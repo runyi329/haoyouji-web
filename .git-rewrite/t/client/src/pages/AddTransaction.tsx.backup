@@ -1,0 +1,972 @@
+import { useState, useEffect, useRef } from "react";
+import { useLocation, useParams } from "wouter";
+import { Button } from "@/components/ui/button";
+import {
+  ArrowLeft,
+  Calendar,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Image as ImageIcon,
+  Link2,
+  Plus,
+  User,
+  X,
+} from "lucide-react";
+import { toast } from "sonner";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { trpc } from "@/lib/trpc";
+import { autoCompressImage } from "@/utils/imageUtils";
+
+type TransactionType = "expense" | "income";
+
+interface Category {
+  id: number;
+  ledgerId: number;
+  name: string;
+  type: "income" | "expense";
+  parentId: number | null;
+  icon: string | null;
+  color: string | null;
+  sortOrder: number;
+  createdBy: number;
+}
+
+const AddTransaction = () => {
+  const [location, setLocation] = useLocation();
+  const { id } = useParams<{ id: string }>();
+  const ledgerId = parseInt(id || "0");
+  const utils = trpc.useUtils();
+  
+  // 监听页面进入，刷新分类数据
+  useEffect(() => {
+    // 每次组件挂载或ledgerId变化时，使分类缓存失效
+    utils.ledger.getCategories.invalidate({ ledgerId });
+  }, [ledgerId, utils]);
+  
+  // 监听路由变化，当返回到添加账目页面时刷新分类数据
+  useEffect(() => {
+    // 当路由包含 /add 时，说明在添加账目页面，刷新分类数据
+    if (location.includes('/add')) {
+      utils.ledger.getCategories.invalidate({ ledgerId });
+    }
+  }, [location, ledgerId, utils]);
+  
+  // 监听页面可见性变化，当页面重新可见时刷新分类数据
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        // 页面重新可见时，刷新分类数据
+        utils.ledger.getCategories.invalidate({ ledgerId });
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [ledgerId, utils]);
+  
+  // 编辑模式：从 URL 参数获取要编辑的账目 ID
+  const urlParams = new URLSearchParams(window.location.search);
+  const editId = urlParams.get('edit');
+  const isEditMode = !!editId;
+  const editTransactionId = editId ? parseInt(editId) : undefined;
+  
+  // 获取要编辑的账目详情
+  const { data: editTransaction } = trpc.ledger.getTransactionDetail.useQuery(
+    { ledgerId, transactionId: editTransactionId! },
+    { enabled: isEditMode && !!editTransactionId }
+  );
+
+  const [transactionType, setTransactionType] = useState<TransactionType>("expense");
+  const [amount, setAmount] = useState("");
+  
+  
+  // 分类选择状态：存储选中的分类路径 [一级分类ID, 二级分类ID, 三级分类ID, ...]
+  // 默认选中第一个预设分类（ID为2）
+  const [selectedCategoryPath, setSelectedCategoryPath] = useState<number[]>([2]);
+  
+  const [selectedAccounts, setSelectedAccounts] = useState<string[]>(["微信"]);
+  const [reimbursementStatus, setReimbursementStatus] = useState<'none' | 'pending'>('none');
+  const [note, setNote] = useState("");
+  
+  // 日期相关状态
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [displayDate, setDisplayDate] = useState(new Date().toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [isDateSheetOpen, setIsDateSheetOpen] = useState(false);
+  const [showDateConfirm, setShowDateConfirm] = useState(false);
+  const [pendingDate, setPendingDate] = useState<Date | null>(null);
+  
+  const [payer, setPayer] = useState("我自己");
+  const [isPayerSheetOpen, setIsPayerSheetOpen] = useState(false);
+  
+  // 图片上传相关
+  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // 加载编辑数据
+  useEffect(() => {
+    if (isEditMode && editTransaction) {
+      setTransactionType(editTransaction.type as TransactionType);
+      setAmount(editTransaction.amount.toString());
+      setNote(editTransaction.description || "");
+      setSelectedDate(new Date(editTransaction.recordDate));
+      setDisplayDate(new Date(editTransaction.recordDate).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
+      
+      // 设置分类路径
+      if (editTransaction.categoryPath && editTransaction.categoryPath.length > 0) {
+        setSelectedCategoryPath(editTransaction.categoryPath);
+      } else if (editTransaction.categoryId) {
+        // 如果没有categoryPath，使用categoryId
+        setSelectedCategoryPath([editTransaction.categoryId]);
+      }
+      
+      // 加载图片
+      if (editTransaction.images && editTransaction.images.length > 0) {
+        setUploadedImages(editTransaction.images);
+      }
+      
+      // 加载报销状态
+      if (editTransaction.reimbursementStatus) {
+        setReimbursementStatus(editTransaction.reimbursementStatus as 'none' | 'pending');
+      }
+    }
+  }, [isEditMode, editTransaction]);
+
+
+
+  // 账户选项
+  const accounts = ["微信", "支付宝", "银行卡", "数字钱包", "现金"];
+
+  // 模拟成员列表
+  const members = [
+    { id: 1, name: "我自己", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=me" },
+    { id: 2, name: "Yunting", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=yunting" },
+    { id: 3, name: "M", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=m" },
+  ];
+
+  // 预设分类（当数据库中没有分类时显示）
+  const defaultCategories = [
+    { id: 2, name: "购物", icon: "🛍️", color: "bg-red-500" },
+  ];
+
+  // 预设子分类（包括三级分类）
+  const defaultSubCategories: Record<number, any[]> = {
+    "2": [{ id: 25, name: "淘宝", icon: "🛍️", color: "bg-red-400", parentId: 2 }],
+    "25": [
+      { id: 251, name: "服饰", icon: "👔", color: "bg-red-300", parentId: 25 },
+      { id: 252, name: "数码", icon: "📱", color: "bg-red-300", parentId: 25 },
+      { id: 253, name: "食品", icon: "🍞", color: "bg-red-300", parentId: 25 },
+    ],
+  };
+
+  // 获取顶级分类（parentId = null）- 收入和支出共享同一套分类
+  const { data: topCategories = [], isLoading: isLoadingTop } = trpc.ledger.getCategories.useQuery({
+    ledgerId,
+    parentId: null,
+  });
+
+  // 如果没有分类，使用预设分类
+  const displayCategories = topCategories.length > 0 ? topCategories : defaultCategories;
+  
+  // 当真实分类加载完成后，更新选中状态（仅在非编辑模式下）
+  useEffect(() => {
+    if (!isEditMode && topCategories.length > 0) {
+      setSelectedCategoryPath([topCategories[0].id]);
+    }
+  }, [isEditMode, topCategories.length > 0 ? topCategories[0]?.id : null]);
+
+  // 动态加载子分类 - 使用固定的3个查询(最多支持3级分类) - 收入和支出共享分类
+  const level1Query = trpc.ledger.getCategories.useQuery(
+    {
+      ledgerId,
+      parentId: selectedCategoryPath[0] || null,
+    },
+    { enabled: selectedCategoryPath.length >= 1 }
+  );
+
+  const level2Query = trpc.ledger.getCategories.useQuery(
+    {
+      ledgerId,
+      parentId: selectedCategoryPath[1] || null,
+    },
+    { enabled: selectedCategoryPath.length >= 2 }
+  );
+
+  // 构建多级分类数据
+  const categoryLevels: any[][] = (() => {
+    const levels: any[][] = [displayCategories];
+    
+    // 添加一级子分类
+    if (selectedCategoryPath.length >= 1) {
+      const parentId = selectedCategoryPath[0];
+      const subCategories = level1Query.data && level1Query.data.length > 0 
+        ? level1Query.data 
+        : defaultSubCategories[parentId.toString()] || [];
+      if (subCategories.length > 0) {
+        levels.push(subCategories);
+      }
+    }
+    
+    // 添加二级子分类
+    if (selectedCategoryPath.length >= 2) {
+      const parentId = selectedCategoryPath[1];
+      const subCategories = level2Query.data && level2Query.data.length > 0
+        ? level2Query.data
+        : defaultSubCategories[parentId.toString()] || [];
+      if (subCategories.length > 0) {
+        levels.push(subCategories);
+      }
+    }
+    
+    return levels;
+  })();
+
+  // 处理分类选择
+  const handleCategorySelect = (categoryId: number, level: number) => {
+    // 如果点击的是已经选中的分类，则取消选中并收起下级分类
+    if (selectedCategoryPath[level] === categoryId) {
+      // 取消选中：移除当前层级及之后的所有选择
+      const newPath = selectedCategoryPath.slice(0, level);
+      setSelectedCategoryPath(newPath);
+    } else {
+      // 选中新分类：更新选中路径，保留到当前层级，移除后续层级
+      const newPath = [...selectedCategoryPath.slice(0, level), categoryId];
+      setSelectedCategoryPath(newPath);
+    }
+  };
+
+  // 获取当前选中的分类名称（用于显示）
+  const getSelectedCategoryName = () => {
+    if (selectedCategoryPath.length === 0) return "";
+    
+    // 找到最后一级选中的分类
+    const lastSelectedId = selectedCategoryPath[selectedCategoryPath.length - 1];
+    const lastLevelCategories = categoryLevels[selectedCategoryPath.length];
+    
+    // 在上一级的分类列表中查找
+    if (selectedCategoryPath.length > 0) {
+      const prevLevelCategories = categoryLevels[selectedCategoryPath.length - 1];
+      const category = prevLevelCategories.find(c => c.id === lastSelectedId);
+      return category?.name || "";
+    }
+    
+    return "";
+  };
+
+
+  // 判断是否是今天
+  const isToday = (date: Date) => {
+    const today = new Date();
+    return date.getDate() === today.getDate() &&
+           date.getMonth() === today.getMonth() &&
+           date.getFullYear() === today.getFullYear();
+  };
+
+  // 判断是否是同一天
+  const isSameDay = (date1: Date, date2: Date) => {
+    return date1.getDate() === date2.getDate() &&
+           date1.getMonth() === date2.getMonth() &&
+           date1.getFullYear() === date2.getFullYear();
+  };
+
+  // 获取月历数据
+  const getCalendarDays = () => {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    
+    // 获取当月第一天和最后一天
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    
+    // 获取第一天是星期几（0=周日，需要调整为1=周一）
+    let firstDayOfWeek = firstDay.getDay();
+    if (firstDayOfWeek === 0) firstDayOfWeek = 7; // 周日改为7
+    
+    // 计算需要显示的上个月的天数
+    const prevMonthDays = firstDayOfWeek - 1;
+    const prevMonthLastDay = new Date(year, month, 0).getDate();
+    
+    const days: Date[] = [];
+    
+    // 添加上个月的日期
+    for (let i = prevMonthDays; i > 0; i--) {
+      days.push(new Date(year, month - 1, prevMonthLastDay - i + 1));
+    }
+    
+    // 添加当月的日期
+    for (let i = 1; i <= lastDay.getDate(); i++) {
+      days.push(new Date(year, month, i));
+    }
+    
+    // 添加下个月的日期，补足到42天（6周）
+    const remainingDays = 42 - days.length;
+    for (let i = 1; i <= remainingDays; i++) {
+      days.push(new Date(year, month + 1, i));
+    }
+    
+    return days;
+  };
+
+  // 处理日期选择
+  const handleDateSelect = (date: Date) => {
+    if (isToday(date)) {
+      // 如果选择今天，直接设置
+      setSelectedDate(date);
+      setDisplayDate(date.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
+      setIsDateSheetOpen(false);
+    } else {
+      // 如果不是今天，显示确认对话框
+      setPendingDate(date);
+      setShowDateConfirm(true);
+    }
+  };
+
+  // 确认日期选择
+  const confirmDateSelect = () => {
+    if (pendingDate) {
+      setSelectedDate(pendingDate);
+      setDisplayDate(pendingDate.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
+      setIsDateSheetOpen(false);
+      setShowDateConfirm(false);
+      setPendingDate(null);
+    }
+  };
+
+  // 取消日期选择
+  const cancelDateSelect = () => {
+    setShowDateConfirm(false);
+    setPendingDate(null);
+  };
+
+  // 切换到今天
+  const goToToday = () => {
+    const today = new Date();
+    setSelectedDate(today);
+    setDisplayDate(today.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
+    setCalendarMonth(today);
+    setIsDateSheetOpen(false);
+  };
+
+  // 上一年
+  const prevYear = () => {
+    setCalendarMonth(new Date(calendarMonth.getFullYear() - 1, calendarMonth.getMonth()));
+  };
+
+  // 下一年
+  const nextYear = () => {
+    setCalendarMonth(new Date(calendarMonth.getFullYear() + 1, calendarMonth.getMonth()));
+  };
+
+  // 上一个月
+  const prevMonth = () => {
+    setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1));
+  };
+
+  // 下一个月
+  const nextMonth = () => {
+    setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1));
+  };
+
+  // 处理数字键盘输入
+  const handleNumberInput = (num: string) => {
+    setAmount((prevAmount) => {
+      // 如果是小数点
+      if (num === ".") {
+        if (prevAmount.includes(".")) return prevAmount; // 已经有小数点
+        return (!prevAmount || prevAmount === "0.00" || prevAmount === "") ? "0." : prevAmount + ".";
+      }
+      
+      // 检查小数点后是否已有两位
+      if (prevAmount.includes(".")) {
+        const parts = prevAmount.split(".");
+        if (parts[1] && parts[1].length >= 2) return prevAmount; // 限制小数点后两位
+        return prevAmount + num;
+      }
+      
+      // 如果当前是空字符串、0或0.00，替换为新数字
+      if (!prevAmount || prevAmount === "0" || prevAmount === "0.00" || prevAmount === "") {
+        return num;
+      }
+      
+      // 否则追加数字
+      return prevAmount + num;
+    });
+  };
+
+  // 处理删除
+  const handleDelete = () => {
+    if (amount.length > 1) {
+      const newAmount = amount.slice(0, -1);
+      // 如果删除后为空或只剩下小数点，重置为空字符串
+      if (newAmount === "" || newAmount === ".") {
+        setAmount("");
+      } else {
+        setAmount(newAmount);
+      }
+    } else {
+      setAmount("");
+    }
+  };
+
+  // 添加记账mutation
+  const addTransactionMutation = trpc.ledger.addTransaction.useMutation({
+    onSuccess: () => {
+      toast.success("记账成功！");
+      // 使缓存失效，强制重新获取数据
+      utils.ledger.getTransactions.invalidate({ ledgerId });
+      setLocation(`/ledger/${id}`);
+    },
+    onError: (error) => {
+      toast.error("记账失败：" + error.message);
+    },
+  });
+  
+  // 更新记账mutation
+  const updateTransactionMutation = trpc.ledger.updateTransaction.useMutation({
+    onSuccess: () => {
+      toast.success("账目修改成功！");
+      utils.ledger.getTransactions.invalidate({ ledgerId });
+      setLocation(`/ledger/${id}`);
+    },
+    onError: (error) => {
+      toast.error("修改失败：" + error.message);
+    },
+  });
+  
+  // 上传图片mutation
+  const uploadImageMutation = trpc.ledger.uploadLedgerImage.useMutation();
+
+  // 处理保存
+  const handleSave = () => {
+    if (selectedCategoryPath.length === 0) {
+      toast.error("请选择分类");
+      return;
+    }
+    // 允许零金额提交
+
+    // 调用后端API保存记账
+    // selectedAccounts是数组,取第一个元素(如果存在)
+    const accountIdNum = selectedAccounts.length > 0 ? parseInt(selectedAccounts[0]) : NaN;
+    // 格式化为 YYYY-MM-DD 格式，使用本地时间
+    const year = selectedDate.getFullYear();
+    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(selectedDate.getDate()).padStart(2, '0');
+    const formattedDate = `${year}-${month}-${day}`;
+    
+    const payload: any = {
+      ledgerId,
+      amount: parseFloat(amount) || 0,
+      type: transactionType,
+      categoryId: selectedCategoryPath[selectedCategoryPath.length - 1], // 使用最后一级分类ID
+      transactionDate: formattedDate,
+      description: note || undefined,
+      images: uploadedImages.length > 0 ? uploadedImages : undefined, // 使用images数组
+      reimbursementStatus, // 添加报销状态
+    };
+    
+    // 只有当accountId是有效数字时才添加
+    if (!isNaN(accountIdNum)) {
+      payload.accountId = accountIdNum;
+    }
+    
+    if (isEditMode && editTransactionId) {
+      // 编辑模式：调用更新API
+      updateTransactionMutation.mutate({
+        recordId: editTransactionId,
+        ...payload,
+      });
+    } else {
+      // 新增模式：调用添加API
+      addTransactionMutation.mutate(payload);
+    }
+  };
+
+  const calendarDays = getCalendarDays();
+  const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
+
+  // 主题颜色数组
+  const themeColors = ["bg-[#A80000]", "bg-orange-500", "bg-green-500", "bg-blue-500"];
+
+  return (
+    <div className="h-screen flex flex-col bg-gray-50">
+      {/* 顶部导航 */}
+      <div className="bg-[#A80000] text-white p-3 flex items-center justify-between flex-shrink-0">
+        <button onClick={() => setLocation(`/ledger/${id}`)}>
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        <h1 className="text-base font-semibold">{isEditMode ? "修改账目" : "添加账目"}</h1>
+        <div className="w-5" /> {/* 占位 */}
+      </div>
+
+      {/* 类型标签页 - 独立白色容器 */}
+      <div className="px-4 py-3 flex-shrink-0">
+        <div className="bg-white rounded-lg flex overflow-hidden shadow-sm">
+          <button
+            className={`flex-1 py-2 text-sm text-center transition-colors ${
+              transactionType === "expense"
+                ? "bg-[#A80000] text-white font-semibold"
+                : "text-gray-600 bg-white"
+            }`}
+            onClick={() => setTransactionType("expense")}
+          >
+            支出
+          </button>
+          <button
+            className={`flex-1 py-2 text-sm text-center transition-colors ${
+              transactionType === "income"
+                ? "bg-[#A80000] text-white font-semibold"
+                : "text-gray-600 bg-white"
+            }`}
+            onClick={() => setTransactionType("income")}
+          >
+            收入
+          </button>
+        </div>
+      </div>
+
+      {/* 金额显示 */}
+      <div className="bg-white py-3 px-4 flex-shrink-0">
+        <div className="text-5xl font-light text-gray-800">
+          {amount || "0.00"}
+        </div>
+      </div>
+
+      {/* 可滚动内容区域 */}
+      <div className="flex-1 overflow-y-auto">
+        {/* 多级分类选择 */}
+        <div className="bg-white mt-1">
+          {/* 一级分类标题 */}
+          <div className="bg-gray-50 px-3 py-2 text-xs text-gray-500">选择分类</div>
+          
+          {/* 渲染每一级分类 - 每级单独一行 */}
+          {categoryLevels.map((categories, level) => {
+            if (categories.length === 0) return null;
+            
+            return (
+              <div key={level} className="border-t border-gray-100">
+                <div className="p-3">
+                  <div className="flex flex-wrap gap-2">
+                    {categories.map((category, index) => {
+                      const isSelected = selectedCategoryPath[level] === category.id;
+                      const colorClass = themeColors[index % themeColors.length];
+                      
+                      return (
+                        <button
+                          key={category.id}
+                          className={`px-3 py-1.5 rounded text-xs transition-colors ${
+                            isSelected
+                              ? `${colorClass} text-white font-medium`
+                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          }`}
+                          onClick={() => handleCategorySelect(category.id, level)}
+                        >
+                          {category.name}
+                        </button>
+                      );
+                    })}
+                    
+                    {/* 只在第一级显示"+"按钮 */}
+                    {level === 0 && (
+                      <button
+                        className="px-3 py-1.5 rounded text-xs bg-white border border-dashed border-[#A80000] text-[#A80000] flex items-center gap-1 hover:bg-red-50"
+                        onClick={() => setLocation(`/ledger/${id}/categories`)}
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          
+          {isLoadingTop && (
+            <div className="text-xs text-gray-400 p-3">加载分类中...</div>
+          )}
+          
+
+        </div>
+
+
+
+        {/* 账户选择 */}
+        <div className="bg-white mt-1">
+          <div className="bg-gray-50 px-3 py-2 text-xs text-gray-500">
+            {transactionType === "expense" ? "付款方式" : "收款方式"}
+          </div>
+          <div className="p-3">
+          <div className="flex flex-wrap gap-1.5">
+            {accounts.map((account) => (
+              <button
+                key={account}
+                className={`px-3 py-1.5 rounded text-xs ${
+                  selectedAccounts.includes(account)
+                    ? "bg-[#A80000] text-white"
+                    : "bg-gray-100 text-gray-700"
+                }`}
+                onClick={() => {
+                  if (selectedAccounts.includes(account)) {
+                    // 取消选中
+                    setSelectedAccounts(selectedAccounts.filter(a => a !== account));
+                  } else {
+                    // 添加选中
+                    setSelectedAccounts([...selectedAccounts, account]);
+                  }
+                }}
+              >
+                {account}
+              </button>
+            ))}
+          </div>
+          </div>
+        </div>
+
+        {/* 报销状态选择 */}
+        <div className="bg-white mt-1">
+          <div className="bg-gray-50 px-3 py-2 text-xs text-gray-500">
+            报销状态
+          </div>
+          <div className="p-3">
+            <button
+              className={`px-3 py-1.5 rounded text-xs ${
+                reimbursementStatus === 'pending'
+                  ? "bg-blue-500 text-white"
+                  : "bg-gray-100 text-gray-700"
+              }`}
+              onClick={() => setReimbursementStatus(reimbursementStatus === 'pending' ? 'none' : 'pending')}
+            >
+              申请报销
+            </button>
+          </div>
+        </div>
+
+        {/* 备注输入 */}
+        <div className="bg-white mt-1 flex items-stretch">
+          <input
+            type="text"
+            placeholder="备注"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className="flex-1 px-3 py-3 border-none outline-none text-sm text-gray-700"
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={async (e) => {
+              const files = e.target.files;
+              if (files) {
+                // 只支持上传1张图片
+                const file = files[0];
+                if (!file) return;
+                
+                try {
+                  // 显示加载提示
+                  toast.loading('正在上传图片...');
+                  
+                  // 自动压缩图片
+                  const { base64 } = await autoCompressImage(file, 'normal');
+                  
+                  // 上传到COS
+                  const result = await uploadImageMutation.mutateAsync({ imageData: base64 });
+                  
+                  if (result.success && result.imageUrl) {
+                    setUploadedImages([result.imageUrl]); // 只保存一张
+                    toast.dismiss();
+                    toast.success('图片上传成功！');
+                  }
+                } catch (error) {
+                  toast.dismiss();
+                  console.error('图片上传失败:', error);
+                  toast.error('图片上传失败，请重试');
+                }
+              }
+            }}
+          />
+          <button 
+            className="px-6 bg-[#A80000] text-white flex items-center gap-2"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <ImageIcon className="w-5 h-5" />
+            <span className="text-sm font-medium">传图</span>
+          </button>
+        </div>
+
+        {/* 图片预览区域 */}
+        {uploadedImages.length > 0 && (
+          <div className="bg-white mt-1 p-3">
+            <div className="flex flex-wrap gap-2">
+              {uploadedImages.map((image, index) => (
+                <div key={index} className="relative w-20 h-20">
+                  <img
+                    src={image}
+                    alt={`上传图片${index + 1}`}
+                    className="w-full h-full object-cover rounded"
+                  />
+                  <button
+                    className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs"
+                    onClick={() => {
+                      setUploadedImages(prev => prev.filter((_, i) => i !== index));
+                    }}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 底部工具栏 */}
+        <div className="bg-white mt-1 p-3 mb-2">
+          <div className="flex items-center justify-between text-xs">
+            <button className="flex items-center gap-1 text-gray-600">
+              <Link2 className="w-3.5 h-3.5" />
+              <span>关联账户</span>
+            </button>
+            <button 
+              className="flex items-center gap-1 text-gray-600"
+              onClick={() => setIsDateSheetOpen(true)}
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>{selectedDate.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+            </button>
+            <button 
+              className="flex items-center gap-1 text-gray-600"
+              onClick={() => setIsPayerSheetOpen(true)}
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>{payer}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 数字键盘 - 固定在底部，缩小高度 */}
+      <div className="flex-shrink-0 bg-gray-100 grid grid-cols-4 gap-px border-t z-50">
+        {["7", "8", "9", "-"].map((key) => (
+          <button
+            key={key}
+            className="bg-white p-3 text-xl font-light text-gray-800 active:bg-gray-200"
+            onClick={() => {
+              if (key !== "-") handleNumberInput(key);
+            }}
+          >
+            {key}
+          </button>
+        ))}
+        {["4", "5", "6", "+"].map((key) => (
+          <button
+            key={key}
+            className="bg-white p-3 text-xl font-light text-gray-800 active:bg-gray-200"
+            onClick={() => {
+              if (key !== "+") handleNumberInput(key);
+            }}
+          >
+            {key}
+          </button>
+        ))}
+        {["1", "2", "3"].map((key) => (
+          <button
+            key={key}
+            className="bg-white p-3 text-xl font-light text-gray-800 active:bg-gray-200"
+            onClick={() => handleNumberInput(key)}
+          >
+            {key}
+          </button>
+        ))}
+        <button
+          className="bg-[#A80000] text-white p-3 text-base font-semibold row-span-2 active:bg-[#8B0000]"
+          onClick={handleSave}
+        >
+          保存
+        </button>
+        <button
+          className="bg-white p-3 text-xl font-light text-gray-800 active:bg-gray-200"
+          onClick={() => handleNumberInput(".")}
+        >
+          .
+        </button>
+        <button
+          className="bg-white p-3 text-xl font-light text-gray-800 active:bg-gray-200"
+          onClick={() => handleNumberInput("0")}
+        >
+          0
+        </button>
+        <button
+          className="bg-white p-3 text-lg text-gray-800 active:bg-gray-200 flex items-center justify-center"
+          onClick={handleDelete}
+        >
+          ⌫
+        </button>
+      </div>
+
+      {/* 日期选择抽屉 */}
+      <Sheet open={isDateSheetOpen} onOpenChange={setIsDateSheetOpen}>
+        <SheetContent side="bottom" className="h-auto max-h-[90vh] overflow-y-auto">
+          <div className="p-4 max-w-lg mx-auto">
+            {/* 日期导航 */}
+            <div className="flex items-center mb-3 relative">
+              {/* 外层箭头 - 控制年份 */}
+              <button onClick={prevYear} className="p-1.5">
+                <ChevronLeft className="w-5 h-5 text-gray-400" />
+              </button>
+              
+              {/* 内层箭头 - 控制月份 */}
+              <button onClick={prevMonth} className="p-1.5">
+                <ChevronLeft className="w-5 h-5 text-[#A80000]" />
+              </button>
+              
+              {/* 年月显示 */}
+              <div className="text-base font-medium mx-3">
+                {calendarMonth.getFullYear()}年{calendarMonth.getMonth() + 1}月
+              </div>
+              
+              {/* 内层箭头 - 控制月份 */}
+              <button onClick={nextMonth} className="p-1.5">
+                <ChevronRight className="w-5 h-5 text-[#A80000]" />
+              </button>
+              
+              {/* 外层箭头 - 控制年份 */}
+              <button onClick={nextYear} className="p-1.5">
+                <ChevronRight className="w-5 h-5 text-gray-400" />
+              </button>
+              
+              {/* 今天按钮 */}
+              <button
+                onClick={goToToday}
+                className="ml-auto px-3 py-1 text-sm text-[#A80000] border-2 border-[#A80000] rounded-full"
+              >
+                今天
+              </button>
+            </div>
+
+            {/* 星期标题 */}
+            <div className="grid grid-cols-7 gap-1 mb-1">
+              {weekDays.map((day) => (
+                <div key={day} className="text-center text-xs text-[#A80000] py-0.5">
+                  {day}
+                </div>
+              ))}
+            </div>
+
+            {/* 日期网格 - 使用固定高度而非 aspect-square，确保电脑端完整显示 */}
+            <div className="grid grid-cols-7 gap-1">
+              {calendarDays.map((day, index) => {
+                const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
+                const isSelected = isSameDay(day, selectedDate);
+                const isTodayDate = isToday(day);
+
+                return (
+                  <button
+                    key={index}
+                    onClick={() => handleDateSelect(day)}
+                    className={`
+                      h-9 sm:h-10 flex items-center justify-center text-sm rounded
+                      ${!isCurrentMonth ? "text-gray-300" : "text-gray-800"}
+                      ${isSelected ? "bg-[#A80000] text-white font-semibold" : ""}
+                      ${isTodayDate && !isSelected ? "border border-[#A80000]" : ""}
+                      ${isCurrentMonth && !isSelected ? "hover:bg-gray-100" : ""}
+                    `}
+                  >
+                    {day.getDate()}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* 日期确认对话框 */}
+      <AlertDialog open={showDateConfirm} onOpenChange={setShowDateConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-center">
+              {pendingDate && (() => {
+                const year = pendingDate.getFullYear();
+                const month = (pendingDate.getMonth() + 1).toString().padStart(2, '0');
+                const day = pendingDate.getDate().toString().padStart(2, '0');
+                const currentYear = new Date().getFullYear();
+                const yearText = year !== currentYear ? `${year}年` : '';
+                return `您选择的 ${year}-${month}-${day}, ${yearText}不是今天呀，确定吗？`;
+              })()}
+            </AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row gap-2">
+            <AlertDialogCancel onClick={cancelDateSelect} className="flex-1">
+              取消
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDateSelect} className="flex-1">
+              确定
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 支出人选择抽屉 */}
+      <Sheet open={isPayerSheetOpen} onOpenChange={setIsPayerSheetOpen}>
+        <SheetContent side="bottom" className="h-auto max-h-[40vh]">
+          <SheetHeader>
+            <SheetTitle className="flex items-center justify-between">
+              <span className="text-sm">请选择支出人：</span>
+              <button
+                onClick={() => setIsPayerSheetOpen(false)}
+                className="text-[#A80000] text-sm"
+              >
+                完成
+              </button>
+            </SheetTitle>
+          </SheetHeader>
+          <div className="mt-3 space-y-2">
+            {members.map((member) => (
+              <button
+                key={member.id}
+                className="w-full flex items-center justify-between p-2 hover:bg-gray-50 rounded"
+                onClick={() => {
+                  setPayer(member.name);
+                  setIsPayerSheetOpen(false);
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <img
+                    src={member.avatar}
+                    alt={member.name}
+                    className="w-5 h-5 rounded-full"
+                  />
+                  <span className="text-sm">{member.name}</span>
+                </div>
+                {payer === member.name && (
+                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                )}
+              </button>
+            ))}
+          </div>
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+};
+
+export default AddTransaction;

@@ -1,0 +1,118 @@
+/**
+ * 红白双引擎统一架构 - 全局视觉规范
+ * 
+ * 核心理念：红卡定结果，白区定过程
+ * 设计目标：30秒一目了然的体验
+ */
+
+:root {
+  /* ========== 色彩系统 ========== */
+  --color-primary-red: #A80000;        /* 深绯红（主品牌色） */
+  --color-primary-red-dark: #8a0000;   /* 深绯红渐变终点 */
+  --color-accent-gold: #C5B358;        /* 香槟金（价值强调色） */
+  --color-bg-base: #F9F9F9;            /* 背景基底色（极浅灰） */
+  --color-text-primary: #333333;       /* 主文字色 */
+  --color-text-secondary: #888888;     /* 辅助文字色 */
+  --color-border: #E0E0E0;             /* 边框色 */
+  --color-status-green: #10B981;       /* 状态绿（已达标） */
+  --color-status-blue: #3B82F6;        /* 状态蓝（个人贡献分） */
+  
+  /* ========== 红卡统一规范 ========== */
+  --red-card-height: 130px;            /* 红卡统一高度 */
+  --red-card-padding: 16px;            /* 红卡内边距 */
+  --red-card-radius-top: 16px;         /* 红卡顶部圆角 */
+  --red-card-radius-bottom: 0px;       /* 红卡底部圆角（与白区无缝衔接） */
+  
+  /* ========== 白区统一规范 ========== */
+  --white-area-padding: 16px;          /* 白区内边距 */
+  --white-area-radius-top: 0px;        /* 白区顶部圆角（与红卡无缝衔接） */
+  --white-area-radius-bottom: 24px;    /* 白区底部圆角 */
+  --white-area-card-gap: 12px;         /* 白区内部卡片间距 */
+  
+  /* ========== 间距统一规范 ========== */
+  --section-gap: 16px;                 /* 板块之间间距 */
+  --card-inner-gap: 12px;              /* 卡片内部元素间距 */
+  
+  /* ========== 进度条统一规范 ========== */
+  --progress-height: 6px;              /* 进度条高度 */
+  --progress-bg: #E0E0E0;              /* 进度条背景色（淡灰） */
+  --progress-fill-red: #A80000;        /* 进度条填充色（深绯红） */
+  --progress-fill-gold: #C5B358;       /* 进度条填充色（香槟金） */
+}
+
+/* ========== 红卡通用样式 ========== */
+.red-card {
+  min-height: var(--red-card-height);
+  padding: var(--red-card-padding);
+  border-radius: var(--red-card-radius-top) var(--red-card-radius-top) var(--red-card-radius-bottom) var(--red-card-radius-bottom);
+  background: linear-gradient(to bottom right, var(--color-primary-red), var(--color-primary-red-dark));
+  color: white;
+}
+
+/* ========== 白区通用样式 ========== */
+.white-area {
+  padding: var(--white-area-padding);
+  border-radius: var(--white-area-radius-top) var(--white-area-radius-top) var(--white-area-radius-bottom) var(--white-area-radius-bottom);
+  background-color: var(--color-bg-base);
+}
+
+.white-area > * + * {
+  margin-top: var(--white-area-card-gap);
+}
+
+/* ========== 进度条通用样式 ========== */
+.progress-bar {
+  height: var(--progress-height);
+  border-radius: calc(var(--progress-height) / 2);
+  background-color: var(--progress-bg);
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  border-radius: calc(var(--progress-height) / 2);
+  transition: width 0.5s ease-in-out;
+}
+
+.progress-bar-fill.red {
+  background-color: var(--progress-fill-red);
+}
+
+.progress-bar-fill.gold {
+  background-color: var(--progress-fill-gold);
+}
+
+.progress-bar-fill.green {
+  background-color: var(--color-status-green);
+}
+
+/* ========== 状态图标统一样式 ========== */
+.status-icon-achieved {
+  color: var(--color-accent-gold);
+}
+
+.status-icon-pending {
+  color: var(--color-text-secondary);
+}
+
+/* ========== 板块间距 ========== */
+.section-gap {
+  margin-top: var(--section-gap);
+}
+
+/* ========== 响应式适配 ========== */
+@media (max-width: 375px) {
+  :root {
+    --red-card-height: 120px;
+    --red-card-padding: 14px;
+    --white-area-padding: 14px;
+  }
+}
+
+@media (min-width: 768px) {
+  :root {
+    --red-card-height: 140px;
+    --red-card-padding: 20px;
+    --white-area-padding: 20px;
+  }
+}

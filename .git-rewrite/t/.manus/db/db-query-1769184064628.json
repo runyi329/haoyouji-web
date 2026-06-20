@@ -1,0 +1,160 @@
+{
+  "query": "\nSELECT \n  c.id,\n  c.name,\n  c.occupation,\n  GROUP_CONCAT(CONCAT(ccf.fieldName, ':', ccf.fieldValue) SEPARATOR '; ') as custom_fields\nFROM contacts c\nLEFT JOIN contact_custom_fields ccf ON c.id = ccf.contactId\nWHERE c.parentUserId = (SELECT id FROM users WHERE username = 'Jiang')\nGROUP BY c.id, c.name, c.occupation\nORDER BY c.createdAt DESC\nLIMIT 25;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \nSELECT \n  c.id,\n  c.name,\n  c.occupation,\n  GROUP_CONCAT(CONCAT(ccf.fieldName, ':', ccf.fieldValue) SEPARATOR '; ') as custom_fields\nFROM contacts c\nLEFT JOIN contact_custom_fields ccf ON c.id = ccf.contactId\nWHERE c.parentUserId = (SELECT id FROM users WHERE username = 'Jiang')\nGROUP BY c.id, c.name, c.occupation\nORDER BY c.createdAt DESC\nLIMIT 25;\n",
+  "rows": [
+    {
+      "id": "1440003",
+      "name": "江晓旭",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "1260001",
+      "name": "范海俊",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "1140001",
+      "name": "张镇疆",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "1110001",
+      "name": "王茜",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "930001",
+      "name": "覃皓",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "900001",
+      "name": "陈文驰",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "870001",
+      "name": "何巧男",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "780001",
+      "name": "张伟英",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "750019",
+      "name": "边宇晴",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "750018",
+      "name": "卞雨萌",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "750017",
+      "name": "卞乐天",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "750016",
+      "name": "边国英",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "750015",
+      "name": "Believe",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "750014",
+      "name": "刘先",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "750013",
+      "name": "亓华琛",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "750012",
+      "name": "苏熙乔",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "750011",
+      "name": "李新影",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "750010",
+      "name": "蒋大兴",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "750009",
+      "name": "巴山",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "750008",
+      "name": "包宇",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "750007",
+      "name": "旭旭老师",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "750006",
+      "name": "白皓天",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "750005",
+      "name": "白崇延",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "750004",
+      "name": "四宝妈妈",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    },
+    {
+      "id": "750003",
+      "name": "乔治爸爸谷风淳",
+      "occupation": "NULL",
+      "custom_fields": "NULL"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\toccupation\tcustom_fields\n1440003\t江晓旭\tNULL\tNULL\n1260001\t范海俊\tNULL\tNULL\n1140001\t张镇疆\tNULL\tNULL\n1110001\t王茜\tNULL\tNULL\n930001\t覃皓\tNULL\tNULL\n900001\t陈文驰\tNULL\tNULL\n870001\t何巧男\tNULL\tNULL\n780001\t张伟英\tNULL\tNULL\n750019\t边宇晴\tNULL\tNULL\n750018\t卞雨萌\tNULL\tNULL\n750017\t卞乐天\tNULL\tNULL\n750016\t边国英\tNULL\tNULL\n750015\tBelieve\tNULL\tNULL\n750014\t刘先\tNULL\tNULL\n750013\t亓华琛\tNULL\tNULL\n750012\t苏熙乔\tNULL\tNULL\n750011\t李新影\tNULL\tNULL\n750010\t蒋大兴\tNULL\tNULL\n750009\t巴山\tNULL\tNULL\n750008\t包宇\tNULL\tNULL\n750007\t旭旭老师\tNULL\tNULL\n750006\t白皓天\tNULL\tNULL\n750005\t白崇延\tNULL\tNULL\n750004\t四宝妈妈\tNULL\tNULL\n750003\t乔治爸爸谷风淳\tNULL\tNULL\n",
+  "stderr": "",
+  "execution_time_ms": 104
+}

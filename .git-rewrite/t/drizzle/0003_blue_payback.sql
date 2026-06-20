@@ -1,0 +1,1 @@
+ALTER TABLE `company_reports` MODIFY COLUMN `uploaded_by` int;

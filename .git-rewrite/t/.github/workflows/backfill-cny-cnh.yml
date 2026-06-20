@@ -1,0 +1,25 @@
+name: 回填人民币汇率历史数据（CNY+CNH）
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/backfill-cny-cnh.yml'
+      - 'scripts/backfill_cny_cnh.py'
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 配置SSH密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 124.223.54.69 >> ~/.ssh/known_hosts 2>/dev/null || true
+      - name: 上传回填脚本到服务器
+        run: |
+          scp -o StrictHostKeyChecking=no scripts/backfill_cny_cnh.py root@124.223.54.69:/tmp/backfill_cny_cnh.py
+      - name: 在服务器上执行回填
+        timeout-minutes: 20
+        run: |
+          ssh -o ConnectTimeout=30 -o ServerAliveInterval=60 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=no root@124.223.54.69 "pip3 install pymysql yfinance requests -q 2>/dev/null; python3 /tmp/backfill_cny_cnh.py"

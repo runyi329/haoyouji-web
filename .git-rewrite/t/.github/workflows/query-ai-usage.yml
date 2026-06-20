@@ -1,0 +1,219 @@
+name: 查询AI使用情况
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: '开始日期 (YYYY-MM-DD)'
+        required: true
+        default: '2026-05-06'
+      end_date:
+        description: '结束日期 (YYYY-MM-DD)'
+        required: true
+        default: '2026-05-08'
+jobs:
+  query:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 设置SSH密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 124.223.54.69 >> ~/.ssh/known_hosts 2>/dev/null || true
+      - name: 查询AI使用日志
+        run: |
+          ssh -o ConnectTimeout=30 -o StrictHostKeyChecking=no root@124.223.54.69 'bash -s' << 'ENDSSH'
+            DATABASE_URL=$(grep "^DATABASE_URL=" /root/haoyouji-web/.env 2>/dev/null | head -1 | cut -d'=' -f2- | tr -d '"' || echo "")
+            if [ -z "$DATABASE_URL" ]; then echo "❌ 未找到 DATABASE_URL"; exit 1; fi
+            pip3 install pymysql -q 2>/dev/null || true
+            python3 - "$DATABASE_URL" "${{ github.event.inputs.start_date }}" "${{ github.event.inputs.end_date }}" << 'PYEOF'
+import sys, re, pymysql
+DATABASE_URL = sys.argv[1]
+START_DATE = sys.argv[2]
+END_DATE = sys.argv[3]
+
+def parse_url(url):
+    m = re.match(r'mysql://([^:]+):([^@]+)@([^:/]+):?([0-9]*)/([^?]+)', url)
+    if not m: raise ValueError(f"无法解析: {url[:40]}")
+    user, pwd, host, port, db = m.groups()
+    return host, int(port or 4000), user, pwd, db
+
+DB_HOST, DB_PORT, DB_USER, DB_PASS, DB_NAME = parse_url(DATABASE_URL)
+print(f"连接: {DB_HOST}:{DB_PORT}/{DB_NAME}")
+conn = pymysql.connect(host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASS, database=DB_NAME, ssl={'ssl': True}, charset='utf8mb4', connect_timeout=30)
+print("数据库连接成功\n")
+
+def run(sql, params=None):
+    with conn.cursor() as cur:
+        cur.execute(sql, params or [])
+        return cur.fetchall(), [d[0] for d in cur.description]
+
+# ===== 1. 检查哪些AI相关表存在 =====
+print("=" * 60)
+print("【1】检查AI相关数据表")
+print("=" * 60)
+tables_sql = """
+SELECT TABLE_NAME FROM information_schema.TABLES 
+WHERE TABLE_SCHEMA = %s AND TABLE_NAME LIKE '%ai%'
+ORDER BY TABLE_NAME
+"""
+rows, cols = run(tables_sql, [DB_NAME])
+for r in rows:
+    print(f"  表名: {r[0]}")
+
+# ===== 2. ai_employee_tasks =====
+print("\n" + "=" * 60)
+print(f"【2】AI员工任务 ({START_DATE} ~ {END_DATE})")
+print("=" * 60)
+try:
+    rows, cols = run(f"""
+        SELECT 
+          DATE(created_at) as 日期,
+          task_type as 任务类型,
+          status as 状态,
+          COUNT(*) as 次数
+        FROM ai_employee_tasks
+        WHERE created_at >= '{START_DATE} 00:00:00' AND created_at <= '{END_DATE} 23:59:59'
+        GROUP BY DATE(created_at), task_type, status
+        ORDER BY 日期 DESC, 次数 DESC
+    """)
+    if rows:
+        print(f"{'日期':<12} {'任务类型':<30} {'状态':<12} {'次数':>6}")
+        print("-" * 65)
+        for r in rows:
+            print(f"{str(r[0]):<12} {str(r[1]):<30} {str(r[2]):<12} {r[3]:>6}")
+    else:
+        print("  (该时间段无记录)")
+except Exception as e:
+    print(f"  查询失败: {e}")
+
+# ===== 3. ai_employee_task_logs =====
+print("\n" + "=" * 60)
+print(f"【3】AI员工执行日志 ({START_DATE} ~ {END_DATE})")
+print("=" * 60)
+try:
+    rows, cols = run(f"""
+        SELECT 
+          DATE(created_at) as 日期,
+          action_type as 操作类型,
+          result_status as 结果,
+          COUNT(*) as 次数
+        FROM ai_employee_task_logs
+        WHERE created_at >= '{START_DATE} 00:00:00' AND created_at <= '{END_DATE} 23:59:59'
+        GROUP BY DATE(created_at), action_type, result_status
+        ORDER BY 日期 DESC, 次数 DESC
+    """)
+    if rows:
+        print(f"{'日期':<12} {'操作类型':<30} {'结果':<12} {'次数':>6}")
+        print("-" * 65)
+        for r in rows:
+            print(f"{str(r[0]):<12} {str(r[1]):<30} {str(r[2]):<12} {r[3]:>6}")
+    else:
+        print("  (该时间段无记录)")
+except Exception as e:
+    print(f"  查询失败: {e}")
+
+# ===== 4. ai_employee_conversations =====
+print("\n" + "=" * 60)
+print(f"【4】AI对话记录 ({START_DATE} ~ {END_DATE})")
+print("=" * 60)
+try:
+    rows, cols = run(f"""
+        SELECT 
+          DATE(created_at) as 日期,
+          COUNT(*) as 对话次数,
+          COUNT(DISTINCT task_id) as 涉及任务数
+        FROM ai_employee_conversations
+        WHERE created_at >= '{START_DATE} 00:00:00' AND created_at <= '{END_DATE} 23:59:59'
+        GROUP BY DATE(created_at)
+        ORDER BY 日期 DESC
+    """)
+    if rows:
+        print(f"{'日期':<12} {'对话次数':>10} {'涉及任务数':>12}")
+        print("-" * 40)
+        for r in rows:
+            print(f"{str(r[0]):<12} {r[1]:>10} {r[2]:>12}")
+    else:
+        print("  (该时间段无记录)")
+except Exception as e:
+    print(f"  查询失败: {e}")
+
+# ===== 5. ai_operation_logs =====
+print("\n" + "=" * 60)
+print(f"【5】AI操作日志 ({START_DATE} ~ {END_DATE})")
+print("=" * 60)
+try:
+    rows, cols = run(f"""
+        SELECT 
+          DATE(created_at) as 日期,
+          operation_type as 操作类型,
+          COUNT(*) as 次数
+        FROM ai_operation_logs
+        WHERE created_at >= '{START_DATE} 00:00:00' AND created_at <= '{END_DATE} 23:59:59'
+        GROUP BY DATE(created_at), operation_type
+        ORDER BY 日期 DESC, 次数 DESC
+    """)
+    if rows:
+        print(f"{'日期':<12} {'操作类型':<35} {'次数':>6}")
+        print("-" * 58)
+        for r in rows:
+            print(f"{str(r[0]):<12} {str(r[1]):<35} {r[2]:>6}")
+    else:
+        print("  (该时间段无记录)")
+except Exception as e:
+    print(f"  查询失败: {e}")
+
+# ===== 6. 查看ai_employee_tasks的详细内容（最近20条）=====
+print("\n" + "=" * 60)
+print(f"【6】AI员工任务详情（最近20条，含任务名称）")
+print("=" * 60)
+try:
+    rows, cols = run(f"""
+        SELECT 
+          id, task_name, task_type, schedule_type, status,
+          DATE(created_at) as 创建日期,
+          DATE(last_executed_at) as 最后执行,
+          execution_count as 执行次数
+        FROM ai_employee_tasks
+        WHERE created_at >= '{START_DATE} 00:00:00' AND created_at <= '{END_DATE} 23:59:59'
+           OR last_executed_at >= '{START_DATE} 00:00:00' AND last_executed_at <= '{END_DATE} 23:59:59'
+        ORDER BY last_executed_at DESC
+        LIMIT 20
+    """)
+    if rows:
+        for r in rows:
+            print(f"  ID:{r[0]} | {r[1]} | 类型:{r[2]} | 频率:{r[3]} | 状态:{r[4]} | 执行{r[7]}次 | 最后:{r[6]}")
+    else:
+        print("  (无记录)")
+except Exception as e:
+    print(f"  查询失败: {e}")
+
+# ===== 7. 汇总 =====
+print("\n" + "=" * 60)
+print("【汇总】各功能DeepSeek调用估算")
+print("=" * 60)
+try:
+    total_tasks = 0
+    total_logs = 0
+    total_conv = 0
+    
+    r1, _ = run(f"SELECT COUNT(*) FROM ai_employee_tasks WHERE (created_at >= '{START_DATE}' AND created_at <= '{END_DATE} 23:59:59') OR (last_executed_at >= '{START_DATE}' AND last_executed_at <= '{END_DATE} 23:59:59')")
+    total_tasks = r1[0][0] if r1 else 0
+    
+    r2, _ = run(f"SELECT COUNT(*) FROM ai_employee_task_logs WHERE created_at >= '{START_DATE}' AND created_at <= '{END_DATE} 23:59:59'")
+    total_logs = r2[0][0] if r2 else 0
+    
+    r3, _ = run(f"SELECT COUNT(*) FROM ai_employee_conversations WHERE created_at >= '{START_DATE}' AND created_at <= '{END_DATE} 23:59:59'")
+    total_conv = r3[0][0] if r3 else 0
+    
+    print(f"  AI员工任务（活跃）: {total_tasks} 个")
+    print(f"  AI员工执行日志:     {total_logs} 条（每条=1次DeepSeek调用）")
+    print(f"  AI对话记录:         {total_conv} 条")
+    print(f"  估算总DeepSeek调用: {total_logs + total_conv} 次")
+except Exception as e:
+    print(f"  汇总失败: {e}")
+
+conn.close()
+print("\n=== 查询完成 ===")
+PYEOF
+ENDSSH

@@ -1,0 +1,31 @@
+name: zz-sms-send
+on:
+  push:
+    paths:
+      - '.github/workflows/zz-sms-send.yml'
+      - 'scripts/send-sms-alert.sh'
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: 配置SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: 上传脚本到服务器
+        run: |
+          scp -i ~/.ssh/deploy_key -P ${{ secrets.DEPLOY_PORT }} \
+            scripts/send-sms-alert.sh \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/send-sms-alert.sh
+
+      - name: 执行发送短信
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "bash /tmp/send-sms-alert.sh 13127919173"

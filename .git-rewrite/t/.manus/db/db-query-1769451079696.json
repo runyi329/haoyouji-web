@@ -1,0 +1,325 @@
+{
+  "query": "\nSELECT id, name, type, parentId, icon, color, sortOrder \nFROM ledger_categories \nWHERE ledgerId = 60002 \nORDER BY sortOrder, id;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \nSELECT id, name, type, parentId, icon, color, sortOrder \nFROM ledger_categories \nWHERE ledgerId = 60002 \nORDER BY sortOrder, id;\n",
+  "rows": [
+    {
+      "id": "60001",
+      "name": "贷款",
+      "type": "expense",
+      "parentId": "NULL",
+      "icon": "💳",
+      "color": "#FF6B6B",
+      "sortOrder": "1"
+    },
+    {
+      "id": "60002",
+      "name": "胡上海建行按揭",
+      "type": "expense",
+      "parentId": "60001",
+      "icon": "🏦",
+      "color": "#FF6B6B",
+      "sortOrder": "1"
+    },
+    {
+      "id": "60007",
+      "name": "外出吃饭",
+      "type": "expense",
+      "parentId": "60006",
+      "icon": "🍽️",
+      "color": "#4ECDC4",
+      "sortOrder": "1"
+    },
+    {
+      "id": "60015",
+      "name": "停车费",
+      "type": "expense",
+      "parentId": "60014",
+      "icon": "🅿️",
+      "color": "#95E1D3",
+      "sortOrder": "1"
+    },
+    {
+      "id": "60024",
+      "name": "话费",
+      "type": "expense",
+      "parentId": "60023",
+      "icon": "📞",
+      "color": "#F38181",
+      "sortOrder": "1"
+    },
+    {
+      "id": "60003",
+      "name": "邮储",
+      "type": "expense",
+      "parentId": "60001",
+      "icon": "🏦",
+      "color": "#FF6B6B",
+      "sortOrder": "2"
+    },
+    {
+      "id": "60006",
+      "name": "购物",
+      "type": "expense",
+      "parentId": "NULL",
+      "icon": "🛒",
+      "color": "#4ECDC4",
+      "sortOrder": "2"
+    },
+    {
+      "id": "60008",
+      "name": "盒马",
+      "type": "expense",
+      "parentId": "60006",
+      "icon": "🛒",
+      "color": "#4ECDC4",
+      "sortOrder": "2"
+    },
+    {
+      "id": "60016",
+      "name": "打车",
+      "type": "expense",
+      "parentId": "60014",
+      "icon": "🚕",
+      "color": "#95E1D3",
+      "sortOrder": "2"
+    },
+    {
+      "id": "60025",
+      "name": "网费",
+      "type": "expense",
+      "parentId": "60023",
+      "icon": "🌐",
+      "color": "#F38181",
+      "sortOrder": "2"
+    },
+    {
+      "id": "60004",
+      "name": "胡招行经营贷",
+      "type": "expense",
+      "parentId": "60001",
+      "icon": "🏦",
+      "color": "#FF6B6B",
+      "sortOrder": "3"
+    },
+    {
+      "id": "60009",
+      "name": "抖音",
+      "type": "expense",
+      "parentId": "60006",
+      "icon": "📱",
+      "color": "#4ECDC4",
+      "sortOrder": "3"
+    },
+    {
+      "id": "60014",
+      "name": "交通",
+      "type": "expense",
+      "parentId": "NULL",
+      "icon": "🚗",
+      "color": "#95E1D3",
+      "sortOrder": "3"
+    },
+    {
+      "id": "60017",
+      "name": "地铁",
+      "type": "expense",
+      "parentId": "60014",
+      "icon": "🚇",
+      "color": "#95E1D3",
+      "sortOrder": "3"
+    },
+    {
+      "id": "60026",
+      "name": "水费",
+      "type": "expense",
+      "parentId": "60023",
+      "icon": "💧",
+      "color": "#F38181",
+      "sortOrder": "3"
+    },
+    {
+      "id": "60005",
+      "name": "蒋招行闪电贷",
+      "type": "expense",
+      "parentId": "60001",
+      "icon": "🏦",
+      "color": "#FF6B6B",
+      "sortOrder": "4"
+    },
+    {
+      "id": "60010",
+      "name": "拼多多",
+      "type": "expense",
+      "parentId": "60006",
+      "icon": "🛍️",
+      "color": "#4ECDC4",
+      "sortOrder": "4"
+    },
+    {
+      "id": "60018",
+      "name": "加油",
+      "type": "expense",
+      "parentId": "60014",
+      "icon": "⛽",
+      "color": "#95E1D3",
+      "sortOrder": "4"
+    },
+    {
+      "id": "60023",
+      "name": "其他",
+      "type": "expense",
+      "parentId": "NULL",
+      "icon": "📦",
+      "color": "#F38181",
+      "sortOrder": "4"
+    },
+    {
+      "id": "60027",
+      "name": "电费",
+      "type": "expense",
+      "parentId": "60023",
+      "icon": "⚡",
+      "color": "#F38181",
+      "sortOrder": "4"
+    },
+    {
+      "id": "60011",
+      "name": "淘宝",
+      "type": "expense",
+      "parentId": "60006",
+      "icon": "🛍️",
+      "color": "#4ECDC4",
+      "sortOrder": "5"
+    },
+    {
+      "id": "60019",
+      "name": "飞机票",
+      "type": "expense",
+      "parentId": "60014",
+      "icon": "✈️",
+      "color": "#95E1D3",
+      "sortOrder": "5"
+    },
+    {
+      "id": "60028",
+      "name": "取暖费",
+      "type": "expense",
+      "parentId": "60023",
+      "icon": "🔥",
+      "color": "#F38181",
+      "sortOrder": "5"
+    },
+    {
+      "id": "60012",
+      "name": "山姆",
+      "type": "expense",
+      "parentId": "60006",
+      "icon": "🛒",
+      "color": "#4ECDC4",
+      "sortOrder": "6"
+    },
+    {
+      "id": "60020",
+      "name": "公交",
+      "type": "expense",
+      "parentId": "60014",
+      "icon": "🚌",
+      "color": "#95E1D3",
+      "sortOrder": "6"
+    },
+    {
+      "id": "60029",
+      "name": "保洁阿姨",
+      "type": "expense",
+      "parentId": "60023",
+      "icon": "🧹",
+      "color": "#F38181",
+      "sortOrder": "6"
+    },
+    {
+      "id": "60035",
+      "name": "保险医疗",
+      "type": "expense",
+      "parentId": "NULL",
+      "icon": "🏥",
+      "color": "#AA96DA",
+      "sortOrder": "6"
+    },
+    {
+      "id": "60013",
+      "name": "康宝莱",
+      "type": "expense",
+      "parentId": "60006",
+      "icon": "💊",
+      "color": "#4ECDC4",
+      "sortOrder": "7"
+    },
+    {
+      "id": "60021",
+      "name": "火车票",
+      "type": "expense",
+      "parentId": "60014",
+      "icon": "🚄",
+      "color": "#95E1D3",
+      "sortOrder": "7"
+    },
+    {
+      "id": "60030",
+      "name": "燃气费",
+      "type": "expense",
+      "parentId": "60023",
+      "icon": "🔥",
+      "color": "#F38181",
+      "sortOrder": "7"
+    },
+    {
+      "id": "60022",
+      "name": "保养",
+      "type": "expense",
+      "parentId": "60014",
+      "icon": "🔧",
+      "color": "#95E1D3",
+      "sortOrder": "8"
+    },
+    {
+      "id": "60031",
+      "name": "快递费",
+      "type": "expense",
+      "parentId": "60023",
+      "icon": "📦",
+      "color": "#F38181",
+      "sortOrder": "8"
+    },
+    {
+      "id": "60032",
+      "name": "喵喵",
+      "type": "expense",
+      "parentId": "60023",
+      "icon": "🐱",
+      "color": "#F38181",
+      "sortOrder": "9"
+    },
+    {
+      "id": "60033",
+      "name": "旺旺",
+      "type": "expense",
+      "parentId": "60023",
+      "icon": "🐶",
+      "color": "#F38181",
+      "sortOrder": "10"
+    },
+    {
+      "id": "60034",
+      "name": "喵喵+旺旺",
+      "type": "expense",
+      "parentId": "60023",
+      "icon": "🐾",
+      "color": "#F38181",
+      "sortOrder": "11"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\ttype\tparentId\ticon\tcolor\tsortOrder\n60001\t贷款\texpense\tNULL\t💳\t#FF6B6B\t1\n60002\t胡上海建行按揭\texpense\t60001\t🏦\t#FF6B6B\t1\n60007\t外出吃饭\texpense\t60006\t🍽️\t#4ECDC4\t1\n60015\t停车费\texpense\t60014\t🅿️\t#95E1D3\t1\n60024\t话费\texpense\t60023\t📞\t#F38181\t1\n60003\t邮储\texpense\t60001\t🏦\t#FF6B6B\t2\n60006\t购物\texpense\tNULL\t🛒\t#4ECDC4\t2\n60008\t盒马\texpense\t60006\t🛒\t#4ECDC4\t2\n60016\t打车\texpense\t60014\t🚕\t#95E1D3\t2\n60025\t网费\texpense\t60023\t🌐\t#F38181\t2\n60004\t胡招行经营贷\texpense\t60001\t🏦\t#FF6B6B\t3\n60009\t抖音\texpense\t60006\t📱\t#4ECDC4\t3\n60014\t交通\texpense\tNULL\t🚗\t#95E1D3\t3\n60017\t地铁\texpense\t60014\t🚇\t#95E1D3\t3\n60026\t水费\texpense\t60023\t💧\t#F38181\t3\n60005\t蒋招行闪电贷\texpense\t60001\t🏦\t#FF6B6B\t4\n60010\t拼多多\texpense\t60006\t🛍️\t#4ECDC4\t4\n60018\t加油\texpense\t60014\t⛽\t#95E1D3\t4\n60023\t其他\texpense\tNULL\t📦\t#F38181\t4\n60027\t电费\texpense\t60023\t⚡\t#F38181\t4\n60011\t淘宝\texpense\t60006\t🛍️\t#4ECDC4\t5\n60019\t飞机票\texpense\t60014\t✈️\t#95E1D3\t5\n60028\t取暖费\texpense\t60023\t🔥\t#F38181\t5\n60012\t山姆\texpense\t60006\t🛒\t#4ECDC4\t6\n60020\t公交\texpense\t60014\t🚌\t#95E1D3\t6\n60029\t保洁阿姨\texpense\t60023\t🧹\t#F38181\t6\n60035\t保险医疗\texpense\tNULL\t🏥\t#AA96DA\t6\n60013\t康宝莱\texpense\t60006\t💊\t#4ECDC4\t7\n60021\t火车票\texpense\t60014\t🚄\t#95E1D3\t7\n60030\t燃气费\texpense\t60023\t🔥\t#F38181\t7\n60022\t保养\texpense\t60014\t🔧\t#95E1D3\t8\n60031\t快递费\texpense\t60023\t📦\t#F38181\t8\n60032\t喵喵\texpense\t60023\t🐱\t#F38181\t9\n60033\t旺旺\texpense\t60023\t🐶\t#F38181\t10\n60034\t喵喵+旺旺\texpense\t60023\t🐾\t#F38181\t11\n",
+  "stderr": "",
+  "execution_time_ms": 1830
+}

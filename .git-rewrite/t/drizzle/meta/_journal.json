@@ -1,0 +1,55 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1769366671425,
+      "tag": "0000_past_xorn",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1769370896742,
+      "tag": "0001_classy_the_professor",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1769372071751,
+      "tag": "0002_flaky_lady_ursula",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1769406916615,
+      "tag": "0003_broad_gressill",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1769407253414,
+      "tag": "0004_overrated_argent",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1769433376262,
+      "tag": "0005_cool_vivisector",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1769433771841,
+      "tag": "0006_lean_otto_octavius",
+      "breakpoints": true
+    }
+  ]
+}

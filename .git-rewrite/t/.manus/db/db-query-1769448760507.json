@@ -1,0 +1,28 @@
+{
+  "query": "\n-- 查询所有账本的ID和名称\nSELECT id, name, type, ownerId FROM ledgers ORDER BY id;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \n-- 查询所有账本的ID和名称\nSELECT id, name, type, ownerId FROM ledgers ORDER BY id;\n",
+  "rows": [
+    {
+      "id": "60001",
+      "name": "家庭账本",
+      "type": "family",
+      "ownerId": "4200293"
+    },
+    {
+      "id": "60002",
+      "name": "家庭账本",
+      "type": "family",
+      "ownerId": "4200293"
+    },
+    {
+      "id": "60003",
+      "name": "生意账本",
+      "type": "business",
+      "ownerId": "4200293"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\ttype\townerId\n60001\t家庭账本\tfamily\t4200293\n60002\t家庭账本\tfamily\t4200293\n60003\t生意账本\tbusiness\t4200293\n",
+  "stderr": "",
+  "execution_time_ms": 1519
+}

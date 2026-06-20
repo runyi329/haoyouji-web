@@ -1,0 +1,31 @@
+name: 诊断能源价格扫描器
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    name: 检查服务器日志和网络连通性
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🔑 配置SSH密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: 🔍 检查服务器状态
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} 'bash -s' << 'ENDSSH'
+            echo "=== PM2进程状态 ==="
+            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 list' 2>&1
+
+            echo ""
+            echo "=== 最新PM2日志（最后60行）==="
+            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 logs haoyouji-web --nostream --lines 60' 2>&1
+
+            echo ""
+            echo "=== 测试Yahoo Finance连通性 ==="
+            curl -s --max-time 10 -A "Mozilla/5.0" "https://query1.finance.yahoo.com/v8/finance/chart/CL=F?interval=1d&range=1d" -o /tmp/yahoo_test.json && python3 -c "import json; d=json.load(open('/tmp/yahoo_test.json')); print('WTI:', d['chart']['result'][0]['meta'].get('regularMarketPrice'))" 2>&1 || echo "Yahoo Finance访问失败"
+          ENDSSH

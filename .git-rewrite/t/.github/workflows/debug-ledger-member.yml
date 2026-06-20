@@ -1,0 +1,25 @@
+name: 查询ledger_members中Yunting
+on:
+  workflow_dispatch:
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 配置SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      - name: 查询
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+            echo "=== Yunting在users表中的id ==="
+            mysql -u root -pMiao@20190603 crm_db -e "SELECT id, name, email FROM users WHERE name='Yunting';"
+            echo "=== ledger_members表中userId=540801的记录 ==="
+            mysql -u root -pMiao@20190603 crm_db -e "SELECT * FROM ledger_members WHERE userId=540801 LIMIT 5;"
+            echo "=== funder_order_alert_state表是否存在 ==="
+            mysql -u root -pMiao@20190603 crm_db -e "SHOW TABLES LIKE 'funder_order_alert_state';"
+            echo "=== funderGetAlertState接口的权限检查逻辑 ==="
+            grep -n "funderGetAlertState\|ledger_members.*userId\|FORBIDDEN" /root/haoyouji-web/server/routers.ts | head -10
+          ENDSSH

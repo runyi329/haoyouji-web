@@ -1,0 +1,1 @@
+ALTER TABLE `company_reports` MODIFY COLUMN `raw_text` longtext;

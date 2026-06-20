@@ -1,0 +1,28 @@
+{
+  "query": "\nSELECT \n  c.id,\n  c.name AS contact_name,\n  ccf.fieldName,\n  ccf.fieldValue AS company_name\nFROM contacts c\nINNER JOIN users u ON c.parentUserId = u.id\nINNER JOIN contact_custom_fields ccf ON c.id = ccf.contactId\nWHERE u.username = 'Jiang' \n  AND ccf.fieldName = '公司名称'\n  AND c.name IN ('王茜', '李晓洁', '羊仲平')\nLIMIT 5;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \nSELECT \n  c.id,\n  c.name AS contact_name,\n  ccf.fieldName,\n  ccf.fieldValue AS company_name\nFROM contacts c\nINNER JOIN users u ON c.parentUserId = u.id\nINNER JOIN contact_custom_fields ccf ON c.id = ccf.contactId\nWHERE u.username = 'Jiang' \n  AND ccf.fieldName = '公司名称'\n  AND c.name IN ('王茜', '李晓洁', '羊仲平')\nLIMIT 5;\n",
+  "rows": [
+    {
+      "id": "540004",
+      "contact_name": "羊仲平",
+      "fieldName": "公司名称",
+      "company_name": "隐钰庐（上海）艺术设计有限公司"
+    },
+    {
+      "id": "390031",
+      "contact_name": "李晓洁",
+      "fieldName": "公司名称",
+      "company_name": "上海桥孚科技有限公司"
+    },
+    {
+      "id": "1110001",
+      "contact_name": "王茜",
+      "fieldName": "公司名称",
+      "company_name": "北京扶摇新程信息咨询有限公司"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tcontact_name\tfieldName\tcompany_name\n540004\t羊仲平\t公司名称\t隐钰庐（上海）艺术设计有限公司\n390031\t李晓洁\t公司名称\t上海桥孚科技有限公司\n1110001\t王茜\t公司名称\t北京扶摇新程信息咨询有限公司\n",
+  "stderr": "",
+  "execution_time_ms": 53
+}

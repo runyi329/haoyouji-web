@@ -1,0 +1,20 @@
+{
+  "query": "SELECT id, username, role FROM users WHERE username IN ('hyy329', 'jiang');",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute SELECT id, username, role FROM users WHERE username IN ('hyy329', 'jiang');",
+  "rows": [
+    {
+      "id": "28",
+      "username": "hyy329",
+      "role": "super_admin"
+    },
+    {
+      "id": "870413",
+      "username": "jiang",
+      "role": "parent"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tusername\trole\n28\thyy329\tsuper_admin\n870413\tjiang\tparent\n",
+  "stderr": "",
+  "execution_time_ms": 373
+}

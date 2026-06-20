@@ -1,0 +1,43 @@
+name: 紧急重启服务
+
+on:
+  workflow_dispatch:
+
+jobs:
+  restart:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 配置SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "Host ${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/config
+          echo "  StrictHostKeyChecking no" >> ~/.ssh/config
+          echo "  UserKnownHostsFile /dev/null" >> ~/.ssh/config
+          echo "  ConnectTimeout 10" >> ~/.ssh/config
+          echo "  ServerAliveInterval 10" >> ~/.ssh/config
+          echo "  ServerAliveCountMax 6" >> ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+      - name: 杀掉占用进程并重启
+        timeout-minutes: 3
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
+            echo "=== 杀掉占用进程 ==="
+            pkill -9 -f "pnpm" 2>/dev/null || true
+            pkill -9 -f "vite" 2>/dev/null || true
+            pkill -9 -f "esbuild" 2>/dev/null || true
+            sleep 3
+            echo "=== 重启 pm2 ==="
+            cd ~/haoyouji-web
+            pm2 restart haoyouji-web 2>/dev/null && echo "pm2 restart ok" || \
+            pm2 start ecosystem.config.cjs 2>/dev/null && echo "pm2 start ecosystem ok" || \
+            pm2 start dist/index.js --name haoyouji-web 2>/dev/null && echo "pm2 start dist ok" || \
+            echo "pm2 all failed"
+            sleep 3
+            echo "=== 重启 nginx ==="
+            systemctl restart nginx 2>/dev/null || service nginx restart 2>/dev/null || nginx -s reload 2>/dev/null || echo "nginx restart failed"
+            echo "=== pm2 状态 ==="
+            pm2 list
+          '

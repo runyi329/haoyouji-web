@@ -1,0 +1,26 @@
+name: 查询59号账本数据
+
+on:
+  workflow_dispatch:
+
+jobs:
+  query:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 设置SSH密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      
+      - name: 查询数据库
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+            echo "=== 59号账本ledger_members ==="
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "SELECT lm.userId, lm.role, u.name as userName FROM ledger_members lm LEFT JOIN users u ON u.id = lm.userId WHERE lm.ledgerId=59;"
+            echo "=== 59号账本equity_shares ==="
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "SELECT es.id, es.userId, es.shareType, es.shareCount, es.grantDate, u.name as userName FROM equity_shares es LEFT JOIN users u ON u.id = es.userId WHERE es.ledgerId=59 ORDER BY es.id;"
+            echo "=== 59号账本基本信息 ==="
+            mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e "SELECT id, name, type FROM ledgers WHERE id=59;"
+          ENDSSH

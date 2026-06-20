@@ -1,0 +1,47 @@
+# triggered: 2026-04-18 retry5 query specific template IDs
+name: zz-diagnose-sms
+on:
+  push:
+    paths:
+      - '.github/workflows/zz-diagnose-sms.yml'
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 配置SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      - name: 诊断SMS配置
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+          cd /root/haoyouji-web
+          export $(grep -v '^#' .env | xargs) 2>/dev/null || true
+          node -e "
+          const tencentcloud = require('tencentcloud-sdk-nodejs');
+          const SmsClient = tencentcloud.sms.v20210111.Client;
+          const client = new SmsClient({
+            credential: { secretId: process.env.COS_SECRET_ID, secretKey: process.env.COS_SECRET_KEY },
+            region: process.env.TENCENT_SMS_REGION || 'ap-guangzhou',
+            profile: { httpProfile: { endpoint: 'sms.tencentcloudapi.com' } },
+          });
+          async function run() {
+            // 1. 查国内全部模板（Limit=100）
+            const r1 = await client.DescribeSmsTemplateList({ International: 0, TemplateIdSet: [], Limit: 100, Offset: 0 }).catch(e => ({ error: e.code + ': ' + e.message }));
+            console.log('国内模板总数:', r1.error || (r1.TemplateStatusSet || []).length);
+            
+            // 2. 直接查指定ID
+            const r2 = await client.DescribeSmsTemplateList({ International: 0, TemplateIdSet: [2630924, 2623560] }).catch(e => ({ error: e.code + ': ' + e.message }));
+            if (r2.error) { console.log('指定ID查询错误:', r2.error); }
+            else { (r2.TemplateStatusSet || []).forEach(t => console.log('找到模板 ID:', t.TemplateId, '名称:', t.TemplateName, '状态:', t.StatusCode)); }
+            
+            // 3. 查国际短信
+            const r3 = await client.DescribeSmsTemplateList({ International: 1, TemplateIdSet: [], Limit: 100, Offset: 0 }).catch(e => ({ error: e.code + ': ' + e.message }));
+            console.log('国际模板总数:', r3.error || (r3.TemplateStatusSet || []).length);
+          }
+          run().catch(e => console.error('运行错误:', e.message));
+          " 2>&1
+          ENDSSH

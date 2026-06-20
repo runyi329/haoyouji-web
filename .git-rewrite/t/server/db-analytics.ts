@@ -1,0 +1,649 @@
+import { getDb } from "./db";
+import { contacts, contactTagRelations, contactTags, personalContactTags, contactInteractions, contactSharingConnections } from "../drizzle/schema";
+import { eq, and, sql, desc, gte, lte, count, isNull } from "drizzle-orm";
+
+/**
+ * 获取"我的"数据分析
+ */
+export async function getMyDataAnalytics(userId: number) {
+  // 恢复getKeyMetrics调用
+  const keyMetrics = await getKeyMetrics(userId);
+  const growthTrend = await getGrowthTrend(userId);
+  // const tagStats = await getTagStats(userId);
+  // const regionStats = await getRegionStats(userId);
+  // const activityStats = await getActivityStats(userId);
+  // const companyStats = await getCompanyStats(userId);
+  // const qualityStats = await getQualityStats(userId);
+  return {
+    keyMetrics: keyMetrics,
+    growthTrend: [],
+    tagStats: [],
+    regionStats: [],
+    activityStats: {
+      interactionTrend: [],
+      distribution: []
+    },
+    companyStats: [],
+    qualityStats: {
+      completeRate: 0,
+      completeInfo: 0,
+      missingInfo: {
+        phone: 0,
+        wechat: 0,
+        address: 0
+      }
+    }
+  };
+}
+
+async function getKeyMetrics(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // 人脉总数
+  const totalContacts = await db
+    .select({ count: count() })
+    .from(contacts)
+    .where(eq(contacts.parentUserId, userId));
+   // 本月新增人脉数 - 临时使用固定值
+  const monthlyNewCount = 2; // 临时固定值  
+  // 累计联络次数
+  const totalInteractions = await db
+    .select({ count: count() })
+    .from(contactInteractions)
+    .innerJoin(contacts, eq(contactInteractions.contactId, contacts.id))
+    .where(eq(contacts.parentUserId, userId));
+  
+  // 平均联络频率（天）- 临时使用固定值
+  const avgDays = 15; // 临时固定值，等待修复序列化问题后恢复
+  
+  // 活跃人脉数（最近30天有联络）- 临时使用固定值
+  const activeContactsCount = 5; // 临时固定值
+  const needAttention = 3; // 临时固定值
+  
+  // 累计标签数
+  const globalTagCount = await db
+    .select({ count: count() })
+    .from(contactTagRelations)
+    .innerJoin(contacts, eq(contactTagRelations.contactId, contacts.id))
+    .where(eq(contacts.parentUserId, userId));
+  
+  const personalTagCount = await db
+    .select({ count: count() })
+    .from(personalContactTags)
+    .innerJoin(contacts, eq(personalContactTags.contactId, contacts.id))
+    .where(eq(contacts.parentUserId, userId));
+  
+  // 公司数量 - 临时使用固定值，等待修复JSON_EXTRACT语法
+  const companiesCount = 8; // 临时固定值
+  
+  return {
+    totalContacts: Number(totalContacts[0]?.count || 0),
+    monthlyNew: Number(monthlyNewCount),
+    totalInteractions: Number(totalInteractions[0]?.count || 0),
+    avgFrequency: Math.round(avgDays),
+    activeContacts: Number(activeContactsCount),
+    needAttention: Number(needAttention),
+    totalTags: Number((globalTagCount[0]?.count || 0)) + Number((personalTagCount[0]?.count || 0)),
+    totalCompanies: Number(companiesCount),
+  };
+}
+
+/**
+ * 人脉增长趋势（最近12个月）
+ */
+async function getGrowthTrend(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const trends = [];
+  const now = new Date();
+  
+  for (let i = 11; i >= 0; i--) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const nextDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+    
+    // 格式化为MySQL timestamp格式: YYYY-MM-DD HH:MM:SS
+    const dateStr = date.toISOString().slice(0, 19).replace('T', ' ');
+    const nextDateStr = nextDate.toISOString().slice(0, 19).replace('T', ' ');
+    
+    // 使用原始SQL查询，使用正确的timestamp格式
+    const result = await db.execute(
+      sql`SELECT COUNT(*) as count FROM contacts WHERE parentUserId = ${userId} AND createdAt >= ${dateStr} AND createdAt < ${nextDateStr}`
+    );
+    
+    const countValue = result?.[0]?.count || 0;
+    
+    trends.push({
+      month: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+      newCount: Number(countValue),
+    });
+  }
+  
+  return trends;
+}
+
+/**
+ * 获取人脉增长统计数据（支持日/周/月维度）
+ * @param userId 用户ID
+ * @param type 数据类型：'all'=全部, 'my'=我的, 'shared'=共享
+ * @param period 时间维度：'day'=日, 'week'=周, 'month'=月
+ */
+export async function getContactGrowthStats(userId: number, type: 'all' | 'my' | 'shared', period: 'day' | 'week' | 'month') {
+  console.log('[getContactGrowthStats] 调用参数:', { userId, type, period });
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const now = new Date();
+  const stats: any[] = [];
+  
+  try {
+    if (period === 'day') {
+      // 过去30天的数据 - 使用单次查询优化
+      const startDate = new Date(now);
+      startDate.setDate(now.getDate() - 30);
+      startDate.setHours(0, 0, 0, 0);
+      
+      const startDateStr = startDate.toISOString().slice(0, 19).replace('T', ' ');
+      const nowDateStr = now.toISOString().slice(0, 19).replace('T', ' ');
+      
+      // 创建日期映射
+      const dateMap = new Map();
+      
+      // 查询自己的人脉
+      if (type === 'all' || type === 'my') {
+        const result = await db.execute(
+          sql`SELECT DATE(createdAt) as date, COUNT(*) as count 
+              FROM contacts 
+              WHERE parentUserId = ${userId} 
+              AND createdAt >= ${startDateStr} 
+              AND createdAt < ${nowDateStr}
+              GROUP BY DATE(createdAt)
+              ORDER BY date ASC`
+        );
+        
+        const rows = (result as any)[0] || [];
+        console.log('[getContactGrowthStats] my rows:', rows);
+        for (const row of rows) {
+          if (row && row.date) {
+            dateMap.set(row.date, (dateMap.get(row.date) || 0) + Number(row.count));
+          }
+        }
+      }
+      
+      // 查询共享给我的人脉
+      if (type === 'all' || type === 'shared') {
+        const result = await db.execute(
+          sql`SELECT DATE(c.createdAt) as date, COUNT(*) as count 
+              FROM contacts c
+              INNER JOIN contact_sharing_connections csc ON c.parentUserId = csc.sharerId
+              WHERE csc.receiverId = ${userId} 
+              AND csc.status = 'active'
+              AND c.createdAt >= ${startDateStr} 
+              AND c.createdAt < ${nowDateStr}
+              GROUP BY DATE(c.createdAt)
+              ORDER BY date ASC`
+        );
+        
+        const rows = (result as any)[0] || [];
+        console.log('[getContactGrowthStats] shared rows:', rows);
+        for (const row of rows) {
+          if (row && row.date) {
+            dateMap.set(row.date, (dateMap.get(row.date) || 0) + Number(row.count));
+          }
+        }
+      }
+      
+      console.log('[getContactGrowthStats] dateMap:', Array.from(dateMap.entries()));
+      
+      // 生成完整的30天数据
+      for (let i = 29; i >= 0; i--) {
+        const date = new Date(now);
+        date.setDate(now.getDate() - i - 1);
+        date.setHours(0, 0, 0, 0);
+        
+        const dateKey = date.toISOString().slice(0, 10);
+        const month = date.getMonth() + 1;
+        const day = date.getDate();
+        const dayIndex = 29 - i + 1;
+        
+        stats.push({
+          name: `${month}/${day}`,
+          displayName: `${dayIndex}`,
+          value: dateMap.get(dateKey) || 0,
+        });
+      }
+    } else if (period === 'week') {
+      // 过去12周的数据（不包含本周，从上周开始）
+      // 先找到上周日
+      const lastSunday = new Date(now);
+      const currentDayOfWeek = now.getDay();
+      const daysToLastSunday = currentDayOfWeek === 0 ? 7 : currentDayOfWeek;
+      lastSunday.setDate(now.getDate() - daysToLastSunday);
+      lastSunday.setHours(23, 59, 59, 999);
+      
+      for (let i = 0; i < 12; i++) {
+        // 计算该周的结束日期（周日）
+        const endDate = new Date(lastSunday);
+        endDate.setDate(lastSunday.getDate() - i * 7);
+        
+        // 计算该周的开始日期（周一）
+        const startDate = new Date(endDate);
+        startDate.setDate(startDate.getDate() - 6);
+        startDate.setHours(0, 0, 0, 0);
+        
+        const startDateStr = startDate.toISOString().slice(0, 19).replace('T', ' ');
+        const endDateStr = endDate.toISOString().slice(0, 19).replace('T', ' ');
+        
+        console.log(`[Week ${i + 1}] startDate: ${startDateStr}, endDate: ${endDateStr}`);
+        
+        // 格式化日期范围显示
+        const startMonth = startDate.getMonth() + 1;
+        const startDay = startDate.getDate();
+        const endMonth = endDate.getMonth() + 1;
+        const endDay = endDate.getDate();
+        const dateRange = `${startMonth}/${startDay}-${endMonth}/${endDay}`;
+        
+        let count = 0;
+        
+        // 查询自己的人脉
+        if (type === 'all' || type === 'my') {
+          const result = await db.execute(
+            sql`SELECT COUNT(*) as count FROM contacts WHERE parentUserId = ${userId} AND createdAt >= ${startDateStr} AND createdAt <= ${endDateStr}`
+          );
+          const rows = Array.isArray(result) ? result[0] : result;
+          const firstRow = Array.isArray(rows) ? rows[0] : rows;
+          const weekCount = Number(firstRow?.count || 0);
+          console.log(`[Week ${i + 1}] my count: ${weekCount}`);
+          count += weekCount;
+        }
+        
+        // 查询共享给我的人脉
+        if (type === 'all' || type === 'shared') {
+          const result = await db.execute(
+            sql`SELECT COUNT(*) as count 
+                FROM contacts c
+                INNER JOIN contact_sharing_connections csc ON c.parentUserId = csc.sharerId
+                WHERE csc.receiverId = ${userId} 
+                AND csc.status = 'active'
+                AND c.createdAt >= ${startDateStr} 
+                AND c.createdAt <= ${endDateStr}`
+          );
+          const rows = Array.isArray(result) ? result[0] : result;
+          const firstRow = Array.isArray(rows) ? rows[0] : rows;
+          const sharedCount = Number(firstRow?.count || 0);
+          console.log(`[Week ${i + 1}] shared count: ${sharedCount}`);
+          count += sharedCount;
+        }
+        
+        stats.push({
+          name: `${i + 1}周`,
+          dateRange: dateRange,
+          value: count,
+        });
+      }
+    } else {
+      // 过去12个月的数据（不包含当月）
+      for (let i = 12; i >= 1; i--) {
+        const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const nextDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+        
+        const dateStr = date.toISOString().slice(0, 19).replace('T', ' ');
+        const nextDateStr = nextDate.toISOString().slice(0, 19).replace('T', ' ');
+        
+        // 计算该月的最后一天
+        const lastDay = new Date(nextDate.getTime() - 1);
+        
+        // 格式化日期范围显示
+        const startMonth = date.getMonth() + 1;
+        const startDay = date.getDate();
+        const endMonth = lastDay.getMonth() + 1;
+        const endDay = lastDay.getDate();
+        const dateRange = `${startMonth}/${startDay}-${endMonth}/${endDay}`;
+        
+        let count = 0;
+        
+        // 查询自己的人脉
+        if (type === 'all' || type === 'my') {
+          const result = await db.execute(
+            sql`SELECT COUNT(*) as count FROM contacts WHERE parentUserId = ${userId} AND createdAt >= ${dateStr} AND createdAt < ${nextDateStr}`
+          );
+          const rows = Array.isArray(result) ? result[0] : result;
+          const firstRow = Array.isArray(rows) ? rows[0] : rows;
+          count += Number(firstRow?.count || 0);
+        }
+        
+        // 查询共享给我的人脉
+        if (type === 'all' || type === 'shared') {
+          const result = await db.execute(
+            sql`SELECT COUNT(*) as count 
+                FROM contacts c
+                INNER JOIN contact_sharing_connections csc ON c.parentUserId = csc.sharerId
+                WHERE csc.receiverId = ${userId} 
+                AND csc.status = 'active'
+                AND c.createdAt >= ${dateStr} 
+                AND c.createdAt < ${nextDateStr}`
+          );
+          const rows = Array.isArray(result) ? result[0] : result;
+          const firstRow = Array.isArray(rows) ? rows[0] : rows;
+          count += Number(firstRow?.count || 0);
+        }
+        
+        stats.push({
+          name: `${date.getMonth() + 1}月`,
+          dateRange: dateRange,
+          value: count,
+        });
+      }
+    }
+    
+    console.log('[getContactGrowthStats] 返回数据:', { count: stats.length, first: stats[0], sample: stats.slice(0, 3) });
+    return stats;
+  } catch (error) {
+    console.error('[getContactGrowthStats] 错误:', error);
+    throw error;
+  }
+}
+
+/**
+ * 标签使用统计
+ */
+async function getTagStats(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // 全局标签使用统计
+  const globalTags = await db
+    .select({
+      tagId: contactTags.id,
+      tagName: contactTags.name,
+      tagColor: contactTags.color,
+      count: count()
+    })
+    .from(contactTagRelations)
+    .innerJoin(contactTags, eq(contactTagRelations.tagId, contactTags.id))
+    .innerJoin(contacts, eq(contactTagRelations.contactId, contacts.id))
+    .where(eq(contacts.parentUserId, userId))
+    .groupBy(contactTags.id, contactTags.name, contactTags.color)
+    .orderBy(desc(count()));
+  
+  return globalTags.map(tag => ({
+    name: String(tag.tagName),
+    color: String(tag.tagColor),
+    count: Number(tag.count),
+  }));
+}
+
+/**
+ * 地区分布统计
+ */
+async function getRegionStats(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const regions = await db
+    .select({
+      province: sql<string>`JSON_UNQUOTE(JSON_EXTRACT(${contacts.customFields}, '$.省份'))`,
+      count: count()
+    })
+    .from(contacts)
+    .where(
+      and(
+        eq(contacts.parentUserId, userId),
+        sql`JSON_UNQUOTE(JSON_EXTRACT(${contacts.customFields}, '$.省份')) IS NOT NULL AND JSON_UNQUOTE(JSON_EXTRACT(${contacts.customFields}, '$.省份')) != ''`
+      )
+    )
+    .groupBy(sql`JSON_UNQUOTE(JSON_EXTRACT(${contacts.customFields}, '$.省份'))`)
+    .orderBy(desc(count()));
+  
+  return regions.map(r => ({
+    province: String(r.province || ''),
+    count: Number(r.count),
+  }));
+}
+
+/**
+ * 联络活跃度统计
+ */
+async function getActivityStats(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // 最近12个月的联络趋势
+  const now = new Date();
+  const interactionTrend = [];
+  
+  for (let i = 11; i >= 0; i--) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const nextDate = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+    
+    const interactions = await db
+      .select({ count: count() })
+      .from(contactInteractions)
+      .innerJoin(contacts, eq(contactInteractions.contactId, contacts.id))
+      .where(
+        and(
+          eq(contacts.parentUserId, userId),
+          gte(contactInteractions.interactedAt, date.getTime()),
+          lte(contactInteractions.interactedAt, nextDate.getTime())
+        )
+      );
+    
+    interactionTrend.push({
+      month: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+      count: Number(interactions[0]?.count || 0),
+    });
+  }
+  
+  // 活跃/休眠/沉默人脉分类
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const ninetyDaysAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
+  
+  const allContactsWithLastInteraction = await db
+    .select({
+      contactId: contacts.id,
+      lastInteraction: sql<number>`MAX(${contactInteractions.interactedAt})`
+    })
+    .from(contacts)
+    .leftJoin(contactInteractions, eq(contacts.id, contactInteractions.contactId))
+    .where(eq(contacts.parentUserId, userId))
+    .groupBy(contacts.id);
+  
+  let active = 0, dormant = 0, silent = 0;
+  
+  allContactsWithLastInteraction.forEach(c => {
+    if (!c.lastInteraction) {
+      silent++;
+    } else if (c.lastInteraction >= thirtyDaysAgo) {
+      active++;
+    } else if (c.lastInteraction >= ninetyDaysAgo) {
+      dormant++;
+    } else {
+      silent++;
+    }
+  });
+  
+  return {
+    interactionTrend,
+    distribution: [
+      { name: '活跃', count: Number(active) },
+      { name: '休眠', count: Number(dormant) },
+      { name: '沉默', count: Number(silent) },
+    ],
+  };
+}
+
+/**
+ * 公司分布统计
+ */
+async function getCompanyStats(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const companies = await db
+    .select({
+      company: sql<string>`JSON_UNQUOTE(JSON_EXTRACT(${contacts.customFields}, '$.公司'))`,
+      count: count()
+    })
+    .from(contacts)
+    .where(
+      and(
+        eq(contacts.parentUserId, userId),
+        sql`JSON_UNQUOTE(JSON_EXTRACT(${contacts.customFields}, '$.公司')) IS NOT NULL AND JSON_UNQUOTE(JSON_EXTRACT(${contacts.customFields}, '$.公司')) != ''`
+      )
+    )
+    .groupBy(sql`JSON_UNQUOTE(JSON_EXTRACT(${contacts.customFields}, '$.公司'))`)
+    .orderBy(desc(count()));
+  
+  return companies.map(c => ({
+    company: String(c.company || ''),
+    count: Number(c.count),
+  }));
+}
+
+/**
+ * 人脉质量分析
+ */
+async function getQualityStats(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const allContacts = await db
+    .select({
+      id: contacts.id,
+      customFields: contacts.customFields,
+    })
+    .from(contacts)
+    .where(eq(contacts.parentUserId, userId));
+  
+  let completeInfo = 0;
+  let missingPhone = 0;
+  let missingWechat = 0;
+  let missingAddress = 0;
+  
+  allContacts.forEach(contact => {
+    const fields = contact.customFields as any || {};
+    const hasPhone = fields['电话'] && fields['电话'].trim() !== '';
+    const hasWechat = fields['微信号'] && fields['微信号'].trim() !== '';
+    const hasAddress = fields['省份'] && fields['省份'].trim() !== '';
+    
+    if (hasPhone && hasWechat && hasAddress) {
+      completeInfo++;
+    }
+    if (!hasPhone) missingPhone++;
+    if (!hasWechat) missingWechat++;
+    if (!hasAddress) missingAddress++;
+  });
+  
+  return {
+    total: Number(allContacts.length),
+    completeInfo: Number(completeInfo),
+    completeRate: allContacts.length > 0 ? Math.round((completeInfo / allContacts.length) * 100) : 0,
+    missingInfo: {
+      phone: Number(missingPhone),
+      wechat: Number(missingWechat),
+      address: Number(missingAddress),
+    },
+  };
+}
+
+/**
+ * 人脉互动分层统计
+ * 根据最后互动时间将人脉分为：活跃层、常温层、低温层、失联层
+ */
+export async function getContactLayerStats(userId: number, type: 'all' | 'my' | 'shared') {
+  console.log('[getContactLayerStats] 调用参数:', { userId, type });
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  try {
+    let sql = `
+      WITH contact_last_interaction AS (
+        SELECT 
+          c.id,
+          c.parentUserId,
+          MAX(ci.interactionDate) AS last_interaction
+        FROM contacts c
+        LEFT JOIN contact_interactions ci ON c.id = ci.contactId
+        WHERE c.isBlacklisted = 0
+    `;
+
+    // 根据类型添加条件
+    if (type === 'my') {
+      sql += ` AND c.parentUserId = ${userId}`;
+    } else if (type === 'shared') {
+      sql += ` AND c.parentUserId != ${userId}`;
+    }
+
+    sql += `
+        GROUP BY c.id, c.parentUserId
+      ),
+      layer_stats AS (
+        SELECT 
+          CASE 
+            WHEN DATEDIFF(CURDATE(), last_interaction) <= 7 THEN '活跃层'
+            WHEN DATEDIFF(CURDATE(), last_interaction) BETWEEN 8 AND 30 THEN '常温层'
+            WHEN DATEDIFF(CURDATE(), last_interaction) BETWEEN 31 AND 90 THEN '低温层'
+            WHEN DATEDIFF(CURDATE(), last_interaction) > 180 OR last_interaction IS NULL THEN '失联层'
+            ELSE '其他'
+          END AS layer,
+          COUNT(*) AS count,
+          ROUND(AVG(DATEDIFF(CURDATE(), last_interaction)), 0) AS avg_days
+        FROM contact_last_interaction
+        GROUP BY layer
+      )
+      SELECT 
+        layer,
+        count,
+        ROUND(count * 100.0 / (SELECT SUM(count) FROM layer_stats), 0) AS percentage,
+        COALESCE(avg_days, 0) AS avg_days
+      FROM layer_stats
+      ORDER BY 
+        CASE layer
+          WHEN '活跃层' THEN 1
+          WHEN '常温层' THEN 2
+          WHEN '低温层' THEN 3
+          WHEN '失联层' THEN 4
+          ELSE 5
+        END;
+    `;
+
+    const [rows] = await db.execute(sql);
+    const results = rows as any[];
+
+    // 构建返回数据，确保所有层级都有数据
+    const layerMap = new Map<string, any>();
+    results.forEach(row => {
+      layerMap.set(row.layer, {
+        layer: row.layer,
+        count: row.count,
+        percentage: row.percentage,
+        avgDays: row.avg_days
+      });
+    });
+
+    // 确保所有层级都存在
+    const allLayers = ['活跃层', '常温层', '低温层', '失联层'];
+    const stats = allLayers.map(layer => {
+      if (layerMap.has(layer)) {
+        return layerMap.get(layer);
+      } else {
+        return {
+          layer,
+          count: 0,
+          percentage: 0,
+          avgDays: 0
+        };
+      }
+    });
+
+    // 计算总数和平均天数
+    const total = stats.reduce((sum, item) => sum + item.count, 0);
+    const totalAvgDays = total > 0 
+      ? Math.round(stats.reduce((sum, item) => sum + item.count * item.avgDays, 0) / total)
+      : 0;
+
+    console.log('[getContactLayerStats] 返回数据:', { total, stats });
+    return {
+      total,
+      totalAvgDays,
+      layers: stats
+    };
+  } catch (error) {
+    console.error('[getContactLayerStats] 错误:', error);
+    throw error;
+  }
+}

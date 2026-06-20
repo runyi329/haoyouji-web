@@ -1,0 +1,38 @@
+name: 补入订单53卖出到账余额
+on:
+  workflow_dispatch:
+jobs:
+  fix:
+    name: 补入AF260328000053卖出成交余额
+    runs-on: ubuntu-latest
+    steps:
+      - name: 配置SSH密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      - name: 补入余额记录
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e \"
+              -- 先确认没有重复记录
+              SELECT COUNT(*) as existing_count FROM af_manual_balances
+              WHERE ledger_id = 52 AND user_id = 4957305 AND note LIKE '%卖出成交%ETH%';
+
+              -- 插入卖出到账记录（本金2000 + 净利润2026.3562 = 4026.3562）
+              INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+              VALUES (52, 4957305, 4026.3562, '卖出成交 ETH 本金2000.00+收益2100.0000-管理费73.6438 USDT', '2026-04-14 06:30:00', NOW());
+
+              -- 验证插入结果
+              SELECT '=== 插入后用户4957305余额汇总 ===' as info;
+              SELECT user_id, SUM(amount) as total_balance, COUNT(*) as record_count
+              FROM af_manual_balances
+              WHERE ledger_id = 52 AND user_id = 4957305;
+
+              SELECT '=== 最新插入的记录 ===' as info;
+              SELECT id, ledger_id, user_id, amount, note, created_at
+              FROM af_manual_balances
+              WHERE ledger_id = 52 AND user_id = 4957305
+              ORDER BY id DESC LIMIT 5;
+            \""

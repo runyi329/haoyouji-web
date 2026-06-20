@@ -1,0 +1,28 @@
+name: 重新构建并重启
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 配置 SSH 密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: 重新构建并重启
+        run: |
+          scp -P ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+            scripts/tushare/rebuild_and_restart.sh \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/root/rebuild_and_restart.sh
+
+          ssh -p ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "bash /root/rebuild_and_restart.sh"

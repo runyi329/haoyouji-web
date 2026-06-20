@@ -1,0 +1,8 @@
+{
+  "query": "SELECT id, company_name, uploaded_at FROM company_reports ORDER BY uploaded_at DESC;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute SELECT id, company_name, uploaded_at FROM company_reports ORDER BY uploaded_at DESC;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'uploaded_at' in 'field list'"
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "query": "\n-- 统计每个用户的人脉数量\nSELECT parentUserId, COUNT(*) as contact_count \nFROM contacts \nGROUP BY parentUserId;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \n-- 统计每个用户的人脉数量\nSELECT parentUserId, COUNT(*) as contact_count \nFROM contacts \nGROUP BY parentUserId;\n",
+  "rows": [
+    {
+      "parentUserId": "4680302",
+      "contact_count": "8"
+    },
+    {
+      "parentUserId": "3060001",
+      "contact_count": "16"
+    },
+    {
+      "parentUserId": "2040145",
+      "contact_count": "2"
+    },
+    {
+      "parentUserId": "999",
+      "contact_count": "1"
+    },
+    {
+      "parentUserId": "540801",
+      "contact_count": "353"
+    },
+    {
+      "parentUserId": "28",
+      "contact_count": "1"
+    },
+    {
+      "parentUserId": "870413",
+      "contact_count": "105"
+    },
+    {
+      "parentUserId": "999999",
+      "contact_count": "16"
+    },
+    {
+      "parentUserId": "1260396",
+      "contact_count": "4"
+    },
+    {
+      "parentUserId": "1",
+      "contact_count": "4"
+    },
+    {
+      "parentUserId": "8888",
+      "contact_count": "4"
+    }
+  ],
+  "messages": [],
+  "stdout": "parentUserId\tcontact_count\n4680302\t8\n3060001\t16\n2040145\t2\n999\t1\n540801\t353\n28\t1\n870413\t105\n999999\t16\n1260396\t4\n1\t4\n8888\t4\n",
+  "stderr": "",
+  "execution_time_ms": 1513
+}

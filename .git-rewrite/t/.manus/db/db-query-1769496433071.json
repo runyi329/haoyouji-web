@@ -1,0 +1,106 @@
+{
+  "query": "SELECT id, ledgerId, name, parentId, type, sortOrder FROM ledger_categories WHERE ledgerId = 60008 ORDER BY type, sortOrder, id;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute SELECT id, ledgerId, name, parentId, type, sortOrder FROM ledger_categories WHERE ledgerId = 60008 ORDER BY type, sortOrder, id;",
+  "rows": [
+    {
+      "id": "60046",
+      "ledgerId": "60008",
+      "name": "工资",
+      "parentId": "NULL",
+      "type": "income",
+      "sortOrder": "0"
+    },
+    {
+      "id": "60047",
+      "ledgerId": "60008",
+      "name": "奖金",
+      "parentId": "NULL",
+      "type": "income",
+      "sortOrder": "1"
+    },
+    {
+      "id": "60048",
+      "ledgerId": "60008",
+      "name": "投资收益",
+      "parentId": "NULL",
+      "type": "income",
+      "sortOrder": "2"
+    },
+    {
+      "id": "60049",
+      "ledgerId": "60008",
+      "name": "其他收入",
+      "parentId": "NULL",
+      "type": "income",
+      "sortOrder": "3"
+    },
+    {
+      "id": "60050",
+      "ledgerId": "60008",
+      "name": "餐饮",
+      "parentId": "NULL",
+      "type": "expense",
+      "sortOrder": "4"
+    },
+    {
+      "id": "60051",
+      "ledgerId": "60008",
+      "name": "交通",
+      "parentId": "NULL",
+      "type": "expense",
+      "sortOrder": "5"
+    },
+    {
+      "id": "60052",
+      "ledgerId": "60008",
+      "name": "购物",
+      "parentId": "NULL",
+      "type": "expense",
+      "sortOrder": "6"
+    },
+    {
+      "id": "60053",
+      "ledgerId": "60008",
+      "name": "娱乐",
+      "parentId": "NULL",
+      "type": "expense",
+      "sortOrder": "7"
+    },
+    {
+      "id": "60054",
+      "ledgerId": "60008",
+      "name": "医疗",
+      "parentId": "NULL",
+      "type": "expense",
+      "sortOrder": "8"
+    },
+    {
+      "id": "60055",
+      "ledgerId": "60008",
+      "name": "教育",
+      "parentId": "NULL",
+      "type": "expense",
+      "sortOrder": "9"
+    },
+    {
+      "id": "60056",
+      "ledgerId": "60008",
+      "name": "住房",
+      "parentId": "NULL",
+      "type": "expense",
+      "sortOrder": "10"
+    },
+    {
+      "id": "60057",
+      "ledgerId": "60008",
+      "name": "其他支出",
+      "parentId": "NULL",
+      "type": "expense",
+      "sortOrder": "11"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tledgerId\tname\tparentId\ttype\tsortOrder\n60046\t60008\t工资\tNULL\tincome\t0\n60047\t60008\t奖金\tNULL\tincome\t1\n60048\t60008\t投资收益\tNULL\tincome\t2\n60049\t60008\t其他收入\tNULL\tincome\t3\n60050\t60008\t餐饮\tNULL\texpense\t4\n60051\t60008\t交通\tNULL\texpense\t5\n60052\t60008\t购物\tNULL\texpense\t6\n60053\t60008\t娱乐\tNULL\texpense\t7\n60054\t60008\t医疗\tNULL\texpense\t8\n60055\t60008\t教育\tNULL\texpense\t9\n60056\t60008\t住房\tNULL\texpense\t10\n60057\t60008\t其他支出\tNULL\texpense\t11\n",
+  "stderr": "",
+  "execution_time_ms": 1523
+}

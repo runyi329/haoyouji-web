@@ -1,0 +1,8 @@
+{
+  "query": "ALTER TABLE ledger_members \nADD COLUMN permission_view ENUM('all','own') NOT NULL DEFAULT 'all' COMMENT '查看账目权限' AFTER nickname,\nADD COLUMN permission_add ENUM('all','own') NOT NULL DEFAULT 'all' COMMENT '添加账目权限' AFTER permission_view,\nADD COLUMN permission_edit ENUM('all','own') NOT NULL DEFAULT 'own' COMMENT '修改账目权限' AFTER permission_add,\nADD COLUMN permission_delete ENUM('all','own') NOT NULL DEFAULT 'own' COMMENT '删除账目权限' AFTER permission_edit;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute ALTER TABLE ledger_members \nADD COLUMN permission_view ENUM('all','own') NOT NULL DEFAULT 'all' COMMENT '查看账目权限' AFTER nickname,\nADD COLUMN permission_add ENUM('all','own') NOT NULL DEFAULT 'all' COMMENT '添加账目权限' AFTER permission_view,\nADD COLUMN permission_edit ENUM('all','own') NOT NULL DEFAULT 'own' COMMENT '修改账目权限' AFTER permission_add,\nADD COLUMN permission_delete ENUM('all','own') NOT NULL DEFAULT 'own' COMMENT '删除账目权限' AFTER permission_edit;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1054 (42S22) at line 1: Unknown column 'permission_view' in 'ledger_members'"
+  ]
+}

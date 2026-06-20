@@ -1,0 +1,32 @@
+name: 建立 ts_daily 数据库索引
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create-index:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 配置 SSH 密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: 上传建索引脚本到服务器
+        run: |
+          scp -P ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+            scripts/tushare/create_index.py \
+            scripts/tushare/PyMySQL-1.1.1-py3-none-any.whl \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/root/
+
+      - name: 在服务器上安装依赖并建立索引
+        run: |
+          ssh -p ${{ secrets.DEPLOY_PORT }} -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "pip3 install /root/PyMySQL-1.1.1-py3-none-any.whl --break-system-packages -q 2>/dev/null || true && python3 /root/create_index.py"

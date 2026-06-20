@@ -1,0 +1,33 @@
+name: 查询ccbtxea用户余额流水
+on:
+  workflow_dispatch:
+jobs:
+  query:
+    name: 查询海宇用户余额流水
+    runs-on: ubuntu-latest
+    steps:
+      - name: 配置SSH密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      - name: 查询余额流水
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e \"
+              SELECT '=== 查找用户ccbtxea ===' as info;
+              SELECT id, username, nickname, created_at FROM users WHERE username LIKE '%ccb%' OR username LIKE '%txe%' OR nickname LIKE '%海宇%';
+
+              SELECT '=== af_manual_balances中该用户所有记录 ===' as info;
+              SELECT b.id, b.ledger_id, b.user_id, b.amount, b.note, b.created_at
+              FROM af_manual_balances b
+              WHERE b.user_id IN (SELECT id FROM users WHERE username LIKE '%ccb%' OR username LIKE '%txe%' OR nickname LIKE '%海宇%')
+              ORDER BY b.id ASC;
+
+              SELECT '=== 该用户余额汇总（按账本）===' as info;
+              SELECT b.ledger_id, b.user_id, SUM(b.amount) as total_balance, COUNT(*) as record_count
+              FROM af_manual_balances b
+              WHERE b.user_id IN (SELECT id FROM users WHERE username LIKE '%ccb%' OR username LIKE '%txe%' OR nickname LIKE '%海宇%')
+              GROUP BY b.ledger_id, b.user_id;
+            \""

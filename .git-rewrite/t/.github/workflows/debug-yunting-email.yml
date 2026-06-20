@@ -1,0 +1,23 @@
+name: 查询Yunting邮箱字段
+on:
+  workflow_dispatch:
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 配置SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      - name: 查询数据库
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+            echo "=== Yunting用户的email字段原始值 ==="
+            mysql -u root -pMiao@20190603 crm_db -e "SELECT id, name, email, LENGTH(email) as email_len, phone, LENGTH(phone) as phone_len FROM users WHERE name='Yunting';"
+            echo "=== getUserById函数的SELECT语句 ==="
+            grep -n "getUserById\|SELECT.*FROM.*users\|textFields\|email\|phone\|company\|business" /root/haoyouji-web/server/db.ts | head -30
+            echo "=== sdk.ts中authenticateRequest如何调用getUserById ==="
+            grep -n "getUserById\|email\|phone\|company\|business" /root/haoyouji-web/server/_core/sdk.ts | head -20
+          ENDSSH

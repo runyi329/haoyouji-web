@@ -1,0 +1,948 @@
+import { useState, useMemo } from 'react';
+import { useLocation } from 'wouter';
+import { trpc } from '@/lib/trpc';
+
+const LEDGER_ID = 59;
+
+const GOLD = '#D4A830';
+const GOLD_DIM = 'rgba(220,185,60,0.5)';
+const GOLD_FAINT = 'rgba(201,168,76,0.15)';
+const GOLD_BORDER = 'rgba(201,168,76,0.3)';
+const GOLD_BORDER_SEL = 'rgba(201,168,76,0.7)';
+const BG_PAGE = 'linear-gradient(160deg,#0D0D00 0%,#1A1600 40%,#0D0D00 100%)';
+
+interface Member {
+  userId: number;
+  name: string;
+  avatar: string | null;
+  resourceWeight: number;
+  capitalWeight: number;
+  totalWeight: number;
+  capitalAmount?: number;
+  capitalRatio?: number;
+  shareNo?: string | null;
+  rawBonus?: number;
+  autoBonus?: number;
+  networkCount?: number;
+  tagCount?: number;
+  directReferrals?: number;
+}
+
+interface WeightLog {
+  id: number;
+  oldResourceWeight: number;
+  oldCapitalWeight: number;
+  newResourceWeight: number;
+  newCapitalWeight: number;
+  remark: string;
+  createdAt: Date;
+  operatorName: string;
+}
+
+interface PreviewItem {
+  userId: number;
+  name: string;
+  avatar: string | null;
+  shareNo: string;
+  capitalTotal: number;
+  rank: number;
+  tier: number | null;
+  capitalWeight: number;
+}
+
+interface TierRow {
+  tier: number;
+  rankFrom: number;
+  rankTo: number;
+  weight: number;
+}
+
+function Avatar({ name, avatar, size = 36 }: { name: string; avatar: string | null; size?: number }) {
+  if (avatar) {
+    return (
+      <img
+        src={avatar}
+        alt=""
+        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', border: `1px solid ${GOLD_BORDER}`, flexShrink: 0 }}
+      />
+    );
+  }
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: GOLD_FAINT, color: GOLD, border: `1px solid ${GOLD_BORDER}`, fontSize: size * 0.38, fontWeight: 700, flexShrink: 0,
+    }}>
+      {name.slice(0, 1)}
+    </div>
+  );
+}
+
+function formatDate(d: Date | string) {
+  const dt = d instanceof Date ? d : new Date(d);
+  const m = dt.getMonth() + 1;
+  const day = dt.getDate();
+  const hh = String(dt.getHours()).padStart(2, '0');
+  const mm = String(dt.getMinutes()).padStart(2, '0');
+  return `${m}月${day}日 ${hh}:${mm}`;
+}
+
+function formatCapital(n: number) {
+  if (n >= 10000) return (n / 10000).toFixed(1) + '万';
+  return n.toLocaleString();
+}
+
+// 资源权重成员行（含展开推荐人列表）
+function ResourceMemberRow({ m, ledgerId, idx, total }: { m: Member; ledgerId: number; idx: number; total: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const utils = trpc.useUtils();
+  const network = m.networkCount ?? 0;
+  const tag = m.tagCount ?? 0;
+  const networkBonus = Math.min(network * 0.01, 1.0);
+  const tagBonus = Math.min((tag / 10) * 0.01, 1.0);
+
+  // 查询该成员的被推荐人列表（仅展开时加载）
+  const { data: referrals, isLoading: refLoading } = trpc.equity.getMemberReferrals.useQuery(
+    { ledgerId, memberUserId: m.userId },
+    { enabled: expanded, retry: false }
+  );
+
+  // 计算已审核通过的推荐数
+  const approvedCount = referrals ? referrals.filter(r => r.approvalStatus === 'approved').length : (m.directReferrals ?? 0);
+  const referralBonus = approvedCount * 0.1;
+  // 资源权重基数为 1.0，在此基础上加各项加成
+  const autoResourceWeight = 1.0 + networkBonus + tagBonus + referralBonus;
+
+  // savedWeight: 记录上次成功保存到数据库的资源权重值（初始为数据库中的值）
+  const [savedWeight, setSavedWeight] = useState<number | null>(m.resourceWeight);
+  const isSaved = savedWeight !== null && Math.abs(savedWeight - autoResourceWeight) < 0.0001;
+
+  const saveMutation = trpc.equity.setMemberWeight.useMutation({
+    onSuccess: () => {
+      utils.equity.getWeightMembers.invalidate({ ledgerId });
+      utils.equity.getMemberWeightScore.invalidate();
+      setSavedWeight(autoResourceWeight);
+    },
+    onError: (e) => { alert('保存失败：' + e.message); },
+  });
+
+  const toggleMutation = trpc.equity.toggleReferralCount.useMutation({
+    onSuccess: () => {
+      utils.equity.getMemberReferrals.invalidate({ ledgerId, memberUserId: m.userId });
+      utils.equity.getWeightMembers.invalidate({ ledgerId });
+    },
+  });
+
+  return (
+    <div
+      style={{
+        background: idx % 2 === 0 ? 'rgba(201,168,76,0.04)' : '#0A0A00',
+        borderBottom: idx < total - 1 ? `1px solid rgba(201,168,76,0.1)` : 'none',
+      }}
+    >
+      {/* 成员行 */}
+      <div className="flex items-center px-3 py-2.5">
+        <div className="flex-1 flex items-center gap-2 min-w-0">
+          <Avatar name={m.name} avatar={m.avatar} size={26} />
+          <div className="min-w-0">
+            <div className="text-xs truncate" style={{ color: GOLD_DIM }}>{m.name}</div>
+            <div className="text-[10px] mt-0.5" style={{ color: 'rgba(220,185,60,0.45)' }}>
+              人脉 {network}人 +{networkBonus.toFixed(2)} &nbsp;|&nbsp; 标签 {tag}个 +{tagBonus.toFixed(2)} &nbsp;|&nbsp; 推荐 {approvedCount}人 +{referralBonus.toFixed(2)}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="text-xs font-bold" style={{ color: '#FFE566', minWidth: 36, textAlign: 'right' }}>{autoResourceWeight.toFixed(2)}</div>
+          {/* 保存按钮：已保存时禁用显示绿色，有变化时高亮可点击 */}
+          <button
+            onClick={() => !isSaved && !saveMutation.isPending && saveMutation.mutate({ ledgerId, userId: m.userId, resourceWeight: autoResourceWeight, capitalWeight: m.capitalWeight })}
+            disabled={isSaved || saveMutation.isPending}
+            className="text-[10px] px-2 py-0.5 rounded-full"
+            style={{
+              background: isSaved ? 'rgba(100,200,100,0.15)' : 'rgba(201,168,76,0.2)',
+              border: `1px solid ${isSaved ? 'rgba(100,200,100,0.45)' : GOLD_BORDER_SEL}`,
+              color: isSaved ? '#6DC86D' : GOLD,
+              flexShrink: 0,
+              opacity: saveMutation.isPending ? 0.5 : 1,
+              cursor: isSaved ? 'default' : 'pointer',
+            }}
+          >
+            {saveMutation.isPending ? '保存中...' : isSaved ? '已保存' : '保存'}
+          </button>
+          {/* 推荐展开按钮 */}
+          <button
+            onClick={() => setExpanded(v => !v)}
+            className="text-[10px] px-2 py-0.5 rounded-full"
+            style={{
+              background: expanded ? 'rgba(201,168,76,0.2)' : 'rgba(201,168,76,0.08)',
+              border: `1px solid ${expanded ? GOLD_BORDER_SEL : GOLD_BORDER}`,
+              color: expanded ? GOLD : GOLD_DIM,
+              flexShrink: 0,
+            }}
+          >
+            推荐 {expanded ? '收起' : '展开'}
+          </button>
+        </div>
+      </div>
+
+      {/* 展开的被推荐人列表 */}
+      {expanded && (
+        <div className="px-3 pb-3" style={{ borderTop: `1px solid rgba(201,168,76,0.1)` }}>
+          {refLoading ? (
+            <div className="text-center py-3 text-[11px]" style={{ color: GOLD_DIM }}>加载中...</div>
+          ) : !referrals || referrals.length === 0 ? (
+            <div className="text-center py-3 text-[11px]" style={{ color: 'rgba(220,185,60,0.35)' }}>该成员暂无推荐关系记录</div>
+          ) : (
+            <div className="pt-2 space-y-1.5">
+              <div className="text-[10px] mb-2" style={{ color: 'rgba(220,185,60,0.4)' }}>共 {referrals.length} 条推荐关系，已计数 {referrals.filter(r => r.approvalStatus === 'approved').length} 人</div>
+              {referrals.map(ref => {
+                const isApproved = ref.approvalStatus === 'approved';
+                const isRejected = ref.approvalStatus === 'rejected';
+                return (
+                  <div
+                    key={ref.referredUserId}
+                    className="flex items-center justify-between rounded-lg px-2.5 py-2"
+                    style={{
+                      background: isApproved ? 'rgba(100,200,100,0.08)' : isRejected ? 'rgba(200,80,80,0.06)' : 'rgba(201,168,76,0.06)',
+                      border: `1px solid ${isApproved ? 'rgba(100,200,100,0.25)' : isRejected ? 'rgba(200,80,80,0.2)' : 'rgba(201,168,76,0.15)'}`,
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Avatar name={ref.referredName} avatar={ref.referredAvatar} size={22} />
+                      <div>
+                        <div className="text-xs" style={{ color: GOLD_DIM }}>{ref.referredName}</div>
+                        <div className="text-[10px]" style={{ color: isApproved ? '#6DC86D' : isRejected ? '#E07070' : 'rgba(220,185,60,0.4)' }}>
+                          {isApproved ? '已计数 +0.1' : isRejected ? '不计数' : '未设置'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => toggleMutation.mutate({ ledgerId, memberUserId: m.userId, referredUserId: ref.referredUserId, referredName: ref.referredName, action: 'approved' })}
+                        disabled={toggleMutation.isPending || isApproved}
+                        className="text-[10px] px-2.5 py-1 rounded-lg font-medium"
+                        style={{
+                          background: isApproved ? 'rgba(100,200,100,0.25)' : 'rgba(100,200,100,0.1)',
+                          border: `1px solid ${isApproved ? 'rgba(100,200,100,0.6)' : 'rgba(100,200,100,0.3)'}`,
+                          color: '#6DC86D',
+                          opacity: toggleMutation.isPending ? 0.5 : 1,
+                        }}
+                      >
+                        计数
+                      </button>
+                      <button
+                        onClick={() => toggleMutation.mutate({ ledgerId, memberUserId: m.userId, referredUserId: ref.referredUserId, referredName: ref.referredName, action: 'rejected' })}
+                        disabled={toggleMutation.isPending || isRejected}
+                        className="text-[10px] px-2.5 py-1 rounded-lg font-medium"
+                        style={{
+                          background: isRejected ? 'rgba(200,80,80,0.25)' : 'rgba(200,80,80,0.1)',
+                          border: `1px solid ${isRejected ? 'rgba(200,80,80,0.6)' : 'rgba(200,80,80,0.3)'}`,
+                          color: '#E07070',
+                          opacity: toggleMutation.isPending ? 0.5 : 1,
+                        }}
+                      >
+                        不计数
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 权重规则弹窗
+function WeightRuleModal({ ledgerId, members, onClose }: { ledgerId: number; members: Member[]; onClose: () => void }) {
+  const [mainTab, setMainTab] = useState<'capital' | 'resource'>('capital');
+  const [ruleTab, setRuleTab] = useState<'preview' | 'tiers'>('preview');
+  const { data, isLoading } = trpc.equity.previewAutoWeight.useQuery(
+    { ledgerId },
+    { retry: false }
+  );
+  const utils = trpc.useUtils();
+  void utils; // utils reserved for future use
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 9999,
+        background: 'rgba(0,0,0,0.75)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end',
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          width: '100%', maxWidth: 520,
+          background: 'linear-gradient(160deg,#0D0D00 0%,#1A1600 100%)',
+          border: `1px solid ${GOLD_BORDER}`,
+          borderRadius: '20px 20px 0 0',
+          maxHeight: '88vh', display: 'flex', flexDirection: 'column',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* 弹窗头部 */}
+        <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${GOLD_BORDER}`, flexShrink: 0 }}>
+          <div>
+            <div className="text-base font-semibold" style={{ color: GOLD }}>权重规则</div>
+            <div className="text-xs mt-0.5" style={{ color: GOLD_DIM }}>资金权重与资源权重规则说明</div>
+          </div>
+          <button onClick={onClose} className="text-xs px-3 py-1 rounded-full" style={{ border: `1px solid ${GOLD_BORDER}`, color: GOLD_DIM }}>关闭</button>
+        </div>
+
+        {/* 主 Tab切换：资金权重 / 资源权重 */}
+        <div className="flex px-4 pt-3 pb-2 gap-2" style={{ flexShrink: 0 }}>
+          {(['capital', 'resource'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setMainTab(tab)}
+              className="flex-1 py-2 rounded-full text-sm font-medium"
+              style={{
+                background: mainTab === tab ? 'rgba(201,168,76,0.2)' : 'transparent',
+                border: `1px solid ${mainTab === tab ? GOLD_BORDER_SEL : GOLD_BORDER}`,
+                color: mainTab === tab ? GOLD : GOLD_DIM,
+              }}
+            >
+              {tab === 'capital' ? '资金权重规则' : '资源权重规则'}
+            </button>
+          ))}
+        </div>
+
+        {/* 实时统计条 - 仅资金权重 Tab 显示 */}
+        {mainTab === 'capital' && data && (
+          <div className="px-4 pt-3 pb-2 flex gap-3" style={{ flexShrink: 0 }}>
+            <div className="flex-1 rounded-xl px-3 py-2.5 text-center" style={{ background: 'rgba(201,168,76,0.1)', border: `1px solid rgba(201,168,76,0.25)` }}>
+              <div className="text-xs mb-1" style={{ color: GOLD_DIM }}>当前已排名人数</div>
+              <div className="text-xl font-bold" style={{ color: GOLD }}>{data.totalRanked}</div>
+              <div className="text-[10px] mt-0.5" style={{ color: 'rgba(220,185,60,0.35)' }}>/ 660 名额</div>
+            </div>
+            <div className="flex-1 rounded-xl px-3 py-2.5 text-center" style={{ background: 'rgba(201,168,76,0.1)', border: `1px solid rgba(201,168,76,0.25)` }}>
+              <div className="text-xs mb-1" style={{ color: GOLD_DIM }}>下一位进来的权重</div>
+              <div className="text-xl font-bold" style={{ color: '#FFE566' }}>{data.nextWeight.toFixed(4)}</div>
+              <div className="text-[10px] mt-0.5" style={{ color: 'rgba(220,185,60,0.35)' }}>
+                第 {data.totalRanked + 1} 名 / 第 {data.totalRanked < 660 ? Math.ceil((data.totalRanked + 1) / 10) : 66} 档
+              </div>
+            </div>
+          </div>
+        )}
+
+
+
+        {/* 内容区 */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 16px' }}>
+
+          {/* 资金权重规则内容 */}
+          {mainTab === 'capital' && (
+            <>
+              {isLoading && (
+                <div className="text-center py-10 text-sm" style={{ color: GOLD_DIM }}>计算中...</div>
+              )}
+
+              {/* 资金权重子Tab切换 */}
+              {!isLoading && data && (
+                <div className="flex pb-2 gap-2" style={{ flexShrink: 0 }}>
+                  {(['preview', 'tiers'] as const).map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setRuleTab(tab)}
+                      className="flex-1 py-1.5 rounded-full text-xs font-medium"
+                      style={{
+                        background: ruleTab === tab ? 'rgba(201,168,76,0.15)' : 'transparent',
+                        border: `1px solid ${ruleTab === tab ? GOLD_BORDER_SEL : GOLD_BORDER}`,
+                        color: ruleTab === tab ? GOLD : GOLD_DIM,
+                      }}
+                    >
+                      {tab === 'preview' ? '成员预览' : '66档规则'}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* 资源权重规则内容 */}
+          {mainTab === 'resource' && (
+            <div>
+              {/* 规则说明卡片 */}
+              <div className="mb-3 pt-1 rounded-xl px-3 py-3" style={{ background: 'rgba(201,168,76,0.06)', border: `1px solid rgba(201,168,76,0.2)` }}>
+                <div className="text-xs font-semibold mb-2" style={{ color: GOLD }}>资源权重计算规则</div>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <div className="text-xs font-bold mt-0.5" style={{ color: GOLD, minWidth: 16 }}>①</div>
+                    <div>
+                      <div className="text-xs font-medium" style={{ color: GOLD_DIM }}>人脉数（最高 +1.0）</div>
+                      <div className="text-[11px] mt-0.5" style={{ color: 'rgba(220,185,60,0.5)' }}>每 1 位人脉 +0.01，100 人封顶</div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <div className="text-xs font-bold mt-0.5" style={{ color: GOLD, minWidth: 16 }}>②</div>
+                    <div>
+                      <div className="text-xs font-medium" style={{ color: GOLD_DIM }}>标签数（最高 +1.0）</div>
+                      <div className="text-[11px] mt-0.5" style={{ color: 'rgba(220,185,60,0.5)' }}>每 10 个标签 +0.01，1000 个封顶</div>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <div className="text-xs font-bold mt-0.5" style={{ color: GOLD, minWidth: 16 }}>③</div>
+                    <div>
+                      <div className="text-xs font-medium" style={{ color: GOLD_DIM }}>审核推荐人（每人 +0.1）</div>
+                      <div className="text-[11px] mt-0.5" style={{ color: 'rgba(220,185,60,0.5)' }}>管理员审核通过后计入，待审核不计入</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-[11px] mt-2 pt-2" style={{ color: 'rgba(220,185,60,0.4)', borderTop: `1px solid rgba(201,168,76,0.15)` }}>
+                  资源权重 = 人脉加成 + 标签加成 + 推荐加成，三项满分各 1.0，最高 3.0
+                </div>
+              </div>
+              {/* 成员资源权重明细表（含展开推荐人列表） */}
+              <div className="mb-2">
+                <div className="text-xs font-semibold" style={{ color: GOLD }}>成员明细（点「推荐展开」可对每个被推荐人设置计数）</div>
+              </div>
+              <div className="rounded-xl overflow-hidden" style={{ border: `1px solid rgba(201,168,76,0.2)` }}>
+                <div className="flex px-3 py-2" style={{ background: 'rgba(201,168,76,0.15)', borderBottom: `1px solid rgba(201,168,76,0.2)` }}>
+                  <div className="flex-1 text-xs font-semibold" style={{ color: GOLD }}>成员 / 人脉 / 标签 / 推荐</div>
+                  <div className="text-xs font-semibold text-right" style={{ color: GOLD, minWidth: 80 }}>资源权重</div>
+                </div>
+                {members.length === 0 ? (
+                  <div className="text-center py-8 text-sm" style={{ color: 'rgba(220,185,60,0.4)' }}>暂无成员</div>
+                ) : (
+                  members.map((m, idx) => (
+                    <ResourceMemberRow key={m.userId} m={m} ledgerId={ledgerId} idx={idx} total={members.length} />
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 资金权重内容：成员预览 Tab */}
+          {mainTab === 'capital' && !isLoading && data && ruleTab === 'preview' && (
+            <div>
+              {data.preview.length === 0 ? (
+                <div className="text-center py-8 text-sm" style={{ color: 'rgba(220,185,60,0.4)' }}>
+                  暂无资金股 ≥ 10万的成员
+                </div>
+              ) : (
+                <>
+                  <div className="text-xs mb-2" style={{ color: GOLD_DIM }}>
+                    共 {data.preview.length} 位成员符合条件，应用后将更新其资金权重（资源权重不变）
+                  </div>
+                  {(data.preview as PreviewItem[]).map((item) => (
+                    <div
+                      key={item.userId}
+                      className="flex items-center justify-between rounded-xl px-3 py-2.5 mb-2"
+                      style={{ background: '#0A0A00', border: `1px solid rgba(201,168,76,0.2)` }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Avatar name={item.name} avatar={item.avatar} size={30} />
+                        <div>
+                          <div className="text-sm font-medium">{item.name}</div>
+                          <div className="text-[10px] mt-0.5" style={{ color: GOLD_DIM }}>
+                            编号 {item.shareNo} · 资金股 {formatCapital(item.capitalTotal)}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-bold" style={{ color: '#FFE566' }}>
+                          {item.capitalWeight.toFixed(4)}
+                        </div>
+                        <div className="text-[10px]" style={{ color: 'rgba(220,185,60,0.4)' }}>
+                          第{item.rank}名 · 第{item.tier}档
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* 66档规则 Tab */}
+          {mainTab === 'capital' && !isLoading && data && ruleTab === 'tiers' && (
+            <div>
+              <div className="text-xs mb-2" style={{ color: GOLD_DIM }}>
+                资金股 ≥ 10万 且 股东编号在前660名，按10人一档共66档，入股早晚加成等差分布 1.0 → 0.0154（加在基础值1.0上）
+              </div>
+              <div className="rounded-xl overflow-hidden" style={{ border: `1px solid rgba(201,168,76,0.2)` }}>
+                {/* 表头 */}
+                <div className="flex px-3 py-2" style={{ background: 'rgba(201,168,76,0.15)', borderBottom: `1px solid rgba(201,168,76,0.2)` }}>
+                  <div className="flex-1 text-xs font-semibold text-center" style={{ color: GOLD }}>档位</div>
+                  <div className="flex-1 text-xs font-semibold text-center" style={{ color: GOLD }}>排名区间</div>
+                    <div className="flex-1 text-xs font-semibold text-center" style={{ color: GOLD }}>加成值</div>
+                    <div className="flex-1 text-xs font-semibold text-center" style={{ color: GOLD }}>资金权重(1+加成)</div>
+                </div>
+                {(data.tiers as TierRow[]).map((row, idx) => (
+                  <div
+                    key={row.tier}
+                    className="flex px-3 py-2"
+                    style={{
+                      background: idx % 2 === 0 ? 'rgba(201,168,76,0.04)' : '#0A0A00',
+                      borderBottom: idx < data.tiers.length - 1 ? `1px solid rgba(201,168,76,0.1)` : 'none',
+                    }}
+                  >
+                    <div className="flex-1 text-xs text-center" style={{ color: GOLD_DIM }}>第 {row.tier} 档</div>
+                    <div className="flex-1 text-xs text-center" style={{ color: GOLD_DIM }}>{row.rankFrom} ~ {row.rankTo} 名</div>
+                    <div className="flex-1 text-xs text-center font-bold" style={{ color: row.tier === 1 ? '#FFE566' : GOLD_DIM }}>
+                      +{(row as any).bonus?.toFixed(4) ?? '—'}
+                    </div>
+                    <div className="flex-1 text-xs text-center font-bold" style={{ color: row.tier === 1 ? '#FFE566' : GOLD_DIM }}>
+                      {row.weight.toFixed(4)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="text-[11px] mt-2" style={{ color: 'rgba(220,185,60,0.35)' }}>
+                第661名及以后：加成值 = 0，资金权重固定为 1.0000
+              </div>
+            </div>
+          )}
+        </div>
+
+
+      </div>
+    </div>
+  );
+}
+
+export default function EquityWeightManage() {
+  const [, setLocation] = useLocation();
+  const [keyword, setKeyword] = useState('');
+  const [selected, setSelected] = useState<Member | null>(null);
+  const [resInput, setResInput] = useState('');
+  const [capInput, setCapInput] = useState('');
+  const [msg, setMsg] = useState('');
+  const [activeTab, setActiveTab] = useState<'edit' | 'log'>('edit');
+  const [showRuleModal, setShowRuleModal] = useState(false);
+
+  // 拉取成员+权重列表
+  const { data, isLoading, error, refetch } = trpc.equity.getWeightMembers.useQuery(
+    { ledgerId: LEDGER_ID },
+    { retry: false }
+  );
+
+  // 拉取日志（仅选中成员时）
+  const { data: logs, isLoading: logsLoading, refetch: refetchLogs } = trpc.equity.getWeightLogs.useQuery(
+    { ledgerId: LEDGER_ID, userId: selected?.userId ?? 0 },
+    { enabled: !!selected && activeTab === 'log', retry: false }
+  );
+
+  // 设置权重
+  const utils = trpc.useUtils();
+  const setWeight = trpc.equity.setMemberWeight.useMutation({
+    onSuccess: async (_result, variables) => {
+      // 刷新成员列表
+      const { data: freshData } = await refetch();
+      refetchLogs();
+      // 同步更新 selected 状态，使编辑区立即显示新权重
+      if (freshData && selected) {
+        const freshMember = (freshData as Member[]).find(m => m.userId === variables.userId);
+        if (freshMember) setSelected(freshMember);
+      }
+      // 使所有成员的 getMemberWeightScore 缓存失效，确保每个成员返回账本首页后立即看到最新权重
+      utils.equity.getMemberWeightScore.invalidate();
+      setMsg('保存成功');
+      setTimeout(() => setMsg(''), 2500);
+    },
+    onError: (e) => setMsg('保存失败：' + e.message),
+  });
+
+  const list = useMemo(() => {
+    if (!data) return [];
+    const kw = keyword.trim().toLowerCase();
+    if (!kw) return data as Member[];
+    return (data as Member[]).filter(m => m.name.toLowerCase().includes(kw));
+  }, [data, keyword]);
+
+  const handleSelect = (m: Member) => {
+    setSelected(m);
+    setResInput(m.resourceWeight.toFixed(2));
+    // 资金权重编辑框默认值：优先使用自动计算结果(1.0+autoBonus)，如果数据库已有手动保存过且与自动计算不同，则保留手动值
+    const computedCap = 1.0 + (m.autoBonus ?? 0);
+    // 如果数据库存储的值与自动计算值相同（或者数据库尚未写入过，即默认1.0），则使用自动计算值
+    const storedCap = m.capitalWeight;
+    const useComputed = Math.abs(storedCap - 1.0) < 0.0001; // 数据库是默认值时用自动计算
+    setCapInput((useComputed ? computedCap : storedCap).toFixed(2));
+    setMsg('');
+    setActiveTab('edit');
+  };
+
+  const previewTotal = () => {
+    const r = parseFloat(resInput);
+    const c = parseFloat(capInput);
+    if (isNaN(r) || isNaN(c)) return '—';
+    return (Math.round(r * c * 10000) / 10000).toFixed(4);
+  };
+
+  const handleSave = () => {
+    if (!selected) return;
+    const r = parseFloat(resInput);
+    const c = parseFloat(capInput);
+    if (isNaN(r) || r < 0 || isNaN(c) || c < 0) {
+      setMsg('请输入有效数值（如 1.0、0.5）');
+      return;
+    }
+    setWeight.mutate({ ledgerId: LEDGER_ID, userId: selected.userId, resourceWeight: r, capitalWeight: c });
+  };
+
+  return (
+    <div style={{ background: BG_PAGE, minHeight: '100vh', color: '#fff', display: 'flex', flexDirection: 'column' }}>
+
+      {/* 顶栏 */}
+      <div className="flex items-center px-4 py-3" style={{ borderBottom: `1px solid ${GOLD_BORDER}`, flexShrink: 0 }}>
+        <button
+          onClick={() => setLocation(`/ledger/${LEDGER_ID}/settings`)}
+          className="text-sm px-3 py-1 rounded-full mr-3"
+          style={{ border: `1px solid rgba(201,168,76,0.5)`, color: GOLD, background: 'transparent' }}
+        >
+          返回
+        </button>
+        <span className="text-base font-semibold" style={{ color: GOLD }}>权重管理</span>
+        {data && (
+          <span className="ml-2 text-xs" style={{ color: GOLD_DIM }}>共 {data.length} 人</span>
+        )}
+        {/* 权重规则按钮 */}
+        <button
+          onClick={() => setShowRuleModal(true)}
+          className="ml-auto text-sm px-3 py-1.5 rounded-full font-medium"
+          style={{
+            background: 'linear-gradient(135deg,rgba(200,146,10,0.25) 0%,rgba(255,229,102,0.15) 100%)',
+            border: `1px solid ${GOLD_BORDER_SEL}`,
+            color: GOLD,
+          }}
+        >
+          权重规则
+        </button>
+      </div>
+
+      {/* 说明条 */}
+      <div className="px-4 pt-3 pb-2" style={{ flexShrink: 0 }}>
+        <div className="text-xs rounded-xl px-3 py-2" style={{ background: 'rgba(201,168,76,0.08)', border: `1px solid rgba(201,168,76,0.18)`, color: GOLD_DIM }}>
+          总权重 = 资源权重 × 资金权重，默认均为 1.0。点击成员可修改权重或查看变更日志。
+        </div>
+      </div>
+
+      {/* 搜索框 */}
+      <div className="px-4 pb-2" style={{ flexShrink: 0 }}>
+        <input
+          type="text"
+          placeholder="搜索成员姓名..."
+          value={keyword}
+          onChange={e => setKeyword(e.target.value)}
+          className="w-full rounded-xl px-4 py-2.5 text-sm"
+          style={{ background: 'rgba(201,168,76,0.08)', border: `1px solid ${GOLD_BORDER}`, color: '#fff', outline: 'none' }}
+        />
+      </div>
+
+      {/* 主体区域：上下布局 */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+        {/* 成员列表区（固定高度，可滚动） */}
+        <div style={{ flex: selected ? '0 0 auto' : '1 1 auto', maxHeight: selected ? '38vh' : '100%', overflowY: 'auto', padding: '0 16px 8px' }}>
+          {isLoading && (
+            <div className="text-center py-8 text-sm" style={{ color: GOLD_DIM }}>加载中...</div>
+          )}
+          {!isLoading && error && (
+            <div className="text-center py-8 text-sm" style={{ color: '#ff6b6b' }}>加载失败：{error.message}</div>
+          )}
+          {!isLoading && !error && list.length === 0 && (
+            <div className="text-center py-8 text-sm" style={{ color: 'rgba(220,185,60,0.4)' }}>
+              {keyword ? '未找到匹配成员' : '暂无成员'}
+            </div>
+          )}
+          {!isLoading && !error && list.map((m: Member) => {
+            const isSel = selected?.userId === m.userId;
+            return (
+              <div
+                key={m.userId}
+                onClick={() => handleSelect(m)}
+                className="flex items-center justify-between rounded-2xl px-3 py-2.5 mb-2"
+                style={{
+                  background: isSel ? 'rgba(201,168,76,0.18)' : '#000',
+                  border: `1px solid ${isSel ? GOLD_BORDER_SEL : 'rgba(201,168,76,0.2)'}`,
+                  cursor: 'pointer',
+                }}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Avatar name={m.name} avatar={m.avatar} size={34} />
+                  <div>
+                    <div className="text-sm font-medium">{m.name}</div>
+                    <div className="text-[10px] mt-0.5" style={{ color: GOLD_DIM }}>
+                      资源 {m.resourceWeight.toFixed(2)} × 资金 {m.capitalWeight.toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-bold" style={{ background: 'linear-gradient(180deg,#FFE566 0%,#C8920A 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                    {m.totalWeight.toFixed(2)}
+                  </div>
+                  <div className="text-[10px]" style={{ color: 'rgba(220,185,60,0.4)' }}>总权重</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* 详情区（选中成员后展开） */}
+        {selected && (
+          <div style={{ flex: '1 1 auto', overflowY: 'auto', padding: '0 16px 24px', borderTop: `1px solid ${GOLD_BORDER}` }}>
+
+            {/* 成员标题行 + Tab切换 */}
+            <div className="flex items-center justify-between pt-3 pb-2">
+              <div className="flex items-center gap-2">
+                <Avatar name={selected.name} avatar={selected.avatar} size={28} />
+                <span className="text-sm font-semibold" style={{ color: GOLD }}>{selected.name}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                {(['edit', 'log'] as const).map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className="text-xs px-3 py-1 rounded-full"
+                    style={{
+                      background: activeTab === tab ? 'rgba(201,168,76,0.25)' : 'transparent',
+                      border: `1px solid ${activeTab === tab ? GOLD_BORDER_SEL : GOLD_BORDER}`,
+                      color: activeTab === tab ? GOLD : GOLD_DIM,
+                    }}
+                  >
+                    {tab === 'edit' ? '编辑权重' : '变更日志'}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setSelected(null)}
+                  className="text-xs px-2 py-1 rounded-full ml-1"
+                  style={{ border: `1px solid ${GOLD_BORDER}`, color: GOLD_DIM, background: 'transparent' }}
+                >
+                  收起
+                </button>
+              </div>
+            </div>
+
+            {/* 编辑权重 Tab */}
+            {activeTab === 'edit' && (
+              <div className="rounded-2xl px-4 pt-4 pb-5" style={{ background: '#0A0A00', border: `1px solid rgba(201,168,76,0.4)` }}>
+                <div className="flex gap-2 mb-4 items-end">
+                  <div className="flex-1">
+                    <label className="text-xs block mb-1" style={{ color: GOLD_DIM }}>资源权重</label>
+                    <input
+                      type="number" step="0.1" min="0"
+                      value={resInput}
+                      onChange={e => setResInput(e.target.value)}
+                      className="w-full rounded-xl px-3 py-2 text-sm text-center"
+                      style={{ background: 'rgba(201,168,76,0.08)', border: `1px solid rgba(201,168,76,0.35)`, color: '#fff', outline: 'none' }}
+                    />
+                  </div>
+                  <div className="pb-2 text-sm" style={{ color: GOLD_DIM }}>×</div>
+                  <div className="flex-1">
+                    <label className="text-xs block mb-1" style={{ color: GOLD_DIM }}>资金权重</label>
+                    <input
+                      type="number" step="0.1" min="0"
+                      value={capInput}
+                      onChange={e => setCapInput(e.target.value)}
+                      className="w-full rounded-xl px-3 py-2 text-sm text-center"
+                      style={{ background: 'rgba(201,168,76,0.08)', border: `1px solid rgba(201,168,76,0.35)`, color: '#fff', outline: 'none' }}
+                    />
+                  </div>
+                  <div className="pb-2 text-sm" style={{ color: GOLD_DIM }}>=</div>
+                  <div className="flex-1">
+                    <label className="text-xs block mb-1" style={{ color: GOLD_DIM }}>总权重</label>
+                    <div className="w-full rounded-xl px-3 py-2 text-sm text-center font-bold" style={{ background: 'rgba(201,168,76,0.06)', border: `1px solid rgba(201,168,76,0.2)`, color: '#FFE566' }}>
+                      {previewTotal()}
+                    </div>
+                  </div>
+                </div>
+                {msg && (
+                  <div className="text-xs text-center mb-3" style={{ color: msg.includes('成功') ? '#4ade80' : '#ff6b6b' }}>
+                    {msg}
+                  </div>
+                )}
+                <button
+                  onClick={handleSave}
+                  disabled={setWeight.isPending}
+                  className="w-full py-2.5 rounded-full text-sm font-semibold"
+                  style={{ background: 'linear-gradient(135deg,#C8920A 0%,#FFE566 100%)', color: '#000' }}
+                >
+                  {setWeight.isPending ? '保存中...' : '确认保存'}
+                </button>
+
+                {/* 权重计算明细 */}
+                <div className="mt-4 rounded-xl px-3 py-3" style={{ background: 'rgba(0,0,0,0.4)', border: `1px solid rgba(201,168,76,0.2)` }}>
+                  <div className="text-xs font-semibold mb-3" style={{ color: GOLD_DIM }}>权重计算明细</div>
+
+                  {/* 资金权重拆解 */}
+                  <div className="mb-3">
+                    <div className="text-[11px] font-medium mb-2" style={{ color: 'rgba(220,185,60,0.6)' }}>资金权重 = 基础值 + 入股早晚加成 × 资金达标系数</div>
+
+                    {/* 资金股本金行 */}
+                    <div className="mb-1.5 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)' }}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px]" style={{ color: 'rgba(220,185,60,0.5)' }}>资金股本金（仅资金股类型）</span>
+                        <span className="text-xs font-medium" style={{ color: GOLD_DIM }}>
+                          {selected.capitalAmount !== undefined ? `¥${selected.capitalAmount.toLocaleString()}` : '—'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 达标系数行 - 展示完整公式 */}
+                    <div className="mb-1.5 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)' }}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[11px]" style={{ color: 'rgba(220,185,60,0.5)' }}>资金达标系数</span>
+                        <span className="text-xs font-medium" style={{ color: GOLD_DIM }}>
+                          {selected.capitalRatio !== undefined ? (selected.capitalRatio * 100).toFixed(2) + '%' : '—'}
+                        </span>
+                      </div>
+                      <div className="text-[10px]" style={{ color: 'rgba(220,185,60,0.35)' }}>
+                        {selected.capitalAmount !== undefined
+                          ? `¥${selected.capitalAmount.toLocaleString()} ÷ ¥100,000 = ${selected.capitalRatio !== undefined ? (selected.capitalRatio * 100).toFixed(2) : '—'}%（上限 100%）`
+                          : '—'}
+                      </div>
+                    </div>
+
+                    {/* 入股早晚加成行 */}
+                    <div className="mb-1.5 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)' }}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[11px]" style={{ color: 'rgba(220,185,60,0.5)' }}>入股早晚加成</span>
+                        <span className="text-xs font-medium" style={{ color: GOLD_DIM }}>
+                          {selected.rawBonus !== undefined ? '+' + selected.rawBonus.toFixed(4) : '—'}
+                        </span>
+                      </div>
+                      <div className="text-[10px]" style={{ color: 'rgba(220,185,60,0.35)' }}>
+                        {selected.shareNo
+                          ? `股东编号 #${selected.shareNo}，第 ${Math.ceil(parseInt(selected.shareNo) / 10)} 档（前660名有效）`
+                          : '未分配股东编号，无入股早晚加成'}
+                      </div>
+                    </div>
+
+                    {/* 实际加成行 */}
+                    <div className="flex items-center justify-between mb-2 px-2 py-1.5 rounded-lg" style={{ background: 'rgba(201,168,76,0.1)', border: `1px solid rgba(201,168,76,0.25)` }}>
+                      <span className="text-[11px] font-medium" style={{ color: GOLD_DIM }}>实际加成 = 早晚加成 × 达标系数</span>
+                      <span className="text-xs font-bold" style={{ color: '#FFE566' }}>
+                        +{selected.autoBonus !== undefined ? selected.autoBonus.toFixed(4) : (parseFloat(capInput) - 1.0).toFixed(4)}
+                      </span>
+                    </div>
+
+                    {/* 资金权重结果 */}
+                    <div className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: 'rgba(255,229,102,0.08)', border: `1px solid rgba(255,229,102,0.25)` }}>
+                      <span className="text-[11px] font-semibold" style={{ color: GOLD }}>
+                        {(() => {
+                          const bonus = selected.autoBonus !== undefined ? selected.autoBonus : (parseFloat(capInput) - 1.0);
+                          const computedCap = 1.0 + bonus;
+                          return `资金权重 = 1.0 + ${bonus.toFixed(4)} = ${computedCap.toFixed(4)}`;
+                        })()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 资源权重 */}
+                  <div className="mb-3" style={{ borderTop: `1px solid rgba(201,168,76,0.12)`, paddingTop: 10 }}>
+                    <div className="text-[11px] font-medium mb-2" style={{ color: 'rgba(220,185,60,0.6)' }}>资源权重（手动设置）</div>
+                    <div className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: 'rgba(255,229,102,0.08)', border: `1px solid rgba(255,229,102,0.25)` }}>
+                      <span className="text-[11px] font-semibold" style={{ color: GOLD }}>资源权重</span>
+                      <span className="text-sm font-bold" style={{ color: '#FFE566' }}>{parseFloat(resInput).toFixed(4)}</span>
+                    </div>
+                    {/* 资源参考指标 */}
+                    <div className="mt-2 text-[10px] mb-1" style={{ color: 'rgba(220,185,60,0.4)' }}>资源参考指标</div>
+                    <div className="flex gap-2">
+                      <div className="flex-1 text-center rounded-lg px-2 py-1.5" style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)' }}>
+                        <div className="text-[10px] mb-0.5" style={{ color: 'rgba(220,185,60,0.4)' }}>人脉数</div>
+                        <div className="text-sm font-bold" style={{ color: GOLD_DIM }}>{selected.networkCount ?? 0}</div>
+                      </div>
+                      <div className="flex-1 text-center rounded-lg px-2 py-1.5" style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)' }}>
+                        <div className="text-[10px] mb-0.5" style={{ color: 'rgba(220,185,60,0.4)' }}>标签数</div>
+                        <div className="text-sm font-bold" style={{ color: GOLD_DIM }}>{selected.tagCount ?? 0}</div>
+                      </div>
+                      <div className="flex-1 text-center rounded-lg px-2 py-1.5" style={{ background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.15)' }}>
+                        <div className="text-[10px] mb-0.5" style={{ color: 'rgba(220,185,60,0.4)' }}>直接推荐</div>
+                        <div className="text-sm font-bold" style={{ color: GOLD_DIM }}>{selected.directReferrals ?? 0}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 最终乘积 */}
+                  <div className="pt-2" style={{ borderTop: `1px solid rgba(201,168,76,0.2)` }}>
+                    <div className="flex items-center justify-between px-2 py-2 rounded-lg" style={{ background: 'linear-gradient(135deg,rgba(200,146,10,0.15) 0%,rgba(255,229,102,0.1) 100%)', border: `1px solid rgba(201,168,76,0.4)` }}>
+                      <span className="text-xs font-semibold" style={{ color: GOLD }}>总权重 = 资金权重 × 资源权重</span>
+                      <span className="text-base font-bold" style={{ color: '#FFE566' }}>{(() => {
+                        const bonus = selected.autoBonus !== undefined ? selected.autoBonus : (parseFloat(capInput) - 1.0);
+                        const computedCap = 1.0 + bonus;
+                        const r = parseFloat(resInput);
+                        if (isNaN(r)) return '—';
+                        return (Math.round(computedCap * r * 10000) / 10000).toFixed(4);
+                      })()}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 变更日志 Tab */}
+            {activeTab === 'log' && (
+              <div>
+                {logsLoading && (
+                  <div className="text-center py-6 text-sm" style={{ color: GOLD_DIM }}>加载日志中...</div>
+                )}
+                {!logsLoading && (!logs || logs.length === 0) && (
+                  <div className="text-center py-6 text-sm" style={{ color: 'rgba(220,185,60,0.35)' }}>暂无变更记录</div>
+                )}
+                {!logsLoading && logs && logs.length > 0 && (
+                  <div className="space-y-2 pt-1">
+                    {(logs as WeightLog[]).map((log, idx) => {
+                      const oldTotal = (Math.round(log.oldResourceWeight * log.oldCapitalWeight * 10000) / 10000).toFixed(2);
+                      const newTotal = (Math.round(log.newResourceWeight * log.newCapitalWeight * 10000) / 10000).toFixed(2);
+                      const isFirst = idx === 0;
+                      return (
+                        <div
+                          key={log.id}
+                          className="rounded-xl px-3 py-3"
+                          style={{
+                            background: isFirst ? 'rgba(201,168,76,0.1)' : '#0A0A00',
+                            border: `1px solid ${isFirst ? 'rgba(201,168,76,0.4)' : 'rgba(201,168,76,0.18)'}`,
+                          }}
+                        >
+                          {/* 时间行 */}
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-[11px]" style={{ color: GOLD_DIM }}>{formatDate(log.createdAt)}</span>
+                            <span className="text-[10px]" style={{ color: 'rgba(220,185,60,0.35)' }}>by {log.operatorName}</span>
+                          </div>
+                          {/* 变更内容 */}
+                          <div className="flex items-center gap-2">
+                            {/* 旧值 */}
+                            <div className="flex-1 text-center rounded-lg py-1.5" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(201,168,76,0.15)' }}>
+                              <div className="text-[10px] mb-0.5" style={{ color: 'rgba(220,185,60,0.4)' }}>变更前</div>
+                              <div className="text-xs font-medium" style={{ color: 'rgba(220,185,60,0.7)' }}>
+                                {log.oldResourceWeight.toFixed(2)} × {log.oldCapitalWeight.toFixed(2)}
+                              </div>
+                              <div className="text-sm font-bold mt-0.5" style={{ color: 'rgba(220,185,60,0.6)' }}>{oldTotal}</div>
+                            </div>
+                            {/* 箭头 */}
+                            <div style={{ color: GOLD, fontSize: 14, flexShrink: 0 }}>→</div>
+                            {/* 新值 */}
+                            <div className="flex-1 text-center rounded-lg py-1.5" style={{ background: 'rgba(201,168,76,0.08)', border: `1px solid rgba(201,168,76,0.3)` }}>
+                              <div className="text-[10px] mb-0.5" style={{ color: GOLD_DIM }}>变更后</div>
+                              <div className="text-xs font-medium" style={{ color: GOLD }}>
+                                {log.newResourceWeight.toFixed(2)} × {log.newCapitalWeight.toFixed(2)}
+                              </div>
+                              <div className="text-sm font-bold mt-0.5" style={{ color: '#FFE566' }}>{newTotal}</div>
+                            </div>
+                          </div>
+                          {log.remark && (
+                            <div className="mt-1.5 text-[11px]" style={{ color: 'rgba(220,185,60,0.5)' }}>备注：{log.remark}</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* 权重规则弹窗 */}
+      {showRuleModal && (
+        <WeightRuleModal ledgerId={LEDGER_ID} members={list} onClose={() => setShowRuleModal(false)} />
+      )}
+    </div>
+  );
+}

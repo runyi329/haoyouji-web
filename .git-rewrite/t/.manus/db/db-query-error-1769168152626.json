@@ -1,0 +1,8 @@
+{
+  "query": "SELECT * FROM extendedFieldCategories WHERE name = '公司名称' LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute SELECT * FROM extendedFieldCategories WHERE name = '公司名称' LIMIT 10;",
+  "returncode": 1,
+  "logs": [
+    "ERROR 1146 (42S02) at line 1: Table 'kjgmnah8wu2okdbybsmxba.extendedFieldCategories' doesn't exist"
+  ]
+}

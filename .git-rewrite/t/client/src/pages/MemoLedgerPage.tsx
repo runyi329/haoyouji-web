@@ -1,0 +1,1464 @@
+/**
+ * MemoLedgerPage.tsx - AD型定制账本：永忆
+ * 两级分类：第1级大类 → 第2级子类（预设+自定义）→ 字段内容
+ */
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
+import {
+  ChevronLeft,
+  Plus,
+  Search,
+  Copy,
+  Eye,
+  EyeOff,
+  Trash2,
+  Pencil,
+  X,
+  ChevronDown,
+  ChevronUp,
+  Settings,
+  RefreshCw,
+  MapPin,
+  KeyRound,
+  Landmark,
+  Globe,
+  Building2,
+  StickyNote,
+  ChevronRight,
+  ClipboardList,
+  CheckSquare,
+  Square,
+  GripVertical,
+  ArrowUp,
+  ArrowDown,
+  History,
+  RotateCcw,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import { UserAvatar } from "@/components/UserAvatar";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+
+// 字段标签预设选项
+const FIELD_LABEL_OPTIONS = [
+  "账号",
+  "密码",
+  "备注",
+  "邮箱",
+  "卡号",
+  "税号",
+  "手机",
+  "手机号",
+  "姓名",
+  "地址",
+  "APP",
+  "自定义",
+];
+
+// ===== 第1级大类 =====
+const CATEGORIES = [
+  { key: "all",     label: "全部",   icon: StickyNote, color: "#757575" },
+  { key: "bank",    label: "银行账号", icon: Landmark,   color: "#43A047" },
+  { key: "account", label: "账号密码", icon: KeyRound,   color: "#1E88E5" },
+  { key: "address", label: "快递地址", icon: MapPin,     color: "#E53935" },
+  { key: "website", label: "公司",   icon: Building2,  color: "#8E24AA" },
+  { key: "other",   label: "其他",   icon: StickyNote,  color: "#FB8C00" },
+];
+
+// ===== 第2级子类预设 =====
+const SUB_CATEGORIES: Record<string, string[]> = {
+  bank: ["工商银行", "建设银行", "招商银行", "农业银行", "中国银行", "交通银行", "邮储银行", "浦发银行", "民生银行", "光大银行", "自定义"],
+  account: ["苹果ID", "华为ID", "微软账号", "谷歌账号", "淘宝/天猫", "京东", "美团", "拼多多", "微信", "支付宝", "抖音", "快手", "欧易", "自定义"],
+  address: ["家庭地址", "公司地址", "常用地址1", "常用地址2", "自定义"],
+  website: [], // 公司分类直接进入字段填写，无需选子类
+  other: ["证件信息", "车牌/车险", "会员卡", "WiFi密码", "自定义"],
+};
+
+// ===== 每种大类的字段模板 =====
+const FIELD_TEMPLATES: Record<string, Array<{ label: string; sensitive?: boolean }>> = {
+  bank: [
+    { label: "银行名称" },
+    { label: "卡号" },
+    { label: "姓名" },
+    { label: "备注" },
+  ],
+  account: [
+    { label: "账号/用户名" },
+    { label: "密码", sensitive: true },
+    { label: "备用邮箱" },
+    { label: "手机号" },
+  ],
+  // 欧易专属模板（单账户4字段）
+  account_ouyi: [
+    { label: "手机号" },
+    { label: "邮箱" },
+    { label: "UID" },
+    { label: "密码", sensitive: true },
+  ],
+  address: [
+    { label: "收件人" },
+    { label: "手机号" },
+    { label: "省市区" },
+    { label: "详细地址" },
+    { label: "邮编" },
+  ],
+  website: [
+    { label: "公司名称" },
+  ],
+  other: [
+    { label: "内容" },
+    { label: "说明" },
+  ],
+};
+
+interface MemoField {
+  label: string;
+  value: string;
+  sensitive?: boolean;
+}
+
+interface MemoItem {
+  id: number;
+  category: string;
+  title: string;   // 格式："大类/子类" 或 "大类/自定义名称"
+  fields: MemoField[];
+  note?: string;
+  createdAt: string;
+}
+
+// 从 title 解析子类名（title格式为 "子类名" 或 "子类名 - 备注"）
+function getSubLabel(item: MemoItem): string {
+  return item.title || "";
+}
+
+// ===== 复制到剪贴板 =====
+function copyText(text: string, label?: string) {
+  navigator.clipboard.writeText(text).then(() => {
+    toast.success(`已复制${label ? `「${label}」` : ""}`, { duration: 1500 });
+  }).catch(() => {
+    toast.error("复制失败，请手动复制");
+  });
+}
+
+// ===== 单条备忘录卡片 =====
+function MemoCard({ item, onEdit, onDelete, showAllPasswords, editMode, onMoveUp, onMoveDown }: {
+  item: MemoItem;
+  onEdit: (item: MemoItem) => void;
+  onDelete: (id: number) => void;
+  showAllPasswords: boolean;
+  editMode: boolean;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const cat = CATEGORIES.find(c => c.key === item.category) || CATEGORIES[CATEGORIES.length - 1];
+  const CatIcon = cat.icon;
+
+  const copyAll = () => {
+    const text = item.fields.filter(f => f.value && f.label !== '__ACCOUNT_SEPARATOR__').map(f => `${f.label}：${f.value}`).join("\n");
+    copyText(text, item.title);
+  };
+
+  // 账号密码分类：按分隔符分组展示多账户
+  // 所有分类都用多条记录模式展示
+  const isOuyi = true;
+  const ouyiAccounts: MemoField[][] = [];
+  {
+    let cur: MemoField[] = [];
+    for (const f of item.fields) {
+      if (f.label === '__ACCOUNT_SEPARATOR__') {
+        if (cur.length > 0) { ouyiAccounts.push(cur); cur = []; }
+      } else {
+        cur.push(f);
+      }
+    }
+    if (cur.length > 0) ouyiAccounts.push(cur);
+  }
+
+  const filledCount = ouyiAccounts.length > 1
+    ? ouyiAccounts.length
+    : item.fields.filter(f => f.value && f.label !== '__ACCOUNT_SEPARATOR__').length;
+
+  return (
+    <div className={`rounded-xl shadow-sm overflow-hidden mb-1.5 transition-colors duration-200 ${expanded ? 'bg-amber-50 border border-amber-200' : 'bg-white border border-gray-100'}`}>
+      {/* 卡片头部 */}
+      <div className="flex items-center px-3 py-2">
+        {/* 编辑模式下显示上下移按钮 */}
+        {editMode && (
+          <div className="flex flex-col gap-0.5 mr-1.5 flex-shrink-0">
+            <button
+              onClick={e => { e.stopPropagation(); onMoveUp?.(); }}
+              disabled={!onMoveUp}
+              className="p-0.5 rounded text-gray-300 hover:text-gray-500 disabled:opacity-20"
+              title="上移"
+            >
+              <ArrowUp className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={e => { e.stopPropagation(); onMoveDown?.(); }}
+              disabled={!onMoveDown}
+              className="p-0.5 rounded text-gray-300 hover:text-gray-500 disabled:opacity-20"
+              title="下移"
+            >
+              <ArrowDown className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+        <div className="flex-1 min-w-0 flex items-center gap-2 cursor-pointer" onClick={() => setExpanded(!expanded)}>
+          <p className="font-medium text-gray-900 truncate flex-1">{getSubLabel(item)}</p>
+          <span className="text-xs text-gray-400 flex-shrink-0">{filledCount}条</span>
+        </div>
+        {editMode && (
+          <div className="flex items-center gap-1 ml-2">
+            <button onClick={e => { e.stopPropagation(); onEdit(item); }} className="p-2 rounded-lg hover:bg-gray-100 text-gray-500">
+              <Pencil className="w-5 h-5" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 展开内容 */}
+      {expanded && (
+        <div className="border-t border-gray-50 px-3 pb-2 pt-1.5">
+          {isOuyi ? (
+            // 所有分类多条记录分组展示
+            <div className="space-y-0">
+              {ouyiAccounts.map((acct, acctIdx) => (
+                <div key={acctIdx}>
+                  {acctIdx > 0 && <div className="border-t border-gray-100 my-2" />}
+                  {ouyiAccounts.length > 1 && (
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-sm text-gray-400">第 {acctIdx + 1} 条</span>
+                      <button
+                        onClick={() => {
+                          const lines = acct
+                            .filter(f => f.label !== '__NOTE__' && f.label !== '__ACCOUNT_SEPARATOR__' && f.value)
+                            .map(f => `${f.label}: ${f.value}`);
+                          const note = acct.find(f => f.label === '__NOTE__' && f.value);
+                          if (note) lines.push(`备注: ${note.value}`);
+                          copyText(lines.join('\n'), `第 ${acctIdx + 1} 条`);
+                        }}
+                        className="p-1 rounded hover:bg-gray-100 text-gray-400 flex items-center gap-1"
+                        title="复制此条全部内容"
+                      >
+                        <Copy className="w-3.5 h-3.5" />
+                        <span className="text-xs">复制</span>
+                      </button>
+                    </div>
+                  )}
+                  <div className="space-y-1.5">
+                    {acct.filter(f => f.value && f.label !== '__NOTE__').map((field, fidx) => {
+                      const globalIdx = item.fields.indexOf(field);
+                      return (
+                        <div key={fidx} className="flex items-center gap-2">
+                          <span className="text-sm text-gray-400 w-16 flex-shrink-0">{field.label}</span>
+                          <div className="flex-1 flex items-center gap-1 min-w-0">
+                            {(field.sensitive || field.label.includes('密码')) && !showAllPasswords ? (
+                              <span className="text-base text-gray-600 tracking-widest">········</span>
+                            ) : (
+                              <span className="text-base text-gray-800 break-all">{field.value}</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button onClick={() => copyText(field.value, field.label)} className="p-1 rounded hover:bg-gray-100 text-gray-400">
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {/* 备注字段单独展示 */}
+                    {acct.find(f => f.label === '__NOTE__' && f.value) && (
+                      <div className="flex items-start gap-2 pt-0.5">
+                        <span className="text-sm text-gray-400 w-16 flex-shrink-0 pt-0.5">备注</span>
+                        <span className="text-sm text-gray-500 break-all">{acct.find(f => f.label === '__NOTE__')!.value}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            // 普通字段展示
+            <div className="space-y-2">
+              {item.fields.filter(f => f.value && f.label !== '__ACCOUNT_SEPARATOR__').map((field, idx) => (
+                    <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-400 w-20 flex-shrink-0">{field.label}</span>
+                  <div className="flex-1 flex items-center gap-1 min-w-0">
+                    {(field.sensitive || field.label.includes('密码')) && !showAllPasswords ? (
+                      <span className="text-base text-gray-600 tracking-widest">········</span>
+                    ) : (
+                      <span className="text-base text-gray-800 break-all">{field.value}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button onClick={() => copyText(field.value, field.label)} className="p-1 rounded hover:bg-gray-100 text-gray-400" title={`复制${field.label}`}>
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {item.note && (
+            <div className="pt-2 mt-2 border-t border-gray-50">
+              <p className="text-sm text-gray-400">备注：{item.note}</p>
+            </div>
+          )}
+
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ===== 新建/编辑弹窗（两级分类） =====
+function MemoFormDialog({ open, onClose, editItem, ledgerId, onSuccess, onDelete }: {
+  open: boolean;
+  onClose: () => void;
+  editItem?: MemoItem | null;
+  ledgerId: number;
+  onSuccess: (description: string) => void;
+  onDelete?: (id: number) => void;
+}) {
+  const [step, setStep] = useState<"cat" | "sub" | "fields">("cat");
+  const [category, setCategory] = useState("bank");
+  const [subLabel, setSubLabel] = useState("");
+  const [customSub, setCustomSub] = useState("");
+  const [isCustom, setIsCustom] = useState(false);
+  const [fields, setFields] = useState<MemoField[]>([]);
+  const [note, setNote] = useState("");
+
+  // 多记录模式：所有分类都支持多条记录
+  const [ouyiAccounts, setOuyiAccounts] = useState<MemoField[][]>([]);
+  const isOuyiMode = true; // 所有分类都用多记录模式
+
+  // 根据分类生成对应的字段模板
+  const newOuyiAccount = (): MemoField[] => {
+    if (category === 'account' && subLabel === '欧易') {
+      return [
+        { label: '手机号', value: '' },
+        { label: '邮箱', value: '' },
+        { label: 'UID', value: '' },
+        { label: '密码', value: '', sensitive: true },
+        { label: '__NOTE__', value: '' },
+      ];
+    }
+    if (category === 'account') {
+      return [
+        { label: '账号/用户名', value: '' },
+        { label: '密码', value: '', sensitive: true },
+        { label: '备用邮箱', value: '' },
+        { label: '手机号', value: '' },
+        { label: '__NOTE__', value: '' },
+      ];
+    }
+    if (category === 'bank') {
+      return [
+        { label: '银行名称', value: '' },
+        { label: '卡号', value: '' },
+        { label: '姓名', value: '' },
+        { label: '备注', value: '' },
+      ];
+    }
+    if (category === 'address') {
+      return [
+        { label: '收件人', value: '' },
+        { label: '手机号', value: '' },
+        { label: '省市区', value: '' },
+        { label: '详细地址', value: '' },
+        { label: '邮编', value: '' },
+      ];
+    }
+    if (category === 'website') {
+      return [
+        { label: '网址', value: '' },
+        { label: '用户名', value: '' },
+        { label: '密码', value: '', sensitive: true },
+      ];
+    }
+    // other 及其他
+    return [
+      { label: '内容', value: '' },
+    ];
+  };
+
+  const addOuyiAccount = () => setOuyiAccounts(prev => [...prev, newOuyiAccount()]);
+  const removeOuyiAccount = (idx: number) => setOuyiAccounts(prev => prev.filter((_, i) => i !== idx));
+  const updateOuyiField = (acctIdx: number, fieldIdx: number, key: keyof MemoField, value: any) =>
+    setOuyiAccounts(prev => prev.map((acct, ai) =>
+      ai === acctIdx ? acct.map((f, fi) => fi === fieldIdx ? { ...f, [key]: value } : f) : acct
+    ));
+  // 在指定账户末尾（__NOTE__之前）添加自定义字段
+  const addOuyiField = (acctIdx: number) => setOuyiAccounts(prev => prev.map((acct, ai) => {
+    if (ai !== acctIdx) return acct;
+    const noteIdx = acct.findIndex(f => f.label === '__NOTE__');
+    // 计算已有自定义字段数量，生成不重复的默认标签名
+    const customCount = acct.filter(f => f.label !== '__NOTE__' && f.label !== '账号/用户名' && f.label !== '密码' && f.label !== '备用邮箱' && f.label !== '手机号' && f.label !== '手机号' && f.label !== 'UID' && f.label !== '邮箱').length;
+    const newField: MemoField = { label: '__NEW__', value: '', sensitive: false };
+    if (noteIdx >= 0) {
+      return [...acct.slice(0, noteIdx), newField, ...acct.slice(noteIdx)];
+    }
+    return [...acct, newField];
+  }));
+  // 删除指定账户的指定字段（不允许删除账号/用户名、密码、__NOTE__）
+  const removeOuyiField = (acctIdx: number, fieldIdx: number) => setOuyiAccounts(prev => prev.map((acct, ai) => {
+    if (ai !== acctIdx) return acct;
+    return acct.filter((_, fi) => fi !== fieldIdx);
+  }));
+
+  // 字段上移/下移
+  const moveOuyiField = (acctIdx: number, fieldIdx: number, dir: -1 | 1) => setOuyiAccounts(prev => prev.map((acct, ai) => {
+    if (ai !== acctIdx) return acct;
+    const next = [...acct];
+    const target = fieldIdx + dir;
+    if (target < 0 || target >= next.length) return acct;
+    [next[fieldIdx], next[target]] = [next[target], next[fieldIdx]];
+    return next;
+  }));
+
+  // 账户上移/下移
+  const moveOuyiAccount = (idx: number, dir: -1 | 1) => setOuyiAccounts(prev => {
+    const next = [...prev];
+    const target = idx + dir;
+    if (target < 0 || target >= next.length) return prev;
+    [next[idx], next[target]] = [next[target], next[idx]];
+    return next;
+  });
+
+  // 欧易 fields 序列化：账户间插入分隔符
+  const serializeOuyiFields = (accounts: MemoField[][]): MemoField[] => {
+    const result: MemoField[] = [];
+    accounts.forEach((acct, idx) => {
+      if (idx > 0) result.push({ label: '__ACCOUNT_SEPARATOR__', value: '' });
+      result.push(...acct);
+    });
+    return result;
+  };
+
+  // 欧易 fields 反序列化
+  const deserializeOuyiFields = (fs: MemoField[]): MemoField[][] => {
+    const accounts: MemoField[][] = [];
+    let cur: MemoField[] = [];
+    for (const f of fs) {
+      if (f.label === '__ACCOUNT_SEPARATOR__') {
+        if (cur.length > 0) { accounts.push(cur); cur = []; }
+      } else {
+        cur.push(f);
+      }
+    }
+    if (cur.length > 0) accounts.push(cur);
+    return accounts.length > 0 ? accounts : [newOuyiAccount()];
+  };
+
+  // 每次弹窗打开时，根据 editItem 重置所有状态（修复分类不持久化问题）
+  useEffect(() => {
+    if (!open) return;
+    if (editItem) {
+      const cat = editItem.category || "bank";
+      const sub = editItem.title || "";
+      const isCustomSub = sub && SUB_CATEGORIES[cat] && !SUB_CATEGORIES[cat].slice(0, -1).includes(sub);
+      setStep("fields");
+      setCategory(cat);
+      setSubLabel(sub);
+      setCustomSub(isCustomSub ? sub : "");
+      setIsCustom(false);
+      setNote(editItem.note || "");
+      // 所有分类都用 deserializeOuyiFields 反序列化为多条记录
+      setOuyiAccounts(deserializeOuyiFields(editItem.fields || []));
+      setFields([]);
+    } else {
+      setStep("cat");
+      setCategory("bank");
+      setSubLabel("");
+      setCustomSub("");
+      setIsCustom(false);
+      setFields([]);
+      setOuyiAccounts([]);
+      setNote("");
+    }
+  }, [open, editItem]);
+  const utils = trpc.useUtils();
+
+  const catObj = CATEGORIES.find(c => c.key === category)!;
+  const subList = SUB_CATEGORIES[category] || ["自定义"];
+
+  const handleSelectCat = (key: string) => {
+    setCategory(key);
+    setSubLabel("");
+    setCustomSub("");
+    setIsCustom(false);
+    setFields([]);
+    // 银行账号、公司分类：直接进入字段填写界面，跳过子类选择
+    if (key === 'bank') {
+      // bank 分类直接进入字段填写，初始化一条记录
+      setOuyiAccounts([[...FIELD_TEMPLATES['bank'].map(f => ({ ...f, value: '' }))]]);
+      setStep("fields");
+    } else if (key === 'website') {
+      // 公司分类：直接进入字段填写，subLabel 为空（保存时用公司名称字段值作为标题）
+      setSubLabel("");
+      setOuyiAccounts([[...FIELD_TEMPLATES['website'].map(f => ({ ...f, value: '' }))]]);
+      setStep("fields");
+    } else {
+      setOuyiAccounts([]);
+      setStep("sub");
+    }
+  };
+
+  const handleSelectSub = (sub: string) => {
+    if (sub === "自定义") {
+      setIsCustom(true);
+      setSubLabel("");
+    } else {
+      setIsCustom(false);
+      setSubLabel(sub);
+      // 所有分类都初始化一条记录（用 newOuyiAccount 根据 category 返回对应模板）
+      setOuyiAccounts([newOuyiAccount()]);
+      setFields([]);
+      setStep("fields");
+    }
+  };
+
+  const handleConfirmCustom = () => {
+    if (!customSub.trim()) { toast.error("请输入名称"); return; }
+    setSubLabel(customSub.trim());
+    // 所有分类都初始化一条记录
+    setOuyiAccounts([newOuyiAccount()]);
+    setFields([]);
+    setStep("fields");
+  };
+
+  // 生成操作描述（用于历史记录）
+  const buildDescription = (isEdit: boolean, title: string, finalFields: MemoField[]): string => {
+    if (!isEdit) return `新增了「${title}」`;
+    // 对比旧字段和新字段
+    const rawFields = editItem?.fields;
+    const oldFields: MemoField[] = rawFields && typeof rawFields === 'string' ? JSON.parse(rawFields) : Array.isArray(rawFields) ? rawFields as MemoField[] : [];
+    const filteredOld = oldFields.filter(f => f.label !== '__ACCOUNT_SEPARATOR__');
+    const oldMap: Record<string, string> = {};
+    filteredOld.forEach(f => { oldMap[f.label] = f.value || ''; });
+    const newFields = finalFields.filter(f => f.label !== '__ACCOUNT_SEPARATOR__');
+    const changes: string[] = [];
+    // 标题变化
+    if (editItem?.title !== title) changes.push(`标题「${editItem?.title}」→「${title}」`);
+    // 字段变化
+    for (const f of newFields) {
+      if (!(f.label in oldMap)) {
+        changes.push(`新增字段「${f.label}」`);
+      } else if (oldMap[f.label] !== f.value) {
+        const isPassword = f.label.includes('密码') || f.sensitive;
+        const newVal = isPassword ? '***' : (f.value?.slice(0, 20) || '（空）');
+        const oldVal = isPassword ? '***' : (oldMap[f.label]?.slice(0, 20) || '（空）');
+        changes.push(`「${f.label}」${oldVal}→${newVal}`);
+      }
+    }
+    // 删除的字段
+    Object.keys(oldMap).forEach(label => {
+      if (!newFields.find(f => f.label === label)) {
+        changes.push(`删除了字段「${label}」`);
+      }
+    });
+    if (changes.length === 0) return `保存了「${title}」（无变化）`;
+    return `修改了「${title}」：${changes.slice(0, 4).join('、')}${changes.length > 4 ? `…等${changes.length}处` : ''}`;
+  };
+
+  const createMutation = trpc.ledger.createMemoItem.useMutation({
+    onSuccess: (_data, vars) => {
+      toast.success("已保存");
+      utils.ledger.getMemoItems.invalidate({ ledgerId });
+      const desc = `新增了「${vars.title}」`;
+      onSuccess(desc);
+      onClose();
+    },
+    onError: e => toast.error(e.message),
+  });
+  const updateMutation = trpc.ledger.updateMemoItem.useMutation({
+    onSuccess: (_data, vars) => {
+      toast.success("已更新");
+      utils.ledger.getMemoItems.invalidate({ ledgerId });
+      const finalFields: MemoField[] = Array.isArray(vars.fields) ? vars.fields as MemoField[] : [];
+      const desc = buildDescription(true, vars.title || editItem?.title || '', finalFields);
+      onSuccess(desc);
+      onClose();
+    },
+    onError: e => toast.error(e.message),
+  });
+
+  const handleSave = () => {
+    // 所有分类统一用多记录模式
+    let effectiveSubLabel = subLabel;
+    if (category === 'bank') {
+      // 银行账号：用第一条记录的银行名称作标题
+      const firstRecord = ouyiAccounts[0];
+      const bankNameField = firstRecord?.find(f => f.label === '银行名称');
+      effectiveSubLabel = bankNameField?.value?.trim() || '银行账号';
+    } else if (category === 'website') {
+      // 公司：用第一条记录的公司名称作标题
+      const firstRecord = ouyiAccounts[0];
+      const companyNameField = firstRecord?.find(f => f.label === '公司名称');
+      effectiveSubLabel = companyNameField?.value?.trim() || subLabel || '公司';
+    }
+    if (!effectiveSubLabel.trim()) { toast.error("请先填写公司名称"); return; }
+    // 所有分类都用 serializeOuyiFields 序列化
+    const finalFields = serializeOuyiFields(ouyiAccounts);
+    if (editItem) {
+      updateMutation.mutate({ id: editItem.id, ledgerId, category, title: effectiveSubLabel, fields: finalFields, note: note.trim() || undefined });
+    } else {
+      createMutation.mutate({ ledgerId, category, title: effectiveSubLabel, fields: finalFields, note: note.trim() || undefined });
+    }
+  };
+
+  const addField = () => setFields(prev => [...prev, { label: "字段", value: "", sensitive: false }]);
+  const removeField = (idx: number) => setFields(prev => prev.filter((_, i) => i !== idx));
+  const updateField = (idx: number, key: keyof MemoField, value: any) =>
+    setFields(prev => prev.map((f, i) => i === idx ? { ...f, [key]: value } : f));
+
+  return (
+    <Dialog open={open} onOpenChange={v => !v && onClose()}>
+      <DialogContent className="max-w-md mx-auto max-h-[90vh] overflow-y-auto">
+        <DialogTitle>{editItem ? "编辑备忘" : "新建备忘"}</DialogTitle>
+
+        {/* ===== STEP 1: 选大类 ===== */}
+        {step === "cat" && (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-500">选择分类</p>
+            <div className="grid grid-cols-2 gap-2">
+              {CATEGORIES.filter(c => c.key !== "all").map(cat => {
+                const Icon = cat.icon;
+                return (
+                  <button
+                    key={cat.key}
+                    onClick={() => handleSelectCat(cat.key)}
+                    className="flex items-center gap-2 px-4 py-3 rounded-xl border border-gray-200 hover:border-gray-300 bg-white text-left"
+                  >
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: cat.color + "18" }}>
+                      <Icon className="w-4 h-4" style={{ color: cat.color }} />
+                    </div>
+                    <span className="text-sm font-medium text-gray-800">{cat.label}</span>
+                    <ChevronRight className="w-4 h-4 text-gray-300 ml-auto" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ===== STEP 2: 选子类 ===== */}
+        {step === "sub" && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <button onClick={() => setStep("cat")} className="p-1 -ml-1 text-gray-400 hover:text-gray-600">
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <div className="flex items-center gap-1.5">
+                <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: catObj.color + "18" }}>
+                  <catObj.icon className="w-3.5 h-3.5" style={{ color: catObj.color }} />
+                </div>
+                <span className="text-sm font-medium" style={{ color: catObj.color }}>{catObj.label}</span>
+              </div>
+              <span className="text-sm text-gray-400">/ 选择具体类型</span>
+            </div>
+
+            {!isCustom ? (
+              <div className="flex flex-wrap gap-2">
+                {subList.map(sub => (
+                  <button
+                    key={sub}
+                    onClick={() => handleSelectSub(sub)}
+                    className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                      sub === "自定义"
+                        ? "border-dashed border-gray-300 text-gray-500 hover:border-gray-400"
+                        : "border-gray-200 text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {sub === "自定义" ? "+ 自定义" : sub}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-gray-500">
+                  {category === 'bank' ? '输入银行名称' : '输入自定义名称'}
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    value={customSub}
+                    onChange={e => setCustomSub(e.target.value)}
+                    placeholder={category === 'bank' ? '如：招商银行、工商银行...' : `如：${catObj.label}名称...`}
+                    autoFocus
+                    onKeyDown={e => e.key === "Enter" && handleConfirmCustom()}
+                  />
+                  <Button onClick={handleConfirmCustom} className="bg-[#D32F2F] hover:bg-[#B71C1C] text-white flex-shrink-0">确认</Button>
+                </div>
+                {category !== 'bank' && (
+                  <button onClick={() => setIsCustom(false)} className="text-xs text-gray-400 hover:text-gray-600">← 返回预设列表</button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ===== STEP 3: 填写字段 ===== */}
+        {step === "fields" && (
+          <div className="space-y-4">
+            {/* 编辑模式：删除整个项目按钮 */}
+            {editItem && onDelete && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <button className="w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-dashed border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600 text-sm transition-colors">
+                    <Trash2 className="w-4 h-4" />
+                    删除整个项目
+                  </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>确认删除</AlertDialogTitle>
+                    <AlertDialogDescription>删除后无法恢复，确定要删除这条备忘吗？</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>取消</AlertDialogCancel>
+                    <AlertDialogAction className="bg-red-500 hover:bg-red-600" onClick={() => { onDelete(editItem.id); onClose(); }}>确认删除</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+
+            {/* 面包屑 */}
+            <div className="flex items-center gap-1.5 text-sm">
+              {!editItem && (
+                <button onClick={() => setStep(category === 'bank' || category === 'website' ? 'cat' : 'sub')} className="text-gray-400 hover:text-gray-600 flex items-center gap-1">
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+              )}
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-full" style={{ backgroundColor: catObj.color + "18" }}>
+                <catObj.icon className="w-3.5 h-3.5" style={{ color: catObj.color }} />
+                <span className="text-xs font-medium" style={{ color: catObj.color }}>{catObj.label}</span>
+              </div>
+              <ChevronRight className="w-3.5 h-3.5 text-gray-300" />
+              {category === 'website' ? (
+                <span className="text-sm font-medium text-gray-800">
+                  {ouyiAccounts[0]?.find(f => f.label === '公司名称')?.value?.trim() || '新建公司'}
+                </span>
+              ) : (
+                <input
+                  value={subLabel}
+                  onChange={e => setSubLabel(e.target.value)}
+                  placeholder="输入名称"
+                  className="text-sm font-medium text-gray-800 bg-transparent border-b border-dashed border-gray-300 focus:border-[#D32F2F] outline-none min-w-0 w-32 px-0.5"
+                />
+              )}
+            </div>
+
+            {/* 欧易多账户 UI */}
+            {isOuyiMode ? (
+              <div className="space-y-0">
+                {ouyiAccounts.map((acct, acctIdx) => (
+                  <div key={acctIdx}>
+                    {acctIdx > 0 && <div className="border-t border-gray-100 my-3" />}
+                    {ouyiAccounts.length > 1 && (
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => moveOuyiAccount(acctIdx, -1)}
+                            disabled={acctIdx === 0}
+                            className="p-0.5 rounded text-gray-300 hover:text-gray-500 disabled:opacity-20"
+                            title="上移"
+                          >
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => moveOuyiAccount(acctIdx, 1)}
+                            disabled={acctIdx === ouyiAccounts.length - 1}
+                            className="p-0.5 rounded text-gray-300 hover:text-gray-500 disabled:opacity-20"
+                            title="下移"
+                          >
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="text-xs font-medium text-gray-500">第 {acctIdx + 1} 条</span>
+                        </div>
+                        <button onClick={() => removeOuyiAccount(acctIdx)} className="text-xs text-red-400 hover:text-red-600 px-2 py-0.5 rounded hover:bg-red-50">
+                          删除此条
+                        </button>
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      {acct.map((field, fidx) => {
+                        const isDeletable = true;
+                        return (
+                          <div key={fidx} className="flex items-center gap-1.5">
+                            {/* 上移/下移按钮 */}
+                            <div className="flex flex-col gap-0.5 flex-shrink-0">
+                              <button
+                                onClick={() => moveOuyiField(acctIdx, fidx, -1)}
+                                disabled={fidx === 0}
+                                className="p-0.5 rounded text-gray-300 hover:text-gray-500 disabled:opacity-20"
+                                title="上移"
+                              >
+                                <ArrowUp className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => moveOuyiField(acctIdx, fidx, 1)}
+                                disabled={fidx === acct.length - 1}
+                                className="p-0.5 rounded text-gray-300 hover:text-gray-500 disabled:opacity-20"
+                                title="下移"
+                              >
+                                <ArrowDown className="w-3 h-3" />
+                              </button>
+                            </div>
+                            {/* 标签下拉选择（选自定义时显示输入框） */}
+                            {(FIELD_LABEL_OPTIONS.includes(field.label) && field.label !== '自定义') || field.label === '__NEW__' ? (
+                              <Select
+                                value={field.label === '__NEW__' ? '' : field.label}
+                                onValueChange={val => {
+                                  if (val === '自定义') {
+                                    updateOuyiField(acctIdx, fidx, "label", '自定义');
+                                  } else {
+                                    updateOuyiField(acctIdx, fidx, "label", val);
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="w-20 flex-shrink-0 text-xs h-9 px-2">
+                                  <SelectValue placeholder="选择" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {FIELD_LABEL_OPTIONS.map(opt => (
+                                    <SelectItem key={opt} value={opt} className="text-xs">{opt}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : !FIELD_LABEL_OPTIONS.includes(field.label) ? (
+                              // 字段标签不在预设列表中（旧数据已有自定义标签）
+                              <div className="flex flex-col gap-0.5 w-20 flex-shrink-0">
+                                <Input
+                                  value={field.label}
+                                  onChange={e => updateOuyiField(acctIdx, fidx, "label", e.target.value)}
+                                  placeholder="字段名"
+                                  className="text-xs h-9 px-2"
+                                />
+                                <button
+                                  onClick={() => updateOuyiField(acctIdx, fidx, "label", '账号')}
+                                  className="text-xs text-gray-400 hover:text-gray-600 leading-none"
+                                >返回选择</button>
+                              </div>
+                            ) : (
+                              // 选了“自定义”，显示文字输入框
+                              <div className="flex flex-col gap-0.5 w-20 flex-shrink-0">
+                                <Input
+                                  value=""
+                                  onChange={e => updateOuyiField(acctIdx, fidx, "label", e.target.value || '自定义')}
+                                  placeholder="输入名称"
+                                  autoFocus
+                                  className="text-xs h-9 px-2"
+                                />
+                                <button
+                                  onClick={() => updateOuyiField(acctIdx, fidx, "label", '账号')}
+                                  className="text-xs text-gray-400 hover:text-gray-600 leading-none"
+                                >返回选择</button>
+                              </div>
+                            )}
+                            <Input
+                              value={field.value}
+                              onChange={e => updateOuyiField(acctIdx, fidx, "value", e.target.value)}
+                              placeholder={`输入${field.label || '内容'}`}
+                              type="text"
+                              className="flex-1 text-sm"
+                            />
+
+                            {/* 删除按钮（所有字段均可删除） */}
+                            {isDeletable ? (
+                              <button
+                                onClick={() => removeOuyiField(acctIdx, fidx)}
+                                className="p-1.5 rounded-lg flex-shrink-0 text-gray-300 hover:text-red-500 hover:bg-red-50"
+                                title="删除此字段"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            ) : (
+                              <div className="w-7 flex-shrink-0" />
+                            )}
+                          </div>
+                        );
+                      })}
+                      {/* 在每个账户下方添加字段按钮 */}
+                      <button
+                        onClick={() => addOuyiField(acctIdx)}
+                        className="flex items-center gap-1 text-xs text-[#D32F2F] hover:bg-red-50 px-2 py-1 rounded-lg mt-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        添加字段
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <div className="pt-3">
+                  <button
+                    onClick={addOuyiAccount}
+                    className="flex items-center gap-1.5 text-sm text-[#D32F2F] hover:bg-red-50 px-3 py-2 rounded-lg w-full justify-center border border-dashed border-red-200"
+                  >
+                    <Plus className="w-4 h-4" />
+                    {category === 'bank' ? '添加银行卡' : category === 'address' ? '添加地址' : category === 'website' ? '添加网站' : subLabel === '欧易' ? '添加欧易账户' : '添加账号'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* 普通字段列表 */
+              <div className="space-y-2">
+                <label className="text-sm text-gray-600">字段内容</label>
+                {fields.map((field, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <Input
+                      value={field.label}
+                      onChange={e => updateField(idx, "label", e.target.value)}
+                      placeholder="字段名"
+                      className="w-24 flex-shrink-0 text-sm"
+                    />
+                    <Input
+                      value={field.value}
+                      onChange={e => updateField(idx, "value", e.target.value)}
+                      placeholder="内容"
+                      type="text"
+                      className="flex-1 text-sm"
+                    />
+
+                    <button onClick={() => removeField(idx)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 flex-shrink-0">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+                <button onClick={addField} className="flex items-center gap-1 text-sm text-[#D32F2F] hover:bg-red-50 px-2 py-1 rounded-lg">
+                  <Plus className="w-4 h-4" />
+                  添加字段
+                </button>
+              </div>
+            )}
+
+            {/* 备注：欧易模式下备注已内置到每个账户里，普通模式才显示整体备注 */}
+            {!isOuyiMode && (
+              <div className="space-y-1">
+                <label className="text-sm text-gray-600">备注（可选）</label>
+                <Input value={note} onChange={e => setNote(e.target.value)} placeholder="附加说明..." />
+              </div>
+            )}
+
+            {/* 操作按钮 */}
+            <div className="flex gap-2 pt-1">
+              <Button variant="outline" className="flex-1" onClick={onClose}>取消</Button>
+              <Button
+                className="flex-1 bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
+                onClick={handleSave}
+                disabled={createMutation.isPending || updateMutation.isPending}
+              >
+                {createMutation.isPending || updateMutation.isPending ? "保存中..." : "保存"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ===== 提示词库分类 =====
+const PROMPT_CATEGORIES = [
+  { key: "image", label: "图片", color: "#1E88E5" },
+  { key: "video", label: "视频", color: "#E53935" },
+  { key: "ppt",   label: "PPT",  color: "#43A047" },
+];
+
+interface PromptItem {
+  id: number;
+  category: string;
+  content: string;
+  createdAt: string;
+}
+
+// ===== 主页面 =====
+export default function MemoLedgerPage({ ledgerId, ledgerData, user, isAdmin = false }: {
+  ledgerId: number;
+  ledgerData: any;
+  user: any;
+  isAdmin?: boolean;
+}) {
+  const [, setLocation] = useLocation();
+  const [activeCategory, setActiveCategory] = useState("all");
+  const [keyword, setKeyword] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [editItem, setEditItem] = useState<MemoItem | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [deleteTitle, setDeleteTitle] = useState<string>("");
+  // 提示词模式
+  const [showAllPasswords, setShowAllPasswords] = useState(false);
+  const [editMode, setEditMode] = useState(false); // 全局编辑模式
+  const [showHistoryDialog, setShowHistoryDialog] = useState(false); // 历史记录弹窗
+  const [promptMode, setPromptMode] = useState(false);
+  const [activePromptCat, setActivePromptCat] = useState("image");
+  const [selectedPrompts, setSelectedPrompts] = useState<Set<number>>(new Set());
+  const [showPromptAdd, setShowPromptAdd] = useState(false);
+  const [promptPasteText, setPromptPasteText] = useState("");
+  // 账目排序状态
+  const [sortedItems, setSortedItems] = useState<MemoItem[]>([]);
+  const utils = trpc.useUtils();
+
+  const { data: items = [], isLoading } = trpc.ledger.getMemoItems.useQuery({
+    ledgerId,
+    category: activeCategory === "all" ? undefined : activeCategory,
+    keyword: keyword || undefined,
+  });
+
+  const { data: prompts = [], isLoading: promptsLoading } = trpc.ledger.getPrompts.useQuery(
+    { ledgerId, category: activePromptCat },
+    { enabled: promptMode, staleTime: 0, refetchOnMount: true }
+  );
+
+  const createPromptsMutation = trpc.ledger.createPrompts.useMutation({
+    onSuccess: () => {
+      toast.success("提示词已保存");
+      setPromptPasteText("");
+      setShowPromptAdd(false);
+      utils.ledger.getPrompts.invalidate({ ledgerId });
+    },
+    onError: e => toast.error(e.message),
+  });
+
+  const deletePromptMutation = trpc.ledger.deletePrompt.useMutation({
+    onSuccess: () => utils.ledger.getPrompts.invalidate({ ledgerId }),
+    onError: e => toast.error(e.message),
+  });
+
+  // 历史记录（必须在 deleteMutation 之前定义，否则 deleteMutation 的 onSuccess 无法调用）
+  const { data: historyList = [], refetch: refetchHistory } = trpc.ledger.getMemoHistoryList.useQuery(
+    { ledgerId },
+    { enabled: showHistoryDialog, staleTime: 0 }
+  );
+  const saveHistoryMutation = trpc.ledger.saveMemoHistory.useMutation();
+
+  const deleteMutation = trpc.ledger.deleteMemoItem.useMutation({
+    onSuccess: () => {
+      toast.success("已删除");
+      utils.ledger.getMemoItems.invalidate({ ledgerId });
+      // 删除后保存历史快照
+      const desc = deleteTitle ? `删除了「${deleteTitle}」` : "删除了一条备忘";
+      saveHistoryMutation.mutate({ ledgerId, description: desc });
+      setDeleteId(null);
+      setDeleteTitle("");
+    },
+    onError: e => toast.error(e.message),
+  });
+
+  const reorderMutation = trpc.ledger.reorderMemoItems.useMutation({
+    onError: e => toast.error("排序保存失败: " + e.message),
+  });
+  const restoreHistoryMutation = trpc.ledger.restoreMemoFromHistory.useMutation({
+    onSuccess: () => {
+      toast.success("已恢复到所选历史记录");
+      setShowHistoryDialog(false);
+      utils.ledger.getMemoItems.invalidate({ ledgerId });
+    },
+    onError: e => toast.error("恢复失败: " + e.message),
+  });
+
+  // 当 items 变化时，同步到本地排序状态（搜索或分类切换时重置）
+  useEffect(() => {
+    setSortedItems(items as MemoItem[]);
+  }, [items]);
+
+  // 上移/下移账目
+  const moveItem = useCallback((idx: number, dir: -1 | 1) => {
+    setSortedItems(prev => {
+      const next = [...prev];
+      const target = idx + dir;
+      if (target < 0 || target >= next.length) return prev;
+      [next[idx], next[target]] = [next[target], next[idx]];
+      // 保存新顺序到数据库
+      reorderMutation.mutate({
+        ledgerId,
+        orderedIds: next.map(it => it.id),
+      });
+      return next;
+    });
+  }, [ledgerId]);
+
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: items.length };
+    items.forEach((item: any) => { counts[item.category] = (counts[item.category] || 0) + 1; });
+    return counts;
+  }, [items]);
+
+  const togglePromptSelect = (id: number) => {
+    setSelectedPrompts(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const copySelectedPrompts = () => {
+    const selected = (prompts as PromptItem[]).filter(p => selectedPrompts.has(p.id));
+    if (!selected.length) { toast.error("请先选择提示词"); return; }
+    navigator.clipboard.writeText(selected.map(p => p.content).join("\n")).then(() => {
+      toast.success(`已合并复制 ${selected.length} 条提示词`);
+      setSelectedPrompts(new Set());
+    });
+  };
+
+  const handleSavePrompts = () => {
+    const lines = promptPasteText.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+    if (!lines.length) { toast.error("请输入至少一条提示词"); return; }
+    createPromptsMutation.mutate({ ledgerId, category: activePromptCat, contents: lines });
+  };
+
+  const promptCatColor = PROMPT_CATEGORIES.find(c => c.key === activePromptCat)?.color || "#1E88E5";
+
+  return (
+    <div className="h-[100dvh] flex flex-col bg-gray-50 overflow-hidden">
+      {/* 顶部导航 */}
+      <div className="text-white flex-shrink-0 z-10" style={{ backgroundColor: promptMode ? promptCatColor : "#D32F2F", transition: "background-color 0.3s" }}>
+        {/* 标题栏 */}
+        <div className="flex items-center justify-between px-4 h-12">
+          <button onClick={() => setLocation("/ledger")} className="p-1 -ml-2">
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          <h1 className="text-base font-medium flex-1 text-center">{ledgerData?.name || "永忆"}</h1>
+          <div className="w-8" />
+        </div>
+
+        {/* 个人信息行 */}
+        <div className="px-4 pt-1 pb-2 flex items-center gap-3">
+          <div className="flex-shrink-0">
+            {user ? (
+              <UserAvatar username={user.username} avatar={user.avatar} nickname={user.nickname} size="lg" />
+            ) : (
+              <div className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold" style={{ backgroundColor: "rgba(255,255,255,0.3)" }}>?</div>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-base font-semibold truncate">{user?.nickname || user?.name || user?.username || "用户"}</p>
+            <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.7)" }}>
+              {promptMode ? `${PROMPT_CATEGORIES.find(c => c.key === activePromptCat)?.label || ""}提示词库` : `共 ${(items as any[]).length} 条备忘`}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {/* 历史记录按钮 */}
+            <button
+              onClick={() => { setShowHistoryDialog(true); }}
+              className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+              title="操作历史"
+            >
+              <History className="w-5 h-5 text-white" />
+            </button>
+            {/* 全局编辑模式按钮 */}
+            <button
+              onClick={() => setEditMode(v => !v)}
+              className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: editMode ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.15)" }}
+              title={editMode ? "退出编辑模式" : "编辑模式"}
+            >
+              <Pencil className="w-5 h-5 text-white" />
+            </button>
+            <button
+              onClick={() => setShowAllPasswords(v => !v)}
+              className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: showAllPasswords ? "rgba(255,255,255,0.35)" : "rgba(255,255,255,0.15)" }}
+              title={showAllPasswords ? "隐藏密码" : "显示密码"}
+            >
+              {showAllPasswords ? <EyeOff className="w-5 h-5 text-white" /> : <Eye className="w-5 h-5 text-white" />}
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+              title="刷新页面"
+            >
+              <RefreshCw className="w-5 h-5 text-white" />
+            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
+                className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+                title="账本设置"
+              >
+                <Settings className="w-5 h-5 text-white" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* 搜索栏（仅备忘模式显示） */}
+        {!promptMode && (
+          <div className="px-4 pb-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-red-200" />
+              <input
+                value={keyword}
+                onChange={e => setKeyword(e.target.value)}
+                placeholder="搜索名称、内容..."
+                className="w-full pl-9 pr-4 py-2 rounded-xl bg-white/20 text-white placeholder-red-200 text-sm outline-none"
+              />
+              {keyword && (
+                <button onClick={() => setKeyword("")} className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <X className="w-4 h-4 text-red-200" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 分类标签栏 */}
+      {!promptMode ? null : (
+        <div className="bg-white border-b border-gray-100 px-4 py-2 flex gap-2 flex-shrink-0">
+          {PROMPT_CATEGORIES.map(cat => (
+            <button
+              key={cat.key}
+              onClick={() => { setActivePromptCat(cat.key); setSelectedPrompts(new Set()); }}
+              className="flex-1 py-2 rounded-xl text-sm font-semibold transition-all"
+              style={activePromptCat === cat.key
+                ? { backgroundColor: cat.color, color: "#fff" }
+                : { backgroundColor: "#F3F4F6", color: "#6B7280" }
+              }
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 多选操作栏（提示词模式） */}
+      {promptMode && selectedPrompts.size > 0 && (
+        <div className="bg-white border-b border-gray-100 px-4 py-2 flex items-center justify-between shadow-sm flex-shrink-0">
+          <span className="text-sm text-gray-600">已选 <span className="font-bold" style={{ color: promptCatColor }}>{selectedPrompts.size}</span> 条</span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setSelectedPrompts(new Set())}
+              className="flex items-center gap-1 text-sm text-gray-500 px-3 py-1.5 rounded-lg border border-gray-200"
+            >
+              <X className="w-3.5 h-3.5" /> 取消
+            </button>
+            <button
+              onClick={copySelectedPrompts}
+              className="flex items-center gap-1 text-sm text-white px-3 py-1.5 rounded-lg"
+              style={{ backgroundColor: promptCatColor }}
+            >
+              <Copy className="w-3.5 h-3.5" /> 合并复制
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 内容区 */}
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        {!promptMode ? (
+          // 备忘内容
+          isLoading ? (
+            <div className="flex items-center justify-center py-20"><div className="text-gray-400">加载中...</div></div>
+          ) : items.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+              <StickyNote className="w-12 h-12 mb-3 opacity-30" />
+              <p className="text-sm">{keyword ? "没有找到相关备忘" : "还没有备忘，点击右下角 + 添加"}</p>
+            </div>
+          ) : (
+            <div>
+              {sortedItems.map((item, idx) => (
+                <MemoCard
+                  key={item.id}
+                  item={item}
+                  onEdit={item => { setEditItem(item); setShowForm(true); }}
+                  onDelete={id => { setDeleteId(id); setDeleteTitle(item.title || ""); }}
+                  showAllPasswords={showAllPasswords}
+                  editMode={editMode}
+                  onMoveUp={idx > 0 ? () => moveItem(idx, -1) : undefined}
+                  onMoveDown={idx < sortedItems.length - 1 ? () => moveItem(idx, 1) : undefined}
+                />
+              ))}
+            </div>
+          )
+        ) : (
+          // 提示词内容
+          promptsLoading ? (
+            <div className="flex items-center justify-center py-20"><div className="text-gray-400">加载中...</div></div>
+          ) : (prompts as PromptItem[]).length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+              <ClipboardList className="w-12 h-12 mb-3 opacity-30" />
+              <p className="text-sm">还没有提示词，点击右下角 + 添加</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {(prompts as PromptItem[]).map(p => {
+                const isSel = selectedPrompts.has(p.id);
+                return (
+                  <div
+                    key={p.id}
+                    className="bg-white rounded-xl px-4 py-3 flex items-start gap-3 border transition-all"
+                    style={isSel ? { borderColor: promptCatColor, borderWidth: 2 } : { borderColor: "#F3F4F6" }}
+                  >
+                    <button onClick={() => togglePromptSelect(p.id)} className="mt-0.5 flex-shrink-0" style={{ color: isSel ? promptCatColor : "#D1D5DB" }}>
+                      {isSel ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
+                    </button>
+                    <p className="flex-1 text-sm text-gray-700 leading-relaxed break-all">{p.content}</p>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button onClick={() => navigator.clipboard.writeText(p.content).then(() => toast.success("已复制"))} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400" title="复制">
+                        <Copy className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => deletePromptMutation.mutate({ id: p.id })} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500" title="删除">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )
+        )}
+      </div>
+
+      {/* 悬浮新建按鈕 */}
+      <button
+        onClick={() => promptMode ? setShowPromptAdd(true) : (setEditItem(null), setShowForm(true))}
+        className="fixed bottom-6 right-6 w-14 h-14 text-white rounded-full shadow-lg flex items-center justify-center z-20"
+        style={{ backgroundColor: promptMode ? promptCatColor : "#D32F2F" }}
+      >
+        <Plus className="w-6 h-6" />
+      </button>
+
+      {/* 备忘新建/编辑弹窗 */}
+      {showForm && (
+        <MemoFormDialog
+          open={showForm}
+          onClose={() => { setShowForm(false); setEditItem(null); }}
+          editItem={editItem}
+          ledgerId={ledgerId}
+          onSuccess={(description: string) => {
+            // 每次保存后自动写入历史快照（带操作描述）
+            saveHistoryMutation.mutate({ ledgerId, description });
+          }}
+          onDelete={id => {
+            // 删除前先记录标题，确保历史记录显示正确描述
+            setDeleteTitle(editItem?.title || "");
+            deleteMutation.mutate({ id, ledgerId });
+          }}
+        />
+      )}
+
+      {/* 提示词添加弹窗 */}
+      <Dialog open={showPromptAdd} onOpenChange={v => { if (!v) { setShowPromptAdd(false); setPromptPasteText(""); } }}>
+        <DialogContent className="mx-4 rounded-2xl p-0 overflow-hidden max-w-sm w-full">
+          <div className="px-5 py-4 text-white" style={{ backgroundColor: promptCatColor }}>
+            <DialogTitle className="text-base font-semibold text-white">
+              添加{PROMPT_CATEGORIES.find(c => c.key === activePromptCat)?.label}提示词
+            </DialogTitle>
+            <p className="text-xs mt-1 opacity-80">每行一条，支持粘贴批量导入</p>
+          </div>
+          <div className="px-5 py-4 space-y-4">
+            <textarea
+              value={promptPasteText}
+              onChange={e => setPromptPasteText(e.target.value)}
+              placeholder={"在此粘贴或输入提示词\n每行一条，可批量导入"}
+              className="w-full h-48 text-sm border border-gray-200 rounded-xl px-3 py-2.5 outline-none resize-none text-gray-700 placeholder-gray-400"
+              style={{ lineHeight: "1.6" }}
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { setShowPromptAdd(false); setPromptPasteText(""); }}>取消</Button>
+              <Button
+                className="flex-1 text-white"
+                style={{ backgroundColor: promptCatColor }}
+                onClick={handleSavePrompts}
+                disabled={createPromptsMutation.isPending}
+              >
+                {createPromptsMutation.isPending ? "保存中..." : "保存"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 历史记录弹窗 */}
+      <Dialog open={showHistoryDialog} onOpenChange={setShowHistoryDialog}>
+        <DialogContent className="max-w-sm mx-auto rounded-2xl p-0 overflow-hidden">
+          <DialogTitle className="sr-only">操作历史</DialogTitle>
+          <div className="bg-[#D32F2F] text-white px-4 py-3 flex items-center gap-2">
+            <History className="w-5 h-5" />
+            <span className="font-semibold text-base">操作历史（最近 10 次保存）</span>
+          </div>
+          <div className="px-4 py-3 space-y-2 max-h-[60vh] overflow-y-auto">
+            {(historyList as any[]).length === 0 ? (
+              <p className="text-center text-gray-400 py-6 text-sm">暂无保存历史</p>
+            ) : (
+              (historyList as any[]).map((h: any, idx: number) => (
+                <div key={h.id} className="flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:bg-gray-50">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800">
+                      {idx === 0 ? "🕒 最新" : `第 ${idx + 1} 次`}
+                      {h.description ? ` — ${h.description}` : ""}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {new Date(h.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      &nbsp;· {h.itemCount} 条账目
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (idx === 0) { toast.info("已是最新状态"); return; }
+                      restoreHistoryMutation.mutate({ ledgerId, historyId: h.id });
+                    }}
+                    disabled={idx === 0 || restoreHistoryMutation.isPending}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40"
+                    style={{ backgroundColor: idx === 0 ? '#e5e7eb' : '#FEE2E2', color: idx === 0 ? '#9ca3af' : '#D32F2F' }}
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    {idx === 0 ? "当前" : "恢复"}
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="px-4 pb-4">
+            <Button variant="outline" className="w-full" onClick={() => setShowHistoryDialog(false)}>关闭</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 删除确认 */}
+      <AlertDialog open={deleteId !== null} onOpenChange={v => !v && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除</AlertDialogTitle>
+            <AlertDialogDescription>删除后无法恢复，确定要删除这条备忘吗？</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-500 hover:bg-red-600 text-white"
+              onClick={() => deleteId && deleteMutation.mutate({ id: deleteId, ledgerId })}
+            >
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

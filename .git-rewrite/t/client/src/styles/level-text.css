@@ -1,0 +1,76 @@
+/* 等级文字 - 红色底色 + 金色光线只在文字上掠过 */
+
+/* 标准用户/标准节点 */
+.level-text-standard {
+  position: relative;
+  display: inline-block;
+  color: #A80000;
+  background: linear-gradient(
+    110deg,
+    #A80000 0%,
+    #A80000 45%,
+    #FFD700 48%,
+    #FFFACD 50%,
+    #FFD700 52%,
+    #A80000 55%,
+    #A80000 100%
+  );
+  background-size: 300% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gold-sweep 6s linear infinite;
+}
+
+@keyframes gold-sweep {
+  0% {
+    background-position: -150% 0;
+  }
+  100% {
+    background-position: 250% 0;
+  }
+}
+
+/* 高级用户/高级节点 */
+.level-text-advanced {
+  position: relative;
+  display: inline-block;
+  color: #A80000;
+  background: linear-gradient(
+    110deg,
+    #A80000 0%,
+    #A80000 46%,
+    #FFD700 48.5%,
+    #FFFACD 50%,
+    #FFD700 51.5%,
+    #A80000 54%,
+    #A80000 100%
+  );
+  background-size: 300% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gold-sweep 6s linear infinite;
+}
+
+/* 超级用户/超级节点 */
+.level-text-super {
+  position: relative;
+  display: inline-block;
+  color: #A80000;
+  background: linear-gradient(
+    110deg,
+    #A80000 0%,
+    #A80000 47%,
+    #FFD700 49%,
+    #FFFACD 50%,
+    #FFD700 51%,
+    #A80000 53%,
+    #A80000 100%
+  );
+  background-size: 300% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gold-sweep 6s linear infinite;
+}

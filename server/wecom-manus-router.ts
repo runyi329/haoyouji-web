@@ -1504,10 +1504,13 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
                     await new Promise(r => setTimeout(r, 500));
                   }
                 } else {
-                  // Manus 路径
+                  // Manus 路径：把专属 System Prompt 拼接到消息前面注入
                   const taskId = await getOrCreateManusTask(userId);
                   if (taskId) {
-                    const reply = await sendToManusAndGetReply(taskId, content, ruleModel);
+                    const manusContent = rulePrompt
+                      ? `[系统指令]\n${rulePrompt}\n\n[用户消息]\n${content}`
+                      : content;
+                    const reply = await sendToManusAndGetReply(taskId, manusContent, ruleModel);
                     const chunks = reply.content.match(/[\s\S]{1,2000}/g) || [reply.content];
                     for (const chunk of chunks) {
                       await sendWeComMessage(userId, chunk);

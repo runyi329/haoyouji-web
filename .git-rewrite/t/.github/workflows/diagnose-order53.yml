@@ -1,0 +1,30 @@
+name: 诊断订单53结算未触发原因
+on:
+  workflow_dispatch:
+jobs:
+  diagnose:
+    name: 查询订单53状态历史和结算触发条件
+    runs-on: ubuntu-latest
+    steps:
+      - name: 配置SSH密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      - name: 查询诊断信息
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e \"
+              SELECT '=== 订单53完整信息 ===' as info;
+              SELECT id, user_id, ledger_id, coin, limit_price, quantity, amount,
+                     status, sell_status, sell_price, sell_at, sell_confirmed_at,
+                     is_gift, created_at, updated_at
+              FROM af_orders WHERE id = 53;
+
+              SELECT '=== af_manual_balances中ledger_id=52所有记录 ===' as info;
+              SELECT id, user_id, amount, note, created_at
+              FROM af_manual_balances
+              WHERE ledger_id = 52
+              ORDER BY id ASC;
+            \""

@@ -1,0 +1,30 @@
+{
+  "query": "\nSELECT * FROM users \nWHERE name LIKE '%jiang%' \n   OR email LIKE '%jiang%' \n   OR openId LIKE '%jiang%'\nLIMIT 10;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \nSELECT * FROM users \nWHERE name LIKE '%jiang%' \n   OR email LIKE '%jiang%' \n   OR openId LIKE '%jiang%'\nLIMIT 10;\n",
+  "rows": [
+    {
+      "id": "870413",
+      "openId": "legacy_870413_9e32d70bc0dcca31",
+      "username": "NULL",
+      "passwordHash": "NULL",
+      "name": "jiang",
+      "email": "NULL",
+      "loginMethod": "password",
+      "role": "parent",
+      "familyId": "NULL",
+      "avatar": "NULL",
+      "points": "0",
+      "sharingEnabled": "0",
+      "isLocked": "0",
+      "failedLoginAttempts": "0",
+      "lastFailedLogin": "NULL",
+      "createdAt": "2026-01-11 17:41:14",
+      "updatedAt": "2026-01-22 21:18:09",
+      "lastSignedIn": "2026-01-22 21:18:09"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\topenId\tusername\tpasswordHash\tname\temail\tloginMethod\trole\tfamilyId\tavatar\tpoints\tsharingEnabled\tisLocked\tfailedLoginAttempts\tlastFailedLogin\tcreatedAt\tupdatedAt\tlastSignedIn\n870413\tlegacy_870413_9e32d70bc0dcca31\tNULL\tNULL\tjiang\tNULL\tpassword\tparent\tNULL\tNULL\t0\t0\t0\t0\tNULL\t2026-01-11 17:41:14\t2026-01-22 21:18:09\t2026-01-22 21:18:09\n",
+  "stderr": "",
+  "execution_time_ms": 418
+}

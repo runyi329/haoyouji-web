@@ -1,0 +1,48 @@
+{
+  "query": "\n-- 查询所有账本成员记录\nSELECT * FROM ledger_members ORDER BY ledgerId, userId;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \n-- 查询所有账本成员记录\nSELECT * FROM ledger_members ORDER BY ledgerId, userId;\n",
+  "rows": [
+    {
+      "id": "60001",
+      "ledgerId": "60002",
+      "userId": "4200293",
+      "role": "owner",
+      "nickname": "胡",
+      "member_type": "real",
+      "avatar_type": "NULL",
+      "permission_view": "all",
+      "permission_add": "all",
+      "permission_edit": "own",
+      "permission_delete": "own",
+      "canEdit": "1",
+      "canDelete": "0",
+      "canInvite": "0",
+      "invitedBy": "NULL",
+      "createdAt": "2026-01-26 17:31:11",
+      "updatedAt": "2026-01-26 17:31:11"
+    },
+    {
+      "id": "60002",
+      "ledgerId": "60003",
+      "userId": "4200293",
+      "role": "owner",
+      "nickname": "胡",
+      "member_type": "real",
+      "avatar_type": "NULL",
+      "permission_view": "all",
+      "permission_add": "all",
+      "permission_edit": "own",
+      "permission_delete": "own",
+      "canEdit": "1",
+      "canDelete": "0",
+      "canInvite": "0",
+      "invitedBy": "NULL",
+      "createdAt": "2026-01-26 17:31:12",
+      "updatedAt": "2026-01-26 17:31:12"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tledgerId\tuserId\trole\tnickname\tmember_type\tavatar_type\tpermission_view\tpermission_add\tpermission_edit\tpermission_delete\tcanEdit\tcanDelete\tcanInvite\tinvitedBy\tcreatedAt\tupdatedAt\n60001\t60002\t4200293\towner\t胡\treal\tNULL\tall\tall\town\town\t1\t0\t0\tNULL\t2026-01-26 17:31:11\t2026-01-26 17:31:11\n60002\t60003\t4200293\towner\t胡\treal\tNULL\tall\tall\town\town\t1\t0\t0\tNULL\t2026-01-26 17:31:12\t2026-01-26 17:31:12\n",
+  "stderr": "",
+  "execution_time_ms": 1517
+}

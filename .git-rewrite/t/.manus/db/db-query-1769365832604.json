@@ -1,0 +1,100 @@
+{
+  "query": "SELECT id, openId, username, email, passwordHash, name, role FROM users LIMIT 10;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute SELECT id, openId, username, email, passwordHash, name, role FROM users LIMIT 10;",
+  "rows": [
+    {
+      "id": "28",
+      "openId": "legacy_28_ce956a21bd83fb7d",
+      "username": "hyy329",
+      "email": "NULL",
+      "passwordHash": "$2b$10$74LKCx/Oxe.tZQHK9A/qYuaEY5VYDmpx.txC0fROFV1L/wU0jbrJy",
+      "name": "hyy329",
+      "role": "super_admin"
+    },
+    {
+      "id": "30184",
+      "openId": "legacy_30184_6f521308d723beaf",
+      "username": "miao",
+      "email": "NULL",
+      "passwordHash": "$2b$10$NrNCnNFfumJON654m/ZO..FyU/zCZuFY/hvuJjEEiAJzO0Jkv0RO2",
+      "name": "喵喵",
+      "role": "baby"
+    },
+    {
+      "id": "30185",
+      "openId": "legacy_30185_6fbdfb8392c9e1f5",
+      "username": "wang",
+      "email": "NULL",
+      "passwordHash": "$2b$10$uOXmnLfTzPjVBvKvXK5cpOm.NnvVyIWMeVVBdhohl6i5h2F9XG0VG",
+      "name": "旺旺",
+      "role": "baby"
+    },
+    {
+      "id": "510025",
+      "openId": "legacy_510025_f6747e5d2f36a8f2",
+      "username": "zhangjue",
+      "email": "NULL",
+      "passwordHash": "$2b$10$M2KI0zmegSteEesscn32Iu1FiMY8To8F/7Q5/WkMNfM1nTtv9C5Em",
+      "name": "zhangjue",
+      "role": "parent"
+    },
+    {
+      "id": "540628",
+      "openId": "legacy_540628_5bc47950698d156d",
+      "username": "贝贝",
+      "email": "NULL",
+      "passwordHash": "$2b$10$x8/4nrnoTMtu5gmr6wa6QOrmbT7HU2pWpa9rmkj0NRRhd0FYlB942",
+      "name": "贝贝",
+      "role": "baby"
+    },
+    {
+      "id": "540801",
+      "openId": "legacy_540801_61b77a3545408c55",
+      "username": "yunting",
+      "email": "NULL",
+      "passwordHash": "$2b$10$HOkeARH7.jR7kpShTSrc7e5NIEtSNTnGwknXCun3r9b9WQ8KPm4DK",
+      "name": "Yunting",
+      "role": "parent"
+    },
+    {
+      "id": "600105",
+      "openId": "legacy_600105_f60f7ca6a29ebb0b",
+      "username": "test",
+      "email": "NULL",
+      "passwordHash": "test-hash",
+      "name": "测试管理员",
+      "role": "parent"
+    },
+    {
+      "id": "870413",
+      "openId": "legacy_870413_9e32d70bc0dcca31",
+      "username": "jiang",
+      "email": "NULL",
+      "passwordHash": "$2b$10$qLEeoupmW4H6T2U7OCL/Xeyvp4b2LIsMcOQT0qiugTFPilnLK8TpS",
+      "name": "jiang",
+      "role": "super_admin"
+    },
+    {
+      "id": "1260259",
+      "openId": "legacy_1260259_2c00f94e8a963c2e",
+      "username": "jilldibg",
+      "email": "NULL",
+      "passwordHash": "$2b$10$yot1PJ4WPIPFf9ic0VcC5Ot.wfch3NqAKbZFIjODCyp0HfXN/8Avu",
+      "name": "Jillding",
+      "role": "parent"
+    },
+    {
+      "id": "1260396",
+      "openId": "legacy_1260396_034831f9511c65ec",
+      "username": "qixu",
+      "email": "NULL",
+      "passwordHash": "$2b$10$4cgoLIR.fCpCDevhM.ovS.KkHyB18zHUN0sjWv9f9jQnBzO9YMdyC",
+      "name": "qixu",
+      "role": "parent"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\topenId\tusername\temail\tpasswordHash\tname\trole\n28\tlegacy_28_ce956a21bd83fb7d\thyy329\tNULL\t$2b$10$74LKCx/Oxe.tZQHK9A/qYuaEY5VYDmpx.txC0fROFV1L/wU0jbrJy\thyy329\tsuper_admin\n30184\tlegacy_30184_6f521308d723beaf\tmiao\tNULL\t$2b$10$NrNCnNFfumJON654m/ZO..FyU/zCZuFY/hvuJjEEiAJzO0Jkv0RO2\t喵喵\tbaby\n30185\tlegacy_30185_6fbdfb8392c9e1f5\twang\tNULL\t$2b$10$uOXmnLfTzPjVBvKvXK5cpOm.NnvVyIWMeVVBdhohl6i5h2F9XG0VG\t旺旺\tbaby\n510025\tlegacy_510025_f6747e5d2f36a8f2\tzhangjue\tNULL\t$2b$10$M2KI0zmegSteEesscn32Iu1FiMY8To8F/7Q5/WkMNfM1nTtv9C5Em\tzhangjue\tparent\n540628\tlegacy_540628_5bc47950698d156d\t贝贝\tNULL\t$2b$10$x8/4nrnoTMtu5gmr6wa6QOrmbT7HU2pWpa9rmkj0NRRhd0FYlB942\t贝贝\tbaby\n540801\tlegacy_540801_61b77a3545408c55\tyunting\tNULL\t$2b$10$HOkeARH7.jR7kpShTSrc7e5NIEtSNTnGwknXCun3r9b9WQ8KPm4DK\tYunting\tparent\n600105\tlegacy_600105_f60f7ca6a29ebb0b\ttest\tNULL\ttest-hash\t测试管理员\tparent\n870413\tlegacy_870413_9e32d70bc0dcca31\tjiang\tNULL\t$2b$10$qLEeoupmW4H6T2U7OCL/Xeyvp4b2LIsMcOQT0qiugTFPilnLK8TpS\tjiang\tsuper_admin\n1260259\tlegacy_1260259_2c00f94e8a963c2e\tjilldibg\tNULL\t$2b$10$yot1PJ4WPIPFf9ic0VcC5Ot.wfch3NqAKbZFIjODCyp0HfXN/8Avu\tJillding\tparent\n1260396\tlegacy_1260396_034831f9511c65ec\tqixu\tNULL\t$2b$10$4cgoLIR.fCpCDevhM.ovS.KkHyB18zHUN0sjWv9f9jQnBzO9YMdyC\tqixu\tparent\n",
+  "stderr": "",
+  "execution_time_ms": 1683
+}

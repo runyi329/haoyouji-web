@@ -1,0 +1,72 @@
+name: 重建趋势缓存（从 Tushare 直接计算）
+
+on:
+  push:
+    paths:
+      - '.github/workflows/rebuild-trend-cache.yml'
+      - 'scripts/rebuild-trend-from-tushare.py'
+  workflow_dispatch:
+
+jobs:
+  rebuild-trend-cache:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run rebuild script on production server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 124.223.54.69
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          command_timeout: 350m
+          script: |
+            cd /root/haoyouji-web
+            git pull origin main
+
+            echo "=== 安装依赖 ==="
+            pip3 install tushare pymysql -q
+
+            echo "=== 后台运行重建脚本（1996-2026全量）==="
+            nohup python3 scripts/rebuild-trend-from-tushare.py 19960101 20260430 \
+              > /tmp/rebuild-trend.log 2>&1 &
+            PID=$!
+            echo "PID=$PID，脚本已在后台运行"
+
+            # 等待 5 分钟，确认脚本正常启动
+            for i in $(seq 1 30); do
+              sleep 10
+              if ! kill -0 $PID 2>/dev/null; then
+                echo "脚本已结束，日志："
+                tail -30 /tmp/rebuild-trend.log
+                break
+              fi
+              echo "运行中... $((i*10))s"
+              tail -3 /tmp/rebuild-trend.log
+            done
+
+            echo "=== 脚本在后台持续运行中 PID=$PID ==="
+
+  drop-ts-daily:
+    runs-on: ubuntu-latest
+    needs: []
+    steps:
+      - name: 删除 ts_daily 和 ts_sync_log 原始数据表
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 124.223.54.69
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            echo "=== 查看 ts_trend_cache 数据量 ==="
+            mysql -u root -p'Miao@20190603' haoyouji -e "SELECT market, COUNT(*) as cnt FROM ts_trend_cache GROUP BY market ORDER BY market;"
+
+            echo "=== 删除 ts_daily 和 ts_sync_log ==="
+            mysql -u root -p'Miao@20190603' haoyouji -e "DROP TABLE IF EXISTS ts_daily; DROP TABLE IF EXISTS ts_sync_log;"
+
+            echo "=== 确认剩余 ts_ 开头的表 ==="
+            mysql -u root -p'Miao@20190603' haoyouji -e "SHOW TABLES LIKE 'ts_%';"
+
+            echo "✅ 删除完成"

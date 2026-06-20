@@ -1,0 +1,5960 @@
+import { getLedgerDb, getDbConnection } from "./db";
+import { ledgers, ledgerMembers, ledgerCategories, ledgerRecords, users } from "../drizzle/schema";
+import { eq, and, desc, sql, isNull, isNotNull, asc, ne } from "drizzle-orm";
+import { encryptFields, decryptFields, decryptFieldsArray } from "./encryption";
+
+// 账目记录需要加密的字段
+const LEDGER_RECORD_ENCRYPT_FIELDS = ['description'];
+// 报销历史需要加密的字段
+const REIMBURSEMENT_ENCRYPT_FIELDS = ['notes'];
+
+// ========== 软删除自动迁移 ==========
+let _softDeleteMigrated = false;
+async function ensureSoftDeleteColumns() {
+  if (_softDeleteMigrated) return;
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    // 尝试添加列，如果已存在则忽略
+    await db.execute(sql`ALTER TABLE ledger_records ADD COLUMN deleted_at TIMESTAMP NULL DEFAULT NULL`);
+  } catch (e: any) {
+    // 列已存在时忽略错误
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureSoftDeleteColumns] deleted_at error:', e.message);
+    }
+  }
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    await db.execute(sql`ALTER TABLE ledger_records ADD COLUMN deleted_by INT NULL DEFAULT NULL`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureSoftDeleteColumns] deleted_by error:', e.message);
+    }
+  }
+  _softDeleteMigrated = true;
+}
+// 在模块加载时执行迁移
+ensureSoftDeleteColumns().catch(console.error);
+
+// ========== 修复 permission 字段类型（确保是 ENUM 而非短 VARCHAR）==========
+let _permissionFieldsMigrated = false;
+async function ensurePermissionFieldTypes() {
+  if (_permissionFieldsMigrated) return;
+  const conn = await getDbConnection();
+  if (!conn) { _permissionFieldsMigrated = true; return; }
+  // 修复 ledger_members 的权限字段类型
+  const memberFields = [
+    { col: 'permission_view', def: `ENUM('all','own','none') NOT NULL DEFAULT 'all'` },
+    { col: 'permission_add', def: `ENUM('all','own','none') NOT NULL DEFAULT 'all'` },
+    { col: 'permission_edit', def: `ENUM('all','own','none') NOT NULL DEFAULT 'own'` },
+    { col: 'permission_delete', def: `ENUM('all','own','none') NOT NULL DEFAULT 'own'` },
+  ];
+  for (const f of memberFields) {
+    try {
+      await conn.execute(`ALTER TABLE ledger_members MODIFY COLUMN \`${f.col}\` ${f.def}`);
+      console.log(`[ensurePermissionFieldTypes] ${f.col} 类型已修复`);
+    } catch (e: any) {
+      // 如果已经是正确类型则忽略
+      if (!e.message?.includes('already') && !e.message?.includes('Duplicate')) {
+        console.error(`[ensurePermissionFieldTypes] ${f.col} error:`, e.message);
+      }
+    }
+  }
+  // 修复 ledgers 的默认权限字段类型
+  const ledgerFields = [
+    { col: 'default_permission_view', def: `ENUM('all','own','none') NOT NULL DEFAULT 'all'` },
+    { col: 'default_permission_add', def: `ENUM('all','own','none') NOT NULL DEFAULT 'all'` },
+    { col: 'default_permission_edit', def: `ENUM('all','own','none') NOT NULL DEFAULT 'own'` },
+    { col: 'default_permission_delete', def: `ENUM('all','own','none') NOT NULL DEFAULT 'own'` },
+  ];
+  for (const f of ledgerFields) {
+    try {
+      await conn.execute(`ALTER TABLE ledgers MODIFY COLUMN \`${f.col}\` ${f.def}`);
+      console.log(`[ensurePermissionFieldTypes] ledgers.${f.col} 类型已修复`);
+    } catch (e: any) {
+      if (!e.message?.includes('already') && !e.message?.includes('Duplicate')) {
+        console.error(`[ensurePermissionFieldTypes] ledgers.${f.col} error:`, e.message);
+      }
+    }
+  }
+  _permissionFieldsMigrated = true;
+}
+ensurePermissionFieldTypes().catch(console.error);
+
+// ========== 备份权限字段迁移 ==========
+let _backupPermissionMigrated = false;
+async function ensureBackupPermissionColumn() {
+  if (_backupPermissionMigrated) return;
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    // 添加 permission_backup 字段
+    await db.execute(sql`ALTER TABLE ledger_members ADD COLUMN permission_backup ENUM('allow','none') NOT NULL DEFAULT 'allow'`);
+    console.log('[ensureBackupPermissionColumn] permission_backup 字段添加成功');
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureBackupPermissionColumn] error:', e.message);
+    }
+  }
+  _backupPermissionMigrated = true;
+}
+// 在模块加载时执行迁移
+ensureBackupPermissionColumn().catch(console.error);
+
+// ========== 删除ledger_members的UNIQUE KEY约束（支持同一用户拥有real和ai两条记录） ==========
+let _uniqueKeyDropped = false;
+async function dropUniqueKeyConstraint() {
+  if (_uniqueKeyDropped) return;
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return;
+    await conn.execute('ALTER TABLE ledger_members DROP INDEX unique_ledger_user');
+    console.log('[dropUniqueKeyConstraint] unique_ledger_user 索引已删除');
+  } catch (e: any) {
+    // 索引不存在时忽略错误
+    if (!e.message?.includes("check that it exists") && !e.message?.includes("Can't DROP")) {
+      console.error('[dropUniqueKeyConstraint] error:', e.message);
+    }
+  }
+  _uniqueKeyDropped = true;
+}
+// 在模块加载时执行迁移
+dropUniqueKeyConstraint().catch(console.error);
+
+// ========== 清理重复AI分身记录 ==========
+let _duplicateAICleaned = false;
+async function cleanDuplicateAIMembers() {
+  if (_duplicateAICleaned) return;
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return;
+    // 查找所有重复的AI分身（同一个ledgerId+userId有多条member_type='ai'的记录）
+    const [duplicates] = await conn.execute(
+      `SELECT ledgerId, userId, COUNT(*) as cnt, MIN(id) as keepId 
+       FROM ledger_members 
+       WHERE member_type = 'ai' 
+       GROUP BY ledgerId, userId 
+       HAVING cnt > 1`
+    ) as any;
+    
+    if (duplicates && duplicates.length > 0) {
+      for (const dup of duplicates) {
+        await conn.execute(
+          'DELETE FROM ledger_members WHERE ledgerId = ? AND userId = ? AND member_type = ? AND id != ?',
+          [dup.ledgerId, dup.userId, 'ai', dup.keepId]
+        );
+        console.log(`[cleanDuplicateAI] 清理账本${dup.ledgerId}用户${dup.userId}的${dup.cnt - 1}条重复AI分身`);
+      }
+    }
+    // 额外清理userId=0的孤立AI分身（旧版本遗留数据）
+    const [legacyAI] = await conn.execute(
+      `SELECT id, ledgerId FROM ledger_members WHERE member_type = 'ai' AND userId = 0`
+    ) as any;
+    if (legacyAI && legacyAI.length > 0) {
+      const legacyIds = legacyAI.map((r: any) => r.id);
+      await conn.execute(
+        `DELETE FROM ledger_members WHERE id IN (${legacyIds.join(',')})`
+      );
+      console.log(`[cleanDuplicateAI] 清理${legacyAI.length}条userId=0的旧版AI分身`);
+    }
+  } catch (e: any) {
+    console.error('[cleanDuplicateAI] error:', e.message);
+  }
+  _duplicateAICleaned = true;
+}
+cleanDuplicateAIMembers().catch(console.error);
+
+// ========== ledger_members role 枚举扩展：加入 funder ==========
+let _funderRoleMigrated = false;
+async function ensureFunderRole() {
+  if (_funderRoleMigrated) return;
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return;
+    // MySQL 修改 ENUM 需要 MODIFY COLUMN，包含所有已有值
+    await conn.execute(
+      `ALTER TABLE ledger_members MODIFY COLUMN role ENUM('owner','admin','member','funder') NOT NULL DEFAULT 'member'`
+    );
+    console.log('[ensureFunderRole] role 枚举已扩展为包含 funder');
+  } catch (e: any) {
+    // 如果已经包含 funder 则忽略
+    if (!e.message?.includes('funder')) {
+      console.error('[ensureFunderRole] error:', e.message);
+    }
+  }
+  _funderRoleMigrated = true;
+}
+ensureFunderRole().catch(console.error);
+
+// ========== 账本功能字段迁移 ==========
+let _ledgerFeaturesMigrated = false;
+async function ensureLedgerFeaturesColumns() {
+  if (_ledgerFeaturesMigrated) return;
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    // 添加 enable_reimbursement 字段
+    await db.execute(sql`ALTER TABLE ledgers ADD COLUMN enable_reimbursement TINYINT DEFAULT 1 NOT NULL COMMENT '是否启用报销功能（1=启用，0=禁用）'`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureLedgerFeaturesColumns] enable_reimbursement error:', e.message);
+    }
+  }
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    // 添加 enable_pending 字段
+    await db.execute(sql`ALTER TABLE ledgers ADD COLUMN enable_pending TINYINT DEFAULT 0 NOT NULL COMMENT '是否启用待结功能（1=启用，0=禁用）'`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureLedgerFeaturesColumns] enable_pending error:', e.message);
+    }
+  }
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    // 添加 pending_type 字段
+    await db.execute(sql`ALTER TABLE ledger_records ADD COLUMN pending_type ENUM('receivable', 'payable') DEFAULT NULL COMMENT '待结类型（receivable=代收，payable=代付，NULL=无）'`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureLedgerFeaturesColumns] pending_type error:', e.message);
+    }
+  }
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    // 添加 pending_include_stats 字段
+    await db.execute(sql`ALTER TABLE ledger_records ADD COLUMN pending_include_stats TINYINT DEFAULT 1 COMMENT '待结账目是否计入统计（0=仅显示不计入，1=显示并计入）'`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureLedgerFeaturesColumns] pending_include_stats error:', e.message);
+    }
+  }
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    // 添加 pending_default_include_stats 字段（账本级别默认统计模式）
+    await db.execute(sql`ALTER TABLE ledgers ADD COLUMN pending_default_include_stats TINYINT DEFAULT 1 NOT NULL COMMENT '待结默认统计模式（0=仅显示不计入，1=显示并计入）'`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureLedgerFeaturesColumns] pending_default_include_stats error:', e.message);
+    }
+  }
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    // 创建索引
+    await db.execute(sql`CREATE INDEX idx_pending_type ON ledger_records(pending_type)`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate key')) {
+      console.error('[ensureLedgerFeaturesColumns] idx_pending_type error:', e.message);
+    }
+  }
+  _ledgerFeaturesMigrated = true;
+  console.log('[ensureLedgerFeaturesColumns] 账本功能字段迁移完成');
+}
+// 在模块加载时执行迁移
+ensureLedgerFeaturesColumns().catch(console.error);
+
+// ========== AB型意见本字段迁移（统一到ledger_categories + ledger_records）==========
+let _opinionBookMigrated = false;
+async function ensureOpinionBookColumns() {
+  if (_opinionBookMigrated) return;
+  const db = await getLedgerDb();
+  if (!db) return;
+
+  // 1. 将 ledger_categories.type 从 ENUM 改为 VARCHAR(20)，彻底消除枚举约束
+  //    这样 'branch' 类型就不会因枚举限制而写入失败
+  try {
+    await db.execute(sql`ALTER TABLE ledger_categories MODIFY COLUMN type VARCHAR(20) NOT NULL DEFAULT 'expense'`);
+    console.log('[ensureOpinionBookColumns] ledger_categories.type 已改为 VARCHAR(20)');
+  } catch (e: any) {
+    // 如果已经是 VARCHAR 就不会报错，其他错误才记录
+    if (!e.message?.includes('already exists') && !e.message?.includes('Nothing to change')) {
+      console.error('[ensureOpinionBookColumns] type varchar error:', e.message);
+    }
+  }
+
+  // 2. 修正旧数据：把 opinion_book 账本下所有 type='expense'/'income' 的分类改为 type='branch'
+  //    这些是用旧的 addCategory 接口创建的，需要一次性修正
+  try {
+    const conn = await getDbConnection();
+    if (conn) {
+      const [result] = await conn.execute(
+        `UPDATE ledger_categories lc
+         INNER JOIN ledgers l ON l.id = lc.ledgerId
+         SET lc.type = 'branch'
+         WHERE l.type = 'opinion_book'
+           AND lc.type IN ('expense', 'income')
+           AND (lc.isDefault = 0 OR lc.isDefault IS NULL)`
+      ) as any;
+      console.log(`[ensureOpinionBookColumns] 旧分店数据修正完成，共修正 ${result?.affectedRows || 0} 条`);
+    }
+  } catch (e: any) {
+    console.error('[ensureOpinionBookColumns] 分店数据修正失败:', e.message);
+  }
+
+  // 2. ledger_records 新增 rating 字段（评分 1-5）
+  try {
+    await db.execute(sql`ALTER TABLE ledger_records ADD COLUMN rating TINYINT NULL DEFAULT NULL COMMENT 'AB型意见本评分 1-5'`);
+    console.log('[ensureOpinionBookColumns] ledger_records.rating 字段已添加');
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureOpinionBookColumns] rating error:', e.message);
+    }
+  }
+
+  // 3. ledger_records 新增 guest_name 字段（访客昵称）
+  try {
+    await db.execute(sql`ALTER TABLE ledger_records ADD COLUMN guest_name VARCHAR(50) NULL DEFAULT NULL COMMENT 'AB型意见本访客昵称'`);
+    console.log('[ensureOpinionBookColumns] ledger_records.guest_name 字段已添加');
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureOpinionBookColumns] guest_name error:', e.message);
+    }
+  }
+
+  // 4. ledger_records 新增 guest_ip 字段（访客IP，防刷）
+  try {
+    await db.execute(sql`ALTER TABLE ledger_records ADD COLUMN guest_ip VARCHAR(45) NULL DEFAULT NULL COMMENT 'AB型意见本访客IP'`);
+    console.log('[ensureOpinionBookColumns] ledger_records.guest_ip 字段已添加');
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureOpinionBookColumns] guest_ip error:', e.message);
+    }
+  }
+
+  // 5. ledger_records 新增 is_read 字段（是否已读）
+  try {
+    await db.execute(sql`ALTER TABLE ledger_records ADD COLUMN is_read TINYINT DEFAULT 0 COMMENT 'AB型意见本是否已读（0=未读，1=已读）'`);
+    console.log('[ensureOpinionBookColumns] ledger_records.is_read 字段已添加');
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureOpinionBookColumns] is_read error:', e.message);
+    }
+  }
+
+  _opinionBookMigrated = true;
+  console.log('[ensureOpinionBookColumns] AB型意见本字段迁移完成');
+}
+// 在模块加载时执行迁移
+ensureOpinionBookColumns().catch(console.error);
+
+/**
+ * 获取用户的所有账本（包括自己创建的和参与的）
+ */
+export async function getUserLedgers(userId: number, isArchived: boolean = false) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 获取用户参与的所有账本ID
+  const memberRecords = await db
+    .select({ ledgerId: ledgerMembers.ledgerId, role: ledgerMembers.role })
+    .from(ledgerMembers)
+    .where(eq(ledgerMembers.userId, userId));
+
+  const ledgerIds = memberRecords.map((m: any) => m.ledgerId);
+
+  if (ledgerIds.length === 0) {
+    return [];
+  }
+
+  // 获取账本详情（先不排序，后续按最近活动时间排序）
+  const ledgerList = await db
+    .select()
+    .from(ledgers)
+    .where(
+      and(
+        sql`${ledgers.id} IN (${sql.join(ledgerIds, sql`, `)})`,
+        eq(ledgers.isArchived, isArchived)
+      )
+    );
+
+  // 为每个账本获取成员信息和最近活动时间
+  const result = await Promise.all(
+    ledgerList.map(async (ledger: any) => {
+      // 使用账本数据库连接,关联users表获取头像
+      const membersRaw = await db
+        .select({
+          userId: ledgerMembers.userId,
+          role: ledgerMembers.role,
+          memberType: ledgerMembers.memberType,
+          username: users.username,
+          avatar: users.avatar,
+        })
+        .from(ledgerMembers)
+        .leftJoin(users, eq(ledgerMembers.userId, users.id))
+        .where(eq(ledgerMembers.ledgerId, ledger.id));
+      
+      // 对于AI分身且userId=0的旧数据，查询当前用户头像作为补唇
+      const hasLegacyAI = membersRaw.some((m: any) => m.memberType === 'ai' && m.userId === 0);
+      let currentUserAvatarForLedger: string | null = null;
+      let currentUserUsernameForLedger: string | null = null;
+      if (hasLegacyAI) {
+        const currentUserInfo = await db
+          .select({ avatar: users.avatar, username: users.username })
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1);
+        if (currentUserInfo.length > 0) {
+          currentUserAvatarForLedger = currentUserInfo[0].avatar;
+          currentUserUsernameForLedger = currentUserInfo[0].username;
+        }
+      }
+      
+      // 将当前用户排在第一位，AI分身紧跟对应真人后面
+      const mappedMembers = membersRaw.map((m: any) => ({
+        ...m,
+        avatar: (m.memberType === 'ai' && m.userId === 0) ? currentUserAvatarForLedger : m.avatar,
+        username: (m.memberType === 'ai' && m.userId === 0) ? currentUserUsernameForLedger : m.username,
+      }));
+      
+      // 分离真人和AI分身
+      const realMembersForLedger = mappedMembers.filter((m: any) => m.memberType !== 'ai');
+      const aiMembersForLedger = mappedMembers.filter((m: any) => m.memberType === 'ai');
+      
+      // 真人按当前用户优先排序
+      realMembersForLedger.sort((a: any, b: any) => {
+        if (a.userId === userId) return -1;
+        if (b.userId === userId) return 1;
+        return 0;
+      });
+      
+      // AI分身插入到对应真人后面
+      const sortedMembersForLedger: any[] = [];
+      for (const real of realMembersForLedger) {
+        sortedMembersForLedger.push(real);
+        const correspondingAI = aiMembersForLedger.find((ai: any) => ai.userId === real.userId);
+        if (correspondingAI) {
+          sortedMembersForLedger.push(correspondingAI);
+        }
+      }
+      // 孤立的AI分身追加到末尾
+      for (const ai of aiMembersForLedger) {
+        if (!sortedMembersForLedger.includes(ai)) {
+          sortedMembersForLedger.push(ai);
+        }
+      }
+      
+      const members = sortedMembersForLedger.slice(0, 4); // 最多显示4个成员头像
+
+      // memberCount 排除AI分身，只计算真实成员数量
+      const memberCount = membersRaw.filter((m: any) => m.memberType !== 'ai').length;
+
+      // 获取账目数量
+      const recordCount = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(ledgerRecords)
+        .where(and(eq(ledgerRecords.ledgerId, ledger.id), isNull(ledgerRecords.deletedAt)))
+        .then((rows: any[]) => rows[0]?.count || 0);
+
+      // 获取该账本最近一条账目的创建时间（作为最近活动时间）
+      const latestRecord = await db
+        .select({ latestAt: sql<string>`MAX(${ledgerRecords.createdAt})` })
+        .from(ledgerRecords)
+        .where(and(eq(ledgerRecords.ledgerId, ledger.id), isNull(ledgerRecords.deletedAt)))
+        .then((rows: any[]) => rows[0]?.latestAt || null);
+
+      // 获取当前用户在这个账本中的角色
+      const userRole = memberRecords.find((m: any) => m.ledgerId === ledger.id)?.role || "member";
+
+      // 最近活动时间：取账目最新时间和账本updatedAt中的较新值
+      const lastActivityAt = latestRecord 
+        ? new Date(Math.max(new Date(latestRecord).getTime(), new Date(ledger.updatedAt).getTime()))
+        : new Date(ledger.updatedAt);
+
+      // 统一架构后：opinion_book 类型直接用 ledger.id 跳转，不再需要 opinionBookId
+
+      // 对 custom_ae / custom_af 类型账本，额外查询进行中的抽奖数量
+      let activeLotteryCount = 0;
+      if (ledger.type === 'custom_ae' || ledger.type === 'custom_af') {
+        try {
+          const lotteryRows = await db
+            .select({ count: sql<number>`count(*)` })
+            .from(sql`lottery_activities`)
+            .where(sql`ledger_id = ${ledger.id} AND status IN ('active', 'open')`)
+            .then((rows: any[]) => rows[0]?.count || 0);
+          activeLotteryCount = lotteryRows;
+        } catch {
+          activeLotteryCount = 0;
+        }
+      }
+
+      return {
+        ...ledger,
+        members,
+        memberCount,
+        recordCount,
+        activeLotteryCount,
+        userRole,
+        lastActivityAt: lastActivityAt.toISOString(),
+      };
+    })
+  );
+
+  // 按最近活动时间降序排列（最近使用的排最前）
+  result.sort((a, b) => new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime());
+
+  return result;
+}
+
+/**
+ * 创建新账本
+ */
+export async function createLedger(data: {
+  name: string;
+  description?: string;
+  type?: string;
+  currency?: string;
+  createdBy: number;
+  memberNickname?: string;
+}) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 如果没有提供昵称，获取用户名作为默认昵称
+  let finalNickname = data.memberNickname;
+  if (!finalNickname || !finalNickname.trim()) {
+    const { getDb } = await import("./db");
+    const mainDb = await getDb();
+    const userResult = await mainDb
+      .select({ username: users.username })
+      .from(users)
+      .where(eq(users.id, data.createdBy))
+      .limit(1);
+    finalNickname = userResult[0]?.username || null;
+  }
+  
+  // 使用原始 SQL 插入账本，避免 Drizzle 类型推断问题
+  let newLedgerId: number;
+  try {
+    console.log("[createLedger] 开始插入账本，数据:", {
+      name: data.name,
+      description: data.description ?? null,
+      type: data.type ?? "personal",
+      currency: data.currency ?? "CNY",
+      createdBy: data.createdBy
+    });
+    
+    const result = await db.execute(sql`
+      INSERT INTO ledgers (name, description, type, currency, icon, createdBy, ownerId, isVip, isArchived)
+      VALUES (${data.name}, ${data.description ?? null}, ${data.type ?? "personal"}, ${data.currency ?? "CNY"}, ${null}, ${data.createdBy}, ${data.createdBy}, ${0}, ${0})
+    `);
+    
+    console.log("[createLedger] result 结构:", JSON.stringify(result, null, 2));
+    
+    // TiDB 返回的是数组，需要从第一个元素获取 insertId
+    newLedgerId = Number((result as any)[0]?.insertId || result.insertId);
+    console.log("[createLedger] 账本插入成功， ID:", newLedgerId);
+  } catch (error) {
+    console.error("[createLedger] 插入账本失败:", error);
+    throw error;
+  }
+
+  // 将创建者添加为账本所有者
+  await db.insert(ledgerMembers).values({
+    ledgerId: newLedgerId,
+    userId: data.createdBy,
+    role: "owner",
+    memberType: "real",
+    nickname: finalNickname,
+    permissionView: "all",
+    permissionAdd: "all",
+    permissionEdit: "all",
+    permissionDelete: "all",
+    canEdit: 1,
+    canDelete: 1,
+    canInvite: 1,
+  });
+
+  // 定制账本（AA/AB类型）自动将管理员 jiang（userId:870413）加入成员列表
+  // 这样不管是谁创建的定制账本，jiang 都能在账本列表中看到并管理
+  const ADMIN_JIANG_ID = 870413;
+  const isCustomType = ['custom_aa', 'custom_ac', 'custom_ad', 'custom_aj', 'opinion_book', 'opinion_book_demo'].includes(data.type ?? '');
+  if (isCustomType && data.createdBy !== ADMIN_JIANG_ID) {
+    try {
+      await db.insert(ledgerMembers).values({
+        ledgerId: newLedgerId,
+        userId: ADMIN_JIANG_ID,
+        role: 'owner',
+        memberType: 'real',
+        nickname: 'jiang',
+        permissionView: 'all',
+        permissionAdd: 'all',
+        permissionEdit: 'all',
+        permissionDelete: 'all',
+        canEdit: 1,
+        canDelete: 1,
+        canInvite: 1,
+      });
+    } catch (e) {
+      // 忽略重复插入错误（INSERT IGNORE 效果）
+      console.warn('[createLedger] 添加jiang为成员时出错（可忽略）:', e);
+    }
+  }
+
+  // 不再创建默认分类，用户可以自己添加或使用全局预设分类（ledgerId=0）
+
+  return { id: newLedgerId, name: data.name };
+}
+
+/**
+ * 复制账本（复制分类和成员）
+ */
+export async function copyLedger(sourceLedgerId: number, userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 首先检查用户是否是源账本的成员
+  const member = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, sourceLedgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  
+  if (member.length === 0) {
+    throw new Error("您不是该账本的成员，无法复制");
+  }
+  
+  // 获取源账本信息
+  const sourceLedger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, sourceLedgerId))
+    .limit(1);
+  
+  if (sourceLedger.length === 0) {
+    throw new Error("源账本不存在");
+  }
+  
+  const source = sourceLedger[0];
+  
+  // 创建新账本，名称加上“复制”前缀
+  const newLedgerName = `复制-${source.name}`;
+  const result = await db.execute(sql`
+    INSERT INTO ledgers (name, description, type, currency, icon, createdBy, ownerId, isVip, isArchived)
+    VALUES (${newLedgerName}, ${source.description}, ${source.type}, ${source.currency}, ${source.icon}, ${userId}, ${userId}, ${0}, ${0})
+  `);
+  
+  const newLedgerId = Number((result as any)[0]?.insertId || result.insertId);
+  
+  // 将创建者添加为账本所有者
+  await db.insert(ledgerMembers).values({
+    ledgerId: newLedgerId,
+    userId: userId,
+    role: "owner",
+    memberType: "real",
+    nickname: null,
+    permissionView: "all",
+    permissionAdd: "all",
+    permissionEdit: "all",
+    permissionDelete: "all",
+    canEdit: 1,
+    canDelete: 1,
+    canInvite: 1,
+  });
+  
+  // 复制分类
+  const categories = await db
+    .select()
+    .from(ledgerCategories)
+    .where(eq(ledgerCategories.ledgerId, sourceLedgerId));
+  
+  for (const category of categories) {
+    await db.insert(ledgerCategories).values({
+      ledgerId: newLedgerId,
+      name: category.name,
+      type: category.type,
+      icon: category.icon,
+      color: category.color,
+      isDefault: category.isDefault,
+      sortOrder: category.sortOrder,
+    });
+  }
+  
+  return { id: newLedgerId, name: newLedgerName };
+}
+
+/**
+ * 获取单个账本详情
+ */
+export async function getLedgerById(ledgerId: number, userId: number) {
+  console.log('[getLedgerById] 调用，参数:', { ledgerId, userId });
+  
+  try {
+    const db = await getLedgerDb();
+    if (!db) {
+      console.error('[getLedgerById] 数据库连接失败');
+      throw new Error("Ledger database connection failed");
+    }
+    console.log('[getLedgerById] 数据库连接成功');
+    
+    // 先查用户角色
+    const userRows = await db
+      .select({ role: users.role })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    const userRole = userRows[0]?.role;
+    console.log('[getLedgerById] 用户角色:', userRole);
+    
+    // 无论是否系统管理员，都先查该用户在该账本中的实际成员角色
+    // super_admin/admin 只是跳过「必须是成员」的限制，但仍使用实际成员角色（含权限设置）
+    let memberRole = 'viewer';
+    const member = await db
+      .select()
+      .from(ledgerMembers)
+      .where(
+        and(
+          eq(ledgerMembers.ledgerId, ledgerId),
+          eq(ledgerMembers.userId, userId)
+        )
+      )
+      .limit(1);
+
+    console.log('[getLedgerById] 成员检查结果:', member);
+    if (member.length > 0) {
+      // 用户是账本成员，使用实际角色
+      memberRole = member[0].role;
+      console.log('[getLedgerById] 用户是账本成员，角色:', memberRole);
+    } else if (userRole === 'super_admin' || userRole === 'admin') {
+      // 系统管理员但不是账本成员，给予 admin 角色（可查看但无 owner 豁免）
+      console.log('[getLedgerById] 系统管理员但非账本成员，赋予 admin 角色');
+      memberRole = 'admin';
+    } else {
+      console.log('[getLedgerById] 用户不是账本成员');
+      throw new Error("您不是该账本的成员");
+    }
+
+    // 获取账本信息
+    console.log('[getLedgerById] 开始查询账本信息...');
+    const ledger = await db
+      .select()
+      .from(ledgers)
+      .where(eq(ledgers.id, ledgerId))
+      .limit(1);
+
+    console.log('[getLedgerById] 账本查询结果:', ledger);
+    if (ledger.length === 0) {
+      throw new Error("账本不存在");
+    }
+
+    // 获取所有成员，关联users表获取username和avatar
+    console.log('[getLedgerById] 开始查询成员列表...');
+    const members = await db
+      .select({
+        userId: ledgerMembers.userId,
+        role: ledgerMembers.role,
+        nickname: ledgerMembers.nickname,
+        username: users.username,
+        avatar: users.avatar,
+      })
+      .from(ledgerMembers)
+      .leftJoin(users, eq(ledgerMembers.userId, users.id))
+      .where(eq(ledgerMembers.ledgerId, ledgerId));
+
+    console.log('[getLedgerById] 成员列表:', members);
+    const result = {
+      ...ledger[0],
+      members,
+      userRole: memberRole,
+    };
+    console.log('[getLedgerById] 返回结果:', result);
+    return result;
+  } catch (error) {
+    console.error('[getLedgerById] 错误:', error);
+    throw error;
+  }
+}
+
+/**
+ * 存档/取消存档账本
+ */
+export async function archiveLedger(ledgerId: number, userId: number, isArchived: boolean) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 检查用户权限（只有所有者和管理员可以存档）
+  const member = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .then((rows: any[]) => rows[0]);
+
+  if (!member || (member.role !== "owner" && member.role !== "admin")) {
+    throw new Error("没有权限存档此账本");
+  }
+
+  await db
+    .update(ledgers)
+    .set({ isArchived, updatedAt: new Date() })
+    .where(eq(ledgers.id, ledgerId));
+
+  return true;
+}
+
+/**
+ * 删除账本
+ */
+export async function deleteLedger(ledgerId: number, userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 检查用户权限（只有所有者可以删除）
+  const member = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .then((rows: any[]) => rows[0]);
+
+  if (!member || member.role !== "owner") {
+    throw new Error("只有账本所有者可以删除账本");
+  }
+
+  // 删除所有相关数据
+  await db.delete(ledgerRecords).where(eq(ledgerRecords.ledgerId, ledgerId));
+  await db.delete(ledgerCategories).where(eq(ledgerCategories.ledgerId, ledgerId));
+  // TODO: 删除预算数据（待实现）
+  // await db.delete(ledgerBudgets).where(eq(ledgerBudgets.ledgerId, ledgerId));
+  await db.delete(ledgerMembers).where(eq(ledgerMembers.ledgerId, ledgerId));
+  await db.delete(ledgers).where(eq(ledgers.id, ledgerId));
+
+  return true;
+}
+
+/**
+ * 邀请用户加入账本（通过用户名）
+ */
+export async function inviteMemberByUsername(ledgerId: number, inviterUserId: number, inviteeUsername: string) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 检查邀请者是否有权限邀请
+  const inviterMember = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, inviterUserId)
+      )
+    )
+    .then((rows: any[]) => rows[0]);
+
+  if (!inviterMember) {
+    throw new Error("您不是该账本的成员");
+  }
+
+  if (!inviterMember.canInvite && inviterMember.role !== "owner" && inviterMember.role !== "admin") {
+    throw new Error("您没有权限邀请成员");
+  }
+
+  // 从主数据库查找被邀请用户
+  const { getDb } = await import("./db");
+  const mainDb = await getDb();
+  if (!mainDb) throw new Error("Main database connection failed");
+
+  const inviteeUser = await mainDb
+    .select()
+    .from(users)
+    .where(eq(users.username, inviteeUsername))
+    .then((rows: any[]) => rows[0]);
+
+  if (!inviteeUser) {
+    throw new Error("用户不存在");
+  }
+
+  // 不能邀请自己
+  if (inviteeUser.id === inviterUserId) {
+    throw new Error("不能邀请自己");
+  }
+
+  // 检查用户是否已经是成员
+  const existingMember = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, inviteeUser.id)
+      )
+    )
+    .then((rows: any[]) => rows[0]);
+
+  if (existingMember) {
+    throw new Error("该用户已经是账本成员");
+  }
+
+  // 添加为成员
+  await db.insert(ledgerMembers).values({
+    ledgerId,
+    userId: inviteeUser.id,
+    role: "member",
+    memberType: "real",
+    permissionView: "all",
+    permissionAdd: "all",
+    permissionEdit: "own",
+    permissionDelete: "own",
+    canEdit: true,
+    canDelete: false,
+    canInvite: false,
+    invitedBy: inviterUserId,
+  });
+
+  return {
+    success: true,
+    member: {
+      userId: inviteeUser.id,
+      username: inviteeUser.username,
+      name: inviteeUser.name,
+      avatar: inviteeUser.avatar,
+    },
+  };
+}
+
+/**
+ * 邀请用户加入账本（通过用户名，支持指定角色）
+ */
+export async function inviteMemberByUsernameWithRole(
+  ledgerId: number,
+  inviterUserId: number,
+  inviteeUsername: string,
+  role: 'member' | 'funder' | 'admin' = 'member'
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  // 从主数据库查找被邀请用户
+  const { getDb } = await import("./db");
+  const mainDb = await getDb();
+  if (!mainDb) throw new Error("Main database connection failed");
+
+  const inviteeUser = await mainDb
+    .select()
+    .from(users)
+    .where(eq(users.username, inviteeUsername))
+    .then((rows: any[]) => rows[0]);
+
+  if (!inviteeUser) throw new Error("用户不存在");
+  if (inviteeUser.id === inviterUserId) throw new Error("不能邀请自己");
+
+  // 检查是否已是成员
+  const existingMember = await db
+    .select()
+    .from(ledgerMembers)
+    .where(and(eq(ledgerMembers.ledgerId, ledgerId), eq(ledgerMembers.userId, inviteeUser.id)))
+    .then((rows: any[]) => rows[0]);
+
+  if (existingMember) throw new Error("该用户已经是账本成员");
+
+  // 根据角色设置权限
+  const isAdmin = role === 'admin';
+  const isFunder = role === 'funder';
+
+  await db.insert(ledgerMembers).values({
+    ledgerId,
+    userId: inviteeUser.id,
+    role: role as any,
+    memberType: "real",
+    permissionView: "all",
+    permissionAdd: isAdmin ? "all" : "own",
+    permissionEdit: isAdmin ? "all" : "own",
+    permissionDelete: isAdmin ? "all" : "own",
+    canEdit: isAdmin,
+    canDelete: isAdmin,
+    canInvite: isAdmin,
+    invitedBy: inviterUserId,
+  });
+
+  return {
+    success: true,
+    member: {
+      userId: inviteeUser.id,
+      username: inviteeUser.username,
+      name: inviteeUser.name,
+      avatar: inviteeUser.avatar,
+    },
+  };
+}
+
+/**
+ * 加入账本（通过邀请码）
+ */
+export async function joinLedger(ledgerId: number, userId: number, invitedBy: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 检查账本是否存在
+  const ledger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .then((rows: any[]) => rows[0]);
+
+  if (!ledger) {
+    throw new Error("账本不存在");
+  }
+
+  // 检查用户是否已经是成员
+  const existingMember = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .then((rows: any[]) => rows[0]);
+
+  if (existingMember) {
+    throw new Error("您已经是此账本的成员");
+  }
+
+  // 添加为成员
+  await db.insert(ledgerMembers).values({
+    ledgerId,
+    userId,
+    role: "member",
+    memberType: "real",
+    permissionView: "all",
+    permissionAdd: "all",
+    permissionEdit: "own",
+    permissionDelete: "own",
+    canEdit: true,
+    canDelete: false,
+    canInvite: false,
+    invitedBy,
+  });
+
+  return true;
+}
+
+/**
+ * 获取账本的所有分类（包括子分类）
+ */
+export async function getLedgerCategories(
+  ledgerId: number,
+  userId?: number,
+  type?: 'income' | 'expense',
+  parentId?: number | null
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 预设分类（ledgerId=0）对所有用户可见，不需要验证成员身份
+  // 用户自定义分类由后续逻辑处理
+  
+  // 构建查询条件：同时查询预设分类（ledgerId=0）和用户自定义分类（ledgerId=具体账本ID）
+  const ledgerConditions = [eq(ledgerCategories.ledgerId, ledgerId)];
+  const defaultConditions = [eq(ledgerCategories.ledgerId, 0)];
+  
+  if (type) {
+    ledgerConditions.push(eq(ledgerCategories.type, type));
+    defaultConditions.push(eq(ledgerCategories.type, type));
+  }
+  
+  // 处理parentId查询：undefined表示查所有，null表示查顶级分类，number表示查指定父分类的子分类
+  if (parentId === null) {
+    ledgerConditions.push(isNull(ledgerCategories.parentId));
+    defaultConditions.push(isNull(ledgerCategories.parentId));
+  } else if (parentId !== undefined) {
+    ledgerConditions.push(eq(ledgerCategories.parentId, parentId));
+    defaultConditions.push(eq(ledgerCategories.parentId, parentId));
+  }
+  
+  // 查询预设分类
+  const defaultCategories = await db
+    .select()
+    .from(ledgerCategories)
+    .where(and(...defaultConditions))
+    .orderBy(asc(ledgerCategories.sortOrder), asc(ledgerCategories.id));
+  
+  // 查询用户自定义分类
+  const customCategories = await db
+    .select()
+    .from(ledgerCategories)
+    .where(and(...ledgerConditions))
+    .orderBy(asc(ledgerCategories.sortOrder), asc(ledgerCategories.id));
+  
+  // 合并预设分类和自定义分类，预设分类在前
+  const allCategories = [...defaultCategories, ...customCategories];
+
+  // ===== 标签可见性过滤 =====
+  // 仅对非-owner用户生效：读取该用户在该账本的 initial_balances，
+  // 将 tagName__visible=0 的顶级标签及其所有子孙分类过滤掉。
+  if (userId && ledgerId > 0) {
+    try {
+      // 查询该用户在该账本的角色
+      const memberRows = await db
+        .select({ role: ledgerMembers.role, initialBalances: ledgerMembers.initialBalances })
+        .from(ledgerMembers)
+        .where(and(eq(ledgerMembers.ledgerId, ledgerId), eq(ledgerMembers.userId, userId)))
+        .limit(1);
+
+      if (memberRows.length > 0) {
+        const memberRole = memberRows[0].role;
+        // owner 看到全部标签，不过滤
+        if (memberRole !== 'owner') {
+          const raw = memberRows[0].initialBalances;
+          if (raw) {
+            const balances = JSON.parse(raw) as Record<string, any>;
+            // 收集隐藏的顶级标签名称（visible=0）
+            const hiddenTopNames = new Set<string>();
+            for (const [key, val] of Object.entries(balances)) {
+              if (key.endsWith('__visible') && Number(val) === 0) {
+                hiddenTopNames.add(key.replace('__visible', ''));
+              }
+            }
+
+            if (hiddenTopNames.size > 0) {
+              // 找出隐藏的顶级分类 ID
+              const topLevelCats = allCategories.filter(c => c.parentId === null);
+              const hiddenTopIds = new Set<number>(
+                topLevelCats.filter(c => hiddenTopNames.has(c.name)).map(c => c.id)
+              );
+
+              if (hiddenTopIds.size > 0) {
+                // 递归收集所有需要隐藏的 ID（包括子孙分类）
+                // 先拿到该账本所有分类（不分层级）用于递归
+                const allLedgerCats = await db
+                  .select({ id: ledgerCategories.id, parentId: ledgerCategories.parentId })
+                  .from(ledgerCategories)
+                  .where(eq(ledgerCategories.ledgerId, ledgerId));
+
+                const hiddenIds = new Set<number>(hiddenTopIds);
+                // BFS 收集子孙分类
+                let changed = true;
+                while (changed) {
+                  changed = false;
+                  for (const cat of allLedgerCats) {
+                    if (!hiddenIds.has(cat.id) && cat.parentId !== null && hiddenIds.has(cat.parentId)) {
+                      hiddenIds.add(cat.id);
+                      changed = true;
+                    }
+                  }
+                }
+
+                return allCategories.filter(c => !hiddenIds.has(c.id));
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // 过滤失败时降级处理，返回全量
+      console.error('[getLedgerCategories] 标签可见性过滤失败:', e);
+    }
+  }
+
+  return allCategories;
+}
+
+/**
+ * 添加自定义分类
+ */
+export async function addLedgerCategory(data: {
+  ledgerId: number;
+  name: string;
+  type: "income" | "expense" | "branch";
+  parentId?: number;
+  icon?: string;
+  color?: string;
+  sortOrder?: number;
+  createdBy: number;
+}) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 如果没有指定排序，获取当前最大排序值+1
+  let sortOrder = data.sortOrder;
+  if (sortOrder === undefined) {
+    const maxSortOrder = await db
+      .select({ max: sql<number>`MAX(${ledgerCategories.sortOrder})` })
+      .from(ledgerCategories)
+      .where(
+        and(
+          eq(ledgerCategories.ledgerId, data.ledgerId),
+          eq(ledgerCategories.type, data.type),
+          data.parentId ? eq(ledgerCategories.parentId, data.parentId) : sql`${ledgerCategories.parentId} IS NULL`
+        )
+      )
+      .then((rows: any[]) => rows[0]?.max || 0);
+    
+    sortOrder = maxSortOrder + 1;
+  }
+  
+  const [newCategory] = await db.insert(ledgerCategories).values({
+    ledgerId: data.ledgerId,
+    name: data.name,
+    type: data.type,
+    parentId: data.parentId || null,
+    icon: data.icon || "📝",
+    color: data.color || (data.type === "income" ? "#10b981" : "#ef4444"),
+    sortOrder,
+    isDefault: false,
+    createdBy: data.createdBy,
+  }).$returningId();
+  
+  return newCategory;
+}
+
+/**
+ * 更新分类排序
+ */
+export async function updateCategorySortOrder(categoryId: number, sortOrder: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  await db
+    .update(ledgerCategories)
+    .set({ sortOrder, updatedAt: new Date() })
+    .where(eq(ledgerCategories.id, categoryId));
+  
+  return true;
+}
+
+/**
+ * 批量更新分类排序
+ */
+export async function batchUpdateCategorySortOrder(updates: { id: number; sortOrder: number }[]) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 使用事务批量更新
+  await Promise.all(
+    updates.map(({ id, sortOrder }) =>
+      db
+        .update(ledgerCategories)
+        .set({ sortOrder, updatedAt: new Date() })
+        .where(eq(ledgerCategories.id, id))
+    )
+  );
+  
+  return true;
+}
+
+/**
+ * 递归获取所有子分类ID
+ */
+async function getAllChildCategoryIds(db: any, parentId: number): Promise<number[]> {
+  const children = await db
+    .select({ id: ledgerCategories.id })
+    .from(ledgerCategories)
+    .where(eq(ledgerCategories.parentId, parentId));
+  
+  let allIds: number[] = [];
+  for (const child of children) {
+    allIds.push(child.id);
+    const grandChildren = await getAllChildCategoryIds(db, child.id);
+    allIds = allIds.concat(grandChildren);
+  }
+  
+  return allIds;
+}
+
+/**
+ * 删除分类(支持级联删除)
+ */
+export async function deleteLedgerCategory(categoryId: number, userId: number, cascade: boolean = false) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 获取分类信息
+  const category = await db
+    .select()
+    .from(ledgerCategories)
+    .where(eq(ledgerCategories.id, categoryId))
+    .then((rows: any[]) => rows[0]);
+  
+  if (!category) {
+    throw new Error("分类不存在");
+  }
+  
+  // 检查是否为默认分类
+  if (category.isDefault) {
+    throw new Error("默认分类不能删除");
+  }
+  
+  // 获取所有子分类ID
+  const childIds = await getAllChildCategoryIds(db, categoryId);
+  
+  // 如果有子分类且不是级联删除,抛出错误
+  if (childIds.length > 0 && !cascade) {
+    throw new Error("此分类下有子分类，请确认是否级联删除");
+  }
+  
+  // 收集所有要删除的分类ID(包括当前分类和所有子分类)
+  const allIdsToDelete = [categoryId, ...childIds];
+  
+  // 检查是否有记录使用这些分类
+  for (const id of allIdsToDelete) {
+    const hasRecords = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(ledgerRecords)
+      .where(and(eq(ledgerRecords.categoryId, id), isNull(ledgerRecords.deletedAt)))
+      .then((rows: any[]) => rows[0]?.count || 0);
+    
+    if (hasRecords > 0) {
+      throw new Error("此分类或其子分类下有记录，不能删除");
+    }
+  }
+  
+  // 删除所有子分类(从最深层开始删除)
+  for (const id of childIds.reverse()) {
+    await db.delete(ledgerCategories).where(eq(ledgerCategories.id, id));
+  }
+  
+  // 删除当前分类
+  await db.delete(ledgerCategories).where(eq(ledgerCategories.id, categoryId));
+  
+  return { success: true, deletedCount: allIdsToDelete.length };
+}
+
+/**
+ * 获取分类使用数量
+ */
+export async function getCategoryUsageCount(
+  ledgerId: number,
+  categoryId: number,
+  userId: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证用户权限
+  const member = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  if (member.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 查询使用该分类的记录数量
+  const count = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        eq(ledgerRecords.categoryId, categoryId),
+        isNull(ledgerRecords.deletedAt)
+      )
+    )
+    .then((rows: any[]) => rows[0]?.count || 0);
+  
+  return { count };
+}
+
+/**
+ * 批量替换分类
+ */
+export async function replaceLedgerCategory(
+  ledgerId: number,
+  sourceCategoryId: number,
+  targetCategoryId: number,
+  userId: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证用户权限
+  const member2 = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  if (member2.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 验证源分类和目标分类是否存在
+  const sourceCategory = await db
+    .select()
+    .from(ledgerCategories)
+    .where(eq(ledgerCategories.id, sourceCategoryId))
+    .then((rows: any[]) => rows[0]);
+  
+  const targetCategory = await db
+    .select()
+    .from(ledgerCategories)
+    .where(eq(ledgerCategories.id, targetCategoryId))
+    .then((rows: any[]) => rows[0]);
+  
+  if (!sourceCategory || !targetCategory) {
+    throw new Error("分类不存在");
+  }
+  
+  // 执行批量更新
+  const result = await db
+    .update(ledgerRecords)
+    .set({ categoryId: targetCategoryId, updatedAt: sql`NOW()` })
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        eq(ledgerRecords.categoryId, sourceCategoryId)
+      )
+    );
+  
+  // 获取更新的记录数
+  const affectedCount = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        eq(ledgerRecords.categoryId, targetCategoryId),
+        isNull(ledgerRecords.deletedAt)
+      )
+    )
+    .then((rows: any[]) => rows[0]?.count || 0);
+  
+  return { 
+    success: true, 
+    affectedCount,
+    sourceCategoryName: sourceCategory.name,
+    targetCategoryName: targetCategory.name
+  };
+}
+
+/**
+ * 更新分类信息
+ */
+export async function updateLedgerCategory(
+  categoryId: number,
+  data: {
+    name?: string;
+    icon?: string;
+    color?: string;
+  }
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  await db
+    .update(ledgerCategories)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(ledgerCategories.id, categoryId));
+  
+  return true;
+}
+
+/**
+ * 获取账本成员列表
+ */
+export async function getLedgerMembers(ledgerId: number, userId: number, userRole?: string) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  console.log("[getLedgerMembers] 开始获取成员列表，参数:", { ledgerId, userId });
+  
+  // 检查用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  
+  // 系统级 admin/super_admin 直接跳过成员检查（与 getLedgerById 逻辑一致）
+  const isSysAdmin = userRole === 'admin' || userRole === 'super_admin';
+  if (membership.length === 0 && !isSysAdmin) {
+    throw new Error("您不是此账本的成员");
+  }
+  
+  // 获取所有成员，关联users表获取username和avatar
+  const members = await db
+    .select({
+      id: ledgerMembers.id,
+      userId: ledgerMembers.userId,
+      role: ledgerMembers.role,
+      nickname: ledgerMembers.nickname,
+      canEdit: ledgerMembers.canEdit,
+      canDelete: ledgerMembers.canDelete,
+      canInvite: ledgerMembers.canInvite,
+      createdAt: ledgerMembers.createdAt,
+      memberType: ledgerMembers.memberType,
+      username: users.username,
+      avatar: users.avatar,
+      realName: users.name,
+    })
+    .from(ledgerMembers)
+    .leftJoin(users, eq(ledgerMembers.userId, users.id))
+    .where(eq(ledgerMembers.ledgerId, ledgerId))
+    .orderBy(ledgerMembers.createdAt);
+  
+  console.log("[getLedgerMembers] 成员列表:", members);
+  
+  // 对于AI分身且userId=0的旧数据，查询请求者的头像作为补唇
+  let currentUserAvatar: string | null = null;
+  let currentUserUsername: string | null = null;
+  const hasLegacyAI = members.some(m => m.memberType === 'ai' && m.userId === 0);
+  if (hasLegacyAI) {
+    const currentUserInfo = await db
+      .select({ avatar: users.avatar, username: users.username })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (currentUserInfo.length > 0) {
+      currentUserAvatar = currentUserInfo[0].avatar;
+      currentUserUsername = currentUserInfo[0].username;
+    }
+  }
+  
+  // 标记当前用户
+  const membersWithCurrentFlag = members.map(member => ({
+    ...member,
+    // AI分身且userId=0时，用请求者的头像和用户名补唇
+    avatar: (member.memberType === 'ai' && member.userId === 0) ? currentUserAvatar : member.avatar,
+    username: (member.memberType === 'ai' && member.userId === 0) ? currentUserUsername : member.username,
+    isCurrentUser: member.userId === userId
+  }));
+  
+  // 排序规则：
+  // 1. 当前用户（真人）排在第一位
+  // 2. AI分身紧跟其对应真人后面（按userId匹配）
+  // 3. 其他真人成员按加入时间排列
+  // 4. AI分身不出现在真人列表末尾
+  
+  // 先分离真人和AI分身
+  const realMembers = membersWithCurrentFlag.filter(m => m.memberType !== 'ai');
+  const aiMembers = membersWithCurrentFlag.filter(m => m.memberType === 'ai');
+  
+  // 真人按「当前用户优先」排序
+  realMembers.sort((a, b) => {
+    if (a.isCurrentUser) return -1;
+    if (b.isCurrentUser) return 1;
+    return 0;
+  });
+  
+  // 将AI分身插入到对应真人后面
+  const sortedMembers: typeof membersWithCurrentFlag = [];
+  for (const real of realMembers) {
+    sortedMembers.push(real);
+    // 找到该真人对应的AI分身（同userId，memberType='ai'）
+    const correspondingAI = aiMembers.find(ai => ai.userId === real.userId);
+    if (correspondingAI) {
+      sortedMembers.push(correspondingAI);
+    }
+  }
+  // 如果有孤立的AI分身（找不到对应真人），追加到末尾
+  for (const ai of aiMembers) {
+    if (!sortedMembers.includes(ai)) {
+      sortedMembers.push(ai);
+    }
+  }
+  
+  // 最终去重保险：按 userId 去重，保留第一条（防止数据库异常导致重复）
+  const seenUserIds = new Set<number>();
+  const deduped = sortedMembers.filter(m => {
+    if (seenUserIds.has(m.userId)) return false;
+    seenUserIds.add(m.userId);
+    return true;
+  });
+
+  return deduped;
+}
+
+/**
+ * 生成邀请token
+ */
+export async function generateInviteToken(ledgerId: number, userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  // 验证用户是否是账本创建者
+  const ledger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
+
+  if (ledger.length === 0) {
+    throw new Error("账本不存在");
+  }
+
+  if (ledger[0].createdBy !== userId) {
+    throw new Error("只有账本创建人可以生成邀请链接");
+  }
+
+  // 生成唯一的token（使用ledgerId + 随机字符串）
+  const { nanoid } = await import("nanoid");
+  const token = `${ledgerId}-${nanoid(16)}`;
+
+  return token;
+}
+
+/**
+ * 通过邀请token加入账本
+ */
+export async function joinLedgerByToken(token: string, userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  // 从token中解析ledgerId
+  const parts = token.split("-");
+  if (parts.length < 2) {
+    throw new Error("无效的邀请链接");
+  }
+
+  const ledgerId = parseInt(parts[0]);
+  if (isNaN(ledgerId)) {
+    throw new Error("无效的邀请链接");
+  }
+
+  // 验证账本是否存在
+  const ledger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
+
+  if (ledger.length === 0) {
+    throw new Error("账本不存在");
+  }
+
+  // 检查用户是否已经是成员
+  const existingMember = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+
+  if (existingMember.length > 0) {
+    throw new Error("您已经是该账本的成员");
+  }
+
+  // 添加用户为账本成员
+  await db.insert(ledgerMembers).values({
+    ledgerId,
+    userId,
+    role: "member",
+    memberType: "real",
+    permissionView: "all",
+    permissionAdd: "all",
+    permissionEdit: "own",
+    permissionDelete: "own",
+  });
+
+  // 自动初始化默认拨比：YJH 33.4%，自己 0%
+  try {
+    const YJH_USER_ID = 4957151;
+    const rawConn = await getDbConnection();
+    if (rawConn) {
+      await (rawConn as any).execute(
+        `INSERT IGNORE INTO af_payout_ratios (ledger_id, source_user_id, beneficiary_user_id, ratio)
+         VALUES (?, ?, ?, 33.40), (?, ?, ?, 0.00)`,
+        [ledgerId, userId, YJH_USER_ID, ledgerId, userId, userId]
+      );
+    }
+  } catch (e) {
+    console.error('[joinLedgerByToken] 初始化默认拨比失败:', e);
+  }
+
+  return ledger[0];
+}
+
+/**
+ * 移除账本成员
+ */
+export async function removeLedgerMember(ledgerId: number, operatorId: number, targetUserId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  // 验证操作者是否是账本创建者
+  const ledger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
+
+  if (ledger.length === 0) {
+    throw new Error("账本不存在");
+  }
+
+  if (ledger[0].createdBy !== operatorId) {
+    throw new Error("只有账本创建人可以移除成员");
+  }
+
+  // 不能移除创建者自己
+  if (targetUserId === ledger[0].createdBy) {
+    throw new Error("不能移除账本创建人");
+  }
+
+  // 移除成员
+  await db
+    .delete(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, targetUserId)
+      )
+    );
+}
+
+/**
+ * 获取账本成员权限列表
+ */
+export async function getMemberPermissions(ledgerId: number, requestUserId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 获取账本信息
+  const ledger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
+  
+  if (ledger.length === 0) {
+    throw new Error("账本不存在");
+  }
+  
+  // 验证请求用户是否是账本成员
+  const currentMember = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, requestUserId)
+      )
+    )
+    .limit(1);
+  
+  if (currentMember.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  const currentUserRole = currentMember[0].role;
+  const isOwner = ledger[0].createdBy === requestUserId;
+  
+  // 获取成员列表
+  let members;
+  if (isOwner) {
+    // 创建人可以看到所有成员
+    members = await db
+      .select({
+        id: ledgerMembers.id,
+        userId: ledgerMembers.userId,
+        role: ledgerMembers.role,
+        permissionView: ledgerMembers.permissionView,
+        permissionAdd: ledgerMembers.permissionAdd,
+        permissionEdit: ledgerMembers.permissionEdit,
+        permissionDelete: ledgerMembers.permissionDelete,
+        permissionBackup: ledgerMembers.permissionBackup,
+      })
+      .from(ledgerMembers)
+      .where(eq(ledgerMembers.ledgerId, ledgerId));
+  } else {
+    // 普通成员只能看到自己
+    members = await db
+      .select({
+        id: ledgerMembers.id,
+        userId: ledgerMembers.userId,
+        role: ledgerMembers.role,
+        permissionView: ledgerMembers.permissionView,
+        permissionAdd: ledgerMembers.permissionAdd,
+        permissionEdit: ledgerMembers.permissionEdit,
+        permissionDelete: ledgerMembers.permissionDelete,
+        permissionBackup: ledgerMembers.permissionBackup,
+      })
+      .from(ledgerMembers)
+      .where(
+        and(
+          eq(ledgerMembers.ledgerId, ledgerId),
+          eq(ledgerMembers.userId, requestUserId)
+        )
+      );
+  }
+  
+  // 将当前用户排在第一位
+  const sortedMembers = members.sort((a, b) => {
+    if (a.userId === requestUserId) return -1;
+    if (b.userId === requestUserId) return 1;
+    return 0;
+  });
+  
+  return {
+    ledgerName: ledger[0].name,
+    currentUserRole,
+    isOwner,
+    members: sortedMembers,
+    defaultPermissions: {
+      view: ledger[0].defaultPermissionView,
+      add: ledger[0].defaultPermissionAdd,
+      edit: ledger[0].defaultPermissionEdit,
+      delete: ledger[0].defaultPermissionDelete,
+      backup: ledger[0].defaultPermissionBackup || 'allow',
+    },
+  };
+}
+
+/**
+ * 更新成员权限
+ */
+export async function updateMemberPermission(
+  ledgerId: number,
+  memberId: number,
+  permissionType: "view" | "add" | "edit" | "delete" | "backup",
+  permissionValue: "all" | "own" | "none" | "allow",
+  requestUserId: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证请求用户是否是账本创建者
+  const ledger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
+  
+  if (ledger.length === 0) {
+    throw new Error("账本不存在");
+  }
+  
+  if (ledger[0].createdBy !== requestUserId) {
+    throw new Error("只有账本创建者可以修改权限设置");
+  }
+  
+  // 验证成员是否属于该账本
+  const member = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.id, memberId),
+        eq(ledgerMembers.ledgerId, ledgerId)
+      )
+    )
+    .limit(1);
+  
+  if (member.length === 0) {
+    throw new Error("成员不存在");
+  }
+  
+  // 不能修改创建者的权限
+  if (member[0].role === "owner") {
+    throw new Error("不能修改创建者的权限");
+  }
+  
+  // 根据权限类型更新对应字段（使用原生 SQL 参数绑定，避免 Drizzle 枚举字段处理问题）
+  const columnMap: Record<string, string> = {
+    view: 'permission_view',
+    add: 'permission_add',
+    edit: 'permission_edit',
+    delete: 'permission_delete',
+    backup: 'permission_backup',
+  };
+  const columnName = columnMap[permissionType];
+  if (!columnName) throw new Error(`无效的权限类型: ${permissionType}`);
+  
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('Database connection failed');
+  await conn.execute(
+    `UPDATE ledger_members SET \`${columnName}\` = ? WHERE \`id\` = ?`,
+    [String(permissionValue), memberId]
+  );
+  
+  return { success: true };
+}
+
+/**
+ * 更新默认成员权限
+ */
+export async function updateDefaultPermission(
+  ledgerId: number,
+  permissionType: "view" | "add" | "edit" | "delete" | "backup",
+  permissionValue: "all" | "own" | "none" | "allow",
+  requestUserId: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证请求用户是否是账本创建者
+  const ledger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
+  
+  if (ledger.length === 0) {
+    throw new Error("账本不存在");
+  }
+  
+  if (ledger[0].createdBy !== requestUserId) {
+    throw new Error("只有账本创建者可以修改默认权限设置");
+  }
+  // 根据权限类型更新对应字段（使用原生 SQL 参数绑定，避免 Drizzle 枚举字段处理问题）
+  const defaultColumnMap: Record<string, string> = {
+    view: 'default_permission_view',
+    add: 'default_permission_add',
+    edit: 'default_permission_edit',
+    delete: 'default_permission_delete',
+    backup: 'default_permission_backup',
+  };
+  const defaultColumnName = defaultColumnMap[permissionType];
+  if (!defaultColumnName) throw new Error(`无效的权限类型: ${permissionType}`);
+  
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('Database connection failed');
+  await conn.execute(
+    `UPDATE ledgers SET \`${defaultColumnName}\` = ? WHERE \`id\` = ?`,
+    [String(permissionValue), ledgerId]
+  );
+  
+  return { success: true };
+}
+
+/**
+ * 获取账本的AI雇员列表
+ */
+export async function getAIEmployees(ledgerId: number, requestUserId: number) {
+  // 使用原生SQL查询，避免Drizzle ORM列映射问题
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("Database connection failed");
+  
+  // 验证请求用户是否是账本成员
+  const [memberRows] = await conn.execute(
+    'SELECT id FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
+    [ledgerId, requestUserId]
+  ) as any;
+  
+  if (!memberRows || memberRows.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 获取所有AI分身，并join users表获取用户头像
+  const [aiRows] = await conn.execute(
+    `SELECT m.id, m.ledgerId, m.userId, m.role, m.nickname, 
+            m.member_type as memberType, m.avatar_type as avatarType, m.createdAt,
+            u.avatar as avatarUrl, u.username
+     FROM ledger_members m
+     LEFT JOIN users u ON m.userId = u.id
+     WHERE m.ledgerId = ? AND m.member_type = 'ai'`,
+    [ledgerId]
+  ) as any;
+  
+  return aiRows || [];
+}
+
+/**
+ * 添加AI雇员到账本
+ */
+export async function addAIEmployee(
+  ledgerId: number,
+  avatarType: string,
+  nickname: string,
+  requestUserId: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证请求用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, requestUserId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 检查该头像类型是否已存在
+  const existing = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.memberType, 'ai'),
+        eq(ledgerMembers.avatarType, avatarType)
+      )
+    )
+    .limit(1);
+  
+  if (existing.length > 0) {
+    throw new Error("该虚拟成员已添加");
+  }
+  
+  // 添加AI分身，使用原生SQL绕过Drizzle ORM的列映射问题
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("Database connection failed");
+  
+  await conn.execute(
+    `INSERT INTO ledger_members 
+     (ledgerId, userId, role, nickname, member_type, avatar_type, 
+      permission_view, permission_add, permission_edit, permission_delete, 
+      canEdit, canDelete, canInvite) 
+     VALUES (?, ?, 'member', ?, 'ai', ?, 'all', 'all', 'own', 'own', 1, 0, 0)`,
+    [ledgerId, requestUserId, nickname, avatarType]
+  );
+  
+  return { success: true };
+}
+
+/**
+ * 开关AI分身：开启则自动创建，关闭则删除
+ * 使用原生SQL绕过Drizzle ORM的列映射问题和UNIQUE KEY约束
+ */
+export async function toggleAIEmployee(
+  ledgerId: number,
+  enabled: boolean,
+  requestUserId: number
+) {
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("Database connection failed");
+
+  // 验证请求用户是否是账本成员（非 AI 成员）
+  const [memberRows] = await conn.execute(
+    'SELECT id FROM ledger_members WHERE ledgerId = ? AND userId = ? AND member_type = ? LIMIT 1',
+    [ledgerId, requestUserId, 'real']
+  ) as any;
+
+  if (!memberRows || memberRows.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+
+  // 查找该用户已有的AI分身
+  const [aiRows] = await conn.execute(
+    'SELECT id FROM ledger_members WHERE ledgerId = ? AND userId = ? AND member_type = ? LIMIT 1',
+    [ledgerId, requestUserId, 'ai']
+  ) as any;
+
+  const hasAI = aiRows && aiRows.length > 0;
+
+  if (enabled) {
+    // 开启：如果还没有AI分身则创建
+    if (!hasAI) {
+      // 获取用户名称
+      const [userRows] = await conn.execute(
+        'SELECT username FROM users WHERE id = ? LIMIT 1',
+        [requestUserId]
+      ) as any;
+      const nickname = userRows?.[0]?.username || 'AI分身';
+
+      // 先清理可能存在的所有旧AI分身记录（防止重复，同时清理userId=0的旧数据）
+      await conn.execute(
+        'DELETE FROM ledger_members WHERE ledgerId = ? AND member_type = ? AND (userId = ? OR userId = 0)',
+        [ledgerId, 'ai', requestUserId]
+      );
+
+      // 使用原生SQL插入，只包含数据库实际存在的列
+      await conn.execute(
+        `INSERT INTO ledger_members 
+         (ledgerId, userId, role, nickname, member_type, avatar_type, 
+          permission_view, permission_add, permission_edit, permission_delete, 
+          canEdit, canDelete, canInvite) 
+         VALUES (?, ?, 'member', ?, 'ai', 'user', 'all', 'all', 'own', 'own', 1, 0, 0)`,
+        [ledgerId, requestUserId, nickname]
+      );
+    } else {
+      // 已有AI分身，清理重复的，只保留第一个
+      const [allAiRows] = await conn.execute(
+        'SELECT id FROM ledger_members WHERE ledgerId = ? AND userId = ? AND member_type = ? ORDER BY id ASC',
+        [ledgerId, requestUserId, 'ai']
+      ) as any;
+      if (allAiRows && allAiRows.length > 1) {
+        // 删除除第一个以外的所有重复AI分身
+        const idsToDelete = allAiRows.slice(1).map((r: any) => r.id);
+        await conn.execute(
+          `DELETE FROM ledger_members WHERE id IN (${idsToDelete.join(',')})`,
+        );
+      }
+    }
+    return { success: true, enabled: true };
+  } else {
+    // 关闭：删除该用户在该账本的所有AI分身（确保彻底清理）
+    // 同时清理userId=requestUserId和userId=0的旧数据
+    await conn.execute(
+      'DELETE FROM ledger_members WHERE ledgerId = ? AND member_type = ? AND (userId = ? OR userId = 0)',
+      [ledgerId, 'ai', requestUserId]
+    );
+    return { success: true, enabled: false };
+  }
+}
+
+/**
+ * 删除账本中的AI雇员
+ */
+export async function removeAIEmployee(
+  ledgerId: number,
+  employeeId: number,
+  requestUserId: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证请求用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, requestUserId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 验证要删除的是AI雇员
+  const employee = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.id, employeeId),
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.memberType, 'ai')
+      )
+    )
+    .limit(1);
+  
+  if (employee.length === 0) {
+    throw new Error("AI雇员不存在");
+  }
+  
+  // 删除AI雇员
+  await db
+    .delete(ledgerMembers)
+    .where(eq(ledgerMembers.id, employeeId));
+  
+  return { success: true };
+}
+
+/**
+ * 更新账本信息
+ */
+export async function updateLedger(
+  ledgerId: number,
+  requestUserId: number,
+  data: {
+    name?: string;
+    description?: string;
+  }
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证请求用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, requestUserId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 更新账本信息
+  const updateData: any = {};
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.description !== undefined) updateData.description = data.description;
+  
+  if (Object.keys(updateData).length > 0) {
+    await db
+      .update(ledgers)
+      .set(updateData)
+      .where(eq(ledgers.id, ledgerId));
+  }
+  
+  return { success: true };
+}
+
+/**
+ * 更新成员昵称
+ */
+export async function updateMemberNickname(
+  ledgerId: number,
+  requestUserId: number,
+  nickname: string
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证请求用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, requestUserId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 更新成员昵称
+  await db
+    .update(ledgerMembers)
+    .set({ nickname })
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, requestUserId)
+      )
+    );
+  
+  return { success: true };
+}
+
+/**
+ * 获取账本报表数据
+ */
+export async function getLedgerReport(
+  ledgerId: number,
+  requestUserId: number,
+  year: number,
+  startDate?: string,
+  endDate?: string
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证请求用户是否是账本成员并获取权限
+  const membership = await db
+    .select({
+      permissionView: ledgerMembers.permissionView,
+      role: ledgerMembers.role,
+    })
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, requestUserId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  const userPermission = membership[0].permissionView;
+  
+  // 检查查看权限
+  if (userPermission === 'none') {
+    // 不允许查看，返回空数据
+    return {
+      income: 0,
+      expense: 0,
+      memberStats: [],
+      monthlyStats: Array.from({ length: 12 }, (_, i) => ({
+        month: i + 1,
+        income: 0,
+        expense: 0,
+      })),
+      dailyStats: [],
+      categoryStats: { income: [], expense: [] },
+    };
+  }
+  
+  // 构建权限筛选条件
+  const permissionCondition = userPermission === 'own'
+    ? sql`${ledgerRecords.createdBy} = ${requestUserId}`
+    : undefined;
+  
+  // 获取年度统计数据
+  const yearStart = `${year}-01-01`;
+  const yearEnd = `${year}-12-31`;
+  
+  // 获取年度总收入和支出
+  const yearlyStats = await db
+    .select({
+      totalIncome: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'income' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+      totalExpense: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'expense' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.recordDate} >= ${yearStart}`,
+        sql`${ledgerRecords.recordDate} <= ${yearEnd}`,
+        isNull(ledgerRecords.deletedAt),
+        permissionCondition
+      )
+    );
+  
+  const income = Number(yearlyStats[0]?.totalIncome || 0);
+  const expense = Number(yearlyStats[0]?.totalExpense || 0);
+  
+  // 获取成员统计数据
+  const memberStatsRaw = await db
+    .select({
+      userId: ledgerRecords.createdBy,
+      totalIncome: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'income' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+      totalExpense: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'expense' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.recordDate} >= ${yearStart}`,
+        sql`${ledgerRecords.recordDate} <= ${yearEnd}`,
+        isNull(ledgerRecords.deletedAt),
+        permissionCondition
+      )
+    )
+    .groupBy(ledgerRecords.createdBy);
+  
+  // 获取成员昵称和用户名
+  const members = await db
+    .select({
+      userId: ledgerMembers.userId,
+      nickname: ledgerMembers.nickname,
+      username: users.username,
+      avatar: users.avatar,
+    })
+    .from(ledgerMembers)
+    .leftJoin(users, eq(ledgerMembers.userId, users.id))
+    .where(eq(ledgerMembers.ledgerId, ledgerId));
+  
+  const memberInfoMap = new Map(members.map((m: any) => [m.userId, m]));
+  
+  const memberStats = memberStatsRaw.map((stat: any) => {
+    const memberInfo = memberInfoMap.get(stat.userId);
+    return {
+      userId: stat.userId,
+      nickname: memberInfo?.nickname,
+      username: memberInfo?.username,
+      avatar: memberInfo?.avatar,
+      income: Number(stat.totalIncome || 0),
+      expense: Number(stat.totalExpense || 0),
+    };
+  });
+  
+  // 获取月度统计数据
+  const monthlyStatsRaw = await db
+    .select({
+      month: sql<number>`MONTH(${ledgerRecords.recordDate})`,
+      totalIncome: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'income' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+      totalExpense: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'expense' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.recordDate} >= ${yearStart}`,
+        sql`${ledgerRecords.recordDate} <= ${yearEnd}`,
+        isNull(ledgerRecords.deletedAt),
+        permissionCondition
+      )
+    )
+    .groupBy(sql`MONTH(${ledgerRecords.recordDate})`);
+  
+  const monthlyStats = Array.from({ length: 12 }, (_, i) => {
+    const monthData = monthlyStatsRaw.find((m: any) => Number(m.month) === i + 1);
+    return {
+      month: i + 1,
+      income: Number(monthData?.totalIncome || 0),
+      expense: Number(monthData?.totalExpense || 0),
+    };
+  });
+  
+  // 获取分类统计数据
+  const categoryStatsRaw = await db
+    .select({
+      categoryId: ledgerRecords.categoryId,
+      type: ledgerRecords.type,
+      totalAmount: sql<number>`COALESCE(SUM(${ledgerRecords.amount}), 0)`,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.recordDate} >= ${yearStart}`,
+        sql`${ledgerRecords.recordDate} <= ${yearEnd}`,
+        isNull(ledgerRecords.deletedAt),
+        permissionCondition
+      )
+    )
+    .groupBy(ledgerRecords.categoryId, ledgerRecords.type);
+  
+  // 获取分类名称
+  const categoryIds = categoryStatsRaw.map((c: any) => c.categoryId);
+  let categories: any[] = [];
+  if (categoryIds.length > 0) {
+    categories = await db
+      .select({
+        id: ledgerCategories.id,
+        name: ledgerCategories.name,
+      })
+      .from(ledgerCategories)
+      .where(sql`${ledgerCategories.id} IN (${sql.join(categoryIds, sql`, `)})`);
+  }
+  
+  const categoryNameMap = new Map(categories.map((c: any) => [c.id, c.name]));
+  
+  const expenseCategories = categoryStatsRaw
+    .filter((c: any) => c.type === 'expense')
+    .map((c: any) => ({
+      category: categoryNameMap.get(c.categoryId) || '未分类',
+      amount: Number(c.totalAmount || 0),
+    }))
+    .sort((a: any, b: any) => b.amount - a.amount);
+  
+  const incomeCategories = categoryStatsRaw
+    .filter((c: any) => c.type === 'income')
+    .map((c: any) => ({
+      category: categoryNameMap.get(c.categoryId) || '未分类',
+      amount: Number(c.totalAmount || 0),
+    }))
+    .sort((a: any, b: any) => b.amount - a.amount);
+  
+  // 获取最近时间范围的统计数据
+  // 如果提供了 startDate 和 endDate，则使用自定义时间范围
+  // 否则使用最近30天
+  let recentStartDate: string;
+  let recentEndDate: string;
+  let daysPassed: number;
+  
+  if (startDate && endDate) {
+    recentStartDate = startDate;
+    recentEndDate = endDate;
+    // 计算天数
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    daysPassed = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  } else {
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today);
+    thirtyDaysAgo.setDate(today.getDate() - 29); // 包含当天共30天
+    recentStartDate = thirtyDaysAgo.toISOString().split('T')[0];
+    recentEndDate = today.toISOString().split('T')[0];
+    daysPassed = 30;
+  }
+  
+  const recentStats = await db
+    .select({
+      totalIncome: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'income' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+      totalExpense: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'expense' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.recordDate} >= ${recentStartDate}`,
+        sql`${ledgerRecords.recordDate} <= ${recentEndDate}`,
+        isNull(ledgerRecords.deletedAt)
+      )
+    );
+  
+  const recentIncome = Number(recentStats[0]?.totalIncome || 0);
+  const recentExpense = Number(recentStats[0]?.totalExpense || 0);
+  
+  // 获取最近30天每日收支数据
+  const dailyStatsRaw = await db
+    .select({
+      date: ledgerRecords.recordDate,
+      totalIncome: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'income' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+      totalExpense: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'expense' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.recordDate} >= ${recentStartDate}`,
+        sql`${ledgerRecords.recordDate} <= ${recentEndDate}`,
+        isNull(ledgerRecords.deletedAt)
+      )
+    )
+    .groupBy(ledgerRecords.recordDate)
+    .orderBy(asc(ledgerRecords.recordDate));
+  
+  // 生成完整的日期范围数据(包含没有记录的日期)
+  const dailyStats = [];
+  const startDateObj = new Date(recentStartDate);
+  for (let i = 0; i < daysPassed; i++) {
+    const currentDate = new Date(startDateObj);
+    currentDate.setDate(startDateObj.getDate() + i);
+    const dateStr = currentDate.toISOString().split('T')[0];
+    
+    const dayData = dailyStatsRaw.find((d: any) => d.date === dateStr);
+    dailyStats.push({
+      date: dateStr,
+      income: Number(dayData?.totalIncome || 0),
+      expense: Number(dayData?.totalExpense || 0),
+    });
+  }
+  
+  // 获取最近30天的分类统计数据
+  const recentCategoryStatsRaw = await db
+    .select({
+      categoryId: ledgerRecords.categoryId,
+      type: ledgerRecords.type,
+      totalAmount: sql<number>`COALESCE(SUM(${ledgerRecords.amount}), 0)`,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.recordDate} >= ${recentStartDate}`,
+        sql`${ledgerRecords.recordDate} <= ${recentEndDate}`,
+        isNull(ledgerRecords.deletedAt)
+      )
+    )
+    .groupBy(ledgerRecords.categoryId, ledgerRecords.type);
+  
+  // 获取最近30天的分类名称
+  const recentCategoryIds = recentCategoryStatsRaw.map((c: any) => c.categoryId);
+  let recentCategories: any[] = [];
+  if (recentCategoryIds.length > 0) {
+    recentCategories = await db
+      .select({
+        id: ledgerCategories.id,
+        name: ledgerCategories.name,
+      })
+      .from(ledgerCategories)
+      .where(sql`${ledgerCategories.id} IN (${sql.join(recentCategoryIds, sql`, `)})`);
+  }
+  
+  const recentCategoryNameMap = new Map(recentCategories.map((c: any) => [c.id, c.name]));
+  
+  const recentExpenseCategories = recentCategoryStatsRaw
+    .filter((c: any) => c.type === 'expense')
+    .map((c: any) => ({
+      category: recentCategoryNameMap.get(c.categoryId) || '未分类',
+      amount: Number(c.totalAmount || 0),
+    }))
+    .sort((a: any, b: any) => b.amount - a.amount);
+  
+  const recentIncomeCategories = recentCategoryStatsRaw
+    .filter((c: any) => c.type === 'income')
+    .map((c: any) => ({
+      category: recentCategoryNameMap.get(c.categoryId) || '未分类',
+      amount: Number(c.totalAmount || 0),
+    }))
+    .sort((a: any, b: any) => b.amount - a.amount);
+  
+  return {
+    yearlyStats: {
+      income,
+      expense,
+    },
+    recentStats: {
+      income: recentIncome,
+      expense: recentExpense,
+      days: daysPassed,
+    },
+    dailyStats,
+    memberStats,
+    monthlyStats,
+    categoryStats: {
+      expense: expenseCategories,
+      income: incomeCategories,
+    },
+    recentCategoryStats: {
+      expense: recentExpenseCategories,
+      income: recentIncomeCategories,
+    },
+  };
+}
+
+
+/**
+ * 获取日历数据（指定月份的每日收支统计）
+ */
+export async function getCalendarData(
+  ledgerId: number,
+  requestUserId: number,
+  year: number,
+  month: number,
+  memberIds?: number[]
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证请求用户是否是账本成员并获取权限
+  const membership = await db
+    .select({
+      permissionView: ledgerMembers.permissionView,
+      role: ledgerMembers.role,
+    })
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, requestUserId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  const userPermission = membership[0].permissionView;
+  
+  // 检查查看权限
+  if (userPermission === 'none') {
+    // 不允许查看，返回空数据
+    return {
+      monthlyStats: { income: 0, expense: 0 },
+      dailyStats: [],
+    };
+  }
+  
+  // 构建日期范围
+  const monthStr = String(month).padStart(2, '0');
+  const monthStart = `${year}-${monthStr}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const monthEnd = `${year}-${monthStr}-${lastDay}`;
+  
+  // 构建成员筛选条件（根据权限进行安全检查）
+  let memberCondition;
+  if (userPermission === 'own') {
+    // 如果权限是"仅自己"，强制只查看自己创建的记录
+    memberCondition = sql`${ledgerRecords.createdBy} = ${requestUserId}`;
+  } else if (userPermission === 'all' && memberIds && memberIds.length > 0) {
+    // 如果权限是"全部"，允许使用 memberIds 筛选
+    // 查询 memberIds 对应的 userId
+    const memberUserIds = await db
+      .select({ userId: ledgerMembers.userId })
+      .from(ledgerMembers)
+      .where(
+        and(
+          eq(ledgerMembers.ledgerId, ledgerId),
+          sql`${ledgerMembers.id} IN (${sql.join(memberIds.map(id => sql`${id}`), sql`, `)})`
+        )
+      );
+    
+    if (memberUserIds.length > 0) {
+      const userIds = memberUserIds.map((m: any) => m.userId);
+      memberCondition = sql`${ledgerRecords.createdBy} IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`;
+    } else {
+      memberCondition = sql`1 = 0`;
+    }
+  }
+  // 如果权限是 'all' 且没有指定 memberIds，则 memberCondition 为 undefined
+  
+  // 获取月度总统计
+  const monthlyStatsRaw = await db
+    .select({
+      totalIncome: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'income' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+      totalExpense: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'expense' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.recordDate} >= ${monthStart}`,
+        sql`${ledgerRecords.recordDate} <= ${monthEnd}`,
+        memberCondition,
+        isNull(ledgerRecords.deletedAt)
+      )
+    );
+  
+  const monthlyStats = {
+    income: Number(monthlyStatsRaw[0]?.totalIncome || 0),
+    expense: Number(monthlyStatsRaw[0]?.totalExpense || 0),
+  };
+  
+  // 获取每日统计
+  const dailyStatsRaw = await db
+    .select({
+      recordDate: ledgerRecords.recordDate,
+      totalIncome: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'income' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+      totalExpense: sql<number>`COALESCE(SUM(CASE WHEN ${ledgerRecords.type} = 'expense' THEN ${ledgerRecords.amount} ELSE 0 END), 0)`,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.recordDate} >= ${monthStart}`,
+        sql`${ledgerRecords.recordDate} <= ${monthEnd}`,
+        memberCondition,
+        isNull(ledgerRecords.deletedAt)
+      )
+    )
+    .groupBy(ledgerRecords.recordDate);
+  
+  const dailyStats = dailyStatsRaw.map((day: any) => {
+    // 从日期字符串中提取天数
+    const dateStr = String(day.recordDate);
+    const dayNum = parseInt(dateStr.split('-')[2], 10);
+    return {
+      day: dayNum,
+      income: Number(day.totalIncome || 0),
+      expense: Number(day.totalExpense || 0),
+    };
+  });
+  
+  return {
+    monthlyStats,
+    dailyStats,
+  };
+}
+
+/**
+ * 获取指定日期的记账记录
+ */
+export async function getDayRecords(
+  ledgerId: number,
+  requestUserId: number,
+  date: string,
+  memberIds?: number[]
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证请求用户是否是账本成员并获取权限
+  const membership = await db
+    .select({
+      permissionView: ledgerMembers.permissionView,
+      role: ledgerMembers.role,
+    })
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, requestUserId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  const userPermission = membership[0].permissionView;
+  const userRole = membership[0].role;
+  
+  // 检查查看权限
+  if (userPermission === 'none') {
+    // 不允许查看任何账目
+    return [];
+  }
+  
+  // 构建成员筛选条件（根据权限进行安全检查）
+  let memberCondition;
+  if (userPermission === 'own') {
+    // 如果权限是"仅自己"，强制只查看自己创建的记录，忽略 memberIds 参数
+    memberCondition = sql`${ledgerRecords.createdBy} = ${requestUserId}`;
+  } else if (userPermission === 'all') {
+    // 如果权限是"全部"，允许使用 memberIds 筛选
+    if (memberIds && memberIds.length > 0) {
+      // 注意：ledgerRecords 表中没有 memberId 字段，需要通过 createdBy 关联到成员
+      // 这里先查询 memberIds 对应的 userId
+      const memberUserIds = await db
+        .select({ userId: ledgerMembers.userId })
+        .from(ledgerMembers)
+        .where(
+          and(
+            eq(ledgerMembers.ledgerId, ledgerId),
+            sql`${ledgerMembers.id} IN (${sql.join(memberIds.map(id => sql`${id}`), sql`, `)})`
+          )
+        );
+      
+      if (memberUserIds.length > 0) {
+        const userIds = memberUserIds.map((m: any) => m.userId);
+        memberCondition = sql`${ledgerRecords.createdBy} IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`;
+      } else {
+        // 如果没有找到对应的成员，返回空结果
+        memberCondition = sql`1 = 0`;
+      }
+    }
+    // 如果没有指定 memberIds，则 memberCondition 为 undefined，查看所有记录
+  }
+  // 如果权限是 'none'，已经在前面返回空数组了
+  
+  // 获取指定日期的记录
+  const records = await db
+    .select({
+      id: ledgerRecords.id,
+      type: ledgerRecords.type,
+      amount: ledgerRecords.amount,
+      categoryId: ledgerRecords.categoryId,
+      description: ledgerRecords.description,
+      date: ledgerRecords.recordDate,
+      createdBy: ledgerRecords.createdBy,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.recordDate} = ${date}`,
+        memberCondition,
+        isNull(ledgerRecords.deletedAt)
+      )
+    )
+    .orderBy(desc(ledgerRecords.createdAt));
+  
+  // 获取分类名称
+  const categoryIds = records.map((r: any) => r.categoryId).filter((id: any) => id);
+  let categories: any[] = [];
+  if (categoryIds.length > 0) {
+    categories = await db
+      .select({
+        id: ledgerCategories.id,
+        name: ledgerCategories.name,
+      })
+      .from(ledgerCategories)
+      .where(sql`${ledgerCategories.id} IN (${sql.join(categoryIds, sql`, `)})`);
+  }
+  
+  const categoryNameMap = new Map(categories.map((c: any) => [c.id, c.name]));
+  
+  return records.map((record: any) => ({
+    ...record,
+    amount: Number(record.amount),
+    categoryName: categoryNameMap.get(record.categoryId) || '未分类',
+  }));
+}
+
+/**
+ * 添加记账记录
+ */
+export async function addTransaction(data: {
+  ledgerId: number;
+  userId: number;
+  type: 'income' | 'expense';
+  amount: number;
+  categoryId: number;
+  subcategoryId?: number;
+  description?: string;
+  imageUrl?: string;
+  transactionDate: string;
+  images?: string[];
+  memberId?: number; // 为谁记账（默认为自己）
+  accountId?: number; // 付款/收款方式
+  reimbursementStatus?: 'none' | 'pending' | 'completed'; // 报销状态
+  pendingType?: 'receivable' | 'payable'; // 待结类型（代收/代付）
+  pendingIncludeStats?: number; // 待结账目是否计入统计（0=仅显示不计入，1=显示并计入）
+  ajCompanyId?: number; // AJ账本开票企业ID
+  ajCompanyName?: string; // AJ账本开票企业名称
+}) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, data.ledgerId),
+        eq(ledgerMembers.userId, data.userId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 检查是否需要审批
+  const approvalCheck = await checkNeedApproval(data.ledgerId, data.userId);
+  
+  // 确定审批状态
+  let approvalStatus: 'pending' | 'approved' | 'rejected' | 'not_required' = 'not_required';
+  let approverIds: number[] = [];
+  
+  if (approvalCheck.needApproval && approvalCheck.rule) {
+    approvalStatus = 'pending';
+    
+    // 获取审批人列表
+    if (approvalCheck.rule.approverType === 'all') {
+      // 需要全部成员审批（除了记账人自己）
+      const allMembers = await db
+        .select({ userId: ledgerMembers.userId })
+        .from(ledgerMembers)
+        .where(eq(ledgerMembers.ledgerId, data.ledgerId));
+      
+      approverIds = allMembers
+        .map(m => m.userId)
+        .filter(id => id !== data.userId);
+    } else if (approvalCheck.rule.approverType === 'specific') {
+      // 指定审批人
+      const approverIdsJson = approvalCheck.rule.approverIds as any;
+      approverIds = typeof approverIdsJson === 'string' 
+        ? JSON.parse(approverIdsJson) 
+        : approverIdsJson || [];
+    }
+  }
+  
+  // UPSERT逻辑：仅37号账本（日历型定制账本）同一标签同一日期只保留一条，后录入覆盖前一条
+  // 其他普通账本允许同一天同一类目多条记录
+  const existingRecord = data.ledgerId === 37 ? await db
+    .select({ id: ledgerRecords.id })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, data.ledgerId),
+        eq(ledgerRecords.categoryId, data.categoryId),
+        eq(ledgerRecords.recordDate, data.transactionDate),
+        isNull(ledgerRecords.deletedAt)
+      )
+    )
+    .limit(1) : [];
+
+  // 插入记账记录（加密敏感字段）
+  // 判断是否是AJ账本：账本类型为 custom_aj 或传入了 ajCompanyId
+  const ledgerInfo = await db
+    .select({ type: ledgers.type })
+    .from(ledgers)
+    .where(eq(ledgers.id, data.ledgerId))
+    .limit(1);
+  const isAJRecord = ledgerInfo[0]?.type === 'custom_aj' || !!data.ajCompanyId;
+  const recordData = {
+    ledgerId: data.ledgerId,
+    type: data.type,
+    amount: data.amount.toString(),
+    categoryId: data.categoryId,
+    description: data.description || null,
+    imageUrl: data.images && data.images.length > 0 ? data.images[0] : null,
+    images: data.images && data.images.length > 0 ? JSON.stringify(data.images) : null,
+    recordDate: data.transactionDate,
+    createdBy: data.userId,
+    reimbursementStatus: data.reimbursementStatus || 'none',
+    pendingType: data.pendingType || null,
+    pendingIncludeStats: data.pendingType ? (data.pendingIncludeStats ?? 1) : null,
+    // AJ账本开票申请字段
+    ...(isAJRecord ? {
+      ajStatus: 'pending' as const,  // 提交后自动设为「申请中」
+      ajCompanyId: data.ajCompanyId || null,
+      ajCompanyName: data.ajCompanyName || null,
+    } : {}),
+  };
+  const encryptedRecordData = await encryptFields(db, 'ledger_records', recordData, LEDGER_RECORD_ENCRYPT_FIELDS);
+
+  let result: any;
+  if (existingRecord.length > 0) {
+    // 已存在同标签同日期的记录，直接更新（覆盖）
+    const existingId = existingRecord[0].id;
+    await db
+      .update(ledgerRecords)
+      .set({
+        ...encryptedRecordData as any,
+        updatedAt: sql`NOW()`,
+      })
+      .where(eq(ledgerRecords.id, existingId));
+    result = { insertId: existingId };
+  } else {
+    // 不存在，正常插入
+    result = await db.insert(ledgerRecords).values(encryptedRecordData as any);
+  }
+  
+  // 如果需要审批，创建审批记录
+  if (approvalStatus === 'pending' && approverIds.length > 0) {
+    await createApprovalRecords(data.ledgerId, result.insertId, approverIds);
+  }
+  
+  return {
+    id: result.insertId,
+    success: true,
+    needApproval: approvalStatus === 'pending',
+    approverIds,
+  };
+}
+
+/**
+ * 获取账本的记账记录列表（按日期分组）
+ */
+export async function getTransactionsList(
+  ledgerId: number,
+  userId: number,
+  options?: {
+    startDate?: string;
+    endDate?: string;
+    type?: 'income' | 'expense';
+    categoryId?: number;
+    memberId?: number;
+    amountMin?: string;
+    amountMax?: string;
+    limit?: number;
+    offset?: number;
+  }
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证用户是否是账本成员并获取权限
+  const membership = await db
+    .select({
+      permissionView: ledgerMembers.permissionView,
+      permissionDelete: ledgerMembers.permissionDelete,
+      role: ledgerMembers.role,
+    })
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  const userPermission = membership[0].permissionView;
+  const userPermissionDelete = membership[0].permissionDelete || 'own';
+  
+  // 检查查看权限
+  if (userPermission === 'none') {
+    return [];
+  }
+  
+  // 构建查询条件
+  const conditions = [eq(ledgerRecords.ledgerId, ledgerId)];
+  
+  // 如果权限是"仅自己"，强制只查看自己创建的记录
+  if (userPermission === 'own') {
+    conditions.push(sql`${ledgerRecords.createdBy} = ${userId}`);
+  }
+  
+  if (options?.startDate) {
+    conditions.push(sql`${ledgerRecords.recordDate} >= ${options.startDate}`);
+  }
+  if (options?.endDate) {
+    conditions.push(sql`${ledgerRecords.recordDate} <= ${options.endDate}`);
+  }
+  if (options?.type) {
+    conditions.push(eq(ledgerRecords.type, options.type));
+  }
+  if (options?.categoryId) {
+    // 先查出该分类下所有子分类ID（支持一级分类筛选出所有二级分类记录）
+    const childCats = await db
+      .select({ id: ledgerCategories.id })
+      .from(ledgerCategories)
+      .where(eq(ledgerCategories.parentId, options.categoryId));
+    const allCategoryIds = [options.categoryId, ...childCats.map((c: any) => c.id)];
+    if (allCategoryIds.length === 1) {
+      conditions.push(eq(ledgerRecords.categoryId, options.categoryId));
+    } else {
+      conditions.push(sql`${ledgerRecords.categoryId} IN (${sql.join(allCategoryIds.map((id: number) => sql`${id}`), sql`, `)})`);
+    }
+  }
+  if (options?.amountMin) {
+    conditions.push(sql`${ledgerRecords.amount} >= ${options.amountMin}`);
+  }
+  if (options?.amountMax) {
+    conditions.push(sql`${ledgerRecords.amount} <= ${options.amountMax}`);
+  }
+  if (options?.memberId) {
+    conditions.push(eq(ledgerRecords.createdBy, options.memberId));
+  }
+  
+  // 注意：不过滤审批状态，返回所有记账（包括待审批的）
+  // 前端会根据 approvalStatus 字段显示不同的状态图标
+  
+  // 获取记录
+  const records = await db
+    .select({
+      id: ledgerRecords.id,
+      type: ledgerRecords.type,
+      amount: ledgerRecords.amount,
+      categoryId: ledgerRecords.categoryId,
+      description: ledgerRecords.description,
+      date: ledgerRecords.recordDate,
+      createdBy: ledgerRecords.createdBy,
+      createdAt: ledgerRecords.createdAt,
+      imageUrl: ledgerRecords.imageUrl,
+      reimbursementStatus: ledgerRecords.reimbursementStatus,
+      pendingType: ledgerRecords.pendingType,
+      pendingIncludeStats: ledgerRecords.pendingIncludeStats,
+      ajStatus: ledgerRecords.ajStatus,
+      ajCompanyId: ledgerRecords.ajCompanyId,
+      ajCompanyName: ledgerRecords.ajCompanyName,
+      ajApprovedBy: ledgerRecords.ajApprovedBy,
+      ajApprovedAt: ledgerRecords.ajApprovedAt,
+    })
+    .from(ledgerRecords)
+    .where(and(...conditions, isNull(ledgerRecords.deletedAt)))
+    .orderBy(desc(ledgerRecords.recordDate), desc(ledgerRecords.createdAt))
+    .limit(options?.limit || 100)
+    .offset(options?.offset || 0);
+  
+  // 获取所有涉及的分类ID
+  const categoryIds = new Set<number>();
+  records.forEach((r: any) => {
+    if (r.categoryId) categoryIds.add(r.categoryId);
+  });
+  
+  // 获取分类信息（包括所有父级分类）
+  let categories: any[] = [];
+  if (categoryIds.size > 0) {
+    // 首先获取当前分类
+    categories = await db
+      .select({
+        id: ledgerCategories.id,
+        name: ledgerCategories.name,
+        icon: ledgerCategories.icon,
+        parentId: ledgerCategories.parentId,
+      })
+      .from(ledgerCategories)
+      .where(sql`${ledgerCategories.id} IN (${sql.join(Array.from(categoryIds).map(id => sql`${id}`), sql`, `)})`);
+    
+    // 获取所有父级分类ID
+    const parentIds = new Set<number>();
+    categories.forEach((c: any) => {
+      if (c.parentId) parentIds.add(c.parentId);
+    });
+    
+    // 如果有父级分类，递归获取
+    if (parentIds.size > 0) {
+      const parentCategories = await db
+        .select({
+          id: ledgerCategories.id,
+          name: ledgerCategories.name,
+          icon: ledgerCategories.icon,
+          parentId: ledgerCategories.parentId,
+        })
+        .from(ledgerCategories)
+        .where(sql`${ledgerCategories.id} IN (${sql.join(Array.from(parentIds).map(id => sql`${id}`), sql`, `)})`);
+      
+      categories = [...categories, ...parentCategories];
+      
+      // 再获取父级的父级（最多3层）
+      const grandParentIds = new Set<number>();
+      parentCategories.forEach((c: any) => {
+        if (c.parentId) grandParentIds.add(c.parentId);
+      });
+      
+      if (grandParentIds.size > 0) {
+        const grandParentCategories = await db
+          .select({
+            id: ledgerCategories.id,
+            name: ledgerCategories.name,
+            icon: ledgerCategories.icon,
+            parentId: ledgerCategories.parentId,
+          })
+          .from(ledgerCategories)
+          .where(sql`${ledgerCategories.id} IN (${sql.join(Array.from(grandParentIds).map(id => sql`${id}`), sql`, `)})`);
+        
+        categories = [...categories, ...grandParentCategories];
+      }
+    }
+  }
+  
+  const categoryMap = new Map(categories.map((c: any) => [c.id, c]));
+  
+  // 构建分类路径的辅助函数
+  const buildCategoryPath = (categoryId: number | null): string => {
+    if (!categoryId) return '未分类';
+    
+    const path: string[] = [];
+    let currentId: number | null = categoryId;
+    
+    // 最多遍历3层，防止无限循环
+    for (let i = 0; i < 3 && currentId; i++) {
+      const cat = categoryMap.get(currentId);
+      if (!cat) break;
+      
+      path.unshift(cat.name); // 在前面插入，保证顺序是 一级 > 二级 > 三级
+      currentId = cat.parentId;
+    }
+    
+    return path.length > 0 ? path.join('-') : '未分类';
+  };
+  
+  // 获取所有涉及的创建者ID
+  const creatorIds = new Set<number>();
+  records.forEach((r: any) => {
+    if (r.createdBy) creatorIds.add(r.createdBy);
+  });
+  
+  // 获取创建者用户信息
+  let creators: any[] = [];
+  if (creatorIds.size > 0) {
+    creators = await db
+      .select({
+        id: users.id,
+        username: users.username,
+        avatar: users.avatar,
+      })
+      .from(users)
+      .where(sql`${users.id} IN (${sql.join(Array.from(creatorIds).map(id => sql`${id}`), sql`, `)})`);
+  }
+  
+  const creatorMap = new Map(creators.map((c: any) => [c.id, c]));
+  
+  // 解密敏感字段
+  const decryptedRecords = await decryptFieldsArray(db, 'ledger_records', records, LEDGER_RECORD_ENCRYPT_FIELDS);
+  
+  // 按日期分组
+  const groupedRecords: Record<string, any> = {};
+  
+  decryptedRecords.forEach((record: any) => {
+    const date = record.date;
+    
+    if (!groupedRecords[date]) {
+      groupedRecords[date] = {
+        date,
+        records: [],
+        income: 0,
+        expense: 0,
+      };
+    }
+    
+    const category = categoryMap.get(record.categoryId);
+    const creator = creatorMap.get(record.createdBy);
+    
+    const amount = Number(record.amount);
+    
+    groupedRecords[date].records.push({
+      id: record.id,
+      type: record.type,
+      amount,
+      category: buildCategoryPath(record.categoryId),
+      categoryIcon: category?.icon,
+      description: record.description,
+      createdAt: record.createdAt,
+      imageUrl: record.imageUrl,
+      reimbursementStatus: record.reimbursementStatus,
+      pendingType: record.pendingType,
+      pendingIncludeStats: record.pendingIncludeStats,
+      ajStatus: record.ajStatus || null,
+      ajCompanyId: record.ajCompanyId || null,
+      ajCompanyName: record.ajCompanyName || null,
+      ajApprovedBy: record.ajApprovedBy || null,
+      ajApprovedAt: record.ajApprovedAt || null,
+      member: creator ? {
+        id: creator.id,
+        username: creator.username,
+        avatar: creator.avatar,
+      } : null,
+    });
+    
+    // 待结账目且 pendingIncludeStats === 0 时不计入统计
+    const shouldIncludeInStats = !(record.pendingType && record.pendingIncludeStats === 0);
+    
+    if (shouldIncludeInStats) {
+      if (record.type === 'income') {
+        groupedRecords[date].income += amount;
+      } else {
+        groupedRecords[date].expense += amount;
+      }
+    }
+  });
+  
+  // 转换为数组并计算每日余额
+  const result = Object.values(groupedRecords).map((day: any) => ({
+    ...day,
+    balance: day.income - day.expense,
+  }));
+  
+  return result;
+}
+
+/**
+ * 获取单条记账详情
+ */
+export async function getTransactionDetail(
+  ledgerId: number,
+  transactionId: number,
+  userId: number
+) {
+  try {
+  console.log('[getTransactionDetail] 开始查询:', { ledgerId, transactionId, userId });
+  
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证用户是否是账本成员并获取权限（使用原生 SQL 确保读取真实字段値）
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("Database connection failed");
+  const [membershipRows] = await conn.execute(
+    'SELECT permission_view, permission_delete, role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
+    [ledgerId, userId]
+  ) as any;
+  
+  if (!membershipRows || membershipRows.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  const userPermission = membershipRows[0].permission_view as string;
+  const userPermissionDelete = (membershipRows[0].permission_delete as string) || 'none';
+  const userRole = membershipRows[0].role as string;
+  
+  // 检查查看权限
+  if (userPermission === 'none') {
+    throw new Error("您没有查看账目的权限");
+  }
+  
+  // 获取记账详情
+  const record = await db
+    .select({
+      id: ledgerRecords.id,
+      ledgerId: ledgerRecords.ledgerId,
+      categoryId: ledgerRecords.categoryId,
+      amount: ledgerRecords.amount,
+      type: ledgerRecords.type,
+      date: ledgerRecords.recordDate,
+      description: ledgerRecords.description,
+      createdBy: ledgerRecords.createdBy,
+      createdAt: ledgerRecords.createdAt,
+      updatedAt: ledgerRecords.updatedAt,
+      imageUrl: ledgerRecords.imageUrl,
+      images: ledgerRecords.images,
+      reimbursementStatus: ledgerRecords.reimbursementStatus,
+      reimbursementNotes: ledgerRecords.reimbursementNotes,
+      reimbursementVoucherUrl: ledgerRecords.reimbursementVoucherUrl,
+      reimbursedAt: ledgerRecords.reimbursedAt,
+      reimbursedBy: ledgerRecords.reimbursedBy,
+      pendingType: ledgerRecords.pendingType,
+      pendingIncludeStats: ledgerRecords.pendingIncludeStats,
+      ajStatus: ledgerRecords.ajStatus,
+      ajCreatedBy: ledgerRecords.createdBy,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.id, transactionId),
+        eq(ledgerRecords.ledgerId, ledgerId),
+        isNull(ledgerRecords.deletedAt)
+      )
+    )
+    .limit(1);
+  
+  console.log('[getTransactionDetail] 查询结果:', { recordLength: record.length, record: record[0] });
+  
+  if (record.length === 0) {
+    throw new Error("记账不存在");
+  }
+  
+  const transaction = record[0];
+  
+  // 如果权限是"仅自己"，检查该记录是否是自己创建的
+  if (userPermission === 'own' && transaction.createdBy !== userId) {
+    throw new Error("您没有查看该账目的权限");
+  }
+  
+  // 获取分类信息
+  const category = await db
+    .select({
+      id: ledgerCategories.id,
+      name: ledgerCategories.name,
+      parentId: ledgerCategories.parentId,
+    })
+    .from(ledgerCategories)
+    .where(eq(ledgerCategories.id, transaction.categoryId))
+    .limit(1);
+  
+  let categoryName = '';
+  let subcategoryName = '';
+  
+  if (category.length > 0) {
+    if (category[0].parentId) {
+      // 这是二级分类，需要获取父分类
+      const parentCategory = await db
+        .select({ name: ledgerCategories.name })
+        .from(ledgerCategories)
+        .where(eq(ledgerCategories.id, category[0].parentId))
+        .limit(1);
+      
+      if (parentCategory.length > 0) {
+        categoryName = parentCategory[0].name;
+        subcategoryName = category[0].name;
+      }
+    } else {
+      // 这是一级分类
+      categoryName = category[0].name;
+    }
+  }
+  
+  // 获取成员信息(关联users表)
+  const memberResult = await db
+    .select({
+      userId: ledgerMembers.userId,
+      nickname: ledgerMembers.nickname,
+      role: ledgerMembers.role,
+      username: users.username,
+      avatar: users.avatar,
+    })
+    .from(ledgerMembers)
+    .leftJoin(users, eq(ledgerMembers.userId, users.id))
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, transaction.createdBy)
+      )
+    )
+    .limit(1);
+  
+  const memberWithAvatar = memberResult.length > 0 ? memberResult[0] : null;
+  
+  // 构建分类路径
+  const categoryPath: number[] = [];
+  if (category.length > 0) {
+    if (category[0].parentId) {
+      // 有父分类，添加父分类 ID
+      categoryPath.push(category[0].parentId);
+    }
+    // 添加当前分类 ID
+    categoryPath.push(category[0].id);
+  }
+  
+  // 解密敏感字段
+  const decryptedTransaction = await decryptFields(db, 'ledger_records', transaction, LEDGER_RECORD_ENCRYPT_FIELDS);
+  
+  const result = {
+    id: decryptedTransaction.id,
+    ledgerId: decryptedTransaction.ledgerId,
+    amount: decryptedTransaction.amount,
+    type: decryptedTransaction.type,
+    date: decryptedTransaction.date,
+    description: decryptedTransaction.description,
+    categoryId: transaction.categoryId,
+    categoryPath,
+    category: categoryName,
+    subcategory: subcategoryName,
+    createdBy: transaction.createdBy,
+    createdAt: transaction.createdAt,
+    updatedAt: transaction.updatedAt,
+    member: memberWithAvatar,
+    recordDate: transaction.date,
+    approvalStatus: (() => {
+      // AJ账本发票审批状态映射
+      const aj = transaction.ajStatus;
+      if (aj === 'pending') return 'pending' as const;
+      if (aj === 'approved') return 'approved' as const;
+      if (aj === 'rejected') return 'rejected' as const;
+      return 'not_required' as const;
+    })(),
+    images: (() => {
+      // 优先使用 images JSON 字段（多图），降级到 imageUrl（单图兼容旧数据）
+      if (transaction.images) {
+        const parsed = typeof transaction.images === 'string' ? JSON.parse(transaction.images) : transaction.images;
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      return transaction.imageUrl ? [transaction.imageUrl] : [];
+    })(),
+    reimbursementStatus: transaction.reimbursementStatus || 'none',
+    reimbursementNotes: transaction.reimbursementNotes || null,
+    reimbursementVoucherUrl: transaction.reimbursementVoucherUrl || null,
+    reimbursedAt: transaction.reimbursedAt || null,
+    reimbursedBy: transaction.reimbursedBy || null,
+    pendingType: transaction.pendingType || null,
+    pendingIncludeStats: transaction.pendingIncludeStats ?? null,
+    userPermissionDelete: userPermissionDelete as 'all' | 'own' | 'none',
+  };
+  
+  console.log('[getTransactionDetail] 返回结果:', result);
+  return result;
+  } catch (error) {
+    console.error('[getTransactionDetail] 错误:', error);
+    throw error;
+  }
+}
+
+/**
+ * 删除记账记录
+ */
+export async function deleteTransaction(
+  recordId: number,
+  userId: number
+) {
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("Database connection failed");
+  
+  // 获取记录信息（使用原始mysql2连接）
+  const [recordRows] = await conn.execute(
+    'SELECT id, ledgerId, createdBy FROM ledger_records WHERE id = ? AND deleted_at IS NULL LIMIT 1',
+    [recordId]
+  ) as any;
+  
+  if (!recordRows || recordRows.length === 0) {
+    throw new Error("记录不存在");
+  }
+  const record = recordRows[0];
+  const ledgerId = record.ledgerId;
+  console.log('[deleteTransaction] 找到记录:', { recordId, ledgerId, createdBy: record.createdBy });
+  
+  // 验证用户是否是账本成员，并获取权限
+  const [memberRows] = await conn.execute(
+    'SELECT id, role, permission_delete FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
+    [ledgerId, userId]
+  ) as any;
+  
+  if (!memberRows || memberRows.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+
+  const memberRole = memberRows[0].role as string;
+  const permDelete = (memberRows[0].permission_delete as string) || 'none';
+  const isOwner = memberRole === 'owner';
+
+  // 权限校验：只有 owner（账本创建者）始终可删除，不受 permission_delete 限制
+  // 其他所有人（包括 admin）都必须遵守 permission_delete 设置
+  if (!isOwner) {
+    if (permDelete === 'none') {
+      throw new Error("您没有删除账目的权限");
+    }
+    // own = 只能删自己添加的
+    if (permDelete === 'own' && record.createdBy !== userId) {
+      throw new Error("您只能删除自己添加的账目");
+    }
+  }
+
+  // 软删除：使用原始SQL直接更新 deleted_at 和 deleted_by
+  console.log('[deleteTransaction] 执行软删除:', { recordId, userId });
+  await conn.execute(
+    'UPDATE ledger_records SET deleted_at = NOW(), deleted_by = ? WHERE id = ?',
+    [userId, recordId]
+  );
+  console.log('[deleteTransaction] 软删除成功');
+  
+  // 验证删除是否成功
+  const [verifyRows] = await conn.execute(
+    'SELECT id, deleted_at, deleted_by FROM ledger_records WHERE id = ?',
+    [recordId]
+  ) as any;
+  console.log('[deleteTransaction] 验证结果:', verifyRows?.[0]);
+  
+  // 写入修改日志
+  await insertRecordLog({
+    recordId,
+    ledgerId,
+    operatorId: userId,
+    action: 'delete',
+    note: '删除账目',
+  });
+  
+  return { success: true };
+}
+
+/**
+ * 获取已删除的账目记录（60天内）
+ */
+export async function getDeletedTransactions(
+  ledgerId: number,
+  userId: number
+) {
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("Database connection failed");
+  const db = await getLedgerDb();
+  
+  console.log('[getDeletedTransactions] 开始查询:', { ledgerId, userId });
+  
+  // 验证用户是否是账本成员并获取权限
+  const [memberRows] = await conn.execute(
+    'SELECT permission_view, role FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
+    [ledgerId, userId]
+  ) as any;
+  
+  if (!memberRows || memberRows.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  const userPermission = memberRows[0].permission_view;
+  console.log('[getDeletedTransactions] 用户权限:', userPermission);
+  
+  // 检查查看权限
+  if (userPermission === 'none') {
+    return [];
+  }
+  
+  // 使用原始mysql2连接查询已删除的记录
+  let records: any[];
+  if (userPermission === 'own') {
+    const [rows] = await conn.execute(
+      'SELECT id, type, amount, categoryId, description, recordDate, createdBy, createdAt, imageUrl, deleted_at, deleted_by, reimbursement_status, pending_type, pending_include_stats FROM ledger_records WHERE ledgerId = ? AND deleted_at IS NOT NULL AND deleted_at >= DATE_SUB(NOW(), INTERVAL 60 DAY) AND (deleted_by = ? OR createdBy = ?) ORDER BY deleted_at DESC',
+      [ledgerId, userId, userId]
+    ) as any;
+    records = rows || [];
+  } else {
+    const [rows] = await conn.execute(
+      'SELECT id, type, amount, categoryId, description, recordDate, createdBy, createdAt, imageUrl, deleted_at, deleted_by, reimbursement_status, pending_type, pending_include_stats FROM ledger_records WHERE ledgerId = ? AND deleted_at IS NOT NULL AND deleted_at >= DATE_SUB(NOW(), INTERVAL 60 DAY) ORDER BY deleted_at DESC',
+      [ledgerId]
+    ) as any;
+    records = rows || [];
+  }
+  
+  console.log('[getDeletedTransactions] 查询结果:', { recordCount: records?.length || 0 });
+  
+  if (!records || records.length === 0) {
+    return [];
+  }
+  
+  // 获取分类信息
+  const categoryIds = new Set<number>();
+  records.forEach((r: any) => {
+    if (r.categoryId) categoryIds.add(r.categoryId);
+  });
+  
+  let categoriesMap: Record<number, string> = {};
+  if (categoryIds.size > 0) {
+    const catIdArr = [...categoryIds];
+    const placeholders = catIdArr.map(() => '?').join(',');
+    const [catRows] = await conn.execute(
+      `SELECT id, name FROM ledger_categories WHERE id IN (${placeholders})`,
+      catIdArr
+    ) as any;
+    (catRows || []).forEach((c: any) => {
+      categoriesMap[c.id] = c.name;
+    });
+  }
+  
+  // 获取用户信息（删除人和创建人）
+  const userIdSet = new Set<number>();
+  records.forEach((r: any) => {
+    if (r.deleted_by) userIdSet.add(r.deleted_by);
+    if (r.createdBy) userIdSet.add(r.createdBy);
+  });
+  
+  let usersMap: Record<number, string> = {};
+  let avatarsMap: Record<number, string | null> = {};
+  if (userIdSet.size > 0) {
+    const userIdArr = [...userIdSet];
+    const placeholders = userIdArr.map(() => '?').join(',');
+    const [userRows] = await conn.execute(
+      `SELECT id, username, name, avatar FROM users WHERE id IN (${placeholders})`,
+      userIdArr
+    ) as any;
+    (userRows || []).forEach((u: any) => {
+      usersMap[u.id] = u.name || u.username || '未知';
+      avatarsMap[u.id] = u.avatar || null;
+    });
+  }
+  
+  // 辅助函数：将Date对象转为字符串
+  const toStr = (v: any) => {
+    if (!v) return null;
+    if (v instanceof Date) return v.toISOString();
+    return String(v);
+  };
+  // 辅助函数：将日期格式化为YYYY-MM-DD
+  const toDateStr = (v: any) => {
+    if (!v) return null;
+    if (v instanceof Date) {
+      const y = v.getFullYear();
+      const m = String(v.getMonth() + 1).padStart(2, '0');
+      const d = String(v.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    // 如果已经是字符串，截取前10位（YYYY-MM-DD）
+    return String(v).substring(0, 10);
+  };
+  
+  // 格式化结果（确保所有字段都是可序列化的基本类型）
+  const formattedRecords = records.map((r: any) => ({
+    id: r.id,
+    type: r.type,
+    amount: r.amount ? String(r.amount) : '0',
+    categoryId: r.categoryId,
+    description: r.description || '',
+    date: toDateStr(r.recordDate),
+    createdBy: r.createdBy,
+    createdAt: toStr(r.createdAt),
+    imageUrl: r.imageUrl || null,
+    deletedAt: toDateStr(r.deleted_at),
+    deletedBy: r.deleted_by,
+    categoryName: r.categoryId ? (categoriesMap[r.categoryId] || '未分类') : '未分类',
+    createdByName: usersMap[r.createdBy] || '未知',
+    createdByAvatar: avatarsMap[r.createdBy] || null,
+    deletedByName: r.deleted_by ? (usersMap[r.deleted_by] || '未知') : '未知',
+    reimbursementStatus: r.reimbursement_status || 'none',
+    pendingType: r.pending_type || null,
+    pendingIncludeStats: r.pending_include_stats ?? 1,
+  }));
+  
+  // 解密敏感字段
+  if (db) {
+    const decryptedRecords = await decryptFieldsArray(db, 'ledger_records', formattedRecords, LEDGER_RECORD_ENCRYPT_FIELDS);
+    return decryptedRecords;
+  }
+  
+  return formattedRecords;
+}
+
+/**
+ * 恢复已删除的账目记录
+ */
+export async function restoreTransaction(
+  recordId: number,
+  userId: number
+) {
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("Database connection failed");
+  
+  // 获取记录信息
+  const [recordRows] = await conn.execute(
+    'SELECT id, ledgerId, deleted_at FROM ledger_records WHERE id = ? LIMIT 1',
+    [recordId]
+  ) as any;
+  
+  if (!recordRows || recordRows.length === 0) {
+    throw new Error("记录不存在");
+  }
+  
+  const record = recordRows[0];
+  
+  if (!record.deleted_at) {
+    throw new Error("该记录未被删除");
+  }
+  
+  // 检查是否超过60天
+  const deletedDate = new Date(record.deleted_at);
+  const now = new Date();
+  const diffDays = (now.getTime() - deletedDate.getTime()) / (1000 * 60 * 60 * 24);
+  if (diffDays > 60) {
+    throw new Error("该记录已超过60天，无法恢复");
+  }
+  
+  // 验证用户是否是账本成员
+  const [memberRows] = await conn.execute(
+    'SELECT id FROM ledger_members WHERE ledgerId = ? AND userId = ? LIMIT 1',
+    [record.ledgerId, userId]
+  ) as any;
+  
+  if (!memberRows || memberRows.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 恢复记录：清除 deleted_at 和 deleted_by
+  await conn.execute(
+    'UPDATE ledger_records SET deleted_at = NULL, deleted_by = NULL WHERE id = ?',
+    [recordId]
+  );
+  
+  console.log('[restoreTransaction] 恢复成功:', { recordId });
+  
+  // 写入修改日志
+  await insertRecordLog({
+    recordId,
+    ledgerId: record.ledgerId,
+    operatorId: userId,
+    action: 'restore',
+    note: '恢复已删除账目',
+  });
+  
+  return { success: true };
+}
+
+/**
+ * 清理超过60天的已删除记录（永久删除）
+ */
+export async function purgeExpiredDeletedRecords() {
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("Database connection failed");
+  
+  await conn.execute(
+    'DELETE FROM ledger_records WHERE deleted_at IS NOT NULL AND deleted_at < DATE_SUB(NOW(), INTERVAL 60 DAY)'
+  );
+  
+  return { success: true };
+}
+
+/**
+ * 更新记账记录
+ */
+export async function updateTransaction(
+  recordId: number,
+  userId: number,
+  data: {
+    type?: 'income' | 'expense';
+    amount?: number;
+    categoryId?: number;
+    subcategoryId?: number;
+    description?: string;
+    transactionDate?: string;
+    images?: string[];
+    memberId?: number;
+    accountId?: number;
+    reimbursementStatus?: 'none' | 'pending' | 'completed';
+    pendingType?: 'receivable' | 'payable' | null;
+    pendingIncludeStats?: number | null;
+  }
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 获取完整的旧记录信息（用于对比变更）
+  const oldRecords = await db
+    .select()
+    .from(ledgerRecords)
+    .where(and(eq(ledgerRecords.id, recordId), isNull(ledgerRecords.deletedAt)))
+    .limit(1);
+  
+  if (oldRecords.length === 0) {
+    throw new Error("记录不存在");
+  }
+  
+  const oldRecord = oldRecords[0] as any;
+  
+  // 解密旧记录的敏感字段
+  const decryptedOldRecord = await decryptFields(db, 'ledger_records', oldRecord, LEDGER_RECORD_ENCRYPT_FIELDS);
+  
+  // 验证用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, oldRecord.ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 构建更新数据，并对比旧值只记录真正变化的字段
+  const updateData: any = {};
+  const logChanges: Array<{ fieldName: string; oldValue: string | null; newValue: string | null }> = [];
+  
+  const typeLabel = (t: string) => t === 'income' ? '收入' : '支出';
+  const reimbursementLabel = (s: string) => ({ none: '无报销', pending: '待报销', completed: '已报销' }[s] || s);
+  const pendingLabel = (t: string | null) => t === 'receivable' ? '代收' : t === 'payable' ? '代付' : '无';
+  
+  if (data.type && data.type !== decryptedOldRecord.type) {
+    updateData.type = data.type;
+    logChanges.push({ fieldName: '类型', oldValue: typeLabel(decryptedOldRecord.type), newValue: typeLabel(data.type) });
+  } else if (data.type) {
+    updateData.type = data.type; // 仍然更新，但不记录日志
+  }
+  
+  if (data.amount !== undefined && String(data.amount) !== String(parseFloat(decryptedOldRecord.amount))) {
+    updateData.amount = data.amount.toString();
+    logChanges.push({ fieldName: '金额', oldValue: String(parseFloat(decryptedOldRecord.amount)), newValue: String(data.amount) });
+  } else if (data.amount !== undefined) {
+    updateData.amount = data.amount.toString();
+  }
+  
+  if (data.categoryId && data.categoryId !== decryptedOldRecord.categoryId) {
+    updateData.categoryId = data.categoryId;
+    // 查询旧分类名称
+    let oldCategoryName = String(decryptedOldRecord.categoryId);
+    let newCategoryName = String(data.categoryId);
+    try {
+      if (decryptedOldRecord.categoryId) {
+        const oldCat = await db.select({ name: ledgerCategories.name, parentId: ledgerCategories.parentId })
+          .from(ledgerCategories).where(eq(ledgerCategories.id, decryptedOldRecord.categoryId)).limit(1);
+        if (oldCat.length > 0) {
+          if (oldCat[0].parentId) {
+            const parentCat = await db.select({ name: ledgerCategories.name })
+              .from(ledgerCategories).where(eq(ledgerCategories.id, oldCat[0].parentId)).limit(1);
+            oldCategoryName = parentCat.length > 0 ? `${parentCat[0].name}/${oldCat[0].name}` : oldCat[0].name;
+          } else {
+            oldCategoryName = oldCat[0].name;
+          }
+        }
+      }
+      const newCat = await db.select({ name: ledgerCategories.name, parentId: ledgerCategories.parentId })
+        .from(ledgerCategories).where(eq(ledgerCategories.id, data.categoryId)).limit(1);
+      if (newCat.length > 0) {
+        if (newCat[0].parentId) {
+          const parentCat = await db.select({ name: ledgerCategories.name })
+            .from(ledgerCategories).where(eq(ledgerCategories.id, newCat[0].parentId)).limit(1);
+          newCategoryName = parentCat.length > 0 ? `${parentCat[0].name}/${newCat[0].name}` : newCat[0].name;
+        } else {
+          newCategoryName = newCat[0].name;
+        }
+      }
+    } catch (e) {
+      console.error('[updateTransaction] 查询分类名称失败:', e);
+    }
+    logChanges.push({ fieldName: '分类', oldValue: oldCategoryName, newValue: newCategoryName });
+  } else if (data.categoryId) {
+    updateData.categoryId = data.categoryId;
+  }
+  
+  if (data.subcategoryId !== undefined) { updateData.subcategoryId = data.subcategoryId; }
+  
+  if (data.description !== undefined && (data.description || '') !== (decryptedOldRecord.description || '')) {
+    updateData.description = data.description;
+    logChanges.push({ fieldName: '备注', oldValue: decryptedOldRecord.description || '无', newValue: data.description || '无' });
+  } else if (data.description !== undefined) {
+    updateData.description = data.description;
+  }
+  
+  if (data.transactionDate && data.transactionDate !== decryptedOldRecord.recordDate) {
+    updateData.recordDate = data.transactionDate;
+    logChanges.push({ fieldName: '日期', oldValue: decryptedOldRecord.recordDate, newValue: data.transactionDate });
+  } else if (data.transactionDate) {
+    updateData.recordDate = data.transactionDate;
+  }
+  
+  if (data.images !== undefined) {
+    // 同时更新 imageUrl（展示层兼容）和 images（多图完整列表）
+    const newImageUrl = data.images && data.images.length > 0 ? data.images[0] : null;
+    const newImages = data.images && data.images.length > 0 ? JSON.stringify(data.images) : null;
+    if (newImageUrl !== decryptedOldRecord.imageUrl) {
+      logChanges.push({ fieldName: '凭证图片', oldValue: decryptedOldRecord.imageUrl ? '有' : '无', newValue: newImageUrl ? '已更新' : '已删除' });
+    }
+    updateData.imageUrl = newImageUrl;
+    (updateData as any).images = newImages;
+  }
+  
+  if (data.memberId && data.memberId !== decryptedOldRecord.memberId) {
+    updateData.memberId = data.memberId;
+    logChanges.push({ fieldName: '支出人', oldValue: String(decryptedOldRecord.memberId || '无'), newValue: String(data.memberId) });
+  } else if (data.memberId) {
+    updateData.memberId = data.memberId;
+  }
+  
+  if (data.accountId !== undefined && data.accountId !== decryptedOldRecord.accountId) {
+    updateData.accountId = data.accountId;
+    logChanges.push({ fieldName: '账户', oldValue: decryptedOldRecord.accountId ? String(decryptedOldRecord.accountId) : '无', newValue: data.accountId ? String(data.accountId) : '无' });
+  } else if (data.accountId !== undefined) {
+    updateData.accountId = data.accountId;
+  }
+  
+  if (data.reimbursementStatus !== undefined && data.reimbursementStatus !== decryptedOldRecord.reimbursementStatus) {
+    updateData.reimbursementStatus = data.reimbursementStatus;
+    logChanges.push({ fieldName: '报销状态', oldValue: reimbursementLabel(decryptedOldRecord.reimbursementStatus), newValue: reimbursementLabel(data.reimbursementStatus) });
+  } else if (data.reimbursementStatus !== undefined) {
+    updateData.reimbursementStatus = data.reimbursementStatus;
+  }
+  
+  if (data.pendingType !== undefined) {
+    const oldPending = decryptedOldRecord.pendingType || null;
+    const newPending = data.pendingType || null;
+    if (newPending !== oldPending) {
+      updateData.pendingType = data.pendingType;
+      if (data.pendingType === null) {
+        updateData.pendingIncludeStats = null;
+      }
+      logChanges.push({ fieldName: '待结状态', oldValue: pendingLabel(oldPending), newValue: pendingLabel(newPending) });
+    } else {
+      updateData.pendingType = data.pendingType;
+    }
+  }
+  if (data.pendingIncludeStats !== undefined) updateData.pendingIncludeStats = data.pendingIncludeStats;
+  
+  // 加密敏感字段
+  const encryptedUpdateData = await encryptFields(db, 'ledger_records', updateData, LEDGER_RECORD_ENCRYPT_FIELDS);
+  
+  // 更新记录
+  await db
+    .update(ledgerRecords)
+    .set(encryptedUpdateData)
+    .where(eq(ledgerRecords.id, recordId));
+  
+  // 只有真正有变化的字段才写入修改日志
+  if (logChanges.length > 0) {
+    console.log('[updateTransaction] 准备写入日志, logChanges数量:', logChanges.length, 'recordId:', recordId, 'ledgerId:', oldRecord.ledgerId, 'userId:', userId);
+    for (const change of logChanges) {
+      await insertRecordLog({
+        recordId,
+        ledgerId: oldRecord.ledgerId,
+        operatorId: userId,
+        action: 'edit',
+        fieldName: change.fieldName,
+        oldValue: change.oldValue,
+        newValue: change.newValue,
+      });
+    }
+  } else {
+    console.log('[updateTransaction] 没有字段变化，不写入日志');
+  }
+  
+  return { success: true };
+}
+
+// ==================== 审批相关函数 ====================
+
+/**
+ * 获取账本的审批规则列表
+ */
+export async function getApprovalRules(ledgerId: number, userId: number) {
+  const db = await getLedgerDb();
+  const { ledgerApprovalRules, ledgerMembers, ledgers } = await import("../drizzle/schema.js");
+  
+  // 验证用户权限 - 只有账本创建人(owner)和管理员(admin)才能查看审批规则
+  const member = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  
+  if (member.length === 0 || (member[0].role !== 'owner' && member[0].role !== 'admin')) {
+    throw new Error("只有账本创建人和管理员可以查看审批规则");
+  }
+  
+  // 获取审批规则
+  const rules = await db
+    .select()
+    .from(ledgerApprovalRules)
+    .where(eq(ledgerApprovalRules.ledgerId, ledgerId));
+  
+  return rules;
+}
+
+/**
+ * 保存审批规则
+ */
+export async function saveApprovalRules(
+  ledgerId: number,
+  userId: number,
+  rules: Array<{
+    recorderId: number | null;
+    approverType: 'all' | 'specific';
+    approverIds?: number[];
+  }>
+) {
+  const db = await getLedgerDb();
+  const { ledgerApprovalRules, ledgerMembers } = await import("../drizzle/schema.js");
+  
+  // 验证用户权限 - 只有账本创建人(owner)和管理员(admin)才能设置审批规则
+  const member = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  
+  if (member.length === 0 || (member[0].role !== 'owner' && member[0].role !== 'admin')) {
+    throw new Error("只有账本创建人和管理员可以设置审批规则");
+  }
+  
+  // 删除旧规则
+  await db
+    .delete(ledgerApprovalRules)
+    .where(eq(ledgerApprovalRules.ledgerId, ledgerId));
+  
+  // 插入新规则
+  for (const rule of rules) {
+    await db.insert(ledgerApprovalRules).values({
+      ledgerId,
+      recorderId: rule.recorderId,
+      approverType: rule.approverType,
+      approverIds: rule.approverIds ? JSON.stringify(rule.approverIds) : null,
+      isEnabled: 1,
+      createdBy: userId,
+    });
+  }
+  
+  return { success: true };
+}
+
+/**
+ * 删除审批规则
+ */
+export async function deleteApprovalRule(ruleId: number, userId: number) {
+  const db = await getLedgerDb();
+  const { ledgerApprovalRules, ledgers } = await import("../drizzle/schema.js");
+  
+  // 获取规则
+  const rule = await db
+    .select()
+    .from(ledgerApprovalRules)
+    .where(eq(ledgerApprovalRules.id, ruleId))
+    .limit(1);
+  
+  if (rule.length === 0) {
+    throw new Error("规则不存在");
+  }
+  
+  // 验证用户权限
+  const ledger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, rule[0].ledgerId))
+    .limit(1);
+  
+  if (ledger.length === 0 || ledger[0].ownerId !== userId) {
+    throw new Error("只有账本创建者可以删除审批规则");
+  }
+  
+  // 删除规则
+  await db
+    .delete(ledgerApprovalRules)
+    .where(eq(ledgerApprovalRules.id, ruleId));
+  
+  return { success: true };
+}
+
+/**
+ * 检查记账是否需要审批
+ */
+export async function checkNeedApproval(ledgerId: number, recorderId: number) {
+  try {
+    const db = await getLedgerDb();
+    const { ledgerApprovalRules } = await import("../drizzle/schema.js");
+    
+    // 查找特殊规则（recorderId 匹配）
+    const specificRule = await db
+      .select()
+      .from(ledgerApprovalRules)
+      .where(
+        and(
+          eq(ledgerApprovalRules.ledgerId, ledgerId),
+          eq(ledgerApprovalRules.recorderId, recorderId),
+          eq(ledgerApprovalRules.isEnabled, 1)
+        )
+      )
+      .limit(1);
+    
+    if (specificRule.length > 0) {
+      return {
+        needApproval: true,
+        rule: specificRule[0],
+      };
+    }
+    
+    // 查找默认规则（recorderId 为 null）
+    const defaultRule = await db
+      .select()
+      .from(ledgerApprovalRules)
+      .where(
+        and(
+          eq(ledgerApprovalRules.ledgerId, ledgerId),
+          isNull(ledgerApprovalRules.recorderId),
+          eq(ledgerApprovalRules.isEnabled, 1)
+        )
+      )
+      .limit(1);
+    
+    if (defaultRule.length > 0) {
+      return {
+        needApproval: true,
+        rule: defaultRule[0],
+      };
+    }
+    
+    return {
+      needApproval: false,
+      rule: null,
+    };
+  } catch (err) {
+    // 审批规则表可能尚未创建，跳过审批检查
+    console.warn('[checkNeedApproval] 审批规则表不可用，跳过审批检查:', (err as Error).message);
+    return {
+      needApproval: false,
+      rule: null,
+    };
+  }
+}
+
+/**
+ * 创建审批记录
+ */
+export async function createApprovalRecords(
+  ledgerId: number,
+  transactionId: number,
+  approverIds: number[]
+) {
+  const db = await getLedgerDb();
+  const { ledgerApprovalRecords } = await import("../drizzle/schema.js");
+  
+  // 为每个审批人创建审批记录
+  for (const approverId of approverIds) {
+    await db.insert(ledgerApprovalRecords).values({
+      ledgerId,
+      transactionId,
+      approverId,
+      status: 'pending',
+    });
+  }
+  
+  return { success: true };
+}
+
+/**
+ * 审批记账
+ */
+export async function approveTransaction(
+  transactionId: number,
+  userId: number,
+  action: 'approved' | 'rejected',
+  comment?: string
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  // 先查询这条记录是否是AJ账本的发票申请（ajStatus不为null）
+  const recordInfo = await db
+    .select({ ledgerId: ledgerRecords.ledgerId, ajStatus: ledgerRecords.ajStatus })
+    .from(ledgerRecords)
+    .where(eq(ledgerRecords.id, transactionId))
+    .limit(1);
+
+  if (recordInfo.length > 0 && recordInfo[0].ajStatus !== null) {
+    // AJ账本发票申请审批：直接更新 ledger_records 表的 aj_status 字段
+    const ledgerId = recordInfo[0].ledgerId;
+    // 验证审批人是账本的管理员或owner
+    const membership = await db
+      .select({ role: ledgerMembers.role })
+      .from(ledgerMembers)
+      .where(and(eq(ledgerMembers.ledgerId, ledgerId), eq(ledgerMembers.userId, userId)))
+      .limit(1);
+    if (membership.length === 0 || !['owner', 'admin'].includes(membership[0].role)) {
+      throw new Error('只有账本管理员或创始人可以审批发票申请');
+    }
+    // 先查出提交人 ID 和报销金额（审批通过时需要发放 USDT 奖励）
+    const recordDetail = await db
+      .select({ createdBy: ledgerRecords.createdBy, amount: ledgerRecords.amount, reimbursementAmount: ledgerRecords.reimbursementAmount })
+      .from(ledgerRecords)
+      .where(eq(ledgerRecords.id, transactionId))
+      .limit(1);
+
+    await db
+      .update(ledgerRecords)
+      .set({
+        ajStatus: action,
+        ajApprovedBy: userId,
+        ajApprovedAt: sql`NOW()`,
+        ajApproveComment: comment || null,
+      } as any)
+      .where(eq(ledgerRecords.id, transactionId));
+
+    // 审批通过时：按报销金额 1% 换算成等值 USDT 发放到提交人钱包
+    let usdtRewarded = 0;
+    if (action === 'approved' && recordDetail.length > 0) {
+      try {
+        const submitterId = recordDetail[0].createdBy;
+        // 优先使用 reimbursementAmount（报销申请金额），fallback 到 amount（账目金额）
+        const reimbursementAmount = parseFloat(recordDetail[0].reimbursementAmount || recordDetail[0].amount || '0');
+        console.log(`[AJ审批奖励] transactionId=${transactionId}, submitterId=${submitterId}, reimbursementAmount=${reimbursementAmount}, rawReimbursementAmount=${recordDetail[0].reimbursementAmount}, rawAmount=${recordDetail[0].amount}`);
+        if (reimbursementAmount > 0) {
+          // 获取实时 USD/CNY 汇率（多源备用，与以太坊计算器右上角同源）
+          let usdCnyRate = 7.2; // 默认兜底汇率
+          try {
+            const fetchers = [
+              async () => {
+                const key = '3878a89bed4728b65cc7d8dc0a644c07';
+                const p = new URLSearchParams({ key, fromcoin: 'USD', tocoin: 'CNY', money: '1' });
+                const res = await fetch(`https://apis.tianapi.com/fxrate/index?${p}`, { signal: AbortSignal.timeout(5000) });
+                const d = await res.json() as { code: number; result?: { money: string } };
+                return (d.code === 200 && d.result?.money) ? parseFloat(d.result.money) : null;
+              },
+              async () => {
+                const res = await fetch('https://open.er-api.com/v6/latest/USD', { signal: AbortSignal.timeout(5000) });
+                const d = await res.json() as { result: string; rates?: Record<string, number> };
+                return (d.result === 'success' && d.rates?.['CNY']) ? d.rates['CNY'] : null;
+              },
+              async () => {
+                const res = await fetch('https://api.frankfurter.app/latest?from=USD&to=CNY', { signal: AbortSignal.timeout(5000) });
+                const d = await res.json() as { rates?: Record<string, number> };
+                return d.rates?.['CNY'] ?? null;
+              },
+            ];
+            for (const fetcher of fetchers) {
+              const rate = await fetcher().catch(() => null);
+              if (rate && rate > 0) { usdCnyRate = rate; break; }
+            }
+          } catch (_) { /* 全部失败，使用兜底汇率 */ }
+
+          // 计算 USDT 数量：报销金额 × 1% ÷ USD/CNY 汇率
+          // USDT ≈ 1 USD，所以 CNY 换 USDT = CNY金额 / USD/CNY汇率
+          const rewardCny = reimbursementAmount * 0.01;
+          usdtRewarded = parseFloat((rewardCny / usdCnyRate).toFixed(6));
+
+          if (usdtRewarded > 0) {
+            // 用 Drizzle db.execute 写入 af_manual_balances（与审批用同一个连接，最可靠）
+            const rewardNote = `成本津贴 #${transactionId}`;
+            const nowStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
+            await db.execute(
+              sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (${ledgerId}, ${submitterId}, ${usdtRewarded}, ${rewardNote}, ${nowStr}, ${nowStr})`
+            );
+            // 同时写入 balance_history，使奖励记录天然出现在钱包明细中
+            try {
+              await db.execute(
+                sql`INSERT INTO balance_history (user_id, amount, type, related_id, balance, description, created_at) VALUES (${submitterId}, ${usdtRewarded}, 'reward', ${transactionId}, 0, ${rewardNote}, ${nowStr})`
+              );
+            } catch (bhErr: any) {
+              console.warn('[AJ审批奖励] balance_history 写入失败（不影响主流程）:', bhErr?.message);
+            }
+            console.log(`[AJ审批奖励] 已发放 ${usdtRewarded} USDT 给用户 ${submitterId}，账本 ${ledgerId}`);
+          }
+        }
+       } catch (rewardErr) {
+        // 奖励发放失败不影响审批结果，但把错误写入数据库方便排查
+        const errMsg = (rewardErr instanceof Error) ? rewardErr.message : String(rewardErr);
+        console.error('[AJ审批奖励] 发放 USDT 失败:', errMsg);
+        try {
+          // 把错误信息写入 af_manual_balances 的 note 字段（amount=0），方便从数据库直接看到报错
+          const nowStr2 = new Date().toISOString().slice(0, 19).replace('T', ' ');
+          await db.execute(
+            sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (${ledgerId}, ${recordDetail[0]?.createdBy ?? 0}, 0, ${`[ERROR] transactionId=${transactionId}: ${errMsg}`}, ${nowStr2}, ${nowStr2})`
+          );
+        } catch (_) { /* 写错误日志也失败，放弃 */ }
+        usdtRewarded = -1; // 标记奖励失败
+      }
+    }
+    return { success: true, allApproved: action === 'approved', anyRejected: action === 'rejected', usdtRewarded };
+  }
+
+  // 普通账本审批流程（原有逻辑）
+  const { ledgerApprovalRecords } = await import("../drizzle/schema.js");
+  
+  // 更新审批记录
+  await db
+    .update(ledgerApprovalRecords)
+    .set({
+      status: action,
+      comment: comment || null,
+    })
+    .where(
+      and(
+        eq(ledgerApprovalRecords.transactionId, transactionId),
+        eq(ledgerApprovalRecords.approverId, userId)
+      )
+    );
+  
+  // 检查是否所有审批人都已审批
+  const allRecords = await db
+    .select()
+    .from(ledgerApprovalRecords)
+    .where(eq(ledgerApprovalRecords.transactionId, transactionId));
+  
+  const allApproved = allRecords.every(r => r.status === 'approved');
+  const anyRejected = allRecords.some(r => r.status === 'rejected');
+  
+  // transactions表已废弃，不再更新（普通账本审批状态通过ledgerApprovalRecords管理）
+  
+  return { success: true, allApproved, anyRejected };
+}
+
+/**
+ * 获取待审批的记账列表
+ */
+export async function getPendingApprovals(ledgerId: number, userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  // 先判断是否是AJ账本
+  const ledgerInfo = await db
+    .select({ type: ledgers.type })
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
+  const isAJLedger = ledgerInfo.length > 0 && ledgerInfo[0].type === 'custom_aj';
+
+  if (isAJLedger) {
+    // AJ账本：查询 ledger_records 表中 aj_status = 'pending' 的记录
+    // 只有账本管理员和owner可以看到待审批列表
+    const membership = await db
+      .select({ role: ledgerMembers.role })
+      .from(ledgerMembers)
+      .where(and(eq(ledgerMembers.ledgerId, ledgerId), eq(ledgerMembers.userId, userId)))
+      .limit(1);
+    if (membership.length === 0 || !['owner', 'admin'].includes(membership[0].role)) {
+      return []; // 普通成员看不到待审批列表
+    }
+    const pendingRecords = await db
+      .select({
+        id: ledgerRecords.id,
+        transactionId: ledgerRecords.id,
+        status: ledgerRecords.ajStatus,
+        comment: ledgerRecords.ajApproveComment,
+        createdAt: ledgerRecords.createdAt,
+        transaction: {
+          id: ledgerRecords.id,
+          type: ledgerRecords.type,
+          amount: ledgerRecords.amount,
+          description: ledgerRecords.description,
+          date: ledgerRecords.recordDate,
+          ajStatus: ledgerRecords.ajStatus,
+          ajCompanyId: ledgerRecords.ajCompanyId,
+          ajCompanyName: ledgerRecords.ajCompanyName,
+          createdBy: ledgerRecords.createdBy,
+          createdAt: ledgerRecords.createdAt,
+        },
+      })
+      .from(ledgerRecords)
+      .where(
+        and(
+          eq(ledgerRecords.ledgerId, ledgerId),
+          sql`${ledgerRecords.ajStatus} = 'pending'`,
+          isNull(ledgerRecords.deletedAt)
+        )
+      )
+      .orderBy(desc(ledgerRecords.createdAt));
+    // 获取创建者信息
+    const creatorIds = [...new Set(pendingRecords.map((r: any) => r.transaction.createdBy).filter(Boolean))];
+    let creatorMap: Record<number, any> = {};
+    if (creatorIds.length > 0) {
+      const creators = await db
+        .select({ id: users.id, username: users.username, avatar: users.avatar })
+        .from(users)
+        .where(sql`${users.id} IN (${sql.join(creatorIds.map((id: any) => sql`${id}`), sql`, `)})`);
+      creatorMap = Object.fromEntries(creators.map((c: any) => [c.id, c]));
+    }
+    return pendingRecords.map((r: any) => ({
+      ...r,
+      transaction: {
+        ...r.transaction,
+        amount: Number(r.transaction.amount),
+        member: creatorMap[r.transaction.createdBy] || null,
+      },
+    }));
+  }
+
+  // 普通账本审批流程（原有逻辑）
+  const { ledgerApprovalRecords } = await import("../drizzle/schema.js");
+  
+  // 获取待审批的记录（不再join已废弃的transactions表）
+  const records = await db
+    .select({
+      id: ledgerApprovalRecords.id,
+      transactionId: ledgerApprovalRecords.transactionId,
+      status: ledgerApprovalRecords.status,
+      comment: ledgerApprovalRecords.comment,
+      createdAt: ledgerApprovalRecords.createdAt,
+    })
+    .from(ledgerApprovalRecords)
+    .where(
+      and(
+        eq(ledgerApprovalRecords.ledgerId, ledgerId),
+        eq(ledgerApprovalRecords.approverId, userId),
+        eq(ledgerApprovalRecords.status, 'pending')
+      )
+    );
+  
+  return records;
+}
+
+/**
+ * 获取AJ账本已审批历史（approved/rejected），含发放USDT金额
+ */
+export async function getApprovalHistory(ledgerId: number, userId: number, page = 1, pageSize = 20) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  // 权限检查：只有owner/admin可以看
+  const membership = await db
+    .select({ role: ledgerMembers.role })
+    .from(ledgerMembers)
+    .where(and(eq(ledgerMembers.ledgerId, ledgerId), eq(ledgerMembers.userId, userId)))
+    .limit(1);
+  if (membership.length === 0 || !['owner', 'admin'].includes(membership[0].role)) {
+    return { list: [], total: 0 };
+  }
+
+  const offset = (page - 1) * pageSize;
+
+  // 查询已审批记录
+  const records = await db
+    .select({
+      id: ledgerRecords.id,
+      amount: ledgerRecords.amount,
+      reimbursementAmount: ledgerRecords.reimbursementAmount,
+      ajStatus: ledgerRecords.ajStatus,
+      ajCompanyName: ledgerRecords.ajCompanyName,
+      ajApprovedAt: ledgerRecords.ajApprovedAt,
+      ajApprovedBy: ledgerRecords.ajApprovedBy,
+      ajApproveComment: ledgerRecords.ajApproveComment,
+      description: ledgerRecords.description,
+      createdBy: ledgerRecords.createdBy,
+      createdAt: ledgerRecords.createdAt,
+      recordDate: ledgerRecords.recordDate,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        sql`${ledgerRecords.ajStatus} IN ('approved', 'rejected')`,
+        isNull(ledgerRecords.deletedAt)
+      )
+    )
+    .orderBy(desc(ledgerRecords.ajApprovedAt))
+    .limit(pageSize)
+    .offset(offset);
+
+  // 获取提交人和审批人信息
+  const allUserIds = [...new Set([
+    ...records.map((r: any) => r.createdBy),
+    ...records.map((r: any) => r.ajApprovedBy),
+  ].filter(Boolean))];
+  let userMap: Record<number, any> = {};
+  if (allUserIds.length > 0) {
+    const userList = await db
+      .select({ id: users.id, username: users.username, avatar: users.avatar })
+      .from(users)
+      .where(sql`${users.id} IN (${sql.join(allUserIds.map((id: any) => sql`${id}`), sql`, `)})`);
+    userMap = Object.fromEntries(userList.map((u: any) => [u.id, u]));
+  }
+
+  // 计算每条记录发放的USDT（按7.2兜底汇率，仅approved才有）
+  const list = records.map((r: any) => {
+    const baseAmount = parseFloat(String(r.reimbursementAmount || r.amount || 0));
+    const usdtRewarded = r.ajStatus === 'approved' ? parseFloat((baseAmount * 0.01 / 7.2).toFixed(6)) : 0;
+    return {
+      ...r,
+      amount: Number(r.amount),
+      reimbursementAmount: r.reimbursementAmount ? Number(r.reimbursementAmount) : null,
+      usdtRewarded,
+      submitter: userMap[r.createdBy] || null,
+      approver: userMap[r.ajApprovedBy] || null,
+    };
+  });
+
+  return { list, total: list.length };
+}
+
+/**
+ * 设置成员角色（仅owner可操作）
+ * 重写版本：使用targetUserId而不是memberId来标识目标成员
+ */
+export async function setMemberRole(
+  ledgerId: number,
+  operatorUserId: number,
+  targetUserId: number,
+  role: 'admin' | 'member' | 'funder'
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  console.log('[setMemberRole] 调用参数:', { ledgerId, operatorUserId, targetUserId, role });
+  
+  // 第1步：验证操作者是owner
+  const operatorRows = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, operatorUserId)
+      )
+    )
+    .limit(1);
+  
+  console.log('[setMemberRole] 操作者查询结果:', operatorRows);
+  
+  if (operatorRows.length === 0 || operatorRows[0].role !== 'owner') {
+    throw new Error('只有账本所有者可以设置管理员');
+  }
+  
+  // 第2步：通过userId+ledgerId查找目标成员
+  const targetRows = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, targetUserId)
+      )
+    )
+    .limit(1);
+  
+  console.log('[setMemberRole] 目标成员查询结果:', targetRows);
+  
+  if (targetRows.length === 0) {
+    throw new Error('目标成员不存在于该账本中');
+  }
+  
+  const targetMember = targetRows[0];
+  
+  // 第3步：不能修改owner的角色
+  if (targetMember.role === 'owner') {
+    throw new Error('不能修改所有者的角色');
+  }
+  
+  // 第4步：更新角色（通过记录的主键id更新）
+  await db
+    .update(ledgerMembers)
+    .set({ role })
+    .where(eq(ledgerMembers.id, targetMember.id));
+  
+  console.log('[setMemberRole] 角色更新成功:', { targetMemberId: targetMember.id, newRole: role });
+  
+  return { success: true };
+}
+
+/**
+ * 管理报销（管理员/owner操作）
+ */
+export async function manageReimbursement(
+  recordId: number,
+  userId: number,
+  status: 'none' | 'pending' | 'completed',
+  notes?: string,
+  voucherImage?: string
+) {
+  console.log('[manageReimbursement] 开始执行', { recordId, userId, status, notes, hasVoucherImage: !!voucherImage });
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 获取账目信息
+  const record = await db
+    .select()
+    .from(ledgerRecords)
+    .where(and(eq(ledgerRecords.id, recordId), isNull(ledgerRecords.deletedAt)))
+    .limit(1)
+    .then((rows: any[]) => rows[0]);
+  
+  if (!record) {
+    console.log('[manageReimbursement] 账目不存在', recordId);
+    throw new Error('账目不存在');
+  }
+  console.log('[manageReimbursement] 找到账目', { recordId, ledgerId: record.ledgerId, currentStatus: record.reimbursementStatus });
+  
+  // 验证权限（admin或owner）
+  const member = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, record.ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1)
+    .then((rows: any[]) => rows[0]);
+  
+  if (!member || (member.role !== 'admin' && member.role !== 'owner')) {
+    console.log('[manageReimbursement] 权限不足', { userId, memberRole: member?.role });
+    throw new Error('只有管理员和所有者可以管理报销');
+  }
+  console.log('[manageReimbursement] 权限验证通过', { userId, role: member.role });
+  
+  // 上传凭证图片（如果有）
+  let voucherUrl = record.reimbursementVoucherUrl;
+  if (voucherImage) {
+    const { uploadImageToCOS } = await import('./cos-upload');
+    voucherUrl = await uploadImageToCOS(voucherImage, 'reimbursement-vouchers');
+  }
+  
+  // 记录旧状态
+  const oldStatus = record.reimbursementStatus;
+  
+  // 更新报销状态
+  const updateData: any = {
+    reimbursementStatus: status,
+    reimbursementNotes: notes || record.reimbursementNotes,
+  };
+  
+  if (voucherUrl) {
+    updateData.reimbursementVoucherUrl = voucherUrl;
+  }
+  
+  if (status === 'completed') {
+    updateData.reimbursedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    updateData.reimbursedBy = userId;
+  }
+  
+  console.log('[manageReimbursement] 准备更新数据库', { recordId, updateData });
+  await db
+    .update(ledgerRecords)
+    .set(updateData)
+    .where(eq(ledgerRecords.id, recordId));
+  console.log('[manageReimbursement] 数据库更新成功');
+  
+  // 记录历史
+  // 加密报销备注
+  const historyData = {
+    recordId,
+    ledgerId: record.ledgerId,
+    operatedBy: userId,
+    action: status === 'completed' ? 'mark_completed' : (status === 'pending' ? 'mark_pending' : 'update'),
+    oldStatus,
+    newStatus: status,
+    notes: notes || null,
+    voucherUrl: voucherUrl || null,
+  };
+  const encryptedHistoryData = await encryptFields(db, 'reimbursement_history', historyData, REIMBURSEMENT_ENCRYPT_FIELDS);
+  
+  const { reimbursementHistory } = await import("../drizzle/schema.js");
+  await db.insert(reimbursementHistory).values(encryptedHistoryData as any);
+  
+  console.log('[manageReimbursement] 完成所有操作', { recordId, newStatus: status });
+  return { 
+    success: true, 
+    voucherUrl: voucherUrl || undefined 
+  };
+}
+
+/**
+ * 获取报销历史
+ */
+export async function getReimbursementHistory(recordId: number, userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 获取账目信息
+  const record = await db
+    .select()
+    .from(ledgerRecords)
+    .where(and(eq(ledgerRecords.id, recordId), isNull(ledgerRecords.deletedAt)))
+    .limit(1)
+    .then((rows: any[]) => rows[0]);
+  
+  if (!record) {
+    throw new Error('账目不存在');
+  }
+  
+  // 验证权限（必须是账本成员）
+  const member = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, record.ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1)
+    .then((rows: any[]) => rows[0]);
+  
+  if (!member) {
+    throw new Error('无权查看此账目');
+  }
+  
+  // 获取历史记录
+  const { reimbursementHistory } = await import("../drizzle/schema.js");
+  const history = await db
+    .select({
+      id: reimbursementHistory.id,
+      operatedBy: reimbursementHistory.operatedBy,
+      action: reimbursementHistory.action,
+      oldStatus: reimbursementHistory.oldStatus,
+      newStatus: reimbursementHistory.newStatus,
+      notes: reimbursementHistory.notes,
+      voucherUrl: reimbursementHistory.voucherUrl,
+      createdAt: reimbursementHistory.createdAt,
+      operatorName: users.username,
+      operatorNickname: ledgerMembers.nickname,
+    })
+    .from(reimbursementHistory)
+    .leftJoin(users, eq(reimbursementHistory.operatedBy, users.id))
+    .leftJoin(
+      ledgerMembers,
+      and(
+        eq(ledgerMembers.userId, reimbursementHistory.operatedBy),
+        eq(ledgerMembers.ledgerId, record.ledgerId)
+      )
+    )
+    .where(eq(reimbursementHistory.recordId, recordId))
+    .orderBy(desc(reimbursementHistory.createdAt));
+  
+  // 解密敏感字段
+  const decryptedHistory = await decryptFieldsArray(db, 'reimbursement_history', history, REIMBURSEMENT_ENCRYPT_FIELDS);
+  
+  // 格式化返回数据
+  return decryptedHistory.map((h: any) => ({
+    id: h.id,
+    operatedBy: h.operatorNickname || h.operatorName || '未知',
+    action: h.action,
+    oldStatus: h.oldStatus,
+    newStatus: h.newStatus,
+    notes: h.notes,
+    voucherUrl: h.voucherUrl,
+    createdAt: h.createdAt,
+  }));
+}
+
+/**
+ * 获取报销统计
+ */
+export async function getReimbursementStats(ledgerId: number, userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证权限
+  const member = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1)
+    .then((rows: any[]) => rows[0]);
+  
+  if (!member) {
+    throw new Error('无权查看此账本');
+  }
+  
+  // 统计待报销
+  const pendingStats = await db
+    .select({
+      count: sql<number>`count(*)`,
+      amount: sql<number>`sum(${ledgerRecords.amount})`,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        eq(ledgerRecords.reimbursementStatus, 'pending'),
+        isNull(ledgerRecords.deletedAt)
+      )
+    )
+    .then((rows: any[]) => rows[0]);
+  
+  // 统计已报销
+  const completedStats = await db
+    .select({
+      count: sql<number>`count(*)`,
+      amount: sql<number>`sum(${ledgerRecords.amount})`,
+    })
+    .from(ledgerRecords)
+    .where(
+      and(
+        eq(ledgerRecords.ledgerId, ledgerId),
+        eq(ledgerRecords.reimbursementStatus, 'completed'),
+        isNull(ledgerRecords.deletedAt)
+      )
+    )
+    .then((rows: any[]) => rows[0]);
+  
+  return {
+    pending: {
+      count: pendingStats?.count || 0,
+      amount: Number(pendingStats?.amount || 0),
+    },
+    completed: {
+      count: completedStats?.count || 0,
+      amount: Number(completedStats?.amount || 0),
+    },
+  };
+}
+
+
+/**
+ * 获取账本所有带图片的记录
+ * 完全参照 getTransactionsList 的实现方式
+ */
+export async function getLedgerImages(ledgerId: number, userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 获取记录 - 完全复制 getTransactionsList 的查询方式
+  const records = await db
+    .select({
+      id: ledgerRecords.id,
+      type: ledgerRecords.type,
+      amount: ledgerRecords.amount,
+      categoryId: ledgerRecords.categoryId,
+      description: ledgerRecords.description,
+      date: ledgerRecords.recordDate,
+      createdBy: ledgerRecords.createdBy,
+      createdAt: ledgerRecords.createdAt,
+      imageUrl: ledgerRecords.imageUrl,
+    })
+    .from(ledgerRecords)
+    .where(and(eq(ledgerRecords.ledgerId, ledgerId), isNull(ledgerRecords.deletedAt)))
+    .orderBy(desc(ledgerRecords.recordDate), desc(ledgerRecords.createdAt))
+    .limit(500);
+  
+  // 解密敏感字段 - 使用和 getTransactionsList 完全相同的4参数调用
+  const decryptedRecords = await decryptFieldsArray(db, 'ledger_records', records, LEDGER_RECORD_ENCRYPT_FIELDS);
+  
+  // 在应用层过滤出有图片的记录
+  const recordsWithImages = decryptedRecords.filter((record: any) => {
+    return record.imageUrl && String(record.imageUrl).trim() !== '';
+  });
+  
+  // 获取分类名称
+  const categoryIds = new Set<number>();
+  recordsWithImages.forEach((r: any) => {
+    if (r.categoryId) categoryIds.add(r.categoryId);
+  });
+  
+  let categories: any[] = [];
+  if (categoryIds.size > 0) {
+    categories = await db
+      .select({
+        id: ledgerCategories.id,
+        name: ledgerCategories.name,
+      })
+      .from(ledgerCategories)
+      .where(sql`${ledgerCategories.id} IN (${sql.join(Array.from(categoryIds).map(id => sql`${id}`), sql`, `)})`);
+  }
+  
+  const categoryNameMap = new Map(categories.map((c: any) => [c.id, c.name]));
+  
+  return recordsWithImages.map((record: any) => ({
+    id: record.id,
+    amount: Number(record.amount),
+    type: record.type,
+    category: categoryNameMap.get(record.categoryId) || '未分类',
+    description: record.description,
+    imageUrl: record.imageUrl,
+    date: record.date,
+  }));
+}
+
+/**
+ * 获取账本导出统计信息
+ */
+export async function getLedgerExportStats(ledgerId: number, userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+  
+  // 验证用户是否是账本成员
+  const membership = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+  
+  // 获取账本信息
+  const ledger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
+  
+  if (ledger.length === 0) {
+    throw new Error("账本不存在");
+  }
+  
+  // 获取所有记录（不包括已删除的）
+  const records = await db
+    .select({
+      id: ledgerRecords.id,
+      type: ledgerRecords.type,
+      amount: ledgerRecords.amount,
+      recordDate: ledgerRecords.recordDate,
+    })
+    .from(ledgerRecords)
+    .where(and(eq(ledgerRecords.ledgerId, ledgerId), isNull(ledgerRecords.deletedAt)))
+  
+  // 解密金额字段
+  const decryptedRecords = await decryptFieldsArray(db, 'ledger_records', records, ['amount']);
+  
+  // 统计数据
+  let totalRecords = decryptedRecords.length;
+  let totalIncome = 0;
+  let totalExpense = 0;
+  let earliestDate: string | null = null;
+  let latestDate: string | null = null;
+  
+  decryptedRecords.forEach((record: any) => {
+    const amount = parseFloat(record.amount || '0');
+    if (record.type === 'income') {
+      totalIncome += amount;
+    } else if (record.type === 'expense') {
+      totalExpense += amount;
+    }
+    
+    const recordDate = record.recordDate;
+    if (recordDate) {
+      if (!earliestDate || recordDate < earliestDate) {
+        earliestDate = recordDate;
+      }
+      if (!latestDate || recordDate > latestDate) {
+        latestDate = recordDate;
+      }
+    }
+  });
+  
+  return {
+    ledgerName: ledger[0].name,
+    totalRecords,
+    totalIncome: totalIncome.toFixed(2),
+    totalExpense: totalExpense.toFixed(2),
+    balance: (totalIncome - totalExpense).toFixed(2),
+    earliestDate,
+    latestDate,
+  };
+}
+
+/**
+ * 转移账本创建人（所有权转移）
+ * 将当前owner的角色降为admin，将目标成员提升为owner
+ * 同时更新ledgers表的ownerId和createdBy
+ */
+export async function transferOwnership(
+  ledgerId: number,
+  currentOwnerId: number,
+  newOwnerId: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  // 验证当前用户是owner
+  const ownerRows = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, currentOwnerId)
+      )
+    )
+    .limit(1);
+
+  if (ownerRows.length === 0 || ownerRows[0].role !== 'owner') {
+    throw new Error('只有账本创建人才能转移所有权');
+  }
+
+  // 验证目标用户是账本成员
+  const targetRows = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, newOwnerId)
+      )
+    )
+    .limit(1);
+
+  if (targetRows.length === 0) {
+    throw new Error('目标用户不是该账本的成员');
+  }
+
+  if (targetRows[0].userId === currentOwnerId) {
+    throw new Error('不能转移给自己');
+  }
+
+  // 将当前owner降为admin
+  await db
+    .update(ledgerMembers)
+    .set({ role: 'admin' })
+    .where(eq(ledgerMembers.id, ownerRows[0].id));
+
+  // 将目标成员提升为owner，并赋予全部权限
+  await db
+    .update(ledgerMembers)
+    .set({
+      role: 'owner',
+      permissionView: 'all',
+      permissionAdd: 'all',
+      permissionEdit: 'all',
+      permissionDelete: 'all',
+      canEdit: 1,
+      canDelete: 1,
+      canInvite: 1,
+    })
+    .where(eq(ledgerMembers.id, targetRows[0].id));
+
+  // 更新ledgers表的ownerId
+  await db.execute(sql`UPDATE ledgers SET ownerId = ${newOwnerId} WHERE id = ${ledgerId}`);
+
+  console.log('[transferOwnership] 所有权转移成功:', {
+    ledgerId,
+    from: currentOwnerId,
+    to: newOwnerId,
+  });
+
+  return { success: true };
+}
+
+/**
+ * 获取或生成账本密钥（Web3风格的长密钥）
+ * 密钥存储在数据库中，如果不存在则自动生成
+ */
+export async function getLedgerSecretKey(ledgerId: number, userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  // 验证用户是否是账本成员且有管理权限（owner或admin）
+  const memberRows = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+
+  if (memberRows.length === 0) {
+    throw new Error('您不是该账本的成员');
+  }
+
+  if (memberRows[0].role !== 'owner' && memberRows[0].role !== 'admin') {
+    throw new Error('只有管理员或创建人可以查看账本密钥');
+  }
+
+  // 确保secret_key列存在
+  try {
+    await db.execute(sql`ALTER TABLE ledgers ADD COLUMN secret_key VARCHAR(130) NULL DEFAULT NULL`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[getLedgerSecretKey] add column error:', e.message);
+    }
+  }
+
+  // 查询现有密钥
+  const result = await db.execute(sql`SELECT secret_key FROM ledgers WHERE id = ${ledgerId}`);
+  const rows = (result as any)[0] || result;
+  const existingKey = Array.isArray(rows) ? rows[0]?.secret_key : null;
+
+  if (existingKey) {
+    return { secretKey: existingKey };
+  }
+
+  // 生成Web3风格的密钥：0x + 64位十六进制字符
+  const crypto = await import('crypto');
+  const randomBytes = crypto.randomBytes(32);
+  const secretKey = '0x' + randomBytes.toString('hex');
+
+  // 保存到数据库
+  await db.execute(sql`UPDATE ledgers SET secret_key = ${secretKey} WHERE id = ${ledgerId}`);
+
+  console.log('[getLedgerSecretKey] 生成新密钥:', { ledgerId });
+  return { secretKey };
+}
+
+/**
+ * 通过密钥加入账本
+ */
+export async function joinLedgerBySecretKey(secretKey: string, userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  // 确保secret_key列存在
+  try {
+    await db.execute(sql`ALTER TABLE ledgers ADD COLUMN secret_key VARCHAR(130) NULL DEFAULT NULL`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      // ignore
+    }
+  }
+
+  // 通过密钥查找账本
+  const result = await db.execute(sql`SELECT id, name FROM ledgers WHERE secret_key = ${secretKey}`);
+  const rows = (result as any)[0] || result;
+  const ledgerRow = Array.isArray(rows) ? rows[0] : null;
+
+  if (!ledgerRow) {
+    throw new Error('无效的账本密钥，请检查后重试');
+  }
+
+  const ledgerId = ledgerRow.id;
+
+  // 检查用户是否已经是成员
+  const existingMember = await db
+    .select()
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+
+  if (existingMember.length > 0) {
+    throw new Error('您已经是该账本的成员');
+  }
+
+  // 检查账本是否已封存
+  const ledger = await db
+    .select()
+    .from(ledgers)
+    .where(eq(ledgers.id, ledgerId))
+    .limit(1);
+
+  if (ledger.length > 0 && ledger[0].isArchived) {
+    throw new Error('该账本已封存，无法加入');
+  }
+
+  // 添加用户为账本成员
+  await db.insert(ledgerMembers).values({
+    ledgerId,
+    userId,
+    role: "member",
+    memberType: "real",
+    permissionView: "all",
+    permissionAdd: "all",
+    permissionEdit: "own",
+    permissionDelete: "own",
+  });
+
+  // 自动初始化默认拨比：YJH 33.4%，自己 0%
+  try {
+    const YJH_USER_ID = 4957151;
+    const rawConn = await getDbConnection();
+    if (rawConn) {
+      await (rawConn as any).execute(
+        `INSERT IGNORE INTO af_payout_ratios (ledger_id, source_user_id, beneficiary_user_id, ratio)
+         VALUES (?, ?, ?, 33.40), (?, ?, ?, 0.00)`,
+        [ledgerId, userId, YJH_USER_ID, ledgerId, userId, userId]
+      );
+    }
+  } catch (e) {
+    console.error('[joinLedgerBySecretKey] 初始化默认拨比失败:', e);
+  }
+
+  console.log('[joinLedgerBySecretKey] 用户通过密鑰加入账本:', { userId, ledgerId });
+  return { ledgerId, ledgerName: ledgerRow.name };
+}
+
+/**
+ * 检查用户是否有备份账本的权限
+ */
+export async function checkBackupPermission(
+  ledgerId: number,
+  userId: number
+): Promise<boolean> {
+  const db = await getLedgerDb();
+  if (!db) return false;
+  
+  // 查询用户的备份权限
+  const membership = await db
+    .select({
+      permissionBackup: ledgerMembers.permissionBackup,
+      role: ledgerMembers.role,
+    })
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+  
+  if (membership.length === 0) {
+    return false; // 不是账本成员
+  }
+  
+  // owner 始终有备份权限
+  if (membership[0].role === 'owner') {
+    return true;
+  }
+  
+  // 检查备份权限字段
+  return membership[0].permissionBackup === 'allow';
+}
+
+
+/**
+ * 更新账本功能设置
+ */
+export async function updateLedgerFeatures(
+  ledgerId: number,
+  userId: number,
+  features: {
+    enableReimbursement?: boolean;
+    enablePending?: boolean;
+    pendingDefaultIncludeStats?: number;
+    requireImage?: boolean;
+  }
+): Promise<void> {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("数据库连接失败");
+
+  // 检查用户是否是账本的owner或admin
+  const membership = await db
+    .select({
+      role: ledgerMembers.role,
+    })
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+
+  if (membership.length === 0) {
+    throw new Error("您不是该账本的成员");
+  }
+
+  if (membership[0].role !== 'owner' && membership[0].role !== 'admin') {
+    throw new Error("只有账本创建人或管理员才能修改功能设置");
+  }
+
+  // 构建更新对象
+  const updateData: any = {};
+  if (features.enableReimbursement !== undefined) {
+    // 如果要关闭报销功能，检查是否还有待报销的账目
+    if (features.enableReimbursement === false) {
+      const reimbursementRecords = await db
+        .select({ id: ledgerRecords.id })
+        .from(ledgerRecords)
+        .where(
+          and(
+            eq(ledgerRecords.ledgerId, ledgerId),
+            eq(ledgerRecords.reimbursementStatus, 'pending'),
+            isNull(ledgerRecords.deletedAt)
+          )
+        )
+        .limit(1);
+      
+      if (reimbursementRecords.length > 0) {
+        const countResult = await db
+          .select({ count: sql<number>`COUNT(*)` })
+          .from(ledgerRecords)
+          .where(
+            and(
+              eq(ledgerRecords.ledgerId, ledgerId),
+              eq(ledgerRecords.reimbursementStatus, 'pending'),
+              isNull(ledgerRecords.deletedAt)
+            )
+          );
+        const count = countResult[0]?.count || 0;
+        throw new Error(`当前账本中还有 ${count} 笔待报销账目，请先处理完毕后再关闭报销功能`);
+      }
+    }
+    updateData.enableReimbursement = features.enableReimbursement ? 1 : 0;
+  }
+  if (features.enablePending !== undefined) {
+    // 如果要关闭待结功能，检查是否还有未结算的账目
+    if (features.enablePending === false) {
+      const pendingRecords = await db
+        .select({ id: ledgerRecords.id })
+        .from(ledgerRecords)
+        .where(
+          and(
+            eq(ledgerRecords.ledgerId, ledgerId),
+            isNotNull(ledgerRecords.pendingType),
+            isNull(ledgerRecords.deletedAt)
+          )
+        )
+        .limit(1);
+      
+      if (pendingRecords.length > 0) {
+        // 查询具体数量
+        const countResult = await db
+          .select({ count: sql<number>`COUNT(*)` })
+          .from(ledgerRecords)
+          .where(
+            and(
+              eq(ledgerRecords.ledgerId, ledgerId),
+              isNotNull(ledgerRecords.pendingType),
+              isNull(ledgerRecords.deletedAt)
+            )
+          );
+        const count = countResult[0]?.count || 0;
+        throw new Error(`当前账本中还有 ${count} 笔待结账目，请先处理完毕后再关闭待结功能`);
+      }
+    }
+    updateData.enablePending = features.enablePending ? 1 : 0;
+  }
+  if (features.pendingDefaultIncludeStats !== undefined) {
+    updateData.pendingDefaultIncludeStats = features.pendingDefaultIncludeStats;
+  }
+  if (features.requireImage !== undefined) {
+    updateData.requireImage = features.requireImage ? 1 : 0;
+  }
+
+  // 更新账本功能设置
+  await db
+    .update(ledgers)
+    .set(updateData)
+    .where(eq(ledgers.id, ledgerId));
+
+  console.log('[updateLedgerFeatures] 账本功能设置已更新:', { ledgerId, features });
+}
+
+
+/**
+ * 获取用户所有账本中的待结账目（按账本分组）
+ */
+export async function getAllPendingTransactions(userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  // 1. 获取用户加入的所有未封存账本
+  const userLedgers = await db
+    .select({
+      ledgerId: ledgerMembers.ledgerId,
+      ledgerName: ledgers.name,
+    })
+    .from(ledgerMembers)
+    .innerJoin(ledgers, eq(ledgerMembers.ledgerId, ledgers.id))
+    .where(
+      and(
+        eq(ledgerMembers.userId, userId),
+        eq(ledgers.isArchived, 0)
+      )
+    );
+
+  if (userLedgers.length === 0) {
+    return [];
+  }
+
+  // 2. 逐个账本查询待结账目
+  const result = [];
+
+  for (const ledger of userLedgers) {
+    const rows = await db
+      .select({
+        id: ledgerRecords.id,
+        description: ledgerRecords.description,
+        amount: ledgerRecords.amount,
+        type: ledgerRecords.type,
+        pendingType: ledgerRecords.pendingType,
+        pendingIncludeStats: ledgerRecords.pendingIncludeStats,
+        recordDate: ledgerRecords.recordDate,
+        categoryId: ledgerRecords.categoryId,
+        categoryName: ledgerCategories.name,
+        categoryIcon: ledgerCategories.icon,
+        createdBy: ledgerRecords.createdBy,
+        creatorName: users.username,
+        creatorAvatar: users.avatar,
+      })
+      .from(ledgerRecords)
+      .leftJoin(ledgerCategories, eq(ledgerRecords.categoryId, ledgerCategories.id))
+      .leftJoin(users, eq(ledgerRecords.createdBy, users.id))
+      .where(
+        and(
+          eq(ledgerRecords.ledgerId, ledger.ledgerId),
+          isNotNull(ledgerRecords.pendingType),
+          isNull(ledgerRecords.deletedAt)
+        )
+      )
+      .orderBy(desc(ledgerRecords.recordDate));
+
+    if (rows.length > 0) {
+      result.push({
+        ledgerId: ledger.ledgerId,
+        ledgerName: ledger.ledgerName,
+        transactions: rows.map(r => ({
+          id: r.id,
+          description: r.description || "",
+          amount: Number(r.amount),
+          type: r.type as string,
+          pendingType: r.pendingType as string,
+          pendingIncludeStats: r.pendingIncludeStats ?? 1,
+          recordDate: r.recordDate,
+          categoryId: r.categoryId,
+          categoryName: r.categoryName ?? null,
+          categoryIcon: r.categoryIcon ?? null,
+          createdBy: r.createdBy,
+          creatorName: r.creatorName ?? null,
+          creatorAvatar: r.creatorAvatar ?? null,
+        })),
+      });
+    }
+  }
+
+  return result;
+}
+
+// ==================== 账目修改记录日志 ====================
+
+/**
+ * 写入账目修改日志（单条字段变更）
+ */
+export async function insertRecordLog(params: {
+  recordId: number;
+  ledgerId: number;
+  operatorId: number;
+  action: string;
+  fieldName?: string;
+  oldValue?: string | null;
+  newValue?: string | null;
+  note?: string;
+}) {
+  try {
+    console.log('[insertRecordLog] 开始写入日志:', JSON.stringify(params));
+    const conn = await getDbConnection();
+    if (!conn) {
+      console.error('[insertRecordLog] 数据库连接失败');
+      return;
+    }
+    await conn.execute(
+      `INSERT INTO ledger_record_logs (record_id, ledger_id, operator_id, action, field_name, old_value, new_value, note, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, CONVERT_TZ(NOW(), '+00:00', '+08:00'))`,
+      [
+        params.recordId,
+        params.ledgerId,
+        params.operatorId,
+        params.action,
+        params.fieldName ?? null,
+        params.oldValue ?? null,
+        params.newValue ?? null,
+        params.note ?? null,
+      ]
+    );
+  } catch (e: any) {
+    console.error('[insertRecordLog] 写入日志失败:', e.message);
+  }
+}
+
+/**
+ * 查询账目的修改记录日志
+ */
+export async function getRecordLogs(
+  recordId: number,
+  ledgerId: number,
+  userId: number
+) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  const member = await db
+    .select()
+    .from(ledgerMembers)
+    .where(and(eq(ledgerMembers.ledgerId, ledgerId), eq(ledgerMembers.userId, userId)))
+    .limit(1);
+  if (member.length === 0) throw new Error("您不是该账本的成员");
+
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接失败");
+
+  const [rows] = await conn.execute(
+    `SELECT l.id, l.record_id, l.ledger_id, l.operator_id, l.action, l.field_name, l.old_value, l.new_value, l.note, l.created_at,
+            u.username as operator_name, u.avatar as operator_avatar
+     FROM ledger_record_logs l
+     LEFT JOIN users u ON l.operator_id = u.id
+     WHERE l.record_id = ? AND l.ledger_id = ?
+     ORDER BY l.created_at DESC`,
+    [recordId, ledgerId]
+  ) as any[];
+
+  return (rows as any[]).map((r: any) => {
+    // created_at 已经是北京时间，直接格式化为字符串，不要用 toISOString()（会转换为UTC）
+    let createdAtStr = '';
+    if (r.created_at instanceof Date) {
+      const d = r.created_at;
+      // 数据库返回的Date对象可能被mysql2解析为本地时间，直接取各分量
+      createdAtStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+    } else {
+      createdAtStr = String(r.created_at);
+    }
+    return {
+      id: r.id,
+      recordId: r.record_id,
+      ledgerId: r.ledger_id,
+      operatorId: r.operator_id,
+      operatorName: r.operator_name || '未知用户',
+      operatorAvatar: r.operator_avatar || null,
+      action: r.action,
+      fieldName: r.field_name,
+      oldValue: r.old_value,
+      newValue: r.new_value,
+      note: r.note,
+      createdAt: createdAtStr,
+    };
+  });
+}
+
+/**
+ * 获取账目的修改记录条数
+ */
+export async function getRecordLogCount(
+  recordId: number,
+  ledgerId: number,
+  userId: number
+): Promise<number> {
+  try {
+    const db = await getLedgerDb();
+    if (!db) return 0;
+
+    const member = await db
+      .select()
+      .from(ledgerMembers)
+      .where(and(eq(ledgerMembers.ledgerId, ledgerId), eq(ledgerMembers.userId, userId)))
+      .limit(1);
+    if (member.length === 0) return 0;
+
+    const conn = await getDbConnection();
+    if (!conn) return 0;
+
+    const [rows] = await conn.execute(
+      `SELECT COUNT(*) as cnt FROM ledger_record_logs WHERE record_id = ? AND ledger_id = ?`,
+      [recordId, ledgerId]
+    ) as any[];
+
+    return Number((rows as any[])[0]?.cnt ?? 0);
+  } catch (e: any) {
+    console.error('[getRecordLogCount] 错误:', e.message);
+    return 0;
+  }
+}
+
+// ========== 账本分组功能 ==========
+
+// 自动建表迁移：ledger_groups 和 ledgers.group_id 字段
+let _ledgerGroupsMigrated = false;
+async function ensureLedgerGroupsTable() {
+  if (_ledgerGroupsMigrated) return;
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return;
+    // 创建 ledger_groups 表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS ledger_groups (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        name VARCHAR(100) NOT NULL,
+        sort_order INT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_user_id (user_id)
+      )
+    `);
+  } catch (e: any) {
+    console.error('[ensureLedgerGroupsTable] 创建 ledger_groups 表失败:', e.message);
+  }
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return;
+    // 给 ledgers 表添加 group_id 字段
+    await conn.execute(`ALTER TABLE ledgers ADD COLUMN group_id INT NULL DEFAULT NULL`);
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureLedgerGroupsTable] 添加 group_id 字段失败:', e.message);
+    }
+  }
+  _ledgerGroupsMigrated = true;
+  console.log('[ensureLedgerGroupsTable] 账本分组迁移完成');
+}
+ensureLedgerGroupsTable().catch(console.error);
+
+/**
+ * 获取用户的所有账本分组
+ */
+export async function getLedgerGroups(userId: number) {
+  await ensureLedgerGroupsTable();
+  const conn = await getDbConnection();
+  if (!conn) return [];
+  const [rows] = await conn.execute(
+    `SELECT id, user_id as userId, name, sort_order as sortOrder, created_at as createdAt
+     FROM ledger_groups WHERE user_id = ? ORDER BY sort_order ASC, id ASC`,
+    [userId]
+  ) as any[];
+  return (rows as any[]) || [];
+}
+
+/**
+ * 创建账本分组
+ */
+export async function createLedgerGroup(userId: number, name: string) {
+  await ensureLedgerGroupsTable();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  // 获取当前最大 sort_order
+  const [maxRows] = await conn.execute(
+    `SELECT COALESCE(MAX(sort_order), -1) as maxOrder FROM ledger_groups WHERE user_id = ?`,
+    [userId]
+  ) as any[];
+  const maxOrder = Number((maxRows as any[])[0]?.maxOrder ?? -1);
+  const [result] = await conn.execute(
+    `INSERT INTO ledger_groups (user_id, name, sort_order) VALUES (?, ?, ?)`,
+    [userId, name, maxOrder + 1]
+  ) as any[];
+  return { id: (result as any).insertId, name, sortOrder: maxOrder + 1 };
+}
+
+/**
+ * 更新账本分组名称
+ */
+export async function updateLedgerGroup(userId: number, groupId: number, name: string) {
+  await ensureLedgerGroupsTable();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  await conn.execute(
+    `UPDATE ledger_groups SET name = ? WHERE id = ? AND user_id = ?`,
+    [name, groupId, userId]
+  );
+  return { success: true };
+}
+
+/**
+ * 删除账本分组（账本移出分组，不删除账本）
+ */
+export async function deleteLedgerGroup(userId: number, groupId: number) {
+  await ensureLedgerGroupsTable();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  // 先将该分组下的所有账本的 group_id 置为 NULL
+  await conn.execute(
+    `UPDATE ledgers SET group_id = NULL WHERE group_id = ?`,
+    [groupId]
+  );
+  // 删除分组
+  await conn.execute(
+    `DELETE FROM ledger_groups WHERE id = ? AND user_id = ?`,
+    [groupId, userId]
+  );
+  return { success: true };
+}
+
+/**
+ * 将账本归入/移出分组
+ * groupId 为 null 时表示移出分组
+ */
+export async function assignLedgerToGroup(userId: number, ledgerId: number, groupId: number | null) {
+  await ensureLedgerGroupsTable();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  // 验证分组属于该用户
+  if (groupId !== null) {
+    const [groupRows] = await conn.execute(
+      `SELECT id FROM ledger_groups WHERE id = ? AND user_id = ?`,
+      [groupId, userId]
+    ) as any[];
+    if (!(groupRows as any[]).length) throw new Error('分组不存在或无权限');
+  }
+  // 验证账本属于该用户（是成员）
+  const db = await getLedgerDb();
+  if (!db) throw new Error('数据库连接失败');
+  const member = await db
+    .select()
+    .from(ledgerMembers)
+    .where(and(eq(ledgerMembers.ledgerId, ledgerId), eq(ledgerMembers.userId, userId)))
+    .limit(1);
+  if (!member.length) throw new Error('账本不存在或无权限');
+  // 更新 group_id
+  await conn.execute(
+    `UPDATE ledgers SET group_id = ? WHERE id = ?`,
+    [groupId, ledgerId]
+  );
+  return { success: true };
+}
+
+/**
+ * 获取用户账本列表（含分组信息）
+ */
+export async function getLedgerGroupsWithLedgers(userId: number) {
+  await ensureLedgerGroupsTable();
+  const conn = await getDbConnection();
+  if (!conn) return { groups: [], ungroupedLedgerIds: [] };
+  // 获取所有分组
+  const [groupRows] = await conn.execute(
+    `SELECT id, name, sort_order as sortOrder FROM ledger_groups WHERE user_id = ? ORDER BY sort_order ASC, id ASC`,
+    [userId]
+  ) as any[];
+  const groups = (groupRows as any[]) || [];
+  // 获取每个账本的 group_id（只获取该用户参与的账本）
+  const [ledgerGroupRows] = await conn.execute(
+    `SELECT l.id as ledgerId, l.group_id as groupId
+     FROM ledgers l
+     INNER JOIN ledger_members lm ON l.id = lm.ledgerId AND lm.userId = ?
+     WHERE l.is_archived = 0`,
+    [userId]
+  ) as any[];
+  const ledgerGroupMap: Record<number, number | null> = {};
+  for (const row of (ledgerGroupRows as any[])) {
+    ledgerGroupMap[row.ledgerId] = row.groupId ?? null;
+  }
+  return { groups, ledgerGroupMap };
+}
+
+// ========== 初始金额相关 ==========
+
+/**
+ * 获取当前用户在某账本的初始金额配置
+ */
+export async function getMyInitialBalances(ledgerId: number, userId: number): Promise<Record<string, number> | null> {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  const rows = await db
+    .select({ initialBalances: ledgerMembers.initialBalances })
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+
+  if (rows.length === 0) return null;
+  const raw = rows[0].initialBalances;
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw) as Record<string, number>;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * 更新当前用户在某账本的初始金额配置
+ */
+export async function updateMyInitialBalances(
+  ledgerId: number,
+  userId: number,
+  balances: Record<string, number | string>
+): Promise<void> {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  const rows = await db
+    .select({ id: ledgerMembers.id })
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+
+  if (rows.length === 0) throw new Error("您不是此账本的成员");
+
+  await db
+    .update(ledgerMembers)
+    .set({ initialBalances: JSON.stringify(balances) })
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    );
+}
+
+/**
+ * 获取账本所有成员的初始金额配置（管理员用）
+ * 返回 { userId: balances } 的映射
+ */
+export async function getAllMembersInitialBalances(ledgerId: number): Promise<Record<number, Record<string, number>>> {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  const rows = await db
+    .select({
+      userId: ledgerMembers.userId,
+      initialBalances: ledgerMembers.initialBalances,
+    })
+    .from(ledgerMembers)
+    .where(eq(ledgerMembers.ledgerId, ledgerId));
+
+  const result: Record<number, Record<string, number>> = {};
+  for (const row of rows) {
+    if (!row.initialBalances) {
+      result[row.userId] = {};
+    } else {
+      try {
+        result[row.userId] = JSON.parse(row.initialBalances) as Record<string, number>;
+      } catch {
+        result[row.userId] = {};
+      }
+    }
+  }
+  return result;
+}
+
+/**
+ * 获取指定用户在账本中的成员记录
+ */
+export async function getUserMembership(ledgerId: number, userId: number) {
+  const db = await getLedgerDb();
+  if (!db) throw new Error("Ledger database connection failed");
+
+  const rows = await db
+    .select({
+      id: ledgerMembers.id,
+      role: ledgerMembers.role,
+      memberType: ledgerMembers.memberType,
+    })
+    .from(ledgerMembers)
+    .where(
+      and(
+        eq(ledgerMembers.ledgerId, ledgerId),
+        eq(ledgerMembers.userId, userId)
+      )
+    )
+    .limit(1);
+
+  return rows[0] ?? null;
+}
+
+// ========== funder_asset_orders.display_config 字段迁移 ==========
+let _displayConfigMigrated = false;
+async function ensureDisplayConfigColumn() {
+  if (_displayConfigMigrated) return;
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    await db.execute(sql`ALTER TABLE funder_asset_orders ADD COLUMN display_config JSON NULL COMMENT '字段展示配置，控制前端卡片各字段的显示/隐藏'`);
+    console.log('[ensureDisplayConfigColumn] display_config 字段添加成功');
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureDisplayConfigColumn] error:', e.message);
+    }
+  }
+  _displayConfigMigrated = true;
+}
+ensureDisplayConfigColumn().catch(console.error);
+
+// ========== funder_asset_orders.commission_share 字段迁移 ==========
+let _commissionShareMigrated = false;
+async function ensureCommissionShareColumn() {
+  if (_commissionShareMigrated) return;
+  try {
+    const db = await getLedgerDb();
+    if (!db) return;
+    await db.execute(sql`ALTER TABLE funder_asset_orders ADD COLUMN commission_share VARCHAR(200) NULL DEFAULT NULL COMMENT '佣金分成说明'`);
+    console.log('[ensureCommissionShareColumn] commission_share 字段添加成功');
+  } catch (e: any) {
+    if (!e.message?.includes('Duplicate column')) {
+      console.error('[ensureCommissionShareColumn] error:', e.message);
+    }
+  }
+  _commissionShareMigrated = true;
+}
+ensureCommissionShareColumn().catch(console.error);

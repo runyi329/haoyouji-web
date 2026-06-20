@@ -1,0 +1,9 @@
+{
+  "query": "\n-- 删除之前可能插入失败的数据\nDELETE ccf FROM contact_custom_fields ccf\nINNER JOIN contacts c ON ccf.contactId = c.id\nINNER JOIN users u ON c.parentUserId = u.id\nWHERE ccf.fieldName = '公司名称'\n  AND c.name IN ('王茜', '李晓洁', '羊仲平', '张珏', '刘强', '马婉义', '钟贝', '杨雪', '秦主任', '丁楠', '郑奎', '洪小燕', '望悦', '卓迪敦', '周翔', '陈奇戎', '王海艳');\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \n-- 删除之前可能插入失败的数据\nDELETE ccf FROM contact_custom_fields ccf\nINNER JOIN contacts c ON ccf.contactId = c.id\nINNER JOIN users u ON c.parentUserId = u.id\nWHERE ccf.fieldName = '公司名称'\n  AND c.name IN ('王茜', '李晓洁', '羊仲平', '张珏', '刘强', '马婉义', '钟贝', '杨雪', '秦主任', '丁楠', '郑奎', '洪小燕', '望悦', '卓迪敦', '周翔', '陈奇戎', '王海艳');\n",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 66
+}

@@ -1,0 +1,161 @@
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
+import { Trash2, Plus, Download, Upload } from "lucide-react";
+
+export default function AntonymManager() {
+  const [word, setWord] = useState("");
+  const [antonym, setAntonym] = useState("");
+  const [isAdding, setIsAdding] = useState(false);
+
+  // 获取所有反义词
+  const { data: antonyms = [], refetch } = trpc.antonym.getAllPairs.useQuery();
+
+  // 添加反义词
+  const addMutation = trpc.antonym.createPair.useMutation({
+    onSuccess: () => {
+      toast.success("反义词添加成功！");
+      setWord("");
+      setAntonym("");
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(error.message || "添加失败");
+    },
+  });
+
+  // 删除反义词
+  const deleteMutation = trpc.antonym.deletePair.useMutation({
+    onSuccess: () => {
+      toast.success("删除成功！");
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(error.message || "删除失败");
+    },
+  });
+
+  const handleAdd = async () => {
+    if (!word.trim() || !antonym.trim()) {
+      toast.error("请填写词语和反义词");
+      return;
+    }
+
+    setIsAdding(true);
+    try {
+      await addMutation.mutateAsync({ word: word.trim(), antonym: antonym.trim(), category: "general", difficulty: "easy" });
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const handleDelete = (id: number): void => {
+    if (confirm("确定要删除这个反义词吗？")) {
+      deleteMutation.mutate({ id });
+    }
+  };
+
+  const handleExport = () => {
+    const data = antonyms.map((item: any) => ({
+      word: item.word,
+      antonym: item.antonym,
+    }));
+    const json = JSON.stringify(data, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "antonyms.json";
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("导出成功！");
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold mb-4">反义词管理</h2>
+        <p className="text-gray-600 mb-6">共 {antonyms.length} 个反义词</p>
+      </div>
+
+      {/* 添加反义词表单 */}
+      <Card className="p-6">
+        <h3 className="text-lg font-semibold mb-4">添加新的反义词</h3>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">词语</label>
+              <Input
+                placeholder="例如：上"
+                value={word}
+                onChange={(e) => setWord(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && handleAdd()}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2">反义词</label>
+              <Input
+                placeholder="例如：下"
+                value={antonym}
+                onChange={(e) => setAntonym(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && handleAdd()}
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleAdd}
+              disabled={isAdding || addMutation.isPending}
+              className="flex items-center gap-2"
+            >
+              <Plus size={18} />
+              添加
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleExport}
+              className="flex items-center gap-2"
+            >
+              <Download size={18} />
+              导出
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* 反义词列表 */}
+      <Card className="p-6">
+        <h3 className="text-lg font-semibold mb-4">反义词列表</h3>
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {antonyms.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">暂无反义词</p>
+          ) : (
+            antonyms.map((item: any) => (
+              <div
+                key={item.id}
+                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition"
+              >
+                <div className="flex-1">
+                  <span className="font-medium text-blue-600">{item.word}</span>
+                  <span className="mx-2 text-gray-400">↔</span>
+                  <span className="font-medium text-purple-600">{item.antonym}</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleDelete(item.id)}
+                  className="text-red-600 hover:text-red-700"
+                >
+                  <Trash2 size={18} />
+                </Button>
+              </div>
+            ))
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}

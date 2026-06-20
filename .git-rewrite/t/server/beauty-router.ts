@@ -1,0 +1,1618 @@
+/**
+ * 奢贝美容院模块 - 后端路由
+ * 使用脉动网的数据库和认证体系
+ */
+import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import { getDb } from "./db";
+import {
+  beautyServices,
+  beautyAppointments,
+  beautyPromotions,
+  beautyBrands,
+  beautyProductCategories,
+  beautyProductEffects,
+  beautyProducts,
+  beautyProductEffectMappings,
+  beautyCartItems,
+  beautyOrders,
+  beautyOrderItems,
+  beautyPoints,
+  beautyPointsLog,
+  beautyMemberCards,
+  beautyVisitLogs,
+  beautyShowcaseGroups,
+  beautyShowcasePhotos,
+  beautyMaterialGroups,
+  beautyMaterialPhotos,
+  beautyPptCompareGroups,
+  beautyPptPages,
+  beautyAiPrompts,
+  beautyAiPromptCategories,
+  users,
+} from "../drizzle/schema";
+import { merchantProducts } from "../drizzle/merchant-schema";
+import { eq, and, desc, asc, sql, ne } from "drizzle-orm";
+import { hasFeaturePermission } from "./db-permissions";
+import { nanoid } from "nanoid";
+
+
+// 超管权限检查（复用脉动网的 super_admin 角色）
+const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  if (ctx.user.role !== "super_admin") {
+    throw new TRPCError({ code: "FORBIDDEN", message: "仅超级管理员可访问" });
+  }
+  return next({ ctx });
+});
+
+export const beautyRouter = router({
+  // ===== 美容服务 =====
+  service: router({
+    list: publicProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) return [];
+      return db
+        .select()
+        .from(beautyServices)
+        .where(eq(beautyServices.isActive, 1))
+        .orderBy(asc(beautyServices.id));
+    }),
+
+    getById: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return null;
+        const rows = await db
+          .select()
+          .from(beautyServices)
+          .where(eq(beautyServices.id, input.id))
+          .limit(1);
+        return rows[0] ?? null;
+      }),
+
+    // 管理员：创建服务
+    create: adminProcedure
+      .input(
+        z.object({
+          name: z.string().min(1),
+          description: z.string().optional(),
+          price: z.string(),
+          duration: z.number(),
+          imageUrl: z.string().optional(),
+          category: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+        await db.insert(beautyServices).values({
+          name: input.name,
+          description: input.description ?? null,
+          price: input.price,
+          duration: input.duration,
+          imageUrl: input.imageUrl ?? null,
+          category: input.category ?? null,
+          isActive: 1,
+        });
+        return { success: true };
+      }),
+  }),
+
+  // ===== 预约 =====
+  appointment: router({
+    // 获取可用时段
+    getAvailableSlots: publicProcedure
+      .input(z.object({ date: z.string(), serviceId: z.number().optional() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        const allSlots: string[] = [];
+        for (let hour = 11; hour < 20; hour++) {
+          const start = `${hour.toString().padStart(2, "0")}:00`;
+          const end = `${(hour + 1).toString().padStart(2, "0")}:00`;
+          allSlots.push(`${start}-${end}`);
+        }
+        if (!db) return allSlots.map((slot) => ({ slot, available: true }));
+
+        const dateStart = new Date(input.date);
+        dateStart.setHours(0, 0, 0, 0);
+        const dateEnd = new Date(input.date);
+        dateEnd.setHours(23, 59, 59, 999);
+
+        const existing = await db
+          .select({ timeSlot: beautyAppointments.timeSlot, status: beautyAppointments.status })
+          .from(beautyAppointments)
+          .where(
+            and(
+              sql`${beautyAppointments.appointmentDate} >= ${dateStart}`,
+              sql`${beautyAppointments.appointmentDate} <= ${dateEnd}`,
+              ne(beautyAppointments.status, "cancelled")
+            )
+          );
+
+        const bookedSlots = existing.map((a) => a.timeSlot);
+        return allSlots.map((slot) => ({ slot, available: !bookedSlots.includes(slot) }));
+      }),
+
+    // 创建预约
+    create: protectedProcedure
+      .input(
+        z.object({
+          serviceId: z.number(),
+          appointmentDate: z.string(),
+          timeSlot: z.string(),
+          notes: z.string().optional(),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+        await db.insert(beautyAppointments).values({
+          userId: ctx.user.id,
+          serviceId: input.serviceId,
+          appointmentDate: new Date(input.appointmentDate),
+          timeSlot: input.timeSlot,
+          notes: input.notes ?? null,
+          status: "pending",
+        });
+        return { success: true };
+      }),
+
+    // 我的预约
+    myList: protectedProcedure.query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const rows = await db
+        .select({
+          id: beautyAppointments.id,
+          serviceId: beautyAppointments.serviceId,
+          appointmentDate: beautyAppointments.appointmentDate,
+          timeSlot: beautyAppointments.timeSlot,
+          status: beautyAppointments.status,
+          notes: beautyAppointments.notes,
+          createdAt: beautyAppointments.createdAt,
+          serviceName: beautyServices.name,
+          servicePrice: beautyServices.price,
+          serviceDuration: beautyServices.duration,
+        })
+        .from(beautyAppointments)
+        .leftJoin(beautyServices, eq(beautyAppointments.serviceId, beautyServices.id))
+        .where(eq(beautyAppointments.userId, ctx.user.id))
+        .orderBy(desc(beautyAppointments.createdAt));
+      return rows;
+    }),
+
+    // 取消预约
+    cancel: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+        const rows = await db
+          .select()
+          .from(beautyAppointments)
+          .where(eq(beautyAppointments.id, input.id))
+          .limit(1);
+        const apt = rows[0];
+        if (!apt) throw new TRPCError({ code: "NOT_FOUND", message: "预约不存在" });
+        if (apt.userId !== ctx.user.id && ctx.user.role !== "super_admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "无权操作此预约" });
+        }
+        await db
+          .update(beautyAppointments)
+          .set({ status: "cancelled" })
+          .where(eq(beautyAppointments.id, input.id));
+        return { success: true };
+      }),
+
+    // 管理员：获取所有预约
+    adminList: adminProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) return [];
+      return db
+        .select()
+        .from(beautyAppointments)
+        .orderBy(desc(beautyAppointments.createdAt));
+    }),
+
+    // 管理员：更新预约状态
+    updateStatus: adminProcedure
+      .input(z.object({ id: z.number(), status: z.enum(["pending", "confirmed", "completed", "cancelled"]) }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+        await db
+          .update(beautyAppointments)
+          .set({ status: input.status })
+          .where(eq(beautyAppointments.id, input.id));
+        return { success: true };
+      }),
+  }),
+
+  // ===== 活动轮播 =====
+  promotion: router({
+    list: publicProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) return [];
+      return db
+        .select()
+        .from(beautyPromotions)
+        .where(eq(beautyPromotions.isActive, 1))
+        .orderBy(asc(beautyPromotions.sortOrder));
+    }),
+  }),
+
+  // ===== 商城 =====
+  shop: router({
+    // 品牌列表
+    brands: publicProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) return [];
+      return db
+        .select()
+        .from(beautyBrands)
+        .where(eq(beautyBrands.isActive, 1))
+        .orderBy(asc(beautyBrands.sortOrder));
+    }),
+
+    // 品牌详情
+    getBrand: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return null;
+        const rows = await db
+          .select()
+          .from(beautyBrands)
+          .where(eq(beautyBrands.id, input.id))
+          .limit(1);
+        return rows[0] ?? null;
+      }),
+
+    // 商品列表（从商品库 merchant_products 读取，ownerMerchantId=2 为奢贝美容院）
+    products: publicProcedure
+      .input(z.object({ brandId: z.number().optional(), categoryId: z.number().optional() }).optional())
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return [];
+        const rows = await db
+          .select()
+          .from(merchantProducts)
+          .where(and(
+            eq(merchantProducts.ownerMerchantId, 2),
+            eq(merchantProducts.status, 'active')
+          ))
+          .orderBy(asc(merchantProducts.sortOrder));
+        // 映射字段以兼容前端现有结构
+        return rows.map(p => ({
+          id: p.id,
+          name: p.name,
+          description: p.description ?? '',
+          price: p.basePrice,
+          imageUrl: p.mainImageUrl ?? '',
+          specification: p.subtitle ?? '',
+          stock: p.stock,
+          isActive: p.status === 'active' ? 1 : 0,
+          sortOrder: p.sortOrder,
+          brandId: 1,
+          categoryId: 1,
+        }));
+      }),
+
+    // 商品详情（从商品库读取）
+    getProduct: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return null;
+        const rows = await db
+          .select()
+          .from(merchantProducts)
+          .where(and(
+            eq(merchantProducts.id, input.id),
+            eq(merchantProducts.ownerMerchantId, 2)
+          ))
+          .limit(1);
+        if (!rows[0]) return null;
+        const p = rows[0];
+        return {
+          id: p.id,
+          name: p.name,
+          description: p.description ?? '',
+          price: p.basePrice,
+          imageUrl: p.mainImageUrl ?? '',
+          specification: p.subtitle ?? '',
+          stock: p.stock,
+          isActive: p.status === 'active' ? 1 : 0,
+          sortOrder: p.sortOrder,
+          brandId: 1,
+          categoryId: 1,
+        };
+      }),
+
+    // 商品分类
+    categories: publicProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) return [];
+      return db
+        .select()
+        .from(beautyProductCategories)
+        .where(eq(beautyProductCategories.isActive, 1))
+        .orderBy(asc(beautyProductCategories.sortOrder));
+    }),
+
+    // 购物车：获取
+    getCart: protectedProcedure.query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) return [];
+      const rows = await db
+        .select({
+          id: beautyCartItems.id,
+          productId: beautyCartItems.productId,
+          quantity: beautyCartItems.quantity,
+          productName: beautyProducts.name,
+          productPrice: beautyProducts.price,
+          productImageUrl: beautyProducts.imageUrl,
+          productSpec: beautyProducts.specification,
+        })
+        .from(beautyCartItems)
+        .leftJoin(beautyProducts, eq(beautyCartItems.productId, beautyProducts.id))
+        .where(eq(beautyCartItems.userId, ctx.user.id));
+      return rows;
+    }),
+
+    // 购物车：添加
+    addToCart: protectedProcedure
+      .input(z.object({ productId: z.number(), quantity: z.number().min(1).default(1) }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+        // 检查是否已在购物车
+        const existing = await db
+          .select()
+          .from(beautyCartItems)
+          .where(and(eq(beautyCartItems.userId, ctx.user.id), eq(beautyCartItems.productId, input.productId)))
+          .limit(1);
+        if (existing.length > 0) {
+          await db
+            .update(beautyCartItems)
+            .set({ quantity: existing[0].quantity + input.quantity })
+            .where(eq(beautyCartItems.id, existing[0].id));
+        } else {
+          await db.insert(beautyCartItems).values({
+            userId: ctx.user.id,
+            productId: input.productId,
+            quantity: input.quantity,
+          });
+        }
+        return { success: true };
+      }),
+
+    // 购物车：更新数量
+    updateCartItem: protectedProcedure
+      .input(z.object({ id: z.number(), quantity: z.number().min(1) }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+        await db
+          .update(beautyCartItems)
+          .set({ quantity: input.quantity })
+          .where(and(eq(beautyCartItems.id, input.id), eq(beautyCartItems.userId, ctx.user.id)));
+        return { success: true };
+      }),
+
+    // 购物车：删除
+    removeCartItem: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+        await db
+          .delete(beautyCartItems)
+          .where(and(eq(beautyCartItems.id, input.id), eq(beautyCartItems.userId, ctx.user.id)));
+        return { success: true };
+      }),
+
+    // 下单
+    checkout: protectedProcedure
+      .input(z.object({ shippingAddress: z.string().optional(), notes: z.string().optional() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+        const cartItems = await db
+          .select({
+            id: beautyCartItems.id,
+            productId: beautyCartItems.productId,
+            quantity: beautyCartItems.quantity,
+            productName: beautyProducts.name,
+            productPrice: beautyProducts.price,
+          })
+          .from(beautyCartItems)
+          .leftJoin(beautyProducts, eq(beautyCartItems.productId, beautyProducts.id))
+          .where(eq(beautyCartItems.userId, ctx.user.id));
+
+        if (cartItems.length === 0) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "购物车为空" });
+        }
+
+        const totalAmount = cartItems
+          .reduce((sum, item) => sum + parseFloat(item.productPrice ?? "0") * item.quantity, 0)
+          .toFixed(2);
+
+        const orderNumber = `SB${Date.now()}${nanoid(4).toUpperCase()}`;
+
+        const result = await db.insert(beautyOrders).values({
+          userId: ctx.user.id,
+          orderNumber,
+          totalAmount,
+          status: "pending",
+          shippingAddress: input.shippingAddress ?? null,
+          notes: input.notes ?? null,
+        });
+
+        const orderId = Number((result as any).insertId ?? (result as any)[0]?.insertId ?? 0);
+
+        for (const item of cartItems) {
+          const subtotal = (parseFloat(item.productPrice ?? "0") * item.quantity).toFixed(2);
+          await db.insert(beautyOrderItems).values({
+            orderId,
+            productId: item.productId,
+            productName: item.productName ?? "",
+            price: item.productPrice ?? "0",
+            quantity: item.quantity,
+            subtotal,
+          });
+        }
+
+        // 清空购物车
+        await db.delete(beautyCartItems).where(eq(beautyCartItems.userId, ctx.user.id));
+
+        return { orderId, orderNumber, totalAmount, success: true };
+      }),
+
+    // 我的订单
+    getOrders: protectedProcedure.query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) return [];
+      return db
+        .select()
+        .from(beautyOrders)
+        .where(eq(beautyOrders.userId, ctx.user.id))
+        .orderBy(desc(beautyOrders.createdAt));
+    }),
+
+    // 管理员：创建品牌
+    createBrand: adminProcedure
+      .input(z.object({ name: z.string().min(1), description: z.string().optional(), logoUrl: z.string().optional(), bannerUrl: z.string().optional() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+        await db.insert(beautyBrands).values({ name: input.name, description: input.description ?? null, logoUrl: input.logoUrl ?? null, bannerUrl: input.bannerUrl ?? null, isActive: 1, sortOrder: 0 });
+        return { success: true };
+      }),
+
+    // 管理员：创建商品
+    createProduct: adminProcedure
+      .input(z.object({ name: z.string().min(1), price: z.string(), description: z.string().optional(), imageUrl: z.string().optional(), brandId: z.number(), categoryId: z.number(), specification: z.string().optional(), stock: z.number().default(0), sortOrder: z.number().optional() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+        await db.insert(beautyProducts).values({ ...input, description: input.description ?? null, imageUrl: input.imageUrl ?? null, specification: input.specification ?? null, isActive: 1, sortOrder: input.sortOrder ?? 0 });
+        return { success: true };
+      }),
+
+    // 管理员：更新商品
+    updateProduct: adminProcedure
+      .input(z.object({ id: z.number(), name: z.string().min(1).optional(), price: z.string().optional(), description: z.string().optional(), imageUrl: z.string().optional(), specification: z.string().optional(), sortOrder: z.number().optional(), isActive: z.number().optional() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+        const { id, ...updates } = input;
+        await db.update(beautyProducts).set(updates).where(eq(beautyProducts.id, id));
+        return { success: true };
+      }),
+
+    // 管理员：删除商品
+    deleteProduct: adminProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+        await db.delete(beautyProducts).where(eq(beautyProducts.id, input.id));
+        return { success: true };
+      }),
+  }),
+
+  // ===== 健康资讯（天行数据代理）=====
+  health: router({
+    news: publicProcedure
+      .input(z.object({ num: z.number().min(1).max(50).default(10), page: z.number().min(1).default(1), word: z.string().optional() }))
+      .query(async ({ input }) => {
+        const TIANAPI_KEY = "3878a89bed4728b65cc7d8dc0a644c07";
+        const params = new URLSearchParams({
+          key: TIANAPI_KEY,
+          num: String(input.num),
+          page: String(input.page),
+          ...(input.word ? { word: input.word } : {}),
+        });
+        try {
+          const res = await fetch(`https://apis.tianapi.com/health/index?${params}`);
+          const data = await res.json() as { code: number; result?: { newslist: Array<{ id: string; title: string; description: string; picUrl: string; ctime: string; url: string; source?: string }> } };
+          if (data.code === 200 && data.result?.newslist) {
+            return data.result.newslist;
+          }
+          return [];
+        } catch {
+          return [];
+        }
+      }),
+  }),
+
+  // ===== 奢贝积分系统 =====
+  points: router({
+    // 获取当前用户的积分余额
+    getMyBalance: protectedProcedure.query(async ({ ctx }) => {
+      const db = await getDb();
+      if (!db) return { balance: 0 };
+      const [account] = await db
+        .select({ balance: beautyPoints.balance })
+        .from(beautyPoints)
+        .where(eq(beautyPoints.userId, ctx.user.id));
+      return { balance: account?.balance ?? 0 };
+    }),
+
+    // 检查当前用户是否有积分管理权限
+    canManage: protectedProcedure.query(async ({ ctx }) => {
+      const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+      return { canManage };
+    }),
+
+    // 检查当前用户是否有奢贝个人中心权限
+    canAccessProfile: protectedProcedure.query(async ({ ctx }) => {
+      const canAccess = await hasFeaturePermission(ctx.user.id, 'beauty-profile');
+      return { canAccess };
+    }),
+
+    // 获取我的客户列表（我邀请的用户 + 他们的积分）
+    getMyClients: protectedProcedure.query(async ({ ctx }) => {
+      const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+      if (!canManage) {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无积分管理权限' });
+      }
+      const db = await getDb();
+      if (!db) return [];
+      const invitedUsers = await db
+        .select({
+          id: users.id,
+          username: users.username,
+          name: users.name,
+          avatar: users.avatar,
+          invitedAt: users.invitedAt,
+          createdAt: users.createdAt,
+        })
+        .from(users)
+        .where(eq(users.invitedByUserId, ctx.user.id))
+        .orderBy(sql`${users.invitedAt} DESC`);
+
+      const result = await Promise.all(
+        invitedUsers.map(async (u) => {
+          const [account] = await db
+            .select({ balance: beautyPoints.balance })
+            .from(beautyPoints)
+            .where(eq(beautyPoints.userId, u.id));
+          return { ...u, pointsBalance: account?.balance ?? 0 };
+        })
+      );
+      return result;
+    }),
+
+    // 加减积分
+    adjustPoints: protectedProcedure
+      .input(z.object({
+        userId: z.number(),
+        amount: z.number().int(),
+        remark: z.string().max(200).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无积分管理权限' });
+        }
+        if (input.amount === 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '变动数量不能为0' });
+        }
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 验证目标用户是自己的邀请人
+        const [targetUser] = await db
+          .select({ id: users.id, invitedByUserId: users.invitedByUserId })
+          .from(users)
+          .where(eq(users.id, input.userId));
+        if (!targetUser || targetUser.invitedByUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '只能管理自己邀请的客户的积分' });
+        }
+        // 获取或创建积分账户
+        let [account] = await db
+          .select()
+          .from(beautyPoints)
+          .where(eq(beautyPoints.userId, input.userId));
+        if (!account) {
+          await db.insert(beautyPoints).values({ userId: input.userId, balance: 0 });
+          [account] = await db
+            .select()
+            .from(beautyPoints)
+            .where(eq(beautyPoints.userId, input.userId));
+        }
+        const newBalance = account.balance + input.amount;
+        if (newBalance < 0) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: '积分不足，无法扣减' });
+        }
+        await db
+          .update(beautyPoints)
+          .set({ balance: newBalance })
+          .where(eq(beautyPoints.userId, input.userId));
+        await db.insert(beautyPointsLog).values({
+          userId: input.userId,
+          operatorId: ctx.user.id,
+          amount: input.amount,
+          balanceAfter: newBalance,
+          remark: input.remark || null,
+        });
+        return { success: true, newBalance };
+      }),
+
+    // 获取某用户的积分变动日志
+    getPointsLog: protectedProcedure
+      .input(z.object({ userId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无积分管理权限' });
+        }
+        const db = await getDb();
+        if (!db) return [];
+        return await db
+          .select()
+          .from(beautyPointsLog)
+          .where(eq(beautyPointsLog.userId, input.userId))
+          .orderBy(desc(beautyPointsLog.createdAt));
+      }),
+  }),
+
+  // ===== 消费卡 & 消费记录 =====
+  card: router({
+    // 获取指定客户的当前有效卡
+    getClientCard: protectedProcedure
+      .input(z.object({ userId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const db = await getDb();
+        if (!db) return null;
+        const [card] = await db
+          .select()
+          .from(beautyMemberCards)
+          .where(and(eq(beautyMemberCards.userId, input.userId), eq(beautyMemberCards.isActive, 1)))
+          .orderBy(desc(beautyMemberCards.createdAt))
+          .limit(1);
+        return card ?? null;
+      }),
+
+    // 批量获取多个客户的卡信息（用于客户列表页）
+    getClientsCards: protectedProcedure
+      .input(z.object({ userIds: z.array(z.number()) }))
+      .query(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const db = await getDb();
+        if (!db || input.userIds.length === 0) return [];
+        return await db
+          .select()
+          .from(beautyMemberCards)
+          .where(and(
+            sql`${beautyMemberCards.userId} IN (${sql.join(input.userIds.map(id => sql`${id}`), sql`, `)})`,
+            eq(beautyMemberCards.isActive, 1)
+          ))
+          .orderBy(desc(beautyMemberCards.createdAt));
+      }),
+
+    // 添加/更新消费卡（新卡会将旧卡设为失效）
+    addCard: protectedProcedure
+      .input(z.object({
+        userId: z.number(),
+        cardType: z.enum(['monthly', 'quarterly', 'semiannual', 'annual']),
+        startDate: z.string(), // YYYY-MM-DD
+        remark: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        // 验证是自己的邀请人
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [targetUser] = await db
+          .select({ id: users.id, invitedByUserId: users.invitedByUserId })
+          .from(users)
+          .where(eq(users.id, input.userId));
+        if (!targetUser || targetUser.invitedByUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '只能管理自己邀请的客户' });
+        }
+        // 计算到期日
+        const start = new Date(input.startDate);
+        const daysMap: Record<string, number> = {
+          monthly: 30,
+          quarterly: 90,
+          semiannual: 180,
+          annual: 365,
+        };
+        const endDate = new Date(start);
+        endDate.setDate(endDate.getDate() + daysMap[input.cardType]);
+        const endDateStr = endDate.toISOString().split('T')[0];
+        // 将旧卡设为失效
+        await db
+          .update(beautyMemberCards)
+          .set({ isActive: 0 })
+          .where(and(eq(beautyMemberCards.userId, input.userId), eq(beautyMemberCards.isActive, 1)));
+        // 插入新卡
+        await db.insert(beautyMemberCards).values({
+          userId: input.userId,
+          operatorId: ctx.user.id,
+          cardType: input.cardType,
+          startDate: input.startDate,
+          endDate: endDateStr,
+          isActive: 1,
+          remark: input.remark || null,
+        });
+        return { success: true, endDate: endDateStr };
+      }),
+
+    // 更新消费卡（修改卡类型和开始日期）
+    updateCard: protectedProcedure
+      .input(z.object({
+        cardId: z.number(),
+        cardType: z.enum(['monthly', 'quarterly', 'semiannual', 'annual']),
+        startDate: z.string(),
+        remark: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [card] = await db
+          .select({ id: beautyMemberCards.id, userId: beautyMemberCards.userId })
+          .from(beautyMemberCards)
+          .where(eq(beautyMemberCards.id, input.cardId));
+        if (!card) throw new TRPCError({ code: 'NOT_FOUND', message: '卡不存在' });
+        const [targetUser] = await db
+          .select({ invitedByUserId: users.invitedByUserId })
+          .from(users)
+          .where(eq(users.id, card.userId));
+        if (!targetUser || targetUser.invitedByUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '只能管理自己邀请的客户' });
+        }
+        const daysMap: Record<string, number> = {
+          monthly: 30, quarterly: 90, semiannual: 180, annual: 365,
+        };
+        const end = new Date(input.startDate);
+        end.setDate(end.getDate() + daysMap[input.cardType]);
+        const endDateStr = end.toISOString().split('T')[0];
+        await db
+          .update(beautyMemberCards)
+          .set({
+            cardType: input.cardType,
+            startDate: input.startDate,
+            endDate: endDateStr,
+            remark: input.remark || null,
+          })
+          .where(eq(beautyMemberCards.id, input.cardId));
+        return { success: true, endDate: endDateStr };
+      }),
+
+    // 删除消费卡（软删除，设为失效）
+    deleteCard: protectedProcedure
+      .input(z.object({ cardId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [card] = await db
+          .select({ id: beautyMemberCards.id, userId: beautyMemberCards.userId })
+          .from(beautyMemberCards)
+          .where(eq(beautyMemberCards.id, input.cardId));
+        if (!card) throw new TRPCError({ code: 'NOT_FOUND', message: '卡不存在' });
+        const [targetUser] = await db
+          .select({ invitedByUserId: users.invitedByUserId })
+          .from(users)
+          .where(eq(users.id, card.userId));
+        if (!targetUser || targetUser.invitedByUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '只能管理自己邀请的客户' });
+        }
+        await db
+          .update(beautyMemberCards)
+          .set({ isActive: 0 })
+          .where(eq(beautyMemberCards.id, input.cardId));
+        return { success: true };
+      }),
+  }),
+
+  // ===== 消费次数 =====
+  visit: router({
+    // 批量获取多个客户的消费次数
+    getClientsVisitCount: protectedProcedure
+      .input(z.object({ userIds: z.array(z.number()) }))
+      .query(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const db = await getDb();
+        if (!db || input.userIds.length === 0) return [];
+        const rows = await db
+          .select({
+            userId: beautyVisitLogs.userId,
+            count: sql<number>`COUNT(*)`,
+          })
+          .from(beautyVisitLogs)
+          .where(sql`${beautyVisitLogs.userId} IN (${sql.join(input.userIds.map(id => sql`${id}`), sql`, `)})`)
+          .groupBy(beautyVisitLogs.userId);
+        return rows;
+      }),
+
+    // 添加一次消费记录
+    addVisit: protectedProcedure
+      .input(z.object({
+        userId: z.number(),
+        visitDate: z.string().optional(), // YYYY-MM-DD，默认今天
+        remark: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [targetUser] = await db
+          .select({ id: users.id, invitedByUserId: users.invitedByUserId })
+          .from(users)
+          .where(eq(users.id, input.userId));
+        if (!targetUser || targetUser.invitedByUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '只能管理自己邀请的客户' });
+        }
+        await db.insert(beautyVisitLogs).values({
+          userId: input.userId,
+          operatorId: ctx.user.id,
+          visitDate: input.visitDate || new Date().toISOString().split('T')[0],
+          remark: input.remark || null,
+        });
+        return { success: true };
+      }),
+
+    // 获取某客户的消费记录
+    getVisitLog: protectedProcedure
+      .input(z.object({ userId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const db = await getDb();
+        if (!db) return [];
+        return await db
+          .select()
+          .from(beautyVisitLogs)
+          .where(eq(beautyVisitLogs.userId, input.userId))
+          .orderBy(desc(beautyVisitLogs.createdAt));
+      }),
+
+    // 编辑消费记录（修改日期和备注）
+    updateVisit: protectedProcedure
+      .input(z.object({
+        visitId: z.number(),
+        visitDate: z.string(),
+        remark: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 验证记录属于自己管理的客户
+        const [visit] = await db
+          .select({ id: beautyVisitLogs.id, userId: beautyVisitLogs.userId })
+          .from(beautyVisitLogs)
+          .where(eq(beautyVisitLogs.id, input.visitId));
+        if (!visit) throw new TRPCError({ code: 'NOT_FOUND', message: '记录不存在' });
+        const [targetUser] = await db
+          .select({ invitedByUserId: users.invitedByUserId })
+          .from(users)
+          .where(eq(users.id, visit.userId));
+        if (!targetUser || targetUser.invitedByUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '只能管理自己邀请的客户' });
+        }
+        await db
+          .update(beautyVisitLogs)
+          .set({
+            visitDate: input.visitDate,
+            remark: input.remark || null,
+          })
+          .where(eq(beautyVisitLogs.id, input.visitId));
+        return { success: true };
+      }),
+
+    // 删除消费记录
+    deleteVisit: protectedProcedure
+      .input(z.object({ visitId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const canManage = await hasFeaturePermission(ctx.user.id, 'beauty-points-manage');
+        if (!canManage) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [visit] = await db
+          .select({ id: beautyVisitLogs.id, userId: beautyVisitLogs.userId })
+          .from(beautyVisitLogs)
+          .where(eq(beautyVisitLogs.id, input.visitId));
+        if (!visit) throw new TRPCError({ code: 'NOT_FOUND', message: '记录不存在' });
+        const [targetUser] = await db
+          .select({ invitedByUserId: users.invitedByUserId })
+          .from(users)
+          .where(eq(users.id, visit.userId));
+        if (!targetUser || targetUser.invitedByUserId !== ctx.user.id) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '只能管理自己邀请的客户' });
+        }
+        await db
+          .delete(beautyVisitLogs)
+          .where(eq(beautyVisitLogs.id, input.visitId));
+        return { success: true };
+      }),
+  }),
+
+  // ===== 数据展示 - 照片组 =====
+  showcase: router({
+    // 查询所有照片组（含照片）
+    listGroups: publicProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) return [];
+      const groups = await db
+        .select()
+        .from(beautyShowcaseGroups)
+        .orderBy(desc(beautyShowcaseGroups.createdAt));
+      // 查询每组的照片
+      const result = await Promise.all(
+        groups.map(async (group) => {
+          const photos = await db
+            .select()
+            .from(beautyShowcasePhotos)
+            .where(eq(beautyShowcasePhotos.groupId, group.id))
+            .orderBy(asc(beautyShowcasePhotos.sortOrder));
+          return { ...group, photos };
+        })
+      );
+      return result;
+    }),
+
+    // 创建照片组
+    createGroup: protectedProcedure
+      .input(z.object({
+        title: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [result] = await db.insert(beautyShowcaseGroups).values({
+          userId: ctx.user.id,
+          title: input.title || null,
+        });
+        return { id: result.insertId, success: true };
+      }),
+
+    // 上传照片到组（base64 → 压缩 → COS）
+    uploadPhoto: protectedProcedure
+      .input(z.object({
+        groupId: z.number(),
+        imageData: z.string(), // base64
+        caption: z.string().optional(), // 照片文字说明
+        sortOrder: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 验证组存在
+        const [group] = await db
+          .select()
+          .from(beautyShowcaseGroups)
+          .where(eq(beautyShowcaseGroups.id, input.groupId));
+        if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: '照片组不存在' });
+        // 上传到COS（自动压缩为WebP）
+        const { uploadImageToCOS } = await import('./cos-upload');
+        const imageUrl = await uploadImageToCOS(input.imageData, 'beauty-showcase');
+        // 保存到数据库
+        const [result] = await db.insert(beautyShowcasePhotos).values({
+          groupId: input.groupId,
+          imageUrl,
+          caption: input.caption || null,
+          sortOrder: input.sortOrder ?? 0,
+        });
+        return { id: result.insertId, imageUrl, success: true };
+      }),
+
+    // 更新照片文字说明
+    updatePhotoCaption: protectedProcedure
+      .input(z.object({
+        photoId: z.number(),
+        caption: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        await db
+          .update(beautyShowcasePhotos)
+          .set({ caption: input.caption || null })
+          .where(eq(beautyShowcasePhotos.id, input.photoId));
+        return { success: true };
+      }),
+
+    // 删除照片组（级联删除组内照片）
+    deleteGroup: protectedProcedure
+      .input(z.object({ groupId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        // 先删除组内照片
+        const photos = await db
+          .select()
+          .from(beautyShowcasePhotos)
+          .where(eq(beautyShowcasePhotos.groupId, input.groupId));
+        // 删除COS上的图片
+        const { deleteImageFromCOS } = await import('./cos-upload');
+        for (const photo of photos) {
+          try { await deleteImageFromCOS(photo.imageUrl); } catch (e) { /* ignore */ }
+        }
+        await db.delete(beautyShowcasePhotos).where(eq(beautyShowcasePhotos.groupId, input.groupId));
+        await db.delete(beautyShowcaseGroups).where(eq(beautyShowcaseGroups.id, input.groupId));
+        return { success: true };
+      }),
+
+    // 删除单张照片
+    deletePhoto: protectedProcedure
+      .input(z.object({ photoId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [photo] = await db
+          .select()
+          .from(beautyShowcasePhotos)
+          .where(eq(beautyShowcasePhotos.id, input.photoId));
+        if (!photo) throw new TRPCError({ code: 'NOT_FOUND', message: '照片不存在' });
+        // 删除COS文件
+        const { deleteImageFromCOS } = await import('./cos-upload');
+        try { await deleteImageFromCOS(photo.imageUrl); } catch (e) { /* ignore */ }
+        await db.delete(beautyShowcasePhotos).where(eq(beautyShowcasePhotos.id, input.photoId));
+        return { success: true };
+      }),    // 生成分享Token（公开接口，展示模式下无需登录即可分享）
+    generateShareToken: publicProcedure
+      .input(z.object({ groupId: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [group] = await db
+          .select()
+          .from(beautyShowcaseGroups)
+          .where(eq(beautyShowcaseGroups.id, input.groupId));
+        if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: '照片组不存在' });
+        // 如果已有token则复用，否则生成新的
+        let token = group.shareToken;
+        if (!token) {
+          token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+          await db
+            .update(beautyShowcaseGroups)
+            .set({ shareToken: token })
+            .where(eq(beautyShowcaseGroups.id, input.groupId));
+        }
+        return { token, success: true };
+      }),
+
+    // 通过分享Token获取照片组（公开，无需登录）
+    getByShareToken: publicProcedure
+      .input(z.object({ token: z.string() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [group] = await db
+          .select()
+          .from(beautyShowcaseGroups)
+          .where(eq(beautyShowcaseGroups.shareToken, input.token));
+        if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: '分享链接无效或已过期' });
+        const photos = await db
+          .select()
+          .from(beautyShowcasePhotos)
+          .where(eq(beautyShowcasePhotos.groupId, group.id))
+          .orderBy(asc(beautyShowcasePhotos.sortOrder));
+        return { ...group, photos };
+      }),
+
+    // 更新照片组标题
+    updateGroupTitle: protectedProcedure
+      .input(z.object({
+        groupId: z.number(),
+        title: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        await db
+          .update(beautyShowcaseGroups)
+          .set({ title: input.title })
+          .where(eq(beautyShowcaseGroups.id, input.groupId));
+        return { success: true };
+      }),
+  }),
+
+  // ===== PPT对比展示 =====
+  pptCompare: router({
+    // 查询所有PPT对比组（含页面图片）
+    listGroups: publicProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) return [];
+      const groups = await db
+        .select()
+        .from(beautyPptCompareGroups)
+        .orderBy(desc(beautyPptCompareGroups.createdAt));
+      const result = await Promise.all(
+        groups.map(async (group) => {
+          const pages = await db
+            .select()
+            .from(beautyPptPages)
+            .where(eq(beautyPptPages.groupId, group.id))
+            .orderBy(asc(beautyPptPages.pageNum));
+          const pagesA = pages.filter((p) => p.side === 'A');
+          const pagesB = pages.filter((p) => p.side === 'B');
+          return { ...group, pagesA, pagesB };
+        })
+      );
+      return result;
+    }),
+
+    // 创建PPT对比组
+    createGroup: protectedProcedure
+      .input(z.object({
+        title: z.string().optional(),
+        titleA: z.string().optional(),
+        titleB: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [result] = await db.insert(beautyPptCompareGroups).values({
+          userId: ctx.user.id,
+          title: input.title || null,
+          titleA: input.titleA || 'PPT-A',
+          titleB: input.titleB || 'PPT-B',
+        });
+        return { id: result.insertId, success: true };
+      }),
+
+    // 上传单张图片页面（直接接收图片base64，不需要LibreOffice）
+    uploadPage: protectedProcedure
+      .input(z.object({
+        groupId: z.number(),
+        side: z.enum(['A', 'B']),
+        imageData: z.string(), // base64图片
+        pageNum: z.number(),   // 页码（从1开始）
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+
+        // 验证组存在
+        const [group] = await db
+          .select()
+          .from(beautyPptCompareGroups)
+          .where(eq(beautyPptCompareGroups.id, input.groupId));
+        if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: '对比组不存在' });
+
+        // 上传图片到COS
+        const { uploadImageToCOS } = await import('./cos-upload');
+        const imageUrl = await uploadImageToCOS(input.imageData, 'beauty-showcase');
+
+        // 保存到数据库
+        const [result] = await db.insert(beautyPptPages).values({
+          groupId: input.groupId,
+          side: input.side,
+          pageNum: input.pageNum,
+          imageUrl,
+        });
+        return { id: result.insertId, imageUrl, success: true };
+      }),
+
+    // 清空某一侧的所有页面（重新上传前先清空）
+    clearSide: protectedProcedure
+      .input(z.object({
+        groupId: z.number(),
+        side: z.enum(['A', 'B']),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const oldPages = await db
+          .select()
+          .from(beautyPptPages)
+          .where(and(
+            eq(beautyPptPages.groupId, input.groupId),
+            eq(beautyPptPages.side, input.side)
+          ));
+        const { deleteImageFromCOS } = await import('./cos-upload');
+        for (const p of oldPages) {
+          try { await deleteImageFromCOS(p.imageUrl); } catch (e) { /* ignore */ }
+        }
+        await db.delete(beautyPptPages).where(and(
+          eq(beautyPptPages.groupId, input.groupId),
+          eq(beautyPptPages.side, input.side)
+        ));
+        return { success: true };
+      }),
+
+    // 更新对比组标题
+    updateGroup: protectedProcedure
+      .input(z.object({
+        groupId: z.number(),
+        title: z.string().optional(),
+        titleA: z.string().optional(),
+        titleB: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const updateData: Record<string, string> = {};
+        if (input.title !== undefined) updateData.title = input.title;
+        if (input.titleA !== undefined) updateData.titleA = input.titleA;
+        if (input.titleB !== undefined) updateData.titleB = input.titleB;
+        if (Object.keys(updateData).length > 0) {
+          await db
+            .update(beautyPptCompareGroups)
+            .set(updateData)
+            .where(eq(beautyPptCompareGroups.id, input.groupId));
+        }
+        return { success: true };
+      }),
+
+    // 删除对比组（级联删除所有页面图片）
+    deleteGroup: protectedProcedure
+      .input(z.object({ groupId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const pages = await db
+          .select()
+          .from(beautyPptPages)
+          .where(eq(beautyPptPages.groupId, input.groupId));
+        const { deleteImageFromCOS } = await import('./cos-upload');
+        for (const page of pages) {
+          try { await deleteImageFromCOS(page.imageUrl); } catch (e) { /* ignore */ }
+        }
+        await db.delete(beautyPptPages).where(eq(beautyPptPages.groupId, input.groupId));
+        await db.delete(beautyPptCompareGroups).where(eq(beautyPptCompareGroups.id, input.groupId));
+        return { success: true };
+      }),
+
+    // 生成PPT对比组分享Token（公开接口，展示模式下无需登录即可分享）
+    generateShareToken: publicProcedure
+      .input(z.object({ groupId: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [group] = await db
+          .select()
+          .from(beautyPptCompareGroups)
+          .where(eq(beautyPptCompareGroups.id, input.groupId));
+        if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: '对比组不存在' });
+        let token = group.shareToken;
+        if (!token) {
+          token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+          await db
+            .update(beautyPptCompareGroups)
+            .set({ shareToken: token })
+            .where(eq(beautyPptCompareGroups.id, input.groupId));
+        }
+        return { token, success: true };
+      }),
+
+    // 通过分享Token获取PPT对比组（公开，无需登录）
+    getByShareToken: publicProcedure
+      .input(z.object({ token: z.string() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [group] = await db
+          .select()
+          .from(beautyPptCompareGroups)
+          .where(eq(beautyPptCompareGroups.shareToken, input.token));
+        if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: '分享链接无效或已过期' });
+        const pages = await db
+          .select()
+          .from(beautyPptPages)
+          .where(eq(beautyPptPages.groupId, group.id))
+          .orderBy(asc(beautyPptPages.pageNum));
+        const pagesA = pages.filter((p) => p.side === 'A');
+        const pagesB = pages.filter((p) => p.side === 'B');
+        return { ...group, pagesA, pagesB };
+      }),
+  }),
+
+  // ===== AI提示词库 =====
+  aiPrompts: router({
+    // 查询所有提示词
+    list: publicProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) return [];
+      return await db
+        .select()
+        .from(beautyAiPrompts)
+        .orderBy(asc(beautyAiPrompts.sortOrder), asc(beautyAiPrompts.createdAt));
+    }),
+
+    // 新增提示词
+    add: protectedProcedure
+      .input(z.object({ content: z.string().min(1).max(2000), categoryId: z.number().default(0), remark: z.string().max(5000).optional() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [result] = await db.insert(beautyAiPrompts).values({
+          content: input.content.trim(),
+          categoryId: input.categoryId,
+          remark: input.remark?.trim() || null,
+          sortOrder: 0,
+        });
+        return { id: result.insertId, success: true };
+      }),
+
+    // 更新提示词内容和备注
+    update: protectedProcedure
+      .input(z.object({ id: z.number(), content: z.string().min(1).max(2000).optional(), remark: z.string().max(5000).nullable().optional() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const updates: Record<string, any> = {};
+        if (input.content !== undefined) updates.content = input.content.trim();
+        if (input.remark !== undefined) updates.remark = input.remark?.trim() || null;
+        if (Object.keys(updates).length > 0) {
+          await db.update(beautyAiPrompts).set(updates).where(eq(beautyAiPrompts.id, input.id));
+        }
+        return { success: true };
+      }),
+
+    // 删除提示词
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        await db.delete(beautyAiPrompts).where(eq(beautyAiPrompts.id, input.id));
+        return { success: true };
+      }),
+
+    // 分类管理
+    categories: router({
+      // 查询所有分类
+      list: publicProcedure.query(async () => {
+        const db = await getDb();
+        if (!db) return [];
+        return await db
+          .select()
+          .from(beautyAiPromptCategories)
+          .orderBy(asc(beautyAiPromptCategories.sortOrder), asc(beautyAiPromptCategories.createdAt));
+      }),
+
+      // 新增分类
+      add: protectedProcedure
+        .input(z.object({ name: z.string().min(1).max(50) }))
+        .mutation(async ({ input }) => {
+          const db = await getDb();
+          if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+          const [result] = await db.insert(beautyAiPromptCategories).values({
+            name: input.name.trim(),
+            sortOrder: 0,
+          });
+          return { id: result.insertId, success: true };
+        }),
+
+      // 修改分类名称
+      rename: protectedProcedure
+        .input(z.object({ id: z.number(), name: z.string().min(1).max(50) }))
+        .mutation(async ({ input }) => {
+          const db = await getDb();
+          if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+          await db.update(beautyAiPromptCategories)
+            .set({ name: input.name.trim() })
+            .where(eq(beautyAiPromptCategories.id, input.id));
+          return { success: true };
+        }),
+
+      // 删除分类（同时将该分类下的提示词移到未分类）
+      delete: protectedProcedure
+        .input(z.object({ id: z.number() }))
+        .mutation(async ({ input }) => {
+          const db = await getDb();
+          if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+          // 将该分类下的提示词移到未分类(0)
+          await db.update(beautyAiPrompts)
+            .set({ categoryId: 0 })
+            .where(eq(beautyAiPrompts.categoryId, input.id));
+          await db.delete(beautyAiPromptCategories).where(eq(beautyAiPromptCategories.id, input.id));
+          return { success: true };
+        }),
+    }),
+  }),
+
+  // ===== 素材展示（刘立凡主页素材Tab，独立数据）=====
+  material: router({
+    // 查询所有素材组（含照片）
+    listGroups: publicProcedure.query(async () => {
+      const db = await getDb();
+      if (!db) return [];
+      const groups = await db
+        .select()
+        .from(beautyMaterialGroups)
+        .orderBy(desc(beautyMaterialGroups.createdAt));
+      const result = await Promise.all(
+        groups.map(async (group) => {
+          const photos = await db
+            .select()
+            .from(beautyMaterialPhotos)
+            .where(eq(beautyMaterialPhotos.groupId, group.id))
+            .orderBy(asc(beautyMaterialPhotos.sortOrder));
+          return { ...group, photos };
+        })
+      );
+      return result;
+    }),
+
+    // 创建素材组
+    createGroup: protectedProcedure
+      .input(z.object({
+        title: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [result] = await db.insert(beautyMaterialGroups).values({
+          userId: ctx.user.id,
+          title: input.title || null,
+        });
+        return { id: result.insertId, success: true };
+      }),
+
+    // 上传素材照片（base64 → 压缩 → COS）
+    uploadPhoto: protectedProcedure
+      .input(z.object({
+        groupId: z.number(),
+        imageData: z.string(), // base64
+        caption: z.string().optional(), // 照片文字说明
+        sortOrder: z.number().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [group] = await db
+          .select()
+          .from(beautyMaterialGroups)
+          .where(eq(beautyMaterialGroups.id, input.groupId));
+        if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: '素材组不存在' });
+        const { uploadImageToCOS } = await import('./cos-upload');
+        const imageUrl = await uploadImageToCOS(input.imageData, 'beauty-material');
+        const [result] = await db.insert(beautyMaterialPhotos).values({
+          groupId: input.groupId,
+          imageUrl,
+          caption: input.caption || null,
+          sortOrder: input.sortOrder ?? 0,
+        });
+        return { id: result.insertId, imageUrl, success: true };
+      }),
+
+    // 更新素材照片文字说明
+    updatePhotoCaption: protectedProcedure
+      .input(z.object({
+        photoId: z.number(),
+        caption: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        await db
+          .update(beautyMaterialPhotos)
+          .set({ caption: input.caption || null })
+          .where(eq(beautyMaterialPhotos.id, input.photoId));
+        return { success: true };
+      }),
+
+    // 删除素材组（级联删除组内照片）
+    deleteGroup: protectedProcedure
+      .input(z.object({ groupId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const photos = await db
+          .select()
+          .from(beautyMaterialPhotos)
+          .where(eq(beautyMaterialPhotos.groupId, input.groupId));
+        const { deleteImageFromCOS } = await import('./cos-upload');
+        for (const photo of photos) {
+          try { await deleteImageFromCOS(photo.imageUrl); } catch (e) { /* ignore */ }
+        }
+        await db.delete(beautyMaterialPhotos).where(eq(beautyMaterialPhotos.groupId, input.groupId));
+        await db.delete(beautyMaterialGroups).where(eq(beautyMaterialGroups.id, input.groupId));
+        return { success: true };
+      }),
+
+    // 删除单张素材照片
+    deletePhoto: protectedProcedure
+      .input(z.object({ photoId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [photo] = await db
+          .select()
+          .from(beautyMaterialPhotos)
+          .where(eq(beautyMaterialPhotos.id, input.photoId));
+        if (!photo) throw new TRPCError({ code: 'NOT_FOUND', message: '照片不存在' });
+        const { deleteImageFromCOS } = await import('./cos-upload');
+        try { await deleteImageFromCOS(photo.imageUrl); } catch (e) { /* ignore */ }
+        await db.delete(beautyMaterialPhotos).where(eq(beautyMaterialPhotos.id, input.photoId));
+        return { success: true };
+      }),
+
+    // 生成分享Token（公开接口）
+    generateShareToken: publicProcedure
+      .input(z.object({ groupId: z.number() }))
+      .mutation(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [group] = await db
+          .select()
+          .from(beautyMaterialGroups)
+          .where(eq(beautyMaterialGroups.id, input.groupId));
+        if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: '素材组不存在' });
+        let token = group.shareToken;
+        if (!token) {
+          token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+          await db
+            .update(beautyMaterialGroups)
+            .set({ shareToken: token })
+            .where(eq(beautyMaterialGroups.id, input.groupId));
+        }
+        return { token, success: true };
+      }),
+
+    // 通过分享Token获取素材组（公开，无需登录）
+    getByShareToken: publicProcedure
+      .input(z.object({ token: z.string() }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        const [group] = await db
+          .select()
+          .from(beautyMaterialGroups)
+          .where(eq(beautyMaterialGroups.shareToken, input.token));
+        if (!group) throw new TRPCError({ code: 'NOT_FOUND', message: '分享链接无效或已过期' });
+        const photos = await db
+          .select()
+          .from(beautyMaterialPhotos)
+          .where(eq(beautyMaterialPhotos.groupId, group.id))
+          .orderBy(asc(beautyMaterialPhotos.sortOrder));
+        return { ...group, photos };
+      }),
+
+    // 更新素材组标题
+    updateGroupTitle: protectedProcedure
+      .input(z.object({
+        groupId: z.number(),
+        title: z.string(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库不可用' });
+        await db
+          .update(beautyMaterialGroups)
+          .set({ title: input.title })
+          .where(eq(beautyMaterialGroups.id, input.groupId));
+        return { success: true };
+      }),
+  }),
+});

@@ -1,0 +1,13 @@
+{
+  "query": "SELECT COUNT(*) as total_count FROM personal_contact_tags",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute SELECT COUNT(*) as total_count FROM personal_contact_tags",
+  "rows": [
+    {
+      "total_count": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "total_count\n0\n",
+  "stderr": "",
+  "execution_time_ms": 367
+}

@@ -1,0 +1,914 @@
+import React, { useState, useRef, useEffect } from "react";
+import { Link, useLocation, useRoute } from "wouter";
+import { ChevronLeft, ChevronRight, Edit, Image, PenTool, Check, X, Hourglass } from "lucide-react";
+import { trpc } from "@/lib/trpc";
+import { useColorTheme } from "@/contexts/ColorThemeContext";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/_core/hooks/useAuth";
+import ReimbursementForm from "@/components/ReimbursementForm";
+
+export default function TransactionDetail() {
+  const [, params] = useRoute("/ledger/:ledgerId/transaction/:transactionId");
+  const [, setLocation] = useLocation();
+  const { user } = useAuth();
+
+  // 获取全局主题色
+  const { currentTheme, customColors } = useColorTheme();
+  const baseThemeColors = customColors || currentTheme.colors;
+
+  const ledgerId = params?.ledgerId ? parseInt(params.ledgerId) : 1;
+  const transactionId = params?.transactionId ? parseInt(params.transactionId) : 1;
+
+  // 获取记账详情
+  const { data: transaction, isLoading, refetch, error } = trpc.ledger.getTransactionDetail.useQuery({
+    ledgerId,
+    transactionId,
+  });
+  
+  // 获取账本详情（用于判断角色）
+  const { data: ledgerData } = trpc.ledger.getById.useQuery({ ledgerId });
+
+  // AJ 报销账本使用深蓝金色系，覆盖全局主题色
+  const isAJLedger = ledgerData?.type === 'custom_aj';
+  const themeColors = isAJLedger
+    ? { ...baseThemeColors, primary: '#1A2B4A', accent1: '#FFFFFF', background: '#F4F6F9', text: '#1A2B4A' }
+    : baseThemeColors;
+
+  // 获取审批规则（判断当前用户是否是审批人）
+  const { data: approvalRules } = trpc.ledger.getApprovalRules.useQuery({
+    ledgerId,
+  });
+
+  // 审批对话框状态
+  const [showApprovalDialog, setShowApprovalDialog] = useState(false);
+  const [approvalAction, setApprovalAction] = useState<'approved' | 'rejected'>('approved');
+  const [comment, setComment] = useState('');
+  
+  // ========== 删除确认对话框状态 ==========
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
+  // ========== 待结功能状态 ==========
+  const [showSettleDialog, setShowSettleDialog] = useState(false);
+  const [pendingLocalType, setPendingLocalType] = useState<string | null>(null);
+
+  // 结算 mutation
+  const settleMutation = trpc.ledger.updateTransaction.useMutation({
+    onSuccess: () => {
+      setPendingLocalType(null);
+      toast.success('已结算，待结状态已清除');
+      setShowSettleDialog(false);
+      refetch();
+    },
+    onError: (err) => {
+      toast.error(err.message || '结算失败');
+    },
+  });
+
+  // 确认结算
+  const handleSettle = () => {
+    settleMutation.mutate({
+      recordId: transactionId,
+      pendingType: null,
+      pendingIncludeStats: null,
+    });
+  };
+
+  // ========== 报销功能状态（全新实现）==========
+  const [showReimbursementForm, setShowReimbursementForm] = useState(false);
+  const [rbDialogOpen, setRbDialogOpen] = useState(false);
+  const [rbNote, setRbNote] = useState('');
+  const [rbVoucher, setRbVoucher] = useState<string | null>(null);
+  // 本地状态：用于在保存成功后立即更新UI
+  const [rbLocalStatus, setRbLocalStatus] = useState<string | null>(null);
+  const rbFileRef = useRef<HTMLInputElement>(null);
+  const [rbPreviewOpen, setRbPreviewOpen] = useState(false);
+  const [rbPreviewUrl, setRbPreviewUrl] = useState('');
+
+  // 当transaction数据加载/更新后，同步本地状态
+  useEffect(() => {
+    if (transaction) {
+      setRbLocalStatus(transaction.reimbursementStatus || 'none');
+      setPendingLocalType(transaction.pendingType || null);
+    }
+  }, [transaction]);
+
+  // 当前显示的报销状态（优先使用本地状态）
+  const displayStatus = rbLocalStatus || transaction?.reimbursementStatus || 'none';
+
+  // 获取报销历史记录
+  const { data: rbHistory, refetch: refetchRbHistory } = trpc.ledger.getReimbursementHistory.useQuery(
+    { recordId: transactionId },
+    { enabled: rbDialogOpen } // 只在对话框打开时查询
+  );
+
+  // tRPC mutation
+  const rbMutation = trpc.ledger.manageReimbursement.useMutation({
+    onSuccess: (data) => {
+      console.log('[rbMutation] onSuccess:', data);
+      setRbLocalStatus('completed');
+      toast.success('报销处理成功');
+      setRbDialogOpen(false);
+      // 清空输入
+      setRbNote('');
+      setRbVoucher(null);
+      refetch();
+      refetchRbHistory();
+    },
+    onError: (err) => {
+      console.error('[rbMutation] onError:', err);
+      toast.error(err.message || '操作失败');
+    },
+  });
+
+  // 申请报销mutation
+  const applyReimbursementMutation = trpc.ledger.updateTransaction.useMutation({
+    onSuccess: () => {
+      setRbLocalStatus('pending');
+      toast.success('报销申请已提交');
+      setShowReimbursementForm(false);
+      refetch();
+    },
+    onError: (err) => {
+      toast.error(err.message || '提交失败');
+    },
+  });
+
+  // 处理报销申请提交
+  const handleReimbursementSubmit = (data: {
+    content: string;
+    amount: number;
+    receiptCount: number;
+    notes: string;
+    voucherImage?: string;
+  }) => {
+    applyReimbursementMutation.mutate({
+      recordId: transactionId,
+      description: `[报销] ${data.content}${data.notes ? ' | 备注: ' + data.notes : ''} | 单据${data.receiptCount}张`,
+      reimbursementStatus: 'pending' as const,
+    });
+  };
+
+  // 打开报销对话框
+  const openRbDialog = () => {
+    // 新增记录时清空输入框（不加载旧数据）
+    setRbNote('');
+    setRbVoucher(null);
+    setRbDialogOpen(true);
+  };
+
+  // 保存报销（新增一条处理记录）
+  const handleRbSave = () => {
+    if (!rbNote && !rbVoucher) {
+      toast.error('请填写备注或上传凭证');
+      return;
+    }
+    console.log('[handleRbSave] 调用mutation', {
+      recordId: transactionId,
+      status: 'completed',
+      notes: rbNote,
+      hasVoucher: !!rbVoucher,
+    });
+    rbMutation.mutate({
+      recordId: transactionId,
+      status: 'completed' as const,
+      notes: rbNote || undefined,
+      voucherImage: rbVoucher || undefined,
+    });
+  };
+
+  // 处理凭证图片上传
+  const handleRbVoucherUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      toast.loading('正在上传图片...');
+      const { autoCompressImage } = await import('@/utils/imageUtils');
+      const { base64 } = await autoCompressImage(file, 'normal');
+      setRbVoucher(base64);
+      toast.dismiss();
+      toast.success('图片上传成功');
+    } catch (error) {
+      toast.dismiss();
+      toast.error('图片上传失败');
+    }
+  };
+
+  // 格式化时间
+  const formatTime = (timeStr: string | null) => {
+    if (!timeStr) return '未知时间';
+    try {
+      const d = new Date(timeStr);
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    } catch {
+      return timeStr;
+    }
+  };
+  // ========== 报销功能状态结束 ==========
+
+  // 上传图片mutation
+  const uploadImageMutation = trpc.ledger.uploadLedgerImage.useMutation();
+  
+  // 审批mutation
+  const approveMutation = trpc.ledger.approveTransaction.useMutation({
+    onSuccess: (data: any) => {
+      if (approvalAction === 'approved') {
+        const usdt = data?.usdtRewarded;
+        if (usdt && usdt > 0) {
+          toast.success(`审批已通过，已向提交人发放 ${usdt} USDT 奖励`);
+        } else {
+          toast.success('审批已通过');
+        }
+      } else {
+        toast.success('审批已拒绝');
+      }
+      setShowApprovalDialog(false);
+      setComment('');
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(error.message || "操作失败");
+    },
+  });
+
+  // 获取tRPC utils用于缓存失效
+  const utils = trpc.useUtils();
+
+  // 获取修改记录条数
+  const { data: logCountData } = trpc.ledger.getRecordLogCount.useQuery({
+    recordId: transactionId,
+    ledgerId,
+  });
+  const logCount = logCountData?.count ?? 0;
+  
+  // 删除mutation
+  const deleteMutation = trpc.ledger.deleteTransaction.useMutation({
+    onSuccess: () => {
+      toast.success("删除成功");
+      utils.ledger.getTransactions.invalidate({ ledgerId });
+      utils.ledger.getById.invalidate({ ledgerId });
+      setLocation(`/ledger/${ledgerId}`);
+    },
+    onError: (error) => {
+      toast.error(error.message || "删除失败");
+    },
+  });
+
+  // ========== 变更申请相关（已简化，仅保留报销申请撤回）==========
+
+  // 撤回报销申请 mutation
+  const [showWithdrawReimbursementDialog, setShowWithdrawReimbursementDialog] = React.useState(false);
+  const withdrawReimbursementMutation = trpc.ledger.withdrawReimbursement.useMutation({
+    onSuccess: () => {
+      toast.success('申请已撤回，账目已取消');
+      setShowWithdrawReimbursementDialog(false);
+      // 撤回即删除，跳转回账本列表
+      setLocation(`/ledger/${ledgerId}`);
+    },
+    onError: (error) => {
+      toast.error(error.message || '撤回失败');
+    },
+  });
+
+  // 处理审批
+  const handleApprove = (action: 'approved' | 'rejected') => {
+    setApprovalAction(action);
+    setShowApprovalDialog(true);
+  };
+
+  const confirmApproval = () => {
+    approveMutation.mutate({
+      ledgerId,
+      recordId: transactionId,
+      action: approvalAction,
+      comment: comment || undefined,
+    });
+  };
+
+  // 判断当前用户是否是审批人
+  const isApprover = () => {
+    if (!user || !transaction || !approvalRules) return false;
+    const rule = approvalRules.find(r => r.recorderId === transaction.createdBy);
+    if (rule) {
+      return rule.approverIds.includes(user.id);
+    }
+    const defaultRule = approvalRules.find(r => r.recorderId === null);
+    if (defaultRule) {
+      return defaultRule.approverIds.includes(user.id);
+    }
+    return false;
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-600">加载中...</div>
+      </div>
+    );
+  }
+
+  if (!transaction) {
+    let errorMsg = '';
+    if (error) {
+      try {
+        errorMsg = typeof error === 'object' && error !== null && 'message' in error 
+          ? String((error as any).message) 
+          : JSON.stringify(error);
+      } catch (e) {
+        errorMsg = String(error);
+      }
+    }
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-600">账目不存在 {errorMsg ? `(错误: ${errorMsg})` : ''}</div>
+      </div>
+    );
+  }
+
+  // 判断账目是否已被审批（aj_status = 'approved'）
+  // 使用服务端映射后的 approvalStatus 字段（'approved' 表示已审批）
+  const isApproved = transaction.approvalStatus === 'approved';
+
+  // 获取审批状态文本
+  const getApprovalStatusText = () => {
+    switch (transaction.approvalStatus) {
+      case 'pending':
+        return '未计入收支，等待审批';
+      case 'approved':
+        return '计入收支';
+      case 'rejected':
+        return '已拒绝，未计入收支';
+      case 'not_required':
+      default:
+        return '计入收支';
+    }
+  };
+
+  // 是否是管理员/所有者
+  const isAdminOrOwner = ledgerData?.userRole === 'admin' || ledgerData?.userRole === 'owner';
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* 顶部导航栏 */}
+      <div style={{ backgroundColor: `${themeColors.primary}30`, color: themeColors.text }}>
+        <div className="flex items-center justify-between px-4 py-3">
+          <button onClick={() => setLocation(`/ledger/${ledgerId}`)} className="p-1">
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          <h1 className="text-lg font-medium">数据详情</h1>
+          <div className="w-6"></div>
+        </div>
+      </div>
+
+      {/* 第一行信息 */}
+      <div className="bg-white px-4 py-3 flex items-center justify-between border-b border-gray-200">
+        <div className="flex items-center gap-2 text-sm text-gray-600">
+          <span>日志</span>
+          <span>成员 {transaction.member?.nickname || transaction.member?.username || '未知'}</span>
+          <span>添加数据</span>
+        </div>
+        <ChevronRight className="w-5 h-5 text-gray-400" />
+      </div>
+
+      {/* 分类信息卡片 */}
+      <div className="bg-white px-4 py-6 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-lg text-gray-900">
+            {(() => {
+              const desc = transaction.description || '';
+              const isDiet = desc.startsWith('[diet:');
+              if (isDiet) {
+                const m = desc.match(/^\[diet:(\w+):([^\]]+)/);
+                const type = m ? m[1] : '';
+                const unit = m ? m[2].split(':')[0] : '';
+                // 清洗 emoji
+                const cleanName = (transaction.category || '').replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\s]+/gu, '').trim();
+                // 如果分类名已包含单位（如「胸围/cm」）则只取斜杠前的名称
+                if (cleanName.includes('/')) return cleanName.split('/')[0];
+                return cleanName;
+              }
+              return transaction.category;
+            })()}
+            {transaction.subcategory && `–${transaction.subcategory}`}
+          </span>
+          {/* 单位显示在分类名右侧 */}
+          {(() => {
+            const desc = transaction.description || '';
+            if (!desc.startsWith('[diet:')) return null;
+            const m = desc.match(/^\[diet:(\w+):([^\]]+)/);
+            const type = m ? m[1] : '';
+            const unit = m ? m[2].split(':')[0] : '';
+            const unitMap: Record<string, string> = { weight: '斤', bmi: '', calorie: 'kcal', measurement: 'cm' };
+            const u = unit || unitMap[type] || '';
+            return u ? <span className="text-sm text-gray-400">{u}</span> : null;
+          })()}
+        </div>
+        <div className="text-right">
+          <div className="text-3xl font-medium text-gray-900">
+            {/* 三围数据去除小数点 */}
+            {(() => {
+              const desc = transaction.description || '';
+              const isMeasurement = desc.startsWith('[diet:measurement:');
+              const num = Number(transaction.amount);
+              if (isMeasurement && !isNaN(num)) return Math.round(num).toString();
+              return transaction.amount;
+            })()}
+          </div>
+        </div>
+      </div>
+
+      {/* 详细信息列表 */}
+      <div className="bg-white mt-3">
+
+        <DetailItem
+          label="登记人"
+          rightContent={
+            <div className="flex items-center gap-2">
+              {transaction.member?.avatar ? (
+                <img src={transaction.member.avatar} alt={transaction.member.nickname || '未知'} className="w-8 h-8 rounded-full object-cover" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-blue-400 flex items-center justify-center text-white text-sm">
+                  {(transaction.member?.nickname || transaction.member?.username || 'U').charAt(0)}
+                </div>
+              )}
+              <span className="text-gray-900">{transaction.member?.nickname || transaction.member?.username || '未知'}</span>
+            </div>
+          }
+        />
+        <DetailItem label="日期" value={transaction.date} />
+        <DetailItem label="备注" value={transaction.description || "未填写"} />
+
+        {/* ========== 报销状态显示（全新实现）========== */}
+        {displayStatus !== 'none' && (
+          isAdminOrOwner ? (
+            <div 
+              className="flex items-center justify-between py-3 px-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 active:bg-gray-100"
+              onClick={openRbDialog}
+            >
+              <span className="text-sm text-gray-600">报销状态</span>
+              {displayStatus === 'completed' ? (
+                <span className="text-sm font-medium text-[#4CAF50]">已经处理</span>
+              ) : (
+                <span className="text-sm font-medium text-[#1976D2]">等待报销</span>
+              )}
+            </div>
+          ) : (
+            <DetailItem 
+              label="报销状态" 
+              value={displayStatus === 'pending' ? '待报销' : displayStatus === 'completed' ? '已报销' : ''}
+            />
+          )
+        )}
+        {/* ========== 报销状态显示结束 ========== */}
+
+        {/* ========== 待结状态显示 ========== */}
+        {pendingLocalType && (
+          <div className="flex items-center justify-between py-3 px-4 border-b border-gray-100">
+            <div className="flex items-center gap-1.5">
+              <Hourglass className="w-4 h-4 text-[#1976D2]" />
+              <span className="text-sm text-gray-600">待结状态</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`text-sm font-medium ${
+                pendingLocalType === 'receivable' ? 'text-[#4CAF50]' : 'text-[#FF9800]'
+              }`}>
+                {pendingLocalType === 'receivable' ? '代收' : '代付'}
+                {transaction.pendingIncludeStats === 0 ? '（不计入统计）' : '（计入统计）'}
+              </span>
+              <button
+                onClick={() => setShowSettleDialog(true)}
+                className="px-2.5 py-1 text-xs bg-[#1976D2] text-white rounded-md hover:bg-[#1565C0] active:bg-[#0D47A1] transition-colors"
+              >
+                已结算
+              </button>
+            </div>
+          </div>
+        )}
+        {/* ========== 待结状态显示结束 ========== */}
+
+        {transaction.images && transaction.images.length > 0 ? (
+          <div className="flex items-start justify-between py-3 px-4 border-b border-gray-100">
+            <span className="text-xs text-gray-500">图片</span>
+            <div className="flex-1 flex flex-wrap justify-end gap-2">
+              {transaction.images.map((imageUrl: string, index: number) => (
+                <img
+                  key={index}
+                  src={imageUrl}
+                  alt={`凭证图片${index + 1}`}
+                  className="w-16 h-16 object-cover rounded cursor-pointer border border-gray-200"
+                  onClick={() => {
+                    const dialog = document.createElement('div');
+                    dialog.className = 'fixed inset-0 bg-black bg-opacity-80 z-50 flex items-center justify-center p-4';
+                    dialog.onclick = () => dialog.remove();
+                    const img = document.createElement('img');
+                    img.src = imageUrl;
+                    img.className = 'max-w-full max-h-full object-contain';
+                    dialog.appendChild(img);
+                    document.body.appendChild(dialog);
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        ) : (
+          <DetailItem label="图片" value="未上传" />
+        )}
+      </div>
+
+      {/* 添加信息 */}
+      <div className="bg-white mt-3">
+        <DetailItem
+          label="添加人"
+          rightContent={
+            <div className="flex items-center gap-2">
+              {transaction.member?.avatar ? (
+                <img src={transaction.member.avatar} alt={transaction.member.nickname || '未知'} className="w-8 h-8 rounded-full object-cover" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-blue-400 flex items-center justify-center text-white text-sm">
+                  {(transaction.member?.nickname || transaction.member?.username || 'U').charAt(0)}
+                </div>
+              )}
+              <span className="text-gray-900">{transaction.member?.nickname || transaction.member?.username || '未知'}</span>
+            </div>
+          }
+        />
+        <DetailItem label="添加时间" value={transaction.createdAt} />
+        <DetailItem label="添加来源" value="手动输入" />
+
+        <DetailItem
+          label="修改记录"
+          rightContent={
+            <span
+              className="flex items-center gap-1 cursor-pointer"
+              style={{ color: themeColors.primary }}
+              onClick={() => setLocation(`/ledger/${ledgerId}/transaction/${transactionId}/logs`)}
+            >
+              <span className="text-sm">{logCount > 0 ? `${logCount}条记录` : '暂无记录'}</span>
+              <ChevronRight size={14} />
+            </span>
+          }
+        />
+      </div>
+
+      {/* 审批信息（待审批状态显示） */}
+      {transaction.approvalStatus === 'pending' && isApprover() && (
+        <div className="bg-white mt-3 px-4 py-3">
+          <div className="text-sm font-medium text-gray-900 mb-3">审批信息</div>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-white text-sm">
+              {(transaction.member?.nickname || transaction.member?.username || 'U').charAt(0)}
+            </div>
+            <span className="text-gray-900">{transaction.member?.nickname || transaction.member?.username || '未知'}</span>
+          </div>
+        </div>
+      )}
+
+      {/* 底部按钮区域 */}
+      <div className="flex-1"></div>
+      
+      {transaction.approvalStatus === 'pending' && isApprover() && (
+        <div className="bg-white px-4 py-3">
+          <button 
+            onClick={() => handleApprove('approved')}
+            className="w-full py-3 bg-[#5b8ff9] hover:bg-[#4a7dd9] text-white rounded-lg font-medium text-base"
+          >
+            通过审批
+          </button>
+        </div>
+      )}
+
+      {/* 待审批且是自己提交的：显示撤回报销申请按鈕（仅 AJ 账本） */}
+      {ledgerData?.type === 'custom_aj' && transaction.approvalStatus === 'pending' && transaction.createdBy === user?.id && (
+        <div className="bg-white px-4 py-3">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3">
+            <div className="text-sm text-yellow-800 font-medium mb-1">报销申请待审批</div>
+            <div className="text-xs text-yellow-600 mb-2">已提交报销申请，等待审批中...</div>
+            <button
+              onClick={() => setShowWithdrawReimbursementDialog(true)}
+              className="w-full py-2 bg-white border border-yellow-300 text-yellow-700 rounded-lg text-sm font-medium"
+            >
+              撤回申请
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(transaction.approvalStatus !== 'pending' || !isApprover()) && (
+        <div className="bg-white px-4 py-3 space-y-3">
+          {/* 修改按钮：有修改权限才显示 */}
+          <button 
+            onClick={() => setLocation(`/ledger/${ledgerId}/add?edit=${transactionId}`)}
+            className="w-full py-3 bg-white border border-gray-300 rounded-lg text-gray-900 font-medium text-base"
+          >
+            修改数据
+          </button>
+          {/* 删除按钮：根据权限设置判断显示，all=可删全部，own=只能删自己的，none=不显示 */}
+          {(() => {
+            const perm = transaction.userPermissionDelete || 'none';
+            const isOwner = ledgerData?.userRole === 'owner';
+            // 只有 owner（账本创建者）始终可删除，不受权限设置限制
+            if (isOwner) {
+              return (
+                <button 
+                  onClick={() => setShowDeleteDialog(true)}
+                  className="w-full py-3 text-white hover:opacity-90 rounded-lg font-medium text-base"
+                  style={{ backgroundColor: themeColors.primary }}
+                >
+                  删除数据
+                </button>
+              );
+            }
+            // 其他所有人（包括 admin）都走 permission_delete 判断
+            // none = 不显示删除按钮
+            if (perm === 'none') return null;
+            // own = 只能删除自己的
+            if (perm === 'own' && transaction.createdBy !== user?.id) return null;
+            // all 或 own（自己的）：显示删除按钮
+            return (
+              <button 
+                onClick={() => setShowDeleteDialog(true)}
+                className="w-full py-3 text-white hover:opacity-90 rounded-lg font-medium text-base"
+                style={{ backgroundColor: themeColors.primary }}
+              >
+                删除数据
+              </button>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* 删除确认对话框 */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认删除</DialogTitle>
+            <DialogDescription>
+              确定要删除这条账目吗？删除后可在“删除账单找回”中恢复。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+              取消
+            </Button>
+            <Button 
+              onClick={() => {
+                setShowDeleteDialog(false);
+                deleteMutation.mutate({ recordId: transactionId });
+              }}
+              disabled={deleteMutation.isPending}
+              className={`${isAJLedger ? 'bg-[#1A2B4A] hover:bg-[#152238]' : 'bg-[#D32F2F] hover:bg-[#B71C1C]'} text-white`}
+            >
+              {deleteMutation.isPending ? '删除中...' : '确认删除'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 撤回报销申请确认对话框 */}
+      <Dialog open={showWithdrawReimbursementDialog} onOpenChange={setShowWithdrawReimbursementDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>撤回报销申请</DialogTitle>
+            <DialogDescription>
+              确定要撤回这条报销申请吗？撤回后账目将恢复为未提交状态，可重新提交。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowWithdrawReimbursementDialog(false)}>
+              取消
+            </Button>
+            <Button
+              onClick={() => withdrawReimbursementMutation.mutate({ ledgerId, recordId: transactionId })}
+              disabled={withdrawReimbursementMutation.isPending}
+              className="bg-yellow-600 hover:bg-yellow-700 text-white"
+            >
+              {withdrawReimbursementMutation.isPending ? '撤回中...' : '确认撤回'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 结算确认对话框 */}
+      <Dialog open={showSettleDialog} onOpenChange={setShowSettleDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>确认结算</DialogTitle>
+            <DialogDescription>
+              确认这笔{pendingLocalType === 'receivable' ? '代收' : '代付'}账目已经结算完成吗？结算后待结状态将被清除，沙漏图标也会消失。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowSettleDialog(false)}>
+              取消
+            </Button>
+            <Button 
+              onClick={handleSettle}
+              disabled={settleMutation.isPending}
+              className="bg-[#1976D2] hover:bg-[#1565C0] text-white"
+            >
+              {settleMutation.isPending ? '处理中...' : '确认结算'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 审批对话框 */}
+      <Dialog open={showApprovalDialog} onOpenChange={setShowApprovalDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{approvalAction === 'approved' ? '通过审批' : '拒绝审批'}</DialogTitle>
+            <DialogDescription>
+              {approvalAction === 'approved' 
+                ? '确认通过这笔记账吗？通过后将计入收支统计。'
+                : '确认拒绝这笔记账吗？拒绝后将不计入收支统计。'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <label className="text-sm text-gray-600 mb-2 block">审批意见（可选）</label>
+            <Textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="输入审批意见..." className="min-h-[100px]" />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowApprovalDialog(false)}>取消</Button>
+            <Button 
+              onClick={confirmApproval}
+              disabled={approveMutation.isPending}
+              className={approvalAction === 'approved' ? 'bg-[#4CAF50] hover:bg-green-700' : (isAJLedger ? 'bg-[#1A2B4A] hover:bg-[#152238]' : 'bg-[#D32F2F] hover:bg-[#D32F2F]')}
+            >
+              {approveMutation.isPending ? '处理中...' : '确认'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* ========== 报销管理对话框（全新实现）========== */}
+      <Dialog open={rbDialogOpen} onOpenChange={setRbDialogOpen}>
+        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto top-[5%] translate-y-0">
+          <DialogHeader>
+            <DialogTitle>报销管理</DialogTitle>
+            <DialogDescription>
+              {displayStatus === 'completed' 
+                ? '查看处理记录，可新增处理记录' 
+                : '处理该账目的报销申请'}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-2">
+            {/* ===== 历史处理记录 ===== */}
+            {rbHistory && rbHistory.length > 0 && (
+              <div>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">处理记录</label>
+                <div className="space-y-3">
+                  {rbHistory.map((record: any, idx: number) => (
+                    <div key={record.id || idx} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium text-gray-800">{record.operatedBy}</span>
+                        <span className="text-xs text-gray-400">{formatTime(record.createdAt)}</span>
+                      </div>
+                      {record.notes && (
+                        <p className="text-sm text-gray-600 mt-1">{record.notes}</p>
+                      )}
+                      {record.voucherUrl && (
+                        <img 
+                          src={record.voucherUrl} 
+                          alt="凭证" 
+                          className="mt-2 w-16 h-16 object-cover rounded border border-gray-300 cursor-pointer"
+                          onClick={() => { setRbPreviewUrl(record.voucherUrl); setRbPreviewOpen(true); }}
+                        />
+                      )}
+                      {!record.notes && !record.voucherUrl && (
+                        <p className="text-xs text-gray-400 mt-1">标记为已处理（无备注）</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ===== 分割线 ===== */}
+            {rbHistory && rbHistory.length > 0 && (
+              <div className="border-t border-gray-200 pt-3">
+                <label className="text-sm font-medium text-gray-700 mb-2 block">新增处理记录</label>
+              </div>
+            )}
+
+            {/* ===== 新增处理记录输入区 ===== */}
+            <div>
+              {!(rbHistory && rbHistory.length > 0) && (
+                <label className="text-sm text-gray-600 mb-2 block">报销备注</label>
+              )}
+              <Textarea
+                value={rbNote}
+                onChange={(e) => setRbNote(e.target.value)}
+                placeholder="输入报销备注..."
+                className="min-h-[70px]"
+              />
+            </div>
+            
+            {/* 上传凭证 */}
+            <div>
+              <input
+                ref={rbFileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleRbVoucherUpload}
+              />
+              <div className="flex items-start gap-3">
+                {rbVoucher ? (
+                  <>
+                    <div 
+                      className="relative w-16 h-16 bg-gray-100 rounded overflow-hidden cursor-pointer border border-gray-300 flex-shrink-0"
+                      onClick={() => { setRbPreviewUrl(rbVoucher); setRbPreviewOpen(true); }}
+                    >
+                      <img src={rbVoucher} alt="报销凭证" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1 flex flex-col gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => rbFileRef.current?.click()} className="w-full text-xs">
+                        重新上传凭证
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <Button type="button" variant="outline" size="sm" onClick={() => rbFileRef.current?.click()} className="w-full text-xs">
+                    上传凭证（可选）
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          <DialogFooter className="flex flex-row gap-2">
+            <Button variant="outline" onClick={() => setRbDialogOpen(false)} className="flex-1">
+              取消
+            </Button>
+            <Button 
+              onClick={handleRbSave}
+              disabled={rbMutation.isPending}
+              className="flex-1 bg-[#1976D2] hover:bg-blue-700"
+            >
+              {rbMutation.isPending ? '保存中...' : '保存'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* 图片预览对话框 */}
+      <Dialog open={rbPreviewOpen} onOpenChange={setRbPreviewOpen}>
+        <DialogContent className="max-w-4xl w-full p-0 bg-transparent border-none">
+          <div className="relative">
+            <img src={rbPreviewUrl} alt="预览" className="w-full h-auto max-h-[90vh] object-contain rounded-lg" />
+            <Button variant="outline" size="icon" className="absolute top-4 right-4 bg-white hover:bg-gray-100" onClick={() => setRbPreviewOpen(false)}>
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 电子报销单申请表 */}
+      <ReimbursementForm
+        open={showReimbursementForm}
+        onOpenChange={setShowReimbursementForm}
+        transactionDate={transaction?.date}
+        transactionCategory={transaction?.category}
+        transactionSubcategory={transaction?.subcategory}
+        transactionAmount={transaction?.amount}
+        transactionDescription={transaction?.description}
+        transactionType={transaction?.type}
+        onSubmit={handleReimbursementSubmit}
+        isPending={applyReimbursementMutation.isPending}
+      />
+    </div>
+  );
+}
+
+// 详细信息项组件
+interface DetailItemProps {
+  label: string;
+  value?: string;
+  rightContent?: React.ReactNode;
+  highlight?: boolean;
+}
+
+function DetailItem({ label, value, rightContent, highlight }: DetailItemProps) {
+  return (
+    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 last:border-b-0">
+      <span className="text-sm text-gray-600">{label}</span>
+      {rightContent ? (
+        rightContent
+      ) : (
+        <span className={`text-sm ${highlight ? 'text-[#CBA471] font-medium' : 'text-gray-900'}`}>
+          {value}
+        </span>
+      )}
+    </div>
+  );
+}

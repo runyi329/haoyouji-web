@@ -1,0 +1,100 @@
+{
+  "query": "\nSELECT \n  c.name AS contact_name,\n  ccf.fieldName,\n  ccf.fieldValue AS company_name,\n  ccf.createdAt\nFROM contacts c\nLEFT JOIN contact_custom_fields ccf ON c.id = ccf.contactId AND ccf.fieldName = '公司名称'\nWHERE c.name IN ('王茜', '李晓洁', '羊仲平', '张珏', '刘强', '马婉义', '钟贝', '杨雪', '秦主任', '丁楠', '郑奎', '洪小燕', '望悦', '卓迪敦', '周翔', '陈奇戎', '王海艳')\nORDER BY c.name;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \nSELECT \n  c.name AS contact_name,\n  ccf.fieldName,\n  ccf.fieldValue AS company_name,\n  ccf.createdAt\nFROM contacts c\nLEFT JOIN contact_custom_fields ccf ON c.id = ccf.contactId AND ccf.fieldName = '公司名称'\nWHERE c.name IN ('王茜', '李晓洁', '羊仲平', '张珏', '刘强', '马婉义', '钟贝', '杨雪', '秦主任', '丁楠', '郑奎', '洪小燕', '望悦', '卓迪敦', '周翔', '陈奇戎', '王海艳')\nORDER BY c.name;\n",
+  "rows": [
+    {
+      "contact_name": "丁楠",
+      "fieldName": "公司名称",
+      "company_name": "上海再捷商务信息咨询有限公司",
+      "createdAt": "2026-01-23 16:15:20"
+    },
+    {
+      "contact_name": "刘强",
+      "fieldName": "公司名称",
+      "company_name": "上海合合信息科技发展有限公司",
+      "createdAt": "2026-01-23 16:15:11"
+    },
+    {
+      "contact_name": "张珏",
+      "fieldName": "公司名称",
+      "company_name": "上海润豆仪豆贸易有限公司",
+      "createdAt": "2026-01-23 16:15:11"
+    },
+    {
+      "contact_name": "望悦",
+      "fieldName": "公司名称",
+      "company_name": "锦途远景教育科技(北京)有限公司",
+      "createdAt": "2026-01-23 16:15:33"
+    },
+    {
+      "contact_name": "李晓洁",
+      "fieldName": "公司名称",
+      "company_name": "上海桥孚科技有限公司",
+      "createdAt": "2026-01-23 16:15:11"
+    },
+    {
+      "contact_name": "杨雪",
+      "fieldName": "公司名称",
+      "company_name": "北京市地税局",
+      "createdAt": "2026-01-23 16:15:20"
+    },
+    {
+      "contact_name": "洪小燕",
+      "fieldName": "公司名称",
+      "company_name": "上海恒愿口腔门诊部有限公司",
+      "createdAt": "2026-01-23 16:15:33"
+    },
+    {
+      "contact_name": "王海艳",
+      "fieldName": "公司名称",
+      "company_name": "上海昌唯文化发展有限公司",
+      "createdAt": "2026-01-23 16:15:33"
+    },
+    {
+      "contact_name": "王茜",
+      "fieldName": "公司名称",
+      "company_name": "北京扶摇新程信息咨询有限公司",
+      "createdAt": "2026-01-23 16:15:11"
+    },
+    {
+      "contact_name": "王茜",
+      "fieldName": "公司名称",
+      "company_name": "北京扶摇新程信息咨询有限公司",
+      "createdAt": "2026-01-23 16:15:11"
+    },
+    {
+      "contact_name": "秦主任",
+      "fieldName": "公司名称",
+      "company_name": "海淀外国语多语种学院",
+      "createdAt": "2026-01-23 16:15:20"
+    },
+    {
+      "contact_name": "羊仲平",
+      "fieldName": "公司名称",
+      "company_name": "隐钰庐（上海）艺术设计有限公司",
+      "createdAt": "2026-01-23 16:15:11"
+    },
+    {
+      "contact_name": "郑奎",
+      "fieldName": "公司名称",
+      "company_name": "上海博雅口腔门诊部有限公司",
+      "createdAt": "2026-01-23 16:15:33"
+    },
+    {
+      "contact_name": "钟贝",
+      "fieldName": "公司名称",
+      "company_name": "北京第一法院",
+      "createdAt": "2026-01-23 16:15:20"
+    },
+    {
+      "contact_name": "马婉义",
+      "fieldName": "公司名称",
+      "company_name": "北京公积金管理中心",
+      "createdAt": "2026-01-23 16:15:20"
+    }
+  ],
+  "messages": [],
+  "stdout": "contact_name\tfieldName\tcompany_name\tcreatedAt\n丁楠\t公司名称\t上海再捷商务信息咨询有限公司\t2026-01-23 16:15:20\n刘强\t公司名称\t上海合合信息科技发展有限公司\t2026-01-23 16:15:11\n张珏\t公司名称\t上海润豆仪豆贸易有限公司\t2026-01-23 16:15:11\n望悦\t公司名称\t锦途远景教育科技(北京)有限公司\t2026-01-23 16:15:33\n李晓洁\t公司名称\t上海桥孚科技有限公司\t2026-01-23 16:15:11\n杨雪\t公司名称\t北京市地税局\t2026-01-23 16:15:20\n洪小燕\t公司名称\t上海恒愿口腔门诊部有限公司\t2026-01-23 16:15:33\n王海艳\t公司名称\t上海昌唯文化发展有限公司\t2026-01-23 16:15:33\n王茜\t公司名称\t北京扶摇新程信息咨询有限公司\t2026-01-23 16:15:11\n王茜\t公司名称\t北京扶摇新程信息咨询有限公司\t2026-01-23 16:15:11\n秦主任\t公司名称\t海淀外国语多语种学院\t2026-01-23 16:15:20\n羊仲平\t公司名称\t隐钰庐（上海）艺术设计有限公司\t2026-01-23 16:15:11\n郑奎\t公司名称\t上海博雅口腔门诊部有限公司\t2026-01-23 16:15:33\n钟贝\t公司名称\t北京第一法院\t2026-01-23 16:15:20\n马婉义\t公司名称\t北京公积金管理中心\t2026-01-23 16:15:20\n",
+  "stderr": "",
+  "execution_time_ms": 58
+}

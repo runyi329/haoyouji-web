@@ -1,0 +1,9 @@
+{
+  "query": "\n-- 查询所有分类数据\nSELECT id, ledgerId, name, type, parentId FROM ledger_categories ORDER BY ledgerId, parentId, id LIMIT 20;\n",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute \n-- 查询所有分类数据\nSELECT id, ledgerId, name, type, parentId FROM ledger_categories ORDER BY ledgerId, parentId, id LIMIT 20;\n",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1541
+}

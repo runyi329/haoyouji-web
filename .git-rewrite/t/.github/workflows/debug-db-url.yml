@@ -1,0 +1,35 @@
+name: 查看服务器DB配置
+on:
+  workflow_dispatch:
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 配置SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      - name: 查看配置
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
+            echo "=== 服务器.env中的数据库URL ==="
+            grep -E "DATABASE_URL|DB_URL|ORIGINAL" /root/haoyouji-web/.env 2>/dev/null || echo "无.env文件"
+            echo "=== db.ts中getDb函数使用的环境变量 ==="
+            grep -n "DATABASE_URL\|ORIGINAL_DATABASE\|process.env\|getDb\b" /root/haoyouji-web/server/db.ts | head -20
+            echo "=== 直接查询Yunting用户的email（通过Node.js）==="
+            cd /root/haoyouji-web && node -e "
+              const mysql = require('mysql2/promise');
+              const url = process.env.ORIGINAL_DATABASE_URL || process.env.DATABASE_URL;
+              console.log('DB URL:', url ? url.replace(/:([^@]+)@/, ':***@') : 'undefined');
+              (async () => {
+                try {
+                  const conn = await mysql.createConnection(url);
+                  const [rows] = await conn.execute('SELECT id, name, email, phone FROM users WHERE name=?', ['Yunting']);
+                  console.log('Yunting rows:', JSON.stringify(rows));
+                  await conn.end();
+                } catch(e) { console.error('Error:', e.message); }
+              })();
+            " 2>&1
+          ENDSSH

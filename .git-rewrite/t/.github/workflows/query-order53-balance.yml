@@ -1,0 +1,34 @@
+name: 查询订单53余额记录
+on:
+  workflow_dispatch:
+jobs:
+  query:
+    name: 查询af_manual_balances中订单53的记录
+    runs-on: ubuntu-latest
+    steps:
+      - name: 配置SSH密钥
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+      - name: 查询余额记录
+        run: |
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e \"
+              SELECT '=== 订单53详情 ===' as info;
+              SELECT id, user_id, ledger_id, coin, limit_price, quantity, amount, sell_price, sell_status, sell_confirmed_at, is_gift
+              FROM af_orders WHERE id = 53;
+
+              SELECT '=== af_manual_balances中ETH相关记录（最近20条）===' as info;
+              SELECT id, ledger_id, user_id, amount, note, created_at
+              FROM af_manual_balances
+              WHERE note LIKE '%ETH%'
+              ORDER BY id DESC LIMIT 20;
+
+              SELECT '=== af_manual_balances中用户余额汇总 ===' as info;
+              SELECT user_id, SUM(amount) as total_balance, COUNT(*) as record_count
+              FROM af_manual_balances
+              WHERE ledger_id = 52
+              GROUP BY user_id;
+            \""

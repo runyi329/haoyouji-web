@@ -1,0 +1,80 @@
+{
+  "query": "SELECT * FROM ledgers ORDER BY id DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user XTqR3P9v8tSgKnm.81f097550e2f --database kjgmNaH8wU2okdbYBsMXbA --execute SELECT * FROM ledgers ORDER BY id DESC LIMIT 5;",
+  "rows": [
+    {
+      "id": "30002",
+      "name": "家庭记账11",
+      "description": "NULL",
+      "type": "family",
+      "currency": "CNY",
+      "icon": "NULL",
+      "createdBy": "4200293",
+      "ownerId": "4200293",
+      "isVip": "0",
+      "isArchived": "0",
+      "createdAt": "2026-01-26 11:16:34",
+      "updatedAt": "2026-01-26 11:16:34"
+    },
+    {
+      "id": "30001",
+      "name": "双数据库测试账本",
+      "description": "NULL",
+      "type": "family",
+      "currency": "CNY",
+      "icon": "NULL",
+      "createdBy": "4200293",
+      "ownerId": "4200293",
+      "isVip": "0",
+      "isArchived": "0",
+      "createdAt": "2026-01-26 11:15:14",
+      "updatedAt": "2026-01-26 11:15:14"
+    },
+    {
+      "id": "3",
+      "name": "查看result结构",
+      "description": "NULL",
+      "type": "family",
+      "currency": "CNY",
+      "icon": "NULL",
+      "createdBy": "4200293",
+      "ownerId": "4200293",
+      "isVip": "0",
+      "isArchived": "0",
+      "createdAt": "2026-01-26 11:04:23",
+      "updatedAt": "2026-01-26 11:04:23"
+    },
+    {
+      "id": "2",
+      "name": "最终测试",
+      "description": "NULL",
+      "type": "family",
+      "currency": "CNY",
+      "icon": "NULL",
+      "createdBy": "4200293",
+      "ownerId": "4200293",
+      "isVip": "0",
+      "isArchived": "0",
+      "createdAt": "2026-01-26 11:03:13",
+      "updatedAt": "2026-01-26 11:03:13"
+    },
+    {
+      "id": "1",
+      "name": "测试账本",
+      "description": "NULL",
+      "type": "family",
+      "currency": "CNY",
+      "icon": "NULL",
+      "createdBy": "4200293",
+      "ownerId": "4200293",
+      "isVip": "0",
+      "isArchived": "0",
+      "createdAt": "2026-01-26 10:57:43",
+      "updatedAt": "2026-01-26 10:57:43"
+    }
+  ],
+  "messages": [],
+  "stdout": "id\tname\tdescription\ttype\tcurrency\ticon\tcreatedBy\townerId\tisVip\tisArchived\tcreatedAt\tupdatedAt\n30002\t家庭记账11\tNULL\tfamily\tCNY\tNULL\t4200293\t4200293\t0\t0\t2026-01-26 11:16:34\t2026-01-26 11:16:34\n30001\t双数据库测试账本\tNULL\tfamily\tCNY\tNULL\t4200293\t4200293\t0\t0\t2026-01-26 11:15:14\t2026-01-26 11:15:14\n3\t查看result结构\tNULL\tfamily\tCNY\tNULL\t4200293\t4200293\t0\t0\t2026-01-26 11:04:23\t2026-01-26 11:04:23\n2\t最终测试\tNULL\tfamily\tCNY\tNULL\t4200293\t4200293\t0\t0\t2026-01-26 11:03:13\t2026-01-26 11:03:13\n1\t测试账本\tNULL\tfamily\tCNY\tNULL\t4200293\t4200293\t0\t0\t2026-01-26 10:57:43\t2026-01-26 10:57:43\n",
+  "stderr": "",
+  "execution_time_ms": 1735
+}
