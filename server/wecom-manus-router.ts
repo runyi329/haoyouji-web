@@ -348,6 +348,21 @@ async function handleMenuClick(userId: string, eventKey: string): Promise<void> 
       break;
     }
 
+    case "AI_EMPLOYEE": {
+      // 将用户模型偏好设为 auto_route，触发智能路由模式
+      await setUserModel(userId, "auto_route");
+      await sendWeComMessage(
+        userId,
+        [
+          "已切换到 AI 员工模式 🤖",
+          "",
+          "我会自动判断你的问题，选择最合适的 AI 来回答。",
+          "直接发消息开始吧！",
+        ].join("\n")
+      );
+      break;
+    }
+
     default: {
       if (eventKey.startsWith("RESERVED_")) {
         await sendWeComMessage(userId, "此功能即将上线，敬请期待。");
@@ -1019,7 +1034,9 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
     let classifierResult = 0;
     let classifierTokens = 0;
     const routeConfig = await getRouteConfig();
-    if (routeConfig.enabled && routeConfig.classifierPrompt) {
+    // 当用户已选择 auto_route，或全局路由开关开启时，触发智能分类
+    const shouldRoute = userModelProfile === "auto_route" || (routeConfig.enabled && routeConfig.classifierPrompt);
+    if (shouldRoute && routeConfig.classifierPrompt) {
       const cls = await classifyMessage(content, routeConfig.classifierPrompt);
       classifierResult = cls.result;
       classifierTokens = cls.tokens;
@@ -1028,6 +1045,10 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
       else if (classifierResult === 2) userModelProfile = "deepseek-v4-flash"; // 深思模式占位，当前用 flash
       else if (classifierResult === 3) userModelProfile = "manus-1.6"; // 默认派给 Manus 标准
       console.log(`[Router] 用户 ${userId} 消息路由到: ${userModelProfile}`);
+    } else if (userModelProfile === "auto_route") {
+      // 路由配置不完整，默认使用 DeepSeek Flash
+      userModelProfile = "deepseek-chat";
+      console.log(`[Router] 用户 ${userId} auto_route 无路由配置，默认用 deepseek-chat`);
     }
 
     const isDeepSeek = DEEPSEEK_PROFILES.has(userModelProfile);
