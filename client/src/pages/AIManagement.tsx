@@ -668,17 +668,17 @@ function UsersTab() {
             >
               <optgroup label="智能路由">
                 {MODEL_OPTIONS.filter(m => m.group === '路由').map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label} — {opt.desc}</option>
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </optgroup>
               <optgroup label="Manus">
                 {MODEL_OPTIONS.filter(m => m.group === 'Manus').map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label} — {opt.desc}</option>
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </optgroup>
               <optgroup label="DeepSeek">
                 {MODEL_OPTIONS.filter(m => m.group === 'DeepSeek').map(opt => (
-                  <option key={opt.value} value={opt.value}>{opt.label} — {opt.desc}</option>
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </optgroup>
             </select>
@@ -768,17 +768,17 @@ function UsersTab() {
                   >
                     <optgroup label="智能路由">
                       {MODEL_OPTIONS.filter(m => m.group === '路由').map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label} — {opt.desc}</option>
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
                       ))}
                     </optgroup>
                     <optgroup label="Manus">
                       {MODEL_OPTIONS.filter(m => m.group === 'Manus').map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label} — {opt.desc}</option>
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
                       ))}
                     </optgroup>
                     <optgroup label="DeepSeek">
                       {MODEL_OPTIONS.filter(m => m.group === 'DeepSeek').map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label} — {opt.desc}</option>
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
                       ))}
                     </optgroup>
                   </select>
