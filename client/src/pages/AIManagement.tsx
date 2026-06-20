@@ -255,7 +255,7 @@ export default function AIManagement() {
 // Panel 1: 企微 AI（原 WecomAdmin 内容）
 // ═══════════════════════════════════════════════════════════════════════════════
 
-type WecomTabKey = 'users' | 'workflow' | 'messages' | 'stats' | 'menu' | 'wallet' | 'rules';
+type WecomTabKey = 'users' | 'workflow' | 'messages' | 'stats' | 'menu' | 'wallet';
 const WECOM_TABS: { key: WecomTabKey; label: string; icon: React.ReactNode }[] = [
   { key: 'users', label: '用户', icon: <User className="w-3.5 h-3.5" /> },
   { key: 'workflow', label: '工作流', icon: <Zap className="w-3.5 h-3.5" /> },
@@ -263,7 +263,6 @@ const WECOM_TABS: { key: WecomTabKey; label: string; icon: React.ReactNode }[] =
   { key: 'stats', label: '统计', icon: <BarChart2 className="w-3.5 h-3.5" /> },
   { key: 'menu', label: '菜单', icon: <Menu className="w-3.5 h-3.5" /> },
   { key: 'wallet', label: '钱包绑定', icon: <Coins className="w-3.5 h-3.5" /> },
-  { key: 'rules', label: '专属规则', icon: <Sparkles className="w-3.5 h-3.5" /> },
 ];
 
 function WecomPanel() {
@@ -296,7 +295,6 @@ function WecomPanel() {
         {activeTab === 'stats' && <StatsTab />}
         {activeTab === 'menu' && <MenuTab />}
         {activeTab === 'wallet' && <WalletBindingTab />}
-        {activeTab === 'rules' && <CustomRulesTab />}
       </div>
     </div>
   );
@@ -3222,6 +3220,7 @@ const ROUTE_MODEL_LABELS: Record<string, { label: string; color: string; emoji: 
 };
 
 function RoutePanel() {
+  const [routeSubTab, setRouteSubTab] = useState<'config' | 'rules'>('config');
   const [routeEnabled, setRouteEnabled] = useState(false);
   const [classifierModel, setClassifierModel] = useState('deepseek-chat');
   const [fallback, setFallback] = useState('deepseek-flash');
@@ -3379,7 +3378,32 @@ function RoutePanel() {
   };
 
   return (
-    <div className="px-4 space-y-4">
+    <div className="space-y-0">
+      {/* 子Tab切换栏 */}
+      <div className="px-4 pb-3">
+        <div className="flex bg-gray-100 rounded-xl p-1">
+          <button
+            onClick={() => setRouteSubTab('config')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs rounded-lg transition-all ${
+              routeSubTab === 'config' ? 'bg-white text-red-600 font-medium shadow-sm' : 'text-gray-500'
+            }`}
+          >
+            <Settings className="w-3.5 h-3.5" />路由配置
+          </button>
+          <button
+            onClick={() => setRouteSubTab('rules')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs rounded-lg transition-all ${
+              routeSubTab === 'rules' ? 'bg-white text-red-600 font-medium shadow-sm' : 'text-gray-500'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />专属规则
+          </button>
+        </div>
+      </div>
+
+      {routeSubTab === 'rules' && <CustomRulesTab />}
+
+      {routeSubTab === 'config' && <div className="px-4 space-y-4">
       {/* 路由配置卡片 */}
       <Card>
         <CardHeader className="pb-2">
@@ -3865,6 +3889,7 @@ function RoutePanel() {
           )}
         </CardContent>
       </Card>
+    </div>}
     </div>
   );
 }
