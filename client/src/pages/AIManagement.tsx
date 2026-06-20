@@ -64,7 +64,12 @@ interface WorkflowRule {
 interface UsageStat {
   nickname: string;
   wecom_user_id: string;
-  total_cost: number;
+  total_cost: number;       // Manus 积分（兼容旧字段）
+  manus_credits: number;    // Manus 积分
+  manus_cny: number;        // Manus 费用（元）
+  ds_total_tokens: number;  // DeepSeek 总 token
+  ds_cny: number;           // DeepSeek 费用（元）
+  total_cny: number;        // 合计费用（元）
   record_count: number;
   task_count: number;
   first_bound_at: string;
@@ -1335,6 +1340,11 @@ interface UserDetailRecord {
   credits: number;
   credits_before?: number;
   credits_after?: number;
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_hit_tokens?: number;
+  cny?: number;            // 本条记录换算的人民币
+  is_deepseek?: boolean;   // 是否为 DeepSeek 记录
   created_at: string;
   model: string;
   record_type?: 'message' | 'task';
@@ -1349,8 +1359,10 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [expandedMsg, setExpandedMsg] = useState<number | null>(null);
   const [useMessageCredits, setUseMessageCredits] = useState(false);
-
-  const creditsToUsdt = (credits: number) => (credits * 0.037).toFixed(2);
+  const [manusCredits, setManusCredits] = useState(0);
+  const [manusCny, setManusCny] = useState(0);
+  const [dsCny, setDsCny] = useState(0);
+  const [totalCny, setTotalCny] = useState(0);
 
   useEffect(() => {
     fetch(`/api/wecom/user-detail?wecom_user_id=${encodeURIComponent(wecomUserId)}`)
@@ -1360,6 +1372,10 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
           setSessions(data.sessions || []);
           setRecords(data.records || []);
           setUseMessageCredits(!!data.use_message_credits);
+          setManusCredits(data.manus_credits || 0);
+          setManusCny(data.manus_cny || 0);
+          setDsCny(data.ds_cny || 0);
+          setTotalCny(data.total_cny || 0);
         } else toast.error(data.error || '加载失败');
       })
       .catch(() => toast.error('网络错误'))
@@ -1382,8 +1398,10 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
           </div>
         </div>
         <div className="text-right">
-          <div className="text-lg font-bold text-blue-600">{Math.round(totalCost)}</div>
-          <div className="text-xs text-gray-400">总消耗算力</div>
+          <div className="text-lg font-bold text-green-600">¥{totalCny > 0 ? totalCny.toFixed(2) : (totalCost * 0.037).toFixed(2)}</div>
+          <div className="text-xs text-gray-400">
+            {dsCny > 0 ? `Manus¥${manusCny.toFixed(2)} + DS¥${dsCny.toFixed(4)}` : `${Math.round(totalCost)}积分`}
+          </div>
         </div>
       </div>
 
@@ -1431,6 +1449,7 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
                         </div>
                         {taskRecords.map((r, i) => {
                           const isExpMsg = expandedMsg === (r.id ?? i);
+                          const recordCny = r.cny ?? (r.is_deepseek ? 0 : r.credits * 0.037);
                           return (
                             <div key={r.id ?? i} className="border-b border-gray-50 last:border-0">
                               <div
@@ -1442,8 +1461,17 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
                                   <div className="text-sm text-gray-800 truncate">{r.user_message || '(无内容)'}</div>
                                 </div>
                                 <div className="flex-shrink-0 text-right ml-2">
-                                  <div className="text-sm font-bold text-blue-600">-{Math.round(r.credits)}</div>
-                                  <div className="text-xs text-green-600">{creditsToYuan(r.credits)}</div>
+                                  {r.is_deepseek ? (
+                                    <>
+                                      <div className="text-xs text-purple-500">{Math.round(r.credits)} tokens</div>
+                                      <div className="text-xs font-bold text-green-600">¥{recordCny.toFixed(4)}</div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div className="text-sm font-bold text-blue-600">-{Math.round(r.credits)}</div>
+                                      <div className="text-xs text-green-600">¥{recordCny.toFixed(2)}</div>
+                                    </>
+                                  )}
                                 </div>
                                 <ChevronRight className={`w-3.5 h-3.5 text-gray-300 flex-shrink-0 mt-1 transition-transform ${isExpMsg ? 'rotate-90' : ''}`} />
                               </div>
@@ -1455,10 +1483,31 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
                                       <div className="text-xs text-gray-700 leading-relaxed">{r.reply_preview}</div>
                                     </div>
                                   )}
-                                  <div className="flex items-center justify-between text-xs text-gray-400">
-                                    <span>算力 {r.credits_before ?? '?'} → {r.credits_after ?? '?'}</span>
-                                    <span>{creditsToUsdt(r.credits)} 元</span>
-                                  </div>
+                                  {r.is_deepseek ? (
+                                    <div className="rounded-lg bg-white border border-gray-100 px-3 py-2 space-y-1">
+                                      <div className="text-xs text-gray-400 font-medium">DeepSeek token 明细</div>
+                                      <div className="grid grid-cols-3 gap-1 text-xs">
+                                        <div className="text-center">
+                                          <div className="text-gray-500">输入(未命中)</div>
+                                          <div className="font-semibold text-gray-800">{r.input_tokens ?? 0}</div>
+                                        </div>
+                                        <div className="text-center">
+                                          <div className="text-gray-500">输入(命中)</div>
+                                          <div className="font-semibold text-green-600">{r.cache_hit_tokens ?? 0}</div>
+                                        </div>
+                                        <div className="text-center">
+                                          <div className="text-gray-500">输出</div>
+                                          <div className="font-semibold text-blue-600">{r.output_tokens ?? 0}</div>
+                                        </div>
+                                      </div>
+                                      <div className="text-xs text-gray-400 text-right">费用 ¥{recordCny.toFixed(6)}</div>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center justify-between text-xs text-gray-400">
+                                      <span>算力 {r.credits_before ?? '?'} → {r.credits_after ?? '?'}</span>
+                                      <span>¥{recordCny.toFixed(2)}</span>
+                                    </div>
+                                  )}
                                   {r.model && <div className="text-xs text-gray-400">模型: {r.model}</div>}
                                 </div>
                               )}
@@ -1506,7 +1555,7 @@ function StatsTab() {
   const [viewMode, setViewMode] = useState<'user' | 'time' | 'rank'>('user');
   const [detailUser, setDetailUser] = useState<{ id: string; name: string } | null>(null);
 
-  const creditsToUsdt = (credits: number) => (credits * 0.037).toFixed(2);
+  const [totalCny, setTotalCny] = useState(0);
 
   const fetchStats = useCallback(async () => {
     setLoading(true);
@@ -1516,6 +1565,7 @@ function StatsTab() {
       if (data.ok) {
         setStats(data.stats || []);
         setTotalCost(data.total_cost || 0);
+        setTotalCny(data.total_cny || 0);
       } else toast.error(data.error || '加载失败');
     } catch { toast.error('网络错误'); }
     finally { setLoading(false); }
@@ -1523,7 +1573,7 @@ function StatsTab() {
 
   useEffect(() => { fetchStats(); }, [fetchStats]);
 
-  const rankStats = [...stats].sort((a, b) => b.total_cost - a.total_cost);
+  const rankStats = [...stats].sort((a, b) => (b.total_cny || 0) - (a.total_cny || 0));
 
   if (detailUser) {
     return <UserDetailModal wecomUserId={detailUser.id} displayName={detailUser.name} onClose={() => setDetailUser(null)} />;
@@ -1534,10 +1584,14 @@ function StatsTab() {
       <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl p-4 text-white">
         <div className="flex items-center gap-2 mb-1">
           <Coins className="w-4 h-4 text-blue-200" />
-          <span className="text-sm text-blue-100">企微渠道累计消耗</span>
+          <span className="text-sm text-blue-100">企微渠道累计费用</span>
         </div>
-        <div className="text-3xl font-bold">{Math.round(totalCost)}</div>
-        <div className="text-sm text-blue-200 mt-0.5">积分</div>
+        <div className="text-3xl font-bold">¥{totalCny.toFixed(2)}</div>
+        <div className="flex items-center gap-3 mt-1.5">
+          <span className="text-xs text-blue-200">Manus {Math.round(totalCost)} 积分 · ¥{(totalCost * 0.037).toFixed(2)}</span>
+          <span className="text-xs text-blue-300">│</span>
+          <span className="text-xs text-blue-200">DeepSeek ¥{(totalCny - totalCost * 0.037).toFixed(4)}</span>
+        </div>
       </div>
 
       <div className="flex items-center gap-2">
@@ -1550,7 +1604,7 @@ function StatsTab() {
                 viewMode === mode ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
               }`}
             >
-              {mode === 'user' ? '按用户' : mode === 'time' ? '按时间' : '按积分'}
+              {mode === 'user' ? '按用户' : mode === 'time' ? '按时间' : '按费用'}
             </button>
           ))}
         </div>
@@ -1571,15 +1625,15 @@ function StatsTab() {
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
           {viewMode === 'user' && (
-            <table className="min-w-full border-collapse text-sm" style={{ minWidth: '700px' }}>
+            <table className="min-w-full border-collapse text-sm" style={{ minWidth: '780px' }}>
               <thead>
                 <tr className="bg-gray-50">
                   <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 border-b border-r border-gray-200">用户（点击查看明细）</th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-20">开始时间</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">累计时间</th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-14">消息数</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">消耗算力</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-gray-200 w-16">元</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-20">Manus积分</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-20">DS tokens</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-gray-200 w-20">合计（元）</th>
                 </tr>
               </thead>
               <tbody>
@@ -1591,16 +1645,21 @@ function StatsTab() {
                   >
                     <td className="px-3 py-2.5 border-r border-gray-100">
                       <div className="font-medium text-gray-900 text-sm">{stat.nickname || stat.wecom_user_id}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        {stat.wecom_user_id}
-                        {stat.task_count > 1 && <span className="ml-1.5 text-orange-500">共 {stat.task_count} 个任务</span>}
-                      </div>
+                      <div className="text-xs text-gray-400 mt-0.5">{stat.wecom_user_id}</div>
                     </td>
                     <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{formatShortDate(stat.first_bound_at)}</td>
-                    <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{calcDays(stat.first_bound_at)}</td>
                     <td className="px-3 py-2.5 text-center text-sm text-gray-600 border-r border-gray-100">{stat.record_count}</td>
-                    <td className="px-3 py-2.5 text-center text-sm font-semibold text-blue-600 border-r border-gray-100">{Math.round(stat.total_cost)}</td>
-                    <td className="px-3 py-2.5 text-center text-sm font-semibold text-green-600">{creditsToYuan(stat.total_cost)}</td>
+                    <td className="px-3 py-2.5 text-center border-r border-gray-100">
+                      <div className="text-sm font-semibold text-blue-600">{Math.round(stat.manus_credits || stat.total_cost)}</div>
+                      <div className="text-xs text-gray-400">¥{(stat.manus_cny || stat.total_cost * 0.037).toFixed(2)}</div>
+                    </td>
+                    <td className="px-3 py-2.5 text-center border-r border-gray-100">
+                      <div className="text-sm font-semibold text-purple-600">{Math.round(stat.ds_total_tokens || 0)}</div>
+                      <div className="text-xs text-gray-400">¥{(stat.ds_cny || 0).toFixed(4)}</div>
+                    </td>
+                    <td className="px-3 py-2.5 text-center">
+                      <div className="text-sm font-bold text-green-600">¥{(stat.total_cny || stat.total_cost * 0.037).toFixed(2)}</div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1608,15 +1667,15 @@ function StatsTab() {
           )}
 
           {viewMode === 'time' && (
-            <table className="min-w-full border-collapse text-sm" style={{ minWidth: '700px' }}>
+            <table className="min-w-full border-collapse text-sm" style={{ minWidth: '780px' }}>
               <thead>
                 <tr className="bg-gray-50">
                   <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 border-b border-r border-gray-200">用户（最早绑定在前）</th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-20">开始时间</th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">累计时间</th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-14">消息数</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">消耗算力</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-gray-200 w-16">元</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-20">Manus积分</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-gray-200 w-20">合计（元）</th>
                 </tr>
               </thead>
               <tbody>
@@ -1633,8 +1692,13 @@ function StatsTab() {
                     <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{formatShortDate(stat.first_bound_at)}</td>
                     <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{calcDays(stat.first_bound_at)}</td>
                     <td className="px-3 py-2.5 text-center text-sm text-gray-600 border-r border-gray-100">{stat.record_count}</td>
-                    <td className="px-3 py-2.5 text-center text-sm font-semibold text-blue-600 border-r border-gray-100">{Math.round(stat.total_cost)}</td>
-                    <td className="px-3 py-2.5 text-center text-sm font-semibold text-green-600">{creditsToYuan(stat.total_cost)}</td>
+                    <td className="px-3 py-2.5 text-center border-r border-gray-100">
+                      <div className="text-sm font-semibold text-blue-600">{Math.round(stat.manus_credits || stat.total_cost)}</div>
+                      <div className="text-xs text-gray-400">¥{(stat.manus_cny || stat.total_cost * 0.037).toFixed(2)}</div>
+                    </td>
+                    <td className="px-3 py-2.5 text-center">
+                      <div className="text-sm font-bold text-green-600">¥{(stat.total_cny || stat.total_cost * 0.037).toFixed(2)}</div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1642,15 +1706,15 @@ function StatsTab() {
           )}
 
           {viewMode === 'rank' && (
-            <table className="min-w-full border-collapse text-sm" style={{ minWidth: '700px' }}>
+            <table className="min-w-full border-collapse text-sm" style={{ minWidth: '780px' }}>
               <thead>
                 <tr className="bg-gray-50">
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-10">排名</th>
                   <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 border-b border-r border-gray-200">用户</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-20">开始时间</th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-14">消息数</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">消耗算力</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-gray-200 w-16">元</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-20">Manus积分</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-20">DS费用(元)</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-gray-200 w-20">合计（元）</th>
                 </tr>
               </thead>
               <tbody>
@@ -1669,10 +1733,15 @@ function StatsTab() {
                       <div className="font-medium text-gray-900 text-sm">{stat.nickname || stat.wecom_user_id}</div>
                       <div className="text-xs text-gray-400 mt-0.5">{stat.wecom_user_id}</div>
                     </td>
-                    <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{formatShortDate(stat.first_bound_at)}</td>
                     <td className="px-3 py-2.5 text-center text-sm text-gray-600 border-r border-gray-100">{stat.record_count}</td>
-                    <td className="px-3 py-2.5 text-center text-sm font-semibold text-blue-600 border-r border-gray-100">{Math.round(stat.total_cost)}</td>
-                    <td className="px-3 py-2.5 text-center text-sm font-semibold text-green-600">{creditsToYuan(stat.total_cost)}</td>
+                    <td className="px-3 py-2.5 text-center border-r border-gray-100">
+                      <div className="text-sm font-semibold text-blue-600">{Math.round(stat.manus_credits || stat.total_cost)}</div>
+                      <div className="text-xs text-gray-400">¥{(stat.manus_cny || stat.total_cost * 0.037).toFixed(2)}</div>
+                    </td>
+                    <td className="px-3 py-2.5 text-center text-sm font-semibold text-purple-600 border-r border-gray-100">¥{(stat.ds_cny || 0).toFixed(4)}</td>
+                    <td className="px-3 py-2.5 text-center">
+                      <div className="text-sm font-bold text-green-600">¥{(stat.total_cny || stat.total_cost * 0.037).toFixed(2)}</div>
+                    </td>
                   </tr>
                 ))}
               </tbody>

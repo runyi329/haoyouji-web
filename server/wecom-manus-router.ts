@@ -140,6 +140,34 @@ const MODEL_PROFILES: Record<string, { profile: string; label: string; emoji: st
   MODEL_DS_FLASH: { profile: "deepseek-chat", label: "DeepSeek 快速（高效对话）", emoji: "⚡" },
 };
 
+// -----------------------------------------------------------
+// 计费公式硬编码（用于统计页面换算人民币）
+// -----------------------------------------------------------
+// Manus 积分价格：4000积分 = 148元，即 1积分 = 0.037元
+const MANUS_CREDIT_PRICE = 0.037; // 元/积分
+
+// DeepSeek 官方价格（元/百万token）
+const DEEPSEEK_PRICING: Record<string, { inputMiss: number; inputHit: number; output: number }> = {
+  'deepseek-v4-flash':         { inputMiss: 1,   inputHit: 0.1, output: 2 },
+  'deepseek-v4-flash-thinking':{ inputMiss: 1,   inputHit: 0.1, output: 2 },
+  'deepseek-v4-pro':           { inputMiss: 3,   inputHit: 0.3, output: 6 },
+  'deepseek-v4-pro-thinking':  { inputMiss: 3,   inputHit: 0.3, output: 6 },
+  'deepseek-chat':             { inputMiss: 1,   inputHit: 0.1, output: 2 }, // 兼容旧名，映射到 flash
+};
+
+/**
+ * 计算 DeepSeek 费用（元）
+ * @param model 模型名（如 deepseek-v4-flash）
+ * @param inputMissTokens 缓存未命中输入token
+ * @param inputHitTokens 缓存命中输入token
+ * @param outputTokens 输出token
+ */
+function calcDeepSeekCost(model: string, inputMissTokens: number, inputHitTokens: number, outputTokens: number): number {
+  const pricing = DEEPSEEK_PRICING[model] || DEEPSEEK_PRICING['deepseek-v4-flash'];
+  const cost = (inputMissTokens * pricing.inputMiss + inputHitTokens * pricing.inputHit + outputTokens * pricing.output) / 1_000_000;
+  return cost;
+}
+
 // DeepSeek 模型 profile 列表（用于判断是否走 DeepSeek 路径）
 // 带 -thinking 后缀的表示开启思考模式（实际 API 调用时传入 thinking: { type: 'enabled' } 参数）
 const DEEPSEEK_PROFILES = new Set([
@@ -436,7 +464,10 @@ async function ensureSessionTable(): Promise<void> {
       user_message  TEXT         COMMENT '用户发送的消息内容（前200字）',
       credits_before INT         NOT NULL DEFAULT 0 COMMENT '发消息前任务累计积分消耗',
       credits_after  INT         NOT NULL DEFAULT 0 COMMENT 'AI回复后任务累计积分消耗',
-      credits_used   INT         NOT NULL DEFAULT 0 COMMENT '本次消耗积分（after - before）',
+      credits_used   INT         NOT NULL DEFAULT 0 COMMENT '本次消耗积分（after - before）或DeepSeek total_tokens',
+      input_tokens   INT         NOT NULL DEFAULT 0 COMMENT 'DeepSeek输入token数（缓存未命中）',
+      output_tokens  INT         NOT NULL DEFAULT 0 COMMENT 'DeepSeek输出token数',
+      cache_hit_tokens INT       NOT NULL DEFAULT 0 COMMENT 'DeepSeek缓存命中输入token数',
       model_used    VARCHAR(50)  COMMENT '使用的模型',
       reply_preview TEXT         COMMENT 'AI回复预览（前100字）',
       created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '消息时间',
@@ -445,6 +476,12 @@ async function ensureSessionTable(): Promise<void> {
       INDEX idx_mc_created (created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='企业微信每条消息积分消耗记录'
   `);
+  // 迁移：给旧表补充 DeepSeek token 字段
+  try {
+    await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS input_tokens INT NOT NULL DEFAULT 0 COMMENT 'DeepSeek输入token数（缓存未命中）'`);
+    await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS output_tokens INT NOT NULL DEFAULT 0 COMMENT 'DeepSeek输出token数'`);
+    await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS cache_hit_tokens INT NOT NULL DEFAULT 0 COMMENT 'DeepSeek缓存命中输入token数'`);
+  } catch (_) {}
 
   // 创建工作流规则表
   await (conn as any).execute(`
@@ -1091,9 +1128,9 @@ async function classifyMessage(userMessage: string, prompt: string, classifierMo
 // -----------------------------------------------------------
 // 工具函数：向 DeepSeek API 发送消息并获取回复
 // -----------------------------------------------------------
-interface DeepSeekReply { content: string; promptTokens: number; completionTokens: number; totalTokens: number; }
+interface DeepSeekReply { content: string; promptTokens: number; completionTokens: number; totalTokens: number; cacheHitTokens: number; }
 async function sendToDeepSeekAndGetReply(userMessage: string, model: string = "deepseek-chat", systemPrompt?: string): Promise<DeepSeekReply> {
-  const errReply = (msg: string): DeepSeekReply => ({ content: msg, promptTokens: 0, completionTokens: 0, totalTokens: 0 });
+  const errReply = (msg: string): DeepSeekReply => ({ content: msg, promptTokens: 0, completionTokens: 0, totalTokens: 0, cacheHitTokens: 0 });
   try {
     if (!DEEPSEEK_API_KEY) {
       return errReply("DeepSeek API Key 未配置，请联系管理员。");
@@ -1145,12 +1182,14 @@ async function sendToDeepSeekAndGetReply(userMessage: string, model: string = "d
     const promptTokens = usage.prompt_tokens || 0;
     const completionTokens = usage.completion_tokens || 0;
     const totalTokens = usage.total_tokens || 0;
+    // DeepSeek API 返回缓存命中 token 数（prompt_cache_hit_tokens）
+    const cacheHitTokens = usage.prompt_cache_hit_tokens || 0;
     if (isThinking && reasoningContent) {
-      console.log(`[DeepSeek] 思考模式回复成功，思维链长度=${reasoningContent.length}，最终答案长度=${content.length}，tokens=${totalTokens}`);
+      console.log(`[DeepSeek] 思考模式回复成功，思维链长度=${reasoningContent.length}，最终答案长度=${content.length}，tokens=${totalTokens}，cacheHit=${cacheHitTokens}`);
     } else {
-      console.log(`[DeepSeek] 回复成功，长度=${finalContent.length}，tokens=${totalTokens}`);
+      console.log(`[DeepSeek] 回复成功，长度=${finalContent.length}，tokens=${totalTokens}，cacheHit=${cacheHitTokens}`);
     }
-    return { content: finalContent, promptTokens, completionTokens, totalTokens };
+    return { content: finalContent, promptTokens, completionTokens, totalTokens, cacheHitTokens };
   } catch (e) {
     console.error("[DeepSeek] 通信异常:", e);
     return errReply("与 DeepSeek 通信时发生错误，请稍后重试。");
@@ -1368,15 +1407,22 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
           ) as any;
           const prevTotalTokens = Number((tokenRows as any[])[0]?.total_tokens || 0);
           const newTotalTokens = prevTotalTokens + dsReply.totalTokens;
+          // 从 DeepSeek API 返回的 usage 中提取各类 token
+          // prompt_cache_hit_tokens: 缓存命中的输入token（价格优惠）
+          // prompt_tokens - prompt_cache_hit_tokens: 缓存未命中的输入token（正常价格）
+          const cacheHitTokens = dsReply.cacheHitTokens || 0;
+          const inputTokensMiss = Math.max(0, dsReply.promptTokens - cacheHitTokens);
           await (dbConn as any).execute(
             `INSERT INTO wecom_message_credits
-             (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, model_used, reply_preview)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [userId, "deepseek", content.substring(0, 200), prevTotalTokens, newTotalTokens, dsReply.totalTokens, userModelProfile, dsReply.content.substring(0, 100)]
+             (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, input_tokens, output_tokens, cache_hit_tokens, model_used, reply_preview)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [userId, "deepseek", content.substring(0, 200), prevTotalTokens, newTotalTokens, dsReply.totalTokens,
+             inputTokensMiss, dsReply.completionTokens, cacheHitTokens, userModelProfile, dsReply.content.substring(0, 100)]
           );
-          // 发送 token 统计消息
+          // 计算本次 DeepSeek 费用
+          const dsCost = calcDeepSeekCost(userModelProfile, inputTokensMiss, cacheHitTokens, dsReply.completionTokens);
           if (dsReply.totalTokens > 0) {
-            await sendWeComMessage(userId, `─────────────\n本次消耗：${dsReply.totalTokens} tokens\n累计消耗：${newTotalTokens} tokens`);
+            await sendWeComMessage(userId, `─────────────\n本次消耗：${dsReply.totalTokens} tokens（≈¥${dsCost.toFixed(4)}）\n累计消耗：${newTotalTokens} tokens`);
           }
           // 写入路由日志
           if (classifierResult > 0) {
@@ -1801,40 +1847,81 @@ router.get("/api/wecom/stats", async (req: Request, res: Response) => {
     if (!conn) return res.status(500).json({ error: "数据库连接失败" });
 
     // 直接从本地 wecom_message_credits 表按 wecom_user_id 汇总
-    // 优点：不受 task_id 变更影响、不受 Manus API limit 限制、历史数据完整
+    // 分别计算 Manus 积分费用和 DeepSeek token 费用，统一换算为人民币
     const [creditRows] = await (conn as any).execute(
       `SELECT
          mc.wecom_user_id,
-         COALESCE(s.nickname, mc.wecom_user_id) AS nickname,
-         SUM(mc.credits_used) AS total_cost,
+         COALESCE(MAX(s.nickname), mc.wecom_user_id) AS nickname,
+         -- Manus 积分（manus_task_id != 'deepseek'）
+         SUM(CASE WHEN mc.manus_task_id != 'deepseek' THEN mc.credits_used ELSE 0 END) AS manus_credits,
+         -- DeepSeek token 汇总
+         SUM(CASE WHEN mc.manus_task_id = 'deepseek' THEN mc.credits_used ELSE 0 END) AS ds_total_tokens,
+         SUM(CASE WHEN mc.manus_task_id = 'deepseek' THEN mc.input_tokens ELSE 0 END) AS ds_input_miss,
+         SUM(CASE WHEN mc.manus_task_id = 'deepseek' THEN mc.output_tokens ELSE 0 END) AS ds_output,
+         SUM(CASE WHEN mc.manus_task_id = 'deepseek' THEN mc.cache_hit_tokens ELSE 0 END) AS ds_cache_hit,
+         -- 按模型分组的 DeepSeek token（用于精确计费）
+         SUM(CASE WHEN mc.model_used IN ('deepseek-v4-pro','deepseek-v4-pro-thinking') THEN mc.input_tokens ELSE 0 END) AS ds_pro_input_miss,
+         SUM(CASE WHEN mc.model_used IN ('deepseek-v4-pro','deepseek-v4-pro-thinking') THEN mc.output_tokens ELSE 0 END) AS ds_pro_output,
+         SUM(CASE WHEN mc.model_used IN ('deepseek-v4-pro','deepseek-v4-pro-thinking') THEN mc.cache_hit_tokens ELSE 0 END) AS ds_pro_cache_hit,
          COUNT(*) AS record_count,
          MIN(mc.created_at) AS first_message_at
        FROM wecom_message_credits mc
-       LEFT JOIN wecom_manus_sessions s ON s.wecom_user_id = mc.wecom_user_id
+       LEFT JOIN wecom_manus_sessions s ON s.wecom_user_id = mc.wecom_user_id AND s.status = 'active'
        GROUP BY mc.wecom_user_id
-       ORDER BY total_cost DESC`
+       ORDER BY mc.wecom_user_id`
     ) as any;
     const creditStats = creditRows as any[];
 
     if (creditStats.length === 0) {
-      return res.json({ ok: true, stats: [], total_cost: 0 });
+      return res.json({ ok: true, stats: [], total_cost: 0, total_cny: 0 });
     }
 
-    const stats = creditStats.map((r: any) => ({
-      wecom_user_id: r.wecom_user_id,
-      nickname: r.nickname || r.wecom_user_id,
-      total_cost: Number(r.total_cost) || 0,
-      record_count: Number(r.record_count) || 0,
-      task_count: 0,  // 兼容前端字段
-      first_bound_at: r.first_message_at
-        ? (r.first_message_at instanceof Date ? r.first_message_at.toISOString() : String(r.first_message_at))
-        : "",
-    }));
+    const stats = creditStats.map((r: any) => {
+      const manusCredits = Number(r.manus_credits) || 0;
+      const manusCny = manusCredits * MANUS_CREDIT_PRICE;
 
-    const total_cost = stats.reduce((sum: number, s: any) => sum + s.total_cost, 0);
+      // DeepSeek 按模型分组精确计费
+      // Flash 系列 = 总输入 - Pro输入
+      const dsProInputMiss = Number(r.ds_pro_input_miss) || 0;
+      const dsProOutput = Number(r.ds_pro_output) || 0;
+      const dsProCacheHit = Number(r.ds_pro_cache_hit) || 0;
+      const dsFlashInputMiss = Math.max(0, (Number(r.ds_input_miss) || 0) - dsProInputMiss);
+      const dsFlashOutput = Math.max(0, (Number(r.ds_output) || 0) - dsProOutput);
+      const dsFlashCacheHit = Math.max(0, (Number(r.ds_cache_hit) || 0) - dsProCacheHit);
+
+      const dsFlashCny = calcDeepSeekCost('deepseek-v4-flash', dsFlashInputMiss, dsFlashCacheHit, dsFlashOutput);
+      const dsProCny = calcDeepSeekCost('deepseek-v4-pro', dsProInputMiss, dsProCacheHit, dsProOutput);
+      const dsTotalCny = dsFlashCny + dsProCny;
+      const totalCny = manusCny + dsTotalCny;
+
+      return {
+        wecom_user_id: r.wecom_user_id,
+        nickname: r.nickname || r.wecom_user_id,
+        // 原始数据
+        manus_credits: manusCredits,
+        ds_total_tokens: Number(r.ds_total_tokens) || 0,
+        // 费用明细
+        manus_cny: manusCny,
+        ds_cny: dsTotalCny,
+        total_cny: totalCny,
+        // 兼容旧字段
+        total_cost: manusCredits,  // 保留旧字段，为 Manus 积分
+        record_count: Number(r.record_count) || 0,
+        task_count: 0,
+        first_bound_at: r.first_message_at
+          ? (r.first_message_at instanceof Date ? r.first_message_at.toISOString() : String(r.first_message_at))
+          : "",
+      };
+    });
+
+    // 按总费用降序排序
+    stats.sort((a: any, b: any) => b.total_cny - a.total_cny);
+
+    const total_cny = stats.reduce((sum: number, s: any) => sum + s.total_cny, 0);
+    const total_cost = stats.reduce((sum: number, s: any) => sum + s.manus_credits, 0);
 
     const usdt_cny_rate = getUsdtCnyRate();
-    res.json({ ok: true, stats, total_cost, usdt_cny_rate });
+    res.json({ ok: true, stats, total_cost, total_cny, usdt_cny_rate });
   } catch (e) {
     console.error("[WeCom] 查询使用统计失败:", e);
     res.status(500).json({ error: "查询失败" });
@@ -1952,26 +2039,24 @@ router.get("/api/wecom/user-detail", async (req: Request, res: Response) => {
     }
 
     // 优先从 wecom_message_credits 表读取消息级积分记录
-    const taskIds = sessions.map((s: any) => s.manus_task_id);
+    // 同时查询该用户所有记录（包含 DeepSeek 记录，即 manus_task_id='deepseek'）
     let messageRecords: any[] = [];
     let useMessageCredits = false;
 
-    if (taskIds.length > 0) {
-      try {
-        const placeholders = taskIds.map(() => "?").join(",");
-        const [mcRows] = await (conn as any).execute(
-          `SELECT id, wecom_user_id, manus_task_id, user_message, credits_before, credits_after,
-                  credits_used, model_used, reply_preview,
-                  DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS created_at
-           FROM wecom_message_credits
-           WHERE manus_task_id IN (${placeholders})
-           ORDER BY created_at DESC`,
-          taskIds
-        ) as any;
-        messageRecords = mcRows as any[];
-        useMessageCredits = messageRecords.length > 0;
-      } catch (_) {}
-    }
+    try {
+      const [mcRows] = await (conn as any).execute(
+        `SELECT id, wecom_user_id, manus_task_id, user_message, credits_before, credits_after,
+                credits_used, input_tokens, output_tokens, cache_hit_tokens, model_used, reply_preview,
+                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS created_at
+         FROM wecom_message_credits
+         WHERE wecom_user_id = ?
+         ORDER BY created_at DESC`,
+        [wecomUserId]
+      ) as any;
+      messageRecords = mcRows as any[];
+      useMessageCredits = messageRecords.length > 0;
+    } catch (_) {}
+    const taskIds = sessions.map((s: any) => s.manus_task_id);
 
     // 拉取每个任务的标题（并行请求）
     const taskTitles: Record<string, string> = {};
@@ -1995,30 +2080,63 @@ router.get("/api/wecom/user-detail", async (req: Request, res: Response) => {
       const totalCost = useMessageCredits
         ? taskMsgs.reduce((sum: number, r: any) => sum + (r.credits_used || 0), 0)
         : (taskCreditTotals[s.manus_task_id] || 0);
+      const manusCny = totalCost * MANUS_CREDIT_PRICE;
       return {
         ...s,
         task_title: taskTitles[s.manus_task_id] || "",
         total_cost: totalCost,
+        manus_cny: manusCny,
         record_count: taskMsgs.length,
       };
     });
+
+    // 计算该用户所有 DeepSeek 记录的费用
+    const dsRecords = messageRecords.filter((r: any) => r.manus_task_id === 'deepseek');
+    let dsTotalCny = 0;
+    let dsTotalTokens = 0;
+    for (const dr of dsRecords) {
+      const inputMiss = Number(dr.input_tokens) || 0;
+      const cacheHit = Number(dr.cache_hit_tokens) || 0;
+      const output = Number(dr.output_tokens) || 0;
+      const model = dr.model_used || 'deepseek-v4-flash';
+      dsTotalCny += calcDeepSeekCost(model, inputMiss, cacheHit, output);
+      dsTotalTokens += Number(dr.credits_used) || 0;
+    }
+    const manusTotalCredits = enrichedSessions.reduce((sum: number, s: any) => sum + (s.total_cost || 0), 0);
+    const manusTotalCny = manusTotalCredits * MANUS_CREDIT_PRICE;
+    const grandTotalCny = manusTotalCny + dsTotalCny;
 
     // 构建统一格式的 records 数组返回给前端
     let userRecords: any[];
     if (useMessageCredits) {
       // 消息级记录：每条消息一行
-      userRecords = messageRecords.map((r: any) => ({
-        id: r.id,
-        task_id: r.manus_task_id,
-        user_message: r.user_message || "",
-        credits: r.credits_used || 0,
-        credits_before: r.credits_before || 0,
-        credits_after: r.credits_after || 0,
-        model: r.model_used || "",
-        reply_preview: r.reply_preview || "",
-        created_at: r.created_at || "",
-        record_type: "message",  // 标识记录类型
-      }));
+      userRecords = messageRecords.map((r: any) => {
+        const isDeepSeekRecord = r.manus_task_id === 'deepseek';
+        const inputMiss = Number(r.input_tokens) || 0;
+        const cacheHit = Number(r.cache_hit_tokens) || 0;
+        const output = Number(r.output_tokens) || 0;
+        const model = r.model_used || '';
+        const cny = isDeepSeekRecord
+          ? calcDeepSeekCost(model, inputMiss, cacheHit, output)
+          : (Number(r.credits_used) || 0) * MANUS_CREDIT_PRICE;
+        return {
+          id: r.id,
+          task_id: r.manus_task_id,
+          user_message: r.user_message || "",
+          credits: r.credits_used || 0,
+          credits_before: r.credits_before || 0,
+          credits_after: r.credits_after || 0,
+          input_tokens: inputMiss,
+          output_tokens: output,
+          cache_hit_tokens: cacheHit,
+          cny: cny,  // 本条记录换算的人民币
+          model: model,
+          reply_preview: r.reply_preview || "",
+          created_at: r.created_at || "",
+          record_type: "message",
+          is_deepseek: isDeepSeekRecord,
+        };
+      });
     } else {
       // 降级：从 Manus usage.list 获取任务级记录
       const usageRes = await fetch(`${MANUS_API_BASE}/usage.list?limit=500`, {
@@ -2041,7 +2159,19 @@ router.get("/api/wecom/user-detail", async (req: Request, res: Response) => {
     }
 
     const usdtCnyRate = getUsdtCnyRate();
-    res.json({ ok: true, sessions: enrichedSessions, records: userRecords, usdt_cny_rate: usdtCnyRate, use_message_credits: useMessageCredits });
+    res.json({
+      ok: true,
+      sessions: enrichedSessions,
+      records: userRecords,
+      usdt_cny_rate: usdtCnyRate,
+      use_message_credits: useMessageCredits,
+      // 费用汇总
+      manus_credits: manusTotalCredits,
+      manus_cny: manusTotalCny,
+      ds_tokens: dsTotalTokens,
+      ds_cny: dsTotalCny,
+      total_cny: grandTotalCny,
+    });
   } catch (e) {
     console.error("[WeCom] 查询用户明细失败:", e);
     res.status(500).json({ error: "查询失败" });
