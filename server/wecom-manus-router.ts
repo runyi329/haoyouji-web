@@ -19,6 +19,10 @@ import { parseStringPromise } from "xml2js";
 import { getDbConnection } from "./db";
 import { getUsdtCnyRate } from "./price-scanner";
 import { isAIFeatureEnabled } from "./ai-monitor";
+import fs from "fs";
+import path from "path";
+import os from "os";
+import { execFile } from "child_process";
 
 const router = Router();
 
@@ -628,6 +632,111 @@ async function sendWeComImage(toUser: string, imageUrl: string): Promise<void> {
 }
 
 // -----------------------------------------------------------
+// 工具函数：下载视频、ffmpeg 压缩到 10MB 以内，上传企微素材库发送视频消息
+// -----------------------------------------------------------
+async function sendWeComVideo(toUser: string, videoUrl: string, filename: string): Promise<void> {
+  const tmpDir = os.tmpdir();
+  const rawPath = path.join(tmpDir, `wecom_video_raw_${Date.now()}.mp4`);
+  const compPath = path.join(tmpDir, `wecom_video_comp_${Date.now()}.mp4`);
+  try {
+    // 1. 下载视频
+    console.log(`[WeCom] 下载视频: ${videoUrl.substring(0, 80)}`);
+    const vidRes = await fetch(videoUrl);
+    if (!vidRes.ok) {
+      console.error(`[WeCom] 下载视频失败: ${vidRes.status}`);
+      await sendWeComMessage(toUser, `[视频] ${filename}\n${videoUrl}`);
+      return;
+    }
+    const vidBuffer = Buffer.from(await vidRes.arrayBuffer());
+    fs.writeFileSync(rawPath, vidBuffer);
+    const rawSize = vidBuffer.length;
+    console.log(`[WeCom] 视频下载完成，大小: ${(rawSize / 1024 / 1024).toFixed(2)} MB`);
+
+    // 2. 如果超过 9MB，用 ffmpeg 压缩
+    const MAX_SIZE = 9 * 1024 * 1024; // 9MB 留 1MB 余量
+    let uploadPath = rawPath;
+    if (rawSize > MAX_SIZE) {
+      console.log(`[WeCom] 视频超过 9MB，开始 ffmpeg 压缩...`);
+      // 目标码率：9MB * 8bit / 视频时长(估算60s) = ~1200kbps，保守用 800kbps
+      await new Promise<void>((resolve, reject) => {
+        execFile('ffmpeg', [
+          '-i', rawPath,
+          '-vcodec', 'libx264',
+          '-acodec', 'aac',
+          '-b:v', '600k',
+          '-b:a', '64k',
+          '-movflags', '+faststart',
+          '-y',
+          compPath
+        ], (err) => {
+          if (err) reject(err); else resolve();
+        });
+      });
+      const compSize = fs.statSync(compPath).size;
+      console.log(`[WeCom] 压缩完成，大小: ${(compSize / 1024 / 1024).toFixed(2)} MB`);
+      uploadPath = compPath;
+    }
+
+    // 3. 上传到企业微信临时素材
+    const token = await getAccessToken();
+    const uploadUrl = `https://qyapi.weixin.qq.com/cgi-bin/media/upload?access_token=${token}&type=video`;
+    const boundary = `----WeComBoundary${Date.now()}`;
+    const videoBuffer = fs.readFileSync(uploadPath);
+    const header = Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="media"; filename="video.mp4"\r\nContent-Type: video/mp4\r\n\r\n`
+    );
+    const footer = Buffer.from(`\r\n--${boundary}--\r\n`);
+    const body = Buffer.concat([header, videoBuffer, footer]);
+    const uploadRes = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
+      body,
+    });
+    const uploadData = await uploadRes.json() as any;
+    if (uploadData.errcode !== 0 && uploadData.errcode !== undefined) {
+      console.error('[WeCom] 上传视频素材失败:', uploadData.errmsg);
+      // 降级：发送原版链接
+      await sendWeComMessage(toUser, `[视频] ${filename}\n${videoUrl}`);
+      return;
+    }
+    const mediaId = uploadData.media_id;
+    console.log(`[WeCom] 视频上传成功 media_id=${mediaId}`);
+
+    // 4. 发送视频消息
+    const sendToken = await getAccessToken();
+    const sendRes = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=${sendToken}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        touser: toUser,
+        msgtype: 'video',
+        agentid: Number(WECOM_AGENT_ID),
+        video: { media_id: mediaId, title: filename, description: '' },
+        safe: 0,
+      }),
+    });
+    const sendData = await sendRes.json() as any;
+    if (sendData.errcode !== 0) {
+      console.error('[WeCom] 发送视频消息失败:', sendData.errmsg);
+      await sendWeComMessage(toUser, `[视频] ${filename}\n${videoUrl}`);
+    } else {
+      console.log(`[WeCom] 视频消息已发送给 ${toUser}`);
+      // 如果原视频超过 9MB，额外发一条原版链接
+      if (rawSize > MAX_SIZE) {
+        await sendWeComMessage(toUser, `原版高清视频（完整版）：\n${videoUrl}`);
+      }
+    }
+  } catch (e) {
+    console.error('[WeCom] 发送视频异常:', e);
+    await sendWeComMessage(toUser, `[视频] ${filename}\n${videoUrl}`);
+  } finally {
+    // 清理临时文件
+    try { if (fs.existsSync(rawPath)) fs.unlinkSync(rawPath); } catch (_) {}
+    try { if (fs.existsSync(compPath)) fs.unlinkSync(compPath); } catch (_) {}
+  }
+}
+
+// -----------------------------------------------------------
 // 工具函数：向 Manus 任务发送消息并等待回复
 // -----------------------------------------------------------
 interface ManusReply {
@@ -1223,15 +1332,21 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
         await new Promise(resolve => setTimeout(resolve, 300));
       }
       for (const att of reply.fileAttachments) {
-        const typeLabel: Record<string, string> = {
-          video: "视频", audio: "音频", pdf: "PDF文件",
-          ppt: "PPT文件", pptx: "PPT文件", xlsx: "Excel文件",
-          xls: "Excel文件", docx: "Word文件", doc: "Word文件",
-          csv: "CSV文件", zip: "压缩包", html: "网页文件",
-        };
         const ext = att.filename.split(".").pop()?.toLowerCase() || "";
-        const label = typeLabel[att.type] || typeLabel[ext] || "文件";
-        await sendWeComMessage(userId, `[${label}] ${att.filename}\n${att.url}`);
+        const isVideo = att.type === "video" || ["mp4", "mov", "avi", "mkv", "webm"].includes(ext);
+        if (isVideo) {
+          // 视频：自动下载压缩后以视频消息发送
+          await sendWeComVideo(userId, att.url, att.filename);
+        } else {
+          const typeLabel: Record<string, string> = {
+            audio: "音频", pdf: "PDF文件",
+            ppt: "PPT文件", pptx: "PPT文件", xlsx: "Excel文件",
+            xls: "Excel文件", docx: "Word文件", doc: "Word文件",
+            csv: "CSV文件", zip: "压缩包", html: "网页文件",
+          };
+          const label = typeLabel[att.type] || typeLabel[ext] || "文件";
+          await sendWeComMessage(userId, `[${label}] ${att.filename}\n${att.url}`);
+        }
         await new Promise(resolve => setTimeout(resolve, 300));
       }
 
