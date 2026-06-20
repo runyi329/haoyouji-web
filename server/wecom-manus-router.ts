@@ -1563,6 +1563,39 @@ router.post("/api/wecom/sessions/:id/archive", async (req: Request, res: Respons
 });
 
 // -----------------------------------------------------------
+// 管理API：更新用户设置（备注名、任务ID、模型、提示词、启用状态）
+// -----------------------------------------------------------
+router.patch("/api/wecom/sessions/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { nickname, manus_task_id, model_pref, system_prompt, enabled } = req.body || {};
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+
+    // 动态构建更新字段
+    const fields: string[] = [];
+    const values: any[] = [];
+    if (nickname !== undefined) { fields.push("nickname = ?"); values.push(nickname); }
+    if (manus_task_id !== undefined) { fields.push("manus_task_id = ?"); values.push(manus_task_id); }
+    if (model_pref !== undefined) { fields.push("model_pref = ?"); values.push(model_pref); }
+    if (system_prompt !== undefined) { fields.push("system_prompt = ?"); values.push(system_prompt); }
+    if (enabled !== undefined) { fields.push("enabled = ?"); values.push(enabled); }
+
+    if (fields.length === 0) return res.status(400).json({ error: "无可更新字段" });
+
+    values.push(id);
+    await (conn as any).execute(
+      `UPDATE wecom_manus_sessions SET ${fields.join(", ")} WHERE id = ?`,
+      values
+    );
+    res.json({ ok: true, message: "保存成功" });
+  } catch (e) {
+    console.error("[WeCom] 更新用户设置失败:", e);
+    res.status(500).json({ error: "保存失败" });
+  }
+});
+
+// -----------------------------------------------------------
 // 管理API：工作流规则 - 查询所有
 // -----------------------------------------------------------
 router.get("/api/wecom/workflow-rules", async (req: Request, res: Response) => {
