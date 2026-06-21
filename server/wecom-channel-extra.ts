@@ -288,7 +288,8 @@ router.post("/api/wecom/ch/kb/upload", upload.single("file"), async (req: Reques
 
     if (ext === "xlsx" || ext === "xls" || ext === "csv") {
       // Excel/CSV：两列 问题/答案 → qa 条目
-      const wb = XLSX.readFile(file.path);
+      const fileBuffer = fs.readFileSync(file.path);
+      const wb = XLSX.read(fileBuffer, { type: "buffer" });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows: any[] = XLSX.utils.sheet_to_json(ws, { header: 1 });
       for (let i = 0; i < rows.length; i++) {
