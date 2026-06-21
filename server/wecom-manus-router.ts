@@ -1316,6 +1316,151 @@ async function sendToDeepSeekAndGetReply(userMessage: string, model: string = "d
 }
 
 // -----------------------------------------------------------
+// 微信客服：发送消息给外部用户
+// -----------------------------------------------------------
+async function sendKfMessage(openKfid: string, toUser: string, content: string): Promise<void> {
+  try {
+    const token = await getAccessToken();
+    const url = `https://qyapi.weixin.qq.com/cgi-bin/kf/send_msg?access_token=${token}`;
+    const body = {
+      touser: toUser,
+      open_kfid: openKfid,
+      msgtype: "text",
+      text: { content },
+    };
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json() as any;
+    if (data.errcode !== 0) {
+      console.error(`[KF] 发送消息失败: errcode=${data.errcode} errmsg=${data.errmsg}`);
+    } else {
+      console.log(`[KF] 消息发送成功 to=${toUser}`);
+    }
+  } catch (e) {
+    console.error("[KF] 发送消息异常:", e);
+  }
+}
+
+// -----------------------------------------------------------
+// 微信客服：处理 kf_msg_or_event 事件
+// 流程：syncMsg拉取 → 知识库检索 → DeepSeek回复 → kf/send_msg发回 → 写日志
+// -----------------------------------------------------------
+async function handleKfMsgOrEvent(): Promise<void> {
+  const KF_OPEN_KFID = "kfc471067df4191a26b";
+  try {
+    const token = await getAccessToken();
+    // 1. 拉取客服消息列表（不做cursor持久化，每次拉最新20条）
+    const syncUrl = `https://qyapi.weixin.qq.com/cgi-bin/kf/sync_msg?access_token=${token}&open_kfid=${KF_OPEN_KFID}&limit=20`;
+    const syncRes = await fetch(syncUrl);
+    const syncData = await syncRes.json() as any;
+    if (syncData.errcode !== 0) {
+      console.error(`[KF] syncMsg失败: errcode=${syncData.errcode} errmsg=${syncData.errmsg}`);
+      return;
+    }
+    const msgList: any[] = syncData.msg_list || [];
+    console.log(`[KF] syncMsg拉取到 ${msgList.length} 条消息`);
+    if (msgList.length === 0) return;
+
+    // 2. 读取kf渠道配置（wecom_channel_kv, channel_type='kf'）
+    let systemPrompt = "你是一名专业的康宝莱健康顾问，请根据知识库内容专业、友好地回答客户问题。如果知识库中没有相关信息，请诚实告知并建议客户联系人工客服。";
+    let aiModel = "deepseek-chat";
+    const dbConn = await getDbConnection();
+    if (dbConn) {
+      try {
+        const [cfgRows] = await (dbConn as any).execute(
+          "SELECT config_key, config_val FROM wecom_channel_kv WHERE channel_type = 'kf'"
+        );
+        const cfg: Record<string, string> = {};
+        for (const r of cfgRows as any[]) cfg[r.config_key] = r.config_val;
+        if (cfg.system_prompt) systemPrompt = cfg.system_prompt;
+        if (cfg.ai_model) aiModel = cfg.ai_model;
+      } catch (_) {}
+    }
+
+    // 3. 获取kf渠道的知识库ID
+    let kbId: number | null = null;
+    if (dbConn) {
+      try {
+        const [kbRows] = await (dbConn as any).execute(
+          "SELECT id FROM wecom_knowledge_bases WHERE channel_type = 'kf' ORDER BY id LIMIT 1"
+        );
+        if ((kbRows as any[]).length > 0) kbId = (kbRows as any[])[0].id;
+      } catch (_) {}
+    }
+
+    // 4. 遍历消息，只处理文本类型
+    for (const msg of msgList) {
+      if (msg.msgtype !== "text") continue;
+      const userText: string = msg.text?.content || "";
+      const fromUser: string = msg.external_userid || msg.open_kfid || "";
+      if (!userText || !fromUser) continue;
+
+      console.log(`[KF] 处理消息 from=${fromUser} text=${userText.substring(0, 50)}`);
+
+      // 5. 知识库检索（LIKE关键词匹配，取前3条相关结果）
+      let kbContext = "";
+      if (dbConn && kbId) {
+        try {
+          // 提取关键词（取前10个字）
+          const keywords = userText.replace(/[？?！!。，,、\s]/g, " ").split(" ").filter(k => k.length >= 2).slice(0, 5);
+          if (keywords.length > 0) {
+            const likeConditions = keywords.map(() => "(question LIKE ? OR answer LIKE ?)").join(" OR ");
+            const likeParams: string[] = [];
+            for (const kw of keywords) {
+              likeParams.push(`%${kw}%`, `%${kw}%`);
+            }
+            const [kbItems] = await (dbConn as any).execute(
+              `SELECT question, answer FROM wecom_knowledge_items WHERE kb_id = ? AND enabled = 1 AND (${likeConditions}) LIMIT 3`,
+              [kbId, ...likeParams]
+            );
+            if ((kbItems as any[]).length > 0) {
+              kbContext = "\n\n【知识库参考】\n" + (kbItems as any[]).map((item: any, i: number) =>
+                `${i + 1}. 问：${(item.question || "").split("\n")[0]}\n   答：${item.answer}`
+              ).join("\n");
+              console.log(`[KF] 知识库命中 ${(kbItems as any[]).length} 条`);
+            }
+          }
+        } catch (e) {
+          console.error("[KF] 知识库检索失败:", e);
+        }
+      }
+
+      // 6. 构建system prompt（含知识库内容）
+      const fullSystemPrompt = systemPrompt + kbContext;
+
+      // 7. 调用DeepSeek获取回复
+      const dsReply = await sendToDeepSeekAndGetReply(userText, aiModel, fullSystemPrompt);
+      console.log(`[KF] DeepSeek回复 tokens=${dsReply.totalTokens} 内容=${dsReply.content.substring(0, 50)}`);
+
+      // 8. 发送回复给用户
+      await sendKfMessage(KF_OPEN_KFID, fromUser, dsReply.content);
+
+      // 9. 写入消息日志
+      if (dbConn) {
+        try {
+          const cacheHitTokens = dsReply.cacheHitTokens || 0;
+          const inputTokensMiss = Math.max(0, dsReply.promptTokens - cacheHitTokens);
+          await (dbConn as any).execute(
+            `INSERT INTO wecom_message_credits
+             (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, input_tokens, output_tokens, cache_hit_tokens, model_used, reply_preview, channel_type)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'kf')`,
+            [fromUser, "kf-deepseek", userText.substring(0, 200), 0, dsReply.totalTokens, dsReply.totalTokens,
+             inputTokensMiss, dsReply.completionTokens, cacheHitTokens, aiModel, dsReply.content.substring(0, 100)]
+          );
+        } catch (e) {
+          console.error("[KF] 写入日志失败:", e);
+        }
+      }
+    }
+  } catch (e) {
+    console.error("[KF] handleKfMsgOrEvent异常:", e);
+  }
+}
+
+// -----------------------------------------------------------
 // 中间件：解析 text/xml body
 // -----------------------------------------------------------
 const xmlBodyParser = expressText({ type: ["text/xml", "application/xml"] });
@@ -1440,6 +1585,10 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
         if (eventKey) {
           await handleMenuClick(userId, eventKey);
         }
+      } else if (event === "kf_msg_or_event") {
+        // ===== 微信客服消息处理 =====
+        // 1. 拉取客服消息（syncMsg）
+        await handleKfMsgOrEvent();
       }
       return;
     }
@@ -2790,16 +2939,18 @@ router.delete("/api/wecom/wallet-bindings/:wecomUserId", async (req: Request, re
 // 专属规则 CRUD API
 // ─────────────────────────────────────────────────────────────────────────────
 
-// 查询规则列表
+// 查询规则列表（按 channel_type 隔离）
 router.get("/api/wecom/custom-rules", async (req: Request, res: Response) => {
   try {
     await ensureSessionTable();
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const channelType = (req.query.channel_type as string) || "app";
     const [rows] = await (conn as any).execute(
       `SELECT id, rule_name, trigger_intent, reply_mode, template_text, ai_model, ai_system_prompt,
-              target_type, target_user_ids, enabled, trigger_count, created_at, updated_at
-       FROM wecom_custom_rules ORDER BY created_at DESC`
+              target_type, target_user_ids, enabled, trigger_count, channel_type, created_at, updated_at
+       FROM wecom_custom_rules WHERE channel_type = ? ORDER BY created_at DESC`,
+      [channelType]
     ) as any;
     res.json({ ok: true, rules: rows as any[] });
   } catch (e) {
@@ -2814,11 +2965,11 @@ router.post("/api/wecom/custom-rules", async (req: Request, res: Response) => {
     await ensureSessionTable();
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ error: "数据库连接失败" });
-    const { rule_name, trigger_intent, reply_mode, template_text, ai_model, ai_system_prompt, target_type, target_user_ids } = req.body;
+    const { rule_name, trigger_intent, reply_mode, template_text, ai_model, ai_system_prompt, target_type, target_user_ids, channel_type } = req.body;
     if (!rule_name || !trigger_intent) return res.status(400).json({ error: "规则名称和触发意图不能为空" });
     const [result] = await (conn as any).execute(
-      `INSERT INTO wecom_custom_rules (rule_name, trigger_intent, reply_mode, template_text, ai_model, ai_system_prompt, target_type, target_user_ids, enabled)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      `INSERT INTO wecom_custom_rules (rule_name, trigger_intent, reply_mode, template_text, ai_model, ai_system_prompt, target_type, target_user_ids, enabled, channel_type)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`,
       [
         rule_name,
         trigger_intent,
@@ -2827,7 +2978,8 @@ router.post("/api/wecom/custom-rules", async (req: Request, res: Response) => {
         ai_model || 'deepseek-chat',
         ai_system_prompt || '',
         target_type || 'selected',
-        target_user_ids ? JSON.stringify(target_user_ids) : '[]'
+        target_user_ids ? JSON.stringify(target_user_ids) : '[]',
+        channel_type || 'app'
       ]
     ) as any;
     res.json({ ok: true, id: (result as any).insertId });
@@ -2907,14 +3059,17 @@ router.delete("/api/wecom/custom-rules/:id", async (req: Request, res: Response)
 // 渠道管理接口 (wecom_channels)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// 获取渠道列表
+// 获取渠道列表（支持按app_id过滤）
 router.get("/api/wecom/channels", async (req: Request, res: Response) => {
   try {
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ error: "数据库连接失败" });
-    const [rows] = await (conn as any).execute(
-      `SELECT id, name, channel_type, project_key, kf_id, is_enabled, created_at FROM wecom_channels ORDER BY id ASC`
-    );
+    const appId = req.query.app_id;
+    let sql = `SELECT id, name, channel_type, project_key, kf_id, is_enabled, app_id, created_at FROM wecom_channels`;
+    const params: any[] = [];
+    if (appId) { sql += " WHERE app_id = ?"; params.push(Number(appId)); }
+    sql += " ORDER BY id ASC";
+    const [rows] = await (conn as any).execute(sql, params);
     res.json({ channels: rows });
   } catch (e) {
     console.error("[渠道] 获取列表失败:", e);
@@ -3190,6 +3345,79 @@ router.get("/api/wecom/chat-logs", async (req: Request, res: Response) => {
     console.error('[对话日志]', e);
     res.status(500).json({ error: "获取失败" });
   } finally {
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 自建应用管理接口 (wecom_apps)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// 获取应用列表
+router.get("/api/wecom/apps", async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const [rows] = await (conn as any).execute(
+      `SELECT id, name, corp_id, agent_id, callback_url, is_enabled, created_at FROM wecom_apps ORDER BY id ASC`
+    );
+    res.json({ apps: rows });
+  } catch (e) {
+    console.error("[应用] 获取列表失败:", e);
+    res.status(500).json({ error: "获取失败" });
+  }
+});
+
+// 获取应用详情（含敏感字段，管理员专用）
+router.get("/api/wecom/apps/:id", async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const { id } = req.params;
+    const [rows] = await (conn as any).execute(
+      `SELECT id, name, corp_id, agent_id, secret, token, encoding_aes_key, callback_url, description, is_enabled, created_at FROM wecom_apps WHERE id = ?`,
+      [id]
+    );
+    if (!(rows as any[]).length) return res.status(404).json({ error: "应用不存在" });
+    res.json({ app: (rows as any[])[0] });
+  } catch (e) {
+    console.error("[应用] 获取详情失败:", e);
+    res.status(500).json({ error: "获取失败" });
+  }
+});
+
+// 新建app
+router.post("/api/wecom/apps", async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const { name, corp_id, agent_id, secret, token, encoding_aes_key, callback_url, description } = req.body;
+    if (!name || !corp_id || !agent_id || !secret) return res.status(400).json({ error: "name/corp_id/agent_id/secret必填" });
+    const [result] = await (conn as any).execute(
+      `INSERT INTO wecom_apps (name, corp_id, agent_id, secret, token, encoding_aes_key, callback_url, description) VALUES (?,?,?,?,?,?,?,?)`,
+      [name, corp_id, agent_id, secret, token || '', encoding_aes_key || '', callback_url || '', description || '']
+    );
+    res.json({ ok: true, id: (result as any).insertId });
+  } catch (e) {
+    console.error("[应用] 新建失败:", e);
+    res.status(500).json({ error: "新建失败" });
+  }
+});
+
+// 更新app
+router.put("/api/wecom/apps/:id", async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const { id } = req.params;
+    const { name, corp_id, agent_id, secret, token, encoding_aes_key, callback_url, description, is_enabled } = req.body;
+    await (conn as any).execute(
+      `UPDATE wecom_apps SET name=?, corp_id=?, agent_id=?, secret=?, token=?, encoding_aes_key=?, callback_url=?, description=?, is_enabled=? WHERE id=?`,
+      [name, corp_id, agent_id, secret, token || '', encoding_aes_key || '', callback_url || '', description || '', is_enabled ?? 1, id]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[应用] 更新失败:", e);
+    res.status(500).json({ error: "更新失败" });
   }
 });
 

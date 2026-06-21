@@ -1917,36 +1917,46 @@ interface Channel {
   project_key: string | null;
   kf_id: string | null;
   is_enabled: number;
+  app_id: number | null;
+  created_at: string;
+}
+
+interface WecomApp {
+  id: number;
+  name: string;
+  corp_id: string;
+  agent_id: string;
+  callback_url: string;
+  is_enabled: number;
   created_at: string;
 }
 
 function ChannelTab() {
-  const [channels, setChannels] = useState<Channel[]>([]);
+  const [apps, setApps] = useState<WecomApp[]>([]);
   const [loading, setLoading] = useState(true);
+  // 三级导航： null=应用列表, WecomApp=渠道列表, Channel=渠道详情
+  const [selectedApp, setSelectedApp] = useState<WecomApp | null>(null);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
 
-  useEffect(() => {
-    fetchChannels();
-  }, []);
+  useEffect(() => { fetchApps(); }, []);
 
-  async function fetchChannels() {
+  async function fetchApps() {
     setLoading(true);
     try {
-      const res = await fetch("/api/wecom/channels");
+      const res = await fetch("/api/wecom/apps");
       const data = await res.json();
-      setChannels(data.channels || []);
+      setApps(data.apps || []);
     } catch (e) {
-      toast.error("获取渠道列表失败");
+      toast.error("获取应用列表失败");
     } finally {
       setLoading(false);
     }
   }
 
-  // 进入渠道详情
+  // 第三级：渠道详情
   if (selectedChannel) {
     return (
       <div className="px-4 py-4">
-        {/* 详情页头部 */}
         <div className="flex items-center gap-3 mb-4">
           <button
             onClick={() => setSelectedChannel(null)}
@@ -1957,23 +1967,27 @@ function ChannelTab() {
           <div>
             <h2 className="text-sm font-semibold text-gray-900">{selectedChannel.name}</h2>
             <p className="text-xs text-gray-400">
-              {selectedChannel.channel_type === "app" ? "自建应用渠道" : "客服账号渠道"}
+              {selectedApp?.name} · {selectedChannel.channel_type === "app" ? "客户联系" : "微信客服"}
             </p>
           </div>
         </div>
-        {/* 统一渠道详情页：自建应用和客服账号使用相同的五Tab结构 */}
         <ChannelDetail channel={selectedChannel} />
       </div>
     );
   }
 
-  // 渠道列表页
+  // 第二级：渠道列表（某个应用下的联系方式）
+  if (selectedApp) {
+    return <AppChannelList app={selectedApp} onSelectChannel={setSelectedChannel} onBack={() => setSelectedApp(null)} />;
+  }
+
+  // 第一级：应用列表
   return (
     <div className="px-4 py-4">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-sm font-semibold text-gray-900">渠道列表</h2>
         <button
-          onClick={fetchChannels}
+          onClick={fetchApps}
           className="text-xs text-blue-600 border border-blue-200 rounded-full px-3 py-1"
         >
           刷新
@@ -1986,13 +2000,105 @@ function ChannelTab() {
         </div>
       ) : (
         <div className="space-y-3">
+          {apps.map(app => (
+            <button
+              key={app.id}
+              onClick={() => setSelectedApp(app)}
+              className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-4 flex items-center gap-4 active:bg-gray-50 transition-colors"
+            >
+              <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+                <Bot className="w-5 h-5 text-blue-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900">{app.name}</p>
+                <p className="text-xs text-gray-400 mt-0.5">自建应用 · CorpID: {app.corp_id}</p>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                  app.is_enabled ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-400"
+                }`}>
+                  {app.is_enabled ? "启用" : "停用"}
+                </span>
+                <ChevronRight className="w-4 h-4 text-gray-300" />
+              </div>
+            </button>
+          ))}
+          {apps.length === 0 && (
+            <div className="text-center py-12 text-gray-400 text-sm">暂无应用配置</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 第二级：应用下的渠道列表
+function AppChannelList({
+  app,
+  onSelectChannel,
+  onBack,
+}: {
+  app: WecomApp;
+  onSelectChannel: (ch: Channel) => void;
+  onBack: () => void;
+}) {
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/wecom/channels?app_id=${app.id}`)
+      .then(r => r.json())
+      .then(d => setChannels(d.channels || []))
+      .catch(() => toast.error("获取渠道失败"))
+      .finally(() => setLoading(false));
+  }, [app.id]);
+
+  return (
+    <div className="px-4 py-4">
+      {/* 头部 */}
+      <div className="flex items-center gap-3 mb-4">
+        <button onClick={onBack} className="p-1.5 rounded-lg bg-gray-100 text-gray-600">
+          <ArrowLeft className="w-4 h-4" />
+        </button>
+        <div>
+          <h2 className="text-sm font-semibold text-gray-900">{app.name}</h2>
+          <p className="text-xs text-gray-400">自建应用 · 选择联系方式</p>
+        </div>
+      </div>
+
+      {/* 应用信息卡片 */}
+      <div className="bg-blue-50 rounded-xl p-4 mb-4 border border-blue-100">
+        <p className="text-xs font-semibold text-blue-700 mb-2">应用信息</p>
+        <div className="space-y-1">
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-500">CorpID</span>
+            <span className="text-gray-800 font-mono">{app.corp_id}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-500">AgentID</span>
+            <span className="text-gray-800 font-mono">{app.agent_id}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-gray-500">回调地址</span>
+            <span className="text-gray-800 font-mono text-right max-w-[180px] truncate">{app.callback_url || "-"}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 渠道列表 */}
+      <p className="text-xs text-gray-500 mb-2">联系方式</p>
+      {loading ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+        </div>
+      ) : (
+        <div className="space-y-3">
           {channels.map(ch => (
             <button
               key={ch.id}
-              onClick={() => setSelectedChannel(ch)}
+              onClick={() => onSelectChannel(ch)}
               className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-4 flex items-center gap-4 active:bg-gray-50 transition-colors"
             >
-              {/* 图标 */}
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
                 ch.channel_type === "app" ? "bg-blue-50" : "bg-purple-50"
               }`}>
@@ -2001,20 +2107,16 @@ function ChannelTab() {
                   : <MessageSquare className="w-5 h-5 text-purple-500" />
                 }
               </div>
-              {/* 文字 */}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900">{ch.name}</p>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  {ch.channel_type === "app" ? "自建应用" : "客服账号"}
-                  {ch.project_key ? ` · ${ch.project_key}` : ""}
+                  {ch.channel_type === "app" ? "客户联系" : "微信客服"}
+                  {ch.kf_id ? ` · ${ch.kf_id}` : ""}
                 </p>
               </div>
-              {/* 状态 + 箭头 */}
               <div className="flex items-center gap-2 flex-shrink-0">
                 <span className={`text-xs px-2 py-0.5 rounded-full ${
-                  ch.is_enabled
-                    ? "bg-green-50 text-green-600"
-                    : "bg-gray-100 text-gray-400"
+                  ch.is_enabled ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-400"
                 }`}>
                   {ch.is_enabled ? "启用" : "停用"}
                 </span>
@@ -2022,25 +2124,8 @@ function ChannelTab() {
               </div>
             </button>
           ))}
-
-          {/* 客服渠道占位卡片（如果没有kf类型渠道） */}
-          {!channels.some(ch => ch.channel_type === "kf") && (
-            <button
-              onClick={() => setSelectedChannel({ id: 0, name: '客服账号渠道', channel_type: 'kf', project_key: null, kf_id: null, is_enabled: 1, created_at: '' })}
-              className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-4 flex items-center gap-4 active:bg-gray-50 transition-colors"
-            >
-              <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center flex-shrink-0">
-                <MessageSquare className="w-5 h-5 text-purple-500" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900">客服账号渠道</p>
-                <p className="text-xs text-gray-400 mt-0.5">客服账号 · AI客服管理</p>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-600">已开通</span>
-                <ChevronRight className="w-4 h-4 text-gray-300" />
-              </div>
-            </button>
+          {channels.length === 0 && (
+            <div className="text-center py-8 text-gray-400 text-sm">该应用下暂无渠道</div>
           )}
         </div>
       )}
