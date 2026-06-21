@@ -3626,6 +3626,31 @@ router.post("/api/wecom/ai-assist-config", async (req: Request, res: Response) =
   }
 });
 
+// -----------------------------------------------------------
+// 获取所有企微用户列表（用于规则编辑中的「指定用户」选择）
+// 从 wecom_manus_sessions 表中读取已有用户
+// -----------------------------------------------------------
+router.get("/api/wecom/users", async (req: Request, res: Response) => {
+  try {
+    await ensureSessionTable();
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const [rows] = await (conn as any).execute(
+      `SELECT DISTINCT wecom_user_id, COALESCE(NULLIF(nickname,''), wecom_user_id) AS nickname
+       FROM wecom_manus_sessions
+       ORDER BY updated_at DESC`
+    ) as any;
+    const users = (rows as any[]).map((r: any) => ({
+      wecom_user_id: r.wecom_user_id,
+      nickname: r.nickname,
+    }));
+    res.json({ ok: true, users });
+  } catch (e) {
+    console.error("[企微用户列表] 查询失败:", e);
+    res.status(500).json({ error: "查询失败" });
+  }
+});
+
 export default router;
 
 
