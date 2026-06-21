@@ -2281,6 +2281,12 @@ function ChannelConfigTab({ channel }: { channel: Channel }) {
   const [classifierModel, setClassifierModel] = useState("deepseek-chat");
   const [fallbackModel, setFallbackModel] = useState("deepseek-chat");
 
+  // 消息抄送（仅微信客服渠道）
+  const [notifyEnabled, setNotifyEnabled] = useState(false);
+  const [notifyUserids, setNotifyUserids] = useState<string[]>([]);
+  const [memberList, setMemberList] = useState<{userid:string;name:string}[]>([]);
+  const [memberLoading, setMemberLoading] = useState(false);
+
   // 菜单回复模板
   const [menuKeys, setMenuKeys] = useState<{key:string;name:string;desc:string;vars:string[]}[]>([]);
   const [menuReplies, setMenuReplies] = useState<Record<string,string>>({});
@@ -2390,7 +2396,14 @@ function ChannelConfigTab({ channel }: { channel: Channel }) {
           setAiModel(cfg.ai_model || "deepseek-chat");
           setKbId(cfg.knowledge_base_id || 0);
           setContextRounds(cfg.context_rounds || 10);
+          setNotifyEnabled(cfg.notify_enabled === '1' || cfg.notify_enabled === true);
+          setNotifyUserids(cfg.notify_userids ? cfg.notify_userids.split(',').map((s:string)=>s.trim()).filter(Boolean) : []);
         }
+        // 加载企业成员列表（用于抄送选择）
+        setMemberLoading(true);
+        fetch('/api/wecom/wecom-users').then(r=>r.json()).then(d=>{
+          if (d.users && d.users.length > 0) setMemberList(d.users);
+        }).catch(()=>{}).finally(()=>setMemberLoading(false));
       }
     }).catch(() => toast.error("加载配置失败")).finally(() => setLoading(false));
   }, [channel.id, isApp]);
@@ -2429,6 +2442,8 @@ function ChannelConfigTab({ channel }: { channel: Channel }) {
             ai_model: aiModel,
             knowledge_base_id: kbId,
             context_rounds: contextRounds,
+            notify_enabled: notifyEnabled ? '1' : '0',
+            notify_userids: notifyUserids.join(','),
           }),
         });
         const d = await res.json();
@@ -2633,6 +2648,69 @@ function ChannelConfigTab({ channel }: { channel: Channel }) {
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* 消息抄送（仅微信客服渠道） */}
+      {!isApp && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="text-sm font-semibold text-gray-800">消息抄送通知</div>
+              <div className="text-xs text-gray-400 mt-0.5">AI 回复客户后，同步抷送一份给指定成员的企业微信</div>
+            </div>
+            <button onClick={() => setNotifyEnabled(v => !v)}>
+              {notifyEnabled
+                ? <ToggleRight className="w-8 h-8 text-blue-500" />
+                : <ToggleLeft className="w-8 h-8 text-gray-400" />}
+            </button>
+          </div>
+          {notifyEnabled && (
+            <div className="space-y-2">
+              <div className="text-xs text-gray-500 mb-1">选择抄送接收人（可多选）</div>
+              {memberLoading ? (
+                <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
+                  <Loader2 className="w-3 h-3 animate-spin" />加载成员列表...
+                </div>
+              ) : memberList.length > 0 ? (
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {memberList.map(m => (
+                    <button
+                      key={m.userid}
+                      onClick={() => setNotifyUserids(prev =>
+                        prev.includes(m.userid)
+                          ? prev.filter(id => id !== m.userid)
+                          : [...prev, m.userid]
+                      )}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border text-sm transition-all ${
+                        notifyUserids.includes(m.userid)
+                          ? 'border-blue-400 bg-blue-50 text-blue-700'
+                          : 'border-gray-200 text-gray-600'
+                      }`}
+                    >
+                      <span>{m.name}</span>
+                      <span className="text-xs text-gray-400">{m.userid}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="text-xs text-amber-500 bg-amber-50 rounded-lg px-3 py-2">成员列表加载失败（IP白名单限制），请手动输入 userid</div>
+                  <input
+                    value={notifyUserids.join(',')}
+                    onChange={e => setNotifyUserids(e.target.value.split(',').map(s=>s.trim()).filter(Boolean))}
+                    placeholder="输入 userid，多个用英文逗号分隔，例如：HuXX,ZhangXX"
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  />
+                </div>
+              )}
+              {notifyUserids.length > 0 && (
+                <div className="text-xs text-green-600 bg-green-50 rounded-lg px-3 py-2 mt-1">
+                  已选 {notifyUserids.length} 人接收抄送：{notifyUserids.join('、')}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

@@ -1422,6 +1422,8 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
     let systemPrompt = "你是一名专业的康宝莱健康顾问，请根据知识库内容专业、友好地回答客户问题。如果知识库中没有相关信息，请诚实告知并建议客户联系人工客服。";
     let aiModel = "deepseek-chat";
     let kbId: number | null = null;
+    let notifyEnabled = false;
+    let notifyUserids: string[] = [];
     const dbConn = await getDbConnection();
     if (dbConn) {
       try {
@@ -1438,6 +1440,8 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
         if (cfg.system_prompt) systemPrompt = cfg.system_prompt;
         if (cfg.ai_model) aiModel = cfg.ai_model;
         if (cfg.knowledge_base_id) kbId = parseInt(cfg.knowledge_base_id, 10) || null;
+        notifyEnabled = cfg.notify_enabled === '1';
+        notifyUserids = (cfg.notify_userids || '').split(',').map((s: string) => s.trim()).filter(Boolean);
       } catch (e) { console.error("[KF] 读取渠道配置失败:", e); }
     }
     // 兜底：若配置里没有知识库ID，按 channel_type='kf' 找
@@ -1497,7 +1501,15 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
       // 8. 发送回复给用户
       await sendKfMessage(KF_OPEN_KFID, fromUser, dsReply.content);
 
-      // 9. 写入消息日志
+      // 9. 抄送通知给指定企业成员
+      if (notifyEnabled && notifyUserids.length > 0) {
+        const notifyContent = `【微信客服消息抄送】\n客户：${fromUser}\n问：${userText.substring(0, 200)}\nAI回：${dsReply.content.substring(0, 300)}`;
+        for (const uid of notifyUserids) {
+          await sendWeComMessage(uid, notifyContent);
+        }
+      }
+
+      // 10. 写入消息日志
       if (dbConn) {
         try {
           const cacheHitTokens = dsReply.cacheHitTokens || 0;
@@ -3339,6 +3351,8 @@ router.get("/api/wecom/channel-config/:channelId", async (req: Request, res: Res
       ai_model: kvMap['ai_model'] || 'deepseek-chat',
       knowledge_base_id: kvMap['knowledge_base_id'] ? Number(kvMap['knowledge_base_id']) : null,
       context_rounds: kvMap['context_rounds'] ? Number(kvMap['context_rounds']) : 10,
+      notify_enabled: kvMap['notify_enabled'] || '0',
+      notify_userids: kvMap['notify_userids'] || '',
     });
   } catch (e) {
     res.status(500).json({ error: "获取失败" });
@@ -3348,7 +3362,7 @@ router.get("/api/wecom/channel-config/:channelId", async (req: Request, res: Res
 // 保存渠道AI配置
 router.post("/api/wecom/channel-config/:channelId", async (req: Request, res: Response) => {
   const { channelId } = req.params;
-  const { welcome_msg, waiting_msg, system_prompt, ai_model, knowledge_base_id, context_rounds } = req.body;
+  const { welcome_msg, waiting_msg, system_prompt, ai_model, knowledge_base_id, context_rounds, notify_enabled, notify_userids } = req.body;
   const conn = await getDbConnection();
   try {
     // 按键值对逐条 upsert
@@ -3359,6 +3373,8 @@ router.post("/api/wecom/channel-config/:channelId", async (req: Request, res: Re
       ai_model: ai_model || 'deepseek-chat',
       knowledge_base_id: knowledge_base_id != null ? String(knowledge_base_id) : '',
       context_rounds: context_rounds != null ? String(context_rounds) : '10',
+      notify_enabled: notify_enabled != null ? String(notify_enabled) : '0',
+      notify_userids: notify_userids != null ? String(notify_userids) : '',
     };
     for (const [key, val] of Object.entries(kvPairs)) {
       await (conn as any).execute(
