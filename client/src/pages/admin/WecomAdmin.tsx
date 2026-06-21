@@ -2262,6 +2262,196 @@ function ChannelDetail({ channel }: { channel: Channel }) {
   );
 }
 
+// ─── AI辅助指令知识库维护卡片 ──────────────────────────────────────────────────
+
+interface AiAssistResult {
+  prompt_additions: string[];
+  kb_items: { question: string; answer: string }[];
+  summary: string;
+}
+
+function AiAssistConfigCard({
+  channelId, kbId, onApplyPrompt
+}: {
+  channelId: number;
+  kbId: number;
+  systemPrompt: string;
+  onApplyPrompt: (addition: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [inputText, setInputText] = useState("");
+  const [analyzing, setAnalyzing] = useState(false);
+  const [result, setResult] = useState<AiAssistResult | null>(null);
+  const [selectedPrompts, setSelectedPrompts] = useState<boolean[]>([]);
+  const [selectedKbs, setSelectedKbs] = useState<boolean[]>([]);
+  const [applying, setApplying] = useState(false);
+  const [applyDone, setApplyDone] = useState(false);
+
+  async function handleAnalyze() {
+    if (!inputText.trim()) return;
+    setAnalyzing(true);
+    setResult(null);
+    setApplyDone(false);
+    try {
+      const res = await fetch("/api/wecom/ai-assist-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: inputText, channelId, kbId }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        setResult(d);
+        setSelectedPrompts(d.prompt_additions.map(() => true));
+        setSelectedKbs(d.kb_items.map(() => true));
+      } else {
+        toast.error(d.error || "AI分析失败");
+      }
+    } catch {
+      toast.error("网络错误");
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  async function handleApply() {
+    if (!result) return;
+    setApplying(true);
+    try {
+      const chosenPrompts = result.prompt_additions.filter((_, i) => selectedPrompts[i]);
+      for (const p of chosenPrompts) {
+        onApplyPrompt(p);
+      }
+      const chosenKbs = result.kb_items.filter((_, i) => selectedKbs[i]);
+      let kbSuccess = 0;
+      if (kbId && chosenKbs.length > 0) {
+        for (const item of chosenKbs) {
+          try {
+            const r = await fetch(`/api/wecom/knowledge-bases/${kbId}/items`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ item_type: 'qa', question: item.question, answer: item.answer }),
+            });
+            const rd = await r.json();
+            if (rd.ok) kbSuccess++;
+          } catch {}
+        }
+      }
+      const msgs: string[] = [];
+      if (chosenPrompts.length > 0) msgs.push(`${chosenPrompts.length}条指令已写入AI指令框`);
+      if (chosenKbs.length > 0) {
+        if (!kbId) msgs.push(`请先绑定知识库再写入知识库条目`);
+        else msgs.push(`${kbSuccess}/${chosenKbs.length}条知识库条目已写入`);
+      }
+      if (msgs.length > 0) toast.success(msgs.join("；"));
+      setApplyDone(true);
+      setTimeout(() => { setResult(null); setInputText(""); setApplyDone(false); }, 1500);
+    } catch {
+      toast.error("写入失败");
+    } finally {
+      setApplying(false);
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3"
+      >
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-purple-500" />
+          <span className="text-sm font-semibold text-gray-800">指令知识库维护</span>
+          <span className="text-xs text-purple-500 bg-purple-50 rounded px-1.5 py-0.5">AI辅助</span>
+        </div>
+        <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-90' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 space-y-3 border-t border-gray-50">
+          <p className="text-xs text-gray-400 pt-3">用大白话描述你对客服的要求和知识，AI 会自动分类整理，帮你写入 AI 指令或知识库</p>
+          <textarea
+            value={inputText}
+            onChange={e => setInputText(e.target.value)}
+            placeholder="例如：客服要有耳心，不要用太官方的语气。我们的产品康宝莱F1单买99元，包含蛋白粉和维生素套餐。如果客户问价格，告诉他们具体套餐内容..."
+            rows={5}
+            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-purple-200 text-gray-800 placeholder-gray-400"
+          />
+          <button
+            onClick={handleAnalyze}
+            disabled={analyzing || !inputText.trim()}
+            className="w-full py-2.5 bg-purple-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {analyzing ? <><Loader2 className="w-4 h-4 animate-spin" />AI 分析中...</> : <><Sparkles className="w-4 h-4" />AI 分析并建议</>}
+          </button>
+
+          {result && (
+            <div className="space-y-3">
+              {result.summary && (
+                <div className="text-xs text-purple-600 bg-purple-50 rounded-lg px-3 py-2">{result.summary}</div>
+              )}
+              {result.prompt_additions.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="text-xs font-semibold text-gray-600">建议写入 AI 指令（勾选后会追加到上方指令框）</div>
+                  {result.prompt_additions.map((p, i) => (
+                    <button key={i} onClick={() => setSelectedPrompts(prev => { const n=[...prev]; n[i]=!n[i]; return n; })}
+                      className={`w-full text-left text-xs px-3 py-2 rounded-lg border transition-all ${
+                        selectedPrompts[i] ? 'border-purple-400 bg-purple-50 text-purple-800' : 'border-gray-200 text-gray-500'
+                      }`}>
+                      <div className="flex items-start gap-2">
+                        <div className={`w-4 h-4 rounded border flex-shrink-0 mt-0.5 flex items-center justify-center ${
+                          selectedPrompts[i] ? 'bg-purple-500 border-purple-500' : 'border-gray-300'
+                        }`}>{selectedPrompts[i] && <Check className="w-3 h-3 text-white" />}</div>
+                        <span className="whitespace-pre-wrap">{p}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {result.kb_items.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="text-xs font-semibold text-gray-600">
+                    建议写入知识库
+                    {!kbId && <span className="text-amber-500 ml-1">(请先在下方绑定知识库)</span>}
+                  </div>
+                  {result.kb_items.map((item, i) => (
+                    <button key={i} onClick={() => setSelectedKbs(prev => { const n=[...prev]; n[i]=!n[i]; return n; })}
+                      className={`w-full text-left text-xs px-3 py-2 rounded-lg border transition-all ${
+                        selectedKbs[i] ? 'border-blue-400 bg-blue-50 text-blue-800' : 'border-gray-200 text-gray-500'
+                      }`}>
+                      <div className="flex items-start gap-2">
+                        <div className={`w-4 h-4 rounded border flex-shrink-0 mt-0.5 flex items-center justify-center ${
+                          selectedKbs[i] ? 'bg-blue-500 border-blue-500' : 'border-gray-300'
+                        }`}>{selectedKbs[i] && <Check className="w-3 h-3 text-white" />}</div>
+                        <div>
+                          <div className="font-medium text-gray-700">Q: {item.question}</div>
+                          <div className="text-gray-500 mt-0.5">A: {item.answer}</div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {(result.prompt_additions.length > 0 || result.kb_items.length > 0) && (
+                <button
+                  onClick={handleApply}
+                  disabled={applying || applyDone}
+                  className={`w-full py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all ${
+                    applyDone ? 'bg-green-500 text-white' : 'bg-gray-800 text-white disabled:opacity-50'
+                  }`}
+                >
+                  {applying ? <><Loader2 className="w-4 h-4 animate-spin" />写入中...</>
+                  : applyDone ? <><Check className="w-4 h-4" />已写入</>
+                  : <><Check className="w-4 h-4" />确认写入勾选内容</>}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── 配置Tab ──────────────────────────────────────────────────────────────────
 
 function ChannelConfigTab({ channel }: { channel: Channel }) {
@@ -2292,6 +2482,10 @@ function ChannelConfigTab({ channel }: { channel: Channel }) {
   const [menuReplies, setMenuReplies] = useState<Record<string,string>>({});
   const [editingReplies, setEditingReplies] = useState<Record<string,boolean>>({});
   const [savingReplies, setSavingReplies] = useState<Record<string,boolean>>({});
+
+  // 脏数据检测：保存后快照，有改动才点亮保存按钮
+  const [savedSnapshot, setSavedSnapshot] = useState<string>("");
+  const [justSaved, setJustSaved] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -2390,14 +2584,24 @@ function ChannelConfigTab({ channel }: { channel: Channel }) {
       } else {
         const cfg = second;
         if (cfg && !cfg.error) {
-          setWelcomeMsg(cfg.welcome_msg || "");
-          setWaitingMsg(cfg.waiting_msg || "收到，AI 正在思考中，请稍候...");
-          setSystemPrompt(cfg.system_prompt || "");
-          setAiModel(cfg.ai_model || "deepseek-chat");
-          setKbId(cfg.knowledge_base_id || 0);
-          setContextRounds(cfg.context_rounds || 10);
-          setNotifyEnabled(cfg.notify_enabled === '1' || cfg.notify_enabled === true);
-          setNotifyUserids(cfg.notify_userids ? cfg.notify_userids.split(',').map((s:string)=>s.trim()).filter(Boolean) : []);
+          const wm = cfg.welcome_msg || "";
+          const wt = cfg.waiting_msg || "收到，AI 正在思考中，请稍候...";
+          const sp = cfg.system_prompt || "";
+          const am = cfg.ai_model || "deepseek-chat";
+          const ki = cfg.knowledge_base_id || 0;
+          const cr = cfg.context_rounds || 10;
+          const ne = cfg.notify_enabled === '1' || cfg.notify_enabled === true;
+          const nu = cfg.notify_userids ? cfg.notify_userids.split(',').map((s:string)=>s.trim()).filter(Boolean) : [];
+          setWelcomeMsg(wm);
+          setWaitingMsg(wt);
+          setSystemPrompt(sp);
+          setAiModel(am);
+          setKbId(ki);
+          setContextRounds(cr);
+          setNotifyEnabled(ne);
+          setNotifyUserids(nu);
+          // 设置初始快照
+          setSavedSnapshot(JSON.stringify({ wm, wt, sp, am, ki, cr, ne, nu }));
         }
         // 加载企业成员列表（用于抄送选择）
         setMemberLoading(true);
@@ -2447,8 +2651,17 @@ function ChannelConfigTab({ channel }: { channel: Channel }) {
           }),
         });
         const d = await res.json();
-        if (d.ok) toast.success("配置已保存");
-        else toast.error(d.error || "保存失败");
+        if (d.ok) {
+          toast.success("配置已保存");
+          // 更新快照，按钮恢复置灰状态
+          setSavedSnapshot(JSON.stringify({
+            wm: welcomeMsg, wt: waitingMsg, sp: systemPrompt,
+            am: aiModel, ki: kbId, cr: contextRounds,
+            ne: notifyEnabled, nu: notifyUserids
+          }));
+          setJustSaved(true);
+          setTimeout(() => setJustSaved(false), 2500);
+        } else toast.error(d.error || "保存失败");
       }
     } catch {
       toast.error("网络错误");
@@ -2522,6 +2735,14 @@ function ChannelConfigTab({ channel }: { channel: Channel }) {
           className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-800 placeholder-gray-400"
         />
       </div>
+
+      {/* AI 辅助指令知识库维护 — 可折叠卡片 */}
+      <AiAssistConfigCard
+        channelId={channel.id}
+        kbId={kbId}
+        systemPrompt={systemPrompt}
+        onApplyPrompt={(addition) => setSystemPrompt(prev => prev ? prev + '\n' + addition : addition)}
+      />
 
       {/* AI 模型选择（客服账号显示，自建应用用路由） */}
       {!isApp && (
@@ -2785,15 +3006,35 @@ function ChannelConfigTab({ channel }: { channel: Channel }) {
         </div>
       )}
 
-      {/* 保存按钮 */}
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
-      >
-        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-        {saving ? "保存中..." : "保存配置"}
-      </button>
+      {/* 保存按钮：带脏数据检测和正反馈 */}
+      {(() => {
+        const currentSnap = !isApp ? JSON.stringify({
+          wm: welcomeMsg, wt: waitingMsg, sp: systemPrompt,
+          am: aiModel, ki: kbId, cr: contextRounds,
+          ne: notifyEnabled, nu: notifyUserids
+        }) : null;
+        const isDirty = isApp || (savedSnapshot === "" || currentSnap !== savedSnapshot);
+        return (
+          <button
+            onClick={handleSave}
+            disabled={saving || justSaved || (!isApp && !isDirty)}
+            className={`w-full py-3 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all ${
+              saving ? 'bg-blue-400 text-white opacity-80'
+              : justSaved ? 'bg-green-500 text-white'
+              : isDirty ? 'bg-blue-600 text-white active:bg-blue-700'
+              : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+            }`}
+          >
+            {saving ? (
+              <><Loader2 className="w-4 h-4 animate-spin" />保存中...</>
+            ) : justSaved ? (
+              <><Check className="w-4 h-4" />已保存</>
+            ) : (
+              <><Save className="w-4 h-4" />{isDirty ? '保存配置' : '配置未更改'}</>
+            )}
+          </button>
+        );
+      })()}
     </div>
   );
 }
@@ -3554,7 +3795,7 @@ function ChannelLogsTab({ channelType }: { channelType: string }) {
   // AI分析弹窗
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeResult, setAnalyzeResult] = useState<string | null>(null);
-  const [kbSuggestions, setKbSuggestions] = useState<{ question: string; answer: string }[] | null>(null);
+  const [kbSuggestions, setKbSuggestions] = useState<{ question: string; answer: string; similar_questions?: string }[] | null>(null);
   const [analyzeMode, setAnalyzeMode] = useState<string>("");
   const [showAnalyzeSheet, setShowAnalyzeSheet] = useState(false);
   const [customPrompt, setCustomPrompt] = useState("");

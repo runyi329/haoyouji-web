@@ -3498,6 +3498,65 @@ router.put("/api/wecom/apps/:id", async (req: Request, res: Response) => {
   }
 });
 
+// ─── AI 辅助指令知识库维护 ────────────────────────────────────────────────────
+// 接收大白话，调用 DeepSeek 分析，返回结构化的「指令建议」和「知识库条目建议」
+router.post("/api/wecom/ai-assist-config", async (req: Request, res: Response) => {
+  const { text, channelId, kbId: reqKbId } = req.body;
+  if (!text || !text.trim()) return res.status(400).json({ error: "请输入内容" });
+
+  const systemPrompt = `你是一个企业微信AI客服的配置助手。用户会用大白话描述他们对客服的要求和知识，你需要将这些内容分类整理成两类：
+
+1. **AI指令（system_prompt追加内容）**：适合放入 System Prompt 的行为约束、角色设定、回复风格、禁止事项等。这类内容是对AI行为的指导，而非具体的问答知识。
+
+2. **知识库条目（QA对）**：适合放入知识库的具体问答对，包括产品介绍、价格、常见问题解答、操作步骤等。每条知识库条目需要有明确的「问题」和「答案」。
+
+请以JSON格式返回，格式如下：
+{
+  "prompt_additions": [
+    "要追加到System Prompt的内容1",
+    "要追加到System Prompt的内容2"
+  ],
+  "kb_items": [
+    { "question": "问题1", "answer": "答案1" },
+    { "question": "问题2", "answer": "答案2" }
+  ],
+  "summary": "一句话总结：本次分析了X条指令建议和Y条知识库条目"
+}
+
+注意：
+- 只返回JSON，不要有任何其他文字
+- 如果某类没有内容，对应数组返回空数组[]
+- 知识库条目的问题要简洁，答案要完整准确`;
+
+  try {
+    const result = await sendToDeepSeekAndGetReply(text.trim(), "deepseek-chat", systemPrompt);
+    // 尝试解析JSON
+    let parsed: any = null;
+    try {
+      // 提取JSON（可能有markdown代码块包裹）
+      const jsonMatch = result.content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        parsed = JSON.parse(jsonMatch[0]);
+      }
+    } catch (e) {
+      console.error("[AI辅助] JSON解析失败:", result.content.substring(0, 200));
+    }
+    if (!parsed) {
+      return res.status(500).json({ error: "AI返回格式异常，请重试" });
+    }
+    res.json({
+      ok: true,
+      prompt_additions: parsed.prompt_additions || [],
+      kb_items: parsed.kb_items || [],
+      summary: parsed.summary || "",
+      tokens: result.totalTokens,
+    });
+  } catch (e) {
+    console.error("[AI辅助] 分析失败:", e);
+    res.status(500).json({ error: "AI分析失败，请稍后重试" });
+  }
+});
+
 export default router;
 
 
