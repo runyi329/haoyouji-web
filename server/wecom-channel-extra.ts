@@ -287,7 +287,8 @@ router.post("/api/wecom/ch/kb/upload", upload.single("file"), async (req: Reques
     let imported = 0;
 
     if (ext === "xlsx" || ext === "xls" || ext === "csv") {
-      // Excel/CSV：两列 问题/答案 → qa 条目
+      // Excel/CSV：三列 问题/答案/相似问法 → qa 条目
+      // 第三列「相似问法」支持分号/逗号分隔多个，每个相似问法单独插入一条 qa 记录
       const fileBuffer = fs.readFileSync(file.path);
       const wb = XLSX.read(fileBuffer, { type: "buffer" });
       const ws = wb.Sheets[wb.SheetNames[0]];
@@ -297,14 +298,27 @@ router.post("/api/wecom/ch/kb/upload", upload.single("file"), async (req: Reques
         if (!row || row.length === 0) continue;
         const q = String(row[0] ?? "").trim();
         const a = String(row[1] ?? "").trim();
+        const similar = String(row[2] ?? "").trim(); // 第三列：相似问法
         // 跳过表头
         if (i === 0 && (q.includes("问") || q.toLowerCase().includes("question"))) continue;
         if (!a && !q) continue;
+        // 插入主问题
         await (conn as any).execute(
           `INSERT INTO wecom_knowledge_items (kb_id, item_type, question, answer, source_file) VALUES (?,?,?,?,?)`,
           [kbId, "qa", q || null, a || q, origName]
         );
         imported++;
+        // 插入相似问法（每个相似问法单独一条，answer 复用原始答案）
+        if (similar) {
+          const similarList = similar.split(/[;；,，\n]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+          for (const sq of similarList) {
+            await (conn as any).execute(
+              `INSERT INTO wecom_knowledge_items (kb_id, item_type, question, answer, source_file) VALUES (?,?,?,?,?)`,
+              [kbId, "qa", sq, a || q, origName]
+            );
+            imported++;
+          }
+        }
       }
     } else {
       // PDF/Word/TXT：提取文本 → 切片 → doc 条目
