@@ -3013,6 +3013,7 @@ function ChannelKnowledgeTab({ channelType }: { channelType: string }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [addType, setAddType] = useState<"qa" | "doc">("qa");
   const [addQuestion, setAddQuestion] = useState("");
+  const [addSimilar, setAddSimilar] = useState(""); // 相似问法
   const [addAnswer, setAddAnswer] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleteSource, setDeleteSource] = useState<string | null>(null);
@@ -3071,12 +3072,17 @@ function ChannelKnowledgeTab({ channelType }: { channelType: string }) {
     if (!addAnswer.trim()) { toast.error("请输入内容"); return; }
     setSaving(true);
     try {
+      // 将相似问法合并进 question 字段（换行分隔），与上传接口保持一致
+      let finalQuestion = addType === "qa" ? addQuestion.trim() : null;
+      if (finalQuestion && addSimilar.trim()) {
+        finalQuestion += "\n" + addSimilar.trim();
+      }
       const res = await fetch("/api/wecom/ch/kb/adopt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           channel_type: channelType,
-          question: addType === "qa" ? addQuestion : null,
+          question: finalQuestion || null,
           answer: addAnswer,
         }),
       });
@@ -3084,7 +3090,7 @@ function ChannelKnowledgeTab({ channelType }: { channelType: string }) {
       if (d.ok) {
         toast.success("添加成功");
         setShowAddModal(false);
-        setAddQuestion(""); setAddAnswer("");
+        setAddQuestion(""); setAddSimilar(""); setAddAnswer("");
         loadData();
       } else toast.error(d.error || "添加失败");
     } catch { toast.error("网络错误"); }
@@ -3249,6 +3255,10 @@ function ChannelKnowledgeTab({ channelType }: { channelType: string }) {
               <div>
                 <label className="text-xs font-medium text-gray-600 mb-1 block">问题</label>
                 <input value={addQuestion} onChange={e => setAddQuestion(e.target.value)} placeholder="输入问题（可选）" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-blue-400" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">相似问法 <span className="text-gray-400 font-normal">（可选，多个用换行分隔）</span></label>
+                <Textarea value={addSimilar} onChange={e => setAddSimilar(e.target.value)} placeholder="例如：&#10;这个怎么用&#10;使用方法是什么" className="text-sm min-h-[80px] resize-none" />
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-600 mb-1 block">答案 <span className="text-red-400">*</span></label>
@@ -3474,7 +3484,7 @@ function ChannelLogsTab({ channelType }: { channelType: string }) {
       const res = await fetch("/api/wecom/ch/kb/adopt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channel_type: channelType, question: s.question, answer: s.answer }),
+        body: JSON.stringify({ channel_type: channelType, question: s.question, similar_questions: s.similar_questions || "", answer: s.answer }),
       });
       const d = await res.json();
       if (d.ok) {

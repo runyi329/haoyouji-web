@@ -287,38 +287,46 @@ router.post("/api/wecom/ch/kb/upload", upload.single("file"), async (req: Reques
     let imported = 0;
 
     if (ext === "xlsx" || ext === "xls" || ext === "csv") {
-      // Excel/CSV：三列 问题/答案/相似问法 → qa 条目
-      // 第三列「相似问法」支持分号/逗号分隔多个，每个相似问法单独插入一条 qa 记录
+      // Excel/CSV 标准知识库格式（按文档规范）：
+      //   A列(0) = 编号（跳过）
+      //   B列(1) = 标准问题 → question
+      //   C列(2) = 相似问法（换行/分号/逗号分隔）→ 合并追加到 question，换行分隔
+      //   D列(3) = 标准答案 → answer
+      // 兼容旧版两列格式（无编号列）：若第一行 row[0] 不像编号则自动降级
       const fileBuffer = fs.readFileSync(file.path);
       const wb = XLSX.read(fileBuffer, { type: "buffer" });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const rows: any[] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+
+      // 自动检测列格式：若第一数据行 row[0] 是纯数字或「编号」则为新格式（有编号列）
+      let colOffset = 0; // 0 = 新格式（B列起），-1 = 旧格式（A列起）
+      if (rows.length > 1) {
+        const firstDataRow = rows[1]; // 跳过表头看第一条数据
+        const col0 = String(firstDataRow?.[0] ?? "").trim();
+        colOffset = /^\d+$/.test(col0) ? 0 : -1;
+      }
+
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         if (!row || row.length === 0) continue;
-        const q = String(row[0] ?? "").trim();
-        const a = String(row[1] ?? "").trim();
-        const similar = String(row[2] ?? "").trim(); // 第三列：相似问法
-        // 跳过表头
-        if (i === 0 && (q.includes("问") || q.toLowerCase().includes("question"))) continue;
-        if (!a && !q) continue;
-        // 插入主问题
+        const standardQ = String(row[1 + colOffset] ?? "").trim(); // B列（或A列旧格式）
+        const similarRaw = String(row[2 + colOffset] ?? "").trim(); // C列相似问法
+        const answer    = String(row[3 + colOffset] ?? "").trim(); // D列答案
+        // 跳过表头行
+        if (i === 0 && (standardQ.includes("问题") || standardQ.includes("问") || standardQ.toLowerCase().includes("question"))) continue;
+        if (!answer && !standardQ) continue;
+
+        // 将相似问法合并进 question 字段（换行分隔），提升向量检索覆盖率
+        let finalQuestion = standardQ;
+        if (similarRaw) {
+          finalQuestion += "\n" + similarRaw;
+        }
+
         await (conn as any).execute(
           `INSERT INTO wecom_knowledge_items (kb_id, item_type, question, answer, source_file) VALUES (?,?,?,?,?)`,
-          [kbId, "qa", q || null, a || q, origName]
+          [kbId, "qa", finalQuestion || null, answer || finalQuestion, origName]
         );
         imported++;
-        // 插入相似问法（每个相似问法单独一条，answer 复用原始答案）
-        if (similar) {
-          const similarList = similar.split(/[;；,，\n]/).map((s: string) => s.trim()).filter((s: string) => s.length > 0);
-          for (const sq of similarList) {
-            await (conn as any).execute(
-              `INSERT INTO wecom_knowledge_items (kb_id, item_type, question, answer, source_file) VALUES (?,?,?,?,?)`,
-              [kbId, "qa", sq, a || q, origName]
-            );
-            imported++;
-          }
-        }
       }
     } else {
       // PDF/Word/TXT：提取文本 → 切片 → doc 条目
@@ -618,7 +626,7 @@ router.post("/api/wecom/ch/logs/ai-analyze", async (req: Request, res: Response)
       systemPrompt = "你是一名AI客服优化专家。请找出以下对话中AI回答得不够好的地方，并针对每条给出改进后的回复版本。用简洁的中文输出，先说问题再给改进版。";
       userPrompt = convText;
     } else if (mode === "kb") {
-      systemPrompt = "你是一名知识库维护助手。请根据以下对话，判断哪些问题应该补充进知识库，生成标准的「问答对」。只输出JSON数组，格式：[{\"question\":\"...\",\"answer\":\"...\"}]，答案要专业、准确、简洁。不要输出多余文字。";
+      systemPrompt = "你是一名知识库维护助手。请根据以下对话，判断哪些问题应该补充进知识库，生成标准的「问答对」。只输出JSON数组，格式：[{\"question\":\"...\",\"similar_questions\":\"...\",\"answer\":\"...\"}]，其中 similar_questions 是用换行分隔的 2-3 个相似问法（不同表达方式），答案要专业、准确、简洁。不要输出多余文字。";
       userPrompt = convText;
       wantJson = true;
     } else if (mode === "custom") {
@@ -649,15 +657,21 @@ router.post("/api/wecom/ch/logs/ai-analyze", async (req: Request, res: Response)
 });
 
 // 采纳知识库推荐（写入知识库，支持编辑后的内容）
+// 支持传入 similar_questions，合并进 question 字段（换行分隔）
 router.post("/api/wecom/ch/kb/adopt", async (req: Request, res: Response) => {
-  const { channel_type = "app", question, answer } = req.body;
+  const { channel_type = "app", question, similar_questions, answer } = req.body;
   if (!answer) return res.status(400).json({ error: "答案不能为空" });
   const conn = await getDbConnection();
   try {
     const kbId = await ensureDefaultKb(conn, channel_type);
+    // 将相似问法合并进 question，提升向量检索覆盖率
+    let finalQuestion = (question || "").trim();
+    if (finalQuestion && similar_questions && String(similar_questions).trim()) {
+      finalQuestion += "\n" + String(similar_questions).trim();
+    }
     const [result] = await (conn as any).execute(
       `INSERT INTO wecom_knowledge_items (kb_id, item_type, question, answer, source_file) VALUES (?,?,?,?,?)`,
-      [kbId, "qa", question || null, answer, "AI分析采纳"]
+      [kbId, "qa", finalQuestion || null, answer, "AI分析采纳"]
     );
     res.json({ ok: true, id: (result as any).insertId });
   } catch (e: any) {
