@@ -1365,6 +1365,7 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
   const [dsCny, setDsCny] = useState(0);
   const [totalCny, setTotalCny] = useState(0);
   const [detailView, setDetailView] = useState<'msg' | 'day' | 'ai'>('msg');
+  const [expandedDay, setExpandedDay] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`/api/wecom/user-detail?wecom_user_id=${encodeURIComponent(wecomUserId)}`)
@@ -1452,24 +1453,72 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
           {dayList.length === 0 ? (
             <div className="text-center text-gray-400 text-sm py-8">暂无记录</div>
-          ) : dayList.map(d => (
-            <div key={d.date} className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-sm font-semibold text-gray-800">{d.date}</div>
-                  <div className="text-xs text-gray-400 mt-0.5">{d.count} 条消息</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-base font-bold text-green-600">¥{d.totalCny.toFixed(4)}</div>
-                  <div className="text-xs text-gray-400">
-                    {d.manusCny > 0 && <span className="text-blue-500">Manus ¥{d.manusCny.toFixed(2)}</span>}
-                    {d.manusCny > 0 && d.dsCny > 0 && <span className="mx-1">+</span>}
-                    {d.dsCny > 0 && <span className="text-purple-500">DS ¥{d.dsCny.toFixed(4)}</span>}
+          ) : dayList.map(d => {
+            const isDayExpanded = expandedDay === d.date;
+            const dayRecords = records.filter(r => (r.created_at ? r.created_at.slice(0, 10) : '未知') === d.date)
+              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            return (
+              <div key={d.date} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                <div
+                  className="px-4 py-3 flex items-center justify-between cursor-pointer active:bg-gray-50"
+                  onClick={() => setExpandedDay(isDayExpanded ? null : d.date)}
+                >
+                  <div>
+                    <div className="text-sm font-semibold text-gray-800">{d.date}</div>
+                    <div className="text-xs text-gray-400 mt-0.5">{d.count} 条消息</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-right">
+                      <div className="text-base font-bold text-green-600">¥{d.totalCny.toFixed(4)}</div>
+                      <div className="text-xs text-gray-400">
+                        {d.manusCny > 0 && <span className="text-blue-500">Manus ¥{d.manusCny.toFixed(2)}</span>}
+                        {d.manusCny > 0 && d.dsCny > 0 && <span className="mx-1">+</span>}
+                        {d.dsCny > 0 && <span className="text-purple-500">DS ¥{d.dsCny.toFixed(4)}</span>}
+                      </div>
+                    </div>
+                    <ChevronRight className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform ${isDayExpanded ? 'rotate-90' : ''}`} />
                   </div>
                 </div>
+                {isDayExpanded && (
+                  <div className="border-t border-gray-50">
+                    <div className="px-4 py-2 bg-gray-50 flex items-center justify-between text-xs text-gray-400 font-medium">
+                      <span>用户消息</span>
+                      <span>消耗 / 元</span>
+                    </div>
+                    {dayRecords.map((r, i) => {
+                      const recordCny = r.cny ?? (r.is_deepseek ? 0 : r.credits * 0.037);
+                      return (
+                        <div key={r.id ?? i} className="px-4 py-2.5 flex items-start gap-2 border-b border-gray-50 last:border-0">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className={`text-xs px-1 py-0.5 rounded font-medium ${
+                                r.is_deepseek ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'
+                              }`}>{r.is_deepseek ? 'DS' : 'Manus'}</span>
+                              <span className="text-xs text-gray-400">{r.created_at ? r.created_at.slice(11, 16) : ''}</span>
+                            </div>
+                            <div className="text-sm text-gray-800 truncate">{r.user_message || '(无内容)'}</div>
+                          </div>
+                          <div className="flex-shrink-0 text-right ml-2">
+                            {r.is_deepseek ? (
+                              <>
+                                <div className="text-xs text-purple-500">{Math.round(r.credits)} tokens</div>
+                                <div className="text-xs font-bold text-green-600">¥{recordCny.toFixed(4)}</div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="text-sm font-bold text-blue-600">-{Math.round(r.credits)}</div>
+                                <div className="text-xs text-green-600">¥{recordCny.toFixed(2)}</div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : detailView === 'ai' ? (
         /* ===== 按AI视图 ===== */
