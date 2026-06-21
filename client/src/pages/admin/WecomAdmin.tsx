@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
 import {
   ArrowLeft, RefreshCw, Trash2, Edit2, Plus, Check, X, Bot,
   Zap, MessageSquare, User, BarChart2, Menu, ChevronRight,
-  Clock, Settings, AlertCircle, PlayCircle, StopCircle, Coins, Loader2
+  Clock, Settings, AlertCircle, PlayCircle, StopCircle, Coins, Loader2,
+  Sparkles, Save, ToggleLeft, ToggleRight, Ban, Shield
 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import WecomBindingManager from "./WecomBindingManager";
 import WecomRoutePanel from "@/components/WecomRoutePanel";
@@ -1959,12 +1961,8 @@ function ChannelTab() {
             </p>
           </div>
         </div>
-        {/* 自建应用渠道：嵌入原AI路由配置面板 */}
-        {selectedChannel.channel_type === "app" && <WecomRoutePanel />}
-        {/* 客服渠道：AI客服详情页 */}
-        {selectedChannel.channel_type === "kf" && (
-          <KfChannelDetail channel={selectedChannel} />
-        )}
+        {/* 统一渠道详情页：自建应用和客服账号使用相同的五Tab结构 */}
+        <ChannelDetail channel={selectedChannel} />
       </div>
     );
   }
@@ -2050,16 +2048,42 @@ function ChannelTab() {
   );
 }
 
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// KfChannelDetail: 客服账号渠道详情页（欢迎词/System Prompt/知识库/对话日志）
+// 统一渠道详情页：五Tab结构（配置/专属规则/知识库/用户/日志）
 // ═══════════════════════════════════════════════════════════════════════════════
 
-interface KfChannelConfig {
-  channel_id: number;
-  welcome_msg: string;
-  system_prompt: string;
+// ─── 类型定义 ──────────────────────────────────────────────────────────────────
+
+interface CustomRule {
+  id: number;
+  rule_name: string;
+  trigger_intent: string;
+  reply_mode: 'template' | 'ai';
+  template_text: string;
   ai_model: string;
-  knowledge_base_id: number;
+  ai_system_prompt: string;
+  target_type: 'all' | 'selected';
+  target_user_ids: string;
+  enabled: number;
+  trigger_count: number;
+  created_at: string;
+}
+
+interface WecomUserForRule {
+  wecom_user_id: string;
+  nickname: string;
+  avatar_url?: string;
+}
+
+interface ChannelUser {
+  wecom_user_id: string;
+  nickname: string;
+  avatar_url?: string;
+  msg_count: number;
+  total_credits: number;
+  last_active: string;
+  blocked: boolean;
 }
 
 interface KnowledgeBase {
@@ -2071,13 +2095,15 @@ interface KnowledgeBase {
 
 interface KnowledgeItem {
   id: number;
-  kb_id: number;
+  kb_id?: number;
   item_type: "qa" | "doc";
-  question: string | null;
+  question?: string | null;
   answer: string;
-  source_doc: string | null;
-  enabled: number;
-  created_at: string;
+  source_file?: string | null;
+  source_doc?: string | null;
+  chunk_index?: number | null;
+  enabled?: number;
+  created_at?: string;
 }
 
 interface ChatLog {
@@ -2090,9 +2116,18 @@ interface ChatLog {
   created_at: string;
   nickname: string | null;
   avatar_url: string | null;
+  channel_type?: string;
 }
 
-const KF_AI_MODELS = [
+const RULE_MODELS = [
+  { value: 'deepseek-chat', label: 'DeepSeek Flash（快速、省费）' },
+  { value: 'deepseek-reasoner', label: 'DeepSeek R1（深度推理）' },
+  { value: 'manus-1.6-lite', label: 'Manus 轻量（快速响应）' },
+  { value: 'manus-1.6', label: 'Manus 标准（平衡能力）' },
+  { value: 'manus-1.6-max', label: 'Manus Max（最强能力）' },
+];
+
+const CHANNEL_AI_MODELS = [
   { value: "deepseek-chat", label: "DeepSeek V3", desc: "高性价比" },
   { value: "deepseek-reasoner", label: "DeepSeek R1", desc: "深度推理" },
   { value: "manus-1.6-lite", label: "Manus Lite", desc: "快速省积分" },
@@ -2100,76 +2135,190 @@ const KF_AI_MODELS = [
   { value: "manus-1.6-max", label: "Manus Max", desc: "最强能力" },
 ];
 
-function KfChannelDetail({ channel }: { channel: Channel }) {
-  const [activeTab, setActiveTab] = useState<"config" | "kb" | "logs">("config");
+// ─── 统一渠道详情主组件 ────────────────────────────────────────────────────────
+
+function ChannelDetail({ channel }: { channel: Channel }) {
+  const [activeTab, setActiveTab] = useState<"config" | "rules" | "kb" | "users" | "logs">("config");
+
+  const tabs = [
+    { key: "config", label: "配置", icon: <Settings className="w-3.5 h-3.5" /> },
+    { key: "rules", label: "专属规则", icon: <Sparkles className="w-3.5 h-3.5" /> },
+    { key: "kb", label: "知识库", icon: <Shield className="w-3.5 h-3.5" /> },
+    { key: "users", label: "用户", icon: <User className="w-3.5 h-3.5" /> },
+    { key: "logs", label: "日志", icon: <MessageSquare className="w-3.5 h-3.5" /> },
+  ];
 
   return (
     <div>
       {/* 子Tab切换 */}
-      <div className="flex gap-1 mb-4 bg-gray-100 rounded-xl p-1">
-        {[
-          { key: "config", label: "AI配置" },
-          { key: "kb", label: "知识库" },
-          { key: "logs", label: "对话日志" },
-        ].map(t => (
+      <div className="flex gap-0.5 mb-4 bg-gray-100 rounded-xl p-1 overflow-x-auto">
+        {tabs.map(t => (
           <button
             key={t.key}
             onClick={() => setActiveTab(t.key as any)}
-            className={`flex-1 text-sm py-1.5 rounded-lg font-medium transition-colors ${
+            className={`flex-1 flex items-center justify-center gap-1 text-xs py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap px-1 ${
               activeTab === t.key
                 ? "bg-white text-blue-600 shadow-sm"
                 : "text-gray-500"
             }`}
           >
+            {t.icon}
             {t.label}
           </button>
         ))}
       </div>
 
-      {activeTab === "config" && <KfConfigTab channelId={channel.id} />}
-      {activeTab === "kb" && <KfKnowledgeTab />}
-      {activeTab === "logs" && <KfLogsTab />}
+      {activeTab === "config" && <ChannelConfigTab channel={channel} />}
+      {activeTab === "rules" && <ChannelCustomRulesTab channelType={channel.channel_type} />}
+      {activeTab === "kb" && <ChannelKnowledgeTab channelType={channel.channel_type} />}
+      {activeTab === "users" && <ChannelUsersTab channelType={channel.channel_type} />}
+      {activeTab === "logs" && <ChannelLogsTab channelType={channel.channel_type} />}
     </div>
   );
 }
 
-// ─── AI配置Tab ────────────────────────────────────────────────────────────────
+// ─── 配置Tab ──────────────────────────────────────────────────────────────────
 
-function KfConfigTab({ channelId }: { channelId: number }) {
-  const [config, setConfig] = useState<KfChannelConfig>({
-    channel_id: channelId,
-    welcome_msg: "",
-    system_prompt: "",
-    ai_model: "deepseek-chat",
-    knowledge_base_id: 1,
-  });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+function ChannelConfigTab({ channel }: { channel: Channel }) {
+  const isApp = channel.channel_type === "app";
+
+  // 通用配置
+  const [welcomeMsg, setWelcomeMsg] = useState("");
+  const [waitingMsg, setWaitingMsg] = useState("收到，AI 正在思考中，请稍候...");
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [aiModel, setAiModel] = useState("deepseek-chat");
+  const [kbId, setKbId] = useState(0);
+  const [contextRounds, setContextRounds] = useState(10);
   const [kbList, setKbList] = useState<KnowledgeBase[]>([]);
 
+  // 自建应用专属
+  const [routeEnabled, setRouteEnabled] = useState(false);
+  const [classifierModel, setClassifierModel] = useState("deepseek-chat");
+  const [fallbackModel, setFallbackModel] = useState("deepseek-chat");
+
+  // 菜单回复模板
+  const [menuKeys, setMenuKeys] = useState<{key:string;name:string;desc:string;vars:string[]}[]>([]);
+  const [menuReplies, setMenuReplies] = useState<Record<string,string>>({});
+  const [editingReplies, setEditingReplies] = useState<Record<string,boolean>>({});
+  const [savingReplies, setSavingReplies] = useState<Record<string,boolean>>({});
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
   useEffect(() => {
-    const cid = channelId || "default";
-    Promise.all([
-      fetch(`/api/wecom/channel-config/${cid}`).then(r => r.json()),
+    const loads: Promise<any>[] = [
       fetch("/api/wecom/knowledge-bases").then(r => r.json()),
-    ]).then(([cfg, kbs]) => {
-      if (cfg && !cfg.error) setConfig({ ...cfg, channel_id: channelId });
+    ];
+    if (isApp) {
+      loads.push(fetch("/api/wecom/route-config").then(r => r.json()));
+      loads.push(fetch("/api/wecom/menu").then(r => r.json()));
+    } else {
+      const cid = channel.id || "default";
+      loads.push(fetch(`/api/wecom/channel-config/${cid}`).then(r => r.json()));
+    }
+    Promise.all(loads).then(([kbs, second, menuData]) => {
       if (Array.isArray(kbs)) setKbList(kbs);
+      if (isApp) {
+        const d = second;
+        if (d.ok && d.config) {
+          setRouteEnabled(d.config.route_enabled === "true");
+          setClassifierModel(d.config.classifier_model || "deepseek-chat");
+          setFallbackModel(d.config.fallback_model || "deepseek-chat");
+          if (d.config.employee_welcome) setWelcomeMsg(d.config.employee_welcome);
+          if (d.config.waiting_msg) setWaitingMsg(d.config.waiting_msg);
+          if (d.config.system_prompt !== undefined) setSystemPrompt(d.config.system_prompt || "");
+          if (d.config.context_rounds) setContextRounds(Number(d.config.context_rounds) || 10);
+          const replies: Record<string,string> = {};
+          Object.keys(d.config).forEach(k => {
+            if (k.startsWith("menu_reply_")) replies[k.replace("menu_reply_", "")] = d.config[k];
+          });
+          setMenuReplies(replies);
+        }
+        // 加载菜单key
+        if (menuData && menuData.ok && menuData.menu) {
+          const VAR_HINTS: Record<string,{name:string;desc:string;vars:string[]}> = {
+            MY_WALLET: { name: "我的钱包", desc: "查询钱包余额时的回复", vars: ["{username}=账号", "{balance}=余额(元)", "{time}=查询时间"] },
+            CREDITS_QUERY: { name: "查积分", desc: "查积分前的提示语", vars: [] },
+            NEW_TASK: { name: "新对话", desc: "开启新对话时的回复", vars: [] },
+            TASK_STATUS: { name: "任务状态", desc: "查询任务状态时的回复", vars: ["{task_id}=任务ID", "{created_at}=创建时间", "{model}=当前模型"] },
+            MODEL_MAX: { name: "Max 模式", desc: "切换模型时的回复", vars: ["{model}=模型名称"] },
+            MODEL_NORMAL: { name: "标准模式", desc: "切换模型时的回复", vars: ["{model}=模型名称"] },
+            MODEL_LITE: { name: "轻量模式", desc: "切换模型时的回复", vars: ["{model}=模型名称"] },
+            MODEL_DS_FLASH: { name: "DeepSeek", desc: "切换模型时的回复", vars: ["{model}=模型名称"] },
+            MODEL_STATUS: { name: "当前模型", desc: "查询当前模型时的回复", vars: ["{model}=模型名称"] },
+            AI_EMPLOYEE: { name: "AI 员工", desc: "切换 AI 员工模式时的回复", vars: [] },
+            HELP: { name: "使用帮助", desc: "点击帮助时的回复", vars: [] },
+            FEEDBACK: { name: "意见反馈", desc: "点击反馈时的回复", vars: [] },
+          };
+          const keys: {key:string;name:string;desc:string;vars:string[]}[] = [];
+          const seen = new Set<string>();
+          const extractKeys = (items: any[]) => {
+            for (const item of items) {
+              if (item.key && !seen.has(item.key)) {
+                seen.add(item.key);
+                const hint = VAR_HINTS[item.key] || { name: item.name || item.key, desc: "菜单回复", vars: [] };
+                keys.push({ key: item.key, name: hint.name || item.name || item.key, desc: hint.desc, vars: hint.vars });
+              }
+              if (item.sub_button) extractKeys(item.sub_button);
+            }
+          };
+          extractKeys(menuData.menu);
+          setMenuKeys(keys);
+        }
+      } else {
+        const cfg = second;
+        if (cfg && !cfg.error) {
+          setWelcomeMsg(cfg.welcome_msg || "");
+          setWaitingMsg(cfg.waiting_msg || "收到，AI 正在思考中，请稍候...");
+          setSystemPrompt(cfg.system_prompt || "");
+          setAiModel(cfg.ai_model || "deepseek-chat");
+          setKbId(cfg.knowledge_base_id || 0);
+          setContextRounds(cfg.context_rounds || 10);
+        }
+      }
     }).catch(() => toast.error("加载配置失败")).finally(() => setLoading(false));
-  }, [channelId]);
+  }, [channel.id, isApp]);
 
   async function handleSave() {
     setSaving(true);
     try {
-      const cid = channelId || "default";
-      const res = await fetch(`/api/wecom/channel-config/${cid}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config),
-      });
-      const data = await res.json();
-      if (data.ok) toast.success("保存成功");
-      else toast.error(data.error || "保存失败");
+      if (isApp) {
+        const res = await fetch("/api/wecom/route-config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            config: {
+              route_enabled: String(routeEnabled),
+              classifier_model: classifierModel,
+              fallback_model: fallbackModel,
+              employee_welcome: welcomeMsg,
+              waiting_msg: waitingMsg,
+              system_prompt: systemPrompt,
+              context_rounds: String(contextRounds),
+            }
+          }),
+        });
+        const d = await res.json();
+        if (d.ok) toast.success("配置已保存");
+        else toast.error(d.error || "保存失败");
+      } else {
+        const cid = channel.id || "default";
+        const res = await fetch(`/api/wecom/channel-config/${cid}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            welcome_msg: welcomeMsg,
+            waiting_msg: waitingMsg,
+            system_prompt: systemPrompt,
+            ai_model: aiModel,
+            knowledge_base_id: kbId,
+            context_rounds: contextRounds,
+          }),
+        });
+        const d = await res.json();
+        if (d.ok) toast.success("配置已保存");
+        else toast.error(d.error || "保存失败");
+      }
     } catch {
       toast.error("网络错误");
     } finally {
@@ -2183,67 +2332,240 @@ function KfConfigTab({ channelId }: { channelId: number }) {
 
   return (
     <div className="space-y-4">
-      {/* 欢迎词 */}
+      {/* 欢迎语 */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">欢迎词</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">欢迎语</label>
+        <p className="text-xs text-gray-400 mb-2">用户首次发消息时自动回复，留空则不发送</p>
         <textarea
-          value={config.welcome_msg}
-          onChange={e => setConfig(c => ({ ...c, welcome_msg: e.target.value }))}
-          placeholder="用户首次发消息时自动回复的欢迎语，留空则不发送"
+          value={welcomeMsg}
+          onChange={e => setWelcomeMsg(e.target.value)}
+          placeholder="输入欢迎语，支持换行"
           rows={3}
           className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-800 placeholder-gray-400"
         />
       </div>
 
-      {/* System Prompt */}
+      {/* 等待提示语 */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">System Prompt / 约束规则</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">等待提示语</label>
+        <p className="text-xs text-gray-400 mb-2">用户发消息后、AI 回复前显示的提示，避免用户以为没反应</p>
+        <input
+          value={waitingMsg}
+          onChange={e => setWaitingMsg(e.target.value)}
+          placeholder="例如：收到，AI 正在思考中，请稍候..."
+          className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+        />
+      </div>
+
+      {/* 全局 System Prompt */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <label className="block text-sm font-medium text-gray-700 mb-1">全局 AI 指令（System Prompt）</label>
+        <p className="text-xs text-gray-400 mb-2">对所有用户生效的 AI 行为约束，留空则不限制</p>
         <textarea
-          value={config.system_prompt}
-          onChange={e => setConfig(c => ({ ...c, system_prompt: e.target.value }))}
-          placeholder="定义AI客服的角色、回答范围、语气风格等约束规则"
-          rows={6}
+          value={systemPrompt}
+          onChange={e => setSystemPrompt(e.target.value)}
+          placeholder="例如：你是一名专业助手，请不要透露你使用的是哪个大模型..."
+          rows={4}
           className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-800 placeholder-gray-400"
         />
       </div>
 
-      {/* AI模型选择 */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-        <label className="block text-sm font-medium text-gray-700 mb-2">AI 模型</label>
-        <div className="space-y-2">
-          {KF_AI_MODELS.map(m => (
-            <button
-              key={m.value}
-              onClick={() => setConfig(c => ({ ...c, ai_model: m.value }))}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg border transition-colors ${
-                config.ai_model === m.value
-                  ? "border-blue-400 bg-blue-50"
-                  : "border-gray-200 bg-gray-50"
-              }`}
-            >
-              <div className="text-left">
-                <p className={`text-sm font-medium ${config.ai_model === m.value ? "text-blue-700" : "text-gray-700"}`}>{m.label}</p>
-                <p className="text-xs text-gray-400">{m.desc}</p>
+      {/* AI 模型选择（客服账号显示，自建应用用路由） */}
+      {!isApp && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">默认 AI 模型</label>
+          <div className="grid grid-cols-1 gap-2">
+            {CHANNEL_AI_MODELS.map(m => (
+              <button
+                key={m.value}
+                onClick={() => setAiModel(m.value)}
+                className={`flex items-center justify-between px-3 py-2.5 rounded-lg border-2 text-sm transition-all ${
+                  aiModel === m.value
+                    ? "border-blue-400 bg-blue-50 text-blue-700"
+                    : "border-gray-200 text-gray-600"
+                }`}
+              >
+                <span className="font-medium">{m.label}</span>
+                <span className="text-xs text-gray-400">{m.desc}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 自建应用：AI 智能路由 */}
+      {isApp && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+          <label className="block text-sm font-medium text-gray-700 mb-3">AI 智能路由</label>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-gray-700">智能路由开关</div>
+                <div className="text-xs text-gray-400">开启后系统自动判断每条消息派给哪个模型</div>
               </div>
-              {config.ai_model === m.value && <Check className="w-4 h-4 text-blue-500 flex-shrink-0" />}
-            </button>
-          ))}
+              <button onClick={() => setRouteEnabled(!routeEnabled)}>
+                {routeEnabled
+                  ? <ToggleRight className="w-8 h-8 text-blue-500" />
+                  : <ToggleLeft className="w-8 h-8 text-gray-400" />}
+              </button>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-gray-50">
+              <div>
+                <div className="text-sm text-gray-700">前置分类模型</div>
+                <div className="text-xs text-gray-400">判断消息应派给谁，建议轻量级</div>
+              </div>
+              <select
+                value={classifierModel}
+                onChange={e => setClassifierModel(e.target.value)}
+                className="text-xs border border-gray-200 rounded px-2 py-1 bg-white"
+              >
+                <option value="deepseek-chat">DeepSeek Flash（推荐）</option>
+                <option value="deepseek-v4-pro">DeepSeek Pro</option>
+                <option value="manus-1.6-lite">Manus 轻量（推荐）</option>
+                <option value="manus-1.6">Manus 标准</option>
+                <option value="manus-1.6-max">Manus Max</option>
+              </select>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-gray-50">
+              <div>
+                <div className="text-sm text-gray-700">兜底模型</div>
+                <div className="text-xs text-gray-400">分类失败时使用</div>
+              </div>
+              <select
+                value={fallbackModel}
+                onChange={e => setFallbackModel(e.target.value)}
+                className="text-xs border border-gray-200 rounded px-2 py-1 bg-white"
+              >
+                <option value="deepseek-chat">DeepSeek Flash</option>
+                <option value="deepseek-v4-pro">DeepSeek Pro</option>
+                <option value="manus-1.6-lite">Manus 轻量</option>
+                <option value="manus-1.6">Manus 标准</option>
+                <option value="manus-1.6-max">Manus Max</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 会话上下文轮数 */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-sm font-medium text-gray-700">会话上下文轮数</label>
+          <span className="text-sm font-bold text-blue-600">{contextRounds} 轮</span>
+        </div>
+        <p className="text-xs text-gray-400 mb-3">AI 记忆多少轮对话历史，数值越大越消耗积分（建议 5-20）</p>
+        <input
+          type="range"
+          min={1}
+          max={50}
+          value={contextRounds}
+          onChange={e => setContextRounds(Number(e.target.value))}
+          className="w-full accent-blue-500"
+        />
+        <div className="flex justify-between text-xs text-gray-300 mt-1">
+          <span>1轮（省积分）</span>
+          <span>50轮（强记忆）</span>
         </div>
       </div>
 
-      {/* 绑定知识库 */}
-      {kbList.length > 0 && (
+      {/* 绑定知识库（客服账号） */}
+      {!isApp && kbList.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
           <label className="block text-sm font-medium text-gray-700 mb-2">绑定知识库</label>
-          <select
-            value={config.knowledge_base_id}
-            onChange={e => setConfig(c => ({ ...c, knowledge_base_id: Number(e.target.value) }))}
-            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200 bg-white text-gray-800"
-          >
+          <div className="space-y-2">
+            <button
+              onClick={() => setKbId(0)}
+              className={`w-full text-left px-3 py-2.5 rounded-lg border-2 text-sm transition-all ${
+                kbId === 0 ? "border-gray-400 bg-gray-50 text-gray-700" : "border-gray-200 text-gray-500"
+              }`}
+            >
+              不绑定知识库
+            </button>
             {kbList.map(kb => (
-              <option key={kb.id} value={kb.id}>{kb.name}（{kb.item_count} 条）</option>
+              <button
+                key={kb.id}
+                onClick={() => setKbId(kb.id)}
+                className={`w-full text-left px-3 py-2.5 rounded-lg border-2 text-sm transition-all ${
+                  kbId === kb.id ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"
+                }`}
+              >
+                <div className="font-medium">{kb.name}</div>
+                {kb.description && <div className="text-xs text-gray-400 mt-0.5">{kb.description}</div>}
+                <div className="text-xs text-gray-400 mt-0.5">{kb.item_count} 条记录</div>
+              </button>
             ))}
-          </select>
+          </div>
+        </div>
+      )}
+
+      {/* 菜单回复模板（自建应用） */}
+      {isApp && menuKeys.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 px-1">
+            <div className="w-1 h-4 bg-blue-500 rounded-full" />
+            <span className="text-sm font-medium text-gray-800">菜单自动回复模板</span>
+          </div>
+          {menuKeys.map(item => (
+            <div key={item.key} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <div className="text-sm font-medium text-gray-700">{item.name}</div>
+                  <div className="text-xs text-gray-400">{item.desc}</div>
+                </div>
+                {!editingReplies[item.key] ? (
+                  <button
+                    onClick={() => setEditingReplies(v => ({ ...v, [item.key]: true }))}
+                    className="text-xs text-blue-500 border border-blue-200 rounded px-2 py-1"
+                  >
+                    编辑
+                  </button>
+                ) : (
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setEditingReplies(v => ({ ...v, [item.key]: false }))}
+                      className="text-xs text-gray-500 border border-gray-200 rounded px-2 py-1"
+                    >
+                      取消
+                    </button>
+                    <button
+                      disabled={savingReplies[item.key]}
+                      onClick={async () => {
+                        setSavingReplies(v => ({ ...v, [item.key]: true }));
+                        try {
+                          const res = await fetch("/api/wecom/route-config", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ config: { [`menu_reply_${item.key}`]: menuReplies[item.key] || "" } }),
+                          });
+                          const d = await res.json();
+                          if (d.ok) { toast.success(`「${item.name}」已保存`); setEditingReplies(v => ({ ...v, [item.key]: false })); }
+                          else toast.error(d.error || "保存失败");
+                        } catch { toast.error("保存失败"); }
+                        finally { setSavingReplies(v => ({ ...v, [item.key]: false })); }
+                      }}
+                      className="text-xs text-white bg-blue-600 rounded px-2 py-1 disabled:opacity-50"
+                    >
+                      {savingReplies[item.key] ? "..." : "保存"}
+                    </button>
+                  </div>
+                )}
+              </div>
+              {editingReplies[item.key] ? (
+                <textarea
+                  id={`menu-reply-ta-${item.key}`}
+                  value={menuReplies[item.key] || ""}
+                  onChange={e => setMenuReplies(prev => ({ ...prev, [item.key]: e.target.value }))}
+                  placeholder="输入回复内容，留空使用默认回复"
+                  rows={3}
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-200"
+                />
+              ) : (
+                <div className="bg-gray-50 rounded-lg p-2.5 text-xs text-gray-600 whitespace-pre-wrap min-h-[40px]">
+                  {menuReplies[item.key] || "（使用默认回复）"}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
@@ -2251,290 +2573,730 @@ function KfConfigTab({ channelId }: { channelId: number }) {
       <button
         onClick={handleSave}
         disabled={saving}
-        className="w-full py-3 rounded-xl bg-blue-600 text-white text-sm font-medium active:bg-blue-700 disabled:opacity-60 flex items-center justify-center gap-2"
+        className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
       >
-        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
         {saving ? "保存中..." : "保存配置"}
       </button>
     </div>
   );
 }
 
-// ─── 知识库Tab ────────────────────────────────────────────────────────────────
+// ─── 专属规则Tab ───────────────────────────────────────────────────────────────
 
-function KfKnowledgeTab() {
-  const [kbList, setKbList] = useState<KnowledgeBase[]>([]);
-  const [selectedKb, setSelectedKb] = useState<KnowledgeBase | null>(null);
-  const [items, setItems] = useState<KnowledgeItem[]>([]);
-  const [itemType, setItemType] = useState<"qa" | "doc">("qa");
-  const [loadingItems, setLoadingItems] = useState(false);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [editingItem, setEditingItem] = useState<KnowledgeItem | null>(null);
-  const [formQuestion, setFormQuestion] = useState("");
-  const [formAnswer, setFormAnswer] = useState("");
-  const [formSourceDoc, setFormSourceDoc] = useState("");
+function ChannelCustomRulesTab({ channelType }: { channelType: string }) {
+  const [rules, setRules] = useState<CustomRule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [showModal, setShowModal] = useState(false);
+  const [editingRule, setEditingRule] = useState<CustomRule | null>(null);
+  const [wecomUsers2, setWecomUsers2] = useState<WecomUserForRule[]>([]);
   const [saving, setSaving] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
 
-  useEffect(() => {
-    fetch("/api/wecom/knowledge-bases")
-      .then(r => r.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setKbList(data);
-          if (data.length > 0) loadItems(data[0]);
-        }
-      })
-      .catch(() => toast.error("加载知识库失败"));
-  }, []);
+  const [form, setForm] = useState({
+    rule_name: "",
+    trigger_intent: "",
+    reply_mode: "ai" as "template" | "ai",
+    template_text: "",
+    ai_model: "deepseek-chat",
+    ai_system_prompt: "",
+    target_type: "selected" as "all" | "selected",
+    selected_user_ids: [] as string[],
+  });
 
-  function loadItems(kb: KnowledgeBase) {
-    setSelectedKb(kb);
-    setLoadingItems(true);
-    setItems([]);
-    fetch(`/api/wecom/knowledge-bases/${kb.id}/items`)
-      .then(r => r.json())
-      .then(data => { if (Array.isArray(data)) setItems(data); })
-      .catch(() => toast.error("加载条目失败"))
-      .finally(() => setLoadingItems(false));
-  }
+  const loadRules = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/wecom/custom-rules?channel_type=${channelType}`);
+      const d = await res.json();
+      if (d.ok) setRules(d.rules || []);
+    } catch { toast.error("加载失败"); }
+    finally { setLoading(false); }
+  };
 
-  function openAddForm() {
-    setEditingItem(null);
-    setFormQuestion("");
-    setFormAnswer("");
-    setFormSourceDoc("");
-    setShowAddForm(true);
-  }
+  const loadUsers2 = async () => {
+    try {
+      const res = await fetch("/api/wecom/users");
+      const d = await res.json();
+      if (d.ok) setWecomUsers2(d.users || []);
+    } catch {}
+  };
 
-  function openEditForm(item: KnowledgeItem) {
-    setEditingItem(item);
-    setFormQuestion(item.question || "");
-    setFormAnswer(item.answer || "");
-    setFormSourceDoc(item.source_doc || "");
-    setShowAddForm(true);
-  }
+  useEffect(() => { loadRules(); loadUsers2(); }, [channelType]);
 
-  async function handleSaveItem() {
-    if (!formAnswer.trim()) { toast.error("内容不能为空"); return; }
-    if (!selectedKb) return;
+  const openCreate = () => {
+    setEditingRule(null);
+    setForm({ rule_name: "", trigger_intent: "", reply_mode: "ai", template_text: "", ai_model: "deepseek-chat", ai_system_prompt: "", target_type: "selected", selected_user_ids: [] });
+    setShowModal(true);
+  };
+
+  const openEdit = (rule: CustomRule) => {
+    setEditingRule(rule);
+    let ids: string[] = [];
+    try { ids = JSON.parse(rule.target_user_ids || "[]"); } catch {}
+    setForm({
+      rule_name: rule.rule_name,
+      trigger_intent: rule.trigger_intent,
+      reply_mode: rule.reply_mode,
+      template_text: rule.template_text || "",
+      ai_model: rule.ai_model || "deepseek-chat",
+      ai_system_prompt: rule.ai_system_prompt || "",
+      target_type: rule.target_type,
+      selected_user_ids: ids,
+    });
+    setShowModal(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.rule_name.trim()) { toast.error("请输入规则名称"); return; }
+    if (!form.trigger_intent.trim()) { toast.error("请输入触发意图描述"); return; }
     setSaving(true);
     try {
-      const body = { item_type: itemType, question: formQuestion || null, answer: formAnswer, source_doc: formSourceDoc || null };
+      const body = {
+        rule_name: form.rule_name,
+        trigger_intent: form.trigger_intent,
+        reply_mode: form.reply_mode,
+        template_text: form.template_text,
+        ai_model: form.ai_model,
+        ai_system_prompt: form.ai_system_prompt,
+        target_type: form.target_type,
+        target_user_ids: form.target_type === "all" ? [] : form.selected_user_ids,
+        channel_type: channelType,
+        enabled: 1,
+      };
       let res;
-      if (editingItem) {
-        res = await fetch(`/api/wecom/knowledge-bases/items/${editingItem.id}`, {
-          method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-        });
+      if (editingRule) {
+        res = await fetch(`/api/wecom/custom-rules/${editingRule.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       } else {
-        res = await fetch(`/api/wecom/knowledge-bases/${selectedKb.id}/items`, {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-        });
+        res = await fetch("/api/wecom/custom-rules", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       }
-      const data = await res.json();
-      if (data.ok) {
-        toast.success(editingItem ? "更新成功" : "新增成功");
-        setShowAddForm(false);
-        loadItems(selectedKb);
-      } else toast.error(data.error || "操作失败");
+      const d = await res.json();
+      if (d.ok) { toast.success("保存成功"); setShowModal(false); loadRules(); }
+      else toast.error(d.error || "保存失败");
+    } catch { toast.error("保存失败"); }
+    finally { setSaving(false); }
+  };
+
+  const handleToggle = async (rule: CustomRule) => {
+    try {
+      const res = await fetch(`/api/wecom/custom-rules/${rule.id}/toggle`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: !rule.enabled }) });
+      const d = await res.json();
+      if (d.ok) { toast.success(rule.enabled ? "已停用" : "已启用"); loadRules(); }
+      else toast.error(d.error || "操作失败");
+    } catch { toast.error("操作失败"); }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      const res = await fetch(`/api/wecom/custom-rules/${id}`, { method: "DELETE" });
+      const d = await res.json();
+      if (d.ok) { toast.success("已删除"); setDeleteConfirm(null); loadRules(); }
+      else toast.error(d.error || "删除失败");
+    } catch { toast.error("删除失败"); }
+  };
+
+  const toggleUserSelect = (uid: string) => {
+    setForm(prev => ({
+      ...prev,
+      selected_user_ids: prev.selected_user_ids.includes(uid)
+        ? prev.selected_user_ids.filter(id => id !== uid)
+        : [...prev.selected_user_ids, uid],
+    }));
+  };
+
+  const filteredRules = rules.filter(r => r.rule_name.includes(search) || r.trigger_intent.includes(search));
+  const enabledCount = rules.filter(r => r.enabled).length;
+  const totalTriggers = rules.reduce((s, r) => s + (r.trigger_count || 0), 0);
+
+  return (
+    <div className="space-y-3 pb-6">
+      {/* 统计栏 */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-100">
+          <div className="text-lg font-bold text-gray-800">{rules.length}</div>
+          <div className="text-xs text-gray-400">规则总数</div>
+        </div>
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-100">
+          <div className="text-lg font-bold text-green-600">{enabledCount}</div>
+          <div className="text-xs text-gray-400">已启用</div>
+        </div>
+        <div className="bg-white rounded-xl p-3 text-center border border-gray-100">
+          <div className="text-lg font-bold text-blue-600">{totalTriggers}</div>
+          <div className="text-xs text-gray-400">累计命中</div>
+        </div>
+      </div>
+
+      {/* 搜索和新建 */}
+      <div className="flex gap-2">
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="搜索规则名称或意图..."
+          className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-blue-400"
+        />
+        <button onClick={openCreate} className="flex items-center gap-1 bg-blue-600 text-white text-sm px-3 py-2 rounded-lg">
+          <Plus className="w-4 h-4" />新建
+        </button>
+      </div>
+
+      {/* 规则列表 */}
+      {loading ? (
+        <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>
+      ) : filteredRules.length === 0 ? (
+        <div className="text-center py-12">
+          <Sparkles className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+          <div className="text-sm text-gray-400">暂无专属规则</div>
+          <div className="text-xs text-gray-300 mt-1">点击「新建」添加第一条规则</div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filteredRules.map(rule => {
+            let userIds: string[] = [];
+            try { userIds = JSON.parse(rule.target_user_ids || "[]"); } catch {}
+            const targetUsers = wecomUsers2.filter(u => userIds.includes(u.wecom_user_id));
+            return (
+              <div key={rule.id} className={`bg-white rounded-xl border p-3 ${rule.enabled ? "border-gray-100" : "border-gray-100 opacity-60"}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${rule.enabled ? "bg-green-400" : "bg-gray-300"}`} />
+                      <span className="text-sm font-medium text-gray-800 truncate">{rule.rule_name}</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${rule.reply_mode === "template" ? "bg-orange-50 text-orange-600" : "bg-blue-50 text-blue-600"}`}>
+                        {rule.reply_mode === "template" ? "固定模板" : "AI回复"}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1 line-clamp-2">{rule.trigger_intent}</div>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      {rule.target_type === "all" ? (
+                        <span className="text-xs text-purple-600 bg-purple-50 rounded px-1.5 py-0.5">全部用户</span>
+                      ) : (
+                        <span className="text-xs text-gray-500">
+                          {targetUsers.length > 0
+                            ? targetUsers.slice(0, 3).map(u => u.nickname).join("、") + (targetUsers.length > 3 ? `等${targetUsers.length}人` : "")
+                            : `${userIds.length}个用户`}
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-300">•</span>
+                      <span className="text-xs text-gray-400">命中 {rule.trigger_count} 次</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5 flex-shrink-0">
+                    <button onClick={() => openEdit(rule)} className="text-xs text-blue-500 border border-blue-200 rounded px-2 py-1">编辑</button>
+                    <button
+                      onClick={() => handleToggle(rule)}
+                      className={`text-xs border rounded px-2 py-1 ${rule.enabled ? "text-gray-500 border-gray-200" : "text-green-600 border-green-200"}`}
+                    >
+                      {rule.enabled ? "停用" : "启用"}
+                    </button>
+                    {deleteConfirm === rule.id ? (
+                      <div className="flex gap-1">
+                        <button onClick={() => handleDelete(rule.id)} className="text-xs text-white bg-red-500 rounded px-1.5 py-1">确删</button>
+                        <button onClick={() => setDeleteConfirm(null)} className="text-xs text-gray-500 border border-gray-200 rounded px-1.5 py-1">取消</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setDeleteConfirm(rule.id)} className="text-xs text-red-400 border border-red-100 rounded px-2 py-1">删除</button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 新建/编辑弹窗 */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(0,0,0,0.4)" }}>
+          <div className="bg-white rounded-t-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between">
+              <span className="font-medium text-gray-800">{editingRule ? "编辑规则" : "新建专属规则"}</span>
+              <button onClick={() => setShowModal(false)}><X className="w-5 h-5 text-gray-400" /></button>
+            </div>
+            <div className="px-4 py-4 space-y-4">
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">规则名称 <span className="text-red-400">*</span></label>
+                <input
+                  value={form.rule_name}
+                  onChange={e => setForm(p => ({ ...p, rule_name: e.target.value }))}
+                  placeholder="如：世界杯赔率查询"
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-blue-400"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">触发意图描述 <span className="text-red-400">*</span></label>
+                <div className="text-xs text-gray-400 mb-1">用自然语言描述什么情况下触发，AI 会判断用户消息是否匹配</div>
+                <Textarea
+                  value={form.trigger_intent}
+                  onChange={e => setForm(p => ({ ...p, trigger_intent: e.target.value }))}
+                  placeholder="如：用户在询问某支球队的赔率、比赛信息或赌局分析"
+                  className="text-sm min-h-[70px] resize-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-2 block">回复模式</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setForm(p => ({ ...p, reply_mode: "template" }))}
+                    className={`py-2.5 rounded-xl text-sm font-medium border-2 transition-all ${form.reply_mode === "template" ? "border-orange-400 bg-orange-50 text-orange-700" : "border-gray-200 text-gray-500"}`}
+                  >
+                    固定模板回复
+                  </button>
+                  <button
+                    onClick={() => setForm(p => ({ ...p, reply_mode: "ai" }))}
+                    className={`py-2.5 rounded-xl text-sm font-medium border-2 transition-all ${form.reply_mode === "ai" ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-500"}`}
+                  >
+                    专属 AI 回复
+                  </button>
+                </div>
+              </div>
+              {form.reply_mode === "template" && (
+                <div>
+                  <label className="text-xs font-medium text-gray-600 mb-1 block">回复内容</label>
+                  <Textarea
+                    value={form.template_text}
+                    onChange={e => setForm(p => ({ ...p, template_text: e.target.value }))}
+                    placeholder="输入固定回复内容"
+                    className="text-sm min-h-[100px] resize-none font-mono"
+                  />
+                </div>
+              )}
+              {form.reply_mode === "ai" && (
+                <>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">指定模型</label>
+                    <div className="space-y-1.5">
+                      {RULE_MODELS.map(m => (
+                        <button
+                          key={m.value}
+                          onClick={() => setForm(p => ({ ...p, ai_model: m.value }))}
+                          className={`w-full text-left text-sm px-3 py-2 rounded-lg border transition-all ${form.ai_model === m.value ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"}`}
+                        >
+                          {m.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 mb-1 block">专属 System Prompt</label>
+                    <Textarea
+                      value={form.ai_system_prompt}
+                      onChange={e => setForm(p => ({ ...p, ai_system_prompt: e.target.value }))}
+                      placeholder="告诉 AI 用什么格式、查什么内容回答"
+                      className="text-sm min-h-[120px] resize-none"
+                    />
+                  </div>
+                </>
+              )}
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-2 block">适用用户</label>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <button
+                    onClick={() => setForm(p => ({ ...p, target_type: "selected" }))}
+                    className={`py-2 rounded-xl text-sm font-medium border-2 transition-all ${form.target_type === "selected" ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-500"}`}
+                  >
+                    指定用户
+                  </button>
+                  <button
+                    onClick={() => setForm(p => ({ ...p, target_type: "all" }))}
+                    className={`py-2 rounded-xl text-sm font-medium border-2 transition-all ${form.target_type === "all" ? "border-purple-400 bg-purple-50 text-purple-700" : "border-gray-200 text-gray-500"}`}
+                  >
+                    全部用户
+                  </button>
+                </div>
+                {form.target_type === "selected" && (
+                  <div className="border border-gray-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+                    {wecomUsers2.length === 0 ? (
+                      <div className="text-xs text-gray-400 text-center py-4">暂无企微用户</div>
+                    ) : wecomUsers2.map(u => (
+                      <div
+                        key={u.wecom_user_id}
+                        onClick={() => toggleUserSelect(u.wecom_user_id)}
+                        className={`flex items-center gap-3 px-3 py-2.5 border-b border-gray-50 last:border-0 cursor-pointer transition-colors ${form.selected_user_ids.includes(u.wecom_user_id) ? "bg-blue-50" : "hover:bg-gray-50"}`}
+                      >
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${form.selected_user_ids.includes(u.wecom_user_id) ? "bg-blue-500 border-blue-500" : "border-gray-300"}`}>
+                          {form.selected_user_ids.includes(u.wecom_user_id) && <Check className="w-3 h-3 text-white" />}
+                        </div>
+                        {u.avatar_url ? (
+                          <img src={u.avatar_url} className="w-7 h-7 rounded-full" alt="" />
+                        ) : (
+                          <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center">
+                            <User className="w-4 h-4 text-gray-400" />
+                          </div>
+                        )}
+                        <span className="text-sm text-gray-700">{u.nickname || u.wecom_user_id}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {form.target_type === "selected" && form.selected_user_ids.length > 0 && (
+                  <div className="text-xs text-gray-500 mt-1">已选 {form.selected_user_ids.length} 个用户</div>
+                )}
+              </div>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {saving ? "保存中..." : "保存规则"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── 知识库Tab（共用） ─────────────────────────────────────────────────────────
+
+function ChannelKnowledgeTab({ channelType }: { channelType: string }) {
+  const [stats, setStats] = useState<{ kb_count: number; item_count: number; file_count: number; char_count: number }>({ kb_count: 0, item_count: 0, file_count: 0, char_count: 0 });
+  const [sources, setSources] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addType, setAddType] = useState<"qa" | "doc">("qa");
+  const [addQuestion, setAddQuestion] = useState("");
+  const [addAnswer, setAddAnswer] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [deleteSource, setDeleteSource] = useState<string | null>(null);
+  const [viewSource, setViewSource] = useState<string | null>(null);
+  const [sourceItems, setSourceItems] = useState<KnowledgeItem[]>([]);
+  const [loadingItems, setLoadingItems] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function loadData() {
+    setLoading(true);
+    try {
+      const [s, src] = await Promise.all([
+        fetch(`/api/wecom/ch/kb/stats?channel_type=${channelType}`).then(r => r.json()),
+        fetch(`/api/wecom/ch/kb/sources?channel_type=${channelType}`).then(r => r.json()),
+      ]);
+      if (s.ok) setStats(s);
+      if (src.ok) setSources(src.sources || []);
+    } catch { toast.error("加载失败"); }
+    finally { setLoading(false); }
+  }
+
+  useEffect(() => { loadData(); }, [channelType]);
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("channel_type", channelType);
+      const res = await fetch("/api/wecom/ch/kb/upload", { method: "POST", body: fd });
+      const d = await res.json();
+      if (d.ok) { toast.success(`导入成功，新增 ${d.imported} 条`); loadData(); }
+      else toast.error(d.error || "导入失败");
+    } catch { toast.error("上传失败"); }
+    finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = ""; }
+  }
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const res = await fetch(`/api/wecom/ch/kb/export?channel_type=${channelType}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `knowledge_${channelType}.xlsx`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("已导出");
+    } catch { toast.error("导出失败"); }
+    finally { setExporting(false); }
+  }
+
+  async function handleAddItem() {
+    if (!addAnswer.trim()) { toast.error("请输入内容"); return; }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/wecom/ch/kb/adopt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channel_type: channelType,
+          question: addType === "qa" ? addQuestion : null,
+          answer: addAnswer,
+        }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        toast.success("添加成功");
+        setShowAddModal(false);
+        setAddQuestion(""); setAddAnswer("");
+        loadData();
+      } else toast.error(d.error || "添加失败");
     } catch { toast.error("网络错误"); }
     finally { setSaving(false); }
   }
 
-  async function handleToggleEnabled(item: KnowledgeItem) {
+  async function handleDeleteSource(sourceFile: string) {
     try {
-      const res = await fetch(`/api/wecom/knowledge-bases/items/${item.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...item, enabled: item.enabled ? 0 : 1 }),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        setItems(prev => prev.map(i => i.id === item.id ? { ...i, enabled: item.enabled ? 0 : 1 } : i));
-      } else toast.error(data.error || "操作失败");
-    } catch { toast.error("网络错误"); }
+      const res = await fetch(`/api/wecom/ch/kb/source?channel_type=${channelType}&source_file=${encodeURIComponent(sourceFile)}`, { method: "DELETE" });
+      const d = await res.json();
+      if (d.ok) { toast.success(`已删除 ${d.deleted} 条`); setDeleteSource(null); loadData(); }
+      else toast.error(d.error || "删除失败");
+    } catch { toast.error("删除失败"); }
   }
 
-  async function handleDeleteItem(item: KnowledgeItem) {
-    if (!confirm(`确认删除这条${item.item_type === "qa" ? "问答" : "文档"}？`)) return;
+  async function openSourceDetail(sourceFile: string) {
+    setViewSource(sourceFile);
+    setLoadingItems(true);
     try {
-      const res = await fetch(`/api/wecom/knowledge-bases/items/${item.id}`, { method: "DELETE" });
-      const data = await res.json();
-      if (data.ok) {
-        toast.success("已删除");
-        setItems(prev => prev.filter(i => i.id !== item.id));
-      } else toast.error(data.error || "删除失败");
-    } catch { toast.error("网络错误"); }
+      const res = await fetch(`/api/wecom/ch/kb/items?channel_type=${channelType}&source_file=${encodeURIComponent(sourceFile)}`);
+      const d = await res.json();
+      if (d.ok) setSourceItems(d.items || []);
+    } catch { toast.error("加载失败"); }
+    finally { setLoadingItems(false); }
   }
 
-  const filteredItems = items.filter(i => i.item_type === itemType);
+  function fmtChars(n: number) {
+    if (n >= 10000) return (n / 10000).toFixed(1) + "万";
+    return String(n);
+  }
 
-  // 新增/编辑表单
-  if (showAddForm) {
+  // 来源文件详情视图
+  if (viewSource) {
     return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-3 mb-2">
-          <button onClick={() => setShowAddForm(false)} className="p-1.5 rounded-lg bg-gray-100 text-gray-600">
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <button onClick={() => setViewSource(null)} className="p-1.5 rounded-lg bg-gray-100 text-gray-600">
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <h3 className="text-sm font-semibold text-gray-900">{editingItem ? "编辑条目" : "新增条目"}</h3>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-gray-800 truncate">{viewSource}</div>
+            <div className="text-xs text-gray-400">{sourceItems.length} 条记录</div>
+          </div>
         </div>
-
-        {/* 类型切换 */}
-        <div className="flex gap-2">
-          {[{ key: "qa", label: "问答对" }, { key: "doc", label: "文档段落" }].map(t => (
-            <button
-              key={t.key}
-              onClick={() => setItemType(t.key as any)}
-              className={`flex-1 text-sm py-2 rounded-lg border font-medium transition-colors ${
-                itemType === t.key ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-200 bg-gray-50 text-gray-600"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        {itemType === "qa" && (
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">问题（可选）</label>
-            <input
-              value={formQuestion}
-              onChange={e => setFormQuestion(e.target.value)}
-              placeholder="用户可能会问的问题"
-              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
-            />
+        {loadingItems ? (
+          <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>
+        ) : sourceItems.length === 0 ? (
+          <div className="text-center py-12 text-gray-400 text-sm">暂无内容</div>
+        ) : (
+          <div className="space-y-2">
+            {sourceItems.map(item => (
+              <div key={item.id} className="bg-white rounded-xl border border-gray-100 p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`text-xs px-1.5 py-0.5 rounded ${item.item_type === "qa" ? "bg-blue-50 text-blue-600" : "bg-green-50 text-green-600"}`}>
+                    {item.item_type === "qa" ? "问答" : "段落"}
+                  </span>
+                  {item.chunk_index != null && <span className="text-xs text-gray-400">第{item.chunk_index + 1}段</span>}
+                </div>
+                {item.question && <div className="text-sm font-medium text-gray-700 mb-1">Q: {item.question}</div>}
+                <div className="text-sm text-gray-500 line-clamp-3">{item.item_type === "qa" ? "A: " : ""}{item.answer}</div>
+              </div>
+            ))}
           </div>
         )}
-
-        {itemType === "doc" && (
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">来源文档（可选）</label>
-            <input
-              value={formSourceDoc}
-              onChange={e => setFormSourceDoc(e.target.value)}
-              placeholder="文档名称或来源说明"
-              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
-            />
-          </div>
-        )}
-
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            {itemType === "qa" ? "答案内容" : "文档内容"}
-          </label>
-          <textarea
-            value={formAnswer}
-            onChange={e => setFormAnswer(e.target.value)}
-            placeholder={itemType === "qa" ? "AI回答的标准答案" : "文档段落内容"}
-            rows={6}
-            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-200"
-          />
-        </div>
-
-        <div className="flex gap-3">
-          <button
-            onClick={() => setShowAddForm(false)}
-            className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 font-medium"
-          >
-            取消
-          </button>
-          <button
-            onClick={handleSaveItem}
-            disabled={saving}
-            className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-medium disabled:opacity-60 flex items-center justify-center gap-2"
-          >
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            {saving ? "保存中..." : "保存"}
-          </button>
-        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
-      {/* 知识库选择（如有多个） */}
-      {kbList.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {kbList.map(kb => (
-            <button
-              key={kb.id}
-              onClick={() => loadItems(kb)}
-              className={`flex-shrink-0 text-sm px-3 py-1.5 rounded-full border transition-colors ${
-                selectedKb?.id === kb.id ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"
-              }`}
-            >
-              {kb.name}
-            </button>
+      {/* 数据看板 */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm py-3 text-center">
+          <div className="text-lg font-bold text-blue-600">{stats.item_count}</div>
+          <div className="text-xs text-gray-400 mt-0.5">知识条数</div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm py-3 text-center">
+          <div className="text-lg font-bold text-green-600">{stats.file_count}</div>
+          <div className="text-xs text-gray-400 mt-0.5">来源文件</div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm py-3 text-center">
+          <div className="text-lg font-bold text-purple-600">{fmtChars(stats.char_count)}</div>
+          <div className="text-xs text-gray-400 mt-0.5">总字数</div>
+        </div>
+      </div>
+
+      {/* 操作按钮 */}
+      <div className="grid grid-cols-3 gap-2">
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="flex items-center justify-center gap-1 bg-blue-600 text-white text-xs py-2.5 rounded-xl font-medium disabled:opacity-50"
+        >
+          {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+          {uploading ? "导入中" : "上传文件"}
+        </button>
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="flex items-center justify-center gap-1 bg-white border border-gray-200 text-gray-700 text-xs py-2.5 rounded-xl font-medium"
+        >
+          <Plus className="w-3.5 h-3.5" />手动新增
+        </button>
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          className="flex items-center justify-center gap-1 bg-white border border-gray-200 text-gray-700 text-xs py-2.5 rounded-xl font-medium disabled:opacity-50"
+        >
+          {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowLeft className="w-3.5 h-3.5 rotate-90" />}
+          导出
+        </button>
+      </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xlsx,.xls,.csv,.pdf,.doc,.docx,.txt"
+        onChange={handleFileUpload}
+        className="hidden"
+      />
+      <div className="text-xs text-gray-400 px-1 leading-relaxed">
+        支持 Excel / CSV（问答对）、PDF / Word / TXT（自动切片）。文件上传后自动转入知识库供 AI 检索。
+      </div>
+
+      {/* 来源文件列表 */}
+      {loading ? (
+        <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>
+      ) : sources.length === 0 ? (
+        <div className="text-center py-12 text-gray-400 text-sm">暂无知识内容，点击「上传文件」或「手动新增」</div>
+      ) : (
+        <div className="space-y-2">
+          <div className="text-xs text-gray-400 px-1">知识来源（共 {sources.length} 个）</div>
+          {sources.map((s, idx) => (
+            <div key={idx} className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 flex items-center gap-3">
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${s.item_type === "qa" ? "bg-blue-50" : "bg-green-50"}`}>
+                <Shield className={`w-4 h-4 ${s.item_type === "qa" ? "text-blue-500" : "text-green-500"}`} />
+              </div>
+              <button onClick={() => openSourceDetail(s.source_file)} className="flex-1 min-w-0 text-left">
+                <div className="text-sm font-medium text-gray-800 truncate">{s.source_file}</div>
+                <div className="text-xs text-gray-400 mt-0.5">{s.item_count} 条 · {formatShortDate(s.imported_at)}</div>
+              </button>
+              {deleteSource === s.source_file ? (
+                <div className="flex gap-1 flex-shrink-0">
+                  <button onClick={() => handleDeleteSource(s.source_file)} className="text-xs text-white bg-red-500 rounded px-1.5 py-1">确删</button>
+                  <button onClick={() => setDeleteSource(null)} className="text-xs text-gray-500 border border-gray-200 rounded px-1.5 py-1">取消</button>
+                </div>
+              ) : (
+                <button onClick={() => setDeleteSource(s.source_file)} className="text-xs text-red-400 border border-red-100 rounded px-2 py-1 flex-shrink-0">删除</button>
+              )}
+            </div>
           ))}
         </div>
       )}
 
-      {/* 类型切换 + 新增按钮 */}
-      <div className="flex items-center gap-2">
-        <div className="flex gap-1 bg-gray-100 rounded-lg p-1 flex-1">
-          {[{ key: "qa", label: "问答对" }, { key: "doc", label: "文档段落" }].map(t => (
-            <button
-              key={t.key}
-              onClick={() => setItemType(t.key as any)}
-              className={`flex-1 text-sm py-1 rounded-md font-medium transition-colors ${
-                itemType === t.key ? "bg-white text-blue-600 shadow-sm" : "text-gray-500"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+      {/* 手动新增弹窗 */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(0,0,0,0.4)" }}>
+          <div className="bg-white rounded-t-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between">
+              <span className="font-medium text-gray-800">手动新增知识</span>
+              <button onClick={() => setShowAddModal(false)}><X className="w-5 h-5 text-gray-400" /></button>
+            </div>
+            <div className="px-4 py-4 space-y-4">
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">问题</label>
+                <input value={addQuestion} onChange={e => setAddQuestion(e.target.value)} placeholder="输入问题（可选）" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-blue-400" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 mb-1 block">答案 <span className="text-red-400">*</span></label>
+                <Textarea value={addAnswer} onChange={e => setAddAnswer(e.target.value)} placeholder="输入答案内容" className="text-sm min-h-[120px] resize-none" />
+              </div>
+              <button onClick={handleAddItem} disabled={saving} className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                {saving ? "添加中..." : "添加到知识库"}
+              </button>
+            </div>
+          </div>
         </div>
-        <button
-          onClick={openAddForm}
-          className="flex-shrink-0 flex items-center gap-1 text-sm px-3 py-1.5 rounded-lg bg-blue-600 text-white"
-        >
-          <Plus className="w-4 h-4" />
-          新增
-        </button>
-      </div>
+      )}
+    </div>
+  );
+}
 
-      {loadingItems ? (
+// ─── 用户Tab ──────────────────────────────────────────────────────────────────
+
+function ChannelUsersTab({ channelType }: { channelType: string }) {
+  const [users, setUsers] = useState<ChannelUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [blockConfirm, setBlockConfirm] = useState<string | null>(null);
+
+  async function loadUsers() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/wecom/ch/users?channel_type=${channelType}`);
+      const d = await res.json();
+      if (d.ok) setUsers(d.users || []);
+    } catch { toast.error("加载失败"); }
+    finally { setLoading(false); }
+  }
+
+  useEffect(() => { loadUsers(); }, [channelType]);
+
+  async function handleBlock(userId: string, block: boolean) {
+    try {
+      const res = await fetch(`/api/wecom/ch/users/${block ? "block" : "unblock"}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wecom_user_id: userId, channel_type: channelType }),
+      });
+      const d = await res.json();
+      if (d.ok) { toast.success(block ? "已拉黑" : "已解除拉黑"); setBlockConfirm(null); loadUsers(); }
+      else toast.error(d.error || "操作失败");
+    } catch { toast.error("操作失败"); }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="text-xs text-gray-400 px-1">共 {users.length} 位用户</div>
+      {loading ? (
         <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>
-      ) : filteredItems.length === 0 ? (
-        <div className="text-center py-10 text-gray-400 text-sm">
-          暂无{itemType === "qa" ? "问答对" : "文档段落"}，点击「新增」添加
-        </div>
+      ) : users.length === 0 ? (
+        <div className="text-center py-12 text-gray-400 text-sm">暂无用户记录</div>
       ) : (
         <div className="space-y-2">
-          {filteredItems.map(item => (
-            <div
-              key={item.id}
-              className={`bg-white rounded-xl border shadow-sm p-4 transition-opacity ${item.enabled ? "" : "opacity-50"}`}
-            >
-              {item.item_type === "qa" && item.question && (
-                <p className="text-xs text-blue-600 font-medium mb-1 leading-relaxed">Q: {item.question}</p>
-              )}
-              {item.item_type === "doc" && item.source_doc && (
-                <p className="text-xs text-gray-400 mb-1">来源：{item.source_doc}</p>
-              )}
-              <p className="text-sm text-gray-800 leading-relaxed line-clamp-3">{item.answer}</p>
-              <div className="flex items-center gap-2 mt-3 pt-2 border-t border-gray-50">
-                <button
-                  onClick={() => handleToggleEnabled(item)}
-                  className={`text-xs px-2 py-0.5 rounded-full border ${
-                    item.enabled ? "border-green-200 text-green-600 bg-green-50" : "border-gray-200 text-gray-400 bg-gray-50"
-                  }`}
-                >
-                  {item.enabled ? "启用" : "停用"}
-                </button>
-                <button
-                  onClick={() => openEditForm(item)}
-                  className="text-xs px-2 py-0.5 rounded-full border border-blue-200 text-blue-600 bg-blue-50"
-                >
-                  编辑
-                </button>
-                <button
-                  onClick={() => handleDeleteItem(item)}
-                  className="text-xs px-2 py-0.5 rounded-full border border-red-200 text-red-500 bg-red-50 ml-auto"
-                >
-                  删除
-                </button>
+          {users.map(u => (
+            <div key={u.wecom_user_id} className={`bg-white rounded-xl border border-gray-100 shadow-sm p-3 ${u.blocked ? "opacity-60" : ""}`}>
+              <div className="flex items-center gap-3">
+                {u.avatar_url ? (
+                  <img src={u.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                    <User className="w-4 h-4 text-blue-500" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-800 truncate">{u.nickname || u.wecom_user_id}</span>
+                    {u.blocked && <span className="text-xs text-red-500 bg-red-50 px-1.5 py-0.5 rounded">已拉黑</span>}
+                  </div>
+                  <div className="flex items-center gap-3 mt-0.5">
+                    <span className="text-xs text-gray-400">{u.msg_count} 条消息</span>
+                    <span className="text-xs text-gray-400">{u.total_credits || 0} 积分</span>
+                    <span className="text-xs text-gray-400">最近：{formatShortDate(u.last_active)}</span>
+                  </div>
+                </div>
+                <div className="flex-shrink-0">
+                  {u.blocked ? (
+                    <button
+                      onClick={() => handleBlock(u.wecom_user_id, false)}
+                      className="text-xs text-green-600 border border-green-200 rounded px-2 py-1"
+                    >
+                      解除
+                    </button>
+                  ) : blockConfirm === u.wecom_user_id ? (
+                    <div className="flex gap-1">
+                      <button onClick={() => handleBlock(u.wecom_user_id, true)} className="text-xs text-white bg-red-500 rounded px-1.5 py-1">确认拉黑</button>
+                      <button onClick={() => setBlockConfirm(null)} className="text-xs text-gray-500 border border-gray-200 rounded px-1.5 py-1">取消</button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setBlockConfirm(u.wecom_user_id)}
+                      className="text-xs text-red-400 border border-red-100 rounded px-2 py-1"
+                    >
+                      <Ban className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -2546,81 +3308,186 @@ function KfKnowledgeTab() {
 
 // ─── 对话日志Tab ──────────────────────────────────────────────────────────────
 
-function KfLogsTab() {
+function ChannelLogsTab({ channelType }: { channelType: string }) {
   const [logs, setLogs] = useState<ChatLog[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [showFilter, setShowFilter] = useState(false);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [userId, setUserId] = useState("");
+  const [keyword, setKeyword] = useState("");
+  const [model, setModel] = useState("");
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 20;
 
-  function buildQuery(p = 0) {
+  // 多选模式
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  // AI分析弹窗
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeResult, setAnalyzeResult] = useState<string | null>(null);
+  const [kbSuggestions, setKbSuggestions] = useState<{ question: string; answer: string }[] | null>(null);
+  const [analyzeMode, setAnalyzeMode] = useState<string>("");
+  const [showAnalyzeSheet, setShowAnalyzeSheet] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState("");
+  const [adoptingIdx, setAdoptingIdx] = useState<number | null>(null);
+
+  function buildParams() {
     const params = new URLSearchParams();
+    params.set("channel_type", channelType);
     if (startDate) params.set("start_date", startDate);
     if (endDate) params.set("end_date", endDate);
     if (userId.trim()) params.set("user_id", userId.trim());
-    params.set("limit", String(PAGE_SIZE));
-    params.set("offset", String(p * PAGE_SIZE));
-    return params.toString() ? `?${params.toString()}` : "";
+    if (keyword.trim()) params.set("keyword", keyword.trim());
+    if (model) params.set("model", model);
+    return params;
   }
 
   async function fetchLogs(p = 0) {
     setLoading(true);
     try {
-      const res = await fetch(`/api/wecom/chat-logs${buildQuery(p)}`);
+      const params = buildParams();
+      params.set("limit", String(PAGE_SIZE));
+      params.set("offset", String(p * PAGE_SIZE));
+      const res = await fetch(`/api/wecom/ch/logs?${params.toString()}`);
       const data = await res.json();
-      if (data.logs) {
-        setLogs(data.logs);
-        setTotal(data.total || 0);
-        setPage(p);
-      } else toast.error(data.error || "加载失败");
+      if (data.ok) { setLogs(data.logs); setTotal(data.total || 0); setPage(p); }
+      else toast.error(data.error || "加载失败");
     } catch { toast.error("网络错误"); }
     finally { setLoading(false); }
   }
 
-  useEffect(() => { fetchLogs(0); }, []);
+  useEffect(() => { fetchLogs(0); }, [channelType]);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
+  function toggleSelect(id: number) {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelected(next);
+  }
+  function exitSelectMode() { setSelectMode(false); setSelected(new Set()); }
+
+  function getSelectedLogs() {
+    return logs.filter(l => selected.has(l.id)).map(l => ({ user_message: l.user_message, reply_preview: l.reply_preview }));
+  }
+
+  async function handleExport(format: "csv" | "json") {
+    try {
+      const params = buildParams();
+      params.set("format", format);
+      const res = await fetch(`/api/wecom/ch/logs/export?${params.toString()}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `logs_${channelType}.${format}`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("已导出");
+    } catch { toast.error("导出失败"); }
+  }
+
+  async function runAnalyze(mode: string) {
+    const sel = getSelectedLogs();
+    if (sel.length === 0) { toast.error("请先选择对话"); return; }
+    setAnalyzeMode(mode);
+    setShowAnalyzeSheet(false);
+    setAnalyzing(true);
+    setAnalyzeResult(null);
+    setKbSuggestions(null);
+    try {
+      const res = await fetch("/api/wecom/ch/logs/ai-analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode, logs: sel, custom_prompt: customPrompt }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        if (mode === "kb") setKbSuggestions((d.suggestions || []).length ? d.suggestions : [{ question: "", answer: d.raw || "" }]);
+        else setAnalyzeResult(d.result || "");
+      } else toast.error(d.error || "分析失败");
+    } catch { toast.error("分析失败"); }
+    finally { setAnalyzing(false); }
+  }
+
+  async function adoptSuggestion(idx: number) {
+    if (!kbSuggestions) return;
+    const s = kbSuggestions[idx];
+    if (!s.answer.trim()) { toast.error("答案不能为空"); return; }
+    setAdoptingIdx(idx);
+    try {
+      const res = await fetch("/api/wecom/ch/kb/adopt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channel_type: channelType, question: s.question, answer: s.answer }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        toast.success("已写入知识库");
+        const next = kbSuggestions.filter((_, i) => i !== idx);
+        setKbSuggestions(next.length ? next : null);
+      } else toast.error(d.error || "采纳失败");
+    } catch { toast.error("采纳失败"); }
+    finally { setAdoptingIdx(null); }
+  }
+
+  function updateSuggestion(idx: number, field: "question" | "answer", val: string) {
+    if (!kbSuggestions) return;
+    const next = [...kbSuggestions];
+    next[idx] = { ...next[idx], [field]: val };
+    setKbSuggestions(next);
+  }
+
   return (
     <div className="space-y-3">
-      {/* 筛选栏 */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 space-y-2">
-        <div className="flex gap-2">
-          <input
-            type="date"
-            value={startDate}
-            onChange={e => setStartDate(e.target.value)}
-            className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-200"
-          />
-          <span className="text-gray-400 self-center text-sm">至</span>
-          <input
-            type="date"
-            value={endDate}
-            onChange={e => setEndDate(e.target.value)}
-            className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-200"
-          />
-        </div>
-        <div className="flex gap-2">
-          <input
-            value={userId}
-            onChange={e => setUserId(e.target.value)}
-            placeholder="用户ID筛选（可选）"
-            className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-200"
-          />
-          <button
-            onClick={() => fetchLogs(0)}
-            className="flex-shrink-0 text-sm px-4 py-1.5 rounded-lg bg-blue-600 text-white font-medium"
-          >
-            查询
+      {/* 顶部操作栏 */}
+      {!selectMode ? (
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowFilter(v => !v)} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600">
+            <BarChart2 className="w-3.5 h-3.5" />筛选
           </button>
+          <button onClick={() => setSelectMode(true)} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600">
+            <Check className="w-3.5 h-3.5" />多选
+          </button>
+          <div className="flex-1" />
+          <span className="text-xs text-gray-400">共 {total} 条</span>
         </div>
-      </div>
+      ) : (
+        <div className="flex items-center gap-2 bg-blue-50 rounded-xl px-3 py-2">
+          <span className="text-xs font-medium text-blue-700">已选 {selected.size} 条</span>
+          <div className="flex-1" />
+          <button onClick={() => setShowAnalyzeSheet(true)} disabled={selected.size === 0} className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-blue-600 text-white font-medium disabled:opacity-40">
+            <Sparkles className="w-3.5 h-3.5" />AI分析
+          </button>
+          <button onClick={() => handleExport("csv")} disabled={selected.size === 0} className="text-xs px-2.5 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-40">导出</button>
+          <button onClick={exitSelectMode} className="text-xs px-2.5 py-1.5 rounded-lg text-gray-500">取消</button>
+        </div>
+      )}
 
-      {/* 统计 */}
-      <div className="text-xs text-gray-400 px-1">共 {total} 条记录</div>
+      {/* 筛选面板 */}
+      {showFilter && !selectMode && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 space-y-2">
+          <div className="flex gap-2">
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:border-blue-400" />
+            <span className="text-gray-400 self-center text-sm">至</span>
+            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:border-blue-400" />
+          </div>
+          <input value={userId} onChange={e => setUserId(e.target.value)} placeholder="用户ID / 昵称" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:border-blue-400" />
+          <input value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="关键词（搜索消息内容）" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:border-blue-400" />
+          <div className="flex gap-2">
+            <select value={model} onChange={e => setModel(e.target.value)} className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:border-blue-400 bg-white">
+              <option value="">全部模型</option>
+              <option value="deepseek-chat">DeepSeek Flash</option>
+              <option value="deepseek-reasoner">DeepSeek R1</option>
+              <option value="manus-1.6-lite">Manus 轻量</option>
+              <option value="manus-1.6">Manus 标准</option>
+            </select>
+            <button onClick={() => { fetchLogs(0); setShowFilter(false); }} className="flex-shrink-0 text-sm px-4 py-1.5 rounded-lg bg-blue-600 text-white font-medium">查询</button>
+          </div>
+        </div>
+      )}
 
       {/* 日志列表 */}
       {loading ? (
@@ -2630,40 +3497,45 @@ function KfLogsTab() {
       ) : (
         <div className="space-y-2">
           {logs.map(log => (
-            <div key={log.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-              {/* 用户信息 + 时间 */}
+            <div
+              key={log.id}
+              onClick={() => selectMode && toggleSelect(log.id)}
+              className={`bg-white rounded-xl border shadow-sm p-4 transition-colors ${
+                selectMode ? "cursor-pointer " + (selected.has(log.id) ? "border-blue-400 bg-blue-50/40" : "border-gray-100") : "border-gray-100"
+              }`}
+            >
               <div className="flex items-center gap-2 mb-2">
-                {log.avatar_url ? (
-                  <img src={log.avatar_url} alt="" className="w-7 h-7 rounded-full object-cover border border-blue-100 flex-shrink-0" />
-                ) : (
-                  <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                    <User className="w-3.5 h-3.5 text-blue-500" />
+                {selectMode && (
+                  <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${selected.has(log.id) ? "bg-blue-600 border-blue-600" : "border-gray-300"}`}>
+                    {selected.has(log.id) && <Check className="w-3 h-3 text-white" />}
                   </div>
                 )}
+                <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                  <User className="w-3.5 h-3.5 text-blue-500" />
+                </div>
                 <div className="flex-1 min-w-0">
                   <span className="text-xs font-medium text-gray-700">{log.nickname || log.wecom_user_id}</span>
                 </div>
                 <span className="text-xs text-gray-400 flex-shrink-0">{formatDate(log.created_at)}</span>
               </div>
-              {/* 用户消息 */}
               <div className="text-sm text-gray-800 mb-1.5 leading-relaxed">
-                <span className="text-xs text-gray-400 mr-1">问：</span>
-                {log.user_message}
+                <span className="text-xs text-gray-400 mr-1">问：</span>{log.user_message}
               </div>
-              {/* AI回复预览 */}
               {log.reply_preview && (
                 <div className="text-sm text-gray-500 leading-relaxed line-clamp-2">
-                  <span className="text-xs text-gray-400 mr-1">答：</span>
-                  {log.reply_preview}
+                  <span className="text-xs text-gray-400 mr-1">答：</span>{log.reply_preview}
                 </div>
               )}
-              {/* 底部元信息 */}
               <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-50">
-                {log.model_used && (
-                  <span className="text-xs text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">{log.model_used}</span>
-                )}
-                {log.credits_used > 0 && (
-                  <span className="text-xs text-gray-400">{log.credits_used} 积分</span>
+                {log.model_used && <span className="text-xs text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">{log.model_used}</span>}
+                {log.credits_used > 0 && <span className="text-xs text-gray-400">{log.credits_used} 积分</span>}
+                {!selectMode && (
+                  <button
+                    onClick={() => { setSelectMode(true); setSelected(new Set([log.id])); setShowAnalyzeSheet(true); }}
+                    className="ml-auto flex items-center gap-1 text-xs text-purple-600"
+                  >
+                    <Sparkles className="w-3 h-3" />AI分析
+                  </button>
                 )}
               </div>
             </div>
@@ -2671,24 +3543,81 @@ function KfLogsTab() {
         </div>
       )}
 
-      {/* 分页 */}
-      {totalPages > 1 && (
+      {!selectMode && totalPages > 1 && (
         <div className="flex items-center justify-center gap-3 py-2">
-          <button
-            onClick={() => fetchLogs(page - 1)}
-            disabled={page === 0 || loading}
-            className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 disabled:opacity-40"
-          >
-            上一页
-          </button>
+          <button onClick={() => fetchLogs(page - 1)} disabled={page === 0 || loading} className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 disabled:opacity-40">上一页</button>
           <span className="text-sm text-gray-500">{page + 1} / {totalPages}</span>
-          <button
-            onClick={() => fetchLogs(page + 1)}
-            disabled={page >= totalPages - 1 || loading}
-            className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 disabled:opacity-40"
-          >
-            下一页
-          </button>
+          <button onClick={() => fetchLogs(page + 1)} disabled={page >= totalPages - 1 || loading} className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 disabled:opacity-40">下一页</button>
+        </div>
+      )}
+
+      {/* AI分析选项底部弹窗 */}
+      {showAnalyzeSheet && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(0,0,0,0.4)" }} onClick={() => setShowAnalyzeSheet(false)}>
+          <div className="bg-white rounded-t-2xl w-full max-w-lg p-4 space-y-2" onClick={e => e.stopPropagation()}>
+            <div className="text-center text-sm font-medium text-gray-800 mb-2">AI 分析（已选 {selected.size} 条）</div>
+            <button onClick={() => runAnalyze("qc")} className="w-full flex items-center gap-3 p-3 rounded-xl bg-blue-50 text-left">
+              <Shield className="w-5 h-5 text-blue-500" />
+              <div><div className="text-sm font-medium text-gray-800">AI质检</div><div className="text-xs text-gray-500">分析对话质量好不好</div></div>
+            </button>
+            <button onClick={() => runAnalyze("optimize")} className="w-full flex items-center gap-3 p-3 rounded-xl bg-amber-50 text-left">
+              <Zap className="w-5 h-5 text-amber-500" />
+              <div><div className="text-sm font-medium text-gray-800">一键优化</div><div className="text-xs text-gray-500">找出问题并给改进建议</div></div>
+            </button>
+            <button onClick={() => runAnalyze("kb")} className="w-full flex items-center gap-3 p-3 rounded-xl bg-green-50 text-left">
+              <Plus className="w-5 h-5 text-green-500" />
+              <div><div className="text-sm font-medium text-gray-800">知识库推荐</div><div className="text-xs text-gray-500">生成问答对，编辑后一键入库</div></div>
+            </button>
+            <button onClick={() => setShowAnalyzeSheet(false)} className="w-full py-2.5 text-sm text-gray-500">取消</button>
+          </div>
+        </div>
+      )}
+
+      {/* AI分析结果弹窗 */}
+      {(analyzing || analyzeResult !== null || kbSuggestions !== null) && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(0,0,0,0.4)" }}>
+          <div className="bg-white rounded-t-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between">
+              <span className="font-medium text-gray-800 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-purple-500" />
+                {analyzeMode === "qc" ? "AI质检结果" : analyzeMode === "optimize" ? "优化建议" : "知识库推荐"}
+              </span>
+              <button onClick={() => { setAnalyzeResult(null); setKbSuggestions(null); }}><X className="w-5 h-5 text-gray-400" /></button>
+            </div>
+            <div className="px-4 py-4">
+              {analyzing ? (
+                <div className="flex flex-col items-center py-10 gap-2">
+                  <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+                  <span className="text-sm text-gray-400">AI 正在分析...</span>
+                </div>
+              ) : kbSuggestions !== null ? (
+                kbSuggestions.length === 0 ? (
+                  <div className="text-center py-8 text-gray-400 text-sm">已全部处理完毕</div>
+                ) : (
+                  <div className="space-y-4">
+                    {kbSuggestions.map((s, idx) => (
+                      <div key={idx} className="border border-gray-100 rounded-xl p-3 space-y-2">
+                        <div>
+                          <label className="text-xs font-medium text-gray-500 mb-1 block">问题（可编辑）</label>
+                          <input value={s.question} onChange={e => updateSuggestion(idx, "question", e.target.value)} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-blue-400" />
+                        </div>
+                        <div>
+                          <label className="text-xs font-medium text-gray-500 mb-1 block">答案（可编辑）</label>
+                          <Textarea value={s.answer} onChange={e => updateSuggestion(idx, "answer", e.target.value)} className="text-sm min-h-[90px] resize-none" />
+                        </div>
+                        <button onClick={() => adoptSuggestion(idx)} disabled={adoptingIdx === idx} className="w-full py-2 bg-green-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-1.5">
+                          {adoptingIdx === idx ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                          采纳入库
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : (
+                <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{analyzeResult}</div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

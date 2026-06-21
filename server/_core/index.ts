@@ -459,6 +459,9 @@ async function startServer() {
   // 企业微信管理后台路由（账号绑定管理）
   const wecomAdminModule = await import('../wecom-admin-router.js');
   app.use(wecomAdminModule.default);
+  // 企业微信渠道详情页扩展路由（配置/用户/知识库/日志AI分析）
+  const wecomChannelExtraModule = await import('../wecom-channel-extra.js');
+  app.use(wecomChannelExtraModule.default);
 
   // 内部数字币数据补全接口（仅允许本机调用）
   app.post('/api/internal/sync-crypto', async (req: any, res: any) => {
