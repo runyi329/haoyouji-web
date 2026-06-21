@@ -3106,35 +3106,56 @@ router.get("/api/wecom/channel-config/:channelId", async (req: Request, res: Res
   const { channelId } = req.params;
   const conn = await getDbConnection();
   try {
+    // 表结构为键值对：(channel_id, config_key, config_val)
     const [rows] = await (conn as any).execute(
-      `SELECT * FROM wecom_channel_config WHERE channel_id = ?`,
+      `SELECT config_key, config_val FROM wecom_channel_config WHERE channel_id = ?`,
       [channelId]
     );
-    const config = (rows as any[])[0] || { channel_id: channelId, welcome_msg: '', system_prompt: '', ai_model: 'deepseek-chat', knowledge_base_id: 1 };
-    res.json(config);
+    const kvMap: Record<string, string> = {};
+    for (const row of rows as any[]) {
+      kvMap[row.config_key] = row.config_val;
+    }
+    res.json({
+      channel_id: channelId,
+      welcome_msg: kvMap['welcome_msg'] || '',
+      waiting_msg: kvMap['waiting_msg'] || '收到，稍等为您解答～',
+      system_prompt: kvMap['system_prompt'] || '',
+      ai_model: kvMap['ai_model'] || 'deepseek-chat',
+      knowledge_base_id: kvMap['knowledge_base_id'] ? Number(kvMap['knowledge_base_id']) : null,
+      context_rounds: kvMap['context_rounds'] ? Number(kvMap['context_rounds']) : 10,
+    });
   } catch (e) {
     res.status(500).json({ error: "获取失败" });
-  } finally {
   }
 });
 
 // 保存渠道AI配置
 router.post("/api/wecom/channel-config/:channelId", async (req: Request, res: Response) => {
   const { channelId } = req.params;
-  const { welcome_msg, system_prompt, ai_model, knowledge_base_id } = req.body;
+  const { welcome_msg, waiting_msg, system_prompt, ai_model, knowledge_base_id, context_rounds } = req.body;
   const conn = await getDbConnection();
   try {
-    await (conn as any).execute(
-      `INSERT INTO wecom_channel_config (channel_id, welcome_msg, system_prompt, ai_model, knowledge_base_id)
-       VALUES (?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE welcome_msg=VALUES(welcome_msg), system_prompt=VALUES(system_prompt),
-         ai_model=VALUES(ai_model), knowledge_base_id=VALUES(knowledge_base_id)`,
-      [channelId, welcome_msg || '', system_prompt || '', ai_model || 'deepseek-chat', knowledge_base_id || 1]
-    );
+    // 按键值对逐条 upsert
+    const kvPairs: Record<string, string> = {
+      welcome_msg: welcome_msg || '',
+      waiting_msg: waiting_msg || '收到，稍等为您解答～',
+      system_prompt: system_prompt || '',
+      ai_model: ai_model || 'deepseek-chat',
+      knowledge_base_id: knowledge_base_id != null ? String(knowledge_base_id) : '',
+      context_rounds: context_rounds != null ? String(context_rounds) : '10',
+    };
+    for (const [key, val] of Object.entries(kvPairs)) {
+      await (conn as any).execute(
+        `INSERT INTO wecom_channel_config (channel_id, config_key, config_val)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE config_val=VALUES(config_val)`,
+        [channelId, key, val]
+      );
+    }
     res.json({ ok: true });
-  } catch (e) {
+  } catch (e: any) {
+    console.error('[channel-config] 保存失败:', e?.message);
     res.status(500).json({ error: "保存失败" });
-  } finally {
   }
 });
 
