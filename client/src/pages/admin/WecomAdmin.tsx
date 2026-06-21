@@ -3595,32 +3595,49 @@ function ChannelCustomRulesTab({ channelType }: { channelType: string }) {
                   </button>
                 </div>
                 {form.target_type === "selected" && (
-                  <div className="border border-gray-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
-                    {wecomUsers2.length === 0 ? (
-                      <div className="text-xs text-gray-400 text-center py-4">暂无企微用户</div>
-                    ) : wecomUsers2.map(u => (
-                      <div
-                        key={u.wecom_user_id}
-                        onClick={() => toggleUserSelect(u.wecom_user_id)}
-                        className={`flex items-center gap-3 px-3 py-2.5 border-b border-gray-50 last:border-0 cursor-pointer transition-colors ${form.selected_user_ids.includes(u.wecom_user_id) ? "bg-blue-50" : "hover:bg-gray-50"}`}
-                      >
-                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${form.selected_user_ids.includes(u.wecom_user_id) ? "bg-blue-500 border-blue-500" : "border-gray-300"}`}>
-                          {form.selected_user_ids.includes(u.wecom_user_id) && <Check className="w-3 h-3 text-white" />}
+                  <div>
+                    {/* 已选用户标签展示 */}
+                    {form.selected_user_ids.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mb-2 p-2 bg-blue-50 rounded-xl border border-blue-100">
+                        <span className="text-xs text-blue-500 w-full mb-1">已选 {form.selected_user_ids.length} 个用户：</span>
+                        {form.selected_user_ids.map(uid => {
+                          const u = wecomUsers2.find(x => x.wecom_user_id === uid);
+                          const label = u?.nickname || uid;
+                          return (
+                            <span key={uid} className="inline-flex items-center gap-1 bg-white text-blue-700 text-xs px-2 py-1 rounded-full border border-blue-200 shadow-sm">
+                              {label}
+                              <button
+                                onClick={() => toggleUserSelect(uid)}
+                                className="ml-0.5 text-blue-400 hover:text-red-500 font-bold leading-none"
+                              >×</button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {/* 用户下拉选择列表 */}
+                    <div className="border border-gray-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+                      {wecomUsers2.length === 0 ? (
+                        <div className="text-xs text-gray-400 text-center py-4">
+                          暂无可选用户（有用户发消息后自动出现）
                         </div>
-                        {u.avatar_url ? (
-                          <img src={u.avatar_url} className="w-7 h-7 rounded-full" alt="" />
-                        ) : (
-                          <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center">
+                      ) : wecomUsers2.map(u => (
+                        <div
+                          key={u.wecom_user_id}
+                          onClick={() => toggleUserSelect(u.wecom_user_id)}
+                          className={`flex items-center gap-3 px-3 py-2.5 border-b border-gray-50 last:border-0 cursor-pointer transition-colors ${form.selected_user_ids.includes(u.wecom_user_id) ? "bg-blue-50" : "hover:bg-gray-50"}`}
+                        >
+                          <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${form.selected_user_ids.includes(u.wecom_user_id) ? "bg-blue-500 border-blue-500" : "border-gray-300"}`}>
+                            {form.selected_user_ids.includes(u.wecom_user_id) && <Check className="w-3 h-3 text-white" />}
+                          </div>
+                          <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
                             <User className="w-4 h-4 text-gray-400" />
                           </div>
-                        )}
-                        <span className="text-sm text-gray-700">{u.nickname || u.wecom_user_id}</span>
-                      </div>
-                    ))}
+                          <span className="text-sm text-gray-700">{u.nickname || u.wecom_user_id}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                )}
-                {form.target_type === "selected" && form.selected_user_ids.length > 0 && (
-                  <div className="text-xs text-gray-500 mt-1">已选 {form.selected_user_ids.length} 个用户</div>
                 )}
               </div>
               <button
