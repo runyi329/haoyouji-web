@@ -6,6 +6,7 @@ import {
   Clock, Settings, AlertCircle, PlayCircle, StopCircle, Coins
 } from "lucide-react";
 import { toast } from "sonner";
+import WecomBindingManager from "./WecomBindingManager";
 
 // ─── 类型定义 ────────────────────────────────────────────────────────────────
 
@@ -104,10 +105,19 @@ function creditsToYuan(credits: number) {
 
 // ─── Tab 按钮 ────────────────────────────────────────────────────────────────
 
-type TabKey = "users" | "workflow" | "messages" | "stats" | "menu";
+type TabKey = "binding" | "users" | "workflow" | "messages" | "stats" | "menu";
+
+// Link2 图标内联引入
+const Link2Icon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+  </svg>
+);
 
 const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
-  { key: "users", label: "用户", icon: <User className="w-4 h-4" /> },
+  { key: "binding", label: "账号绑定", icon: <Link2Icon /> },
+  { key: "users", label: "客服用户", icon: <User className="w-4 h-4" /> },
   { key: "workflow", label: "工作流", icon: <Zap className="w-4 h-4" /> },
   { key: "messages", label: "消息", icon: <MessageSquare className="w-4 h-4" /> },
   { key: "stats", label: "统计", icon: <BarChart2 className="w-4 h-4" /> },
@@ -120,7 +130,7 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
 
 export default function WecomAdmin() {
   const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<TabKey>("users");
+  const [activeTab, setActiveTab] = useState<TabKey>("binding");
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 max-w-md mx-auto">
@@ -130,11 +140,12 @@ export default function WecomAdmin() {
           <ArrowLeft className="w-5 h-5 text-gray-600" />
         </button>
         <Bot className="w-5 h-5 text-blue-600" />
-        <h1 className="text-base font-semibold text-gray-900 flex-1">企业微信 AI 管理</h1>
+        <h1 className="text-base font-semibold text-gray-900 flex-1">企业微信管理</h1>
       </div>
 
       {/* Tab 内容 */}
       <div className="pt-2">
+        {activeTab === "binding" && <WecomBindingManager />}
         {activeTab === "users" && <UsersTab />}
         {activeTab === "workflow" && <WorkflowTab />}
         {activeTab === "messages" && <MessagesTab />}

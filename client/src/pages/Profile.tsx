@@ -460,6 +460,7 @@ export default function Profile() {
       { id: "topology", icon: Network, label: "拓扑", color: "bg-[#F3F0FF] text-[#5E35B1]", badge: null, onClick: () => navigate("/parent/topology") },
       { id: "sms-manage", icon: MessageSquare, label: "短信管理", color: "bg-green-50 text-green-600", badge: null, onClick: () => navigate("/jiang/sms-manage") },
       { id: "add-product", icon: PackagePlus, label: "上架商品", color: "bg-amber-50 text-amber-600", badge: null, onClick: () => navigate("/admin/product/new") },
+      { id: "wecom-binding", icon: MessageCircle, label: "企业微信", color: "bg-blue-50 text-blue-600", badge: null, onClick: () => navigate("/admin/wecom") },
       { id: "ai-token-monitor", icon: Bot, label: "AI管理", color: "bg-purple-50 text-purple-600", badge: null, onClick: () => navigate("/parent/ai-management") },
     ] : []),
     { id: "change-password", icon: Shield, label: "修改密码", color: "bg-indigo-50 text-indigo-600", badge: null, onClick: () => setIsPasswordDialogOpen(true) },
