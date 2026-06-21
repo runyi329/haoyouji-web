@@ -2268,6 +2268,8 @@ interface AiAssistResult {
   prompt_additions: string[];
   kb_items: { question: string; answer: string }[];
   summary: string;
+  model_used?: string;
+  tokens?: number;
 }
 
 function AiAssistConfigCard({
@@ -2386,8 +2388,15 @@ function AiAssistConfigCard({
 
           {result && (
             <div className="space-y-3">
-              {result.summary && (
-                <div className="text-xs text-purple-600 bg-purple-50 rounded-lg px-3 py-2">{result.summary}</div>
+              {(result.summary || result.model_used) && (
+                <div className="text-xs text-purple-600 bg-purple-50 rounded-lg px-3 py-2 space-y-1">
+                  {result.summary && <div>{result.summary}</div>}
+                  <div className="flex items-center gap-1 text-purple-400">
+                    <Sparkles className="w-3 h-3" />
+                    <span>由 {result.model_used || 'DeepSeek V4 Flash'} 分析</span>
+                    {result.tokens && <span className="ml-1">· {result.tokens.toLocaleString()} tokens</span>}
+                  </div>
+                </div>
               )}
               {result.prompt_additions.length > 0 && (
                 <div className="space-y-1.5">

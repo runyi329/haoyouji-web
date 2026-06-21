@@ -3550,6 +3550,7 @@ router.post("/api/wecom/ai-assist-config", async (req: Request, res: Response) =
       kb_items: parsed.kb_items || [],
       summary: parsed.summary || "",
       tokens: result.totalTokens,
+      model_used: "DeepSeek V4 Flash",
     });
   } catch (e) {
     console.error("[AI辅助] 分析失败:", e);
