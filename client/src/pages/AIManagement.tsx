@@ -1878,7 +1878,7 @@ function StatsTab() {
               viewMode === mode ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
             }`}
           >
-            {mode === 'user' ? '按用户' : mode === 'time' ? '按时间' : mode === 'rank' ? '按费用' : '按AI'}
+            {mode === 'user' ? '按用户' : mode === 'time' ? '按时间' : mode === 'rank' ? '按费用' : 'AI汇总'}
           </button>
         ))}
       </div>
@@ -1975,8 +1975,8 @@ function StatsTab() {
           )}
         </div>
 
-        {/* AI模型下拉 - 按AI视角时隐藏 */}
-        {viewMode !== 'ai' && (<div className="relative flex-1">
+        {/* AI模型下拉 */}
+        <div className="relative flex-1">
           <button
             onClick={() => { setShowAiDropdown(!showAiDropdown); setShowTimeDropdown(false); setShowUserDropdown(false); }}
             className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium border transition-all ${
@@ -1999,7 +1999,7 @@ function StatsTab() {
               ))}
             </div>
           )}
-        </div>)}
+        </div>
       </div>
 
       {/* 自定义日期输入展开 */}
