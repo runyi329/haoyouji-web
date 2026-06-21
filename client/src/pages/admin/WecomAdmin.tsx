@@ -3624,7 +3624,6 @@ function ChannelCustomRulesTab({ channelType }: { channelType: string }) {
                         <div className="px-3 pt-2.5 pb-1.5">
                           <input
                             type="text"
-                            autoFocus
                             placeholder="搜索用户名或 ID…"
                             value={userSearch}
                             onChange={e => setUserSearch(e.target.value)}
