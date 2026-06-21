@@ -41,10 +41,15 @@ interface WorkflowRule {
 interface UsageStat {
   nickname: string;
   wecom_user_id: string;
-  total_cost: number;
+  total_cost: number;        // Manus 积分（兼容旧字段）
+  manus_credits: number;    // Manus 积分
+  manus_cny: number;        // Manus 费用（元）
+  ds_total_tokens: number;  // DeepSeek 总 token
+  ds_cny: number;           // DeepSeek 费用（元）
+  total_cny: number;        // 合计费用（元）
   record_count: number;
   task_count: number;
-  first_bound_at: string;  // 最早绑定时间
+  first_bound_at: string;
 }
 
 interface MenuItem {
@@ -1275,35 +1280,88 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
 
 function StatsTab() {
   const [stats, setStats] = useState<UsageStat[]>([]);
+  const [allStats, setAllStats] = useState<UsageStat[]>([]); // 全量用户列表（用于用户多选下拉）
   const [loading, setLoading] = useState(false);
   const [totalCost, setTotalCost] = useState(0);
-  const [viewMode, setViewMode] = useState<"user" | "time" | "rank">("user");
+  const [totalCny, setTotalCny] = useState(0);
+  const [viewMode, setViewMode] = useState<'user' | 'time' | 'ai'>('user');
+  const [userSortBy, setUserSortBy] = useState<'default' | 'cny'>('default');
+  const [daily, setDaily] = useState<any[]>([]);
   const [detailUser, setDetailUser] = useState<{ id: string; name: string } | null>(null);
-  const [usdtCnyRate, setUsdtCnyRate] = useState<number>(7.0);
 
-  // 积分转人民币：1积分 = 0.037元（基于4000积分=148元官方定价）
-  const creditsToUsdt = (credits: number) => {
-    return (credits * 0.037).toFixed(2);
+  // 三维筛选状态
+  type TimeRange = 'all' | 'today' | 'week' | 'month' | 'custom';
+  const [timeRange, setTimeRange] = useState<TimeRange>('all');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [showTimeDropdown, setShowTimeDropdown] = useState(false);
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [userSearch, setUserSearch] = useState('');
+  const [aiModel, setAiModel] = useState<'all' | 'manus' | 'deepseek' | 'ds_flash' | 'ds_pro'>('all');
+  const [showAiDropdown, setShowAiDropdown] = useState(false);
+
+  const getLocalDateRange = (range: TimeRange): { start: string; end: string } | null => {
+    const now = new Date();
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    if (range === 'today') { const t = fmt(now); return { start: t, end: t }; }
+    if (range === 'week') {
+      const day = now.getDay() || 7;
+      const mon = new Date(now); mon.setDate(now.getDate() - day + 1);
+      return { start: fmt(mon), end: fmt(now) };
+    }
+    if (range === 'month') {
+      const first = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { start: fmt(first), end: fmt(now) };
+    }
+    if (range === 'custom' && customStart && customEnd) return { start: customStart, end: customEnd };
+    return null;
   };
 
-  const fetchStats = useCallback(async () => {
+  const buildQuery = (opts?: { range?: TimeRange; cs?: string; ce?: string; users?: string[]; model?: string }) => {
+    const r = opts?.range ?? timeRange;
+    const cs = opts?.cs ?? customStart;
+    const ce = opts?.ce ?? customEnd;
+    const users = opts?.users ?? selectedUsers;
+    const model = opts?.model ?? aiModel;
+    const dr = r === 'custom' ? (cs && ce ? { start: cs, end: ce } : null) : getLocalDateRange(r);
+    const p = new URLSearchParams();
+    if (dr) { p.set('start_date', dr.start); p.set('end_date', dr.end); }
+    if (users.length > 0) p.set('user_ids', users.join(','));
+    if (model !== 'all') p.set('ai_model', model);
+    return p.toString() ? `?${p.toString()}` : '';
+  };
+
+  const fetchStats = useCallback(async (opts?: { range?: TimeRange; cs?: string; ce?: string; users?: string[]; model?: string }) => {
     setLoading(true);
     try {
-      const res = await fetch("/api/wecom/stats");
-      const data = await res.json();
-      if (data.ok) {
-        setStats(data.stats || []);
-        setTotalCost(data.total_cost || 0);
-        if (data.usdt_cny_rate) setUsdtCnyRate(data.usdt_cny_rate);
-      } else toast.error(data.error || "加载失败");
-    } catch { toast.error("网络错误"); }
+      const query = buildQuery(opts);
+      const [statsRes, dailyRes] = await Promise.all([
+        fetch(`/api/wecom/stats${query}`),
+        fetch(`/api/wecom/stats/daily${query}`),
+      ]);
+      const [statsData, dailyData] = await Promise.all([statsRes.json(), dailyRes.json()]);
+      if (statsData.ok) {
+        setStats(statsData.stats || []);
+        setTotalCost(statsData.total_cost || 0);
+        setTotalCny(statsData.total_cny || 0);
+      } else toast.error(statsData.error || '加载失败');
+      if (dailyData.ok) setDaily(dailyData.daily || []);
+    } catch { toast.error('网络错误'); }
     finally { setLoading(false); }
+  }, [timeRange, customStart, customEnd, selectedUsers, aiModel]);
+
+  useEffect(() => {
+    fetchStats();
+    fetch('/api/wecom/stats').then(r => r.json()).then(d => {
+      if (d.ok) setAllStats(d.stats || []);
+    });
   }, []);
 
-  useEffect(() => { fetchStats(); }, [fetchStats]);
-
-  // 按积分排行（已是降序）
-  const rankStats = [...stats].sort((a, b) => b.total_cost - a.total_cost);
+  const sortedStats = userSortBy === 'cny'
+    ? [...stats].sort((a, b) => (b.total_cny || 0) - (a.total_cny || 0))
+    : stats;
 
   if (detailUser) {
     return <UserDetailModal wecomUserId={detailUser.id} displayName={detailUser.name} onClose={() => setDetailUser(null)} />;
@@ -1315,38 +1373,211 @@ function StatsTab() {
       <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl p-4 text-white">
         <div className="flex items-center gap-2 mb-1">
           <Coins className="w-4 h-4 text-blue-200" />
-          <span className="text-sm text-blue-100">企微渠道累计消耗</span>
+          <span className="text-sm text-blue-100">企微渠道累计费用</span>
         </div>
-        <div className="text-3xl font-bold">{Math.round(totalCost)}</div>
-        <div className="text-sm text-blue-200 mt-0.5">积分</div>
+        <div className="text-3xl font-bold">¥{totalCny.toFixed(2)}</div>
+        <div className="flex items-center gap-3 mt-1.5">
+          <span className="text-xs text-blue-200">Manus {Math.round(totalCost)} 积分 · ¥{(totalCost * 0.037).toFixed(2)}</span>
+          <span className="text-xs text-blue-300">│</span>
+          <span className="text-xs text-blue-200">DeepSeek ¥{(totalCny - totalCost * 0.037).toFixed(4)}</span>
+        </div>
       </div>
 
-      {/* 三维度 Tab + 刷新 */}
+      {/* Tab 主视角切换 */}
       <div className="flex items-center gap-2">
         <div className="flex bg-gray-100 rounded-xl p-1 flex-1">
-          {(["user", "time", "rank"] as const).map((mode) => (
+          {(['user', 'time', 'ai'] as const).map((mode) => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
               className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                viewMode === mode ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+                viewMode === mode ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
               }`}
             >
-              {mode === "user" ? "按用户" : mode === "time" ? "按时间" : "按积分"}
+              {mode === 'user' ? '按用户' : mode === 'time' ? '按时间' : 'AI汇总'}
             </button>
           ))}
         </div>
-        <button
-          onClick={fetchStats}
-          className="flex items-center gap-1 px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs text-gray-600"
-          disabled={loading}
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-          刷新
-        </button>
+        {/* 按用户时显示排序切换 */}
+        {viewMode === 'user' && (
+          <button
+            onClick={() => setUserSortBy(userSortBy === 'default' ? 'cny' : 'default')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+              userSortBy === 'cny' ? 'bg-green-50 border-green-300 text-green-700' : 'bg-white border-gray-200 text-gray-500'
+            }`}
+          >
+            {userSortBy === 'cny' ? '按费用↓' : '默认排序'}
+          </button>
+        )}
       </div>
 
-      {/* 内容区 */}
+      {/* 三维筛选条 */}
+      <div className="flex gap-2 relative">
+        {/* 时间下拉 */}
+        <div className="relative flex-1">
+          <button
+            onClick={() => { setShowTimeDropdown(!showTimeDropdown); setShowUserDropdown(false); setShowAiDropdown(false); }}
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium border transition-all ${
+              timeRange !== 'all' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white border-gray-200 text-gray-600'
+            }`}
+          >
+            <span>{timeRange === 'all' ? '时间' : timeRange === 'today' ? '今天' : timeRange === 'week' ? '本周' : timeRange === 'month' ? '本月' : '自定义'}</span>
+            <ChevronRight className={`w-3 h-3 transition-transform ${showTimeDropdown ? 'rotate-90' : ''}`} />
+          </button>
+          {showTimeDropdown && (
+            <div className="absolute top-10 left-0 z-30 bg-white border border-gray-200 rounded-xl shadow-lg w-36 py-1">
+              {(['all','today','week','month','custom'] as const).map((v) => {
+                const label = v === 'all' ? '全部' : v === 'today' ? '今天' : v === 'week' ? '本周' : v === 'month' ? '本月' : '自定义…';
+                return (
+                  <button
+                    key={v}
+                    onClick={() => {
+                      setTimeRange(v);
+                      setShowCustomInput(v === 'custom');
+                      setShowTimeDropdown(false);
+                      if (v !== 'custom') fetchStats({ range: v });
+                    }}
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${timeRange === v ? 'text-blue-600 font-medium' : 'text-gray-700'}`}
+                  >{label}</button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* 用户下拉 */}
+        <div className="relative flex-1">
+          <button
+            onClick={() => { setShowUserDropdown(!showUserDropdown); setShowTimeDropdown(false); setShowAiDropdown(false); }}
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium border transition-all ${
+              selectedUsers.length > 0 ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white border-gray-200 text-gray-600'
+            }`}
+          >
+            <span>{selectedUsers.length === 0 ? '用户' : `已选${selectedUsers.length}人`}</span>
+            <ChevronRight className={`w-3 h-3 transition-transform ${showUserDropdown ? 'rotate-90' : ''}`} />
+          </button>
+          {showUserDropdown && (
+            <div className="absolute top-10 left-0 z-30 bg-white border border-gray-200 rounded-xl shadow-lg w-52">
+              <div className="px-3 pt-2 pb-1">
+                <input
+                  type="text"
+                  placeholder="搜索用户名…"
+                  value={userSearch}
+                  onChange={e => setUserSearch(e.target.value)}
+                  className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 outline-none"
+                  autoFocus
+                />
+              </div>
+              <div className="max-h-52 overflow-y-auto py-1">
+                {allStats
+                  .filter(u => !userSearch || (u.nickname || u.wecom_user_id).toLowerCase().includes(userSearch.toLowerCase()))
+                  .slice(0, userSearch ? 50 : 10)
+                  .map(u => (
+                    <label key={u.wecom_user_id} className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedUsers.includes(u.wecom_user_id)}
+                        onChange={e => {
+                          const next = e.target.checked
+                            ? [...selectedUsers, u.wecom_user_id]
+                            : selectedUsers.filter(id => id !== u.wecom_user_id);
+                          setSelectedUsers(next);
+                          fetchStats({ users: next });
+                        }}
+                        className="w-3.5 h-3.5 accent-blue-600"
+                      />
+                      <span className="text-sm text-gray-700 truncate">{u.nickname || u.wecom_user_id}</span>
+                    </label>
+                  ))}
+                {!userSearch && allStats.length > 10 && (
+                  <div className="px-3 py-1.5 text-sm text-gray-400 text-center">输入名字搜索更多用户</div>
+                )}
+              </div>
+              {selectedUsers.length > 0 && (
+                <div className="border-t border-gray-100 px-3 py-2">
+                  <button onClick={() => { setSelectedUsers([]); fetchStats({ users: [] }); setShowUserDropdown(false); }}
+                    className="text-sm text-red-500">清除已选</button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* AI模型下拉 */}
+        <div className="relative flex-1">
+          <button
+            onClick={() => { setShowAiDropdown(!showAiDropdown); setShowTimeDropdown(false); setShowUserDropdown(false); }}
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium border transition-all ${
+              aiModel !== 'all' ? 'bg-purple-50 border-purple-300 text-purple-700' : 'bg-white border-gray-200 text-gray-600'
+            }`}
+          >
+            <span>{aiModel === 'all' ? 'AI模型' : aiModel === 'manus' ? 'Manus' : aiModel === 'deepseek' ? 'DeepSeek' : aiModel === 'ds_flash' ? 'DS Flash' : 'DS Pro'}</span>
+            <ChevronRight className={`w-3 h-3 transition-transform ${showAiDropdown ? 'rotate-90' : ''}`} />
+          </button>
+          {showAiDropdown && (
+            <div className="absolute top-10 right-0 z-30 bg-white border border-gray-200 rounded-xl shadow-lg w-40 py-1">
+              {(['all','manus','deepseek','ds_flash','ds_pro'] as const).map((v) => {
+                const label = v === 'all' ? '全部' : v === 'manus' ? 'Manus' : v === 'deepseek' ? 'DeepSeek' : v === 'ds_flash' ? 'DS Flash' : 'DS Pro';
+                return (
+                  <button
+                    key={v}
+                    onClick={() => { setAiModel(v); fetchStats({ model: v }); setShowAiDropdown(false); }}
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${aiModel === v ? 'text-purple-600 font-medium' : 'text-gray-700'}`}
+                  >{label}</button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 自定义日期输入 */}
+      {showCustomInput && (
+        <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2">
+          <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
+            className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 outline-none" />
+          <span className="text-gray-400 text-xs">—</span>
+          <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
+            className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 outline-none" />
+          <button
+            onClick={() => fetchStats({ range: 'custom', cs: customStart, ce: customEnd })}
+            disabled={!customStart || !customEnd}
+            className="px-2 py-1 bg-blue-600 text-white rounded-lg text-xs disabled:opacity-40"
+          >查询</button>
+        </div>
+      )}
+
+      {/* 已选标签行 */}
+      {(timeRange !== 'all' || selectedUsers.length > 0 || aiModel !== 'all') && (
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {timeRange !== 'all' && (
+            <span className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-xs">
+              {timeRange === 'today' ? '今天' : timeRange === 'week' ? '本周' : timeRange === 'month' ? '本月' : `${customStart}~${customEnd}`}
+              <button onClick={() => { setTimeRange('all'); setShowCustomInput(false); fetchStats({ range: 'all' }); }} className="text-blue-400 hover:text-blue-700">×</button>
+            </span>
+          )}
+          {selectedUsers.map(uid => {
+            const u = allStats.find(s => s.wecom_user_id === uid);
+            return (
+              <span key={uid} className="flex items-center gap-1 px-2 py-0.5 bg-green-50 text-green-700 rounded-full text-xs">
+                {u?.nickname || uid}
+                <button onClick={() => { const next = selectedUsers.filter(id => id !== uid); setSelectedUsers(next); fetchStats({ users: next }); }} className="text-green-400 hover:text-green-700">×</button>
+              </span>
+            );
+          })}
+          {aiModel !== 'all' && (
+            <span className="flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-700 rounded-full text-xs">
+              {aiModel === 'manus' ? 'Manus' : aiModel === 'deepseek' ? 'DeepSeek' : aiModel === 'ds_flash' ? 'DS Flash' : 'DS Pro'}
+              <button onClick={() => { setAiModel('all'); fetchStats({ model: 'all' }); }} className="text-purple-400 hover:text-purple-700">×</button>
+            </span>
+          )}
+          <button
+            onClick={() => { setTimeRange('all'); setSelectedUsers([]); setAiModel('all'); setShowCustomInput(false); fetchStats({ range: 'all', users: [], model: 'all' }); }}
+            className="text-xs text-gray-400 hover:text-red-500 ml-1"
+          >清除全部</button>
+        </div>
+      )}
+
       {loading && stats.length === 0 ? (
         <div className="text-center py-10 text-gray-400 text-sm">加载中...</div>
       ) : stats.length === 0 ? (
@@ -1355,139 +1586,159 @@ function StatsTab() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
 
           {/* 按用户 */}
-          {viewMode === "user" && (
-            <table className="min-w-full border-collapse text-sm" style={{minWidth: '700px'}}>
+          {viewMode === 'user' && (
+            <table className="w-auto border-collapse text-sm">
               <thead>
                 <tr className="bg-gray-50">
-                  <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 border-b border-r border-gray-200">用户（点击查看明细）</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-20">开始时间</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">累计时间</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-14">消息数</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">消耗算力</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-20"><div>元</div><div className="text-gray-400">U</div></th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-gray-200 w-8"></th>
+                  <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 border-b border-r border-gray-200 whitespace-nowrap">用户</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 whitespace-nowrap">开始时间</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 whitespace-nowrap">消息数</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 whitespace-nowrap">Manus积分</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 whitespace-nowrap">DS tokens</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-gray-200 whitespace-nowrap">合计（元）</th>
                 </tr>
               </thead>
               <tbody>
-                {stats.map((stat, i) => (
-                  <tr
-                    key={i}
+                {sortedStats.map((stat, i) => (
+                  <tr key={i}
                     className="border-b border-gray-100 last:border-0 cursor-pointer hover:bg-blue-50 active:bg-blue-100 transition-colors"
-                    onClick={() => setDetailUser({ id: stat.wecom_user_id, name: stat.nickname || stat.wecom_user_id })}
-                  >
-                    <td className="px-3 py-2.5 border-r border-gray-100">
-                      <div className="font-medium text-gray-900 text-sm">{stat.nickname || stat.wecom_user_id}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        {stat.wecom_user_id}
-                        {stat.task_count > 1 && (
-                          <span className="ml-1.5 text-orange-500">共 {stat.task_count} 个任务</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{formatShortDate(stat.first_bound_at)}</td>
-                    <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{calcDays(stat.first_bound_at)}</td>
-                    <td className="px-3 py-2.5 text-center text-sm text-gray-600 border-r border-gray-100">{stat.record_count}</td>
-                    <td className="px-3 py-2.5 text-center text-sm font-semibold text-blue-600 border-r border-gray-100">{Math.round(stat.total_cost)}</td>
-                    <td className="px-3 py-2.5 text-center border-r border-gray-100">
-                      <div className="text-sm font-semibold text-green-600">{creditsToYuan(stat.total_cost)}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">{creditsToUsdt(stat.total_cost)} 元</div>
-                    </td>
-                    <td className="px-3 py-2.5 text-center"><ChevronRight className="w-4 h-4 text-gray-300 mx-auto" /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-
-          {/* 按时间 */}
-          {viewMode === "time" && (
-            <table className="min-w-full border-collapse text-sm" style={{minWidth: '700px'}}>
-              <thead>
-                <tr className="bg-gray-50">
-                  <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 border-b border-r border-gray-200">用户（最早绑定在前）</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-20">开始时间</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">累计时间</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-14">消息数</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">消耗算力</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-20"><div>元</div><div className="text-gray-400">U</div></th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-gray-200 w-8"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...stats].sort((a, b) => new Date(a.first_bound_at).getTime() - new Date(b.first_bound_at).getTime()).reverse().map((stat, i) => (
-                  <tr
-                    key={i}
-                    className="border-b border-gray-100 last:border-0 cursor-pointer hover:bg-blue-50 active:bg-blue-100 transition-colors"
-                    onClick={() => setDetailUser({ id: stat.wecom_user_id, name: stat.nickname || stat.wecom_user_id })}
-                  >
-                    <td className="px-3 py-2.5 border-r border-gray-100">
+                    onClick={() => setDetailUser({ id: stat.wecom_user_id, name: stat.nickname || stat.wecom_user_id })}>
+                    <td className="px-3 py-2.5 border-r border-gray-100 whitespace-nowrap">
                       <div className="font-medium text-gray-900 text-sm">{stat.nickname || stat.wecom_user_id}</div>
                       <div className="text-xs text-gray-400 mt-0.5">{stat.wecom_user_id}</div>
                     </td>
-                    <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{formatShortDate(stat.first_bound_at)}</td>
-                    <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{calcDays(stat.first_bound_at)}</td>
-                    <td className="px-3 py-2.5 text-center text-sm text-gray-600 border-r border-gray-100">{stat.record_count}</td>
-                    <td className="px-3 py-2.5 text-center text-sm font-semibold text-blue-600 border-r border-gray-100">{Math.round(stat.total_cost)}</td>
+                    <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100 whitespace-nowrap">{formatShortDate(stat.first_bound_at)}</td>
+                    <td className="px-3 py-2.5 text-center text-sm text-gray-600 border-r border-gray-100 whitespace-nowrap">{stat.record_count}</td>
                     <td className="px-3 py-2.5 text-center border-r border-gray-100">
-                      <div className="text-sm font-semibold text-green-600">{creditsToYuan(stat.total_cost)}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">{creditsToUsdt(stat.total_cost)} 元</div>
+                      <div className="text-sm font-semibold text-blue-600">{Math.round(stat.manus_credits || stat.total_cost)}</div>
+                      <div className="text-xs text-gray-400">¥{(stat.manus_cny || stat.total_cost * 0.037).toFixed(2)}</div>
                     </td>
-                    <td className="px-3 py-2.5 text-center"><ChevronRight className="w-4 h-4 text-gray-300 mx-auto" /></td>
+                    <td className="px-3 py-2.5 text-center border-r border-gray-100">
+                      <div className="text-sm font-semibold text-purple-600">{Math.round(stat.ds_total_tokens || 0)}</div>
+                      <div className="text-xs text-gray-400">¥{(stat.ds_cny || 0).toFixed(4)}</div>
+                    </td>
+                    <td className="px-3 py-2.5 text-center">
+                      <div className="text-sm font-bold text-green-600">¥{(stat.total_cny || stat.total_cost * 0.037).toFixed(2)}</div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
 
-          {/* 按积分排行 */}
-          {viewMode === "rank" && (
-            <table className="min-w-full border-collapse text-sm" style={{minWidth: '740px'}}>
+          {/* 按时间 - 日期列表 */}
+          {viewMode === 'time' && (
+            daily.length === 0 ? (
+              <div className="text-center py-10 text-gray-400 text-sm">暂无日期数据</div>
+            ) : (
+              <table className="w-auto border-collapse text-sm">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 border-b border-r border-gray-200 whitespace-nowrap">日期</th>
+                    <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 whitespace-nowrap">活跃用户</th>
+                    <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 whitespace-nowrap">消息数</th>
+                    <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 whitespace-nowrap">Manus积分</th>
+                    <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 whitespace-nowrap">DS tokens</th>
+                    <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-gray-200 whitespace-nowrap">当日费用（元）</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {daily.map((d, i) => (
+                    <tr key={i} className="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                      <td className="px-3 py-2.5 border-r border-gray-100 whitespace-nowrap">
+                        <div className="font-medium text-gray-900 text-sm">{d.date}</div>
+                      </td>
+                      <td className="px-3 py-2.5 text-center text-sm text-gray-600 border-r border-gray-100">{d.user_count}人</td>
+                      <td className="px-3 py-2.5 text-center text-sm text-gray-600 border-r border-gray-100">{d.record_count}</td>
+                      <td className="px-3 py-2.5 text-center border-r border-gray-100">
+                        <div className="text-sm font-semibold text-blue-600">{Math.round(d.manus_credits)}</div>
+                        <div className="text-xs text-gray-400">¥{d.manus_cny.toFixed(2)}</div>
+                      </td>
+                      <td className="px-3 py-2.5 text-center border-r border-gray-100">
+                        <div className="text-sm font-semibold text-purple-600">{Math.round(d.ds_total_tokens)}</div>
+                        <div className="text-xs text-gray-400">¥{d.ds_cny.toFixed(4)}</div>
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        <div className="text-sm font-bold text-green-600">¥{d.total_cny.toFixed(2)}</div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )
+          )}
+
+        </div>
+      )}
+
+      {/* AI汇总视图 */}
+      {viewMode === 'ai' && (
+        <div className="space-y-3">
+          {/* Manus 卡片 */}
+          <div className="bg-white rounded-xl shadow-sm border border-blue-100 overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 bg-blue-50 border-b border-blue-100">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">Manus</span>
+              <span className="text-sm font-medium text-blue-800">{Math.round(stats.reduce((s, r) => s + (r.manus_credits || r.total_cost || 0), 0))} 积分</span>
+              <span className="ml-auto text-sm font-bold text-blue-700">¥{stats.reduce((s, r) => s + (r.manus_cny || (r.total_cost || 0) * 0.037), 0).toFixed(2)}</span>
+            </div>
+            <table className="min-w-full border-collapse text-sm">
               <thead>
                 <tr className="bg-gray-50">
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-10">排名</th>
-                  <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 border-b border-r border-gray-200">用户</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-20">开始时间</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">累计时间</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-14">消息数</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">消耗算力</th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-20"><div>元</div><div className="text-gray-400">U</div></th>
-                  <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-gray-200 w-8"></th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 border-b border-r border-gray-200">用户</th>
+                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">消息数</th>
+                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-20">积分</th>
+                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 border-b border-gray-200 w-20">费用（元）</th>
                 </tr>
               </thead>
               <tbody>
-                {rankStats.map((stat, i) => (
-                  <tr
-                    key={i}
-                    className="border-b border-gray-100 last:border-0 cursor-pointer hover:bg-blue-50 active:bg-blue-100 transition-colors"
-                    onClick={() => setDetailUser({ id: stat.wecom_user_id, name: stat.nickname || stat.wecom_user_id })}
-                  >
-                    <td className="px-3 py-2.5 text-center border-r border-gray-100">
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mx-auto ${
-                        i === 0 ? "bg-yellow-100 text-yellow-700" :
-                        i === 1 ? "bg-gray-100 text-gray-600" :
-                        i === 2 ? "bg-orange-100 text-orange-600" :
-                        "bg-gray-50 text-gray-400"
-                      }`}>{i + 1}</div>
-                    </td>
+                {stats.filter(s => (s.manus_credits || s.total_cost || 0) > 0).map((stat, i) => (
+                  <tr key={i} className="border-b border-gray-100 last:border-0 cursor-pointer hover:bg-blue-50 transition-colors"
+                    onClick={() => setDetailUser({ id: stat.wecom_user_id, name: stat.nickname || stat.wecom_user_id })}>
                     <td className="px-3 py-2.5 border-r border-gray-100">
                       <div className="font-medium text-gray-900 text-sm">{stat.nickname || stat.wecom_user_id}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">{stat.wecom_user_id}</div>
                     </td>
-                    <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{formatShortDate(stat.first_bound_at)}</td>
-                    <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100">{calcDays(stat.first_bound_at)}</td>
                     <td className="px-3 py-2.5 text-center text-sm text-gray-600 border-r border-gray-100">{stat.record_count}</td>
-                    <td className="px-3 py-2.5 text-center text-sm font-bold text-blue-600 border-r border-gray-100">{Math.round(stat.total_cost)}</td>
-                    <td className="px-3 py-2.5 text-center border-r border-gray-100">
-                      <div className="text-sm font-semibold text-green-600">{creditsToYuan(stat.total_cost)}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">{creditsToUsdt(stat.total_cost)} 元</div>
-                    </td>
-                    <td className="px-3 py-2.5 text-center"><ChevronRight className="w-4 h-4 text-gray-300 mx-auto" /></td>
+                    <td className="px-3 py-2.5 text-center text-sm font-semibold text-blue-600 border-r border-gray-100">{Math.round(stat.manus_credits || stat.total_cost || 0)}</td>
+                    <td className="px-3 py-2.5 text-center text-sm font-bold text-green-600">¥{(stat.manus_cny || (stat.total_cost || 0) * 0.037).toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          )}
+          </div>
 
+          {/* DeepSeek 卡片 */}
+          <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 bg-purple-50 border-b border-purple-100">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">DeepSeek</span>
+              <span className="text-sm font-medium text-purple-800">{Math.round(stats.reduce((s, r) => s + (r.ds_total_tokens || 0), 0))} tokens</span>
+              <span className="ml-auto text-sm font-bold text-purple-700">¥{stats.reduce((s, r) => s + (r.ds_cny || 0), 0).toFixed(4)}</span>
+            </div>
+            <table className="min-w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 border-b border-r border-gray-200">用户</th>
+                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-16">消息数</th>
+                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 w-20">Tokens</th>
+                  <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 border-b border-gray-200 w-20">费用（元）</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.filter(s => (s.ds_total_tokens || 0) > 0).length === 0 ? (
+                  <tr><td colSpan={4} className="px-3 py-6 text-center text-xs text-gray-400">暂无 DeepSeek 使用记录</td></tr>
+                ) : stats.filter(s => (s.ds_total_tokens || 0) > 0).map((stat, i) => (
+                  <tr key={i} className="border-b border-gray-100 last:border-0 cursor-pointer hover:bg-purple-50 transition-colors"
+                    onClick={() => setDetailUser({ id: stat.wecom_user_id, name: stat.nickname || stat.wecom_user_id })}>
+                    <td className="px-3 py-2.5 border-r border-gray-100">
+                      <div className="font-medium text-gray-900 text-sm">{stat.nickname || stat.wecom_user_id}</div>
+                    </td>
+                    <td className="px-3 py-2.5 text-center text-sm text-gray-600 border-r border-gray-100">{stat.record_count}</td>
+                    <td className="px-3 py-2.5 text-center text-sm font-semibold text-purple-600 border-r border-gray-100">{Math.round(stat.ds_total_tokens || 0)}</td>
+                    <td className="px-3 py-2.5 text-center text-sm font-bold text-green-600">¥{(stat.ds_cny || 0).toFixed(4)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

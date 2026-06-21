@@ -2045,6 +2045,86 @@ router.get("/api/wecom/messages/:taskId", async (req: Request, res: Response) =>
 });
 
 // -----------------------------------------------------------
+// 管理API：按日期聚合统计（必须在 /api/wecom/stats 之前注册，避免被拦截）
+// -----------------------------------------------------------
+router.get("/api/wecom/stats/daily", async (req: Request, res: Response) => {
+  try {
+    await ensureSessionTable();
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+
+    const { start_date, end_date, user_ids, ai_model } = req.query as {
+      start_date?: string; end_date?: string; user_ids?: string; ai_model?: string;
+    };
+
+    const conditions: string[] = ['1=1'];
+    if (start_date && end_date) {
+      conditions.push(`mc.created_at >= '${start_date} 00:00:00' AND mc.created_at <= '${end_date} 23:59:59'`);
+    }
+    if (user_ids) {
+      const ids = user_ids.split(',').map((id: string) => `'${id.trim().replace(/'/g, '')}'`).join(',');
+      if (ids) conditions.push(`mc.wecom_user_id IN (${ids})`);
+    }
+    if (ai_model && ai_model !== 'all') {
+      if (ai_model === 'manus') conditions.push(`mc.manus_task_id != 'deepseek'`);
+      else if (ai_model === 'deepseek') conditions.push(`mc.manus_task_id = 'deepseek'`);
+      else if (ai_model === 'ds_flash') conditions.push(`mc.manus_task_id = 'deepseek' AND mc.model_used NOT IN ('deepseek-v4-pro','deepseek-v4-pro-thinking')`);
+      else if (ai_model === 'ds_pro') conditions.push(`mc.manus_task_id = 'deepseek' AND mc.model_used IN ('deepseek-v4-pro','deepseek-v4-pro-thinking')`);
+    }
+    const whereClause = conditions.join(' AND ');
+
+    const [rows] = await (conn as any).execute(
+      `SELECT
+         DATE(mc.created_at) AS date,
+         COUNT(DISTINCT mc.wecom_user_id) AS user_count,
+         COUNT(*) AS record_count,
+         SUM(CASE WHEN mc.manus_task_id != 'deepseek' THEN COALESCE(mc.credits_used,0) ELSE 0 END) AS manus_credits,
+         SUM(CASE WHEN mc.manus_task_id = 'deepseek' THEN COALESCE(mc.credits_used,0) ELSE 0 END) AS ds_total_tokens,
+         SUM(CASE WHEN mc.manus_task_id = 'deepseek' THEN COALESCE(mc.input_tokens,0) ELSE 0 END) AS ds_input_miss,
+         SUM(CASE WHEN mc.manus_task_id = 'deepseek' THEN COALESCE(mc.output_tokens,0) ELSE 0 END) AS ds_output,
+         SUM(CASE WHEN mc.manus_task_id = 'deepseek' THEN COALESCE(mc.cache_hit_tokens,0) ELSE 0 END) AS ds_cache_hit,
+         SUM(CASE WHEN mc.model_used IN ('deepseek-v4-pro','deepseek-v4-pro-thinking') THEN COALESCE(mc.input_tokens,0) ELSE 0 END) AS ds_pro_input_miss,
+         SUM(CASE WHEN mc.model_used IN ('deepseek-v4-pro','deepseek-v4-pro-thinking') THEN COALESCE(mc.output_tokens,0) ELSE 0 END) AS ds_pro_output,
+         SUM(CASE WHEN mc.model_used IN ('deepseek-v4-pro','deepseek-v4-pro-thinking') THEN COALESCE(mc.cache_hit_tokens,0) ELSE 0 END) AS ds_pro_cache_hit
+       FROM wecom_message_credits mc
+       WHERE ${whereClause}
+       GROUP BY DATE(mc.created_at)
+       ORDER BY date DESC`
+    ) as any;
+
+    const daily = (rows as any[]).map((r: any) => {
+      const manusCredits = Number(r.manus_credits) || 0;
+      const manusCny = manusCredits * MANUS_CREDIT_PRICE;
+      const dsProInputMiss = Number(r.ds_pro_input_miss) || 0;
+      const dsProOutput = Number(r.ds_pro_output) || 0;
+      const dsProCacheHit = Number(r.ds_pro_cache_hit) || 0;
+      const dsFlashInputMiss = Math.max(0, (Number(r.ds_input_miss) || 0) - dsProInputMiss);
+      const dsFlashOutput = Math.max(0, (Number(r.ds_output) || 0) - dsProOutput);
+      const dsFlashCacheHit = Math.max(0, (Number(r.ds_cache_hit) || 0) - dsProCacheHit);
+      const dsFlashCny = calcDeepSeekCost('deepseek-v4-flash', dsFlashInputMiss, dsFlashCacheHit, dsFlashOutput);
+      const dsProCny = calcDeepSeekCost('deepseek-v4-pro', dsProInputMiss, dsProCacheHit, dsProOutput);
+      const dsTotalCny = dsFlashCny + dsProCny;
+      const totalCny = manusCny + dsTotalCny;
+      return {
+        date: r.date instanceof Date ? r.date.toISOString().slice(0,10) : String(r.date).slice(0,10),
+        user_count: Number(r.user_count) || 0,
+        record_count: Number(r.record_count) || 0,
+        manus_credits: manusCredits,
+        ds_total_tokens: Number(r.ds_total_tokens) || 0,
+        manus_cny: manusCny,
+        ds_cny: dsTotalCny,
+        total_cny: totalCny,
+      };
+    });
+
+    res.json({ ok: true, daily });
+  } catch (e) {
+    console.error("[WeCom] 按日期统计失败:", e);
+    res.status(500).json({ error: "查询失败" });
+  }
+});
+
+// -----------------------------------------------------------
 // 管理API：使用统计（调用 Manus usage.list，按 task_id 聚合）
 // -----------------------------------------------------------
 router.get("/api/wecom/stats", async (req: Request, res: Response) => {
@@ -2156,6 +2236,86 @@ router.get("/api/wecom/stats", async (req: Request, res: Response) => {
     res.json({ ok: true, stats, total_cost, total_cny, usdt_cny_rate });
   } catch (e) {
     console.error("[WeCom] 查询使用统计失败:", e);
+    res.status(500).json({ error: "查询失败" });
+  }
+});
+
+// -----------------------------------------------------------
+// 管理API：按日期聚合统计
+// -----------------------------------------------------------
+router.get("/api/wecom/stats/daily", async (req: Request, res: Response) => {
+  try {
+    await ensureSessionTable();
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+
+    const { start_date, end_date, user_ids, ai_model } = req.query as {
+      start_date?: string; end_date?: string; user_ids?: string; ai_model?: string;
+    };
+
+    const conditions: string[] = ['1=1'];
+    if (start_date && end_date) {
+      conditions.push(`mc.created_at >= '${start_date} 00:00:00' AND mc.created_at <= '${end_date} 23:59:59'`);
+    }
+    if (user_ids) {
+      const ids = user_ids.split(',').map((id: string) => `'${id.trim().replace(/'/g, '')}'`).join(',');
+      if (ids) conditions.push(`mc.wecom_user_id IN (${ids})`);
+    }
+    if (ai_model && ai_model !== 'all') {
+      if (ai_model === 'manus') conditions.push(`mc.manus_task_id != 'deepseek'`);
+      else if (ai_model === 'deepseek') conditions.push(`mc.manus_task_id = 'deepseek'`);
+      else if (ai_model === 'ds_flash') conditions.push(`mc.manus_task_id = 'deepseek' AND mc.model_used NOT IN ('deepseek-v4-pro','deepseek-v4-pro-thinking')`);
+      else if (ai_model === 'ds_pro') conditions.push(`mc.manus_task_id = 'deepseek' AND mc.model_used IN ('deepseek-v4-pro','deepseek-v4-pro-thinking')`);
+    }
+    const whereClause = conditions.join(' AND ');
+
+    const [rows] = await (conn as any).execute(
+      `SELECT
+         DATE(mc.created_at) AS date,
+         COUNT(DISTINCT mc.wecom_user_id) AS user_count,
+         COUNT(*) AS record_count,
+         SUM(CASE WHEN mc.manus_task_id != 'deepseek' THEN COALESCE(mc.credits_used,0) ELSE 0 END) AS manus_credits,
+         SUM(CASE WHEN mc.manus_task_id = 'deepseek' THEN COALESCE(mc.credits_used,0) ELSE 0 END) AS ds_total_tokens,
+         SUM(CASE WHEN mc.manus_task_id = 'deepseek' THEN COALESCE(mc.input_tokens,0) ELSE 0 END) AS ds_input_miss,
+         SUM(CASE WHEN mc.manus_task_id = 'deepseek' THEN COALESCE(mc.output_tokens,0) ELSE 0 END) AS ds_output,
+         SUM(CASE WHEN mc.manus_task_id = 'deepseek' THEN COALESCE(mc.cache_hit_tokens,0) ELSE 0 END) AS ds_cache_hit,
+         SUM(CASE WHEN mc.model_used IN ('deepseek-v4-pro','deepseek-v4-pro-thinking') THEN COALESCE(mc.input_tokens,0) ELSE 0 END) AS ds_pro_input_miss,
+         SUM(CASE WHEN mc.model_used IN ('deepseek-v4-pro','deepseek-v4-pro-thinking') THEN COALESCE(mc.output_tokens,0) ELSE 0 END) AS ds_pro_output,
+         SUM(CASE WHEN mc.model_used IN ('deepseek-v4-pro','deepseek-v4-pro-thinking') THEN COALESCE(mc.cache_hit_tokens,0) ELSE 0 END) AS ds_pro_cache_hit
+       FROM wecom_message_credits mc
+       WHERE ${whereClause}
+       GROUP BY DATE(mc.created_at)
+       ORDER BY date DESC`
+    ) as any;
+
+    const daily = (rows as any[]).map((r: any) => {
+      const manusCredits = Number(r.manus_credits) || 0;
+      const manusCny = manusCredits * MANUS_CREDIT_PRICE;
+      const dsProInputMiss = Number(r.ds_pro_input_miss) || 0;
+      const dsProOutput = Number(r.ds_pro_output) || 0;
+      const dsProCacheHit = Number(r.ds_pro_cache_hit) || 0;
+      const dsFlashInputMiss = Math.max(0, (Number(r.ds_input_miss) || 0) - dsProInputMiss);
+      const dsFlashOutput = Math.max(0, (Number(r.ds_output) || 0) - dsProOutput);
+      const dsFlashCacheHit = Math.max(0, (Number(r.ds_cache_hit) || 0) - dsProCacheHit);
+      const dsFlashCny = calcDeepSeekCost('deepseek-v4-flash', dsFlashInputMiss, dsFlashCacheHit, dsFlashOutput);
+      const dsProCny = calcDeepSeekCost('deepseek-v4-pro', dsProInputMiss, dsProCacheHit, dsProOutput);
+      const dsTotalCny = dsFlashCny + dsProCny;
+      const totalCny = manusCny + dsTotalCny;
+      return {
+        date: r.date instanceof Date ? r.date.toISOString().slice(0,10) : String(r.date).slice(0,10),
+        user_count: Number(r.user_count) || 0,
+        record_count: Number(r.record_count) || 0,
+        manus_credits: manusCredits,
+        ds_total_tokens: Number(r.ds_total_tokens) || 0,
+        manus_cny: manusCny,
+        ds_cny: dsTotalCny,
+        total_cny: totalCny,
+      };
+    });
+
+    res.json({ ok: true, daily });
+  } catch (e) {
+    console.error("[WeCom] 按日期统计失败:", e);
     res.status(500).json({ error: "查询失败" });
   }
 });
