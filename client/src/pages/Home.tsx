@@ -1892,12 +1892,11 @@ export default function Home() {
                         const kfUrl = 'https://work.weixin.qq.com/kfid/kfc471067df4191a26b';
                         const ua = navigator.userAgent.toLowerCase();
                         const isMiniProgram = ua.includes('miniprogram') || (window as any).__wxjs_environment === 'miniprogram';
-                        if (isMiniProgram && (window as any).wx && (window as any).wx.openCustomerServiceChat) {
-                          (window as any).wx.openCustomerServiceChat({
-                            extInfo: { url: kfUrl },
-                            corpId: 'ww471067df4191a26b',
-                            success: () => {},
-                            fail: () => { window.location.href = kfUrl; }
+                        if (isMiniProgram) {
+                          // 微信小程序内无法直接跳转 work.weixin.qq.com，弹出引导提示
+                          toast('请点右上角「···」→「在浏览器中打开」，再点健康养生联系客服', {
+                            duration: 5000,
+                            description: '微信小程序暂不支持直接跳转客服链接'
                           });
                         } else {
                           window.location.href = kfUrl;
