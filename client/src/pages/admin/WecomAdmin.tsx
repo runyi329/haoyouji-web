@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import WecomBindingManager from "./WecomBindingManager";
+import WecomRoutePanel from "@/components/WecomRoutePanel";
 
 // ─── 类型定义 ────────────────────────────────────────────────────────────────
 
@@ -110,7 +111,7 @@ function creditsToYuan(credits: number) {
 
 // ─── Tab 按钮 ────────────────────────────────────────────────────────────────
 
-type TabKey = "binding" | "users" | "workflow" | "messages" | "stats" | "menu";
+type TabKey = "binding" | "users" | "workflow" | "messages" | "stats" | "menu" | "route";
 
 // Link2 图标内联引入
 const Link2Icon = () => (
@@ -127,6 +128,7 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: "messages", label: "消息", icon: <MessageSquare className="w-4 h-4" /> },
   { key: "stats", label: "统计", icon: <BarChart2 className="w-4 h-4" /> },
   { key: "menu", label: "菜单", icon: <Menu className="w-4 h-4" /> },
+  { key: "route", label: "路由", icon: <BarChart2 className="w-4 h-4" /> },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -156,11 +158,12 @@ export default function WecomAdmin() {
         {activeTab === "messages" && <MessagesTab />}
         {activeTab === "stats" && <StatsTab />}
         {activeTab === "menu" && <MenuTab />}
+        {activeTab === "route" && <WecomRoutePanel />}
       </div>
 
       {/* 底部 Tab 栏 */}
       <div className="fixed bottom-0 left-0 right-0 z-20 bg-white border-t border-gray-100 max-w-md mx-auto">
-        <div className="flex">
+        <div className="flex overflow-x-auto">
           {TABS.map(tab => (
             <button
               key={tab.key}
