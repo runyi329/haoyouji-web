@@ -1364,6 +1364,7 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
   const [manusCny, setManusCny] = useState(0);
   const [dsCny, setDsCny] = useState(0);
   const [totalCny, setTotalCny] = useState(0);
+  const [detailView, setDetailView] = useState<'msg' | 'day' | 'ai'>('msg');
 
   useEffect(() => {
     fetch(`/api/wecom/user-detail?wecom_user_id=${encodeURIComponent(wecomUserId)}`)
@@ -1384,6 +1385,27 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
   }, [wecomUserId]);
 
   const totalCost = sessions.reduce((s, t) => s + t.total_cost, 0);
+
+  // 按天聚合所有 records
+  const dayMap: Record<string, { date: string; manusCredits: number; manusCny: number; dsCny: number; totalCny: number; count: number }> = {};
+  records.forEach(r => {
+    const day = r.created_at ? r.created_at.slice(0, 10) : '未知';
+    if (!dayMap[day]) dayMap[day] = { date: day, manusCredits: 0, manusCny: 0, dsCny: 0, totalCny: 0, count: 0 };
+    const cny = r.cny ?? (r.is_deepseek ? 0 : r.credits * 0.037);
+    if (r.is_deepseek) { dayMap[day].dsCny += cny; }
+    else { dayMap[day].manusCredits += r.credits; dayMap[day].manusCny += cny; }
+    dayMap[day].totalCny += cny;
+    dayMap[day].count += 1;
+  });
+  const dayList = Object.values(dayMap).sort((a, b) => b.date.localeCompare(a.date));
+
+  // 按AI聚合
+  const manusRecords = records.filter(r => !r.is_deepseek);
+  const dsRecords = records.filter(r => r.is_deepseek);
+  const manusTotalCny = manusRecords.reduce((s, r) => s + (r.cny ?? r.credits * 0.037), 0);
+  const dsTotalCny = dsRecords.reduce((s, r) => s + (r.cny ?? 0), 0);
+  const manusTotal = manusRecords.reduce((s, r) => s + r.credits, 0);
+  const dsTotal = dsRecords.reduce((s, r) => s + r.credits, 0);
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-white">
@@ -1406,11 +1428,113 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
         </div>
       </div>
 
+      {/* 三维度切换 Tab */}
+      <div className="flex border-b border-gray-100 bg-white">
+        {([['msg','按消息'],['day','按天'],['ai','按AI']] as const).map(([v, label]) => (
+          <button
+            key={v}
+            onClick={() => setDetailView(v)}
+            className={`flex-1 py-2 text-sm font-medium transition-colors ${
+              detailView === v
+                ? 'text-blue-600 border-b-2 border-blue-600'
+                : 'text-gray-400'
+            }`}
+          >{label}</button>
+        ))}
+      </div>
+
       {loading ? (
         <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">加载中...</div>
       ) : sessions.length === 0 ? (
         <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">暂无绑定记录</div>
+      ) : detailView === 'day' ? (
+        /* ===== 按天视图 ===== */
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+          {dayList.length === 0 ? (
+            <div className="text-center text-gray-400 text-sm py-8">暂无记录</div>
+          ) : dayList.map(d => (
+            <div key={d.date} className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-gray-800">{d.date}</div>
+                  <div className="text-xs text-gray-400 mt-0.5">{d.count} 条消息</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-base font-bold text-green-600">¥{d.totalCny.toFixed(4)}</div>
+                  <div className="text-xs text-gray-400">
+                    {d.manusCny > 0 && <span className="text-blue-500">Manus ¥{d.manusCny.toFixed(2)}</span>}
+                    {d.manusCny > 0 && d.dsCny > 0 && <span className="mx-1">+</span>}
+                    {d.dsCny > 0 && <span className="text-purple-500">DS ¥{d.dsCny.toFixed(4)}</span>}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : detailView === 'ai' ? (
+        /* ===== 按AI视图 ===== */
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+          {/* Manus 卡片 */}
+          <div className="bg-white rounded-xl border border-blue-100 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 bg-blue-50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                <span className="text-sm font-semibold text-blue-700">Manus</span>
+              </div>
+              <div className="text-right">
+                <div className="text-base font-bold text-blue-600">¥{manusTotalCny.toFixed(2)}</div>
+                <div className="text-xs text-gray-400">{Math.round(manusTotal)} 积分 · {manusRecords.length} 条</div>
+              </div>
+            </div>
+            <div className="divide-y divide-gray-50">
+              {manusRecords.length === 0 ? (
+                <div className="px-4 py-3 text-xs text-gray-400 text-center">暂无记录</div>
+              ) : manusRecords.map((r, i) => (
+                <div key={r.id ?? i} className="px-4 py-2.5 flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-gray-400">{r.created_at ? r.created_at.slice(0, 16).replace('T', ' ') : ''}</div>
+                    <div className="text-sm text-gray-700 truncate">{r.user_message || '(无内容)'}</div>
+                  </div>
+                  <div className="ml-3 text-right flex-shrink-0">
+                    <div className="text-sm font-bold text-blue-600">-{Math.round(r.credits)}</div>
+                    <div className="text-xs text-green-600">¥{(r.cny ?? r.credits * 0.037).toFixed(2)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* DeepSeek 卡片 */}
+          <div className="bg-white rounded-xl border border-purple-100 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 bg-purple-50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                <span className="text-sm font-semibold text-purple-700">DeepSeek</span>
+              </div>
+              <div className="text-right">
+                <div className="text-base font-bold text-purple-600">¥{dsTotalCny.toFixed(4)}</div>
+                <div className="text-xs text-gray-400">{Math.round(dsTotal)} tokens · {dsRecords.length} 条</div>
+              </div>
+            </div>
+            <div className="divide-y divide-gray-50">
+              {dsRecords.length === 0 ? (
+                <div className="px-4 py-3 text-xs text-gray-400 text-center">暂无记录</div>
+              ) : dsRecords.map((r, i) => (
+                <div key={r.id ?? i} className="px-4 py-2.5 flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-gray-400">{r.created_at ? r.created_at.slice(0, 16).replace('T', ' ') : ''}</div>
+                    <div className="text-sm text-gray-700 truncate">{r.user_message || '(无内容)'}</div>
+                  </div>
+                  <div className="ml-3 text-right flex-shrink-0">
+                    <div className="text-xs text-purple-500">{Math.round(r.credits)} tokens</div>
+                    <div className="text-xs text-green-600">¥{(r.cny ?? 0).toFixed(4)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       ) : (
+        /* ===== 按消息视图（原有逻辑）===== */
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
           {sessions.map((s) => {
             const taskRecords = records.filter(r => r.task_id === s.manus_task_id);
