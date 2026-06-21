@@ -2496,6 +2496,15 @@ function ChannelConfigTab({ channel }: { channel: Channel }) {
   const [savedSnapshot, setSavedSnapshot] = useState<string>("");
   const [justSaved, setJustSaved] = useState(false);
 
+  // 各字段的编辑态控制：平时只读，点编辑才可修改
+  const [editingWelcome, setEditingWelcome] = useState(false);
+  const [editingWaiting, setEditingWaiting] = useState(false);
+  const [editingPrompt, setEditingPrompt] = useState(false);
+  // 编辑时的临时値（取消时可恢复）
+  const [draftWelcome, setDraftWelcome] = useState("");
+  const [draftWaiting, setDraftWaiting] = useState("");
+  const [draftPrompt, setDraftPrompt] = useState("");
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isEnabled, setIsEnabled] = useState(channel.is_enabled !== 0);
@@ -2709,40 +2718,100 @@ function ChannelConfigTab({ channel }: { channel: Channel }) {
 
       {/* 欢迎语 */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-        <label className="block text-sm font-medium text-gray-700 mb-1">欢迎语</label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-sm font-medium text-gray-700">欢迎语</label>
+          {!editingWelcome ? (
+            <button onClick={() => { setDraftWelcome(welcomeMsg); setEditingWelcome(true); }}
+              className="text-xs text-blue-500 px-2 py-0.5 rounded hover:bg-blue-50">编辑</button>
+          ) : (
+            <div className="flex gap-2">
+              <button onClick={() => { setWelcomeMsg(draftWelcome); setEditingWelcome(false); }}
+                className="text-xs text-gray-400 px-2 py-0.5 rounded hover:bg-gray-50">取消</button>
+              <button onClick={() => setEditingWelcome(false)}
+                className="text-xs text-blue-500 px-2 py-0.5 rounded hover:bg-blue-50">完成</button>
+            </div>
+          )}
+        </div>
         <p className="text-xs text-gray-400 mb-2">用户首次发消息时自动回复，留空则不发送</p>
-        <textarea
-          value={welcomeMsg}
-          onChange={e => setWelcomeMsg(e.target.value)}
-          placeholder="输入欢迎语，支持换行"
-          rows={3}
-          className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-800 placeholder-gray-400"
-        />
+        {editingWelcome ? (
+          <textarea
+            value={welcomeMsg}
+            onChange={e => setWelcomeMsg(e.target.value)}
+            placeholder="输入欢迎语，支持换行"
+            rows={3}
+            autoFocus
+            className="w-full text-sm border border-blue-300 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-800 placeholder-gray-400"
+          />
+        ) : (
+          <div className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2 min-h-[60px] whitespace-pre-wrap">
+            {welcomeMsg || <span className="text-gray-400">未设置欢迎语</span>}
+          </div>
+        )}
       </div>
 
       {/* 等待提示语 */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-        <label className="block text-sm font-medium text-gray-700 mb-1">等待提示语</label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-sm font-medium text-gray-700">等待提示语</label>
+          {!editingWaiting ? (
+            <button onClick={() => { setDraftWaiting(waitingMsg); setEditingWaiting(true); }}
+              className="text-xs text-blue-500 px-2 py-0.5 rounded hover:bg-blue-50">编辑</button>
+          ) : (
+            <div className="flex gap-2">
+              <button onClick={() => { setWaitingMsg(draftWaiting); setEditingWaiting(false); }}
+                className="text-xs text-gray-400 px-2 py-0.5 rounded hover:bg-gray-50">取消</button>
+              <button onClick={() => setEditingWaiting(false)}
+                className="text-xs text-blue-500 px-2 py-0.5 rounded hover:bg-blue-50">完成</button>
+            </div>
+          )}
+        </div>
         <p className="text-xs text-gray-400 mb-2">用户发消息后、AI 回复前显示的提示，避免用户以为没反应</p>
-        <input
-          value={waitingMsg}
-          onChange={e => setWaitingMsg(e.target.value)}
-          placeholder="例如：收到，AI 正在思考中，请稍候..."
-          className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
-        />
+        {editingWaiting ? (
+          <input
+            value={waitingMsg}
+            onChange={e => setWaitingMsg(e.target.value)}
+            placeholder="例如：收到，AI 正在思考中，请稍候..."
+            autoFocus
+            className="w-full text-sm border border-blue-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          />
+        ) : (
+          <div className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2">
+            {waitingMsg || <span className="text-gray-400">未设置等待提示语</span>}
+          </div>
+        )}
       </div>
 
       {/* 全局 System Prompt */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-        <label className="block text-sm font-medium text-gray-700 mb-1">全局 AI 指令（System Prompt）</label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-sm font-medium text-gray-700">全局 AI 指令（System Prompt）</label>
+          {!editingPrompt ? (
+            <button onClick={() => { setDraftPrompt(systemPrompt); setEditingPrompt(true); }}
+              className="text-xs text-blue-500 px-2 py-0.5 rounded hover:bg-blue-50">编辑</button>
+          ) : (
+            <div className="flex gap-2">
+              <button onClick={() => { setSystemPrompt(draftPrompt); setEditingPrompt(false); }}
+                className="text-xs text-gray-400 px-2 py-0.5 rounded hover:bg-gray-50">取消</button>
+              <button onClick={() => setEditingPrompt(false)}
+                className="text-xs text-blue-500 px-2 py-0.5 rounded hover:bg-blue-50">完成</button>
+            </div>
+          )}
+        </div>
         <p className="text-xs text-gray-400 mb-2">对所有用户生效的 AI 行为约束，留空则不限制</p>
-        <textarea
-          value={systemPrompt}
-          onChange={e => setSystemPrompt(e.target.value)}
-          placeholder="例如：你是一名专业助手，请不要透露你使用的是哪个大模型..."
-          rows={4}
-          className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-800 placeholder-gray-400"
-        />
+        {editingPrompt ? (
+          <textarea
+            value={systemPrompt}
+            onChange={e => setSystemPrompt(e.target.value)}
+            placeholder="例如：你是一名专业助手，请不要透露你使用的是哪个大模型..."
+            rows={6}
+            autoFocus
+            className="w-full text-sm border border-blue-300 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-800 placeholder-gray-400"
+          />
+        ) : (
+          <div className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2 min-h-[80px] whitespace-pre-wrap">
+            {systemPrompt || <span className="text-gray-400">未设置 AI 指令</span>}
+          </div>
+        )}
       </div>
 
       {/* AI 辅助指令知识库维护 — 可折叠卡片 */}
