@@ -288,45 +288,83 @@ router.post("/api/wecom/ch/kb/upload", upload.single("file"), async (req: Reques
 
     if (ext === "xlsx" || ext === "xls" || ext === "csv") {
       // Excel/CSV 标准知识库格式（按文档规范）：
-      //   A列(0) = 编号（跳过）
-      //   B列(1) = 标准问题 → question
-      //   C列(2) = 相似问法（换行/分号/逗号分隔）→ 合并追加到 question，换行分隔
-      //   D列(3) = 标准答案 → answer
-      // 兼容旧版两列格式（无编号列）：若第一行 row[0] 不像编号则自动降级
+      //   A列(0) = 编号（字母数字组合，如 P001）
+      //   B列(1) = 标准问题 ★ → question
+      //   C列(2) = 相似问法 ★ → 合并追加到 question，换行分隔
+      //   D列(3) = 标准答案 ★ → answer
+      //   H列(7) = 状态（已启用/已停用）
+      // 支持多 Sheet：遍历所有 Sheet，自动跳过目录页和小标题行
+      // 兼容旧版两列格式（无编号列）
       const fileBuffer = fs.readFileSync(file.path);
       const wb = XLSX.read(fileBuffer, { type: "buffer" });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows: any[] = XLSX.utils.sheet_to_json(ws, { header: 1 });
 
-      // 自动检测列格式：若第一数据行 row[0] 是纯数字或「编号」则为新格式（有编号列）
-      let colOffset = 0; // 0 = 新格式（B列起），-1 = 旧格式（A列起）
-      if (rows.length > 1) {
-        const firstDataRow = rows[1]; // 跳过表头看第一条数据
-        const col0 = String(firstDataRow?.[0] ?? "").trim();
-        colOffset = /^\d+$/.test(col0) ? 0 : -1;
+      // 判断某个 Sheet 是否为目录页（数据行少于 3 行或无有效编号）
+      function isIndexSheet(rows: any[][]): boolean {
+        let dataCount = 0;
+        for (const row of rows) {
+          const col0 = String(row?.[0] ?? "").trim();
+          // 有编号格式（字母+数字，如 P001、A001、S001）或纯数字编号
+          if (/^[A-Za-z]\d+$/.test(col0) || /^\d+$/.test(col0)) dataCount++;
+        }
+        return dataCount < 3;
       }
 
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row || row.length === 0) continue;
-        const standardQ = String(row[1 + colOffset] ?? "").trim(); // B列（或A列旧格式）
-        const similarRaw = String(row[2 + colOffset] ?? "").trim(); // C列相似问法
-        const answer    = String(row[3 + colOffset] ?? "").trim(); // D列答案
-        // 跳过表头行
-        if (i === 0 && (standardQ.includes("问题") || standardQ.includes("问") || standardQ.toLowerCase().includes("question"))) continue;
-        if (!answer && !standardQ) continue;
+      for (const sheetName of wb.SheetNames) {
+        const ws = wb.Sheets[sheetName];
+        const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
 
-        // 将相似问法合并进 question 字段（换行分隔），提升向量检索覆盖率
-        let finalQuestion = standardQ;
-        if (similarRaw) {
-          finalQuestion += "\n" + similarRaw;
+        // 跳过目录页
+        if (isIndexSheet(rows)) continue;
+
+        // 检测列格式：找到表头行，确认 B 列是「标准问题」
+        // 若 A 列是「编号」则 colOffset=0（从 B 列读），否则 colOffset=-1（从 A 列读）
+        let colOffset = 0;
+        // 找第一个有编号格式的数据行来判断
+        for (const row of rows) {
+          const col0 = String(row?.[0] ?? "").trim();
+          if (/^[A-Za-z]\d+$/.test(col0) || /^\d+$/.test(col0)) {
+            colOffset = 0; // 有编号列
+            break;
+          }
+          // 若 A 列是问题文本（非编号、非表头、非标题）
+          const isHeader = col0.includes("编号") || col0.includes("问题") || col0.includes("▌") || col0.length > 30;
+          if (!isHeader && col0.length > 0) {
+            colOffset = -1; // 无编号列，从 A 列读
+            break;
+          }
         }
 
-        await (conn as any).execute(
-          `INSERT INTO wecom_knowledge_items (kb_id, item_type, question, answer, source_file) VALUES (?,?,?,?,?)`,
-          [kbId, "qa", finalQuestion || null, answer || finalQuestion, origName]
-        );
-        imported++;
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          if (!row || row.length === 0) continue;
+
+          const col0 = String(row[0] ?? "").trim();
+          const standardQ = String(row[1 + colOffset] ?? "").trim();
+          const similarRaw = String(row[2 + colOffset] ?? "").trim();
+          const answer     = String(row[3 + colOffset] ?? "").trim();
+          const status     = String(row[7] ?? "").trim(); // H列：状态
+
+          // 跳过：表头行、大标题行、分类小标题行（▌开头）、空行
+          if (!col0 && !standardQ) continue;
+          if (col0.includes("编号") || col0.includes("▌") || col0.startsWith("  ")) continue;
+          if (standardQ.includes("标准问题") || standardQ.toLowerCase().includes("question")) continue;
+          // 跳过「已停用」状态
+          if (status === "已停用") continue;
+          // 必须有答案
+          if (!answer) continue;
+
+          // 将相似问法合并进 question 字段（换行分隔），提升向量检索覆盖率
+          let finalQuestion = standardQ;
+          if (similarRaw) {
+            finalQuestion += "\n" + similarRaw;
+          }
+
+          await (conn as any).execute(
+            `INSERT INTO wecom_knowledge_items (kb_id, item_type, question, answer, source_file) VALUES (?,?,?,?,?)`,
+            [kbId, "qa", finalQuestion || null, answer, origName]
+          );
+          imported++;
+        }
       }
     } else {
       // PDF/Word/TXT：提取文本 → 切片 → doc 条目
