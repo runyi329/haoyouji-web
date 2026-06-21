@@ -136,7 +136,7 @@ export default function WecomAdmin() {
     <div className="min-h-screen bg-gray-50 pb-24 max-w-md mx-auto">
       {/* Header */}
       <div className="bg-white sticky top-0 z-10 px-4 py-3 flex items-center gap-3 border-b border-gray-100 shadow-sm">
-        <button onClick={() => navigate("/admin")} className="p-1 -ml-1">
+        <button onClick={() => navigate("/parent/profile")} className="p-1 -ml-1">
           <ArrowLeft className="w-5 h-5 text-gray-600" />
         </button>
         <Bot className="w-5 h-5 text-blue-600" />
