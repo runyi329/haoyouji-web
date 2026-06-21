@@ -2204,6 +2204,37 @@ function ChannelConfigTab({ channel }: { channel: Channel }) {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isEnabled, setIsEnabled] = useState(channel.is_enabled !== 0);
+  const [togglingEnabled, setTogglingEnabled] = useState(false);
+
+  async function handleToggleEnabled() {
+    setTogglingEnabled(true);
+    try {
+      const newVal = isEnabled ? 0 : 1;
+      const res = await fetch(`/api/wecom/channels/${channel.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: channel.name,
+          channel_type: channel.channel_type,
+          project_key: channel.project_key,
+          kf_id: channel.kf_id,
+          is_enabled: newVal,
+        }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        setIsEnabled(newVal === 1);
+        toast.success(newVal === 1 ? "渠道已启用" : "渠道已停用");
+      } else {
+        toast.error(d.error || "操作失败");
+      }
+    } catch {
+      toast.error("网络错误");
+    } finally {
+      setTogglingEnabled(false);
+    }
+  }
 
   useEffect(() => {
     const loads: Promise<any>[] = [
@@ -2332,6 +2363,28 @@ function ChannelConfigTab({ channel }: { channel: Channel }) {
 
   return (
     <div className="space-y-4">
+      {/* 渠道启用/停用开关 */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-semibold text-gray-800">渠道状态</div>
+            <div className="text-xs text-gray-400 mt-0.5">{isEnabled ? "已启用，AI 正在接收消息" : "已停用，AI 不会回复消息"}</div>
+          </div>
+          <button
+            onClick={handleToggleEnabled}
+            disabled={togglingEnabled}
+            className="flex items-center gap-2 disabled:opacity-50"
+          >
+            {togglingEnabled
+              ? <Loader2 className="w-12 h-12 animate-spin text-gray-400" />
+              : isEnabled
+                ? <ToggleRight className="w-16 h-16 text-green-500" />
+                : <ToggleLeft className="w-16 h-16 text-gray-300" />
+            }
+          </button>
+        </div>
+      </div>
+
       {/* 欢迎语 */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
         <label className="block text-sm font-medium text-gray-700 mb-1">欢迎语</label>
