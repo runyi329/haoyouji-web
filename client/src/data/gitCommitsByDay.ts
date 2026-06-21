@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-21
+// 生成时间：2026-06-22
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -7672,5 +7672,10 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-21T11:00:49Z", type: "feat", cleanMessage: "欢迎语/等待提示语/AI指令改为只读+点编辑才可修改模式" },
     { date: "2026-06-21T11:15:17Z", type: "feat", cleanMessage: "AI辅助维护支持拍照上传识别+结果条目可编辑+优化系统提示词" },
     { date: "2026-06-21T11:49:47Z", type: "fix", cleanMessage: "优化知识库检索逻辑（优先问题字段匹配+LIMIT5），更新system_prompt（精准回答+不提口味/规格）" },
+    { date: "2026-06-21T12:03:33Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-21T12:53:19Z", type: "fix", cleanMessage: "健康养生按钮在微信小程序内兼容处理，小程序环境用wx.openCustomerServiceChat，其他环境直接跳转" },
+    { date: "2026-06-21T13:29:28Z", type: "fix", cleanMessage: "小程序环境下健康养生按钮改为toast引导提示" },
+    { date: "2026-06-21T13:36:38Z", type: "fix", cleanMessage: "新增 /api/wecom/users 接口，供规则编辑「指定用户」选择器使用" },
+    { date: "2026-06-21T13:45:52Z", type: "fix", cleanMessage: "规则编辑「指定用户」区域重构——已选用户以标签形式显示可删除，列表为空时提示更友好" },
   ],
 };
