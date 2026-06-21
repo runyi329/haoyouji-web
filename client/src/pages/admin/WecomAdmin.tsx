@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
 import {
   ArrowLeft, RefreshCw, Trash2, Edit2, Plus, Check, X, Bot,
-  Zap, MessageSquare, User, BarChart2, Menu, ChevronRight,
+  Zap, MessageSquare, User, BarChart2, Menu, ChevronRight, ChevronDown,
   Clock, Settings, AlertCircle, PlayCircle, StopCircle, Coins, Loader2,
   Sparkles, Save, ToggleLeft, ToggleRight, Ban, Shield, Camera, Pencil, ImageIcon
 } from "lucide-react";
@@ -3283,6 +3283,8 @@ function ChannelCustomRulesTab({ channelType }: { channelType: string }) {
   const [wecomUsers2, setWecomUsers2] = useState<WecomUserForRule[]>([]);
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [userSearch, setUserSearch] = useState("");
 
   const [form, setForm] = useState({
     rule_name: "",
@@ -3307,7 +3309,7 @@ function ChannelCustomRulesTab({ channelType }: { channelType: string }) {
 
   const loadUsers2 = async () => {
     try {
-      const res = await fetch("/api/wecom/users");
+      const res = await fetch(`/api/wecom/ch/users?channel_type=${channelType}`);
       const d = await res.json();
       if (d.ok) setWecomUsers2(d.users || []);
     } catch {}
@@ -3580,6 +3582,7 @@ function ChannelCustomRulesTab({ channelType }: { channelType: string }) {
               )}
               <div>
                 <label className="text-xs font-medium text-gray-600 mb-2 block">适用用户</label>
+                {/* 全部用户 / 指定用户 切换 */}
                 <div className="grid grid-cols-2 gap-2 mb-3">
                   <button
                     onClick={() => setForm(p => ({ ...p, target_type: "selected" }))}
@@ -3594,49 +3597,93 @@ function ChannelCustomRulesTab({ channelType }: { channelType: string }) {
                     全部用户
                   </button>
                 </div>
+                {/* 指定用户时显示可搜索下拉多选框 */}
                 {form.target_type === "selected" && (
-                  <div>
-                    {/* 已选用户标签展示 */}
-                    {form.selected_user_ids.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 mb-2 p-2 bg-blue-50 rounded-xl border border-blue-100">
-                        <span className="text-xs text-blue-500 w-full mb-1">已选 {form.selected_user_ids.length} 个用户：</span>
-                        {form.selected_user_ids.map(uid => {
-                          const u = wecomUsers2.find(x => x.wecom_user_id === uid);
-                          const label = u?.nickname || uid;
-                          return (
-                            <span key={uid} className="inline-flex items-center gap-1 bg-white text-blue-700 text-xs px-2 py-1 rounded-full border border-blue-200 shadow-sm">
-                              {label}
+                  <div className="relative">
+                    {/* 触发按鈕 */}
+                    <button
+                      type="button"
+                      onClick={() => { setUserDropdownOpen(v => !v); setUserSearch(""); }}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm border-2 transition-all ${
+                        form.selected_user_ids.length > 0
+                          ? "border-blue-400 bg-blue-50 text-blue-700"
+                          : "border-gray-200 bg-white text-gray-500"
+                      }`}
+                    >
+                      <span>
+                        {form.selected_user_ids.length === 0
+                          ? "点击选择用户…"
+                          : `已选 ${form.selected_user_ids.length} 个用户`}
+                      </span>
+                      <ChevronDown className="w-4 h-4 flex-shrink-0" />
+                    </button>
+                    {/* 下拉面板 */}
+                    {userDropdownOpen && (
+                      <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg">
+                        {/* 搜索框 */}
+                        <div className="px-3 pt-2.5 pb-1.5">
+                          <input
+                            type="text"
+                            autoFocus
+                            placeholder="搜索用户名或 ID…"
+                            value={userSearch}
+                            onChange={e => setUserSearch(e.target.value)}
+                            className="w-full text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-blue-400"
+                          />
+                        </div>
+                        {/* 用户列表 */}
+                        <div className="max-h-52 overflow-y-auto py-1">
+                          {wecomUsers2
+                            .filter(u => !userSearch || (u.nickname || u.wecom_user_id).toLowerCase().includes(userSearch.toLowerCase()))
+                            .map(u => (
+                              <label
+                                key={u.wecom_user_id}
+                                className="flex items-center gap-2.5 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={form.selected_user_ids.includes(u.wecom_user_id)}
+                                  onChange={() => toggleUserSelect(u.wecom_user_id)}
+                                  className="w-4 h-4 accent-blue-600 flex-shrink-0"
+                                />
+                                {u.avatar_url ? (
+                                  <img src={u.avatar_url} className="w-6 h-6 rounded-full flex-shrink-0" alt="" />
+                                ) : (
+                                  <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                                    <User className="w-3.5 h-3.5 text-gray-400" />
+                                  </div>
+                                )}
+                                <span className="text-sm text-gray-700 truncate">{u.nickname || u.wecom_user_id}</span>
+                              </label>
+                            ))}
+                          {wecomUsers2.filter(u => !userSearch || (u.nickname || u.wecom_user_id).toLowerCase().includes(userSearch.toLowerCase())).length === 0 && (
+                            <div className="text-xs text-gray-400 text-center py-4">暂无匹配用户</div>
+                          )}
+                        </div>
+                        {/* 底部操作栏 */}
+                        <div className="border-t border-gray-100 px-3 py-2 flex items-center justify-between">
+                          <span className="text-xs text-gray-400">已选 {form.selected_user_ids.length} 个</span>
+                          <div className="flex gap-2">
+                            {form.selected_user_ids.length > 0 && (
                               <button
-                                onClick={() => toggleUserSelect(uid)}
-                                className="ml-0.5 text-blue-400 hover:text-red-500 font-bold leading-none"
-                              >×</button>
-                            </span>
-                          );
-                        })}
+                                type="button"
+                                onClick={() => setForm(p => ({ ...p, selected_user_ids: [] }))}
+                                className="text-xs text-red-500 hover:text-red-600"
+                              >
+                                清除
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setUserDropdownOpen(false)}
+                              className="text-xs text-blue-500 hover:text-blue-600 font-medium"
+                            >
+                              确定
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     )}
-                    {/* 用户下拉选择列表 */}
-                    <div className="border border-gray-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
-                      {wecomUsers2.length === 0 ? (
-                        <div className="text-xs text-gray-400 text-center py-4">
-                          暂无可选用户（有用户发消息后自动出现）
-                        </div>
-                      ) : wecomUsers2.map(u => (
-                        <div
-                          key={u.wecom_user_id}
-                          onClick={() => toggleUserSelect(u.wecom_user_id)}
-                          className={`flex items-center gap-3 px-3 py-2.5 border-b border-gray-50 last:border-0 cursor-pointer transition-colors ${form.selected_user_ids.includes(u.wecom_user_id) ? "bg-blue-50" : "hover:bg-gray-50"}`}
-                        >
-                          <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${form.selected_user_ids.includes(u.wecom_user_id) ? "bg-blue-500 border-blue-500" : "border-gray-300"}`}>
-                            {form.selected_user_ids.includes(u.wecom_user_id) && <Check className="w-3 h-3 text-white" />}
-                          </div>
-                          <div className="w-7 h-7 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-                            <User className="w-4 h-4 text-gray-400" />
-                          </div>
-                          <span className="text-sm text-gray-700">{u.nickname || u.wecom_user_id}</span>
-                        </div>
-                      ))}
-                    </div>
                   </div>
                 )}
               </div>

@@ -652,10 +652,19 @@ async function ensureSessionTable(): Promise<void> {
       target_user_ids TEXT COMMENT '指定用户的wecom_user_id列表，JSON数组格式',
       enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
       trigger_count INT NOT NULL DEFAULT 0 COMMENT '累计触发次数',
+      channel_type VARCHAR(20) NOT NULL DEFAULT 'kf' COMMENT '渠道类型：kf/app',
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+  // 迁移：给旧表补充 channel_type 字段
+  try {
+    await (conn as any).execute(`ALTER TABLE wecom_custom_rules ADD COLUMN IF NOT EXISTS channel_type VARCHAR(20) NOT NULL DEFAULT 'kf' COMMENT '渠道类型：kf/app'`);
+  } catch (_) {}
+  // 迁移：给 wecom_message_credits 补充 channel_type 字段
+  try {
+    await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS channel_type VARCHAR(20) NOT NULL DEFAULT 'kf' COMMENT '渠道类型：kf/app'`);
+  } catch (_) {}
 
   _tableEnsured = true;
 }
@@ -1694,7 +1703,7 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
       const ruleConn = await getDbConnection();
       if (ruleConn) {
         const [ruleRows] = await (ruleConn as any).execute(
-          `SELECT * FROM wecom_custom_rules WHERE enabled = 1 ORDER BY created_at ASC`
+          `SELECT * FROM wecom_custom_rules WHERE enabled = 1 AND channel_type = 'kf' ORDER BY created_at ASC`
         ) as any;
         const allRules = ruleRows as any[];
         // 筛选出适用于当前用户的规则
@@ -1856,8 +1865,8 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
           const inputTokensMiss = Math.max(0, dsReply.promptTokens - cacheHitTokens);
           await (dbConn as any).execute(
             `INSERT INTO wecom_message_credits
-             (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, input_tokens, output_tokens, cache_hit_tokens, model_used, reply_preview)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, input_tokens, output_tokens, cache_hit_tokens, model_used, reply_preview, channel_type)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'app')`,
             [userId, "deepseek", content.substring(0, 200), prevTotalTokens, newTotalTokens, dsReply.totalTokens,
              inputTokensMiss, dsReply.completionTokens, cacheHitTokens, userModelProfile, dsReply.content.substring(0, 100)]
           );
@@ -1935,8 +1944,8 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
         if (dbConn) {
           await (dbConn as any).execute(
             `INSERT INTO wecom_message_credits
-             (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, model_used, reply_preview)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+             (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, model_used, reply_preview, channel_type)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'app')`,
             [userId, taskId, content.substring(0, 200), creditsBefore, creditsAfter, creditsUsed, userModelProfile, replyPreview]
           );
           console.log(`[Credits] 用户 ${userId} 本次消耗 ${creditsUsed} 积分 (${creditsBefore} -> ${creditsAfter})`);
