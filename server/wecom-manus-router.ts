@@ -1463,27 +1463,40 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
 
       console.log(`[KF] 处理消息 from=${fromUser} text=${userText.substring(0, 50)}`);
 
-      // 5. 知识库检索（LIKE关键词匹配，取前3条相关结果）
+      // 5. 知识库检索（优先匹配问题字段，再补充答案字段，取前5条）
       let kbContext = "";
       if (dbConn && kbId) {
         try {
-          // 提取关键词（取前10个字）
-          const keywords = userText.replace(/[？?！!。，,、\s]/g, " ").split(" ").filter(k => k.length >= 2).slice(0, 5);
+          // 提取关键词：保留2字以上的词，最多取8个
+          const keywords = userText.replace(/[？?！!。，,、\s]/g, " ").split(" ").filter(k => k.length >= 2).slice(0, 8);
           if (keywords.length > 0) {
-            const likeConditions = keywords.map(() => "(question LIKE ? OR answer LIKE ?)").join(" OR ");
-            const likeParams: string[] = [];
-            for (const kw of keywords) {
-              likeParams.push(`%${kw}%`, `%${kw}%`);
-            }
-            const [kbItems] = await (dbConn as any).execute(
-              `SELECT question, answer FROM wecom_knowledge_items WHERE kb_id = ? AND enabled = 1 AND (${likeConditions}) LIMIT 3`,
-              [kbId, ...likeParams]
+            // 第一步：优先按问题字段匹配（命中率更高）
+            const qLike = keywords.map(() => "question LIKE ?").join(" OR ");
+            const qParams = keywords.map(kw => `%${kw}%`);
+            const [qItems] = await (dbConn as any).execute(
+              `SELECT question, answer FROM wecom_knowledge_items WHERE kb_id = ? AND enabled = 1 AND (${qLike}) LIMIT 5`,
+              [kbId, ...qParams]
             );
-            if ((kbItems as any[]).length > 0) {
-              kbContext = "\n\n【知识库参考】\n" + (kbItems as any[]).map((item: any, i: number) =>
+            let kbItems: any[] = (qItems as any[]);
+            // 第二步：若问题字段命中不足3条，补充答案字段匹配
+            if (kbItems.length < 3) {
+              const existingQs = new Set(kbItems.map((i: any) => i.question));
+              const aLike = keywords.map(() => "answer LIKE ?").join(" OR ");
+              const aParams = keywords.map(kw => `%${kw}%`);
+              const [aItems] = await (dbConn as any).execute(
+                `SELECT question, answer FROM wecom_knowledge_items WHERE kb_id = ? AND enabled = 1 AND (${aLike}) LIMIT 5`,
+                [kbId, ...aParams]
+              );
+              for (const item of (aItems as any[])) {
+                if (!existingQs.has(item.question)) kbItems.push(item);
+                if (kbItems.length >= 5) break;
+              }
+            }
+            if (kbItems.length > 0) {
+              kbContext = "\n\n【知识库参考】\n" + kbItems.slice(0, 5).map((item: any, i: number) =>
                 `${i + 1}. 问：${(item.question || "").split("\n")[0]}\n   答：${item.answer}`
               ).join("\n");
-              console.log(`[KF] 知识库命中 ${(kbItems as any[]).length} 条`);
+              console.log(`[KF] 知识库命中 ${kbItems.length} 条`);
             }
           }
         } catch (e) {
