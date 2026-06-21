@@ -1889,7 +1889,19 @@ export default function Home() {
                         return;
                       }
                       if (cat.name === '健康养生') {
-                        window.open('https://work.weixin.qq.com/kfid/kfc471067df4191a26b', '_blank');
+                        const kfUrl = 'https://work.weixin.qq.com/kfid/kfc471067df4191a26b';
+                        const ua = navigator.userAgent.toLowerCase();
+                        const isMiniProgram = ua.includes('miniprogram') || (window as any).__wxjs_environment === 'miniprogram';
+                        if (isMiniProgram && (window as any).wx && (window as any).wx.openCustomerServiceChat) {
+                          (window as any).wx.openCustomerServiceChat({
+                            extInfo: { url: kfUrl },
+                            corpId: 'ww471067df4191a26b',
+                            success: () => {},
+                            fail: () => { window.location.href = kfUrl; }
+                          });
+                        } else {
+                          window.location.href = kfUrl;
+                        }
                         return;
                       }
                       setSelectedCategoryId(cat.id);
