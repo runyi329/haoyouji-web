@@ -2903,6 +2903,120 @@ router.delete("/api/wecom/custom-rules/:id", async (req: Request, res: Response)
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// 渠道管理接口 (wecom_channels)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// 获取渠道列表
+router.get("/api/wecom/channels", async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const [rows] = await (conn as any).execute(
+      `SELECT id, name, channel_type, project_key, kf_id, is_enabled, created_at FROM wecom_channels ORDER BY id ASC`
+    );
+    res.json({ channels: rows });
+  } catch (e) {
+    console.error("[渠道] 获取列表失败:", e);
+    res.status(500).json({ error: "获取失败" });
+  }
+});
+
+// 新增渠道
+router.post("/api/wecom/channels", async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const { name, channel_type, project_key, kf_id } = req.body;
+    if (!name || !channel_type) return res.status(400).json({ error: "name和channel_type必填" });
+    const [result] = await (conn as any).execute(
+      `INSERT INTO wecom_channels (name, channel_type, project_key, kf_id) VALUES (?,?,?,?)`,
+      [name, channel_type, project_key || null, kf_id || null]
+    );
+    res.json({ ok: true, id: (result as any).insertId });
+  } catch (e) {
+    console.error("[渠道] 新增失败:", e);
+    res.status(500).json({ error: "新增失败" });
+  }
+});
+
+// 更新渠道
+router.put("/api/wecom/channels/:id", async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const { id } = req.params;
+    const { name, channel_type, project_key, kf_id, is_enabled } = req.body;
+    await (conn as any).execute(
+      `UPDATE wecom_channels SET name=?, channel_type=?, project_key=?, kf_id=?, is_enabled=? WHERE id=?`,
+      [name, channel_type, project_key || null, kf_id || null, is_enabled ?? 1, id]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[渠道] 更新失败:", e);
+    res.status(500).json({ error: "更新失败" });
+  }
+});
+
+// 删除渠道
+router.delete("/api/wecom/channels/:id", async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const { id } = req.params;
+    await (conn as any).execute(`DELETE FROM wecom_channels WHERE id=?`, [id]);
+    await (conn as any).execute(`DELETE FROM wecom_channel_config WHERE channel_id=?`, [id]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[渠道] 删除失败:", e);
+    res.status(500).json({ error: "删除失败" });
+  }
+});
+
+// 获取渠道配置
+router.get("/api/wecom/channels/:id/config", async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const { id } = req.params;
+    const [rows] = await (conn as any).execute(
+      `SELECT config_key, config_val FROM wecom_channel_config WHERE channel_id=?`,
+      [id]
+    );
+    // 转为 key-value 对象
+    const config: Record<string, string> = {};
+    for (const row of rows as any[]) {
+      config[row.config_key] = row.config_val;
+    }
+    res.json({ config });
+  } catch (e) {
+    console.error("[渠道配置] 获取失败:", e);
+    res.status(500).json({ error: "获取失败" });
+  }
+});
+
+// 保存渠道配置（批量 upsert）
+router.post("/api/wecom/channels/:id/config", async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const { id } = req.params;
+    const { config } = req.body; // { key: value, ... }
+    if (!config || typeof config !== "object") return res.status(400).json({ error: "config必须是对象" });
+    for (const [key, val] of Object.entries(config)) {
+      await (conn as any).execute(
+        `INSERT INTO wecom_channel_config (channel_id, config_key, config_val) VALUES (?,?,?)
+         ON DUPLICATE KEY UPDATE config_val=VALUES(config_val)`,
+        [id, key, val]
+      );
+    }
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[渠道配置] 保存失败:", e);
+    res.status(500).json({ error: "保存失败" });
+  }
+});
+
 export default router;
 
 

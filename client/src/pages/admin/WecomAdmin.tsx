@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import {
   ArrowLeft, RefreshCw, Trash2, Edit2, Plus, Check, X, Bot,
   Zap, MessageSquare, User, BarChart2, Menu, ChevronRight,
-  Clock, Settings, AlertCircle, PlayCircle, StopCircle, Coins
+  Clock, Settings, AlertCircle, PlayCircle, StopCircle, Coins, Loader2
 } from "lucide-react";
 import { toast } from "sonner";
 import WecomBindingManager from "./WecomBindingManager";
@@ -111,7 +111,7 @@ function creditsToYuan(credits: number) {
 
 // ─── Tab 按钮 ────────────────────────────────────────────────────────────────
 
-type TabKey = "binding" | "users" | "workflow" | "messages" | "stats" | "menu" | "route";
+type TabKey = "binding" | "users" | "workflow" | "messages" | "stats" | "menu" | "channel";
 
 // Link2 图标内联引入
 const Link2Icon = () => (
@@ -128,7 +128,7 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: "messages", label: "消息", icon: <MessageSquare className="w-4 h-4" /> },
   { key: "stats", label: "统计", icon: <BarChart2 className="w-4 h-4" /> },
   { key: "menu", label: "菜单", icon: <Menu className="w-4 h-4" /> },
-  { key: "route", label: "路由", icon: <BarChart2 className="w-4 h-4" /> },
+  { key: "channel", label: "渠道", icon: <Settings className="w-4 h-4" /> },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -158,7 +158,7 @@ export default function WecomAdmin() {
         {activeTab === "messages" && <MessagesTab />}
         {activeTab === "stats" && <StatsTab />}
         {activeTab === "menu" && <MenuTab />}
-        {activeTab === "route" && <WecomRoutePanel />}
+        {activeTab === "channel" && <ChannelTab />}
       </div>
 
       {/* 底部 Tab 栏 */}
@@ -1900,6 +1900,154 @@ function MenuTab() {
       >
         {saving ? "推送中..." : "推送菜单到企业微信"}
       </button>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Tab 7: 渠道管理
+// ═══════════════════════════════════════════════════════════════════════════════
+
+interface Channel {
+  id: number;
+  name: string;
+  channel_type: "app" | "kf";
+  project_key: string | null;
+  kf_id: string | null;
+  is_enabled: number;
+  created_at: string;
+}
+
+function ChannelTab() {
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
+
+  useEffect(() => {
+    fetchChannels();
+  }, []);
+
+  async function fetchChannels() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/wecom/channels");
+      const data = await res.json();
+      setChannels(data.channels || []);
+    } catch (e) {
+      toast.error("获取渠道列表失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // 进入渠道详情
+  if (selectedChannel) {
+    return (
+      <div className="px-4 py-4">
+        {/* 详情页头部 */}
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            onClick={() => setSelectedChannel(null)}
+            className="p-1.5 rounded-lg bg-gray-100 text-gray-600"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">{selectedChannel.name}</h2>
+            <p className="text-xs text-gray-400">
+              {selectedChannel.channel_type === "app" ? "自建应用渠道" : "客服账号渠道"}
+            </p>
+          </div>
+        </div>
+        {/* 自建应用渠道：嵌入原AI路由配置面板 */}
+        {selectedChannel.channel_type === "app" && <WecomRoutePanel />}
+        {/* 客服渠道：占位 */}
+        {selectedChannel.channel_type === "kf" && (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-16 h-16 rounded-full bg-blue-50 flex items-center justify-center mb-4">
+              <MessageSquare className="w-8 h-8 text-blue-400" />
+            </div>
+            <p className="text-sm font-medium text-gray-700 mb-1">客服渠道配置</p>
+            <p className="text-xs text-gray-400">企微客服账号开通后即可配置</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // 渠道列表页
+  return (
+    <div className="px-4 py-4">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold text-gray-900">渠道列表</h2>
+        <button
+          onClick={fetchChannels}
+          className="text-xs text-blue-600 border border-blue-200 rounded-full px-3 py-1"
+        >
+          刷新
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {channels.map(ch => (
+            <button
+              key={ch.id}
+              onClick={() => setSelectedChannel(ch)}
+              className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-4 flex items-center gap-4 active:bg-gray-50 transition-colors"
+            >
+              {/* 图标 */}
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                ch.channel_type === "app" ? "bg-blue-50" : "bg-purple-50"
+              }`}>
+                {ch.channel_type === "app"
+                  ? <Bot className="w-5 h-5 text-blue-500" />
+                  : <MessageSquare className="w-5 h-5 text-purple-500" />
+                }
+              </div>
+              {/* 文字 */}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900">{ch.name}</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {ch.channel_type === "app" ? "自建应用" : "客服账号"}
+                  {ch.project_key ? ` · ${ch.project_key}` : ""}
+                </p>
+              </div>
+              {/* 状态 + 箭头 */}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                  ch.is_enabled
+                    ? "bg-green-50 text-green-600"
+                    : "bg-gray-100 text-gray-400"
+                }`}>
+                  {ch.is_enabled ? "启用" : "停用"}
+                </span>
+                <ChevronRight className="w-4 h-4 text-gray-300" />
+              </div>
+            </button>
+          ))}
+
+          {/* 客服渠道占位卡片（如果没有kf类型渠道） */}
+          {!channels.some(ch => ch.channel_type === "kf") && (
+            <div className="w-full text-left bg-gray-50 rounded-xl border border-dashed border-gray-200 px-4 py-4 flex items-center gap-4 opacity-60">
+              <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center flex-shrink-0">
+                <MessageSquare className="w-5 h-5 text-purple-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-600">客服账号渠道</p>
+                <p className="text-xs text-gray-400 mt-0.5">企微客服账号开通后可用</p>
+              </div>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-400 flex-shrink-0">
+                即将开放
+              </span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
