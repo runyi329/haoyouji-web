@@ -3017,6 +3017,161 @@ router.post("/api/wecom/channels/:id/config", async (req: Request, res: Response
   }
 });
 
+// ==================== 知识库管理接口 ====================
+
+// 获取知识库列表
+router.get("/api/wecom/knowledge-bases", async (req: Request, res: Response) => {
+  const conn = await getDbConnection();
+  try {
+    const [rows] = await (conn as any).execute(
+      `SELECT kb.*, COUNT(ki.id) AS item_count
+       FROM wecom_knowledge_bases kb
+       LEFT JOIN wecom_knowledge_items ki ON ki.kb_id = kb.id
+       GROUP BY kb.id
+       ORDER BY kb.id`
+    );
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: "获取失败" });
+  } finally {
+  }
+});
+
+// 获取知识库条目列表
+router.get("/api/wecom/knowledge-bases/:kbId/items", async (req: Request, res: Response) => {
+  const { kbId } = req.params;
+  const conn = await getDbConnection();
+  try {
+    const [rows] = await (conn as any).execute(
+      `SELECT * FROM wecom_knowledge_items WHERE kb_id = ? ORDER BY id DESC`,
+      [kbId]
+    );
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: "获取失败" });
+  } finally {
+  }
+});
+
+// 新增知识库条目
+router.post("/api/wecom/knowledge-bases/:kbId/items", async (req: Request, res: Response) => {
+  const { kbId } = req.params;
+  const { item_type, question, answer, source_doc } = req.body;
+  if (!answer) return res.status(400).json({ error: "内容不能为空" });
+  const conn = await getDbConnection();
+  try {
+    const [result] = await (conn as any).execute(
+      `INSERT INTO wecom_knowledge_items (kb_id, item_type, question, answer, source_doc) VALUES (?, ?, ?, ?, ?)`,
+      [kbId, item_type || 'qa', question || null, answer, source_doc || null]
+    );
+    res.json({ ok: true, id: (result as any).insertId });
+  } catch (e) {
+    res.status(500).json({ error: "新增失败" });
+  } finally {
+  }
+});
+
+// 更新知识库条目
+router.put("/api/wecom/knowledge-bases/items/:itemId", async (req: Request, res: Response) => {
+  const { itemId } = req.params;
+  const { item_type, question, answer, source_doc, enabled } = req.body;
+  const conn = await getDbConnection();
+  try {
+    await (conn as any).execute(
+      `UPDATE wecom_knowledge_items SET item_type=?, question=?, answer=?, source_doc=?, enabled=? WHERE id=?`,
+      [item_type || 'qa', question || null, answer, source_doc || null, enabled !== undefined ? enabled : 1, itemId]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: "更新失败" });
+  } finally {
+  }
+});
+
+// 删除知识库条目
+router.delete("/api/wecom/knowledge-bases/items/:itemId", async (req: Request, res: Response) => {
+  const { itemId } = req.params;
+  const conn = await getDbConnection();
+  try {
+    await (conn as any).execute(`DELETE FROM wecom_knowledge_items WHERE id=?`, [itemId]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: "删除失败" });
+  } finally {
+  }
+});
+
+// 获取渠道AI配置（欢迎词、System Prompt等）
+router.get("/api/wecom/channel-config/:channelId", async (req: Request, res: Response) => {
+  const { channelId } = req.params;
+  const conn = await getDbConnection();
+  try {
+    const [rows] = await (conn as any).execute(
+      `SELECT * FROM wecom_channel_config WHERE channel_id = ?`,
+      [channelId]
+    );
+    const config = (rows as any[])[0] || { channel_id: channelId, welcome_msg: '', system_prompt: '', ai_model: 'deepseek-chat', knowledge_base_id: 1 };
+    res.json(config);
+  } catch (e) {
+    res.status(500).json({ error: "获取失败" });
+  } finally {
+  }
+});
+
+// 保存渠道AI配置
+router.post("/api/wecom/channel-config/:channelId", async (req: Request, res: Response) => {
+  const { channelId } = req.params;
+  const { welcome_msg, system_prompt, ai_model, knowledge_base_id } = req.body;
+  const conn = await getDbConnection();
+  try {
+    await (conn as any).execute(
+      `INSERT INTO wecom_channel_config (channel_id, welcome_msg, system_prompt, ai_model, knowledge_base_id)
+       VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE welcome_msg=VALUES(welcome_msg), system_prompt=VALUES(system_prompt),
+         ai_model=VALUES(ai_model), knowledge_base_id=VALUES(knowledge_base_id)`,
+      [channelId, welcome_msg || '', system_prompt || '', ai_model || 'deepseek-chat', knowledge_base_id || 1]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: "保存失败" });
+  } finally {
+  }
+});
+
+// 获取对话日志（按渠道）
+router.get("/api/wecom/chat-logs", async (req: Request, res: Response) => {
+  const { channel_type, start_date, end_date, user_id, limit = '50', offset = '0' } = req.query as Record<string, string>;
+  const conn = await getDbConnection();
+  try {
+    const conditions: string[] = [];
+    const params: any[] = [];
+    if (start_date) { conditions.push('mc.created_at >= ?'); params.push(start_date + ' 00:00:00'); }
+    if (end_date) { conditions.push('mc.created_at <= ?'); params.push(end_date + ' 23:59:59'); }
+    if (user_id) { conditions.push('mc.wecom_user_id = ?'); params.push(user_id); }
+    const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+    const [rows] = await (conn as any).execute(
+      `SELECT mc.id, mc.wecom_user_id, mc.user_message, mc.reply_preview, mc.model_used,
+              mc.credits_used, mc.created_at,
+              ws.nickname, CAST(NULL AS CHAR) AS avatar_url
+       FROM wecom_message_credits mc
+       LEFT JOIN wecom_manus_sessions ws ON ws.wecom_user_id = mc.wecom_user_id
+       ${where}
+       ORDER BY mc.created_at DESC
+       LIMIT ${Number(limit)} OFFSET ${Number(offset)}`,
+      params
+    );
+    const [countRows] = await (conn as any).execute(
+      `SELECT COUNT(*) AS total FROM wecom_message_credits mc ${where}`,
+      params
+    );
+    res.json({ logs: rows, total: (countRows as any[])[0].total });
+  } catch (e) {
+    console.error('[对话日志]', e);
+    res.status(500).json({ error: "获取失败" });
+  } finally {
+  }
+});
+
 export default router;
 
 
