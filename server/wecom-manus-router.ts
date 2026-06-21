@@ -2053,8 +2053,35 @@ router.get("/api/wecom/stats", async (req: Request, res: Response) => {
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ error: "数据库连接失败" });
 
+    // 筛选参数
+    const { start_date, end_date, user_ids, ai_model } = req.query as {
+      start_date?: string; end_date?: string; user_ids?: string; ai_model?: string;
+    };
+
+    const conditions: string[] = ['1=1'];
+    if (start_date && end_date) {
+      conditions.push(`mc.created_at >= '${start_date} 00:00:00' AND mc.created_at <= '${end_date} 23:59:59'`);
+    }
+    // 用户多选：user_ids 为逗号分隔的 wecom_user_id
+    if (user_ids) {
+      const ids = user_ids.split(',').map((id: string) => `'${id.trim().replace(/'/g, '')}'`).join(',');
+      if (ids) conditions.push(`mc.wecom_user_id IN (${ids})`);
+    }
+    // AI模型筛选：manus=只看Manus, ds_flash=只看DS Flash, ds_pro=只看DS Pro, deepseek=所有DS
+    if (ai_model && ai_model !== 'all') {
+      if (ai_model === 'manus') {
+        conditions.push(`mc.manus_task_id != 'deepseek'`);
+      } else if (ai_model === 'deepseek') {
+        conditions.push(`mc.manus_task_id = 'deepseek'`);
+      } else if (ai_model === 'ds_flash') {
+        conditions.push(`mc.manus_task_id = 'deepseek' AND mc.model_used NOT IN ('deepseek-v4-pro','deepseek-v4-pro-thinking')`);
+      } else if (ai_model === 'ds_pro') {
+        conditions.push(`mc.manus_task_id = 'deepseek' AND mc.model_used IN ('deepseek-v4-pro','deepseek-v4-pro-thinking')`);
+      }
+    }
+    const whereClause = conditions.join(' AND ');
+
     // 直接从本地 wecom_message_credits 表按 wecom_user_id 汇总
-    // 分别计算 Manus 积分费用和 DeepSeek token 费用，统一换算为人民币
     const [creditRows] = await (conn as any).execute(
       `SELECT
          mc.wecom_user_id,
@@ -2071,6 +2098,7 @@ router.get("/api/wecom/stats", async (req: Request, res: Response) => {
          MIN(mc.created_at) AS first_message_at
        FROM wecom_message_credits mc
        LEFT JOIN wecom_manus_sessions s ON s.wecom_user_id = mc.wecom_user_id
+       WHERE ${whereClause}
        GROUP BY mc.wecom_user_id
        ORDER BY mc.wecom_user_id`
     ) as any;
