@@ -4,7 +4,7 @@ import {
   ArrowLeft, RefreshCw, Trash2, Edit2, Plus, Check, X, Bot,
   Zap, MessageSquare, User, BarChart2, Menu, ChevronRight,
   Clock, Settings, AlertCircle, PlayCircle, StopCircle, Coins, Loader2,
-  Sparkles, Save, ToggleLeft, ToggleRight, Ban, Shield
+  Sparkles, Save, ToggleLeft, ToggleRight, Ban, Shield, Camera, Pencil, ImageIcon
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -2283,17 +2283,60 @@ function AiAssistConfigCard({
   const [open, setOpen] = useState(false);
   const [inputText, setInputText] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
+  const [extracting, setExtracting] = useState(false); // 图片识别中
   const [result, setResult] = useState<AiAssistResult | null>(null);
   const [selectedPrompts, setSelectedPrompts] = useState<boolean[]>([]);
   const [selectedKbs, setSelectedKbs] = useState<boolean[]>([]);
+  // 结果条目可编辑状态
+  const [editingPromptIdx, setEditingPromptIdx] = useState<number | null>(null);
+  const [editingKbIdx, setEditingKbIdx] = useState<number | null>(null);
+  const [editDraftPrompt, setEditDraftPrompt] = useState("");
+  const [editDraftQ, setEditDraftQ] = useState("");
+  const [editDraftA, setEditDraftA] = useState("");
   const [applying, setApplying] = useState(false);
   const [applyDone, setApplyDone] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 图片上传识别
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setExtracting(true);
+    try {
+      // 转 base64
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch("/api/wecom/ai-image-extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: base64 }),
+      });
+      const d = await res.json();
+      if (d.ok && d.text) {
+        setInputText(prev => prev ? prev + "\n\n" + d.text : d.text);
+        toast.success("图片内容已识别并填入");
+      } else {
+        toast.error(d.error || "图片识别失败");
+      }
+    } catch {
+      toast.error("图片识别失败");
+    } finally {
+      setExtracting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
 
   async function handleAnalyze() {
     if (!inputText.trim()) return;
     setAnalyzing(true);
     setResult(null);
     setApplyDone(false);
+    setEditingPromptIdx(null);
+    setEditingKbIdx(null);
     try {
       const res = await fetch("/api/wecom/ai-assist-config", {
         method: "POST",
@@ -2313,6 +2356,24 @@ function AiAssistConfigCard({
     } finally {
       setAnalyzing(false);
     }
+  }
+
+  // 保存指令编辑
+  function savePromptEdit(i: number) {
+    if (!result) return;
+    const updated = [...result.prompt_additions];
+    updated[i] = editDraftPrompt;
+    setResult({ ...result, prompt_additions: updated });
+    setEditingPromptIdx(null);
+  }
+
+  // 保存知识库条目编辑
+  function saveKbEdit(i: number) {
+    if (!result) return;
+    const updated = [...result.kb_items];
+    updated[i] = { question: editDraftQ, answer: editDraftA };
+    setResult({ ...result, kb_items: updated });
+    setEditingKbIdx(null);
   }
 
   async function handleApply() {
@@ -2356,6 +2417,15 @@ function AiAssistConfigCard({
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      {/* 隐藏的文件输入 */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleImageUpload}
+      />
       <button
         onClick={() => setOpen(v => !v)}
         className="w-full flex items-center justify-between px-4 py-3"
@@ -2371,13 +2441,26 @@ function AiAssistConfigCard({
       {open && (
         <div className="px-4 pb-4 space-y-3 border-t border-gray-50">
           <p className="text-xs text-gray-400 pt-3">用大白话描述你对客服的要求和知识，AI 会自动分类整理，帮你写入 AI 指令或知识库</p>
-          <textarea
-            value={inputText}
-            onChange={e => setInputText(e.target.value)}
-            placeholder="例如：客服要有耳心，不要用太官方的语气。我们的产品康宝莱F1单买99元，包含蛋白粉和维生素套餐。如果客户问价格，告诉他们具体套餐内容..."
-            rows={5}
-            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-purple-200 text-gray-800 placeholder-gray-400"
-          />
+
+          {/* 输入区 + 拍照按钮 */}
+          <div className="relative">
+            <textarea
+              value={inputText}
+              onChange={e => setInputText(e.target.value)}
+              placeholder="例如：客服要有耳心，不要用太官方的语气。我们的产品康宝莱F1单一99元，包含蛋白粉和维生素套餐。如果客户问价格，告诉他们具体套餐内容..."
+              rows={5}
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 pb-10 resize-none focus:outline-none focus:ring-2 focus:ring-purple-200 text-gray-800 placeholder-gray-400"
+            />
+            {/* 拍照/上传图片按钮，浮在输入框右下角 */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={extracting}
+              className="absolute bottom-2 right-2 flex items-center gap-1 text-xs text-purple-500 bg-purple-50 hover:bg-purple-100 px-2 py-1 rounded-md transition-all disabled:opacity-50"
+            >
+              {extracting ? <><Loader2 className="w-3 h-3 animate-spin" />识别中...</> : <><Camera className="w-3 h-3" />拍照/上传</>}
+            </button>
+          </div>
+
           <button
             onClick={handleAnalyze}
             disabled={analyzing || !inputText.trim()}
@@ -2398,24 +2481,57 @@ function AiAssistConfigCard({
                   </div>
                 </div>
               )}
+
+              {/* 指令建议列表（可编辑） */}
               {result.prompt_additions.length > 0 && (
                 <div className="space-y-1.5">
                   <div className="text-xs font-semibold text-gray-600">建议写入 AI 指令（勾选后会追加到上方指令框）</div>
                   {result.prompt_additions.map((p, i) => (
-                    <button key={i} onClick={() => setSelectedPrompts(prev => { const n=[...prev]; n[i]=!n[i]; return n; })}
-                      className={`w-full text-left text-xs px-3 py-2 rounded-lg border transition-all ${
-                        selectedPrompts[i] ? 'border-purple-400 bg-purple-50 text-purple-800' : 'border-gray-200 text-gray-500'
-                      }`}>
-                      <div className="flex items-start gap-2">
-                        <div className={`w-4 h-4 rounded border flex-shrink-0 mt-0.5 flex items-center justify-center ${
-                          selectedPrompts[i] ? 'bg-purple-500 border-purple-500' : 'border-gray-300'
-                        }`}>{selectedPrompts[i] && <Check className="w-3 h-3 text-white" />}</div>
-                        <span className="whitespace-pre-wrap">{p}</span>
-                      </div>
-                    </button>
+                    <div key={i} className={`rounded-lg border transition-all ${
+                      selectedPrompts[i] ? 'border-purple-400 bg-purple-50' : 'border-gray-200'
+                    }`}>
+                      {editingPromptIdx === i ? (
+                        // 编辑模式
+                        <div className="p-2 space-y-2">
+                          <textarea
+                            value={editDraftPrompt}
+                            onChange={e => setEditDraftPrompt(e.target.value)}
+                            rows={3}
+                            autoFocus
+                            className="w-full text-xs border border-purple-300 rounded px-2 py-1 resize-none focus:outline-none"
+                          />
+                          <div className="flex gap-2 justify-end">
+                            <button onClick={() => setEditingPromptIdx(null)}
+                              className="text-xs text-gray-400 px-2 py-0.5 rounded hover:bg-gray-100">取消</button>
+                            <button onClick={() => savePromptEdit(i)}
+                              className="text-xs text-purple-600 px-2 py-0.5 rounded hover:bg-purple-100">保存</button>
+                          </div>
+                        </div>
+                      ) : (
+                        // 查看模式
+                        <div className="flex items-start gap-2 px-3 py-2">
+                          <button onClick={() => setSelectedPrompts(prev => { const n=[...prev]; n[i]=!n[i]; return n; })}
+                            className="flex-shrink-0 mt-0.5">
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center ${
+                              selectedPrompts[i] ? 'bg-purple-500 border-purple-500' : 'border-gray-300'
+                            }`}>{selectedPrompts[i] && <Check className="w-3 h-3 text-white" />}</div>
+                          </button>
+                          <span className={`flex-1 text-xs whitespace-pre-wrap ${
+                            selectedPrompts[i] ? 'text-purple-800' : 'text-gray-500'
+                          }`}>{p}</span>
+                          <button
+                            onClick={() => { setEditingPromptIdx(i); setEditDraftPrompt(p); }}
+                            className="flex-shrink-0 text-gray-300 hover:text-purple-500 ml-1">
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
+
+              {/* 知识库条目列表（可编辑） */}
               {result.kb_items.length > 0 && (
                 <div className="space-y-1.5">
                   <div className="text-xs font-semibold text-gray-600">
@@ -2423,23 +2539,62 @@ function AiAssistConfigCard({
                     {!kbId && <span className="text-amber-500 ml-1">(请先在下方绑定知识库)</span>}
                   </div>
                   {result.kb_items.map((item, i) => (
-                    <button key={i} onClick={() => setSelectedKbs(prev => { const n=[...prev]; n[i]=!n[i]; return n; })}
-                      className={`w-full text-left text-xs px-3 py-2 rounded-lg border transition-all ${
-                        selectedKbs[i] ? 'border-blue-400 bg-blue-50 text-blue-800' : 'border-gray-200 text-gray-500'
-                      }`}>
-                      <div className="flex items-start gap-2">
-                        <div className={`w-4 h-4 rounded border flex-shrink-0 mt-0.5 flex items-center justify-center ${
-                          selectedKbs[i] ? 'bg-blue-500 border-blue-500' : 'border-gray-300'
-                        }`}>{selectedKbs[i] && <Check className="w-3 h-3 text-white" />}</div>
-                        <div>
-                          <div className="font-medium text-gray-700">Q: {item.question}</div>
-                          <div className="text-gray-500 mt-0.5">A: {item.answer}</div>
+                    <div key={i} className={`rounded-lg border transition-all ${
+                      selectedKbs[i] ? 'border-blue-400 bg-blue-50' : 'border-gray-200'
+                    }`}>
+                      {editingKbIdx === i ? (
+                        // 编辑模式
+                        <div className="p-2 space-y-2">
+                          <div>
+                            <div className="text-xs text-gray-400 mb-0.5">Q 问题</div>
+                            <input
+                              value={editDraftQ}
+                              onChange={e => setEditDraftQ(e.target.value)}
+                              autoFocus
+                              className="w-full text-xs border border-blue-300 rounded px-2 py-1 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-400 mb-0.5">A 答案</div>
+                            <textarea
+                              value={editDraftA}
+                              onChange={e => setEditDraftA(e.target.value)}
+                              rows={3}
+                              className="w-full text-xs border border-blue-300 rounded px-2 py-1 resize-none focus:outline-none"
+                            />
+                          </div>
+                          <div className="flex gap-2 justify-end">
+                            <button onClick={() => setEditingKbIdx(null)}
+                              className="text-xs text-gray-400 px-2 py-0.5 rounded hover:bg-gray-100">取消</button>
+                            <button onClick={() => saveKbEdit(i)}
+                              className="text-xs text-blue-600 px-2 py-0.5 rounded hover:bg-blue-100">保存</button>
+                          </div>
                         </div>
-                      </div>
-                    </button>
+                      ) : (
+                        // 查看模式
+                        <div className="flex items-start gap-2 px-3 py-2">
+                          <button onClick={() => setSelectedKbs(prev => { const n=[...prev]; n[i]=!n[i]; return n; })}
+                            className="flex-shrink-0 mt-0.5">
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center ${
+                              selectedKbs[i] ? 'bg-blue-500 border-blue-500' : 'border-gray-300'
+                            }`}>{selectedKbs[i] && <Check className="w-3 h-3 text-white" />}</div>
+                          </button>
+                          <div className="flex-1 text-xs">
+                            <div className={`font-medium ${ selectedKbs[i] ? 'text-blue-800' : 'text-gray-700' }`}>Q: {item.question}</div>
+                            <div className={`mt-0.5 ${ selectedKbs[i] ? 'text-blue-600' : 'text-gray-500' }`}>A: {item.answer}</div>
+                          </div>
+                          <button
+                            onClick={() => { setEditingKbIdx(i); setEditDraftQ(item.question); setEditDraftA(item.answer); }}
+                            className="flex-shrink-0 text-gray-300 hover:text-blue-500 ml-1">
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
+
               {(result.prompt_additions.length > 0 || result.kb_items.length > 0) && (
                 <button
                   onClick={handleApply}

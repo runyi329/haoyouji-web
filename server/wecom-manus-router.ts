@@ -3499,34 +3499,89 @@ router.put("/api/wecom/apps/:id", async (req: Request, res: Response) => {
 });
 
 // ─── AI 辅助指令知识库维护 ────────────────────────────────────────────────────
+
+// 图片识别接口：接收 base64 图片，调用视觉模型提取文字内容
+router.post("/api/wecom/ai-image-extract", async (req: Request, res: Response) => {
+  const { imageBase64 } = req.body;
+  if (!imageBase64) return res.status(400).json({ error: "请上传图片" });
+  if (!DEEPSEEK_API_KEY) return res.status(500).json({ error: "AI 服务未配置" });
+
+  try {
+    // 使用 DeepSeek 视觉模型（deepseek-vl2）识别图片内容
+    const res2 = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${DEEPSEEK_API_KEY}` },
+      body: JSON.stringify({
+        model: "deepseek-vl2",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: { url: imageBase64.startsWith("data:") ? imageBase64 : `data:image/jpeg;base64,${imageBase64}` }
+              },
+              {
+                type: "text",
+                text: "请详细描述这张图片中的所有内容，包括文字、数字、表格、产品信息等。用中文回答，尽量完整保留原文内容。"
+              }
+            ]
+          }
+        ],
+        max_tokens: 2000,
+        stream: false,
+      })
+    });
+
+    if (!res2.ok) {
+      // DeepSeek 视觉模型不可用时，回退到文字模型提示用户手动输入
+      const errText = await res2.text();
+      console.error("[AI图片识别] 视觉模型失败:", errText.substring(0, 200));
+      return res.status(400).json({ error: "图片识别暂不可用，请手动输入内容" });
+    }
+
+    const data = await res2.json() as any;
+    const text = data?.choices?.[0]?.message?.content || "";
+    if (!text) return res.status(500).json({ error: "图片识别失败，请重试" });
+    res.json({ ok: true, text });
+  } catch (e) {
+    console.error("[AI图片识别] 异常:", e);
+    res.status(500).json({ error: "图片识别失败，请重试" });
+  }
+});
+
 // 接收大白话，调用 DeepSeek 分析，返回结构化的「指令建议」和「知识库条目建议」
 router.post("/api/wecom/ai-assist-config", async (req: Request, res: Response) => {
   const { text, channelId, kbId: reqKbId } = req.body;
   if (!text || !text.trim()) return res.status(400).json({ error: "请输入内容" });
 
-  const systemPrompt = `你是一个企业微信AI客服的配置助手。用户会用大白话描述他们对客服的要求和知识，你需要将这些内容分类整理成两类：
+  // 硬编码系统提示词：明确告知 AI 这里的输出是用于知识库和指令集的
+  const systemPrompt = `你是一个企业微信AI客服的配置助手。你的输出将直接写入两个地方：
 
-1. **AI指令（system_prompt追加内容）**：适合放入 System Prompt 的行为约束、角色设定、回复风格、禁止事项等。这类内容是对AI行为的指导，而非具体的问答知识。
+《写入目标》
+1. **AI指令（System Prompt）**：直接嵌入到 AI 的系统提示词中，控制 AI 的行为、风格、禁止事项。
+2. **知识库（QA对）**：存入知识库，当客户问相关问题时 AI 会检索并引用。
 
-2. **知识库条目（QA对）**：适合放入知识库的具体问答对，包括产品介绍、价格、常见问题解答、操作步骤等。每条知识库条目需要有明确的「问题」和「答案」。
+《输出要求（严格执行）》
+- **精炼犠利**：每条指令必须是可直接执行的行为准则，不要模糊、不要冗余
+- **指令格式**：用第二人称命令式（如“回复时用口语化表达”），不要用描述性语言
+- **知识库格式**：问题要精准简短（客户真实会这样问），答案要完整准确包含具体数据
+- **不要展开**：不要补充用户未提供的信息，不要自己编造价格或不确定的事实
+- **分类准确**：行为约束放指令，具体事实放知识库
 
-请以JSON格式返回，格式如下：
+请以JSON格式返回：
 {
   "prompt_additions": [
-    "要追加到System Prompt的内容1",
-    "要追加到System Prompt的内容2"
+    "第二人称命令式的指令内容1",
+    "第二人称命令式的指令内容2"
   ],
   "kb_items": [
-    { "question": "问题1", "answer": "答案1" },
-    { "question": "问题2", "answer": "答案2" }
+    { "question": "客户真实会问的问题", "answer": "完整准确的答案" }
   ],
-  "summary": "一句话总结：本次分析了X条指令建议和Y条知识库条目"
+  "summary": "本次提炼了X条指令和Y条知识库条目"
 }
 
-注意：
-- 只返回JSON，不要有任何其他文字
-- 如果某类没有内容，对应数组返回空数组[]
-- 知识库条目的问题要简洁，答案要完整准确`;
+只返回JSON，不要其他文字。如果某类没有内容则返回空数组[]。`;
 
   try {
     const result = await sendToDeepSeekAndGetReply(text.trim(), "deepseek-chat", systemPrompt);
