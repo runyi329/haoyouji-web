@@ -1349,9 +1349,26 @@ async function sendKfMessage(openKfid: string, toUser: string, content: string):
 // 流程：syncMsg拉取 → 知识库检索 → DeepSeek回复 → kf/send_msg发回 → 写日志
 // -----------------------------------------------------------
 async function handleKfMsgOrEvent(): Promise<void> {
-  const KF_OPEN_KFID = "kfc471067df4191a26b";
   try {
     const token = await getAccessToken();
+
+    // 0. 从数据库动态读取 open_kfid
+    const dbConnForKfid = await getDbConnection();
+    let KF_OPEN_KFID = "";
+    if (dbConnForKfid) {
+      try {
+        const [kfRows] = await (dbConnForKfid as any).execute(
+          "SELECT kf_id FROM wecom_channels WHERE channel_type = 'kf' AND kf_id IS NOT NULL LIMIT 1"
+        );
+        if ((kfRows as any[]).length > 0) KF_OPEN_KFID = (kfRows as any[])[0].kf_id || "";
+      } catch (_) {}
+    }
+    if (!KF_OPEN_KFID) {
+      console.error("[KF] 未找到有效的 open_kfid，请在渠道配置中设置kf_id");
+      return;
+    }
+    console.log(`[KF] 使用 open_kfid: ${KF_OPEN_KFID}`);
+
     // 1. 拉取客服消息列表（不做cursor持久化，每次拉最新20条）
     const syncUrl = `https://qyapi.weixin.qq.com/cgi-bin/kf/sync_msg?access_token=${token}&open_kfid=${KF_OPEN_KFID}&limit=20`;
     const syncRes = await fetch(syncUrl);
