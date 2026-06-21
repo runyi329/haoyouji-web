@@ -1888,6 +1888,10 @@ export default function Home() {
                         navigate('/yaban');
                         return;
                       }
+                      if (cat.name === '健康养生') {
+                        window.open('https://work.weixin.qq.com/kfid/kfc471067df4191a26b', '_blank');
+                        return;
+                      }
                       setSelectedCategoryId(cat.id);
                       setCategorySheetOpen(true);
                     }}
