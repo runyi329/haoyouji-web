@@ -1348,14 +1348,14 @@ async function sendKfMessage(openKfid: string, toUser: string, content: string):
 // 微信客服：处理 kf_msg_or_event 事件
 // 流程：syncMsg拉取 → 知识库检索 → DeepSeek回复 → kf/send_msg发回 → 写日志
 // -----------------------------------------------------------
-async function handleKfMsgOrEvent(): Promise<void> {
+async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: string): Promise<void> {
   try {
     const token = await getAccessToken();
 
-    // 0. 从数据库动态读取 open_kfid
+    // 0. 确定 open_kfid：优先用回调里的 OpenKfId，其次从数据库读
+    let KF_OPEN_KFID = callbackOpenKfId || "";
     const dbConnForKfid = await getDbConnection();
-    let KF_OPEN_KFID = "";
-    if (dbConnForKfid) {
+    if (!KF_OPEN_KFID && dbConnForKfid) {
       try {
         const [kfRows] = await (dbConnForKfid as any).execute(
           "SELECT kf_id FROM wecom_channels WHERE channel_type = 'kf' AND kf_id IS NOT NULL LIMIT 1"
@@ -1364,42 +1364,84 @@ async function handleKfMsgOrEvent(): Promise<void> {
       } catch (_) {}
     }
     if (!KF_OPEN_KFID) {
-      console.error("[KF] 未找到有效的 open_kfid，请在渠道配置中设置kf_id");
+      console.error("[KF] 未找到有效的 open_kfid");
       return;
     }
-    console.log(`[KF] 使用 open_kfid: ${KF_OPEN_KFID}`);
+    console.log(`[KF] 使用 open_kfid: ${KF_OPEN_KFID}, 回调token长度=${callbackToken.length}`);
 
-    // 1. 拉取客服消息列表（不做cursor持久化，每次拉最新20条）
-    const syncUrl = `https://qyapi.weixin.qq.com/cgi-bin/kf/sync_msg?access_token=${token}&open_kfid=${KF_OPEN_KFID}&limit=20`;
-    const syncRes = await fetch(syncUrl);
-    const syncData = await syncRes.json() as any;
-    if (syncData.errcode !== 0) {
-      console.error(`[KF] syncMsg失败: errcode=${syncData.errcode} errmsg=${syncData.errmsg}`);
-      return;
+    // 1. 读取上次保存的 cursor（按 open_kfid 持久化在 wecom_channel_kv）
+    let cursor = "";
+    const cursorKey = `kf_cursor_${KF_OPEN_KFID}`;
+    if (dbConnForKfid) {
+      try {
+        const [curRows] = await (dbConnForKfid as any).execute(
+          "SELECT config_val FROM wecom_channel_kv WHERE channel_type = 'kf' AND config_key = ? LIMIT 1",
+          [cursorKey]
+        );
+        if ((curRows as any[]).length > 0) cursor = (curRows as any[])[0].config_val || "";
+      } catch (_) {}
     }
-    const msgList: any[] = syncData.msg_list || [];
+
+    // 2. 拉取客服消息（POST，body传 token + cursor，循环拉完 has_more）
+    const msgList: any[] = [];
+    let safety = 0;
+    while (safety < 10) {
+      safety++;
+      const body: any = { token: callbackToken, limit: 1000, open_kfid: KF_OPEN_KFID };
+      if (cursor) body.cursor = cursor;
+      const syncRes = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/kf/sync_msg?access_token=${token}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const syncData = await syncRes.json() as any;
+      if (syncData.errcode !== 0) {
+        console.error(`[KF] syncMsg失败: errcode=${syncData.errcode} errmsg=${syncData.errmsg}`);
+        break;
+      }
+      const batch: any[] = syncData.msg_list || [];
+      msgList.push(...batch);
+      cursor = syncData.next_cursor || cursor;
+      if (syncData.has_more !== 1) break;
+    }
+
+    // 3. 保存最新 cursor（避免下次重复拉取）
+    if (cursor && dbConnForKfid) {
+      try {
+        await (dbConnForKfid as any).execute(
+          "INSERT INTO wecom_channel_kv (channel_type, config_key, config_val) VALUES ('kf', ?, ?) ON DUPLICATE KEY UPDATE config_val = VALUES(config_val)",
+          [cursorKey, cursor]
+        );
+      } catch (e) { console.error("[KF] 保存cursor失败:", e); }
+    }
+
     console.log(`[KF] syncMsg拉取到 ${msgList.length} 条消息`);
     if (msgList.length === 0) return;
 
-    // 2. 读取kf渠道配置（wecom_channel_kv, channel_type='kf'）
+    // 4. 读取kf渠道配置（wecom_channel_config, channel_id=2 为微信客服渠道）
     let systemPrompt = "你是一名专业的康宝莱健康顾问，请根据知识库内容专业、友好地回答客户问题。如果知识库中没有相关信息，请诚实告知并建议客户联系人工客服。";
     let aiModel = "deepseek-chat";
+    let kbId: number | null = null;
     const dbConn = await getDbConnection();
     if (dbConn) {
       try {
+        const [chRows] = await (dbConn as any).execute(
+          "SELECT id FROM wecom_channels WHERE channel_type = 'kf' LIMIT 1"
+        );
+        const kfChannelId = (chRows as any[]).length > 0 ? (chRows as any[])[0].id : 2;
         const [cfgRows] = await (dbConn as any).execute(
-          "SELECT config_key, config_val FROM wecom_channel_kv WHERE channel_type = 'kf'"
+          "SELECT config_key, config_val FROM wecom_channel_config WHERE channel_id = ?",
+          [kfChannelId]
         );
         const cfg: Record<string, string> = {};
         for (const r of cfgRows as any[]) cfg[r.config_key] = r.config_val;
         if (cfg.system_prompt) systemPrompt = cfg.system_prompt;
         if (cfg.ai_model) aiModel = cfg.ai_model;
-      } catch (_) {}
+        if (cfg.knowledge_base_id) kbId = parseInt(cfg.knowledge_base_id, 10) || null;
+      } catch (e) { console.error("[KF] 读取渠道配置失败:", e); }
     }
-
-    // 3. 获取kf渠道的知识库ID
-    let kbId: number | null = null;
-    if (dbConn) {
+    // 兜底：若配置里没有知识库ID，按 channel_type='kf' 找
+    if (dbConn && !kbId) {
       try {
         const [kbRows] = await (dbConn as any).execute(
           "SELECT id FROM wecom_knowledge_bases WHERE channel_type = 'kf' ORDER BY id LIMIT 1"
@@ -1604,8 +1646,10 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
         }
       } else if (event === "kf_msg_or_event") {
         // ===== 微信客服消息处理 =====
-        // 1. 拉取客服消息（syncMsg）
-        await handleKfMsgOrEvent();
+        // 回调里携带临时 Token（用于 sync_msg 校验）和 OpenKfId（有新消息的客服账号）
+        const kfToken = innerXml.Token || "";
+        const kfOpenKfId = innerXml.OpenKfId || "";
+        await handleKfMsgOrEvent(kfToken, kfOpenKfId);
       }
       return;
     }
