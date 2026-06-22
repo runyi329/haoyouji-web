@@ -1,0 +1,28 @@
+name: zz-read-pm2-log
+on:
+  push:
+    paths:
+      - '.github/workflows/zz-read-pm2-log.yml'
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: SSH setup
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 124.223.54.69 >> ~/.ssh/known_hosts 2>/dev/null || true
+      - name: Read PM2 logs
+        run: |
+          ssh -o StrictHostKeyChecking=no root@124.223.54.69 << 'ENDSSH'
+            echo "=== 服务器最新代码版本 ==="
+            cd /root/haoyouji-web && git log --oneline -3
+            echo ""
+            echo "=== PM2 进程状态 ==="
+            pm2 list
+            echo ""
+            echo "=== PM2 最新100行日志（全部）==="
+            pm2 logs --lines 100 --nostream 2>/dev/null | tail -100
+ENDSSH
