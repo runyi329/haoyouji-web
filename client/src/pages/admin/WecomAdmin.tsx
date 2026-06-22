@@ -2086,49 +2086,85 @@ function AppChannelList({
       </div>
 
       {/* 渠道列表 */}
-      <p className="text-xs text-gray-500 mb-2">联系方式</p>
       {loading ? (
         <div className="flex justify-center py-8">
           <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
         </div>
-      ) : (
-        <div className="space-y-3">
-          {channels.map(ch => (
-            <button
-              key={ch.id}
-              onClick={() => onSelectChannel(ch)}
-              className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-4 flex items-center gap-4 active:bg-gray-50 transition-colors"
-            >
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                ch.channel_type === "app" ? "bg-blue-50" : "bg-purple-50"
-              }`}>
-                {ch.channel_type === "app"
-                  ? <Bot className="w-5 h-5 text-blue-500" />
-                  : <MessageSquare className="w-5 h-5 text-purple-500" />
-                }
+      ) : (() => {
+        // 客户联系渠道（app类型）
+        const appChannels = channels.filter(ch => ch.channel_type === "app");
+        // 微信客服渠道（kf类型，每个kf_id是独立客服账号）
+        const kfChannels = channels.filter(ch => ch.channel_type === "kf");
+        return (
+          <div className="space-y-4">
+            {/* 客户联系 */}
+            {appChannels.length > 0 && (
+              <div>
+                <p className="text-xs text-gray-400 mb-2">客户联系</p>
+                <div className="space-y-2">
+                  {appChannels.map(ch => (
+                    <button
+                      key={ch.id}
+                      onClick={() => onSelectChannel(ch)}
+                      className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-4 flex items-center gap-4 active:bg-gray-50 transition-colors"
+                    >
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-50">
+                        <Bot className="w-5 h-5 text-blue-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900">{ch.name}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">客户联系</p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          ch.is_enabled ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-400"
+                        }`}>
+                          {ch.is_enabled ? "启用" : "停用"}
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-gray-300" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900">{ch.name}</p>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {ch.channel_type === "app" ? "客户联系" : "微信客服"}
-                  {ch.kf_id ? ` · ${ch.kf_id}` : ""}
-                </p>
+            )}
+            {/* 微信客服：每个账号独立一张卡片 */}
+            {kfChannels.length > 0 && (
+              <div>
+                <p className="text-xs text-gray-400 mb-2">微信客服账号（{kfChannels.length} 个）</p>
+                <div className="space-y-2">
+                  {kfChannels.map(ch => (
+                    <button
+                      key={ch.id}
+                      onClick={() => onSelectChannel(ch)}
+                      className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-4 flex items-center gap-4 active:bg-gray-50 transition-colors"
+                    >
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-purple-50">
+                        <MessageSquare className="w-5 h-5 text-purple-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900">{ch.name}</p>
+                        <p className="text-xs text-gray-400 mt-0.5 font-mono truncate">{ch.kf_id || "微信客服"}</p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          ch.is_enabled ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-400"
+                        }`}>
+                          {ch.is_enabled ? "启用" : "停用"}
+                        </span>
+                        <ChevronRight className="w-4 h-4 text-gray-300" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <span className={`text-xs px-2 py-0.5 rounded-full ${
-                  ch.is_enabled ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-400"
-                }`}>
-                  {ch.is_enabled ? "启用" : "停用"}
-                </span>
-                <ChevronRight className="w-4 h-4 text-gray-300" />
-              </div>
-            </button>
-          ))}
-          {channels.length === 0 && (
-            <div className="text-center py-8 text-gray-400 text-sm">该应用下暂无渠道</div>
-          )}
-        </div>
-      )}
+            )}
+            {channels.length === 0 && (
+              <div className="text-center py-8 text-gray-400 text-sm">该应用下暂无渠道</div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
