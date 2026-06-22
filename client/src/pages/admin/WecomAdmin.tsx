@@ -4,7 +4,7 @@ import {
   ArrowLeft, RefreshCw, Trash2, Edit2, Plus, Check, X, Bot,
   Zap, MessageSquare, User, BarChart2, Menu, ChevronRight, ChevronDown,
   Clock, Settings, AlertCircle, PlayCircle, StopCircle, Coins, Loader2,
-  Sparkles, Save, ToggleLeft, ToggleRight, Ban, Shield, Camera, Pencil, ImageIcon
+  Sparkles, Save, ToggleLeft, ToggleRight, Ban, Shield, Camera, Pencil, ImageIcon, FileText
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -116,7 +116,7 @@ function creditsToYuan(credits: number) {
 
 // ─── Tab 按钮 ────────────────────────────────────────────────────────────────
 
-type TabKey = "binding" | "users" | "workflow" | "messages" | "stats" | "menu" | "channel";
+type TabKey = "binding" | "users" | "workflow" | "messages" | "stats" | "menu" | "channel" | "docs";
 
 // Link2 图标内联引入
 const Link2Icon = () => (
@@ -134,6 +134,7 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: "stats", label: "统计", icon: <BarChart2 className="w-4 h-4" /> },
   { key: "menu", label: "菜单", icon: <Menu className="w-4 h-4" /> },
   { key: "channel", label: "渠道", icon: <Settings className="w-4 h-4" /> },
+  { key: "docs", label: "文档", icon: <FileText className="w-4 h-4" /> },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -164,6 +165,7 @@ export default function WecomAdmin() {
         {activeTab === "stats" && <StatsTab />}
         {activeTab === "menu" && <MenuTab />}
         {activeTab === "channel" && <ChannelTab />}
+        {activeTab === "docs" && <DocsTab />}
       </div>
 
       {/* 底部 Tab 栏 */}
@@ -4827,6 +4829,274 @@ function ChannelLogsTab({ channelType, channelId }: { channelType: string, chann
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 文档 Tab：AI 智库 4 层架构系统设计文档
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function DocsTab() {
+  const [openSection, setOpenSection] = useState<string | null>("overview");
+
+  const sections = [
+    {
+      id: "overview",
+      title: "架构总览",
+      content: (
+        <div className="space-y-3">
+          <p className="text-sm text-gray-700 leading-relaxed">
+            「AI 智库」将 AI 的认知和行为逻辑清晰划分为 4 个层级，从「自我认知」到「自我能力」，再到「客户认知」，形成完整的对话系统架构。
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-blue-50">
+                  <th className="border border-blue-100 px-2 py-1.5 text-left font-semibold text-blue-800">层级</th>
+                  <th className="border border-blue-100 px-2 py-1.5 text-left font-semibold text-blue-800">名称</th>
+                  <th className="border border-blue-100 px-2 py-1.5 text-left font-semibold text-blue-800">核心作用</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  ["①", "角色定义 & 行为规则", "AI 的基础人设与规则，决定「我是谁」「我怎么说话」"],
+                  ["②", "我的数字分身", "客服本人的风格克隆，通过优质对话语料提炼说话风格"],
+                  ["③", "知识库", "标准答案库，含平台共享知识库和客服私人知识库"],
+                  ["④", "历史对话记忆", "AI 对「客户是谁」的理解，含长期偏好记忆和短期上下文"],
+                ].map(([num, name, desc]) => (
+                  <tr key={num} className="hover:bg-gray-50">
+                    <td className="border border-gray-100 px-2 py-1.5 font-bold text-blue-600 text-center">{num}</td>
+                    <td className="border border-gray-100 px-2 py-1.5 font-medium text-gray-800 whitespace-nowrap">{name}</td>
+                    <td className="border border-gray-100 px-2 py-1.5 text-gray-600">{desc}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "layer1",
+      title: "① 角色定义 & 行为规则",
+      content: (
+        <div className="space-y-3 text-sm text-gray-700 leading-relaxed">
+          <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+            <div className="font-semibold text-blue-800 mb-1">本质：AI 的基础人设与规则</div>
+            <p>决定 AI「我是谁」「我怎么说话」「我必须遵守什么规则」（如不主动报价等）。</p>
+          </div>
+          <div>
+            <div className="font-medium text-gray-800 mb-1">数据库表</div>
+            <code className="bg-gray-100 px-2 py-0.5 rounded text-xs">wecom_prompt_rules</code>
+            <span className="text-xs text-gray-500 ml-2">layer=1（系统级，只读）/ layer=2（自定义指令）</span>
+          </div>
+          <div>
+            <div className="font-medium text-gray-800 mb-1">Prompt 拼装位置</div>
+            <p className="text-xs text-gray-600">最先注入，作为 System Prompt 的基础框架。layer1 直接拼接，layer2 以「行为规则：1. 2. 3.」格式追加。</p>
+          </div>
+          <div>
+            <div className="font-medium text-gray-800 mb-1">生命周期</div>
+            <p className="text-xs text-gray-600">静态配置，很少改变。由管理员在「AI 智库 → 第①层」中编辑。</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "layer2",
+      title: "② 我的数字分身",
+      content: (
+        <div className="space-y-3 text-sm text-gray-700 leading-relaxed">
+          <div className="bg-green-50 rounded-lg p-3 border border-green-100">
+            <div className="font-semibold text-green-800 mb-1">本质：客服本人的风格克隆</div>
+            <p>通过学习客服历史优质对话，提炼其说话风格和专业积累，让 AI 说话像这个客服本人。</p>
+          </div>
+          <div>
+            <div className="font-medium text-gray-800 mb-1">数据库表</div>
+            <div className="space-y-1">
+              <div><code className="bg-gray-100 px-2 py-0.5 rounded text-xs">wecom_corpus</code><span className="text-xs text-gray-500 ml-2">语料库（含 quality 标注字段）</span></div>
+              <div><code className="bg-gray-100 px-2 py-0.5 rounded text-xs">wecom_digital_twin</code><span className="text-xs text-gray-500 ml-2">分身配置（enabled 开关、version、last_trained_at）</span></div>
+            </div>
+          </div>
+          <div>
+            <div className="font-medium text-gray-800 mb-1">Prompt 拼装位置（待接入）</div>
+            <p className="text-xs text-gray-600">在 layer1/2 之后、知识库之前注入。检索 quality=1 的优质语料，以「参考回复风格」格式注入。</p>
+          </div>
+          <div>
+            <div className="font-medium text-gray-800 mb-1">护城河设计</div>
+            <p className="text-xs text-gray-600">客户端只展示统计概览（优质语料数、版本、场景标签），不展示具体语料内容。语料积累越多，AI 越像本人，形成竞争壁垒。</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "layer3",
+      title: "③ 知识库",
+      content: (
+        <div className="space-y-3 text-sm text-gray-700 leading-relaxed">
+          <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-100">
+            <div className="font-semibold text-yellow-800 mb-1">本质：标准答案库</div>
+            <p>包含平台提供的「共享知识库」和客服上传的「私人知识库」，提供精准的标准答案。</p>
+          </div>
+          <div>
+            <div className="font-medium text-gray-800 mb-1">数据库表</div>
+            <div className="space-y-1">
+              <div><code className="bg-gray-100 px-2 py-0.5 rounded text-xs">wecom_knowledge_bases</code><span className="text-xs text-gray-500 ml-2">知识库（is_system=1 为共享）</span></div>
+              <div><code className="bg-gray-100 px-2 py-0.5 rounded text-xs">wecom_knowledge_items</code><span className="text-xs text-gray-500 ml-2">知识条目（question + answer）</span></div>
+            </div>
+          </div>
+          <div>
+            <div className="font-medium text-gray-800 mb-1">检索逻辑</div>
+            <p className="text-xs text-gray-600">优先按问题字段关键词匹配，命中不足 3 条时补充答案字段匹配，最终取前 5 条，以「知识库标准答案——必须优先使用」格式注入。</p>
+          </div>
+          <div>
+            <div className="font-medium text-gray-800 mb-1">向量化方案</div>
+            <p className="text-xs text-gray-600">当前采用 MySQL JSON 存储向量，已为将来升级 ChromaDB / Qdrant 预留扩展空间。</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "layer4",
+      title: "④ 历史对话记忆",
+      content: (
+        <div className="space-y-3 text-sm text-gray-700 leading-relaxed">
+          <div className="bg-purple-50 rounded-lg p-3 border border-purple-100">
+            <div className="font-semibold text-purple-800 mb-1">本质：AI 对「客户是谁」的理解</div>
+            <p>包含两个时间维度：本轮对话的短期上下文（临时），以及历史对话提炼的长期偏好记忆（持久化，规划中）。</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="border border-gray-200 px-2 py-1.5 text-left font-semibold">维度</th>
+                  <th className="border border-gray-200 px-2 py-1.5 text-left font-semibold">时间范围</th>
+                  <th className="border border-gray-200 px-2 py-1.5 text-left font-semibold">存储</th>
+                  <th className="border border-gray-200 px-2 py-1.5 text-left font-semibold">状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="border border-gray-100 px-2 py-1.5">本轮上下文</td>
+                  <td className="border border-gray-100 px-2 py-1.5">最近 N 句</td>
+                  <td className="border border-gray-100 px-2 py-1.5">临时，不存库</td>
+                  <td className="border border-gray-100 px-2 py-1.5 text-green-600 font-medium">已上线</td>
+                </tr>
+                <tr>
+                  <td className="border border-gray-100 px-2 py-1.5">客户长期记忆</td>
+                  <td className="border border-gray-100 px-2 py-1.5">全部历史</td>
+                  <td className="border border-gray-100 px-2 py-1.5">持久化存库</td>
+                  <td className="border border-gray-100 px-2 py-1.5 text-orange-500 font-medium">规划中</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 text-xs text-gray-600">
+            <span className="font-medium text-gray-700">重要说明：</span>已启用数字分身（第②层）后，AI 可通过长期记忆理解用户偏好，短期上下文轮数的重要性自动降低。两者共同构成 AI 对客户的完整认知。
+          </div>
+          <div>
+            <div className="font-medium text-gray-800 mb-1">数据库字段</div>
+            <div><code className="bg-gray-100 px-2 py-0.5 rounded text-xs">wecom_channel_config.context_rounds</code><span className="text-xs text-gray-500 ml-2">全局保留轮数设置</span></div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "prompt",
+      title: "Prompt 拼装顺序规范",
+      content: (
+        <div className="space-y-3 text-sm text-gray-700">
+          <p className="text-xs text-gray-500">每次用户发消息时，后端按以下顺序组装 System Prompt 发送给 LLM：</p>
+          <div className="bg-gray-900 rounded-lg p-3 text-xs font-mono text-green-400 space-y-1">
+            <div className="text-gray-400">// 第①层：角色定义 & 行为规则（静态）</div>
+            <div>systemPrompt = layer1 + "\n\n行为规则：\n" + layer2</div>
+            <div className="mt-2 text-gray-400">// 第②层：数字分身风格（若开启，动态检索）</div>
+            <div>digitalTwinContext = "【参考回复风格】\n" + corpus</div>
+            <div className="mt-2 text-gray-400">// 第③层：知识库标准答案（动态检索）</div>
+            <div>kbContext = "【知识库标准答案——必须优先使用】\n" + items</div>
+            <div className="mt-2 text-gray-400">// 最终拼装</div>
+            <div className="text-yellow-300">fullSystemPrompt = systemPrompt + digitalTwinContext + kbContext</div>
+          </div>
+          <div className="text-xs text-gray-500 bg-yellow-50 rounded-lg p-2 border border-yellow-100">
+            注：数字分身（digitalTwinContext）接入后端 Prompt 拼装流程尚在开发中，当前版本仅拼装 systemPrompt + kbContext。
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "roadmap",
+      title: "开发路线图",
+      content: (
+        <div className="space-y-2">
+          {[
+            { status: "done", text: "客户数据 Tab（UsersTab + LogsTab 合并）" },
+            { status: "done", text: "接入指引弹窗（SetupGuideModal，4 步骤）" },
+            { status: "done", text: "AI 模型下拉框（7 个模型，DeepSeek / Manus 分组）" },
+            { status: "done", text: "数字分身前端（DigitalTwinCard，统计概览 + 开关）" },
+            { status: "done", text: "语料库后端（wecom_corpus + wecom_digital_twin 表）" },
+            { status: "done", text: "语料库管理 Tab（WecomAdmin 渠道详情 CorpusTab）" },
+            { status: "progress", text: "AI 智库 Tab 重构（4 层结构，移除 ConfigTab AI 指令）" },
+            { status: "progress", text: "第④层历史对话记忆卡片（context_rounds 全局设置）" },
+            { status: "todo", text: "数字分身接入后端 Prompt 拼装（digitalTwinContext）" },
+            { status: "todo", text: "客户长期偏好记忆（历史对话提炼，持久化存库）" },
+            { status: "todo", text: "向量检索升级（ChromaDB / Qdrant）" },
+          ].map((item, i) => (
+            <div key={i} className="flex items-start gap-2.5">
+              <div className={`mt-0.5 w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center text-xs ${
+                item.status === "done" ? "bg-green-500" :
+                item.status === "progress" ? "bg-blue-500" : "bg-gray-200"
+              }`}>
+                {item.status === "done" && <Check className="w-2.5 h-2.5 text-white" />}
+                {item.status === "progress" && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+              </div>
+              <span className={`text-xs leading-relaxed ${
+                item.status === "done" ? "text-gray-500 line-through" :
+                item.status === "progress" ? "text-blue-700 font-medium" : "text-gray-600"
+              }`}>{item.text}</span>
+            </div>
+          ))}
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="px-4 py-4 space-y-3 pb-8">
+      {/* 标题 */}
+      <div className="bg-gradient-to-r from-blue-600 to-blue-500 rounded-2xl p-4 text-white">
+        <div className="flex items-center gap-2 mb-1">
+          <Bot className="w-5 h-5" />
+          <span className="font-bold text-base">AI 智库系统设计文档</span>
+        </div>
+        <p className="text-xs text-blue-100 leading-relaxed">
+          好友记企业微信客服管理平台 · 4 层 AI 大脑架构设计规范
+        </p>
+        <div className="mt-2 flex gap-2">
+          <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">v1.0</span>
+          <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">2026-06-22</span>
+        </div>
+      </div>
+
+      {/* 各章节折叠卡片 */}
+      {sections.map(section => (
+        <div key={section.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
+          <button
+            className="w-full px-4 py-3 flex items-center justify-between"
+            onClick={() => setOpenSection(openSection === section.id ? null : section.id)}
+          >
+            <span className="text-sm font-semibold text-gray-800">{section.title}</span>
+            {openSection === section.id
+              ? <ChevronDown className="w-4 h-4 text-gray-400" />
+              : <ChevronRight className="w-4 h-4 text-gray-400" />}
+          </button>
+          {openSection === section.id && (
+            <div className="px-4 pb-4 border-t border-gray-50">
+              <div className="pt-3">{section.content}</div>
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

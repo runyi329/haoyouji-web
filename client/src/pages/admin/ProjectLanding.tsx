@@ -227,6 +227,104 @@ function SetupGuideModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ─── 数字分身卡片（客户端只读概览） ────────────────────────────────────────────
+function DigitalTwinCard({ channelId }: { channelId: string }) {
+  const [stats, setStats] = useState<any>(null);
+  const [enabled, setEnabled] = useState(false);
+  const [toggling, setToggling] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/wecom/corpus/stats?channel_id=${channelId}`)
+      .then(r => r.json())
+      .then(d => { if (d.ok) { setStats(d); setEnabled(d.twin_enabled === 1 || d.twin_enabled === true); } })
+      .finally(() => setLoading(false));
+  }, [channelId]);
+
+  const handleToggle = async () => {
+    setToggling(true);
+    const newEnabled = !enabled;
+    const r = await fetch("/api/wecom/corpus/twin-toggle", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channel_id: channelId, enabled: newEnabled }),
+    });
+    const d = await r.json();
+    setToggling(false);
+    if (d.ok) { setEnabled(newEnabled); toast.success(newEnabled ? "数字分身已开启" : "数字分身已关闭"); }
+    else toast.error(d.error || "操作失败");
+  };
+
+  const SCENE_LABEL: Record<string, string> = {
+    price: "价格咨询", product: "产品介绍", close: "成交转化",
+    objection: "异议处理", followup: "跟进维护", other: "其他",
+  };
+
+  return (
+    <div className="rounded-xl border overflow-hidden" style={{ borderColor: C.line }}>
+      {/* 标题栏（浅绿背景） */}
+      <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: C.brandLight, borderBottom: `1px solid ${C.line}` }}>
+        <span className="text-xs font-semibold" style={{ color: C.textMain }}>我的数字分身</span>
+        {/* 与共享知识库完全一致的 toggle 开关 */}
+        <div
+          onClick={toggling ? undefined : handleToggle}
+          style={{
+            position: 'relative', display: 'inline-block',
+            width: 40, height: 22, borderRadius: 11,
+            backgroundColor: enabled ? C.brand : '#D1D5DB',
+            cursor: toggling ? 'not-allowed' : 'pointer',
+            opacity: toggling ? 0.5 : 1,
+            flexShrink: 0, transition: 'background-color 0.2s',
+          }}
+        >
+          <div style={{
+            position: 'absolute', top: 3,
+            left: enabled ? 19 : 3,
+            width: 16, height: 16, borderRadius: '50%',
+            backgroundColor: '#fff',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+            transition: 'left 0.2s',
+          }} />
+        </div>
+      </div>
+
+      {/* 数据概览 */}
+      <div className="px-4 py-3" style={{ backgroundColor: C.white }}>
+        {loading ? (
+          <div className="text-center py-4 text-sm" style={{ color: C.textSub }}>加载中…</div>
+        ) : (
+          <div className="space-y-2">
+            {/* 三个指标 */}
+            <div className="flex items-baseline gap-4">
+              <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{stats?.quality_count ?? 0}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>优质语料</span></span>
+              <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{stats?.total ?? 0}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>总语料</span></span>
+              <span><span className="text-base font-bold" style={{ color: C.textMain }}>{stats?.twin_version || 'v1.0'}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>版本</span></span>
+            </div>
+            {/* 覆盖场景标签 */}
+            {stats?.scene_tags?.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {stats.scene_tags.map((s: any) => (
+                  <span key={s.tag} className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: C.brandLight, color: C.brand }}>
+                    {SCENE_LABEL[s.tag] || s.tag}
+                  </span>
+                ))}
+              </div>
+            )}
+            {/* 底部更新时间 */}
+            <div className="flex items-center justify-between pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+              <span className="text-xs" style={{ color: C.textSub }}>
+                {stats?.last_updated ? `更新至 ${new Date(stats.last_updated).toLocaleDateString('zh-CN')}` : '暂无更新记录'}
+              </span>
+              <span className="text-xs" style={{ color: C.textSub }}>
+                分身风格 <span className="font-semibold" style={{ color: enabled ? C.brand : '#9CA3AF' }}>{enabled ? '已开启' : '未开启'}</span>
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── 工具函数 ────────────────────────────────────────────────────
 function formatDate(s: string) {
   if (!s) return "";
@@ -239,12 +337,23 @@ function formatDate(s: string) {
 }
 
 // ─── 模型选项 ────────────────────────────────────────────────────
-const AI_MODELS = [
-  { value: "deepseek-chat", label: "DeepSeek Flash（快速，省积分）" },
-  { value: "deepseek-v4-pro", label: "DeepSeek Pro（强推理）" },
-  { value: "manus-1.6-lite", label: "Manus 轻量" },
-  { value: "manus-1.6", label: "Manus 标准" },
-  { value: "manus-1.6-max", label: "Manus Max" },
+interface AiModelOption {
+  value: string;
+  label: string;
+  desc: string;
+  group: string;
+}
+const AI_MODELS: AiModelOption[] = [
+  // DeepSeek V4 Flash 系列
+  { value: "deepseek-v4-flash",          label: "DeepSeek V4 Flash",          desc: "最新快速模型，日常对话首选，最省积分",     group: "DeepSeek" },
+  { value: "deepseek-v4-flash-thinking", label: "DeepSeek V4 Flash 推理版",    desc: "Flash 加开思维链，适合需要分析的问题",   group: "DeepSeek" },
+  // DeepSeek V4 Pro 系列
+  { value: "deepseek-v4-pro",            label: "DeepSeek V4 Pro",            desc: "最强通用模型，复杂问题、长文写作首选",   group: "DeepSeek" },
+  { value: "deepseek-v4-pro-thinking",   label: "DeepSeek V4 Pro 推理版",     desc: "Pro 加深度思考，数学/代码/逻辑推理最强",  group: "DeepSeek" },
+  // Manus 系列
+  { value: "manus-1.6-lite",             label: "Manus 1.6 Lite",             desc: "轻量模型，响应最快，适合简单问答场景",   group: "Manus" },
+  { value: "manus-1.6",                  label: "Manus 1.6 标准",              desc: "平衡能力与速度，适合绝大多数场景",     group: "Manus" },
+  { value: "manus-1.6-max",              label: "Manus 1.6 Max",              desc: "最强能力，适合复杂任务，消耗积分较高",   group: "Manus" },
 ];
 
 const RULE_MODELS = [
@@ -301,6 +410,7 @@ interface KnowledgeBase {
 function ConfigTab() {
   const [enabled, setEnabled] = useState(true);
   const [showGuide, setShowGuide] = useState(false);
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [welcomeMsg, setWelcomeMsg] = useState("");
   const [waitingMsg, setWaitingMsg] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
@@ -317,27 +427,16 @@ function ConfigTab() {
   const [kbId, setKbId] = useState(0);
   const [kbList, setKbList] = useState<KnowledgeBase[]>([]);
 
-  // 结构化 AI 指令
-  const [promptRules, setPromptRules] = useState<PromptRule[]>([]);
-  const [editingRuleId, setEditingRuleId] = useState<number | null>(null);
-  const [editingRuleText, setEditingRuleText] = useState("");
-  const [showPromptExpand, setShowPromptExpand] = useState(false);
-  const [addingRule, setAddingRule] = useState(false);
-  const [newRuleText, setNewRuleText] = useState("");
-  const [savingRule, setSavingRule] = useState(false);
-
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
-        const [cfgRes, rulesRes, kbsRes, chCfgRes] = await Promise.all([
+        const [cfgRes, kbsRes, chCfgRes] = await Promise.all([
           fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/config`),
-          fetch(`/api/wecom/prompt-rules?channel_id=${KF_CHANNEL_ID}`),
           fetch(`/api/wecom/knowledge-bases`),
           fetch(`/api/wecom/channel-config/${KF_CHANNEL_ID}`),
         ]);
         const cfg = await cfgRes.json();
-        const rulesData = await rulesRes.json();
         const kbs = await kbsRes.json();
         const chCfg = await chCfgRes.json();
         if (cfg.config) {
@@ -358,7 +457,6 @@ function ConfigTab() {
           const ki = chCfg.knowledge_base_id || 0;
           setKbId(ki);
         }
-        if (rulesData.ok) setPromptRules(rulesData.rules || []);
       } catch {
         toast.error("加载配置失败");
       } finally {
@@ -416,71 +514,10 @@ function ConfigTab() {
     }
   }
 
-  async function handleSaveRule(rule: PromptRule) {
-    setSavingRule(true);
-    try {
-      const res = await fetch(`/api/wecom/prompt-rules/${rule.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rule_text: editingRuleText }),
-      });
-      const d = await res.json();
-      if (d.ok) { toast.success("已保存"); setEditingRuleId(null); setPromptRules(prev => prev.map(r => r.id === rule.id ? { ...r, rule_text: editingRuleText } : r)); }
-      else toast.error(d.error || "保存失败");
-    } catch { toast.error("保存失败"); }
-    finally { setSavingRule(false); }
-  }
 
-  async function handleToggleRule(rule: PromptRule) {
-    try {
-      const res = await fetch(`/api/wecom/prompt-rules/${rule.id}/toggle`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled: !rule.enabled }),
-      });
-      const d = await res.json();
-      if (d.ok) setPromptRules(prev => prev.map(r => r.id === rule.id ? { ...r, enabled: !r.enabled } : r));
-      else toast.error(d.error || "操作失败");
-    } catch { toast.error("操作失败"); }
-  }
-
-  async function handleAddRule() {
-    if (!newRuleText.trim()) { toast.error("请输入指令内容"); return; }
-    setSavingRule(true);
-    try {
-      const res = await fetch("/api/wecom/prompt-rules", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channel_id: KF_CHANNEL_ID, channel_type: KF_CHANNEL_TYPE, rule_text: newRuleText, layer: 2 }),
-      });
-      const d = await res.json();
-      if (d.ok) {
-        toast.success("添加成功");
-        setAddingRule(false);
-        setNewRuleText("");
-        const rulesRes = await fetch(`/api/wecom/prompt-rules?channel_id=${KF_CHANNEL_ID}`);
-        const rulesData = await rulesRes.json();
-        if (rulesData.ok) setPromptRules(rulesData.rules || []);
-      } else toast.error(d.error || "添加失败");
-    } catch { toast.error("添加失败"); }
-    finally { setSavingRule(false); }
-  }
-
-  async function handleDeleteRule(id: number) {
-    try {
-      const res = await fetch(`/api/wecom/prompt-rules/${id}`, { method: "DELETE" });
-      const d = await res.json();
-      if (d.ok) { toast.success("已删除"); setPromptRules(prev => prev.filter(r => r.id !== id)); }
-      else toast.error(d.error || "删除失败");
-    } catch { toast.error("删除失败"); }
-  }
-
-  const currentSnap = JSON.stringify({ wm: welcomeMsg, wt: waitingMsg, sp: systemPrompt, am: aiModel, cr: contextRounds, ne: notifyEnabled, nu: notifyUserids.join(","), ki: kbId });
+    const currentSnap = JSON.stringify({ wm: welcomeMsg, wt: waitingMsg, sp: systemPrompt, am: aiModel, cr: contextRounds, ne: notifyEnabled, nu: notifyUserids.join(","), ki: kbId });
   const isDirty = savedSnapshot === "" || currentSnap !== savedSnapshot;
 
-  const layer1Rules = promptRules.filter(r => r.layer === 1);
-  const layer2Rules = promptRules.filter(r => r.layer === 2);
-  const enabledCount = promptRules.filter(r => r.enabled).length;
 
   if (loading) {
     return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin" style={{ color: C.brand }} /></div>;
@@ -549,167 +586,87 @@ function ConfigTab() {
         />
       </div>
 
-      {/* AI 指令管理（结构化） */}
+      {/* AI 指令管理 - 已移至 AI 智库 Tab 第①层 */}
       <div className="bg-white rounded-2xl shadow-sm border overflow-hidden" style={{ borderColor: C.line }}>
-        <button
-          className="w-full px-4 py-3 flex items-center justify-between"
-          onClick={() => setShowPromptExpand(!showPromptExpand)}
-        >
+        <div className="px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Bot className="w-4 h-4" style={{ color: C.brand }} />
             <span className="text-sm font-semibold" style={{ color: C.textMain }}>AI 指令管理</span>
-            <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: C.brandLight, color: C.brand }}>
-              第1层 {layer1Rules.length} 条 · 第2层 {layer2Rules.length}/{layer2Rules.length} 条启用
-            </span>
           </div>
-          {showPromptExpand
-            ? <ChevronDown className="w-4 h-4" style={{ color: C.textSub }} />
-            : <ChevronRight className="w-4 h-4" style={{ color: C.textSub }} />}
-        </button>
-
-        {showPromptExpand && (
-          <div className="px-4 pb-4 space-y-3 border-t" style={{ borderColor: C.line }}>
-            {/* 第1层（系统级，只读） */}
-            {layer1Rules.length > 0 && (
-              <div>
-                <div className="text-xs font-medium mt-3 mb-2" style={{ color: C.textSub }}>第1层（系统级，只读）</div>
-                {layer1Rules.map(rule => (
-                  <div key={rule.id} className="rounded-xl border p-3 mb-2" style={{ borderColor: C.line, backgroundColor: C.bg }}>
-                    <div className="text-xs" style={{ color: C.textMain }}>{rule.rule_text}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* 第2层（自定义） */}
-            <div>
-              <div className="flex items-center justify-between mt-3 mb-2">
-                <div className="text-xs font-medium" style={{ color: C.textSub }}>第2层（自定义指令）</div>
-                <button
-                  onClick={() => setAddingRule(true)}
-                  className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg"
-                  style={{ backgroundColor: C.brandLight, color: C.brand }}
-                >
-                  <Plus className="w-3 h-3" />添加
-                </button>
-              </div>
-              {layer2Rules.length === 0 && !addingRule && (
-                <div className="text-xs text-center py-4" style={{ color: C.textSub }}>暂无自定义指令</div>
-              )}
-              {layer2Rules.map(rule => (
-                <div key={rule.id} className={`rounded-xl border p-3 mb-2 ${!rule.enabled ? "opacity-50" : ""}`} style={{ borderColor: C.line }}>
-                  {editingRuleId === rule.id ? (
-                    <div className="space-y-2">
-                      <textarea
-                        value={editingRuleText}
-                        onChange={e => setEditingRuleText(e.target.value)}
-                        rows={3}
-                        className="w-full text-xs rounded-lg border p-2 resize-none outline-none"
-                        style={{ borderColor: C.line }}
-                        autoFocus
-                      />
-                      <div className="flex gap-1.5">
-                        <button
-                          onClick={() => handleSaveRule(rule)}
-                          disabled={savingRule}
-                          className="flex-1 py-1.5 rounded-lg text-xs text-white flex items-center justify-center gap-1"
-                          style={{ backgroundColor: C.brand }}
-                        >
-                          {savingRule ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}保存
-                        </button>
-                        <button
-                          onClick={() => setEditingRuleId(null)}
-                          className="flex-1 py-1.5 rounded-lg text-xs border"
-                          style={{ borderColor: C.line, color: C.textSub }}
-                        >取消</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-start gap-2">
-                      <div className="flex-1 text-xs" style={{ color: C.textMain }}>{rule.rule_text}</div>
-                      <div className="flex gap-1 flex-shrink-0">
-                        <button
-                          onClick={() => { setEditingRuleId(rule.id); setEditingRuleText(rule.rule_text); }}
-                          className="text-xs px-1.5 py-0.5 rounded border"
-                          style={{ borderColor: C.line, color: C.textSub }}
-                        >编辑</button>
-                        <button
-                          onClick={() => handleToggleRule(rule)}
-                          className="text-xs px-1.5 py-0.5 rounded border"
-                          style={{ borderColor: rule.enabled ? C.line : C.brand, color: rule.enabled ? C.textSub : C.brand }}
-                        >{rule.enabled ? "停用" : "启用"}</button>
-                        <button
-                          onClick={() => handleDeleteRule(rule.id)}
-                          className="text-xs px-1.5 py-0.5 rounded border border-red-100 text-red-400"
-                        >删除</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-              {addingRule && (
-                <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: C.brand }}>
-                  <textarea
-                    value={newRuleText}
-                    onChange={e => setNewRuleText(e.target.value)}
-                    rows={3}
-                    className="w-full text-xs rounded-lg border p-2 resize-none outline-none"
-                    style={{ borderColor: C.line }}
-                    placeholder="输入新的 AI 指令..."
-                    autoFocus
-                  />
-                  <div className="flex gap-1.5">
-                    <button
-                      onClick={handleAddRule}
-                      disabled={savingRule}
-                      className="flex-1 py-1.5 rounded-lg text-xs text-white flex items-center justify-center gap-1"
-                      style={{ backgroundColor: C.brand }}
-                    >
-                      {savingRule ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}添加
-                    </button>
-                    <button
-                      onClick={() => { setAddingRule(false); setNewRuleText(""); }}
-                      className="flex-1 py-1.5 rounded-lg text-xs border"
-                      style={{ borderColor: C.line, color: C.textSub }}
-                    >取消</button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* System Prompt 文本框（备用） */}
-            <div>
-              <div className="text-xs font-medium mb-2" style={{ color: C.textSub }}>系统指令（文本模式）</div>
-              <textarea
-                value={systemPrompt}
-                onChange={(e) => setSystemPrompt(e.target.value)}
-                rows={6}
-                className="w-full text-sm rounded-xl border p-3 resize-none outline-none"
-                style={{ borderColor: C.line, color: C.textMain, backgroundColor: C.bg }}
-                placeholder="直接输入 AI 系统指令..."
-              />
-              <div className="text-xs mt-1" style={{ color: C.textSub }}>{systemPrompt.length} 字符</div>
-            </div>
-          </div>
-        )}
+          <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: C.brandLight, color: C.brand }}>
+            已移至 AI 智库 ①
+          </span>
+        </div>
+        <div className="px-4 pb-3 text-xs" style={{ color: C.textSub }}>
+          AI 指令管理已整合至「AI 智库」Tab 的第①层，请前往「AI 智库」进行配置。
+        </div>
       </div>
 
       {/* 默认 AI 模型 */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: C.line }}>
-        <div className="text-sm font-semibold mb-3" style={{ color: C.textMain }}>默认 AI 模型</div>
-        <div className="space-y-2">
-          {AI_MODELS.map(m => (
-            <button
-              key={m.value}
-              onClick={() => setAiModel(m.value)}
-              className="w-full text-left text-sm px-3 py-2.5 rounded-xl border-2 transition-all"
-              style={aiModel === m.value
-                ? { borderColor: C.brand, backgroundColor: C.brandLight, color: C.brandDeep }
-                : { borderColor: C.line, color: C.textMain }}
+        <div className="text-sm font-semibold mb-2" style={{ color: C.textMain }}>默认 AI 模型</div>
+        {/* 自定义下拉框 */}
+        <div className="relative">
+          {/* 触发按钮 */}
+          <button
+            onClick={() => setShowModelDropdown(!showModelDropdown)}
+            className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border-2 text-sm transition-all"
+            style={{ borderColor: showModelDropdown ? C.brand : C.line, backgroundColor: showModelDropdown ? C.brandLight : C.white }}
+          >
+            <div className="flex flex-col items-start min-w-0">
+              <span className="font-medium truncate" style={{ color: C.textMain }}>
+                {AI_MODELS.find(m => m.value === aiModel)?.label || aiModel}
+              </span>
+              <span className="text-xs truncate w-full" style={{ color: C.textSub }}>
+                {AI_MODELS.find(m => m.value === aiModel)?.desc || ""}
+              </span>
+            </div>
+            <ChevronDown
+              className="w-4 h-4 flex-shrink-0 ml-2 transition-transform"
+              style={{ color: C.textSub, transform: showModelDropdown ? "rotate(180deg)" : "rotate(0deg)" }}
+            />
+          </button>
+
+          {/* 下拉列表 */}
+          {showModelDropdown && (
+            <div
+              className="absolute left-0 right-0 top-full mt-1 rounded-2xl border shadow-lg overflow-hidden z-20"
+              style={{ borderColor: C.line, backgroundColor: C.white }}
             >
-              {m.label}
-            </button>
-          ))}
+              {/* 按分组渲染 */}
+              {["DeepSeek", "Manus"].map(group => (
+                <div key={group}>
+                  {/* 分组标题 */}
+                  <div
+                    className="px-3 py-1.5 text-xs font-semibold"
+                    style={{ backgroundColor: C.bg, color: C.textSub }}
+                  >
+                    {group}
+                  </div>
+                  {/* 该分组的模型列表 */}
+                  {AI_MODELS.filter(m => m.group === group).map((m, idx, arr) => (
+                    <button
+                      key={m.value}
+                      onClick={() => { setAiModel(m.value); setShowModelDropdown(false); }}
+                      className="w-full text-left px-3 py-2.5 flex items-center justify-between transition-all"
+                      style={{
+                        backgroundColor: aiModel === m.value ? C.brandLight : "transparent",
+                        borderBottom: idx < arr.length - 1 ? `1px solid ${C.line}` : "none",
+                      }}
+                    >
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <span className="text-sm font-medium" style={{ color: aiModel === m.value ? C.brandDeep : C.textMain }}>{m.label}</span>
+                        <span className="text-xs truncate" style={{ color: C.textSub }}>{m.desc}</span>
+                      </div>
+                      {aiModel === m.value && (
+                        <Check className="w-4 h-4 flex-shrink-0 ml-2" style={{ color: C.brand }} />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1099,7 +1056,371 @@ function RulesTab() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// 知识库 Tab
+// AI 智库 Tab（4 层架构）
+// ═══════════════════════════════════════════════════════════════
+function AIBrainTab() {
+  // 展开状态：默认全部折叠，点击展开
+  const [openLayer, setOpenLayer] = useState<number | null>(null);
+
+  // ── 第①层：AI 指令（从 ConfigTab 迁移） ──
+  const [promptRules, setPromptRules] = useState<PromptRule[]>([]);
+  const [editingRuleId, setEditingRuleId] = useState<number | null>(null);
+  const [editingRuleText, setEditingRuleText] = useState("");
+  const [addingRule, setAddingRule] = useState(false);
+  const [newRuleText, setNewRuleText] = useState("");
+  const [savingRule, setSavingRule] = useState(false);
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [loadingRules, setLoadingRules] = useState(true);
+
+  // ── 第③层：知识库统计（复用 KnowledgeTab 逻辑） ──
+  const [kbStats, setKbStats] = useState({ item_count: 0, file_count: 0, char_count: 0, month_count: 0 });
+  const [sysKbStats, setSysKbStats] = useState({ item_count: 0, file_count: 0, char_count: 0 });
+  const [sysKbEnabled, setSysKbEnabled] = useState(true);
+  const [togglingKb, setTogglingKb] = useState(false);
+
+  // ── 第④层：上下文轮数 ──
+  const [contextRounds, setContextRounds] = useState(10);
+  const [savingCtx, setSavingCtx] = useState(false);
+  const [ctxSaved, setCtxSaved] = useState(false);
+
+  useEffect(() => {
+    // 加载第①层：AI 指令
+    fetch(`/api/wecom/prompt-rules?channel_id=${KF_CHANNEL_ID}`)
+      .then(r => r.json())
+      .then(d => { if (d.ok) setPromptRules(d.rules || []); })
+      .finally(() => setLoadingRules(false));
+
+    // 加载第③层：知识库统计
+    Promise.all([
+      fetch(`/api/wecom/ch/kb/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()),
+      fetch(`/api/wecom/ch/kb/stats?channel_type=kf`).then(r => r.json()),
+      fetch(`/api/wecom/channel-config/${KF_CHANNEL_ID}`).then(r => r.json()).catch(() => ({})),
+      fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/config`).then(r => r.json()).catch(() => ({})),
+    ]).then(([priv, sys, chCfg, cfg]) => {
+      if (priv.ok) setKbStats({ item_count: priv.item_count || 0, file_count: priv.file_count || 0, char_count: priv.char_count || 0, month_count: priv.month_count || 0 });
+      if (sys.ok) setSysKbStats({ item_count: sys.item_count || 0, file_count: sys.file_count || 0, char_count: sys.char_count || 0 });
+      setSysKbEnabled(chCfg.disable_system_kb !== '1');
+      if (cfg.config) {
+        setContextRounds(cfg.config.context_rounds || 10);
+        setSystemPrompt(cfg.config.system_prompt || "");
+      }
+    });
+  }, []);
+
+  const layer1Rules = promptRules.filter(r => r.layer === 1);
+  const layer2Rules = promptRules.filter(r => r.layer === 2);
+
+  async function handleSaveRule(rule: PromptRule) {
+    setSavingRule(true);
+    try {
+      const res = await fetch(`/api/wecom/prompt-rules/${rule.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rule_text: editingRuleText }) });
+      const d = await res.json();
+      if (d.ok) { toast.success("已保存"); setEditingRuleId(null); setPromptRules(prev => prev.map(r => r.id === rule.id ? { ...r, rule_text: editingRuleText } : r)); }
+      else toast.error(d.error || "保存失败");
+    } catch { toast.error("保存失败"); }
+    finally { setSavingRule(false); }
+  }
+
+  async function handleToggleRule(rule: PromptRule) {
+    try {
+      const res = await fetch(`/api/wecom/prompt-rules/${rule.id}/toggle`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: !rule.enabled }) });
+      const d = await res.json();
+      if (d.ok) setPromptRules(prev => prev.map(r => r.id === rule.id ? { ...r, enabled: !r.enabled } : r));
+      else toast.error(d.error || "操作失败");
+    } catch { toast.error("操作失败"); }
+  }
+
+  async function handleAddRule() {
+    if (!newRuleText.trim()) { toast.error("请输入指令内容"); return; }
+    setSavingRule(true);
+    try {
+      const res = await fetch("/api/wecom/prompt-rules", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ channel_id: KF_CHANNEL_ID, channel_type: KF_CHANNEL_TYPE, rule_text: newRuleText, layer: 2 }) });
+      const d = await res.json();
+      if (d.ok) {
+        toast.success("添加成功"); setAddingRule(false); setNewRuleText("");
+        const rulesRes = await fetch(`/api/wecom/prompt-rules?channel_id=${KF_CHANNEL_ID}`);
+        const rulesData = await rulesRes.json();
+        if (rulesData.ok) setPromptRules(rulesData.rules || []);
+      } else toast.error(d.error || "添加失败");
+    } catch { toast.error("添加失败"); }
+    finally { setSavingRule(false); }
+  }
+
+  async function handleDeleteRule(id: number) {
+    try {
+      const res = await fetch(`/api/wecom/prompt-rules/${id}`, { method: "DELETE" });
+      const d = await res.json();
+      if (d.ok) { toast.success("已删除"); setPromptRules(prev => prev.filter(r => r.id !== id)); }
+      else toast.error(d.error || "删除失败");
+    } catch { toast.error("删除失败"); }
+  }
+
+  async function handleToggleSysKb() {
+    setTogglingKb(true);
+    try {
+      const newVal = !sysKbEnabled;
+      const res = await fetch(`/api/wecom/channel-config/${KF_CHANNEL_ID}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ disable_system_kb: newVal ? '0' : '1' }) });
+      const d = await res.json();
+      if (d.ok) { setSysKbEnabled(newVal); toast.success(newVal ? '共享知识库已启用' : '共享知识库已禁用'); }
+      else toast.error(d.error || '操作失败');
+    } catch { toast.error('网络错误'); }
+    finally { setTogglingKb(false); }
+  }
+
+  async function handleSaveContextRounds() {
+    setSavingCtx(true);
+    try {
+      const res = await fetch(`/api/wecom/channel-config/${KF_CHANNEL_ID}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ context_rounds: contextRounds }) });
+      const d = await res.json();
+      if (d.ok) { setCtxSaved(true); toast.success('已保存'); setTimeout(() => setCtxSaved(false), 2000); }
+      else toast.error(d.error || '保存失败');
+    } catch { toast.error('网络错误'); }
+    finally { setSavingCtx(false); }
+  }
+
+  // 层级配置
+  const layers = [
+    {
+      id: 1,
+      color: '#3B82F6',
+      bgColor: '#EFF6FF',
+      borderColor: '#BFDBFE',
+      label: '① 角色定义 & 行为规则',
+      subtitle: 'AI 的基础人设与规则',
+      badge: loadingRules ? '-' : `${layer1Rules.length + layer2Rules.length} 条`,
+    },
+    {
+      id: 2,
+      color: '#10B981',
+      bgColor: '#ECFDF5',
+      borderColor: '#A7F3D0',
+      label: '② 我的数字分身',
+      subtitle: '客服本人的风格克隆',
+      badge: null,
+    },
+    {
+      id: 3,
+      color: '#F59E0B',
+      bgColor: '#FFFBEB',
+      borderColor: '#FDE68A',
+      label: '③ 知识库',
+      subtitle: '标准答案库（共享 + 私人）',
+      badge: `${kbStats.item_count + sysKbStats.item_count} 条`,
+    },
+    {
+      id: 4,
+      color: '#8B5CF6',
+      bgColor: '#F5F3FF',
+      borderColor: '#DDD6FE',
+      label: '④ 历史对话记忆',
+      subtitle: 'AI 对客户的理解',
+      badge: `${contextRounds} 轮`,
+    },
+  ];
+
+  return (
+    <div className="space-y-3 pb-8 pt-2">
+      {/* 顶部说明 */}
+      <div className="rounded-2xl p-3 text-xs leading-relaxed" style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
+        <span className="font-semibold">AI 大脑 4 层架构</span>：从「自我认知」→「自我能力」→「知识储备」→「客户认知」，层层递进，构建完整的 AI 对话系统。
+      </div>
+
+      {/* 4 层卡片 */}
+      {layers.map(layer => (
+        <div key={layer.id} className="rounded-2xl border overflow-hidden shadow-sm" style={{ borderColor: layer.borderColor }}>
+          {/* 标题行 */}
+          <button
+            className="w-full px-4 py-3 flex items-center justify-between"
+            style={{ backgroundColor: layer.bgColor }}
+            onClick={() => setOpenLayer(openLayer === layer.id ? null : layer.id)}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold" style={{ color: layer.color }}>{layer.label}</span>
+              {layer.badge && (
+                <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'white', color: layer.color }}>
+                  {layer.badge}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs" style={{ color: layer.color, opacity: 0.7 }}>{layer.subtitle}</span>
+              {openLayer === layer.id
+                ? <ChevronDown className="w-4 h-4 flex-shrink-0" style={{ color: layer.color }} />
+                : <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: layer.color }} />}
+            </div>
+          </button>
+
+          {/* 展开内容 */}
+          {openLayer === layer.id && (
+            <div className="px-4 pb-4 pt-3 bg-white space-y-3" style={{ borderTop: `1px solid ${layer.borderColor}` }}>
+
+              {/* ── 第①层内容：AI 指令管理 ── */}
+              {layer.id === 1 && (
+                <div className="space-y-3">
+                  {/* 第1层（系统级，只读） */}
+                  {layer1Rules.length > 0 && (
+                    <div>
+                      <div className="text-xs font-medium mb-2" style={{ color: C.textSub }}>系统级指令（只读）</div>
+                      {layer1Rules.map(rule => (
+                        <div key={rule.id} className="rounded-xl border p-3 mb-2" style={{ borderColor: C.line, backgroundColor: C.bg }}>
+                          <div className="text-xs" style={{ color: C.textMain }}>{rule.rule_text}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* 第2层（自定义） */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-xs font-medium" style={{ color: C.textSub }}>自定义指令</div>
+                      <button onClick={() => setAddingRule(true)} className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg" style={{ backgroundColor: '#EFF6FF', color: '#3B82F6' }}>
+                        <Plus className="w-3 h-3" />添加
+                      </button>
+                    </div>
+                    {layer2Rules.length === 0 && !addingRule && (
+                      <div className="text-xs text-center py-4" style={{ color: C.textSub }}>暂无自定义指令，点击右上角添加</div>
+                    )}
+                    {layer2Rules.map(rule => (
+                      <div key={rule.id} className={`rounded-xl border p-3 mb-2 ${!rule.enabled ? 'opacity-50' : ''}`} style={{ borderColor: C.line }}>
+                        {editingRuleId === rule.id ? (
+                          <div className="space-y-2">
+                            <textarea value={editingRuleText} onChange={e => setEditingRuleText(e.target.value)} rows={3} className="w-full text-xs rounded-lg border p-2 resize-none outline-none" style={{ borderColor: C.line }} autoFocus />
+                            <div className="flex gap-1.5">
+                              <button onClick={() => handleSaveRule(rule)} disabled={savingRule} className="flex-1 py-1.5 rounded-lg text-xs text-white flex items-center justify-center gap-1" style={{ backgroundColor: '#3B82F6' }}>
+                                {savingRule ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}保存
+                              </button>
+                              <button onClick={() => setEditingRuleId(null)} className="flex-1 py-1.5 rounded-lg text-xs border" style={{ borderColor: C.line, color: C.textSub }}>取消</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-start gap-2">
+                            <div className="flex-1 text-xs" style={{ color: C.textMain }}>{rule.rule_text}</div>
+                            <div className="flex gap-1 flex-shrink-0">
+                              <button onClick={() => { setEditingRuleId(rule.id); setEditingRuleText(rule.rule_text); }} className="text-xs px-1.5 py-0.5 rounded border" style={{ borderColor: C.line, color: C.textSub }}>编辑</button>
+                              <button onClick={() => handleToggleRule(rule)} className="text-xs px-1.5 py-0.5 rounded border" style={{ borderColor: rule.enabled ? C.line : '#3B82F6', color: rule.enabled ? C.textSub : '#3B82F6' }}>{rule.enabled ? '停用' : '启用'}</button>
+                              <button onClick={() => handleDeleteRule(rule.id)} className="text-xs px-1.5 py-0.5 rounded border border-red-100 text-red-400">删除</button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {addingRule && (
+                      <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: '#3B82F6' }}>
+                        <textarea value={newRuleText} onChange={e => setNewRuleText(e.target.value)} rows={3} className="w-full text-xs rounded-lg border p-2 resize-none outline-none" style={{ borderColor: C.line }} placeholder="输入新的 AI 指令..." autoFocus />
+                        <div className="flex gap-1.5">
+                          <button onClick={handleAddRule} disabled={savingRule} className="flex-1 py-1.5 rounded-lg text-xs text-white flex items-center justify-center gap-1" style={{ backgroundColor: '#3B82F6' }}>
+                            {savingRule ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}添加
+                          </button>
+                          <button onClick={() => { setAddingRule(false); setNewRuleText(''); }} className="flex-1 py-1.5 rounded-lg text-xs border" style={{ borderColor: C.line, color: C.textSub }}>取消</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {/* 系统指令文本模式 */}
+                  <div>
+                    <div className="text-xs font-medium mb-1.5" style={{ color: C.textSub }}>系统指令（文本模式）</div>
+                    <textarea value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)} rows={5} className="w-full text-sm rounded-xl border p-3 resize-none outline-none" style={{ borderColor: C.line, color: C.textMain, backgroundColor: C.bg }} placeholder="直接输入 AI 系统指令..." />
+                    <div className="text-xs mt-1" style={{ color: C.textSub }}>{systemPrompt.length} 字符</div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── 第②层内容：数字分身 ── */}
+              {layer.id === 2 && (
+                <DigitalTwinCard channelId={String(KF_CHANNEL_ID)} />
+              )}
+
+              {/* ── 第③层内容：知识库 ── */}
+              {layer.id === 3 && (
+                <div className="space-y-3">
+                  {/* 共享知识库 */}
+                  <div className="rounded-xl border p-3" style={{ borderColor: C.line }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <div className="text-xs font-semibold" style={{ color: C.textMain }}>平台共享知识库</div>
+                        <div className="text-xs mt-0.5" style={{ color: C.textSub }}>{sysKbStats.item_count} 条 · {sysKbStats.file_count} 个文件</div>
+                      </div>
+                      <div
+                        onClick={togglingKb ? undefined : handleToggleSysKb}
+                        style={{ position: 'relative', display: 'inline-block', width: 40, height: 22, borderRadius: 11, backgroundColor: sysKbEnabled ? '#F59E0B' : '#D1D5DB', cursor: togglingKb ? 'not-allowed' : 'pointer', opacity: togglingKb ? 0.5 : 1, flexShrink: 0, transition: 'background-color 0.2s' }}
+                      >
+                        <div style={{ position: 'absolute', top: 3, left: sysKbEnabled ? 19 : 3, width: 16, height: 16, borderRadius: '50%', backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.3)', transition: 'left 0.2s' }} />
+                      </div>
+                    </div>
+                  </div>
+                  {/* 私人知识库 */}
+                  <div className="rounded-xl border p-3" style={{ borderColor: C.line }}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <div className="text-xs font-semibold" style={{ color: C.textMain }}>我的私人知识库</div>
+                        <div className="text-xs mt-0.5" style={{ color: C.textSub }}>{kbStats.item_count} 条 · {kbStats.file_count} 个文件 · 本月新增 {kbStats.month_count}</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => { /* 跳转到知识库详情 - 复用原 KnowledgeTab */ }}
+                      className="w-full py-2 rounded-xl text-xs font-medium border flex items-center justify-center gap-1"
+                      style={{ borderColor: '#F59E0B', color: '#F59E0B', backgroundColor: '#FFFBEB' }}
+                    >
+                      <Plus className="w-3 h-3" />管理知识库内容
+                    </button>
+                  </div>
+                  {/* 提示 */}
+                  <div className="text-xs rounded-xl p-2.5" style={{ backgroundColor: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>
+                    知识库详细管理（上传文件、添加条目、查看内容）请前往「知识库」页面操作。
+                  </div>
+                </div>
+              )}
+
+              {/* ── 第④层内容：历史对话记忆 ── */}
+              {layer.id === 4 && (
+                <div className="space-y-3">
+                  {/* 本轮上下文轮数 */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-xs font-semibold" style={{ color: C.textMain }}>本轮上下文保留轮数</div>
+                      <span className="text-sm font-bold" style={{ color: '#8B5CF6' }}>{contextRounds} 轮</span>
+                    </div>
+                    <p className="text-xs mb-3" style={{ color: C.textSub }}>AI 记忆多少轮对话历史，数值越大越消耗积分（建议 5-20）</p>
+                    <input type="range" min={1} max={50} value={contextRounds} onChange={e => setContextRounds(Number(e.target.value))} className="w-full" style={{ accentColor: '#8B5CF6' }} />
+                    <div className="flex justify-between text-xs mt-1" style={{ color: C.textSub }}>
+                      <span>1轮（省积分）</span><span>50轮（强记忆）</span>
+                    </div>
+                    <button
+                      onClick={handleSaveContextRounds}
+                      disabled={savingCtx || ctxSaved}
+                      className="mt-3 w-full py-2 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-1.5 disabled:opacity-60"
+                      style={{ backgroundColor: ctxSaved ? '#16A34A' : '#8B5CF6' }}
+                    >
+                      {savingCtx ? <Loader2 className="w-3 h-3 animate-spin" /> : ctxSaved ? <Check className="w-3 h-3" /> : <Save className="w-3 h-3" />}
+                      {savingCtx ? '保存中...' : ctxSaved ? '已保存' : '保存设置'}
+                    </button>
+                  </div>
+                  {/* 客户长期记忆（规划中） */}
+                  <div className="rounded-xl border p-3" style={{ borderColor: '#DDD6FE', backgroundColor: '#F5F3FF' }}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-semibold" style={{ color: '#8B5CF6' }}>客户长期偏好记忆</div>
+                        <div className="text-xs mt-0.5" style={{ color: '#6D28D9', opacity: 0.7 }}>历史对话提炼，持久化存储客户画像</div>
+                      </div>
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#EDE9FE', color: '#7C3AED' }}>规划中</span>
+                    </div>
+                  </div>
+                  {/* 说明 */}
+                  <div className="text-xs rounded-xl p-2.5" style={{ backgroundColor: '#F5F3FF', color: '#5B21B6', border: '1px solid #DDD6FE' }}>
+                    <span className="font-medium">提示：</span>已启用数字分身（第②层）后，AI 可通过长期记忆理解用户偏好，短期上下文轮数的重要性自动降低。
+                  </div>
+                </div>
+              )}
+
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 知识库 Tab（保留，供 AI 智库第③层跳转）
 // ═══════════════════════════════════════════════════════════════
 function KnowledgeTab() {
   const [stats, setStats] = useState({ kb_count: 0, item_count: 0, file_count: 0, char_count: 0, last_updated: null as string | null, month_count: 0 });
@@ -1223,8 +1544,8 @@ function KnowledgeTab() {
         const bjNow = new Date(now.getTime() + 8 * 3600 * 1000);
         const dateStr = `${bjNow.getUTCFullYear()}年${bjNow.getUTCMonth() + 1}月${bjNow.getUTCDate()}日`;
         return (
-          <div className="rounded-xl border px-4 py-3" style={{ backgroundColor: C.white, borderColor: C.line, opacity: sysKbEnabled ? 1 : 0.7 }}>
-            <div className="flex items-center justify-between mb-2">
+          <div className="rounded-xl border overflow-hidden" style={{ borderColor: C.line, opacity: sysKbEnabled ? 1 : 0.7 }}>
+            <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: C.brandLight, borderBottom: `1px solid ${C.line}` }}>
               <span className="text-xs font-semibold" style={{ color: C.textMain }}>共享知识库</span>
               <div
                 onClick={togglingKb ? undefined : handleToggleSysKb}
@@ -1254,15 +1575,17 @@ function KnowledgeTab() {
                 }} />
               </div>
             </div>
-            <div className="flex items-baseline gap-4 mb-2">
-              <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{sysStats.kb_count}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>知识库</span></span>
-              <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{sysStats.item_count}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>条目</span></span>
-              <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{sysStats.file_count}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>文件</span></span>
-              <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{fmtChars(sysStats.char_count)}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>字符</span></span>
-            </div>
-            <div className="flex items-center justify-between pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
-              <span className="text-xs" style={{ color: C.textSub }}>更新至 <span className="font-medium" style={{ color: C.textMain }}>{dateStr}</span></span>
-              <span className="text-xs" style={{ color: C.textSub }}>本月新增 <span className="font-semibold" style={{ color: C.brand }}>{sysStats.month_count}</span> 条</span>
+            <div className="px-4 py-3" style={{ backgroundColor: C.white }}>
+              <div className="flex items-baseline gap-4 mb-2">
+                <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{sysStats.kb_count}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>知识库</span></span>
+                <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{sysStats.item_count}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>条目</span></span>
+                <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{sysStats.file_count}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>文件</span></span>
+                <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{fmtChars(sysStats.char_count)}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>字符</span></span>
+              </div>
+              <div className="flex items-center justify-between pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                <span className="text-xs" style={{ color: C.textSub }}>更新至 <span className="font-medium" style={{ color: C.textMain }}>{dateStr}</span></span>
+                <span className="text-xs" style={{ color: C.textSub }}>本月新增 <span className="font-semibold" style={{ color: C.brand }}>{sysStats.month_count}</span> 条</span>
+              </div>
             </div>
           </div>
         );
@@ -1270,10 +1593,9 @@ function KnowledgeTab() {
 
       {/* 私人知识库容器（统计 + 操作 + 文件列表全部包在一起） */}
       <div className="rounded-xl border overflow-hidden" style={{ borderColor: C.line }}>
-        {/* 标题 + 统计数字 */}
-        <div className="px-4 py-3 border-b" style={{ backgroundColor: C.white, borderColor: C.line }}>
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-xs font-semibold" style={{ color: C.textMain }}>私人知识库</div>
+        {/* 标题行（浅绿背景） */}
+        <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: C.brandLight, borderBottom: `1px solid ${C.line}` }}>
+          <div className="text-xs font-semibold" style={{ color: C.textMain }}>私人知识库</div>
             <div className="relative">
               <div
                 onClick={() => !uploading && setShowUploadMenu(v => !v)}
@@ -1315,7 +1637,9 @@ function KnowledgeTab() {
               )}
               <input ref={fileInputRef} type="file" className="hidden" accept=".xlsx,.csv,.pdf,.docx,.txt" onChange={handleUpload} />
             </div>
-          </div>
+        </div>
+        {/* 私人知识库统计数据区 */}
+        <div className="px-4 py-3 border-b" style={{ backgroundColor: C.white, borderColor: C.line }}>
           <div className="flex items-baseline gap-4 mb-2">
             <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{stats.kb_count}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>知识库</span></span>
             <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{stats.item_count}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>条目</span></span>
@@ -1449,6 +1773,9 @@ function KnowledgeTab() {
           </div>
         </div>
       </div>
+
+      {/* 我的数字分身卡片 */}
+      <DigitalTwinCard channelId={String(KF_CHANNEL_ID)} />
 
       {/* 手动添加弹窗 */}
       {showAddModal && (
@@ -1764,11 +2091,11 @@ function CustomerDataTab() {
 // ═══════════════════════════════════════════════════════════════
 // 营养俱乐部主页
 // ═══════════════════════════════════════════════════════════════
-type TabKey = "config" | "kb" | "customers" | "rules";
+type TabKey = "config" | "aibrain" | "customers" | "rules";
 
 const TABS: { key: TabKey; label: string; icon: typeof Bot }[] = [
   { key: "config", label: "配置", icon: Settings },
-  { key: "kb", label: "知识库", icon: BookOpen },
+  { key: "aibrain", label: "AI智库", icon: BookOpen },
   { key: "customers", label: "客户数据", icon: Users },
   { key: "rules", label: "专属规则", icon: Sparkles },
 ];
@@ -1784,8 +2111,8 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
       fetch(`/api/wecom/custom-rules?channel_type=${KF_CHANNEL_TYPE}`).then(r => r.json()).then(d => d.ok ? (d.rules || []).length : 0).catch(() => 0),
       fetch(`/api/wecom/ch/kb/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).then(d => d.item_count || 0).catch(() => 0),
       fetch(`/api/wecom/ch/logs?channel_id=${KF_CHANNEL_ID}&channel_type=${KF_CHANNEL_TYPE}&limit=1`).then(r => r.json()).then(d => d.total || 0).catch(() => 0),
-    ]).then(([config, rules, kb, customers]) => {
-      setTabCounts({ config, rules, kb, customers });
+    ]).then(([config, rules, aibrain, customers]) => {
+      setTabCounts({ config, rules, aibrain, customers });
     });
   }, []);
 
@@ -1825,6 +2152,7 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
                     ? { color: C.brand, borderBottom: `2px solid ${C.brand}` }
                     : { color: C.textSub, borderBottom: '2px solid transparent' }),
                   borderRight: t.key !== 'rules' ? `1px solid ${C.line}` : 'none',
+                  minWidth: t.key === 'aibrain' ? 70 : undefined,
                 }}
               >
                 <span>{t.label}</span>
@@ -1845,7 +2173,7 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
       {/* 主内容区 */}
       <main className="flex-1 overflow-y-auto px-4 pt-2">
         {activeTab === "config" && <ConfigTab />}
-        {activeTab === "kb" && <KnowledgeTab />}
+        {activeTab === "aibrain" && <AIBrainTab />}
         {activeTab === "customers" && <CustomerDataTab />}
         {activeTab === "rules" && <RulesTab />}
       </main>
