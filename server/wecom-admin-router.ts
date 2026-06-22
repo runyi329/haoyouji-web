@@ -7,37 +7,22 @@
 
 import { Router, Request, Response } from "express";
 import { getDbConnection } from "./db";
+import { sdk } from "./_core/sdk";
 
 const router = Router();
 
 // ─── 鉴权中间件：仅超级管理员可访问 ─────────────────────────────────────────
 async function requireSuperAdmin(req: Request, res: Response, next: Function) {
-  // 优先使用 httpOnly cookie，其次使用 header（忽略空字符串）
-  const sessionToken =
-    req.cookies?.session_token ||
-    (req.headers?.["x-session-token"] as string || "").trim() ||
-    undefined;
-  if (!sessionToken) {
-    return res.status(401).json({ ok: false, error: "未登录" });
-  }
   try {
-    const conn = await getDbConnection();
-    if (!conn) return res.status(500).json({ ok: false, error: "数据库连接失败" });
-    const [rows] = await (conn as any).execute(
-      `SELECT u.id, u.username, u.role FROM sessions s
-       JOIN users u ON u.id = s.user_id
-       WHERE s.token = ? AND s.expires_at > NOW() LIMIT 1`,
-      [sessionToken]
-    ) as any;
-    const user = (rows as any[])[0];
-    if (!user || user.role !== "super_admin") {
+    // 使用与其他接口一致的认证方式：Authorization: Bearer <auth-token>
+    const user = await sdk.authenticateRequest(req);
+    if (!user || (user as any).role !== "super_admin") {
       return res.status(403).json({ ok: false, error: "权限不足，仅超级管理员可操作" });
     }
     (req as any).adminUser = user;
     next();
   } catch (e) {
-    console.error("[wecom-admin] 鉴权失败:", e);
-    return res.status(500).json({ ok: false, error: "鉴权异常" });
+    return res.status(401).json({ ok: false, error: "未登录或登录已过期" });
   }
 }
 

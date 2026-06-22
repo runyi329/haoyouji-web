@@ -14,6 +14,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+// 获取认证 header（与其他接口保持一致）
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('auth-token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
+
 // ─── 类型定义 ────────────────────────────────────────────────────────────────
 interface WecomUserRecord {
   wecom_user_id: string;
@@ -124,6 +130,7 @@ function BindDialog({
     try {
       const r = await fetch(`/api/admin/wecom/search-site-user?keyword=${encodeURIComponent(kw)}`, {
         credentials: "include",
+        headers: getAuthHeaders(),
       });
       const d = await r.json();
       if (d.ok) setSearchResults(d.data);
@@ -148,7 +155,7 @@ function BindDialog({
     try {
       const r = await fetch("/api/admin/wecom/bindings", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         credentials: "include",
         body: JSON.stringify({ wecom_user_id: wecomUserId, site_username: username, bind_note: note }),
       });
@@ -385,7 +392,7 @@ export default function WecomBindingManager() {
   const fetchStats = useCallback(async () => {
     setStatsLoading(true);
     try {
-      const r = await fetch("/api/admin/wecom/binding-stats", { credentials: "include" });
+      const r = await fetch("/api/admin/wecom/binding-stats", { credentials: "include", headers: getAuthHeaders() });
       const d = await r.json();
       if (d.ok) setStats(d.data);
     } finally {
@@ -397,7 +404,7 @@ export default function WecomBindingManager() {
     setListLoading(true);
     try {
       const params = new URLSearchParams({ keyword: kw, page: String(pg), pageSize: String(PAGE_SIZE) });
-      const r = await fetch(`/api/admin/wecom/users?${params}`, { credentials: "include" });
+      const r = await fetch(`/api/admin/wecom/users?${params}`, { credentials: "include", headers: getAuthHeaders() });
       const d = await r.json();
       if (d.ok) {
         setUsers(d.data);
@@ -423,6 +430,7 @@ export default function WecomBindingManager() {
       const r = await fetch(`/api/admin/wecom/bindings/${encodeURIComponent(record.wecom_user_id)}`, {
         method: "DELETE",
         credentials: "include",
+        headers: getAuthHeaders(),
       });
       const d = await r.json();
       if (d.ok) {
