@@ -146,8 +146,8 @@ router.get("/api/admin/wecom/users", requireSuperAdmin, async (req: Request, res
        LEFT JOIN users u ON u.id = b.site_user_id
        ${whereClause}
        ORDER BY s.updated_at DESC
-       LIMIT ? OFFSET ?`,
-      [...params, Number(pageSize), Number(offset)]
+       LIMIT ${Number(pageSize)} OFFSET ${Number(offset)}`,
+      params
     ) as any;
 
     res.json({
