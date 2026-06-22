@@ -22,6 +22,7 @@ import {
   Trash2, ChevronRight, ChevronDown, Save, RefreshCw, FileText, X,
   Users, Settings, Sparkles, ToggleLeft, ToggleRight, Check, User,
   Shield, ShieldOff, // reserved for future use
+  HelpCircle, ChevronLeft,
 } from "lucide-react";
 
 // ─── 营养俱乐部配色 ──────────────────────────────────────────────
@@ -40,6 +41,191 @@ const C = {
 const KF_CHANNEL_ID = 3;
 const KF_CHANNEL_TYPE = "kf";
 const SYS_KB_CHANNEL_ID = 2; // 系统默认知识库
+
+// ═══════════════════════════════════════════════════════════════
+// 接入指引弹窗（SetupGuideModal）
+// ═══════════════════════════════════════════════════════════════
+const SETUP_STEPS = [
+  {
+    title: "获取企业 ID（CorpID）",
+    desc: "企业 ID 是您企业的唯一标识，AI 助手需要它来识别您的企业。",
+    steps: [
+      "登录企业微信管理后台（work.weixin.qq.com）",
+      "点击顶部导航栏的 \"我的企业\"",
+      "在左侧菜单选择 \"企业信息\"",
+      "滚动到页面最下方，找到 \"企业 ID\"，复制后填入本系统",
+    ],
+    tip: "企业 ID 格式通常为 ww 开头的字母数字组合，例如：wwa2091bee5a3f125a",
+  },
+  {
+    title: "创建或选择自建应用",
+    desc: "AI 助手需要通过一个自建应用来接收和发送客服消息，您需要准备一个并获取其 Secret。",
+    steps: [
+      "在顶部导航栏点击 \"应用管理\"",
+      "向下滚动到 \"自建\" 区域",
+      "如已有自建应用可直接点击进入；如没有，点击 \"+ 创建应用\"，起一个名字（如：AI客服助手），上传头像后创建",
+      "进入应用详情页，找到 \"Secret\" 字段，点击 \"查看\" 并用企业微信扫码获取",
+      "将 Secret 复制后填入本系统",
+    ],
+    tip: "Secret 是一串随机字符，请妥善保管，不要泄露给他人。",
+  },
+  {
+    title: "配置接收消息（Webhook）",
+    desc: "告诉企业微信：当有客户发消息时，请把消息转发给 AI 助手处理。",
+    steps: [
+      "在自建应用详情页，向下滚动找到 \"接收消息\" 模块",
+      "点击 \"设置 API 接收\"",
+      "在 URL 输入框中，粘贴本系统为您生成的 Webhook URL",
+      "点击 Token 右侧的 \"随机获取\"，再点击 EncodingAESKey 右侧的 \"随机获取\"",
+      "将生成的 Token 和 EncodingAESKey 复制后填入本系统，点击保存",
+      "回到企业微信后台点击 \"保存\"，提示成功即表示连通验证通过",
+    ],
+    tip: "请先在本系统填入 Token 和 EncodingAESKey 并保存，再点击企业微信后台的保存，顺序不能颠倒。",
+  },
+  {
+    title: "绑定微信客服",
+    desc: "最后一步：将刚才配置的应用与微信客服绑定，让 AI 正式接管客服消息。",
+    steps: [
+      "在顶部导航栏点击 \"应用管理\"，在基础应用中找到并点击 \"微信客服\"",
+      "在微信客服页面，找到 \"API\" 配置入口并点击",
+      "在 \"可调用接口的应用\" 中，选择您在第二步中使用的自建应用",
+      "在 \"通过 API 管理微信客服账号\" 处，将需要 AI 接管的客服账号切换为 \"企业内部开发\"",
+      "保存设置",
+    ],
+    tip: "完成后，当客户向您的微信客服发消息时，AI 助手将自动回复。",
+  },
+];
+
+function SetupGuideModal({ onClose }: { onClose: () => void }) {
+  const [step, setStep] = useState(0);
+  const total = SETUP_STEPS.length;
+  const current = SETUP_STEPS[step];
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center"
+      style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg rounded-t-3xl overflow-hidden flex flex-col"
+        style={{ backgroundColor: C.white, maxHeight: "88vh" }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* 顶部标题栏 */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <HelpCircle className="w-5 h-5" style={{ color: C.brand }} />
+            <span className="text-base font-bold" style={{ color: C.textMain }}>接入指引</span>
+          </div>
+          <button onClick={onClose}>
+            <X className="w-5 h-5" style={{ color: C.textSub }} />
+          </button>
+        </div>
+
+        {/* 步骤进度条 */}
+        <div className="px-5 pb-3 flex-shrink-0">
+          <div className="flex items-center gap-1.5">
+            {SETUP_STEPS.map((_s, i) => (
+              <button
+                key={i}
+                onClick={() => setStep(i)}
+                className="flex-1 h-1.5 rounded-full transition-all"
+                style={{ backgroundColor: i <= step ? C.brand : C.line }}
+              />
+            ))}
+          </div>
+          <div className="flex items-center justify-between mt-2">
+            <span className="text-xs" style={{ color: C.textSub }}>第 {step + 1} 步，共 {total} 步</span>
+            <span className="text-xs font-medium" style={{ color: C.brand }}>全程约 10 分钟</span>
+          </div>
+        </div>
+
+        {/* 步骤内容 */}
+        <div className="flex-1 overflow-y-auto px-5 pb-4">
+          {/* 步骤标题卡片 */}
+          <div
+            className="rounded-2xl p-4 mb-4"
+            style={{ backgroundColor: C.brandLight }}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <div
+                className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0"
+                style={{ backgroundColor: C.brand }}
+              >
+                {step + 1}
+              </div>
+              <span className="text-sm font-bold" style={{ color: C.brandDeep }}>{current.title}</span>
+            </div>
+            <p className="text-xs pl-8" style={{ color: C.textSub }}>{current.desc}</p>
+          </div>
+
+          {/* 操作步骤列表 */}
+          <div className="space-y-3 mb-4">
+            {current.steps.map((s, i) => (
+              <div key={i} className="flex items-start gap-3">
+                <div
+                  className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 mt-0.5"
+                  style={{ backgroundColor: C.line, color: C.brand }}
+                >
+                  {i + 1}
+                </div>
+                <p className="text-sm flex-1" style={{ color: C.textMain, lineHeight: 1.6 }}>{s}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* 提示 */}
+          <div
+            className="rounded-xl p-3 flex items-start gap-2"
+            style={{ backgroundColor: "#FFF9E6", border: "1px solid #FFE58F" }}
+          >
+            <span className="text-sm flex-shrink-0">💡</span>
+            <p className="text-xs" style={{ color: "#7A5C00" }}>{current.tip}</p>
+          </div>
+        </div>
+
+        {/* 底部导航按钮 */}
+        <div className="px-5 pb-6 pt-3 flex gap-3 flex-shrink-0" style={{ borderTop: `1px solid ${C.line}` }}>
+          {step > 0 ? (
+            <button
+              onClick={() => setStep(step - 1)}
+              className="flex-1 py-3 rounded-2xl text-sm font-semibold border flex items-center justify-center gap-1"
+              style={{ borderColor: C.line, color: C.textSub }}
+            >
+              <ChevronLeft className="w-4 h-4" />上一步
+            </button>
+          ) : (
+            <button
+              onClick={onClose}
+              className="flex-1 py-3 rounded-2xl text-sm font-semibold border"
+              style={{ borderColor: C.line, color: C.textSub }}
+            >
+              关闭
+            </button>
+          )}
+          {step < total - 1 ? (
+            <button
+              onClick={() => setStep(step + 1)}
+              className="flex-1 py-3 rounded-2xl text-sm font-semibold text-white flex items-center justify-center gap-1"
+              style={{ backgroundColor: C.brand }}
+            >
+              下一步<ChevronRight className="w-4 h-4" />
+            </button>
+          ) : (
+            <button
+              onClick={onClose}
+              className="flex-1 py-3 rounded-2xl text-sm font-semibold text-white flex items-center justify-center gap-1"
+              style={{ backgroundColor: C.brand }}
+            >
+              <Check className="w-4 h-4" />完成配置
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── 工具函数 ────────────────────────────────────────────────────
 function formatDate(s: string) {
@@ -114,6 +300,7 @@ interface KnowledgeBase {
 // ═══════════════════════════════════════════════════════════════
 function ConfigTab() {
   const [enabled, setEnabled] = useState(true);
+  const [showGuide, setShowGuide] = useState(false);
   const [welcomeMsg, setWelcomeMsg] = useState("");
   const [waitingMsg, setWaitingMsg] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
@@ -301,6 +488,9 @@ function ConfigTab() {
 
   return (
     <div className="space-y-4 pb-6">
+      {/* 接入指引弹窗 */}
+      {showGuide && <SetupGuideModal onClose={() => setShowGuide(false)} />}
+
       {/* 渠道状态 */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: C.line }}>
         <div className="flex items-center justify-between">
@@ -310,11 +500,21 @@ function ConfigTab() {
               {enabled ? "已启用，AI 正在接收消息" : "已停用，AI 不接收消息"}
             </div>
           </div>
-          <button onClick={handleToggleEnabled}>
-            {enabled
-              ? <ToggleRight className="w-9 h-9" style={{ color: C.brand }} />
-              : <ToggleLeft className="w-9 h-9 text-gray-400" />}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowGuide(true)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border"
+              style={{ borderColor: C.brand, color: C.brand, backgroundColor: C.brandLight }}
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              接入指引
+            </button>
+            <button onClick={handleToggleEnabled}>
+              {enabled
+                ? <ToggleRight className="w-9 h-9" style={{ color: C.brand }} />
+                : <ToggleLeft className="w-9 h-9 text-gray-400" />}
+            </button>
+          </div>
         </div>
       </div>
 
