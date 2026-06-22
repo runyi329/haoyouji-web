@@ -1,6 +1,11 @@
 name: Check Manus API Key
 on:
   workflow_dispatch:
+    inputs:
+      dummy:
+        description: '触发检查'
+        required: false
+        default: 'run'
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -23,7 +28,9 @@ jobs:
             echo "=== 测试Manus API ==="
             MANUS_KEY=$(grep "MANUS_API_KEY" /root/haoyouji-web/.env 2>/dev/null | cut -d'=' -f2- | tr -d '"' || echo "")
             if [ -n "$MANUS_KEY" ]; then
-              curl -s -o /dev/null -w "%{http_code}" -H "x-manus-api-key: $MANUS_KEY" "https://api.manus.ai/v2/usage.list?limit=1"
+              echo "MANUS_KEY前20字符: ${MANUS_KEY:0:20}..."
+              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "x-manus-api-key: $MANUS_KEY" "https://api.manus.ai/v2/usage.list?limit=1")
+              echo "API响应码: $HTTP_CODE"
             else
               echo "MANUS_API_KEY为空"
             fi
