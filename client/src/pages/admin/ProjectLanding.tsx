@@ -13,7 +13,7 @@
  * 设计：移动端优先，绿色健康配色，lucide-react 图标，严禁 Emoji。
  */
 import { useState, useEffect, useRef } from "react";
-import { useRoute } from "wouter";
+import { useParams } from "wouter";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -45,7 +45,7 @@ const C = {
 } as const;
 
 // ─── 客服渠道 ID（营养俱乐部绑定的渠道） ──────────────────────────
-const KF_CHANNEL_ID = 2;
+const KF_CHANNEL_ID = 3; // 营养俱乐部渠道 channel_id=3
 const KF_CHANNEL_TYPE = "kf";
 
 // ─── 工具函数 ────────────────────────────────────────────────────
@@ -195,6 +195,7 @@ function AiPromptTab() {
 // ═══════════════════════════════════════════════════════════════
 function KnowledgeTab() {
   const [stats, setStats] = useState({ kb_count: 0, item_count: 0, file_count: 0, char_count: 0 });
+  const [sysStats, setSysStats] = useState({ item_count: 0, file_count: 0 });
   const [sources, setSources] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -205,17 +206,21 @@ function KnowledgeTab() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 系统默认知识库是 channel_id=2（is_system=1）
+  const SYS_KB_CHANNEL_ID = 2;
   const queryStr = `channel_id=${KF_CHANNEL_ID}`;
 
   async function loadData() {
     setLoading(true);
     try {
-      const [s, src] = await Promise.all([
+      const [s, src, sys] = await Promise.all([
         fetch(`/api/wecom/ch/kb/stats?${queryStr}`).then((r) => r.json()),
         fetch(`/api/wecom/ch/kb/sources?${queryStr}`).then((r) => r.json()),
+        fetch(`/api/wecom/ch/kb/stats?channel_id=${SYS_KB_CHANNEL_ID}`).then((r) => r.json()),
       ]);
       if (s.ok) setStats(s);
       if (src.ok) setSources(src.sources || []);
+      if (sys.ok) setSysStats({ item_count: sys.item_count || 0, file_count: sys.file_count || 0 });
     } catch {
       toast.error("加载失败");
     } finally {
@@ -303,7 +308,25 @@ function KnowledgeTab() {
 
   return (
     <div className="space-y-4 pb-6">
-      {/* 统计卡片 */}
+      {/* 系统默认知识库状态提示（只读） */}
+      <div
+        className="rounded-xl px-4 py-3 flex items-center gap-3 border"
+        style={{ backgroundColor: "#EAF4FF", borderColor: "#B3D4F5" }}
+      >
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#D0E8FF" }}>
+          <BookOpen className="w-4 h-4" style={{ color: "#2980B9" }} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-semibold" style={{ color: "#1A5276" }}>系统默认知识库（共享）</div>
+          <div className="text-xs mt-0.5" style={{ color: "#2980B9" }}>
+            {sysStats.item_count} 条内容 · {sysStats.file_count} 个文件 · AI 回复时自动召唤，无需配置
+          </div>
+        </div>
+        <div className="text-xs px-2 py-0.5 rounded-full flex-shrink-0" style={{ backgroundColor: "#D0E8FF", color: "#2980B9" }}>已启用</div>
+      </div>
+
+      {/* 私有知识库统计卡片 */}
+      <div className="text-xs font-semibold px-1" style={{ color: C.textSub }}>我的私有知识库</div>
       <div className="grid grid-cols-4 gap-2">
         {[
           { label: "知识库", value: stats.kb_count },
@@ -662,8 +685,8 @@ function NutritionClubPage() {
 // 路由入口：按 slug 分发到对应项目
 // ═══════════════════════════════════════════════════════════════
 export default function ProjectLanding() {
-  const [match, params] = useRoute("/p/:slug");
-  const slug = match ? (params as any).slug : "";
+  const params = useParams<{ slug: string }>();
+  const slug = params.slug || "";
 
   if (slug === "proj_69hzg9") {
     return <NutritionClubPage />;
