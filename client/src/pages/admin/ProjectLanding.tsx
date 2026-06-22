@@ -21,7 +21,7 @@ import {
   ArrowLeft, Bot, BookOpen, MessageSquare, Loader2, Upload, Plus,
   Trash2, ChevronRight, ChevronDown, Save, RefreshCw, FileText, X,
   Users, Settings, Sparkles, ToggleLeft, ToggleRight, Check, User,
-  Shield, ShieldOff,
+  Shield, ShieldOff, // reserved for future use
 } from "lucide-react";
 
 // ─── 营养俱乐部配色 ──────────────────────────────────────────────
@@ -919,6 +919,8 @@ function KnowledgeTab() {
   const [sourceItems, setSourceItems] = useState<any[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pasteText, setPasteText] = useState("");
+  const [aiParsing, setAiParsing] = useState(false);
 
   async function loadData() {
     setLoading(true);
@@ -1070,7 +1072,50 @@ function KnowledgeTab() {
       <div className="rounded-xl border overflow-hidden" style={{ borderColor: C.line }}>
         {/* 标题 + 统计数字 */}
         <div className="px-4 py-3 border-b" style={{ backgroundColor: C.white, borderColor: C.line }}>
-          <div className="text-xs font-semibold mb-2" style={{ color: C.textMain }}>私人知识库</div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-xs font-semibold" style={{ color: C.textMain }}>私人知识库</div>
+            <div className="relative">
+              <div
+                onClick={() => !uploading && setShowUploadMenu(v => !v)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 26, height: 26, borderRadius: 13,
+                  backgroundColor: uploading ? '#aaa' : C.brand,
+                  cursor: uploading ? 'not-allowed' : 'pointer',
+                  fontSize: 11, color: '#fff', fontWeight: 600, userSelect: 'none' as const,
+                  transition: 'background-color 0.2s',
+                }}
+              >
+                +
+              </div>
+              {showUploadMenu && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setShowUploadMenu(false)} />
+                  <div
+                    className="absolute right-0 rounded-xl border shadow-lg z-20 overflow-hidden"
+                    style={{ top: 'calc(100% + 4px)', minWidth: 120, backgroundColor: C.white, borderColor: C.line }}
+                  >
+                    <button
+                      onClick={() => { setShowUploadMenu(false); if (fileInputRef.current) { fileInputRef.current.accept = 'image/*'; fileInputRef.current.setAttribute('capture', 'environment'); } fileInputRef.current?.click(); }}
+                      className="w-full px-4 py-2.5 text-sm text-left border-b active:bg-gray-50"
+                      style={{ borderColor: C.line, color: C.textMain }}
+                    >拍照上传</button>
+                    <button
+                      onClick={() => { setShowUploadMenu(false); setShowAddModal(true); }}
+                      className="w-full px-4 py-2.5 text-sm text-left border-b active:bg-gray-50"
+                      style={{ borderColor: C.line, color: C.textMain }}
+                    >手写上传</button>
+                    <button
+                      onClick={() => { setShowUploadMenu(false); if (fileInputRef.current) { fileInputRef.current.accept = '.xlsx,.csv,.pdf,.docx,.txt'; fileInputRef.current.removeAttribute('capture'); } fileInputRef.current?.click(); }}
+                      className="w-full px-4 py-2.5 text-sm text-left active:bg-gray-50"
+                      style={{ color: C.textMain }}
+                    >文件上传</button>
+                  </div>
+                </>
+              )}
+              <input ref={fileInputRef} type="file" className="hidden" accept=".xlsx,.csv,.pdf,.docx,.txt" onChange={handleUpload} />
+            </div>
+          </div>
           <div className="flex items-baseline gap-4 mb-2">
             <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{stats.kb_count}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>知识库</span></span>
             <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{stats.item_count}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>条目</span></span>
@@ -1089,50 +1134,7 @@ function KnowledgeTab() {
             );
           })()}
         </div>
-        {/* 操作按钮 */}
-        <div className="px-4 py-3 border-b relative" style={{ backgroundColor: C.white, borderColor: C.line }}>
-          <button
-            onClick={() => setShowUploadMenu(v => !v)}
-            disabled={uploading}
-            className="w-full py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 text-white active:scale-[0.98] transition-transform disabled:opacity-60"
-            style={{ backgroundColor: C.brand }}
-          >
-            {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-            {uploading ? "上传中..." : "添加"}
-          </button>
-          {showUploadMenu && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setShowUploadMenu(false)} />
-              <div
-                className="absolute left-4 right-4 rounded-xl border shadow-lg z-20 overflow-hidden"
-                style={{ top: 'calc(100% - 4px)', backgroundColor: C.white, borderColor: C.line }}
-              >
-                <button
-                  onClick={() => { setShowUploadMenu(false); if (fileInputRef.current) { fileInputRef.current.accept = 'image/*'; fileInputRef.current.setAttribute('capture', 'environment'); } fileInputRef.current?.click(); }}
-                  className="w-full px-4 py-3 text-sm text-left flex items-center gap-3 border-b active:bg-gray-50"
-                  style={{ borderColor: C.line, color: C.textMain }}
-                >
-                  <span style={{ fontSize: 18 }}>📷</span> 拍照上传
-                </button>
-                <button
-                  onClick={() => { setShowUploadMenu(false); setShowAddModal(true); }}
-                  className="w-full px-4 py-3 text-sm text-left flex items-center gap-3 border-b active:bg-gray-50"
-                  style={{ borderColor: C.line, color: C.textMain }}
-                >
-                  <span style={{ fontSize: 18 }}>✍️</span> 手写输入
-                </button>
-                <button
-                  onClick={() => { setShowUploadMenu(false); if (fileInputRef.current) { fileInputRef.current.accept = '.xlsx,.csv,.pdf,.docx,.txt'; fileInputRef.current.removeAttribute('capture'); } fileInputRef.current?.click(); }}
-                  className="w-full px-4 py-3 text-sm text-left flex items-center gap-3 active:bg-gray-50"
-                  style={{ color: C.textMain }}
-                >
-                  <span style={{ fontSize: 18 }}>📂</span> 文件上传
-                </button>
-              </div>
-            </>
-          )}
-          <input ref={fileInputRef} type="file" className="hidden" accept=".xlsx,.csv,.pdf,.docx,.txt" onChange={handleUpload} />
-        </div>
+
         {/* 来源文件列表 */}
         <div style={{ backgroundColor: C.white }}>
           <div className="px-4 py-3 border-b text-xs font-semibold" style={{ borderColor: C.line, color: C.textSub }}>来源文件 ({sources.length})</div>
@@ -1188,6 +1190,64 @@ function KnowledgeTab() {
             </ul>
           )}
         </div>
+        {/* 粘贴框 + AI 按钮（内嵌右下角） */}
+        <div className="px-4 py-3 border-t" style={{ borderColor: C.line, backgroundColor: C.white }}>
+          <div style={{ position: 'relative', width: '100%' }}>
+            <textarea
+              value={pasteText}
+              onChange={e => setPasteText(e.target.value)}
+              rows={3}
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                fontSize: 14, lineHeight: 1.5,
+                borderRadius: 12, border: `1px solid ${C.line}`,
+                color: C.textMain, backgroundColor: C.bg,
+                padding: '10px 46px 10px 10px',
+                resize: 'none', outline: 'none', minHeight: 80,
+              }}
+              placeholder="粘贴文字或链接，AI 自动整理入库..."
+            />
+            <button
+              onClick={async () => {
+                if (!pasteText.trim() || aiParsing) return;
+                setAiParsing(true);
+                try {
+                  const r = await fetch('/api/wecom/ch/kb/ai-parse', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ channel_type: KF_CHANNEL_TYPE, channel_id: KF_CHANNEL_ID, content: pasteText.trim() }),
+                  }).then(x => x.json());
+                  if (r.ok) {
+                    setPasteText('');
+                    toast.success(`AI 已整理 ${r.count} 条知识入库`);
+                    loadData();
+                  } else {
+                    toast.error(r.error || 'AI 解析失败');
+                  }
+                } catch {
+                  toast.error('网络错误，请重试');
+                } finally {
+                  setAiParsing(false);
+                }
+              }}
+              disabled={!pasteText.trim() || aiParsing}
+              style={{
+                position: 'absolute',
+                right: 'calc(1px + 10px)',
+                bottom: 'calc(1px + 10px)',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                width: 26, height: 26, borderRadius: 13,
+                backgroundColor: (!pasteText.trim() || aiParsing) ? '#aaa' : C.brand,
+                cursor: (!pasteText.trim() || aiParsing) ? 'not-allowed' : 'pointer',
+                fontSize: 11, color: '#fff', fontWeight: 600,
+                border: 'none', userSelect: 'none' as const,
+                transition: 'background-color 0.2s',
+              }}
+            >
+              {aiParsing ? '…' : 'AI'}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* 手动添加弹窗 */}
@@ -1218,163 +1278,251 @@ function KnowledgeTab() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// 用户 Tab
+// 客户数据 Tab（合并原用户Tab + 日志Tab）
 // ═══════════════════════════════════════════════════════════════
-function UsersTab() {
-  const [users, setUsers] = useState<ChannelUser[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [blockConfirm, setBlockConfirm] = useState<string | null>(null);
-
-  async function loadUsers() {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/wecom/ch/users?channel_type=${KF_CHANNEL_TYPE}`);
-      const d = await res.json();
-      if (d.ok) setUsers(d.users || []);
-    } catch { toast.error("加载失败"); }
-    finally { setLoading(false); }
-  }
-
-  useEffect(() => { loadUsers(); }, []);
-
-  async function handleBlock(userId: string, blocked: boolean) {
-    try {
-      const action = blocked ? "unblock" : "block";
-      const res = await fetch(`/api/wecom/ch/users/${action}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wecom_user_id: userId, channel_type: KF_CHANNEL_TYPE }),
-      });
-      const d = await res.json();
-      if (d.ok) { toast.success(blocked ? "已解除拉黑" : "已拉黑"); setBlockConfirm(null); loadUsers(); }
-      else toast.error(d.error || "操作失败");
-    } catch { toast.error("操作失败"); }
-  }
-
-  const activeUsers = users.filter(u => !u.blocked);
-  const blockedUsers = users.filter(u => u.blocked);
-
-  if (loading) return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin" style={{ color: C.brand }} /></div>;
-
-  return (
-    <div className="space-y-4 pb-6">
-      {/* 统计 */}
-      <div className="grid grid-cols-3 gap-2">
-        {[{ label: "总用户", value: users.length, color: C.textMain }, { label: "活跃", value: activeUsers.length, color: C.brand }, { label: "已拉黑", value: blockedUsers.length, color: "#EF4444" }].map(s => (
-          <div key={s.label} className="bg-white rounded-xl p-3 text-center border shadow-sm" style={{ borderColor: C.line }}>
-            <div className="text-lg font-bold" style={{ color: s.color }}>{s.value}</div>
-            <div className="text-xs" style={{ color: C.textSub }}>{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* 用户列表 */}
-      {users.length === 0 ? (
-        <div className="text-center py-16">
-          <Users className="w-10 h-10 mx-auto mb-2" style={{ color: C.line }} />
-          <div className="text-sm" style={{ color: C.textSub }}>暂无用户记录</div>
-          <div className="text-xs mt-1" style={{ color: C.textSub }}>有用户发消息后会自动出现在这里</div>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {users.map(user => (
-            <div key={user.wecom_user_id} className={`bg-white rounded-2xl border p-3 shadow-sm flex items-center gap-3 ${user.blocked ? "opacity-60" : ""}`} style={{ borderColor: C.line }}>
-              {user.avatar_url ? (
-                <img src={user.avatar_url} className="w-10 h-10 rounded-full flex-shrink-0" alt="" />
-              ) : (
-                <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: C.brandLight }}>
-                  <User className="w-5 h-5" style={{ color: C.brand }} />
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium truncate" style={{ color: C.textMain }}>{user.nickname || user.wecom_user_id}</span>
-                  {user.blocked && <span className="text-xs px-1.5 py-0.5 rounded bg-red-50 text-red-500">已拉黑</span>}
-                </div>
-                <div className="text-xs mt-0.5" style={{ color: C.textSub }}>
-                  消息 {user.msg_count} · 积分 {user.total_credits || 0} · {user.last_active ? formatDate(user.last_active) : "未活跃"}
-                </div>
-              </div>
-              <div className="flex-shrink-0">
-                {blockConfirm === user.wecom_user_id ? (
-                  <div className="flex gap-1">
-                    <button onClick={() => handleBlock(user.wecom_user_id, user.blocked)} className={`text-xs text-white rounded-lg px-2 py-1 ${user.blocked ? "bg-green-500" : "bg-red-500"}`}>
-                      {user.blocked ? "确认解黑" : "确认拉黑"}
-                    </button>
-                    <button onClick={() => setBlockConfirm(null)} className="text-xs border rounded-lg px-2 py-1" style={{ borderColor: C.line, color: C.textSub }}>取消</button>
-                  </div>
-                ) : (
-                  <button onClick={() => setBlockConfirm(user.wecom_user_id)} className="p-1.5 rounded-lg" style={{ color: user.blocked ? C.brand : "#9CA3AF" }}>
-                    {user.blocked ? <ShieldOff className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════
-// 对话日志 Tab
-// ═══════════════════════════════════════════════════════════════
-interface LogItem {
+interface CustomerLog {
   id: number;
   wecom_user_id: string;
   user_message: string;
   reply_preview: string;
   model_used: string;
-  input_tokens: number;
-  output_tokens: number;
+  credits_used: number;
   created_at: string;
+  nickname: string | null;
 }
 
-function LogsTab() {
-  const [logs, setLogs] = useState<LogItem[]>([]);
+type CdTimeRange = 'all' | 'today' | 'week' | 'month';
+
+function getCdDateRange(range: CdTimeRange): { start: string; end: string } | null {
+  const now = new Date();
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  if (range === 'today') { const t = fmt(now); return { start: t, end: t }; }
+  if (range === 'week') {
+    const day = now.getDay() || 7;
+    const mon = new Date(now); mon.setDate(now.getDate() - day + 1);
+    return { start: fmt(mon), end: fmt(now) };
+  }
+  if (range === 'month') {
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { start: fmt(first), end: fmt(now) };
+  }
+  return null;
+}
+
+function CustomerDataTab() {
+  // ── 汇总数据 ──
+  const [summary, setSummary] = useState<{ total_logs: number; total_users: number; month_logs: number; avg_credits: number; models: string[] } | null>(null);
+  // ── 用户列表（用于下拉筛选） ──
+  const [allUsers, setAllUsers] = useState<ChannelUser[]>([]);
+  // ── 筛选状态 ──
+  const [timeRange, setTimeRange] = useState<CdTimeRange>('all');
+  const [filterUser, setFilterUser] = useState('');
+  const [filterModel, setFilterModel] = useState('');
+  // ── 日志列表 ──
+  const [logs, setLogs] = useState<CustomerLog[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(0);
   const [expanded, setExpanded] = useState<number | null>(null);
+  // ── 下拉展开状态 ──
+  const [showTimeDD, setShowTimeDD] = useState(false);
+  const [showUserDD, setShowUserDD] = useState(false);
+  const [showModelDD, setShowModelDD] = useState(false);
+  const [userSearch, setUserSearch] = useState('');
   const PAGE_SIZE = 20;
+
+  // 初始化：并行加载汇总 + 用户列表
+  useEffect(() => {
+    Promise.all([
+      fetch(`/api/wecom/ch/data/summary?channel_id=${KF_CHANNEL_ID}&channel_type=${KF_CHANNEL_TYPE}`).then(r => r.json()).catch(() => null),
+      fetch(`/api/wecom/ch/users?channel_type=${KF_CHANNEL_TYPE}`).then(r => r.json()).catch(() => null),
+    ]).then(([sum, usersData]) => {
+      if (sum?.ok) setSummary(sum);
+      if (usersData?.ok) setAllUsers(usersData.users || []);
+    });
+  }, []);
+
+  function buildParams(p = 0) {
+    const params = new URLSearchParams();
+    params.set('channel_id', String(KF_CHANNEL_ID));
+    params.set('channel_type', KF_CHANNEL_TYPE);
+    params.set('limit', String(PAGE_SIZE));
+    params.set('offset', String(p * PAGE_SIZE));
+    const dr = getCdDateRange(timeRange);
+    if (dr) { params.set('start_date', dr.start); params.set('end_date', dr.end); }
+    if (filterUser) params.set('user_id', filterUser);
+    if (filterModel) params.set('model', filterModel);
+    return params;
+  }
 
   async function fetchLogs(p = 0) {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ channel_id: String(KF_CHANNEL_ID), channel_type: KF_CHANNEL_TYPE, limit: String(PAGE_SIZE), offset: String(p * PAGE_SIZE) });
+      const params = buildParams(p);
       const res = await fetch(`/api/wecom/ch/logs?${params.toString()}`);
       const data = await res.json();
       if (data.ok) { setLogs(data.logs); setTotal(data.total || 0); setPage(p); }
-      else toast.error(data.error || "加载失败");
-    } catch { toast.error("网络错误"); }
+      else toast.error(data.error || '加载失败');
+    } catch { toast.error('网络错误'); }
     finally { setLoading(false); }
   }
 
-  useEffect(() => { fetchLogs(0); }, []);
+  // 筛选变化时自动重新请求
+  useEffect(() => { fetchLogs(0); }, [timeRange, filterUser, filterModel]);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
+  const timeLabels: Record<CdTimeRange, string> = { all: '全部时间', today: '今天', week: '本周', month: '本月' };
+
+  const filteredUsers = allUsers.filter(u =>
+    !userSearch || (u.nickname || u.wecom_user_id).toLowerCase().includes(userSearch.toLowerCase())
+  ).slice(0, 20);
+
+  const modelOptions = summary?.models || [];
 
   return (
     <div className="space-y-3 pb-6">
+      {/* ── 数据总览 ── */}
+      {summary && (
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { label: '总对话', value: summary.total_logs, color: C.brand },
+            { label: '总用户', value: summary.total_users, color: C.textMain },
+            { label: '本月对话', value: summary.month_logs, color: C.brand },
+            { label: '均积分/条', value: summary.avg_credits, color: C.textSub },
+          ].map(s => (
+            <div key={s.label} className="bg-white rounded-xl p-3 text-center border shadow-sm" style={{ borderColor: C.line }}>
+              <div className="text-xl font-bold" style={{ color: s.color }}>{s.value}</div>
+              <div className="text-xs mt-0.5" style={{ color: C.textSub }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── 筛选栏 ── */}
+      <div className="flex gap-2 relative">
+        {/* 时间下拉 */}
+        <div className="relative flex-1">
+          <button
+            onClick={() => { setShowTimeDD(v => !v); setShowUserDD(false); setShowModelDD(false); }}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium border transition-all"
+            style={timeRange !== 'all'
+              ? { backgroundColor: C.brandLight, borderColor: C.brand, color: C.brand }
+              : { backgroundColor: C.white, borderColor: C.line, color: C.textSub }}
+          >
+            <span>{timeLabels[timeRange]}</span>
+            <ChevronRight className="w-3 h-3" style={{ transform: showTimeDD ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
+          </button>
+          {showTimeDD && (
+            <div className="absolute top-10 left-0 z-30 rounded-xl shadow-lg w-32 py-1" style={{ backgroundColor: C.white, border: `1px solid ${C.line}` }}>
+              {(['all', 'today', 'week', 'month'] as CdTimeRange[]).map(v => (
+                <button key={v} onClick={() => { setTimeRange(v); setShowTimeDD(false); }}
+                  className="w-full text-left px-3 py-2 text-xs"
+                  style={{ color: timeRange === v ? C.brand : C.textMain, fontWeight: timeRange === v ? 600 : 400 }}
+                >{timeLabels[v]}</button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 用户下拉 */}
+        <div className="relative flex-1">
+          <button
+            onClick={() => { setShowUserDD(v => !v); setShowTimeDD(false); setShowModelDD(false); }}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium border transition-all"
+            style={filterUser
+              ? { backgroundColor: C.brandLight, borderColor: C.brand, color: C.brand }
+              : { backgroundColor: C.white, borderColor: C.line, color: C.textSub }}
+          >
+            <span className="truncate">{filterUser ? (allUsers.find(u => u.wecom_user_id === filterUser)?.nickname || filterUser.slice(0, 8)) : '全部用户'}</span>
+            <ChevronRight className="w-3 h-3 flex-shrink-0" style={{ transform: showUserDD ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
+          </button>
+          {showUserDD && (
+            <div className="absolute top-10 left-0 z-30 rounded-xl shadow-lg w-52" style={{ backgroundColor: C.white, border: `1px solid ${C.line}` }}>
+              <div className="px-3 pt-2 pb-1">
+                <input type="text" placeholder="搜索用户…" value={userSearch} onChange={e => setUserSearch(e.target.value)}
+                  className="w-full text-xs rounded-lg px-2 py-1.5 outline-none"
+                  style={{ border: `1px solid ${C.line}` }} autoFocus />
+              </div>
+              <div className="max-h-48 overflow-y-auto py-1">
+                <button onClick={() => { setFilterUser(''); setShowUserDD(false); setUserSearch(''); }}
+                  className="w-full text-left px-3 py-2 text-xs"
+                  style={{ color: !filterUser ? C.brand : C.textMain, fontWeight: !filterUser ? 600 : 400 }}>全部用户</button>
+                {filteredUsers.map(u => (
+                  <button key={u.wecom_user_id} onClick={() => { setFilterUser(u.wecom_user_id); setShowUserDD(false); setUserSearch(''); }}
+                    className="w-full text-left px-3 py-2 text-xs truncate"
+                    style={{ color: filterUser === u.wecom_user_id ? C.brand : C.textMain, fontWeight: filterUser === u.wecom_user_id ? 600 : 400 }}
+                  >{u.nickname || u.wecom_user_id}</button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 模型下拉 */}
+        <div className="relative flex-1">
+          <button
+            onClick={() => { setShowModelDD(v => !v); setShowTimeDD(false); setShowUserDD(false); }}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium border transition-all"
+            style={filterModel
+              ? { backgroundColor: C.brandLight, borderColor: C.brand, color: C.brand }
+              : { backgroundColor: C.white, borderColor: C.line, color: C.textSub }}
+          >
+            <span className="truncate">{filterModel ? filterModel.replace('deepseek-', 'DS-').replace('manus-1.6', 'M1.6') : '全部模型'}</span>
+            <ChevronRight className="w-3 h-3 flex-shrink-0" style={{ transform: showModelDD ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
+          </button>
+          {showModelDD && (
+            <div className="absolute top-10 right-0 z-30 rounded-xl shadow-lg w-44 py-1" style={{ backgroundColor: C.white, border: `1px solid ${C.line}` }}>
+              <button onClick={() => { setFilterModel(''); setShowModelDD(false); }}
+                className="w-full text-left px-3 py-2 text-xs"
+                style={{ color: !filterModel ? C.brand : C.textMain, fontWeight: !filterModel ? 600 : 400 }}>全部模型</button>
+              {modelOptions.map(m => (
+                <button key={m} onClick={() => { setFilterModel(m); setShowModelDD(false); }}
+                  className="w-full text-left px-3 py-2 text-xs"
+                  style={{ color: filterModel === m ? C.brand : C.textMain, fontWeight: filterModel === m ? 600 : 400 }}
+                >{m}</button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── 记录数 + 刷新 ── */}
       <div className="flex items-center justify-between">
         <span className="text-xs" style={{ color: C.textSub }}>共 {total} 条对话记录</span>
         <button onClick={() => fetchLogs(page)} className="p-1.5 rounded-lg" style={{ color: C.brand }}><RefreshCw className="w-4 h-4" /></button>
       </div>
+
+      {/* ── 聊天记录列表 ── */}
       {loading ? (
         <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin" style={{ color: C.brand }} /></div>
       ) : logs.length === 0 ? (
-        <div className="py-16 text-center text-sm" style={{ color: C.textSub }}>暂无对话记录</div>
+        <div className="py-16 text-center">
+          <MessageSquare className="w-10 h-10 mx-auto mb-2" style={{ color: C.line }} />
+          <div className="text-sm" style={{ color: C.textSub }}>暂无对话记录</div>
+        </div>
       ) : (
         <div className="space-y-2">
           {logs.map(log => (
             <div key={log.id} className="bg-white rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: C.line }}>
-              <button className="w-full px-4 py-3 flex items-start gap-3 text-left" onClick={() => setExpanded(expanded === log.id ? null : log.id)}>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium truncate" style={{ color: C.textMain }}>{log.user_message || "(无内容)"}</div>
-                  <div className="text-xs mt-0.5 truncate" style={{ color: C.textSub }}>{log.wecom_user_id} · {formatDate(log.created_at)}</div>
+              <button className="w-full px-4 py-3 flex items-start gap-3 text-left"
+                onClick={() => setExpanded(expanded === log.id ? null : log.id)}>
+                {/* 头像 */}
+                <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{ backgroundColor: C.brandLight }}>
+                  <User className="w-4 h-4" style={{ color: C.brand }} />
                 </div>
-                {expanded === log.id ? <ChevronDown className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: C.textSub }} /> : <ChevronRight className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: C.textSub }} />}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold truncate" style={{ color: C.textMain }}>{log.nickname || log.wecom_user_id.slice(0, 12)}</span>
+                    <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>{formatDate(log.created_at)}</span>
+                  </div>
+                  <div className="text-sm mt-0.5 line-clamp-1" style={{ color: C.textMain }}>{log.user_message || '(无内容)'}</div>
+                  {log.reply_preview && (
+                    <div className="text-xs mt-0.5 line-clamp-1" style={{ color: C.textSub }}>{log.reply_preview}</div>
+                  )}
+                </div>
+                {expanded === log.id
+                  ? <ChevronDown className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: C.textSub }} />
+                  : <ChevronRight className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: C.textSub }} />}
               </button>
               {expanded === log.id && (
                 <div className="px-4 pb-3 space-y-2 border-t" style={{ borderColor: C.line }}>
@@ -1386,10 +1534,9 @@ function LogsTab() {
                     <div className="text-xs font-medium mb-1" style={{ color: C.textSub }}>AI 回复</div>
                     <div className="text-sm p-2 rounded-xl" style={{ backgroundColor: C.brandLight, color: C.textMain }}>{log.reply_preview}</div>
                   </div>
-                  <div className="flex gap-3 text-xs" style={{ color: C.textSub }}>
-                    <span>模型：{log.model_used}</span>
-                    <span>输入：{log.input_tokens}</span>
-                    <span>输出：{log.output_tokens}</span>
+                  <div className="flex gap-3 text-xs flex-wrap" style={{ color: C.textSub }}>
+                    {log.model_used && <span className="px-2 py-0.5 rounded-full" style={{ backgroundColor: C.brandLight, color: C.brand }}>{log.model_used}</span>}
+                    {log.credits_used > 0 && <span>{log.credits_used} 积分</span>}
                   </div>
                 </div>
               )}
@@ -1397,11 +1544,17 @@ function LogsTab() {
           ))}
         </div>
       )}
+
+      {/* ── 分页 ── */}
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-3 pt-2">
-          <button onClick={() => fetchLogs(page - 1)} disabled={page === 0 || loading} className="px-4 py-2 rounded-xl text-sm border disabled:opacity-40" style={{ borderColor: C.line, color: C.brand }}>上一页</button>
+          <button onClick={() => fetchLogs(page - 1)} disabled={page === 0 || loading}
+            className="px-4 py-2 rounded-xl text-sm border disabled:opacity-40"
+            style={{ borderColor: C.line, color: C.brand }}>上一页</button>
           <span className="text-sm" style={{ color: C.textSub }}>{page + 1} / {totalPages}</span>
-          <button onClick={() => fetchLogs(page + 1)} disabled={page >= totalPages - 1 || loading} className="px-4 py-2 rounded-xl text-sm border disabled:opacity-40" style={{ borderColor: C.line, color: C.brand }}>下一页</button>
+          <button onClick={() => fetchLogs(page + 1)} disabled={page >= totalPages - 1 || loading}
+            className="px-4 py-2 rounded-xl text-sm border disabled:opacity-40"
+            style={{ borderColor: C.line, color: C.brand }}>下一页</button>
         </div>
       )}
     </div>
@@ -1411,14 +1564,13 @@ function LogsTab() {
 // ═══════════════════════════════════════════════════════════════
 // 营养俱乐部主页
 // ═══════════════════════════════════════════════════════════════
-type TabKey = "config" | "rules" | "kb" | "users" | "logs";
+type TabKey = "config" | "kb" | "customers" | "rules";
 
 const TABS: { key: TabKey; label: string; icon: typeof Bot }[] = [
   { key: "config", label: "配置", icon: Settings },
-  { key: "rules", label: "专属规则", icon: Sparkles },
   { key: "kb", label: "知识库", icon: BookOpen },
-  { key: "users", label: "用户", icon: Users },
-  { key: "logs", label: "日志", icon: MessageSquare },
+  { key: "customers", label: "客户数据", icon: Users },
+  { key: "rules", label: "专属规则", icon: Sparkles },
 ];
 
 export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
@@ -1431,10 +1583,9 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
       fetch(`/api/wecom/prompt-rules?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).then(d => d.ok ? (d.rules || []).filter((r: any) => r.enabled).length : 0).catch(() => 0),
       fetch(`/api/wecom/custom-rules?channel_type=${KF_CHANNEL_TYPE}`).then(r => r.json()).then(d => d.ok ? (d.rules || []).length : 0).catch(() => 0),
       fetch(`/api/wecom/ch/kb/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).then(d => d.item_count || 0).catch(() => 0),
-      fetch(`/api/wecom/ch/users?channel_type=${KF_CHANNEL_TYPE}`).then(r => r.json()).then(d => (d.users || []).length).catch(() => 0),
       fetch(`/api/wecom/ch/logs?channel_id=${KF_CHANNEL_ID}&channel_type=${KF_CHANNEL_TYPE}&limit=1`).then(r => r.json()).then(d => d.total || 0).catch(() => 0),
-    ]).then(([config, rules, kb, users, logs]) => {
-      setTabCounts({ config, rules, kb, users, logs });
+    ]).then(([config, rules, kb, customers]) => {
+      setTabCounts({ config, rules, kb, customers });
     });
   }, []);
 
@@ -1473,7 +1624,7 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
                   ...(activeTab === t.key
                     ? { color: C.brand, borderBottom: `2px solid ${C.brand}` }
                     : { color: C.textSub, borderBottom: '2px solid transparent' }),
-                  borderRight: t.key !== 'logs' ? `1px solid ${C.line}` : 'none',
+                  borderRight: t.key !== 'rules' ? `1px solid ${C.line}` : 'none',
                 }}
               >
                 <span>{t.label}</span>
@@ -1494,10 +1645,9 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
       {/* 主内容区 */}
       <main className="flex-1 overflow-y-auto px-4 pt-2">
         {activeTab === "config" && <ConfigTab />}
-        {activeTab === "rules" && <RulesTab />}
         {activeTab === "kb" && <KnowledgeTab />}
-        {activeTab === "users" && <UsersTab />}
-        {activeTab === "logs" && <LogsTab />}
+        {activeTab === "customers" && <CustomerDataTab />}
+        {activeTab === "rules" && <RulesTab />}
       </main>
     </div>
   );

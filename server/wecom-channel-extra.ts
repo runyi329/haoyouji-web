@@ -806,4 +806,136 @@ router.post("/api/wecom/ch/kb/adopt", async (req: Request, res: Response) => {
   }
 });
 
+// AI 解析粘贴内容/链接并批量入库
+router.post("/api/wecom/ch/kb/ai-parse", async (req: Request, res: Response) => {
+  const { channel_type = "kf", channel_id, content } = req.body;
+  if (!content || !content.trim()) return res.status(400).json({ error: "内容不能为空" });
+  const conn = await getDbConnection();
+  try {
+    // 判断是否是 URL
+    let rawText = content.trim();
+    const urlPattern = /^https?:\/\/.+/i;
+    if (urlPattern.test(rawText)) {
+      // 抓取网页内容
+      try {
+        const fetchRes = await fetch(rawText, {
+          headers: { "User-Agent": "Mozilla/5.0 (compatible; HaoyoujiBot/1.0)" },
+          signal: AbortSignal.timeout(10000),
+        });
+        const html = await fetchRes.text();
+        // 简单提取文本：去掉 HTML 标签
+        rawText = html
+          .replace(/<script[\s\S]*?<\/script>/gi, "")
+          .replace(/<style[\s\S]*?<\/style>/gi, "")
+          .replace(/<[^>]+>/g, " ")
+          .replace(/&nbsp;/g, " ")
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/\s{3,}/g, "\n")
+          .trim()
+          .substring(0, 8000);
+      } catch (fetchErr: any) {
+        return res.status(400).json({ error: `无法抓取链接内容：${fetchErr.message}` });
+      }
+    }
+
+    // 调用 AI 解析成问答对
+    const systemPrompt = `你是一个知识库整理助手。请将用户提供的文本内容整理成若干个问答对（Q&A），用于知识库。
+要求：
+1. 每个问答对包含一个问题和一个答案
+2. 问题要简洁明确，答案要完整准确
+3. 如果内容不适合拆分成问答，就整理成一条知识（问题留空，答案为完整内容）
+4. 输出严格的 JSON 格式：{"items": [{"question": "...", "answer": "..."}, ...]}
+5. 最多生成 20 条问答对`;
+
+    const aiReply = await callWecomDeepSeek(systemPrompt, rawText);
+
+    // 解析 AI 返回的 JSON
+    let items: Array<{ question: string; answer: string }> = [];
+    try {
+      const jsonMatch = aiReply.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        items = parsed.items || [];
+      }
+    } catch {
+      // 如果解析失败，把整段内容作为一条知识
+      items = [{ question: "", answer: rawText.substring(0, 2000) }];
+    }
+
+    if (items.length === 0) {
+      return res.status(400).json({ error: "AI 未能解析出有效内容" });
+    }
+
+    // 批量写入知识库
+    const kbId = await ensureDefaultKb(conn, channel_type, channel_id);
+    const sourceFile = `AI粘贴_${new Date().toLocaleDateString("zh-CN")}`;
+    let insertCount = 0;
+    for (const item of items) {
+      if (!item.answer || !item.answer.trim()) continue;
+      await (conn as any).execute(
+        `INSERT INTO wecom_knowledge_items (kb_id, item_type, question, answer, source_file) VALUES (?,?,?,?,?)`,
+        [kbId, "qa", item.question || null, item.answer, sourceFile]
+      );
+      insertCount++;
+    }
+
+    res.json({ ok: true, count: insertCount, items });
+  } catch (e: any) {
+    console.error("[AI解析粘贴] 失败:", e);
+    res.status(500).json({ error: "AI 解析失败: " + (e?.message || "") });
+  } finally {
+    conn.end?.();
+  }
+});
+
+// =====================================================================
+// 五、客户数据汇总（CustomerDataTab 专用）
+// =====================================================================
+// 返回：总对话数、总用户数、本月对话数、平均积分消耗
+router.get("/api/wecom/ch/data/summary", async (req: Request, res: Response) => {
+  const { channel_type = "app", channel_id } = req.query as Record<string, string>;
+  const conn = await getDbConnection();
+  try {
+    const channelCondition = channel_id ? `mc.channel_type = 'kf_${channel_id}'` : `mc.channel_type = '${channel_type}'`;
+    const now = new Date();
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    const [[totals]] = await (conn as any).execute(
+      `SELECT COUNT(*) AS total_logs,
+              COUNT(DISTINCT mc.wecom_user_id) AS total_users,
+              SUM(mc.credits_used) AS total_credits,
+              AVG(mc.credits_used) AS avg_credits
+       FROM wecom_message_credits mc
+       WHERE ${channelCondition}`
+    ) as any;
+    const [[monthRow]] = await (conn as any).execute(
+      `SELECT COUNT(*) AS month_logs
+       FROM wecom_message_credits mc
+       WHERE ${channelCondition} AND mc.created_at >= ?`,
+      [monthStart + " 00:00:00"]
+    ) as any;
+    // 获取所有出现过的模型列表（用于筛选下拉框）
+    const [modelRows] = await (conn as any).execute(
+      `SELECT DISTINCT mc.model_used FROM wecom_message_credits mc
+       WHERE ${channelCondition} AND mc.model_used IS NOT NULL AND mc.model_used != ''
+       ORDER BY mc.model_used`
+    ) as any;
+    res.json({
+      ok: true,
+      total_logs: Number(totals?.total_logs || 0),
+      total_users: Number(totals?.total_users || 0),
+      total_credits: Number(totals?.total_credits || 0),
+      avg_credits: Math.round(Number(totals?.avg_credits || 0)),
+      month_logs: Number(monthRow?.month_logs || 0),
+      models: (modelRows as any[]).map((r: any) => r.model_used).filter(Boolean),
+    });
+  } catch (e: any) {
+    console.error("[客户数据汇总] 失败:", e);
+    res.status(500).json({ error: "获取失败" });
+  } finally {
+    conn.end?.();
+  }
+});
+
 export default router;
