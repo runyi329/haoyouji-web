@@ -1754,49 +1754,23 @@ function StatsTab() {
 // Tab 5: 菜单配置
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const DEFAULT_MENU: MenuItem[] = [
-  {
-    name: "切换模型",
-    type: "click",
-    key: "",
-    sub_button: [
-      { name: "Max 模式", type: "click", key: "MODEL_MAX" },
-      { name: "标准模式", type: "click", key: "MODEL_NORMAL" },
-      { name: "轻量模式", type: "click", key: "MODEL_LITE" },
-      { name: "DeepSeek", type: "click", key: "MODEL_DS_FLASH" },
-      { name: "", type: "click", key: "RESERVED_1_5" },
-    ],
-  },
-  {
-    name: "工具箱",
-    type: "click",
-    key: "",
-    sub_button: [
-      { name: "查积分", type: "click", key: "CREDITS_QUERY" },
-      { name: "新对话", type: "click", key: "NEW_TASK" },
-      { name: "任务状态", type: "click", key: "TASK_STATUS" },
-      { name: "预留", type: "click", key: "RESERVED_2_4" },
-      { name: "预留", type: "click", key: "RESERVED_2_5" },
-    ],
-  },
-  {
-    name: "更多",
-    type: "click",
-    key: "",
-    sub_button: [
-      { name: "使用帮助", type: "click", key: "HELP" },
-      { name: "意见反馈", type: "click", key: "FEEDBACK" },
-      { name: "预留", type: "click", key: "RESERVED_3_3" },
-      { name: "预留", type: "click", key: "RESERVED_3_4" },
-      { name: "预留", type: "click", key: "RESERVED_3_5" },
-    ],
-  },
-];
-
 function MenuTab() {
-  const [menu, setMenu] = useState<MenuItem[]>(DEFAULT_MENU);
+  const [menu, setMenu] = useState<MenuItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [expandedIdx, setExpandedIdx] = useState<number | null>(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/wecom/menu')
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok && d.menu) {
+          setMenu(d.menu);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
   const handleNameChange = (i: number, j: number | null, val: string) => {
     const m = JSON.parse(JSON.stringify(menu)) as MenuItem[];
@@ -1825,6 +1799,8 @@ function MenuTab() {
     } catch { toast.error("网络错误"); }
     finally { setSaving(false); }
   };
+
+  if (loading) return <div className="px-4 py-8 text-center text-xs text-gray-400">加载中...</div>;
 
   return (
     <div className="px-4 space-y-3">
