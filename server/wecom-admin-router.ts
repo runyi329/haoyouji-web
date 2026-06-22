@@ -60,21 +60,32 @@ async function ensureBindingTable() {
   `);
 
   // 迁移：补充 provider 字段（为未来多渠道扩展预留，默认 wecom）
+  // 注意：MySQL 8.0 不支持 ADD COLUMN IF NOT EXISTS，需先检查字段是否存在
   try {
-    await (conn as any).execute(
-      `ALTER TABLE wecom_account_binding
-       ADD COLUMN IF NOT EXISTS provider VARCHAR(32) NOT NULL DEFAULT 'wecom'
-       COMMENT '认证来源: wecom/wechat_mp' AFTER id`
-    );
+    const [providerCols] = await (conn as any).execute(
+      `SHOW COLUMNS FROM wecom_account_binding LIKE 'provider'`
+    ) as any;
+    if ((providerCols as any[]).length === 0) {
+      await (conn as any).execute(
+        `ALTER TABLE wecom_account_binding
+         ADD COLUMN provider VARCHAR(32) NOT NULL DEFAULT 'wecom'
+         COMMENT '认证来源: wecom/wechat_mp' AFTER id`
+      );
+    }
   } catch (_) {}
 
   // 迁移：补充 bind_note 字段（管理员备注）
   try {
-    await (conn as any).execute(
-      `ALTER TABLE wecom_account_binding
-       ADD COLUMN IF NOT EXISTS bind_note VARCHAR(200) DEFAULT NULL
-       COMMENT '管理员备注' AFTER bound_by`
-    );
+    const [noteCols] = await (conn as any).execute(
+      `SHOW COLUMNS FROM wecom_account_binding LIKE 'bind_note'`
+    ) as any;
+    if ((noteCols as any[]).length === 0) {
+      await (conn as any).execute(
+        `ALTER TABLE wecom_account_binding
+         ADD COLUMN bind_note VARCHAR(200) DEFAULT NULL
+         COMMENT '管理员备注' AFTER bound_by`
+      );
+    }
   } catch (_) {}
 
   _tableEnsured = true;
