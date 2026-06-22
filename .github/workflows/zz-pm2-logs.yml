@@ -1,0 +1,22 @@
+name: zz-pm2-logs
+on:
+  push:
+    paths:
+      - '.github/workflows/zz-pm2-logs.yml'
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: SSH setup
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 124.223.54.69 >> ~/.ssh/known_hosts 2>/dev/null || true
+      - name: Check logs
+        run: |
+          ssh -o StrictHostKeyChecking=no root@124.223.54.69 'pm2 logs --lines 200 --nostream 2>/dev/null | grep -E "\[Manus\]|\[专属规则\]|MANUS_API_KEY" | tail -50'
+      - name: Check env
+        run: |
+          ssh -o StrictHostKeyChecking=no root@124.223.54.69 'grep -i "manus" /root/haoyouji-web/.env 2>/dev/null || echo "no manus in env"'
