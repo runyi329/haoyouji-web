@@ -412,12 +412,16 @@ function ConfigTab() {
   const [showGuide, setShowGuide] = useState(false);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [welcomeMsg, setWelcomeMsg] = useState("");
+  const [welcomeEnabled, setWelcomeEnabled] = useState(false);
   const [waitingMsg, setWaitingMsg] = useState("");
+  const [waitingEnabled, setWaitingEnabled] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState("");
   const [aiModel, setAiModel] = useState("deepseek-chat");
   const [contextRounds, setContextRounds] = useState(10);
   const [notifyEnabled, setNotifyEnabled] = useState(false);
   const [notifyUserids, setNotifyUserids] = useState<string[]>([]);
+  const [showNotifyHelp, setShowNotifyHelp] = useState(false);
+  const [showChannelHelp, setShowChannelHelp] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
@@ -443,7 +447,9 @@ function ConfigTab() {
           const c = cfg.config;
           setEnabled(c.enabled !== false);
           setWelcomeMsg(c.welcome_msg || "");
+          setWelcomeEnabled(c.welcome_enabled !== false);
           setWaitingMsg(c.waiting_msg || "");
+          setWaitingEnabled(c.waiting_enabled !== false);
           setSystemPrompt(c.system_prompt || "");
           setAiModel(c.ai_model || "deepseek-chat");
           setContextRounds(c.context_rounds || 10);
@@ -473,8 +479,10 @@ function ConfigTab() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          welcome_msg: welcomeMsg,
-          waiting_msg: waitingMsg,
+          welcome_msg: welcomeEnabled ? welcomeMsg : '',
+          welcome_enabled: welcomeEnabled ? '1' : '0',
+          waiting_msg: waitingEnabled ? waitingMsg : '',
+          waiting_enabled: waitingEnabled ? '1' : '0',
           system_prompt: systemPrompt,
           ai_model: aiModel,
           knowledge_base_id: kbId,
@@ -531,10 +539,24 @@ function ConfigTab() {
       {/* 渠道状态 */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: C.line }}>
         <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-semibold" style={{ color: C.textMain }}>渠道状态</div>
-            <div className="text-xs mt-0.5" style={{ color: C.textSub }}>
-              {enabled ? "已启用，AI 正在接收消息" : "已停用，AI 不接收消息"}
+          <div className="flex items-center gap-1.5">
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-semibold" style={{ color: C.textMain }}>渠道状态</span>
+                <button
+                  onClick={() => setShowChannelHelp(v => !v)}
+                  style={{
+                    width: 14, height: 14, borderRadius: '50%',
+                    backgroundColor: C.brand, color: '#fff',
+                    fontSize: 10, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0, border: 'none', cursor: 'pointer',
+                  }}
+                >?</button>
+              </div>
+              <div className="text-xs mt-0.5" style={{ color: enabled ? C.brand : C.textSub }}>
+                {enabled ? "已启用，AI 正在接收消息" : "已停用，AI 不接收消息"}
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -546,60 +568,111 @@ function ConfigTab() {
               <HelpCircle className="w-3.5 h-3.5" />
               接入指引
             </button>
-            <button onClick={handleToggleEnabled}>
-              {enabled
-                ? <ToggleRight className="w-9 h-9" style={{ color: C.brand }} />
-                : <ToggleLeft className="w-9 h-9 text-gray-400" />}
-            </button>
+            <div
+              onClick={handleToggleEnabled}
+              style={{
+                position: 'relative', display: 'inline-block',
+                width: 40, height: 22, borderRadius: 11,
+                backgroundColor: enabled ? C.brand : '#D1D5DB',
+                cursor: 'pointer',
+                flexShrink: 0, transition: 'background-color 0.2s',
+              }}
+            >
+              <div style={{
+                position: 'absolute', top: 3,
+                left: enabled ? 19 : 3,
+                width: 16, height: 16, borderRadius: '50%',
+                backgroundColor: '#fff',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                transition: 'left 0.2s',
+              }} />
+            </div>
           </div>
         </div>
+        {showChannelHelp && (
+          <div className="rounded-xl p-3 mt-2 text-xs space-y-2" style={{ backgroundColor: C.brandLight, color: C.textMain, border: `1px solid ${C.line}` }}>
+            <div className="font-semibold" style={{ color: C.brand }}>开启状态</div>
+            <div style={{ color: C.textSub }}>客户发消息到企业微信客服，AI 自动接收并回复，欢迎语、等待提示语、抄送通知均正常工作。</div>
+            <div className="font-semibold" style={{ color: C.brand }}>关闭状态</div>
+            <div style={{ color: C.textSub }}>AI 停止自动回复，客户消息将不被处理。适用场景：系统维护、紧急暂停、切换为全人工接待。</div>
+            <div className="font-semibold" style={{ color: C.brand }}>注意</div>
+            <div style={{ color: C.textSub }}>关闭后客户消息将无人处理，请确认已有人工接待方案再操作。</div>
+          </div>
+        )}
       </div>
 
       {/* 欢迎语 */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: C.line }}>
         <div className="flex items-center justify-between mb-2">
           <div className="text-sm font-semibold" style={{ color: C.textMain }}>欢迎语</div>
-          <span className="text-xs" style={{ color: C.textSub }}>用户首次发消息时自动回复，留空则不发送</span>
+          <div
+            onClick={() => setWelcomeEnabled(!welcomeEnabled)}
+            style={{
+              position: 'relative', display: 'inline-block',
+              width: 40, height: 22, borderRadius: 11,
+              backgroundColor: welcomeEnabled ? C.brand : '#D1D5DB',
+              cursor: 'pointer', flexShrink: 0, transition: 'background-color 0.2s',
+            }}
+          >
+            <div style={{
+              position: 'absolute', top: 3,
+              left: welcomeEnabled ? 19 : 3,
+              width: 16, height: 16, borderRadius: '50%',
+              backgroundColor: '#fff',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+              transition: 'left 0.2s',
+            }} />
+          </div>
         </div>
-        <textarea
-          value={welcomeMsg}
-          onChange={(e) => setWelcomeMsg(e.target.value)}
-          rows={3}
-          className="w-full text-sm rounded-xl border p-3 resize-none outline-none focus:ring-2"
-          style={{ borderColor: C.line, color: C.textMain, backgroundColor: C.bg }}
-          placeholder="未设置欢迎语"
-        />
+        {welcomeEnabled && (
+          <input
+            value={welcomeMsg}
+            onChange={(e) => setWelcomeMsg(e.target.value)}
+            className="w-full text-sm rounded-xl border p-3 outline-none"
+            style={{ borderColor: C.line, color: C.textMain, backgroundColor: C.bg }}
+            placeholder="用户首次发消息时自动回复..."
+          />
+        )}
+        {!welcomeEnabled && (
+          <div className="text-xs py-1" style={{ color: C.textSub }}>已关闭，不发送欢迎语</div>
+        )}
       </div>
 
       {/* 等待提示语 */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: C.line }}>
         <div className="flex items-center justify-between mb-2">
           <div className="text-sm font-semibold" style={{ color: C.textMain }}>等待提示语</div>
-          <span className="text-xs" style={{ color: C.textSub }}>用户发消息后、AI 回复前显示的提示</span>
-        </div>
-        <input
-          value={waitingMsg}
-          onChange={(e) => setWaitingMsg(e.target.value)}
-          className="w-full text-sm rounded-xl border p-3 outline-none focus:ring-2"
-          style={{ borderColor: C.line, color: C.textMain, backgroundColor: C.bg }}
-          placeholder="如：收到，AI 正在思考中，请稍候..."
-        />
-      </div>
-
-      {/* AI 指令管理 - 已移至 AI 智库 Tab 第①层 */}
-      <div className="bg-white rounded-2xl shadow-sm border overflow-hidden" style={{ borderColor: C.line }}>
-        <div className="px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Bot className="w-4 h-4" style={{ color: C.brand }} />
-            <span className="text-sm font-semibold" style={{ color: C.textMain }}>AI 指令管理</span>
+          <div
+            onClick={() => setWaitingEnabled(!waitingEnabled)}
+            style={{
+              position: 'relative', display: 'inline-block',
+              width: 40, height: 22, borderRadius: 11,
+              backgroundColor: waitingEnabled ? C.brand : '#D1D5DB',
+              cursor: 'pointer', flexShrink: 0, transition: 'background-color 0.2s',
+            }}
+          >
+            <div style={{
+              position: 'absolute', top: 3,
+              left: waitingEnabled ? 19 : 3,
+              width: 16, height: 16, borderRadius: '50%',
+              backgroundColor: '#fff',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+              transition: 'left 0.2s',
+            }} />
           </div>
-          <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: C.brandLight, color: C.brand }}>
-            已移至 AI 智库 ①
-          </span>
         </div>
-        <div className="px-4 pb-3 text-xs" style={{ color: C.textSub }}>
-          AI 指令管理已整合至「AI 智库」Tab 的第①层，请前往「AI 智库」进行配置。
-        </div>
+        {waitingEnabled && (
+          <input
+            value={waitingMsg}
+            onChange={(e) => setWaitingMsg(e.target.value)}
+            className="w-full text-sm rounded-xl border p-3 outline-none"
+            style={{ borderColor: C.line, color: C.textMain, backgroundColor: C.bg }}
+            placeholder="如：收到，AI 正在思考中，请稍候..."
+          />
+        )}
+        {!waitingEnabled && (
+          <div className="text-xs py-1" style={{ color: C.textSub }}>已关闭，不发送等待提示语</div>
+        )}
       </div>
 
       {/* 默认 AI 模型 */}
@@ -691,16 +764,49 @@ function ConfigTab() {
       {/* 消息抄送 */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: C.line }}>
         <div className="flex items-center justify-between mb-2">
-          <div>
-            <div className="text-sm font-semibold" style={{ color: C.textMain }}>消息抄送通知</div>
-            <div className="text-xs mt-0.5" style={{ color: C.textSub }}>AI 回复客户后，同步抄送给指定成员</div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-semibold" style={{ color: C.textMain }}>消息抄送通知</span>
+            <button
+              onClick={() => setShowNotifyHelp(v => !v)}
+              style={{
+                width: 14, height: 14, borderRadius: '50%',
+                backgroundColor: C.brand, color: '#fff',
+                fontSize: 10, fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0, border: 'none', cursor: 'pointer',
+              }}
+            >?</button>
           </div>
-          <button onClick={() => setNotifyEnabled(v => !v)}>
-            {notifyEnabled
-              ? <ToggleRight className="w-9 h-9" style={{ color: C.brand }} />
-              : <ToggleLeft className="w-9 h-9 text-gray-400" />}
-          </button>
+          <div
+            onClick={() => setNotifyEnabled(v => !v)}
+            style={{
+              position: 'relative', display: 'inline-block',
+              width: 40, height: 22, borderRadius: 11,
+              backgroundColor: notifyEnabled ? C.brand : '#D1D5DB',
+              cursor: 'pointer', flexShrink: 0, transition: 'background-color 0.2s',
+            }}
+          >
+            <div style={{
+              position: 'absolute', top: 3,
+              left: notifyEnabled ? 19 : 3,
+              width: 16, height: 16, borderRadius: '50%',
+              backgroundColor: '#fff',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+              transition: 'left 0.2s',
+            }} />
+          </div>
         </div>
+        {showNotifyHelp && (
+          <div className="rounded-xl p-3 mb-2 text-xs space-y-2" style={{ backgroundColor: C.brandLight, color: C.textMain, border: `1px solid ${C.line}` }}>
+            <div className="font-semibold" style={{ color: C.brand }}>什么是 userid？</div>
+            <div style={{ color: C.textSub }}>userid 是企业微信内部成员的帐号 ID，仅内部员工可收到抄送通知，客户（外部人员）无法收到。</div>
+            <div className="font-semibold" style={{ color: C.brand }}>如何查看 userid？</div>
+            <div style={{ color: C.textSub }}>方式一：登录企业微信管理后台 → 通讯录 → 点击某个成员 → 查看「账号」字段</div>
+            <div style={{ color: C.textSub }}>方式二：手机企业微信 → 我 → 个人信息 → 账号，即为本人 userid</div>
+            <div className="font-semibold" style={{ color: C.brand }}>填写示例</div>
+            <div style={{ color: C.textSub }}>单人：<span style={{color: C.brand}}>HuXX</span>　多人：<span style={{color: C.brand}}>HuXX,ZhangXX,LiXX</span>（英文逗号分隔）</div>
+          </div>
+        )}
         {notifyEnabled && (
           <div className="space-y-2 mt-2">
             <div className="text-xs" style={{ color: C.textSub }}>输入接收人 userid（多个用英文逗号分隔）</div>
@@ -1059,9 +1165,6 @@ function RulesTab() {
 // AI 智库 Tab（4 层架构）
 // ═══════════════════════════════════════════════════════════════
 function AIBrainTab() {
-  // 展开状态：默认全部折叠，点击展开
-  const [openLayer, setOpenLayer] = useState<number | null>(null);
-
   // ── 第①层：AI 指令（从 ConfigTab 迁移） ──
   const [promptRules, setPromptRules] = useState<PromptRule[]>([]);
   const [editingRuleId, setEditingRuleId] = useState<number | null>(null);
@@ -1178,40 +1281,40 @@ function AIBrainTab() {
     finally { setSavingCtx(false); }
   }
 
-  // 层级配置
+  // 层级配置（统一绿色系风格）
   const layers = [
     {
       id: 1,
-      color: '#3B82F6',
-      bgColor: '#EFF6FF',
-      borderColor: '#BFDBFE',
+      color: C.brand,
+      bgColor: C.brandLight,
+      borderColor: C.line,
       label: '① 角色定义 & 行为规则',
       subtitle: 'AI 的基础人设与规则',
       badge: loadingRules ? '-' : `${layer1Rules.length + layer2Rules.length} 条`,
     },
     {
       id: 2,
-      color: '#10B981',
-      bgColor: '#ECFDF5',
-      borderColor: '#A7F3D0',
+      color: C.brand,
+      bgColor: C.brandLight,
+      borderColor: C.line,
       label: '② 我的数字分身',
       subtitle: '客服本人的风格克隆',
       badge: null,
     },
     {
       id: 3,
-      color: '#F59E0B',
-      bgColor: '#FFFBEB',
-      borderColor: '#FDE68A',
+      color: C.brand,
+      bgColor: C.brandLight,
+      borderColor: C.line,
       label: '③ 知识库',
       subtitle: '标准答案库（共享 + 私人）',
       badge: `${kbStats.item_count + sysKbStats.item_count} 条`,
     },
     {
       id: 4,
-      color: '#8B5CF6',
-      bgColor: '#F5F3FF',
-      borderColor: '#DDD6FE',
+      color: C.brand,
+      bgColor: C.brandLight,
+      borderColor: C.line,
       label: '④ 历史对话记忆',
       subtitle: 'AI 对客户的理解',
       badge: `${contextRounds} 轮`,
@@ -1220,19 +1323,13 @@ function AIBrainTab() {
 
   return (
     <div className="space-y-3 pb-8 pt-2">
-      {/* 顶部说明 */}
-      <div className="rounded-2xl p-3 text-xs leading-relaxed" style={{ backgroundColor: '#EFF6FF', color: '#1D4ED8', border: '1px solid #BFDBFE' }}>
-        <span className="font-semibold">AI 大脑 4 层架构</span>：从「自我认知」→「自我能力」→「知识储备」→「客户认知」，层层递进，构建完整的 AI 对话系统。
-      </div>
-
       {/* 4 层卡片 */}
       {layers.map(layer => (
         <div key={layer.id} className="rounded-2xl border overflow-hidden shadow-sm" style={{ borderColor: layer.borderColor }}>
           {/* 标题行 */}
-          <button
+          <div
             className="w-full px-4 py-3 flex items-center justify-between"
             style={{ backgroundColor: layer.bgColor }}
-            onClick={() => setOpenLayer(openLayer === layer.id ? null : layer.id)}
           >
             <div className="flex items-center gap-2">
               <span className="text-sm font-bold" style={{ color: layer.color }}>{layer.label}</span>
@@ -1242,17 +1339,11 @@ function AIBrainTab() {
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs" style={{ color: layer.color, opacity: 0.7 }}>{layer.subtitle}</span>
-              {openLayer === layer.id
-                ? <ChevronDown className="w-4 h-4 flex-shrink-0" style={{ color: layer.color }} />
-                : <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: layer.color }} />}
-            </div>
-          </button>
+            <span className="text-xs" style={{ color: layer.color, opacity: 0.7 }}>{layer.subtitle}</span>
+          </div>
 
-          {/* 展开内容 */}
-          {openLayer === layer.id && (
-            <div className="px-4 pb-4 pt-3 bg-white space-y-3" style={{ borderTop: `1px solid ${layer.borderColor}` }}>
+          {/* 内容（常驻展开） */}
+          <div className="px-4 pb-4 pt-3 bg-white space-y-3" style={{ borderTop: `1px solid ${layer.borderColor}` }}>
 
               {/* ── 第①层内容：AI 指令管理 ── */}
               {layer.id === 1 && (
@@ -1272,7 +1363,7 @@ function AIBrainTab() {
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <div className="text-xs font-medium" style={{ color: C.textSub }}>自定义指令</div>
-                      <button onClick={() => setAddingRule(true)} className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg" style={{ backgroundColor: '#EFF6FF', color: '#3B82F6' }}>
+                      <button onClick={() => setAddingRule(true)} className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg" style={{ backgroundColor: C.brandLight, color: C.brand }}>
                         <Plus className="w-3 h-3" />添加
                       </button>
                     </div>
@@ -1285,7 +1376,7 @@ function AIBrainTab() {
                           <div className="space-y-2">
                             <textarea value={editingRuleText} onChange={e => setEditingRuleText(e.target.value)} rows={3} className="w-full text-xs rounded-lg border p-2 resize-none outline-none" style={{ borderColor: C.line }} autoFocus />
                             <div className="flex gap-1.5">
-                              <button onClick={() => handleSaveRule(rule)} disabled={savingRule} className="flex-1 py-1.5 rounded-lg text-xs text-white flex items-center justify-center gap-1" style={{ backgroundColor: '#3B82F6' }}>
+                              <button onClick={() => handleSaveRule(rule)} disabled={savingRule} className="flex-1 py-1.5 rounded-lg text-xs text-white flex items-center justify-center gap-1" style={{ backgroundColor: C.brand }}>
                                 {savingRule ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}保存
                               </button>
                               <button onClick={() => setEditingRuleId(null)} className="flex-1 py-1.5 rounded-lg text-xs border" style={{ borderColor: C.line, color: C.textSub }}>取消</button>
@@ -1296,7 +1387,7 @@ function AIBrainTab() {
                             <div className="flex-1 text-xs" style={{ color: C.textMain }}>{rule.rule_text}</div>
                             <div className="flex gap-1 flex-shrink-0">
                               <button onClick={() => { setEditingRuleId(rule.id); setEditingRuleText(rule.rule_text); }} className="text-xs px-1.5 py-0.5 rounded border" style={{ borderColor: C.line, color: C.textSub }}>编辑</button>
-                              <button onClick={() => handleToggleRule(rule)} className="text-xs px-1.5 py-0.5 rounded border" style={{ borderColor: rule.enabled ? C.line : '#3B82F6', color: rule.enabled ? C.textSub : '#3B82F6' }}>{rule.enabled ? '停用' : '启用'}</button>
+                              <button onClick={() => handleToggleRule(rule)} className="text-xs px-1.5 py-0.5 rounded border" style={{ borderColor: rule.enabled ? C.line : C.brand, color: rule.enabled ? C.textSub : C.brand }}>{rule.enabled ? '停用' : '启用'}</button>
                               <button onClick={() => handleDeleteRule(rule.id)} className="text-xs px-1.5 py-0.5 rounded border border-red-100 text-red-400">删除</button>
                             </div>
                           </div>
@@ -1304,10 +1395,10 @@ function AIBrainTab() {
                       </div>
                     ))}
                     {addingRule && (
-                      <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: '#3B82F6' }}>
+                      <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: C.brand }}>
                         <textarea value={newRuleText} onChange={e => setNewRuleText(e.target.value)} rows={3} className="w-full text-xs rounded-lg border p-2 resize-none outline-none" style={{ borderColor: C.line }} placeholder="输入新的 AI 指令..." autoFocus />
                         <div className="flex gap-1.5">
-                          <button onClick={handleAddRule} disabled={savingRule} className="flex-1 py-1.5 rounded-lg text-xs text-white flex items-center justify-center gap-1" style={{ backgroundColor: '#3B82F6' }}>
+                          <button onClick={handleAddRule} disabled={savingRule} className="flex-1 py-1.5 rounded-lg text-xs text-white flex items-center justify-center gap-1" style={{ backgroundColor: C.brand }}>
                             {savingRule ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}添加
                           </button>
                           <button onClick={() => { setAddingRule(false); setNewRuleText(''); }} className="flex-1 py-1.5 rounded-lg text-xs border" style={{ borderColor: C.line, color: C.textSub }}>取消</button>
@@ -1341,7 +1432,7 @@ function AIBrainTab() {
                       </div>
                       <div
                         onClick={togglingKb ? undefined : handleToggleSysKb}
-                        style={{ position: 'relative', display: 'inline-block', width: 40, height: 22, borderRadius: 11, backgroundColor: sysKbEnabled ? '#F59E0B' : '#D1D5DB', cursor: togglingKb ? 'not-allowed' : 'pointer', opacity: togglingKb ? 0.5 : 1, flexShrink: 0, transition: 'background-color 0.2s' }}
+                        style={{ position: 'relative', display: 'inline-block', width: 40, height: 22, borderRadius: 11, backgroundColor: sysKbEnabled ? C.brand : '#D1D5DB', cursor: togglingKb ? 'not-allowed' : 'pointer', opacity: togglingKb ? 0.5 : 1, flexShrink: 0, transition: 'background-color 0.2s' }}
                       >
                         <div style={{ position: 'absolute', top: 3, left: sysKbEnabled ? 19 : 3, width: 16, height: 16, borderRadius: '50%', backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.3)', transition: 'left 0.2s' }} />
                       </div>
@@ -1358,13 +1449,13 @@ function AIBrainTab() {
                     <button
                       onClick={() => { /* 跳转到知识库详情 - 复用原 KnowledgeTab */ }}
                       className="w-full py-2 rounded-xl text-xs font-medium border flex items-center justify-center gap-1"
-                      style={{ borderColor: '#F59E0B', color: '#F59E0B', backgroundColor: '#FFFBEB' }}
+                      style={{ borderColor: C.brand, color: C.brand, backgroundColor: C.brandLight }}
                     >
                       <Plus className="w-3 h-3" />管理知识库内容
                     </button>
                   </div>
                   {/* 提示 */}
-                  <div className="text-xs rounded-xl p-2.5" style={{ backgroundColor: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}>
+                  <div className="text-xs rounded-xl p-2.5" style={{ backgroundColor: C.brandLight, color: C.textSub, border: `1px solid ${C.line}` }}>
                     知识库详细管理（上传文件、添加条目、查看内容）请前往「知识库」页面操作。
                   </div>
                 </div>
@@ -1377,10 +1468,10 @@ function AIBrainTab() {
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <div className="text-xs font-semibold" style={{ color: C.textMain }}>本轮上下文保留轮数</div>
-                      <span className="text-sm font-bold" style={{ color: '#8B5CF6' }}>{contextRounds} 轮</span>
+                      <span className="text-sm font-bold" style={{ color: C.brand }}>{contextRounds} 轮</span>
                     </div>
                     <p className="text-xs mb-3" style={{ color: C.textSub }}>AI 记忆多少轮对话历史，数值越大越消耗积分（建议 5-20）</p>
-                    <input type="range" min={1} max={50} value={contextRounds} onChange={e => setContextRounds(Number(e.target.value))} className="w-full" style={{ accentColor: '#8B5CF6' }} />
+                    <input type="range" min={1} max={50} value={contextRounds} onChange={e => setContextRounds(Number(e.target.value))} className="w-full" style={{ accentColor: C.brand }} />
                     <div className="flex justify-between text-xs mt-1" style={{ color: C.textSub }}>
                       <span>1轮（省积分）</span><span>50轮（强记忆）</span>
                     </div>
@@ -1388,31 +1479,30 @@ function AIBrainTab() {
                       onClick={handleSaveContextRounds}
                       disabled={savingCtx || ctxSaved}
                       className="mt-3 w-full py-2 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-1.5 disabled:opacity-60"
-                      style={{ backgroundColor: ctxSaved ? '#16A34A' : '#8B5CF6' }}
+                      style={{ backgroundColor: C.brand }}
                     >
                       {savingCtx ? <Loader2 className="w-3 h-3 animate-spin" /> : ctxSaved ? <Check className="w-3 h-3" /> : <Save className="w-3 h-3" />}
                       {savingCtx ? '保存中...' : ctxSaved ? '已保存' : '保存设置'}
                     </button>
                   </div>
                   {/* 客户长期记忆（规划中） */}
-                  <div className="rounded-xl border p-3" style={{ borderColor: '#DDD6FE', backgroundColor: '#F5F3FF' }}>
+                  <div className="rounded-xl border p-3" style={{ borderColor: C.line, backgroundColor: C.brandLight }}>
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-xs font-semibold" style={{ color: '#8B5CF6' }}>客户长期偏好记忆</div>
-                        <div className="text-xs mt-0.5" style={{ color: '#6D28D9', opacity: 0.7 }}>历史对话提炼，持久化存储客户画像</div>
+                        <div className="text-xs font-semibold" style={{ color: C.brand }}>客户长期偏好记忆</div>
+                        <div className="text-xs mt-0.5" style={{ color: C.textSub }}>历史对话提炼，持久化存储客户画像</div>
                       </div>
-                      <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#EDE9FE', color: '#7C3AED' }}>规划中</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: C.line, color: C.brand }}>规划中</span>
                     </div>
                   </div>
                   {/* 说明 */}
-                  <div className="text-xs rounded-xl p-2.5" style={{ backgroundColor: '#F5F3FF', color: '#5B21B6', border: '1px solid #DDD6FE' }}>
-                    <span className="font-medium">提示：</span>已启用数字分身（第②层）后，AI 可通过长期记忆理解用户偏好，短期上下文轮数的重要性自动降低。
+                  <div className="text-xs rounded-xl p-2.5" style={{ backgroundColor: C.brandLight, color: C.textSub, border: `1px solid ${C.line}` }}>
+                    <span className="font-medium" style={{ color: C.brand }}>提示：</span>已启用数字分身（第②层）后，AI 可通过长期记忆理解用户偏好，短期上下文轮数的重要性自动降低。
                   </div>
                 </div>
               )}
 
-            </div>
-          )}
+          </div>
         </div>
       ))}
     </div>
@@ -2134,7 +2224,7 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
         <button onClick={() => onBack ? onBack() : window.history.back()} className="p-1.5 rounded-full" style={{ color: "rgba(255,255,255,0.8)" }}>
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <span className="text-[17px] font-bold tracking-wide text-white">营养俱乐部 · AI 客服</span>
+        <span className="text-[17px] font-bold tracking-wide text-white">营养俱乐部 AI 数字分身客服</span>
         <div className="w-8" />
       </header>
 
