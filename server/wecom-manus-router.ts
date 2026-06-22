@@ -730,7 +730,7 @@ async function getOrCreateManusTask(wecomUserId: string): Promise<string | null>
     return (rows as any[])[0].manus_task_id;
   }
 
-  // 创建新的 Manus 任务（使用 Max 模式）
+  // 创建新的 Manus 任务
   try {
     console.log(`[Manus] 为用户 ${wecomUserId} 创建新任务...`);
     const res = await fetch(`${MANUS_API_BASE}/task.create`, {
@@ -744,7 +744,8 @@ async function getOrCreateManusTask(wecomUserId: string): Promise<string | null>
           role: "user",
           content: "你好，我是通过企业微信连接的用户。请记住我们的对话，帮助我完成各种工作。",
         },
-        agent_profile: await getUserModel(wecomUserId),
+        // 注意：不传 agent_profile，避免 auto_route 等非 Manus profile 值导致创建失败
+        // 实际发消息时会通过 sendToManusAndGetReply 的 agentProfile 参数指定模型
       }),
     });
     const data = await res.json() as any;
