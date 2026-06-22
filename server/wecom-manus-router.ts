@@ -1482,7 +1482,7 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
     console.log(`[KF] syncMsg拉取到 ${msgList.length} 条消息`);
     if (msgList.length === 0) return;
 
-    // 4. 读取kf渠道配置（wecom_channel_config, channel_id=2 为微信客服渠道）
+    // 4. 读取kf渠道配置（按 open_kfid 动态查找，不存在则自动注册）
     let systemPrompt = "";
     let aiModel = "deepseek-chat";
     let kbId: number | null = null;
@@ -1492,10 +1492,28 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
     const dbConn = await getDbConnection();
     if (dbConn) {
       try {
+        // 按 open_kfid 查找渠道
         const [chRows] = await (dbConn as any).execute(
-          "SELECT id FROM wecom_channels WHERE channel_type = 'kf' LIMIT 1"
+          "SELECT id FROM wecom_channels WHERE channel_type = 'kf' AND kf_id = ? LIMIT 1",
+          [KF_OPEN_KFID]
         );
-        kfChannelId = (chRows as any[]).length > 0 ? (chRows as any[])[0].id : 2;
+        if ((chRows as any[]).length > 0) {
+          kfChannelId = (chRows as any[])[0].id;
+        } else {
+          // 自动注册新渠道
+          const [insertRes] = await (dbConn as any).execute(
+            "INSERT INTO wecom_channels (name, channel_type, kf_id) VALUES (?, 'kf', ?)",
+            [`新客服账号_${KF_OPEN_KFID.substring(0, 6)}`, KF_OPEN_KFID]
+          );
+          kfChannelId = (insertRes as any).insertId;
+          console.log(`[KF] 自动注册新客服渠道: id=${kfChannelId}, kf_id=${KF_OPEN_KFID}`);
+          
+          // 为新渠道创建默认知识库
+          await (dbConn as any).execute(
+            "INSERT INTO wecom_knowledge_bases (name, description, channel_type, channel_id) VALUES (?, ?, 'kf', ?)",
+            [`客服账号_${KF_OPEN_KFID.substring(0, 6)}知识库`, "自动创建的默认知识库", kfChannelId]
+          );
+        }
         const [cfgRows] = await (dbConn as any).execute(
           "SELECT config_key, config_val FROM wecom_channel_config WHERE channel_id = ?",
           [kfChannelId]
@@ -1522,11 +1540,12 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
         if (!systemPrompt && cfg.system_prompt) systemPrompt = cfg.system_prompt;
       } catch (e) { console.error("[KF] 读取渠道配置失败:", e); }
     }
-    // 兜底：若配置里没有知识库ID，按 channel_type='kf' 找
+    // 兜底：若配置里没有知识库ID，按 channel_id 找
     if (dbConn && !kbId) {
       try {
         const [kbRows] = await (dbConn as any).execute(
-          "SELECT id FROM wecom_knowledge_bases WHERE channel_type = 'kf' ORDER BY id LIMIT 1"
+          "SELECT id FROM wecom_knowledge_bases WHERE channel_id = ? ORDER BY id LIMIT 1",
+          [kfChannelId]
         );
         if ((kbRows as any[]).length > 0) kbId = (kbRows as any[])[0].id;
       } catch (_) {}
@@ -1590,7 +1609,15 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
       console.log(`[KF] DeepSeek回复 tokens=${dsReply.totalTokens} 内容=${dsReply.content.substring(0, 50)}`);
 
       // 8. 发送回复给用户
-      await sendKfMessage(KF_OPEN_KFID, fromUser, dsReply.content);
+      let replyContent = dsReply.content;
+      
+      // 检查是否有欢迎语（新用户第一条消息，通过检查该用户之前是否有消息记录来判断）
+      // 这里为了性能和简化，我们也可以把欢迎语加在前面，但通常是在另一个事件触发
+      
+      // 检查转人工前缀（如果是转人工，并且配置了项目前缀，我们加在内容前，但这需要和转人工的指令结合）
+      // 暂时不在这里加前缀，后续可以优化
+      
+      await sendKfMessage(KF_OPEN_KFID, fromUser, replyContent);
 
       // 9. 抄送通知给指定企业成员
       if (notifyEnabled && notifyUserids.length > 0) {
@@ -1608,9 +1635,9 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
           await (dbConn as any).execute(
             `INSERT INTO wecom_message_credits
              (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, input_tokens, output_tokens, cache_hit_tokens, model_used, reply_preview, channel_type)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'kf')`,
-            [fromUser, "kf-deepseek", userText.substring(0, 200), 0, dsReply.totalTokens, dsReply.totalTokens,
-             inputTokensMiss, dsReply.completionTokens, cacheHitTokens, aiModel, dsReply.content.substring(0, 100)]
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [fromUser, `kf-deepseek-${kfChannelId}`, userText.substring(0, 200), 0, dsReply.totalTokens, dsReply.totalTokens,
+             inputTokensMiss, dsReply.completionTokens, cacheHitTokens, aiModel, dsReply.content.substring(0, 100), 'kf']
           );
         } catch (e) {
           console.error("[KF] 写入日志失败:", e);

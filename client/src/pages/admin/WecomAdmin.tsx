@@ -4138,7 +4138,8 @@ function ChannelKnowledgeTab({ channelType }: { channelType: string }) {
 
   async function handleDeleteSource(sourceFile: string) {
     try {
-      const res = await fetch(`/api/wecom/ch/kb/source?channel_type=${channelType}&source_file=${encodeURIComponent(sourceFile)}`, { method: "DELETE" });
+      const queryStr = channelId ? `channel_id=${channelId}` : `channel_type=${channelType}`;
+      const res = await fetch(`/api/wecom/ch/kb/source?${queryStr}&source_file=${encodeURIComponent(sourceFile)}`, { method: "DELETE" });
       const d = await res.json();
       if (d.ok) { toast.success(`已删除 ${d.deleted} 条`); setDeleteSource(null); loadData(); }
       else toast.error(d.error || "删除失败");
@@ -4149,7 +4150,8 @@ function ChannelKnowledgeTab({ channelType }: { channelType: string }) {
     setViewSource(sourceFile);
     setLoadingItems(true);
     try {
-      const res = await fetch(`/api/wecom/ch/kb/items?channel_type=${channelType}&source_file=${encodeURIComponent(sourceFile)}`);
+      const queryStr = channelId ? `channel_id=${channelId}` : `channel_type=${channelType}`;
+      const res = await fetch(`/api/wecom/ch/kb/items?${queryStr}&source_file=${encodeURIComponent(sourceFile)}`);
       const d = await res.json();
       if (d.ok) setSourceItems(d.items || []);
     } catch { toast.error("加载失败"); }
@@ -4410,7 +4412,7 @@ function ChannelUsersTab({ channelType }: { channelType: string }) {
 
 // ─── 对话日志Tab ──────────────────────────────────────────────────────────────
 
-function ChannelLogsTab({ channelType }: { channelType: string }) {
+function ChannelLogsTab({ channelType, channelId }: { channelType: string, channelId?: number }) {
   const [logs, setLogs] = useState<ChatLog[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -4439,6 +4441,7 @@ function ChannelLogsTab({ channelType }: { channelType: string }) {
   function buildParams() {
     const params = new URLSearchParams();
     params.set("channel_type", channelType);
+    if (channelId) params.set("channel_id", String(channelId));
     if (startDate) params.set("start_date", startDate);
     if (endDate) params.set("end_date", endDate);
     if (userId.trim()) params.set("user_id", userId.trim());
@@ -4523,7 +4526,7 @@ function ChannelLogsTab({ channelType }: { channelType: string }) {
       const res = await fetch("/api/wecom/ch/kb/adopt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channel_type: channelType, question: s.question, similar_questions: s.similar_questions || "", answer: s.answer }),
+        body: JSON.stringify({ channel_type: channelType, channel_id: channelId, question: s.question, similar_questions: s.similar_questions || "", answer: s.answer }),
       });
       const d = await res.json();
       if (d.ok) {

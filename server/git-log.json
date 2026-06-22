@@ -1,5 +1,14 @@
 [
   {
+    "hash": "8816dbbb0522a5fdad1d1d4dff600a588fa3c902",
+    "author": "runyi329",
+    "date": "2026-06-22T00:02:35+00:00",
+    "message": "feat: 专属规则下拉多选框 + 三层结构化AI指令管理 + 旧system_prompt自动迁移",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "专属规则下拉多选框 + 三层结构化AI指令管理 + 旧system_prompt自动迁移"
+  },
+  {
     "hash": "d561c7fdb937fcc854fe61459199a473c921fdb8",
     "author": "runyi329",
     "date": "2026-06-21T23:00:03+00:00",
