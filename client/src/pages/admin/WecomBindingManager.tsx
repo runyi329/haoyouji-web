@@ -39,7 +39,7 @@ interface WecomUserRecord {
   user_real_name: string | null;
   user_phone: string | null;
   user_role: string | null;
-  user_balance: number | null;
+  user_balance_usdt: number | null;
   msg_count: number;
 }
 
@@ -272,6 +272,16 @@ function UserCard({
 }) {
   const isBound = !!record.binding_id;
   const hasManus = !!record.manus_task_id;
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const menuRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [menuOpen]);
 
   return (
     <div className="bg-white mx-4 mb-3 rounded-2xl shadow-sm overflow-hidden">
@@ -280,16 +290,50 @@ function UserCard({
           {(record.nickname || record.wecom_user_id).charAt(0).toUpperCase()}
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-gray-800 text-sm">
               {record.nickname || record.wecom_user_id}
             </span>
             {record.nickname && (
               <span className="text-xs text-gray-400">{record.wecom_user_id}</span>
             )}
+            {isBound && (
+              <span className="text-xs text-green-600 font-medium">
+                脉动网账号：{record.site_username}{record.user_real_name ? `（${record.user_real_name}）` : ""}
+              </span>
+            )}
             {!record.wecom_enabled && (
               <span className="text-xs bg-red-100 text-red-500 px-1.5 py-0.5 rounded-full">已禁用</span>
             )}
+            {/* 铅笔图标 + 弹出菜单 */}
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setMenuOpen(v => !v)}
+                className="p-1 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 top-7 z-20 bg-white rounded-lg shadow-md border border-gray-200 py-1 min-w-[90px]">
+                  <button
+                    onClick={() => { setMenuOpen(false); onBind(record); }}
+                    className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                  >
+                    <Pencil className="w-3.5 h-3.5 text-gray-500" />
+                    {isBound ? "改绑" : "绑定"}
+                  </button>
+                  {isBound && (
+                    <button
+                      onClick={() => { setMenuOpen(false); onUnbind(record); }}
+                      className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                    >
+                      <Unlink className="w-3.5 h-3.5 text-gray-500" />
+                      解绑
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-3 mt-0.5">
             <span className="text-xs text-gray-400 flex items-center gap-1">
@@ -308,48 +352,21 @@ function UserCard({
 
       <div className="h-px bg-gray-50 mx-4" />
 
-      <div className="px-4 py-3 space-y-2.5">
-        {/* 脉动网钱包绑定（核心） */}
+      <div className="px-4 py-3 space-y-2">
+        {/* 脉动网钉包绑定（核心） */}
         <div className="flex items-center gap-3">
           <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${isBound ? "bg-green-100" : "bg-gray-100"}`}>
             <Wallet className={`w-3.5 h-3.5 ${isBound ? "text-green-600" : "text-gray-400"}`} />
           </div>
           <div className="flex-1 min-w-0">
             {isBound ? (
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-800">{record.site_username}</span>
-                  {record.user_real_name && (
-                    <span className="text-xs text-gray-400">{record.user_real_name}</span>
-                  )}
-                  <span className="text-xs bg-green-100 text-green-600 px-1.5 py-0.5 rounded-full">已绑定</span>
-                </div>
-                <div className="flex items-center gap-3 mt-0.5">
-                  <span className="text-xs text-green-600 font-medium">余额 {formatBalance(record.user_balance)}</span>
-                  {record.user_phone && <span className="text-xs text-gray-400">{record.user_phone}</span>}
-                  {record.bind_note && <span className="text-xs text-gray-400 italic">{record.bind_note}</span>}
-                </div>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-green-600 font-medium">USDT {formatBalance(record.user_balance_usdt ?? 0)}</span>
+                {record.user_phone && <span className="text-xs text-gray-400">{record.user_phone}</span>}
+                {record.bind_note && <span className="text-xs text-gray-400 italic">{record.bind_note}</span>}
               </div>
             ) : (
               <span className="text-sm text-gray-400">脉动网账号未绑定</span>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <button
-              onClick={() => onBind(record)}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-600 text-xs font-medium hover:bg-blue-100 transition-colors"
-            >
-              {isBound ? <Pencil className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-              {isBound ? "改绑" : "绑定"}
-            </button>
-            {isBound && (
-              <button
-                onClick={() => onUnbind(record)}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-50 text-red-500 text-xs font-medium hover:bg-red-100 transition-colors"
-              >
-                <Unlink className="w-3 h-3" />
-                解绑
-              </button>
             )}
           </div>
         </div>

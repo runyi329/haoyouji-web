@@ -139,7 +139,7 @@ router.get("/api/admin/wecom/users", requireSuperAdmin, async (req: Request, res
          u.name           AS user_real_name,
          u.phone          AS user_phone,
          u.role           AS user_role,
-         u.balance        AS user_balance,
+         (COALESCE(u.balance, 0) + COALESCE((SELECT SUM(amount) FROM af_manual_balances WHERE user_id = u.id), 0)) AS user_balance_usdt,
          (SELECT COUNT(*) FROM wecom_route_log rl WHERE rl.wecom_user_id = s.wecom_user_id) AS msg_count
        FROM wecom_manus_sessions s
        LEFT JOIN wecom_account_binding b ON b.wecom_user_id = s.wecom_user_id
