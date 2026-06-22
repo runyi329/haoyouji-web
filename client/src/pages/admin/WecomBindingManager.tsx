@@ -383,6 +383,7 @@ export default function WecomBindingManager() {
   const [statsLoading, setStatsLoading] = useState(true);
   const [users, setUsers] = useState<WecomUserRecord[]>([]);
   const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState<string>("");
   const [keyword, setKeyword] = useState("");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -409,6 +410,10 @@ export default function WecomBindingManager() {
       if (d.ok) {
         setUsers(d.data);
         setTotal(d.total);
+        setListError("");
+      } else {
+        console.error('[WecomBinding] fetchUsers failed:', d);
+        setListError(d.error || `接口返回错误 (HTTP ${r.status})`);
       }
     } finally {
       setListLoading(false);
@@ -472,6 +477,12 @@ export default function WecomBindingManager() {
       {listLoading ? (
         <div className="flex justify-center py-12">
           <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+        </div>
+      ) : listError ? (
+        <div className="text-center py-12 text-red-400">
+          <Link2Off className="w-10 h-10 mx-auto mb-2 opacity-30" />
+          <p className="text-sm font-medium">加载失败</p>
+          <p className="text-xs mt-1">{listError}</p>
         </div>
       ) : users.length === 0 ? (
         <div className="text-center py-12 text-gray-400">
