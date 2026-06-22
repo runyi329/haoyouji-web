@@ -12,7 +12,7 @@ const router = Router();
 
 // ─── 鉴权中间件：仅超级管理员可访问 ─────────────────────────────────────────
 async function requireSuperAdmin(req: Request, res: Response, next: Function) {
-  const sessionToken = req.cookies?.session_token || req.headers?.["x-session-token"];
+  const sessionToken = req.cookies?.session_token || (req.headers?.["x-session-token"] as string || "").trim() || undefined;
   if (!sessionToken) {
     return res.status(401).json({ ok: false, error: "未登录" });
   }
