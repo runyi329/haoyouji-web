@@ -206,6 +206,13 @@ export default defineConfig({
   server: {
     host: true,
     hmr: true,
+    proxy: {
+      "/api": {
+        target: "https://www.jiangyuchen.cn",
+        changeOrigin: true,
+        secure: true,
+      },
+    },
     watch: {
       usePolling: true,
       interval: 1000,

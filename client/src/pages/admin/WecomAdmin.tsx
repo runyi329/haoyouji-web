@@ -1931,12 +1931,52 @@ interface WecomApp {
   created_at: string;
 }
 
+// ─── 平台管理视图（系统默认知识库，channel_id=2，is_system=1）─────────────────
+
+function PlatformKbView() {
+  const SYSTEM_CHANNEL_ID = 2;
+  const [channel, setChannel] = useState<Channel | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // 直接构造平台渠道对象，复用 ChannelDetail 全套组件
+    fetch("/api/wecom/channels?app_id=1")
+      .then(r => r.json())
+      .then(d => {
+        const ch = (d.channels || []).find((c: Channel) => c.id === SYSTEM_CHANNEL_ID);
+        if (ch) setChannel(ch);
+        else {
+          // 如果找不到，构造一个默认对象
+          setChannel({
+            id: SYSTEM_CHANNEL_ID,
+            name: "系统默认",
+            channel_type: "kf",
+            project_key: "__platform__",
+            kf_id: null,
+            is_enabled: 1,
+            app_id: 1,
+            created_at: "",
+          });
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>;
+  if (!channel) return null;
+
+  return <ChannelDetail channel={channel} />;
+}
+
 function ChannelTab() {
   const [apps, setApps] = useState<WecomApp[]>([]);
   const [loading, setLoading] = useState(true);
   // 三级导航： null=应用列表, WecomApp=渠道列表, Channel=渠道详情
   const [selectedApp, setSelectedApp] = useState<WecomApp | null>(null);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
+  // 平台管理视图（系统默认知识库）
+  const [showPlatform, setShowPlatform] = useState(false);
 
   useEffect(() => { fetchApps(); }, []);
 
@@ -1951,6 +1991,27 @@ function ChannelTab() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // 平台管理视图
+  if (showPlatform) {
+    return (
+      <div className="px-4 py-4">
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            onClick={() => setShowPlatform(false)}
+            className="p-1.5 rounded-lg bg-gray-100 text-gray-600"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">平台管理</h2>
+            <p className="text-xs text-gray-400">系统默认知识库 · 所有客服账号共享</p>
+          </div>
+        </div>
+        <PlatformKbView />
+      </div>
+    );
   }
 
   // 第三级：渠道详情
@@ -1978,7 +2039,7 @@ function ChannelTab() {
 
   // 第二级：渠道列表（某个应用下的联系方式）
   if (selectedApp) {
-    return <AppChannelList app={selectedApp} onSelectChannel={setSelectedChannel} onBack={() => setSelectedApp(null)} />;
+    return <AppChannelList app={selectedApp} onSelectChannel={setSelectedChannel} onBack={() => setSelectedApp(null)} onShowPlatform={() => setShowPlatform(true)} />;
   }
 
   // 第一级：应用列表
@@ -2037,10 +2098,12 @@ function AppChannelList({
   app,
   onSelectChannel,
   onBack,
+  onShowPlatform,
 }: {
   app: WecomApp;
   onSelectChannel: (ch: Channel) => void;
   onBack: () => void;
+  onShowPlatform?: () => void;
 }) {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2093,8 +2156,8 @@ function AppChannelList({
       ) : (() => {
         // 客户联系渠道（app类型）
         const appChannels = channels.filter(ch => ch.channel_type === "app");
-        // 微信客服渠道（kf类型，每个kf_id是独立客服账号）
-        const kfChannels = channels.filter(ch => ch.channel_type === "kf");
+        // 微信客服渠道（kf类型，排除系统默认平台渠道）
+        const kfChannels = channels.filter(ch => ch.channel_type === "kf" && ch.project_key !== "__platform__");
         return (
           <div className="space-y-4">
             {/* 客户联系 */}
@@ -2132,6 +2195,22 @@ function AppChannelList({
             {kfChannels.length > 0 && (
               <div>
                 <p className="text-xs text-gray-400 mb-2">微信客服账号（{kfChannels.length} 个）</p>
+                {/* 平台管理入口 */}
+                {onShowPlatform && (
+                  <button
+                    onClick={onShowPlatform}
+                    className="w-full text-left bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl border border-orange-100 shadow-sm px-4 py-4 flex items-center gap-4 active:bg-orange-100 transition-colors mb-2"
+                  >
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-orange-100">
+                      <Shield className="w-5 h-5 text-orange-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900">平台管理</p>
+                      <p className="text-xs text-orange-500 mt-0.5">系统默认知识库 · 所有客服账号共享</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-orange-300 flex-shrink-0" />
+                  </button>
+                )}
                 <div className="space-y-2">
                   {kfChannels.map(ch => (
                     <button
@@ -2291,9 +2370,9 @@ function ChannelDetail({ channel }: { channel: Channel }) {
 
       {activeTab === "config" && <ChannelConfigTab channel={channel} onJumpToKb={() => setActiveTab("kb")} />}
       {activeTab === "rules" && <ChannelCustomRulesTab channelType={channel.channel_type} />}
-      {activeTab === "kb" && <ChannelKnowledgeTab channelType={channel.channel_type} />}
+      {activeTab === "kb" && <ChannelKnowledgeTab channelType={channel.channel_type} channelId={channel.id} />}
       {activeTab === "users" && <ChannelUsersTab channelType={channel.channel_type} />}
-      {activeTab === "logs" && <ChannelLogsTab channelType={channel.channel_type} />}
+      {activeTab === "logs" && <ChannelLogsTab channelType={channel.channel_type} channelId={channel.id} />}
     </div>
   );
 }
@@ -4079,7 +4158,7 @@ function ChannelCustomRulesTab({ channelType }: { channelType: string }) {
 
 // ─── 知识库Tab（共用） ─────────────────────────────────────────────────────────
 
-function ChannelKnowledgeTab({ channelType }: { channelType: string }) {
+function ChannelKnowledgeTab({ channelType, channelId }: { channelType: string; channelId?: number }) {
   const [stats, setStats] = useState<{ kb_count: number; item_count: number; file_count: number; char_count: number }>({ kb_count: 0, item_count: 0, file_count: 0, char_count: 0 });
   const [sources, setSources] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -4101,8 +4180,8 @@ function ChannelKnowledgeTab({ channelType }: { channelType: string }) {
     setLoading(true);
     try {
       const [s, src] = await Promise.all([
-        fetch(`/api/wecom/ch/kb/stats?channel_type=${channelType}`).then(r => r.json()),
-        fetch(`/api/wecom/ch/kb/sources?channel_type=${channelType}`).then(r => r.json()),
+        fetch(`/api/wecom/ch/kb/stats?${channelId ? `channel_id=${channelId}` : `channel_type=${channelType}`}`).then(r => r.json()),
+        fetch(`/api/wecom/ch/kb/sources?${channelId ? `channel_id=${channelId}` : `channel_type=${channelType}`}`).then(r => r.json()),
       ]);
       if (s.ok) setStats(s);
       if (src.ok) setSources(src.sources || []);
@@ -4119,7 +4198,8 @@ function ChannelKnowledgeTab({ channelType }: { channelType: string }) {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      fd.append("channel_type", channelType);
+      if (channelId) fd.append("channel_id", String(channelId));
+      else fd.append("channel_type", channelType);
       const res = await fetch("/api/wecom/ch/kb/upload", { method: "POST", body: fd });
       const d = await res.json();
       if (d.ok) { toast.success(`导入成功，新增 ${d.imported} 条`); loadData(); }
@@ -4131,7 +4211,7 @@ function ChannelKnowledgeTab({ channelType }: { channelType: string }) {
   async function handleExport() {
     setExporting(true);
     try {
-      const res = await fetch(`/api/wecom/ch/kb/export?channel_type=${channelType}`);
+      const res = await fetch(`/api/wecom/ch/kb/export?${channelId ? `channel_id=${channelId}` : `channel_type=${channelType}`}`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -4156,7 +4236,7 @@ function ChannelKnowledgeTab({ channelType }: { channelType: string }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          channel_type: channelType,
+          ...(channelId ? { channel_id: channelId } : { channel_type: channelType }),
           question: finalQuestion || null,
           answer: addAnswer,
         }),
