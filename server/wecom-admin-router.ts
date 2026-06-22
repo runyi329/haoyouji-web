@@ -147,7 +147,7 @@ router.get("/api/admin/wecom/users", requireSuperAdmin, async (req: Request, res
        ${whereClause}
        ORDER BY s.updated_at DESC
        LIMIT ? OFFSET ?`,
-      [...params, pageSize, offset]
+      [...params, Number(pageSize), Number(offset)]
     ) as any;
 
     res.json({
