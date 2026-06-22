@@ -755,33 +755,16 @@ async function getOrCreateManusTask(wecomUserId: string): Promise<string | null>
       return null;
     }
 
-    // 等待初始任务完成（最多60秒），避免立刻 sendMessage 时任务还在 running
     const initTaskId = data.task_id;
-    let initWaited = 0;
-    while (initWaited < 60) {
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      initWaited += 3;
-      try {
-        const checkRes = await fetch(
-          `${MANUS_API_BASE}/task.listMessages?task_id=${initTaskId}&order=desc&limit=5`,
-          { headers: { "x-manus-api-key": MANUS_API_KEY } }
-        );
-        const checkData = await checkRes.json() as any;
-        if (checkData.ok) {
-          const statusEvt = (checkData.messages || []).find((e: any) => e.type === "status_update");
-          const st = statusEvt?.status_update?.agent_status;
-          console.log(`[Manus] 初始任务状态: ${st} (已等待 ${initWaited}s)`);
-          if (st === "stopped" || st === "waiting" || st === "error") break;
-        }
-      } catch (_) {}
-    }
 
-    // 保存到数据库，新任务强制为 active
+    // 保存到数据库，新任务强制为 active（不等待初始消息完成，避免超时）
     await (conn as any).execute(
       "INSERT INTO wecom_manus_sessions (wecom_user_id, manus_task_id, status) VALUES (?, ?, 'active')",
       [wecomUserId, initTaskId]
     );
     console.log(`[Manus] 为用户 ${wecomUserId} 创建新任务成功: ${initTaskId}`);
+    // 等待3秒让初始任务稍微稳定，但不阻塞主流程
+    await new Promise(resolve => setTimeout(resolve, 3000));
     return initTaskId;
   } catch (e) {
     console.error("[Manus] 创建任务异常:", e);
