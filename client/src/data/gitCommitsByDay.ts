@@ -7707,5 +7707,9 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-22T09:03:12Z", type: "fix", cleanMessage: "修复用户绑定列表LIMIT/OFFSET参数类型错误(mysqld_stmt_execute)" },
     { date: "2026-06-22T09:07:21Z", type: "fix", cleanMessage: "LIMIT/OFFSET改为SQL字符串拼接，彻底解决mysqld_stmt_execute参数类型错误" },
     { date: "2026-06-22T09:37:21Z", type: "feat", cleanMessage: "重新设计用户绑定页面，修复余额计算(USDT=users.balance+af_manual_balances)，修复鉴权，铅笔图标改绑/解绑" },
+    { date: "2026-06-22T09:49:37Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-22T11:43:28Z", type: "feat", cleanMessage: "营养俱乐部绿色UI统一、知识库Tab完善（共享/私人知识库统计、Toggle开关、添加按钮菜单、month_count修复）" },
+    { date: "2026-06-22T12:45:39Z", type: "feat", cleanMessage: "合并用户Tab和日志Tab为客户数据Tab，含数据总览+三维筛选+聊天记录列表" },
+    { date: "2026-06-22T13:07:14Z", type: "feat", cleanMessage: "配置Tab添加接入指引弹窗（分步骤操作引导）" },
   ],
 };
