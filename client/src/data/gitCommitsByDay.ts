@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-22
+// 生成时间：2026-06-23
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -7711,5 +7711,11 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-22T11:43:28Z", type: "feat", cleanMessage: "营养俱乐部绿色UI统一、知识库Tab完善（共享/私人知识库统计、Toggle开关、添加按钮菜单、month_count修复）" },
     { date: "2026-06-22T12:45:39Z", type: "feat", cleanMessage: "合并用户Tab和日志Tab为客户数据Tab，含数据总览+三维筛选+聊天记录列表" },
     { date: "2026-06-22T13:07:14Z", type: "feat", cleanMessage: "配置Tab添加接入指引弹窗（分步骤操作引导）" },
+    { date: "2026-06-22T15:11:33Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-22T15:09:41Z", type: "feat", cleanMessage: "AI智库4层架构重构 + WecomAdmin文档Tab" },
+    { date: "2026-06-22T15:52:57Z", type: "feat", cleanMessage: "AI智库4层架构重构 + 配置Tab优化" },
+  ],
+  "2026-06-23": [
+    { date: "2026-06-22T17:03:26Z", type: "feat", cleanMessage: "AI分身Tab等效比例详细说明+数字分身corpus后端API+Prompt拼装接入" },
   ],
 };
