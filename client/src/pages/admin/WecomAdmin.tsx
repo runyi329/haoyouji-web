@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import WecomBindingManager from "./WecomBindingManager";
 import WecomRoutePanel from "@/components/WecomRoutePanel";
+import { NutritionClubPage } from "./ProjectLanding";
 
 // ─── 类型定义 ────────────────────────────────────────────────────────────────
 
@@ -53,6 +54,8 @@ interface UsageStat {
   record_count: number;
   task_count: number;
   first_bound_at: string;
+  site_username?: string | null;
+  site_user_id?: number | null;
 }
 
 interface MenuItem {
@@ -1595,7 +1598,7 @@ function StatsTab() {
             <table className="w-auto border-collapse text-sm">
               <thead>
                 <tr className="bg-gray-50">
-                  <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 border-b border-r border-gray-200 whitespace-nowrap">用户</th>
+                  <th className="px-3 py-2.5 text-left text-xs font-medium text-gray-500 border-b border-r border-gray-200" style={{width:'10em',minWidth:'10em',maxWidth:'10em'}}>用户</th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 whitespace-nowrap">开始时间</th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 whitespace-nowrap">消息数</th>
                   <th className="px-3 py-2.5 text-center text-xs font-medium text-gray-500 border-b border-r border-gray-200 whitespace-nowrap">Manus积分</th>
@@ -1608,9 +1611,12 @@ function StatsTab() {
                   <tr key={i}
                     className="border-b border-gray-100 last:border-0 cursor-pointer hover:bg-blue-50 active:bg-blue-100 transition-colors"
                     onClick={() => setDetailUser({ id: stat.wecom_user_id, name: stat.nickname || stat.wecom_user_id })}>
-                    <td className="px-3 py-2.5 border-r border-gray-100 whitespace-nowrap">
-                      <div className="font-medium text-gray-900 text-sm">{stat.nickname || stat.wecom_user_id}</div>
-                      <div className="text-xs text-gray-400 mt-0.5">{stat.wecom_user_id}</div>
+                    <td className="px-3 py-2.5 border-r border-gray-100" style={{width:'10em',minWidth:'10em',maxWidth:'10em'}}>
+                      <div className="font-medium text-gray-900 text-sm truncate">{stat.nickname || stat.wecom_user_id}</div>
+                      {stat.site_username
+                        ? <div className="text-xs text-green-600 mt-0.5">脉动网：{stat.site_username}</div>
+                        : <div className="text-xs text-gray-400 mt-0.5">未绑定脉动网</div>
+                      }
                     </td>
                     <td className="px-3 py-2.5 text-center text-xs text-gray-500 border-r border-gray-100 whitespace-nowrap">{formatShortDate(stat.first_bound_at)}</td>
                     <td className="px-3 py-2.5 text-center text-sm text-gray-600 border-r border-gray-100 whitespace-nowrap">{stat.record_count}</td>
@@ -1992,6 +1998,10 @@ function ChannelTab() {
 
   // 第三级：渠道详情
   if (selectedChannel) {
+    // 营养俱乐部渠道（channel_id=3）直接复用绿色版组件，保持前后端完全一致
+    if (selectedChannel.id === 3) {
+      return <NutritionClubPage onBack={() => setSelectedChannel(null)} />;
+    }
     return (
       <div className="px-4 py-4">
         <div className="flex items-center gap-3 mb-4">

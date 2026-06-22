@@ -1776,6 +1776,42 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
       return;
     }
 
+    // 自动拉取企微昵称（nickname为空时触发，异步不阻塞主流程）
+    (async () => {
+      try {
+        const conn = await getDbConnection();
+        if (!conn) return;
+        const [rows] = await (conn as any).execute(
+          "SELECT nickname FROM wecom_manus_sessions WHERE wecom_user_id = ? LIMIT 1",
+          [userId]
+        ) as any;
+        const existingNickname = rows?.[0]?.nickname;
+        if (existingNickname) return; // 已有昵称，不再拉取
+        const token = await getAccessToken();
+        let nickname = "";
+        if (userId.startsWith("wm")) {
+          // 外部联系人
+          const res = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/externalcontact/get?access_token=${token}&external_userid=${encodeURIComponent(userId)}`);
+          const data = await res.json() as any;
+          nickname = data?.contact_detail?.name || data?.contact?.name || "";
+        } else {
+          // 内部员工
+          const res = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/user/get?access_token=${token}&userid=${encodeURIComponent(userId)}`);
+          const data = await res.json() as any;
+          nickname = data?.name || "";
+        }
+        if (nickname) {
+          await (conn as any).execute(
+            "UPDATE wecom_manus_sessions SET nickname = ? WHERE wecom_user_id = ?",
+            [nickname, userId]
+          );
+          console.log(`[WeCom] 自动拉取昵称成功: ${userId} -> ${nickname}`);
+        }
+      } catch (e) {
+        console.error(`[WeCom] 自动拉取昵称失败: ${userId}`, e);
+      }
+    })();
+
     // 获取用户当前模型偏好
     let userModelProfile = await getUserModel(userId);
 
@@ -2502,9 +2538,12 @@ router.get("/api/wecom/stats", async (req: Request, res: Response) => {
          SUM(CASE WHEN mc.model_used IN ('deepseek-v4-pro','deepseek-v4-pro-thinking') THEN COALESCE(mc.output_tokens,0) ELSE 0 END) AS ds_pro_output,
          SUM(CASE WHEN mc.model_used IN ('deepseek-v4-pro','deepseek-v4-pro-thinking') THEN COALESCE(mc.cache_hit_tokens,0) ELSE 0 END) AS ds_pro_cache_hit,
          COUNT(*) AS record_count,
-         MIN(mc.created_at) AS first_message_at
+         MIN(mc.created_at) AS first_message_at,
+         MAX(b.site_username) AS site_username,
+         MAX(b.site_user_id) AS site_user_id
        FROM wecom_message_credits mc
        LEFT JOIN wecom_manus_sessions s ON s.wecom_user_id = mc.wecom_user_id
+       LEFT JOIN wecom_account_binding b ON b.wecom_user_id = mc.wecom_user_id
        WHERE ${whereClause}
        GROUP BY mc.wecom_user_id
        ORDER BY mc.wecom_user_id`
@@ -2547,6 +2586,8 @@ router.get("/api/wecom/stats", async (req: Request, res: Response) => {
         total_cost: manusCredits,  // 保留旧字段，为 Manus 积分
         record_count: Number(r.record_count) || 0,
         task_count: 0,
+        site_username: r.site_username || null,
+        site_user_id: r.site_user_id ? Number(r.site_user_id) : null,
         first_bound_at: r.first_message_at
           ? (r.first_message_at instanceof Date ? r.first_message_at.toISOString() : String(r.first_message_at))
           : "",
@@ -3538,6 +3579,7 @@ router.get("/api/wecom/channel-config/:channelId", async (req: Request, res: Res
       context_rounds: kvMap['context_rounds'] ? Number(kvMap['context_rounds']) : 10,
       notify_enabled: kvMap['notify_enabled'] || '0',
       notify_userids: kvMap['notify_userids'] || '',
+      disable_system_kb: kvMap['disable_system_kb'] || '0',
     });
   } catch (e) {
     res.status(500).json({ error: "获取失败" });
@@ -3547,20 +3589,20 @@ router.get("/api/wecom/channel-config/:channelId", async (req: Request, res: Res
 // 保存渠道AI配置
 router.post("/api/wecom/channel-config/:channelId", async (req: Request, res: Response) => {
   const { channelId } = req.params;
-  const { welcome_msg, waiting_msg, system_prompt, ai_model, knowledge_base_id, context_rounds, notify_enabled, notify_userids } = req.body;
+  const { welcome_msg, waiting_msg, system_prompt, ai_model, knowledge_base_id, context_rounds, notify_enabled, notify_userids, disable_system_kb } = req.body;
   const conn = await getDbConnection();
   try {
-    // 按键值对逐条 upsert
-    const kvPairs: Record<string, string> = {
-      welcome_msg: welcome_msg || '',
-      waiting_msg: waiting_msg || '收到，稍等为您解答～',
-      system_prompt: system_prompt || '',
-      ai_model: ai_model || 'deepseek-chat',
-      knowledge_base_id: knowledge_base_id != null ? String(knowledge_base_id) : '',
-      context_rounds: context_rounds != null ? String(context_rounds) : '10',
-      notify_enabled: notify_enabled != null ? String(notify_enabled) : '0',
-      notify_userids: notify_userids != null ? String(notify_userids) : '',
-    };
+    // 按键值对逐条 upsert，只更新传入的字段
+    const kvPairs: Record<string, string> = {};
+    if (welcome_msg !== undefined) kvPairs.welcome_msg = welcome_msg || '';
+    if (waiting_msg !== undefined) kvPairs.waiting_msg = waiting_msg || '收到，稍等为您解答～';
+    if (system_prompt !== undefined) kvPairs.system_prompt = system_prompt || '';
+    if (ai_model !== undefined) kvPairs.ai_model = ai_model || 'deepseek-chat';
+    if (knowledge_base_id !== undefined) kvPairs.knowledge_base_id = knowledge_base_id != null ? String(knowledge_base_id) : '';
+    if (context_rounds !== undefined) kvPairs.context_rounds = context_rounds != null ? String(context_rounds) : '10';
+    if (notify_enabled !== undefined) kvPairs.notify_enabled = notify_enabled != null ? String(notify_enabled) : '0';
+    if (notify_userids !== undefined) kvPairs.notify_userids = notify_userids != null ? String(notify_userids) : '';
+    if (disable_system_kb !== undefined) kvPairs.disable_system_kb = String(disable_system_kb);
     for (const [key, val] of Object.entries(kvPairs)) {
       await (conn as any).execute(
         `INSERT INTO wecom_channel_config (channel_id, config_key, config_val)

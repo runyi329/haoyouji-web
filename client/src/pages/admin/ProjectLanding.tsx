@@ -102,6 +102,13 @@ interface PromptRule {
   layer: number;
 }
 
+interface KnowledgeBase {
+  id: number;
+  name: string;
+  description: string;
+  item_count: number;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // 配置 Tab（完整版：渠道状态 + 欢迎语 + 等待提示 + AI 指令 + 模型 + 消息抄送）
 // ═══════════════════════════════════════════════════════════════
@@ -119,6 +126,10 @@ function ConfigTab() {
   const [justSaved, setJustSaved] = useState(false);
   const [savedSnapshot, setSavedSnapshot] = useState("");
 
+  // 知识库
+  const [kbId, setKbId] = useState(0);
+  const [kbList, setKbList] = useState<KnowledgeBase[]>([]);
+
   // 结构化 AI 指令
   const [promptRules, setPromptRules] = useState<PromptRule[]>([]);
   const [editingRuleId, setEditingRuleId] = useState<number | null>(null);
@@ -132,12 +143,16 @@ function ConfigTab() {
     (async () => {
       setLoading(true);
       try {
-        const [cfgRes, rulesRes] = await Promise.all([
+        const [cfgRes, rulesRes, kbsRes, chCfgRes] = await Promise.all([
           fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/config`),
           fetch(`/api/wecom/prompt-rules?channel_id=${KF_CHANNEL_ID}`),
+          fetch(`/api/wecom/knowledge-bases`),
+          fetch(`/api/wecom/channel-config/${KF_CHANNEL_ID}`),
         ]);
         const cfg = await cfgRes.json();
         const rulesData = await rulesRes.json();
+        const kbs = await kbsRes.json();
+        const chCfg = await chCfgRes.json();
         if (cfg.config) {
           const c = cfg.config;
           setEnabled(c.enabled !== false);
@@ -148,8 +163,13 @@ function ConfigTab() {
           setContextRounds(c.context_rounds || 10);
           setNotifyEnabled(!!c.notify_enabled);
           setNotifyUserids(c.notify_userids ? (Array.isArray(c.notify_userids) ? c.notify_userids : c.notify_userids.split(",").filter(Boolean)) : []);
-          const snap = JSON.stringify({ wm: c.welcome_msg || "", wt: c.waiting_msg || "", sp: c.system_prompt || "", am: c.ai_model || "deepseek-chat", cr: c.context_rounds || 10, ne: !!c.notify_enabled, nu: c.notify_userids || "" });
+          const snap = JSON.stringify({ wm: c.welcome_msg || "", wt: c.waiting_msg || "", sp: c.system_prompt || "", am: c.ai_model || "deepseek-chat", cr: c.context_rounds || 10, ne: !!c.notify_enabled, nu: c.notify_userids || "", ki: 0 });
           setSavedSnapshot(snap);
+        }
+        if (Array.isArray(kbs)) setKbList(kbs);
+        if (chCfg && !chCfg.error) {
+          const ki = chCfg.knowledge_base_id || 0;
+          setKbId(ki);
         }
         if (rulesData.ok) setPromptRules(rulesData.rules || []);
       } catch {
@@ -163,27 +183,26 @@ function ConfigTab() {
   async function handleSave() {
     setSaving(true);
     try {
-      const r = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/config`, {
+      // 保存渠道配置（含知识库绑定）
+      const r = await fetch(`/api/wecom/channel-config/${KF_CHANNEL_ID}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          config: {
-            enabled,
-            welcome_msg: welcomeMsg,
-            waiting_msg: waitingMsg,
-            system_prompt: systemPrompt,
-            ai_model: aiModel,
-            context_rounds: contextRounds,
-            notify_enabled: notifyEnabled,
-            notify_userids: notifyUserids,
-          },
+          welcome_msg: welcomeMsg,
+          waiting_msg: waitingMsg,
+          system_prompt: systemPrompt,
+          ai_model: aiModel,
+          knowledge_base_id: kbId,
+          context_rounds: contextRounds,
+          notify_enabled: notifyEnabled ? '1' : '0',
+          notify_userids: notifyUserids.join(','),
         }),
       });
       const d = await r.json();
       if (d.ok) {
         toast.success("保存成功");
         setJustSaved(true);
-        const snap = JSON.stringify({ wm: welcomeMsg, wt: waitingMsg, sp: systemPrompt, am: aiModel, cr: contextRounds, ne: notifyEnabled, nu: notifyUserids.join(",") });
+        const snap = JSON.stringify({ wm: welcomeMsg, wt: waitingMsg, sp: systemPrompt, am: aiModel, cr: contextRounds, ne: notifyEnabled, nu: notifyUserids.join(","), ki: kbId });
         setSavedSnapshot(snap);
         setTimeout(() => setJustSaved(false), 2000);
       } else toast.error(d.error || "保存失败");
@@ -269,7 +288,7 @@ function ConfigTab() {
     } catch { toast.error("删除失败"); }
   }
 
-  const currentSnap = JSON.stringify({ wm: welcomeMsg, wt: waitingMsg, sp: systemPrompt, am: aiModel, cr: contextRounds, ne: notifyEnabled, nu: notifyUserids.join(",") });
+  const currentSnap = JSON.stringify({ wm: welcomeMsg, wt: waitingMsg, sp: systemPrompt, am: aiModel, cr: contextRounds, ne: notifyEnabled, nu: notifyUserids.join(","), ki: kbId });
   const isDirty = savedSnapshot === "" || currentSnap !== savedSnapshot;
 
   const layer1Rules = promptRules.filter(r => r.layer === 1);
@@ -543,6 +562,38 @@ function ConfigTab() {
           </div>
         )}
       </div>
+
+      {/* 绑定知识库 */}
+      {kbList.length > 0 && (
+        <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: C.line }}>
+          <div className="text-sm font-semibold mb-3" style={{ color: C.textMain }}>绑定知识库</div>
+          <div className="space-y-2">
+            <button
+              onClick={() => setKbId(0)}
+              className="w-full text-left text-sm px-3 py-2.5 rounded-xl border-2 transition-all"
+              style={kbId === 0
+                ? { borderColor: C.textSub, backgroundColor: C.bg, color: C.textSub }
+                : { borderColor: C.line, color: C.textSub }}
+            >
+              不绑定知识库
+            </button>
+            {kbList.map(kb => (
+              <button
+                key={kb.id}
+                onClick={() => setKbId(kb.id)}
+                className="w-full text-left text-sm px-3 py-2.5 rounded-xl border-2 transition-all"
+                style={kbId === kb.id
+                  ? { borderColor: C.brand, backgroundColor: C.brandLight, color: C.brandDeep }
+                  : { borderColor: C.line, color: C.textMain }}
+              >
+                <div className="font-medium">{kb.name}</div>
+                {kb.description && <div className="text-xs mt-0.5" style={{ color: C.textSub }}>{kb.description}</div>}
+                <div className="text-xs mt-0.5" style={{ color: C.textSub }}>{kb.item_count} 条记录</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 保存按钮 */}
       <button
@@ -851,12 +902,15 @@ function RulesTab() {
 // 知识库 Tab
 // ═══════════════════════════════════════════════════════════════
 function KnowledgeTab() {
-  const [stats, setStats] = useState({ kb_count: 0, item_count: 0, file_count: 0, char_count: 0 });
-  const [sysStats, setSysStats] = useState({ item_count: 0, file_count: 0 });
+  const [stats, setStats] = useState({ kb_count: 0, item_count: 0, file_count: 0, char_count: 0, last_updated: null as string | null, month_count: 0 });
+  const [sysStats, setSysStats] = useState({ kb_count: 0, item_count: 0, file_count: 0, char_count: 0, month_count: 0 });
+  const [sysKbEnabled, setSysKbEnabled] = useState(true);
+  const [togglingKb, setTogglingKb] = useState(false);
   const [sources, setSources] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [addQuestion, setAddQuestion] = useState("");
   const [addAnswer, setAddAnswer] = useState("");
   const [saving, setSaving] = useState(false);
@@ -872,16 +926,34 @@ function KnowledgeTab() {
       const [s, src, sys] = await Promise.all([
         fetch(`/api/wecom/ch/kb/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()),
         fetch(`/api/wecom/ch/kb/sources?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()),
-        fetch(`/api/wecom/ch/kb/stats?channel_id=${SYS_KB_CHANNEL_ID}`).then(r => r.json()),
+        fetch(`/api/wecom/ch/kb/stats?channel_type=kf`).then(r => r.json()),
       ]);
-      if (s.ok) setStats(s);
+      const chCfg = await fetch(`/api/wecom/channel-config/${KF_CHANNEL_ID}`).then(r => r.json()).catch(() => ({}));
+      if (s.ok) setStats({ kb_count: s.kb_count || 0, item_count: s.item_count || 0, file_count: s.file_count || 0, char_count: s.char_count || 0, last_updated: s.last_updated || null, month_count: s.month_count || 0 });
       if (src.ok) setSources(src.sources || []);
-      if (sys.ok) setSysStats({ item_count: sys.item_count || 0, file_count: sys.file_count || 0 });
+      if (sys.ok) setSysStats({ kb_count: sys.kb_count || 0, item_count: sys.item_count || 0, file_count: sys.file_count || 0, char_count: sys.char_count || 0, month_count: sys.month_count || 0 });
+      setSysKbEnabled(chCfg.disable_system_kb !== '1');
     } catch { toast.error("加载失败"); }
     finally { setLoading(false); }
   }
 
   useEffect(() => { loadData(); }, []);
+
+  async function handleToggleSysKb() {
+    setTogglingKb(true);
+    try {
+      const newVal = !sysKbEnabled;
+      const res = await fetch(`/api/wecom/channel-config/${KF_CHANNEL_ID}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ disable_system_kb: newVal ? '0' : '1' }),
+      });
+      const d = await res.json();
+      if (d.ok) { setSysKbEnabled(newVal); toast.success(newVal ? '共享知识库已启用' : '共享知识库已禁用'); }
+      else toast.error(d.error || '操作失败');
+    } catch { toast.error('网络错误'); }
+    finally { setTogglingKb(false); }
+  }
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -936,103 +1008,186 @@ function KnowledgeTab() {
   }
 
   function fmtChars(n: number) {
-    if (n >= 10000) return (n / 10000).toFixed(1) + "万";
-    return String(n);
+    return n.toLocaleString("zh-CN");
   }
 
   if (loading) return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin" style={{ color: C.brand }} /></div>;
 
   return (
     <div className="space-y-4 pb-6">
-      {/* 系统默认知识库状态 */}
-      <div className="rounded-xl px-4 py-3 flex items-center gap-3 border" style={{ backgroundColor: "#EAF4FF", borderColor: "#B3D4F5" }}>
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: "#D0E8FF" }}>
-          <BookOpen className="w-4 h-4" style={{ color: "#2980B9" }} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-xs font-semibold" style={{ color: "#1A5276" }}>系统默认知识库（共享）</div>
-          <div className="text-xs mt-0.5" style={{ color: "#2980B9" }}>{sysStats.item_count} 条内容 · {sysStats.file_count} 个文件 · AI 回复时自动召唤，无需配置</div>
-        </div>
-        <div className="text-xs px-2 py-0.5 rounded-full flex-shrink-0" style={{ backgroundColor: "#D0E8FF", color: "#2980B9" }}>已启用</div>
-      </div>
-
-      {/* 私有知识库统计 */}
-      <div className="text-xs font-semibold px-1" style={{ color: C.textSub }}>我的私有知识库</div>
-      <div className="grid grid-cols-4 gap-2">
-        {[{ label: "知识库", value: stats.kb_count }, { label: "条目", value: stats.item_count }, { label: "文件", value: stats.file_count }, { label: "字符", value: fmtChars(stats.char_count) }].map(s => (
-          <div key={s.label} className="bg-white rounded-xl p-3 text-center shadow-sm border" style={{ borderColor: C.line }}>
-            <div className="text-lg font-bold" style={{ color: C.brand }}>{s.value}</div>
-            <div className="text-[11px]" style={{ color: C.textSub }}>{s.label}</div>
+      {/* 共享知识库容器 */}
+      {(() => {
+        const now = new Date();
+        const bjNow = new Date(now.getTime() + 8 * 3600 * 1000);
+        const dateStr = `${bjNow.getUTCFullYear()}年${bjNow.getUTCMonth() + 1}月${bjNow.getUTCDate()}日`;
+        return (
+          <div className="rounded-xl border px-4 py-3" style={{ backgroundColor: C.white, borderColor: C.line, opacity: sysKbEnabled ? 1 : 0.7 }}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold" style={{ color: C.textMain }}>共享知识库</span>
+              <div
+                onClick={togglingKb ? undefined : handleToggleSysKb}
+                style={{
+                  position: 'relative',
+                  display: 'inline-block',
+                  width: 40,
+                  height: 22,
+                  borderRadius: 11,
+                  backgroundColor: sysKbEnabled ? C.brand : '#D1D5DB',
+                  cursor: togglingKb ? 'not-allowed' : 'pointer',
+                  opacity: togglingKb ? 0.5 : 1,
+                  flexShrink: 0,
+                  transition: 'background-color 0.2s',
+                }}
+              >
+                <div style={{
+                  position: 'absolute',
+                  top: 3,
+                  left: sysKbEnabled ? 19 : 3,
+                  width: 16,
+                  height: 16,
+                  borderRadius: '50%',
+                  backgroundColor: '#fff',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                  transition: 'left 0.2s',
+                }} />
+              </div>
+            </div>
+            <div className="flex items-baseline gap-4 mb-2">
+              <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{sysStats.kb_count}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>知识库</span></span>
+              <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{sysStats.item_count}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>条目</span></span>
+              <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{sysStats.file_count}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>文件</span></span>
+              <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{fmtChars(sysStats.char_count)}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>字符</span></span>
+            </div>
+            <div className="flex items-center justify-between pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+              <span className="text-xs" style={{ color: C.textSub }}>更新至 <span className="font-medium" style={{ color: C.textMain }}>{dateStr}</span></span>
+              <span className="text-xs" style={{ color: C.textSub }}>本月新增 <span className="font-semibold" style={{ color: C.brand }}>{sysStats.month_count}</span> 条</span>
+            </div>
           </div>
-        ))}
-      </div>
+        );
+      })()}
 
-      {/* 操作按钮 */}
-      <div className="flex gap-2">
-        <button onClick={() => fileInputRef.current?.click()} disabled={uploading} className="flex-1 py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 border active:scale-[0.98] transition-transform disabled:opacity-60" style={{ borderColor: C.brand, color: C.brand, backgroundColor: C.brandLight }}>
-          {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-          {uploading ? "上传中..." : "上传文件"}
-        </button>
-        <button onClick={() => setShowAddModal(true)} className="flex-1 py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 text-white active:scale-[0.98] transition-transform" style={{ backgroundColor: C.brand }}>
-          <Plus className="w-4 h-4" />手动添加
-        </button>
-        <input ref={fileInputRef} type="file" className="hidden" accept=".xlsx,.csv,.pdf,.docx,.txt" onChange={handleUpload} />
-      </div>
-
-      {/* 来源文件列表 */}
-      <div className="bg-white rounded-2xl shadow-sm border overflow-hidden" style={{ borderColor: C.line }}>
-        <div className="px-4 py-3 border-b text-sm font-semibold" style={{ borderColor: C.line, color: C.textMain }}>来源文件 ({sources.length})</div>
-        {sources.length === 0 ? (
-          <div className="py-12 text-center text-sm" style={{ color: C.textSub }}>暂无知识库内容，请上传文件或手动添加</div>
-        ) : (
-          <ul className="divide-y" style={{ borderColor: C.line }}>
-            {sources.map((s: any) => (
-              <li key={s.source_file}>
-                <div className="px-4 py-3 flex items-center gap-3">
-                  <FileText className="w-4 h-4 flex-shrink-0" style={{ color: C.brand }} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium truncate" style={{ color: C.textMain }}>{s.source_file}</div>
-                    <div className="text-xs" style={{ color: C.textSub }}>{s.item_count} 条 · {formatDate(s.latest_time)}</div>
+      {/* 私人知识库容器（统计 + 操作 + 文件列表全部包在一起） */}
+      <div className="rounded-xl border overflow-hidden" style={{ borderColor: C.line }}>
+        {/* 标题 + 统计数字 */}
+        <div className="px-4 py-3 border-b" style={{ backgroundColor: C.white, borderColor: C.line }}>
+          <div className="text-xs font-semibold mb-2" style={{ color: C.textMain }}>私人知识库</div>
+          <div className="flex items-baseline gap-4 mb-2">
+            <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{stats.kb_count}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>知识库</span></span>
+            <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{stats.item_count}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>条目</span></span>
+            <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{stats.file_count}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>文件</span></span>
+            <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{fmtChars(stats.char_count)}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>字符</span></span>
+          </div>
+          {(() => {
+            const now = new Date();
+            const bjNow = new Date(now.getTime() + 8 * 3600 * 1000);
+            const dateStr = `${bjNow.getUTCFullYear()}年${bjNow.getUTCMonth() + 1}月${bjNow.getUTCDate()}日`;
+            return (
+              <div className="flex items-center justify-between pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                <span className="text-xs" style={{ color: C.textSub }}>更新至 <span className="font-medium" style={{ color: C.textMain }}>{dateStr}</span></span>
+                <span className="text-xs" style={{ color: C.textSub }}>本月新增 <span className="font-semibold" style={{ color: C.brand }}>{stats.month_count}</span> 条</span>
+              </div>
+            );
+          })()}
+        </div>
+        {/* 操作按钮 */}
+        <div className="px-4 py-3 border-b relative" style={{ backgroundColor: C.white, borderColor: C.line }}>
+          <button
+            onClick={() => setShowUploadMenu(v => !v)}
+            disabled={uploading}
+            className="w-full py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 text-white active:scale-[0.98] transition-transform disabled:opacity-60"
+            style={{ backgroundColor: C.brand }}
+          >
+            {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+            {uploading ? "上传中..." : "添加"}
+          </button>
+          {showUploadMenu && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowUploadMenu(false)} />
+              <div
+                className="absolute left-4 right-4 rounded-xl border shadow-lg z-20 overflow-hidden"
+                style={{ top: 'calc(100% - 4px)', backgroundColor: C.white, borderColor: C.line }}
+              >
+                <button
+                  onClick={() => { setShowUploadMenu(false); if (fileInputRef.current) { fileInputRef.current.accept = 'image/*'; fileInputRef.current.setAttribute('capture', 'environment'); } fileInputRef.current?.click(); }}
+                  className="w-full px-4 py-3 text-sm text-left flex items-center gap-3 border-b active:bg-gray-50"
+                  style={{ borderColor: C.line, color: C.textMain }}
+                >
+                  <span style={{ fontSize: 18 }}>📷</span> 拍照上传
+                </button>
+                <button
+                  onClick={() => { setShowUploadMenu(false); setShowAddModal(true); }}
+                  className="w-full px-4 py-3 text-sm text-left flex items-center gap-3 border-b active:bg-gray-50"
+                  style={{ borderColor: C.line, color: C.textMain }}
+                >
+                  <span style={{ fontSize: 18 }}>✍️</span> 手写输入
+                </button>
+                <button
+                  onClick={() => { setShowUploadMenu(false); if (fileInputRef.current) { fileInputRef.current.accept = '.xlsx,.csv,.pdf,.docx,.txt'; fileInputRef.current.removeAttribute('capture'); } fileInputRef.current?.click(); }}
+                  className="w-full px-4 py-3 text-sm text-left flex items-center gap-3 active:bg-gray-50"
+                  style={{ color: C.textMain }}
+                >
+                  <span style={{ fontSize: 18 }}>📂</span> 文件上传
+                </button>
+              </div>
+            </>
+          )}
+          <input ref={fileInputRef} type="file" className="hidden" accept=".xlsx,.csv,.pdf,.docx,.txt" onChange={handleUpload} />
+        </div>
+        {/* 来源文件列表 */}
+        <div style={{ backgroundColor: C.white }}>
+          <div className="px-4 py-3 border-b text-xs font-semibold" style={{ borderColor: C.line, color: C.textSub }}>来源文件 ({sources.length})</div>
+          {sources.length === 0 ? (
+            <div className="py-10 text-center text-sm" style={{ color: C.textSub }}>暂无知识库内容，请上传文件或手动添加</div>
+          ) : (
+            <ul className="divide-y" style={{ borderColor: C.line }}>
+              {sources.map((s: any) => (
+                <li key={s.source_file}>
+                  <div className="px-4 py-3 flex items-center gap-3">
+                    <FileText className="w-4 h-4 flex-shrink-0" style={{ color: C.brand }} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate" style={{ color: C.textMain }}>{s.source_file}</div>
+                      <div className="text-xs" style={{ color: C.textSub }}>{s.item_count} 条 · {formatDate(s.latest_time)}</div>
+                    </div>
+                    <div className="flex gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => { if (viewSource === s.source_file) { setViewSource(null); } else { setViewSource(s.source_file); loadSourceItems(s.source_file); } }}
+                        className="text-xs border rounded-lg px-2 py-1"
+                        style={{ borderColor: C.line, color: C.textSub }}
+                      >
+                        {viewSource === s.source_file ? "收起" : "查看"}
+                      </button>
+                      {deleteConfirm === s.source_file ? (
+                        <div className="flex gap-1">
+                          <button onClick={() => handleDelete(s.source_file)} className="text-xs text-white bg-red-500 rounded-lg px-2 py-1">确删</button>
+                          <button onClick={() => setDeleteConfirm(null)} className="text-xs border rounded-lg px-2 py-1" style={{ borderColor: C.line, color: C.textSub }}>取消</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setDeleteConfirm(s.source_file)} className="p-1.5 rounded-lg text-red-400"><Trash2 className="w-4 h-4" /></button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex gap-1 flex-shrink-0">
-                    <button
-                      onClick={() => { if (viewSource === s.source_file) { setViewSource(null); } else { setViewSource(s.source_file); loadSourceItems(s.source_file); } }}
-                      className="text-xs border rounded-lg px-2 py-1"
-                      style={{ borderColor: C.line, color: C.textSub }}
-                    >
-                      {viewSource === s.source_file ? "收起" : "查看"}
-                    </button>
-                    {deleteConfirm === s.source_file ? (
-                      <div className="flex gap-1">
-                        <button onClick={() => handleDelete(s.source_file)} className="text-xs text-white bg-red-500 rounded-lg px-2 py-1">确删</button>
-                        <button onClick={() => setDeleteConfirm(null)} className="text-xs border rounded-lg px-2 py-1" style={{ borderColor: C.line, color: C.textSub }}>取消</button>
-                      </div>
-                    ) : (
-                      <button onClick={() => setDeleteConfirm(s.source_file)} className="p-1.5 rounded-lg text-red-400"><Trash2 className="w-4 h-4" /></button>
-                    )}
-                  </div>
-                </div>
-                {viewSource === s.source_file && (
-                  <div className="px-4 pb-3 border-t" style={{ borderColor: C.line }}>
-                    {loadingItems ? (
-                      <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin" style={{ color: C.brand }} /></div>
-                    ) : (
-                      <div className="space-y-2 mt-2">
-                        {sourceItems.map((item: any) => (
-                          <div key={item.id} className="rounded-xl p-2.5 text-xs" style={{ backgroundColor: C.bg }}>
-                            {item.question && <div className="font-medium mb-1" style={{ color: C.textMain }}>Q: {item.question}</div>}
-                            <div style={{ color: C.textSub }}>A: {item.answer}</div>
-                          </div>
-                        ))}
-                        {sourceItems.length === 0 && <div className="text-xs text-center py-2" style={{ color: C.textSub }}>暂无条目</div>}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
+                  {viewSource === s.source_file && (
+                    <div className="px-4 pb-3 border-t" style={{ borderColor: C.line }}>
+                      {loadingItems ? (
+                        <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin" style={{ color: C.brand }} /></div>
+                      ) : (
+                        <div className="space-y-2 mt-2">
+                          {sourceItems.map((item: any) => (
+                            <div key={item.id} className="rounded-xl p-2.5 text-xs" style={{ backgroundColor: C.bg }}>
+                              {item.question && <div className="font-medium mb-1" style={{ color: C.textMain }}>Q: {item.question}</div>}
+                              <div style={{ color: C.textSub }}>A: {item.answer}</div>
+                            </div>
+                          ))}
+                          {sourceItems.length === 0 && <div className="text-xs text-center py-2" style={{ color: C.textSub }}>暂无条目</div>}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
 
       {/* 手动添加弹窗 */}
@@ -1266,8 +1421,22 @@ const TABS: { key: TabKey; label: string; icon: typeof Bot }[] = [
   { key: "logs", label: "日志", icon: MessageSquare },
 ];
 
-function NutritionClubPage() {
+export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
   const [activeTab, setActiveTab] = useState<TabKey>("config");
+  const [tabCounts, setTabCounts] = useState<Partial<Record<TabKey, number>>>({});
+
+  useEffect(() => {
+    // 并行拉取各 Tab 的数量
+    Promise.all([
+      fetch(`/api/wecom/prompt-rules?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).then(d => d.ok ? (d.rules || []).filter((r: any) => r.enabled).length : 0).catch(() => 0),
+      fetch(`/api/wecom/custom-rules?channel_type=${KF_CHANNEL_TYPE}`).then(r => r.json()).then(d => d.ok ? (d.rules || []).length : 0).catch(() => 0),
+      fetch(`/api/wecom/ch/kb/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).then(d => d.item_count || 0).catch(() => 0),
+      fetch(`/api/wecom/ch/users?channel_type=${KF_CHANNEL_TYPE}`).then(r => r.json()).then(d => (d.users || []).length).catch(() => 0),
+      fetch(`/api/wecom/ch/logs?channel_id=${KF_CHANNEL_ID}&channel_type=${KF_CHANNEL_TYPE}&limit=1`).then(r => r.json()).then(d => d.total || 0).catch(() => 0),
+    ]).then(([config, rules, kb, users, logs]) => {
+      setTabCounts({ config, rules, kb, users, logs });
+    });
+  }, []);
 
   return (
     <div
@@ -1284,27 +1453,38 @@ function NutritionClubPage() {
         className="sticky top-0 z-10 flex items-center justify-between px-4"
         style={{ height: 52, background: `linear-gradient(135deg,${C.brandDeep} 0%,${C.brand} 100%)` }}
       >
-        <button onClick={() => window.history.back()} className="p-1.5 rounded-full" style={{ color: "rgba(255,255,255,0.8)" }}>
+        <button onClick={() => onBack ? onBack() : window.history.back()} className="p-1.5 rounded-full" style={{ color: "rgba(255,255,255,0.8)" }}>
           <ArrowLeft className="w-5 h-5" />
         </button>
         <span className="text-[17px] font-bold tracking-wide text-white">营养俱乐部 · AI 客服</span>
         <div className="w-8" />
       </header>
 
-      {/* Tab 切换（横向滚动，5个Tab） */}
-      <div className="sticky top-[52px] z-10 px-4 py-2" style={{ backgroundColor: C.bg }}>
-        <div className="flex rounded-xl p-1 overflow-x-auto gap-0.5 scrollbar-hide" style={{ backgroundColor: C.line }}>
+      {/* Tab 切换 */}
+      <div className="sticky top-[52px] z-10" style={{ backgroundColor: C.bg, borderBottom: `1px solid ${C.line}` }}>
+        <div className="flex">
           {TABS.map(t => {
-            const Icon = t.icon;
             return (
               <button
                 key={t.key}
                 onClick={() => setActiveTab(t.key)}
-                className="flex-shrink-0 flex items-center justify-center gap-1 text-xs py-2 px-2.5 rounded-lg font-medium transition-colors whitespace-nowrap"
-                style={activeTab === t.key ? { backgroundColor: C.white, color: C.brand } : { color: C.textSub }}
+                className="flex-1 flex flex-col items-center justify-center gap-0.5 text-xs py-2.5 px-1 font-medium transition-colors"
+                style={{
+                  ...(activeTab === t.key
+                    ? { color: C.brand, borderBottom: `2px solid ${C.brand}` }
+                    : { color: C.textSub, borderBottom: '2px solid transparent' }),
+                  borderRight: t.key !== 'logs' ? `1px solid ${C.line}` : 'none',
+                }}
               >
-                <Icon className="w-3.5 h-3.5" />
-                {t.label}
+                <span>{t.label}</span>
+                <span
+                  className="text-[11px] leading-none font-semibold px-1.5 py-0.5 rounded-full mt-0.5"
+                  style={activeTab === t.key
+                    ? { backgroundColor: C.brandLight, color: C.brand }
+                    : { backgroundColor: 'rgba(0,0,0,0.06)', color: C.textSub }}
+                >
+                  {tabCounts[t.key] !== undefined ? tabCounts[t.key] : '-'}
+                </span>
               </button>
             );
           })}

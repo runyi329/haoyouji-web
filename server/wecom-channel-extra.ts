@@ -215,17 +215,29 @@ router.get("/api/wecom/ch/kb/stats", async (req: Request, res: Response) => {
     const [statRows] = await (conn as any).execute(
       `SELECT COUNT(*) AS item_count,
               COUNT(DISTINCT source_file) AS file_count,
-              SUM(CHAR_LENGTH(COALESCE(question,'')) + CHAR_LENGTH(COALESCE(answer,''))) AS char_count
+              SUM(CHAR_LENGTH(COALESCE(question,'')) + CHAR_LENGTH(COALESCE(answer,''))) AS char_count,
+              MAX(created_at) AS last_updated
        FROM wecom_knowledge_items WHERE kb_id IN (${placeholders})`,
       kbIds
     );
+    // 本月新增（北京时间 UTC+8）
+    const now = new Date();
+    const bjNow = new Date(now.getTime() + 8 * 3600 * 1000);
+    const monthStart = `${bjNow.getUTCFullYear()}-${String(bjNow.getUTCMonth() + 1).padStart(2, '0')}-01 00:00:00`;
+    const [monthRows] = await (conn as any).execute(
+      `SELECT COUNT(*) AS month_count FROM wecom_knowledge_items WHERE kb_id IN (${placeholders}) AND created_at >= ?`,
+      [...kbIds, monthStart]
+    );
     const stat = (statRows as any[])[0] || {};
+    const monthCount = Number((monthRows as any[])[0]?.month_count || 0);
     res.json({
       ok: true,
       kb_count: kbIds.length,
       item_count: Number(stat.item_count || 0),
       file_count: Number(stat.file_count || 0),
       char_count: Number(stat.char_count || 0),
+      last_updated: stat.last_updated || null,
+      month_count: monthCount,
     });
   } catch (e: any) {
     console.error("[知识库看板] 失败:", e);
