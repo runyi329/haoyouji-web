@@ -938,4 +938,104 @@ router.get("/api/wecom/ch/data/summary", async (req: Request, res: Response) => 
   }
 });
 
+// =====================================================================
+// 数字分身（Corpus + DigitalTwin）API
+// =====================================================================
+
+/** 确保 wecom_corpus 和 wecom_digital_twin 表存在（含列迁移） */
+async function ensureCorpusTables(conn: any) {
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS wecom_corpus (
+      id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      channel_id INT NOT NULL,
+      user_msg TEXT NOT NULL COMMENT '用户消息',
+      agent_reply TEXT NOT NULL COMMENT '客服回复',
+      quality TINYINT NOT NULL DEFAULT 0 COMMENT '0=普通 1=优质',
+      scene_tag VARCHAR(32) DEFAULT NULL COMMENT '场景标签: price/product/close/objection/followup/other',
+      source VARCHAR(32) DEFAULT 'manual' COMMENT '来源: manual/import/ai_pick',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_channel_quality (channel_id, quality)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS wecom_digital_twin (
+      id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      channel_id INT NOT NULL UNIQUE,
+      twin_enabled TINYINT NOT NULL DEFAULT 0 COMMENT '开关',
+      twin_version VARCHAR(16) DEFAULT 'v1.0',
+      last_trained_at TIMESTAMP NULL DEFAULT NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  // 列迁移：若旧表缺少列，自动补充
+  const migrationCols = [
+    { col: 'twin_enabled', sql: 'ADD COLUMN twin_enabled TINYINT NOT NULL DEFAULT 0 COMMENT \'\u5f00关\'' },
+    { col: 'twin_version', sql: "ADD COLUMN twin_version VARCHAR(16) DEFAULT 'v1.0'" },
+    { col: 'last_trained_at', sql: 'ADD COLUMN last_trained_at TIMESTAMP NULL DEFAULT NULL' },
+    { col: 'updated_at', sql: 'ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP' },
+  ];
+  for (const m of migrationCols) {
+    try {
+      await conn.execute(`ALTER TABLE wecom_digital_twin ${m.sql}`);
+    } catch (_) { /* 列已存在，忽略 */ }
+  }
+}
+
+/** GET /api/wecom/corpus/stats?channel_id=3 */
+router.get("/api/wecom/corpus/stats", async (req: Request, res: Response) => {
+  const channelId = parseInt(req.query.channel_id as string, 10) || 0;
+  if (!channelId) return res.status(400).json({ ok: false, error: "channel_id 必填" });
+  const conn = await getDbConnection();
+  try {
+    await ensureCorpusTables(conn);
+    const [[totalRow]] = await (conn as any).execute(
+      `SELECT COUNT(*) as cnt FROM wecom_corpus WHERE channel_id = ?`,
+      [channelId]
+    ) as any;
+    const [[qualityRow]] = await (conn as any).execute(
+      `SELECT COUNT(*) as cnt FROM wecom_corpus WHERE channel_id = ? AND quality = 1`,
+      [channelId]
+    ) as any;
+    const [sceneRows] = await (conn as any).execute(
+      `SELECT scene_tag as tag, COUNT(*) as cnt FROM wecom_corpus WHERE channel_id = ? AND quality = 1 AND scene_tag IS NOT NULL GROUP BY scene_tag ORDER BY cnt DESC LIMIT 6`,
+      [channelId]
+    ) as any;
+    const [[twinRow]] = await (conn as any).execute(
+      `SELECT twin_enabled, twin_version, last_trained_at FROM wecom_digital_twin WHERE channel_id = ? LIMIT 1`,
+      [channelId]
+    ) as any;
+    res.json({
+      ok: true,
+      total: Number(totalRow?.cnt || 0),
+      quality_count: Number(qualityRow?.cnt || 0),
+      scene_tags: (sceneRows as any[]).map((r: any) => ({ tag: r.tag, cnt: Number(r.cnt) })),
+      twin_enabled: twinRow ? (twinRow.twin_enabled === 1) : false,
+      twin_version: twinRow?.twin_version || 'v1.0',
+      last_updated: twinRow?.last_trained_at || null,
+    });
+  } catch (e: any) {
+    console.error("[corpus/stats] 失败:", e);
+    res.status(500).json({ ok: false, error: "获取失败" });
+  }
+});
+
+/** POST /api/wecom/corpus/twin-toggle */
+router.post("/api/wecom/corpus/twin-toggle", async (req: Request, res: Response) => {
+  const { channel_id, enabled } = req.body;
+  if (!channel_id) return res.status(400).json({ ok: false, error: "channel_id 必填" });
+  const conn = await getDbConnection();
+  try {
+    await ensureCorpusTables(conn);
+    await (conn as any).execute(
+      `INSERT INTO wecom_digital_twin (channel_id, twin_enabled) VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE twin_enabled = VALUES(twin_enabled), updated_at = CURRENT_TIMESTAMP`,
+      [channel_id, enabled ? 1 : 0]
+    );
+    res.json({ ok: true, twin_enabled: !!enabled });
+  } catch (e: any) {
+    console.error("[corpus/twin-toggle] 失败:", e);
+    res.status(500).json({ ok: false, error: "操作失败" });
+  }
+});
+
 export default router;

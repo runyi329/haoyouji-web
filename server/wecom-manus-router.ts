@@ -1588,8 +1588,33 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
         }
       }
 
-      // 6. 构建system prompt（含知识库内容）
-      const fullSystemPrompt = systemPrompt + kbContext;
+      // 6. 数字分身语料检索（若 twin_enabled=1，取前3条优质语料作为回复风格示例）
+      let twinContext = "";
+      if (dbConn) {
+        try {
+          const [[twinRow]] = await (dbConn as any).execute(
+            `SELECT twin_enabled FROM wecom_digital_twin WHERE channel_id = ? LIMIT 1`,
+            [kfChannelId]
+          ) as any;
+          if (twinRow && twinRow.twin_enabled === 1) {
+            const [corpusRows] = await (dbConn as any).execute(
+              `SELECT user_msg, agent_reply FROM wecom_corpus WHERE channel_id = ? AND quality = 1 ORDER BY id DESC LIMIT 3`,
+              [kfChannelId]
+            ) as any;
+            if ((corpusRows as any[]).length > 0) {
+              twinContext = "\n\n[参考回复风格示例（请模仿这些示例的语气和表达方式）]\n" +
+                (corpusRows as any[]).map((r: any, i: number) =>
+                  `${i + 1}. 客户问：${r.user_msg.substring(0, 80)}\n   回复：${r.agent_reply.substring(0, 120)}`
+                ).join("\n") +
+                "\n[风格要求]回复时请保持上述示例的语气、节奏和表达风格";
+              console.log(`[KF] 数字分身语料命中 ${(corpusRows as any[]).length} 条`);
+            }
+          }
+        } catch (_) {}
+      }
+
+      // 6b. 构建system prompt（含知识库内容）
+      const fullSystemPrompt = systemPrompt + twinContext + kbContext;
 
       // 7. 调用DeepSeek获取回复
       const dsReply = await sendToDeepSeekAndGetReply(userText, aiModel, fullSystemPrompt);

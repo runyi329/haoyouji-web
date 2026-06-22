@@ -410,14 +410,10 @@ interface KnowledgeBase {
 function ConfigTab() {
   const [enabled, setEnabled] = useState(true);
   const [showGuide, setShowGuide] = useState(false);
-  const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [welcomeMsg, setWelcomeMsg] = useState("");
   const [welcomeEnabled, setWelcomeEnabled] = useState(false);
   const [waitingMsg, setWaitingMsg] = useState("");
   const [waitingEnabled, setWaitingEnabled] = useState(false);
-  const [systemPrompt, setSystemPrompt] = useState("");
-  const [aiModel, setAiModel] = useState("deepseek-chat");
-  const [contextRounds, setContextRounds] = useState(10);
   const [notifyEnabled, setNotifyEnabled] = useState(false);
   const [notifyUserids, setNotifyUserids] = useState<string[]>([]);
   const [showNotifyHelp, setShowNotifyHelp] = useState(false);
@@ -450,12 +446,9 @@ function ConfigTab() {
           setWelcomeEnabled(c.welcome_enabled !== false);
           setWaitingMsg(c.waiting_msg || "");
           setWaitingEnabled(c.waiting_enabled !== false);
-          setSystemPrompt(c.system_prompt || "");
-          setAiModel(c.ai_model || "deepseek-chat");
-          setContextRounds(c.context_rounds || 10);
           setNotifyEnabled(!!c.notify_enabled);
           setNotifyUserids(c.notify_userids ? (Array.isArray(c.notify_userids) ? c.notify_userids : c.notify_userids.split(",").filter(Boolean)) : []);
-          const snap = JSON.stringify({ wm: c.welcome_msg || "", wt: c.waiting_msg || "", sp: c.system_prompt || "", am: c.ai_model || "deepseek-chat", cr: c.context_rounds || 10, ne: !!c.notify_enabled, nu: c.notify_userids || "", ki: 0 });
+          const snap = JSON.stringify({ wm: c.welcome_msg || "", wt: c.waiting_msg || "", ne: !!c.notify_enabled, nu: c.notify_userids || "" });
           setSavedSnapshot(snap);
         }
         if (Array.isArray(kbs)) setKbList(kbs);
@@ -483,10 +476,6 @@ function ConfigTab() {
           welcome_enabled: welcomeEnabled ? '1' : '0',
           waiting_msg: waitingEnabled ? waitingMsg : '',
           waiting_enabled: waitingEnabled ? '1' : '0',
-          system_prompt: systemPrompt,
-          ai_model: aiModel,
-          knowledge_base_id: kbId,
-          context_rounds: contextRounds,
           notify_enabled: notifyEnabled ? '1' : '0',
           notify_userids: notifyUserids.join(','),
         }),
@@ -495,7 +484,7 @@ function ConfigTab() {
       if (d.ok) {
         toast.success("保存成功");
         setJustSaved(true);
-        const snap = JSON.stringify({ wm: welcomeMsg, wt: waitingMsg, sp: systemPrompt, am: aiModel, cr: contextRounds, ne: notifyEnabled, nu: notifyUserids.join(","), ki: kbId });
+        const snap = JSON.stringify({ wm: welcomeMsg, wt: waitingMsg, ne: notifyEnabled, nu: notifyUserids.join(",") });
         setSavedSnapshot(snap);
         setTimeout(() => setJustSaved(false), 2000);
       } else toast.error(d.error || "保存失败");
@@ -523,7 +512,7 @@ function ConfigTab() {
   }
 
 
-    const currentSnap = JSON.stringify({ wm: welcomeMsg, wt: waitingMsg, sp: systemPrompt, am: aiModel, cr: contextRounds, ne: notifyEnabled, nu: notifyUserids.join(","), ki: kbId });
+    const currentSnap = JSON.stringify({ wm: welcomeMsg, wt: waitingMsg, ne: notifyEnabled, nu: notifyUserids.join(",") });
   const isDirty = savedSnapshot === "" || currentSnap !== savedSnapshot;
 
 
@@ -675,91 +664,6 @@ function ConfigTab() {
         )}
       </div>
 
-      {/* 默认 AI 模型 */}
-      <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: C.line }}>
-        <div className="text-sm font-semibold mb-2" style={{ color: C.textMain }}>默认 AI 模型</div>
-        {/* 自定义下拉框 */}
-        <div className="relative">
-          {/* 触发按钮 */}
-          <button
-            onClick={() => setShowModelDropdown(!showModelDropdown)}
-            className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border-2 text-sm transition-all"
-            style={{ borderColor: showModelDropdown ? C.brand : C.line, backgroundColor: showModelDropdown ? C.brandLight : C.white }}
-          >
-            <div className="flex flex-col items-start min-w-0">
-              <span className="font-medium truncate" style={{ color: C.textMain }}>
-                {AI_MODELS.find(m => m.value === aiModel)?.label || aiModel}
-              </span>
-              <span className="text-xs truncate w-full" style={{ color: C.textSub }}>
-                {AI_MODELS.find(m => m.value === aiModel)?.desc || ""}
-              </span>
-            </div>
-            <ChevronDown
-              className="w-4 h-4 flex-shrink-0 ml-2 transition-transform"
-              style={{ color: C.textSub, transform: showModelDropdown ? "rotate(180deg)" : "rotate(0deg)" }}
-            />
-          </button>
-
-          {/* 下拉列表 */}
-          {showModelDropdown && (
-            <div
-              className="absolute left-0 right-0 top-full mt-1 rounded-2xl border shadow-lg overflow-hidden z-20"
-              style={{ borderColor: C.line, backgroundColor: C.white }}
-            >
-              {/* 按分组渲染 */}
-              {["DeepSeek", "Manus"].map(group => (
-                <div key={group}>
-                  {/* 分组标题 */}
-                  <div
-                    className="px-3 py-1.5 text-xs font-semibold"
-                    style={{ backgroundColor: C.bg, color: C.textSub }}
-                  >
-                    {group}
-                  </div>
-                  {/* 该分组的模型列表 */}
-                  {AI_MODELS.filter(m => m.group === group).map((m, idx, arr) => (
-                    <button
-                      key={m.value}
-                      onClick={() => { setAiModel(m.value); setShowModelDropdown(false); }}
-                      className="w-full text-left px-3 py-2.5 flex items-center justify-between transition-all"
-                      style={{
-                        backgroundColor: aiModel === m.value ? C.brandLight : "transparent",
-                        borderBottom: idx < arr.length - 1 ? `1px solid ${C.line}` : "none",
-                      }}
-                    >
-                      <div className="flex flex-col min-w-0 flex-1">
-                        <span className="text-sm font-medium" style={{ color: aiModel === m.value ? C.brandDeep : C.textMain }}>{m.label}</span>
-                        <span className="text-xs truncate" style={{ color: C.textSub }}>{m.desc}</span>
-                      </div>
-                      {aiModel === m.value && (
-                        <Check className="w-4 h-4 flex-shrink-0 ml-2" style={{ color: C.brand }} />
-                      )}
-                    </button>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 会话上下文轮数 */}
-      <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: C.line }}>
-        <div className="flex items-center justify-between mb-1">
-          <div className="text-sm font-semibold" style={{ color: C.textMain }}>会话上下文轮数</div>
-          <span className="text-sm font-bold" style={{ color: C.brand }}>{contextRounds} 轮</span>
-        </div>
-        <p className="text-xs mb-3" style={{ color: C.textSub }}>AI 记忆多少轮对话历史，数值越大越消耗积分（建议 5-20）</p>
-        <input
-          type="range" min={1} max={50} value={contextRounds}
-          onChange={e => setContextRounds(Number(e.target.value))}
-          className="w-full"
-          style={{ accentColor: C.brand }}
-        />
-        <div className="flex justify-between text-xs mt-1" style={{ color: C.line }}>
-          <span>1轮（省积分）</span><span>50轮（强记忆）</span>
-        </div>
-      </div>
 
       {/* 消息抄送 */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: C.line }}>
@@ -826,37 +730,6 @@ function ConfigTab() {
         )}
       </div>
 
-      {/* 绑定知识库 */}
-      {kbList.length > 0 && (
-        <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: C.line }}>
-          <div className="text-sm font-semibold mb-3" style={{ color: C.textMain }}>绑定知识库</div>
-          <div className="space-y-2">
-            <button
-              onClick={() => setKbId(0)}
-              className="w-full text-left text-sm px-3 py-2.5 rounded-xl border-2 transition-all"
-              style={kbId === 0
-                ? { borderColor: C.textSub, backgroundColor: C.bg, color: C.textSub }
-                : { borderColor: C.line, color: C.textSub }}
-            >
-              不绑定知识库
-            </button>
-            {kbList.map(kb => (
-              <button
-                key={kb.id}
-                onClick={() => setKbId(kb.id)}
-                className="w-full text-left text-sm px-3 py-2.5 rounded-xl border-2 transition-all"
-                style={kbId === kb.id
-                  ? { borderColor: C.brand, backgroundColor: C.brandLight, color: C.brandDeep }
-                  : { borderColor: C.line, color: C.textMain }}
-              >
-                <div className="font-medium">{kb.name}</div>
-                {kb.description && <div className="text-xs mt-0.5" style={{ color: C.textSub }}>{kb.description}</div>}
-                <div className="text-xs mt-0.5" style={{ color: C.textSub }}>{kb.item_count} 条记录</div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* 保存按钮 */}
       <button
@@ -1162,6 +1035,395 @@ function RulesTab() {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// AI 分身 Tab（养成成长系统）
+// ═══════════════════════════════════════════════════════════════
+// 学历等级体系：以等效知识条数（每条≈100字）为单位
+// 等效条数 = 知识库条目×1 + 优质语料×2 + 对话次数×0.1
+const AVATAR_LEVELS = [
+  { level: 1,  name: "小学生",   label: "基础常识",     threshold: 0     },
+  { level: 2,  name: "初中一年级", label: "系统入门",   threshold: 50    },
+  { level: 3,  name: "初中二年级", label: "知识扩展",   threshold: 120   },
+  { level: 4,  name: "初中三年级", label: "综合提升",   threshold: 250   },
+  { level: 5,  name: "高中一年级", label: "专业入门",   threshold: 450   },
+  { level: 6,  name: "高中二年级", label: "深度学习",   threshold: 700   },
+  { level: 7,  name: "高中三年级", label: "备考冲刺",   threshold: 1000  },
+  { level: 8,  name: "大学本科",   label: "专业系统",   threshold: 1500  },
+  { level: 9,  name: "硕士研究生", label: "研究深度",   threshold: 2500  },
+  { level: 10, name: "博士",       label: "顶尖专业",   threshold: 4000  },
+  { level: 11, name: "博士后",     label: "前沿研究",   threshold: 6500  },
+  { level: 12, name: "院士",       label: "行业权威",   threshold: 10000 },
+];
+
+// 等效知识条数计算（每条≈100字）
+function calcEquivCount(kbCount: number, corpusQuality: number, dialogCount: number): number {
+  return Math.round(kbCount * 1 + corpusQuality * 2 + dialogCount * 0.1);
+}
+
+function calcLevel(kbCount: number, corpusQuality: number, dialogCount: number) {
+  const equiv = calcEquivCount(kbCount, corpusQuality, dialogCount);
+  let cur = AVATAR_LEVELS[0];
+  for (const lv of AVATAR_LEVELS) {
+    if (equiv >= lv.threshold) cur = lv;
+  }
+  const idx = AVATAR_LEVELS.indexOf(cur);
+  const next = AVATAR_LEVELS[idx + 1] || null;
+  const progress = next
+    ? Math.min(100, Math.round(((equiv - cur.threshold) / (next.threshold - cur.threshold)) * 100))
+    : 100;
+  return { cur, next, equiv, progress };
+}
+
+function AvatarGrowthTab() {
+  const [loading, setLoading] = useState(true);
+  const [kbCount, setKbCount] = useState(0);
+  const [corpusQuality, setCorpusQuality] = useState(0);
+  const [dialogCount, setDialogCount] = useState(0);
+  const [twinEnabled, setTwinEnabled] = useState(false);
+  const [growthHistory, setGrowthHistory] = useState<{date: string; equiv: number; level: string}[]>([]);
+  const [showLevelGuide, setShowLevelGuide] = useState(false);
+
+  // 知识投喂
+  const [feedText, setFeedText] = useState("");
+  const [feedUrl, setFeedUrl] = useState("");
+  const [feedingText, setFeedingText] = useState(false);
+  const [feedingUrl, setFeedingUrl] = useState(false);
+  const [feedResult, setFeedResult] = useState<{show: boolean; count: number; level: string} | null>(null);
+
+  useEffect(() => {
+    Promise.all([
+      fetch(`/api/wecom/ch/kb/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).catch(() => ({})),
+      fetch(`/api/wecom/corpus/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).catch(() => ({})),
+      fetch(`/api/wecom/ch/logs?channel_id=${KF_CHANNEL_ID}&channel_type=${KF_CHANNEL_TYPE}&limit=1`).then(r => r.json()).catch(() => ({})),
+    ]).then(([kb, corpus, logs]) => {
+      const kb_ = kb.item_count || 0;
+      const cq_ = corpus.ok ? (corpus.quality_count || 0) : 0;
+      const d_  = logs.total || 0;
+      setKbCount(kb_);
+      setCorpusQuality(cq_);
+      setDialogCount(d_);
+      setTwinEnabled(corpus.ok && (corpus.twin_enabled === 1 || corpus.twin_enabled === true));
+      // 模拟成长历程（实际可从后端拉取快照数据）
+      const equiv = calcEquivCount(kb_, cq_, d_);
+      const today = new Date();
+      const hist: {date: string; equiv: number; level: string}[] = [];
+      // 生成过去6个月的模拟增长曲线（按比例递减）
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(today);
+        d.setMonth(d.getMonth() - i);
+        const ratio = (6 - i) / 6;
+        const e = Math.round(equiv * ratio * ratio); // 非线性增长
+        const lv = AVATAR_LEVELS.reduce((acc, l) => e >= l.threshold ? l : acc, AVATAR_LEVELS[0]);
+        hist.push({
+          date: `${d.getMonth() + 1}月`,
+          equiv: e,
+          level: lv.name,
+        });
+      }
+      setGrowthHistory(hist);
+    }).finally(() => setLoading(false));
+  }, []);
+
+  const { cur, next, equiv, progress } = calcLevel(kbCount, corpusQuality, dialogCount);
+  const toNext = next ? next.threshold - equiv : 0;
+
+  // 能力维度
+  const ABILITIES = [
+    { key: 'product',   label: '产品咨询',   minEquiv: 0,    unlockEquiv: 0,   desc: '回答基础产品问题' },
+    { key: 'health',    label: '健康问答',   minEquiv: 50,   unlockEquiv: 50,  desc: '解答常见健康疑问' },
+    { key: 'objection', label: '异议处理',   minEquiv: 250,  unlockEquiv: 250, desc: '应对客户质疑和顾虑' },
+    { key: 'close',     label: '成交引导',   minEquiv: 700,  unlockEquiv: 700, desc: '主动引导客户下单' },
+    { key: 'followup',  label: '跟进维护',   minEquiv: 1500, unlockEquiv: 1500,desc: '主动回访促进复购' },
+    { key: 'personal',  label: '个性化方案', minEquiv: 4000, unlockEquiv: 4000,desc: '结合客户情况深度定制' },
+  ];
+
+  async function handleFeedText() {
+    if (!feedText.trim()) return;
+    setFeedingText(true);
+    try {
+      const r = await fetch('/api/wecom/ch/kb/add-item', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel_id: KF_CHANNEL_ID, content: feedText.trim(), source: 'manual' }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        const newKb = kbCount + 1;
+        setKbCount(newKb);
+        const newEquiv = calcEquivCount(newKb, corpusQuality, dialogCount);
+        const newLv = AVATAR_LEVELS.reduce((acc, l) => newEquiv >= l.threshold ? l : acc, AVATAR_LEVELS[0]);
+        setFeedResult({ show: true, count: 1, level: newLv.name });
+        setFeedText('');
+        setTimeout(() => setFeedResult(null), 4000);
+      } else toast.error(d.error || '添加失败');
+    } catch { toast.error('网络错误'); }
+    finally { setFeedingText(false); }
+  }
+
+  async function handleFeedUrl() {
+    if (!feedUrl.trim()) return;
+    setFeedingUrl(true);
+    try {
+      const r = await fetch('/api/wecom/ch/kb/add-url', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel_id: KF_CHANNEL_ID, url: feedUrl.trim() }),
+      });
+      const d = await r.json();
+      if (d.ok) {
+        const added = d.item_count || 1;
+        const newKb = kbCount + added;
+        setKbCount(newKb);
+        const newEquiv = calcEquivCount(newKb, corpusQuality, dialogCount);
+        const newLv = AVATAR_LEVELS.reduce((acc, l) => newEquiv >= l.threshold ? l : acc, AVATAR_LEVELS[0]);
+        setFeedResult({ show: true, count: added, level: newLv.name });
+        setFeedUrl('');
+        setTimeout(() => setFeedResult(null), 4000);
+      } else toast.error(d.error || '抓取失败');
+    } catch { toast.error('网络错误'); }
+    finally { setFeedingUrl(false); }
+  }
+
+  if (loading) {
+    return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin" style={{ color: C.brand }} /></div>;
+  }
+
+  // 成长曲线 SVG（只显示已达到的等级刻度）
+  const chartW = 320, chartH = 140, padL = 72, padR = 16, padT = 12, padB = 28;
+  const innerW = chartW - padL - padR;
+  const innerH = chartH - padT - padB;
+  const maxEquiv = Math.max(equiv * 1.2, next ? next.threshold * 1.1 : equiv * 1.5, 10);
+  const reachedLevels = AVATAR_LEVELS.filter(l => l.threshold <= equiv);
+
+  const toX = (i: number) => padL + (i / (growthHistory.length - 1)) * innerW;
+  const toY = (e: number) => padT + innerH - (e / maxEquiv) * innerH;
+
+  const pathD = growthHistory.map((p, i) =>
+    `${i === 0 ? 'M' : 'L'} ${toX(i).toFixed(1)} ${toY(p.equiv).toFixed(1)}`
+  ).join(' ');
+
+  return (
+    <div className="space-y-4 pb-6">
+
+      {/* ── 等级卡片 ── */}
+      <div className="rounded-2xl overflow-hidden" style={{ background: `linear-gradient(135deg, ${C.brandDeep} 0%, ${C.brand} 100%)` }}>
+        <div className="px-5 pt-5 pb-4">
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <div className="text-white text-xs font-medium opacity-75 mb-1">你的分身目前相当于</div>
+              <div className="text-white text-2xl font-bold tracking-tight">{cur.name}</div>
+              <div className="text-white text-sm opacity-80 mt-0.5">{cur.label}水平</div>
+            </div>
+            <button
+              onClick={() => setShowLevelGuide(!showLevelGuide)}
+              className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-1"
+              style={{ backgroundColor: 'rgba(255,255,255,0.25)', color: '#fff' }}
+            >?</button>
+          </div>
+          {/* 已吸收知识量 */}
+          <div className="text-white text-xs opacity-70 mb-2">
+            已吸收 <span className="font-bold text-sm opacity-100">{equiv.toLocaleString()}</span> 等效知识条
+            （知识库 {kbCount} 条 · 优质语料 {corpusQuality} 条 · 对话 {dialogCount} 次）
+          </div>
+          {/* 进度条 */}
+          {next && (
+            <div>
+              <div className="flex justify-between text-white text-xs opacity-70 mb-1.5">
+                <span>距「{next.name}」还差 {toNext.toLocaleString()} 条</span>
+                <span>{progress}%</span>
+              </div>
+              <div className="rounded-full overflow-hidden" style={{ height: 6, backgroundColor: 'rgba(255,255,255,0.25)' }}>
+                <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, backgroundColor: '#fff' }} />
+              </div>
+            </div>
+          )}
+          {!next && <div className="text-white text-xs opacity-70">🎓 已达最高等级</div>}
+        </div>
+
+        {/* 等级对照表（问号展开） */}
+        {showLevelGuide && (
+          <div className="mx-4 mb-4 rounded-xl overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.12)' }}>
+            <div className="px-3 py-2 text-white text-xs font-semibold opacity-90 border-b" style={{ borderColor: 'rgba(255,255,255,0.2)' }}>
+              等效知识条数对照表
+            </div>
+            <div className="px-3 py-2 space-y-1">
+              {AVATAR_LEVELS.map(lv => (
+                <div key={lv.level} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-semibold ${lv.level <= cur.level ? 'text-white' : 'text-white opacity-40'}`}>
+                      {lv.level <= cur.level ? '✓' : '·'} {lv.name}
+                    </span>
+                  </div>
+                  <span className={`text-xs ${lv.level <= cur.level ? 'text-white opacity-80' : 'text-white opacity-35'}`}>
+                    {lv.threshold === 0 ? '起点' : `${lv.threshold.toLocaleString()} 条`}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="px-3 pt-2 pb-3 space-y-2" style={{ borderTop: '1px solid rgba(255,255,255,0.15)' }}>
+              <div className="text-white text-[10px] font-semibold opacity-70">等效知识条数计算规则</div>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-white text-[10px] opacity-60">📚 知识库每条</span>
+                  <span className="text-white text-[10px] opacity-80 font-semibold">× 1 条</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-white text-[10px] opacity-60">⭐ 优质语料每条</span>
+                  <span className="text-white text-[10px] opacity-80 font-semibold">× 2 条</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-white text-[10px] opacity-60">💬 对话记录每次</span>
+                  <span className="text-white text-[10px] opacity-80 font-semibold">× 0.1 条</span>
+                </div>
+              </div>
+              <div className="text-white text-[10px] opacity-40">优质语料权重更高，因其包含经过筛选的高质量对话示例</div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── 成长曲线 ── */}
+      <div className="rounded-xl border overflow-hidden" style={{ borderColor: C.line }}>
+        <div className="px-4 py-3 flex items-center justify-between" style={{ backgroundColor: C.brandLight, borderBottom: `1px solid ${C.line}` }}>
+          <span className="text-xs font-semibold" style={{ color: C.textMain }}>成长曲线</span>
+          <span className="text-xs" style={{ color: C.textSub }}>近6个月</span>
+        </div>
+        <div className="px-4 py-3" style={{ backgroundColor: C.white }}>
+          <svg width="100%" viewBox={`0 0 ${chartW} ${chartH}`} style={{ overflow: 'visible' }}>
+            {/* Y轴刻度线（只显示已达到的等级） */}
+            {reachedLevels.map(lv => {
+              const y = toY(lv.threshold);
+              return (
+                <g key={lv.level}>
+                  <line x1={padL} y1={y} x2={chartW - padR} y2={y}
+                    stroke={C.line} strokeWidth="0.5" strokeDasharray="3,3" />
+                  <text x={padL - 4} y={y + 4} textAnchor="end" fontSize="8" fill={C.textSub}>{lv.name}</text>
+                </g>
+              );
+            })}
+            {/* X轴 */}
+            <line x1={padL} y1={padT + innerH} x2={chartW - padR} y2={padT + innerH} stroke={C.line} strokeWidth="1" />
+            {/* X轴标签 */}
+            {growthHistory.map((p, i) => (
+              <text key={i} x={toX(i)} y={chartH - 6} textAnchor="middle" fontSize="8" fill={C.textSub}>{p.date}</text>
+            ))}
+            {/* 曲线填充 */}
+            <path
+              d={`${pathD} L ${toX(growthHistory.length - 1).toFixed(1)} ${(padT + innerH).toFixed(1)} L ${padL.toFixed(1)} ${(padT + innerH).toFixed(1)} Z`}
+              fill={C.brand} opacity="0.08"
+            />
+            {/* 曲线 */}
+            <path d={pathD} fill="none" stroke={C.brand} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            {/* 当前点 */}
+            <circle cx={toX(growthHistory.length - 1)} cy={toY(equiv)} r="4" fill={C.brand} />
+            <text x={toX(growthHistory.length - 1)} y={toY(equiv) - 8} textAnchor="middle" fontSize="8" fill={C.brand} fontWeight="bold">
+              你在这里
+            </text>
+          </svg>
+        </div>
+      </div>
+
+      {/* ── 分身已掌握的能力 ── */}
+      <div className="rounded-xl border overflow-hidden" style={{ borderColor: C.line }}>
+        <div className="px-4 py-3" style={{ backgroundColor: C.brandLight, borderBottom: `1px solid ${C.line}` }}>
+          <span className="text-xs font-semibold" style={{ color: C.textMain }}>分身已掌握的能力</span>
+        </div>
+        <div className="px-4 py-3 space-y-2.5" style={{ backgroundColor: C.white }}>
+          {ABILITIES.map(ab => {
+            const unlocked = equiv >= ab.unlockEquiv;
+            const abProgress = unlocked ? 100 : Math.min(99, Math.round((equiv / ab.unlockEquiv) * 100));
+            const stillNeed = ab.unlockEquiv - equiv;
+            return (
+              <div key={ab.key}>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm">{unlocked ? '✅' : '⬜'}</span>
+                    <span className="text-xs font-semibold" style={{ color: unlocked ? C.textMain : '#9CA3AF' }}>{ab.label}</span>
+                  </div>
+                  <span className="text-[10px]" style={{ color: unlocked ? C.brand : '#9CA3AF' }}>
+                    {unlocked ? ab.desc : `再投喂 ${stillNeed.toLocaleString()} 条解锁`}
+                  </span>
+                </div>
+                <div className="rounded-full overflow-hidden" style={{ height: 4, backgroundColor: unlocked ? C.brandLight : 'rgba(0,0,0,0.06)' }}>
+                  <div className="h-full rounded-full" style={{ width: `${abProgress}%`, backgroundColor: unlocked ? C.brand : '#D1D5DB' }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── 投喂结果提示 ── */}
+      {feedResult?.show && (
+        <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ backgroundColor: C.brandLight, border: `1px solid ${C.brand}` }}>
+          <span className="text-xl">🎉</span>
+          <div>
+            <div className="text-sm font-semibold" style={{ color: C.brand }}>分身成长了！新增 {feedResult.count} 条知识</div>
+            <div className="text-xs mt-0.5" style={{ color: C.textSub }}>当前相当于「{feedResult.level}」水平</div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 知识投喂 ── */}
+      <div className="rounded-xl border overflow-hidden" style={{ borderColor: C.line }}>
+        <div className="px-4 py-3" style={{ backgroundColor: C.brandLight, borderBottom: `1px solid ${C.line}` }}>
+          <span className="text-xs font-semibold" style={{ color: C.textMain }}>知识投喂</span>
+          <span className="text-xs ml-2" style={{ color: C.textSub }}>帮你的分身学习更多专业知识</span>
+        </div>
+        <div className="px-4 py-3 space-y-3" style={{ backgroundColor: C.white }}>
+          {/* 文字输入 */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="text-xs font-medium" style={{ color: C.textMain }}>输入知识文字</div>
+              <div className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: C.brandLight, color: C.brand }}>+1 等效条</div>
+            </div>
+            <textarea
+              rows={3}
+              value={feedText}
+              onChange={e => setFeedText(e.target.value)}
+              placeholder="粘贴文章段落、产品说明、专业知识…"
+              className="w-full rounded-lg border px-3 py-2 text-sm resize-none outline-none"
+              style={{ borderColor: C.line, color: C.textMain, backgroundColor: C.bg }}
+            />
+            <button
+              onClick={handleFeedText}
+              disabled={!feedText.trim() || feedingText}
+              className="mt-1.5 w-full py-2 rounded-lg text-sm font-medium transition-opacity"
+              style={{ backgroundColor: feedText.trim() ? C.brand : '#D1D5DB', color: '#fff', opacity: feedingText ? 0.6 : 1 }}
+            >
+              {feedingText ? '添加中…' : '添加到知识库'}
+            </button>
+          </div>
+          {/* 链接输入 */}
+          <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 12 }}>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="text-xs font-medium" style={{ color: C.textMain }}>粘贴网页链接</div>
+              <div className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: C.brandLight, color: C.brand }}>+10~50 等效条</div>
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="url"
+                value={feedUrl}
+                onChange={e => setFeedUrl(e.target.value)}
+                placeholder="https://… 支持公众号文章、健康期刊"
+                className="flex-1 rounded-lg border px-3 py-2 text-sm outline-none"
+                style={{ borderColor: C.line, color: C.textMain, backgroundColor: C.bg }}
+              />
+              <button
+                onClick={handleFeedUrl}
+                disabled={!feedUrl.trim() || feedingUrl}
+                className="px-4 py-2 rounded-lg text-sm font-medium flex-shrink-0"
+                style={{ backgroundColor: feedUrl.trim() ? C.brand : '#D1D5DB', color: '#fff', opacity: feedingUrl ? 0.6 : 1 }}
+              >
+                {feedingUrl ? '抓取中…' : '抓取'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
 // AI 智库 Tab（4 层架构）
 // ═══════════════════════════════════════════════════════════════
 function AIBrainTab() {
@@ -1180,11 +1442,19 @@ function AIBrainTab() {
   const [sysKbStats, setSysKbStats] = useState({ item_count: 0, file_count: 0, char_count: 0 });
   const [sysKbEnabled, setSysKbEnabled] = useState(true);
   const [togglingKb, setTogglingKb] = useState(false);
+  const [kbId, setKbId] = useState(0);
+  const [kbList, setKbList] = useState<KnowledgeBase[]>([]);
+  const [savingKbBind, setSavingKbBind] = useState(false);
+  const [kbBindSaved, setKbBindSaved] = useState(false);
 
   // ── 第④层：上下文轮数 ──
   const [contextRounds, setContextRounds] = useState(10);
   const [savingCtx, setSavingCtx] = useState(false);
   const [ctxSaved, setCtxSaved] = useState(false);
+  const [aiModel, setAiModel] = useState("deepseek-chat");
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [savingModel, setSavingModel] = useState(false);
+  const [modelSaved, setModelSaved] = useState(false);
 
   useEffect(() => {
     // 加载第①层：AI 指令
@@ -1199,14 +1469,18 @@ function AIBrainTab() {
       fetch(`/api/wecom/ch/kb/stats?channel_type=kf`).then(r => r.json()),
       fetch(`/api/wecom/channel-config/${KF_CHANNEL_ID}`).then(r => r.json()).catch(() => ({})),
       fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/config`).then(r => r.json()).catch(() => ({})),
-    ]).then(([priv, sys, chCfg, cfg]) => {
+      fetch(`/api/wecom/knowledge-bases`).then(r => r.json()).catch(() => ({ ok: false })),
+    ]).then(([priv, sys, chCfg, cfg, kbs]) => {
       if (priv.ok) setKbStats({ item_count: priv.item_count || 0, file_count: priv.file_count || 0, char_count: priv.char_count || 0, month_count: priv.month_count || 0 });
       if (sys.ok) setSysKbStats({ item_count: sys.item_count || 0, file_count: sys.file_count || 0, char_count: sys.char_count || 0 });
       setSysKbEnabled(chCfg.disable_system_kb !== '1');
       if (cfg.config) {
         setContextRounds(cfg.config.context_rounds || 10);
         setSystemPrompt(cfg.config.system_prompt || "");
+        setKbId(cfg.config.knowledge_base_id || 0);
+        if (cfg.config.ai_model) setAiModel(cfg.config.ai_model);
       }
+      if (kbs.ok && Array.isArray(kbs.kbs)) setKbList(kbs.kbs);
     });
   }, []);
 
@@ -1412,6 +1686,83 @@ function AIBrainTab() {
                     <textarea value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)} rows={5} className="w-full text-sm rounded-xl border p-3 resize-none outline-none" style={{ borderColor: C.line, color: C.textMain, backgroundColor: C.bg }} placeholder="直接输入 AI 系统指令..." />
                     <div className="text-xs mt-1" style={{ color: C.textSub }}>{systemPrompt.length} 字符</div>
                   </div>
+                  {/* 默认 AI 模型 */}
+                  <div>
+                    <div className="text-xs font-semibold mb-1.5" style={{ color: C.textMain }}>默认 AI 模型</div>
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowModelDropdown(!showModelDropdown)}
+                        className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border-2 text-sm transition-all"
+                        style={{ borderColor: showModelDropdown ? C.brand : C.line, backgroundColor: showModelDropdown ? C.brandLight : C.white }}
+                      >
+                        <div className="flex flex-col items-start min-w-0">
+                          <span className="text-xs font-medium truncate" style={{ color: C.textMain }}>{AI_MODELS.find(m => m.value === aiModel)?.label || aiModel}</span>
+                          <span className="text-xs truncate w-full" style={{ color: C.textSub }}>{AI_MODELS.find(m => m.value === aiModel)?.desc || ""}</span>
+                        </div>
+                        <ChevronDown className="w-4 h-4 flex-shrink-0 ml-2 transition-transform" style={{ color: C.textSub, transform: showModelDropdown ? "rotate(180deg)" : "rotate(0deg)" }} />
+                      </button>
+                      {showModelDropdown && (
+                        <div className="absolute left-0 right-0 top-full mt-1 rounded-2xl border shadow-lg overflow-hidden z-20" style={{ borderColor: C.line, backgroundColor: C.white }}>
+                          {["DeepSeek", "Manus"].map(group => (
+                            <div key={group}>
+                              <div className="px-3 py-1.5 text-xs font-semibold" style={{ backgroundColor: C.bg, color: C.textSub }}>{group}</div>
+                              {AI_MODELS.filter(m => m.group === group).map((m, idx, arr) => (
+                                <button key={m.value} onClick={() => { setAiModel(m.value); setShowModelDropdown(false); setModelSaved(false); }}
+                                  className="w-full text-left px-3 py-2.5 flex items-center justify-between transition-all"
+                                  style={{ backgroundColor: aiModel === m.value ? C.brandLight : "transparent", borderBottom: idx < arr.length - 1 ? `1px solid ${C.line}` : "none" }}
+                                >
+                                  <div className="flex flex-col min-w-0 flex-1">
+                                    <span className="text-xs font-medium" style={{ color: aiModel === m.value ? C.brandDeep : C.textMain }}>{m.label}</span>
+                                    <span className="text-xs truncate" style={{ color: C.textSub }}>{m.desc}</span>
+                                  </div>
+                                  {aiModel === m.value && <Check className="w-4 h-4 flex-shrink-0 ml-2" style={{ color: C.brand }} />}
+                                </button>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={async () => {
+                        setSavingModel(true);
+                        try {
+                          const res = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ai_model: aiModel }) });
+                          const d = await res.json();
+                          if (d.ok) { setModelSaved(true); toast.success('模型已保存'); setTimeout(() => setModelSaved(false), 2000); }
+                          else toast.error(d.error || '保存失败');
+                        } catch { toast.error('保存失败'); }
+                        finally { setSavingModel(false); }
+                      }}
+                      disabled={savingModel || modelSaved}
+                      className="mt-2 w-full py-1.5 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-1 disabled:opacity-60"
+                      style={{ backgroundColor: C.brand }}
+                    >
+                      {savingModel ? <Loader2 className="w-3 h-3 animate-spin" /> : modelSaved ? <Check className="w-3 h-3" /> : <Save className="w-3 h-3" />}
+                      {savingModel ? '保存中...' : modelSaved ? '已保存' : '保存模型'}
+                    </button>
+                  </div>
+                  {/* 上下文轮数 */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-xs font-semibold" style={{ color: C.textMain }}>会话上下文轮数</div>
+                      <span className="text-sm font-bold" style={{ color: C.brand }}>{contextRounds} 轮</span>
+                    </div>
+                    <p className="text-xs mb-2" style={{ color: C.textSub }}>AI 记忆多少轮对话历史，数值越大越消耗积分（建议 5-20）</p>
+                    <input type="range" min={1} max={50} value={contextRounds} onChange={e => { setContextRounds(Number(e.target.value)); setCtxSaved(false); }} className="w-full" style={{ accentColor: C.brand }} />
+                    <div className="flex justify-between text-xs mt-1" style={{ color: C.textSub }}>
+                      <span>1轮（省积分）</span><span>50轮（强记忆）</span>
+                    </div>
+                    <button
+                      onClick={handleSaveContextRounds}
+                      disabled={savingCtx || ctxSaved}
+                      className="mt-2 w-full py-1.5 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-1.5 disabled:opacity-60"
+                      style={{ backgroundColor: C.brand }}
+                    >
+                      {savingCtx ? <Loader2 className="w-3 h-3 animate-spin" /> : ctxSaved ? <Check className="w-3 h-3" /> : <Save className="w-3 h-3" />}
+                      {savingCtx ? '保存中...' : ctxSaved ? '已保存' : '保存设置'}
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -1454,6 +1805,53 @@ function AIBrainTab() {
                       <Plus className="w-3 h-3" />管理知识库内容
                     </button>
                   </div>
+                  {/* 绑定知识库选择器 */}
+                  {kbList.length > 0 && (
+                    <div className="rounded-xl border p-3" style={{ borderColor: C.line }}>
+                      <div className="text-xs font-semibold mb-2" style={{ color: C.textMain }}>绑定知识库（选择一个私人知识库供 AI 优先检索）</div>
+                      <div className="space-y-1.5">
+                        <button
+                          onClick={() => { setKbId(0); setKbBindSaved(false); }}
+                          className="w-full text-left text-xs px-3 py-2 rounded-xl border-2 transition-all"
+                          style={kbId === 0
+                            ? { borderColor: C.textSub, backgroundColor: C.bg, color: C.textSub }
+                            : { borderColor: C.line, color: C.textSub }}
+                        >不绑定知识库</button>
+                        {kbList.map(kb => (
+                          <button
+                            key={kb.id}
+                            onClick={() => { setKbId(kb.id); setKbBindSaved(false); }}
+                            className="w-full text-left text-xs px-3 py-2 rounded-xl border-2 transition-all"
+                            style={kbId === kb.id
+                              ? { borderColor: C.brand, backgroundColor: C.brandLight, color: C.brandDeep }
+                              : { borderColor: C.line, color: C.textMain }}
+                          >
+                            <div className="font-medium">{kb.name}</div>
+                            {kb.description && <div className="mt-0.5" style={{ color: C.textSub }}>{kb.description}</div>}
+                            <div className="mt-0.5" style={{ color: C.textSub }}>{kb.item_count} 条记录</div>
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={async () => {
+                          setSavingKbBind(true);
+                          try {
+                            const res = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ knowledge_base_id: kbId }) });
+                            const d = await res.json();
+                            if (d.ok) { setKbBindSaved(true); toast.success('绑定已保存'); setTimeout(() => setKbBindSaved(false), 2000); }
+                            else toast.error(d.error || '保存失败');
+                          } catch { toast.error('保存失败'); }
+                          finally { setSavingKbBind(false); }
+                        }}
+                        disabled={savingKbBind || kbBindSaved}
+                        className="mt-2 w-full py-1.5 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-1 disabled:opacity-60"
+                        style={{ backgroundColor: C.brand }}
+                      >
+                        {savingKbBind ? <Loader2 className="w-3 h-3 animate-spin" /> : kbBindSaved ? <Check className="w-3 h-3" /> : <Save className="w-3 h-3" />}
+                        {savingKbBind ? '保存中...' : kbBindSaved ? '已保存' : '保存绑定'}
+                      </button>
+                    </div>
+                  )}
                   {/* 提示 */}
                   <div className="text-xs rounded-xl p-2.5" style={{ backgroundColor: C.brandLight, color: C.textSub, border: `1px solid ${C.line}` }}>
                     知识库详细管理（上传文件、添加条目、查看内容）请前往「知识库」页面操作。
@@ -2181,10 +2579,11 @@ function CustomerDataTab() {
 // ═══════════════════════════════════════════════════════════════
 // 营养俱乐部主页
 // ═══════════════════════════════════════════════════════════════
-type TabKey = "config" | "aibrain" | "customers" | "rules";
+type TabKey = "config" | "avatar" | "aibrain" | "customers" | "rules";
 
 const TABS: { key: TabKey; label: string; icon: typeof Bot }[] = [
   { key: "config", label: "配置", icon: Settings },
+  { key: "avatar", label: "AI分身", icon: Bot },
   { key: "aibrain", label: "AI智库", icon: BookOpen },
   { key: "customers", label: "客户数据", icon: Users },
   { key: "rules", label: "专属规则", icon: Sparkles },
@@ -2201,8 +2600,18 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
       fetch(`/api/wecom/custom-rules?channel_type=${KF_CHANNEL_TYPE}`).then(r => r.json()).then(d => d.ok ? (d.rules || []).length : 0).catch(() => 0),
       fetch(`/api/wecom/ch/kb/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).then(d => d.item_count || 0).catch(() => 0),
       fetch(`/api/wecom/ch/logs?channel_id=${KF_CHANNEL_ID}&channel_type=${KF_CHANNEL_TYPE}&limit=1`).then(r => r.json()).then(d => d.total || 0).catch(() => 0),
-    ]).then(([config, rules, aibrain, customers]) => {
-      setTabCounts({ config, rules, aibrain, customers });
+      fetch(`/api/wecom/corpus/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).then(d => {
+        const kb = 0; // 将在单独请求中获取
+        const corpus = d.ok ? (d.quality_count || 0) : 0;
+        return corpus;
+      }).catch(() => 0),
+    ]).then(([config, rules, aibrain, customers, corpusQuality]) => {
+      // 计算 AI 分身等级（简化版，只用 kb+corpus 估算）
+      const avatarScore = aibrain * 1 + corpusQuality * 3 + customers * 0.5;
+      let avatarLevel = 1;
+      const lvThresholds = [0, 100, 300, 700, 1500, 3000];
+      for (let i = lvThresholds.length - 1; i >= 0; i--) { if (avatarScore >= lvThresholds[i]) { avatarLevel = i + 1; break; } }
+      setTabCounts({ config, rules, aibrain, customers, avatar: avatarLevel });
     });
   }, []);
 
@@ -2242,6 +2651,7 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
                     ? { color: C.brand, borderBottom: `2px solid ${C.brand}` }
                     : { color: C.textSub, borderBottom: '2px solid transparent' }),
                   borderRight: t.key !== 'rules' ? `1px solid ${C.line}` : 'none',
+                  fontSize: t.key === 'aibrain' ? 11 : undefined,
                   minWidth: t.key === 'aibrain' ? 70 : undefined,
                 }}
               >
@@ -2252,7 +2662,10 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
                     ? { backgroundColor: C.brandLight, color: C.brand }
                     : { backgroundColor: 'rgba(0,0,0,0.06)', color: C.textSub }}
                 >
-                  {tabCounts[t.key] !== undefined ? tabCounts[t.key] : '-'}
+                  {t.key === 'avatar'
+                    ? (tabCounts[t.key] !== undefined ? `Lv.${tabCounts[t.key]}` : '-')
+                    : (tabCounts[t.key] !== undefined ? tabCounts[t.key] : '-')
+                  }
                 </span>
               </button>
             );
@@ -2263,6 +2676,7 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
       {/* 主内容区 */}
       <main className="flex-1 overflow-y-auto px-4 pt-2">
         {activeTab === "config" && <ConfigTab />}
+        {activeTab === "avatar" && <AvatarGrowthTab />}
         {activeTab === "aibrain" && <AIBrainTab />}
         {activeTab === "customers" && <CustomerDataTab />}
         {activeTab === "rules" && <RulesTab />}
