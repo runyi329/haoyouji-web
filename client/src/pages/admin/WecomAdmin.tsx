@@ -124,7 +124,7 @@ const Link2Icon = () => (
 );
 
 const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
-  { key: "binding", label: "账号绑定", icon: <Link2Icon /> },
+  { key: "binding", label: "用户绑定", icon: <Link2Icon /> },
   { key: "users", label: "客服用户", icon: <User className="w-4 h-4" /> },
   { key: "workflow", label: "工作流", icon: <Zap className="w-4 h-4" /> },
   { key: "messages", label: "消息", icon: <MessageSquare className="w-4 h-4" /> },
