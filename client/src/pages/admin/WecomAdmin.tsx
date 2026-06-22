@@ -2253,7 +2253,7 @@ function ChannelDetail({ channel }: { channel: Channel }) {
         ))}
       </div>
 
-      {activeTab === "config" && <ChannelConfigTab channel={channel} />}
+      {activeTab === "config" && <ChannelConfigTab channel={channel} onJumpToKb={() => setActiveTab("kb")} />}
       {activeTab === "rules" && <ChannelCustomRulesTab channelType={channel.channel_type} />}
       {activeTab === "kb" && <ChannelKnowledgeTab channelType={channel.channel_type} />}
       {activeTab === "users" && <ChannelUsersTab channelType={channel.channel_type} />}
@@ -2618,7 +2618,7 @@ function AiAssistConfigCard({
 
 // ─── 配置Tab ──────────────────────────────────────────────────────────────────
 
-function ChannelConfigTab({ channel }: { channel: Channel }) {
+function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToKb?: () => void }) {
   const isApp = channel.channel_type === "app";
 
   // 通用配置
@@ -2646,6 +2646,110 @@ function ChannelConfigTab({ channel }: { channel: Channel }) {
   const [menuReplies, setMenuReplies] = useState<Record<string,string>>({});
   const [editingReplies, setEditingReplies] = useState<Record<string,boolean>>({});
   const [savingReplies, setSavingReplies] = useState<Record<string,boolean>>({});
+
+  // 结构化指令条目
+  interface PromptRule {
+    id: number;
+    channel_id: number;
+    layer: number;
+    category: string;
+    content: string;
+    enabled: number;
+    sort_order: number;
+    remark: string;
+    created_at: string;
+    updated_at: string;
+  }
+  const [promptRules, setPromptRules] = useState<PromptRule[]>([]);
+  const [promptRulesOpen, setPromptRulesOpen] = useState(false);
+  const [promptPreviewOpen, setPromptPreviewOpen] = useState(false);
+  const [editingRuleId, setEditingRuleId] = useState<number | null>(null);
+  const [addingRule, setAddingRule] = useState(false);
+  const [ruleSearch, setRuleSearch] = useState("");
+  const [newRule, setNewRule] = useState({ layer: 2, category: "行为规则", content: "", remark: "" });
+  const [savingRule, setSavingRule] = useState(false);
+  const [editRuleDraft, setEditRuleDraft] = useState<Partial<PromptRule>>({});
+
+  const PROMPT_CATEGORIES = ["角色定义", "知识库规则", "回复格式", "语气风格", "安全边界"];
+
+  async function loadPromptRules() {
+    try {
+      const res = await fetch(`/api/wecom/channels/${channel.id}/prompt-rules`);
+      const d = await res.json();
+      if (d.rules) setPromptRules(d.rules);
+    } catch {}
+  }
+
+  async function handleAddRule() {
+    if (!newRule.content.trim()) return;
+    setSavingRule(true);
+    try {
+      const res = await fetch(`/api/wecom/channels/${channel.id}/prompt-rules`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newRule),
+      });
+      const d = await res.json();
+      if (d.rule) {
+        setPromptRules(prev => [...prev, d.rule]);
+        setNewRule({ layer: 2, category: "行为规则", content: "", remark: "" });
+        setAddingRule(false);
+        toast.success("指令已添加");
+      } else toast.error(d.error || "添加失败");
+    } catch { toast.error("网络错误"); }
+    finally { setSavingRule(false); }
+  }
+
+  async function handleToggleRule(rule: PromptRule) {
+    const newEnabled = rule.enabled ? 0 : 1;
+    try {
+      const res = await fetch(`/api/wecom/channels/${channel.id}/prompt-rules/${rule.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: newEnabled }),
+      });
+      const d = await res.json();
+      if (d.rule) setPromptRules(prev => prev.map(r => r.id === rule.id ? d.rule : r));
+    } catch { toast.error("网络错误"); }
+  }
+
+  async function handleSaveRule(ruleId: number) {
+    setSavingRule(true);
+    try {
+      const res = await fetch(`/api/wecom/channels/${channel.id}/prompt-rules/${ruleId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editRuleDraft),
+      });
+      const d = await res.json();
+      if (d.rule) {
+        setPromptRules(prev => prev.map(r => r.id === ruleId ? d.rule : r));
+        setEditingRuleId(null);
+        setEditRuleDraft({});
+        toast.success("已保存");
+      } else toast.error(d.error || "保存失败");
+    } catch { toast.error("网络错误"); }
+    finally { setSavingRule(false); }
+  }
+
+  async function handleDeleteRule(ruleId: number) {
+    if (!confirm("确认删除这条指令？")) return;
+    try {
+      await fetch(`/api/wecom/channels/${channel.id}/prompt-rules/${ruleId}`, { method: "DELETE" });
+      setPromptRules(prev => prev.filter(r => r.id !== ruleId));
+      toast.success("已删除");
+    } catch { toast.error("网络错误"); }
+  }
+
+  // 生成最终拼接的System Prompt预览
+  function buildPromptPreview() {
+    const layer1 = promptRules.filter(r => r.layer === 1 && r.enabled);
+    const layer2 = promptRules.filter(r => r.layer === 2 && r.enabled);
+    const parts: string[] = [];
+    if (layer1.length > 0) parts.push("【角色定义】\n" + layer1.map(r => r.content).join("\n"));
+    if (layer2.length > 0) parts.push("【行为规则】\n" + layer2.map((r, i) => `${i + 1}. ${r.content}`).join("\n"));
+    return parts.join("\n\n") || "（暂无启用的指令）";
+  }
 
   // 脏数据检测：保存后快照，有改动才点亮保存按钮
   const [savedSnapshot, setSavedSnapshot] = useState<string>("");
@@ -2783,6 +2887,8 @@ function ChannelConfigTab({ channel }: { channel: Channel }) {
         }).catch(()=>{}).finally(()=>setMemberLoading(false));
       }
     }).catch(() => toast.error("加载配置失败")).finally(() => setLoading(false));
+    // 加载结构化指令条目
+    loadPromptRules();
   }, [channel.id, isApp]);
 
   async function handleSave() {
@@ -2936,35 +3042,268 @@ function ChannelConfigTab({ channel }: { channel: Channel }) {
         )}
       </div>
 
-      {/* 全局 System Prompt */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-        <div className="flex items-center justify-between mb-1">
-          <label className="text-sm font-medium text-gray-700">全局 AI 指令（System Prompt）</label>
-          {!editingPrompt ? (
-            <button onClick={() => { setDraftPrompt(systemPrompt); setEditingPrompt(true); }}
-              className="text-xs text-blue-500 px-2 py-0.5 rounded hover:bg-blue-50">编辑</button>
-          ) : (
-            <div className="flex gap-2">
-              <button onClick={() => { setSystemPrompt(draftPrompt); setEditingPrompt(false); }}
-                className="text-xs text-gray-400 px-2 py-0.5 rounded hover:bg-gray-50">取消</button>
-              <button onClick={() => setEditingPrompt(false)}
-                className="text-xs text-blue-500 px-2 py-0.5 rounded hover:bg-blue-50">完成</button>
+      {/* 结构化 AI 指令管理 */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        {/* 折叠头部 */}
+        <button
+          className="w-full flex items-center justify-between px-4 py-3 text-left"
+          onClick={() => setPromptRulesOpen(v => !v)}
+        >
+          <div className="flex items-center gap-2">
+            <Bot className="w-4 h-4 text-blue-500" />
+            <span className="text-sm font-semibold text-gray-800">AI 指令管理</span>
+            <span className="text-xs text-gray-400">
+              第1层 {promptRules.filter(r=>r.layer===1).length}条·第2层 {promptRules.filter(r=>r.layer===2&&r.enabled).length}/{promptRules.filter(r=>r.layer===2).length}条启用
+            </span>
+          </div>
+          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${promptRulesOpen ? 'rotate-180' : ''}`} />
+        </button>
+
+        {promptRulesOpen && (
+          <div className="border-t border-gray-100 px-4 pb-4 pt-3 space-y-4">
+
+            {/* 搜索查重 */}
+            <div className="relative">
+              <input
+                type="text"
+                value={ruleSearch}
+                onChange={e => setRuleSearch(e.target.value)}
+                placeholder="搜索指令内容（查重用）..."
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              />
+              {ruleSearch && (
+                <button onClick={() => setRuleSearch('')} className="absolute right-2 top-2 text-gray-400"><X className="w-4 h-4" /></button>
+              )}
             </div>
-          )}
-        </div>
-        <p className="text-xs text-gray-400 mb-2">对所有用户生效的 AI 行为约束，留空则不限制</p>
-        {editingPrompt ? (
-          <textarea
-            value={systemPrompt}
-            onChange={e => setSystemPrompt(e.target.value)}
-            placeholder="例如：你是一名专业助手，请不要透露你使用的是哪个大模型..."
-            rows={6}
-            autoFocus
-            className="w-full text-sm border border-blue-300 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-800 placeholder-gray-400"
-          />
-        ) : (
-          <div className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2 min-h-[80px] whitespace-pre-wrap">
-            {systemPrompt || <span className="text-gray-400">未设置 AI 指令</span>}
+
+            {/* 第一层：角色定义 */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-4 bg-purple-400 rounded-full inline-block"></span>
+                  <span className="text-xs font-semibold text-gray-700">第一层·角色定义</span>
+                  <span className="text-xs text-gray-400">你是谁、你的边界</span>
+                </div>
+                <button
+                  onClick={() => { setAddingRule(true); setNewRule({ layer: 1, category: '角色定义', content: '', remark: '' }); }}
+                  className="text-xs text-purple-500 flex items-center gap-0.5 hover:bg-purple-50 px-2 py-0.5 rounded"
+                ><Plus className="w-3 h-3" />新增</button>
+              </div>
+              {promptRules.filter(r => r.layer === 1 && (ruleSearch === '' || r.content.includes(ruleSearch) || r.remark?.includes(ruleSearch))).length === 0 && (
+                <div className="text-xs text-gray-400 py-2 text-center bg-gray-50 rounded-lg">暂无角色定义，建议添加一条</div>
+              )}
+              {promptRules.filter(r => r.layer === 1 && (ruleSearch === '' || r.content.includes(ruleSearch) || r.remark?.includes(ruleSearch))).map(rule => (
+                <div key={rule.id} className={`border rounded-lg mb-2 overflow-hidden ${rule.enabled ? 'border-purple-200 bg-purple-50/30' : 'border-gray-200 bg-gray-50 opacity-60'}`}>
+                  {editingRuleId === rule.id ? (
+                    <div className="p-3 space-y-2">
+                      <textarea
+                        value={editRuleDraft.content ?? rule.content}
+                        onChange={e => setEditRuleDraft(d => ({...d, content: e.target.value}))}
+                        rows={3}
+                        className="w-full text-sm border border-blue-300 rounded px-2 py-1.5 resize-none focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        value={editRuleDraft.remark ?? rule.remark}
+                        onChange={e => setEditRuleDraft(d => ({...d, remark: e.target.value}))}
+                        placeholder="备注（例：2025-06-22 修改：加强知识库优先级）"
+                        className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none"
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <button onClick={() => { setEditingRuleId(null); setEditRuleDraft({}); }} className="text-xs text-gray-400 px-3 py-1 rounded hover:bg-gray-100">取消</button>
+                        <button onClick={() => handleSaveRule(rule.id)} disabled={savingRule} className="text-xs text-white bg-blue-500 px-3 py-1 rounded hover:bg-blue-600 disabled:opacity-50">保存</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm text-gray-800 flex-1 whitespace-pre-wrap">{rule.content}</p>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => handleToggleRule(rule)}>
+                            {rule.enabled ? <ToggleRight className="w-6 h-6 text-purple-500" /> : <ToggleLeft className="w-6 h-6 text-gray-400" />}
+                          </button>
+                          <button onClick={() => { setEditingRuleId(rule.id); setEditRuleDraft({}); }} className="text-gray-400 hover:text-blue-500"><Edit2 className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => handleDeleteRule(rule.id)} className="text-gray-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                        </div>
+                      </div>
+                      {rule.remark && <p className="text-xs text-gray-400 mt-1">📌 {rule.remark}</p>}
+                      <p className="text-xs text-gray-300 mt-1">更新：{new Date(rule.updated_at).toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* 第二层：行为规则 */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-4 bg-blue-400 rounded-full inline-block"></span>
+                  <span className="text-xs font-semibold text-gray-700">第二层·行为规则</span>
+                  <span className="text-xs text-gray-400">知识库/回复/语气/安全</span>
+                </div>
+                <button
+                  onClick={() => { setAddingRule(true); setNewRule({ layer: 2, category: '行为规则', content: '', remark: '' }); }}
+                  className="text-xs text-blue-500 flex items-center gap-0.5 hover:bg-blue-50 px-2 py-0.5 rounded"
+                ><Plus className="w-3 h-3" />新增</button>
+              </div>
+              {promptRules.filter(r => r.layer === 2 && (ruleSearch === '' || r.content.includes(ruleSearch) || r.category.includes(ruleSearch) || r.remark?.includes(ruleSearch))).length === 0 && (
+                <div className="text-xs text-gray-400 py-2 text-center bg-gray-50 rounded-lg">暂无行为规则</div>
+              )}
+              {promptRules.filter(r => r.layer === 2 && (ruleSearch === '' || r.content.includes(ruleSearch) || r.category.includes(ruleSearch) || r.remark?.includes(ruleSearch))).map(rule => (
+                <div key={rule.id} className={`border rounded-lg mb-2 overflow-hidden ${rule.enabled ? 'border-blue-200 bg-blue-50/20' : 'border-gray-200 bg-gray-50 opacity-60'}`}>
+                  {editingRuleId === rule.id ? (
+                    <div className="p-3 space-y-2">
+                      <div className="flex gap-2">
+                        <select
+                          value={editRuleDraft.category ?? rule.category}
+                          onChange={e => setEditRuleDraft(d => ({...d, category: e.target.value}))}
+                          className="text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none"
+                        >
+                          {PROMPT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <textarea
+                        value={editRuleDraft.content ?? rule.content}
+                        onChange={e => setEditRuleDraft(d => ({...d, content: e.target.value}))}
+                        rows={3}
+                        className="w-full text-sm border border-blue-300 rounded px-2 py-1.5 resize-none focus:outline-none"
+                      />
+                      <input
+                        type="text"
+                        value={editRuleDraft.remark ?? rule.remark}
+                        onChange={e => setEditRuleDraft(d => ({...d, remark: e.target.value}))}
+                        placeholder="备注（例：2025-06-22 修改：加强知识库优先级）"
+                        className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none"
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <button onClick={() => { setEditingRuleId(null); setEditRuleDraft({}); }} className="text-xs text-gray-400 px-3 py-1 rounded hover:bg-gray-100">取消</button>
+                        <button onClick={() => handleSaveRule(rule.id)} disabled={savingRule} className="text-xs text-white bg-blue-500 px-3 py-1 rounded hover:bg-blue-600 disabled:opacity-50">保存</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1">
+                          <span className={`text-xs px-1.5 py-0.5 rounded mr-1.5 ${
+                            rule.category === '知识库规则' ? 'bg-green-100 text-green-700' :
+                            rule.category === '回复格式' ? 'bg-orange-100 text-orange-700' :
+                            rule.category === '语气风格' ? 'bg-pink-100 text-pink-700' :
+                            rule.category === '安全边界' ? 'bg-red-100 text-red-700' :
+                            'bg-blue-100 text-blue-700'
+                          }`}>{rule.category}</span>
+                          <span className="text-sm text-gray-800 whitespace-pre-wrap">{rule.content}</span>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => handleToggleRule(rule)}>
+                            {rule.enabled ? <ToggleRight className="w-6 h-6 text-blue-500" /> : <ToggleLeft className="w-6 h-6 text-gray-400" />}
+                          </button>
+                          <button onClick={() => { setEditingRuleId(rule.id); setEditRuleDraft({}); }} className="text-gray-400 hover:text-blue-500"><Edit2 className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => handleDeleteRule(rule.id)} className="text-gray-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                        </div>
+                      </div>
+                      {rule.remark && <p className="text-xs text-gray-400 mt-1">📌 {rule.remark}</p>}
+                      <p className="text-xs text-gray-300 mt-1">更新：{new Date(rule.updated_at).toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* 第三层：知识库概览入口 */}
+            <div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <span className="w-1.5 h-4 bg-green-400 rounded-full inline-block"></span>
+                <span className="text-xs font-semibold text-gray-700">第三层·知识库</span>
+                <span className="text-xs text-gray-400">问答内容，匹配后自动注入指令</span>
+              </div>
+              <button
+                onClick={() => onJumpToKb?.()}
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg border border-green-200 bg-green-50/40 text-sm text-green-700 hover:bg-green-50 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Shield className="w-4 h-4" />
+                  <span>知识库管理</span>
+                  {kbList.length > 0 && (
+                    <span className="text-xs text-gray-500">已绑定：{kbList.find(kb=>kb.id===kbId)?.name || '未绑定'}·{kbList.find(kb=>kb.id===kbId)?.item_count || 0}条</span>
+                  )}
+                </div>
+                <ChevronRight className="w-4 h-4 text-green-400" />
+              </button>
+            </div>
+
+            {/* 新增指令弹层 */}
+            {addingRule && (
+              <div className="border border-blue-200 rounded-xl p-3 bg-blue-50/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-blue-700">新增指令</span>
+                  <button onClick={() => setAddingRule(false)}><X className="w-4 h-4 text-gray-400" /></button>
+                </div>
+                <div className="flex gap-2">
+                  <select
+                    value={newRule.layer}
+                    onChange={e => setNewRule(r => ({...r, layer: Number(e.target.value), category: Number(e.target.value) === 1 ? '角色定义' : '行为规则'}))}
+                    className="text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none"
+                  >
+                    <option value={1}>第1层·角色定义</option>
+                    <option value={2}>第2层·行为规则</option>
+                  </select>
+                  {newRule.layer === 2 && (
+                    <select
+                      value={newRule.category}
+                      onChange={e => setNewRule(r => ({...r, category: e.target.value}))}
+                      className="text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none flex-1"
+                    >
+                      {PROMPT_CATEGORIES.filter(c=>c!=='角色定义').map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  )}
+                </div>
+                {/* 搜索相似条目提示 */}
+                {newRule.content.length > 4 && (() => {
+                  const similar = promptRules.filter(r => r.content.includes(newRule.content.slice(0,6)) || newRule.content.includes(r.content.slice(0,6)));
+                  return similar.length > 0 ? (
+                    <div className="text-xs text-orange-600 bg-orange-50 rounded px-2 py-1.5">
+                      ⚠️ 发现相似条目：「{similar[0].content.slice(0,30)}...」，请确认是否重复
+                    </div>
+                  ) : null;
+                })()}
+                <textarea
+                  value={newRule.content}
+                  onChange={e => setNewRule(r => ({...r, content: e.target.value}))}
+                  placeholder={newRule.layer === 1 ? "例：你是一名专业的康宝莱健康顾问，性格亲切、专业..." : "例：如果知识库有相关内容，必须严格按照知识库答案回复..."}
+                  rows={3}
+                  className="w-full text-sm border border-blue-200 rounded px-2 py-1.5 resize-none focus:outline-none"
+                />
+                <input
+                  type="text"
+                  value={newRule.remark}
+                  onChange={e => setNewRule(r => ({...r, remark: e.target.value}))}
+                  placeholder={`备注（例：${new Date().toLocaleDateString('zh-CN')} 新增：初始角色设定）`}
+                  className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none"
+                />
+                <div className="flex gap-2 justify-end">
+                  <button onClick={() => setAddingRule(false)} className="text-xs text-gray-400 px-3 py-1 rounded hover:bg-gray-100">取消</button>
+                  <button onClick={handleAddRule} disabled={savingRule || !newRule.content.trim()} className="text-xs text-white bg-blue-500 px-3 py-1 rounded hover:bg-blue-600 disabled:opacity-50">
+                    {savingRule ? '保存中...' : '添加指令'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* 实时预览 */}
+            <div>
+              <button
+                onClick={() => setPromptPreviewOpen(v => !v)}
+                className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-500"
+              >
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${promptPreviewOpen ? 'rotate-180' : ''}`} />
+                实时预览（发给 AI 的完整指令文本）
+              </button>
+              {promptPreviewOpen && (
+                <pre className="mt-2 text-xs text-gray-600 bg-gray-50 rounded-lg p-3 whitespace-pre-wrap max-h-48 overflow-y-auto border border-gray-200">{buildPromptPreview()}</pre>
+              )}
+            </div>
+
           </div>
         )}
       </div>

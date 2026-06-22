@@ -666,6 +666,61 @@ async function ensureSessionTable(): Promise<void> {
     await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS channel_type VARCHAR(20) NOT NULL DEFAULT 'kf' COMMENT '渠道类型：kf/app'`);
   } catch (_) {}
 
+  // 结构化指令条目表
+  await (conn as any).execute(`
+    CREATE TABLE IF NOT EXISTS wecom_prompt_rules (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      channel_id INT NOT NULL DEFAULT 2 COMMENT '渠道ID',
+      layer TINYINT NOT NULL DEFAULT 2 COMMENT '层级：1=角色定义 2=行为规则',
+      category VARCHAR(50) NOT NULL DEFAULT '行为规则' COMMENT '分类标签：角色定义/知识库规则/回复格式/语气风格/安全边界',
+      content TEXT NOT NULL COMMENT '指令内容',
+      enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
+      sort_order INT NOT NULL DEFAULT 0 COMMENT '排序权重',
+      remark VARCHAR(200) DEFAULT '' COMMENT '备注',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_channel_layer (channel_id, layer)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='结构化AI指令条目'
+  `);
+
+  // 自动迁移：如果 wecom_prompt_rules 为空，但 wecom_channel_config 里有旧的 system_prompt，则自动拆分迁移
+  try {
+    const [countRows] = await (conn as any).execute(`SELECT COUNT(*) as cnt FROM wecom_prompt_rules`);
+    const ruleCount = (countRows as any[])[0]?.cnt ?? 0;
+    if (ruleCount === 0) {
+      // 查询所有渠道的旧 system_prompt
+      const [cfgRows] = await (conn as any).execute(
+        `SELECT DISTINCT channel_id FROM wecom_channels WHERE channel_type = 'kf' LIMIT 10`
+      );
+      for (const chRow of cfgRows as any[]) {
+        const chId = chRow.channel_id;
+        const [spRows] = await (conn as any).execute(
+          `SELECT config_val FROM wecom_channel_config WHERE channel_id = ? AND config_key = 'system_prompt' LIMIT 1`,
+          [chId]
+        );
+        const oldPrompt: string = (spRows as any[])[0]?.config_val ?? '';
+        if (!oldPrompt.trim()) continue;
+        // 拆分迁移为结构化条目
+        const migrationRules = [
+          { layer: 1, category: '角色定义', content: '回复字数要自然，尽量两到三句话说清楚，不要一大段一大段。客户发多长，我们差不多跟他匹配。回复时不要用句号结尾，也不要在句子末尾加任何标点符号，说完就直接结束，像真人发消息一样自然收尾', remark: '迁移自旧system_prompt - 回复风格定义', sort_order: 1 },
+          { layer: 2, category: '知识库规则', content: '如果知识库中有与用户问题相关的内容，必须严格按照知识库的答案回复，不得自行发挥或修改。知识库里有的数据直接报出来，不允许用模糊表达', remark: '迁移自旧system_prompt - 知识库优先规则', sort_order: 1 },
+          { layer: 2, category: '回复格式', content: '客户问什么，就只回答什么，不要主动补充没被问到的信息。比如客户只问价格，就只说价格，不要顺带说克数、份数、口味等。客户只问最贵的是哪款，就只说产品名和价格，不要展开介绍', remark: '迁移自旧system_prompt - 回答精准性规则', sort_order: 2 },
+          { layer: 2, category: '回复格式', content: '回答价格时不要主动提口味，因为同一产品不同口味价格相同，提口味没有意义', remark: '迁移自旧system_prompt - 价格回答规则', sort_order: 3 },
+          { layer: 2, category: '回复格式', content: '当客户问最贵的是什么、最便宜的是什么等比较类问题时，必须给出明确的产品名称和价格，不能含糊其辞', remark: '迁移自旧system_prompt - 比较类问题规则', sort_order: 4 },
+        ];
+        for (const r of migrationRules) {
+          await (conn as any).execute(
+            `INSERT INTO wecom_prompt_rules (channel_id, layer, category, content, enabled, sort_order, remark) VALUES (?,?,?,?,1,?,?)`,
+            [chId, r.layer, r.category, r.content, r.sort_order, r.remark]
+          );
+        }
+        console.log(`[PromptRules] 已自动迁移渠道 ${chId} 的旧 system_prompt 为 ${migrationRules.length} 条结构化指令`);
+      }
+    }
+  } catch (e) {
+    console.error('[PromptRules] 自动迁移失败:', e);
+  }
+
   _tableEnsured = true;
 }
 
@@ -1428,29 +1483,43 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
     if (msgList.length === 0) return;
 
     // 4. 读取kf渠道配置（wecom_channel_config, channel_id=2 为微信客服渠道）
-    let systemPrompt = "你是一名专业的康宝莱健康顾问，请根据知识库内容专业、友好地回答客户问题。如果知识库中没有相关信息，请诚实告知并建议客户联系人工客服。";
+    let systemPrompt = "";
     let aiModel = "deepseek-chat";
     let kbId: number | null = null;
     let notifyEnabled = false;
     let notifyUserids: string[] = [];
+    let kfChannelId = 2;
     const dbConn = await getDbConnection();
     if (dbConn) {
       try {
         const [chRows] = await (dbConn as any).execute(
           "SELECT id FROM wecom_channels WHERE channel_type = 'kf' LIMIT 1"
         );
-        const kfChannelId = (chRows as any[]).length > 0 ? (chRows as any[])[0].id : 2;
+        kfChannelId = (chRows as any[]).length > 0 ? (chRows as any[])[0].id : 2;
         const [cfgRows] = await (dbConn as any).execute(
           "SELECT config_key, config_val FROM wecom_channel_config WHERE channel_id = ?",
           [kfChannelId]
         );
         const cfg: Record<string, string> = {};
         for (const r of cfgRows as any[]) cfg[r.config_key] = r.config_val;
-        if (cfg.system_prompt) systemPrompt = cfg.system_prompt;
         if (cfg.ai_model) aiModel = cfg.ai_model;
         if (cfg.knowledge_base_id) kbId = parseInt(cfg.knowledge_base_id, 10) || null;
         notifyEnabled = cfg.notify_enabled === '1';
         notifyUserids = (cfg.notify_userids || '').split(',').map((s: string) => s.trim()).filter(Boolean);
+        // 从结构化指令表拼接 System Prompt
+        const [ruleRows] = await (dbConn as any).execute(
+          "SELECT layer, category, content FROM wecom_prompt_rules WHERE channel_id = ? AND enabled = 1 ORDER BY layer ASC, sort_order ASC, id ASC",
+          [kfChannelId]
+        );
+        const rules = ruleRows as any[];
+        const layer1 = rules.filter((r: any) => r.layer === 1);
+        const layer2 = rules.filter((r: any) => r.layer === 2);
+        const parts: string[] = [];
+        if (layer1.length > 0) parts.push(layer1.map((r: any) => r.content).join("\n"));
+        if (layer2.length > 0) parts.push("行为规则：\n" + layer2.map((r: any, i: number) => `${i + 1}. ${r.content}`).join("\n"));
+        if (parts.length > 0) systemPrompt = parts.join("\n\n");
+        // 如果指令表为空，尝试读取旧的 system_prompt 字段兑底
+        if (!systemPrompt && cfg.system_prompt) systemPrompt = cfg.system_prompt;
       } catch (e) { console.error("[KF] 读取渠道配置失败:", e); }
     }
     // 兜底：若配置里没有知识库ID，按 channel_type='kf' 找
@@ -1502,9 +1571,9 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
               }
             }
             if (kbItems.length > 0) {
-              kbContext = "\n\n【知识库参考】\n" + kbItems.slice(0, 5).map((item: any, i: number) =>
+              kbContext = "\n\n【知识库标准答案——必须优先使用】\n" + kbItems.slice(0, 5).map((item: any, i: number) =>
                 `${i + 1}. 问：${(item.question || "").split("\n")[0]}\n   答：${item.answer}`
-              ).join("\n");
+              ).join("\n") + "\n【重要】以上是标准答案，回复时必须严格依照上述内容，不得修改或忽略。";
               console.log(`[KF] 知识库命中 ${kbItems.length} 条`);
             }
           }
@@ -3264,6 +3333,86 @@ router.post("/api/wecom/channels/:id/config", async (req: Request, res: Response
   } catch (e) {
     console.error("[渠道配置] 保存失败:", e);
     res.status(500).json({ error: "保存失败" });
+  }
+});
+
+// ==================== 结构化AI指令条目接口 ====================
+
+// 获取指令条目列表
+router.get("/api/wecom/channels/:channelId/prompt-rules", async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const { channelId } = req.params;
+    const [rows] = await (conn as any).execute(
+      `SELECT * FROM wecom_prompt_rules WHERE channel_id = ? ORDER BY layer ASC, sort_order ASC, id ASC`,
+      [channelId]
+    );
+    res.json({ rules: rows });
+  } catch (e) {
+    console.error("[指令条目] 获取失败:", e);
+    res.status(500).json({ error: "获取失败" });
+  }
+});
+
+// 新增指令条目
+router.post("/api/wecom/channels/:channelId/prompt-rules", async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const { channelId } = req.params;
+    const { layer, category, content, enabled, sort_order, remark } = req.body;
+    if (!content) return res.status(400).json({ error: "content不能为空" });
+    const [result] = await (conn as any).execute(
+      `INSERT INTO wecom_prompt_rules (channel_id, layer, category, content, enabled, sort_order, remark) VALUES (?,?,?,?,?,?,?)`,
+      [channelId, layer || 2, category || '行为规则', content, enabled !== undefined ? enabled : 1, sort_order || 0, remark || '']
+    );
+    const insertId = (result as any).insertId;
+    const [rows] = await (conn as any).execute(`SELECT * FROM wecom_prompt_rules WHERE id = ?`, [insertId]);
+    res.json({ rule: (rows as any[])[0] });
+  } catch (e) {
+    console.error("[指令条目] 新增失败:", e);
+    res.status(500).json({ error: "新增失败" });
+  }
+});
+
+// 更新指令条目
+router.put("/api/wecom/channels/:channelId/prompt-rules/:ruleId", async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const { ruleId } = req.params;
+    const { layer, category, content, enabled, sort_order, remark } = req.body;
+    const fields: string[] = [];
+    const values: any[] = [];
+    if (layer !== undefined) { fields.push("layer=?"); values.push(layer); }
+    if (category !== undefined) { fields.push("category=?"); values.push(category); }
+    if (content !== undefined) { fields.push("content=?"); values.push(content); }
+    if (enabled !== undefined) { fields.push("enabled=?"); values.push(enabled); }
+    if (sort_order !== undefined) { fields.push("sort_order=?"); values.push(sort_order); }
+    if (remark !== undefined) { fields.push("remark=?"); values.push(remark); }
+    if (fields.length === 0) return res.status(400).json({ error: "无更新字段" });
+    values.push(ruleId);
+    await (conn as any).execute(`UPDATE wecom_prompt_rules SET ${fields.join(",")} WHERE id=?`, values);
+    const [rows] = await (conn as any).execute(`SELECT * FROM wecom_prompt_rules WHERE id = ?`, [ruleId]);
+    res.json({ rule: (rows as any[])[0] });
+  } catch (e) {
+    console.error("[指令条目] 更新失败:", e);
+    res.status(500).json({ error: "更新失败" });
+  }
+});
+
+// 删除指令条目
+router.delete("/api/wecom/channels/:channelId/prompt-rules/:ruleId", async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const { ruleId } = req.params;
+    await (conn as any).execute(`DELETE FROM wecom_prompt_rules WHERE id=?`, [ruleId]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[指令条目] 删除失败:", e);
+    res.status(500).json({ error: "删除失败" });
   }
 });
 
