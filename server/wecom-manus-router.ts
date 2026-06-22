@@ -201,7 +201,7 @@ async function getUserModel(userId: string): Promise<string> {
       }
     }
   } catch (_) {}
-  return "manus-1.6-max";
+  return "auto_route";
 }
 
 async function setUserModel(userId: string, profile: string): Promise<void> {
@@ -327,18 +327,10 @@ async function handleMenuClick(userId: string, eventKey: string): Promise<void> 
     case "MODEL_MAX":
     case "MODEL_NORMAL":
     case "MODEL_LITE":
-    case "MODEL_DS_FLASH": {
-      const model = MODEL_PROFILES[eventKey];
-      await setUserModel(userId, model.profile);
-      const modelTpl = await getMenuReplyTemplate(eventKey, { model: model.label, emoji: model.emoji });
-      await sendWeComMessage(userId, modelTpl ?? `已切换到: ${model.emoji} ${model.label}\n\n下次发送消息将使用新模型。`);
-      break;
-    }
-
+    case "MODEL_DS_FLASH":
     case "MODEL_STATUS": {
-      const label = await getUserModelLabel(userId);
-      const statusTpl = await getMenuReplyTemplate(eventKey, { model: label });
-      await sendWeComMessage(userId, statusTpl ?? `当前使用模型: ${label}`);
+      // 已移除手动切换模型功能，全局使用自动路由模式
+      await sendWeComMessage(userId, "当前已启用全自动路由模式，系统会自动选择最合适的 AI 处理您的消息。");
       break;
     }
 
@@ -398,13 +390,10 @@ async function handleMenuClick(userId: string, eventKey: string): Promise<void> 
         "--- 使用帮助 ---",
         "",
         "直接发送文字消息即可与 AI 对话。",
+        "系统已启用全自动路由模式，会自动选择最合适的 AI 处理您的消息。",
         "",
         "底部菜单功能:",
-        "[切换模型] 选择不同的 AI 模型",
-        "  🔴 Max: 最强能力，适合复杂任务",
-        "  🟡 标准: 平衡能力与速度",
-        "  🟢 轻量: 快速响应，省积分",
-        "  ⚡ DeepSeek 快速: 高效对话",
+        "[AI 助理] 重置为自动路由模式",
         "",
         "[工具箱]",
         "  - 查积分: 查看最近积分消耗",
@@ -1813,7 +1802,7 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
       const ruleConn = await getDbConnection();
       if (ruleConn) {
         const [ruleRows] = await (ruleConn as any).execute(
-          `SELECT * FROM wecom_custom_rules WHERE enabled = 1 AND channel_type = 'kf' ORDER BY created_at ASC`
+          `SELECT * FROM wecom_custom_rules WHERE enabled = 1 AND channel_type = 'app' ORDER BY created_at ASC`
         ) as any;
         const allRules = ruleRows as any[];
         // 筛选出适用于当前用户的规则
