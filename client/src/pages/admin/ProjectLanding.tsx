@@ -908,7 +908,10 @@ function ConfigTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avata
 
           {/* 企业号 */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
-            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>企业号 (Corp ID)</span>
+            <div className="flex flex-col flex-shrink-0">
+              <span className="text-xs" style={{ color: C.textSub }}>企业号</span>
+              <span className="text-[10px]" style={{ color: C.textSub, opacity: 0.6 }}>corpid</span>
+            </div>
             <span className="text-xs font-mono" style={{ color: C.textMain }}>
               {corpId ? `${corpId.substring(0, 6)}${'*'.repeat(corpId.length - 10)}${corpId.slice(-4)}` : '-'}
             </span>
@@ -916,7 +919,10 @@ function ConfigTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avata
 
           {/* 客服账号 open_kfid */}
           <div className="px-4 py-2.5 flex items-start justify-between gap-2">
-            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>客服账号 ID</span>
+            <div className="flex flex-col flex-shrink-0">
+              <span className="text-xs" style={{ color: C.textSub }}>客服账号 ID</span>
+              <span className="text-[10px]" style={{ color: C.textSub, opacity: 0.6 }}>open_kfid</span>
+            </div>
             <span className="text-xs font-mono text-right break-all max-w-[55%]" style={{ color: C.textMain }}>
               {kfId ? `${kfId.substring(0, 6)}${'*'.repeat(Math.max(0, kfId.length - 10))}${kfId.slice(-4)}` : <span style={{ color: C.textSub }}>未配置</span>}
             </span>
