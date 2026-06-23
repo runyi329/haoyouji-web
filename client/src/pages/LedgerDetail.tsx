@@ -5555,10 +5555,11 @@ export default function LedgerDetail() {
           const isSearchActive = !!(urlParams.has('startDate') || urlParams.has('endDate') || urlParams.has('note') || urlParams.has('type') || urlParams.has('amountMin') || urlParams.has('amountMax') || urlParams.has('categoryIds') || urlParams.has('memberIds') || urlParams.has('allTime'));
           if (!isSearchActive || !transactionsData) return null;
           
-          // 汇总所有记录
+          // 汇总所有记录，同时按记账人分组
           let totalIncome = 0, totalExpense = 0, totalCount = 0;
           const allDates: string[] = [];
-          const memberSet = new Map<number, string>(); // id -> 显示名
+          // 记账人统计： id -> { name, dates: Set<string>, count }
+          const memberStats = new Map<number, { name: string; dates: Set<string>; count: number }>();
           transactionsData.forEach((day: any) => {
             allDates.push(day.date);
             totalIncome += day.income || 0;
@@ -5566,14 +5567,32 @@ export default function LedgerDetail() {
             (day.records || []).forEach((r: any) => {
               totalCount++;
               if (r.member?.id) {
-                memberSet.set(r.member.id, r.member.nickname || r.member.username || String(r.member.id));
+                const mid = r.member.id;
+                if (!memberStats.has(mid)) {
+                  memberStats.set(mid, {
+                    name: r.member.nickname || r.member.username || String(mid),
+                    dates: new Set(),
+                    count: 0,
+                  });
+                }
+                const ms = memberStats.get(mid)!;
+                ms.dates.add(day.date);
+                ms.count++;
               }
             });
           });
           const balance = totalIncome - totalExpense;
-          const earliestDate = allDates.length > 0 ? allDates[allDates.length - 1] : '';
-          const latestDate = allDates.length > 0 ? allDates[0] : '';
-          const memberNames = Array.from(memberSet.values());
+          const sortedDates = [...allDates].sort();
+          const earliestDate = sortedDates.length > 0 ? sortedDates[0] : '';
+          const latestDate = sortedDates.length > 0 ? sortedDates[sortedDates.length - 1] : '';
+          
+          // 计算天数
+          const calcDays = (d1: string, d2: string) => {
+            if (!d1 || !d2) return 0;
+            const diff = new Date(d2).getTime() - new Date(d1).getTime();
+            return Math.round(diff / 86400000) + 1;
+          };
+          const totalDays = calcDays(earliestDate, latestDate);
           
           // 搜索条件文字
           const condParts: string[] = [];
@@ -5587,6 +5606,15 @@ export default function LedgerDetail() {
           }
           const allTimeFlag = urlParams.get('allTime') === '1';
           
+          // 整体时间范围文字
+          const overallTimeText = allTimeFlag
+            ? '全部时段'
+            : (earliestDate && latestDate
+                ? (earliestDate === latestDate
+                    ? earliestDate
+                    : `${earliestDate} – ${latestDate}（${totalDays}天）`)
+                : '无日期');
+          
           return (
             <div className="bg-white rounded-lg p-3 shadow-sm border border-blue-100 mb-1">
               {/* 标题行 */}
@@ -5596,12 +5624,15 @@ export default function LedgerDetail() {
                   <span className="text-xs font-medium text-[#1976D2]">搜索结果</span>
                   {condParts.length > 0 && <span className="text-xs text-gray-500">· {condParts.join(' / ')}</span>}
                 </div>
-                <span className="text-xs text-gray-400">{totalCount} 条</span>
+                <span className="text-xs text-gray-400">共 {totalCount} 笔</span>
               </div>
-              {/* 时间范围 */}
-              <div className="text-xs text-gray-500 mb-2">
-                {allTimeFlag ? '全部时段' : (earliestDate && latestDate ? (earliestDate === latestDate ? earliestDate : `${earliestDate} – ${latestDate}`) : '无日期')}
+
+              {/* 时间跨度区块 */}
+              <div className="mb-2">
+                <div className="text-[10px] text-gray-400 mb-0.5 font-medium">时间跨度</div>
+                <div className="text-xs text-gray-700">{overallTimeText}</div>
               </div>
+
               {/* 收支合计 */}
               <div className="grid grid-cols-3 gap-2 mb-2">
                 <div className="text-center">
@@ -5617,10 +5648,28 @@ export default function LedgerDetail() {
                   <div className={`text-sm font-semibold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>{balance.toFixed(2)}</div>
                 </div>
               </div>
-              {/* 记账人 */}
-              {memberNames.length > 0 && (
-                <div className="text-xs text-gray-500">
-                  <span className="text-gray-400">记账人：</span>{memberNames.join('、')}
+
+              {/* 记账人分列明细 */}
+              {memberStats.size > 0 && (
+                <div>
+                  <div className="text-[10px] text-gray-400 mb-1 font-medium">记账人详情</div>
+                  <div className="space-y-1">
+                    {Array.from(memberStats.entries()).map(([mid, ms]) => {
+                      const mDates = [...ms.dates].sort();
+                      const mEarliest = mDates[0];
+                      const mLatest = mDates[mDates.length - 1];
+                      const mDays = calcDays(mEarliest, mLatest);
+                      const mTimeText = mEarliest === mLatest
+                        ? mEarliest
+                        : `${mEarliest} – ${mLatest}（${mDays}天）`;
+                      return (
+                        <div key={mid} className="flex items-start justify-between text-xs bg-gray-50 rounded px-2 py-1">
+                          <span className="text-gray-700 font-medium flex-shrink-0 mr-2">{ms.name}</span>
+                          <span className="text-gray-500 text-right">{mTimeText} · {ms.count}笔</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
