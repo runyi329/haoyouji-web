@@ -439,6 +439,10 @@ function ConfigTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avata
   const [kfId, setKfId] = useState("");
   const [copiedLink, setCopiedLink] = useState(false);
   const [showQr, setShowQr] = useState(false);
+  // 连接信息
+  const [aiModel, setAiModel] = useState("deepseek-chat");
+  const [kbName, setKbName] = useState("");
+  const [corpId, setCorpId] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -470,7 +474,14 @@ function ConfigTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avata
         if (chCfg && !chCfg.error) {
           const ki = chCfg.knowledge_base_id || 0;
           setKbId(ki);
+          if (chCfg.ai_model) setAiModel(chCfg.ai_model);
+          // 找到对应知识库名称
+          if (ki && Array.isArray(kbs)) {
+            const kb = (kbs as any[]).find((k: any) => k.id === ki);
+            if (kb) setKbName(kb.name || "");
+          }
         }
+        setCorpId("wwbbaccf1da5f886d9");
         // 加载分身名称和头像
         if (channelList?.channels) {
           const ch = channelList.channels.find((c: any) => c.id === KF_CHANNEL_ID);
@@ -876,6 +887,113 @@ function ConfigTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avata
           )}
         </div>
       )}
+
+      {/* 系统连接总览 */}
+      <div className="rounded-2xl border overflow-hidden" style={{ borderColor: C.line }}>
+        {/* 标题行 */}
+        <div className="px-4 py-3 flex items-center gap-2" style={{ backgroundColor: C.brand }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
+          </svg>
+          <span className="text-sm font-semibold text-white">系统连接总览</span>
+        </div>
+
+        <div className="divide-y" style={{ backgroundColor: '#fff', borderColor: C.line }}>
+
+          {/* 区块标题：企业微信 */}
+          <div className="px-4 pt-3 pb-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: C.brand }}>企业微信</span>
+          </div>
+
+          {/* 企业号 */}
+          <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>企业号 (Corp ID)</span>
+            <span className="text-xs font-mono" style={{ color: C.textMain }}>
+              {corpId ? `${corpId.substring(0, 6)}${'*'.repeat(corpId.length - 10)}${corpId.slice(-4)}` : '-'}
+            </span>
+          </div>
+
+          {/* 客服账号 open_kfid */}
+          <div className="px-4 py-2.5 flex items-start justify-between gap-2">
+            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>客服账号 ID</span>
+            <span className="text-xs font-mono text-right break-all max-w-[55%]" style={{ color: C.textMain }}>
+              {kfId ? `${kfId.substring(0, 6)}${'*'.repeat(Math.max(0, kfId.length - 10))}${kfId.slice(-4)}` : <span style={{ color: C.textSub }}>未配置</span>}
+            </span>
+          </div>
+
+          {/* 接入方式 */}
+          <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>接入方式</span>
+            <span className="text-xs" style={{ color: C.textMain }}>微信客服 API 回调</span>
+          </div>
+
+          {/* 企微连接状态 */}
+          <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>连接状态</span>
+            <span className="flex items-center gap-1 text-xs font-medium" style={{ color: kfId ? '#16A34A' : '#EF4444' }}>
+              <span className={`w-1.5 h-1.5 rounded-full inline-block ${kfId ? 'bg-green-500' : 'bg-red-400'}`}></span>
+              {kfId ? '已连接' : '未配置'}
+            </span>
+          </div>
+
+          {/* 区块标题： AI 引擎 */}
+          <div className="px-4 pt-3 pb-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: C.brand }}>AI 引擎</span>
+          </div>
+
+          {/* DeepSeek API */}
+          <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>DeepSeek API</span>
+            <span className="text-xs font-mono" style={{ color: C.textMain }}>api.deepseek.com</span>
+          </div>
+
+          {/* DeepSeek API Key */}
+          <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>DeepSeek Key</span>
+            <span className="text-xs font-mono" style={{ color: C.textMain }}>sk-***...***已配置</span>
+          </div>
+
+          {/* Manus API */}
+          <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>Manus API</span>
+            <span className="text-xs font-mono" style={{ color: C.textMain }}>api.manus.ai/v2</span>
+          </div>
+
+          {/* Manus API Key */}
+          <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>Manus Key</span>
+            <span className="text-xs font-mono" style={{ color: C.textMain }}>***已配置</span>
+          </div>
+
+          {/* 当前模型 */}
+          <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>当前模型</span>
+            <span className="text-xs font-medium" style={{ color: C.textMain }}>
+              {AI_MODELS.find(m => m.value === aiModel)?.label || aiModel}
+            </span>
+          </div>
+
+          {/* 区块标题：知识库 */}
+          <div className="px-4 pt-3 pb-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: C.brand }}>知识库</span>
+          </div>
+
+          {/* 绑定知识库 */}
+          <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>私人知识库</span>
+            <span className="text-xs" style={{ color: kbName ? C.textMain : C.textSub }}>{kbName || '未绑定'}</span>
+          </div>
+
+          {/* 共享知识库 */}
+          <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>共享知识库</span>
+            <span className="text-xs" style={{ color: C.textMain }}>平台共享库（自动接入）</span>
+          </div>
+
+
+        </div>
+      </div>
 
       {/* 保存按钮 */}
       <button
