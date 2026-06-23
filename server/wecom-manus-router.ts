@@ -518,11 +518,11 @@ async function ensureSessionTable(): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='企业微信用户与Manus任务的会话映射'
   `);
   // 迁移：如果旧表没有相关列，自动添加
-  try {
-    await (conn as any).execute(`ALTER TABLE wecom_manus_sessions ADD COLUMN IF NOT EXISTS model_pref VARCHAR(50) DEFAULT 'manus-1.6-max' COMMENT '用户默认模型'`);
-    await (conn as any).execute(`ALTER TABLE wecom_manus_sessions ADD COLUMN IF NOT EXISTS system_prompt TEXT DEFAULT NULL COMMENT '系统提示词'`);
-    await (conn as any).execute(`ALTER TABLE wecom_manus_sessions ADD COLUMN IF NOT EXISTS enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用'`);
-  } catch (_) {}
+  for (const sql of [
+    `ALTER TABLE wecom_manus_sessions ADD COLUMN model_pref VARCHAR(50) DEFAULT 'manus-1.6-max' COMMENT '用户默认模型'`,
+    `ALTER TABLE wecom_manus_sessions ADD COLUMN system_prompt TEXT DEFAULT NULL COMMENT '系统提示词'`,
+    `ALTER TABLE wecom_manus_sessions ADD COLUMN enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用'`,
+  ]) { try { await (conn as any).execute(sql); } catch (_) {} }
 
   // 创建消息级积分记录表
   await (conn as any).execute(`
@@ -546,12 +546,12 @@ async function ensureSessionTable(): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='企业微信每条消息积分消耗记录'
   `);
   // 迁移：给旧表补充 DeepSeek token 字段
-  try {
-    await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS input_tokens INT NOT NULL DEFAULT 0 COMMENT 'DeepSeek输入token数（缓存未命中）'`);
-    await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS output_tokens INT NOT NULL DEFAULT 0 COMMENT 'DeepSeek输出token数'`);
-    await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS cache_hit_tokens INT NOT NULL DEFAULT 0 COMMENT 'DeepSeek缓存命中输入token数'`);
-    await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS model_used VARCHAR(50) NULL COMMENT '使用的模型'`);
-  } catch (_) {}
+  for (const sql of [
+    `ALTER TABLE wecom_message_credits ADD COLUMN input_tokens INT NOT NULL DEFAULT 0 COMMENT 'DeepSeek输入token数（缓存未命中）'`,
+    `ALTER TABLE wecom_message_credits ADD COLUMN output_tokens INT NOT NULL DEFAULT 0 COMMENT 'DeepSeek输出token数'`,
+    `ALTER TABLE wecom_message_credits ADD COLUMN cache_hit_tokens INT NOT NULL DEFAULT 0 COMMENT 'DeepSeek缓存命中输入token数'`,
+    `ALTER TABLE wecom_message_credits ADD COLUMN model_used VARCHAR(50) NULL COMMENT '使用的模型'`,
+  ]) { try { await (conn as any).execute(sql); } catch (_) {} }
 
   // 创建工作流规则表
   await (conn as any).execute(`
@@ -646,19 +646,16 @@ async function ensureSessionTable(): Promise<void> {
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
-  // 迁移：给旧表补充 channel_type 字段
-  try {
-    await (conn as any).execute(`ALTER TABLE wecom_custom_rules ADD COLUMN IF NOT EXISTS channel_type VARCHAR(20) NOT NULL DEFAULT 'kf' COMMENT '渠道类型：kf/app'`);
-  } catch (_) {}
-  // 迁移：给 wecom_message_credits 补充 channel_type 字段
-  try {
-    await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS channel_type VARCHAR(20) NOT NULL DEFAULT 'kf' COMMENT '渠道类型：kf/app'`);
-  } catch (_) {}
-  try { await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS dialog_score TINYINT DEFAULT NULL COMMENT '对话质量评分(0-100)'`); } catch (_) {}
-  try { await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS score_level VARCHAR(10) DEFAULT NULL COMMENT '评分等级：优质/良好/一般/低质'`); } catch (_) {}
-  try { await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS score_reason TEXT DEFAULT NULL COMMENT 'AI评分理由'`); } catch (_) {}
-  try { await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS score_dimensions JSON DEFAULT NULL COMMENT '各维度评分JSON'`); } catch (_) {}
-  try { await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS score_at TIMESTAMP DEFAULT NULL COMMENT '评分时间'`); } catch (_) {}
+  // 迁移：给旧表补充字段（小写每条 try-catch，兼容旧 MySQL）
+  for (const sql of [
+    `ALTER TABLE wecom_custom_rules ADD COLUMN channel_type VARCHAR(20) NOT NULL DEFAULT 'kf' COMMENT '渠道类型：kf/app'`,
+    `ALTER TABLE wecom_message_credits ADD COLUMN channel_type VARCHAR(20) NOT NULL DEFAULT 'kf' COMMENT '渠道类型：kf/app'`,
+    `ALTER TABLE wecom_message_credits ADD COLUMN dialog_score TINYINT DEFAULT NULL COMMENT '对话质量评分(0-100)'`,
+    `ALTER TABLE wecom_message_credits ADD COLUMN score_level VARCHAR(10) DEFAULT NULL COMMENT '评分等级：优质/良好/一般/低质'`,
+    `ALTER TABLE wecom_message_credits ADD COLUMN score_reason TEXT DEFAULT NULL COMMENT 'AI评分理由'`,
+    `ALTER TABLE wecom_message_credits ADD COLUMN score_dimensions JSON DEFAULT NULL COMMENT '各维度评分JSON'`,
+    `ALTER TABLE wecom_message_credits ADD COLUMN score_at TIMESTAMP DEFAULT NULL COMMENT '评分时间'`,
+  ]) { try { await (conn as any).execute(sql); } catch (_) {} }
 
   // 结构化指令条目表
   await (conn as any).execute(`
@@ -1708,11 +1705,7 @@ AI回复：${dsReply.content.substring(0, 300)}`;
                 const level = stars >= 4.5 ? '优质' : stars >= 3.5 ? '良好' : stars >= 2.5 ? '一般' : '低质';
                 const dimJson = dimensions ? JSON.stringify(dimensions) : null;
                 // 确保字段存在
-                await (dbConn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS dialog_score TINYINT DEFAULT NULL`).catch(() => {});
-                await (dbConn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS score_level VARCHAR(10) DEFAULT NULL`).catch(() => {});
-                await (dbConn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS score_reason TEXT DEFAULT NULL`).catch(() => {});
-                await (dbConn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS score_dimensions JSON DEFAULT NULL`).catch(() => {});
-                await (dbConn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS score_at TIMESTAMP DEFAULT NULL`).catch(() => {});
+                // 评分字段已在 initDb 中初始化，此处跳过
                 await (dbConn as any).execute(
                   `UPDATE wecom_message_credits SET dialog_score=?, score_level=?, score_reason=?, score_dimensions=?, score_at=NOW() WHERE id=?`,
                   [score, level, reason, dimJson, newLogId]

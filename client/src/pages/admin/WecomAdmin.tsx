@@ -1872,7 +1872,31 @@ function StatsTab() {
                     <div className="px-3 pb-2.5 pt-1.5 border-t border-gray-50 flex items-center gap-2 flex-wrap">
                       {log.model_used && <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-blue-50 text-blue-600">{log.model_used}</span>}
                       <span className="text-[10px] text-gray-400">{totalTok > 0 ? `${totalTok.toLocaleString()} tokens` : `${log.credits_used || 0} credits`}</span>
-                      {chName && <span className="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-medium" style={{backgroundColor:'#f0fdf4',color:'#16a34a',border:'1px solid #bbf7d0'}}>{chName}</span>}
+                      {/* 星级评分 */}
+                      {log.dialog_score != null ? (() => {
+                        const stars = Math.round((log.dialog_score / 20) * 2) / 2;
+                        const sc = stars >= 4.5 ? '#16a34a' : stars >= 3.5 ? '#2563eb' : stars >= 2.5 ? '#d97706' : '#dc2626';
+                        return (
+                          <div className="flex items-center gap-0.5 ml-auto">
+                            {Array.from({length: 5}).map((_, i) => {
+                              const filled = i < Math.floor(stars);
+                              const half = !filled && i === Math.floor(stars) && stars % 1 >= 0.5;
+                              return (
+                                <svg key={i} className="w-3 h-3" viewBox="0 0 24 24">
+                                  {half ? (
+                                    <>
+                                      <defs><linearGradient id={`pg${log.id}${i}`}><stop offset="50%" stopColor={sc}/><stop offset="50%" stopColor="#e5e7eb"/></linearGradient></defs>
+                                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill={`url(#pg${log.id}${i})`}/>
+                                    </>
+                                  ) : <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill={filled ? sc : '#e5e7eb'}/>}
+                                </svg>
+                              );
+                            })}
+                            <span className="text-[10px] font-bold ml-0.5" style={{color:sc}}>{stars.toFixed(1)}</span>
+                          </div>
+                        );
+                      })() : <span className="ml-auto text-[10px] text-gray-300">评分中…</span>}
+                      {chName && <span className="px-1.5 py-0.5 rounded-full text-[10px] font-medium" style={{backgroundColor:'#f0fdf4',color:'#16a34a',border:'1px solid #bbf7d0'}}>{chName}</span>}
                     </div>
                     {/* 展开详情 */}
                     {isExp && (
