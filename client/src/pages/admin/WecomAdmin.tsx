@@ -2110,13 +2110,24 @@ function PlatformAccountsTab({ channels, onRefresh }: { channels: Channel[]; onR
   return (
     <div className="space-y-3">
       {/* 开通新分身按钮 */}
-      <button
-        onClick={() => setShowAddModal(true)}
-        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-green-300 text-green-600 text-sm font-medium bg-green-50/50 active:bg-green-100 transition-colors"
-      >
-        <Plus className="w-4 h-4" />
-        开通新分身账户
-      </button>
+      {/* 操作按鈕行 */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-green-300 text-green-600 text-sm font-medium bg-green-50/50 active:bg-green-100 transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          开通新分身
+        </button>
+        <button
+          onClick={handleSyncKfAccounts}
+          disabled={syncing}
+          className="flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl border border-blue-200 text-blue-600 text-sm font-medium bg-blue-50 active:bg-blue-100 transition-colors disabled:opacity-50"
+        >
+          {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+          同步客服
+        </button>
+      </div>
 
       {/* 分身列表 */}
       {kfChannels.length === 0 && (

@@ -3423,6 +3423,69 @@ router.delete("/api/wecom/channels/:id", async (req: Request, res: Response) => 
   }
 });
 
+// 同步企业微信客服账号列表 → 自动更新 kf_id
+router.post("/api/wecom/channels/sync-kf-accounts", async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    // 获取 access_token
+    const tokenRes = await fetch(
+      `https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=${WECOM_CORP_ID}&corpsecret=${process.env.WECOM_SECRET || "3-XQAnU8_8iKPA74O6_Gw3YQPdOIA2nIv4ILXpxcZ2g"}`
+    );
+    const tokenData: any = await tokenRes.json();
+    if (!tokenData.access_token) {
+      return res.status(500).json({ error: "获取access_token失败: " + tokenData.errmsg });
+    }
+    const token = tokenData.access_token;
+    // 调用企业微信客服账号列表接口
+    const kfRes = await fetch(
+      `https://qyapi.weixin.qq.com/cgi-bin/kf/account/list?access_token=${token}&offset=0&limit=100`
+    );
+    const kfData: any = await kfRes.json();
+    if (kfData.errcode !== 0) {
+      return res.status(500).json({ error: `企业微信接口错误: ${kfData.errmsg} (${kfData.errcode})` });
+    }
+    const accounts: any[] = kfData.account_list || [];
+    const updated: any[] = [];
+    const created: any[] = [];
+    for (const acc of accounts) {
+      const openKfId: string = acc.open_kfid || "";
+      const name: string = acc.name || "";
+      if (!openKfId) continue;
+      // 查找是否已有渠道匹配此 open_kfid
+      const [existing] = await (conn as any).execute(
+        "SELECT id, name FROM wecom_channels WHERE channel_type = 'kf' AND kf_id = ? LIMIT 1",
+        [openKfId]
+      );
+      if ((existing as any[]).length > 0) {
+        updated.push({ id: (existing as any[])[0].id, name: (existing as any[])[0].name, open_kfid: openKfId });
+      } else {
+        // 尝试按名称匹配（名称相同但 kf_id 为空或不同）
+        const [byName] = await (conn as any).execute(
+          "SELECT id, name FROM wecom_channels WHERE channel_type = 'kf' AND (kf_id IS NULL OR kf_id = '') AND name = ? LIMIT 1",
+          [name]
+        );
+        if ((byName as any[]).length > 0) {
+          const chId = (byName as any[])[0].id;
+          await (conn as any).execute("UPDATE wecom_channels SET kf_id = ? WHERE id = ?", [openKfId, chId]);
+          updated.push({ id: chId, name, open_kfid: openKfId, action: "matched_by_name" });
+        } else {
+          // 新建渠道
+          const [ins] = await (conn as any).execute(
+            "INSERT INTO wecom_channels (name, channel_type, kf_id) VALUES (?, 'kf', ?)",
+            [name, openKfId]
+          );
+          created.push({ id: (ins as any).insertId, name, open_kfid: openKfId });
+        }
+      }
+    }
+    res.json({ ok: true, total: accounts.length, updated, created, accounts: accounts.map((a: any) => ({ name: a.name, open_kfid: a.open_kfid })) });
+  } catch (e) {
+    console.error("[同步客服账号] 失败:", e);
+    res.status(500).json({ error: "同步失败" });
+  }
+});
+
 // 获取渠道配置
 router.get("/api/wecom/channels/:id/config", async (req: Request, res: Response) => {
   try {
