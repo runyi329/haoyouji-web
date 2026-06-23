@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, Chevr
 import { toast } from "sonner";
 
 // 币种选项
-const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL'] as const;
+const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU'] as const;
 type CoinType = typeof COIN_OPTIONS[number];
 
 const STATUS_OPTIONS = [
@@ -46,6 +46,8 @@ const COIN_COLORS: Record<CoinType, string> = {
   CL: '#8B4513',
   NG: '#4A90D9',
   CRCL: '#1E88D6',
+  DRAM: '#E040FB',
+  MU: '#0097A7',
 };
 
 // 获取北京时间（UTC+8）今天，返回 YYYY-MM-DD

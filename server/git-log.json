@@ -1,5 +1,14 @@
 [
   {
+    "hash": "51245d910e6b00ead30b90aecf48d83bff062913",
+    "author": "Manus Deploy",
+    "date": "2026-06-23T13:54:13+00:00",
+    "message": "fix: 初始加载失败静默重试+进入客户档案自动触发批量打分",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "初始加载失败静默重试+进入客户档案自动触发批量打分"
+  },
+  {
     "hash": "3fd63fc5238f1ffd40033c6b806d23aeec157204",
     "author": "Manus Deploy",
     "date": "2026-06-23T13:39:43+00:00",

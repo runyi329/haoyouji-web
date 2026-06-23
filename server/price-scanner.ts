@@ -60,7 +60,7 @@ const COINS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA'
 const STOCK_COINS = ['TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG'];
 // 仅 Yahoo Finance 有价格的美股（加密交易所无对应合约，如 CRCL=Circle 纽交所股票）。
 // 取美元股价直接作为 USDT 计价（USD≈USDT），每 3 秒轮询，与其它币种一致。
-const YAHOO_STOCKS = ['CRCL'];
+const YAHOO_STOCKS = ['CRCL', 'DRAM', 'MU'];
 
 // 从文件恢复缓存（服务启动时调用）
 function loadCacheFromFile() {
@@ -68,7 +68,7 @@ function loadCacheFromFile() {
     if (fs.existsSync(CACHE_FILE)) {
       const raw = fs.readFileSync(CACHE_FILE, 'utf-8');
       const cached = JSON.parse(raw);
-      for (const coin of [...COINS, ...STOCK_COINS, ...YAHOO_STOCKS]) {
+      for (const coin of [...COINS, ...STOCK_COINS, ...YAHOO_STOCKS]) {  // YAHOO_STOCKS 已含 DRAM, MU
         if (cached[coin]?.price && cached[coin]?.updatedAt) {
           latestPrices[coin] = { price: cached[coin].price, todayOpen: cached[coin].todayOpen ?? 0, changePercent: cached[coin].changePercent ?? 0, high24h: cached[coin].high24h ?? 0, low24h: cached[coin].low24h ?? 0, volume24h: cached[coin].volume24h ?? 0, quoteVolume24h: cached[coin].quoteVolume24h ?? 0, updatedAt: cached[coin].updatedAt };
         }
