@@ -20,6 +20,7 @@ import {
   UserPlus,
   Gift,
   ShoppingBag,
+  Bot,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -2015,8 +2016,22 @@ export default function Home() {
         );
       })()}
 
-      {/* 备用占位符 */}
-
+      {/* WorkBuddy 入口按钮 */}
+      <div className="px-4 mt-1 flex-shrink-0">
+        <button
+          onClick={() => window.open('https://www.codebuddy.cn', '_blank')}
+          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl transition-all active:scale-[0.97]"
+          style={{
+            background: 'linear-gradient(135deg, #1E88D6 0%, #3D9FD6 100%)',
+            boxShadow: '0 4px 14px rgba(30,136,214,0.32), 0 1px 3px rgba(0,0,0,0.08)',
+            color: '#fff',
+          }}
+        >
+          <Bot className="w-4 h-4" strokeWidth={1.5} />
+          <span className="text-[13px] font-bold tracking-wide">WorkBuddy</span>
+          <span className="text-[11px] opacity-80">AI 编程助手</span>
+        </button>
+      </div>
 
       {/* ═══════════════════════════════════════════ */}
       {/* 下半区：左 AI 人脉 + 右 AI 錢脉 */}
