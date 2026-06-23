@@ -654,6 +654,11 @@ async function ensureSessionTable(): Promise<void> {
   try {
     await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS channel_type VARCHAR(20) NOT NULL DEFAULT 'kf' COMMENT '渠道类型：kf/app'`);
   } catch (_) {}
+  try { await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS dialog_score TINYINT DEFAULT NULL COMMENT '对话质量评分(0-100)'`); } catch (_) {}
+  try { await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS score_level VARCHAR(10) DEFAULT NULL COMMENT '评分等级：优质/良好/一般/低质'`); } catch (_) {}
+  try { await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS score_reason TEXT DEFAULT NULL COMMENT 'AI评分理由'`); } catch (_) {}
+  try { await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS score_dimensions JSON DEFAULT NULL COMMENT '各维度评分JSON'`); } catch (_) {}
+  try { await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS score_at TIMESTAMP DEFAULT NULL COMMENT '评分时间'`); } catch (_) {}
 
   // 结构化指令条目表
   await (conn as any).execute(`
