@@ -630,8 +630,9 @@ router.get("/api/wecom/ch/logs", async (req: Request, res: Response) => {
     const conditions: string[] = [];
     const params: any[] = [];
     if (channel_id) {
-      conditions.push("mc.channel_type = ?");
-      params.push(`kf_${channel_id}`);
+      // 兼容两种格式：旧数据存 'kf'，新数据存 'kf_3'
+      conditions.push("(mc.channel_type = ? OR mc.channel_type = ?)");
+      params.push(`kf_${channel_id}`, channel_type || 'kf');
     } else {
       conditions.push("mc.channel_type = ?");
       params.push(channel_type);
