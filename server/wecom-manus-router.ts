@@ -1498,15 +1498,24 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
         notifyEnabled = cfg.notify_enabled === '1';
         notifyUserids = (cfg.notify_userids || '').split(',').map((s: string) => s.trim()).filter(Boolean);
         // 从结构化指令表拼接 System Prompt
+        // 先加载平台共享指令（channel_id=1），再加载私人指令（当前渠道）
+        const disablePlatformRules = cfg.disable_platform_rules === '1';
+        const [platformRuleRows] = disablePlatformRules
+          ? [[]]
+          : await (dbConn as any).execute(
+              "SELECT layer, category, content FROM wecom_prompt_rules WHERE channel_id = 1 AND enabled = 1 ORDER BY layer ASC, sort_order ASC, id ASC",
+              []
+            );
         const [ruleRows] = await (dbConn as any).execute(
           "SELECT layer, category, content FROM wecom_prompt_rules WHERE channel_id = ? AND enabled = 1 ORDER BY layer ASC, sort_order ASC, id ASC",
           [kfChannelId]
         );
+        const platformRules = platformRuleRows as any[];
         const rules = ruleRows as any[];
-        const layer1 = rules.filter((r: any) => r.layer === 1);
+        const platformLayer1 = platformRules.filter((r: any) => r.layer === 1);
         const layer2 = rules.filter((r: any) => r.layer === 2);
         const parts: string[] = [];
-        if (layer1.length > 0) parts.push(layer1.map((r: any) => r.content).join("\n"));
+        if (platformLayer1.length > 0) parts.push(platformLayer1.map((r: any) => r.content).join("\n"));
         if (layer2.length > 0) parts.push("行为规则：\n" + layer2.map((r: any, i: number) => `${i + 1}. ${r.content}`).join("\n"));
         if (parts.length > 0) systemPrompt = parts.join("\n\n");
         // 如果指令表为空，尝试读取旧的 system_prompt 字段兑底
@@ -4022,6 +4031,53 @@ router.get("/api/wecom/users", async (req: Request, res: Response) => {
   } catch (e) {
     console.error("[企微用户列表] 查询失败:", e);
     res.status(500).json({ error: "查询失败" });
+  }
+});
+
+// AI辅助分析平台指令：建议分类 + 润色
+router.post("/api/wecom/ai-analyze-rule", async (req: Request, res: Response) => {
+  const { content } = req.body;
+  if (!content || !content.trim()) return res.status(400).json({ error: "请输入指令内容" });
+
+  const systemPrompt = `你是一个企业微信AI客服系统的指令库管理专家。用户会粘贴一段指令原文，你需要：
+
+1. 判断它属于哪一层：
+   - 第1层「角色定义」：AI是谁、有什么身份、能力范围、人格设定
+   - 第2层「行为规范」：AI在对话中应该怎么做、具体动作、处理逻辑
+
+2. 确定具体分类（category）：
+   - 角色定义层：只能选「角色定义」
+   - 行为规范层：可选「知识库规则」「回复格式」「语气风格」「安全边界」
+
+3. 对原文进行润色和补充：
+   - 保留原意图，语言更精准专业
+   - 补充可能的边界情况和异常处理
+   - 使用第二人称命令式（如「当...时，你应该...」）
+
+请以JSON格式返回：
+{
+  "suggested_layer": 1 或 2,
+  "suggested_category": "分类名称",
+  "reason": "为什么建议放这里（一句话）",
+  "polished": "润色后的完整指令内容"
+}
+
+只返回JSON，不要其他文字。`;
+
+  try {
+    const result = await sendToDeepSeekAndGetReply(content.trim(), "deepseek-chat", systemPrompt);
+    let parsed: any = null;
+    try {
+      const jsonMatch = result.content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+    } catch (e) {
+      console.error("[AI分析指令] JSON解析失败:", result.content.substring(0, 200));
+    }
+    if (!parsed) return res.status(500).json({ error: "AI返回格式异常，请重试" });
+    res.json({ ok: true, result: parsed });
+  } catch (e) {
+    console.error("[AI分析指令] 失败:", e);
+    res.status(500).json({ error: "AI分析失败，请稍后重试" });
   }
 });
 

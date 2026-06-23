@@ -147,15 +147,6 @@ export default function WecomAdmin() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 max-w-md mx-auto">
-      {/* Header */}
-      <div className="bg-white sticky top-0 z-10 px-4 py-3 flex items-center gap-3 border-b border-gray-100 shadow-sm">
-        <button onClick={() => window.history.back()} className="p-1 -ml-1">
-          <ArrowLeft className="w-5 h-5 text-gray-600" />
-        </button>
-        <Bot className="w-5 h-5 text-blue-600" />
-        <h1 className="text-base font-semibold text-gray-900 flex-1">企业微信管理</h1>
-      </div>
-
       {/* Tab 内容 */}
       <div className="pt-2">
         {activeTab === "binding" && <WecomBindingManager />}
@@ -175,14 +166,13 @@ export default function WecomAdmin() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 text-xs transition-colors ${
+              className={`flex-1 flex items-center justify-center py-3 text-xs font-medium transition-colors whitespace-nowrap ${
                 activeTab === tab.key
-                  ? "text-blue-600 font-medium"
-                  : "text-gray-400"
+                  ? 'text-[#1a5c2e] border-t-2 border-[#1a5c2e]'
+                  : 'text-gray-400 border-t-2 border-transparent'
               }`}
             >
-              {tab.icon}
-              <span>{tab.label}</span>
+              {tab.label}
             </button>
           ))}
         </div>
@@ -2067,6 +2057,22 @@ function PlatformAccountsTab({ channels, onRefresh }: { channels: Channel[]; onR
   const [addAppId, setAddAppId] = useState(1);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState<number | null>(null);
+  const [syncing, setSyncing] = useState(false);
+
+  async function handleSyncKfAccounts() {
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/wecom/channels/sync-kf-accounts', { method: 'POST' });
+      const d = await res.json();
+      if (d.ok) {
+        toast.success(`同步完成：共 ${d.total} 个账号，新增 ${d.created?.length || 0} 个`);
+        onRefresh();
+      } else {
+        toast.error(d.error || '同步失败');
+      }
+    } catch { toast.error('网络错误'); }
+    finally { setSyncing(false); }
+  }
 
   const kfChannels = channels.filter(ch => ch.channel_type === 'kf' && ch.project_key !== '__platform__');
 
@@ -2219,9 +2225,544 @@ function PlatformAccountsTab({ channels, onRefresh }: { channels: Channel[]; onR
   );
 }
 
+// 平台指令库Tab（管理 channel_id=1 的共享 prompt-rules）
+function PlatformRulesTab() {
+  interface PromptRule {
+    id: number;
+    channel_id: number;
+    layer: number;
+    category: string;
+    content: string;
+    enabled: number;
+    sort_order: number;
+    remark: string;
+    created_at: string;
+    updated_at: string;
+  }
+  const [rules, setRules] = useState<PromptRule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [addingRule, setAddingRule] = useState(false);
+  const [editingRuleId, setEditingRuleId] = useState<number | null>(null);
+  const [editRuleDraft, setEditRuleDraft] = useState<Partial<PromptRule>>({});
+  const [newRule, setNewRule] = useState({ layer: 1, category: '角色定义', content: '', remark: '' });
+  const [savingRule, setSavingRule] = useState(false);
+  const [ruleSearch, setRuleSearch] = useState('');
+  const PLATFORM_CHANNEL_ID = 1;
+  const PROMPT_CATEGORIES = ['角色定义', '知识库规则', '回复格式', '语气风格', '安全边界'];
+
+  // AI辅助分析相关state
+  const [rawInput, setRawInput] = useState(''); // 用户原始输入
+  const [analyzing, setAnalyzing] = useState(false);
+  const [aiResult, setAiResult] = useState<{
+    suggested_layer: number;
+    suggested_category: string;
+    reason: string;
+    polished: string;
+  } | null>(null);
+
+  async function handleAiAnalyze() {
+    if (!rawInput.trim()) return;
+    setAnalyzing(true);
+    setAiResult(null);
+    try {
+      const res = await fetch('/api/wecom/ai-analyze-rule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: rawInput }),
+      });
+      const d = await res.json();
+      if (d.result) {
+        setAiResult(d.result);
+        setNewRule(r => ({
+          ...r,
+          layer: d.result.suggested_layer,
+          category: d.result.suggested_category,
+          content: d.result.polished,
+        }));
+      } else toast.error(d.error || 'AI分析失败');
+    } catch { toast.error('网络错误'); }
+    finally { setAnalyzing(false); }
+  }
+
+  function handleAcceptAi() {
+    // 用户确认AI建议，直接保存
+    handleAddRule();
+  }
+
+  function handleRejectAi() {
+    // 用户拒绝，返回编辑原始输入
+    setAiResult(null);
+    setNewRule(r => ({ ...r, content: rawInput }));
+  }
+
+  async function loadRules() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/wecom/channels/${PLATFORM_CHANNEL_ID}/prompt-rules`);
+      const d = await res.json();
+      if (d.rules) setRules(d.rules);
+    } catch { toast.error('加载失败'); }
+    finally { setLoading(false); }
+  }
+
+  useEffect(() => { loadRules(); }, []);
+
+  async function handleAddRule() {
+    if (!newRule.content.trim()) return;
+    setSavingRule(true);
+    try {
+      const res = await fetch(`/api/wecom/channels/${PLATFORM_CHANNEL_ID}/prompt-rules`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newRule),
+      });
+      const d = await res.json();
+      if (d.rule) {
+        setRules(prev => [...prev, d.rule]);
+        setNewRule({ layer: 1, category: '角色定义', content: '', remark: '' });
+        setAddingRule(false);
+        toast.success('指令已添加');
+      } else toast.error(d.error || '添加失败');
+    } catch { toast.error('网络错误'); }
+    finally { setSavingRule(false); }
+  }
+
+  async function handleToggleRule(rule: PromptRule) {
+    const newEnabled = rule.enabled ? 0 : 1;
+    try {
+      const res = await fetch(`/api/wecom/channels/${PLATFORM_CHANNEL_ID}/prompt-rules/${rule.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: newEnabled }),
+      });
+      const d = await res.json();
+      if (d.rule) setRules(prev => prev.map(r => r.id === rule.id ? d.rule : r));
+    } catch { toast.error('网络错误'); }
+  }
+
+  async function handleSaveRule(ruleId: number) {
+    setSavingRule(true);
+    try {
+      const res = await fetch(`/api/wecom/channels/${PLATFORM_CHANNEL_ID}/prompt-rules/${ruleId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editRuleDraft),
+      });
+      const d = await res.json();
+      if (d.rule) {
+        setRules(prev => prev.map(r => r.id === ruleId ? d.rule : r));
+        setEditingRuleId(null);
+        setEditRuleDraft({});
+        toast.success('已保存');
+      } else toast.error(d.error || '保存失败');
+    } catch { toast.error('网络错误'); }
+    finally { setSavingRule(false); }
+  }
+
+  async function handleDeleteRule(ruleId: number) {
+    if (!confirm('确认删除这条平台指令？')) return;
+    try {
+      await fetch(`/api/wecom/channels/${PLATFORM_CHANNEL_ID}/prompt-rules/${ruleId}`, { method: 'DELETE' });
+      setRules(prev => prev.filter(r => r.id !== ruleId));
+      toast.success('已删除');
+    } catch { toast.error('删除失败'); }
+  }
+
+  const layer1 = rules.filter(r => r.layer === 1 && (ruleSearch === '' || r.content.includes(ruleSearch) || r.remark?.includes(ruleSearch)));
+  const layer2 = rules.filter(r => r.layer === 2 && (ruleSearch === '' || r.content.includes(ruleSearch) || r.category.includes(ruleSearch) || r.remark?.includes(ruleSearch)));
+
+  return (
+    <div className="space-y-4">
+      {/* 顶部绿色卡片 */}
+      <div className="bg-gradient-to-br from-[#0d2818] to-[#1a5c2e] rounded-2xl p-5 text-white">
+        <div className="flex items-center gap-2 mb-1">
+          <div className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
+          <span className="text-xs text-green-300 font-medium tracking-wider">平台指令库 · 所有分身共同继承</span>
+        </div>
+        <div className="text-2xl font-bold mt-2">{rules.filter(r => r.enabled).length} 条生效指令</div>
+        <div className="text-xs text-green-300 mt-1">共 {rules.length} 条 · 第1层角色定义 {rules.filter(r=>r.layer===1).length} 条 · 第2层行为规则 {rules.filter(r=>r.layer===2).length} 条</div>
+      </div>
+
+      {/* 搜索 + 新增 */}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <input
+            type="text"
+            value={ruleSearch}
+            onChange={e => setRuleSearch(e.target.value)}
+            placeholder="搜索指令内容..."
+            className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-green-100"
+          />
+          {ruleSearch && (
+            <button onClick={() => setRuleSearch('')} className="absolute right-2 top-2 text-gray-400"><X className="w-4 h-4" /></button>
+          )}
+        </div>
+        <button
+          onClick={() => { setAddingRule(true); setNewRule({ layer: 1, category: '角色定义', content: '', remark: '' }); }}
+          className="flex items-center gap-1 px-4 py-2 rounded-xl bg-gradient-to-r from-[#1a5c2e] to-[#2d8a47] text-white text-sm font-medium"
+        >
+          <Plus className="w-4 h-4" />新增
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-green-500" /></div>
+      ) : (
+        <>
+          {/* 第一层：角色定义 */}
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-purple-50 flex items-center justify-center">
+                  <span className="text-xs font-bold text-purple-600">①</span>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">角色定义</p>
+                  <p className="text-xs text-gray-400">你是谁、你的边界</p>
+                </div>
+              </div>
+              <span className="text-xs text-gray-400">{layer1.length} 条</span>
+            </div>
+            {layer1.length === 0 && (
+              <div className="text-xs text-gray-400 py-3 text-center bg-gray-50 rounded-lg">暂无角色定义，点击「新增」添加</div>
+            )}
+            {layer1.map(rule => (
+              <div key={rule.id} className={`border rounded-lg mb-2 overflow-hidden ${rule.enabled ? 'border-purple-200 bg-purple-50/30' : 'border-gray-200 bg-gray-50 opacity-60'}`}>
+                {editingRuleId === rule.id ? (
+                  <div className="p-3 space-y-2">
+                    <textarea value={editRuleDraft.content ?? rule.content} onChange={e => setEditRuleDraft(d => ({...d, content: e.target.value}))} rows={3} className="w-full text-sm border border-blue-300 rounded px-2 py-1.5 resize-none focus:outline-none" />
+                    <input type="text" value={editRuleDraft.remark ?? rule.remark} onChange={e => setEditRuleDraft(d => ({...d, remark: e.target.value}))} placeholder="备注" className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none" />
+                    <div className="flex gap-2 justify-end">
+                      <button onClick={() => { setEditingRuleId(null); setEditRuleDraft({}); }} className="text-xs text-gray-400 px-3 py-1 rounded hover:bg-gray-100">取消</button>
+                      <button onClick={() => handleSaveRule(rule.id)} disabled={savingRule} className="text-xs text-white bg-blue-500 px-3 py-1 rounded disabled:opacity-50">保存</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm text-gray-800 flex-1 whitespace-pre-wrap">{rule.content}</p>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={() => handleToggleRule(rule)}>
+                          {rule.enabled ? <ToggleRight className="w-6 h-6 text-purple-500" /> : <ToggleLeft className="w-6 h-6 text-gray-400" />}
+                        </button>
+                        <button onClick={() => { setEditingRuleId(rule.id); setEditRuleDraft({}); }} className="text-gray-400 hover:text-blue-500"><Edit2 className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => handleDeleteRule(rule.id)} className="text-gray-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </div>
+                    {rule.remark && <p className="text-xs text-gray-400 mt-1">📌 {rule.remark}</p>}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* 第二层：行为规则 */}
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+                  <span className="text-xs font-bold text-blue-600">②</span>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">行为规则</p>
+                  <p className="text-xs text-gray-400">知识库/回复/语气/安全</p>
+                </div>
+              </div>
+              <span className="text-xs text-gray-400">{layer2.length} 条</span>
+            </div>
+            {layer2.length === 0 && (
+              <div className="text-xs text-gray-400 py-3 text-center bg-gray-50 rounded-lg">暂无行为规则</div>
+            )}
+            {layer2.map(rule => (
+              <div key={rule.id} className={`border rounded-lg mb-2 overflow-hidden ${rule.enabled ? 'border-blue-200 bg-blue-50/20' : 'border-gray-200 bg-gray-50 opacity-60'}`}>
+                {editingRuleId === rule.id ? (
+                  <div className="p-3 space-y-2">
+                    <select value={editRuleDraft.category ?? rule.category} onChange={e => setEditRuleDraft(d => ({...d, category: e.target.value}))} className="text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none">
+                      {PROMPT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <textarea value={editRuleDraft.content ?? rule.content} onChange={e => setEditRuleDraft(d => ({...d, content: e.target.value}))} rows={3} className="w-full text-sm border border-blue-300 rounded px-2 py-1.5 resize-none focus:outline-none" />
+                    <input type="text" value={editRuleDraft.remark ?? rule.remark} onChange={e => setEditRuleDraft(d => ({...d, remark: e.target.value}))} placeholder="备注" className="w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none" />
+                    <div className="flex gap-2 justify-end">
+                      <button onClick={() => { setEditingRuleId(null); setEditRuleDraft({}); }} className="text-xs text-gray-400 px-3 py-1 rounded hover:bg-gray-100">取消</button>
+                      <button onClick={() => handleSaveRule(rule.id)} disabled={savingRule} className="text-xs text-white bg-blue-500 px-3 py-1 rounded disabled:opacity-50">保存</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1">
+                        <span className={`text-xs px-1.5 py-0.5 rounded mr-1.5 ${
+                          rule.category === '知识库规则' ? 'bg-green-100 text-green-700' :
+                          rule.category === '回复格式' ? 'bg-orange-100 text-orange-700' :
+                          rule.category === '语气风格' ? 'bg-pink-100 text-pink-700' :
+                          rule.category === '安全边界' ? 'bg-red-100 text-red-700' :
+                          'bg-blue-100 text-blue-700'
+                        }`}>{rule.category}</span>
+                        <span className="text-sm text-gray-800 whitespace-pre-wrap">{rule.content}</span>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={() => handleToggleRule(rule)}>
+                          {rule.enabled ? <ToggleRight className="w-6 h-6 text-blue-500" /> : <ToggleLeft className="w-6 h-6 text-gray-400" />}
+                        </button>
+                        <button onClick={() => { setEditingRuleId(rule.id); setEditRuleDraft({}); }} className="text-gray-400 hover:text-blue-500"><Edit2 className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => handleDeleteRule(rule.id)} className="text-gray-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </div>
+                    {rule.remark && <p className="text-xs text-gray-400 mt-1">📌 {rule.remark}</p>}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* 新增指令弹层（AI辅助录入） */}
+      {addingRule && (
+        <div className="border border-green-200 rounded-xl overflow-hidden bg-white shadow-sm">
+          {/* 弹层标题栏 */}
+          <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-[#0d2818] to-[#1a5c2e]">
+            <span className="text-sm font-semibold text-white">新增平台指令</span>
+            <button onClick={() => { setAddingRule(false); setAiResult(null); setRawInput(''); }}>
+              <X className="w-4 h-4 text-green-300" />
+            </button>
+          </div>
+
+          <div className="p-4 space-y-3">
+            {/* 第一步：原始输入区 */}
+            {!aiResult && (
+              <>
+                <div>
+                  <label className="text-xs font-semibold text-gray-500 mb-1.5 block">粘贴或输入指令内容</label>
+                  <textarea
+                    value={rawInput}
+                    onChange={e => setRawInput(e.target.value)}
+                    placeholder="直接输入或粘贴您的指令原文，AI 将帮您分析应放在角色定义还是行为规范，并对内容进行润色和补充..."
+                    rows={8}
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-green-100"
+                  />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button onClick={() => { setAddingRule(false); setRawInput(''); }} className="text-xs text-gray-400 px-3 py-1.5 rounded-lg hover:bg-gray-100">取消</button>
+                  <button
+                    onClick={handleAiAnalyze}
+                    disabled={analyzing || !rawInput.trim()}
+                    className="flex items-center gap-1.5 text-xs text-white bg-gradient-to-r from-[#1a5c2e] to-[#2d8a47] px-4 py-1.5 rounded-lg disabled:opacity-50"
+                  >
+                    {analyzing ? (
+                      <><Loader2 className="w-3.5 h-3.5 animate-spin" />AI 分析中...</>
+                    ) : (
+                      <>✨ AI 智能分析</>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* 第二步：AI分析结果 + 对比视图 */}
+            {aiResult && (
+              <>
+                {/* AI建议分类 */}
+                <div className="flex items-center gap-2 p-2.5 bg-green-50 rounded-lg border border-green-100">
+                  <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#1a5c2e] to-[#2d8a47] flex items-center justify-center flex-shrink-0">
+                    <span className="text-[10px] text-white font-bold">✨</span>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold text-gray-800">
+                      AI 建议放入：
+                      <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] ${
+                        aiResult.suggested_layer === 1 ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'
+                      }`}>
+                        {aiResult.suggested_layer === 1 ? '角色定义' : '行为规范'}
+                      </span>
+                      <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] bg-gray-100 text-gray-600">{aiResult.suggested_category}</span>
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">{aiResult.reason}</p>
+                  </div>
+                </div>
+
+                {/* 对比视图 */}
+                <div className="space-y-2">
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <div className="w-2 h-2 rounded-full bg-gray-400" />
+                      <span className="text-[11px] font-semibold text-gray-400">原文</span>
+                    </div>
+                    <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2 leading-relaxed whitespace-pre-wrap border border-gray-100">{rawInput}</div>
+                  </div>
+                  <div className="flex items-center justify-center">
+                    <div className="flex items-center gap-1 text-[10px] text-green-600">
+                      <span>↓</span>
+                      <span>AI 已优化</span>
+                      <span>↓</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <div className="w-2 h-2 rounded-full bg-green-500" />
+                      <span className="text-[11px] font-semibold text-green-700">优化后</span>
+                    </div>
+                    <textarea
+                      value={newRule.content}
+                      onChange={e => setNewRule(r => ({...r, content: e.target.value}))}
+                      rows={4}
+                      className="w-full text-xs text-gray-800 bg-green-50/50 rounded-lg px-3 py-2 leading-relaxed border border-green-200 resize-none focus:outline-none focus:ring-2 focus:ring-green-100"
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">可直接编辑上方内容进行调整</p>
+                  </div>
+                </div>
+
+                {/* 备注 */}
+                <input
+                  type="text"
+                  value={newRule.remark}
+                  onChange={e => setNewRule(r => ({...r, remark: e.target.value}))}
+                  placeholder={`备注（可不填）`}
+                  className="w-full text-xs border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none"
+                />
+
+                {/* 确认按鈕区 */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleRejectAi}
+                    className="flex-1 py-2 text-xs text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
+                  >
+                    返回修改
+                  </button>
+                  <button
+                    onClick={handleAcceptAi}
+                    disabled={savingRule || !newRule.content.trim()}
+                    className="flex-1 py-2 text-xs text-white bg-gradient-to-r from-[#1a5c2e] to-[#2d8a47] rounded-lg disabled:opacity-50 font-medium"
+                  >
+                    {savingRule ? '保存中...' : '确认保存'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 平台共享 Tab：上方平台共享指令库 + 下方平台共享知识库
+function PlatformSharedTab() {
+  const [kbStats, setKbStats] = useState<{ item_count: number; file_count: number; char_count: number } | null>(null);
+  const [kbLoading, setKbLoading] = useState(true);
+  // 指令区块展开/折叠
+  const [rulesOpen, setRulesOpen] = useState(true);
+  // 知识库展开/折叠
+  const [kbOpen, setKbOpen] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/wecom/ch/kb/stats?channel_id=2')
+      .then(r => r.json())
+      .then(d => { if (d.ok) setKbStats(d); })
+      .catch(() => {})
+      .finally(() => setKbLoading(false));
+  }, []);
+
+  return (
+    <div className="space-y-4">
+      {/* 顶部绿色总览卡片 */}
+      <div className="bg-gradient-to-br from-[#0d2818] to-[#1a5c2e] rounded-2xl p-5 text-white">
+        <div className="flex items-center gap-2 mb-1">
+          <div className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
+          <span className="text-xs text-green-300 font-medium tracking-wider">平台共享 · 所有分身共同继承</span>
+        </div>
+        <div className="text-2xl font-bold mt-2">平台共享资源</div>
+        <div className="grid grid-cols-2 gap-3 mt-4">
+          <div className="bg-white/10 rounded-xl p-3">
+            <div className="text-xs text-green-300 mb-1">平台指令库</div>
+            <div className="text-xs text-green-400">角色定义 + 行为规则</div>
+          </div>
+          <div className="bg-white/10 rounded-xl p-3">
+            <div className="text-xs text-green-300 mb-1">共享知识库</div>
+            <div className="text-xl font-bold text-[#f5c842]">{kbLoading ? '-' : (kbStats?.item_count || 0)}</div>
+            <div className="text-xs text-green-400">条知识内容</div>
+          </div>
+        </div>
+      </div>
+
+      {/* 区块1：平台指令库 */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <button
+          onClick={() => setRulesOpen(v => !v)}
+          className="w-full flex items-center justify-between px-4 py-3.5"
+        >
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-purple-50 flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-purple-500" />
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-semibold text-gray-900">平台指令库</p>
+              <p className="text-xs text-gray-400">角色定义与行为规则，所有分身共享</p>
+            </div>
+          </div>
+          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${rulesOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {rulesOpen && (
+          <div className="border-t border-gray-100 px-4 pb-4 pt-3">
+            <PlatformRulesTab />
+          </div>
+        )}
+      </div>
+
+      {/* 区块2：平台共享知识库 */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <button
+          onClick={() => setKbOpen(v => !v)}
+          className="w-full flex items-center justify-between px-4 py-3.5"
+        >
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
+              <Shield className="w-4 h-4 text-amber-500" />
+            </div>
+            <div className="text-left">
+              <p className="text-sm font-semibold text-gray-900">平台共享知识库</p>
+              <p className="text-xs text-gray-400">问答内容，所有分身共同继承</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {!kbLoading && kbStats && (
+              <span className="text-xs text-gray-400">{kbStats.item_count} 条</span>
+            )}
+            <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${kbOpen ? 'rotate-180' : ''}`} />
+          </div>
+        </button>
+        {kbOpen && (
+          <div className="border-t border-gray-100 px-4 pb-4 pt-3">
+            <ChannelKnowledgeTab channelType="kf" channelId={2} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// 平台用量统计Tab（绿色总览风格）
+function PlatformUsageTabView() {
+  return (
+    <div className="space-y-4">
+      {/* 顶部绿色卡片 */}
+      <div className="bg-gradient-to-br from-[#0d2818] to-[#1a5c2e] rounded-2xl p-5 text-white">
+        <div className="flex items-center gap-2 mb-1">
+          <div className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
+          <span className="text-xs text-green-300 font-medium tracking-wider">用量统计 · 全平台 AI 费用概览</span>
+        </div>
+        <div className="text-2xl font-bold mt-2">费用明细</div>
+        <div className="text-xs text-green-300 mt-1">按用户 / 按时间 / 按模型 多维分析</div>
+      </div>
+      {/* 统计内容 */}
+      <StatsTab />
+    </div>
+  );
+}
+
 // 主PlatformKbView组件
 function PlatformKbView() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'accounts' | 'kb' | 'usage'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'accounts' | 'shared' | 'usage'>('overview');
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -2240,7 +2781,7 @@ function PlatformKbView() {
   const tabs = [
     { key: 'overview', label: '总览', icon: <BarChart2 className="w-3.5 h-3.5" /> },
     { key: 'accounts', label: '分身账户', icon: <Bot className="w-3.5 h-3.5" /> },
-    { key: 'kb', label: '共享知识库', icon: <Shield className="w-3.5 h-3.5" /> },
+    { key: 'shared', label: '平台共享', icon: <Shield className="w-3.5 h-3.5" /> },
     { key: 'usage', label: '用量统计', icon: <Coins className="w-3.5 h-3.5" /> },
   ];
 
@@ -2268,8 +2809,8 @@ function PlatformKbView() {
 
       {activeTab === 'overview' && <PlatformOverviewTab channels={channels} />}
       {activeTab === 'accounts' && <PlatformAccountsTab channels={channels} onRefresh={loadChannels} />}
-      {activeTab === 'kb' && <ChannelKnowledgeTab channelType="kf" channelId={2} />}
-      {activeTab === 'usage' && <StatsTab />}
+      {activeTab === 'shared' && <PlatformSharedTab />}
+      {activeTab === 'usage' && <PlatformUsageTabView />}
     </div>
   );
 }
@@ -2301,103 +2842,105 @@ function ChannelTab() {
   // 平台管理视图
   if (showPlatform) {
     return (
-      <div className="px-4 py-4">
-        <div className="flex items-center gap-3 mb-4">
-          <button
-            onClick={() => setShowPlatform(false)}
-            className="p-1.5 rounded-lg bg-gray-100 text-gray-600"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <div>
-            <h2 className="text-sm font-semibold text-gray-900">平台管理</h2>
-            <p className="text-xs text-gray-400">AI 数字银行 · 管理员总控台</p>
+      <div>
+        {/* 帽子 */}
+        <div className="sticky top-0 z-10" style={{ background: 'linear-gradient(135deg,#0d2818 0%,#1a5c2e 100%)' }}>
+          <div className="flex items-center gap-3 px-4" style={{ height: 48 }}>
+            <button onClick={() => setShowPlatform(false)} className="p-1.5 rounded-full" style={{ color: 'rgba(255,255,255,0.8)' }}>
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <div className="flex-1">
+              <div className="text-sm font-bold text-white leading-tight">平台管理</div>
+              <div className="text-[10px] text-green-300">渠道 » 平台管理</div>
+            </div>
           </div>
         </div>
-        <PlatformKbView />
+        <div className="px-4 py-4">
+          <PlatformKbView />
+        </div>
       </div>
     );
   }
 
   // 第三级：渠道详情
   if (selectedChannel) {
-    // 营养俱乐部渠道（channel_id=3）直接复用绿色版组件，保持前后端完全一致
     if (selectedChannel.id === 3) {
       return <NutritionClubPage onBack={() => setSelectedChannel(null)} />;
     }
     return (
-      <div className="px-4 py-4">
-        <div className="flex items-center gap-3 mb-4">
-          <button
-            onClick={() => setSelectedChannel(null)}
-            className="p-1.5 rounded-lg bg-gray-100 text-gray-600"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <div>
-            <h2 className="text-sm font-semibold text-gray-900">{selectedChannel.name}</h2>
-            <p className="text-xs text-gray-400">
-              {selectedApp?.name} · {selectedChannel.channel_type === "app" ? "客户联系" : "微信客服"}
-            </p>
+      <div>
+        {/* 帽子 */}
+        <div className="sticky top-0 z-10" style={{ background: 'linear-gradient(135deg,#0d2818 0%,#1a5c2e 100%)' }}>
+          <div className="flex items-center gap-3 px-4" style={{ height: 48 }}>
+            <button onClick={() => setSelectedChannel(null)} className="p-1.5 rounded-full" style={{ color: 'rgba(255,255,255,0.8)' }}>
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <div className="flex-1">
+              <div className="text-sm font-bold text-white leading-tight">{selectedChannel.name}</div>
+              <div className="text-[10px] text-green-300">渠道 » {selectedApp?.name} » {selectedChannel.channel_type === 'app' ? '客户联系' : '微信客服'}</div>
+            </div>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+              selectedChannel.is_enabled ? 'bg-green-400/20 text-green-200' : 'bg-gray-400/20 text-gray-300'
+            }`}>{selectedChannel.is_enabled ? '运行中' : '已停用'}</span>
           </div>
         </div>
-        <ChannelDetail channel={selectedChannel} />
+        <div className="px-4 py-4">
+          <ChannelDetail channel={selectedChannel} />
+        </div>
       </div>
     );
   }
 
-  // 第二级：渠道列表（某个应用下的联系方式）
+  // 第二级：渠道列表
   if (selectedApp) {
     return <AppChannelList app={selectedApp} onSelectChannel={setSelectedChannel} onBack={() => setSelectedApp(null)} onShowPlatform={() => setShowPlatform(true)} />;
   }
 
   // 第一级：应用列表
   return (
-    <div className="px-4 py-4">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-semibold text-gray-900">渠道列表</h2>
-        <button
-          onClick={fetchApps}
-          className="text-xs text-blue-600 border border-blue-200 rounded-full px-3 py-1"
-        >
-          刷新
-        </button>
+    <div>
+      {/* 帽子 */}
+      <div className="sticky top-0 z-10" style={{ background: 'linear-gradient(135deg,#0d2818 0%,#1a5c2e 100%)' }}>
+        <div className="flex items-center justify-between px-4" style={{ height: 48 }}>
+          <div className="text-sm font-bold text-white">渠道</div>
+          <button onClick={fetchApps} className="text-[11px] text-green-300 border border-green-600/40 rounded-full px-3 py-1">刷新</button>
+        </div>
       </div>
 
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {apps.map(app => (
-            <button
-              key={app.id}
-              onClick={() => setSelectedApp(app)}
-              className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-4 flex items-center gap-4 active:bg-gray-50 transition-colors"
-            >
-              <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-                <Bot className="w-5 h-5 text-blue-500" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900">{app.name}</p>
-                <p className="text-xs text-gray-400 mt-0.5">自建应用 · CorpID: {app.corp_id}</p>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <span className={`text-xs px-2 py-0.5 rounded-full ${
-                  app.is_enabled ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-400"
-                }`}>
-                  {app.is_enabled ? "启用" : "停用"}
-                </span>
-                <ChevronRight className="w-4 h-4 text-gray-300" />
-              </div>
-            </button>
-          ))}
-          {apps.length === 0 && (
-            <div className="text-center py-12 text-gray-400 text-sm">暂无应用配置</div>
-          )}
-        </div>
-      )}
+      <div className="px-4 py-4">
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <Loader2 className="w-5 h-5 animate-spin text-green-500" />
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {apps.map(app => (
+              <button
+                key={app.id}
+                onClick={() => setSelectedApp(app)}
+                className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-4 flex items-center gap-3 active:bg-gray-50 transition-colors"
+              >
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#1a5c2e] to-[#2d8a47] flex items-center justify-center flex-shrink-0">
+                  <Bot className="w-5 h-5 text-[#4ade80]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900">{app.name}</p>
+                  <p className="text-xs text-gray-400 mt-0.5 font-mono truncate">CorpID: {app.corp_id}</p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                    app.is_enabled ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'
+                  }`}>{app.is_enabled ? '启用' : '停用'}</span>
+                  <ChevronRight className="w-4 h-4 text-gray-300" />
+                </div>
+              </button>
+            ))}
+            {apps.length === 0 && (
+              <div className="text-center py-12 text-gray-400 text-sm">暂无应用配置</div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -2426,73 +2969,61 @@ function AppChannelList({
   }, [app.id]);
 
   return (
-    <div className="px-4 py-4">
-      {/* 头部 */}
-      <div className="flex items-center gap-3 mb-4">
-        <button onClick={onBack} className="p-1.5 rounded-lg bg-gray-100 text-gray-600">
-          <ArrowLeft className="w-4 h-4" />
-        </button>
-        <div>
-          <h2 className="text-sm font-semibold text-gray-900">{app.name}</h2>
-          <p className="text-xs text-gray-400">自建应用 · 选择联系方式</p>
+    <div>
+      {/* 帽子 */}
+      <div className="sticky top-0 z-10" style={{ background: 'linear-gradient(135deg,#0d2818 0%,#1a5c2e 100%)' }}>
+        <div className="flex items-center gap-3 px-4" style={{ height: 48 }}>
+          <button onClick={onBack} className="p-1.5 rounded-full" style={{ color: 'rgba(255,255,255,0.8)' }}>
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <div className="flex-1">
+            <div className="text-sm font-bold text-white leading-tight">{app.name}</div>
+            <div className="text-[10px] text-green-300">渠道 » {app.name}</div>
+          </div>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+            app.is_enabled ? 'bg-green-400/20 text-green-200' : 'bg-gray-400/20 text-gray-300'
+          }`}>{app.is_enabled ? '启用' : '停用'}</span>
         </div>
       </div>
 
-      {/* 应用信息卡片 */}
-      <div className="bg-blue-50 rounded-xl p-4 mb-4 border border-blue-100">
-        <p className="text-xs font-semibold text-blue-700 mb-2">应用信息</p>
-        <div className="space-y-1">
-          <div className="flex justify-between text-xs">
-            <span className="text-gray-500">CorpID</span>
-            <span className="text-gray-800 font-mono">{app.corp_id}</span>
-          </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-gray-500">AgentID</span>
-            <span className="text-gray-800 font-mono">{app.agent_id}</span>
-          </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-gray-500">回调地址</span>
-            <span className="text-gray-800 font-mono text-right max-w-[180px] truncate">{app.callback_url || "-"}</span>
-          </div>
-        </div>
-      </div>
+      <div className="px-4 py-4">
 
       {/* 渠道列表 */}
       {loading ? (
         <div className="flex justify-center py-8">
-          <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+          <Loader2 className="w-5 h-5 animate-spin text-green-500" />
         </div>
       ) : (() => {
-        // 客户联系渠道（app类型）
         const appChannels = channels.filter(ch => ch.channel_type === "app");
-        // 微信客服渠道（kf类型，排除系统默认平台渠道）
         const kfChannels = channels.filter(ch => ch.channel_type === "kf" && ch.project_key !== "__platform__");
         return (
-          <div className="space-y-4">
-            {/* 客户联系 */}
+          <div className="space-y-5">
+            {/* 客户联系分组 */}
             {appChannels.length > 0 && (
               <div>
-                <p className="text-xs text-gray-400 mb-2">客户联系</p>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-1 h-3.5 rounded-full bg-blue-400" />
+                  <p className="text-xs font-semibold text-gray-500">客户联系</p>
+                  <span className="text-xs text-gray-400">{appChannels.length} 个</span>
+                </div>
                 <div className="space-y-2">
                   {appChannels.map(ch => (
                     <button
                       key={ch.id}
                       onClick={() => onSelectChannel(ch)}
-                      className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-4 flex items-center gap-4 active:bg-gray-50 transition-colors"
+                      className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3.5 flex items-center gap-3 active:bg-gray-50 transition-colors"
                     >
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-blue-50">
-                        <Bot className="w-5 h-5 text-blue-500" />
+                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center flex-shrink-0">
+                        <Bot className="w-4.5 h-4.5 text-white" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900">{ch.name}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">客户联系</p>
+                        <p className="text-sm font-semibold text-gray-900">{ch.name}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">客户联系渠道</p>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          ch.is_enabled ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-400"
-                        }`}>
-                          {ch.is_enabled ? "启用" : "停用"}
-                        </span>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                          ch.is_enabled ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'
+                        }`}>{ch.is_enabled ? '启用' : '停用'}</span>
                         <ChevronRight className="w-4 h-4 text-gray-300" />
                       </div>
                     </button>
@@ -2500,46 +3031,33 @@ function AppChannelList({
                 </div>
               </div>
             )}
-            {/* 微信客服：每个账号独立一张卡片 */}
+
+            {/* 微信客服分组 */}
             {kfChannels.length > 0 && (
               <div>
-                <p className="text-xs text-gray-400 mb-2">微信客服账号（{kfChannels.length} 个）</p>
-                {/* 平台管理入口 */}
-                {onShowPlatform && (
-                  <button
-                    onClick={onShowPlatform}
-                    className="w-full text-left bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl border border-orange-100 shadow-sm px-4 py-4 flex items-center gap-4 active:bg-orange-100 transition-colors mb-2"
-                  >
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-orange-100">
-                      <Shield className="w-5 h-5 text-orange-500" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900">平台管理</p>
-                      <p className="text-xs text-orange-500 mt-0.5">系统默认知识库 · 所有客服账号共享</p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-orange-300 flex-shrink-0" />
-                  </button>
-                )}
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-1 h-3.5 rounded-full bg-[#2d8a47]" />
+                  <p className="text-xs font-semibold text-gray-500">微信客服</p>
+                  <span className="text-xs text-gray-400">{kfChannels.length} 个账号</span>
+                </div>
                 <div className="space-y-2">
                   {kfChannels.map(ch => (
                     <button
                       key={ch.id}
                       onClick={() => onSelectChannel(ch)}
-                      className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-4 flex items-center gap-4 active:bg-gray-50 transition-colors"
+                      className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3.5 flex items-center gap-3 active:bg-gray-50 transition-colors"
                     >
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-purple-50">
-                        <MessageSquare className="w-5 h-5 text-purple-500" />
+                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#1a5c2e] to-[#2d8a47] flex items-center justify-center flex-shrink-0">
+                        <MessageSquare className="w-4 h-4 text-[#4ade80]" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900">{ch.name}</p>
-                        <p className="text-xs text-gray-400 mt-0.5 font-mono truncate">{ch.kf_id || "微信客服"}</p>
+                        <p className="text-sm font-semibold text-gray-900">{ch.name}</p>
+                        <p className="text-xs text-gray-400 mt-0.5 font-mono truncate">{ch.kf_id || '微信客服'}</p>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          ch.is_enabled ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-400"
-                        }`}>
-                          {ch.is_enabled ? "启用" : "停用"}
-                        </span>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                          ch.is_enabled ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'
+                        }`}>{ch.is_enabled ? '运行中' : '已停用'}</span>
                         <ChevronRight className="w-4 h-4 text-gray-300" />
                       </div>
                     </button>
@@ -2547,12 +3065,37 @@ function AppChannelList({
                 </div>
               </div>
             )}
+
+            {/* 平台管理入口 */}
+            {onShowPlatform && (
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-1 h-3.5 rounded-full bg-amber-400" />
+                  <p className="text-xs font-semibold text-gray-500">平台管理</p>
+                </div>
+                <button
+                  onClick={onShowPlatform}
+                  className="w-full text-left bg-gradient-to-r from-[#0d2818] to-[#1a5c2e] rounded-xl shadow-sm px-4 py-3.5 flex items-center gap-3 active:opacity-90 transition-opacity"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
+                    <Shield className="w-4 h-4 text-[#4ade80]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white">平台管理</p>
+                    <p className="text-xs text-green-300 mt-0.5">共享指令库 · 共享知识库 · 分身账户</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-green-400 flex-shrink-0" />
+                </button>
+              </div>
+            )}
+
             {channels.length === 0 && (
               <div className="text-center py-8 text-gray-400 text-sm">该应用下暂无渠道</div>
             )}
           </div>
         );
       })()}
+      </div>
     </div>
   );
 }

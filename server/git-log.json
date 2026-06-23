@@ -1,5 +1,446 @@
 [
   {
+    "hash": "24651d040855160216bf5afad5c4210502f7bc8b",
+    "author": "runyi329",
+    "date": "2026-06-23T08:10:23+00:00",
+    "message": "cleanup: 删除临时fix-channel-type接口",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "cleanup: 删除临时fix-channel-type接口"
+  },
+  {
+    "hash": "c329940327c29e653eea9716439104a86df85e6b",
+    "author": "runyi329",
+    "date": "2026-06-23T08:07:04+00:00",
+    "message": "temp: 修复channel_type字段（kf->kf_3）",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "temp: 修复channel_type字段（kf->kf_3）"
+  },
+  {
+    "hash": "51f66ac16e40c916aec78d7d7f80e637ac42d8cb",
+    "author": "runyi329",
+    "date": "2026-06-23T08:02:07+00:00",
+    "message": "cleanup: 删除临时数据迁移接口（已完成迁移）",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "cleanup: 删除临时数据迁移接口（已完成迁移）"
+  },
+  {
+    "hash": "b24f8b89de26244fde02f696e28d00824c638f31",
+    "author": "runyi329",
+    "date": "2026-06-23T07:59:07+00:00",
+    "message": "temp: 添加channel_id=5数据迁移到channel_id=3的临时接口",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "temp: 添加channel_id=5数据迁移到channel_id=3的临时接口"
+  },
+  {
+    "hash": "f0e1d7d88b2f8f1f7e091c9a102160e995370600",
+    "author": "github-actions[bot]",
+    "date": "2026-06-23T07:51:58+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "df2833afe8804072f416eaf6dccce70d4ab9da45",
+    "author": "runyi329",
+    "date": "2026-06-23T07:50:09+00:00",
+    "message": "feat: 系统连接总览加英文字段名对照（corpid/open_kfid）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "系统连接总览加英文字段名对照（corpid/open_kfid）"
+  },
+  {
+    "hash": "a6b5fbb20ca9467e40ab29744cf49c5deb34a03d",
+    "author": "runyi329",
+    "date": "2026-06-23T07:44:20+00:00",
+    "message": "fix: 同步客服账号时增加kfc格式兜底匹配，修复营养顾问open_kfid更新问题",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "同步客服账号时增加kfc格式兜底匹配，修复营养顾问open_kfid更新问题"
+  },
+  {
+    "hash": "ad34e0ba59aa506f4f15628ab1e039526ffa7c20",
+    "author": "runyi329",
+    "date": "2026-06-23T07:12:25+00:00",
+    "message": "feat: 系统连接总览卡片 - 私人/共享知识库改名，移除对话上下文行",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "系统连接总览卡片 - 私人/共享知识库改名，移除对话上下文行"
+  },
+  {
+    "hash": "3ecd2774c0209b70e760ea3efac91896c7bcbd66",
+    "author": "runyi329",
+    "date": "2026-06-23T07:02:22+00:00",
+    "message": "feat: 新增同步客服账号接口，自动从企业微信拉取open_kfid更新数据库，前端加同步按钮",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "新增同步客服账号接口，自动从企业微信拉取open_kfid更新数据库，前端加同步按钮"
+  },
+  {
+    "hash": "2a9379e4ab1705e5a505fd530773bc67078ae58c",
+    "author": "runyi329",
+    "date": "2026-06-23T06:46:38+00:00",
+    "message": "feat: 修复AI指令添加失败(接口路径)，输入框放大3倍，新增清除按钮，设置Tab新增推广链接卡片",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "修复AI指令添加失败(接口路径)，输入框放大3倍，新增清除按钮，设置Tab新增推广链接卡片"
+  },
+  {
+    "hash": "7ddf237a623fe8788ae58a68bd05fee0c698be51",
+    "author": "runyi329",
+    "date": "2026-06-23T06:05:32+00:00",
+    "message": "feat: 我的分身资产改为库数/条目/字符三维度，联动共享知识库数据",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "我的分身资产改为库数/条目/字符三维度，联动共享知识库数据"
+  },
+  {
+    "hash": "8a00ee73ebf415e277b1b3b2124d40bfc0201ef1",
+    "author": "runyi329",
+    "date": "2026-06-23T05:46:47+00:00",
+    "message": "fix: 从设置Tab移除头像和名称区块（已移至我的分身Tab）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "从设置Tab移除头像和名称区块（已移至我的分身Tab）"
+  },
+  {
+    "hash": "0aadb5bc4ede7185c104566c22fc1bbe32da9e94",
+    "author": "runyi329",
+    "date": "2026-06-23T05:40:10+00:00",
+    "message": "fix: 修复ProjectLanding.tsx构建错误 - 清除残留对照表JSX碎片",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复ProjectLanding.tsx构建错误 - 清除残留对照表JSX碎片"
+  },
+  {
+    "hash": "fb7f7b7719bef3bc88cbba919ca7f922758db5ca",
+    "author": "runyi329",
+    "date": "2026-06-23T05:17:38+00:00",
+    "message": "feat: 数字分身页面重构 - 克隆完成度/2维度成长曲线/Tab优化/头像名称设置/去掉等级体系",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "数字分身页面重构 - 克隆完成度/2维度成长曲线/Tab优化/头像名称设置/去掉等级体系"
+  },
+  {
+    "hash": "8ba863853acde934d3efb69476b48b186a6c528e",
+    "author": "runyi329",
+    "date": "2026-06-23T12:03:55+08:00",
+    "message": "feat: 首页添加 WorkBuddy 入口按钮",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "首页添加 WorkBuddy 入口按钮"
+  },
+  {
+    "hash": "7f524e8fdd95e3fa7280a9d97de39112766a343f",
+    "author": "Manus Deploy",
+    "date": "2026-06-23T01:29:36+00:00",
+    "message": "feat: 重设PlatformKbView为管理员总控台，含总览/分身账户/共享知识库/用量统计4个Tab",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "重设PlatformKbView为管理员总控台，含总览/分身账户/共享知识库/用量统计4个Tab"
+  },
+  {
+    "hash": "ec4a7668b05cb42ac7bef2005bb87c4ae302a5bf",
+    "author": "github-actions[bot]",
+    "date": "2026-06-22T19:28:22+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "2a10550a2adc1788497e91360323e903cd9b337f",
+    "author": "Manus Deploy",
+    "date": "2026-06-22T17:03:26+00:00",
+    "message": "feat: AI分身Tab等效比例详细说明+数字分身corpus后端API+Prompt拼装接入",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "AI分身Tab等效比例详细说明+数字分身corpus后端API+Prompt拼装接入"
+  },
+  {
+    "hash": "5f0128e84ec4163c2e8130d2c6f3e1513c10d189",
+    "author": "Manus Deploy",
+    "date": "2026-06-22T15:52:57+00:00",
+    "message": "feat: AI智库4层架构重构 + 配置Tab优化",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "AI智库4层架构重构 + 配置Tab优化"
+  },
+  {
+    "hash": "f56531fd55afd2e30e5a0e41efbaf3c43b78d2cd",
+    "author": "Manus",
+    "date": "2026-06-22T15:09:41+00:00",
+    "message": "feat: AI智库4层架构重构 + WecomAdmin文档Tab",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "AI智库4层架构重构 + WecomAdmin文档Tab"
+  },
+  {
+    "hash": "4f9e7e96eb632b4dffd6358f2bcce25963459fd5",
+    "author": "github-actions[bot]",
+    "date": "2026-06-22T15:11:33+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "a8c63e9348f8c37b13e3cf117f316025ca866a81",
+    "author": "runyi329",
+    "date": "2026-06-22T13:07:14+00:00",
+    "message": "feat: 配置Tab添加接入指引弹窗（分步骤操作引导）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "配置Tab添加接入指引弹窗（分步骤操作引导）"
+  },
+  {
+    "hash": "ee808fd5c3ab5ee81b2d2db00eec7041c42025c6",
+    "author": "runyi329",
+    "date": "2026-06-22T12:45:39+00:00",
+    "message": "feat: 合并用户Tab和日志Tab为客户数据Tab，含数据总览+三维筛选+聊天记录列表",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "合并用户Tab和日志Tab为客户数据Tab，含数据总览+三维筛选+聊天记录列表"
+  },
+  {
+    "hash": "015d09e6f565414ff2eeaeff1866ef88e69fc8cc",
+    "author": "runyi329",
+    "date": "2026-06-22T11:43:28+00:00",
+    "message": "feat: 营养俱乐部绿色UI统一、知识库Tab完善（共享/私人知识库统计、Toggle开关、添加按钮菜单、month_count修复）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "营养俱乐部绿色UI统一、知识库Tab完善（共享/私人知识库统计、Toggle开关、添加按钮菜单、month_count修复）"
+  },
+  {
+    "hash": "845e9ed011d4dec3d3955a5d447a32f75888b355",
+    "author": "github-actions[bot]",
+    "date": "2026-06-22T09:49:37+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "a16461719c2fb83fcc2848bf07b094b7256ea19b",
+    "author": "runyi329",
+    "date": "2026-06-22T09:37:21+00:00",
+    "message": "feat: 重新设计用户绑定页面，修复余额计算(USDT=users.balance+af_manual_balances)，修复鉴权，铅笔图标改绑/解绑",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "重新设计用户绑定页面，修复余额计算(USDT=users.balance+af_manual_balances)，修复鉴权，铅笔图标改绑/解绑"
+  },
+  {
+    "hash": "0ea1c70c5938225f66afdb9f5f0b75e24380a8a9",
+    "author": "runyi329",
+    "date": "2026-06-22T09:07:21+00:00",
+    "message": "fix: LIMIT/OFFSET改为SQL字符串拼接，彻底解决mysqld_stmt_execute参数类型错误",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "LIMIT/OFFSET改为SQL字符串拼接，彻底解决mysqld_stmt_execute参数类型错误"
+  },
+  {
+    "hash": "9e9afd8e8b031f832a05a63dfe680881c0f3d621",
+    "author": "runyi329",
+    "date": "2026-06-22T09:03:12+00:00",
+    "message": "fix: 修复用户绑定列表LIMIT/OFFSET参数类型错误(mysqld_stmt_execute)",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复用户绑定列表LIMIT/OFFSET参数类型错误(mysqld_stmt_execute)"
+  },
+  {
+    "hash": "fdf8f3fa302a8aca79be01b8c7b718eaa2e8af01",
+    "author": "runyi329",
+    "date": "2026-06-22T08:59:17+00:00",
+    "message": "debug: 用户绑定页面列表加载失败时显示错误原因",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "debug: 用户绑定页面列表加载失败时显示错误原因"
+  },
+  {
+    "hash": "4bc0fb10f29743b6c0dd4eed0fcc0867c4450b33",
+    "author": "runyi329",
+    "date": "2026-06-22T08:54:06+00:00",
+    "message": "fix: 用户绑定页面鉴权改用sdk.authenticateRequest+Bearer token，修复数据不显示问题",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "用户绑定页面鉴权改用sdk.authenticateRequest+Bearer token，修复数据不显示问题"
+  },
+  {
+    "hash": "74aed0c2cc42872c7df95283d1e0d72f50d90638",
+    "author": "runyi329",
+    "date": "2026-06-22T08:46:33+00:00",
+    "message": "feat: 重新设计用户绑定页面，以企微用户为主体展示绑定状态",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "重新设计用户绑定页面，以企微用户为主体展示绑定状态"
+  },
+  {
+    "hash": "5f493d0db1e3383fd3d20987f43f912bf9edca65",
+    "author": "runyi329",
+    "date": "2026-06-22T08:08:23+00:00",
+    "message": "fix: requireSuperAdmin 忽略空字符串的 x-session-token，优先使用 httpOnly cookie",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "requireSuperAdmin 忽略空字符串的 x-session-token，优先使用 httpOnly cookie"
+  },
+  {
+    "hash": "fbd7140b150a9961c0bbb04e7a88ba07fbbbefc5",
+    "author": "runyi329",
+    "date": "2026-06-22T07:49:22+00:00",
+    "message": "fix: 企微账号绑定页面显示零 - 修复 MySQL 8.0 不支持 ADD COLUMN IF NOT EXISTS 导致 provider/bind_note 字段缺失",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "企微账号绑定页面显示零 - 修复 MySQL 8.0 不支持 ADD COLUMN IF NOT EXISTS 导致 provider/bind_note 字段缺失"
+  },
+  {
+    "hash": "52946a3b2cfe2a6720a346a43f166bbe2337382a",
+    "author": "runyi329",
+    "date": "2026-06-22T07:20:27+00:00",
+    "message": "chore: 清理排查过程中的临时诊断workflow文件",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "清理排查过程中的临时诊断workflow文件"
+  },
+  {
+    "hash": "5c01639cf696d2611f46303f26c89e49d20adc66",
+    "author": "runyi329",
+    "date": "2026-06-22T07:19:39+00:00",
+    "message": "临时：读取PM2完整日志",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "临时：读取PM2完整日志"
+  },
+  {
+    "hash": "6802668b7a6e656ab1032e801076f97f6915a4fc",
+    "author": "runyi329",
+    "date": "2026-06-22T07:13:19+00:00",
+    "message": "fix: getOrCreateManusTask 创建新任务时不传 agent_profile，避免 auto_route 无效值导致 task.create 失败",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "getOrCreateManusTask 创建新任务时不传 agent_profile，避免 auto_route 无效值导致 task.create 失败"
+  },
+  {
+    "hash": "a7c4d94b3ca94b2f7df26f53f2c9236abcffc430",
+    "author": "runyi329",
+    "date": "2026-06-22T07:11:52+00:00",
+    "message": "临时：立即检查PM2状态",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "临时：立即检查PM2状态"
+  },
+  {
+    "hash": "d2fb46571c4b6a35d260c348c71b9685e603d067",
+    "author": "runyi329",
+    "date": "2026-06-22T07:08:48+00:00",
+    "message": "临时：检查PM2状态和代码版本",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "临时：检查PM2状态和代码版本"
+  },
+  {
+    "hash": "99cff63d1b9cf595fc5eaabb03aa9ceb209648e5",
+    "author": "runyi329",
+    "date": "2026-06-22T07:05:42+00:00",
+    "message": "临时：查PM2日志",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "临时：查PM2日志"
+  },
+  {
+    "hash": "4b4588ff5eff241f6354e53ead46ba3051e30ad2",
+    "author": "runyi329",
+    "date": "2026-06-22T07:02:34+00:00",
+    "message": "临时：检查Manus日志和API Key",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "临时：检查Manus日志和API Key"
+  },
+  {
+    "hash": "22762f22c19440f2ab5ff92c078ab7f30e855a1e",
+    "author": "runyi329",
+    "date": "2026-06-22T07:00:20+00:00",
+    "message": "修复workflow触发器",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "修复workflow触发器"
+  },
+  {
+    "hash": "57d9d4737ec12d1273affb9d7742806a152c968d",
+    "author": "runyi329",
+    "date": "2026-06-22T06:59:47+00:00",
+    "message": "临时：检查MANUS_API_KEY配置",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "临时：检查MANUS_API_KEY配置"
+  },
+  {
+    "hash": "a12b214b9c3858b04c80db7a2dfeb298bf10837f",
+    "author": "runyi329",
+    "date": "2026-06-22T06:47:52+00:00",
+    "message": "fix: 去掉新用户创建Manus任务时的60秒等待，避免企业微信消息处理超时",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "去掉新用户创建Manus任务时的60秒等待，避免企业微信消息处理超时"
+  },
+  {
+    "hash": "06970e7cb9d21f7bd54a3b918f2a18b5a1cf29f4",
+    "author": "runyi329",
+    "date": "2026-06-22T06:38:16+00:00",
+    "message": "fix: 菜单配置Tab彻底去掉硬编码，完全从数据库加载实现前后端联动",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "菜单配置Tab彻底去掉硬编码，完全从数据库加载实现前后端联动"
+  },
+  {
+    "hash": "e5a21160b58f7ac41c922b6db169f18f2bc7d30a",
+    "author": "runyi329",
+    "date": "2026-06-22T06:32:05+00:00",
+    "message": "feat: 全局启用自动路由模式，移除手动切换模型功能",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "全局启用自动路由模式，移除手动切换模型功能"
+  },
+  {
+    "hash": "7f60c70b1a9466af3ee1812c7ff3e2a57d9a5ef0",
+    "author": "runyi329",
+    "date": "2026-06-22T05:06:19+00:00",
+    "message": "feat: 多客服工作区完整升级 - 统一绿色UI，5个Tab全功能，平台管理入口，两层知识库架构",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "多客服工作区完整升级 - 统一绿色UI，5个Tab全功能，平台管理入口，两层知识库架构"
+  },
+  {
+    "hash": "71037ee85cdf8bad0b64bff8452aa927b83b5f47",
+    "author": "runyi329",
+    "date": "2026-06-22T02:51:55+00:00",
+    "message": "feat: 修复营养俱乐部页面路由+两层知识库架构",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "修复营养俱乐部页面路由+两层知识库架构"
+  },
+  {
+    "hash": "c9e6b012511a00a0d6ff90c0a285b1aa2c680577",
+    "author": "runyi329",
+    "date": "2026-06-22T02:37:59+00:00",
+    "message": "feat: 渠道列表按客服账号独立展示",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "渠道列表按客服账号独立展示"
+  },
+  {
+    "hash": "30e4f69850d77127a7b91b4502cad2527becb4ac",
+    "author": "runyi329",
+    "date": "2026-06-22T02:20:42+00:00",
+    "message": "feat: 多客服工作区架构升级",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "多客服工作区架构升级"
+  },
+  {
     "hash": "8816dbbb0522a5fdad1d1d4dff600a588fa3c902",
     "author": "runyi329",
     "date": "2026-06-22T00:02:35+00:00",
