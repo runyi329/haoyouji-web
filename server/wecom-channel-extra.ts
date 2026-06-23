@@ -1057,6 +1057,79 @@ router.post("/api/wecom/corpus/twin-toggle", async (req: Request, res: Response)
 // 对话质量评分（AI自动打分 + 手动调整）
 // =====================================================================
 
+/**
+ * POST /api/wecom/ch/logs/auto-score-all
+ * 对未打分的对话记录批量补打分，每次最多处理 batchSize 条
+ * 异步执行：接口立即返回，后台持续打分
+ * 注意：必须在 /:id/score 路由之前注册，否则 auto-score-all 会被当作 :id 匹配
+ */
+router.post("/api/wecom/ch/logs/auto-score-all", async (req: Request, res: Response) => {
+  const batchSize = Math.min(parseInt((req.body?.batch_size as string) || '50', 10), 100);
+  const conn = await getDbConnection();
+  let pendingCount = 0;
+  try {
+    const [pending] = await (conn as any).execute(
+      `SELECT id, user_message, reply_preview FROM wecom_message_credits
+       WHERE dialog_score IS NULL
+         AND channel_type IN ('kf','kf_3','kf_4','kf_5','kf_6')
+         AND user_message IS NOT NULL AND user_message != ''
+         AND reply_preview IS NOT NULL AND reply_preview != ''
+       ORDER BY id DESC LIMIT ?`,
+      [batchSize]
+    );
+    pendingCount = (pending as any[]).length;
+    res.json({ ok: true, pending: pendingCount, message: `开始异步批量打分 ${pendingCount} 条` });
+    setImmediate(async () => {
+      const scoreSystemPrompt = `你是一名专业的AI对话质量评估专家。请对以下一条对话进行质量评分，输出严格的JSON格式（不要输出任何其他内容）：
+{
+  "stars": <1.0|1.5|2.0|2.5|3.0|3.5|4.0|4.5|5.0 中的一个小数>,
+  "reason": "<简洁的中文总评，不超过80字>",
+  "dimensions": {
+    "intent_clarity": <0-20的整数>,
+    "reply_quality": <0-30的整数>,
+    "completeness": <0-20的整数>,
+    "info_density": <0-15的整数>,
+    "emotion_handling": <0-15的整数>
+  }
+}
+星级标准：5星=极优精选训练集，4星=良好备选语料，3星=一般参考语料，2星=较差建议修改，1星=低质过滤丢弃。必须使用半星精度。`;
+      for (const log of (pending as any[])) {
+        try {
+          const userPrompt = `用户消息：${(log.user_message || '').substring(0, 300)}
+AI回复：${(log.reply_preview || '').substring(0, 300)}`;
+          const aiReply = await callWecomDeepSeek(scoreSystemPrompt, userPrompt);
+          let stars = 3.0, reason = '', dimensions: any = null;
+          try {
+            const m = aiReply.match(/\{[\s\S]*\}/);
+            if (m) {
+              const p = JSON.parse(m[0]);
+              if (p.stars !== undefined) stars = Math.round(Math.max(1.0, Math.min(5.0, parseFloat(p.stars) || 3.0)) * 2) / 2;
+              reason = (p.reason || '').substring(0, 200);
+              if (p.dimensions) dimensions = p.dimensions;
+            }
+          } catch (_) {}
+          const score = Math.round(stars * 20);
+          const level = stars >= 4.5 ? '优质' : stars >= 3.5 ? '良好' : stars >= 2.5 ? '一般' : '低质';
+          const dimJson = dimensions ? JSON.stringify(dimensions) : null;
+          await (conn as any).execute(
+            `UPDATE wecom_message_credits SET dialog_score=?, score_level=?, score_reason=?, score_dimensions=?, score_at=NOW() WHERE id=?`,
+            [score, level, reason, dimJson, log.id]
+          );
+          console.log(`[批量评分] id=${log.id} stars=${stars}`);
+          await new Promise(r => setTimeout(r, 500));
+        } catch (se) {
+          console.error(`[批量评分] id=${log.id} 失败:`, se);
+        }
+      }
+      console.log(`[批量评分] 完成 ${pendingCount} 条`);
+      conn.end?.();
+    });
+  } catch (e: any) {
+    console.error('[批量评分] 失败:', e);
+    res.status(500).json({ error: '批量评分失败' });
+  }
+});
+
 /** POST /api/wecom/ch/logs/:id/score
  *  body: { channel_id, channel_type, avatar_role? }
  *  功能：调用 DeepSeek 对单条对话打分，结合分身定位
@@ -1290,81 +1363,5 @@ router.get("/api/wecom/platform/channels", async (req: Request, res: Response) =
   }
 });
 
-// =====================================================================
-// 批量补打分（后台自动）
-// =====================================================================
-/**
- * POST /api/wecom/ch/logs/auto-score-all
- * 对未打分的对话记录批量补打分，每次最多处理 batchSize 条，防止超时
- * 异步执行：接口立即返回，后台持续打分
- */
-router.post("/api/wecom/ch/logs/auto-score-all", async (req: Request, res: Response) => {
-  const batchSize = Math.min(parseInt((req.body?.batch_size as string) || '50', 10), 100);
-  const conn = await getDbConnection();
-  let pendingCount = 0;
-  try {
-    const [pending] = await (conn as any).execute(
-      `SELECT id, user_message, reply_preview FROM wecom_message_credits
-       WHERE dialog_score IS NULL
-         AND channel_type IN ('kf','kf_3','kf_4','kf_5','kf_6')
-         AND user_message IS NOT NULL AND user_message != ''
-         AND reply_preview IS NOT NULL AND reply_preview != ''
-       ORDER BY id DESC LIMIT ?`,
-      [batchSize]
-    );
-    pendingCount = (pending as any[]).length;
-    res.json({ ok: true, pending: pendingCount, message: `开始异步批量打分 ${pendingCount} 条` });
-    // 异步执行，不阻塞响应
-    setImmediate(async () => {
-      const scoreSystemPrompt = `你是一名专业的AI对话质量评估专家。请对以下一条对话进行质量评分，输出严格的JSON格式（不要输出任何其他内容）：
-{
-  "stars": <1.0|1.5|2.0|2.5|3.0|3.5|4.0|4.5|5.0 中的一个小数>,
-  "reason": "<简洁的中文总评，不超过80字>",
-  "dimensions": {
-    "intent_clarity": <0-20的整数>,
-    "reply_quality": <0-30的整数>,
-    "completeness": <0-20的整数>,
-    "info_density": <0-15的整数>,
-    "emotion_handling": <0-15的整数>
-  }
-}
-星级标准：5星=极优精选训练集，4星=良好备选语料，3星=一般参考语料，2星=较差建议修改，1星=低质过滤丢弃。必须使用半星精度。`;
-      for (const log of (pending as any[])) {
-        try {
-          const userPrompt = `用户消息：${(log.user_message || '').substring(0, 300)}
-AI回复：${(log.reply_preview || '').substring(0, 300)}`;
-          const aiReply = await callWecomDeepSeek(scoreSystemPrompt, userPrompt);
-          let stars = 3.0, reason = '', dimensions: any = null;
-          try {
-            const m = aiReply.match(/\{[\s\S]*\}/);
-            if (m) {
-              const p = JSON.parse(m[0]);
-              if (p.stars !== undefined) stars = Math.round(Math.max(1.0, Math.min(5.0, parseFloat(p.stars) || 3.0)) * 2) / 2;
-              reason = (p.reason || '').substring(0, 200);
-              if (p.dimensions) dimensions = p.dimensions;
-            }
-          } catch (_) {}
-          const score = Math.round(stars * 20);
-          const level = stars >= 4.5 ? '优质' : stars >= 3.5 ? '良好' : stars >= 2.5 ? '一般' : '低质';
-          const dimJson = dimensions ? JSON.stringify(dimensions) : null;
-          await (conn as any).execute(
-            `UPDATE wecom_message_credits SET dialog_score=?, score_level=?, score_reason=?, score_dimensions=?, score_at=NOW() WHERE id=?`,
-            [score, level, reason, dimJson, log.id]
-          );
-          console.log(`[批量评分] id=${log.id} stars=${stars}`);
-          // 防止打分过快，每条间隔 500ms
-          await new Promise(r => setTimeout(r, 500));
-        } catch (se) {
-          console.error(`[批量评分] id=${log.id} 失败:`, se);
-        }
-      }
-      console.log(`[批量评分] 完成 ${pendingCount} 条`);
-      conn.end?.();
-    });
-  } catch (e: any) {
-    console.error('[批量评分] 失败:', e);
-    res.status(500).json({ error: '批量评分失败' });
-  }
-});
 
 export default router;

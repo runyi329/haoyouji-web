@@ -1,0 +1,19 @@
+name: trigger-auto-score
+on:
+  workflow_dispatch:
+jobs:
+  score:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: setup ssh
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf 'Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n' > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+      - name: trigger auto score on production
+        run: |
+          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            'curl -s -X POST "http://localhost:3000/api/wecom/ch/logs/auto-score-all" -H "Content-Type: application/json" -d "{\"batch_size\":50}" && echo "triggered"'
