@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-23
+// 生成时间：2026-06-24
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -7748,5 +7748,12 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-23T11:45:40Z", type: "fix", cleanMessage: "兼容旧MySQL版本的字段添加方式" },
     { date: "2026-06-23T12:03:23Z", type: "feat", cleanMessage: "渠道识别+对话记录Tab - 客户档案显示渠道标签，用量统计新增对话记录明细Tab，旧数据归入营养顾问" },
     { date: "2026-06-23T12:15:36Z", type: "fix", cleanMessage: "修复客户档案渠道识别+自动打分+兼容旧MySQL ALTER TABLE语法" },
+    { date: "2026-06-23T12:27:08Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-23T12:30:29Z", type: "fix", cleanMessage: "修复auto-score-all路由顺序，添加批量打分触发workflow" },
+    { date: "2026-06-23T12:34:24Z", type: "chore", cleanMessage: "修改query-channel-type为触发批量打分" },
+    { date: "2026-06-23T13:17:41Z", type: "feat", cleanMessage: "对话气泡布局+分身头像+统计联动+星级同行+展开不重复" },
+    { date: "2026-06-23T13:39:43Z", type: "feat", cleanMessage: "气泡布局优化+用户名移至时间行+分身只显示头像" },
+    { date: "2026-06-23T13:54:13Z", type: "fix", cleanMessage: "初始加载失败静默重试+进入客户档案自动触发批量打分" },
+    { date: "2026-06-23T15:32:21Z", type: "feat", cleanMessage: "新增DRAM和MU币种支持（价格扫描+前后端枚举）" },
   ],
 };
