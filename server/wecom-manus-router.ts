@@ -3470,12 +3470,33 @@ router.post("/api/wecom/channels/sync-kf-accounts", async (req: Request, res: Re
           await (conn as any).execute("UPDATE wecom_channels SET kf_id = ? WHERE id = ?", [openKfId, chId]);
           updated.push({ id: chId, name, open_kfid: openKfId, action: "matched_by_name" });
         } else {
-          // 新建渠道
-          const [ins] = await (conn as any).execute(
-            "INSERT INTO wecom_channels (name, channel_type, kf_id) VALUES (?, 'kf', ?)",
-            [name, openKfId]
+          // 尝试按旧格式 kfcid 匹配（kfc 开头的错误格式）
+          const [byKfc] = await (conn as any).execute(
+            "SELECT id, name FROM wecom_channels WHERE channel_type = 'kf' AND kf_id LIKE 'kfc%' LIMIT 10",
+            []
           );
-          created.push({ id: (ins as any).insertId, name, open_kfid: openKfId });
+          // 如果只有一个 kfc 格式的渠道，直接更新；如果有多个，按名字模糊匹配
+          let matchedByKfc = null;
+          if ((byKfc as any[]).length === 1) {
+            matchedByKfc = (byKfc as any[])[0];
+          } else if ((byKfc as any[]).length > 1) {
+            // 多个 kfc 渠道，尝试模糊名字匹配
+            matchedByKfc = (byKfc as any[]).find((c: any) =>
+              name && c.name && (c.name.includes(name) || name.includes(c.name))
+            ) || null;
+          }
+          if (matchedByKfc) {
+            const chId = matchedByKfc.id;
+            await (conn as any).execute("UPDATE wecom_channels SET kf_id = ? WHERE id = ?", [openKfId, chId]);
+            updated.push({ id: chId, name: matchedByKfc.name, open_kfid: openKfId, action: "matched_by_kfc_fallback" });
+          } else {
+            // 新建渠道
+            const [ins] = await (conn as any).execute(
+              "INSERT INTO wecom_channels (name, channel_type, kf_id) VALUES (?, 'kf', ?)",
+              [name, openKfId]
+            );
+            created.push({ id: (ins as any).insertId, name, open_kfid: openKfId });
+          }
         }
       }
     }
