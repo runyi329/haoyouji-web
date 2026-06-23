@@ -1646,31 +1646,7 @@ function AvatarGrowthTab({ onProfileUpdate }: { onProfileUpdate?: (name: string,
               </div>
             );
           })()}
-        </div> 条`}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <div className="px-3 pt-2 pb-3 space-y-2" style={{ borderTop: '1px solid rgba(255,255,255,0.15)' }}>
-              <div className="text-white text-[10px] font-semibold opacity-70">等效知识条数计算规则</div>
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-white text-[10px] opacity-60"> 知识库每条</span>
-                  <span className="text-white text-[10px] opacity-80 font-semibold">× 1 条</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-white text-[10px] opacity-60"> 优质语料每条</span>
-                  <span className="text-white text-[10px] opacity-80 font-semibold">× 2 条</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-white text-[10px] opacity-60"> 对话记录每次</span>
-                  <span className="text-white text-[10px] opacity-80 font-semibold">× 0.1 条</span>
-                </div>
-              </div>
-              <div className="text-white text-[10px] opacity-40">优质语料权重更高，因其包含经过筛选的高质量对话示例</div>
-            </div>
-          </div>
-        )}
+      </div>
       </div>
 
       {/* ── 克隆维度成长曲线 ── */}
