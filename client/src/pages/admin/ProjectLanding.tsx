@@ -2031,7 +2031,7 @@ function AIBrainTab() {
     });
   }, []);
 
-  const platformLayer1Rules = platformRules.filter(r => r.layer === 1);
+  const platformLayer1Rules = platformRules; // 显示所有平台共享指令（layer1角色定义+layer2行为规范）
   const layer2Rules = promptRules.filter(r => r.layer === 2);
 
   async function handleSaveRule(rule: PromptRule) {
