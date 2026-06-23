@@ -11,7 +11,13 @@ jobs:
           echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
-      - name: 触发生产服务器批量打分
+      - name: 同步客服头像 + 触发批量打分
         run: |
-          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            'curl -s -X POST "http://localhost:3000/api/wecom/ch/logs/auto-score-all" -H "Content-Type: application/json" -d "{\"batch_size\":50}" && echo "批量打分已触发"'
+          ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
+            echo "=== 同步客服账号头像 ==="
+            curl -s -X POST "http://localhost:3000/api/wecom/channels/sync-kf-accounts" | head -c 500
+            echo ""
+            echo "=== 触发批量打分 ==="
+            curl -s -X POST "http://localhost:3000/api/wecom/ch/logs/auto-score-all" -H "Content-Type: application/json" -d "{\"batch_size\":50}"
+            echo "完成"
+          '

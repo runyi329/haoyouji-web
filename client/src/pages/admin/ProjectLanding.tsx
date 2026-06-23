@@ -2822,6 +2822,9 @@ interface CustomerLog {
   credits_used: number;
   created_at: string;
   nickname: string | null;
+  channel_name?: string | null;
+  channel_avatar?: string | null;
+  manus_task_id?: string | null;
   dialog_score?: number | null;
   score_level?: string | null;
   score_reason?: string | null;
@@ -3095,33 +3098,86 @@ function CustomerDataTab() {
         <div className="space-y-2">
           {logs.map(log => (
             <div key={log.id} className="bg-white rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: C.line }}>
-              <button className="w-full px-4 py-3 flex items-start gap-3 text-left"
+              <button className="w-full px-3 py-3 text-left"
                 onClick={() => setExpanded(expanded === log.id ? null : log.id)}>
-                {/* 头像 */}
-                <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5" style={{ backgroundColor: C.brandLight }}>
-                  <User className="w-4 h-4" style={{ color: C.brand }} />
+                {/* 时间 + 展开按钮 */}
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px]" style={{ color: C.textSub }}>{formatDate(log.created_at)}</span>
+                  {expanded === log.id
+                    ? <ChevronDown className="w-3.5 h-3.5" style={{ color: C.textSub }} />
+                    : <ChevronRight className="w-3.5 h-3.5" style={{ color: C.textSub }} />}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold truncate" style={{ color: C.textMain }}>{log.nickname || log.wecom_user_id.slice(0, 12)}</span>
-                    <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>{formatDate(log.created_at)}</span>
+                {/* 用户气泡：左侧 */}
+                <div className="flex items-start gap-1.5 mb-2">
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: C.brandLight }}>
+                    <User className="w-3 h-3" style={{ color: C.brand }} />
                   </div>
-                  <div className="text-sm mt-0.5 line-clamp-1" style={{ color: C.textMain }}>{log.user_message || '(无内容)'}</div>
-                  {log.reply_preview && (
-                    <div className="text-xs mt-0.5 line-clamp-1" style={{ color: C.textSub }}>{log.reply_preview}</div>
-                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] mb-0.5 font-medium" style={{ color: C.textSub }}>{log.nickname || log.wecom_user_id.slice(0, 12)}</div>
+                    <div className={`text-sm leading-snug ${expanded === log.id ? '' : 'line-clamp-2'}`} style={{ color: C.textMain }}>{log.user_message || '(无内容)'}</div>
+                  </div>
+                </div>
+                {/* AI 气泡：右侧 */}
+                {log.reply_preview && (
+                  <div className="flex items-start gap-1.5 flex-row-reverse">
+                    {/* 分身头像 */}
+                    {log.channel_avatar ? (
+                      <img src={log.channel_avatar} alt="" className="w-6 h-6 rounded-full flex-shrink-0 object-cover" />
+                    ) : (
+                      <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: C.brand }}>
+                        <span className="text-white text-[9px] font-bold">分身</span>
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[10px] mb-0.5 font-medium text-right" style={{ color: C.textSub }}>{log.channel_name || (log.manus_task_id === 'kf-deepseek' ? '营养顾问' : '分身')}</div>
+                      <div className={`text-xs leading-snug text-right ${expanded === log.id ? '' : 'line-clamp-2'}`} style={{ color: C.textSub }}>{log.reply_preview}</div>
                     </div>
-                {expanded === log.id
-                  ? <ChevronDown className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: C.textSub }} />
-                  : <ChevronRight className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: C.textSub }} />}
+                  </div>
+                )}
               </button>
               {/* 卡片底部细线下方：始终可见 */}
               <div className="px-4 pb-3 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
-                {/* 模型 + token + 渠道 */}
-                <div className="flex gap-2 text-xs flex-wrap mb-2 items-center" style={{ color: C.textSub }}>
+                {/* 模型 + token + 星级（同一行） + 渠道 */}
+                <div className="flex gap-2 text-xs flex-wrap items-center" style={{ color: C.textSub }}>
                   {log.model_used && <span className="px-2 py-0.5 rounded-full" style={{ backgroundColor: C.brandLight, color: C.brand }}>{log.model_used}</span>}
                   {log.credits_used > 0 && <span>{log.credits_used} token</span>}
-                  {/* 渠道标签：新数据显示渠道名，旧数据显示「营养顾问」 */}
+                  {/* 星级：跟在 token 后面，收窄显示 */}
+                  {(() => {
+                    if (log.dialog_score !== null && log.dialog_score !== undefined) {
+                      const stars = Math.round((log.dialog_score / 20) * 2) / 2;
+                      const fullStars = Math.floor(stars);
+                      const hasHalf = stars - fullStars >= 0.5;
+                      const emptyStars = 5 - fullStars - (hasHalf ? 1 : 0);
+                      const starColor = stars >= 4.5 ? '#16a34a' : stars >= 3.5 ? '#2563eb' : stars >= 2.5 ? '#d97706' : '#dc2626';
+                      return (
+                        <div className="flex items-center gap-0.5">
+                          {Array.from({ length: fullStars }).map((_, i) => (
+                            <svg key={`f${i}`} className="w-3 h-3" viewBox="0 0 24 24" fill={starColor}><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                          ))}
+                          {hasHalf && (
+                            <svg className="w-3 h-3" viewBox="0 0 24 24">
+                              <defs><linearGradient id={`hg${log.id}`}><stop offset="50%" stopColor={starColor}/><stop offset="50%" stopColor="#e5e7eb"/></linearGradient></defs>
+                              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill={`url(#hg${log.id})`}/>
+                            </svg>
+                          )}
+                          {Array.from({ length: emptyStars }).map((_, i) => (
+                            <svg key={`e${i}`} className="w-3 h-3" viewBox="0 0 24 24" fill="#e5e7eb"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                          ))}
+                          <span className="text-xs font-semibold ml-0.5" style={{ color: starColor }}>{stars.toFixed(1)}</span>
+                        </div>
+                      );
+                    } else {
+                      // 未打分：显示空星
+                      return (
+                        <div className="flex items-center gap-0.5">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <svg key={i} className="w-3 h-3" viewBox="0 0 24 24" fill="#e5e7eb"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                          ))}
+                        </div>
+                      );
+                    }
+                  })()}
+                  {/* 渠道标签 */}
                   {(() => {
                     const chName = log.channel_name || (log.manus_task_id === 'kf-deepseek' ? '营养顾问' : null);
                     if (!chName) return null;
@@ -3133,33 +3189,14 @@ function CustomerDataTab() {
                     );
                   })()}
                 </div>
-                {log.dialog_score !== null && log.dialog_score !== undefined ? (() => {
-                  // 将 0-100 分转换为星级（半星精度）
+                {/* 展开后：总评 + 维度 + 调整 */}
+                {expanded === log.id && log.dialog_score !== null && log.dialog_score !== undefined && (() => {
                   const stars = Math.round((log.dialog_score / 20) * 2) / 2;
-                  const fullStars = Math.floor(stars);
-                  const hasHalf = stars - fullStars >= 0.5;
-                  const emptyStars = 5 - fullStars - (hasHalf ? 1 : 0);
                   const starColor = stars >= 4.5 ? '#16a34a' : stars >= 3.5 ? '#2563eb' : stars >= 2.5 ? '#d97706' : '#dc2626';
                   return (
-                    <div className="space-y-2">
-                      {/* 星级行 */}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {/* 半星渲染 */}
-                        <div className="flex items-center gap-0.5">
-                          {Array.from({ length: fullStars }).map((_, i) => (
-                            <svg key={`f${i}`} className="w-4 h-4" viewBox="0 0 24 24" fill={starColor}><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                          ))}
-                          {hasHalf && (
-                            <svg className="w-4 h-4" viewBox="0 0 24 24">
-                              <defs><linearGradient id={`hg${log.id}`}><stop offset="50%" stopColor={starColor}/><stop offset="50%" stopColor="#e5e7eb"/></linearGradient></defs>
-                              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill={`url(#hg${log.id})`}/>
-                            </svg>
-                          )}
-                          {Array.from({ length: emptyStars }).map((_, i) => (
-                            <svg key={`e${i}`} className="w-4 h-4" viewBox="0 0 24 24" fill="#e5e7eb"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                          ))}
-                        </div>
-                        <span className="text-sm font-bold" style={{ color: starColor }}>{stars.toFixed(1)}</span>
+                    <div className="space-y-2 mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                      {/* 等级标签 + 调整按钮 */}
+                      <div className="flex items-center gap-2">
                         <span className="text-xs px-1.5 py-0.5 rounded-full font-medium"
                           style={{
                             backgroundColor: stars >= 4.5 ? '#dcfce7' : stars >= 3.5 ? '#dbeafe' : stars >= 2.5 ? '#fef3c7' : '#fee2e2',
@@ -3167,9 +3204,9 @@ function CustomerDataTab() {
                           }}>
                           {stars >= 4.5 ? '极优' : stars >= 3.5 ? '良好' : stars >= 2.5 ? '一般' : stars >= 1.5 ? '较差' : '低质'}
                         </span>
-                        <span className="text-xs ml-auto" style={{ color: C.textSub }}>训练语料</span>
+                        <span className="text-xs" style={{ color: C.textSub }}>训练语料</span>
                         <button onClick={e => { e.stopPropagation(); setAdjustingId(adjustingId === log.id ? null : log.id); setAdjustScore(log.dialog_score!); }}
-                          className="text-xs px-2 py-0.5 rounded-lg border" style={{ borderColor: C.line, color: C.textSub }}>
+                          className="text-xs px-2 py-0.5 rounded-lg border ml-auto" style={{ borderColor: C.line, color: C.textSub }}>
                           调整
                         </button>
                       </div>
@@ -3179,7 +3216,7 @@ function CustomerDataTab() {
                           {log.score_reason}
                         </div>
                       )}
-                      {/* 维度详情（点击星级展开） */}
+                      {/* 维度详情 */}
                       {log.score_dimensions && (
                         <div className="space-y-1.5 pt-1">
                           <div className="text-xs font-medium mb-1" style={{ color: C.textSub }}>评分维度详情</div>
@@ -3210,7 +3247,7 @@ function CustomerDataTab() {
                           })}
                         </div>
                       )}
-                      {/* 手动调整（星级滑块，0.5-5.0） */}
+                      {/* 手动调整滑块 */}
                       {adjustingId === log.id && (
                         <div className="flex items-center gap-2 mt-1 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
                           <span className="text-xs" style={{ color: C.textSub }}>1星</span>
@@ -3233,26 +3270,9 @@ function CustomerDataTab() {
                       )}
                     </div>
                   );
-                })() : (
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <svg key={i} className="w-4 h-4" viewBox="0 0 24 24" fill="#e5e7eb"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                    ))}
-                  </div>
-                )}
+                })()}
               </div>
-              {expanded === log.id && (
-                <div className="px-4 pb-3 space-y-2 border-t" style={{ borderColor: C.line }}>
-                  <div>
-                    <div className="text-xs font-medium mb-1" style={{ color: C.textSub }}>用户消息</div>
-                    <div className="text-sm p-2 rounded-xl" style={{ backgroundColor: C.bg, color: C.textMain }}>{log.user_message}</div>
-                  </div>
-                  <div>
-                    <div className="text-xs font-medium mb-1" style={{ color: C.textSub }}>AI 回复</div>
-                    <div className="text-sm p-2 rounded-xl" style={{ backgroundColor: C.brandLight, color: C.textMain }}>{log.reply_preview}</div>
-                  </div>
-                </div>
-              )}
+
             </div>
           ))}
         </div>

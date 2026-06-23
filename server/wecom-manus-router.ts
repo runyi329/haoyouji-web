@@ -3516,6 +3516,7 @@ router.post("/api/wecom/channels/sync-kf-accounts", async (req: Request, res: Re
     for (const acc of accounts) {
       const openKfId: string = acc.open_kfid || "";
       const name: string = acc.name || "";
+      const avatarUrl: string = acc.avatar || "";
       if (!openKfId) continue;
       // 查找是否已有渠道匹配此 open_kfid
       const [existing] = await (conn as any).execute(
@@ -3523,7 +3524,12 @@ router.post("/api/wecom/channels/sync-kf-accounts", async (req: Request, res: Re
         [openKfId]
       );
       if ((existing as any[]).length > 0) {
-        updated.push({ id: (existing as any[])[0].id, name: (existing as any[])[0].name, open_kfid: openKfId });
+        const chId = (existing as any[])[0].id;
+        // 同步头像
+        if (avatarUrl) {
+          try { await (conn as any).execute("UPDATE wecom_channels SET avatar_url = ? WHERE id = ?", [avatarUrl, chId]); } catch (_) {}
+        }
+        updated.push({ id: chId, name: (existing as any[])[0].name, open_kfid: openKfId, avatar: avatarUrl });
       } else {
         // 尝试按名称匹配（名称相同但 kf_id 为空或不同）
         const [byName] = await (conn as any).execute(

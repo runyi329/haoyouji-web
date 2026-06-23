@@ -661,6 +661,7 @@ router.get("/api/wecom/ch/logs", async (req: Request, res: Response) => {
               mc.created_at, ws.nickname,
               mc.channel_id, mc.channel_type, mc.manus_task_id,
               wc.name AS channel_name,
+              wc.avatar_url AS channel_avatar,
               mc.dialog_score, mc.score_level, mc.score_reason, mc.score_dimensions
        FROM wecom_message_credits mc
        LEFT JOIN wecom_manus_sessions ws ON ws.wecom_user_id = mc.wecom_user_id
@@ -913,7 +914,10 @@ router.get("/api/wecom/ch/data/summary", async (req: Request, res: Response) => 
   const { channel_type = "app", channel_id } = req.query as Record<string, string>;
   const conn = await getDbConnection();
   try {
-    const channelCondition = channel_id ? `mc.channel_type = 'kf_${channel_id}'` : `mc.channel_type = '${channel_type}'`;
+    // 兼容旧数据：channel_id=3 时同时查 kf_3（新格式）和 kf（旧格式，已归入营养顾问）
+  const channelCondition = channel_id
+    ? `(mc.channel_type = 'kf_${channel_id}' OR (mc.channel_type = 'kf' AND (mc.channel_id = ${parseInt(channel_id, 10)} OR mc.channel_id IS NULL) AND ${parseInt(channel_id, 10)} = 3))`
+    : `mc.channel_type = '${channel_type}'`;
     const now = new Date();
     const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
     const [[totals]] = await (conn as any).execute(
