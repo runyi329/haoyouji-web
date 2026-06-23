@@ -1038,4 +1038,121 @@ router.post("/api/wecom/corpus/twin-toggle", async (req: Request, res: Response)
   }
 });
 
+// =====================================================================
+// 对话质量评分（AI自动打分 + 手动调整）
+// =====================================================================
+
+/** POST /api/wecom/ch/logs/:id/score
+ *  body: { channel_id, channel_type, avatar_role? }
+ *  功能：调用 DeepSeek 对单条对话打分，结合分身定位
+ */
+router.post("/api/wecom/ch/logs/:id/score", async (req: Request, res: Response) => {
+  const logId = parseInt(req.params.id, 10);
+  const { channel_id, channel_type = "kf", avatar_role } = req.body;
+  if (!logId) return res.status(400).json({ error: "缺少 log id" });
+  const conn = await getDbConnection();
+  try {
+    // 确保评分字段存在
+    try {
+      await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS dialog_score TINYINT DEFAULT NULL COMMENT '对话质量评分 0-100'`);
+      await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS score_level VARCHAR(10) DEFAULT NULL COMMENT '评分等级：优质/良好/一般/低质'`);
+      await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS score_reason TEXT DEFAULT NULL COMMENT 'AI评分理由'`);
+      await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS score_at TIMESTAMP DEFAULT NULL COMMENT '评分时间'`);
+    } catch (_) {}
+
+    // 读取对话内容
+    const [rows] = await (conn as any).execute(
+      `SELECT mc.id, mc.user_message, mc.reply_preview, mc.model_used,
+              mc.dialog_score, mc.score_level, mc.score_reason, mc.score_at,
+              ws.nickname
+       FROM wecom_message_credits mc
+       LEFT JOIN wecom_manus_sessions ws ON ws.wecom_user_id = mc.wecom_user_id
+       WHERE mc.id = ?`,
+      [logId]
+    );
+    const log = (rows as any[])[0];
+    if (!log) return res.status(404).json({ error: "对话记录不存在" });
+
+    // 如果已有评分，直接返回（避免重复计费）
+    if (log.dialog_score !== null && log.dialog_score !== undefined) {
+      return res.json({ ok: true, score: log.dialog_score, level: log.score_level, reason: log.score_reason, cached: true });
+    }
+
+    // 构建评分 Prompt（结合分身定位）
+    const roleContext = avatar_role
+      ? `当前数字分身的定位是：${avatar_role}。请结合该定位评估对话是否符合分身的专业方向和服务目标。`
+      : "请从通用AI客服质量角度评估对话。";
+
+    const systemPrompt = `你是一名专业的AI对话质量评估专家。${roleContext}
+
+请对以下一条对话进行质量评分，输出严格的JSON格式（不要输出任何其他内容）：
+{
+  "score": <0-100的整数>,
+  "level": "优质|良好|一般|低质",
+  "reason": "<简洁的中文评分理由，不超过80字>",
+  "dimensions": {
+    "intent_clarity": <0-20>,
+    "reply_quality": <0-30>,
+    "completeness": <0-20>,
+    "info_density": <0-15>,
+    "emotion_handling": <0-15>
+  }
+}
+
+评级标准：优质(80-100)精选训练集，良好(60-79)备选语料，一般(40-59)参考语料，低质(0-39)过滤丢弃。`;
+
+    const userPrompt = `用户消息：${log.user_message || "(空)"}
+AI回复：${log.reply_preview || "(空)"}`;
+
+    const aiReply = await callWecomDeepSeek(systemPrompt, userPrompt);
+
+    // 解析 JSON
+    let score = 60, level = "良好", reason = "AI评分完成";
+    try {
+      const jsonMatch = aiReply.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        score = Math.max(0, Math.min(100, parseInt(parsed.score, 10) || 60));
+        level = ["优质", "良好", "一般", "低质"].includes(parsed.level) ? parsed.level : (score >= 80 ? "优质" : score >= 60 ? "良好" : score >= 40 ? "一般" : "低质");
+        reason = (parsed.reason || "").substring(0, 200);
+      }
+    } catch (_) {
+      level = score >= 80 ? "优质" : score >= 60 ? "良好" : score >= 40 ? "一般" : "低质";
+    }
+
+    // 写入数据库
+    await (conn as any).execute(
+      `UPDATE wecom_message_credits SET dialog_score=?, score_level=?, score_reason=?, score_at=NOW() WHERE id=?`,
+      [score, level, reason, logId]
+    );
+
+    res.json({ ok: true, score, level, reason, cached: false });
+  } catch (e: any) {
+    console.error("[对话评分] 失败:", e);
+    res.status(500).json({ error: "评分失败: " + (e?.message || "") });
+  }
+});
+
+/** PATCH /api/wecom/ch/logs/:id/score
+ *  body: { score, level, reason }
+ *  功能：手动调整评分
+ */
+router.patch("/api/wecom/ch/logs/:id/score", async (req: Request, res: Response) => {
+  const logId = parseInt(req.params.id, 10);
+  const { score, level, reason } = req.body;
+  if (!logId || score === undefined) return res.status(400).json({ error: "缺少参数" });
+  const finalScore = Math.max(0, Math.min(100, parseInt(score, 10)));
+  const finalLevel = ["优质", "良好", "一般", "低质"].includes(level) ? level : (finalScore >= 80 ? "优质" : finalScore >= 60 ? "良好" : finalScore >= 40 ? "一般" : "低质");
+  const conn = await getDbConnection();
+  try {
+    await (conn as any).execute(
+      `UPDATE wecom_message_credits SET dialog_score=?, score_level=?, score_reason=?, score_at=NOW() WHERE id=?`,
+      [finalScore, finalLevel, reason || "手动调整", logId]
+    );
+    res.json({ ok: true, score: finalScore, level: finalLevel });
+  } catch (e: any) {
+    res.status(500).json({ error: "调整失败" });
+  }
+});
+
 export default router;

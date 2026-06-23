@@ -2822,6 +2822,10 @@ interface CustomerLog {
   credits_used: number;
   created_at: string;
   nickname: string | null;
+  dialog_score?: number | null;
+  score_level?: string | null;
+  score_reason?: string | null;
+  score_at?: string | null;
 }
 
 type CdTimeRange = 'all' | 'today' | 'week' | 'month';
@@ -2862,6 +2866,10 @@ function CustomerDataTab() {
   const [showUserDD, setShowUserDD] = useState(false);
   const [showModelDD, setShowModelDD] = useState(false);
   const [userSearch, setUserSearch] = useState('');
+  // ── 评分状态 ──
+  const [scoringId, setScoringId] = useState<number | null>(null); // 正在评分的logId
+  const [adjustingId, setAdjustingId] = useState<number | null>(null); // 正在手动调整的logId
+  const [adjustScore, setAdjustScore] = useState<number>(60);
   const PAGE_SIZE = 20;
 
   // 初始化：并行加载汇总 + 用户列表
@@ -2902,6 +2910,41 @@ function CustomerDataTab() {
 
   // 筛选变化时自动重新请求
   useEffect(() => { fetchLogs(0); }, [timeRange, filterUser, filterModel]);
+
+  // AI 自动评分
+  async function handleScore(logId: number) {
+    setScoringId(logId);
+    try {
+      const res = await fetch(`/api/wecom/ch/logs/${logId}/score`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel_id: KF_CHANNEL_ID, channel_type: KF_CHANNEL_TYPE, avatar_role: '营养顾问，为用户提供专业的营养和健康咨询服务' })
+      });
+      const d = await res.json();
+      if (d.ok) {
+        setLogs(prev => prev.map(l => l.id === logId ? { ...l, dialog_score: d.score, score_level: d.level, score_reason: d.reason } : l));
+        toast.success(d.cached ? '评分已加载' : `评分完成：${d.score}分（${d.level}）`);
+      } else toast.error(d.error || '评分失败');
+    } catch { toast.error('评分失败'); }
+    finally { setScoringId(null); }
+  }
+
+  // 手动调整评分
+  async function handleAdjustScore(logId: number, score: number) {
+    try {
+      const res = await fetch(`/api/wecom/ch/logs/${logId}/score`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ score, reason: '手动调整' })
+      });
+      const d = await res.json();
+      if (d.ok) {
+        setLogs(prev => prev.map(l => l.id === logId ? { ...l, dialog_score: d.score, score_level: d.level } : l));
+        setAdjustingId(null);
+        toast.success('评分已更新');
+      } else toast.error(d.error || '更新失败');
+    } catch { toast.error('更新失败'); }
+  }
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const timeLabels: Record<CdTimeRange, string> = { all: '全部时间', today: '今天', week: '本周', month: '本月' };
@@ -3070,6 +3113,67 @@ function CustomerDataTab() {
                   <div className="flex gap-3 text-xs flex-wrap" style={{ color: C.textSub }}>
                     {log.model_used && <span className="px-2 py-0.5 rounded-full" style={{ backgroundColor: C.brandLight, color: C.brand }}>{log.model_used}</span>}
                     {log.credits_used > 0 && <span>{log.credits_used} 积分</span>}
+                  </div>
+
+                  {/* ── 评分区块 ── */}
+                  <div className="pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                    {log.dialog_score !== null && log.dialog_score !== undefined ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {/* 分数圆圈 */}
+                          <div className="flex items-center justify-center w-10 h-10 rounded-full text-white text-sm font-bold flex-shrink-0"
+                            style={{ backgroundColor: log.dialog_score >= 80 ? '#16a34a' : log.dialog_score >= 60 ? '#2563eb' : log.dialog_score >= 40 ? '#d97706' : '#dc2626' }}>
+                            {log.dialog_score}
+                          </div>
+                          {/* 等级标签 */}
+                          <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
+                            style={{
+                              backgroundColor: log.score_level === '优质' ? '#dcfce7' : log.score_level === '良好' ? '#dbeafe' : log.score_level === '一般' ? '#fef3c7' : '#fee2e2',
+                              color: log.score_level === '优质' ? '#16a34a' : log.score_level === '良好' ? '#2563eb' : log.score_level === '一般' ? '#d97706' : '#dc2626'
+                            }}>
+                            {log.score_level === '优质' ? '⭐⭐⭐ 优质' : log.score_level === '良好' ? '⭐⭐ 良好' : log.score_level === '一般' ? '⭐ 一般' : '✕ 低质'}
+                          </span>
+                          <span className="text-xs ml-auto" style={{ color: C.textSub }}>训练语料</span>
+                          {/* 手动调整按鈕 */}
+                          <button onClick={() => { setAdjustingId(log.id); setAdjustScore(log.dialog_score!); }}
+                            className="text-xs px-2 py-0.5 rounded-lg border" style={{ borderColor: C.line, color: C.textSub }}>
+                            调整
+                          </button>
+                        </div>
+                        {log.score_reason && (
+                          <div className="text-xs px-2 py-1.5 rounded-lg" style={{ backgroundColor: C.bg, color: C.textSub }}>
+                            {log.score_reason}
+                          </div>
+                        )}
+                        {/* 手动调整内联表单 */}
+                        {adjustingId === log.id && (
+                          <div className="flex items-center gap-2 mt-1">
+                            <input type="range" min={0} max={100} value={adjustScore}
+                              onChange={e => setAdjustScore(Number(e.target.value))}
+                              className="flex-1 h-1.5 rounded-full accent-green-600" />
+                            <span className="text-sm font-bold w-8 text-center" style={{ color: C.brand }}>{adjustScore}</span>
+                            <button onClick={() => handleAdjustScore(log.id, adjustScore)}
+                              className="text-xs px-3 py-1 rounded-lg text-white" style={{ backgroundColor: C.brand }}>
+                              确定
+                            </button>
+                            <button onClick={() => setAdjustingId(null)}
+                              className="text-xs px-2 py-1 rounded-lg border" style={{ borderColor: C.line, color: C.textSub }}>
+                              取消
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleScore(log.id)}
+                        disabled={scoringId === log.id}
+                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border disabled:opacity-60"
+                        style={{ borderColor: C.brand, color: C.brand }}>
+                        {scoringId === log.id
+                          ? <><Loader2 className="w-3 h-3 animate-spin" />评分中...</>
+                          : <>✨ AI 评分这条对话</>}
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
