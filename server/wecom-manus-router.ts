@@ -1661,13 +1661,63 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
         try {
           const cacheHitTokens = dsReply.cacheHitTokens || 0;
           const inputTokensMiss = Math.max(0, dsReply.promptTokens - cacheHitTokens);
-          await (dbConn as any).execute(
+          const [insertResult] = await (dbConn as any).execute(
             `INSERT INTO wecom_message_credits
              (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, input_tokens, output_tokens, cache_hit_tokens, model_used, reply_preview, channel_type)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [fromUser, `kf-deepseek-${kfChannelId}`, userText.substring(0, 200), 0, dsReply.totalTokens, dsReply.totalTokens,
              inputTokensMiss, dsReply.completionTokens, cacheHitTokens, aiModel, dsReply.content.substring(0, 100), 'kf']
           );
+          // 异步触发对话评分（不阻塞回复发送）
+          const newLogId = (insertResult as any).insertId;
+          if (newLogId) {
+            setImmediate(async () => {
+              try {
+                const scoreSystemPrompt = `你是一名专业的AI对话质量评估专家。请对以下一条对话进行质量评分，输出严格的JSON格式（不要输出任何其他内容）：
+{
+  "stars": <1.0|1.5|2.0|2.5|3.0|3.5|4.0|4.5|5.0 中的一个小数>,
+  "reason": "<简洁的中文总评，不超过80字>",
+  "dimensions": {
+    "intent_clarity": <0-20的整数>,
+    "reply_quality": <0-30的整数>,
+    "completeness": <0-20的整数>,
+    "info_density": <0-15的整数>,
+    "emotion_handling": <0-15的整数>
+  }
+}
+星级标准：5星=极优精选训练集，4星=良好备选语料，3星=一般参考语料，2星=较差建议修改，1星=低质过滤丢弃。必须使用半星精度（如3.5、4.0、4.5）。`;
+                const scoreUserPrompt = `用户消息：${userText.substring(0, 300)}
+AI回复：${dsReply.content.substring(0, 300)}`;
+                const scoreReply = await sendToDeepSeekAndGetReply(scoreUserPrompt, 'deepseek-chat', scoreSystemPrompt);
+                let stars = 3.0, reason = '', dimensions: any = null;
+                try {
+                  const m = scoreReply.content.match(/\{[\s\S]*\}/);
+                  if (m) {
+                    const p = JSON.parse(m[0]);
+                    if (p.stars !== undefined) stars = Math.round(Math.max(1.0, Math.min(5.0, parseFloat(p.stars) || 3.0)) * 2) / 2;
+                    reason = (p.reason || '').substring(0, 200);
+                    if (p.dimensions) dimensions = p.dimensions;
+                  }
+                } catch (_) {}
+                const score = Math.round(stars * 20);
+                const level = stars >= 4.5 ? '优质' : stars >= 3.5 ? '良好' : stars >= 2.5 ? '一般' : '低质';
+                const dimJson = dimensions ? JSON.stringify(dimensions) : null;
+                // 确保字段存在
+                await (dbConn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS dialog_score TINYINT DEFAULT NULL`).catch(() => {});
+                await (dbConn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS score_level VARCHAR(10) DEFAULT NULL`).catch(() => {});
+                await (dbConn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS score_reason TEXT DEFAULT NULL`).catch(() => {});
+                await (dbConn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS score_dimensions JSON DEFAULT NULL`).catch(() => {});
+                await (dbConn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS score_at TIMESTAMP DEFAULT NULL`).catch(() => {});
+                await (dbConn as any).execute(
+                  `UPDATE wecom_message_credits SET dialog_score=?, score_level=?, score_reason=?, score_dimensions=?, score_at=NOW() WHERE id=?`,
+                  [score, level, reason, dimJson, newLogId]
+                );
+                console.log(`[KF评分] logId=${newLogId} stars=${stars} level=${level}`);
+              } catch (se) {
+                console.error('[KF评分] 失败:', se);
+              }
+            });
+          }
         } catch (e) {
           console.error("[KF] 写入日志失败:", e);
         }

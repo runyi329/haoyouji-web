@@ -2825,6 +2825,13 @@ interface CustomerLog {
   dialog_score?: number | null;
   score_level?: string | null;
   score_reason?: string | null;
+  score_dimensions?: {
+    intent_clarity?: number;
+    reply_quality?: number;
+    completeness?: number;
+    info_density?: number;
+    emotion_handling?: number;
+  } | null;
   score_at?: string | null;
 }
 
@@ -2902,7 +2909,14 @@ function CustomerDataTab() {
       const params = buildParams(p);
       const res = await fetch(`/api/wecom/ch/logs?${params.toString()}`);
       const data = await res.json();
-      if (data.ok) { setLogs(data.logs); setTotal(data.total || 0); setPage(p); }
+      if (data.ok) {
+        // 解析 score_dimensions（MySQL JSON 字段可能是字符串）
+        const parsedLogs = (data.logs || []).map((l: any) => ({
+          ...l,
+          score_dimensions: typeof l.score_dimensions === 'string' ? (() => { try { return JSON.parse(l.score_dimensions); } catch { return null; } })() : l.score_dimensions
+        }));
+        setLogs(parsedLogs); setTotal(data.total || 0); setPage(p);
+      }
       else toast.error(data.error || '加载失败');
     } catch { toast.error('网络错误'); }
     finally { setLoading(false); }
@@ -2922,8 +2936,9 @@ function CustomerDataTab() {
       });
       const d = await res.json();
       if (d.ok) {
-        setLogs(prev => prev.map(l => l.id === logId ? { ...l, dialog_score: d.score, score_level: d.level, score_reason: d.reason } : l));
-        toast.success(d.cached ? '评分已加载' : `评分完成：${d.score}分（${d.level}）`);
+        const stars = d.stars ?? Math.round((d.score / 20) * 2) / 2;
+        setLogs(prev => prev.map(l => l.id === logId ? { ...l, dialog_score: d.score, score_level: d.level, score_reason: d.reason, score_dimensions: d.dimensions } : l));
+        toast.success(d.cached ? '评分已加载' : `评分完成：${stars}星`);
       } else toast.error(d.error || '评分失败');
     } catch { toast.error('评分失败'); }
     finally { setScoringId(null); }
@@ -3095,11 +3110,126 @@ function CustomerDataTab() {
                   {log.reply_preview && (
                     <div className="text-xs mt-0.5 line-clamp-1" style={{ color: C.textSub }}>{log.reply_preview}</div>
                   )}
-                </div>
+                    </div>
                 {expanded === log.id
                   ? <ChevronDown className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: C.textSub }} />
                   : <ChevronRight className="w-4 h-4 flex-shrink-0 mt-1" style={{ color: C.textSub }} />}
               </button>
+              {/* 卡片底部细线下方：始终可见 */}
+              <div className="px-4 pb-3 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                {/* 模型 + token */}
+                <div className="flex gap-3 text-xs flex-wrap mb-2" style={{ color: C.textSub }}>
+                  {log.model_used && <span className="px-2 py-0.5 rounded-full" style={{ backgroundColor: C.brandLight, color: C.brand }}>{log.model_used}</span>}
+                  {log.credits_used > 0 && <span>{log.credits_used} token</span>}
+                </div>
+                {log.dialog_score !== null && log.dialog_score !== undefined ? (() => {
+                  // 将 0-100 分转换为星级（半星精度）
+                  const stars = Math.round((log.dialog_score / 20) * 2) / 2;
+                  const fullStars = Math.floor(stars);
+                  const hasHalf = stars - fullStars >= 0.5;
+                  const emptyStars = 5 - fullStars - (hasHalf ? 1 : 0);
+                  const starColor = stars >= 4.5 ? '#16a34a' : stars >= 3.5 ? '#2563eb' : stars >= 2.5 ? '#d97706' : '#dc2626';
+                  return (
+                    <div className="space-y-2">
+                      {/* 星级行 */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {/* 半星渲染 */}
+                        <div className="flex items-center gap-0.5">
+                          {Array.from({ length: fullStars }).map((_, i) => (
+                            <svg key={`f${i}`} className="w-4 h-4" viewBox="0 0 24 24" fill={starColor}><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                          ))}
+                          {hasHalf && (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24">
+                              <defs><linearGradient id={`hg${log.id}`}><stop offset="50%" stopColor={starColor}/><stop offset="50%" stopColor="#e5e7eb"/></linearGradient></defs>
+                              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill={`url(#hg${log.id})`}/>
+                            </svg>
+                          )}
+                          {Array.from({ length: emptyStars }).map((_, i) => (
+                            <svg key={`e${i}`} className="w-4 h-4" viewBox="0 0 24 24" fill="#e5e7eb"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                          ))}
+                        </div>
+                        <span className="text-sm font-bold" style={{ color: starColor }}>{stars.toFixed(1)}</span>
+                        <span className="text-xs px-1.5 py-0.5 rounded-full font-medium"
+                          style={{
+                            backgroundColor: stars >= 4.5 ? '#dcfce7' : stars >= 3.5 ? '#dbeafe' : stars >= 2.5 ? '#fef3c7' : '#fee2e2',
+                            color: starColor
+                          }}>
+                          {stars >= 4.5 ? '极优' : stars >= 3.5 ? '良好' : stars >= 2.5 ? '一般' : stars >= 1.5 ? '较差' : '低质'}
+                        </span>
+                        <span className="text-xs ml-auto" style={{ color: C.textSub }}>训练语料</span>
+                        <button onClick={e => { e.stopPropagation(); setAdjustingId(adjustingId === log.id ? null : log.id); setAdjustScore(log.dialog_score!); }}
+                          className="text-xs px-2 py-0.5 rounded-lg border" style={{ borderColor: C.line, color: C.textSub }}>
+                          调整
+                        </button>
+                      </div>
+                      {/* 总评 */}
+                      {log.score_reason && (
+                        <div className="text-xs px-2 py-1.5 rounded-lg" style={{ backgroundColor: C.bg, color: C.textSub }}>
+                          {log.score_reason}
+                        </div>
+                      )}
+                      {/* 维度详情（点击星级展开） */}
+                      {log.score_dimensions && (
+                        <div className="space-y-1.5 pt-1">
+                          <div className="text-xs font-medium mb-1" style={{ color: C.textSub }}>评分维度详情</div>
+                          {([
+                            { key: 'intent_clarity', label: '意图清晰度', max: 20, desc: '用户意图是否清晰、AI是否准确理解' },
+                            { key: 'reply_quality', label: '回复质量', max: 30, desc: '回复准确完整专业、有无错误信息' },
+                            { key: 'completeness', label: '对话完整性', max: 20, desc: '问答闭环完整、用户问题得到解决' },
+                            { key: 'info_density', label: '信息密度', max: 15, desc: '包含有价値的业务知识信息' },
+                            { key: 'emotion_handling', label: '情感处理', max: 15, desc: '负面情绪或投诉时的处理是否得当' },
+                          ] as const).map(dim => {
+                            const val = (log.score_dimensions as any)?.[dim.key] ?? 0;
+                            const pct = Math.round((val / dim.max) * 100);
+                            const barColor = pct >= 80 ? '#16a34a' : pct >= 60 ? '#2563eb' : pct >= 40 ? '#d97706' : '#dc2626';
+                            return (
+                              <div key={dim.key}>
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <div>
+                                    <span className="text-xs font-medium" style={{ color: C.textMain }}>{dim.label}</span>
+                                    <span className="text-xs ml-1" style={{ color: C.textSub }}>({dim.desc})</span>
+                                  </div>
+                                  <span className="text-xs font-bold" style={{ color: barColor }}>{val}/{dim.max}</span>
+                                </div>
+                                <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: '#e5e7eb' }}>
+                                  <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: barColor }} />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {/* 手动调整（星级滑块，0.5-5.0） */}
+                      {adjustingId === log.id && (
+                        <div className="flex items-center gap-2 mt-1 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                          <span className="text-xs" style={{ color: C.textSub }}>1星</span>
+                          <input type="range" min={20} max={100} step={10} value={adjustScore}
+                            onChange={e => setAdjustScore(Number(e.target.value))}
+                            className="flex-1 h-1.5 rounded-full accent-green-600" />
+                          <span className="text-xs" style={{ color: C.textSub }}>5星</span>
+                          <span className="text-sm font-bold w-12 text-center" style={{ color: C.brand }}>
+                            {(Math.round((adjustScore / 20) * 2) / 2).toFixed(1)}星
+                          </span>
+                          <button onClick={e => { e.stopPropagation(); handleAdjustScore(log.id, adjustScore); }}
+                            className="text-xs px-3 py-1 rounded-lg text-white" style={{ backgroundColor: C.brand }}>
+                            确定
+                          </button>
+                          <button onClick={e => { e.stopPropagation(); setAdjustingId(null); }}
+                            className="text-xs px-2 py-1 rounded-lg border" style={{ borderColor: C.line, color: C.textSub }}>
+                            取消
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })() : (
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <svg key={i} className="w-4 h-4" viewBox="0 0 24 24" fill="#e5e7eb"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                    ))}
+                  </div>
+                )}
+              </div>
               {expanded === log.id && (
                 <div className="px-4 pb-3 space-y-2 border-t" style={{ borderColor: C.line }}>
                   <div>
@@ -3109,71 +3239,6 @@ function CustomerDataTab() {
                   <div>
                     <div className="text-xs font-medium mb-1" style={{ color: C.textSub }}>AI 回复</div>
                     <div className="text-sm p-2 rounded-xl" style={{ backgroundColor: C.brandLight, color: C.textMain }}>{log.reply_preview}</div>
-                  </div>
-                  <div className="flex gap-3 text-xs flex-wrap" style={{ color: C.textSub }}>
-                    {log.model_used && <span className="px-2 py-0.5 rounded-full" style={{ backgroundColor: C.brandLight, color: C.brand }}>{log.model_used}</span>}
-                    {log.credits_used > 0 && <span>{log.credits_used} 积分</span>}
-                  </div>
-
-                  {/* ── 评分区块 ── */}
-                  <div className="pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
-                    {log.dialog_score !== null && log.dialog_score !== undefined ? (
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {/* 分数圆圈 */}
-                          <div className="flex items-center justify-center w-10 h-10 rounded-full text-white text-sm font-bold flex-shrink-0"
-                            style={{ backgroundColor: log.dialog_score >= 80 ? '#16a34a' : log.dialog_score >= 60 ? '#2563eb' : log.dialog_score >= 40 ? '#d97706' : '#dc2626' }}>
-                            {log.dialog_score}
-                          </div>
-                          {/* 等级标签 */}
-                          <span className="px-2 py-0.5 rounded-full text-xs font-semibold"
-                            style={{
-                              backgroundColor: log.score_level === '优质' ? '#dcfce7' : log.score_level === '良好' ? '#dbeafe' : log.score_level === '一般' ? '#fef3c7' : '#fee2e2',
-                              color: log.score_level === '优质' ? '#16a34a' : log.score_level === '良好' ? '#2563eb' : log.score_level === '一般' ? '#d97706' : '#dc2626'
-                            }}>
-                            {log.score_level === '优质' ? '⭐⭐⭐ 优质' : log.score_level === '良好' ? '⭐⭐ 良好' : log.score_level === '一般' ? '⭐ 一般' : '✕ 低质'}
-                          </span>
-                          <span className="text-xs ml-auto" style={{ color: C.textSub }}>训练语料</span>
-                          {/* 手动调整按鈕 */}
-                          <button onClick={() => { setAdjustingId(log.id); setAdjustScore(log.dialog_score!); }}
-                            className="text-xs px-2 py-0.5 rounded-lg border" style={{ borderColor: C.line, color: C.textSub }}>
-                            调整
-                          </button>
-                        </div>
-                        {log.score_reason && (
-                          <div className="text-xs px-2 py-1.5 rounded-lg" style={{ backgroundColor: C.bg, color: C.textSub }}>
-                            {log.score_reason}
-                          </div>
-                        )}
-                        {/* 手动调整内联表单 */}
-                        {adjustingId === log.id && (
-                          <div className="flex items-center gap-2 mt-1">
-                            <input type="range" min={0} max={100} value={adjustScore}
-                              onChange={e => setAdjustScore(Number(e.target.value))}
-                              className="flex-1 h-1.5 rounded-full accent-green-600" />
-                            <span className="text-sm font-bold w-8 text-center" style={{ color: C.brand }}>{adjustScore}</span>
-                            <button onClick={() => handleAdjustScore(log.id, adjustScore)}
-                              className="text-xs px-3 py-1 rounded-lg text-white" style={{ backgroundColor: C.brand }}>
-                              确定
-                            </button>
-                            <button onClick={() => setAdjustingId(null)}
-                              className="text-xs px-2 py-1 rounded-lg border" style={{ borderColor: C.line, color: C.textSub }}>
-                              取消
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => handleScore(log.id)}
-                        disabled={scoringId === log.id}
-                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border disabled:opacity-60"
-                        style={{ borderColor: C.brand, color: C.brand }}>
-                        {scoringId === log.id
-                          ? <><Loader2 className="w-3 h-3 animate-spin" />评分中...</>
-                          : <>✨ AI 评分这条对话</>}
-                      </button>
-                    )}
                   </div>
                 </div>
               )}

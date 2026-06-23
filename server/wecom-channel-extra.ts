@@ -647,7 +647,8 @@ router.get("/api/wecom/ch/logs", async (req: Request, res: Response) => {
     const where = "WHERE " + conditions.join(" AND ");
     const [rows] = await (conn as any).execute(
       `SELECT mc.id, mc.wecom_user_id, mc.user_message, mc.reply_preview, mc.model_used,
-              mc.credits_used, mc.created_at, ws.nickname
+              mc.credits_used, mc.created_at, ws.nickname,
+              mc.dialog_score, mc.score_level, mc.score_reason, mc.score_dimensions
        FROM wecom_message_credits mc
        LEFT JOIN wecom_manus_sessions ws ON ws.wecom_user_id = mc.wecom_user_id
        ${where}
@@ -1063,7 +1064,7 @@ router.post("/api/wecom/ch/logs/:id/score", async (req: Request, res: Response) 
     // 读取对话内容
     const [rows] = await (conn as any).execute(
       `SELECT mc.id, mc.user_message, mc.reply_preview, mc.model_used,
-              mc.dialog_score, mc.score_level, mc.score_reason, mc.score_at,
+              mc.dialog_score, mc.score_level, mc.score_reason, mc.score_dimensions, mc.score_at,
               ws.nickname
        FROM wecom_message_credits mc
        LEFT JOIN wecom_manus_sessions ws ON ws.wecom_user_id = mc.wecom_user_id
@@ -1075,7 +1076,10 @@ router.post("/api/wecom/ch/logs/:id/score", async (req: Request, res: Response) 
 
     // 如果已有评分，直接返回（避免重复计费）
     if (log.dialog_score !== null && log.dialog_score !== undefined) {
-      return res.json({ ok: true, score: log.dialog_score, level: log.score_level, reason: log.score_reason, cached: true });
+      const cachedStars = Math.round((log.dialog_score / 20) * 2) / 2;
+      let cachedDims = null;
+      try { cachedDims = log.score_dimensions ? JSON.parse(log.score_dimensions) : null; } catch (_) {}
+      return res.json({ ok: true, score: log.dialog_score, stars: cachedStars, level: log.score_level, reason: log.score_reason, dimensions: cachedDims, cached: true });
     }
 
     // 构建评分 Prompt（结合分身定位）
@@ -1087,19 +1091,18 @@ router.post("/api/wecom/ch/logs/:id/score", async (req: Request, res: Response) 
 
 请对以下一条对话进行质量评分，输出严格的JSON格式（不要输出任何其他内容）：
 {
-  "score": <0-100的整数>,
-  "level": "优质|良好|一般|低质",
-  "reason": "<简洁的中文评分理由，不超过80字>",
+  "stars": <1.0|1.5|2.0|2.5|3.0|3.5|4.0|4.5|5.0 中的一个小数>,
+  "reason": "<简洁的中文总评，不超过80字>",
   "dimensions": {
-    "intent_clarity": <0-20>,
-    "reply_quality": <0-30>,
-    "completeness": <0-20>,
-    "info_density": <0-15>,
-    "emotion_handling": <0-15>
+    "intent_clarity": <0-20的整数，评估用户意图是否清晰、AI是否准确理解意图>,
+    "reply_quality": <0-30的整数，评估回复是否准确完整专业、有无错误信息>,
+    "completeness": <0-20的整数，评估是否有完整的问答闭环、用户问题是否得到解决>,
+    "info_density": <0-15的整数，评估对话中是否包含有价値的业务知识信息>,
+    "emotion_handling": <0-15的整数，评估遇到负面情绪或投诉时AI的处理是否得当>
   }
 }
 
-评级标准：优质(80-100)精选训练集，良好(60-79)备选语料，一般(40-59)参考语料，低质(0-39)过滤丢弃。`;
+星级标准：5星=极优精选训练集，4星=良好备选语料，3星=一般参考语料，2星=较差建议修改，1星=低质过滤丢弃。必须使用半星精度（如3.5、4.0、4.5），不要只给整星。`;
 
     const userPrompt = `用户消息：${log.user_message || "(空)"}
 AI回复：${log.reply_preview || "(空)"}`;
@@ -1107,26 +1110,40 @@ AI回复：${log.reply_preview || "(空)"}`;
     const aiReply = await callWecomDeepSeek(systemPrompt, userPrompt);
 
     // 解析 JSON
-    let score = 60, level = "良好", reason = "AI评分完成";
+    let stars = 3.0, reason = "AI评分完成", dimensions: any = null;
     try {
       const jsonMatch = aiReply.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
-        score = Math.max(0, Math.min(100, parseInt(parsed.score, 10) || 60));
-        level = ["优质", "良好", "一般", "低质"].includes(parsed.level) ? parsed.level : (score >= 80 ? "优质" : score >= 60 ? "良好" : score >= 40 ? "一般" : "低质");
+        // 星级解析：支持 stars 字段（新）或 score 字段（兼容旧格式）
+        if (parsed.stars !== undefined) {
+          stars = Math.round(Math.max(1.0, Math.min(5.0, parseFloat(parsed.stars) || 3.0)) * 2) / 2;
+        } else if (parsed.score !== undefined) {
+          // 将旧的 0-100 分转换为星级
+          const s = Math.max(0, Math.min(100, parseInt(parsed.score, 10) || 60));
+          stars = Math.round((s / 20) * 2) / 2; // 0-100 映射到 0-5
+          stars = Math.max(1.0, Math.min(5.0, stars));
+        }
         reason = (parsed.reason || "").substring(0, 200);
+        if (parsed.dimensions) dimensions = parsed.dimensions;
       }
-    } catch (_) {
-      level = score >= 80 ? "优质" : score >= 60 ? "良好" : score >= 40 ? "一般" : "低质";
-    }
+    } catch (_) { /* 保持默认分 */ }
+
+    // 星级转换为 0-100 分存储（向下兼容）
+    const score = Math.round(stars * 20);
+    const level = stars >= 4.5 ? "优质" : stars >= 3.5 ? "良好" : stars >= 2.5 ? "一般" : "低质";
+    const dimensionsJson = dimensions ? JSON.stringify(dimensions) : null;
+
+    // 确保 dimensions 字段存在
+    await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN IF NOT EXISTS score_dimensions JSON DEFAULT NULL COMMENT 'AI评分各维度详情'`).catch(() => {});
 
     // 写入数据库
     await (conn as any).execute(
-      `UPDATE wecom_message_credits SET dialog_score=?, score_level=?, score_reason=?, score_at=NOW() WHERE id=?`,
-      [score, level, reason, logId]
+      `UPDATE wecom_message_credits SET dialog_score=?, score_level=?, score_reason=?, score_dimensions=?, score_at=NOW() WHERE id=?`,
+      [score, level, reason, dimensionsJson, logId]
     );
 
-    res.json({ ok: true, score, level, reason, cached: false });
+    res.json({ ok: true, score, stars, level, reason, dimensions, cached: false });
   } catch (e: any) {
     console.error("[对话评分] 失败:", e);
     res.status(500).json({ error: "评分失败: " + (e?.message || "") });
