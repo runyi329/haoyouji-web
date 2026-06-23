@@ -435,6 +435,10 @@ function ConfigTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avata
   // 知识库
   const [kbId, setKbId] = useState(0);
   const [kbList, setKbList] = useState<KnowledgeBase[]>([]);
+  // 客服ID
+  const [kfId, setKfId] = useState("");
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [showQr, setShowQr] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -473,6 +477,7 @@ function ConfigTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avata
           if (ch) {
             setAvatarName(ch.name || "营养顾问分身");
             setAvatarUrl(ch.avatar_url || "");
+            setKfId(ch.kf_id || "");
           }
         }
       } catch {
@@ -807,6 +812,70 @@ function ConfigTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avata
         )}
       </div>
 
+
+      {/* 推广链接卡片 */}
+      {kfId && (
+        <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: C.line }}>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: C.brandLight }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.brand} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+              </svg>
+            </div>
+            <div>
+              <div className="text-sm font-semibold" style={{ color: C.textMain }}>推广链接</div>
+              <div className="text-[10px]" style={{ color: C.textSub }}>客户点击后可直接发起咨询</div>
+            </div>
+          </div>
+          {/* 链接展示 */}
+          <div className="rounded-xl px-3 py-2.5 mb-3 flex items-center gap-2" style={{ backgroundColor: C.bg, border: `1px solid ${C.line}` }}>
+            <span className="flex-1 text-xs truncate" style={{ color: C.textMain }}>
+              {`https://work.weixin.qq.com/kfid/${kfId}`}
+            </span>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`https://work.weixin.qq.com/kfid/${kfId}`).then(() => {
+                  setCopiedLink(true);
+                  setTimeout(() => setCopiedLink(false), 2000);
+                });
+              }}
+              className="flex-shrink-0 text-xs px-2.5 py-1 rounded-lg font-medium transition-all"
+              style={{ backgroundColor: copiedLink ? '#16A34A' : C.brand, color: '#fff' }}
+            >
+              {copiedLink ? '已复制' : '复制'}
+            </button>
+          </div>
+          {/* 二维码区域 */}
+          <div
+            onClick={() => setShowQr(v => !v)}
+            className="flex items-center justify-between cursor-pointer"
+          >
+            <div className="flex items-center gap-1.5">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.brand} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
+                <path d="M14 14h3v3" /><path d="M17 21v-4" /><path d="M21 14v3h-4" />
+              </svg>
+              <span className="text-xs font-medium" style={{ color: C.brand }}>查看二维码</span>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textSub} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {showQr ? <path d="M18 15l-6-6-6 6" /> : <path d="M6 9l6 6 6-6" />}
+            </svg>
+          </div>
+          {showQr && (
+            <div className="mt-3 flex flex-col items-center gap-2">
+              <div className="rounded-xl overflow-hidden p-2" style={{ backgroundColor: '#fff', border: `1px solid ${C.line}` }}>
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`https://work.weixin.qq.com/kfid/${kfId}`)}`}
+                  alt="客服二维码"
+                  className="w-40 h-40"
+                />
+              </div>
+              <div className="text-[10px] text-center" style={{ color: C.textSub }}>长按或截图保存二维码，分享给客户扫码咨询</div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 保存按钮 */}
       <button
@@ -1794,9 +1863,12 @@ function AIBrainTab() {
 
   useEffect(() => {
     // 加载第①层：AI 指令
-    fetch(`/api/wecom/prompt-rules?channel_id=${KF_CHANNEL_ID}`)
+    fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/prompt-rules`)
       .then(r => r.json())
-      .then(d => { if (d.ok) setPromptRules(d.rules || []); })
+      .then(d => {
+        const rules = Array.isArray(d.rules) ? d.rules : Array.isArray(d) ? d : [];
+        setPromptRules(rules.map((r: any) => ({ ...r, rule_text: r.content || r.rule_text || "" })));
+      })
       .finally(() => setLoadingRules(false));
 
     // 加载第③层：知识库统计
@@ -1826,9 +1898,9 @@ function AIBrainTab() {
   async function handleSaveRule(rule: PromptRule) {
     setSavingRule(true);
     try {
-      const res = await fetch(`/api/wecom/prompt-rules/${rule.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rule_text: editingRuleText }) });
+      const res = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/prompt-rules/${rule.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: editingRuleText }) });
       const d = await res.json();
-      if (d.ok) { toast.success("已保存"); setEditingRuleId(null); setPromptRules(prev => prev.map(r => r.id === rule.id ? { ...r, rule_text: editingRuleText } : r)); }
+      if (d.ok || d.rule) { toast.success("已保存"); setEditingRuleId(null); setPromptRules(prev => prev.map(r => r.id === rule.id ? { ...r, rule_text: editingRuleText, content: editingRuleText } : r)); }
       else toast.error(d.error || "保存失败");
     } catch { toast.error("保存失败"); }
     finally { setSavingRule(false); }
@@ -1836,9 +1908,9 @@ function AIBrainTab() {
 
   async function handleToggleRule(rule: PromptRule) {
     try {
-      const res = await fetch(`/api/wecom/prompt-rules/${rule.id}/toggle`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: !rule.enabled }) });
+      const res = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/prompt-rules/${rule.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: rule.enabled ? 0 : 1 }) });
       const d = await res.json();
-      if (d.ok) setPromptRules(prev => prev.map(r => r.id === rule.id ? { ...r, enabled: !r.enabled } : r));
+      if (d.ok || d.rule) setPromptRules(prev => prev.map(r => r.id === rule.id ? { ...r, enabled: !r.enabled } : r));
       else toast.error(d.error || "操作失败");
     } catch { toast.error("操作失败"); }
   }
@@ -1847,13 +1919,14 @@ function AIBrainTab() {
     if (!newRuleText.trim()) { toast.error("请输入指令内容"); return; }
     setSavingRule(true);
     try {
-      const res = await fetch("/api/wecom/prompt-rules", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ channel_id: KF_CHANNEL_ID, channel_type: KF_CHANNEL_TYPE, rule_text: newRuleText, layer: 2 }) });
+      const res = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/prompt-rules`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ layer: 2, category: "custom", content: newRuleText, enabled: 1, sort_order: 1 }) });
       const d = await res.json();
-      if (d.ok) {
+      if (d.rule) {
         toast.success("添加成功"); setAddingRule(false); setNewRuleText("");
-        const rulesRes = await fetch(`/api/wecom/prompt-rules?channel_id=${KF_CHANNEL_ID}`);
+        const rulesRes = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/prompt-rules`);
         const rulesData = await rulesRes.json();
-        if (rulesData.ok) setPromptRules(rulesData.rules || []);
+        if (Array.isArray(rulesData.rules)) setPromptRules(rulesData.rules.map((r: any) => ({ ...r, rule_text: r.content || r.rule_text || "" })));
+        else if (Array.isArray(rulesData)) setPromptRules(rulesData.map((r: any) => ({ ...r, rule_text: r.content || r.rule_text || "" })));
       } else toast.error(d.error || "添加失败");
     } catch { toast.error("添加失败"); }
     finally { setSavingRule(false); }
@@ -1861,7 +1934,7 @@ function AIBrainTab() {
 
   async function handleDeleteRule(id: number) {
     try {
-      const res = await fetch(`/api/wecom/prompt-rules/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/prompt-rules/${id}`, { method: "DELETE" });
       const d = await res.json();
       if (d.ok) { toast.success("已删除"); setPromptRules(prev => prev.filter(r => r.id !== id)); }
       else toast.error(d.error || "删除失败");
@@ -2006,7 +2079,19 @@ function AIBrainTab() {
                     ))}
                     {addingRule && (
                       <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: C.brand }}>
-                        <textarea value={newRuleText} onChange={e => setNewRuleText(e.target.value)} rows={3} className="w-full text-xs rounded-lg border p-2 resize-none outline-none" style={{ borderColor: C.line }} placeholder="输入新的 AI 指令..." autoFocus />
+                        <div className="relative">
+                          <textarea value={newRuleText} onChange={e => setNewRuleText(e.target.value)} rows={9} className="w-full text-sm rounded-lg border p-3 resize-none outline-none" style={{ borderColor: C.brand, color: C.textMain, backgroundColor: C.bg }} placeholder="输入新的 AI 指令，支持多行内容..." autoFocus />
+                          {newRuleText.length > 0 && (
+                            <button
+                              onClick={() => setNewRuleText('')}
+                              className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center"
+                              style={{ backgroundColor: 'rgba(0,0,0,0.15)' }}
+                            >
+                              <X className="w-3 h-3 text-white" />
+                            </button>
+                          )}
+                        </div>
+                        <div className="text-xs" style={{ color: C.textSub }}>{newRuleText.length} 字符</div>
                         <div className="flex gap-1.5">
                           <button onClick={handleAddRule} disabled={savingRule} className="flex-1 py-1.5 rounded-lg text-xs text-white flex items-center justify-center gap-1" style={{ backgroundColor: C.brand }}>
                             {savingRule ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}添加
