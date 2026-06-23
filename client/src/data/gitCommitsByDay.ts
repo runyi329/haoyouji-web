@@ -7717,5 +7717,17 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   ],
   "2026-06-23": [
     { date: "2026-06-22T17:03:26Z", type: "feat", cleanMessage: "AI分身Tab等效比例详细说明+数字分身corpus后端API+Prompt拼装接入" },
+    { date: "2026-06-22T19:28:22Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-23T01:29:36Z", type: "feat", cleanMessage: "重设PlatformKbView为管理员总控台，含总览/分身账户/共享知识库/用量统计4个Tab" },
+    { date: "2026-06-23T12:03:55+08:00", type: "feat", cleanMessage: "首页添加 WorkBuddy 入口按钮" },
+    { date: "2026-06-23T05:17:38Z", type: "feat", cleanMessage: "数字分身页面重构 - 克隆完成度/2维度成长曲线/Tab优化/头像名称设置/去掉等级体系" },
+    { date: "2026-06-23T05:40:10Z", type: "fix", cleanMessage: "修复ProjectLanding.tsx构建错误 - 清除残留对照表JSX碎片" },
+    { date: "2026-06-23T05:46:47Z", type: "fix", cleanMessage: "从设置Tab移除头像和名称区块（已移至我的分身Tab）" },
+    { date: "2026-06-23T06:05:32Z", type: "feat", cleanMessage: "我的分身资产改为库数/条目/字符三维度，联动共享知识库数据" },
+    { date: "2026-06-23T06:46:38Z", type: "feat", cleanMessage: "修复AI指令添加失败(接口路径)，输入框放大3倍，新增清除按钮，设置Tab新增推广链接卡片" },
+    { date: "2026-06-23T07:02:22Z", type: "feat", cleanMessage: "新增同步客服账号接口，自动从企业微信拉取open_kfid更新数据库，前端加同步按钮" },
+    { date: "2026-06-23T07:12:25Z", type: "feat", cleanMessage: "系统连接总览卡片 - 私人/共享知识库改名，移除对话上下文行" },
+    { date: "2026-06-23T07:44:20Z", type: "fix", cleanMessage: "同步客服账号时增加kfc格式兜底匹配，修复营养顾问open_kfid更新问题" },
+    { date: "2026-06-23T07:50:09Z", type: "feat", cleanMessage: "系统连接总览加英文字段名对照（corpid/open_kfid）" },
   ],
 };
