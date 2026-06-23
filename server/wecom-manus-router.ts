@@ -4025,20 +4025,6 @@ router.get("/api/wecom/users", async (req: Request, res: Response) => {
   }
 });
 
-// 临时修复接口：将 manus_task_id=kf-deepseek-3 的记录 channel_type 修正为 kf_3
-router.post("/api/wecom/admin/fix-channel-type-3", async (req: Request, res: Response) => {
-  try {
-    const conn = await getDbConnection();
-    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
-    const [r] = await (conn as any).execute(
-      `UPDATE wecom_message_credits SET channel_type = 'kf_3' WHERE manus_task_id = 'kf-deepseek-3' AND (channel_type = 'kf' OR channel_type IS NULL)`
-    );
-    res.json({ ok: true, fixed: (r as any).affectedRows });
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
 export default router;
 
 
