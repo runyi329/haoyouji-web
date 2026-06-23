@@ -1290,6 +1290,11 @@ function RadarChart({ scores }: { scores: { label: string; score: number; icon: 
 function AvatarGrowthTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avatarUrl: string) => void } = {}) {
   const [loading, setLoading] = useState(true);
   const [kbCount, setKbCount] = useState(0);
+  const [kbFileCount, setKbFileCount] = useState(0);
+  const [kbCharCount, setKbCharCount] = useState(0);
+  const [sysKbEnabled, setSysKbEnabled] = useState(false);
+  const [sysKbCount, setSysKbCount] = useState(0);
+  const [sysKbCharCount, setSysKbCharCount] = useState(0);
   const [corpusQuality, setCorpusQuality] = useState(0);
   const [dialogCount, setDialogCount] = useState(0);
   const [twinEnabled, setTwinEnabled] = useState(false);
@@ -1320,13 +1325,25 @@ function AvatarGrowthTab({ onProfileUpdate }: { onProfileUpdate?: (name: string,
 
     Promise.all([
       fetch(`/api/wecom/ch/kb/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).catch(() => ({})),
+      fetch(`/api/wecom/ch/kb/stats?channel_type=kf`).then(r => r.json()).catch(() => ({})),
+      fetch(`/api/wecom/channel-config/${KF_CHANNEL_ID}`).then(r => r.json()).catch(() => ({})),
       fetch(`/api/wecom/corpus/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).catch(() => ({})),
       fetch(`/api/wecom/ch/logs?channel_id=${KF_CHANNEL_ID}&channel_type=${KF_CHANNEL_TYPE}&limit=1`).then(r => r.json()).catch(() => ({})),
-    ]).then(([kb, corpus, logs]) => {
+    ]).then(([kb, sysKb, cfg, corpus, logs]) => {
       const kb_ = kb.item_count || 0;
+      const kbFile_ = kb.file_count || 0;
+      const kbChar_ = kb.char_count || 0;
+      const sysEnabled = !(cfg.disable_system_kb === '1' || cfg.disable_system_kb === 1);
+      const sysKb_ = sysKb.item_count || 0;
+      const sysKbChar_ = sysKb.char_count || 0;
       const cq_ = corpus.ok ? (corpus.quality_count || 0) : 0;
       const d_  = logs.total || 0;
       setKbCount(kb_);
+      setKbFileCount(kbFile_);
+      setKbCharCount(kbChar_);
+      setSysKbEnabled(sysEnabled);
+      setSysKbCount(sysEnabled ? sysKb_ : 0);
+      setSysKbCharCount(sysEnabled ? sysKbChar_ : 0);
       setCorpusQuality(cq_);
       setDialogCount(d_);
       setTwinEnabled(corpus.ok && (corpus.twin_enabled === 1 || corpus.twin_enabled === true));
@@ -1507,36 +1524,47 @@ function AvatarGrowthTab({ onProfileUpdate }: { onProfileUpdate?: (name: string,
           {/* 账户标题 */}
           <div className="text-white text-[10px] opacity-55 tracking-widest uppercase mb-4">分身资产账户</div>
           {/* 资产总值—大号数字 */}
-          <div className="mb-1">
-            <div className="text-white text-[11px] opacity-55 mb-0.5">资产总值</div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-white font-bold tracking-tight" style={{ fontSize: 36, lineHeight: 1 }}>{equiv.toLocaleString()}</span>
-              <span className="text-white text-sm opacity-70">知识单元</span>
-            </div>
-          </div>
-          {/* 资产明细 */}
-          <div className="flex items-center gap-3 mb-4">
-            <div className="flex items-center gap-1">
-              <span className="text-white text-[10px] opacity-45">知识库</span>
-              <span className="text-white text-[11px] font-semibold opacity-80">{kbCount}</span>
-            </div>
-            <span className="text-white opacity-25 text-[10px]">/</span>
-            <div className="flex items-center gap-1">
-              <span className="text-white text-[10px] opacity-45">优质语料</span>
-              <span className="text-white text-[11px] font-semibold opacity-80">{corpusQuality}</span>
-            </div>
-            <span className="text-white opacity-25 text-[10px]">/</span>
-            <div className="flex items-center gap-1">
-              <span className="text-white text-[10px] opacity-45">对话</span>
-              <span className="text-white text-[11px] font-semibold opacity-80">{dialogCount}</span>
-            </div>
-          </div>
+          {(() => {
+            const totalItems = kbCount + sysKbCount;
+            const totalChars = kbCharCount + sysKbCharCount;
+            const kbNum = sysKbEnabled ? 2 : 1; // 私人库 + 共享库
+            const fmtChar = (n: number) => n >= 10000 ? `${(n / 10000).toFixed(1)}万` : n.toLocaleString();
+            return (
+              <>
+                <div className="mb-1">
+                  <div className="text-white text-[11px] opacity-55 mb-0.5">知识资产总量</div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-white font-bold tracking-tight" style={{ fontSize: 36, lineHeight: 1 }}>{totalItems.toLocaleString()}</span>
+                    <span className="text-white text-sm opacity-70">条目</span>
+                  </div>
+                </div>
+                {/* 资产明细：库数 / 条目 / 字符 */}
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="flex items-center gap-1">
+                    <span className="text-white text-[10px] opacity-45">知识库</span>
+                    <span className="text-white text-[11px] font-semibold opacity-80">{kbNum} 个</span>
+                  </div>
+                  <span className="text-white opacity-25 text-[10px]">/</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-white text-[10px] opacity-45">条目</span>
+                    <span className="text-white text-[11px] font-semibold opacity-80">{totalItems}</span>
+                  </div>
+                  <span className="text-white opacity-25 text-[10px]">/</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-white text-[10px] opacity-45">字符</span>
+                    <span className="text-white text-[11px] font-semibold opacity-80">{fmtChar(totalChars)}</span>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
           {/* 分隔线 */}
           <div style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.15)', marginBottom: 14 }} />
           {/* 克隆完成度 */}
           {(() => {
-            const MAX_EQUIV = 10000;
-            const clonePct = Math.min(100, Math.round((equiv / MAX_EQUIV) * 100));
+            const totalItems = kbCount + sysKbCount;
+            const MAX_ITEMS = 5000; // 满分 5000 条目 = 100%
+            const clonePct = Math.min(100, Math.round((totalItems / MAX_ITEMS) * 100));
             return (
               <div>
                 <div className="flex items-center justify-between mb-1.5">
@@ -1562,7 +1590,7 @@ function AvatarGrowthTab({ onProfileUpdate }: { onProfileUpdate?: (name: string,
 
       {/* ── 克隆维度成长曲线 ── */}
       {(() => {
-        const knowledgeCur = Math.min(100, Math.round(((kbCount + corpusQuality * 2) / 5000) * 100));
+        const knowledgeCur = Math.min(100, Math.round(((kbCount + sysKbCount) / 5000) * 100));
         const memoryCur = Math.min(100, Math.round((dialogCount / 2000) * 100));
         const CLONE_LINES = [
           { key: 'knowledge', label: '专业知识覆盖度', color: '#27AE60', cur: knowledgeCur },
