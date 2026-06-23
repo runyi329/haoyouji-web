@@ -3098,39 +3098,37 @@ function CustomerDataTab() {
         <div className="space-y-2">
           {logs.map(log => (
             <div key={log.id} className="bg-white rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: C.line }}>
-              <button className="w-full px-3 py-3 text-left"
+              <button className="w-full px-3 py-2 text-left"
                 onClick={() => setExpanded(expanded === log.id ? null : log.id)}>
-                {/* 时间 + 展开按钮 */}
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px]" style={{ color: C.textSub }}>{formatDate(log.created_at)}</span>
+                {/* 时间 + 用户名 + 展开按钮 */}
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <span className="text-[10px] flex-shrink-0" style={{ color: C.textSub }}>{formatDate(log.created_at)}</span>
+                  <span className="text-[10px] truncate flex-1" style={{ color: C.textSub }}>{log.nickname || log.wecom_user_id.slice(0, 12)}</span>
                   {expanded === log.id
-                    ? <ChevronDown className="w-3.5 h-3.5" style={{ color: C.textSub }} />
-                    : <ChevronRight className="w-3.5 h-3.5" style={{ color: C.textSub }} />}
+                    ? <ChevronDown className="w-3 h-3 flex-shrink-0" style={{ color: C.textSub }} />
+                    : <ChevronRight className="w-3 h-3 flex-shrink-0" style={{ color: C.textSub }} />}
                 </div>
-                {/* 用户气泡：左侧 */}
-                <div className="flex items-start gap-1.5 mb-2">
+                {/* 用户气泡：头像左侧，气泡内只显示纯内容 */}
+                <div className="flex items-start gap-1.5 mb-1">
                   <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: C.brandLight }}>
                     <User className="w-3 h-3" style={{ color: C.brand }} />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[10px] mb-0.5 font-medium" style={{ color: C.textSub }}>{log.nickname || log.wecom_user_id.slice(0, 12)}</div>
-                    <div className={`text-sm leading-snug ${expanded === log.id ? '' : 'line-clamp-2'}`} style={{ color: C.textMain }}>{log.user_message || '(无内容)'}</div>
+                  <div className="rounded-2xl rounded-tl-none px-2.5 py-1.5 flex-1 min-w-0" style={{ backgroundColor: '#f0f0f0' }}>
+                    <div className={`text-sm leading-snug ${expanded === log.id ? '' : 'line-clamp-1'}`} style={{ color: '#1a1a1a' }}>{log.user_message || '(无内容)'}</div>
                   </div>
                 </div>
-                {/* AI 气泡：右侧 */}
+                {/* 分身气泡：头像右侧，不显示名字，气泡占满剩余宽度 */}
                 {log.reply_preview && (
                   <div className="flex items-start gap-1.5 flex-row-reverse">
-                    {/* 分身头像 */}
                     {log.channel_avatar ? (
                       <img src={log.channel_avatar} alt="" className="w-6 h-6 rounded-full flex-shrink-0 object-cover" />
                     ) : (
                       <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: C.brand }}>
-                        <span className="text-white text-[9px] font-bold">分身</span>
+                        <span className="text-white" style={{ fontSize: '9px', fontWeight: 700 }}>分</span>
                       </div>
                     )}
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[10px] mb-0.5 font-medium text-right" style={{ color: C.textSub }}>{log.channel_name || (log.manus_task_id === 'kf-deepseek' ? '营养顾问' : '分身')}</div>
-                      <div className={`text-xs leading-snug text-right ${expanded === log.id ? '' : 'line-clamp-2'}`} style={{ color: C.textSub }}>{log.reply_preview}</div>
+                    <div className="rounded-2xl rounded-tr-none px-2.5 py-1.5 flex-1 min-w-0" style={{ backgroundColor: C.brand }}>
+                      <div className={`text-sm leading-snug ${expanded === log.id ? '' : 'line-clamp-1'}`} style={{ color: '#fff' }}>{log.reply_preview}</div>
                     </div>
                   </div>
                 )}
