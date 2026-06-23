@@ -1376,7 +1376,7 @@ function RadarChart({ scores }: { scores: { label: string; score: number; icon: 
   );
 }
 
-function AvatarGrowthTab() {
+function AvatarGrowthTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avatarUrl: string) => void } = {}) {
   const [loading, setLoading] = useState(true);
   const [kbCount, setKbCount] = useState(0);
   const [corpusQuality, setCorpusQuality] = useState(0);
@@ -1384,6 +1384,11 @@ function AvatarGrowthTab() {
   const [twinEnabled, setTwinEnabled] = useState(false);
   const [growthHistory, setGrowthHistory] = useState<{date: string; equiv: number; level: string}[]>([]);
   const [showLevelGuide, setShowLevelGuide] = useState(false);
+  const [avatarName, setAvatarName] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
 
   // 知识投喂
   const [feedText, setFeedText] = useState("");
@@ -1393,6 +1398,15 @@ function AvatarGrowthTab() {
   const [feedResult, setFeedResult] = useState<{show: boolean; count: number; level: string} | null>(null);
 
   useEffect(() => {
+    // 加载分身名称和头像
+    fetch(`/api/wecom/channels/${KF_CHANNEL_ID}`)
+      .then(r => r.json())
+      .then(ch => {
+        if (ch && ch.name) setAvatarName(ch.name);
+        if (ch && ch.avatar_url) setAvatarUrl(ch.avatar_url);
+      })
+      .catch(() => {});
+
     Promise.all([
       fetch(`/api/wecom/ch/kb/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).catch(() => ({})),
       fetch(`/api/wecom/corpus/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).catch(() => ({})),
@@ -1510,15 +1524,77 @@ function AvatarGrowthTab() {
       {/* ── 资产总览卡片（原等级卡片） ── */}
       <div className="rounded-2xl overflow-hidden" style={{ background: `linear-gradient(145deg, ${C.brandDeep} 0%, ${C.brand} 100%)` }}>
         <div className="px-5 pt-5 pb-4">
-          {/* 顶部：账户标题 + 问号 */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="text-white text-[10px] opacity-55 tracking-widest uppercase">分身资产账户</div>
-            <button
-              onClick={() => setShowLevelGuide(!showLevelGuide)}
-              className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
-              style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: '#fff' }}
-            >?</button>
+          {/* 头像 + 名称区块 */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex-shrink-0">
+              <div className="w-14 h-14 rounded-full overflow-hidden flex items-center justify-center"
+                style={{ backgroundColor: 'rgba(255,255,255,0.2)', border: '2px solid rgba(255,255,255,0.5)' }}>
+                {avatarUrl
+                  ? <img src={avatarUrl} alt="头像" className="w-full h-full object-cover" />
+                  : <Bot className="w-7 h-7 text-white opacity-80" />}
+              </div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-white font-semibold text-base leading-tight truncate">{avatarName}</span>
+                <button
+                  onClick={() => { setNameInput(avatarName); setEditingName(true); }}
+                  className="text-xs px-2 py-0.5 rounded-full flex-shrink-0 font-medium"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.85)' }}
+                >设置</button>
+              </div>
+              <div className="text-white text-[10px] opacity-50 mt-0.5">数字分身</div>
+            </div>
           </div>
+          {/* 设置面板：编辑分身名称 */}
+          {editingName && (
+            <div className="mb-4 rounded-xl p-3 space-y-2.5" style={{ backgroundColor: 'rgba(255,255,255,0.12)' }}>
+              <div className="text-white text-[11px] font-semibold opacity-80">编辑分身名称</div>
+              <input
+                className="w-full text-sm border rounded-lg px-3 py-1.5 outline-none"
+                style={{ borderColor: 'rgba(255,255,255,0.4)', backgroundColor: 'rgba(255,255,255,0.15)', color: '#fff' }}
+                placeholder="输入分身名称…"
+                value={nameInput}
+                onChange={e => setNameInput(e.target.value)}
+                autoFocus
+              />
+              <div className="flex gap-2 pt-0.5">
+                <button
+                  onClick={async () => {
+                    if (!nameInput.trim()) return;
+                    setSavingProfile(true);
+                    try {
+                      const r = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}`);
+                      const ch = r.ok ? await r.json() : {};
+                      const res = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: nameInput.trim(), channel_type: ch.channel_type || 'kf', project_key: ch.project_key || null, kf_id: ch.kf_id || null, is_enabled: ch.is_enabled ?? 1, avatar_url: avatarUrl }),
+                      });
+                      const d = await res.json();
+                      if (d.ok) {
+                        setAvatarName(nameInput.trim());
+                        setEditingName(false);
+                        toast.success('保存成功');
+                        onProfileUpdate?.(nameInput.trim(), avatarUrl);
+                      } else toast.error(d.error || '保存失败');
+                    } catch { toast.error('网络错误'); }
+                    finally { setSavingProfile(false); }
+                  }}
+                  disabled={savingProfile}
+                  className="flex-1 py-1.5 rounded-lg text-sm font-medium"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.9)', color: '#166534' }}
+                >{savingProfile ? '保存中…' : '保存'}</button>
+                <button
+                  onClick={() => setEditingName(false)}
+                  className="px-4 py-1.5 rounded-lg text-sm"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.8)' }}
+                >取消</button>
+              </div>
+            </div>
+          )}
+          {/* 账户标题 */}
+          <div className="text-white text-[10px] opacity-55 tracking-widest uppercase mb-4">分身资产账户</div>
           {/* 资产总值—大号数字 */}
           <div className="mb-1">
             <div className="text-white text-[11px] opacity-55 mb-0.5">资产总值</div>
@@ -1536,7 +1612,7 @@ function AvatarGrowthTab() {
             <span className="text-white opacity-25 text-[10px]">/</span>
             <div className="flex items-center gap-1">
               <span className="text-white text-[10px] opacity-45">优质语料</span>
-              <span className="text-white text-[11px] font-semibold opacity-80" style={{ color: '#fde68a' }}>{corpusQuality}</span>
+              <span className="text-white text-[11px] font-semibold opacity-80">{corpusQuality}</span>
             </div>
             <span className="text-white opacity-25 text-[10px]">/</span>
             <div className="flex items-center gap-1">
@@ -1546,54 +1622,31 @@ function AvatarGrowthTab() {
           </div>
           {/* 分隔线 */}
           <div style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.15)', marginBottom: 14 }} />
-          {/* 当前等级 + 进度 */}
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <div className="text-white text-[10px] opacity-50 mb-0.5">当前等级</div>
-              <div className="flex items-center gap-2">
-                <span className="text-white text-lg font-bold">{cur.name}</span>
-                <span className="text-white text-[10px] opacity-60 px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>{cur.label}</span>
-              </div>
-            </div>
-            {next && (
-              <div className="text-right">
-                <div className="text-white text-[10px] opacity-50 mb-0.5">下一级</div>
-                <div className="text-white text-sm font-semibold opacity-80">{next.name}</div>
-              </div>
-            )}
-          </div>
-          {/* 进度条 */}
-          {next && (
-            <div>
-              <div className="flex justify-between text-white text-[10px] opacity-50 mb-1.5">
-                <span>还差 {toNext.toLocaleString()} 单元升级</span>
-                <span>{progress}%</span>
-              </div>
-              <div className="rounded-full overflow-hidden" style={{ height: 5, backgroundColor: 'rgba(255,255,255,0.2)' }}>
-                <div className="h-full rounded-full transition-all duration-700"
-                  style={{ width: `${progress}%`, background: 'linear-gradient(90deg, rgba(255,255,255,0.7) 0%, #fff 100%)' }} />
-              </div>
-            </div>
-          )}
-          {!next && <div className="text-white text-xs opacity-60">🎓 已达最高等级—顶尖层次</div>}
-        </div>
-
-        {/* 等级对照表（问号展开） */}
-        {showLevelGuide && (
-          <div className="mx-4 mb-4 rounded-xl overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.12)' }}>
-            <div className="px-3 py-2 text-white text-xs font-semibold opacity-90 border-b" style={{ borderColor: 'rgba(255,255,255,0.2)' }}>
-              等效知识条数对照表
-            </div>
-            <div className="px-3 py-2 space-y-1">
-              {AVATAR_LEVELS.map(lv => (
-                <div key={lv.level} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs font-semibold ${lv.level <= cur.level ? 'text-white' : 'text-white opacity-40'}`}>
-                      {lv.level <= cur.level ? '✓' : '·'} {lv.name}
-                    </span>
+          {/* 克隆完成度 */}
+          {(() => {
+            const MAX_EQUIV = 10000;
+            const clonePct = Math.min(100, Math.round((equiv / MAX_EQUIV) * 100));
+            return (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="text-white text-[10px] opacity-50">克隆完成度</div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-white text-lg font-bold leading-none">{clonePct}</span>
+                    <span className="text-white text-xs opacity-70">%</span>
                   </div>
-                  <span className={`text-xs ${lv.level <= cur.level ? 'text-white opacity-80' : 'text-white opacity-35'}`}>
-                    {lv.threshold === 0 ? '起点' : `${lv.threshold.toLocaleString()} 条`}
+                </div>
+                <div className="rounded-full overflow-hidden" style={{ height: 6, backgroundColor: 'rgba(255,255,255,0.2)' }}>
+                  <div className="h-full rounded-full transition-all duration-700"
+                    style={{ width: `${clonePct}%`, background: 'linear-gradient(90deg, rgba(255,255,255,0.6) 0%, #fff 100%)' }} />
+                </div>
+                {clonePct >= 100
+                  ? <div className="text-white text-[10px] opacity-60 mt-1">已完全克隆</div>
+                  : <div className="text-white text-[10px] opacity-40 mt-1">持续喂养语料，提升克隆完成度</div>
+                }
+              </div>
+            );
+          })()}
+        </div> 条`}
                   </span>
                 </div>
               ))}
@@ -1602,15 +1655,15 @@ function AvatarGrowthTab() {
               <div className="text-white text-[10px] font-semibold opacity-70">等效知识条数计算规则</div>
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-white text-[10px] opacity-60">📚 知识库每条</span>
+                  <span className="text-white text-[10px] opacity-60"> 知识库每条</span>
                   <span className="text-white text-[10px] opacity-80 font-semibold">× 1 条</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-white text-[10px] opacity-60">⭐ 优质语料每条</span>
+                  <span className="text-white text-[10px] opacity-60"> 优质语料每条</span>
                   <span className="text-white text-[10px] opacity-80 font-semibold">× 2 条</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-white text-[10px] opacity-60">💬 对话记录每次</span>
+                  <span className="text-white text-[10px] opacity-60"> 对话记录每次</span>
                   <span className="text-white text-[10px] opacity-80 font-semibold">× 0.1 条</span>
                 </div>
               </div>
@@ -1620,86 +1673,68 @@ function AvatarGrowthTab() {
         )}
       </div>
 
-      {/* ── 天赋图谱（Canvas高清雷达图） ── */}
-      <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: C.white, border: `1px solid ${C.line}`, boxShadow: '0 2px 12px rgba(39,174,96,0.08)' }}>
-        <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-          <div>
-            <div className="text-xs font-bold" style={{ color: C.textMain }}>天赋图谱</div>
-            <div className="text-[10px] mt-0.5" style={{ color: C.textSub }}>分身的核心能力画像</div>
-          </div>
-          <div className="text-[10px] px-2 py-1 rounded-full font-medium" style={{ backgroundColor: C.brandLight, color: C.brand }}>
-            综合 {Math.round(radarScores.reduce((s, r) => s + r.score, 0) / radarScores.length)}分
-          </div>
-        </div>
-        {/* 雷达图区域：用SVG层叠加标签，保证对齐精准 */}
-        <div className="relative" style={{ padding: '0 8px' }}>
-          {/* Canvas层 */}
-          <div style={{ paddingTop: '80%', position: 'relative' }}>
-            <div className="absolute inset-0">
-              <RadarChart scores={radarScores} />
+      {/* ── 克隆维度成长曲线 ── */}
+      {(() => {
+        const knowledgeCur = Math.min(100, Math.round(((kbCount + corpusQuality * 2) / 5000) * 100));
+        const memoryCur = Math.min(100, Math.round((dialogCount / 2000) * 100));
+        const CLONE_LINES = [
+          { key: 'knowledge', label: '专业知识覆盖度', color: '#27AE60', cur: knowledgeCur },
+          { key: 'memory',    label: '个人记忆深度',   color: '#3B82F6', cur: memoryCur },
+        ];
+        const months = growthHistory.length > 0 ? growthHistory.map(h => h.date) : ['1月','2月','3月','4月','5月','6月'];
+        const n = months.length;
+        const histScores: Record<string, number[]> = {};
+        CLONE_LINES.forEach(ab => {
+          histScores[ab.key] = Array.from({ length: n }, (_, i) => {
+            const ratio = (i + 1) / n;
+            return Math.round(ab.cur * ratio * ratio);
+          });
+        });
+        const cW = 320, cH = 160, pL = 32, pR = 16, pT = 16, pB = 28;
+        const iW = cW - pL - pR, iH = cH - pT - pB;
+        const tx = (i: number) => pL + (n <= 1 ? iW / 2 : (i / (n - 1)) * iW);
+        const ty = (v: number) => pT + iH - (v / 100) * iH;
+        return (
+          <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: C.white, border: `1px solid ${C.line}`, boxShadow: '0 2px 12px rgba(39,174,96,0.08)' }}>
+            <div className="px-4 pt-4 pb-2 flex items-center justify-between flex-wrap gap-1">
+              <div className="text-sm font-semibold" style={{ color: C.textMain }}>克隆维度成长曲线</div>
+              <div className="flex items-center gap-3">
+                {CLONE_LINES.map(ab => (
+                  <div key={ab.key} className="flex items-center gap-1">
+                    <div className="w-3 h-0.5 rounded-full" style={{ backgroundColor: ab.color }} />
+                    <span className="text-[10px]" style={{ color: C.textSub }}>{ab.label} {ab.cur}%</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            {/* SVG标签层：精确对齐五边形顶点 */}
-            <svg className="absolute inset-0" width="100%" height="100%" viewBox="0 0 200 160" preserveAspectRatio="xMidYMid meet">
-              {radarScores.map((s, i) => {
-                const n = radarScores.length;
-                const cx = 100, cy = 80;
-                // 标签圆半径比Canvas的maxR稍大，让标签排在外圈
-                const labelR = 70;
-                const a = (Math.PI * 2 * i) / n - Math.PI / 2;
-                const lx = cx + labelR * Math.cos(a);
-                const ly = cy + labelR * Math.sin(a);
-                // 根据角度判断对齐方式
-                const anchor = Math.abs(Math.cos(a)) < 0.15 ? 'middle' : (Math.cos(a) > 0 ? 'start' : 'end');
-                return (
-                  <g key={i}>
-                    <text x={lx} y={ly - 6} textAnchor={anchor} fontSize="11" style={{ fontFamily: 'system-ui' }}>{s.icon}</text>
-                    <text x={lx} y={ly + 7} textAnchor={anchor} fontSize="8.5" fill="#374151" fontWeight="500">{s.label}</text>
-                    <text x={lx} y={ly + 18} textAnchor={anchor} fontSize="9" fill="#27AE60" fontWeight="700">{s.score}</text>
+            <div className="px-2 pb-3">
+              <svg viewBox={`0 0 ${cW} ${cH}`} style={{ width: '100%', height: cH }}>
+                {[0,25,50,75,100].map(v => (
+                  <g key={v}>
+                    <line x1={pL} y1={ty(v)} x2={cW - pR} y2={ty(v)} stroke="#e5e7eb" strokeWidth={0.5} />
+                    <text x={pL - 4} y={ty(v) + 3} textAnchor="end" fontSize={8} fill="#9ca3af">{v}</text>
                   </g>
-                );
-              })}
-            </svg>
+                ))}
+                {months.map((m, i) => (
+                  <text key={i} x={tx(i)} y={cH - 4} textAnchor="middle" fontSize={8} fill="#9ca3af">{m}</text>
+                ))}
+                {CLONE_LINES.map(ab => {
+                  const pts = histScores[ab.key];
+                  const d = pts.map((v, i) => `${i === 0 ? 'M' : 'L'} ${tx(i).toFixed(1)} ${ty(v).toFixed(1)}`).join(' ');
+                  return (
+                    <g key={ab.key}>
+                      <path d={d} fill="none" stroke={ab.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+                      {pts.map((v, i) => (
+                        <circle key={i} cx={tx(i)} cy={ty(v)} r={i === pts.length - 1 ? 3.5 : 2} fill={ab.color} />
+                      ))}
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
           </div>
-        </div>
-        <div className="px-4 pb-3 pt-1">
-          <div className="text-[10px] text-center" style={{ color: C.textSub }}>投喂更多知识，解锁更强天赋</div>
-        </div>
-      </div>
-
-      {/* ── 成长轨迹 ── */}
-      <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: C.white, border: `1px solid ${C.line}`, boxShadow: '0 2px 12px rgba(39,174,96,0.06)' }}>
-        <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-          <div className="text-xs font-bold" style={{ color: C.textMain }}>成长轨迹</div>
-          <div className="text-[10px]" style={{ color: C.textSub }}>近6个月</div>
-        </div>
-        <div className="px-4 pb-4">
-          <svg width="100%" viewBox={`0 0 ${chartW} ${chartH}`} style={{ overflow: 'visible' }}>
-            {/* Y轴刻度线（只显示已达到的等级） */}
-            {reachedLevels.map(lv => {
-              const y = toY(lv.threshold);
-              return (
-                <g key={lv.level}>
-                  <line x1={padL} y1={y} x2={chartW - padR} y2={y}
-                    stroke={C.line} strokeWidth="0.5" strokeDasharray="3,3" />
-                  <text x={padL - 4} y={y + 4} textAnchor="end" fontSize="8" fill={C.textSub}>{lv.name}</text>
-                </g>
-              );
-            })}
-            <line x1={padL} y1={padT + innerH} x2={chartW - padR} y2={padT + innerH} stroke={C.line} strokeWidth="0.8" />
-            {growthHistory.map((p, i) => (
-              <text key={i} x={toX(i)} y={chartH - 5} textAnchor="middle" fontSize="8" fill={C.textSub}>{p.date}</text>
-            ))}
-            <path
-              d={`${pathD} L ${toX(growthHistory.length - 1).toFixed(1)} ${(padT + innerH).toFixed(1)} L ${padL.toFixed(1)} ${(padT + innerH).toFixed(1)} Z`}
-              fill={C.brand} opacity="0.07"
-            />
-            <path d={pathD} fill="none" stroke={C.brand} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            <circle cx={toX(growthHistory.length - 1)} cy={toY(equiv)} r="4" fill={C.brand} />
-            <circle cx={toX(growthHistory.length - 1)} cy={toY(equiv)} r="7" fill={C.brand} opacity="0.15" />
-            <text x={toX(growthHistory.length - 1)} y={toY(equiv) - 10} textAnchor="middle" fontSize="8" fill={C.brand} fontWeight="bold">你在这里</text>
-          </svg>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* ── 已解锁能力（2列网格） ── */}
       <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: C.white, border: `1px solid ${C.line}`, boxShadow: '0 2px 12px rgba(39,174,96,0.06)' }}>
@@ -1718,7 +1753,7 @@ function AvatarGrowthTab() {
                   }}>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-semibold" style={{ color: unlocked ? C.textMain : '#9CA3AF' }}>{ab.label}</span>
-                    <span style={{ fontSize: 14 }}>{unlocked ? '✅' : '🔒'}</span>
+                    <span style={{ fontSize: 14 }}>{unlocked ? '' : ''}</span>
                   </div>
                   <div className="rounded-full overflow-hidden mb-1.5" style={{ height: 3, backgroundColor: unlocked ? 'rgba(39,174,96,0.2)' : 'rgba(0,0,0,0.06)' }}>
                     <div className="h-full rounded-full transition-all"
@@ -1740,7 +1775,7 @@ function AvatarGrowthTab() {
           style={{ background: `linear-gradient(135deg, ${C.brandDeep} 0%, ${C.brand} 100%)` }}>
           <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
             style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
-            <span style={{ fontSize: 18 }}>⬆️</span>
+            <span style={{ fontSize: 18 }}></span>
           </div>
           <div>
             <div className="text-sm font-bold text-white">资产入账！+{feedResult.count} 知识单元</div>
@@ -2965,18 +3000,17 @@ function CustomerDataTab() {
 // ═══════════════════════════════════════════════════════════════
 // 营养俱乐部主页
 // ═══════════════════════════════════════════════════════════════
-type TabKey = "config" | "avatar" | "aibrain" | "customers" | "rules";
+type TabKey = "avatar" | "config" | "aibrain" | "customers";
 
 const TABS: { key: TabKey; label: string; icon: typeof Bot }[] = [
-  { key: "config", label: "设置", icon: Settings },
   { key: "avatar", label: "我的分身", icon: Bot },
-  { key: "aibrain", label: "知识金库", icon: BookOpen },
+  { key: "config", label: "设置", icon: Settings },
+  { key: "aibrain", label: "知识库", icon: BookOpen },
   { key: "customers", label: "客户档案", icon: Users },
-  { key: "rules", label: "行为准则", icon: Sparkles },
 ];
 
 export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
-  const [activeTab, setActiveTab] = useState<TabKey>("config");
+  const [activeTab, setActiveTab] = useState<TabKey>("avatar");
   const [tabCounts, setTabCounts] = useState<Partial<Record<TabKey, number>>>({});
   const [channelName, setChannelName] = useState("营养顾问分身");
   const [channelAvatarUrl, setChannelAvatarUrl] = useState("");
@@ -3032,8 +3066,7 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div className="text-center">
-            <div className="text-[15px] font-bold tracking-wide text-white leading-tight">AI 数字銀行</div>
-            <div className="text-[10px] text-white leading-tight" style={{ opacity: 0.65 }}>数字分身资产管理中心</div>
+            <div className="text-[15px] font-bold tracking-wide text-white leading-tight">数字分身 · {channelName}</div>
           </div>
           <div className="w-8" />
         </div>
@@ -3049,13 +3082,6 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
             </div>
             <div>
               <div className="text-white text-[13px] font-semibold leading-tight">{channelName}</div>
-              <div className="text-white text-[10px] leading-tight" style={{ opacity: 0.6 }}>运行中·账户 #A{KF_CHANNEL_ID.toString().padStart(3, '0')}</div>
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="text-[10px] text-white leading-tight" style={{ opacity: 0.55 }}>当前等级</div>
-            <div className="text-white text-[13px] font-bold leading-tight">
-              Lv.{tabCounts.avatar ?? 1}
             </div>
           </div>
         </div>
@@ -3074,7 +3100,7 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
                   ...(activeTab === t.key
                     ? { color: C.brand, borderBottom: `2px solid ${C.brand}` }
                     : { color: C.textSub, borderBottom: '2px solid transparent' }),
-                  borderRight: t.key !== 'rules' ? `1px solid ${C.line}` : 'none',
+                  borderRight: t.key !== 'customers' ? `1px solid ${C.line}` : 'none',
                   fontSize: t.key === 'aibrain' ? 11 : undefined,
                   minWidth: t.key === 'aibrain' ? 70 : undefined,
                 }}
@@ -3087,7 +3113,7 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
                     : { backgroundColor: 'rgba(0,0,0,0.06)', color: C.textSub }}
                 >
                   {t.key === 'avatar'
-                    ? (tabCounts[t.key] !== undefined ? `Lv.${tabCounts[t.key]}` : '-')
+                    ? (() => { const eq = (tabCounts['aibrain'] || 0) + (tabCounts['customers'] || 0) * 0.1; const pct = Math.min(100, Math.round((eq / 10000) * 100)); return `${pct}%`; })()
                     : (tabCounts[t.key] !== undefined ? tabCounts[t.key] : '-')
                   }
                 </span>
@@ -3099,11 +3125,10 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
 
       {/* 主内容区 */}
       <main className="flex-1 overflow-y-auto px-4 pt-2">
+        {activeTab === "avatar" && <AvatarGrowthTab onProfileUpdate={(name, url) => { setChannelName(name); setChannelAvatarUrl(url); }} />}
         {activeTab === "config" && <ConfigTab onProfileUpdate={(name, avatarUrl) => { setChannelName(name); setChannelAvatarUrl(avatarUrl); }} />}
-        {activeTab === "avatar" && <AvatarGrowthTab />}
         {activeTab === "aibrain" && <AIBrainTab />}
         {activeTab === "customers" && <CustomerDataTab />}
-        {activeTab === "rules" && <RulesTab />}
       </main>
     </div>
   );
