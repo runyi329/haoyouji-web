@@ -627,12 +627,21 @@ router.get("/api/wecom/ch/logs", async (req: Request, res: Response) => {
   } = req.query as Record<string, string>;
   const conn = await getDbConnection();
   try {
+    // 确保 channel_id 字段存在（兼容旧数据库）
+    try {
+      await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN channel_id INT DEFAULT NULL COMMENT '渠道ID'`);
+      // 迁移旧数据：manus_task_id='kf-deepseek' 归入 channel_id=3（营养顾问）
+      await (conn as any).execute(`UPDATE wecom_message_credits SET channel_id=3 WHERE manus_task_id='kf-deepseek' AND channel_id IS NULL`);
+      // 迁移新格式：从 manus_task_id 解析 channel_id（如 kf-deepseek-3 -> 3）
+      await (conn as any).execute(`UPDATE wecom_message_credits SET channel_id=CAST(REGEXP_SUBSTR(manus_task_id, '[0-9]+$') AS UNSIGNED) WHERE manus_task_id REGEXP 'kf-deepseek-[0-9]+' AND channel_id IS NULL`);
+    } catch (_) {}
+
     const conditions: string[] = [];
     const params: any[] = [];
     if (channel_id) {
-      // 兼容两种格式：旧数据存 'kf'，新数据存 'kf_3'
-      conditions.push("(mc.channel_type = ? OR mc.channel_type = ?)");
-      params.push(`kf_${channel_id}`, channel_type || 'kf');
+      // 优先用 channel_id 字段，兼容旧数据（channel_type IN ('kf','kf_N')）
+      conditions.push("(mc.channel_id = ? OR (mc.channel_id IS NULL AND (mc.channel_type = ? OR mc.channel_type = ?)))");
+      params.push(Number(channel_id), `kf_${channel_id}`, 'kf');
     } else {
       conditions.push("mc.channel_type = ?");
       params.push(channel_type);
@@ -648,10 +657,14 @@ router.get("/api/wecom/ch/logs", async (req: Request, res: Response) => {
     const where = "WHERE " + conditions.join(" AND ");
     const [rows] = await (conn as any).execute(
       `SELECT mc.id, mc.wecom_user_id, mc.user_message, mc.reply_preview, mc.model_used,
-              mc.credits_used, mc.created_at, ws.nickname,
+              mc.credits_used, mc.input_tokens, mc.output_tokens, mc.cache_hit_tokens,
+              mc.created_at, ws.nickname,
+              mc.channel_id, mc.channel_type, mc.manus_task_id,
+              wc.name AS channel_name,
               mc.dialog_score, mc.score_level, mc.score_reason, mc.score_dimensions
        FROM wecom_message_credits mc
        LEFT JOIN wecom_manus_sessions ws ON ws.wecom_user_id = mc.wecom_user_id
+       LEFT JOIN wecom_channels wc ON wc.id = mc.channel_id
        ${where}
        ORDER BY mc.created_at DESC
        LIMIT ${Number(limit)} OFFSET ${Number(offset)}`,
@@ -1170,6 +1183,107 @@ router.patch("/api/wecom/ch/logs/:id/score", async (req: Request, res: Response)
     res.json({ ok: true, score: finalScore, level: finalLevel });
   } catch (e: any) {
     res.status(500).json({ error: "调整失败" });
+  }
+});
+
+// =====================================================================
+// 全平台对话记录明细（用量统计页面专用）
+// =====================================================================
+/** GET /api/wecom/platform/logs
+ *  支持筛选：channel_id, start_date, end_date, user_id, model, keyword
+ *  返回：带渠道名称的对话记录列表，含 token 明细
+ */
+router.get("/api/wecom/platform/logs", async (req: Request, res: Response) => {
+  const {
+    channel_id,
+    start_date,
+    end_date,
+    user_id,
+    keyword,
+    model,
+    limit = "50",
+    offset = "0",
+  } = req.query as Record<string, string>;
+  const conn = await getDbConnection();
+  try {
+    // 确保 channel_id 字段存在（兼容旧数据库）
+    try {
+      await (conn as any).execute(`ALTER TABLE wecom_message_credits ADD COLUMN channel_id INT DEFAULT NULL COMMENT '渠道ID'`);
+      await (conn as any).execute(`UPDATE wecom_message_credits SET channel_id=3 WHERE manus_task_id='kf-deepseek' AND channel_id IS NULL`);
+      await (conn as any).execute(`UPDATE wecom_message_credits SET channel_id=CAST(REGEXP_SUBSTR(manus_task_id, '[0-9]+$') AS UNSIGNED) WHERE manus_task_id REGEXP 'kf-deepseek-[0-9]+' AND channel_id IS NULL`);
+    } catch (_) {}
+    const conditions: string[] = ["mc.channel_type IN ('kf','kf_3','kf_4','kf_5','kf_6')"];
+    const params: any[] = [];
+    // 支持按渠道筛选（kf类型）
+    if (channel_id && channel_id !== 'all') {
+      conditions.push("(mc.channel_id = ? OR (mc.channel_id IS NULL AND mc.manus_task_id LIKE ?))");
+      params.push(Number(channel_id), `kf-deepseek-${channel_id}%`);
+      // 如果是渠道3，还要包含旧的 kf-deepseek 数据
+      if (channel_id === '3') {
+        conditions[conditions.length - 1] = "(mc.channel_id = ? OR (mc.channel_id IS NULL AND (mc.manus_task_id = 'kf-deepseek' OR mc.manus_task_id LIKE 'kf-deepseek-3%')))";
+      }
+    }
+    if (start_date) { conditions.push("mc.created_at >= ?"); params.push(start_date + " 00:00:00"); }
+    if (end_date) { conditions.push("mc.created_at <= ?"); params.push(end_date + " 23:59:59"); }
+    if (user_id) { conditions.push("mc.wecom_user_id = ?"); params.push(user_id); }
+    if (keyword) {
+      conditions.push("(mc.user_message LIKE ? OR mc.reply_preview LIKE ?)");
+      params.push("%" + keyword + "%", "%" + keyword + "%");
+    }
+    if (model) { conditions.push("mc.model_used = ?"); params.push(model); }
+    const where = "WHERE " + conditions.join(" AND ");
+    const [rows] = await (conn as any).execute(
+      `SELECT mc.id, mc.wecom_user_id, mc.user_message, mc.reply_preview, mc.model_used,
+              mc.credits_used, mc.input_tokens, mc.output_tokens, mc.cache_hit_tokens,
+              mc.created_at, ws.nickname,
+              mc.channel_id, mc.channel_type, mc.manus_task_id,
+              COALESCE(wc.name, CASE
+                WHEN mc.manus_task_id = 'kf-deepseek' THEN '营养顾问'
+                WHEN mc.manus_task_id LIKE 'kf-deepseek-%' THEN CONCAT('渠道', REGEXP_SUBSTR(mc.manus_task_id, '[0-9]+$'))
+                ELSE mc.channel_type
+              END) AS channel_name,
+              mc.dialog_score, mc.score_level
+       FROM wecom_message_credits mc
+       LEFT JOIN wecom_manus_sessions ws ON ws.wecom_user_id = mc.wecom_user_id
+       LEFT JOIN wecom_channels wc ON wc.id = mc.channel_id
+       ${where}
+       ORDER BY mc.created_at DESC
+       LIMIT ${Number(limit)} OFFSET ${Number(offset)}`,
+      params
+    );
+    const [countRows] = await (conn as any).execute(
+      `SELECT COUNT(*) AS total,
+              SUM(mc.input_tokens + mc.output_tokens + mc.cache_hit_tokens) AS total_tokens,
+              SUM(mc.credits_used) AS total_credits
+       FROM wecom_message_credits mc ${where}`,
+      params
+    );
+    const summary = (countRows as any[])[0];
+    res.json({
+      ok: true,
+      logs: rows,
+      total: Number(summary?.total || 0),
+      total_tokens: Number(summary?.total_tokens || 0),
+      total_credits: Number(summary?.total_credits || 0),
+    });
+  } catch (e: any) {
+    console.error("[平台日志] 失败:", e);
+    res.status(500).json({ error: "获取失败" });
+  }
+});
+
+/** GET /api/wecom/platform/channels
+ *  返回所有 kf 类型渠道列表（用于筛选下拉）
+ */
+router.get("/api/wecom/platform/channels", async (req: Request, res: Response) => {
+  const conn = await getDbConnection();
+  try {
+    const [rows] = await (conn as any).execute(
+      `SELECT id, name FROM wecom_channels WHERE channel_type = 'kf' AND is_enabled = 1 ORDER BY id`
+    );
+    res.json({ ok: true, channels: rows });
+  } catch (e: any) {
+    res.status(500).json({ error: "获取失败" });
   }
 });
 

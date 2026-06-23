@@ -3117,10 +3117,21 @@ function CustomerDataTab() {
               </button>
               {/* 卡片底部细线下方：始终可见 */}
               <div className="px-4 pb-3 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
-                {/* 模型 + token */}
-                <div className="flex gap-3 text-xs flex-wrap mb-2" style={{ color: C.textSub }}>
+                {/* 模型 + token + 渠道 */}
+                <div className="flex gap-2 text-xs flex-wrap mb-2 items-center" style={{ color: C.textSub }}>
                   {log.model_used && <span className="px-2 py-0.5 rounded-full" style={{ backgroundColor: C.brandLight, color: C.brand }}>{log.model_used}</span>}
                   {log.credits_used > 0 && <span>{log.credits_used} token</span>}
+                  {/* 渠道标签：新数据显示渠道名，旧数据显示「营养顾问」 */}
+                  {(() => {
+                    const chName = log.channel_name || (log.manus_task_id === 'kf-deepseek' ? '营养顾问' : null);
+                    if (!chName) return null;
+                    return (
+                      <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-medium"
+                        style={{ backgroundColor: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0' }}>
+                        {chName}
+                      </span>
+                    );
+                  })()}
                 </div>
                 {log.dialog_score !== null && log.dialog_score !== undefined ? (() => {
                   // 将 0-100 分转换为星级（半星精度）

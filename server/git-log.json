@@ -1,5 +1,113 @@
 [
   {
+    "hash": "0b8e27d2c1595c7a6f23b4d0679f05f605d00086",
+    "author": "Manus Deploy",
+    "date": "2026-06-23T11:45:40+00:00",
+    "message": "fix: 兼容旧MySQL版本的字段添加方式",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "兼容旧MySQL版本的字段添加方式"
+  },
+  {
+    "hash": "731896340e69d1b22ed5e5926717bbf586b72b7a",
+    "author": "Manus Deploy",
+    "date": "2026-06-23T11:44:04+00:00",
+    "message": "fix: 通过workflow直接添加生产数据库评分字段",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "通过workflow直接添加生产数据库评分字段"
+  },
+  {
+    "hash": "a39917940f303b75c16084c78f1eff153905d019",
+    "author": "Manus Deploy",
+    "date": "2026-06-23T11:42:21+00:00",
+    "message": "chore: 添加生产数据库评分字段迁移workflow",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "添加生产数据库评分字段迁移workflow"
+  },
+  {
+    "hash": "bf4be8f171dae7bd0557e38a4fffa4e03d890586",
+    "author": "Manus Deploy",
+    "date": "2026-06-23T11:33:55+00:00",
+    "message": "tmp: 查询生产环境channel_type值",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "tmp: 查询生产环境channel_type值"
+  },
+  {
+    "hash": "3d8061c1f83fe4af78bd19dc7b26f5330874b163",
+    "author": "Manus Deploy",
+    "date": "2026-06-23T11:27:46+00:00",
+    "message": "fix: ch/logs接口兼容旧数据channel_type格式，修复客户档案列表显示0条",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "ch/logs接口兼容旧数据channel_type格式，修复客户档案列表显示0条"
+  },
+  {
+    "hash": "2e118a7c11e5799491ebc941acd4dc2b427c27af",
+    "author": "Manus Deploy",
+    "date": "2026-06-23T10:57:56+00:00",
+    "message": "fix: initDb补充评分字段ALTER，修复生产环境ch/logs接口获取失败",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "initDb补充评分字段ALTER，修复生产环境ch/logs接口获取失败"
+  },
+  {
+    "hash": "8d55428576f485b68fd92b6a5eec302956d321ab",
+    "author": "runyi329",
+    "date": "2026-06-23T10:23:54+00:00",
+    "message": "feat: 对话评分改为后端AI回复后自动触发，前端未评分显示空星，去掉页面加载时批量评分",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "对话评分改为后端AI回复后自动触发，前端未评分显示空星，去掉页面加载时批量评分"
+  },
+  {
+    "hash": "64e2af2685f76970c9b954002ebc1483ae7e6f7a",
+    "author": "runyi329",
+    "date": "2026-06-23T09:53:50+00:00",
+    "message": "feat: 客户档案对话质量评分功能 - AI自动打分+手动调整+等级标签",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "客户档案对话质量评分功能 - AI自动打分+手动调整+等级标签"
+  },
+  {
+    "hash": "a6ab3f24f417356ea5080e6efaf4a2a228f34877",
+    "author": "runyi329",
+    "date": "2026-06-23T09:40:30+00:00",
+    "message": "fix: 营养顾问页面平台共享指令展示layer2行为规范被过滤的bug",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "营养顾问页面平台共享指令展示layer2行为规范被过滤的bug"
+  },
+  {
+    "hash": "0a1da02eeedd0c4809e1d559c2425033f36da30b",
+    "author": "runyi329",
+    "date": "2026-06-23T09:38:07+00:00",
+    "message": "fix: 渠道页面刷新按钮改为强制刷新页面(window.location.reload)",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "渠道页面刷新按钮改为强制刷新页面(window.location.reload)"
+  },
+  {
+    "hash": "d8826e27684e627a451acc124e75fb1957238d14",
+    "author": "runyi329",
+    "date": "2026-06-23T09:32:37+00:00",
+    "message": "fix: 修复平台共享指令未被引用的bug",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复平台共享指令未被引用的bug"
+  },
+  {
+    "hash": "8456ddfc6cc87ce45d392ec2db4090c682be6efb",
+    "author": "runyi329",
+    "date": "2026-06-23T09:25:44+00:00",
+    "message": "feat: 平台管理UI改造 + AI辅助指令录入",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "平台管理UI改造 + AI辅助指令录入"
+  },
+  {
     "hash": "24651d040855160216bf5afad5c4210502f7bc8b",
     "author": "runyi329",
     "date": "2026-06-23T08:10:23+00:00",
