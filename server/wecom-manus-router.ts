@@ -1512,11 +1512,19 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
         );
         const platformRules = platformRuleRows as any[];
         const rules = ruleRows as any[];
+        // 平台共享指令：layer1（角色定义）+ layer2（行为规范）全部拼入
         const platformLayer1 = platformRules.filter((r: any) => r.layer === 1);
-        const layer2 = rules.filter((r: any) => r.layer === 2);
+        const platformLayer2 = platformRules.filter((r: any) => r.layer === 2);
+        // 私人指令：layer1（角色定义）+ layer2（行为规范）
+        const privateLayer1 = rules.filter((r: any) => r.layer === 1);
+        const privateLayer2 = rules.filter((r: any) => r.layer === 2);
         const parts: string[] = [];
-        if (platformLayer1.length > 0) parts.push(platformLayer1.map((r: any) => r.content).join("\n"));
-        if (layer2.length > 0) parts.push("行为规则：\n" + layer2.map((r: any, i: number) => `${i + 1}. ${r.content}`).join("\n"));
+        // 第一块：角色定义（平台 + 私人）
+        const allLayer1 = [...platformLayer1, ...privateLayer1];
+        if (allLayer1.length > 0) parts.push(allLayer1.map((r: any) => r.content).join("\n"));
+        // 第二块：行为规范（平台 + 私人）
+        const allLayer2 = [...platformLayer2, ...privateLayer2];
+        if (allLayer2.length > 0) parts.push("行为规则：\n" + allLayer2.map((r: any, i: number) => `${i + 1}. ${r.content}`).join("\n"));
         if (parts.length > 0) systemPrompt = parts.join("\n\n");
         // 如果指令表为空，尝试读取旧的 system_prompt 字段兑底
         if (!systemPrompt && cfg.system_prompt) systemPrompt = cfg.system_prompt;
