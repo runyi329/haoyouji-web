@@ -4025,53 +4025,6 @@ router.get("/api/wecom/users", async (req: Request, res: Response) => {
   }
 });
 
-// 临时迁移接口：将 channel_id=5 的对话记录迁移到 channel_id=3
-router.post("/api/wecom/admin/migrate-channel-5-to-3", async (req: Request, res: Response) => {
-  try {
-    const conn = await getDbConnection();
-    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
-    // 1. 迁移 wecom_message_credits: manus_task_id kf-deepseek-5 -> kf-deepseek-3
-    const [r1] = await (conn as any).execute(
-      `UPDATE wecom_message_credits SET manus_task_id = 'kf-deepseek-3' WHERE manus_task_id = 'kf-deepseek-5'`
-    );
-    // 2. 迁移 wecom_manus_sessions: channel_id=5 -> channel_id=3 (如果有 channel_id 字段)
-    let r2: any = { affectedRows: 0 };
-    try {
-      const [sr] = await (conn as any).execute(
-        `UPDATE wecom_manus_sessions SET channel_id = 3 WHERE channel_id = 5`
-      );
-      r2 = sr;
-    } catch (_) {}
-    // 3. 迁移 wecom_prompt_rules: channel_id=5 -> channel_id=3
-    const [r3] = await (conn as any).execute(
-      `UPDATE wecom_prompt_rules SET channel_id = 3 WHERE channel_id = 5`
-    );
-    // 4. 迁移 wecom_channel_config: channel_id=5 -> channel_id=3 (如果没有冲突)
-    let r4: any = { affectedRows: 0 };
-    try {
-      const [cr] = await (conn as any).execute(
-        `UPDATE wecom_channel_config SET channel_id = 3 WHERE channel_id = 5 AND config_key NOT IN (SELECT config_key FROM (SELECT config_key FROM wecom_channel_config WHERE channel_id = 3) AS t)`
-      );
-      r4 = cr;
-    } catch (_) {}
-    // 5. 删除 channel_id=5 的渠道记录
-    const [r5] = await (conn as any).execute(
-      `DELETE FROM wecom_channels WHERE id = 5`
-    );
-    res.json({
-      ok: true,
-      message_credits_migrated: (r1 as any).affectedRows,
-      sessions_migrated: r2.affectedRows,
-      prompt_rules_migrated: (r3 as any).affectedRows,
-      channel_config_migrated: r4.affectedRows,
-      channel_deleted: (r5 as any).affectedRows,
-    });
-  } catch (e) {
-    console.error("[迁移] 失败:", e);
-    res.status(500).json({ error: "迁移失败", detail: String(e) });
-  }
-});
-
 export default router;
 
 
