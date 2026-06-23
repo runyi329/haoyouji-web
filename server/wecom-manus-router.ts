@@ -3314,7 +3314,15 @@ router.get("/api/wecom/channels", async (req: Request, res: Response) => {
     if (appId) { sql += " WHERE app_id = ?"; params.push(Number(appId)); }
     sql += " ORDER BY id ASC";
     const [rows] = await (conn as any).execute(sql, params);
-    res.json({ channels: rows });
+    // 尝试补充 avatar_url
+    let channels = rows as any[];
+    try {
+      const [ar] = await (conn as any).execute(`SELECT id, avatar_url FROM wecom_channels ORDER BY id ASC`);
+      const avatarMap: Record<number, string> = {};
+      for (const r of ar as any[]) avatarMap[r.id] = r.avatar_url || null;
+      channels = channels.map((c: any) => ({ ...c, avatar_url: avatarMap[c.id] ?? null }));
+    } catch { channels = channels.map((c: any) => ({ ...c, avatar_url: null })); }
+    res.json({ channels });
   } catch (e) {
     console.error("[渠道] 获取列表失败:", e);
     res.status(500).json({ error: "获取失败" });
@@ -3339,16 +3347,59 @@ router.post("/api/wecom/channels", async (req: Request, res: Response) => {
   }
 });
 
+// 确保 wecom_channels 有 avatar_url 列
+async function ensureAvatarUrlColumn() {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return;
+    await (conn as any).execute(`ALTER TABLE wecom_channels ADD COLUMN avatar_url VARCHAR(500) DEFAULT NULL`);
+    console.log('[wecom_channels] avatar_url 列添加成功');
+  } catch { /* 列已存在，忽略 */ }
+}
+// 延迟执行迁移，不阻塞启动
+setTimeout(ensureAvatarUrlColumn, 3000);
+
+// 获取单个渠道
+router.get("/api/wecom/channels/:id", async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const { id } = req.params;
+    // 排除 /config 子路径（由后面的路由处理）
+    if (id === 'config' || isNaN(Number(id))) return res.status(400).json({ error: "无效ID" });
+    // 安全查询：先不包含 avatar_url，再单独查
+    const [rows] = await (conn as any).execute(
+      `SELECT id, name, channel_type, project_key, kf_id, is_enabled, app_id, created_at FROM wecom_channels WHERE id=? LIMIT 1`,
+      [id]
+    );
+    const ch = (rows as any[])[0] as any;
+    if (!ch) return res.status(404).json({ error: "渠道不存在" });
+    // 尝试获取 avatar_url
+    try {
+      const [ar] = await (conn as any).execute(`SELECT avatar_url FROM wecom_channels WHERE id=? LIMIT 1`, [id]);
+      ch.avatar_url = (ar as any[])[0]?.avatar_url || null;
+    } catch { ch.avatar_url = null; }
+    res.json(ch);
+  } catch (e) {
+    console.error("[渠道] 获取单个失败:", e);
+    res.status(500).json({ error: "获取失败" });
+  }
+});
+
 // 更新渠道
 router.put("/api/wecom/channels/:id", async (req: Request, res: Response) => {
   try {
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ error: "数据库连接失败" });
     const { id } = req.params;
-    const { name, channel_type, project_key, kf_id, is_enabled } = req.body;
+    const { name, channel_type, project_key, kf_id, is_enabled, avatar_url } = req.body;
+    // 先检查avatar_url列是否存在，不存在则迁移添加
+    try {
+      await (conn as any).execute(`ALTER TABLE wecom_channels ADD COLUMN avatar_url VARCHAR(500) DEFAULT NULL`);
+    } catch { /* 列已存在，忽略 */ }
     await (conn as any).execute(
-      `UPDATE wecom_channels SET name=?, channel_type=?, project_key=?, kf_id=?, is_enabled=? WHERE id=?`,
-      [name, channel_type, project_key || null, kf_id || null, is_enabled ?? 1, id]
+      `UPDATE wecom_channels SET name=?, channel_type=?, project_key=?, kf_id=?, is_enabled=?, avatar_url=? WHERE id=?`,
+      [name, channel_type, project_key || null, kf_id || null, is_enabled ?? 1, avatar_url || null, id]
     );
     res.json({ ok: true });
   } catch (e) {

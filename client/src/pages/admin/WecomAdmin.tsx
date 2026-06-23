@@ -1915,42 +1915,352 @@ interface WecomApp {
   created_at: string;
 }
 
-// ─── 平台管理视图（系统默认知识库，channel_id=2，is_system=1）─────────────────
+// ─── 平台管理总控台（管理员视角，4个Tab）──────────────────────────────────────
 
-function PlatformKbView() {
-  const SYSTEM_CHANNEL_ID = 2;
-  const [channel, setChannel] = useState<Channel | null>(null);
+// 总览Tab：所有分身数据面板
+function PlatformOverviewTab({ channels }: { channels: Channel[] }) {
+  const [twinStats, setTwinStats] = useState<Record<number, any>>({});
+  const [kbStats, setKbStats] = useState<{ item_count: number; file_count: number; char_count: number } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 直接构造平台渠道对象，复用 ChannelDetail 全套组件
-    fetch("/api/wecom/channels?app_id=1")
-      .then(r => r.json())
-      .then(d => {
-        const ch = (d.channels || []).find((c: Channel) => c.id === SYSTEM_CHANNEL_ID);
-        if (ch) setChannel(ch);
-        else {
-          // 如果找不到，构造一个默认对象
-          setChannel({
-            id: SYSTEM_CHANNEL_ID,
-            name: "系统默认",
-            channel_type: "kf",
-            project_key: "__platform__",
-            kf_id: null,
-            is_enabled: 1,
-            app_id: 1,
-            created_at: "",
-          });
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+    async function load() {
+      setLoading(true);
+      try {
+        // 加载每个分身的语料统计
+        const kfChannels = channels.filter(ch => ch.channel_type === 'kf' && ch.project_key !== '__platform__');
+        const statsMap: Record<number, any> = {};
+        await Promise.all(
+          kfChannels.map(async (ch) => {
+            try {
+              const r = await fetch(`/api/wecom/corpus/stats?channel_id=${ch.id}`);
+              const d = await r.json();
+              if (d.ok) statsMap[ch.id] = d;
+            } catch {}
+          })
+        );
+        setTwinStats(statsMap);
+        // 加载共享知识库统计
+        const kbRes = await fetch('/api/wecom/ch/kb/stats?channel_id=2');
+        const kbData = await kbRes.json();
+        if (kbData.ok) setKbStats(kbData);
+      } catch {}
+      finally { setLoading(false); }
+    }
+    load();
+  }, [channels]);
 
-  if (loading) return <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>;
-  if (!channel) return null;
+  const kfChannels = channels.filter(ch => ch.channel_type === 'kf' && ch.project_key !== '__platform__');
+  const activeCount = kfChannels.filter(ch => ch.is_enabled).length;
+  const twinOnCount = kfChannels.filter(ch => twinStats[ch.id]?.twin_enabled).length;
+  const totalCorpus = kfChannels.reduce((sum, ch) => sum + (twinStats[ch.id]?.total || 0), 0);
+  const totalQuality = kfChannels.reduce((sum, ch) => sum + (twinStats[ch.id]?.quality_count || 0), 0);
 
-  return <ChannelDetail channel={channel} />;
+  if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-green-500" /></div>;
+
+  return (
+    <div className="space-y-4">
+      {/* 顶部总览卡片 */}
+      <div className="bg-gradient-to-br from-[#0d2818] to-[#1a5c2e] rounded-2xl p-5 text-white">
+        <div className="flex items-center gap-2 mb-1">
+          <div className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
+          <span className="text-xs text-green-300 font-medium tracking-wider">AI 数字银行 · 管理员总控台</span>
+        </div>
+        <div className="text-2xl font-bold mt-2">{kfChannels.length} 个数字分身</div>
+        <div className="text-xs text-green-300 mt-1">{activeCount} 个运行中 · {twinOnCount} 个AI分身已激活</div>
+        <div className="grid grid-cols-2 gap-3 mt-4">
+          <div className="bg-white/10 rounded-xl p-3">
+            <div className="text-xs text-green-300 mb-1">累计语料</div>
+            <div className="text-xl font-bold">{totalCorpus}</div>
+            <div className="text-xs text-green-400">条对话记录</div>
+          </div>
+          <div className="bg-white/10 rounded-xl p-3">
+            <div className="text-xs text-green-300 mb-1">优质语料</div>
+            <div className="text-xl font-bold text-[#f5c842]">{totalQuality}</div>
+            <div className="text-xs text-green-400">条精选训练集</div>
+          </div>
+        </div>
+      </div>
+
+      {/* 共享知识库摘要 */}
+      {kbStats && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
+              <Shield className="w-4 h-4 text-amber-500" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">共享知识库</p>
+              <p className="text-xs text-gray-400">所有分身共同继承</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="text-center">
+              <div className="text-lg font-bold text-gray-900">{kbStats.item_count}</div>
+              <div className="text-xs text-gray-400">知识条目</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-bold text-gray-900">{kbStats.file_count}</div>
+              <div className="text-xs text-gray-400">文件数</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-bold text-gray-900">{(kbStats.char_count / 1000).toFixed(1)}k</div>
+              <div className="text-xs text-gray-400">字符量</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 各分身状态列表 */}
+      <div>
+        <p className="text-xs text-gray-400 mb-2 font-medium">分身运行状态</p>
+        <div className="space-y-2">
+          {kfChannels.length === 0 && (
+            <div className="text-center py-8 text-gray-400 text-sm">暂无数字分身账户</div>
+          )}
+          {kfChannels.map(ch => {
+            const ts = twinStats[ch.id];
+            return (
+              <div key={ch.id} className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${ch.is_enabled ? 'bg-green-400' : 'bg-gray-300'}`} />
+                    <span className="text-sm font-medium text-gray-900">{ch.name}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {ts?.twin_enabled && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-600 border border-green-200">AI激活</span>
+                    )}
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      ch.is_enabled ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'
+                    }`}>{ch.is_enabled ? '运行中' : '已停用'}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-800">{ts?.total || 0}</div>
+                    <div className="text-xs text-gray-400">语料总量</div>
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-[#f5c842]">{ts?.quality_count || 0}</div>
+                    <div className="text-xs text-gray-400">优质语料</div>
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-gray-800">{ch.kf_id ? ch.kf_id.slice(-6) : '-'}</div>
+                    <div className="text-xs text-gray-400">客服ID尾号</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 分身账户Tab：账户列表+绑定状态+新增
+function PlatformAccountsTab({ channels, onRefresh }: { channels: Channel[]; onRefresh: () => void }) {
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addName, setAddName] = useState('');
+  const [addKfId, setAddKfId] = useState('');
+  const [addAppId, setAddAppId] = useState(1);
+  const [saving, setSaving] = useState(false);
+  const [toggling, setToggling] = useState<number | null>(null);
+
+  const kfChannels = channels.filter(ch => ch.channel_type === 'kf' && ch.project_key !== '__platform__');
+
+  async function handleAddAccount() {
+    if (!addName.trim() || !addKfId.trim()) { toast.error('请填写分身名称和客服ID'); return; }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/wecom/channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: addName.trim(), channel_type: 'kf', kf_id: addKfId.trim(), app_id: addAppId, is_enabled: 1 }),
+      });
+      const d = await res.json();
+      if (d.ok || d.id) {
+        toast.success('分身账户已开通');
+        setShowAddModal(false);
+        setAddName(''); setAddKfId('');
+        onRefresh();
+      } else {
+        toast.error(d.error || '开通失败');
+      }
+    } catch { toast.error('网络错误'); }
+    finally { setSaving(false); }
+  }
+
+  async function handleToggle(ch: Channel) {
+    setToggling(ch.id);
+    try {
+      const res = await fetch(`/api/wecom/channels/${ch.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_enabled: ch.is_enabled ? 0 : 1 }),
+      });
+      const d = await res.json();
+      if (d.ok) { toast.success(ch.is_enabled ? '已停用' : '已启用'); onRefresh(); }
+      else toast.error(d.error || '操作失败');
+    } catch { toast.error('网络错误'); }
+    finally { setToggling(null); }
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* 开通新分身按钮 */}
+      <button
+        onClick={() => setShowAddModal(true)}
+        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-green-300 text-green-600 text-sm font-medium bg-green-50/50 active:bg-green-100 transition-colors"
+      >
+        <Plus className="w-4 h-4" />
+        开通新分身账户
+      </button>
+
+      {/* 分身列表 */}
+      {kfChannels.length === 0 && (
+        <div className="text-center py-12 text-gray-400 text-sm">暂无分身账户，点击上方开通</div>
+      )}
+      {kfChannels.map(ch => (
+        <div key={ch.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+              ch.is_enabled ? 'bg-gradient-to-br from-[#1a5c2e] to-[#2d8a47]' : 'bg-gray-100'
+            }`}>
+              <Bot className={`w-5 h-5 ${ch.is_enabled ? 'text-[#4ade80]' : 'text-gray-400'}`} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-gray-900">{ch.name}</p>
+              <p className="text-xs text-gray-400 font-mono truncate mt-0.5">{ch.kf_id || '未配置客服ID'}</p>
+            </div>
+            <button
+              onClick={() => handleToggle(ch)}
+              disabled={toggling === ch.id}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                ch.is_enabled
+                  ? 'bg-red-50 text-red-500 active:bg-red-100'
+                  : 'bg-green-50 text-green-600 active:bg-green-100'
+              }`}
+            >
+              {toggling === ch.id ? <Loader2 className="w-3 h-3 animate-spin" /> : (
+                ch.is_enabled ? <StopCircle className="w-3 h-3" /> : <PlayCircle className="w-3 h-3" />
+              )}
+              {ch.is_enabled ? '停用' : '启用'}
+            </button>
+          </div>
+          <div className="mt-3 pt-3 border-t border-gray-50 grid grid-cols-2 gap-2 text-xs">
+            <div className="flex items-center gap-1.5 text-gray-500">
+              <span className="text-gray-400">账户ID：</span>
+              <span className="font-mono text-gray-700">#{ch.id}</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-gray-500">
+              <span className="text-gray-400">创建：</span>
+              <span className="text-gray-700">{ch.created_at ? ch.created_at.slice(0, 10) : '-'}</span>
+            </div>
+          </div>
+        </div>
+      ))}
+
+      {/* 新增分身弹窗 */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center">
+          <div className="bg-white rounded-t-2xl w-full max-w-lg p-5 pb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold text-gray-900">开通新分身账户</h3>
+              <button onClick={() => setShowAddModal(false)} className="p-1 text-gray-400">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">分身名称 *</label>
+                <input
+                  value={addName}
+                  onChange={e => setAddName(e.target.value)}
+                  placeholder="例：营养顾问小李"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-green-400"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">企微客服账号ID *</label>
+                <input
+                  value={addKfId}
+                  onChange={e => setAddKfId(e.target.value)}
+                  placeholder="例：wkxxxxxxxxxxxxxxxx"
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:border-green-400"
+                />
+                <p className="text-xs text-gray-400 mt-1">在企业微信后台「客服账号」中查看</p>
+              </div>
+            </div>
+            <button
+              onClick={handleAddAccount}
+              disabled={saving}
+              className="w-full mt-4 py-3 rounded-xl bg-gradient-to-r from-[#1a5c2e] to-[#2d8a47] text-white text-sm font-semibold flex items-center justify-center gap-2 active:opacity-90"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              确认开通
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 主PlatformKbView组件
+function PlatformKbView() {
+  const [activeTab, setActiveTab] = useState<'overview' | 'accounts' | 'kb' | 'usage'>('overview');
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  async function loadChannels() {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/wecom/channels?app_id=1');
+      const d = await res.json();
+      setChannels(d.channels || []);
+    } catch {}
+    finally { setLoading(false); }
+  }
+
+  useEffect(() => { loadChannels(); }, []);
+
+  const tabs = [
+    { key: 'overview', label: '总览', icon: <BarChart2 className="w-3.5 h-3.5" /> },
+    { key: 'accounts', label: '分身账户', icon: <Bot className="w-3.5 h-3.5" /> },
+    { key: 'kb', label: '共享知识库', icon: <Shield className="w-3.5 h-3.5" /> },
+    { key: 'usage', label: '用量统计', icon: <Coins className="w-3.5 h-3.5" /> },
+  ];
+
+  if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-green-500" /></div>;
+
+  return (
+    <div>
+      {/* Tab切换 */}
+      <div className="flex gap-0.5 mb-4 bg-gray-100 rounded-xl p-1 overflow-x-auto">
+        {tabs.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setActiveTab(t.key as any)}
+            className={`flex-1 flex items-center justify-center gap-1 text-xs py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap px-1 ${
+              activeTab === t.key
+                ? 'bg-white text-green-700 shadow-sm'
+                : 'text-gray-500'
+            }`}
+          >
+            {t.icon}
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'overview' && <PlatformOverviewTab channels={channels} />}
+      {activeTab === 'accounts' && <PlatformAccountsTab channels={channels} onRefresh={loadChannels} />}
+      {activeTab === 'kb' && <ChannelKnowledgeTab channelType="kf" channelId={2} />}
+      {activeTab === 'usage' && <StatsTab />}
+    </div>
+  );
 }
 
 function ChannelTab() {
@@ -1990,7 +2300,7 @@ function ChannelTab() {
           </button>
           <div>
             <h2 className="text-sm font-semibold text-gray-900">平台管理</h2>
-            <p className="text-xs text-gray-400">系统默认知识库 · 所有客服账号共享</p>
+            <p className="text-xs text-gray-400">AI 数字银行 · 管理员总控台</p>
           </div>
         </div>
         <PlatformKbView />

@@ -407,7 +407,7 @@ interface KnowledgeBase {
 // ═══════════════════════════════════════════════════════════════
 // 配置 Tab（完整版：渠道状态 + 欢迎语 + 等待提示 + AI 指令 + 模型 + 消息抄送）
 // ═══════════════════════════════════════════════════════════════
-function ConfigTab() {
+function ConfigTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avatarUrl: string) => void } = {}) {
   const [enabled, setEnabled] = useState(true);
   const [showGuide, setShowGuide] = useState(false);
   const [welcomeMsg, setWelcomeMsg] = useState("");
@@ -423,6 +423,15 @@ function ConfigTab() {
   const [justSaved, setJustSaved] = useState(false);
   const [savedSnapshot, setSavedSnapshot] = useState("");
 
+  // 分身基本信息
+  const [avatarName, setAvatarName] = useState("营养顾问分身");
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState("");
+  const [editingAvatar, setEditingAvatar] = useState(false);
+  const [avatarInput, setAvatarInput] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+
   // 知识库
   const [kbId, setKbId] = useState(0);
   const [kbList, setKbList] = useState<KnowledgeBase[]>([]);
@@ -431,14 +440,16 @@ function ConfigTab() {
     (async () => {
       setLoading(true);
       try {
-        const [cfgRes, kbsRes, chCfgRes] = await Promise.all([
+        const [cfgRes, kbsRes, chCfgRes, channelRes] = await Promise.all([
           fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/config`),
           fetch(`/api/wecom/knowledge-bases`),
           fetch(`/api/wecom/channel-config/${KF_CHANNEL_ID}`),
+          fetch(`/api/wecom/channels`),
         ]);
         const cfg = await cfgRes.json();
         const kbs = await kbsRes.json();
         const chCfg = await chCfgRes.json();
+        const channelList = await channelRes.json();
         if (cfg.config) {
           const c = cfg.config;
           setEnabled(c.enabled !== false);
@@ -455,6 +466,14 @@ function ConfigTab() {
         if (chCfg && !chCfg.error) {
           const ki = chCfg.knowledge_base_id || 0;
           setKbId(ki);
+        }
+        // 加载分身名称和头像
+        if (channelList?.channels) {
+          const ch = channelList.channels.find((c: any) => c.id === KF_CHANNEL_ID);
+          if (ch) {
+            setAvatarName(ch.name || "营养顾问分身");
+            setAvatarUrl(ch.avatar_url || "");
+          }
         }
       } catch {
         toast.error("加载配置失败");
@@ -511,6 +530,64 @@ function ConfigTab() {
     }
   }
 
+  async function handleSaveName() {
+    if (!nameInput.trim()) return;
+    setSavingProfile(true);
+    try {
+      // 先获取当前渠道完整信息再更新
+      const r = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}`);
+      const ch = r.ok ? await r.json() : {};
+      const res = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: nameInput.trim(),
+          channel_type: ch.channel_type || "kf",
+          project_key: ch.project_key || null,
+          kf_id: ch.kf_id || null,
+          is_enabled: ch.is_enabled ?? 1,
+          avatar_url: avatarUrl,
+        }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        setAvatarName(nameInput.trim());
+        setEditingName(false);
+        toast.success("分身名称已更新");
+        onProfileUpdate?.(nameInput.trim(), avatarUrl);
+      } else toast.error(d.error || "保存失败");
+    } catch { toast.error("网络错误"); }
+    finally { setSavingProfile(false); }
+  }
+
+  async function handleSaveAvatar() {
+    setSavingProfile(true);
+    try {
+      const r = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}`);
+      const ch = r.ok ? await r.json() : {};
+      const res = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: avatarName,
+          channel_type: ch.channel_type || "kf",
+          project_key: ch.project_key || null,
+          kf_id: ch.kf_id || null,
+          is_enabled: ch.is_enabled ?? 1,
+          avatar_url: avatarInput.trim(),
+        }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        setAvatarUrl(avatarInput.trim());
+        setEditingAvatar(false);
+        toast.success("头像已更新");
+        onProfileUpdate?.(avatarName, avatarInput.trim());
+      } else toast.error(d.error || "保存失败");
+    } catch { toast.error("网络错误"); }
+    finally { setSavingProfile(false); }
+  }
+
 
     const currentSnap = JSON.stringify({ wm: welcomeMsg, wt: waitingMsg, ne: notifyEnabled, nu: notifyUserids.join(",") });
   const isDirty = savedSnapshot === "" || currentSnap !== savedSnapshot;
@@ -524,6 +601,95 @@ function ConfigTab() {
     <div className="space-y-4 pb-6">
       {/* 接入指引弹窗 */}
       {showGuide && <SetupGuideModal onClose={() => setShowGuide(false)} />}
+
+      {/* 分身基本信息 */}
+      <div className="bg-white rounded-2xl shadow-sm border" style={{ borderColor: C.line }}>
+        {/* 头像行 */}
+        <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${C.line}` }}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center"
+              style={{ backgroundColor: C.brandLight, border: `1.5px solid ${C.brand}` }}>
+              {avatarUrl
+                ? <img src={avatarUrl} alt="头像" className="w-full h-full object-cover" />
+                : <Bot className="w-4 h-4" style={{ color: C.brand }} />}
+            </div>
+            <div>
+              <div className="text-[11px]" style={{ color: C.textSub }}>分身头像</div>
+              {editingAvatar ? (
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <input
+                    className="text-xs border rounded px-2 py-0.5 outline-none"
+                    style={{ borderColor: C.brand, color: C.textMain, width: 160 }}
+                    placeholder="粘贴图片URL…"
+                    value={avatarInput}
+                    onChange={e => setAvatarInput(e.target.value)}
+                    autoFocus
+                  />
+                  <button
+                    onClick={handleSaveAvatar}
+                    disabled={savingProfile}
+                    className="text-xs px-2 py-0.5 rounded font-medium"
+                    style={{ backgroundColor: C.brand, color: '#fff' }}
+                  >{savingProfile ? '…' : '保存'}</button>
+                  <button onClick={() => setEditingAvatar(false)} className="text-xs" style={{ color: C.textSub }}>取消</button>
+                </div>
+              ) : (
+                <div className="text-xs font-medium" style={{ color: C.textMain }}>
+                  {avatarUrl ? '已设置' : '未设置'}
+                </div>
+              )}
+            </div>
+          </div>
+          {!editingAvatar && (
+            <button
+              onClick={() => { setAvatarInput(avatarUrl); setEditingAvatar(true); }}
+              className="text-xs px-2.5 py-1 rounded-full font-medium"
+              style={{ backgroundColor: C.brandLight, color: C.brand }}
+            >更换</button>
+          )}
+        </div>
+        {/* 名称行 */}
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center"
+              style={{ backgroundColor: 'rgba(0,0,0,0.04)' }}>
+              <span style={{ fontSize: 16 }}>✏️</span>
+            </div>
+            <div>
+              <div className="text-[11px]" style={{ color: C.textSub }}>分身名称</div>
+              {editingName ? (
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <input
+                    className="text-xs border rounded px-2 py-0.5 outline-none"
+                    style={{ borderColor: C.brand, color: C.textMain, width: 140 }}
+                    placeholder="输入分身名称…"
+                    value={nameInput}
+                    onChange={e => setNameInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleSaveName()}
+                    autoFocus
+                  />
+                  <button
+                    onClick={handleSaveName}
+                    disabled={savingProfile}
+                    className="text-xs px-2 py-0.5 rounded font-medium"
+                    style={{ backgroundColor: C.brand, color: '#fff' }}
+                  >{savingProfile ? '…' : '保存'}</button>
+                  <button onClick={() => setEditingName(false)} className="text-xs" style={{ color: C.textSub }}>取消</button>
+                </div>
+              ) : (
+                <div className="text-xs font-medium" style={{ color: C.textMain }}>{avatarName}</div>
+              )}
+            </div>
+          </div>
+          {!editingName && (
+            <button
+              onClick={() => { setNameInput(avatarName); setEditingName(true); }}
+              className="text-xs px-2.5 py-1 rounded-full font-medium"
+              style={{ backgroundColor: C.brandLight, color: C.brand }}
+            >编辑</button>
+          )}
+        </div>
+      </div>
 
       {/* 渠道状态 */}
       <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: C.line }}>
@@ -1073,6 +1239,143 @@ function calcLevel(kbCount: number, corpusQuality: number, dialogCount: number) 
   return { cur, next, equiv, progress };
 }
 
+// 5维天赋分数计算
+function calcRadarScores(kbCount: number, corpusQuality: number, dialogCount: number, equiv: number, nextThreshold: number) {
+  const maxEquiv = Math.max(nextThreshold, equiv + 1);
+  // 知识力：知识库条数占比
+  const iq = Math.min(100, Math.round((kbCount / Math.max(nextThreshold * 0.6, 1)) * 100));
+  // 共情力：优质语料占比
+  const eq = Math.min(100, Math.round((corpusQuality / Math.max(nextThreshold * 0.3, 1)) * 100));
+  // 抗压力：对话次数占比
+  const aq = Math.min(100, Math.round((dialogCount / Math.max(nextThreshold * 2, 1)) * 100));
+  // 成交力：综合资产占比
+  const sq = Math.min(100, Math.round((equiv / Math.max(maxEquiv, 1)) * 100));
+  // 记忆力：对话轮次深度
+  const mq = Math.min(100, Math.round((dialogCount / Math.max(dialogCount + 10, 1)) * 100));
+  // 初期数据为0时给一个最小值，保持图形可见
+  const floor = (v: number) => Math.max(v, 5);
+  return [
+    { key: 'iq', label: '知识力', score: floor(iq), icon: '🧠' },
+    { key: 'eq', label: '共情力', score: floor(eq), icon: '❤️' },
+    { key: 'aq', label: '抗压力', score: floor(aq), icon: '💪' },
+    { key: 'sq', label: '成交力', score: floor(sq), icon: '🎯' },
+    { key: 'mq', label: '记忆力', score: floor(mq), icon: '🔄' },
+  ];
+}
+
+// Canvas高清雷达图组件
+function RadarChart({ scores }: { scores: { label: string; score: number; icon: string }[] }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animRef = useRef<number>(0);
+  const progressRef = useRef(0);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 2;
+    const size = canvas.offsetWidth;
+    canvas.width = size * dpr;
+    canvas.height = size * dpr;
+    const ctx = canvas.getContext('2d')!;
+    ctx.scale(dpr, dpr);
+
+    const cx = size / 2, cy = size / 2;
+    const maxR = size * 0.36;
+    const n = scores.length;
+    const angle = (i: number) => (Math.PI * 2 * i) / n - Math.PI / 2;
+
+    const drawFrame = (progress: number) => {
+      ctx.clearRect(0, 0, size, size);
+
+      // 背景网格：3层同心五边形
+      [0.33, 0.66, 1].forEach((ratio, gi) => {
+        ctx.beginPath();
+        for (let i = 0; i < n; i++) {
+          const r = maxR * ratio;
+          const x = cx + r * Math.cos(angle(i));
+          const y = cy + r * Math.sin(angle(i));
+          i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.strokeStyle = gi === 2 ? 'rgba(39,174,96,0.25)' : 'rgba(39,174,96,0.12)';
+        ctx.lineWidth = gi === 2 ? 0.8 : 0.5;
+        ctx.stroke();
+        // 最外层淡充色
+        if (gi === 2) {
+          ctx.fillStyle = 'rgba(39,174,96,0.04)';
+          ctx.fill();
+        }
+      });
+
+      // 轴线
+      for (let i = 0; i < n; i++) {
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + maxR * Math.cos(angle(i)), cy + maxR * Math.sin(angle(i)));
+        ctx.strokeStyle = 'rgba(39,174,96,0.15)';
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+
+      // 数据区域（动画）
+      const pts = scores.map((s, i) => ({
+        x: cx + (maxR * (s.score / 100) * progress) * Math.cos(angle(i)),
+        y: cy + (maxR * (s.score / 100) * progress) * Math.sin(angle(i)),
+      }));
+
+      // 渐变填充
+      ctx.beginPath();
+      pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+      ctx.closePath();
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
+      grad.addColorStop(0, 'rgba(74,222,128,0.45)');
+      grad.addColorStop(1, 'rgba(39,174,96,0.15)');
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // 描边
+      ctx.beginPath();
+      pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+      ctx.closePath();
+      ctx.strokeStyle = '#27AE60';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // 顶点光晕
+      pts.forEach((p) => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(74,222,128,0.25)';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#4ade80';
+        ctx.fill();
+      });
+    };
+
+    // easeOutCubic 动画
+    const startTime = performance.now();
+    const duration = 600;
+    const animate = (now: number) => {
+      const t = Math.min((now - startTime) / duration, 1);
+      const ease = 1 - Math.pow(1 - t, 3);
+      progressRef.current = ease;
+      drawFrame(ease);
+      if (t < 1) animRef.current = requestAnimationFrame(animate);
+    };
+    animRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animRef.current);
+  }, [scores.map(s => s.score).join(',')]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{ width: '100%', height: '100%', display: 'block' }}
+    />
+  );
+}
+
 function AvatarGrowthTab() {
   const [loading, setLoading] = useState(true);
   const [kbCount, setKbCount] = useState(0);
@@ -1199,42 +1502,80 @@ function AvatarGrowthTab() {
     `${i === 0 ? 'M' : 'L'} ${toX(i).toFixed(1)} ${toY(p.equiv).toFixed(1)}`
   ).join(' ');
 
-  return (
-    <div className="space-y-4 pb-6">
+  const radarScores = calcRadarScores(kbCount, corpusQuality, dialogCount, equiv, next ? next.threshold : equiv + 100);
 
-      {/* ── 等级卡片 ── */}
-      <div className="rounded-2xl overflow-hidden" style={{ background: `linear-gradient(135deg, ${C.brandDeep} 0%, ${C.brand} 100%)` }}>
+  return (
+    <div className="space-y-3 pb-8">
+
+      {/* ── 资产总览卡片（原等级卡片） ── */}
+      <div className="rounded-2xl overflow-hidden" style={{ background: `linear-gradient(145deg, ${C.brandDeep} 0%, ${C.brand} 100%)` }}>
         <div className="px-5 pt-5 pb-4">
-          <div className="flex items-start justify-between mb-3">
-            <div>
-              <div className="text-white text-xs font-medium opacity-75 mb-1">你的分身目前相当于</div>
-              <div className="text-white text-2xl font-bold tracking-tight">{cur.name}</div>
-              <div className="text-white text-sm opacity-80 mt-0.5">{cur.label}水平</div>
-            </div>
+          {/* 顶部：账户标题 + 问号 */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-white text-[10px] opacity-55 tracking-widest uppercase">分身资产账户</div>
             <button
               onClick={() => setShowLevelGuide(!showLevelGuide)}
-              className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-1"
-              style={{ backgroundColor: 'rgba(255,255,255,0.25)', color: '#fff' }}
+              className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
+              style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: '#fff' }}
             >?</button>
           </div>
-          {/* 已吸收知识量 */}
-          <div className="text-white text-xs opacity-70 mb-2">
-            已吸收 <span className="font-bold text-sm opacity-100">{equiv.toLocaleString()}</span> 等效知识条
-            （知识库 {kbCount} 条 · 优质语料 {corpusQuality} 条 · 对话 {dialogCount} 次）
+          {/* 资产总值—大号数字 */}
+          <div className="mb-1">
+            <div className="text-white text-[11px] opacity-55 mb-0.5">资产总值</div>
+            <div className="flex items-baseline gap-2">
+              <span className="text-white font-bold tracking-tight" style={{ fontSize: 36, lineHeight: 1 }}>{equiv.toLocaleString()}</span>
+              <span className="text-white text-sm opacity-70">知识单元</span>
+            </div>
+          </div>
+          {/* 资产明细 */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-1">
+              <span className="text-white text-[10px] opacity-45">知识库</span>
+              <span className="text-white text-[11px] font-semibold opacity-80">{kbCount}</span>
+            </div>
+            <span className="text-white opacity-25 text-[10px]">/</span>
+            <div className="flex items-center gap-1">
+              <span className="text-white text-[10px] opacity-45">优质语料</span>
+              <span className="text-white text-[11px] font-semibold opacity-80" style={{ color: '#fde68a' }}>{corpusQuality}</span>
+            </div>
+            <span className="text-white opacity-25 text-[10px]">/</span>
+            <div className="flex items-center gap-1">
+              <span className="text-white text-[10px] opacity-45">对话</span>
+              <span className="text-white text-[11px] font-semibold opacity-80">{dialogCount}</span>
+            </div>
+          </div>
+          {/* 分隔线 */}
+          <div style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.15)', marginBottom: 14 }} />
+          {/* 当前等级 + 进度 */}
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <div className="text-white text-[10px] opacity-50 mb-0.5">当前等级</div>
+              <div className="flex items-center gap-2">
+                <span className="text-white text-lg font-bold">{cur.name}</span>
+                <span className="text-white text-[10px] opacity-60 px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}>{cur.label}</span>
+              </div>
+            </div>
+            {next && (
+              <div className="text-right">
+                <div className="text-white text-[10px] opacity-50 mb-0.5">下一级</div>
+                <div className="text-white text-sm font-semibold opacity-80">{next.name}</div>
+              </div>
+            )}
           </div>
           {/* 进度条 */}
           {next && (
             <div>
-              <div className="flex justify-between text-white text-xs opacity-70 mb-1.5">
-                <span>距「{next.name}」还差 {toNext.toLocaleString()} 条</span>
+              <div className="flex justify-between text-white text-[10px] opacity-50 mb-1.5">
+                <span>还差 {toNext.toLocaleString()} 单元升级</span>
                 <span>{progress}%</span>
               </div>
-              <div className="rounded-full overflow-hidden" style={{ height: 6, backgroundColor: 'rgba(255,255,255,0.25)' }}>
-                <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, backgroundColor: '#fff' }} />
+              <div className="rounded-full overflow-hidden" style={{ height: 5, backgroundColor: 'rgba(255,255,255,0.2)' }}>
+                <div className="h-full rounded-full transition-all duration-700"
+                  style={{ width: `${progress}%`, background: 'linear-gradient(90deg, rgba(255,255,255,0.7) 0%, #fff 100%)' }} />
               </div>
             </div>
           )}
-          {!next && <div className="text-white text-xs opacity-70">🎓 已达最高等级</div>}
+          {!next && <div className="text-white text-xs opacity-60">🎓 已达最高等级—顶尖层次</div>}
         </div>
 
         {/* 等级对照表（问号展开） */}
@@ -1279,13 +1620,59 @@ function AvatarGrowthTab() {
         )}
       </div>
 
-      {/* ── 成长曲线 ── */}
-      <div className="rounded-xl border overflow-hidden" style={{ borderColor: C.line }}>
-        <div className="px-4 py-3 flex items-center justify-between" style={{ backgroundColor: C.brandLight, borderBottom: `1px solid ${C.line}` }}>
-          <span className="text-xs font-semibold" style={{ color: C.textMain }}>成长曲线</span>
-          <span className="text-xs" style={{ color: C.textSub }}>近6个月</span>
+      {/* ── 天赋图谱（Canvas高清雷达图） ── */}
+      <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: C.white, border: `1px solid ${C.line}`, boxShadow: '0 2px 12px rgba(39,174,96,0.08)' }}>
+        <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+          <div>
+            <div className="text-xs font-bold" style={{ color: C.textMain }}>天赋图谱</div>
+            <div className="text-[10px] mt-0.5" style={{ color: C.textSub }}>分身的核心能力画像</div>
+          </div>
+          <div className="text-[10px] px-2 py-1 rounded-full font-medium" style={{ backgroundColor: C.brandLight, color: C.brand }}>
+            综合 {Math.round(radarScores.reduce((s, r) => s + r.score, 0) / radarScores.length)}分
+          </div>
         </div>
-        <div className="px-4 py-3" style={{ backgroundColor: C.white }}>
+        {/* 雷达图区域：用SVG层叠加标签，保证对齐精准 */}
+        <div className="relative" style={{ padding: '0 8px' }}>
+          {/* Canvas层 */}
+          <div style={{ paddingTop: '80%', position: 'relative' }}>
+            <div className="absolute inset-0">
+              <RadarChart scores={radarScores} />
+            </div>
+            {/* SVG标签层：精确对齐五边形顶点 */}
+            <svg className="absolute inset-0" width="100%" height="100%" viewBox="0 0 200 160" preserveAspectRatio="xMidYMid meet">
+              {radarScores.map((s, i) => {
+                const n = radarScores.length;
+                const cx = 100, cy = 80;
+                // 标签圆半径比Canvas的maxR稍大，让标签排在外圈
+                const labelR = 70;
+                const a = (Math.PI * 2 * i) / n - Math.PI / 2;
+                const lx = cx + labelR * Math.cos(a);
+                const ly = cy + labelR * Math.sin(a);
+                // 根据角度判断对齐方式
+                const anchor = Math.abs(Math.cos(a)) < 0.15 ? 'middle' : (Math.cos(a) > 0 ? 'start' : 'end');
+                return (
+                  <g key={i}>
+                    <text x={lx} y={ly - 6} textAnchor={anchor} fontSize="11" style={{ fontFamily: 'system-ui' }}>{s.icon}</text>
+                    <text x={lx} y={ly + 7} textAnchor={anchor} fontSize="8.5" fill="#374151" fontWeight="500">{s.label}</text>
+                    <text x={lx} y={ly + 18} textAnchor={anchor} fontSize="9" fill="#27AE60" fontWeight="700">{s.score}</text>
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+        </div>
+        <div className="px-4 pb-3 pt-1">
+          <div className="text-[10px] text-center" style={{ color: C.textSub }}>投喂更多知识，解锁更强天赋</div>
+        </div>
+      </div>
+
+      {/* ── 成长轨迹 ── */}
+      <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: C.white, border: `1px solid ${C.line}`, boxShadow: '0 2px 12px rgba(39,174,96,0.06)' }}>
+        <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+          <div className="text-xs font-bold" style={{ color: C.textMain }}>成长轨迹</div>
+          <div className="text-[10px]" style={{ color: C.textSub }}>近6个月</div>
+        </div>
+        <div className="px-4 pb-4">
           <svg width="100%" viewBox={`0 0 ${chartW} ${chartH}`} style={{ overflow: 'visible' }}>
             {/* Y轴刻度线（只显示已达到的等级） */}
             {reachedLevels.map(lv => {
@@ -1298,121 +1685,120 @@ function AvatarGrowthTab() {
                 </g>
               );
             })}
-            {/* X轴 */}
-            <line x1={padL} y1={padT + innerH} x2={chartW - padR} y2={padT + innerH} stroke={C.line} strokeWidth="1" />
-            {/* X轴标签 */}
+            <line x1={padL} y1={padT + innerH} x2={chartW - padR} y2={padT + innerH} stroke={C.line} strokeWidth="0.8" />
             {growthHistory.map((p, i) => (
-              <text key={i} x={toX(i)} y={chartH - 6} textAnchor="middle" fontSize="8" fill={C.textSub}>{p.date}</text>
+              <text key={i} x={toX(i)} y={chartH - 5} textAnchor="middle" fontSize="8" fill={C.textSub}>{p.date}</text>
             ))}
-            {/* 曲线填充 */}
             <path
               d={`${pathD} L ${toX(growthHistory.length - 1).toFixed(1)} ${(padT + innerH).toFixed(1)} L ${padL.toFixed(1)} ${(padT + innerH).toFixed(1)} Z`}
-              fill={C.brand} opacity="0.08"
+              fill={C.brand} opacity="0.07"
             />
-            {/* 曲线 */}
-            <path d={pathD} fill="none" stroke={C.brand} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            {/* 当前点 */}
+            <path d={pathD} fill="none" stroke={C.brand} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             <circle cx={toX(growthHistory.length - 1)} cy={toY(equiv)} r="4" fill={C.brand} />
-            <text x={toX(growthHistory.length - 1)} y={toY(equiv) - 8} textAnchor="middle" fontSize="8" fill={C.brand} fontWeight="bold">
-              你在这里
-            </text>
+            <circle cx={toX(growthHistory.length - 1)} cy={toY(equiv)} r="7" fill={C.brand} opacity="0.15" />
+            <text x={toX(growthHistory.length - 1)} y={toY(equiv) - 10} textAnchor="middle" fontSize="8" fill={C.brand} fontWeight="bold">你在这里</text>
           </svg>
         </div>
       </div>
 
-      {/* ── 分身已掌握的能力 ── */}
-      <div className="rounded-xl border overflow-hidden" style={{ borderColor: C.line }}>
-        <div className="px-4 py-3" style={{ backgroundColor: C.brandLight, borderBottom: `1px solid ${C.line}` }}>
-          <span className="text-xs font-semibold" style={{ color: C.textMain }}>分身已掌握的能力</span>
-        </div>
-        <div className="px-4 py-3 space-y-2.5" style={{ backgroundColor: C.white }}>
-          {ABILITIES.map(ab => {
-            const unlocked = equiv >= ab.unlockEquiv;
-            const abProgress = unlocked ? 100 : Math.min(99, Math.round((equiv / ab.unlockEquiv) * 100));
-            const stillNeed = ab.unlockEquiv - equiv;
-            return (
-              <div key={ab.key}>
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm">{unlocked ? '✅' : '⬜'}</span>
+      {/* ── 已解锁能力（2列网格） ── */}
+      <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: C.white, border: `1px solid ${C.line}`, boxShadow: '0 2px 12px rgba(39,174,96,0.06)' }}>
+        <div className="px-4 pt-4 pb-3">
+          <div className="text-xs font-bold mb-3" style={{ color: C.textMain }}>分身已解锁的能力</div>
+          <div className="grid grid-cols-2 gap-2">
+            {ABILITIES.map(ab => {
+              const unlocked = equiv >= ab.unlockEquiv;
+              const abProgress = unlocked ? 100 : Math.min(99, Math.round((equiv / Math.max(ab.unlockEquiv, 1)) * 100));
+              const stillNeed = ab.unlockEquiv - equiv;
+              return (
+                <div key={ab.key} className="rounded-xl p-3"
+                  style={{
+                    backgroundColor: unlocked ? C.brandLight : '#F9FAFB',
+                    border: `1px solid ${unlocked ? C.brand + '40' : '#E5E7EB'}`,
+                  }}>
+                  <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-semibold" style={{ color: unlocked ? C.textMain : '#9CA3AF' }}>{ab.label}</span>
+                    <span style={{ fontSize: 14 }}>{unlocked ? '✅' : '🔒'}</span>
                   </div>
-                  <span className="text-[10px]" style={{ color: unlocked ? C.brand : '#9CA3AF' }}>
-                    {unlocked ? ab.desc : `再投喂 ${stillNeed.toLocaleString()} 条解锁`}
-                  </span>
+                  <div className="rounded-full overflow-hidden mb-1.5" style={{ height: 3, backgroundColor: unlocked ? 'rgba(39,174,96,0.2)' : 'rgba(0,0,0,0.06)' }}>
+                    <div className="h-full rounded-full transition-all"
+                      style={{ width: `${abProgress}%`, backgroundColor: unlocked ? C.brand : '#D1D5DB' }} />
+                  </div>
+                  <div className="text-[10px]" style={{ color: unlocked ? C.brand : '#9CA3AF' }}>
+                    {unlocked ? ab.desc : `还差 ${stillNeed.toLocaleString()} 单元`}
+                  </div>
                 </div>
-                <div className="rounded-full overflow-hidden" style={{ height: 4, backgroundColor: unlocked ? C.brandLight : 'rgba(0,0,0,0.06)' }}>
-                  <div className="h-full rounded-full" style={{ width: `${abProgress}%`, backgroundColor: unlocked ? C.brand : '#D1D5DB' }} />
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      {/* ── 投喂结果提示 ── */}
+      {/* ── 投喂成功提示 ── */}
       {feedResult?.show && (
-        <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ backgroundColor: C.brandLight, border: `1px solid ${C.brand}` }}>
-          <span className="text-xl">🎉</span>
+        <div className="rounded-2xl px-4 py-3 flex items-center gap-3"
+          style={{ background: `linear-gradient(135deg, ${C.brandDeep} 0%, ${C.brand} 100%)` }}>
+          <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
+            style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+            <span style={{ fontSize: 18 }}>⬆️</span>
+          </div>
           <div>
-            <div className="text-sm font-semibold" style={{ color: C.brand }}>分身成长了！新增 {feedResult.count} 条知识</div>
-            <div className="text-xs mt-0.5" style={{ color: C.textSub }}>当前相当于「{feedResult.level}」水平</div>
+            <div className="text-sm font-bold text-white">资产入账！+{feedResult.count} 知识单元</div>
+            <div className="text-[11px] text-white mt-0.5" style={{ opacity: 0.75 }}>分身当前等级：{feedResult.level}</div>
           </div>
         </div>
       )}
 
-      {/* ── 知识投喂 ── */}
-      <div className="rounded-xl border overflow-hidden" style={{ borderColor: C.line }}>
-        <div className="px-4 py-3" style={{ backgroundColor: C.brandLight, borderBottom: `1px solid ${C.line}` }}>
-          <span className="text-xs font-semibold" style={{ color: C.textMain }}>知识投喂</span>
-          <span className="text-xs ml-2" style={{ color: C.textSub }}>帮你的分身学习更多专业知识</span>
-        </div>
-        <div className="px-4 py-3 space-y-3" style={{ backgroundColor: C.white }}>
-          {/* 文字输入 */}
-          <div>
+      {/* ── 存入知识资产 ── */}
+      <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: C.white, border: `1px solid ${C.line}`, boxShadow: '0 2px 12px rgba(39,174,96,0.06)' }}>
+        <div className="px-4 pt-4 pb-3">
+          <div className="text-xs font-bold mb-0.5" style={{ color: C.textMain }}>存入知识资产</div>
+          <div className="text-[10px] mb-4" style={{ color: C.textSub }}>投喂的知识将永久存入分身记忆</div>
+          {/* 文字存入 */}
+          <div className="mb-3">
             <div className="flex items-center justify-between mb-1.5">
-              <div className="text-xs font-medium" style={{ color: C.textMain }}>输入知识文字</div>
-              <div className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: C.brandLight, color: C.brand }}>+1 等效条</div>
+              <div className="text-xs font-medium" style={{ color: C.textMain }}>文字内容</div>
+              <div className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: C.brandLight, color: C.brand }}>+1 单元</div>
             </div>
             <textarea
               rows={3}
               value={feedText}
               onChange={e => setFeedText(e.target.value)}
-              placeholder="粘贴文章段落、产品说明、专业知识…"
-              className="w-full rounded-lg border px-3 py-2 text-sm resize-none outline-none"
+              placeholder="粘贴专业知识、产品说明、对话范例…"
+              className="w-full rounded-xl border px-3 py-2.5 text-sm resize-none outline-none"
               style={{ borderColor: C.line, color: C.textMain, backgroundColor: C.bg }}
             />
             <button
               onClick={handleFeedText}
               disabled={!feedText.trim() || feedingText}
-              className="mt-1.5 w-full py-2 rounded-lg text-sm font-medium transition-opacity"
+              className="mt-2 w-full py-2.5 rounded-xl text-sm font-semibold transition-opacity"
               style={{ backgroundColor: feedText.trim() ? C.brand : '#D1D5DB', color: '#fff', opacity: feedingText ? 0.6 : 1 }}
             >
-              {feedingText ? '添加中…' : '添加到知识库'}
+              {feedingText ? '存入中…' : '存入知识库'}
             </button>
           </div>
-          {/* 链接输入 */}
-          <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 12 }}>
+          {/* 链接存入 */}
+          <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 14 }}>
             <div className="flex items-center justify-between mb-1.5">
-              <div className="text-xs font-medium" style={{ color: C.textMain }}>粘贴网页链接</div>
-              <div className="text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: C.brandLight, color: C.brand }}>+10~50 等效条</div>
+              <div className="text-xs font-medium" style={{ color: C.textMain }}>网页链接</div>
+              <div className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#FEF3C7', color: '#D97706' }}>+10~50 单元</div>
             </div>
             <div className="flex gap-2">
               <input
                 type="url"
                 value={feedUrl}
                 onChange={e => setFeedUrl(e.target.value)}
-                placeholder="https://… 支持公众号文章、健康期刊"
-                className="flex-1 rounded-lg border px-3 py-2 text-sm outline-none"
+                placeholder="https://… 公众号、健康期刊、专业文章"
+                className="flex-1 rounded-xl border px-3 py-2.5 text-sm outline-none"
                 style={{ borderColor: C.line, color: C.textMain, backgroundColor: C.bg }}
               />
               <button
                 onClick={handleFeedUrl}
                 disabled={!feedUrl.trim() || feedingUrl}
-                className="px-4 py-2 rounded-lg text-sm font-medium flex-shrink-0"
+                className="px-4 py-2.5 rounded-xl text-sm font-semibold flex-shrink-0"
                 style={{ backgroundColor: feedUrl.trim() ? C.brand : '#D1D5DB', color: '#fff', opacity: feedingUrl ? 0.6 : 1 }}
               >
-                {feedingUrl ? '抓取中…' : '抓取'}
+                {feedingUrl ? '抓取中…' : '抓入'}
               </button>
             </div>
           </div>
@@ -2582,18 +2968,29 @@ function CustomerDataTab() {
 type TabKey = "config" | "avatar" | "aibrain" | "customers" | "rules";
 
 const TABS: { key: TabKey; label: string; icon: typeof Bot }[] = [
-  { key: "config", label: "配置", icon: Settings },
-  { key: "avatar", label: "AI分身", icon: Bot },
-  { key: "aibrain", label: "AI智库", icon: BookOpen },
-  { key: "customers", label: "客户数据", icon: Users },
-  { key: "rules", label: "专属规则", icon: Sparkles },
+  { key: "config", label: "设置", icon: Settings },
+  { key: "avatar", label: "我的分身", icon: Bot },
+  { key: "aibrain", label: "知识金库", icon: BookOpen },
+  { key: "customers", label: "客户档案", icon: Users },
+  { key: "rules", label: "行为准则", icon: Sparkles },
 ];
 
 export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
   const [activeTab, setActiveTab] = useState<TabKey>("config");
   const [tabCounts, setTabCounts] = useState<Partial<Record<TabKey, number>>>({});
+  const [channelName, setChannelName] = useState("营养顾问分身");
+  const [channelAvatarUrl, setChannelAvatarUrl] = useState("");
 
   useEffect(() => {
+    // 加载分身名称和头像
+    fetch(`/api/wecom/channels/${KF_CHANNEL_ID}`)
+      .then(r => r.json())
+      .then(ch => {
+        if (ch && ch.name) setChannelName(ch.name);
+        if (ch && ch.avatar_url) setChannelAvatarUrl(ch.avatar_url);
+      })
+      .catch(() => {});
+
     // 并行拉取各 Tab 的数量
     Promise.all([
       fetch(`/api/wecom/prompt-rules?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).then(d => d.ok ? (d.rules || []).filter((r: any) => r.enabled).length : 0).catch(() => 0),
@@ -2601,7 +2998,6 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
       fetch(`/api/wecom/ch/kb/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).then(d => d.item_count || 0).catch(() => 0),
       fetch(`/api/wecom/ch/logs?channel_id=${KF_CHANNEL_ID}&channel_type=${KF_CHANNEL_TYPE}&limit=1`).then(r => r.json()).then(d => d.total || 0).catch(() => 0),
       fetch(`/api/wecom/corpus/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).then(d => {
-        const kb = 0; // 将在单独请求中获取
         const corpus = d.ok ? (d.quality_count || 0) : 0;
         return corpus;
       }).catch(() => 0),
@@ -2625,20 +3021,48 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
         fontFamily: "'Noto Sans SC', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif",
       }}
     >
-      {/* 顶部栏 */}
+      {/* 顶部栏 - AI 数字銀行风格 */}
       <header
-        className="sticky top-0 z-10 flex items-center justify-between px-4"
-        style={{ height: 52, background: `linear-gradient(135deg,${C.brandDeep} 0%,${C.brand} 100%)` }}
+        className="sticky top-0 z-10"
+        style={{ background: `linear-gradient(135deg,${C.brandDeep} 0%,${C.brand} 100%)` }}
       >
-        <button onClick={() => onBack ? onBack() : window.history.back()} className="p-1.5 rounded-full" style={{ color: "rgba(255,255,255,0.8)" }}>
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <span className="text-[17px] font-bold tracking-wide text-white">营养俱乐部 AI 数字分身客服</span>
-        <div className="w-8" />
+        {/* 主标题行 */}
+        <div className="flex items-center justify-between px-4" style={{ height: 52 }}>
+          <button onClick={() => onBack ? onBack() : window.history.back()} className="p-1.5 rounded-full" style={{ color: "rgba(255,255,255,0.8)" }}>
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div className="text-center">
+            <div className="text-[15px] font-bold tracking-wide text-white leading-tight">AI 数字銀行</div>
+            <div className="text-[10px] text-white leading-tight" style={{ opacity: 0.65 }}>数字分身资产管理中心</div>
+          </div>
+          <div className="w-8" />
+        </div>
+        {/* 当前账户卡片 */}
+        <div className="mx-4 mb-3 rounded-xl px-4 py-3 flex items-center justify-between"
+          style={{ backgroundColor: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.18)' }}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden"
+              style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+              {channelAvatarUrl
+                ? <img src={channelAvatarUrl} alt="分身" className="w-full h-full object-cover" />
+                : <Bot className="w-4 h-4 text-white" />}
+            </div>
+            <div>
+              <div className="text-white text-[13px] font-semibold leading-tight">{channelName}</div>
+              <div className="text-white text-[10px] leading-tight" style={{ opacity: 0.6 }}>运行中·账户 #A{KF_CHANNEL_ID.toString().padStart(3, '0')}</div>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-[10px] text-white leading-tight" style={{ opacity: 0.55 }}>当前等级</div>
+            <div className="text-white text-[13px] font-bold leading-tight">
+              Lv.{tabCounts.avatar ?? 1}
+            </div>
+          </div>
+        </div>
       </header>
 
       {/* Tab 切换 */}
-      <div className="sticky top-[52px] z-10" style={{ backgroundColor: C.bg, borderBottom: `1px solid ${C.line}` }}>
+      <div className="sticky top-[116px] z-10" style={{ backgroundColor: C.bg, borderBottom: `1px solid ${C.line}` }}>
         <div className="flex">
           {TABS.map(t => {
             return (
@@ -2675,7 +3099,7 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
 
       {/* 主内容区 */}
       <main className="flex-1 overflow-y-auto px-4 pt-2">
-        {activeTab === "config" && <ConfigTab />}
+        {activeTab === "config" && <ConfigTab onProfileUpdate={(name, avatarUrl) => { setChannelName(name); setChannelAvatarUrl(avatarUrl); }} />}
         {activeTab === "avatar" && <AvatarGrowthTab />}
         {activeTab === "aibrain" && <AIBrainTab />}
         {activeTab === "customers" && <CustomerDataTab />}
