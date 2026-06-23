@@ -1,5 +1,14 @@
 [
   {
+    "hash": "3fd63fc5238f1ffd40033c6b806d23aeec157204",
+    "author": "Manus Deploy",
+    "date": "2026-06-23T13:39:43+00:00",
+    "message": "feat: 气泡布局优化+用户名移至时间行+分身只显示头像",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "气泡布局优化+用户名移至时间行+分身只显示头像"
+  },
+  {
     "hash": "da2cf0d141eeb8373b986dab4332e8d9377b31c7",
     "author": "Manus Deploy",
     "date": "2026-06-23T13:17:41+00:00",

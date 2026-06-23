@@ -2882,7 +2882,7 @@ function CustomerDataTab() {
   const [adjustScore, setAdjustScore] = useState<number>(60);
   const PAGE_SIZE = 20;
 
-  // 初始化：并行加载汇总 + 用户列表
+  // 初始化：并行加载汇总 + 用户列表 + 静默触发批量打分
   useEffect(() => {
     Promise.all([
       fetch(`/api/wecom/ch/data/summary?channel_id=${KF_CHANNEL_ID}&channel_type=${KF_CHANNEL_TYPE}`).then(r => r.json()).catch(() => null),
@@ -2891,6 +2891,11 @@ function CustomerDataTab() {
       if (sum?.ok) setSummary(sum);
       if (usersData?.ok) setAllUsers(usersData.users || []);
     });
+    // 静默触发批量打分（给未打分的历史数据补分），打完后刷新列表
+    fetch(`/api/wecom/ch/logs/auto-score-all`, { method: 'POST' })
+      .then(r => r.json())
+      .then(d => { if (d.ok && d.scored > 0) fetchLogs(0); })
+      .catch(() => {});
   }, []);
 
   function buildParams(p = 0) {
@@ -2906,7 +2911,7 @@ function CustomerDataTab() {
     return params;
   }
 
-  async function fetchLogs(p = 0) {
+  async function fetchLogs(p = 0, retry = true) {
     setLoading(true);
     try {
       const params = buildParams(p);
@@ -2919,9 +2924,20 @@ function CustomerDataTab() {
           score_dimensions: typeof l.score_dimensions === 'string' ? (() => { try { return JSON.parse(l.score_dimensions); } catch { return null; } })() : l.score_dimensions
         }));
         setLogs(parsedLogs); setTotal(data.total || 0); setPage(p);
+      } else if (retry) {
+        // 首次失败时静默重试一次（服务器初始化中可能暂时不可用）
+        setTimeout(() => fetchLogs(p, false), 1500);
+        return;
+      } else {
+        toast.error(data.error || '加载失败');
       }
-      else toast.error(data.error || '加载失败');
-    } catch { toast.error('网络错误'); }
+    } catch {
+      if (retry) {
+        setTimeout(() => fetchLogs(p, false), 1500);
+        return;
+      }
+      toast.error('网络错误');
+    }
     finally { setLoading(false); }
   }
 
