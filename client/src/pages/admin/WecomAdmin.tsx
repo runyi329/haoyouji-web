@@ -2903,7 +2903,9 @@ function ChannelTab() {
       <div className="sticky top-0 z-10" style={{ background: 'linear-gradient(135deg,#0d2818 0%,#1a5c2e 100%)' }}>
         <div className="flex items-center justify-between px-4" style={{ height: 48 }}>
           <div className="text-sm font-bold text-white">渠道</div>
-          <button onClick={fetchApps} className="text-[11px] text-green-300 border border-green-600/40 rounded-full px-3 py-1">刷新</button>
+          <button onClick={() => window.location.reload()} className="flex items-center gap-1 text-[11px] text-green-300 border border-green-600/40 rounded-full px-3 py-1 active:opacity-70">
+            <RefreshCw className="w-3 h-3" />强制刷新
+          </button>
         </div>
       </div>
 
@@ -2980,9 +2982,9 @@ function AppChannelList({
             <div className="text-sm font-bold text-white leading-tight">{app.name}</div>
             <div className="text-[10px] text-green-300">渠道 » {app.name}</div>
           </div>
-          <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-            app.is_enabled ? 'bg-green-400/20 text-green-200' : 'bg-gray-400/20 text-gray-300'
-          }`}>{app.is_enabled ? '启用' : '停用'}</span>
+          <button onClick={() => window.location.reload()} className="flex items-center gap-1 text-[11px] text-green-300 border border-green-600/40 rounded-full px-3 py-1 active:opacity-70">
+            <RefreshCw className="w-3 h-3" />强制刷新
+          </button>
         </div>
       </div>
 
