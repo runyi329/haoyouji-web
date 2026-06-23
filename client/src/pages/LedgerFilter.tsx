@@ -39,8 +39,9 @@ export default function LedgerFilter() {
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>(["all"]);
   const [note, setNote] = useState("");
   const [showAmountRange, setShowAmountRange] = useState(false);
-  const [selectedDateRange, setSelectedDateRange] = useState("week"); // week, month, year, ytd, custom
+  const [selectedDateRange, setSelectedDateRange] = useState("week"); // week, month, year, ytd, all, custom
   const [showCustomDate, setShowCustomDate] = useState(false);
+  const [allTime, setAllTime] = useState(false);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
@@ -175,6 +176,7 @@ export default function LedgerFilter() {
     const startDate = weekAgo.toISOString().split("T")[0];
     setDateStart(startDate);
     setDateEnd(endDate);
+    setAllTime(false);
     setAmountMin("");
     setAmountMax("");
     setSelectedType("all");
@@ -188,9 +190,11 @@ export default function LedgerFilter() {
     // 构建筛选条件对象
     const filters: any = {};
     
-    // 时间范围
-    if (dateStart) filters.startDate = dateStart;
-    if (dateEnd) filters.endDate = dateEnd;
+    // 时间范围（全部时段时不传日期参数）
+    if (!allTime) {
+      if (dateStart) filters.startDate = dateStart;
+      if (dateEnd) filters.endDate = dateEnd;
+    }
     
     // 金额范围
     if (amountMin) filters.amountMin = amountMin;
@@ -219,6 +223,11 @@ export default function LedgerFilter() {
     // 备注
     if (note.trim()) {
       filters.note = note.trim();
+    }
+    
+    // 全部时段标记
+    if (allTime) {
+      filters.allTime = '1';
     }
     
     // 将筛选条件序列化为URL参数
@@ -268,25 +277,28 @@ export default function LedgerFilter() {
         <div className="bg-white rounded-lg p-3 shadow-sm">
           <div className="flex items-center justify-between mb-2">
             <label className="text-sm font-medium text-gray-700">账目时间</label>
-            {dateStart && dateEnd && (
+            {allTime ? (
+              <span className="text-xs text-gray-400">全部历史记录</span>
+            ) : (dateStart && dateEnd && (
               <span className="text-xs text-gray-400">
                 {dateStart} 至 {dateEnd}
               </span>
-            )}
+            ))}
           </div>
-          <div className="flex gap-1.5 mb-2">
+          <div className="flex flex-wrap gap-1.5 mb-2">
             {[
               { value: "week", label: "近一周" },
               { value: "month", label: "近一月" },
               { value: "year", label: "近一年" },
               { value: "ytd", label: "今年至今" },
+              { value: "all", label: "全部时段" },
               { value: "custom", label: "自定义" },
             ].map((range) => (
               <Button
                 key={range.value}
                 variant={selectedDateRange === range.value ? "default" : "outline"}
                 size="sm"
-                className={`text-xs h-7 rounded ${
+                className={`text-xs h-7 rounded flex-shrink-0 ${
                   selectedDateRange === range.value
                     ? "bg-[#1976D2] text-white hover:bg-[#1976D2]"
                     : "bg-white text-gray-700 hover:bg-gray-50"
@@ -295,8 +307,15 @@ export default function LedgerFilter() {
                   setSelectedDateRange(range.value);
                   if (range.value === "custom") {
                     setShowCustomDate(true);
+                    setAllTime(false);
+                  } else if (range.value === "all") {
+                    setShowCustomDate(false);
+                    setAllTime(true);
+                    setDateStart("");
+                    setDateEnd("");
                   } else {
                     setShowCustomDate(false);
+                    setAllTime(false);
                     // 计算快捷时间范围
                     const today = new Date();
                     const endDate = today.toISOString().split("T")[0];

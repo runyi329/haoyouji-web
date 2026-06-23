@@ -1947,6 +1947,7 @@ export default function LedgerDetail() {
   if (urlParams.has('type')) filters.type = urlParams.get('type') as 'income' | 'expense';
   if (urlParams.has('amountMin')) filters.amountMin = urlParams.get('amountMin')!;
   if (urlParams.has('amountMax')) filters.amountMax = urlParams.get('amountMax')!;
+  if (urlParams.has('note')) filters.note = urlParams.get('note')!;
   
   // 处理分类 ID（只使用第一个）
   if (urlParams.has('categoryIds')) {
@@ -5549,10 +5550,87 @@ export default function LedgerDetail() {
 
       {/* 记账记录列表 —— 非 custom_ae / custom_af / custom_ah / custom_ai 账本显示；AJ账本切换到资方视角时也隐藏 */}
       {!isCustomAE && !isCustomAF && !isCustomAH && !isCustomAI && !(isCustomAJ && (((isAdmin || isOwner) && ajViewMode === 'owner') || isFunder) && !viewAsUserId) && <div className={`flex-1 pb-20 space-y-3`}>
+        {/* 搜索结果汇总卡片：仅在有搜索条件时显示 */}
+        {(() => {
+          const isSearchActive = !!(urlParams.has('startDate') || urlParams.has('endDate') || urlParams.has('note') || urlParams.has('type') || urlParams.has('amountMin') || urlParams.has('amountMax') || urlParams.has('categoryIds') || urlParams.has('memberIds') || urlParams.has('allTime'));
+          if (!isSearchActive || !transactionsData) return null;
+          
+          // 汇总所有记录
+          let totalIncome = 0, totalExpense = 0, totalCount = 0;
+          const allDates: string[] = [];
+          const memberSet = new Map<number, string>(); // id -> 显示名
+          transactionsData.forEach((day: any) => {
+            allDates.push(day.date);
+            totalIncome += day.income || 0;
+            totalExpense += day.expense || 0;
+            (day.records || []).forEach((r: any) => {
+              totalCount++;
+              if (r.member?.id) {
+                memberSet.set(r.member.id, r.member.nickname || r.member.username || String(r.member.id));
+              }
+            });
+          });
+          const balance = totalIncome - totalExpense;
+          const earliestDate = allDates.length > 0 ? allDates[allDates.length - 1] : '';
+          const latestDate = allDates.length > 0 ? allDates[0] : '';
+          const memberNames = Array.from(memberSet.values());
+          
+          // 搜索条件文字
+          const condParts: string[] = [];
+          if (urlParams.get('note')) condParts.push(`备注「${urlParams.get('note')}」`);
+          if (urlParams.get('type') === 'income') condParts.push('类型: 收入');
+          if (urlParams.get('type') === 'expense') condParts.push('类型: 支出');
+          if (urlParams.get('amountMin') || urlParams.get('amountMax')) {
+            const min = urlParams.get('amountMin') || '';
+            const max = urlParams.get('amountMax') || '';
+            condParts.push(`金额: ${min || '0'} – ${max || '不限'}`);
+          }
+          const allTimeFlag = urlParams.get('allTime') === '1';
+          
+          return (
+            <div className="bg-white rounded-lg p-3 shadow-sm border border-blue-100 mb-1">
+              {/* 标题行 */}
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <svg className="w-3.5 h-3.5 text-[#1976D2]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                  <span className="text-xs font-medium text-[#1976D2]">搜索结果</span>
+                  {condParts.length > 0 && <span className="text-xs text-gray-500">· {condParts.join(' / ')}</span>}
+                </div>
+                <span className="text-xs text-gray-400">{totalCount} 条</span>
+              </div>
+              {/* 时间范围 */}
+              <div className="text-xs text-gray-500 mb-2">
+                {allTimeFlag ? '全部时段' : (earliestDate && latestDate ? (earliestDate === latestDate ? earliestDate : `${earliestDate} – ${latestDate}`) : '无日期')}
+              </div>
+              {/* 收支合计 */}
+              <div className="grid grid-cols-3 gap-2 mb-2">
+                <div className="text-center">
+                  <div className="text-[10px] text-gray-400 mb-0.5">收入</div>
+                  <div className="text-sm font-semibold text-green-600">{totalIncome.toFixed(2)}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-[10px] text-gray-400 mb-0.5">支出</div>
+                  <div className="text-sm font-semibold text-red-600">{totalExpense.toFixed(2)}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-[10px] text-gray-400 mb-0.5">结余</div>
+                  <div className={`text-sm font-semibold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>{balance.toFixed(2)}</div>
+                </div>
+              </div>
+              {/* 记账人 */}
+              {memberNames.length > 0 && (
+                <div className="text-xs text-gray-500">
+                  <span className="text-gray-400">记账人：</span>{memberNames.join('、')}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+        
         {!hasRecords ? (
           <div className="text-center py-12">
             <div className="text-gray-400 text-base mb-1">{ledgerData?.type === 'diet' ? '还没有减肥记录' : '还没有记账记录'}</div>
-            <div className="text-gray-400 text-sm">{ledgerData?.type === 'diet' ? '点击下方按钮，添加减肥记录' : '点击下方"+"按钮开始记账'}</div>
+            <div className="text-gray-400 text-sm">{ledgerData?.type === 'diet' ? '点击下方按鈕，添加减肥记录' : '点击下方“+”按鈕开始记账'}</div>
           </div>
         ) : (
           transactionsData.map((dayRecord: any) => {

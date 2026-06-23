@@ -3239,6 +3239,7 @@ export async function getTransactionsList(
     memberId?: number;
     amountMin?: string;
     amountMax?: string;
+    note?: string;
     limit?: number;
     offset?: number;
   }
@@ -3312,6 +3313,9 @@ export async function getTransactionsList(
   }
   if (options?.memberId) {
     conditions.push(eq(ledgerRecords.createdBy, options.memberId));
+  }
+  if (options?.note) {
+    conditions.push(sql`${ledgerRecords.description} LIKE ${`%${options.note}%`}`);
   }
   
   // 注意：不过滤审批状态，返回所有记账（包括待审批的）

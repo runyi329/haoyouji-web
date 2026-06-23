@@ -9153,6 +9153,7 @@ ${klinesSummary}
         memberId: z.number().optional(),
         amountMin: z.string().optional(),
         amountMax: z.string().optional(),
+        note: z.string().optional(),
         limit: z.number().optional(),
         offset: z.number().optional(),
       }))
