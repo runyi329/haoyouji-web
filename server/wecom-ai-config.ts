@@ -175,8 +175,8 @@ const CACHE_TTL = 60_000;
 
 export async function getAIConfigs(): Promise<Map<UseCase, AIModelConfig>> {
   if (configCache && Date.now() - cacheTime < CACHE_TTL) return configCache;
-  const db = getDbConnection();
-  const [rows] = await (db as any).promise().execute(
+  const conn = await getDbConnection();
+  const [rows] = await (conn as any).execute(
     "SELECT use_case, label, provider, model_name, api_key, api_base, note FROM wecom_ai_model_config ORDER BY id"
   ) as any[];
   const map = new Map<UseCase, AIModelConfig>();
@@ -195,8 +195,8 @@ export async function getAIConfig(useCase: UseCase): Promise<AIModelConfig | nul
 
 /** 保存单条配置，清空缓存 */
 export async function saveAIConfig(cfg: Partial<AIModelConfig> & { use_case: UseCase }): Promise<void> {
-  const db = getDbConnection();
-  await (db as any).promise().execute(
+  const conn = await getDbConnection();
+  await (conn as any).execute(
     `INSERT INTO wecom_ai_model_config (use_case, provider, model_name, api_key, api_base, note)
      VALUES (?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
