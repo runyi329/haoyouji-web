@@ -1591,7 +1591,8 @@ router.post('/api/wecom/ocr-image', async (req: any, res: any) => {
     if (!forgeApiKey) {
       return res.json({ ok: false, error: 'OCR 功能需要配置 BUILT_IN_FORGE_API_KEY' });
     }
-    const apiUrl = `${forgeApiUrl.replace(/\/$/, '')}/v1/chat/completions`;
+    // BUILT_IN_FORGE_API_URL 已包含 /v1，直接拼接 /chat/completions
+    const apiUrl = forgeApiUrl.replace(/\/+$/, '').replace(/\/v1$/, '') + '/v1/chat/completions';
     const payload = {
       model: 'gemini-2.5-flash',
       messages: [
