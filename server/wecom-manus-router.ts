@@ -1807,9 +1807,12 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
               materialsMap[r.id] = { type: r.type, storage_url: r.storage_url, title: r.title };
             }
           }
-        } catch (_) {}
+        } catch (matErr: any) {
+          console.error(`[KF] 素材库查询异常 channel_id=${kfChannelId}:`, matErr?.message || matErr);
+        }
       }
 
+      console.log(`[KF] 构建 fullSystemPrompt: kfChannelId=${kfChannelId} materialsContext长度=${materialsContext.length}`);
       const fullSystemPrompt = systemPrompt + twinContext + kbContext + materialsContext;
 
       // 7. 调用DeepSeek获取回复
