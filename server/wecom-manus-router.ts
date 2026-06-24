@@ -1299,7 +1299,7 @@ async function classifyMessage(userMessage: string, prompt: string, classifierMo
 // -----------------------------------------------------------
 // 工具函数：向 DeepSeek API 发送消息并获取回复
 // -----------------------------------------------------------
-interface DeepSeekReply { content: string; promptTokens: number; completionTokens: number; totalTokens: number; cacheHitTokens: number; }
+interface DeepSeekReply { content: string; promptTokens: number; completionTokens: number; totalTokens: number; cacheHitTokens: number; modelUsed?: string; }
 async function sendToDeepSeekAndGetReply(userMessage: string, model: string = "deepseek-chat", systemPrompt?: string, useCase: UseCase = "chat"): Promise<DeepSeekReply> {
   const errReply = (msg: string): DeepSeekReply => ({ content: msg, promptTokens: 0, completionTokens: 0, totalTokens: 0, cacheHitTokens: 0 });
   try {
@@ -1379,7 +1379,7 @@ async function sendToDeepSeekAndGetReply(userMessage: string, model: string = "d
     } else {
       console.log(`[DeepSeek] 回复成功，长度=${finalContent.length}，tokens=${totalTokens}，cacheHit=${cacheHitTokens}`);
     }
-    return { content: finalContent, promptTokens, completionTokens, totalTokens, cacheHitTokens };
+    return { content: finalContent, promptTokens, completionTokens, totalTokens, cacheHitTokens, modelUsed: apiModel };
   } catch (e) {
     console.error("[DeepSeek] 通信异常:", e);
     return errReply("与 DeepSeek 通信时发生错误，请稍后重试。");
@@ -1760,7 +1760,7 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
              (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, input_tokens, output_tokens, cache_hit_tokens, model_used, reply_preview, channel_type)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [fromUser, `kf-deepseek-${kfChannelId}`, userText.substring(0, 200), 0, dsReply.totalTokens, dsReply.totalTokens,
-             inputTokensMiss, dsReply.completionTokens, cacheHitTokens, aiModel, dsReply.content.substring(0, 100), 'kf']
+             inputTokensMiss, dsReply.completionTokens, cacheHitTokens, dsReply.modelUsed || aiModel, dsReply.content.substring(0, 100), 'kf']
           );
           // 异步触发对话评分（不阻塞回复发送）
           const newLogId = (insertResult as any).insertId;
