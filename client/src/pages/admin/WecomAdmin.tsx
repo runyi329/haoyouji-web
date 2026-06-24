@@ -3103,8 +3103,8 @@ function ChannelTab() {
       <div className="sticky top-0 z-10" style={{ background: 'linear-gradient(135deg,#0d2818 0%,#1a5c2e 100%)' }}>
         <div className="flex items-center justify-between px-4" style={{ height: 48 }}>
           <div className="text-sm font-bold text-white">渠道</div>
-          <button onClick={() => window.location.reload()} className="flex items-center gap-1 text-[11px] text-green-300 border border-green-600/40 rounded-full px-3 py-1 active:opacity-70">
-            <RefreshCw className="w-3 h-3" />强制刷新
+          <button onClick={() => { setLoading(true); fetch('/api/wecom/apps').then(r=>r.json()).then(d=>setApps(d.apps||[])).catch(()=>{}).finally(()=>setLoading(false)); }} className="text-[11px] text-green-300 border border-green-600/40 rounded-full px-3 py-1 active:opacity-70">
+            双新
           </button>
         </div>
       </div>
@@ -3182,8 +3182,8 @@ function AppChannelList({
             <div className="text-sm font-bold text-white leading-tight">{app.name}</div>
             <div className="text-[10px] text-green-300">渠道 » {app.name}</div>
           </div>
-          <button onClick={() => window.location.reload()} className="flex items-center gap-1 text-[11px] text-green-300 border border-green-600/40 rounded-full px-3 py-1 active:opacity-70">
-            <RefreshCw className="w-3 h-3" />强制刷新
+          <button onClick={() => { setLoading(true); fetch(`/api/wecom/channels?app_id=${app.id}`).then(r=>r.json()).then(d=>setChannels(d.channels||[])).catch(()=>{}).finally(()=>setLoading(false)); }} className="text-[11px] text-green-300 border border-green-600/40 rounded-full px-3 py-1 active:opacity-70">
+            双新
           </button>
         </div>
       </div>
@@ -5230,6 +5230,110 @@ function ChannelKnowledgeTab({ channelType, channelId }: { channelType: string; 
   const [loadingItems, setLoadingItems] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // ── 第0步：AI智能整理 ──
+  const [step0Open, setStep0Open] = useState(false);
+  const [step0Input, setStep0Input] = useState("");
+  const [step0Analyzing, setStep0Analyzing] = useState(false);
+  const [step0Result, setStep0Result] = useState<AiAssistResult | null>(null);
+  const [step0SelPrompts, setStep0SelPrompts] = useState<boolean[]>([]);
+  const [step0SelKbs, setStep0SelKbs] = useState<boolean[]>([]);
+  const [step0Applying, setStep0Applying] = useState(false);
+  const [step0Done, setStep0Done] = useState(false);
+  const [step0KbId, setStep0KbId] = useState<number>(0);
+  // 编辑状态
+  const [step0EditPromptIdx, setStep0EditPromptIdx] = useState<number | null>(null);
+  const [step0EditKbIdx, setStep0EditKbIdx] = useState<number | null>(null);
+  const [step0EditDraftPrompt, setStep0EditDraftPrompt] = useState("");
+  const [step0EditDraftQ, setStep0EditDraftQ] = useState("");
+  const [step0EditDraftA, setStep0EditDraftA] = useState("");
+
+  // 加载kbId（通过channel-config接口）
+  useEffect(() => {
+    if (!channelId) return;
+    fetch(`/api/wecom/channel-config/${channelId}`)
+      .then(r => r.json())
+      .then(d => { if (d.knowledge_base_id) setStep0KbId(d.knowledge_base_id); })
+      .catch(() => {});
+  }, [channelId]);
+
+  async function handleStep0Analyze() {
+    if (!step0Input.trim()) return;
+    setStep0Analyzing(true);
+    setStep0Result(null);
+    setStep0Done(false);
+    try {
+      const res = await fetch("/api/wecom/ai-assist-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: step0Input, channelId: channelId || 0, kbId: step0KbId }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        setStep0Result(d);
+        setStep0SelPrompts(d.prompt_additions.map(() => true));
+        setStep0SelKbs(d.kb_items.map(() => true));
+      } else {
+        toast.error(d.error || "AI分析失败");
+      }
+    } catch {
+      toast.error("网络错误");
+    } finally {
+      setStep0Analyzing(false);
+    }
+  }
+
+  async function handleStep0Apply() {
+    if (!step0Result) return;
+    setStep0Applying(true);
+    try {
+      const chosenPrompts = step0Result.prompt_additions.filter((_, i) => step0SelPrompts[i]);
+      const chosenKbs = step0Result.kb_items.filter((_, i) => step0SelKbs[i]);
+      let promptSuccess = 0;
+      let kbSuccess = 0;
+      // 写入指令（prompt_rules layer=2）
+      if (channelId && chosenPrompts.length > 0) {
+        for (const p of chosenPrompts) {
+          try {
+            const r = await fetch(`/api/wecom/channels/${channelId}/prompt-rules`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ layer: 2, category: "行为规则", content: p }),
+            });
+            const rd = await r.json();
+            if (rd.rule) promptSuccess++;
+          } catch {}
+        }
+      }
+      // 写入知识库
+      if (step0KbId && chosenKbs.length > 0) {
+        for (const item of chosenKbs) {
+          try {
+            const r = await fetch(`/api/wecom/knowledge-bases/${step0KbId}/items`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ item_type: "qa", question: item.question, answer: item.answer }),
+            });
+            const rd = await r.json();
+            if (rd.ok) kbSuccess++;
+          } catch {}
+        }
+      }
+      const msgs: string[] = [];
+      if (chosenPrompts.length > 0) msgs.push(`${promptSuccess}/${chosenPrompts.length}条指令已写入行为规则`);
+      if (chosenKbs.length > 0) {
+        if (!step0KbId) msgs.push(`请先在「配置」Tab绑定知识库`);
+        else msgs.push(`${kbSuccess}/${chosenKbs.length}条已写入知识库`);
+      }
+      if (msgs.length > 0) toast.success(msgs.join("；"));
+      setStep0Done(true);
+      setTimeout(() => { setStep0Result(null); setStep0Input(""); setStep0Done(false); loadData(); }, 1500);
+    } catch {
+      toast.error("写入失败");
+    } finally {
+      setStep0Applying(false);
+    }
+  }
+
   async function loadData() {
     setLoading(true);
     try {
@@ -5372,6 +5476,179 @@ function ChannelKnowledgeTab({ channelType, channelId }: { channelType: string; 
 
   return (
     <div className="space-y-3">
+      {/* 第0步：AI智能整理 */}
+      <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border border-purple-100 overflow-hidden">
+        <button
+          onClick={() => setStep0Open(v => !v)}
+          className="w-full flex items-center justify-between px-4 py-3"
+        >
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full bg-purple-600 flex items-center justify-center flex-shrink-0">
+              <span className="text-white text-xs font-bold">0</span>
+            </div>
+            <span className="text-sm font-semibold text-gray-800">第0步· AI智能整理</span>
+            <span className="text-xs text-purple-600 bg-purple-100 rounded px-1.5 py-0.5">推荐先做</span>
+          </div>
+          <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${step0Open ? 'rotate-90' : ''}`} />
+        </button>
+
+        {step0Open && (
+          <div className="px-4 pb-4 space-y-3 border-t border-purple-100">
+            <p className="text-xs text-gray-500 pt-3 leading-relaxed">
+              粘贴任意内容（产品介绍、客服要求、价格表等），AI 自动判断并分别写入「角色行为规则」和「知识库」
+            </p>
+
+            <div className="relative">
+              <textarea
+                value={step0Input}
+                onChange={e => setStep0Input(e.target.value)}
+                placeholder="例如：客服要有耕心，不要用太官方的语气。我们的产品康宝莱F1单一99元，包含蛋白粉和维生素套餐。如果客户问价格，告诉他们具体套餐内容..."
+                rows={5}
+                className="w-full text-sm border border-purple-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-purple-200 text-gray-800 placeholder-gray-400 bg-white"
+              />
+            </div>
+
+            <button
+              onClick={handleStep0Analyze}
+              disabled={step0Analyzing || !step0Input.trim()}
+              className="w-full py-2.5 bg-purple-600 text-white rounded-xl text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {step0Analyzing
+                ? <><Loader2 className="w-4 h-4 animate-spin" />分析中...</>
+                : <><Sparkles className="w-4 h-4" />让 AI 帮我整理</>}
+            </button>
+
+            {step0Result && (
+              <div className="space-y-3">
+                {step0Result.summary && (
+                  <div className="text-xs text-purple-700 bg-purple-50 rounded-lg px-3 py-2 flex items-start gap-1.5">
+                    <Sparkles className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                    <span>{step0Result.summary}</span>
+                  </div>
+                )}
+
+                {/* 角色/行为规则建议 */}
+                {step0Result.prompt_additions.length > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="text-xs font-semibold text-gray-600 flex items-center gap-1">
+                      <div className="w-2 h-2 rounded-full bg-purple-500" />
+                      建议写入「角色/行为规则」
+                    </div>
+                    {step0Result.prompt_additions.map((p, i) => (
+                      <div key={i} className={`rounded-lg border transition-all ${
+                        step0SelPrompts[i] ? 'border-purple-400 bg-purple-50' : 'border-gray-200 bg-white'
+                      }`}>
+                        {step0EditPromptIdx === i ? (
+                          <div className="p-2 space-y-2">
+                            <textarea
+                              value={step0EditDraftPrompt}
+                              onChange={e => setStep0EditDraftPrompt(e.target.value)}
+                              rows={3}
+                              autoFocus
+                              className="w-full text-xs border border-purple-300 rounded px-2 py-1 resize-none focus:outline-none"
+                            />
+                            <div className="flex gap-2 justify-end">
+                              <button onClick={() => setStep0EditPromptIdx(null)} className="text-xs text-gray-400 px-2 py-0.5 rounded hover:bg-gray-100">取消</button>
+                              <button onClick={() => {
+                                const updated = [...step0Result!.prompt_additions];
+                                updated[i] = step0EditDraftPrompt;
+                                setStep0Result({ ...step0Result!, prompt_additions: updated });
+                                setStep0EditPromptIdx(null);
+                              }} className="text-xs text-purple-600 px-2 py-0.5 rounded hover:bg-purple-100">保存</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-start gap-2 px-3 py-2">
+                            <button onClick={() => setStep0SelPrompts(prev => { const n=[...prev]; n[i]=!n[i]; return n; })} className="flex-shrink-0 mt-0.5">
+                              <div className={`w-4 h-4 rounded border flex items-center justify-center ${
+                                step0SelPrompts[i] ? 'bg-purple-500 border-purple-500' : 'border-gray-300'
+                              }`}>{step0SelPrompts[i] && <Check className="w-3 h-3 text-white" />}</div>
+                            </button>
+                            <span className={`flex-1 text-xs whitespace-pre-wrap ${
+                              step0SelPrompts[i] ? 'text-purple-800' : 'text-gray-500'
+                            }`}>{p}</span>
+                            <button onClick={() => { setStep0EditPromptIdx(i); setStep0EditDraftPrompt(p); }} className="flex-shrink-0 text-gray-300 hover:text-purple-500">
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* 知识库条目建议 */}
+                {step0Result.kb_items.length > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="text-xs font-semibold text-gray-600 flex items-center gap-1">
+                      <div className="w-2 h-2 rounded-full bg-blue-500" />
+                      建议写入「知识库」
+                      {!step0KbId && <span className="text-amber-500 font-normal ml-1">(请先在「配置」Tab绑定知识库)</span>}
+                    </div>
+                    {step0Result.kb_items.map((item, i) => (
+                      <div key={i} className={`rounded-lg border transition-all ${
+                        step0SelKbs[i] ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white'
+                      }`}>
+                        {step0EditKbIdx === i ? (
+                          <div className="p-2 space-y-2">
+                            <div>
+                              <div className="text-xs text-gray-400 mb-0.5">Q 问题</div>
+                              <input value={step0EditDraftQ} onChange={e => setStep0EditDraftQ(e.target.value)} autoFocus className="w-full text-xs border border-blue-300 rounded px-2 py-1 focus:outline-none" />
+                            </div>
+                            <div>
+                              <div className="text-xs text-gray-400 mb-0.5">A 答案</div>
+                              <textarea value={step0EditDraftA} onChange={e => setStep0EditDraftA(e.target.value)} rows={3} className="w-full text-xs border border-blue-300 rounded px-2 py-1 resize-none focus:outline-none" />
+                            </div>
+                            <div className="flex gap-2 justify-end">
+                              <button onClick={() => setStep0EditKbIdx(null)} className="text-xs text-gray-400 px-2 py-0.5 rounded hover:bg-gray-100">取消</button>
+                              <button onClick={() => {
+                                const updated = [...step0Result!.kb_items];
+                                updated[i] = { question: step0EditDraftQ, answer: step0EditDraftA };
+                                setStep0Result({ ...step0Result!, kb_items: updated });
+                                setStep0EditKbIdx(null);
+                              }} className="text-xs text-blue-600 px-2 py-0.5 rounded hover:bg-blue-100">保存</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-start gap-2 px-3 py-2">
+                            <button onClick={() => setStep0SelKbs(prev => { const n=[...prev]; n[i]=!n[i]; return n; })} className="flex-shrink-0 mt-0.5">
+                              <div className={`w-4 h-4 rounded border flex items-center justify-center ${
+                                step0SelKbs[i] ? 'bg-blue-500 border-blue-500' : 'border-gray-300'
+                              }`}>{step0SelKbs[i] && <Check className="w-3 h-3 text-white" />}</div>
+                            </button>
+                            <div className="flex-1 text-xs">
+                              <div className={`font-medium ${ step0SelKbs[i] ? 'text-blue-800' : 'text-gray-700' }`}>Q: {item.question}</div>
+                              <div className={`mt-0.5 ${ step0SelKbs[i] ? 'text-blue-600' : 'text-gray-500' }`}>A: {item.answer}</div>
+                            </div>
+                            <button onClick={() => { setStep0EditKbIdx(i); setStep0EditDraftQ(item.question); setStep0EditDraftA(item.answer); }} className="flex-shrink-0 text-gray-300 hover:text-blue-500">
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {(step0Result.prompt_additions.length > 0 || step0Result.kb_items.length > 0) && (
+                  <button
+                    onClick={handleStep0Apply}
+                    disabled={step0Applying || step0Done}
+                    className={`w-full py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all ${
+                      step0Done ? 'bg-green-500 text-white' : 'bg-gray-800 text-white disabled:opacity-50'
+                    }`}
+                  >
+                    {step0Applying ? <><Loader2 className="w-4 h-4 animate-spin" />写入中...</>
+                    : step0Done ? <><Check className="w-4 h-4" />已全部写入</>
+                    : <><Check className="w-4 h-4" />确认写入勾选内容</>}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* 数据看板 */}
       <div className="grid grid-cols-3 gap-2">
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm py-3 text-center">
