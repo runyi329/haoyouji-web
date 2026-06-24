@@ -402,14 +402,18 @@ export default function AfOrderManage() {
     const s = typeof d === 'string' ? d : new Date(d).toISOString();
     return s.replace('T', ' ').substring(0, 19);
   };
-  // 日期格式化：只显示 YY-MM-DD（用于卡片标题）
+  // 日期格式化：显示 YY-MM-DD HH:mm:ss（北京时间）
   const formatDate = (d: any) => {
     if (!d) return "-";
-    const s = typeof d === 'string' ? d : new Date(d).toISOString();
-    const parts = s.replace('T', ' ').substring(0, 10); // "2026-04-14"
-    const [yyyy, mm, dd] = (parts || '').split('-');
+    // 转为北京时间（UTC+8）
+    const dt = typeof d === 'string' ? new Date(d) : new Date(d);
+    const bjDate = new Date(dt.getTime() + 8 * 60 * 60 * 1000);
+    const iso = bjDate.toISOString(); // UTC时间已+8h，直接截取
+    const [datePart, timePart] = iso.split('T');
+    const [yyyy, mm, dd] = (datePart || '').split('-');
     const yy = (yyyy || '').slice(2);
-    return `${yy}-${mm || ''}-${dd || ''}`;
+    const hms = (timePart || '').substring(0, 8); // HH:mm:ss
+    return `${yy}-${mm || ''}-${dd || ''} ${hms}`;
   };
 
   return (
