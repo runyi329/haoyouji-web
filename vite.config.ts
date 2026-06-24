@@ -205,12 +205,13 @@ export default defineConfig({
   },
   server: {
     host: true,
+    port: 5173,
     hmr: true,
     proxy: {
       "/api": {
-        target: "https://www.jiangyuchen.cn",
+        target: "http://localhost:3000",
         changeOrigin: true,
-        secure: true,
+        secure: false,
       },
     },
     watch: {

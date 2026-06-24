@@ -402,18 +402,19 @@ export default function AfOrderManage() {
     const s = typeof d === 'string' ? d : new Date(d).toISOString();
     return s.replace('T', ' ').substring(0, 19);
   };
-  // 日期格式化：显示 YY-MM-DD HH:mm:ss（北京时间）
+  // 日期格式化：显示 YY-MM-DD HH:mm:ss（北京时间，用于开仓时间）
   const formatDate = (d: any) => {
     if (!d) return "-";
-    // 转为北京时间（UTC+8）
     const dt = typeof d === 'string' ? new Date(d) : new Date(d);
-    const bjDate = new Date(dt.getTime() + 8 * 60 * 60 * 1000);
-    const iso = bjDate.toISOString(); // UTC时间已+8h，直接截取
-    const [datePart, timePart] = iso.split('T');
-    const [yyyy, mm, dd] = (datePart || '').split('-');
-    const yy = (yyyy || '').slice(2);
-    const hms = (timePart || '').substring(0, 8); // HH:mm:ss
-    return `${yy}-${mm || ''}-${dd || ''} ${hms}`;
+    // 转换为北京时间（UTC+8）
+    const bjTime = new Date(dt.getTime() + 8 * 60 * 60 * 1000);
+    const yy = String(bjTime.getUTCFullYear()).slice(2);
+    const mm = String(bjTime.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(bjTime.getUTCDate()).padStart(2, '0');
+    const hh = String(bjTime.getUTCHours()).padStart(2, '0');
+    const min = String(bjTime.getUTCMinutes()).padStart(2, '0');
+    const ss = String(bjTime.getUTCSeconds()).padStart(2, '0');
+    return `${yy}-${mm}-${dd} ${hh}:${min}:${ss}`;
   };
 
   return (
@@ -1666,7 +1667,7 @@ export default function AfOrderManage() {
                         />
                       ) : (
                         <span className="font-medium text-gray-900">
-                          {parseFloat(order.limitPrice).toLocaleString()} USDT
+                          {parseFloat(order.limitPrice).toLocaleString()} <span className="text-gray-400">u</span>
                         </span>
                       )}
                     </div>
@@ -1698,16 +1699,26 @@ export default function AfOrderManage() {
                         </div>
                       );
                     })()}
-                    {/* 实际投入（正单显示自己amount，赠单显示sourceAmount） */}
+                    {/* 实际投入（左列） */}
                     {(() => {
                       const srcAmt = parseFloat(order.sourceAmount || '0');
                       const selfAmt = parseFloat(order.amount || '0');
                       const investAmt = order.isGift ? srcAmt : selfAmt;
-                      if (investAmt <= 0) return null;
                       return (
-                        <div className="flex items-center gap-1 col-span-2">
+                        <div className="flex items-center gap-1">
                           <span className="text-gray-400 w-12 shrink-0">实际投入</span>
-                          <span className="font-medium text-gray-900">{investAmt.toFixed(2)} USDT</span>
+                          <span className="font-medium text-gray-900">{investAmt.toFixed(2)} <span className="text-gray-400">u</span></span>
+                        </div>
+                      );
+                    })()}
+                    {/* 订单价值（右列） */}
+                    {(() => {
+                      const amount = parseFloat(order.amount);
+                      const tradeValue = order.isGift ? amount : amount * 5.25;
+                      return (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-400 w-12 shrink-0">订单价值</span>
+                          <span className="text-gray-900 font-medium">{tradeValue.toFixed(2)} <span className="text-gray-400">u</span></span>
                         </div>
                       );
                     })()}
@@ -1720,20 +1731,9 @@ export default function AfOrderManage() {
                         <div className="flex items-center gap-1 col-span-2">
                           <span className="text-gray-400 w-12 shrink-0">赠送市值</span>
                           <span className="font-medium text-gray-900">
-                            {giftAmt.toFixed(2)} USDT
+                            {giftAmt.toFixed(2)} <span className="text-gray-400">u</span>
                             {ratio > 0 && <span className="font-normal text-gray-400 ml-1">({ratio.toFixed(4)}倍)</span>}
                           </span>
-                        </div>
-                      );
-                    })()}
-                    {/* 订单价值 */}
-                    {(() => {
-                      const amount = parseFloat(order.amount);
-                      const tradeValue = order.isGift ? amount : amount * 5.25;
-                      return (
-                        <div className="flex items-center gap-1 col-span-2">
-                          <span className="text-gray-400 w-12 shrink-0">订单价值</span>
-                          <span className="text-gray-900 font-medium">{tradeValue.toFixed(2)} USDT</span>
                         </div>
                       );
                     })()}
@@ -1742,7 +1742,7 @@ export default function AfOrderManage() {
                       <div className="flex items-center gap-1">
                         <span className="text-gray-400 w-12 shrink-0">卖出价</span>
                         <span className="font-medium text-gray-900">
-                          {parseFloat(order.sellPrice).toLocaleString()} USDT
+                          {parseFloat(order.sellPrice).toLocaleString()} <span className="text-gray-400">u</span>
                         </span>
                       </div>
                     )}
@@ -1770,12 +1770,20 @@ export default function AfOrderManage() {
                       const lowPrice = parseFloat((order as any).allTimeLowPrice);
                       const lowAt = (order as any).allTimeLowAt;
                       const lowDate = lowAt ? new Date(lowAt) : null;
-                      const fmtLow = lowDate ? `${lowDate.getMonth()+1}月${lowDate.getDate()}日` : '';
+                      const fmtLow = lowDate ? (() => {
+                        const bjLow = new Date(lowDate.getTime() + 8 * 60 * 60 * 1000);
+                        const mo = bjLow.getUTCMonth() + 1;
+                        const da = bjLow.getUTCDate();
+                        const hh = String(bjLow.getUTCHours()).padStart(2, '0');
+                        const mi = String(bjLow.getUTCMinutes()).padStart(2, '0');
+                        const sc = String(bjLow.getUTCSeconds()).padStart(2, '0');
+                        return `${mo}/${da} ${hh}:${mi}:${sc}`;
+                      })() : '';
                       return (
                         <div className="flex items-center gap-1 col-span-2">
                           <span className="text-gray-400 w-12 shrink-0">最低扫描</span>
                           <span className="font-medium text-blue-600">
-                            {lowPrice.toLocaleString()} USDT
+                            {lowPrice.toLocaleString()} <span className="text-gray-400">u</span>
                             {fmtLow && <span className="text-gray-400 ml-1">({fmtLow})</span>}
                           </span>
                         </div>
@@ -1805,23 +1813,16 @@ export default function AfOrderManage() {
                       const totalFee = dailyFee * holdDays;
                       const isPending = order.status === 'pending';
                       const isSold = order.sellStatus === 'sold';
-                      // 日期格式化函数
-                      const fmtDay = (d: Date) => `${d.getMonth()+1}月${d.getDate()}日`;
+                      // 日期格式化函数：M/D 格式
+                      const fmtDay = (d: Date) => `${d.getMonth()+1}/${d.getDate()}`;
                       return (
-                        <>
-                          <div className="flex items-center gap-1 col-span-2">
-                            <span className="text-gray-400 w-12 shrink-0">管理费</span>
-                            <span className={`font-medium ${isPending ? 'text-gray-400' : isSold ? 'text-gray-500' : 'text-gray-900'}`}>
-                              {totalFee.toFixed(4)} USDT
-                              {isPending && <span className="text-gray-400 font-normal ml-1">撤单则作废</span>}
-                              {isSold && <span className="text-red-400 font-normal ml-1">✓ 已停止计费</span>}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1 col-span-2">
-                            <span className="text-gray-400 w-12 shrink-0">计费区间</span>
-                            <span className="text-gray-500">{fmtDay(startDay)} → {fmtDay(endDay)}（共{holdDays}天，{dailyFee.toFixed(4)}/天）</span>
-                          </div>
-                        </>
+                        <div className="flex items-center gap-1 col-span-2">
+                          <span className="text-gray-400 w-12 shrink-0">管理费</span>
+                          <span className={`font-medium ${isPending ? 'text-gray-400' : isSold ? 'text-gray-500' : 'text-gray-900'}`}>
+                            {totalFee.toFixed(4)} <span className="text-gray-400">u</span>
+                          </span>
+                          <span className="text-gray-400 ml-1">({fmtDay(startDay)}→{fmtDay(endDay)} {holdDays}天 {dailyFee.toFixed(4)}/天{isPending ? ' 撤单则作废' : ''}{isSold ? ' ✓已停计' : ''})</span>
+                        </div>
                       );
                     })()}
                   </div>
