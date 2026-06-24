@@ -822,6 +822,7 @@ async function sendWeComImage(toUser: string, imageUrl: string): Promise<void> {
       body,
     });
     const uploadData = await uploadRes.json() as any;
+    console.log(`[KF-MAT] 上传企微返回:`, JSON.stringify(uploadData).substring(0, 200));
     if (uploadData.errcode !== 0 && uploadData.errcode !== undefined) {
       console.error("[WeCom] 上传临时素材失败:", uploadData.errmsg);
       // 降级：发送图片链接文字
@@ -917,6 +918,7 @@ async function sendWeComVideo(toUser: string, videoUrl: string, filename: string
       body,
     });
     const uploadData = await uploadRes.json() as any;
+    console.log(`[KF-MAT] 上传企微返回:`, JSON.stringify(uploadData).substring(0, 200));
     if (uploadData.errcode !== 0 && uploadData.errcode !== undefined) {
       console.error('[WeCom] 上传视频素材失败:', uploadData.errmsg);
       // 降级：发送原版链接
@@ -1003,6 +1005,7 @@ async function sendWeComFile(toUser: string, fileUrl: string, filename: string):
       body,
     });
     const uploadData = await uploadRes.json() as any;
+    console.log(`[KF-MAT] 上传企微返回:`, JSON.stringify(uploadData).substring(0, 200));
     if (uploadData.errcode !== 0 && uploadData.errcode !== undefined) {
       console.error('[WeCom] 上传文件素材失败:', uploadData.errmsg);
       await sendWeComMessage(toUser, `[文件] ${filename}\n${fileUrl}`);
@@ -1422,12 +1425,15 @@ async function sendKfMessage(openKfid: string, toUser: string, content: string):
 async function sendKfMaterial(openKfid: string, toUser: string, matType: string, storageUrl: string, title: string): Promise<void> {
   try {
     const token = await getAccessToken();
+    console.log(`[KF-MAT] 开始发送素材 type=${matType} url=${storageUrl.substring(0, 80)}`);
+    console.log(`[KF-MAT] 获取token成功`);
 
     // 1. 从云存储下载文件内容
     const fileRes = await fetch(storageUrl);
     if (!fileRes.ok) throw new Error(`下载素材失败: ${fileRes.status}`);
     const fileBuffer = Buffer.from(await fileRes.arrayBuffer());
     const contentType = fileRes.headers.get("content-type") || "application/octet-stream";
+    console.log(`[KF-MAT] 下载文件成功 size=${fileBuffer.length} contentType=${contentType}`);
 
     // 2. 上传到企微媒体库获取 media_id
     // 企微上传接口：POST https://qyapi.weixin.qq.com/cgi-bin/media/upload?access_token=xxx&type=image/video/file
@@ -1441,9 +1447,11 @@ async function sendKfMaterial(openKfid: string, toUser: string, matType: string,
     const formData = new FormData();
     const blob = new Blob([fileBuffer], { type: contentType });
     formData.append("media", blob, fileName);
+    console.log(`[KF-MAT] 开始上传企微 wecomType=${wecomType} fileName=${fileName}`);
 
     const uploadRes = await fetch(uploadUrl, { method: "POST", body: formData });
     const uploadData = await uploadRes.json() as any;
+    console.log(`[KF-MAT] 上传企微返回:`, JSON.stringify(uploadData).substring(0, 200));
     if (uploadData.errcode && uploadData.errcode !== 0) {
       throw new Error(`企微上传素材失败: errcode=${uploadData.errcode} errmsg=${uploadData.errmsg}`);
     }
