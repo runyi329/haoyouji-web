@@ -1577,6 +1577,7 @@ router.get("/api/wecom/materials/for-ai", async (req: Request, res: Response) =>
 
 // -----------------------------------------------------------
 // OCR识别图片中的文字（用于① AI 智能整理上传图片）
+// 直接调用 Forge API（支持视觉），绕过 invokeLLM 避免参数兼容问题
 // -----------------------------------------------------------
 router.post('/api/wecom/ocr-image', async (req: any, res: any) => {
   const { imageBase64, mimeType = 'image/jpeg' } = req.body;
@@ -1584,21 +1585,42 @@ router.post('/api/wecom/ocr-image', async (req: any, res: any) => {
     return res.json({ ok: false, error: '缺少图片数据' });
   }
   try {
-    const { invokeLLM } = await import('./_core/llm');
-    const result = await invokeLLM({
+    // 优先使用 Forge API（支持视觉），fallback 到 WECOM_DEEPSEEK_API_KEY（不支持视觉，仅文字）
+    const forgeApiKey = process.env.BUILT_IN_FORGE_API_KEY || '';
+    const forgeApiUrl = process.env.BUILT_IN_FORGE_API_URL || 'https://forge.manus.im';
+    if (!forgeApiKey) {
+      return res.json({ ok: false, error: 'OCR 功能需要配置 BUILT_IN_FORGE_API_KEY' });
+    }
+    const apiUrl = `${forgeApiUrl.replace(/\/$/, '')}/v1/chat/completions`;
+    const payload = {
+      model: 'gemini-2.5-flash',
       messages: [
         {
           role: 'user',
           content: [
-            { type: 'text', text: '请识别图片中的所有文字内容，保持原有格式和顺序，直接返回文字内容，不要添加任何解释或前缀。' },
+            { type: 'text', text: '请识别图片中的所有文字内容，保持原有格式和顺序，直接返回文字内容，不要添加任何解释或前缀。如果图片中没有文字，请回复"图片中没有文字"。' },
             { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
           ],
         },
       ],
-      featureKey: 'wecom_ocr',
+      max_tokens: 4096,
+    };
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${forgeApiKey}`,
+      },
+      body: JSON.stringify(payload),
     });
-    const rawContent = result?.choices?.[0]?.message?.content;
-    const text = typeof rawContent === 'string' ? rawContent : (Array.isArray(rawContent) ? (rawContent as any[]).map((p: any) => p.text || '').join('') : '');
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('[OCR] API 调用失败:', response.status, errText.substring(0, 200));
+      return res.json({ ok: false, error: `图片识别服务暂时不可用（${response.status}）` });
+    }
+    const data = await response.json() as any;
+    const rawContent = data?.choices?.[0]?.message?.content;
+    const text = typeof rawContent === 'string' ? rawContent : '';
     if (text) {
       res.json({ ok: true, text });
     } else {
