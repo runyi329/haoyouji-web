@@ -3387,6 +3387,9 @@ ${step0Extra.trim()}`
                     </div>
                   )}
 
+                  {/* 素材库 */}
+                  <MaterialsCard channelId={KF_CHANNEL_ID} />
+
                   {/* 私人知识库管理抽屉 */}
                   {showKbDrawer && (
                     <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => { setShowKbDrawer(false); setKbExpandedSource(null); }}>
