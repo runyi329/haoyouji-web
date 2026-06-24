@@ -1,5 +1,437 @@
 [
   {
+    "hash": "c42a2c12203ef9e29ff777b2c964c4ca6c2cce4a",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T14:08:37+00:00",
+    "message": "fix: wecom-materials存JPG格式，sendKfMaterial用绝对路径加载sharp转换WebP",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "wecom-materials存JPG格式，sendKfMaterial用绝对路径加载sharp转换WebP"
+  },
+  {
+    "hash": "16c3a51547f52cab7c344016bd7ed75e625ffee6",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T14:02:57+00:00",
+    "message": "fix: WebP转JPG再上传企微，解决40123格式错误",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "WebP转JPG再上传企微，解决40123格式错误"
+  },
+  {
+    "hash": "c3d4acf235be37e1ac6c8d92ecc1692034f0e317",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T13:58:42+00:00",
+    "message": "debug: 在sendKfMaterial每步加详细日志",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "debug: 在sendKfMaterial每步加详细日志"
+  },
+  {
+    "hash": "9cf298cafb4e8272bc610bd02009b73af344c65f",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T13:51:19+00:00",
+    "message": "debug: 在素材发送循环前加日志确认数组长度",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "debug: 在素材发送循环前加日志确认数组长度"
+  },
+  {
+    "hash": "81143655d5837144b5a106dd0170cc3ca545ebc8",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T13:45:40+00:00",
+    "message": "fix: 素材发送改为系统层面关键词匹配，不依赖AI加[SEND_MAT]标记",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "素材发送改为系统层面关键词匹配，不依赖AI加[SEND_MAT]标记"
+  },
+  {
+    "hash": "03d5b879f8157923232a8be01738b71de3d4cf9a",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T13:36:22+00:00",
+    "message": "fix: 加强素材发送指令，增加示例让AI严格遵从[SEND_MAT]标记",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "加强素材发送指令，增加示例让AI严格遵从[SEND_MAT]标记"
+  },
+  {
+    "hash": "6ee8194deb25bad7ec6db6306fd0b0005d09994b",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T13:19:04+00:00",
+    "message": "debug: 打印素材查询异常和kfChannelId",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "debug: 打印素材查询异常和kfChannelId"
+  },
+  {
+    "hash": "0070b93700e2846f2d51056f65e719a4b6505e1c",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T13:07:26+00:00",
+    "message": "debug: 加素材库查询和AI回复日志",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "debug: 加素材库查询和AI回复日志"
+  },
+  {
+    "hash": "b6b59621a2ec67ed24df342bfe2e83089e4e3f12",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T12:59:59+00:00",
+    "message": "fix: 修复素材库AI触发格式，统一标识符并加强指令",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复素材库AI触发格式，统一标识符并加强指令"
+  },
+  {
+    "hash": "ce8a3fde9caf3168090a2a457141c61193514206",
+    "author": "github-actions[bot]",
+    "date": "2026-06-24T12:12:15+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "71efa3d2c43ebc03e121da06f6232193a844cc04",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T11:54:50+00:00",
+    "message": "fix: 素材库卡片移到AIBrainTab第③层知识库中，修复未显示问题",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "素材库卡片移到AIBrainTab第③层知识库中，修复未显示问题"
+  },
+  {
+    "hash": "fcd946ca8dd1bfb6102dc4934e55848beec2bceb",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T11:37:19+00:00",
+    "message": "fix: 素材库上传改用腾讯云COS，不再使用Manus内置存储代理",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "素材库上传改用腾讯云COS，不再使用Manus内置存储代理"
+  },
+  {
+    "hash": "54a1ea81da3144390894f9e3e8775cca09564a63",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T11:22:08+00:00",
+    "message": "feat: 素材库功能 - 上传图片/文件+自然语言触发描述，AI自动判断发送",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "素材库功能 - 上传图片/文件+自然语言触发描述，AI自动判断发送"
+  },
+  {
+    "hash": "e432b40229219854401ec9c04d7c6e248c52738d",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T10:48:44+00:00",
+    "message": "feat: 推广链接支持点击跳转，二维码改为全屏覆盖层展示",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "推广链接支持点击跳转，二维码改为全屏覆盖层展示"
+  },
+  {
+    "hash": "e4e7a0b6bd23d0b7e309ccb7c013f21124da6724",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T10:04:45+00:00",
+    "message": "fix: 修正model_used日志记录为实际调用模型名(dsReply.modelUsed)",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修正model_used日志记录为实际调用模型名(dsReply.modelUsed)"
+  },
+  {
+    "hash": "70383df8fedc4658f55061bc03f20aba38f48581",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T09:51:36+00:00",
+    "message": "fix(voice): 修复forgeApiUrl重复/v1导致语音识别404的问题",
+    "type": "fix",
+    "scope": "voice",
+    "cleanMessage": "修复forgeApiUrl重复/v1导致语音识别404的问题"
+  },
+  {
+    "hash": "33b5ac818ae17a1bab362988da26fc94d725e982",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T09:47:04+00:00",
+    "message": "fix(debug): 扩大日志容量至2000条，AF扫描日志采样避免冲刷KF日志",
+    "type": "fix",
+    "scope": "debug",
+    "cleanMessage": "扩大日志容量至2000条，AF扫描日志采样避免冲刷KF日志"
+  },
+  {
+    "hash": "4efd05674753942304a397a366d29e803da8c2d6",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T09:31:59+00:00",
+    "message": "fix(voice): 在handleKfMsgOrEvent入口加调试日志，排查语音消息未处理问题",
+    "type": "fix",
+    "scope": "voice",
+    "cleanMessage": "在handleKfMsgOrEvent入口加调试日志，排查语音消息未处理问题"
+  },
+  {
+    "hash": "5c5c1e32c725ddaaa20954005a1cfe7b54f6e0bd",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T08:56:58+00:00",
+    "message": "fix: 语音消息调试日志+voice_format:0+debug-logs接口",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "语音消息调试日志+voice_format:0+debug-logs接口"
+  },
+  {
+    "hash": "15fa4838c5224b1c18129eb48469746bcb614ca9",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T08:36:23+00:00",
+    "message": "fix: 注入BUILT_IN_FORGE_API_KEY和URL到服务器.env，修复语音识别无法调用的问题",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "注入BUILT_IN_FORGE_API_KEY和URL到服务器.env，修复语音识别无法调用的问题"
+  },
+  {
+    "hash": "6c51a272d58cd2e86a198eb2b262a7a5a0f1249d",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T08:28:07+00:00",
+    "message": "fix: 补全voice_asr场景自动INSERT+修正SQL字段名duration_sec",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "补全voice_asr场景自动INSERT+修正SQL字段名duration_sec"
+  },
+  {
+    "hash": "36fce8a68a5a03274eaf0a024f17ce25d2248ad2",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T08:22:13+00:00",
+    "message": "feat: 语音消息接入+API用量统计+差量合并+平台版AI辅助整理",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "语音消息接入+API用量统计+差量合并+平台版AI辅助整理"
+  },
+  {
+    "hash": "8c15fd9bcce79e6c0e7721422bb9694dc0e2adb3",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T07:53:47+00:00",
+    "message": "feat: 平台管理新增零步AI辅助整理入口，支持选库/全部库，写入平台共享规则与共享库",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "平台管理新增零步AI辅助整理入口，支持选库/全部库，写入平台共享规则与共享库"
+  },
+  {
+    "hash": "bf4224e039b2e5b3c40044670b2e3ad7c95f9a10",
+    "author": "github-actions[bot]",
+    "date": "2026-06-24T07:43:07+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "464591d5d044a8b872d827d80ff05c309075fc64",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T07:38:20+00:00",
+    "message": "fix: AI归类改用action字段并加理由一致性兜底，修正非重复内容被误去重",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "AI归类改用action字段并加理由一致性兜底，修正非重复内容被误去重"
+  },
+  {
+    "hash": "7adaf46c2346c663ecb899bb052d272d2e66bbe2",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T07:32:55+00:00",
+    "message": "feat: AI辅助整理升级为智能归类（建议加入/已去重 add/skip）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "AI辅助整理升级为智能归类（建议加入/已去重 add/skip）"
+  },
+  {
+    "hash": "6fe5e533975ed2e9e4750884a961d4e6e37098bf",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T07:02:32+00:00",
+    "message": "fix: 修复getAIConfigs/saveAIConfig的db调用方式(await+去掉.promise())",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复getAIConfigs/saveAIConfig的db调用方式(await+去掉.promise())"
+  },
+  {
+    "hash": "266fb47a97a2c4933ba284f77988d07990e84d49",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T06:58:11+00:00",
+    "message": "feat: AI模型配置管理 - 平台管理新增AI模型Tab，7个场景独立配置，含价格说明下拉框",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "AI模型配置管理 - 平台管理新增AI模型Tab，7个场景独立配置，含价格说明下拉框"
+  },
+  {
+    "hash": "b68abd767febb286d960be1a04f0efcbf2b558f0",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T06:23:56+00:00",
+    "message": "fix: 图片识别模型名从deepseek-vl2改为deepseek-chat(V4内置视觉能力)",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "图片识别模型名从deepseek-vl2改为deepseek-chat(V4内置视觉能力)"
+  },
+  {
+    "hash": "b8f4ed8423449d45efbb67fed288b3814f948bc5",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T06:04:16+00:00",
+    "message": "feat: 平台共享知识库改造为多公共库管理+分身多对多调用",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "平台共享知识库改造为多公共库管理+分身多对多调用"
+  },
+  {
+    "hash": "6760e512209a0bf223933f56517bab7fd3b69ecb",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T05:36:38+00:00",
+    "message": "feat: 接入腾讯混元embedding实现知识库/规则语义检索与查重",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "接入腾讯混元embedding实现知识库/规则语义检索与查重"
+  },
+  {
+    "hash": "b12a37be7035b9550e8f83f0d3b7dc04d58a4783",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T04:38:22+00:00",
+    "message": "fix: 顶部刷新按钮通过refreshKey触发AIBrainTab重载，不跳转页面",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "顶部刷新按钮通过refreshKey触发AIBrainTab重载，不跳转页面"
+  },
+  {
+    "hash": "604f83dfb6136b4f136bc3714b12fb1d19bdf216",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T04:34:06+00:00",
+    "message": "fix: 刷新按钮改回window.location.reload，渠道刷新按钮文字改为刷新",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "刷新按钮改回window.location.reload，渠道刷新按钮文字改为刷新"
+  },
+  {
+    "hash": "67dfb8d1f298ee4f1019e9f49b74f8857fe204de",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T04:29:53+00:00",
+    "message": "feat: 刷新按钮停留本页 + 渠道强制刷新改为双新",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "刷新按钮停留本页 + 渠道强制刷新改为双新"
+  },
+  {
+    "hash": "7b34c85d8760fdda6ef2b58684ada8f4f6b36ca4",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T04:24:00+00:00",
+    "message": "feat: 刷新按钮移至顶部绿色标题栏右侧，点击刷新整个页面",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "刷新按钮移至顶部绿色标题栏右侧，点击刷新整个页面"
+  },
+  {
+    "hash": "ab47ef588a7be5c5a14227cd8decf4add29f7fa3",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T04:19:11+00:00",
+    "message": "feat: 加刷新按钮 + 写入成功后自动刷新数据",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "加刷新按钮 + 写入成功后自动刷新数据"
+  },
+  {
+    "hash": "56f23d4ec400197c2db45cf3d2a388de1e883c0d",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T04:12:56+00:00",
+    "message": "fix: 修复prompt_additions内容空白 + 新增查重报告（重复/相似/全新）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复prompt_additions内容空白 + 新增查重报告（重复/相似/全新）"
+  },
+  {
+    "hash": "d557c68bb20ff1eb3b99930e34e500c21d90f2b4",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T04:05:07+00:00",
+    "message": "feat: 共享规则详情弹窗 + 知识库抽屉点击来源展开条目列表",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "共享规则详情弹窗 + 知识库抽屉点击来源展开条目列表"
+  },
+  {
+    "hash": "afd59e7fa479d5fcf1bd73368ebe654a29b726d5",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T04:00:05+00:00",
+    "message": "feat: 第0步输入区加「补充说明」框，图片/文字内容与需求描述分层，AI综合理解",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "第0步输入区加「补充说明」框，图片/文字内容与需求描述分层，AI综合理解"
+  },
+  {
+    "hash": "15bd40b89d3c7128c68e4d56877cd0c541be9974",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T03:55:07+00:00",
+    "message": "feat: 知识库来源标签「手动录入」→「AI整理」，历史数据已同步更新",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "知识库来源标签「手动录入」→「AI整理」，历史数据已同步更新"
+  },
+  {
+    "hash": "13601c2149c2a7864a94af8cbd3e220afe212f91",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T03:49:22+00:00",
+    "message": "feat: 共享知识库卡片加摘要预览（5条）+ 编辑抽屉，与私人知识库风格一致",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "共享知识库卡片加摘要预览（5条）+ 编辑抽屉，与私人知识库风格一致"
+  },
+  {
+    "hash": "77e8a3341eb3aee4166eae2b69712da2329da2c6",
+    "author": "haoyouji-deploy",
+    "date": "2026-06-24T03:44:24+00:00",
+    "message": "feat: AI大脑页面优化 - 知识库/规则卡片简化标题、纯预览模式、编辑抽屉、DigitalTwinCard联动KB统计",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "AI大脑页面优化 - 知识库/规则卡片简化标题、纯预览模式、编辑抽屉、DigitalTwinCard联动KB统计"
+  },
+  {
+    "hash": "fa2005ed5d5da9bfdcb8e4335e56c8c8ca932c11",
+    "author": "Manus Deploy",
+    "date": "2026-06-24T01:34:10+00:00",
+    "message": "fix: 替换客服推广二维码为官方图片，解决扫码无法连接问题",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "替换客服推广二维码为官方图片，解决扫码无法连接问题"
+  },
+  {
+    "hash": "fb62c427866c6902e594554abf0ca957cee0124b",
+    "author": "Manus Deploy",
+    "date": "2026-06-24T01:20:23+00:00",
+    "message": "feat: AA账本汇总日历节假日样式对齐 + 今日变动列完整功能",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "AA账本汇总日历节假日样式对齐 + 今日变动列完整功能"
+  },
+  {
+    "hash": "97f354546719d4ec68cad7d50a97bcf9f1ee8115",
+    "author": "Manus",
+    "date": "2026-06-23T23:50:42+00:00",
+    "message": "feat: 搜索汇总卡片增强 + 删除WorkBuddy按钮",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "搜索汇总卡片增强 + 删除WorkBuddy按钮"
+  },
+  {
+    "hash": "48c6478caaab17d4936fe2ff9a51720f5df0b759",
+    "author": "Manus",
+    "date": "2026-06-23T23:24:03+00:00",
+    "message": "feat: 普通账本搜索功能增强",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "普通账本搜索功能增强"
+  },
+  {
+    "hash": "eadf2e2b3cb5765c37dc546bf0c74eed6154f975",
+    "author": "github-actions[bot]",
+    "date": "2026-06-23T17:56:08+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "012be4ad54b5f6da9fdc81f219f7ead8a07b4577",
+    "author": "Manus Deploy",
+    "date": "2026-06-23T15:32:21+00:00",
+    "message": "feat: 新增DRAM和MU币种支持（价格扫描+前后端枚举）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "新增DRAM和MU币种支持（价格扫描+前后端枚举）"
+  },
+  {
     "hash": "51245d910e6b00ead30b90aecf48d83bff062913",
     "author": "Manus Deploy",
     "date": "2026-06-23T13:54:13+00:00",

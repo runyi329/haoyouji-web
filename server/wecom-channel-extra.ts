@@ -1575,4 +1575,39 @@ router.get("/api/wecom/materials/for-ai", async (req: Request, res: Response) =>
   }
 });
 
+// -----------------------------------------------------------
+// OCR识别图片中的文字（用于① AI 智能整理上传图片）
+// -----------------------------------------------------------
+router.post('/api/wecom/ocr-image', async (req: any, res: any) => {
+  const { imageBase64, mimeType = 'image/jpeg' } = req.body;
+  if (!imageBase64) {
+    return res.json({ ok: false, error: '缺少图片数据' });
+  }
+  try {
+    const { invokeLLM } = await import('./_core/llm');
+    const result = await invokeLLM({
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: '请识别图片中的所有文字内容，保持原有格式和顺序，直接返回文字内容，不要添加任何解释或前缀。' },
+            { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
+          ],
+        },
+      ],
+      featureKey: 'wecom_ocr',
+    });
+    const rawContent = result?.choices?.[0]?.message?.content;
+    const text = typeof rawContent === 'string' ? rawContent : (Array.isArray(rawContent) ? (rawContent as any[]).map((p: any) => p.text || '').join('') : '');
+    if (text) {
+      res.json({ ok: true, text });
+    } else {
+      res.json({ ok: false, error: '图片识别失败，未返回内容' });
+    }
+  } catch (e: any) {
+    console.error('[OCR] 图片识别失败:', e);
+    res.json({ ok: false, error: e?.message || '图片识别失败' });
+  }
+});
+
 export default router;
