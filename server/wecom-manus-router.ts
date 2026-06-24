@@ -1436,18 +1436,31 @@ async function sendKfMaterial(openKfid: string, toUser: string, matType: string,
     console.log(`[KF-MAT] 下载文件成功 size=${fileBuffer.length} contentType=${contentType}`);
 
     // 2. 上传到企微媒体库获取 media_id
-    // 企微上传接口：POST https://qyapi.weixin.qq.com/cgi-bin/media/upload?access_token=xxx&type=image/video/file
     let wecomType = "file";
     if (matType === "image") wecomType = "image";
     else if (matType === "video") wecomType = "video";
 
+    // 企微不支持WebP，如果是图片且为WebP格式，先用sharp转成JPG
+    let uploadBuffer = fileBuffer;
+    let uploadContentType = contentType;
+    if (wecomType === "image" && (contentType.includes("webp") || storageUrl.includes(".webp"))) {
+      try {
+        const sharp = require("sharp");
+        uploadBuffer = await sharp(fileBuffer).jpeg({ quality: 90 }).toBuffer();
+        uploadContentType = "image/jpeg";
+        console.log(`[KF-MAT] WebP转JPG成功 size=${uploadBuffer.length}`);
+      } catch (sharpErr) {
+        console.error(`[KF-MAT] WebP转JPG失败，直接上传原图:`, sharpErr);
+      }
+    }
+
     const uploadUrl = `https://qyapi.weixin.qq.com/cgi-bin/media/upload?access_token=${token}&type=${wecomType}`;
-    const fileName = title.replace(/[^a-zA-Z0-9\u4e00-\u9fa5._-]/g, "_") + (matType === "image" ? ".jpg" : matType === "video" ? ".mp4" : ".file");
+    const fileName = title.replace(/[^a-zA-Z0-9\u4e00-\u9fa5._-]/g, "_") + (wecomType === "image" ? ".jpg" : wecomType === "video" ? ".mp4" : ".file");
 
     const formData = new FormData();
-    const blob = new Blob([fileBuffer], { type: contentType });
+    const blob = new Blob([uploadBuffer], { type: uploadContentType });
     formData.append("media", blob, fileName);
-    console.log(`[KF-MAT] 开始上传企微 wecomType=${wecomType} fileName=${fileName}`);
+    console.log(`[KF-MAT] 开始上传企微 wecomType=${wecomType} fileName=${fileName} size=${uploadBuffer.length}`);
 
     const uploadRes = await fetch(uploadUrl, { method: "POST", body: formData });
     const uploadData = await uploadRes.json() as any;
