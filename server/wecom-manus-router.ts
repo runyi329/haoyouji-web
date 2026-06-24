@@ -1420,6 +1420,7 @@ async function sendKfMessage(openKfid: string, toUser: string, content: string):
 // 流程：syncMsg拉取 → 知识库检索 → DeepSeek回复 → kf/send_msg发回 → 写日志
 // -----------------------------------------------------------
 async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: string): Promise<void> {
+  console.log(`[KF-ENTRY] handleKfMsgOrEvent 被调用 token长度=${callbackToken.length} openKfId=${callbackOpenKfId}`);
   try {
     const token = await getAccessToken();
 
