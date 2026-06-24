@@ -1493,17 +1493,23 @@ router.post("/api/wecom/materials/upload", upload.single("file"), async (req: Re
     if (mimeType.startsWith("image/")) matType = "image";
     else if (mimeType.startsWith("video/")) matType = "video";
 
-    // 上传到云存储
-    const { storagePut } = await import("./storage");
-    const storageKey = `wecom_materials/${channelId}/${Date.now()}_${originalName.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-    const { url: storageUrl } = await storagePut(storageKey, fileBuffer, mimeType);
+    // 上传到腾讯云COS
+    let storageUrl: string;
+    const safeFilename = `${channelId}/${Date.now()}_${originalName.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+    if (mimeType.startsWith("image/")) {
+      const { uploadImageToCOS } = await import("./cos-upload");
+      storageUrl = await uploadImageToCOS(fileBuffer, "wecom-materials", safeFilename);
+    } else {
+      const { uploadFileToCOS } = await import("./cos-upload");
+      storageUrl = await uploadFileToCOS(fileBuffer, "wecom-materials", safeFilename, mimeType);
+    }
 
     // 写入数据库
     const displayTitle = title || originalName;
     const [result] = await (conn as any).execute(
       `INSERT INTO wecom_materials (channel_id, type, title, description, storage_url, storage_key, file_size, mime_type)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [channelId, matType, displayTitle, description, storageUrl, storageKey, fileSize, mimeType]
+      [channelId, matType, displayTitle, description, storageUrl, safeFilename, fileSize, mimeType]
     );
     const insertId = (result as any).insertId;
 
