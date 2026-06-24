@@ -1568,13 +1568,25 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
       let kbContext = "";
       if (dbConn) {
         try {
-          // 收集需要检索的 kb_id 列表：系统默认(is_system=1) + 当前渠道私有
+          // 收集需要检索的 kb_id 列表：该分身绑定的公共库 + 当前渠道私有库
           const kbIdSet = new Set<number>();
-          // 系统默认知识库（所有渠道共享）
-          const [sysKbRows] = await (dbConn as any).execute(
-            "SELECT id FROM wecom_knowledge_bases WHERE is_system = 1 ORDER BY id"
-          );
-          for (const r of (sysKbRows as any[])) kbIdSet.add(r.id);
+          // 该分身绑定的平台公共知识库（多对多，分身可自选）
+          try {
+            const [boundKbRows] = await (dbConn as any).execute(
+              `SELECT sk.kb_id FROM wecom_channel_shared_kb sk
+               JOIN wecom_knowledge_bases kb ON sk.kb_id = kb.id
+               WHERE sk.channel_id = ? AND kb.is_shared = 1`,
+              [kfChannelId]
+            );
+            for (const r of (boundKbRows as any[])) kbIdSet.add(r.kb_id);
+          } catch (bindErr) {
+            // 绑定表不存在或异常时，兜底回退到旧的 is_system 全继承逻辑
+            console.error("[KF] 读取公共库绑定失败，回退 is_system:", bindErr);
+            const [sysKbRows] = await (dbConn as any).execute(
+              "SELECT id FROM wecom_knowledge_bases WHERE is_system = 1 ORDER BY id"
+            );
+            for (const r of (sysKbRows as any[])) kbIdSet.add(r.id);
+          }
           // 当前渠道私有知识库
           if (kbId) kbIdSet.add(kbId);
           // 如果没有任何知识库，跳过
@@ -3819,6 +3831,116 @@ router.delete("/api/wecom/knowledge-bases/items/:itemId", async (req: Request, r
   } catch (e) {
     res.status(500).json({ error: "删除失败" });
   } finally {
+  }
+});
+
+// ==================== 平台公共知识库管理接口（多库 + 分身多对多绑定） ====================
+
+// 获取所有公共知识库列表（is_shared=1）
+router.get("/api/wecom/shared-kbs", async (_req: Request, res: Response) => {
+  const conn = await getDbConnection();
+  try {
+    const [rows] = await (conn as any).execute(
+      `SELECT kb.id, kb.name, kb.description, kb.created_at, kb.updated_at,
+              COUNT(ki.id) AS item_count
+       FROM wecom_knowledge_bases kb
+       LEFT JOIN wecom_knowledge_items ki ON ki.kb_id = kb.id
+       WHERE kb.is_shared = 1
+       GROUP BY kb.id
+       ORDER BY kb.id`
+    );
+    res.json(rows);
+  } catch (e) {
+    console.error("[公共库] 列表获取失败:", e);
+    res.status(500).json({ error: "获取失败" });
+  }
+});
+
+// 新建公共知识库
+router.post("/api/wecom/shared-kbs", async (req: Request, res: Response) => {
+  const { name, description } = req.body;
+  if (!name || !String(name).trim()) return res.status(400).json({ error: "库名不能为空" });
+  const conn = await getDbConnection();
+  try {
+    const [result] = await (conn as any).execute(
+      `INSERT INTO wecom_knowledge_bases (name, description, channel_type, channel_id, is_system, is_shared)
+       VALUES (?, ?, 'kf', 0, 0, 1)`,
+      [String(name).trim(), description || null]
+    );
+    res.json({ ok: true, id: (result as any).insertId });
+  } catch (e) {
+    console.error("[公共库] 新建失败:", e);
+    res.status(500).json({ error: "新建失败" });
+  }
+});
+
+// 重命名/编辑公共知识库
+router.put("/api/wecom/shared-kbs/:kbId", async (req: Request, res: Response) => {
+  const { kbId } = req.params;
+  const { name, description } = req.body;
+  const conn = await getDbConnection();
+  try {
+    await (conn as any).execute(
+      `UPDATE wecom_knowledge_bases SET name = COALESCE(?, name), description = ?, updated_at = NOW()
+       WHERE id = ? AND is_shared = 1`,
+      [name ? String(name).trim() : null, description ?? null, kbId]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[公共库] 更新失败:", e);
+    res.status(500).json({ error: "更新失败" });
+  }
+});
+
+// 删除公共知识库（同时清理绑定关系与库内条目）
+router.delete("/api/wecom/shared-kbs/:kbId", async (req: Request, res: Response) => {
+  const { kbId } = req.params;
+  const conn = await getDbConnection();
+  try {
+    await (conn as any).execute(`DELETE FROM wecom_channel_shared_kb WHERE kb_id = ?`, [kbId]);
+    await (conn as any).execute(`DELETE FROM wecom_knowledge_items WHERE kb_id = ?`, [kbId]);
+    await (conn as any).execute(`DELETE FROM wecom_knowledge_bases WHERE id = ? AND is_shared = 1`, [kbId]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[公共库] 删除失败:", e);
+    res.status(500).json({ error: "删除失败" });
+  }
+});
+
+// 查询某分身已绑定的公共库 id 列表
+router.get("/api/wecom/channels/:channelId/shared-kbs", async (req: Request, res: Response) => {
+  const { channelId } = req.params;
+  const conn = await getDbConnection();
+  try {
+    const [rows] = await (conn as any).execute(
+      `SELECT kb_id FROM wecom_channel_shared_kb WHERE channel_id = ?`,
+      [channelId]
+    );
+    res.json({ kb_ids: (rows as any[]).map((r) => r.kb_id) });
+  } catch (e) {
+    console.error("[公共库] 查询分身绑定失败:", e);
+    res.status(500).json({ error: "获取失败" });
+  }
+});
+
+// 设置某分身绑定的公共库（全量覆盖）
+router.put("/api/wecom/channels/:channelId/shared-kbs", async (req: Request, res: Response) => {
+  const { channelId } = req.params;
+  const { kb_ids } = req.body;
+  if (!Array.isArray(kb_ids)) return res.status(400).json({ error: "kb_ids 必须为数组" });
+  const conn = await getDbConnection();
+  try {
+    await (conn as any).execute(`DELETE FROM wecom_channel_shared_kb WHERE channel_id = ?`, [channelId]);
+    for (const kbId of kb_ids) {
+      await (conn as any).execute(
+        `INSERT IGNORE INTO wecom_channel_shared_kb (channel_id, kb_id) VALUES (?, ?)`,
+        [channelId, kbId]
+      );
+    }
+    res.json({ ok: true, count: kb_ids.length });
+  } catch (e) {
+    console.error("[公共库] 设置分身绑定失败:", e);
+    res.status(500).json({ error: "保存失败" });
   }
 });
 

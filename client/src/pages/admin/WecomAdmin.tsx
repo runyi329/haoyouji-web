@@ -4,7 +4,8 @@ import {
   ArrowLeft, RefreshCw, Trash2, Edit2, Plus, Check, X, Bot,
   Zap, MessageSquare, User, BarChart2, Menu, ChevronRight, ChevronDown,
   Clock, Settings, AlertCircle, PlayCircle, StopCircle, Coins, Loader2,
-  Sparkles, Save, ToggleLeft, ToggleRight, Ban, Shield, Camera, Pencil, ImageIcon, FileText
+  Sparkles, Save, ToggleLeft, ToggleRight, Ban, Shield, Camera, Pencil, ImageIcon, FileText,
+  FolderPlus, Library, ArrowRight
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -2847,21 +2848,74 @@ function PlatformRulesTab() {
 }
 
 // 平台共享 Tab：上方平台共享指令库 + 下方平台共享知识库
+interface SharedKb { id: number; name: string; description?: string | null; item_count: number; }
+
 function PlatformSharedTab() {
-  const [kbStats, setKbStats] = useState<{ item_count: number; file_count: number; char_count: number } | null>(null);
-  const [kbLoading, setKbLoading] = useState(true);
   // 指令区块展开/折叠
   const [rulesOpen, setRulesOpen] = useState(true);
-  // 知识库展开/折叠
+  // 知识库区块展开/折叠
   const [kbOpen, setKbOpen] = useState(true);
+  // 公共库列表
+  const [sharedKbs, setSharedKbs] = useState<SharedKb[]>([]);
+  const [kbLoading, setKbLoading] = useState(true);
+  // 当前进入管理的库（null = 列表视图）
+  const [activeKb, setActiveKb] = useState<SharedKb | null>(null);
+  // 新建/重命名弹窗
+  const [showKbModal, setShowKbModal] = useState(false);
+  const [editingKb, setEditingKb] = useState<SharedKb | null>(null);
+  const [kbNameDraft, setKbNameDraft] = useState("");
+  const [kbDescDraft, setKbDescDraft] = useState("");
+  const [savingKb, setSavingKb] = useState(false);
+  const [deletingKb, setDeletingKb] = useState<SharedKb | null>(null);
 
-  useEffect(() => {
-    fetch('/api/wecom/ch/kb/stats?channel_id=2')
-      .then(r => r.json())
-      .then(d => { if (d.ok) setKbStats(d); })
-      .catch(() => {})
-      .finally(() => setKbLoading(false));
-  }, []);
+  async function loadSharedKbs() {
+    setKbLoading(true);
+    try {
+      const r = await fetch('/api/wecom/shared-kbs');
+      const d = await r.json();
+      if (Array.isArray(d)) setSharedKbs(d.map((k: any) => ({ ...k, item_count: Number(k.item_count || 0) })));
+    } catch {} finally { setKbLoading(false); }
+  }
+
+  useEffect(() => { loadSharedKbs(); }, []);
+
+  const totalItems = sharedKbs.reduce((s, k) => s + (k.item_count || 0), 0);
+
+  function openCreate() {
+    setEditingKb(null); setKbNameDraft(""); setKbDescDraft(""); setShowKbModal(true);
+  }
+  function openRename(kb: SharedKb) {
+    setEditingKb(kb); setKbNameDraft(kb.name); setKbDescDraft(kb.description || ""); setShowKbModal(true);
+  }
+  async function handleSaveKb() {
+    if (!kbNameDraft.trim()) { toast.error("请输入库名"); return; }
+    setSavingKb(true);
+    try {
+      if (editingKb) {
+        const r = await fetch(`/api/wecom/shared-kbs/${editingKb.id}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: kbNameDraft.trim(), description: kbDescDraft.trim() || null }),
+        });
+        if ((await r.json()).ok) { toast.success("已保存"); setShowKbModal(false); loadSharedKbs(); }
+        else toast.error("保存失败");
+      } else {
+        const r = await fetch('/api/wecom/shared-kbs', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: kbNameDraft.trim(), description: kbDescDraft.trim() || null }),
+        });
+        if ((await r.json()).ok) { toast.success("已创建"); setShowKbModal(false); loadSharedKbs(); }
+        else toast.error("创建失败");
+      }
+    } catch { toast.error("网络错误"); } finally { setSavingKb(false); }
+  }
+  async function handleDeleteKb() {
+    if (!deletingKb) return;
+    try {
+      const r = await fetch(`/api/wecom/shared-kbs/${deletingKb.id}`, { method: 'DELETE' });
+      if ((await r.json()).ok) { toast.success("已删除"); setDeletingKb(null); loadSharedKbs(); }
+      else toast.error("删除失败");
+    } catch { toast.error("删除失败"); }
+  }
 
   return (
     <div className="space-y-4">
@@ -2879,8 +2933,8 @@ function PlatformSharedTab() {
           </div>
           <div className="bg-white/10 rounded-xl p-3">
             <div className="text-xs text-green-300 mb-1">共享知识库</div>
-            <div className="text-xl font-bold text-[#f5c842]">{kbLoading ? '-' : (kbStats?.item_count || 0)}</div>
-            <div className="text-xs text-green-400">条知识内容</div>
+            <div className="text-xl font-bold text-[#f5c842]">{kbLoading ? '-' : `${sharedKbs.length} 个`}</div>
+            <div className="text-xs text-green-400">共 {totalItems} 条内容</div>
           </div>
         </div>
       </div>
@@ -2909,7 +2963,7 @@ function PlatformSharedTab() {
         )}
       </div>
 
-      {/* 区块2：平台共享知识库 */}
+      {/* 区块2：平台公共知识库（多库） */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <button
           onClick={() => setKbOpen(v => !v)}
@@ -2917,26 +2971,126 @@ function PlatformSharedTab() {
         >
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
-              <Shield className="w-4 h-4 text-amber-500" />
+              <Library className="w-4 h-4 text-amber-500" />
             </div>
             <div className="text-left">
-              <p className="text-sm font-semibold text-gray-900">平台共享知识库</p>
-              <p className="text-xs text-gray-400">问答内容，所有分身共同继承</p>
+              <p className="text-sm font-semibold text-gray-900">平台公共知识库</p>
+              <p className="text-xs text-gray-400">可建多个主题库，分身按需调用</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {!kbLoading && kbStats && (
-              <span className="text-xs text-gray-400">{kbStats.item_count} 条</span>
+            {!kbLoading && (
+              <span className="text-xs text-gray-400">{sharedKbs.length} 个库</span>
             )}
             <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${kbOpen ? 'rotate-180' : ''}`} />
           </div>
         </button>
         {kbOpen && (
           <div className="border-t border-gray-100 px-4 pb-4 pt-3">
-            <ChannelKnowledgeTab channelType="kf" channelId={2} />
+            {activeKb ? (
+              /* 进入单库管理视图 */
+              <div>
+                <button
+                  onClick={() => { setActiveKb(null); loadSharedKbs(); }}
+                  className="flex items-center gap-1.5 text-sm text-green-600 mb-3"
+                >
+                  <ArrowLeft className="w-4 h-4" /> 返回公共库列表
+                </button>
+                <div className="flex items-center gap-2 mb-3 px-1">
+                  <Library className="w-4 h-4 text-amber-500" />
+                  <span className="text-sm font-semibold text-gray-900">{activeKb.name}</span>
+                  <span className="text-xs text-gray-400">公共库</span>
+                </div>
+                <ChannelKnowledgeTab channelType="kf" kbId={activeKb.id} />
+              </div>
+            ) : (
+              /* 公共库列表视图 */
+              <div className="space-y-2">
+                {kbLoading ? (
+                  <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-green-500" /></div>
+                ) : (
+                  <>
+                    {sharedKbs.length === 0 && (
+                      <div className="text-center py-6 text-gray-400 text-sm">暂无公共库，点击下方「新建公共库」创建</div>
+                    )}
+                    {sharedKbs.map(kb => (
+                      <div key={kb.id} className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-3 border border-gray-100">
+                        <button className="flex items-center gap-2.5 flex-1 min-w-0 text-left" onClick={() => setActiveKb(kb)}>
+                          <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
+                            <Library className="w-4 h-4 text-amber-500" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{kb.name}</p>
+                            <p className="text-xs text-gray-400">{kb.item_count} 条内容{kb.description ? ` · ${kb.description}` : ''}</p>
+                          </div>
+                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => openRename(kb)} className="p-1.5 text-gray-400 hover:text-gray-600" title="重命名">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => setDeletingKb(kb)} className="p-1.5 text-gray-400 hover:text-red-500" title="删除">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => setActiveKb(kb)} className="p-1.5 text-green-500" title="管理">
+                            <ArrowRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    <button
+                      onClick={openCreate}
+                      className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-dashed border-green-300 text-green-600 text-sm font-medium hover:bg-green-50"
+                    >
+                      <FolderPlus className="w-4 h-4" /> 新建公共库
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {/* 新建/重命名公共库弹窗 */}
+      {showKbModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6" onClick={() => setShowKbModal(false)}>
+          <div className="bg-white rounded-2xl p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <p className="text-base font-semibold text-gray-900 mb-3">{editingKb ? '重命名公共库' : '新建公共库'}</p>
+            <label className="text-xs text-gray-500">库名</label>
+            <input
+              value={kbNameDraft} onChange={e => setKbNameDraft(e.target.value)}
+              placeholder="如：健康减肥、营养基础"
+              className="w-full mt-1 mb-3 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-green-400"
+            />
+            <label className="text-xs text-gray-500">描述（可选）</label>
+            <input
+              value={kbDescDraft} onChange={e => setKbDescDraft(e.target.value)}
+              placeholder="一句话描述这个库的用途"
+              className="w-full mt-1 mb-4 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-green-400"
+            />
+            <div className="flex gap-2">
+              <button onClick={() => setShowKbModal(false)} className="flex-1 py-2 rounded-lg border border-gray-200 text-sm text-gray-600">取消</button>
+              <button onClick={handleSaveKb} disabled={savingKb} className="flex-1 py-2 rounded-lg bg-green-500 text-white text-sm font-medium disabled:opacity-50">
+                {savingKb ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 删除确认弹窗 */}
+      {deletingKb && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6" onClick={() => setDeletingKb(null)}>
+          <div className="bg-white rounded-2xl p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <p className="text-base font-semibold text-gray-900 mb-2">删除公共库？</p>
+            <p className="text-sm text-gray-500 mb-4">将删除「{deletingKb.name}」及其内 {deletingKb.item_count} 条内容，并解除所有分身对它的绑定。此操作不可恢复。</p>
+            <div className="flex gap-2">
+              <button onClick={() => setDeletingKb(null)} className="flex-1 py-2 rounded-lg border border-gray-200 text-sm text-gray-600">取消</button>
+              <button onClick={handleDeleteKb} className="flex-1 py-2 rounded-lg bg-red-500 text-white text-sm font-medium">确认删除</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -3798,6 +3952,10 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
   const [kbId, setKbId] = useState(0);
   const [contextRounds, setContextRounds] = useState(10);
   const [kbList, setKbList] = useState<KnowledgeBase[]>([]);
+  // 平台公共库（多选调用）
+  const [sharedKbList, setSharedKbList] = useState<{ id: number; name: string; item_count: number }[]>([]);
+  const [boundSharedKbIds, setBoundSharedKbIds] = useState<number[]>([]);
+  const [savingSharedKb, setSavingSharedKb] = useState(false);
 
   // 自建应用专属
   const [routeEnabled, setRouteEnabled] = useState(false);
@@ -4058,7 +4216,30 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
     }).catch(() => toast.error("加载配置失败")).finally(() => setLoading(false));
     // 加载结构化指令条目
     loadPromptRules();
+    // 加载平台公共库列表与该分身已绑定关系（仅客服分身）
+    if (!isApp && channel.id) {
+      fetch('/api/wecom/shared-kbs').then(r => r.json()).then((d) => {
+        if (Array.isArray(d)) setSharedKbList(d.map((k: any) => ({ id: k.id, name: k.name, item_count: Number(k.item_count || 0) })));
+      }).catch(() => {});
+      fetch(`/api/wecom/channels/${channel.id}/shared-kbs`).then(r => r.json()).then((d) => {
+        if (d && Array.isArray(d.kb_ids)) setBoundSharedKbIds(d.kb_ids);
+      }).catch(() => {});
+    }
   }, [channel.id, isApp]);
+
+  async function toggleSharedKb(kbIdToToggle: number) {
+    const next = boundSharedKbIds.includes(kbIdToToggle)
+      ? boundSharedKbIds.filter(id => id !== kbIdToToggle)
+      : [...boundSharedKbIds, kbIdToToggle];
+    setBoundSharedKbIds(next);
+    setSavingSharedKb(true);
+    try {
+      await fetch(`/api/wecom/channels/${channel.id}/shared-kbs`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kb_ids: next }),
+      });
+    } catch { toast.error('保存失败'); } finally { setSavingSharedKb(false); }
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -4609,6 +4790,39 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
                 <div className="text-xs text-gray-400 mt-0.5">{kb.item_count} 条记录</div>
               </button>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* 调用平台公共库（客服账号·多选） */}
+      {!isApp && sharedKbList.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-sm font-medium text-gray-700">调用平台公共库</label>
+            {savingSharedKb && <Loader2 className="w-3.5 h-3.5 animate-spin text-green-500" />}
+          </div>
+          <p className="text-xs text-gray-400 mb-2.5">勾选后，该分身回答时会一并检索这些公共库的内容（可多选，自动保存）</p>
+          <div className="space-y-2">
+            {sharedKbList.map(kb => {
+              const checked = boundSharedKbIds.includes(kb.id);
+              return (
+                <button
+                  key={kb.id}
+                  onClick={() => toggleSharedKb(kb.id)}
+                  className={`w-full flex items-center gap-2.5 text-left px-3 py-2.5 rounded-lg border-2 text-sm transition-all ${
+                    checked ? "border-green-400 bg-green-50" : "border-gray-200"
+                  }`}
+                >
+                  <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                    checked ? 'bg-green-500 border-green-500' : 'border-gray-300'
+                  }`}>{checked && <Check className="w-3 h-3 text-white" />}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className={`font-medium ${checked ? 'text-green-700' : 'text-gray-700'}`}>{kb.name}</div>
+                    <div className="text-xs text-gray-400 mt-0.5">{kb.item_count} 条内容</div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -5212,7 +5426,9 @@ function ChannelCustomRulesTab({ channelType }: { channelType: string }) {
 
 // ─── 知识库Tab（共用） ─────────────────────────────────────────────────────────
 
-function ChannelKnowledgeTab({ channelType, channelId }: { channelType: string; channelId?: number }) {
+function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { channelType: string; channelId?: number; kbId?: number }) {
+  // 统一的库定位查询串：优先用显式 kbId（公共库场景），否则按渠道
+  const kbQuery = explicitKbId ? `kb_id=${explicitKbId}` : (channelId ? `channel_id=${channelId}` : `channel_type=${channelType}`);
   const [stats, setStats] = useState<{ kb_count: number; item_count: number; file_count: number; char_count: number }>({ kb_count: 0, item_count: 0, file_count: 0, char_count: 0 });
   const [sources, setSources] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -5247,14 +5463,15 @@ function ChannelKnowledgeTab({ channelType, channelId }: { channelType: string; 
   const [step0EditDraftQ, setStep0EditDraftQ] = useState("");
   const [step0EditDraftA, setStep0EditDraftA] = useState("");
 
-  // 加载kbId（通过channel-config接口）
+  // 加载kbId（通过channel-config接口；公共库场景直接用显式 kbId）
   useEffect(() => {
+    if (explicitKbId) { setStep0KbId(explicitKbId); return; }
     if (!channelId) return;
     fetch(`/api/wecom/channel-config/${channelId}`)
       .then(r => r.json())
       .then(d => { if (d.knowledge_base_id) setStep0KbId(d.knowledge_base_id); })
       .catch(() => {});
-  }, [channelId]);
+  }, [channelId, explicitKbId]);
 
   async function handleStep0Analyze() {
     if (!step0Input.trim()) return;
@@ -5338,8 +5555,8 @@ function ChannelKnowledgeTab({ channelType, channelId }: { channelType: string; 
     setLoading(true);
     try {
       const [s, src] = await Promise.all([
-        fetch(`/api/wecom/ch/kb/stats?${channelId ? `channel_id=${channelId}` : `channel_type=${channelType}`}`).then(r => r.json()),
-        fetch(`/api/wecom/ch/kb/sources?${channelId ? `channel_id=${channelId}` : `channel_type=${channelType}`}`).then(r => r.json()),
+        fetch(`/api/wecom/ch/kb/stats?${kbQuery}`).then(r => r.json()),
+        fetch(`/api/wecom/ch/kb/sources?${kbQuery}`).then(r => r.json()),
       ]);
       if (s.ok) setStats(s);
       if (src.ok) setSources(src.sources || []);
@@ -5356,7 +5573,8 @@ function ChannelKnowledgeTab({ channelType, channelId }: { channelType: string; 
     try {
       const fd = new FormData();
       fd.append("file", file);
-      if (channelId) fd.append("channel_id", String(channelId));
+      if (explicitKbId) fd.append("kb_id", String(explicitKbId));
+      else if (channelId) fd.append("channel_id", String(channelId));
       else fd.append("channel_type", channelType);
       const res = await fetch("/api/wecom/ch/kb/upload", { method: "POST", body: fd });
       const d = await res.json();
@@ -5369,7 +5587,7 @@ function ChannelKnowledgeTab({ channelType, channelId }: { channelType: string; 
   async function handleExport() {
     setExporting(true);
     try {
-      const res = await fetch(`/api/wecom/ch/kb/export?${channelId ? `channel_id=${channelId}` : `channel_type=${channelType}`}`);
+      const res = await fetch(`/api/wecom/ch/kb/export?${kbQuery}`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -5394,7 +5612,7 @@ function ChannelKnowledgeTab({ channelType, channelId }: { channelType: string; 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...(channelId ? { channel_id: channelId } : { channel_type: channelType }),
+          ...(explicitKbId ? { kb_id: explicitKbId } : (channelId ? { channel_id: channelId } : { channel_type: channelType })),
           question: finalQuestion || null,
           answer: addAnswer,
         }),
@@ -5412,8 +5630,7 @@ function ChannelKnowledgeTab({ channelType, channelId }: { channelType: string; 
 
   async function handleDeleteSource(sourceFile: string) {
     try {
-      const queryStr = channelId ? `channel_id=${channelId}` : `channel_type=${channelType}`;
-      const res = await fetch(`/api/wecom/ch/kb/source?${queryStr}&source_file=${encodeURIComponent(sourceFile)}`, { method: "DELETE" });
+      const res = await fetch(`/api/wecom/ch/kb/source?${kbQuery}&source_file=${encodeURIComponent(sourceFile)}`, { method: "DELETE" });
       const d = await res.json();
       if (d.ok) { toast.success(`已删除 ${d.deleted} 条`); setDeleteSource(null); loadData(); }
       else toast.error(d.error || "删除失败");
@@ -5424,8 +5641,7 @@ function ChannelKnowledgeTab({ channelType, channelId }: { channelType: string; 
     setViewSource(sourceFile);
     setLoadingItems(true);
     try {
-      const queryStr = channelId ? `channel_id=${channelId}` : `channel_type=${channelType}`;
-      const res = await fetch(`/api/wecom/ch/kb/items?${queryStr}&source_file=${encodeURIComponent(sourceFile)}`);
+      const res = await fetch(`/api/wecom/ch/kb/items?${kbQuery}&source_file=${encodeURIComponent(sourceFile)}`);
       const d = await res.json();
       if (d.ok) setSourceItems(d.items || []);
     } catch { toast.error("加载失败"); }

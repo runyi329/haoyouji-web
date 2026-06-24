@@ -198,10 +198,13 @@ router.post("/api/wecom/ch/users/unblock", async (req: Request, res: Response) =
 router.get("/api/wecom/ch/kb/stats", async (req: Request, res: Response) => {
   const channelType = (req.query.channel_type as string) || "app";
   const channelId = req.query.channel_id as string;
+  const kbIdParam = req.query.kb_id as string;
   const conn = await getDbConnection();
   try {
     let kbRows;
-    if (channelId) {
+    if (kbIdParam) {
+      kbRows = [{ id: Number(kbIdParam) }];
+    } else if (channelId) {
       [kbRows] = await (conn as any).execute(
         "SELECT id FROM wecom_knowledge_bases WHERE channel_id = ?",
         [channelId]
@@ -251,7 +254,11 @@ router.get("/api/wecom/ch/kb/stats", async (req: Request, res: Response) => {
 });
 
 // 确保渠道有一个默认知识库，返回 kbId
-async function ensureDefaultKb(conn: any, channelType: string, channelId?: string | number): Promise<number> {
+// kbIdExplicit：若显式传入（如公共库 channel_id=0），直接使用该库
+async function ensureDefaultKb(conn: any, channelType: string, channelId?: string | number, kbIdExplicit?: string | number): Promise<number> {
+  if (kbIdExplicit) {
+    return Number(kbIdExplicit);
+  }
   if (channelId) {
     const [rows] = await conn.execute(
       "SELECT id FROM wecom_knowledge_bases WHERE channel_id = ? ORDER BY id LIMIT 1",
@@ -318,11 +325,12 @@ function chunkText(text: string, maxLen = 450): string[] {
 router.post("/api/wecom/ch/kb/upload", upload.single("file"), async (req: Request, res: Response) => {
   const channelType = (req.body.channel_type as string) || "app";
   const channelId = req.body.channel_id as string;
+  const kbIdParam = req.body.kb_id as string;
   const file = (req as any).file;
   if (!file) return res.status(400).json({ error: "未收到文件" });
   const conn = await getDbConnection();
   try {
-    const kbId = await ensureDefaultKb(conn, channelType, channelId);
+    const kbId = await ensureDefaultKb(conn, channelType, channelId, kbIdParam);
     const origName = Buffer.from(file.originalname, "latin1").toString("utf8");
     const ext = (origName.split(".").pop() || "").toLowerCase();
     let imported = 0;
@@ -454,10 +462,13 @@ router.post("/api/wecom/ch/kb/upload", upload.single("file"), async (req: Reques
 router.get("/api/wecom/ch/kb/export", async (req: Request, res: Response) => {
   const channelType = (req.query.channel_type as string) || "app";
   const channelId = req.query.channel_id as string;
+  const kbIdParam = req.query.kb_id as string;
   const conn = await getDbConnection();
   try {
     let kbRows;
-    if (channelId) {
+    if (kbIdParam) {
+      kbRows = [{ id: Number(kbIdParam) }];
+    } else if (channelId) {
       [kbRows] = await (conn as any).execute(
         "SELECT id FROM wecom_knowledge_bases WHERE channel_id = ?",
         [channelId]
@@ -506,12 +517,15 @@ router.get("/api/wecom/ch/kb/export", async (req: Request, res: Response) => {
 router.delete("/api/wecom/ch/kb/source", async (req: Request, res: Response) => {
   const channelType = (req.query.channel_type as string) || "app";
   const channelId = req.query.channel_id as string;
+  const kbIdParam = req.query.kb_id as string;
   const sourceFile = req.query.source_file as string;
   if (!sourceFile) return res.status(400).json({ error: "缺少source_file" });
   const conn = await getDbConnection();
   try {
     let kbRows;
-    if (channelId) {
+    if (kbIdParam) {
+      kbRows = [{ id: Number(kbIdParam) }];
+    } else if (channelId) {
       [kbRows] = await (conn as any).execute(
         "SELECT id FROM wecom_knowledge_bases WHERE channel_id = ?",
         [channelId]
@@ -540,10 +554,13 @@ router.delete("/api/wecom/ch/kb/source", async (req: Request, res: Response) => 
 router.get("/api/wecom/ch/kb/sources", async (req: Request, res: Response) => {
   const channelType = (req.query.channel_type as string) || "app";
   const channelId = req.query.channel_id as string;
+  const kbIdParam = req.query.kb_id as string;
   const conn = await getDbConnection();
   try {
     let kbRows;
-    if (channelId) {
+    if (kbIdParam) {
+      kbRows = [{ id: Number(kbIdParam) }];
+    } else if (channelId) {
       [kbRows] = await (conn as any).execute(
         "SELECT id FROM wecom_knowledge_bases WHERE channel_id = ?",
         [channelId]
@@ -578,11 +595,14 @@ router.get("/api/wecom/ch/kb/sources", async (req: Request, res: Response) => {
 router.get("/api/wecom/ch/kb/items", async (req: Request, res: Response) => {
   const channelType = (req.query.channel_type as string) || "app";
   const channelId = req.query.channel_id as string;
+  const kbIdParam = req.query.kb_id as string;
   const sourceFile = req.query.source_file as string;
   const conn = await getDbConnection();
   try {
     let kbRows;
-    if (channelId) {
+    if (kbIdParam) {
+      kbRows = [{ id: Number(kbIdParam) }];
+    } else if (channelId) {
       [kbRows] = await (conn as any).execute(
         "SELECT id FROM wecom_knowledge_bases WHERE channel_id = ?",
         [channelId]
@@ -808,11 +828,11 @@ router.post("/api/wecom/ch/logs/ai-analyze", async (req: Request, res: Response)
 // 采纳知识库推荐（写入知识库，支持编辑后的内容）
 // 支持传入 similar_questions，合并进 question 字段（换行分隔）
 router.post("/api/wecom/ch/kb/adopt", async (req: Request, res: Response) => {
-  const { channel_type = "app", channel_id, question, similar_questions, answer } = req.body;
+  const { channel_type = "app", channel_id, kb_id, question, similar_questions, answer } = req.body;
   if (!answer) return res.status(400).json({ error: "答案不能为空" });
   const conn = await getDbConnection();
   try {
-    const kbId = await ensureDefaultKb(conn, channel_type, channel_id);
+    const kbId = await ensureDefaultKb(conn, channel_type, channel_id, kb_id);
     // 将相似问法合并进 question，提升向量检索覆盖率
     let finalQuestion = (question || "").trim();
     if (finalQuestion && similar_questions && String(similar_questions).trim()) {
