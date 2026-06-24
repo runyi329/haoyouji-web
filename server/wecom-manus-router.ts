@@ -4123,12 +4123,12 @@ router.post("/api/wecom/ai-image-extract", async (req: Request, res: Response) =
   if (!DEEPSEEK_API_KEY) return res.status(500).json({ error: "AI 服务未配置" });
 
   try {
-    // 使用 DeepSeek 视觉模型（deepseek-vl2）识别图片内容
+    // 使用 DeepSeek V4 视觉模型（deepseek-chat，V4版本内置视觉能力）识别图片内容
     const res2 = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${DEEPSEEK_API_KEY}` },
       body: JSON.stringify({
-        model: "deepseek-vl2",
+        model: "deepseek-chat",
         messages: [
           {
             role: "user",
