@@ -2147,6 +2147,8 @@ ${step0Extra.trim()}`
       if (chosenKbs.length > 0) msgs.push(`${kbSuccess}/${chosenKbs.length}条已写入知识库`);
       if (msgs.length > 0) toast.success(msgs.join("；"));
       setStep0Done(true);
+      // 写入成功后自动刷新数据
+      loadAllData();
       setTimeout(() => { setStep0Result(null); setStep0Input(""); setStep0Extra(""); setStep0Done(false); }, 1500);
     } catch {
       toast.error("写入失败");
@@ -2187,8 +2189,10 @@ ${step0Extra.trim()}`
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [savingModel, setSavingModel] = useState(false);
   const [modelSaved, setModelSaved] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
+  async function loadAllData() {
+    setRefreshing(true);
     // 加载第①层：AI 指令
     fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/prompt-rules`)
       .then(r => r.json())
@@ -2208,7 +2212,7 @@ ${step0Extra.trim()}`
       .finally(() => setLoadingPlatformRules(false));
 
     // 加载第③层：知识库统计
-    Promise.all([
+    await Promise.all([
       fetch(`/api/wecom/ch/kb/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()),
       fetch(`/api/wecom/ch/kb/stats?channel_type=kf`).then(r => r.json()),
       fetch(`/api/wecom/channel-config/${KF_CHANNEL_ID}`).then(r => r.json()).catch(() => ({})),
@@ -2230,8 +2234,10 @@ ${step0Extra.trim()}`
       if (kbs.ok && Array.isArray(kbs.kbs)) setKbList(kbs.kbs);
       if (src.ok && Array.isArray(src.sources)) setKbSources(src.sources);
       if (sysSrc.ok && Array.isArray(sysSrc.sources)) setSysKbSources(sysSrc.sources);
-    });
-  }, []);
+    }).finally(() => setRefreshing(false));
+  }
+
+  useEffect(() => { loadAllData(); }, []);
 
   const [platformRulesExpanded, setPlatformRulesExpanded] = useState(false);
   const [platformRuleDetail, setPlatformRuleDetail] = useState<{ rule_text: string } | null>(null);
@@ -2374,9 +2380,17 @@ ${step0Extra.trim()}`
               <HelpCircle className="w-4 h-4" />
             </button>
           </div>
-          <button onClick={() => setStep0Open(v => !v)}>
-            <ChevronRight className={`w-4 h-4 transition-transform ${step0Open ? 'rotate-90' : ''}`} style={{ color: C.brand, opacity: 0.7 }} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={e => { e.stopPropagation(); loadAllData(); }}
+              disabled={refreshing}
+              className="text-xs px-2.5 py-1 rounded-lg"
+              style={{ backgroundColor: refreshing ? C.bg : C.white, color: refreshing ? C.textSub : C.brand, border: `1px solid ${C.line}` }}
+            >{refreshing ? '刷新中...' : '刷新'}</button>
+            <button onClick={() => setStep0Open(v => !v)}>
+              <ChevronRight className={`w-4 h-4 transition-transform ${step0Open ? 'rotate-90' : ''}`} style={{ color: C.brand, opacity: 0.7 }} />
+            </button>
+          </div>
         </div>
 
         {step0HelpOpen && (
