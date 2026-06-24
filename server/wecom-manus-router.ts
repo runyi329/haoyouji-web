@@ -2965,11 +2965,17 @@ router.get("/api/wecom/stats/api-usage", async (req: Request, res: Response) => 
 // 调试API：查看最近的服务器日志（用于排查语音等问题）
 // -----------------------------------------------------------
 const recentLogs: string[] = [];
-const MAX_LOG_LINES = 200;
+const MAX_LOG_LINES = 2000;
+let _afLogCount = 0; // AF扫描日志采样计数
 const origConsoleLog = console.log.bind(console);
 const origConsoleError = console.error.bind(console);
 console.log = (...args: any[]) => {
   const line = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+  // AF扫描日志每10条只保留1条，避免冲刷其他日志
+  if (line.includes('[AF扫描]')) {
+    _afLogCount++;
+    if (_afLogCount % 10 !== 0) { origConsoleLog(...args); return; }
+  }
   recentLogs.push(`[LOG] ${new Date().toISOString()} ${line}`);
   if (recentLogs.length > MAX_LOG_LINES) recentLogs.shift();
   origConsoleLog(...args);
