@@ -1416,6 +1416,69 @@ async function sendKfMessage(openKfid: string, toUser: string, content: string):
 }
 
 // -----------------------------------------------------------
+// 微信客服：发送素材消息（图片/视频/文件）
+// 流程：先上传素材到企微获取media_id，再用media_id发送
+// -----------------------------------------------------------
+async function sendKfMaterial(openKfid: string, toUser: string, matType: string, storageUrl: string, title: string): Promise<void> {
+  try {
+    const token = await getAccessToken();
+
+    // 1. 从云存储下载文件内容
+    const fileRes = await fetch(storageUrl);
+    if (!fileRes.ok) throw new Error(`下载素材失败: ${fileRes.status}`);
+    const fileBuffer = Buffer.from(await fileRes.arrayBuffer());
+    const contentType = fileRes.headers.get("content-type") || "application/octet-stream";
+
+    // 2. 上传到企微媒体库获取 media_id
+    // 企微上传接口：POST https://qyapi.weixin.qq.com/cgi-bin/media/upload?access_token=xxx&type=image/video/file
+    let wecomType = "file";
+    if (matType === "image") wecomType = "image";
+    else if (matType === "video") wecomType = "video";
+
+    const uploadUrl = `https://qyapi.weixin.qq.com/cgi-bin/media/upload?access_token=${token}&type=${wecomType}`;
+    const fileName = title.replace(/[^a-zA-Z0-9\u4e00-\u9fa5._-]/g, "_") + (matType === "image" ? ".jpg" : matType === "video" ? ".mp4" : ".file");
+
+    const formData = new FormData();
+    const blob = new Blob([fileBuffer], { type: contentType });
+    formData.append("media", blob, fileName);
+
+    const uploadRes = await fetch(uploadUrl, { method: "POST", body: formData });
+    const uploadData = await uploadRes.json() as any;
+    if (uploadData.errcode && uploadData.errcode !== 0) {
+      throw new Error(`企微上传素材失败: errcode=${uploadData.errcode} errmsg=${uploadData.errmsg}`);
+    }
+    const mediaId = uploadData.media_id;
+    if (!mediaId) throw new Error("企微上传素材未返回media_id");
+
+    // 3. 用 media_id 发送消息
+    const sendUrl = `https://qyapi.weixin.qq.com/cgi-bin/kf/send_msg?access_token=${token}`;
+    let msgBody: any;
+    if (wecomType === "image") {
+      msgBody = { touser: toUser, open_kfid: openKfid, msgtype: "image", image: { media_id: mediaId } };
+    } else if (wecomType === "video") {
+      msgBody = { touser: toUser, open_kfid: openKfid, msgtype: "video", video: { media_id: mediaId, title } };
+    } else {
+      msgBody = { touser: toUser, open_kfid: openKfid, msgtype: "file", file: { media_id: mediaId } };
+    }
+
+    const sendRes = await fetch(sendUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(msgBody),
+    });
+    const sendData = await sendRes.json() as any;
+    if (sendData.errcode !== 0) {
+      console.error(`[KF] 素材消息发送失败: errcode=${sendData.errcode} errmsg=${sendData.errmsg}`);
+    } else {
+      console.log(`[KF] 素材消息发送成功 type=${wecomType} to=${toUser}`);
+    }
+  } catch (e) {
+    console.error("[KF] sendKfMaterial 异常:", e);
+    throw e;
+  }
+}
+
+// -----------------------------------------------------------
 // 微信客服：处理 kf_msg_or_event 事件
 // 流程：syncMsg拉取 → 知识库检索 → DeepSeek回复 → kf/send_msg发回 → 写日志
 // -----------------------------------------------------------
@@ -1725,22 +1788,55 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
       }
 
       // 6b. 构建system prompt（含知识库内容）
-      const fullSystemPrompt = systemPrompt + twinContext + kbContext;
+      // 6c. 素材库注入（把该分身的素材描述列表注入到 system prompt，让AI自主判断是否发送）
+      let materialsContext = "";
+      let materialsMap: Record<number, { type: string; storage_url: string; title: string }> = {};
+      if (dbConn) {
+        try {
+          const [matRows] = await (dbConn as any).execute(
+            `SELECT id, type, title, description, storage_url FROM wecom_materials WHERE channel_id = ? AND is_active = 1 AND description != '' ORDER BY id`,
+            [kfChannelId]
+          ) as any;
+          if ((matRows as any[]).length > 0) {
+            materialsContext = "\n\n【可发送素材列表——当对话场景合适时，在回复末尾加上对应标记即可自动发送，格式：[SEND_MAT:ID]，只在真正合适时使用，不要强行插入】\n" +
+              (matRows as any[]).map((r: any) => `- [MAT_${r.id}] ${r.title}：${r.description}`).join("\n") +
+              "\n【注意】标记格式必须严格为 [SEND_MAT:数字ID]，如 [SEND_MAT:3]，不要修改格式";
+            for (const r of (matRows as any[])) {
+              materialsMap[r.id] = { type: r.type, storage_url: r.storage_url, title: r.title };
+            }
+          }
+        } catch (_) {}
+      }
+
+      const fullSystemPrompt = systemPrompt + twinContext + kbContext + materialsContext;
 
       // 7. 调用DeepSeek获取回复
       const dsReply = await sendToDeepSeekAndGetReply(userText, aiModel, fullSystemPrompt, "chat_reply");
       console.log(`[KF] DeepSeek回复 tokens=${dsReply.totalTokens} 内容=${dsReply.content.substring(0, 50)}`);
 
       // 8. 发送回复给用户
+      // 解析 [SEND_MAT:id] 标记，提取要发送的素材ID列表，并从文字中移除标记
       let replyContent = dsReply.content;
-      
-      // 检查是否有欢迎语（新用户第一条消息，通过检查该用户之前是否有消息记录来判断）
-      // 这里为了性能和简化，我们也可以把欢迎语加在前面，但通常是在另一个事件触发
-      
-      // 检查转人工前缀（如果是转人工，并且配置了项目前缀，我们加在内容前，但这需要和转人工的指令结合）
-      // 暂时不在这里加前缀，后续可以优化
+      const matIdsToSend: number[] = [];
+      replyContent = replyContent.replace(/\[SEND_MAT:(\d+)\]/g, (_match: string, idStr: string) => {
+        const matId = parseInt(idStr, 10);
+        if (materialsMap[matId]) matIdsToSend.push(matId);
+        return "";
+      }).trim();
       
       await sendKfMessage(KF_OPEN_KFID, fromUser, replyContent);
+
+      // 8b. 发送素材消息（图片/文件/视频）
+      for (const matId of matIdsToSend) {
+        const mat = materialsMap[matId];
+        if (!mat || !mat.storage_url) continue;
+        try {
+          await sendKfMaterial(KF_OPEN_KFID, fromUser, mat.type, mat.storage_url, mat.title);
+          console.log(`[KF] 素材发送成功 matId=${matId} type=${mat.type} title=${mat.title}`);
+        } catch (matErr) {
+          console.error(`[KF] 素材发送失败 matId=${matId}:`, matErr);
+        }
+      }
 
       // 9. 抄送通知给指定企业成员
       if (notifyEnabled && notifyUserids.length > 0) {

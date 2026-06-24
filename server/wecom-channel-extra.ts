@@ -1422,4 +1422,151 @@ router.get("/api/wecom/platform/channels", async (req: Request, res: Response) =
 });
 
 
+
+// =====================================================================
+// 素材库（wecom_materials）
+// 每个分身可上传图片/视频/文件，配一段自然语言触发描述
+// AI 对话时自动注入素材列表，AI 用 [SEND_MAT:id] 标记触发发送
+// =====================================================================
+
+async function ensureMaterialsTable(conn: any) {
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS wecom_materials (
+      id            INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      channel_id    INT NOT NULL COMMENT '所属分身渠道',
+      type          VARCHAR(16) NOT NULL DEFAULT 'image' COMMENT 'image/video/file',
+      title         VARCHAR(128) NOT NULL DEFAULT '' COMMENT '素材名称',
+      description   TEXT COMMENT '触发描述（自然语言，AI 据此判断何时发送）',
+      storage_url   TEXT COMMENT '云存储原始URL（永久）',
+      storage_key   VARCHAR(256) COMMENT '云存储key',
+      media_id      VARCHAR(128) DEFAULT NULL COMMENT '企微媒体ID（3天有效）',
+      media_id_expires_at BIGINT DEFAULT NULL COMMENT '企微媒体ID过期时间戳(ms)',
+      file_size     INT DEFAULT 0 COMMENT '文件大小(bytes)',
+      mime_type     VARCHAR(64) DEFAULT '' COMMENT 'MIME类型',
+      is_active     TINYINT NOT NULL DEFAULT 1,
+      created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_channel (channel_id, is_active)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+}
+
+/** GET /api/wecom/materials?channel_id=3 — 获取素材列表 */
+router.get("/api/wecom/materials", async (req: Request, res: Response) => {
+  const channelId = parseInt(req.query.channel_id as string, 10) || 0;
+  if (!channelId) return res.status(400).json({ ok: false, error: "channel_id 必填" });
+  const conn = await getDbConnection();
+  try {
+    await ensureMaterialsTable(conn);
+    const [rows] = await (conn as any).execute(
+      `SELECT id, channel_id, type, title, description, storage_url, file_size, mime_type, is_active, created_at
+       FROM wecom_materials WHERE channel_id = ? AND is_active = 1 ORDER BY id DESC`,
+      [channelId]
+    );
+    res.json({ ok: true, materials: rows });
+  } catch (e: any) {
+    console.error("[materials] 获取失败:", e);
+    res.status(500).json({ ok: false, error: "获取失败" });
+  }
+});
+
+/** POST /api/wecom/materials/upload — 上传素材文件 */
+router.post("/api/wecom/materials/upload", upload.single("file"), async (req: Request, res: Response) => {
+  const channelId = parseInt(req.body.channel_id, 10) || 0;
+  const title = (req.body.title as string || "").trim();
+  const description = (req.body.description as string || "").trim();
+  if (!channelId) return res.status(400).json({ ok: false, error: "channel_id 必填" });
+  if (!req.file) return res.status(400).json({ ok: false, error: "文件必填" });
+
+  const conn = await getDbConnection();
+  try {
+    await ensureMaterialsTable(conn);
+
+    // 读取文件内容
+    const fileBuffer = fs.readFileSync(req.file.path);
+    const mimeType = req.file.mimetype || "application/octet-stream";
+    const originalName = req.file.originalname || req.file.filename;
+    const fileSize = req.file.size || fileBuffer.length;
+
+    // 判断类型
+    let matType = "file";
+    if (mimeType.startsWith("image/")) matType = "image";
+    else if (mimeType.startsWith("video/")) matType = "video";
+
+    // 上传到云存储
+    const { storagePut } = await import("./storage");
+    const storageKey = `wecom_materials/${channelId}/${Date.now()}_${originalName.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+    const { url: storageUrl } = await storagePut(storageKey, fileBuffer, mimeType);
+
+    // 写入数据库
+    const displayTitle = title || originalName;
+    const [result] = await (conn as any).execute(
+      `INSERT INTO wecom_materials (channel_id, type, title, description, storage_url, storage_key, file_size, mime_type)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [channelId, matType, displayTitle, description, storageUrl, storageKey, fileSize, mimeType]
+    );
+    const insertId = (result as any).insertId;
+
+    // 清理临时文件
+    try { fs.unlinkSync(req.file.path); } catch (_) {}
+
+    res.json({ ok: true, id: insertId, storage_url: storageUrl, type: matType, title: displayTitle });
+  } catch (e: any) {
+    console.error("[materials/upload] 失败:", e);
+    try { if (req.file?.path) fs.unlinkSync(req.file.path); } catch (_) {}
+    res.status(500).json({ ok: false, error: e.message || "上传失败" });
+  }
+});
+
+/** PUT /api/wecom/materials/:id — 更新素材描述/标题 */
+router.put("/api/wecom/materials/:id", async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  const { title, description } = req.body;
+  if (!id) return res.status(400).json({ ok: false, error: "id 必填" });
+  const conn = await getDbConnection();
+  try {
+    await ensureMaterialsTable(conn);
+    await (conn as any).execute(
+      `UPDATE wecom_materials SET title = ?, description = ? WHERE id = ?`,
+      [title || "", description || "", id]
+    );
+    res.json({ ok: true });
+  } catch (e: any) {
+    console.error("[materials] 更新失败:", e);
+    res.status(500).json({ ok: false, error: "更新失败" });
+  }
+});
+
+/** DELETE /api/wecom/materials/:id — 软删除素材 */
+router.delete("/api/wecom/materials/:id", async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  if (!id) return res.status(400).json({ ok: false, error: "id 必填" });
+  const conn = await getDbConnection();
+  try {
+    await ensureMaterialsTable(conn);
+    await (conn as any).execute(`UPDATE wecom_materials SET is_active = 0 WHERE id = ?`, [id]);
+    res.json({ ok: true });
+  } catch (e: any) {
+    console.error("[materials] 删除失败:", e);
+    res.status(500).json({ ok: false, error: "删除失败" });
+  }
+});
+
+/** GET /api/wecom/materials/for-ai?channel_id=3 — 给AI用的素材列表（含描述） */
+router.get("/api/wecom/materials/for-ai", async (req: Request, res: Response) => {
+  const channelId = parseInt(req.query.channel_id as string, 10) || 0;
+  if (!channelId) return res.status(400).json({ ok: false, materials: [] });
+  const conn = await getDbConnection();
+  try {
+    await ensureMaterialsTable(conn);
+    const [rows] = await (conn as any).execute(
+      `SELECT id, type, title, description FROM wecom_materials WHERE channel_id = ? AND is_active = 1 AND description != '' ORDER BY id`,
+      [channelId]
+    );
+    res.json({ ok: true, materials: rows });
+  } catch (e: any) {
+    res.json({ ok: false, materials: [] });
+  }
+});
+
 export default router;

@@ -228,6 +228,321 @@ function SetupGuideModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+
+// ─── 素材库卡片 ──────────────────────────────────────────────────────────────
+interface Material {
+  id: number;
+  type: string;
+  title: string;
+  description: string;
+  storage_url: string;
+  file_size: number;
+  mime_type: string;
+  created_at: string;
+}
+
+function MaterialsCard({ channelId }: { channelId: number }) {
+  const [materials, setMaterials] = useState<Material[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadDesc, setUploadDesc] = useState("");
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
+  const matFileRef = useRef<HTMLInputElement>(null);
+
+  async function loadMaterials() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/wecom/materials?channel_id=${channelId}`);
+      const d = await res.json();
+      if (d.ok) setMaterials(d.materials || []);
+    } catch (_) {}
+    finally { setLoading(false); }
+  }
+
+  useEffect(() => { loadMaterials(); }, [channelId]);
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadFile(file);
+    setUploadTitle(file.name.replace(/\.[^.]+$/, ""));
+    if (file.type.startsWith("image/")) {
+      setUploadPreview(URL.createObjectURL(file));
+    } else {
+      setUploadPreview(null);
+    }
+    setShowUploadModal(true);
+    if (matFileRef.current) matFileRef.current.value = "";
+  }
+
+  async function handleUpload() {
+    if (!uploadFile) return;
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", uploadFile);
+      form.append("channel_id", String(channelId));
+      form.append("title", uploadTitle.trim() || uploadFile.name);
+      form.append("description", uploadDesc.trim());
+      const res = await fetch("/api/wecom/materials/upload", { method: "POST", body: form });
+      const d = await res.json();
+      if (d.ok) {
+        toast.success("素材上传成功");
+        setShowUploadModal(false);
+        setUploadFile(null);
+        setUploadTitle("");
+        setUploadDesc("");
+        setUploadPreview(null);
+        loadMaterials();
+      } else {
+        toast.error(d.error || "上传失败");
+      }
+    } catch (_) {
+      toast.error("网络错误");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleSaveEdit(id: number) {
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`/api/wecom/materials/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: editTitle.trim(), description: editDesc.trim() }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        toast.success("已保存");
+        setEditingId(null);
+        loadMaterials();
+      } else {
+        toast.error(d.error || "保存失败");
+      }
+    } catch (_) {
+      toast.error("网络错误");
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  async function handleDelete(id: number) {
+    try {
+      const res = await fetch(`/api/wecom/materials/${id}`, { method: "DELETE" });
+      const d = await res.json();
+      if (d.ok) {
+        toast.success("已删除");
+        setDeleteConfirm(null);
+        loadMaterials();
+      } else {
+        toast.error(d.error || "删除失败");
+      }
+    } catch (_) {
+      toast.error("网络错误");
+    }
+  }
+
+  function getTypeIcon(type: string) {
+    if (type === "image") return <ImageIcon className="w-4 h-4" style={{ color: C.brand }} />;
+    if (type === "video") return <span className="text-xs font-bold" style={{ color: C.brand }}>视频</span>;
+    return <FileText className="w-4 h-4" style={{ color: C.brand }} />;
+  }
+
+  function fmtSize(bytes: number) {
+    if (!bytes) return "";
+    if (bytes < 1024) return `${bytes}B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+  }
+
+  return (
+    <div className="rounded-xl border overflow-hidden" style={{ borderColor: C.line }}>
+      {/* 标题行 */}
+      <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: C.brandLight, borderBottom: `1px solid ${C.line}` }}>
+        <div className="flex items-center gap-2">
+          <div className="text-xs font-semibold" style={{ color: C.textMain }}>素材库</div>
+          <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: C.brand, color: '#fff' }}>{materials.length}</span>
+        </div>
+        <div>
+          <input ref={matFileRef} type="file" className="hidden" accept="image/*,video/*,.pdf,.docx,.xlsx,.pptx,.txt" onChange={handleFileSelect} />
+          <div
+            onClick={() => matFileRef.current?.click()}
+            style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              width: 26, height: 26, borderRadius: 13,
+              backgroundColor: C.brand, cursor: 'pointer',
+              fontSize: 11, color: '#fff', fontWeight: 600, userSelect: 'none' as const,
+            }}
+          >+</div>
+        </div>
+      </div>
+
+      {/* 说明文字 */}
+      <div className="px-4 py-2.5" style={{ backgroundColor: '#FAFBFF', borderBottom: `1px solid ${C.line}` }}>
+        <p className="text-xs leading-relaxed" style={{ color: C.textSub }}>
+          上传图片、视频、文件，并用自然语言描述「什么时候发这个」。AI 对话时会自动判断并发送对应素材给客户。
+        </p>
+      </div>
+
+      {/* 素材列表 */}
+      <div style={{ backgroundColor: C.white }}>
+        {loading ? (
+          <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin" style={{ color: C.brand }} /></div>
+        ) : materials.length === 0 ? (
+          <div className="py-10 text-center text-sm" style={{ color: C.textSub }}>暂无素材，点击右上角 + 上传</div>
+        ) : (
+          <ul className="divide-y" style={{ borderColor: C.line }}>
+            {materials.map((mat) => (
+              <li key={mat.id} className="px-4 py-3">
+                {editingId === mat.id ? (
+                  <div className="space-y-2">
+                    <div>
+                      <div className="text-xs mb-1" style={{ color: C.textSub }}>名称</div>
+                      <input
+                        value={editTitle}
+                        onChange={e => setEditTitle(e.target.value)}
+                        className="w-full text-sm rounded-lg border px-3 py-1.5 outline-none"
+                        style={{ borderColor: C.brand }}
+                        autoFocus
+                      />
+                    </div>
+                    <div>
+                      <div className="text-xs mb-1" style={{ color: C.textSub }}>触发描述（告诉 AI 什么时候发这个）</div>
+                      <textarea
+                        value={editDesc}
+                        onChange={e => setEditDesc(e.target.value)}
+                        rows={3}
+                        placeholder="例：当客户询问如何订购、怎么下单时，发送这张扫码订购二维码海报"
+                        className="w-full text-sm rounded-lg border px-3 py-2 resize-none outline-none"
+                        style={{ borderColor: C.line }}
+                      />
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <button onClick={() => setEditingId(null)} className="text-xs px-3 py-1.5 rounded-lg border" style={{ borderColor: C.line, color: C.textSub }}>取消</button>
+                      <button
+                        onClick={() => handleSaveEdit(mat.id)}
+                        disabled={savingEdit}
+                        className="text-xs px-3 py-1.5 rounded-lg text-white flex items-center gap-1 disabled:opacity-60"
+                        style={{ backgroundColor: C.brand }}
+                      >
+                        {savingEdit ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                        保存
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-3">
+                    {/* 缩略图 / 类型图标 */}
+                    <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ backgroundColor: C.brandLight }}>
+                      {mat.type === "image" && mat.storage_url ? (
+                        <img src={mat.storage_url} alt={mat.title} className="w-full h-full object-cover" />
+                      ) : (
+                        getTypeIcon(mat.type)
+                      )}
+                    </div>
+                    {/* 信息区 */}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium truncate" style={{ color: C.textMain }}>{mat.title}</div>
+                      {mat.description ? (
+                        <div className="text-xs mt-0.5 line-clamp-2" style={{ color: C.textSub }}>{mat.description}</div>
+                      ) : (
+                        <div className="text-xs mt-0.5 italic" style={{ color: '#D1D5DB' }}>未设置触发描述（AI 不会自动发送）</div>
+                      )}
+                      <div className="text-xs mt-1" style={{ color: '#D1D5DB' }}>{fmtSize(mat.file_size)}</div>
+                    </div>
+                    {/* 操作按钮 */}
+                    <div className="flex flex-col gap-1 flex-shrink-0">
+                      <button
+                        onClick={() => { setEditingId(mat.id); setEditTitle(mat.title); setEditDesc(mat.description || ""); }}
+                        className="text-xs border rounded-lg px-2 py-1"
+                        style={{ borderColor: C.line, color: C.textSub }}
+                      >编辑</button>
+                      {deleteConfirm === mat.id ? (
+                        <div className="flex gap-1">
+                          <button onClick={() => handleDelete(mat.id)} className="text-xs text-white bg-red-500 rounded-lg px-2 py-1">确删</button>
+                          <button onClick={() => setDeleteConfirm(null)} className="text-xs border rounded-lg px-2 py-1" style={{ borderColor: C.line, color: C.textSub }}>取消</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setDeleteConfirm(mat.id)} className="p-1.5 rounded-lg text-red-400"><Trash2 className="w-4 h-4" /></button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* 上传弹窗 */}
+      {showUploadModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={() => { if (!uploading) { setShowUploadModal(false); setUploadFile(null); setUploadPreview(null); } }}>
+          <div className="bg-white rounded-t-3xl w-full max-w-lg p-5 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <span className="font-semibold" style={{ color: C.textMain }}>上传素材</span>
+              <button onClick={() => { if (!uploading) { setShowUploadModal(false); setUploadFile(null); setUploadPreview(null); } }}><X className="w-5 h-5 text-gray-400" /></button>
+            </div>
+
+            {uploadPreview && (
+              <div className="w-full h-40 rounded-xl overflow-hidden" style={{ backgroundColor: C.brandLight }}>
+                <img src={uploadPreview} alt="预览" className="w-full h-full object-contain" />
+              </div>
+            )}
+            {!uploadPreview && uploadFile && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ backgroundColor: C.brandLight }}>
+                <FileText className="w-5 h-5" style={{ color: C.brand }} />
+                <span className="text-sm truncate" style={{ color: C.textMain }}>{uploadFile.name}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs font-medium mb-1 block" style={{ color: C.textSub }}>素材名称</label>
+              <input
+                value={uploadTitle}
+                onChange={e => setUploadTitle(e.target.value)}
+                className="w-full text-sm rounded-xl border p-3 outline-none"
+                style={{ borderColor: C.line }}
+                placeholder="为这个素材起个名字"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-medium mb-1 block" style={{ color: C.textSub }}>触发描述（告诉 AI 什么时候发这个）</label>
+              <textarea
+                value={uploadDesc}
+                onChange={e => setUploadDesc(e.target.value)}
+                rows={3}
+                placeholder="例：当客户询问如何订购、怎么下单、购买流程时，发送这张扫码订购二维码海报"
+                className="w-full text-sm rounded-xl border p-3 resize-none outline-none"
+                style={{ borderColor: C.line }}
+              />
+              <p className="text-xs mt-1" style={{ color: C.textSub }}>建议写具体场景，越具体 AI 判断越准确</p>
+            </div>
+
+            <button
+              onClick={handleUpload}
+              disabled={uploading || !uploadFile}
+              className="w-full py-3 rounded-2xl text-white font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-60"
+              style={{ backgroundColor: C.brand }}
+            >
+              {uploading ? <><Loader2 className="w-4 h-4 animate-spin" />上传中...</> : <><Upload className="w-4 h-4" />确认上传</>}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── 数字分身卡片（客户端只读概览） ────────────────────────────────────────────
 function DigitalTwinCard({ channelId }: { channelId: string }) {
   const [stats, setStats] = useState<any>(null);
@@ -3778,6 +4093,9 @@ function KnowledgeTab() {
           </div>
         </div>
       </div>
+
+      {/* 素材库 */}
+      <MaterialsCard channelId={KF_CHANNEL_ID} />
 
       {/* 我的数字分身卡片 */}
       <DigitalTwinCard channelId={String(KF_CHANNEL_ID)} />
