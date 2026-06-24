@@ -850,9 +850,15 @@ function ConfigTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avata
           </div>
           {/* 链接展示 */}
           <div className="rounded-xl px-3 py-2.5 mb-3 flex items-center gap-2" style={{ backgroundColor: C.bg, border: `1px solid ${C.line}` }}>
-            <span className="flex-1 text-xs truncate" style={{ color: C.textMain }}>
+            <a
+              href={`https://work.weixin.qq.com/kfid/${kfId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 text-xs truncate"
+              style={{ color: C.brand, textDecoration: 'underline', wordBreak: 'break-all' }}
+            >
               {`https://work.weixin.qq.com/kfid/${kfId}`}
-            </span>
+            </a>
             <button
               onClick={() => {
                 navigator.clipboard.writeText(`https://work.weixin.qq.com/kfid/${kfId}`).then(() => {
@@ -866,33 +872,34 @@ function ConfigTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avata
               {copiedLink ? '已复制' : '复制'}
             </button>
           </div>
-          {/* 二维码区域 */}
-          <div
-            onClick={() => setShowQr(v => !v)}
-            className="flex items-center justify-between cursor-pointer"
+          {/* 二维码按钮 */}
+          <button
+            onClick={() => setShowQr(true)}
+            className="flex items-center gap-1.5 w-full justify-center py-2 rounded-xl transition-all active:opacity-70"
+            style={{ backgroundColor: C.brandLight, border: `1px solid ${C.line}` }}
           >
-            <div className="flex items-center gap-1.5">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.brand} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
-                <path d="M14 14h3v3" /><path d="M17 21v-4" /><path d="M21 14v3h-4" />
-              </svg>
-              <span className="text-xs font-medium" style={{ color: C.brand }}>查看二维码</span>
-            </div>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.textSub} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              {showQr ? <path d="M18 15l-6-6-6 6" /> : <path d="M6 9l6 6 6-6" />}
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.brand} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
+              <path d="M14 14h3v3" /><path d="M17 21v-4" /><path d="M21 14v3h-4" />
             </svg>
-          </div>
+            <span className="text-xs font-medium" style={{ color: C.brand }}>查看二维码</span>
+          </button>
+          {/* 全屏二维码覆盖层 */}
           {showQr && (
-            <div className="mt-3 flex flex-col items-center gap-2">
-              <div className="rounded-xl overflow-hidden p-2" style={{ backgroundColor: '#fff', border: `1px solid ${C.line}` }}>
-                <img
-                  src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/yxpMOYREnDHtcMuA.png"
-                  alt="客服二维码"
-                  className="w-40 h-40"
-                  style={{ objectFit: 'contain' }}
-                />
-              </div>
-              <div className="text-[10px] text-center" style={{ color: C.textSub }}>长按或截图保存二维码，分享给客户扫码咨询</div>
+            <div
+              className="fixed inset-0 z-50 flex flex-col items-center justify-center"
+              style={{ backgroundColor: 'rgba(0,0,0,0.85)' }}
+              onClick={() => setShowQr(false)}
+            >
+              <img
+                src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/yxpMOYREnDHtcMuA.png"
+                alt="客服二维码"
+                className="w-72 h-72"
+                style={{ objectFit: 'contain' }}
+                onClick={e => e.stopPropagation()}
+              />
+              <div className="mt-4 text-sm text-white/80">长按或截图保存二维码，分享给客户扫码咨询</div>
+              <div className="mt-2 text-xs text-white/50">点击任意处关闭</div>
             </div>
           )}
         </div>
