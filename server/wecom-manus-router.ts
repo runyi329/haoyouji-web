@@ -30,7 +30,7 @@ import {
   DEDUP_THRESHOLD_SIMILAR,
 } from "./wecom-vector";
 import { getUsdtCnyRate } from "./price-scanner";
-import { getAIConfig, callAI, callAIVision, saveAIConfig, getAIConfigs, MODEL_OPTIONS, USE_CASE_META, type UseCase } from "./wecom-ai-config";
+import { getAIConfig, callAI, callAIVision, callAIVoice, logApiUsage, saveAIConfig, getAIConfigs, MODEL_OPTIONS, USE_CASE_META, type UseCase } from "./wecom-ai-config";
 import { isAIFeatureEnabled } from "./ai-monitor";
 import fs from "fs";
 import path from "path";
@@ -1575,12 +1575,39 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
       } catch (_) {}
     }
 
-    // 4. 遍历消息，只处理文本类型
+    // 4. 遍历消息，处理文本和语音类型
     for (const msg of msgList) {
-      if (msg.msgtype !== "text") continue;
-      const userText: string = msg.text?.content || "";
+      if (msg.msgtype !== "text" && msg.msgtype !== "voice") continue;
       const fromUser: string = msg.external_userid || msg.open_kfid || "";
-      if (!userText || !fromUser) continue;
+      if (!fromUser) continue;
+
+      let userText: string = "";
+      if (msg.msgtype === "voice") {
+        // 语音消息：下载音频 → Whisper 转文字
+        const mediaId: string = msg.voice?.media_id || msg.voice?.mediaid || "";
+        if (!mediaId) continue;
+        try {
+          const kfToken = await getAccessToken();
+          const audioResp = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/media/get?access_token=${kfToken}&media_id=${encodeURIComponent(mediaId)}`);
+          if (!audioResp.ok) throw new Error(`下载语音失败: ${audioResp.status}`);
+          const audioBuffer = Buffer.from(await audioResp.arrayBuffer());
+          const mimeType = audioResp.headers.get("content-type") || "audio/amr";
+          const asrResult = await callAIVoice(audioBuffer, mimeType, kfChannelId);
+          if (!asrResult.text?.trim()) {
+            await sendKfMessage(fromUser, kfOpenKfId, "(语音已收到，但未能识别内容，请重新发送或改用文字)");
+            continue;
+          }
+          userText = asrResult.text.trim();
+          console.log(`[KF] 语音识别成功 from=${fromUser} text=${userText.substring(0, 50)}`);
+        } catch (e) {
+          console.error(`[KF] 语音识别失败 from=${fromUser}:`, e);
+          await sendKfMessage(fromUser, kfOpenKfId, "(语音消息识别失败，请重新发送或改用文字)");
+          continue;
+        }
+      } else {
+        userText = msg.text?.content || "";
+      }
+      if (!userText) continue;
 
       console.log(`[KF] 处理消息 from=${fromUser} text=${userText.substring(0, 50)}`);
 
@@ -1919,8 +1946,31 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
       return;
     }
 
-    // 只处理文字消息
-    if (innerMsgType !== "text" || !content || !userId) {
+    // 处理语音消息：下载 AMR → 调 Whisper 转文字 → 当作文字消息继续处理
+    let finalContent = content || "";
+    if (innerMsgType === "voice") {
+      const mediaId = innerXml.MediaId || innerXml.media_id || "";
+      if (!mediaId || !userId) return;
+      try {
+        const token = await getAccessToken();
+        const audioResp = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/media/get?access_token=${token}&media_id=${encodeURIComponent(mediaId)}`);
+        if (!audioResp.ok) throw new Error(`下载语音失败: ${audioResp.status}`);
+        const audioBuffer = Buffer.from(await audioResp.arrayBuffer());
+        const mimeType = audioResp.headers.get("content-type") || "audio/amr";
+        const asrResult = await callAIVoice(audioBuffer, mimeType);
+        if (!asrResult.text?.trim()) {
+          await sendWeComMessage(userId, "（语音已收到，但未能识别内容，请重新发送或改用文字）");
+          return;
+        }
+        finalContent = asrResult.text.trim();
+        console.log(`[WeCom] 语音识别成功 from=${userId} text=${finalContent.substring(0, 50)}`);
+      } catch (e) {
+        console.error(`[WeCom] 语音识别失败 from=${userId}:`, e);
+        await sendWeComMessage(userId, "（语音消息识别失败，请重新发送或改用文字）");
+        return;
+      }
+    } else if (innerMsgType !== "text" || !content || !userId) {
+      // 其他非文字非语音类型，静默忽略
       return;
     }
 
@@ -1984,8 +2034,8 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
         if (applicableRules.length > 0) {
           // 用分类模型逐条判断是否命中
           for (const rule of applicableRules) {
-            const intentPrompt = `你是意图匹配器，只回复 1 或 0，不解释。\n\n意图描述：${rule.trigger_intent}\n\n用户消息：${content}\n\n是否匹配（1=是 0=否）：`;
-            const matchResult = await classifyMessage(content, intentPrompt, 'deepseek-chat');
+            const intentPrompt = `你是意图匹配器，只回复 1 或 0，不解释。\n\n意图描述：${rule.trigger_intent}\n\n用户消息：${finalContent}\n\n是否匹配（1=是 0=否）：`;
+            const matchResult = await classifyMessage(finalContent, intentPrompt, 'deepseek-chat');
             if (matchResult.result === 1) {
               // 命中！立即设置标志位，确保后续任何异常都不会再走全局路由
               hitCustomRule = true;
@@ -2012,7 +2062,7 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
                 } catch (_) {}
                 await sendWeComMessage(userId, waitingMsg2);
                 if (isRuleDeepSeek) {
-                  const dsReply = await sendToDeepSeekAndGetReply(content, ruleModel, rulePrompt || undefined, 'rule_reply');
+                  const dsReply = await sendToDeepSeekAndGetReply(finalContent, ruleModel, rulePrompt || undefined, 'rule_reply');
                   const chunks = dsReply.content.match(/[\s\S]{1,2000}/g) || [dsReply.content];
                   for (const chunk of chunks) {
                     await sendWeComMessage(userId, chunk);
@@ -2023,8 +2073,8 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
                   const taskId = await getOrCreateManusTask(userId);
                   if (taskId) {
                     const manusContent = rulePrompt
-                      ? `[系统指令]\n${rulePrompt}\n\n[用户消息]\n${content}`
-                      : content;
+                      ? `[系统指令]\n${rulePrompt}\n\n[用户消息]\n${finalContent}`
+                      : finalContent;
                     const reply = await sendToManusAndGetReply(taskId, manusContent, ruleModel);
                     // 如果 Manus 返回空内容（沉默规则），不发任何消息
                     if (reply.text || reply.imageUrls.length > 0 || reply.fileAttachments.length > 0) {
@@ -2059,7 +2109,7 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
     // 当用户已选择 auto_route，或全局路由开关开启时，触发智能分类
     const shouldRoute = userModelProfile === "auto_route" || (routeConfig.enabled && routeConfig.classifierPrompt);
     if (shouldRoute && routeConfig.classifierPrompt) {
-      const cls = await classifyMessage(content, routeConfig.classifierPrompt, routeConfig.classifierModel);
+      const cls = await classifyMessage(finalContent, routeConfig.classifierPrompt, routeConfig.classifierModel);
       classifierResult = cls.result;
       classifierTokens = cls.tokens;
       // 根据分类结果覆盖模型
@@ -2103,7 +2153,7 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
         return;
       }
       await sendWeComMessage(userId, waitingMsg);
-      const dsReply = await sendToDeepSeekAndGetReply(content, userModelProfile, globalSystemPrompt || undefined, 'chat_reply');
+      const dsReply = await sendToDeepSeekAndGetReply(finalContent, userModelProfile, globalSystemPrompt || undefined, 'chat_reply');
       const dsReplyText = dsReply.content;
       if (dsReplyText.length <= 2048) {
         await sendWeComMessage(userId, dsReplyText);
@@ -2134,7 +2184,7 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
             `INSERT INTO wecom_message_credits
              (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, input_tokens, output_tokens, cache_hit_tokens, model_used, reply_preview, channel_type)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'app')`,
-            [userId, "deepseek", content.substring(0, 200), prevTotalTokens, newTotalTokens, dsReply.totalTokens,
+            [userId, "deepseek", finalContent.substring(0, 200), prevTotalTokens, newTotalTokens, dsReply.totalTokens,
              inputTokensMiss, dsReply.completionTokens, cacheHitTokens, userModelProfile, dsReply.content.substring(0, 100)]
           );
           // 计算本次 DeepSeek 费用
@@ -2147,7 +2197,7 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
             try {
               await (dbConn as any).execute(
                 "INSERT INTO wecom_route_log (wecom_user_id, user_message, classifier_result, routed_to, tokens_classify, tokens_reply, latency_ms) VALUES (?,?,?,?,?,?,?)",
-                [userId, content.substring(0, 200), classifierResult, userModelProfile, classifierTokens, dsReply.totalTokens, Date.now() - startTime]
+                [userId, finalContent.substring(0, 200), classifierResult, userModelProfile, classifierTokens, dsReply.totalTokens, Date.now() - startTime]
               );
             } catch (_) {}
           }
@@ -2165,7 +2215,7 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
       }
 
       // 注入 system_prompt（全局配置 + 用户级配置叠加）
-      let finalContent = content;
+      let manusContent = finalContent;
       try {
         let combinedPrompt = globalSystemPrompt;
         const conn = await getDbConnection();
@@ -2180,7 +2230,7 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
           }
         }
         if (combinedPrompt) {
-          finalContent = `[系统指令：${combinedPrompt}]\n\n${content}`;
+          manusContent = `[系统指令：${combinedPrompt}]\n\n${finalContent}`;
         }
       } catch (_) {}
 
@@ -2196,7 +2246,7 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
         }
       } catch (_) {}
 
-      const reply = await sendToManusAndGetReply(taskId, finalContent, userModelProfile);
+      const reply = await sendToManusAndGetReply(taskId, manusContent, userModelProfile);
 
       // 回复后计算差值并写入数据库
       try {
@@ -2213,7 +2263,7 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
             `INSERT INTO wecom_message_credits
              (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, model_used, reply_preview, channel_type)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'app')`,
-            [userId, taskId, content.substring(0, 200), creditsBefore, creditsAfter, creditsUsed, userModelProfile, replyPreview]
+            [userId, taskId, finalContent.substring(0, 200), creditsBefore, creditsAfter, creditsUsed, userModelProfile, replyPreview]
           );
           console.log(`[Credits] 用户 ${userId} 本次消耗 ${creditsUsed} 积分 (${creditsBefore} -> ${creditsAfter})`);
         }
@@ -2832,6 +2882,74 @@ router.get("/api/wecom/stats/daily", async (req: Request, res: Response) => {
     res.json({ ok: true, daily });
   } catch (e) {
     console.error("[WeCom] 按日期统计失败:", e);
+    res.status(500).json({ error: "查询失败" });
+  }
+});
+
+// -----------------------------------------------------------
+// 管理API：API 用量统计（wecom_api_usage_log 按场景汇总）
+// -----------------------------------------------------------
+router.get("/api/wecom/stats/api-usage", async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+
+    const { start_date, end_date } = req.query as { start_date?: string; end_date?: string };
+    const conditions: string[] = ['1=1'];
+    if (start_date && end_date) {
+      conditions.push(`created_at >= '${start_date} 00:00:00' AND created_at <= '${end_date} 23:59:59'`);
+    }
+    const where = conditions.join(' AND ');
+
+    // 按场景汇总
+    const [byScene] = await (conn as any).execute(
+      `SELECT
+         use_case,
+         provider,
+         model_name,
+         COUNT(*) AS call_count,
+         SUM(COALESCE(input_tokens,0)) AS total_input_tokens,
+         SUM(COALESCE(output_tokens,0)) AS total_output_tokens,
+         SUM(COALESCE(input_tokens,0)+COALESCE(output_tokens,0)) AS total_tokens,
+         SUM(COALESCE(audio_seconds,0)) AS total_audio_seconds
+       FROM wecom_api_usage_log
+       WHERE ${where}
+       GROUP BY use_case, provider, model_name
+       ORDER BY call_count DESC`
+    ) as any;
+
+    // 按天汇总（最近30天）
+    const [byDay] = await (conn as any).execute(
+      `SELECT
+         DATE(created_at) AS date,
+         COUNT(*) AS call_count,
+         SUM(COALESCE(input_tokens,0)+COALESCE(output_tokens,0)) AS total_tokens
+       FROM wecom_api_usage_log
+       WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+       GROUP BY DATE(created_at)
+       ORDER BY date DESC`
+    ) as any;
+
+    res.json({
+      ok: true,
+      by_scene: (byScene as any[]).map(r => ({
+        use_case: r.use_case,
+        provider: r.provider,
+        model_name: r.model_name,
+        call_count: Number(r.call_count) || 0,
+        total_input_tokens: Number(r.total_input_tokens) || 0,
+        total_output_tokens: Number(r.total_output_tokens) || 0,
+        total_tokens: Number(r.total_tokens) || 0,
+        total_audio_seconds: Number(r.total_audio_seconds) || 0,
+      })),
+      by_day: (byDay as any[]).map(r => ({
+        date: r.date instanceof Date ? r.date.toISOString().slice(0,10) : String(r.date).slice(0,10),
+        call_count: Number(r.call_count) || 0,
+        total_tokens: Number(r.total_tokens) || 0,
+      })),
+    });
+  } catch (e) {
+    console.error("[WeCom] API用量统计查询失败:", e);
     res.status(500).json({ error: "查询失败" });
   }
 });
@@ -4411,67 +4529,84 @@ router.post("/api/wecom/ai-assist-config", async (req: Request, res: Response) =
       if (k.level === 'similar') judgeQueue.push({ key: k._key, newText: `问：${k.question}\n答：${k.answer}`, matched: k.matched });
     });
 
-    // AI 二次判断：对中间区间条目批量询问是否有补充价值
-    const aiVerdict: Record<string, { keep: boolean; reason: string }> = {};
+    // AI 二次判断 + 差量提取：对相似条目，AI 只提取「新内容里现有条目没有的增量」，重复部分丢弃
+    // verdict.action: 'add'(全新保留) | 'merge'(只保留增量delta) | 'skip'(完全重复丢弃)
+    const aiVerdict: Record<string, { keep: boolean; action: string; reason: string; delta?: string; deltaQ?: string; deltaA?: string }> = {};
     if (judgeQueue.length > 0) {
       try {
         const listText = judgeQueue.map((j, i) =>
-          `[${i}] 新内容：${j.newText.slice(0, 200)}\n    现有最相似条目：${(j.matched || '').slice(0, 200)}`
+          `[${i}] 新内容：${j.newText.slice(0, 300)}\n    现有最相似条目：${(j.matched || '').slice(0, 300)}`
         ).join('\n\n');
-        const judgePrompt = `你是营养顾问知识库管理助手。下面每一条是「新内容」与知识库中「现有最相似条目」的对比。请逐条判断新内容该「加入」还是「去重」：\n- action="add"：新内容提供了额外信息、更精确的数据、不同场景、补充角度，或与现有条目主题不同（只是算法误判到一起）\n- action="skip"：新内容与现有条目表达同一意思、无实质补充，属于重复\n重要：reason 必须与 action 逻辑一致（说“提供了额外信息/不同主题”就必须 action=add；说“重复/相同”就必须 action=skip）\n\n待判断列表：\n${listText}\n\n仅返回 JSON 数组，格式：[{"index":0,"action":"add","reason":"简短理由（20字以内）"}]，不要其他文字。`;
+        const judgePrompt = `你是营养顾问知识库管理助手。下面每一条是「新内容」与知识库中「现有最相似条目」的对比。请逐条做“差量合并”判断，目标是【只保留新内容里现有条目没有的增量信息，重复部分一律丢弃】：\n\n- action="skip"：新内容与现有条目表达完全相同的意思、没有任何新增信息 → 整条丢弃\n- action="merge"：新内容与现有条目大部分重复，但含有少量现有条目没有的增量信息（如更精确的数据、新的例子、补充的场景） → 必须在 delta 字段里只写出“那部分增量信息”，重复部分不要写\n- action="add"：新内容与现有条目其实主题不同（算法误判到一起），或绝大部分都是新信息 → 整条作为新内容保留，delta 留空\n\n要求：\n1. delta 必须是完整通顺的一句话或一段话，能独立入库，不能只是零散词\n2. delta 里绝不能包含现有条目里已有的信息\n3. 若该条是“问答对”（含“问：”“答：”），merge 时请用 deltaQ/deltaA 分别给出增量后的问题与答案\n\n待判断列表：\n${listText}\n\n仅返回 JSON 数组，格式：[{"index":0,"action":"merge","reason":"简短理由(20字内)","delta":"增量内容","deltaQ":"增量问题(问答对时)","deltaA":"增量答案(问答对时)"}]，不要其他文字。`;
         const judgeRes = await callAI('ai_organize', [
-          { role: 'system', content: '你是严谨的知识库去重助手，只返回 JSON，reason 必须与 action 一致。' },
+          { role: 'system', content: '你是严谨的知识库差量合并助手，只返回 JSON。核心原则：只提取增量信息，重复部分一律丢弃，delta 绝不能含已有信息。' },
           { role: 'user', content: judgePrompt },
         ]);
         let jtext = (judgeRes.text || '').trim();
         const jm = jtext.match(/\[[\s\S]*\]/);
         if (jm) jtext = jm[0];
         const arr = JSON.parse(jtext);
-        // 理由中出现正向词（补充/额外/不同/新增）却判 skip，视为 AI 自相矛盾，纠正为 keep
         const POSITIVE_RE = /额外|补充|不同|新增|更精确|更详细|不是重复|非重复|新信息|新内容|不相关/;
         const NEGATIVE_RE = /重复|相同|一致|已有|重叠|同一/;
         for (const v of arr) {
           const item = judgeQueue[v.index];
           if (!item) continue;
           const reason = String(v.reason || '');
-          let keep = String(v.action || '').toLowerCase() === 'add';
-          // 一致性兜底：理由明显正向但判 skip → 纠正为 add
-          if (!keep && POSITIVE_RE.test(reason) && !NEGATIVE_RE.test(reason)) keep = true;
-          // 理由明显负向但判 add → 纠正为 skip
-          if (keep && NEGATIVE_RE.test(reason) && !POSITIVE_RE.test(reason)) keep = false;
-          aiVerdict[item.key] = { keep, reason };
+          let action = String(v.action || '').toLowerCase();
+          if (action !== 'add' && action !== 'merge' && action !== 'skip') {
+            // 兜底：按理由推断
+            action = NEGATIVE_RE.test(reason) && !POSITIVE_RE.test(reason) ? 'skip' : 'add';
+          }
+          const delta = String(v.delta || '').trim();
+          const deltaQ = String(v.deltaQ || '').trim();
+          const deltaA = String(v.deltaA || '').trim();
+          // 一致性兜底：判 merge 却没给出任何 delta → 降级
+          if (action === 'merge' && !delta && !deltaA) {
+            action = NEGATIVE_RE.test(reason) ? 'skip' : 'add';
+          }
+          const keep = action !== 'skip';
+          aiVerdict[item.key] = { keep, action, reason, delta, deltaQ, deltaA };
         }
       } catch (je) {
-        console.error('[AI辅助] 二次归类判断失败，相似条目默认归入建议加入:', je);
+        console.error('[AI辅助] 二次差量判断失败，相似条目默认整条归入建议加入:', je);
       }
     }
 
-    // 根据 level + AI 判决生成最终 recommendation/dedup_reason/matched
+    // 根据 level + AI 判决生成最终 recommendation/dedup_reason/matched/action/delta
     function finalize(level: string, score: number, matched: string, key: string) {
       const pct = Math.round(score * 100);
       if (level === 'duplicate') {
-        return { recommendation: 'skip', dedup_reason: `与现有条目高度重复（相似度${pct}%）`, matched };
+        return { recommendation: 'skip', action: 'skip', dedup_reason: `与现有条目高度重复（相似度${pct}%）`, matched };
       }
       if (level === 'similar') {
         const v = aiVerdict[key];
-        if (v && !v.keep) {
-          return { recommendation: 'skip', dedup_reason: v.reason || `与现有条目重复（相似度${pct}%）`, matched };
+        if (v && v.action === 'skip') {
+          return { recommendation: 'skip', action: 'skip', dedup_reason: v.reason || `与现有条目重复（相似度${pct}%）`, matched };
         }
-        if (v && v.keep) {
-          return { recommendation: 'add', dedup_reason: v.reason || `相似但有补充价值（相似度${pct}%）`, matched };
+        if (v && v.action === 'merge') {
+          return { recommendation: 'add', action: 'merge', dedup_reason: v.reason || `仅保留增量部分（原文相似度${pct}%）`, matched, delta: v.delta, deltaQ: v.deltaQ, deltaA: v.deltaA };
         }
-        return { recommendation: 'add', dedup_reason: `与现有条目部分相似（相似度${pct}%），建议人工复核`, matched };
+        if (v && v.action === 'add') {
+          return { recommendation: 'add', action: 'add', dedup_reason: v.reason || `与现有条目主题不同，整条加入`, matched };
+        }
+        return { recommendation: 'add', action: 'add', dedup_reason: `与现有条目部分相似（相似度${pct}%），建议人工复核`, matched };
       }
-      return { recommendation: 'add', dedup_reason: '全新内容', matched: '' };
+      return { recommendation: 'add', action: 'add', dedup_reason: '全新内容', matched: '' };
     }
 
     const promptAdditions = promptRaw.map((p: any) => {
-      const f = finalize(p.level, p.score, p.matched, p._key);
-      return { content: p.content, recommendation: f.recommendation, dedup_reason: f.dedup_reason, matched: f.matched, duplicate_check: f.recommendation === 'skip' ? 'duplicate' : 'new' };
+      const f: any = finalize(p.level, p.score, p.matched, p._key);
+      // merge 时用增量 delta 替换要入库的内容；original 保留原文供对照展示
+      const finalContent = (f.action === 'merge' && f.delta) ? f.delta : p.content;
+      return { content: finalContent, original: p.content, recommendation: f.recommendation, action: f.action, dedup_reason: f.dedup_reason, matched: f.matched, duplicate_check: f.recommendation === 'skip' ? 'duplicate' : 'new' };
     });
     const kbItems = kbRaw.map((k: any) => {
-      const f = finalize(k.level, k.score, k.matched, k._key);
-      return { question: k.question, answer: k.answer, recommendation: f.recommendation, dedup_reason: f.dedup_reason, matched: f.matched, duplicate_check: f.recommendation === 'skip' ? 'duplicate' : 'new' };
+      const f: any = finalize(k.level, k.score, k.matched, k._key);
+      // merge 时用增量 deltaQ/deltaA 替换；originalQ/A 保留原文
+      const useMerge = f.action === 'merge' && (f.deltaA || f.deltaQ);
+      const finalQ = useMerge ? (f.deltaQ || k.question) : k.question;
+      const finalA = useMerge ? (f.deltaA || k.answer) : k.answer;
+      return { question: finalQ, answer: finalA, originalQuestion: k.question, originalAnswer: k.answer, recommendation: f.recommendation, action: f.action, dedup_reason: f.dedup_reason, matched: f.matched, duplicate_check: f.recommendation === 'skip' ? 'duplicate' : 'new' };
     });
 
     // 按 recommendation 分组汇总
@@ -4486,9 +4621,12 @@ router.post("/api/wecom/ai-assist-config", async (req: Request, res: Response) =
 
     const addCount = addItems.length;
     const skipCount = skipItems.length;
-    const dupSummary = skipCount > 0
-      ? `✅ 建议加入 ${addCount} 条，已自动去重 ${skipCount} 条`
-      : `✅ 全部 ${addCount} 条均建议加入，无重复`;
+    const mergeCount = addItems.filter((it: any) => it.action === 'merge').length;
+    const parts: string[] = [];
+    if (addCount > 0) parts.push(`✅ 建议加入 ${addCount} 条`);
+    if (mergeCount > 0) parts.push(`其中 ${mergeCount} 条已只保留增量部分`);
+    if (skipCount > 0) parts.push(`已自动去重 ${skipCount} 条`);
+    const dupSummary = parts.join('，') || '无可加入内容';
 
     res.json({
       ok: true,

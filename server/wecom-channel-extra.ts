@@ -1034,6 +1034,24 @@ async function ensureCorpusTables(conn: any) {
       await conn.execute(`ALTER TABLE wecom_digital_twin ${m.sql}`);
     } catch (_) { /* 列已存在，忽略 */ }
   }
+  // API 用量记录表（统一记录所有 AI 调用的 token/积分/次数）
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS wecom_api_usage_log (
+      id            BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      use_case      VARCHAR(64) NOT NULL COMMENT '场景标识，如 chat/embedding/image_ocr/voice_asr',
+      provider      VARCHAR(32) NOT NULL DEFAULT '' COMMENT '服务商，如 hunyuan/deepseek/manus',
+      model_name    VARCHAR(64) NOT NULL DEFAULT '' COMMENT '模型名称',
+      channel_id    INT NULL COMMENT '关联分身渠道，NULL 表示平台级调用',
+      input_tokens  INT NOT NULL DEFAULT 0 COMMENT '输入 token 数（或等效计量）',
+      output_tokens INT NOT NULL DEFAULT 0 COMMENT '输出 token 数',
+      duration_sec  FLOAT NOT NULL DEFAULT 0 COMMENT '音频时长（秒），语音识别专用',
+      cost_unit     VARCHAR(16) NOT NULL DEFAULT 'token' COMMENT '计费单位：token/second/call',
+      extra         TEXT NULL COMMENT 'JSON 扩展字段',
+      created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_use_case_time (use_case, created_at),
+      INDEX idx_channel_time (channel_id, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
 }
 
 /** GET /api/wecom/corpus/stats?channel_id=3 */

@@ -1285,7 +1285,7 @@ function StatsTab() {
   const [loading, setLoading] = useState(false);
   const [totalCost, setTotalCost] = useState(0);
   const [totalCny, setTotalCny] = useState(0);
-  const [viewMode, setViewMode] = useState<'user' | 'time' | 'ai' | 'logs'>('user');
+  const [viewMode, setViewMode] = useState<'user' | 'time' | 'ai' | 'logs' | 'api_usage'>('user');
   // 对话记录明细状态
   const [platLogs, setPlatLogs] = useState<any[]>([]);
   const [platLogsTotal, setPlatLogsTotal] = useState(0);
@@ -1434,15 +1434,15 @@ function StatsTab() {
       {/* Tab 主视角切换 */}
       <div className="flex items-center gap-2">
         <div className="flex bg-gray-100 rounded-xl p-1 flex-1">
-          {(['user', 'time', 'ai', 'logs'] as const).map((mode) => (
+          {(['user', 'time', 'ai', 'logs', 'api_usage'] as const).map((mode) => (
             <button
               key={mode}
-              onClick={() => setViewMode(mode)}
+              onClick={() => setViewMode(mode as any)}
               className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
                 viewMode === mode ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
               }`}
             >
-              {mode === 'user' ? '按用户' : mode === 'time' ? '按时间' : mode === 'ai' ? 'AI汇总' : '对话记录'}
+              {mode === 'user' ? '按用户' : mode === 'time' ? '按时间' : mode === 'ai' ? 'AI汇总' : mode === 'logs' ? '对话记录' : 'API用量'}
             </button>
           ))}
         </div>
@@ -1945,6 +1945,93 @@ function StatsTab() {
           )}
         </div>
       )}
+
+      {/* API 用量详情 */}
+      {viewMode === 'api_usage' && (
+        <ApiUsageView />
+      )}
+    </div>
+  );
+}
+
+// API 用量视图组件
+const USE_CASE_LABELS: Record<string, string> = {
+  chat_reply: '对话回复',
+  rule_reply: '规则回复',
+  ai_organize: 'AI辅助整理',
+  image_ocr: '图片识别',
+  embedding: '向量检索',
+  voice_asr: '语音识别',
+  classifier: '智能路由',
+};
+function ApiUsageView() {
+  const [data, setData] = useState<{ by_scene: any[]; by_day: any[] } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/wecom/stats/api-usage')
+      .then(r => r.json())
+      .then(d => { if (d.ok) setData(d); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-blue-500" /></div>;
+  if (!data || data.by_scene.length === 0) return (
+    <div className="text-center py-12 text-gray-400 text-sm">
+      <div className="text-3xl mb-2">📊</div>
+      <div>暂无 API 用量记录</div>
+      <div className="text-xs mt-1 text-gray-300">有 AI 调用后自动记录</div>
+    </div>
+  );
+
+  const totalCalls = data.by_scene.reduce((s, r) => s + r.call_count, 0);
+  const totalTokens = data.by_scene.reduce((s, r) => s + r.total_tokens, 0);
+  const totalAudioSec = data.by_scene.reduce((s, r) => s + r.total_audio_seconds, 0);
+
+  return (
+    <div className="space-y-3">
+      {/* 汇总卡片 */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="bg-blue-50 rounded-xl p-3 text-center">
+          <div className="text-xl font-bold text-blue-700">{totalCalls.toLocaleString()}</div>
+          <div className="text-xs text-blue-400 mt-0.5">总调用次数</div>
+        </div>
+        <div className="bg-purple-50 rounded-xl p-3 text-center">
+          <div className="text-xl font-bold text-purple-700">{totalTokens >= 10000 ? (totalTokens / 10000).toFixed(1) + '万' : totalTokens.toLocaleString()}</div>
+          <div className="text-xs text-purple-400 mt-0.5">总 Tokens</div>
+        </div>
+        <div className="bg-orange-50 rounded-xl p-3 text-center">
+          <div className="text-xl font-bold text-orange-700">{totalAudioSec >= 60 ? (totalAudioSec / 60).toFixed(1) + '分' : totalAudioSec + '秒'}</div>
+          <div className="text-xs text-orange-400 mt-0.5">语音时长</div>
+        </div>
+      </div>
+
+      {/* 按场景明细 */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-50">
+          <div className="text-sm font-bold text-gray-800">各场景用量明细</div>
+          <div className="text-xs text-gray-400 mt-0.5">按场景分类统计，可对应管理平台的 AI 模型配置</div>
+        </div>
+        <div className="divide-y divide-gray-50">
+          {data.by_scene.map((row, i) => (
+            <div key={i} className="px-4 py-3">
+              <div className="flex items-center justify-between mb-1">
+                <div>
+                  <span className="text-sm font-medium text-gray-800">{USE_CASE_LABELS[row.use_case] || row.use_case}</span>
+                  <span className="ml-2 text-xs text-gray-400">{row.provider} · {row.model_name}</span>
+                </div>
+                <span className="text-xs font-bold text-blue-600">{row.call_count.toLocaleString()} 次</span>
+              </div>
+              <div className="flex gap-3 text-xs text-gray-500">
+                <span>输入 {row.total_input_tokens.toLocaleString()} tok</span>
+                <span>输出 {row.total_output_tokens.toLocaleString()} tok</span>
+                {row.total_audio_seconds > 0 && <span>语音 {row.total_audio_seconds >= 60 ? (row.total_audio_seconds/60).toFixed(1)+'分' : row.total_audio_seconds+'秒'}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -3064,8 +3151,8 @@ function AIModelConfigTab() {
 interface SharedKb { id: number; name: string; description?: string | null; item_count: number; }
 
 // 平台版「零步 AI 辅助整理」：把大白话智能归类后写入平台共享规则(channel_id=1)与选中的共享库
-interface PlatAddPrompt { content: string; recommendation?: 'add' | 'skip'; dedup_reason?: string; matched?: string; }
-interface PlatAddKb { question: string; answer: string; recommendation?: 'add' | 'skip'; dedup_reason?: string; matched?: string; }
+interface PlatAddPrompt { content: string; original?: string; action?: 'add' | 'merge' | 'skip'; recommendation?: 'add' | 'skip'; dedup_reason?: string; matched?: string; }
+interface PlatAddKb { question: string; answer: string; originalQuestion?: string; originalAnswer?: string; action?: 'add' | 'merge' | 'skip'; recommendation?: 'add' | 'skip'; dedup_reason?: string; matched?: string; }
 interface PlatAiResult { ok: boolean; prompt_additions: PlatAddPrompt[]; kb_items: PlatAddKb[]; summary?: string; dup_summary?: string; }
 
 function PlatformAiAssistCard({ sharedKbs, onApplied }: { sharedKbs: SharedKb[]; onApplied: () => void }) {
@@ -3218,8 +3305,17 @@ function PlatformAiAssistCard({ sharedKbs, onApplied }: { sharedKbs: SharedKb[];
                         <div className={`w-4 h-4 rounded border flex items-center justify-center ${selPrompts[i] ? 'bg-purple-500 border-purple-500' : 'border-gray-300'}`}>{selPrompts[i] && <Check className="w-3 h-3 text-white" />}</div>
                       </button>
                       <div className="flex-1 min-w-0">
-                        <span className={`block text-xs whitespace-pre-wrap ${selPrompts[i] ? 'text-purple-800' : 'text-gray-400 line-through'}`}>{p.content}</span>
-                        {p.dedup_reason && <div className={`mt-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded ${p.recommendation === 'skip' ? 'bg-gray-100 text-gray-500' : 'bg-green-50 text-green-600'}`}>{p.recommendation === 'skip' ? '⛔ ' : '✅ '}{p.dedup_reason}</div>}
+                        {p.action === 'merge' && p.original ? (
+                          <>
+                            <div className="text-[10px] text-gray-400 mb-0.5">原文（重复部分已去除）：</div>
+                            <span className="block text-xs text-gray-400 line-through whitespace-pre-wrap">{p.original}</span>
+                            <div className="text-[10px] text-green-600 mt-1 mb-0.5">⤵ 仅入库这部分增量：</div>
+                            <span className={`block text-xs whitespace-pre-wrap ${selPrompts[i] ? 'text-purple-800 font-medium' : 'text-gray-400 line-through'}`}>{p.content}</span>
+                          </>
+                        ) : (
+                          <span className={`block text-xs whitespace-pre-wrap ${selPrompts[i] ? 'text-purple-800' : 'text-gray-400 line-through'}`}>{p.content}</span>
+                        )}
+                        {p.dedup_reason && <div className={`mt-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded ${p.recommendation === 'skip' ? 'bg-gray-100 text-gray-500' : p.action === 'merge' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'}`}>{p.recommendation === 'skip' ? '⛔ ' : p.action === 'merge' ? '✂️ ' : '✅ '}{p.dedup_reason}</div>}
                       </div>
                     </div>
                   ))}
@@ -3234,9 +3330,22 @@ function PlatformAiAssistCard({ sharedKbs, onApplied }: { sharedKbs: SharedKb[];
                         <div className={`w-4 h-4 rounded border flex items-center justify-center ${selKbs[i] ? 'bg-amber-500 border-amber-500' : 'border-gray-300'}`}>{selKbs[i] && <Check className="w-3 h-3 text-white" />}</div>
                       </button>
                       <div className="flex-1 text-xs min-w-0">
-                        <div className={`font-medium ${selKbs[i] ? 'text-amber-800' : 'text-gray-400 line-through'}`}>Q: {item.question}</div>
-                        <div className={`mt-0.5 ${selKbs[i] ? 'text-amber-700' : 'text-gray-400 line-through'}`}>A: {item.answer}</div>
-                        {item.dedup_reason && <div className={`mt-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded ${item.recommendation === 'skip' ? 'bg-gray-100 text-gray-500' : 'bg-green-50 text-green-600'}`}>{item.recommendation === 'skip' ? '⛔ ' : '✅ '}{item.dedup_reason}</div>}
+                        {item.action === 'merge' && (item.originalAnswer || item.originalQuestion) ? (
+                          <>
+                            <div className="text-[10px] text-gray-400 mb-0.5">原文（重复部分已去除）：</div>
+                            <div className="text-gray-400 line-through">Q: {item.originalQuestion}</div>
+                            <div className="text-gray-400 line-through mt-0.5">A: {item.originalAnswer}</div>
+                            <div className="text-[10px] text-green-600 mt-1 mb-0.5">⤵ 仅入库这部分增量：</div>
+                            <div className={`font-medium ${selKbs[i] ? 'text-amber-800' : 'text-gray-400 line-through'}`}>Q: {item.question}</div>
+                            <div className={`mt-0.5 ${selKbs[i] ? 'text-amber-700' : 'text-gray-400 line-through'}`}>A: {item.answer}</div>
+                          </>
+                        ) : (
+                          <>
+                            <div className={`font-medium ${selKbs[i] ? 'text-amber-800' : 'text-gray-400 line-through'}`}>Q: {item.question}</div>
+                            <div className={`mt-0.5 ${selKbs[i] ? 'text-amber-700' : 'text-gray-400 line-through'}`}>A: {item.answer}</div>
+                          </>
+                        )}
+                        {item.dedup_reason && <div className={`mt-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded ${item.recommendation === 'skip' ? 'bg-gray-100 text-gray-500' : item.action === 'merge' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'}`}>{item.recommendation === 'skip' ? '⛔ ' : item.action === 'merge' ? '✂️ ' : '✅ '}{item.dedup_reason}</div>}
                       </div>
                     </div>
                   ))}
@@ -4008,6 +4117,8 @@ interface AiAssistResult {
 }
 type PromptAddition = {
   content: string;
+  original?: string;
+  action?: 'add' | 'merge' | 'skip';
   recommendation?: 'add' | 'skip';
   dedup_reason?: string;
   matched?: string;
@@ -4015,6 +4126,9 @@ type PromptAddition = {
 type KbItemResult = {
   question: string;
   answer: string;
+  originalQuestion?: string;
+  originalAnswer?: string;
+  action?: 'add' | 'merge' | 'skip';
   recommendation?: 'add' | 'skip';
   dedup_reason?: string;
   matched?: string;
@@ -4268,14 +4382,23 @@ function AiAssistConfigCard({
                             }`}>{selectedPrompts[i] && <Check className="w-3 h-3 text-white" />}</div>
                           </button>
                           <div className="flex-1 min-w-0">
-                            <span className={`block text-xs whitespace-pre-wrap ${
-                              selectedPrompts[i] ? 'text-purple-800' : 'text-gray-400 line-through'
-                            }`}>{p.content}</span>
+                            {p.action === 'merge' && p.original ? (
+                              <>
+                                <div className="text-[10px] text-gray-400 mb-0.5">原文（重复部分已去除）：</div>
+                                <span className="block text-xs text-gray-400 line-through whitespace-pre-wrap">{p.original}</span>
+                                <div className="text-[10px] text-green-600 mt-1 mb-0.5">⤵ 仅入库这部分增量：</div>
+                                <span className={`block text-xs whitespace-pre-wrap ${selectedPrompts[i] ? 'text-purple-800 font-medium' : 'text-gray-400 line-through'}`}>{p.content}</span>
+                              </>
+                            ) : (
+                              <span className={`block text-xs whitespace-pre-wrap ${
+                                selectedPrompts[i] ? 'text-purple-800' : 'text-gray-400 line-through'
+                              }`}>{p.content}</span>
+                            )}
                             {p.dedup_reason && (
                               <div className={`mt-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded ${
-                                p.recommendation === 'skip' ? 'bg-gray-100 text-gray-500' : 'bg-green-50 text-green-600'
+                                p.recommendation === 'skip' ? 'bg-gray-100 text-gray-500' : p.action === 'merge' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'
                               }`}>
-                                {p.recommendation === 'skip' ? '⛔ ' : '✅ '}{p.dedup_reason}
+                                {p.recommendation === 'skip' ? '⛔ ' : p.action === 'merge' ? '✂️ ' : '✅ '}{p.dedup_reason}
                               </div>
                             )}
                           </div>
@@ -4340,13 +4463,26 @@ function AiAssistConfigCard({
                             }`}>{selectedKbs[i] && <Check className="w-3 h-3 text-white" />}</div>
                           </button>
                           <div className="flex-1 text-xs min-w-0">
-                            <div className={`font-medium ${ selectedKbs[i] ? 'text-blue-800' : 'text-gray-400 line-through' }`}>Q: {item.question}</div>
-                            <div className={`mt-0.5 ${ selectedKbs[i] ? 'text-blue-600' : 'text-gray-400 line-through' }`}>A: {item.answer}</div>
+                            {item.action === 'merge' && (item.originalAnswer || item.originalQuestion) ? (
+                              <>
+                                <div className="text-[10px] text-gray-400 mb-0.5">原文（重复部分已去除）：</div>
+                                <div className="text-gray-400 line-through">Q: {item.originalQuestion}</div>
+                                <div className="text-gray-400 line-through mt-0.5">A: {item.originalAnswer}</div>
+                                <div className="text-[10px] text-green-600 mt-1 mb-0.5">⤵ 仅入库这部分增量：</div>
+                                <div className={`font-medium ${ selectedKbs[i] ? 'text-blue-800' : 'text-gray-400 line-through' }`}>Q: {item.question}</div>
+                                <div className={`mt-0.5 ${ selectedKbs[i] ? 'text-blue-600' : 'text-gray-400 line-through' }`}>A: {item.answer}</div>
+                              </>
+                            ) : (
+                              <>
+                                <div className={`font-medium ${ selectedKbs[i] ? 'text-blue-800' : 'text-gray-400 line-through' }`}>Q: {item.question}</div>
+                                <div className={`mt-0.5 ${ selectedKbs[i] ? 'text-blue-600' : 'text-gray-400 line-through' }`}>A: {item.answer}</div>
+                              </>
+                            )}
                             {item.dedup_reason && (
                               <div className={`mt-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded ${
-                                item.recommendation === 'skip' ? 'bg-gray-100 text-gray-500' : 'bg-green-50 text-green-600'
+                                item.recommendation === 'skip' ? 'bg-gray-100 text-gray-500' : item.action === 'merge' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'
                               }`}>
-                                {item.recommendation === 'skip' ? '⛔ ' : '✅ '}{item.dedup_reason}
+                                {item.recommendation === 'skip' ? '⛔ ' : item.action === 'merge' ? '✂️ ' : '✅ '}{item.dedup_reason}
                               </div>
                             )}
                           </div>
@@ -6228,13 +6364,22 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
                               }`}>{step0SelPrompts[i] && <Check className="w-3 h-3 text-white" />}</div>
                             </button>
                             <div className="flex-1 min-w-0">
-                              <span className={`block text-xs whitespace-pre-wrap ${
-                                step0SelPrompts[i] ? 'text-purple-800' : 'text-gray-400 line-through'
-                              }`}>{p.content}</span>
+                              {p.action === 'merge' && p.original ? (
+                                <>
+                                  <div className="text-[10px] text-gray-400 mb-0.5">原文（重复部分已去除）：</div>
+                                  <span className="block text-xs text-gray-400 line-through whitespace-pre-wrap">{p.original}</span>
+                                  <div className="text-[10px] text-green-600 mt-1 mb-0.5">⤵ 仅入库这部分增量：</div>
+                                  <span className={`block text-xs whitespace-pre-wrap ${step0SelPrompts[i] ? 'text-purple-800 font-medium' : 'text-gray-400 line-through'}`}>{p.content}</span>
+                                </>
+                              ) : (
+                                <span className={`block text-xs whitespace-pre-wrap ${
+                                  step0SelPrompts[i] ? 'text-purple-800' : 'text-gray-400 line-through'
+                                }`}>{p.content}</span>
+                              )}
                               {p.dedup_reason && (
                                 <div className={`mt-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded ${
-                                  p.recommendation === 'skip' ? 'bg-gray-100 text-gray-500' : 'bg-green-50 text-green-600'
-                                }`}>{p.recommendation === 'skip' ? '⛔ ' : '✅ '}{p.dedup_reason}</div>
+                                  p.recommendation === 'skip' ? 'bg-gray-100 text-gray-500' : p.action === 'merge' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'
+                                }`}>{p.recommendation === 'skip' ? '⛔ ' : p.action === 'merge' ? '✂️ ' : '✅ '}{p.dedup_reason}</div>
                               )}
                             </div>
                             <button onClick={() => { setStep0EditPromptIdx(i); setStep0EditDraftPrompt(p.content); }} className="flex-shrink-0 text-gray-300 hover:text-purple-500">
@@ -6287,12 +6432,25 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
                               }`}>{step0SelKbs[i] && <Check className="w-3 h-3 text-white" />}</div>
                             </button>
                             <div className="flex-1 text-xs min-w-0">
-                              <div className={`font-medium ${ step0SelKbs[i] ? 'text-blue-800' : 'text-gray-400 line-through' }`}>Q: {item.question}</div>
-                              <div className={`mt-0.5 ${ step0SelKbs[i] ? 'text-blue-600' : 'text-gray-400 line-through' }`}>A: {item.answer}</div>
+                              {item.action === 'merge' && (item.originalAnswer || item.originalQuestion) ? (
+                                <>
+                                  <div className="text-[10px] text-gray-400 mb-0.5">原文（重复部分已去除）：</div>
+                                  <div className="text-gray-400 line-through">Q: {item.originalQuestion}</div>
+                                  <div className="text-gray-400 line-through mt-0.5">A: {item.originalAnswer}</div>
+                                  <div className="text-[10px] text-green-600 mt-1 mb-0.5">⤵ 仅入库这部分增量：</div>
+                                  <div className={`font-medium ${ step0SelKbs[i] ? 'text-blue-800' : 'text-gray-400 line-through' }`}>Q: {item.question}</div>
+                                  <div className={`mt-0.5 ${ step0SelKbs[i] ? 'text-blue-600' : 'text-gray-400 line-through' }`}>A: {item.answer}</div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className={`font-medium ${ step0SelKbs[i] ? 'text-blue-800' : 'text-gray-400 line-through' }`}>Q: {item.question}</div>
+                                  <div className={`mt-0.5 ${ step0SelKbs[i] ? 'text-blue-600' : 'text-gray-400 line-through' }`}>A: {item.answer}</div>
+                                </>
+                              )}
                               {item.dedup_reason && (
                                 <div className={`mt-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded ${
-                                  item.recommendation === 'skip' ? 'bg-gray-100 text-gray-500' : 'bg-green-50 text-green-600'
-                                }`}>{item.recommendation === 'skip' ? '⛔ ' : '✅ '}{item.dedup_reason}</div>
+                                  item.recommendation === 'skip' ? 'bg-gray-100 text-gray-500' : item.action === 'merge' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'
+                                }`}>{item.recommendation === 'skip' ? '⛔ ' : item.action === 'merge' ? '✂️ ' : '✅ '}{item.dedup_reason}</div>
                               )}
                             </div>
                             <button onClick={() => { setStep0EditKbIdx(i); setStep0EditDraftQ(item.question); setStep0EditDraftA(item.answer); }} className="flex-shrink-0 text-gray-300 hover:text-blue-500">

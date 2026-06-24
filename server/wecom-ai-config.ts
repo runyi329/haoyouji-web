@@ -29,7 +29,8 @@ export type UseCase =
   | "ai_organize"
   | "ai_analyze"
   | "image_ocr"
-  | "embedding";
+  | "embedding"
+  | "voice_asr";  // 语音识别（Whisper/forgeApi）
 
 // -------------------------------------------------------
 // 模型选项（供前端下拉框使用，含价格说明）
@@ -54,6 +55,7 @@ export const USE_CASE_META: Record<string, { label: string; desc: string; catego
   ai_analyze:  { label: "AI 辅助分析指令",   desc: "分析新增指令应放哪个分类，管理员操作",                    category: "chat" },
   image_ocr:   { label: "图片识别",           desc: "拍照上传图片→自动识别内容，必须选具备视觉能力的模型",   category: "vision" },
   embedding:   { label: "向量语义检索",     desc: "知识库语义检索和查重，必须选 embedding 模型",             category: "embedding" },
+  voice_asr:   { label: "语音识别",           desc: "客户发送语音消息时自动转文字，使用 Manus forgeApi（Whisper）",      category: "chat" },
 };
 
 export const MODEL_OPTIONS: ModelOption[] = [
@@ -150,6 +152,17 @@ export const MODEL_OPTIONS: ModelOption[] = [
     supports_vision: false,
     supports_embedding: true,
     category: "embedding",
+  },
+  // ===== Manus forgeApi - 语音识别（仅 voice_asr 可选）=====
+  {
+    provider: "manus",
+    model_name: "whisper-1",
+    label: "Manus Whisper（内置语音识别）",
+    price_note: "包含在 Manus 平台服务费用内，无额外计费，使用 BUILT_IN_FORGE_API_KEY",
+    api_base: "",  // 自动读取 ENV.forgeApiUrl
+    supports_vision: false,
+    supports_embedding: false,
+    category: "chat",
   },
 ];
 
@@ -253,6 +266,10 @@ export async function callAI(
   const data = await resp.json() as any;
   const text = data?.choices?.[0]?.message?.content ?? "";
   if (!text) throw new Error("AI返回内容为空");
+  const inputTok = data?.usage?.prompt_tokens ?? 0;
+  const outputTok = data?.usage?.completion_tokens ?? 0;
+  // 异步记录用量（不阻塞主流程）
+  logApiUsage({ use_case: useCase, provider: cfg.provider, model_name: cfg.model_name, input_tokens: inputTok, output_tokens: outputTok }).catch(() => {});
   return { text, model: cfg.model_name, provider: cfg.provider };
 }
 
@@ -299,5 +316,132 @@ export async function callAIVision(
   const data = await resp.json() as any;
   const text = data?.choices?.[0]?.message?.content ?? "";
   if (!text) throw new Error("图片识别返回内容为空");
+  const inputTokens = data?.usage?.prompt_tokens ?? 0;
+  const outputTokens = data?.usage?.completion_tokens ?? 0;
+  // 异步记录用量（不阻塞主流程）
+  logApiUsage({ use_case: "image_ocr", provider: cfg.provider, model_name: cfg.model_name, input_tokens: inputTokens, output_tokens: outputTokens }).catch(() => {});
   return { text, model: cfg.model_name, provider: cfg.provider };
+}
+
+// -------------------------------------------------------
+// API 用量日志（异步写入，不阻塞主流程）
+// -------------------------------------------------------
+export interface ApiUsageEntry {
+  use_case: string;
+  provider: string;
+  model_name: string;
+  channel_id?: number | null;
+  input_tokens?: number;
+  output_tokens?: number;
+  duration_sec?: number;
+  cost_unit?: string;
+  extra?: string;
+}
+
+export async function logApiUsage(entry: ApiUsageEntry): Promise<void> {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return;
+    await (conn as any).execute(
+      `INSERT INTO wecom_api_usage_log
+       (use_case, provider, model_name, channel_id, input_tokens, output_tokens, duration_sec, cost_unit, extra)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        entry.use_case,
+        entry.provider ?? "",
+        entry.model_name ?? "",
+        entry.channel_id ?? null,
+        entry.input_tokens ?? 0,
+        entry.output_tokens ?? 0,
+        entry.duration_sec ?? 0,
+        entry.cost_unit ?? "token",
+        entry.extra ?? null,
+      ]
+    );
+  } catch (e) {
+    // 用量日志失败不影响主流程
+    console.error("[logApiUsage] 写入失败:", e);
+  }
+}
+
+// -------------------------------------------------------
+// 语音识别调用（自动读取 voice_asr 配置，支持换 key）
+// -------------------------------------------------------
+import { ENV } from "./_core/env";
+
+export interface VoiceAsrResult {
+  text: string;
+  duration_sec: number;
+  language: string;
+  provider: string;
+  model: string;
+}
+
+/**
+ * 语音识别：传入音频 Buffer（AMR/MP3/WAV），返回识别文字
+ * 自动读取 voice_asr 配置：
+ *   - provider=manus 时：使用 ENV.forgeApiUrl + ENV.forgeApiKey（内置 Whisper）
+ *   - 其他 provider 时：使用配置的 api_base + api_key（展留未来换服务商）
+ */
+export async function callAIVoice(
+  audioBuffer: Buffer,
+  mimeType = "audio/amr",
+  channelId?: number | null
+): Promise<VoiceAsrResult> {
+  const cfg = await getAIConfig("voice_asr");
+  const provider = cfg?.provider ?? "manus";
+  const modelName = cfg?.model_name ?? "whisper-1";
+
+  // 确定调用地址和 key
+  let apiBase: string;
+  let apiKey: string;
+  if (provider === "manus" || !cfg?.api_base) {
+    apiBase = ENV.forgeApiUrl?.replace(/\/$/, "") ?? "";
+    apiKey = ENV.forgeApiKey ?? "";
+  } else {
+    apiBase = cfg.api_base.replace(/\/$/, "");
+    apiKey = cfg.api_key;
+  }
+
+  if (!apiBase || !apiKey) {
+    throw new Error("语音识别服务未配置（请在管理平台配置 voice_asr 或设置 BUILT_IN_FORGE_API_KEY）");
+  }
+
+  // 构建 multipart form
+  const formData = new FormData();
+  const ext = mimeType.includes("amr") ? "amr" : mimeType.includes("mp3") || mimeType.includes("mpeg") ? "mp3" : mimeType.includes("wav") ? "wav" : "audio";
+  const audioBlob = new Blob([new Uint8Array(audioBuffer)], { type: mimeType });
+  formData.append("file", audioBlob, `voice.${ext}`);
+  formData.append("model", modelName);
+  formData.append("response_format", "verbose_json");
+  formData.append("prompt", "请将用户语音转写为文字，保持原意不要翻译");
+
+  const resp = await fetch(`${apiBase}/v1/audio/transcriptions`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${apiKey}`, "Accept-Encoding": "identity" },
+    body: formData,
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => "");
+    throw new Error(`语音识别失败(${resp.status}): ${errText.substring(0, 100)}`);
+  }
+
+  const result = await resp.json() as any;
+  const text = result?.text ?? "";
+  const durationSec: number = result?.duration ?? 0;
+  const language: string = result?.language ?? "zh";
+
+  // 异步记录用量
+  logApiUsage({
+    use_case: "voice_asr",
+    provider,
+    model_name: modelName,
+    channel_id: channelId ?? null,
+    duration_sec: durationSec,
+    cost_unit: "second",
+    extra: JSON.stringify({ language }),
+  }).catch(() => {});
+
+  return { text, duration_sec: durationSec, language, provider, model: modelName };
 }
