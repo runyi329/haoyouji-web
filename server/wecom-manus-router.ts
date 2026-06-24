@@ -1797,7 +1797,9 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
             `SELECT id, type, title, description, storage_url FROM wecom_materials WHERE channel_id = ? AND is_active = 1 AND description != '' ORDER BY id`,
             [kfChannelId]
           ) as any;
+          console.log(`[KF] 素材库查询: channel_id=${kfChannelId}, 查到条数=${(matRows as any[]).length}`);
           if ((matRows as any[]).length > 0) {
+            console.log(`[KF] 素材列表:`, (matRows as any[]).map((r: any) => `id=${r.id} title=${r.title}`).join(', '));
             materialsContext = "\n\n【可发送素材列表】以下是可以发给客户的素材，当客户的问题符合某个素材的触发描述时，必须在回复文字末尾加上对应的标记（系统会自动发送素材给客户）：\n" +
               (matRows as any[]).map((r: any) => `- 素材ID=${r.id} 【${r.title}】触发条件：${r.description}。发送标记：[SEND_MAT:${r.id}]`).join("\n") +
               "\n重要：标记格式必须严格为 [SEND_MAT:数字] ，如 [SEND_MAT:1]，将它直接写在回复文字末尾，不要解释该标记";
@@ -1816,6 +1818,7 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
 
       // 8. 发送回复给用户
       // 解析 [SEND_MAT:id] 标记，提取要发送的素材ID列表，并从文字中移除标记
+      console.log(`[KF] AI原始回复(${dsReply.content.length}字): ${dsReply.content.substring(0, 200)}`);
       let replyContent = dsReply.content;
       const matIdsToSend: number[] = [];
       replyContent = replyContent.replace(/\[SEND_MAT:(\d+)\]/g, (_match: string, idStr: string) => {
