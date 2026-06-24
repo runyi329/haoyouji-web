@@ -1970,6 +1970,7 @@ function AIBrainTab() {
   const [step0Open, setStep0Open] = useState(false);
   const [step0HelpOpen, setStep0HelpOpen] = useState(false);
   const [step0Input, setStep0Input] = useState("");
+  const [step0Extra, setStep0Extra] = useState(""); // 补充说明/需求描述
   const [step0Analyzing, setStep0Analyzing] = useState(false);
   const [step0Result, setStep0Result] = useState<{ prompt_additions: { content: string; duplicate_check: string }[]; kb_items: { question: string; answer: string; duplicate_check: string }[]; summary: string } | null>(null);
   const [step0SelPrompts, setStep0SelPrompts] = useState<boolean[]>([]);
@@ -2060,15 +2061,26 @@ function AIBrainTab() {
   }
 
   async function handleStep0Analyze() {
-    if (!step0Input.trim()) return;
+    if (!step0Input.trim() && !step0Extra.trim()) return;
     setStep0Analyzing(true);
     setStep0Result(null);
     setStep0Done(false);
     try {
+      // 合并原始内容和补充说明
+      let combinedText = step0Input.trim();
+      if (step0Extra.trim()) {
+        combinedText = combinedText
+          ? `${combinedText}
+
+---
+【我的需求/补充说明】
+${step0Extra.trim()}`
+          : step0Extra.trim();
+      }
       const res = await fetch("/api/wecom/ai-assist-config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: step0Input, channelId: KF_CHANNEL_ID, kbId: 0 }),
+        body: JSON.stringify({ text: combinedText, channelId: KF_CHANNEL_ID, kbId: 0 }),
       });
       const d = await res.json();
       if (d.ok) {
@@ -2124,7 +2136,7 @@ function AIBrainTab() {
       if (chosenKbs.length > 0) msgs.push(`${kbSuccess}/${chosenKbs.length}条已写入知识库`);
       if (msgs.length > 0) toast.success(msgs.join("；"));
       setStep0Done(true);
-      setTimeout(() => { setStep0Result(null); setStep0Input(""); setStep0Done(false); }, 1500);
+      setTimeout(() => { setStep0Result(null); setStep0Input(""); setStep0Extra(""); setStep0Done(false); }, 1500);
     } catch {
       toast.error("写入失败");
     } finally {
@@ -2492,9 +2504,25 @@ function AIBrainTab() {
               )}
             </div>
 
+            {/* 补充说明输入框：上传图片/文字后可继续输入需求 */}
+            <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}`, backgroundColor: '#fff' }}>
+              <div className="flex items-center justify-between px-3 pt-2 pb-0.5">
+                <span className="text-xs" style={{ color: C.textSub }}>补充说明（可选）</span>
+                <span className="text-xs" style={{ color: step0Extra.length > 0 ? C.brand : C.textSub }}>{step0Extra.length} 字</span>
+              </div>
+              <textarea
+                value={step0Extra}
+                onChange={e => setStep0Extra(e.target.value)}
+                placeholder="例如：帮我整理成客户常问的问答格式，重点提取退款政策..."
+                rows={2}
+                className="w-full text-sm px-3 pb-2.5 resize-none focus:outline-none bg-transparent"
+                style={{ color: C.textMain, border: 'none', outline: 'none', minHeight: '52px' }}
+              />
+            </div>
+
             <button
               onClick={handleStep0Analyze}
-              disabled={step0Analyzing || !step0Input.trim()}
+              disabled={step0Analyzing || (!step0Input.trim() && !step0Extra.trim())}
               className="w-full py-2.5 rounded-xl text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
               style={{ backgroundColor: C.brand, color: '#fff' }}
             >
