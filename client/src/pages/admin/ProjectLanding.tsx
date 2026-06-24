@@ -1972,7 +1972,7 @@ function AIBrainTab() {
   const [step0Input, setStep0Input] = useState("");
   const [step0Extra, setStep0Extra] = useState(""); // 补充说明/需求描述
   const [step0Analyzing, setStep0Analyzing] = useState(false);
-  const [step0Result, setStep0Result] = useState<{ prompt_additions: { content: string; duplicate_check: string }[]; kb_items: { question: string; answer: string; duplicate_check: string }[]; summary: string } | null>(null);
+  const [step0Result, setStep0Result] = useState<{ prompt_additions: { content: string; duplicate_check: string }[]; kb_items: { question: string; answer: string; duplicate_check: string }[]; summary: string; dup_summary?: string } | null>(null);
   const [step0SelPrompts, setStep0SelPrompts] = useState<boolean[]>([]);
   const [step0SelKbs, setStep0SelKbs] = useState<boolean[]>([]);
   const [step0Applying, setStep0Applying] = useState(false);
@@ -2088,9 +2088,16 @@ ${step0Extra.trim()}`
       });
       const d = await res.json();
       if (d.ok) {
-        setStep0Result(d);
-        setStep0SelPrompts(d.prompt_additions.map(() => true));
-        setStep0SelKbs(d.kb_items.map(() => true));
+        // 兼容后端返回字符串数组的情况，统一转为对象数组
+        const normalizedPrompts = (d.prompt_additions || []).map((p: any) =>
+          typeof p === 'string' ? { content: p, duplicate_check: 'new' } : p
+        );
+        const normalizedKbs = (d.kb_items || []).map((k: any) =>
+          typeof k === 'object' && k !== null ? k : { question: String(k), answer: '', duplicate_check: 'new' }
+        );
+        setStep0Result({ ...d, prompt_additions: normalizedPrompts, kb_items: normalizedKbs });
+        setStep0SelPrompts(normalizedPrompts.map(() => true));
+        setStep0SelKbs(normalizedKbs.map(() => true));
       } else {
         toast.error(d.error || "AI分析失败");
       }
@@ -2541,6 +2548,14 @@ ${step0Extra.trim()}`
                   <div className="text-xs rounded-lg px-3 py-2 flex items-start gap-1.5" style={{ color: C.brandDeep, backgroundColor: C.brandLight }}>
                     <Sparkles className="w-3 h-3 mt-0.5 flex-shrink-0" />
                     <span>{step0Result.summary}</span>
+                  </div>
+                )}
+                {step0Result.dup_summary && (
+                  <div className="text-xs rounded-lg px-3 py-2 flex items-start gap-1.5" style={{
+                    color: step0Result.dup_summary.startsWith('⚠') ? '#DC2626' : step0Result.dup_summary.startsWith('~') ? '#D97706' : '#059669',
+                    backgroundColor: step0Result.dup_summary.startsWith('⚠') ? '#FEF2F2' : step0Result.dup_summary.startsWith('~') ? '#FFFBEB' : '#F0FDF4'
+                  }}>
+                    <span>{step0Result.dup_summary}</span>
                   </div>
                 )}
 

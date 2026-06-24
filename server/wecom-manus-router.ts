@@ -4057,11 +4057,95 @@ router.post("/api/wecom/ai-assist-config", async (req: Request, res: Response) =
     if (!parsed) {
       return res.status(500).json({ error: "AI返回格式异常，请重试" });
     }
+    // 查重：获取现有规则和知识库条目，做简单文本相似度比对
+    const conn2 = await getDbConnection();
+    let existingRules: string[] = [];
+    let existingKbItems: { question: string; answer: string }[] = [];
+    try {
+      if (conn2 && channelId) {
+        const [ruleRows] = await (conn2 as any).execute(
+          `SELECT content FROM wecom_prompt_rules WHERE channel_id = ? AND enabled = 1`,
+          [channelId]
+        );
+        existingRules = (ruleRows as any[]).map((r: any) => r.content || "");
+        // 同时查平台共享规则
+        const [sysRuleRows] = await (conn2 as any).execute(
+          `SELECT content FROM wecom_prompt_rules WHERE channel_id = 1 AND enabled = 1`
+        );
+        existingRules = existingRules.concat((sysRuleRows as any[]).map((r: any) => r.content || ""));
+
+        const [kbRows] = await (conn2 as any).execute(
+          `SELECT ki.question, ki.answer FROM wecom_knowledge_items ki
+           JOIN wecom_knowledge_bases kb ON ki.kb_id = kb.id
+           WHERE kb.channel_id = ? AND ki.enabled = 1 LIMIT 200`,
+          [channelId]
+        );
+        existingKbItems = (kbRows as any[]).map((r: any) => ({ question: r.question || "", answer: r.answer || "" }));
+      }
+    } catch {}
+
+    // 简单相似度：关键词重叠率
+    function simScore(a: string, b: string): number {
+      const wordsA = new Set(a.replace(/[，。！？、；：""''（）【】]/g, ' ').split(/\s+/).filter(w => w.length > 1));
+      const wordsB = new Set(b.replace(/[，。！？、；：""''（）【】]/g, ' ').split(/\s+/).filter(w => w.length > 1));
+      if (wordsA.size === 0 || wordsB.size === 0) return 0;
+      let overlap = 0;
+      wordsA.forEach(w => { if (wordsB.has(w)) overlap++; });
+      return overlap / Math.min(wordsA.size, wordsB.size);
+    }
+
+    // 对每条prompt_addition做查重
+    const promptAdditions = (parsed.prompt_additions || []).map((p: any) => {
+      const content = typeof p === 'string' ? p : (p.content || '');
+      let dupCheck = 'new';
+      let maxScore = 0;
+      let matchedRule = '';
+      for (const rule of existingRules) {
+        const score = simScore(content, rule);
+        if (score > maxScore) { maxScore = score; matchedRule = rule.slice(0, 20); }
+      }
+      if (maxScore >= 0.7) dupCheck = `duplicate:${matchedRule},相似度${Math.round(maxScore * 100)}%`;
+      else if (maxScore >= 0.4) dupCheck = `similar:${matchedRule},相似度${Math.round(maxScore * 100)}%`;
+      return { content, duplicate_check: dupCheck };
+    });
+
+    // 对每条kb_item做查重
+    const kbItems = (parsed.kb_items || []).map((item: any) => {
+      const q = item.question || '';
+      const a = item.answer || '';
+      let dupCheck = 'new';
+      let maxScore = 0;
+      let matchedQ = '';
+      for (const existing of existingKbItems) {
+        const scoreQ = simScore(q, existing.question);
+        const scoreA = simScore(a, existing.answer);
+        const score = Math.max(scoreQ, scoreA);
+        if (score > maxScore) { maxScore = score; matchedQ = existing.question.slice(0, 20); }
+      }
+      if (maxScore >= 0.7) dupCheck = `duplicate:${matchedQ},相似度${Math.round(maxScore * 100)}%`;
+      else if (maxScore >= 0.4) dupCheck = `similar:${matchedQ},相似度${Math.round(maxScore * 100)}%`;
+      return { question: q, answer: a, duplicate_check: dupCheck };
+    });
+
+    // 生成查重摘要
+    const dupCount = promptAdditions.filter((p: any) => p.duplicate_check.startsWith('duplicate')).length
+      + kbItems.filter((k: any) => k.duplicate_check.startsWith('duplicate')).length;
+    const simCount = promptAdditions.filter((p: any) => p.duplicate_check.startsWith('similar')).length
+      + kbItems.filter((k: any) => k.duplicate_check.startsWith('similar')).length;
+    const newCount = promptAdditions.filter((p: any) => p.duplicate_check === 'new').length
+      + kbItems.filter((k: any) => k.duplicate_check === 'new').length;
+    const dupSummary = dupCount > 0
+      ? `⚠ ${dupCount}条高度重复，${simCount}条相似，${newCount}条全新内容`
+      : simCount > 0
+      ? `~ ${simCount}条与现有内容相似，${newCount}条全新内容`
+      : `✓ 全部 ${newCount} 条均为全新内容，无重复`;
+
     res.json({
       ok: true,
-      prompt_additions: parsed.prompt_additions || [],
-      kb_items: parsed.kb_items || [],
+      prompt_additions: promptAdditions,
+      kb_items: kbItems,
       summary: parsed.summary || "",
+      dup_summary: dupSummary,
       tokens: result.totalTokens,
       model_used: "DeepSeek V4 Flash",
     });
