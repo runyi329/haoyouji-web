@@ -3063,6 +3063,199 @@ function AIModelConfigTab() {
 // 平台共享 Tab：上方平台共享指令库 + 下方平台共享知识库
 interface SharedKb { id: number; name: string; description?: string | null; item_count: number; }
 
+// 平台版「零步 AI 辅助整理」：把大白话智能归类后写入平台共享规则(channel_id=1)与选中的共享库
+interface PlatAddPrompt { content: string; recommendation?: 'add' | 'skip'; dedup_reason?: string; matched?: string; }
+interface PlatAddKb { question: string; answer: string; recommendation?: 'add' | 'skip'; dedup_reason?: string; matched?: string; }
+interface PlatAiResult { ok: boolean; prompt_additions: PlatAddPrompt[]; kb_items: PlatAddKb[]; summary?: string; dup_summary?: string; }
+
+function PlatformAiAssistCard({ sharedKbs, onApplied }: { sharedKbs: SharedKb[]; onApplied: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [input, setInput] = useState("");
+  // 选中的目标库 id 集合；空集且 allKb=true 表示全部库
+  const [allKb, setAllKb] = useState(true);
+  const [selKbIds, setSelKbIds] = useState<number[]>([]);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [done, setDone] = useState(false);
+  const [result, setResult] = useState<PlatAiResult | null>(null);
+  const [selPrompts, setSelPrompts] = useState<boolean[]>([]);
+  const [selKbs, setSelKbs] = useState<boolean[]>([]);
+
+  // 实际用于查重/写入的目标库 id 列表
+  const targetKbIds = allKb ? sharedKbs.map(k => k.id) : selKbIds;
+
+  function toggleKb(id: number) {
+    setSelKbIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
+
+  async function handleAnalyze() {
+    if (!input.trim()) { toast.error("请先输入内容"); return; }
+    setAnalyzing(true); setResult(null); setDone(false);
+    try {
+      const res = await fetch("/api/wecom/ai-assist-config", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: input, scope: "platform", kbIds: targetKbIds }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        setResult(d);
+        setSelPrompts((d.prompt_additions || []).map((p: PlatAddPrompt) => p.recommendation !== 'skip'));
+        setSelKbs((d.kb_items || []).map((k: PlatAddKb) => k.recommendation !== 'skip'));
+      } else {
+        toast.error(d.error || "AI 分析失败");
+      }
+    } catch { toast.error("网络错误"); } finally { setAnalyzing(false); }
+  }
+
+  async function handleApply() {
+    if (!result) return;
+    const chosenPrompts = result.prompt_additions.filter((_, i) => selPrompts[i]);
+    const chosenKbs = result.kb_items.filter((_, i) => selKbs[i]);
+    if (chosenPrompts.length === 0 && chosenKbs.length === 0) { toast.error("请至少勾选一条"); return; }
+    if (chosenKbs.length > 0 && targetKbIds.length === 0) { toast.error("请先选择要写入的共享库"); return; }
+    setApplying(true);
+    try {
+      let ruleOk = 0, kbOk = 0;
+      // 写入平台共享规则 channel_id=1
+      for (const p of chosenPrompts) {
+        try {
+          const r = await fetch(`/api/wecom/channels/1/prompt-rules`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ layer: 2, category: "行为规则", content: p.content }),
+          });
+          if ((await r.json()).rule) ruleOk++;
+        } catch {}
+      }
+      // 写入知识库：写入每个选中的共享库
+      for (const item of chosenKbs) {
+        for (const kbId of targetKbIds) {
+          try {
+            const r = await fetch(`/api/wecom/knowledge-bases/${kbId}/items`, {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ item_type: "qa", question: item.question, answer: item.answer }),
+            });
+            if ((await r.json()).ok) kbOk++;
+          } catch {}
+        }
+      }
+      const msgs: string[] = [];
+      if (chosenPrompts.length > 0) msgs.push(`${ruleOk}/${chosenPrompts.length} 条规则已写入平台指令库`);
+      if (chosenKbs.length > 0) msgs.push(`${chosenKbs.length} 条已写入 ${targetKbIds.length} 个共享库`);
+      toast.success(msgs.join("；") || "已应用");
+      setDone(true);
+      setTimeout(() => { setResult(null); setInput(""); setDone(false); onApplied(); }, 1500);
+    } catch { toast.error("写入失败"); } finally { setApplying(false); }
+  }
+
+  const addCount = result ? result.prompt_additions.filter((_, i) => selPrompts[i]).length + result.kb_items.filter((_, i) => selKbs[i]).length : 0;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <button onClick={() => setOpen(v => !v)} className="w-full flex items-center justify-between px-4 py-3.5">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-green-50 flex items-center justify-center">
+            <Sparkles className="w-4 h-4 text-green-500" />
+          </div>
+          <div className="text-left">
+            <p className="text-sm font-semibold text-gray-900">AI 辅助整理（平台共享）</p>
+            <p className="text-xs text-gray-400">粘大白话，自动归类写入平台指令库与共享库</p>
+          </div>
+        </div>
+        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="border-t border-gray-100 px-4 pb-4 pt-3 space-y-3">
+          {/* 目标库选择 */}
+          <div>
+            <div className="text-xs font-semibold text-gray-600 mb-1.5">写入哪些共享库？</div>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                onClick={() => { setAllKb(true); setSelKbIds([]); }}
+                className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${allKb ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-gray-200 text-gray-600'}`}
+              >全部共享库（{sharedKbs.length}）</button>
+              {sharedKbs.map(kb => {
+                const active = !allKb && selKbIds.includes(kb.id);
+                return (
+                  <button
+                    key={kb.id}
+                    onClick={() => { setAllKb(false); toggleKb(kb.id); }}
+                    className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${active ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-gray-200 text-gray-600'}`}
+                  >{kb.name}</button>
+                );
+              })}
+            </div>
+            {!allKb && selKbIds.length === 0 && (
+              <div className="text-[11px] text-amber-500 mt-1">未选库：只会写入“规则”，知识库条目需选中至少一个库</div>
+            )}
+          </div>
+          <textarea
+            value={input} onChange={e => setInput(e.target.value)} rows={4}
+            placeholder="粘贴聊天记录、产品资料或话术，AI 会自动提炼并与现有平台内容查重后归类"
+            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-green-400"
+          />
+          <button
+            onClick={handleAnalyze} disabled={analyzing}
+            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-green-500 text-white text-sm font-medium disabled:opacity-50"
+          >
+            {analyzing ? <><Loader2 className="w-4 h-4 animate-spin" /> AI 分析中...</> : <><Sparkles className="w-4 h-4" /> AI 智能整理</>}
+          </button>
+
+          {result && (
+            <div className="space-y-3">
+              {(result.summary || result.dup_summary) && (
+                <div className="text-xs text-green-700 bg-green-50 rounded-lg px-3 py-2 space-y-1">
+                  {result.summary && <div className="flex items-start gap-1.5"><Sparkles className="w-3 h-3 mt-0.5 flex-shrink-0" /><span>{result.summary}</span></div>}
+                  {result.dup_summary && <div className="font-medium text-gray-700">{result.dup_summary}</div>}
+                  <div className="text-gray-400">已自动归类：✅ 建议加入已默认勾选，⛔ 已去重默认不勾（可手动调整）</div>
+                </div>
+              )}
+              {result.prompt_additions.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="text-xs font-semibold text-gray-600 flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-purple-500" />写入「平台指令库」</div>
+                  {result.prompt_additions.map((p, i) => (
+                    <div key={i} className={`rounded-lg border px-3 py-2 flex items-start gap-2 ${selPrompts[i] ? 'border-purple-400 bg-purple-50' : 'border-gray-200 bg-white'}`}>
+                      <button onClick={() => setSelPrompts(prev => { const n=[...prev]; n[i]=!n[i]; return n; })} className="flex-shrink-0 mt-0.5">
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${selPrompts[i] ? 'bg-purple-500 border-purple-500' : 'border-gray-300'}`}>{selPrompts[i] && <Check className="w-3 h-3 text-white" />}</div>
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <span className={`block text-xs whitespace-pre-wrap ${selPrompts[i] ? 'text-purple-800' : 'text-gray-400 line-through'}`}>{p.content}</span>
+                        {p.dedup_reason && <div className={`mt-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded ${p.recommendation === 'skip' ? 'bg-gray-100 text-gray-500' : 'bg-green-50 text-green-600'}`}>{p.recommendation === 'skip' ? '⛔ ' : '✅ '}{p.dedup_reason}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {result.kb_items.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="text-xs font-semibold text-gray-600 flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-amber-500" />写入「共享知识库」{targetKbIds.length > 0 ? `（${targetKbIds.length} 个库）` : <span className="text-amber-500 font-normal ml-1">（未选库）</span>}</div>
+                  {result.kb_items.map((item, i) => (
+                    <div key={i} className={`rounded-lg border px-3 py-2 flex items-start gap-2 ${selKbs[i] ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-white'}`}>
+                      <button onClick={() => setSelKbs(prev => { const n=[...prev]; n[i]=!n[i]; return n; })} className="flex-shrink-0 mt-0.5">
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center ${selKbs[i] ? 'bg-amber-500 border-amber-500' : 'border-gray-300'}`}>{selKbs[i] && <Check className="w-3 h-3 text-white" />}</div>
+                      </button>
+                      <div className="flex-1 text-xs min-w-0">
+                        <div className={`font-medium ${selKbs[i] ? 'text-amber-800' : 'text-gray-400 line-through'}`}>Q: {item.question}</div>
+                        <div className={`mt-0.5 ${selKbs[i] ? 'text-amber-700' : 'text-gray-400 line-through'}`}>A: {item.answer}</div>
+                        {item.dedup_reason && <div className={`mt-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded ${item.recommendation === 'skip' ? 'bg-gray-100 text-gray-500' : 'bg-green-50 text-green-600'}`}>{item.recommendation === 'skip' ? '⛔ ' : '✅ '}{item.dedup_reason}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {(result.prompt_additions.length > 0 || result.kb_items.length > 0) && (
+                <button onClick={handleApply} disabled={applying || done}
+                  className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-green-600 text-white text-sm font-medium disabled:opacity-50">
+                  {done ? <><Check className="w-4 h-4" /> 已应用</> : applying ? <><Loader2 className="w-4 h-4 animate-spin" /> 写入中...</> : `应用已勾选的 ${addCount} 条`}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PlatformSharedTab() {
   // 指令区块展开/折叠
   const [rulesOpen, setRulesOpen] = useState(true);
@@ -3151,6 +3344,9 @@ function PlatformSharedTab() {
           </div>
         </div>
       </div>
+
+      {/* 零步 AI 辅助整理（平台共享） */}
+      <PlatformAiAssistCard sharedKbs={sharedKbs} onApplied={loadSharedKbs} />
 
       {/* 区块1：平台指令库 */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">

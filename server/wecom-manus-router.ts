@@ -4197,8 +4197,14 @@ router.post("/api/wecom/ai-image-extract", async (req: Request, res: Response) =
 
 // 接收大白话，调用 DeepSeek 分析，返回结构化的「指令建议」和「知识库条目建议」
 router.post("/api/wecom/ai-assist-config", async (req: Request, res: Response) => {
-  const { text, channelId, kbId: reqKbId } = req.body;
+  const { text, channelId, kbId: reqKbId, scope, kbIds } = req.body;
   if (!text || !text.trim()) return res.status(400).json({ error: "请输入内容" });
+  // scope='platform' 表示平台层：查重针对平台共享规则(channel_id=1)与选中的共享库
+  const isPlatform = scope === 'platform';
+  // 规范化选中的库 id 列表（平台模式用）
+  const targetKbIds: number[] = Array.isArray(kbIds)
+    ? kbIds.map((x: any) => Number(x)).filter((n: number) => Number.isFinite(n) && n > 0)
+    : [];
 
   // 硬编码系统提示词：明确告知 AI 这里的输出是用于知识库和指令集的
   const systemPrompt = `你是一个企业微信AI客服的配置助手。你的输出将直接写入两个地方：
@@ -4252,7 +4258,38 @@ router.post("/api/wecom/ai-assist-config", async (req: Request, res: Response) =
     let ruleVecs: { text: string; vec: number[] | null }[] = [];
     let kbVecs: { text: string; vec: number[] | null }[] = [];
     try {
-      if (conn2 && channelId) {
+      if (conn2 && isPlatform) {
+        // 【平台模式】规则查重：仅平台共享规则 channel_id=1
+        const [sysRuleRows] = await (conn2 as any).execute(
+          `SELECT content, embedding FROM wecom_prompt_rules WHERE channel_id = 1 AND enabled = 1`
+        );
+        existingRules = (sysRuleRows as any[]).map((r: any) => r.content || "");
+        ruleVecs = (sysRuleRows as any[]).map((r: any) => ({ text: r.content || "", vec: parseEmbedding(r.embedding) }));
+
+        // 知识库查重：针对选中的共享库（targetKbIds）；若未指定则查全部 is_shared=1
+        let kbRows: any[] = [];
+        if (targetKbIds.length > 0) {
+          const placeholders = targetKbIds.map(() => '?').join(',');
+          const [rows] = await (conn2 as any).execute(
+            `SELECT ki.question, ki.answer, ki.embedding FROM wecom_knowledge_items ki
+             WHERE ki.kb_id IN (${placeholders}) AND ki.enabled = 1 LIMIT 1000`,
+            targetKbIds
+          );
+          kbRows = rows as any[];
+        } else {
+          const [rows] = await (conn2 as any).execute(
+            `SELECT ki.question, ki.answer, ki.embedding FROM wecom_knowledge_items ki
+             JOIN wecom_knowledge_bases kb ON ki.kb_id = kb.id
+             WHERE kb.is_shared = 1 AND ki.enabled = 1 LIMIT 1000`
+          );
+          kbRows = rows as any[];
+        }
+        existingKbItems = kbRows.map((r: any) => ({ question: r.question || "", answer: r.answer || "" }));
+        kbVecs = kbRows.map((r: any) => ({
+          text: buildItemEmbedText(r.question, r.answer),
+          vec: parseEmbedding(r.embedding),
+        }));
+      } else if (conn2 && channelId) {
         const [ruleRows] = await (conn2 as any).execute(
           `SELECT content, embedding FROM wecom_prompt_rules WHERE channel_id = ? AND enabled = 1`,
           [channelId]
