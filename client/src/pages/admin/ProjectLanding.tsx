@@ -1965,7 +1965,7 @@ function AvatarGrowthTab({ onProfileUpdate }: { onProfileUpdate?: (name: string,
 // ═══════════════════════════════════════════════════════════════
 // AI 智库 Tab（4 层架构）
 // ═══════════════════════════════════════════════════════════════
-function AIBrainTab() {
+function AIBrainTab({ refreshKey = 0 }: { refreshKey?: number } = {}) {
   // ── 第0步：AI智能整理 ──
   const [step0Open, setStep0Open] = useState(false);
   const [step0HelpOpen, setStep0HelpOpen] = useState(false);
@@ -2237,7 +2237,7 @@ ${step0Extra.trim()}`
     }).finally(() => setRefreshing(false));
   }
 
-  useEffect(() => { loadAllData(); }, []);
+  useEffect(() => { loadAllData(); }, [refreshKey]);
 
   const [platformRulesExpanded, setPlatformRulesExpanded] = useState(false);
   const [platformRuleDetail, setPlatformRuleDetail] = useState<{ rule_text: string } | null>(null);
@@ -4282,6 +4282,7 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
   const [tabCounts, setTabCounts] = useState<Partial<Record<TabKey, number>>>({});
   const [channelName, setChannelName] = useState("营养顾问分身");
   const [channelAvatarUrl, setChannelAvatarUrl] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     // 加载分身名称和头像
@@ -4337,7 +4338,7 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
             <div className="text-[15px] font-bold tracking-wide text-white leading-tight">数字分身 · {channelName}</div>
           </div>
           <button
-            onClick={() => window.location.reload()}
+            onClick={() => setRefreshKey(k => k + 1)}
             className="text-xs px-2.5 py-1 rounded-lg"
             style={{ backgroundColor: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.9)' }}
           >刷新</button>
@@ -4399,7 +4400,7 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
       <main className="flex-1 overflow-y-auto px-4 pt-2">
         {activeTab === "avatar" && <AvatarGrowthTab onProfileUpdate={(name, url) => { setChannelName(name); setChannelAvatarUrl(url); }} />}
         {activeTab === "config" && <ConfigTab onProfileUpdate={(name, avatarUrl) => { setChannelName(name); setChannelAvatarUrl(avatarUrl); }} />}
-        {activeTab === "aibrain" && <AIBrainTab />}
+        {activeTab === "aibrain" && <AIBrainTab refreshKey={refreshKey} />}
         {activeTab === "customers" && <CustomerDataTab />}
       </main>
     </div>
