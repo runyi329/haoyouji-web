@@ -2379,6 +2379,7 @@ function AIBrainTab({ refreshKey = 0 }: { refreshKey?: number } = {}) {
       const data = await resp.json();
       if (data.ok && data.text) {
         setStep0Input(prev => prev ? prev + '\n\n' + data.text : data.text);
+        setStep0ImagePreview(null); // 识别成功后自动清除图片预览
         toast.success('图片识别完成，内容已填入输入框');
       } else {
         toast.error(data.error || '图片识别失败');
