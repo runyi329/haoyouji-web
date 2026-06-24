@@ -22,7 +22,7 @@ import {
   Trash2, ChevronRight, ChevronDown, Save, RefreshCw, FileText, X,
   Users, Settings, Sparkles, ToggleLeft, ToggleRight, Check, User,
   Shield, ShieldOff, // reserved for future use
-  HelpCircle, ChevronLeft,
+  HelpCircle, ChevronLeft, Pencil, Camera, ImageIcon, Mail, Copy,
 } from "lucide-react";
 
 // ─── 营养俱乐部配色 ──────────────────────────────────────────────
@@ -234,12 +234,20 @@ function DigitalTwinCard({ channelId }: { channelId: string }) {
   const [enabled, setEnabled] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [kbStats, setKbStats] = useState({ kb_count: 1, item_count: 0, char_count: 0 });
 
   useEffect(() => {
-    fetch(`/api/wecom/corpus/stats?channel_id=${channelId}`)
-      .then(r => r.json())
-      .then(d => { if (d.ok) { setStats(d); setEnabled(d.twin_enabled === 1 || d.twin_enabled === true); } })
-      .finally(() => setLoading(false));
+    Promise.all([
+      fetch(`/api/wecom/corpus/stats?channel_id=${channelId}`).then(r => r.json()).catch(() => ({})),
+      fetch(`/api/wecom/ch/kb/stats?channel_id=${channelId}`).then(r => r.json()).catch(() => ({})),
+    ]).then(([corpus, kb]) => {
+      if (corpus.ok) { setStats(corpus); setEnabled(corpus.twin_enabled === 1 || corpus.twin_enabled === true); }
+      setKbStats({
+        kb_count: kb.kb_count || 1,
+        item_count: kb.item_count || 0,
+        char_count: kb.char_count || 0,
+      });
+    }).finally(() => setLoading(false));
   }, [channelId]);
 
   const handleToggle = async () => {
@@ -264,7 +272,7 @@ function DigitalTwinCard({ channelId }: { channelId: string }) {
     <div className="rounded-xl border overflow-hidden" style={{ borderColor: C.line }}>
       {/* 标题栏（浅绿背景） */}
       <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: C.brandLight, borderBottom: `1px solid ${C.line}` }}>
-        <span className="text-xs font-semibold" style={{ color: C.textMain }}>我的数字分身</span>
+        <span className="text-sm font-semibold" style={{ color: C.textMain }}>我的数字分身</span>
         {/* 与共享知识库完全一致的 toggle 开关 */}
         <div
           onClick={toggling ? undefined : handleToggle}
@@ -294,11 +302,11 @@ function DigitalTwinCard({ channelId }: { channelId: string }) {
           <div className="text-center py-4 text-sm" style={{ color: C.textSub }}>加载中…</div>
         ) : (
           <div className="space-y-2">
-            {/* 三个指标 */}
+            {/* 三个指标：知识库数 / 条目数 / 字符数 */}
             <div className="flex items-baseline gap-4">
-              <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{stats?.quality_count ?? 0}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>优质语料</span></span>
-              <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{stats?.total ?? 0}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>总语料</span></span>
-              <span><span className="text-base font-bold" style={{ color: C.textMain }}>{stats?.twin_version || 'v1.0'}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>版本</span></span>
+              <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{kbStats.kb_count}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>知识库</span></span>
+              <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{kbStats.item_count.toLocaleString()}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>条目</span></span>
+              <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{kbStats.char_count >= 10000 ? `${(kbStats.char_count / 10000).toFixed(1)}万` : kbStats.char_count.toLocaleString()}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>字符</span></span>
             </div>
             {/* 覆盖场景标签 */}
             {stats?.scene_tags?.length > 0 && (
@@ -1849,7 +1857,7 @@ function AvatarGrowthTab({ onProfileUpdate }: { onProfileUpdate?: (name: string,
       {/* ── 已解锁能力（2列网格） ── */}
       <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: C.white, border: `1px solid ${C.line}`, boxShadow: '0 2px 12px rgba(39,174,96,0.06)' }}>
         <div className="px-4 pt-4 pb-3">
-          <div className="text-xs font-bold mb-3" style={{ color: C.textMain }}>分身已解锁的能力</div>
+          <div className="text-sm font-bold mb-3" style={{ color: C.textMain }}>分身已解锁的能力</div>
           <div className="grid grid-cols-2 gap-2">
             {ABILITIES.map(ab => {
               const unlocked = equiv >= ab.unlockEquiv;
@@ -1897,7 +1905,7 @@ function AvatarGrowthTab({ onProfileUpdate }: { onProfileUpdate?: (name: string,
       {/* ── 存入知识资产 ── */}
       <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: C.white, border: `1px solid ${C.line}`, boxShadow: '0 2px 12px rgba(39,174,96,0.06)' }}>
         <div className="px-4 pt-4 pb-3">
-          <div className="text-xs font-bold mb-0.5" style={{ color: C.textMain }}>存入知识资产</div>
+          <div className="text-sm font-bold mb-0.5" style={{ color: C.textMain }}>存入知识资产</div>
           <div className="text-[10px] mb-4" style={{ color: C.textSub }}>投喂的知识将永久存入分身记忆</div>
           {/* 文字存入 */}
           <div className="mb-3">
@@ -1958,6 +1966,169 @@ function AvatarGrowthTab({ onProfileUpdate }: { onProfileUpdate?: (name: string,
 // AI 智库 Tab（4 层架构）
 // ═══════════════════════════════════════════════════════════════
 function AIBrainTab() {
+  // ── 第0步：AI智能整理 ──
+  const [step0Open, setStep0Open] = useState(false);
+  const [step0HelpOpen, setStep0HelpOpen] = useState(false);
+  const [step0Input, setStep0Input] = useState("");
+  const [step0Analyzing, setStep0Analyzing] = useState(false);
+  const [step0Result, setStep0Result] = useState<{ prompt_additions: { content: string; duplicate_check: string }[]; kb_items: { question: string; answer: string; duplicate_check: string }[]; summary: string } | null>(null);
+  const [step0SelPrompts, setStep0SelPrompts] = useState<boolean[]>([]);
+  const [step0SelKbs, setStep0SelKbs] = useState<boolean[]>([]);
+  const [step0Applying, setStep0Applying] = useState(false);
+  const [step0Done, setStep0Done] = useState(false);
+  const [step0EditPromptIdx, setStep0EditPromptIdx] = useState<number | null>(null);
+  const [step0EditKbIdx, setStep0EditKbIdx] = useState<number | null>(null);
+  const [step0EditDraftPrompt, setStep0EditDraftPrompt] = useState("");
+  const [step0EditDraftQ, setStep0EditDraftQ] = useState("");
+  const [step0EditDraftA, setStep0EditDraftA] = useState("");
+  const [step0OcrLoading, setStep0OcrLoading] = useState(false);
+  const [step0ImagePreview, setStep0ImagePreview] = useState<string | null>(null);
+  const step0FileRef = useRef<HTMLInputElement>(null);
+  const [step0EmailPopup, setStep0EmailPopup] = useState(false);
+  const [step0EmailCopied, setStep0EmailCopied] = useState(false);
+  // 当前分身的专属收件邮筱（待DNS配置后替换为真实地址）
+  const INBOX_EMAIL = `nutrition@mail.jiangyuchen.cn`;
+  // 私人规则管理抽屉
+  const [showRulesDrawer, setShowRulesDrawer] = useState(false);
+  // 私人知识库管理抽屉
+  const [showKbDrawer, setShowKbDrawer] = useState(false);
+  const [kbSources, setKbSources] = useState<any[]>([]);
+  const [loadingKbSources, setLoadingKbSources] = useState(false);
+
+  async function handleStep0OcrImage(file: File) {
+    setStep0OcrLoading(true);
+    setStep0ImagePreview(null);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      setStep0ImagePreview(URL.createObjectURL(file));
+      const resp = await fetch('/api/wecom/ocr-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64, mimeType: file.type || 'image/jpeg' }),
+      });
+      const data = await resp.json();
+      if (data.ok && data.text) {
+        setStep0Input(prev => prev ? prev + '\n\n' + data.text : data.text);
+        toast.success('图片识别完成，内容已填入输入框');
+      } else {
+        toast.error(data.error || '图片识别失败');
+        setStep0ImagePreview(null);
+      }
+    } catch (e) {
+      toast.error('图片上传失败，请重试');
+      setStep0ImagePreview(null);
+    } finally {
+      setStep0OcrLoading(false);
+      if (step0FileRef.current) step0FileRef.current.value = '';
+    }
+  }
+
+
+  const [step0FileLoading, setStep0FileLoading] = useState(false);
+  const [step0UploadedFile, setStep0UploadedFile] = useState<string | null>(null);
+  const step0DocRef = useRef<HTMLInputElement>(null);
+
+  async function handleStep0FileUpload(file: File) {
+    setStep0FileLoading(true);
+    setStep0UploadedFile(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const resp = await fetch('/api/extract-file', { method: 'POST', body: formData });
+      const data = await resp.json();
+      if (data.ok && data.text) {
+        setStep0Input(prev => prev ? prev + '\n\n' + data.text : data.text);
+        setStep0UploadedFile(file.name);
+        toast.success(`「${file.name}」内容已提取，已填入输入框`);
+      } else {
+        toast.error(data.error || '文件解析失败');
+      }
+    } catch (e) {
+      toast.error('文件上传失败，请重试');
+    } finally {
+      setStep0FileLoading(false);
+      if (step0DocRef.current) step0DocRef.current.value = '';
+    }
+  }
+
+  async function handleStep0Analyze() {
+    if (!step0Input.trim()) return;
+    setStep0Analyzing(true);
+    setStep0Result(null);
+    setStep0Done(false);
+    try {
+      const res = await fetch("/api/wecom/ai-assist-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: step0Input, channelId: KF_CHANNEL_ID, kbId: 0 }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        setStep0Result(d);
+        setStep0SelPrompts(d.prompt_additions.map(() => true));
+        setStep0SelKbs(d.kb_items.map(() => true));
+      } else {
+        toast.error(d.error || "AI分析失败");
+      }
+    } catch {
+      toast.error("网络错误");
+    } finally {
+      setStep0Analyzing(false);
+    }
+  }
+
+  async function handleStep0Apply() {
+    if (!step0Result) return;
+    setStep0Applying(true);
+    try {
+      const chosenPrompts = step0Result.prompt_additions.filter((_, i) => step0SelPrompts[i]).map(p => p.content);
+      const chosenKbs = step0Result.kb_items.filter((_, i) => step0SelKbs[i]);
+      let promptSuccess = 0;
+      let kbSuccess = 0;
+      if (chosenPrompts.length > 0) {
+        for (const p of chosenPrompts) {
+          try {
+            const r = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/prompt-rules`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ layer: 2, category: "行为规则", content: p }),
+            });
+            const rd = await r.json();
+            if (rd.rule) promptSuccess++;
+          } catch {}
+        }
+      }
+      if (chosenKbs.length > 0) {
+        for (const item of chosenKbs) {
+          try {
+            const r = await fetch("/api/wecom/ch/kb/adopt", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ channel_id: KF_CHANNEL_ID, channel_type: KF_CHANNEL_TYPE, question: item.question, answer: item.answer }),
+            });
+            const rd = await r.json();
+            if (rd.ok) kbSuccess++;
+          } catch {}
+        }
+      }
+      const msgs: string[] = [];
+      if (chosenPrompts.length > 0) msgs.push(`${promptSuccess}/${chosenPrompts.length}条指令已写入角色/行为规则`);
+      if (chosenKbs.length > 0) msgs.push(`${kbSuccess}/${chosenKbs.length}条已写入知识库`);
+      if (msgs.length > 0) toast.success(msgs.join("；"));
+      setStep0Done(true);
+      setTimeout(() => { setStep0Result(null); setStep0Input(""); setStep0Done(false); }, 1500);
+    } catch {
+      toast.error("写入失败");
+    } finally {
+      setStep0Applying(false);
+    }
+  }
+
   // ── 第①层：AI 指令（从 ConfigTab 迁移） ──
   const [promptRules, setPromptRules] = useState<PromptRule[]>([]);
   const [editingRuleId, setEditingRuleId] = useState<number | null>(null);
@@ -2017,7 +2188,8 @@ function AIBrainTab() {
       fetch(`/api/wecom/channel-config/${KF_CHANNEL_ID}`).then(r => r.json()).catch(() => ({})),
       fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/config`).then(r => r.json()).catch(() => ({})),
       fetch(`/api/wecom/knowledge-bases`).then(r => r.json()).catch(() => ({ ok: false })),
-    ]).then(([priv, sys, chCfg, cfg, kbs]) => {
+      fetch(`/api/wecom/ch/kb/sources?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).catch(() => ({ ok: false })),
+    ]).then(([priv, sys, chCfg, cfg, kbs, src]) => {
       if (priv.ok) setKbStats({ item_count: priv.item_count || 0, file_count: priv.file_count || 0, char_count: priv.char_count || 0, month_count: priv.month_count || 0 });
       if (sys.ok) setSysKbStats({ item_count: sys.item_count || 0, file_count: sys.file_count || 0, char_count: sys.char_count || 0 });
       setSysKbEnabled(chCfg.disable_system_kb !== '1');
@@ -2029,9 +2201,12 @@ function AIBrainTab() {
         if (cfg.config.ai_model) setAiModel(cfg.config.ai_model);
       }
       if (kbs.ok && Array.isArray(kbs.kbs)) setKbList(kbs.kbs);
+      if (src.ok && Array.isArray(src.sources)) setKbSources(src.sources);
     });
   }, []);
 
+  const [platformRulesExpanded, setPlatformRulesExpanded] = useState(false);
+  const [platformRuleDetail, setPlatformRuleDetail] = useState<{ rule_text: string } | null>(null);
   const platformLayer1Rules = platformRules; // 显示所有平台共享指令（layer1角色定义+layer2行为规范）
   const layer2Rules = promptRules.filter(r => r.layer === 2);
 
@@ -2132,7 +2307,7 @@ function AIBrainTab() {
       color: C.brand,
       bgColor: C.brandLight,
       borderColor: C.line,
-      label: '② 我的数字分身',
+      label: '② 数字分身',
       subtitle: '客服本人的风格克隆',
       badge: null,
     },
@@ -2158,6 +2333,290 @@ function AIBrainTab() {
 
   return (
     <div className="space-y-3 pb-8 pt-2">
+      {/* 第0步：AI智能整理 */}
+      <div className="rounded-2xl border overflow-hidden shadow-sm" style={{ borderColor: C.line }}>
+        <div className="w-full px-4 py-3 flex items-center justify-between" style={{ backgroundColor: C.brandLight }}>
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => setStep0Open(v => !v)} className="text-sm font-bold" style={{ color: C.brand }}>⓪ AI 智能整理</button>
+            <button
+              onClick={e => { e.stopPropagation(); setStep0HelpOpen(true); }}
+              className="flex items-center justify-center"
+              style={{ color: C.textMain, opacity: 0.6 }}
+            >
+              <HelpCircle className="w-4 h-4" />
+            </button>
+          </div>
+          <button onClick={() => setStep0Open(v => !v)}>
+            <ChevronRight className={`w-4 h-4 transition-transform ${step0Open ? 'rotate-90' : ''}`} style={{ color: C.brand, opacity: 0.7 }} />
+          </button>
+        </div>
+
+        {step0HelpOpen && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setStep0HelpOpen(false)}>
+            <div className="w-full max-w-lg rounded-t-2xl bg-white px-5 pt-5 pb-8" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-base font-bold" style={{ color: C.textMain }}>为什么要有「⓪ AI 智能整理」？</span>
+                <button onClick={() => setStep0HelpOpen(false)} className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: C.bg }}>
+                  <X className="w-4 h-4" style={{ color: C.textSub }} />
+                </button>
+              </div>
+              <div className="space-y-3 text-sm leading-relaxed" style={{ color: C.textMain }}>
+                <p>一个优秀的 AI 分身，需要三类信息共同支擔：</p>
+                <div className="rounded-xl p-3 space-y-2" style={{ backgroundColor: C.brandLight }}>
+                  <div className="flex items-start gap-2">
+                    <span className="font-bold flex-shrink-0" style={{ color: C.brand }}>① 角色定义</span>
+                    <span style={{ color: C.textSub }}>—— AI 是谁？性格怎样？说话风格是什么？</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="font-bold flex-shrink-0" style={{ color: C.brand }}>② 行为规则</span>
+                    <span style={{ color: C.textSub }}>—— 遇到哪些情况该怎么做？什么不能说？</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="font-bold flex-shrink-0" style={{ color: C.brand }}>③ 知识库</span>
+                    <span style={{ color: C.textSub }}>—— 产品价格、常见问题、专业知识等具体信息</span>
+                  </div>
+                </div>
+                <p style={{ color: C.textSub }}>大多数人并不知道自己输入的内容属于哪一类。<span className="font-medium" style={{ color: C.textMain }}>第⓪步就是解决这个问题的</span>——你只需要把想说的内容粘贴进来，AI 会自动判断并分类写入对应的位置，不需要你手动区分。</p>
+                <p style={{ color: C.textSub }}>建议每次添加新内容时，优先使用这一步。</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {step0Open && (
+          <div className="px-4 pb-4 space-y-3" style={{ borderTop: `1px solid ${C.line}` }}>
+            <div className="relative rounded-lg overflow-hidden mt-3" style={{ border: `1px solid ${C.textMain}`, backgroundColor: '#fff' }}>
+              {/* 顶部提示行 */}
+              <div className="flex items-center justify-between px-3 pt-2.5 pb-1">
+                <span className="text-xs" style={{ color: step0Input.length > 0 ? 'transparent' : C.textSub }}>请输入内容...</span>
+                <span className="text-xs" style={{ color: step0Input.length > 0 ? C.brand : C.textSub }}>{step0Input.length} 字</span>
+              </div>
+              <textarea
+                value={step0Input}
+                onChange={e => {
+                  setStep0Input(e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = e.target.scrollHeight + 'px';
+                }}
+                onFocus={e => {
+                  e.target.style.height = 'auto';
+                  e.target.style.height = e.target.scrollHeight + 'px';
+                }}
+                placeholder=""
+                rows={3}
+                className="w-full text-base px-3 pb-2 resize-none focus:outline-none overflow-hidden bg-transparent"
+                style={{ color: C.textMain, minHeight: '72px', border: 'none', outline: 'none' }}
+              />
+              {/* 输入框内部底部：拍照/上传按钮 */}
+              <div className="flex items-center gap-2 px-3 pb-2.5 pt-1">
+                {/* 合并按钮：拍照 / 上传图片 / 文件 */}
+                <input
+                  ref={step0FileRef}
+                  type="file"
+                  accept="*/*"
+                  className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    // 图片类型 → OCR识别；其他 → 文件解析
+                    if (file.type.startsWith('image/')) {
+                      handleStep0OcrImage(file);
+                    } else {
+                      handleStep0FileUpload(file);
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => step0FileRef.current?.click()}
+                  disabled={step0OcrLoading || step0FileLoading}
+                  className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border disabled:opacity-50 transition-all"
+                  style={{ color: C.textSub, borderColor: C.line, backgroundColor: C.bg }}
+                >
+                  {(step0OcrLoading || step0FileLoading)
+                    ? <><Loader2 className="w-3 h-3 animate-spin" />识别中...</>
+                    : <><Camera className="w-3 h-3" />拍照 / 上传图片 / 文件</>}
+                </button>
+                {step0ImagePreview && (
+                  <div className="relative flex-shrink-0">
+                    <img src={step0ImagePreview} alt="已上传" className="h-7 w-7 object-cover rounded" />
+                    <button
+                      onClick={() => setStep0ImagePreview(null)}
+                      className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center"
+                      style={{ backgroundColor: C.textSub, color: '#fff' }}
+                    >
+                      <X className="w-2 h-2" />
+                    </button>
+                  </div>
+                )}
+                {step0UploadedFile && (
+                  <span className="text-xs truncate max-w-[120px]" style={{ color: C.brand }}>
+                    {step0UploadedFile}
+                  </span>
+                )}
+                {/* 邮件转发按钮 */}
+                <button
+                  onClick={() => setStep0EmailPopup(v => !v)}
+                  className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-all"
+                  style={{ color: step0EmailPopup ? C.brand : C.textSub, borderColor: step0EmailPopup ? C.brand : C.line, backgroundColor: C.bg }}
+                >
+                  <Mail className="w-3 h-3" />邮件
+                </button>
+              </div>
+
+              {/* 邮件地址弹出卡片 */}
+              {step0EmailPopup && (
+                <div className="mx-3 mb-3 rounded-xl p-3" style={{ backgroundColor: C.brandLight, border: `1px solid ${C.brand}30` }}>
+                  <p className="text-xs mb-2" style={{ color: C.brandDeep }}>转发你的邮件至以下地址，AI 会帮你处理下一步。</p>
+                  <div
+                    className="relative flex items-center px-2.5 py-1.5 rounded-lg cursor-pointer select-all"
+                    style={{ backgroundColor: C.white, border: `1px solid ${C.line}` }}
+                    onClick={() => {
+                      navigator.clipboard.writeText(INBOX_EMAIL).then(() => {
+                        setStep0EmailCopied(true);
+                        setTimeout(() => setStep0EmailCopied(false), 2000);
+                      });
+                    }}
+                  >
+                    <span className="flex-1 text-xs font-mono" style={{ color: C.textMain }}>{INBOX_EMAIL}</span>
+                    <span className="ml-2 flex-shrink-0" style={{ color: step0EmailCopied ? C.brand : C.textSub }}>
+                      {step0EmailCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    </span>
+                  </div>
+                  <p className="text-xs mt-2" style={{ color: C.textSub }}>支持正文及附件（PDF、Word、图片等）</p>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={handleStep0Analyze}
+              disabled={step0Analyzing || !step0Input.trim()}
+              className="w-full py-2.5 rounded-xl text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+              style={{ backgroundColor: C.brand, color: '#fff' }}
+            >
+              {step0Analyzing
+                ? <><Loader2 className="w-4 h-4 animate-spin" />分析中...</>
+                : <>AI 助理</>}
+            </button>
+
+            {step0Result && (
+              <div className="space-y-3">
+                {step0Result.summary && (
+                  <div className="text-xs rounded-lg px-3 py-2 flex items-start gap-1.5" style={{ color: C.brandDeep, backgroundColor: C.brandLight }}>
+                    <Sparkles className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                    <span>{step0Result.summary}</span>
+                  </div>
+                )}
+
+                {step0Result.prompt_additions.length > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="text-xs font-semibold flex items-center gap-1" style={{ color: C.textSub }}>
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: C.brand }} />
+                      建议写入「角色/行为规则」
+                    </div>
+                    {step0Result.prompt_additions.map((p, i) => (
+                      <div key={i} className="rounded-lg border transition-all" style={step0SelPrompts[i] ? { borderColor: C.brand, backgroundColor: C.brandLight } : { borderColor: C.line, backgroundColor: C.white }}>
+                        {step0EditPromptIdx === i ? (
+                          <div className="p-2 space-y-2">
+                            <textarea value={step0EditDraftPrompt} onChange={e => setStep0EditDraftPrompt(e.target.value)} rows={3} autoFocus className="w-full text-xs rounded px-2 py-1 resize-none focus:outline-none" style={{ border: '1px solid #7C3AED' }} />
+                            <div className="flex gap-2 justify-end">
+                              <button onClick={() => setStep0EditPromptIdx(null)} className="text-xs px-2 py-0.5 rounded" style={{ color: C.textSub }}>取消</button>
+                              <button onClick={() => { const u=[...step0Result!.prompt_additions]; u[i]={...u[i], content: step0EditDraftPrompt}; setStep0Result({...step0Result!, prompt_additions: u}); setStep0EditPromptIdx(null); }} className="text-xs px-2 py-0.5 rounded" style={{ color: C.brand }}>保存</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-start gap-2 px-3 py-2">
+                            <button onClick={() => setStep0SelPrompts(prev => { const n=[...prev]; n[i]=!n[i]; return n; })} className="flex-shrink-0 mt-0.5">
+                              <div className="w-4 h-4 rounded border flex items-center justify-center" style={step0SelPrompts[i] ? { backgroundColor: C.brand, borderColor: C.brand } : { borderColor: C.line }}>
+                                {step0SelPrompts[i] && <Check className="w-3 h-3 text-white" />}
+                              </div>
+                            </button>
+                            <div className="flex-1 text-xs">
+                              {p.duplicate_check && p.duplicate_check !== 'new' && (
+                                <div className="mb-1 px-1.5 py-0.5 rounded text-xs inline-flex items-center gap-1" style={{ backgroundColor: p.duplicate_check.startsWith('duplicate') ? '#FEF2F2' : '#FFFBEB', color: p.duplicate_check.startsWith('duplicate') ? '#DC2626' : '#D97706' }}>
+                                  {p.duplicate_check.startsWith('duplicate') ? '⚠ 重复' : '~ 相似'}：{p.duplicate_check.replace(/^(duplicate|similar):/, '').split(',')[0]}
+                                  {p.duplicate_check.includes(',') && <span style={{ color: '#6B7280' }}>（{p.duplicate_check.split(',').slice(1).join(',')}）</span>}
+                                </div>
+                              )}
+                              <span className="whitespace-pre-wrap" style={{ color: step0SelPrompts[i] ? C.brandDeep : C.textSub }}>{p.content}</span>
+                            </div>
+                            <button onClick={() => { setStep0EditPromptIdx(i); setStep0EditDraftPrompt(p.content); }} className="flex-shrink-0" style={{ color: C.line }}>
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {step0Result.kb_items.length > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="text-xs font-semibold flex items-center gap-1" style={{ color: C.textSub }}>
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: C.brand }} />
+                      建议写入「知识库」
+                    </div>
+                    {step0Result.kb_items.map((item, i) => (
+                      <div key={i} className="rounded-lg border transition-all" style={step0SelKbs[i] ? { borderColor: C.brand, backgroundColor: C.brandLight } : { borderColor: C.line, backgroundColor: C.white }}>
+                        {step0EditKbIdx === i ? (
+                          <div className="p-2 space-y-2">
+                            <div>
+                              <div className="text-xs mb-0.5" style={{ color: C.textSub }}>Q 问题</div>
+                              <input value={step0EditDraftQ} onChange={e => setStep0EditDraftQ(e.target.value)} autoFocus className="w-full text-xs rounded px-2 py-1 focus:outline-none" style={{ border: `1px solid ${C.brand}` }} />
+                            </div>
+                            <div>
+                              <div className="text-xs mb-0.5" style={{ color: C.textSub }}>A 答案</div>
+                              <textarea value={step0EditDraftA} onChange={e => setStep0EditDraftA(e.target.value)} rows={3} className="w-full text-xs rounded px-2 py-1 resize-none focus:outline-none" style={{ border: `1px solid ${C.brand}` }} />
+                            </div>
+                            <div className="flex gap-2 justify-end">
+                              <button onClick={() => setStep0EditKbIdx(null)} className="text-xs px-2 py-0.5 rounded" style={{ color: C.textSub }}>取消</button>
+                              <button onClick={() => { const u=[...step0Result!.kb_items]; u[i]={question:step0EditDraftQ,answer:step0EditDraftA}; setStep0Result({...step0Result!, kb_items: u}); setStep0EditKbIdx(null); }} className="text-xs px-2 py-0.5 rounded" style={{ color: C.brand }}>保存</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-start gap-2 px-3 py-2">
+                            <button onClick={() => setStep0SelKbs(prev => { const n=[...prev]; n[i]=!n[i]; return n; })} className="flex-shrink-0 mt-0.5">
+                              <div className="w-4 h-4 rounded border flex items-center justify-center" style={step0SelKbs[i] ? { backgroundColor: C.brand, borderColor: C.brand } : { borderColor: C.line }}>
+                                {step0SelKbs[i] && <Check className="w-3 h-3 text-white" />}
+                              </div>
+                            </button>
+                            <div className="flex-1 text-xs">
+                              {item.duplicate_check && item.duplicate_check !== 'new' && (
+                                <div className="mb-1 px-1.5 py-0.5 rounded text-xs inline-flex items-center gap-1" style={{ backgroundColor: item.duplicate_check.startsWith('duplicate') ? '#FEF2F2' : '#FFFBEB', color: item.duplicate_check.startsWith('duplicate') ? '#DC2626' : '#D97706' }}>
+                                  {item.duplicate_check.startsWith('duplicate') ? '⚠ 重复' : '~ 相似'}：{item.duplicate_check.replace(/^(duplicate|similar):/, '').split(',')[0]}
+                                  {item.duplicate_check.includes(',') && <span style={{ color: '#6B7280' }}>（{item.duplicate_check.split(',').slice(1).join(',')}）</span>}
+                                </div>
+                              )}
+                              <div className="font-medium" style={{ color: step0SelKbs[i] ? C.brandDeep : C.textMain }}>Q: {item.question}</div>
+                              <div className="mt-0.5" style={{ color: step0SelKbs[i] ? C.brand : C.textSub }}>A: {item.answer}</div>
+                            </div>
+                            <button onClick={() => { setStep0EditKbIdx(i); setStep0EditDraftQ(item.question); setStep0EditDraftA(item.answer); }} className="flex-shrink-0" style={{ color: C.line }}>
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {(step0Result.prompt_additions.length > 0 || step0Result.kb_items.length > 0) && (
+                  <button
+                    onClick={handleStep0Apply}
+                    disabled={step0Applying || step0Done}
+                    className="w-full py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                    style={{ backgroundColor: step0Done ? C.brand : C.textMain, color: '#fff' }}
+                  >
+                    {step0Applying ? <><Loader2 className="w-4 h-4 animate-spin" />写入中...</>
+                    : step0Done ? <><Check className="w-4 h-4" />已全部写入</>
+                    : <><Check className="w-4 h-4" />确认写入勾选内容</>}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* 4 层卡片 */}
       {layers.map(layer => (
         <div key={layer.id} className="rounded-2xl border overflow-hidden shadow-sm" style={{ borderColor: layer.borderColor }}>
@@ -2186,11 +2645,11 @@ function AIBrainTab() {
                   {/* 平台共享指令卡片（带开关，参考第③层共享知识库样式） */}
                   <div className="rounded-xl border p-3" style={{ borderColor: C.line }}>
                     <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <div className="text-xs font-semibold" style={{ color: C.textMain }}>平台共享角色定义和行为规范</div>
-                        <div className="text-xs mt-0.5" style={{ color: C.textSub }}>
-                          {loadingPlatformRules ? '加载中...' : `${platformLayer1Rules.length} 条指令`}
-                        </div>
+                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                        <span className="text-sm font-semibold" style={{ color: C.textMain }}>共享</span>
+                        <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>
+                          {loadingPlatformRules ? '加载中...' : `${platformLayer1Rules.length} 条`}
+                        </span>
                       </div>
                       <div
                         onClick={togglingPlatformRules ? undefined : handleTogglePlatformRules}
@@ -2207,81 +2666,106 @@ function AIBrainTab() {
                       ) : platformLayer1Rules.length === 0 ? (
                         <div className="text-xs text-center py-3" style={{ color: C.textSub }}>暂无平台共享指令</div>
                       ) : (
-                        <div className="space-y-2">
-                          {platformLayer1Rules.map(rule => (
-                            <div key={rule.id} className={`rounded-lg border p-2.5 ${!rule.enabled ? 'opacity-50' : ''}`} style={{ borderColor: C.line, backgroundColor: C.bg }}>
-                              <div className="text-xs" style={{ color: C.textMain }}>{rule.rule_text}</div>
-                            </div>
-                          ))}
-                        </div>
+                        <div className="space-y-1.5 mt-1">
+                            {platformLayer1Rules.map(rule => (
+                              <div
+                                key={rule.id}
+                                className={`flex items-center justify-between gap-2 rounded-xl px-3 py-1.5 ${!rule.enabled ? 'opacity-40' : ''}`}
+                                style={{ backgroundColor: C.brandLight }}
+                              >
+                                <span className="text-xs flex-1 truncate" style={{ color: C.textMain }}>
+                                  {(rule.rule_text || '').slice(0, 24)}{(rule.rule_text || '').length > 24 ? '…' : ''}
+                                </span>
+                                <button
+                                  onClick={() => setPlatformRuleDetail(rule)}
+                                  className="text-xs flex-shrink-0 ml-2"
+                                  style={{ color: C.brand }}
+                                >
+                                  详情
+                                </button>
+                              </div>
+                            ))}
+                          </div>
                       )
                     )}
                   </div>
 
-                  {/* 私人指令卡片（可编辑，参考第③层私人知识库样式） */}
+                  {/* 私人指令卡片（纯预览，编辑按钮开抽屉） */}
                   <div className="rounded-xl border p-3" style={{ borderColor: C.line }}>
                     <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <div className="text-xs font-semibold" style={{ color: C.textMain }}>我的私人角色定义和行为规范</div>
-                        <div className="text-xs mt-0.5" style={{ color: C.textSub }}>
-                          {loadingRules ? '加载中...' : `${layer2Rules.length} 条指令`}
-                        </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-semibold" style={{ color: C.textMain }}>私人</span>
+                        <span className="text-xs" style={{ color: C.textSub }}>
+                          {loadingRules ? '加载中...' : `${layer2Rules.length} 条`}
+                        </span>
                       </div>
-                      <button onClick={() => setAddingRule(true)} className="text-xs flex items-center gap-1 px-2 py-1 rounded-lg" style={{ backgroundColor: C.brandLight, color: C.brand }}>
-                        <Plus className="w-3 h-3" />添加
-                      </button>
+                      <button
+                        onClick={() => { setShowRulesDrawer(true); setEditingRuleId(null); }}
+                        className="text-xs px-2.5 py-1 rounded-lg flex-shrink-0"
+                        style={{ backgroundColor: C.brandLight, color: C.brand }}
+                      >编辑</button>
                     </div>
-                    {layer2Rules.length === 0 && !addingRule && (
-                      <div className="text-xs text-center py-3" style={{ color: C.textSub }}>暂无私人指令，点击右上角添加</div>
-                    )}
-                    {layer2Rules.map(rule => (
-                      <div key={rule.id} className={`rounded-xl border p-3 mb-2 ${!rule.enabled ? 'opacity-50' : ''}`} style={{ borderColor: C.line }}>
-                        {editingRuleId === rule.id ? (
-                          <div className="space-y-2">
-                            <textarea value={editingRuleText} onChange={e => setEditingRuleText(e.target.value)} rows={3} className="w-full text-xs rounded-lg border p-2 resize-none outline-none" style={{ borderColor: C.line }} autoFocus />
-                            <div className="flex gap-1.5">
-                              <button onClick={() => handleSaveRule(rule)} disabled={savingRule} className="flex-1 py-1.5 rounded-lg text-xs text-white flex items-center justify-center gap-1" style={{ backgroundColor: C.brand }}>
-                                {savingRule ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}保存
-                              </button>
-                              <button onClick={() => setEditingRuleId(null)} className="flex-1 py-1.5 rounded-lg text-xs border" style={{ borderColor: C.line, color: C.textSub }}>取消</button>
-                            </div>
+                    {layer2Rules.length === 0 ? (
+                      <div className="text-xs text-center py-3" style={{ color: C.textSub }}>暂无私人规则，可通过顶部「AI 智能整理」添加</div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {layer2Rules.slice(0, 5).map(rule => (
+                          <div key={rule.id} className={`flex items-center gap-2 rounded-xl px-3 py-1.5 ${!rule.enabled ? 'opacity-40' : ''}`} style={{ backgroundColor: C.brandLight }}>
+                            <span className="text-xs flex-1 truncate" style={{ color: C.textMain }}>
+                              {(rule.rule_text || '').slice(0, 28)}{(rule.rule_text || '').length > 28 ? '…' : ''}
+                            </span>
                           </div>
-                        ) : (
-                          <div className="flex items-start gap-2">
-                            <div className="flex-1 text-xs" style={{ color: C.textMain }}>{rule.rule_text}</div>
-                            <div className="flex gap-1 flex-shrink-0">
-                              <button onClick={() => { setEditingRuleId(rule.id); setEditingRuleText(rule.rule_text); }} className="text-xs px-1.5 py-0.5 rounded border" style={{ borderColor: C.line, color: C.textSub }}>编辑</button>
-                              <button onClick={() => handleToggleRule(rule)} className="text-xs px-1.5 py-0.5 rounded border" style={{ borderColor: rule.enabled ? C.line : C.brand, color: rule.enabled ? C.textSub : C.brand }}>{rule.enabled ? '停用' : '启用'}</button>
-                              <button onClick={() => handleDeleteRule(rule.id)} className="text-xs px-1.5 py-0.5 rounded border border-red-100 text-red-400">删除</button>
-                            </div>
-                          </div>
+                        ))}
+                        {layer2Rules.length > 5 && (
+                          <button
+                            onClick={() => { setShowRulesDrawer(true); setEditingRuleId(null); }}
+                            className="w-full text-xs py-1.5 text-center rounded-xl"
+                            style={{ color: C.brand, backgroundColor: C.brandLight }}
+                          >查看全部 {layer2Rules.length} 条 ›</button>
                         )}
-                      </div>
-                    ))}
-                    {addingRule && (
-                      <div className="rounded-xl border p-3 space-y-2" style={{ borderColor: C.brand }}>
-                        <div className="relative">
-                          <textarea value={newRuleText} onChange={e => setNewRuleText(e.target.value)} rows={9} className="w-full text-sm rounded-lg border p-3 resize-none outline-none" style={{ borderColor: C.brand, color: C.textMain, backgroundColor: C.bg }} placeholder="输入新的 AI 指令，支持多行内容..." autoFocus />
-                          {newRuleText.length > 0 && (
-                            <button
-                              onClick={() => setNewRuleText('')}
-                              className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center"
-                              style={{ backgroundColor: 'rgba(0,0,0,0.15)' }}
-                            >
-                              <X className="w-3 h-3 text-white" />
-                            </button>
-                          )}
-                        </div>
-                        <div className="text-xs" style={{ color: C.textSub }}>{newRuleText.length} 字符</div>
-                        <div className="flex gap-1.5">
-                          <button onClick={handleAddRule} disabled={savingRule} className="flex-1 py-1.5 rounded-lg text-xs text-white flex items-center justify-center gap-1" style={{ backgroundColor: C.brand }}>
-                            {savingRule ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}添加
-                          </button>
-                          <button onClick={() => { setAddingRule(false); setNewRuleText(''); }} className="flex-1 py-1.5 rounded-lg text-xs border" style={{ borderColor: C.line, color: C.textSub }}>取消</button>
-                        </div>
                       </div>
                     )}
                   </div>
+
+                  {/* 私人规则管理抽屉 */}
+                  {showRulesDrawer && (
+                    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => { setShowRulesDrawer(false); setEditingRuleId(null); }}>
+                      <div className="w-full max-w-lg rounded-t-2xl p-4 pb-10 space-y-3" style={{ backgroundColor: C.white, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between pb-1">
+                          <span className="text-sm font-semibold" style={{ color: C.textMain }}>私人规则管理</span>
+                          <button onClick={() => { setShowRulesDrawer(false); setEditingRuleId(null); }} className="text-xs px-3 py-1 rounded-lg" style={{ backgroundColor: C.brandLight, color: C.brand }}>完成</button>
+                        </div>
+                        {layer2Rules.length === 0 ? (
+                          <div className="text-xs text-center py-8" style={{ color: C.textSub }}>暂无私人规则，可通过顶部「AI 智能整理」添加</div>
+                        ) : (
+                          layer2Rules.map(rule => (
+                            <div key={rule.id} className={`rounded-xl border p-3 ${!rule.enabled ? 'opacity-50' : ''}`} style={{ borderColor: C.line }}>
+                              {editingRuleId === rule.id ? (
+                                <div className="space-y-2">
+                                  <textarea value={editingRuleText} onChange={e => setEditingRuleText(e.target.value)} rows={4} className="w-full text-xs rounded-lg border p-2 resize-none outline-none" style={{ borderColor: C.brand, color: C.textMain }} autoFocus />
+                                  <div className="flex gap-1.5">
+                                    <button onClick={() => handleSaveRule(rule)} disabled={savingRule} className="flex-1 py-1.5 rounded-lg text-xs text-white flex items-center justify-center gap-1" style={{ backgroundColor: C.brand }}>
+                                      {savingRule ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}保存
+                                    </button>
+                                    <button onClick={() => setEditingRuleId(null)} className="flex-1 py-1.5 rounded-lg text-xs border" style={{ borderColor: C.line, color: C.textSub }}>取消</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-start gap-2">
+                                  <div className="flex-1 text-xs leading-relaxed" style={{ color: C.textMain }}>{rule.rule_text}</div>
+                                  <div className="flex gap-1 flex-shrink-0 mt-0.5">
+                                    <button onClick={() => { setEditingRuleId(rule.id); setEditingRuleText(rule.rule_text); }} className="text-xs px-1.5 py-0.5 rounded border" style={{ borderColor: C.line, color: C.textSub }}>编辑</button>
+                                    <button onClick={() => handleToggleRule(rule)} className="text-xs px-1.5 py-0.5 rounded border" style={{ borderColor: rule.enabled ? C.line : C.brand, color: rule.enabled ? C.textSub : C.brand }}>{rule.enabled ? '停用' : '启用'}</button>
+                                    <button onClick={() => handleDeleteRule(rule.id)} className="text-xs px-1.5 py-0.5 rounded border border-red-100 text-red-400">删除</button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2295,10 +2779,10 @@ function AIBrainTab() {
                 <div className="space-y-3">
                   {/* 共享知识库 */}
                   <div className="rounded-xl border p-3" style={{ borderColor: C.line }}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <div className="text-xs font-semibold" style={{ color: C.textMain }}>平台共享知识库</div>
-                        <div className="text-xs mt-0.5" style={{ color: C.textSub }}>{sysKbStats.item_count} 条 · {sysKbStats.file_count} 个文件</div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-semibold" style={{ color: C.textMain }}>共享</span>
+                        <span className="text-xs" style={{ color: C.textSub }}>{sysKbStats.item_count} 条 · {sysKbStats.file_count} 个文件</span>
                       </div>
                       <div
                         onClick={togglingKb ? undefined : handleToggleSysKb}
@@ -2311,23 +2795,42 @@ function AIBrainTab() {
                   {/* 私人知识库 */}
                   <div className="rounded-xl border p-3" style={{ borderColor: C.line }}>
                     <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <div className="text-xs font-semibold" style={{ color: C.textMain }}>我的私人知识库</div>
-                        <div className="text-xs mt-0.5" style={{ color: C.textSub }}>{kbStats.item_count} 条 · {kbStats.file_count} 个文件 · 本月新增 {kbStats.month_count}</div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm font-semibold" style={{ color: C.textMain }}>私人</span>
+                        <span className="text-xs" style={{ color: C.textSub }}>{kbStats.item_count} 条 · {kbStats.file_count} 个文件 · 本月新增 {kbStats.month_count}</span>
                       </div>
+                      <button
+                        onClick={() => setShowKbDrawer(true)}
+                        className="text-xs px-2.5 py-1 rounded-lg flex-shrink-0"
+                        style={{ backgroundColor: C.brandLight, color: C.brand }}
+                      >编辑</button>
                     </div>
-                    <button
-                      onClick={() => { /* 跳转到知识库详情 - 复用原 KnowledgeTab */ }}
-                      className="w-full py-2 rounded-xl text-xs font-medium border flex items-center justify-center gap-1"
-                      style={{ borderColor: C.brand, color: C.brand, backgroundColor: C.brandLight }}
-                    >
-                      <Plus className="w-3 h-3" />管理知识库内容
-                    </button>
+                    {kbSources.length === 0 ? (
+                      <div className="text-xs text-center py-3" style={{ color: C.textSub }}>暂无知识库内容，可通过顶部「AI 智能整理」添加</div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {kbSources.slice(0, 5).map((s: any) => (
+                          <div key={s.source_file} className="flex items-center gap-2 rounded-xl px-3 py-1.5" style={{ backgroundColor: C.brandLight }}>
+                            <span className="text-xs flex-1 truncate" style={{ color: C.textMain }}>
+                              {(s.source_file || '').slice(0, 28)}{(s.source_file || '').length > 28 ? '…' : ''}
+                            </span>
+                            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>{s.item_count} 条</span>
+                          </div>
+                        ))}
+                        {kbSources.length > 5 && (
+                          <button
+                            onClick={() => setShowKbDrawer(true)}
+                            className="w-full text-xs py-1.5 text-center rounded-xl"
+                            style={{ color: C.brand, backgroundColor: C.brandLight }}
+                          >查看全部 {kbSources.length} 个来源 ›</button>
+                        )}
+                      </div>
+                    )}
                   </div>
                   {/* 绑定知识库选择器 */}
                   {kbList.length > 0 && (
                     <div className="rounded-xl border p-3" style={{ borderColor: C.line }}>
-                      <div className="text-xs font-semibold mb-2" style={{ color: C.textMain }}>绑定知识库（选择一个私人知识库供 AI 优先检索）</div>
+                      <div className="text-sm font-semibold mb-2" style={{ color: C.textMain }}>绑定知识库（选择一个私人知识库供 AI 优先检索）</div>
                       <div className="space-y-1.5">
                         <button
                           onClick={() => { setKbId(0); setKbBindSaved(false); }}
@@ -2371,10 +2874,30 @@ function AIBrainTab() {
                       </button>
                     </div>
                   )}
-                  {/* 提示 */}
-                  <div className="text-xs rounded-xl p-2.5" style={{ backgroundColor: C.brandLight, color: C.textSub, border: `1px solid ${C.line}` }}>
-                    知识库详细管理（上传文件、添加条目、查看内容）请前往「知识库」页面操作。
-                  </div>
+
+                  {/* 私人知识库管理抽屉 */}
+                  {showKbDrawer && (
+                    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setShowKbDrawer(false)}>
+                      <div className="w-full max-w-lg rounded-t-2xl p-4 pb-10 space-y-3" style={{ backgroundColor: C.white, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between pb-1">
+                          <span className="text-sm font-semibold" style={{ color: C.textMain }}>私人知识库</span>
+                          <button onClick={() => setShowKbDrawer(false)} className="text-xs px-3 py-1 rounded-lg" style={{ backgroundColor: C.brandLight, color: C.brand }}>完成</button>
+                        </div>
+                        {kbSources.length === 0 ? (
+                          <div className="text-xs text-center py-8" style={{ color: C.textSub }}>暂无知识库内容，可通过顶部「AI 智能整理」添加</div>
+                        ) : (
+                          kbSources.map((s: any) => (
+                            <div key={s.source_file} className="rounded-xl border p-3" style={{ borderColor: C.line }}>
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-medium flex-1" style={{ color: C.textMain }}>{s.source_file}</span>
+                                <span className="text-xs flex-shrink-0 ml-2" style={{ color: C.textSub }}>{s.item_count} 条 · {formatDate(s.latest_time)}</span>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2384,7 +2907,7 @@ function AIBrainTab() {
                   {/* 本轮上下文轮数 */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <div className="text-xs font-semibold" style={{ color: C.textMain }}>本轮上下文保留轮数</div>
+                      <div className="text-sm font-semibold" style={{ color: C.textMain }}>本轮上下文保留轮数</div>
                       <span className="text-sm font-bold" style={{ color: C.brand }}>{contextRounds} 轮</span>
                     </div>
                     <p className="text-xs mb-3" style={{ color: C.textSub }}>AI 记忆多少轮对话历史，数值越大越消耗积分（建议 5-20）</p>
@@ -2406,7 +2929,7 @@ function AIBrainTab() {
                   <div className="rounded-xl border p-3" style={{ borderColor: C.line, backgroundColor: C.brandLight }}>
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-xs font-semibold" style={{ color: C.brand }}>客户长期偏好记忆</div>
+                        <div className="text-sm font-semibold" style={{ color: C.brand }}>客户长期偏好记忆</div>
                         <div className="text-xs mt-0.5" style={{ color: C.textSub }}>历史对话提炼，持久化存储客户画像</div>
                       </div>
                       <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: C.line, color: C.brand }}>规划中</span>
@@ -2449,6 +2972,94 @@ function KnowledgeTab() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pasteText, setPasteText] = useState("");
   const [aiParsing, setAiParsing] = useState(false);
+
+  // ── 第0步：AI智能整理 ──
+  const [step0Open, setStep0Open] = useState(false);
+  const [step0Input, setStep0Input] = useState("");
+  const [step0Analyzing, setStep0Analyzing] = useState(false);
+  const [step0Result, setStep0Result] = useState<{ prompt_additions: { content: string; duplicate_check: string }[]; kb_items: { question: string; answer: string; duplicate_check: string }[]; summary: string } | null>(null);
+  const [step0SelPrompts, setStep0SelPrompts] = useState<boolean[]>([]);
+  const [step0SelKbs, setStep0SelKbs] = useState<boolean[]>([]);
+  const [step0Applying, setStep0Applying] = useState(false);
+  const [step0Done, setStep0Done] = useState(false);
+  const [step0EditPromptIdx, setStep0EditPromptIdx] = useState<number | null>(null);
+  const [step0EditKbIdx, setStep0EditKbIdx] = useState<number | null>(null);
+  const [step0EditDraftPrompt, setStep0EditDraftPrompt] = useState("");
+  const [step0EditDraftQ, setStep0EditDraftQ] = useState("");
+  const [step0EditDraftA, setStep0EditDraftA] = useState("");
+
+  async function handleStep0Analyze() {
+    if (!step0Input.trim()) return;
+    setStep0Analyzing(true);
+    setStep0Result(null);
+    setStep0Done(false);
+    try {
+      const res = await fetch("/api/wecom/ai-assist-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: step0Input, channelId: KF_CHANNEL_ID, kbId: 0 }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        setStep0Result(d);
+        setStep0SelPrompts(d.prompt_additions.map(() => true));
+        setStep0SelKbs(d.kb_items.map(() => true));
+      } else {
+        toast.error(d.error || "AI分析失败");
+      }
+    } catch {
+      toast.error("网络错误");
+    } finally {
+      setStep0Analyzing(false);
+    }
+  }
+
+  async function handleStep0Apply() {
+    if (!step0Result) return;
+    setStep0Applying(true);
+    try {
+      const chosenPrompts = step0Result.prompt_additions.filter((_, i) => step0SelPrompts[i]).map(p => p.content);
+      const chosenKbs = step0Result.kb_items.filter((_, i) => step0SelKbs[i]);
+      let promptSuccess = 0;
+      let kbSuccess = 0;
+      if (chosenPrompts.length > 0) {
+        for (const p of chosenPrompts) {
+          try {
+            const r = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/prompt-rules`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ layer: 2, category: "行为规则", content: p }),
+            });
+            const rd = await r.json();
+            if (rd.rule) promptSuccess++;
+          } catch {}
+        }
+      }
+      if (chosenKbs.length > 0) {
+        for (const item of chosenKbs) {
+          try {
+            const r = await fetch("/api/wecom/ch/kb/adopt", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ channel_id: KF_CHANNEL_ID, channel_type: KF_CHANNEL_TYPE, question: item.question, answer: item.answer }),
+            });
+            const rd = await r.json();
+            if (rd.ok) kbSuccess++;
+          } catch {}
+        }
+      }
+      const msgs: string[] = [];
+      if (chosenPrompts.length > 0) msgs.push(`${promptSuccess}/${chosenPrompts.length}条指令已写入角色/行为规则`);
+      if (chosenKbs.length > 0) msgs.push(`${kbSuccess}/${chosenKbs.length}条已写入知识库`);
+      if (msgs.length > 0) toast.success(msgs.join("；"));
+      setStep0Done(true);
+      setTimeout(() => { setStep0Result(null); setStep0Input(""); setStep0Done(false); loadData(); }, 1500);
+    } catch {
+      toast.error("写入失败");
+    } finally {
+      setStep0Applying(false);
+    }
+  }
 
   async function loadData() {
     setLoading(true);
@@ -2545,6 +3156,165 @@ function KnowledgeTab() {
 
   return (
     <div className="space-y-4 pb-6">
+      {/* 第0步：AI智能整理 */}
+      <div className="rounded-xl border overflow-hidden" style={{ borderColor: '#C4A8E8', background: 'linear-gradient(135deg, #F5EEFF 0%, #EEF4FF 100%)' }}>
+        <button
+          onClick={() => setStep0Open(v => !v)}
+          className="w-full flex items-center justify-between px-4 py-3"
+        >
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: C.brand }}>
+              <span className="text-white text-xs font-bold">0</span>
+            </div>
+            <span className="text-sm font-semibold" style={{ color: C.textMain }}>第0步· AI智能整理</span>
+            <span className="text-xs rounded px-1.5 py-0.5" style={{ color: C.brand, backgroundColor: C.brandLight }}>推荐先做</span>
+          </div>
+          <ChevronRight className={`w-4 h-4 transition-transform ${step0Open ? 'rotate-90' : ''}`} style={{ color: C.textSub }} />
+        </button>
+
+        {step0Open && (
+          <div className="px-4 pb-4 space-y-3" style={{ borderTop: '1px solid #C4A8E8' }}>
+            <p className="text-xs pt-3 leading-relaxed" style={{ color: C.textSub }}>
+              粘贴任意内容（产品介绍、客服要求、价格表等），AI 自动判断并分别写入「角色/行为规则」和「知识库」
+            </p>
+            <textarea
+              value={step0Input}
+              onChange={e => setStep0Input(e.target.value)}
+              placeholder="例如：客服要有耕心，不要用太官方的语气。我们的产品康宝莱F1单一99元，包含蛋白粉和维生素套餐..."
+              rows={5}
+              className="w-full text-sm rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2"
+              style={{ border: '1px solid #C4A8E8', color: C.textMain, backgroundColor: '#FDFBFF' }}
+            />
+            <button
+              onClick={handleStep0Analyze}
+              disabled={step0Analyzing || !step0Input.trim()}
+              className="w-full py-2.5 rounded-xl text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+              style={{ backgroundColor: C.brand, color: '#fff' }}
+            >
+              {step0Analyzing
+                ? <><Loader2 className="w-4 h-4 animate-spin" />分析中...</>
+                : <><Sparkles className="w-4 h-4" />让 AI 帮我整理</>}
+            </button>
+
+            {step0Result && (
+              <div className="space-y-3">
+                {step0Result.summary && (
+                  <div className="text-xs rounded-lg px-3 py-2 flex items-start gap-1.5" style={{ color: C.brandDeep, backgroundColor: C.brandLight }}>
+                    <Sparkles className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                    <span>{step0Result.summary}</span>
+                  </div>
+                )}
+
+                {step0Result.prompt_additions.length > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="text-xs font-semibold flex items-center gap-1" style={{ color: C.textSub }}>
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: C.brand }} />
+                      建议写入「角色/行为规则」
+                    </div>
+                    {step0Result.prompt_additions.map((p, i) => (
+                      <div key={i} className="rounded-lg border transition-all" style={step0SelPrompts[i] ? { borderColor: C.brand, backgroundColor: C.brandLight } : { borderColor: C.line, backgroundColor: C.white }}>
+                        {step0EditPromptIdx === i ? (
+                          <div className="p-2 space-y-2">
+                            <textarea value={step0EditDraftPrompt} onChange={e => setStep0EditDraftPrompt(e.target.value)} rows={3} autoFocus className="w-full text-xs rounded px-2 py-1 resize-none focus:outline-none" style={{ border: '1px solid #7C3AED' }} />
+                            <div className="flex gap-2 justify-end">
+                              <button onClick={() => setStep0EditPromptIdx(null)} className="text-xs px-2 py-0.5 rounded" style={{ color: C.textSub }}>取消</button>
+                              <button onClick={() => { const u=[...step0Result!.prompt_additions]; u[i]={...u[i], content: step0EditDraftPrompt}; setStep0Result({...step0Result!, prompt_additions: u}); setStep0EditPromptIdx(null); }} className="text-xs px-2 py-0.5 rounded" style={{ color: C.brand }}>保存</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-start gap-2 px-3 py-2">
+                            <button onClick={() => setStep0SelPrompts(prev => { const n=[...prev]; n[i]=!n[i]; return n; })} className="flex-shrink-0 mt-0.5">
+                              <div className="w-4 h-4 rounded border flex items-center justify-center" style={step0SelPrompts[i] ? { backgroundColor: C.brand, borderColor: C.brand } : { borderColor: C.line }}>
+                                {step0SelPrompts[i] && <Check className="w-3 h-3 text-white" />}
+                              </div>
+                            </button>
+                            <div className="flex-1 text-xs">
+                              {p.duplicate_check && p.duplicate_check !== 'new' && (
+                                <div className="mb-1 px-1.5 py-0.5 rounded text-xs inline-flex items-center gap-1" style={{ backgroundColor: p.duplicate_check.startsWith('duplicate') ? '#FEF2F2' : '#FFFBEB', color: p.duplicate_check.startsWith('duplicate') ? '#DC2626' : '#D97706' }}>
+                                  {p.duplicate_check.startsWith('duplicate') ? '⚠ 重复' : '~ 相似'}：{p.duplicate_check.replace(/^(duplicate|similar):/, '').split(',')[0]}
+                                  {p.duplicate_check.includes(',') && <span style={{ color: '#6B7280' }}>（{p.duplicate_check.split(',').slice(1).join(',')}）</span>}
+                                </div>
+                              )}
+                              <span className="whitespace-pre-wrap" style={{ color: step0SelPrompts[i] ? C.brandDeep : C.textSub }}>{p.content}</span>
+                            </div>
+                            <button onClick={() => { setStep0EditPromptIdx(i); setStep0EditDraftPrompt(p.content); }} className="flex-shrink-0" style={{ color: C.line }}>
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {step0Result.kb_items.length > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="text-xs font-semibold flex items-center gap-1" style={{ color: C.textSub }}>
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: C.brand }} />
+                      建议写入「知识库」
+                    </div>
+                    {step0Result.kb_items.map((item, i) => (
+                      <div key={i} className="rounded-lg border transition-all" style={step0SelKbs[i] ? { borderColor: C.brand, backgroundColor: C.brandLight } : { borderColor: C.line, backgroundColor: C.white }}>
+                        {step0EditKbIdx === i ? (
+                          <div className="p-2 space-y-2">
+                            <div>
+                              <div className="text-xs mb-0.5" style={{ color: C.textSub }}>Q 问题</div>
+                              <input value={step0EditDraftQ} onChange={e => setStep0EditDraftQ(e.target.value)} autoFocus className="w-full text-xs rounded px-2 py-1 focus:outline-none" style={{ border: `1px solid ${C.brand}` }} />
+                            </div>
+                            <div>
+                              <div className="text-xs mb-0.5" style={{ color: C.textSub }}>A 答案</div>
+                              <textarea value={step0EditDraftA} onChange={e => setStep0EditDraftA(e.target.value)} rows={3} className="w-full text-xs rounded px-2 py-1 resize-none focus:outline-none" style={{ border: `1px solid ${C.brand}` }} />
+                            </div>
+                            <div className="flex gap-2 justify-end">
+                              <button onClick={() => setStep0EditKbIdx(null)} className="text-xs px-2 py-0.5 rounded" style={{ color: C.textSub }}>取消</button>
+                              <button onClick={() => { const u=[...step0Result!.kb_items]; u[i]={question:step0EditDraftQ,answer:step0EditDraftA}; setStep0Result({...step0Result!, kb_items: u}); setStep0EditKbIdx(null); }} className="text-xs px-2 py-0.5 rounded" style={{ color: C.brand }}>保存</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-start gap-2 px-3 py-2">
+                            <button onClick={() => setStep0SelKbs(prev => { const n=[...prev]; n[i]=!n[i]; return n; })} className="flex-shrink-0 mt-0.5">
+                              <div className="w-4 h-4 rounded border flex items-center justify-center" style={step0SelKbs[i] ? { backgroundColor: C.brand, borderColor: C.brand } : { borderColor: C.line }}>
+                                {step0SelKbs[i] && <Check className="w-3 h-3 text-white" />}
+                              </div>
+                            </button>
+                            <div className="flex-1 text-xs">
+                              {item.duplicate_check && item.duplicate_check !== 'new' && (
+                                <div className="mb-1 px-1.5 py-0.5 rounded text-xs inline-flex items-center gap-1" style={{ backgroundColor: item.duplicate_check.startsWith('duplicate') ? '#FEF2F2' : '#FFFBEB', color: item.duplicate_check.startsWith('duplicate') ? '#DC2626' : '#D97706' }}>
+                                  {item.duplicate_check.startsWith('duplicate') ? '⚠ 重复' : '~ 相似'}：{item.duplicate_check.replace(/^(duplicate|similar):/, '').split(',')[0]}
+                                  {item.duplicate_check.includes(',') && <span style={{ color: '#6B7280' }}>（{item.duplicate_check.split(',').slice(1).join(',')}）</span>}
+                                </div>
+                              )}
+                              <div className="font-medium" style={{ color: step0SelKbs[i] ? C.brandDeep : C.textMain }}>Q: {item.question}</div>
+                              <div className="mt-0.5" style={{ color: step0SelKbs[i] ? C.brand : C.textSub }}>A: {item.answer}</div>
+                            </div>
+                            <button onClick={() => { setStep0EditKbIdx(i); setStep0EditDraftQ(item.question); setStep0EditDraftA(item.answer); }} className="flex-shrink-0" style={{ color: C.line }}>
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {(step0Result.prompt_additions.length > 0 || step0Result.kb_items.length > 0) && (
+                  <button
+                    onClick={handleStep0Apply}
+                    disabled={step0Applying || step0Done}
+                    className="w-full py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                    style={{ backgroundColor: step0Done ? C.brand : C.textMain, color: '#fff' }}
+                  >
+                    {step0Applying ? <><Loader2 className="w-4 h-4 animate-spin" />写入中...</>
+                    : step0Done ? <><Check className="w-4 h-4" />已全部写入</>
+                    : <><Check className="w-4 h-4" />确认写入勾选内容</>}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* 共享知识库容器 */}
       {(() => {
         const now = new Date();
