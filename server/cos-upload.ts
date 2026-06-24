@@ -89,10 +89,23 @@ export async function uploadImageToCOS(
       buffer = imageData;
     }
 
-    // 自动压缩图片为 WebP
-    const compressed = await compressImageToWebP(buffer, contentType);
-    buffer = compressed.buffer;
-    contentType = compressed.contentType;
+    // wecom-materials 文件夹的图片不转WebP（企微不支持WebP格式）
+    // 其他文件夹自动压缩为 WebP
+    if (folder !== 'wecom-materials') {
+      const compressed = await compressImageToWebP(buffer, contentType);
+      buffer = compressed.buffer;
+      contentType = compressed.contentType;
+    } else {
+      // wecom-materials: 将图片统一转换为JPG（企微支持JPG/PNG/GIF/BMP）
+      try {
+        const jpgBuffer = await sharp(buffer).jpeg({ quality: 90 }).toBuffer();
+        buffer = jpgBuffer;
+        contentType = 'image/jpeg';
+        console.log(`[COS] wecom-materials图片转JPG: ${Math.round(jpgBuffer.length/1024)}KB`);
+      } catch (err) {
+        console.warn('[COS] wecom-materials图片转JPG失败，使用原图:', err);
+      }
+    }
     
     // 生成唯一文件名
     const hash = crypto.createHash('md5').update(buffer).digest('hex');

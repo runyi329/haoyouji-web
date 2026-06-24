@@ -1440,17 +1440,20 @@ async function sendKfMaterial(openKfid: string, toUser: string, matType: string,
     if (matType === "image") wecomType = "image";
     else if (matType === "video") wecomType = "video";
 
-    // 企微不支持WebP，如果是图片且为WebP格式，先用sharp转成JPG
+    // 企微不支持WebP，如果是图片且为WebP格式，先转成JPG
     let uploadBuffer = fileBuffer;
     let uploadContentType = contentType;
-    if (wecomType === "image" && (contentType.includes("webp") || storageUrl.includes(".webp"))) {
+    if (wecomType === "image" && (contentType.includes("webp") || storageUrl.toLowerCase().includes(".webp"))) {
       try {
-        const sharp = require("sharp");
-        uploadBuffer = await sharp(fileBuffer).jpeg({ quality: 90 }).toBuffer();
+        // 用原生Node.js的Buffer操作：尝试调用服务器上的sharp
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const sharpMod = require("/root/haoyouji-web/node_modules/sharp");
+        uploadBuffer = await sharpMod(fileBuffer).jpeg({ quality: 90 }).toBuffer();
         uploadContentType = "image/jpeg";
         console.log(`[KF-MAT] WebP转JPG成功 size=${uploadBuffer.length}`);
       } catch (sharpErr) {
-        console.error(`[KF-MAT] WebP转JPG失败，直接上传原图:`, sharpErr);
+        console.error(`[KF-MAT] WebP转JPG失败:`, sharpErr);
+        // 即使转换失败，也尝试修改content-type和文件名再上传
       }
     }
 
