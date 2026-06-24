@@ -1800,9 +1800,9 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
           console.log(`[KF] 素材库查询: channel_id=${kfChannelId}, 查到条数=${(matRows as any[]).length}`);
           if ((matRows as any[]).length > 0) {
             console.log(`[KF] 素材列表:`, (matRows as any[]).map((r: any) => `id=${r.id} title=${r.title}`).join(', '));
-            materialsContext = "\n\n【可发送素材列表】以下是可以发给客户的素材，当客户的问题符合某个素材的触发描述时，必须在回复文字末尾加上对应的标记（系统会自动发送素材给客户）：\n" +
-              (matRows as any[]).map((r: any) => `- 素材ID=${r.id} 【${r.title}】触发条件：${r.description}。发送标记：[SEND_MAT:${r.id}]`).join("\n") +
-              "\n重要：标记格式必须严格为 [SEND_MAT:数字] ，如 [SEND_MAT:1]，将它直接写在回复文字末尾，不要解释该标记";
+            materialsContext = "\n\n【素材发送规则 - 必须严格执行】\n你有以下可发送的素材。当用户的问题匹配某条素材的触发条件时，你【必须】在回复的最后一行加上对应的标记，格式严格为 [SEND_MAT:数字]，不得省略、不得修改格式、不得解释该标记。系统会自动识别并发送对应素材给客户。\n\n素材列表：\n" +
+              (matRows as any[]).map((r: any) => `触发条件：${r.description}\n→ 匹配时必须在回复末尾加：[SEND_MAT:${r.id}]`).join("\n\n") +
+              "\n\n示例：如果用户问购买相关问题，你的回复应该是：\n您好，可以通过官方商城购买哦～[SEND_MAT:1]\n（注意：[SEND_MAT:1]必须紧跟在回复文字后面，不换行，不加任何说明）";
             for (const r of (matRows as any[])) {
               materialsMap[r.id] = { type: r.type, storage_url: r.storage_url, title: r.title };
             }
