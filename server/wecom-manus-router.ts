@@ -17,6 +17,18 @@ import { Router, Request, Response, text as expressText } from "express";
 import crypto from "crypto";
 import { parseStringPromise } from "xml2js";
 import { getDbConnection } from "./db";
+import {
+  backfillEmbeddingAsync,
+  searchKnowledgeSemantic,
+  dedupCheckDb,
+  buildItemEmbedText,
+  isVectorEnabled,
+  embedTexts,
+  cosineSim,
+  parseEmbedding,
+  DEDUP_THRESHOLD_DUPLICATE,
+  DEDUP_THRESHOLD_SIMILAR,
+} from "./wecom-vector";
 import { getUsdtCnyRate } from "./price-scanner";
 import { isAIFeatureEnabled } from "./ai-monitor";
 import fs from "fs";
@@ -1568,9 +1580,23 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
           // 如果没有任何知识库，跳过
           if (kbIdSet.size > 0) {
             const kbIds = Array.from(kbIdSet);
+            let kbItems: any[] = [];
+            // 【优先】向量语义检索：理解语义，避免字面不符就漏检
+            if (isVectorEnabled()) {
+              try {
+                const hits = await searchKnowledgeSemantic(dbConn, kbIds, userText, 5, 0.5);
+                if (hits && hits.length > 0) {
+                  kbItems = hits.map((h) => ({ question: h.question, answer: h.answer }));
+                  console.log(`[KF] 知识库语义命中 ${kbItems.length} 条，最高分 ${(hits[0].score * 100).toFixed(1)}%`);
+                }
+              } catch (ve) {
+                console.error("[KF] 向量检索异常，降级关键词:", ve);
+              }
+            }
+            // 【兜底】向量无命中或未启用时，回退到原关键词 LIKE 匹配
             // 提取关键词：保留2字以上的词，最多取8个
             const keywords = userText.replace(/[？?！!。，,、\s]/g, " ").split(" ").filter((k: string) => k.length >= 2).slice(0, 8);
-            if (keywords.length > 0) {
+            if (kbItems.length === 0 && keywords.length > 0) {
               const kbPlaceholders = kbIds.map(() => "?").join(",");
               // 第一步：优先按问题字段匹配（命中率更高）
               const qLike = keywords.map(() => "question LIKE ?").join(" OR ");
@@ -1579,7 +1605,7 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
                 `SELECT question, answer FROM wecom_knowledge_items WHERE kb_id IN (${kbPlaceholders}) AND enabled = 1 AND (${qLike}) LIMIT 5`,
                 [...kbIds, ...qParams]
               );
-              let kbItems: any[] = (qItems as any[]);
+              kbItems = (qItems as any[]);
               // 第二步：若问题字段命中不足3条，补充答案字段匹配
               if (kbItems.length < 3) {
                 const existingQs = new Set(kbItems.map((i: any) => i.question));
@@ -1594,12 +1620,12 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
                   if (kbItems.length >= 5) break;
                 }
               }
-              if (kbItems.length > 0) {
-                kbContext = "\n\n【知识库标准答案——必须优先使用】\n" + kbItems.slice(0, 5).map((item: any, i: number) =>
-                  `${i + 1}. 问：${(item.question || "").split("\n")[0]}\n   答：${item.answer}`
-                ).join("\n") + "\n【重要】以上是标准答案，回复时必须严格依照上述内容，不得修改或忽略。";
-                console.log(`[KF] 知识库命中 ${kbItems.length} 条（来自 kb_ids: ${kbIds.join(',')}）`);
-              }
+            }
+            // 生成知识库上下文（向量命中或关键词命中均适用）
+            if (kbItems.length > 0) {
+              kbContext = "\n\n【知识库标准答案——必须优先使用】\n" + kbItems.slice(0, 5).map((item: any, i: number) =>
+                `${i + 1}. 问：${(item.question || "").split("\n")[0]}\n   答：${item.answer}`
+              ).join("\n") + "\n【重要】以上是标准答案，回复时必须严格依照上述内容，不得修改或忽略。";
             }
           }
         } catch (e) {
@@ -3654,6 +3680,8 @@ router.post("/api/wecom/channels/:channelId/prompt-rules", async (req: Request, 
       [channelId, layer || 2, category || '行为规则', content, enabled !== undefined ? enabled : 1, sort_order || 0, remark || '']
     );
     const insertId = (result as any).insertId;
+    // 异步回填规则向量（内容即 embed 文本）
+    backfillEmbeddingAsync(conn, "wecom_prompt_rules", insertId, String(content || ""));
     const [rows] = await (conn as any).execute(`SELECT * FROM wecom_prompt_rules WHERE id = ?`, [insertId]);
     res.json({ rule: (rows as any[])[0] });
   } catch (e) {
@@ -3680,6 +3708,10 @@ router.put("/api/wecom/channels/:channelId/prompt-rules/:ruleId", async (req: Re
     if (fields.length === 0) return res.status(400).json({ error: "无更新字段" });
     values.push(ruleId);
     await (conn as any).execute(`UPDATE wecom_prompt_rules SET ${fields.join(",")} WHERE id=?`, values);
+    // 内容变更时重新回填向量
+    if (content !== undefined) {
+      backfillEmbeddingAsync(conn, "wecom_prompt_rules", Number(ruleId), String(content || ""));
+    }
     const [rows] = await (conn as any).execute(`SELECT * FROM wecom_prompt_rules WHERE id = ?`, [ruleId]);
     res.json({ rule: (rows as any[])[0] });
   } catch (e) {
@@ -3749,7 +3781,9 @@ router.post("/api/wecom/knowledge-bases/:kbId/items", async (req: Request, res: 
       `INSERT INTO wecom_knowledge_items (kb_id, item_type, question, answer, source_doc) VALUES (?, ?, ?, ?, ?)`,
       [kbId, item_type || 'qa', question || null, answer, source_doc || null]
     );
-    res.json({ ok: true, id: (result as any).insertId });
+    const newItemId = (result as any).insertId;
+    backfillEmbeddingAsync(conn, "wecom_knowledge_items", newItemId, buildItemEmbedText(question, answer));
+    res.json({ ok: true, id: newItemId });
   } catch (e) {
     res.status(500).json({ error: "新增失败" });
   } finally {
@@ -3766,6 +3800,8 @@ router.put("/api/wecom/knowledge-bases/items/:itemId", async (req: Request, res:
       `UPDATE wecom_knowledge_items SET item_type=?, question=?, answer=?, source_doc=?, enabled=? WHERE id=?`,
       [item_type || 'qa', question || null, answer, source_doc || null, enabled !== undefined ? enabled : 1, itemId]
     );
+    // 问答变更时重新回填向量
+    backfillEmbeddingAsync(conn, "wecom_knowledge_items", Number(itemId), buildItemEmbedText(question, answer));
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: "更新失败" });
@@ -4057,32 +4093,78 @@ router.post("/api/wecom/ai-assist-config", async (req: Request, res: Response) =
     if (!parsed) {
       return res.status(500).json({ error: "AI返回格式异常，请重试" });
     }
-    // 查重：获取现有规则和知识库条目，做简单文本相似度比对
+    // 查重：获取现有规则和知识库条目（同时取出向量用于语义查重）
     const conn2 = await getDbConnection();
     let existingRules: string[] = [];
     let existingKbItems: { question: string; answer: string }[] = [];
+    // 带向量的现有数据（用于语义查重）
+    let ruleVecs: { text: string; vec: number[] | null }[] = [];
+    let kbVecs: { text: string; vec: number[] | null }[] = [];
     try {
       if (conn2 && channelId) {
         const [ruleRows] = await (conn2 as any).execute(
-          `SELECT content FROM wecom_prompt_rules WHERE channel_id = ? AND enabled = 1`,
+          `SELECT content, embedding FROM wecom_prompt_rules WHERE channel_id = ? AND enabled = 1`,
           [channelId]
         );
-        existingRules = (ruleRows as any[]).map((r: any) => r.content || "");
         // 同时查平台共享规则
         const [sysRuleRows] = await (conn2 as any).execute(
-          `SELECT content FROM wecom_prompt_rules WHERE channel_id = 1 AND enabled = 1`
+          `SELECT content, embedding FROM wecom_prompt_rules WHERE channel_id = 1 AND enabled = 1`
         );
-        existingRules = existingRules.concat((sysRuleRows as any[]).map((r: any) => r.content || ""));
+        const allRuleRows = [...(ruleRows as any[]), ...(sysRuleRows as any[])];
+        existingRules = allRuleRows.map((r: any) => r.content || "");
+        ruleVecs = allRuleRows.map((r: any) => ({ text: r.content || "", vec: parseEmbedding(r.embedding) }));
 
         const [kbRows] = await (conn2 as any).execute(
-          `SELECT ki.question, ki.answer FROM wecom_knowledge_items ki
+          `SELECT ki.question, ki.answer, ki.embedding FROM wecom_knowledge_items ki
            JOIN wecom_knowledge_bases kb ON ki.kb_id = kb.id
-           WHERE kb.channel_id = ? AND ki.enabled = 1 LIMIT 200`,
+           WHERE kb.channel_id = ? AND ki.enabled = 1 LIMIT 500`,
           [channelId]
         );
         existingKbItems = (kbRows as any[]).map((r: any) => ({ question: r.question || "", answer: r.answer || "" }));
+        kbVecs = (kbRows as any[]).map((r: any) => ({
+          text: buildItemEmbedText(r.question, r.answer),
+          vec: parseEmbedding(r.embedding),
+        }));
       }
     } catch {}
+
+    // 【向量语义查重】如果向量可用，预先批量生成本次新内容的向量
+    const useVector = isVectorEnabled();
+    const newRuleTexts: string[] = (parsed.prompt_additions || []).map((p: any) =>
+      typeof p === "string" ? p : (p.content || "")
+    );
+    const newKbTexts: string[] = (parsed.kb_items || []).map((item: any) =>
+      buildItemEmbedText(item.question || "", item.answer || "")
+    );
+    let newRuleVecs: (number[] | null)[] = newRuleTexts.map(() => null);
+    let newKbVecs: (number[] | null)[] = newKbTexts.map(() => null);
+    if (useVector) {
+      try {
+        const allNew = [...newRuleTexts, ...newKbTexts].map((t) => t || " ");
+        if (allNew.length > 0) {
+          const vecs = await embedTexts(allNew);
+          newRuleVecs = vecs.slice(0, newRuleTexts.length);
+          newKbVecs = vecs.slice(newRuleTexts.length);
+        }
+      } catch (ve) {
+        console.error("[AI辅助] 查重向量生成失败，降级关键词:", ve);
+      }
+    }
+    // 向量查重辅助：返回 {level, score, matchedText}，未命中返回 null
+    function vecDup(newVec: number[] | null, existing: { text: string; vec: number[] | null }[]) {
+      if (!newVec) return null;
+      let best = -1, bestText = "";
+      for (const e of existing) {
+        if (!e.vec) continue;
+        const s = cosineSim(newVec, e.vec);
+        if (s > best) { best = s; bestText = e.text; }
+      }
+      if (best < 0) return null;
+      let level = "new";
+      if (best >= DEDUP_THRESHOLD_DUPLICATE) level = "duplicate";
+      else if (best >= DEDUP_THRESHOLD_SIMILAR) level = "similar";
+      return { level, score: best, text: bestText };
+    }
 
     // 简单相似度：关键词重叠率
     function simScore(a: string, b: string): number {
@@ -4094,36 +4176,45 @@ router.post("/api/wecom/ai-assist-config", async (req: Request, res: Response) =
       return overlap / Math.min(wordsA.size, wordsB.size);
     }
 
-    // 对每条prompt_addition做查重
-    const promptAdditions = (parsed.prompt_additions || []).map((p: any) => {
+    // 对每条prompt_addition做查重（向量优先，关键词兜底）
+    const promptAdditions = (parsed.prompt_additions || []).map((p: any, idx: number) => {
       const content = typeof p === 'string' ? p : (p.content || '');
       let dupCheck = 'new';
-      let maxScore = 0;
-      let matchedRule = '';
-      for (const rule of existingRules) {
-        const score = simScore(content, rule);
-        if (score > maxScore) { maxScore = score; matchedRule = rule.slice(0, 20); }
+      const vd = vecDup(newRuleVecs[idx], ruleVecs);
+      if (vd && vd.level !== 'new') {
+        dupCheck = `${vd.level}:${vd.text.slice(0, 20)},语义相似度${Math.round(vd.score * 100)}%`;
+      } else if (!vd) {
+        // 向量不可用时降级关键词
+        let maxScore = 0, matchedRule = '';
+        for (const rule of existingRules) {
+          const score = simScore(content, rule);
+          if (score > maxScore) { maxScore = score; matchedRule = rule.slice(0, 20); }
+        }
+        if (maxScore >= 0.7) dupCheck = `duplicate:${matchedRule},相似度${Math.round(maxScore * 100)}%`;
+        else if (maxScore >= 0.4) dupCheck = `similar:${matchedRule},相似度${Math.round(maxScore * 100)}%`;
       }
-      if (maxScore >= 0.7) dupCheck = `duplicate:${matchedRule},相似度${Math.round(maxScore * 100)}%`;
-      else if (maxScore >= 0.4) dupCheck = `similar:${matchedRule},相似度${Math.round(maxScore * 100)}%`;
       return { content, duplicate_check: dupCheck };
     });
 
-    // 对每条kb_item做查重
-    const kbItems = (parsed.kb_items || []).map((item: any) => {
+    // 对每条kb_item做查重（向量优先，关键词兜底）
+    const kbItems = (parsed.kb_items || []).map((item: any, idx: number) => {
       const q = item.question || '';
       const a = item.answer || '';
       let dupCheck = 'new';
-      let maxScore = 0;
-      let matchedQ = '';
-      for (const existing of existingKbItems) {
-        const scoreQ = simScore(q, existing.question);
-        const scoreA = simScore(a, existing.answer);
-        const score = Math.max(scoreQ, scoreA);
-        if (score > maxScore) { maxScore = score; matchedQ = existing.question.slice(0, 20); }
+      const vd = vecDup(newKbVecs[idx], kbVecs);
+      if (vd && vd.level !== 'new') {
+        dupCheck = `${vd.level}:${vd.text.slice(0, 20)},语义相似度${Math.round(vd.score * 100)}%`;
+      } else if (!vd) {
+        let maxScore = 0, matchedQ = '';
+        for (const existing of existingKbItems) {
+          const scoreQ = simScore(q, existing.question);
+          const scoreA = simScore(a, existing.answer);
+          const score = Math.max(scoreQ, scoreA);
+          if (score > maxScore) { maxScore = score; matchedQ = existing.question.slice(0, 20); }
+        }
+        if (maxScore >= 0.7) dupCheck = `duplicate:${matchedQ},相似度${Math.round(maxScore * 100)}%`;
+        else if (maxScore >= 0.4) dupCheck = `similar:${matchedQ},相似度${Math.round(maxScore * 100)}%`;
       }
-      if (maxScore >= 0.7) dupCheck = `duplicate:${matchedQ},相似度${Math.round(maxScore * 100)}%`;
-      else if (maxScore >= 0.4) dupCheck = `similar:${matchedQ},相似度${Math.round(maxScore * 100)}%`;
       return { question: q, answer: a, duplicate_check: dupCheck };
     });
 

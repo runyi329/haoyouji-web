@@ -990,6 +990,41 @@ function ConfigTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avata
             </span>
           </div>
 
+          {/* 区块标题：向量引擎（语义检索） */}
+          <div className="px-4 pt-3 pb-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: C.brand }}>向量引擎·语义检索</span>
+          </div>
+
+          {/* Embedding 服务商 */}
+          <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>向量服务</span>
+            <span className="text-xs font-medium" style={{ color: C.textMain }}>腾讯混元 Embedding</span>
+          </div>
+
+          {/* Embedding API 域名 */}
+          <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>Embedding API</span>
+            <span className="text-xs font-mono" style={{ color: C.textMain }}>api.hunyuan.cloud.tencent.com</span>
+          </div>
+
+          {/* Embedding Key（脱敏） */}
+          <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>Embedding Key</span>
+            <span className="text-xs font-mono" style={{ color: C.textMain }}>sk-OAOV***...***KdbHb</span>
+          </div>
+
+          {/* 向量模型 */}
+          <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>向量模型</span>
+            <span className="text-xs font-medium" style={{ color: C.textMain }}>hunyuan-embedding（1024维）</span>
+          </div>
+
+          {/* 用途 */}
+          <div className="px-4 py-2.5 flex items-start justify-between gap-2">
+            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>用途</span>
+            <span className="text-xs text-right max-w-[60%]" style={{ color: C.textMain }}>知识库/规则语义检索与查重</span>
+          </div>
+
           {/* 区块标题：知识库 */}
           <div className="px-4 pt-3 pb-1">
             <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: C.brand }}>知识库</span>

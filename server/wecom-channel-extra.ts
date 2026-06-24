@@ -13,6 +13,11 @@ import multer from "multer";
 import * as XLSX from "xlsx";
 import fs from "fs";
 import { getDbConnection } from "./db";
+import {
+  backfillEmbeddingAsync,
+  backfillAllMissing,
+  buildItemEmbedText,
+} from "./wecom-vector";
 
 const router = Router();
 
@@ -435,6 +440,8 @@ router.post("/api/wecom/ch/kb/upload", upload.single("file"), async (req: Reques
 
     // 清理临时文件
     try { fs.unlinkSync(file.path); } catch {}
+    // 批量回填本次导入条目的向量（导入接口本身较慢，await 完成可接受）
+    try { await backfillAllMissing(conn); } catch {}
     res.json({ ok: true, imported, file: origName, kb_id: kbId });
   } catch (e: any) {
     console.error("[知识库上传] 失败:", e);
@@ -815,7 +822,15 @@ router.post("/api/wecom/ch/kb/adopt", async (req: Request, res: Response) => {
       `INSERT INTO wecom_knowledge_items (kb_id, item_type, question, answer, source_file) VALUES (?,?,?,?,?)`,
       [kbId, "qa", finalQuestion || null, answer, "AI分析采纳"]
     );
-    res.json({ ok: true, id: (result as any).insertId });
+    const newId = (result as any).insertId;
+    // 异步回填向量（不阻塞响应；连接池连接，安全）
+    backfillEmbeddingAsync(
+      conn,
+      "wecom_knowledge_items",
+      newId,
+      buildItemEmbedText(finalQuestion, answer)
+    );
+    res.json({ ok: true, id: newId });
   } catch (e: any) {
     console.error("[采纳知识] 失败:", e);
     res.status(500).json({ error: "采纳失败" });
@@ -894,9 +909,10 @@ router.post("/api/wecom/ch/kb/ai-parse", async (req: Request, res: Response) => 
         `INSERT INTO wecom_knowledge_items (kb_id, item_type, question, answer, source_file) VALUES (?,?,?,?,?)`,
         [kbId, "qa", item.question || null, item.answer, sourceFile]
       );
-      insertCount++;
+            insertCount++;
     }
-
+    // 批量回填本次新写入条目的向量（此接口 finally 会关闭连接池，故在响应前 await 完成）
+    try { await backfillAllMissing(conn); } catch {}
     res.json({ ok: true, count: insertCount, items });
   } catch (e: any) {
     console.error("[AI解析粘贴] 失败:", e);
