@@ -2847,6 +2847,219 @@ function PlatformRulesTab() {
   );
 }
 
+// ─── AI 模型配置 Tab ──────────────────────────────────────────────────────────
+interface AIModelOption {
+  value: string;       // model_name
+  label: string;       // 显示名称
+  provider: string;    // 服务商
+  price_note: string;  // 价格说明
+  supports_vision?: boolean;
+  supports_embedding?: boolean;
+}
+interface AIModelConfig {
+  use_case: string;
+  use_case_label: string;
+  use_case_desc: string;
+  provider: string;
+  model_name: string;
+  api_key: string;
+  api_base: string;
+  category: string;   // 'chat' | 'vision' | 'embedding'
+}
+
+function AIModelConfigTab() {
+  const [configs, setConfigs] = useState<AIModelConfig[]>([]);
+  const [modelOptions, setModelOptions] = useState<Record<string, AIModelOption[]>>({});
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null);
+  // 本地编辑状态
+  const [edits, setEdits] = useState<Record<string, Partial<AIModelConfig>>>({});
+  // API Key 显示/隐藏
+  const [showKey, setShowKey] = useState<Record<string, boolean>>({});
+
+  async function loadConfigs() {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/wecom/ai-model-configs');
+      const d = await res.json();
+      if (d.ok) {
+        setConfigs(d.configs || []);
+        setModelOptions(d.model_options || {});
+        // 初始化编辑状态
+        const initEdits: Record<string, Partial<AIModelConfig>> = {};
+        for (const c of (d.configs || [])) {
+          initEdits[c.use_case] = { provider: c.provider, model_name: c.model_name, api_key: c.api_key, api_base: c.api_base };
+        }
+        setEdits(initEdits);
+      }
+    } catch {}
+    finally { setLoading(false); }
+  }
+
+  useEffect(() => { loadConfigs(); }, []);
+
+  async function saveConfig(useCase: string) {
+    const e = edits[useCase];
+    if (!e?.model_name) return;
+    setSaving(useCase);
+    try {
+      const res = await fetch(`/api/wecom/ai-model-configs/${useCase}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(e),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        toast.success('已保存');
+        loadConfigs();
+      } else {
+        toast.error(d.error || '保存失败');
+      }
+    } catch { toast.error('保存失败'); }
+    finally { setSaving(null); }
+  }
+
+  function updateEdit(useCase: string, field: string, value: string) {
+    setEdits(prev => ({
+      ...prev,
+      [useCase]: { ...prev[useCase], [field]: value }
+    }));
+    // 当选择模型时，自动填入对应的 provider
+    if (field === 'model_name') {
+      const cfg = configs.find(c => c.use_case === useCase);
+      const category = cfg?.category || 'chat';
+      const options = modelOptions[category] || [];
+      const opt = options.find(o => o.value === value);
+      if (opt) {
+        setEdits(prev => ({
+          ...prev,
+          [useCase]: { ...prev[useCase], model_name: value, provider: opt.provider }
+        }));
+      }
+    }
+  }
+
+  const categoryLabel: Record<string, string> = {
+    chat: '💬 对话模型',
+    vision: '📷 视觉模型（图片识别）',
+    embedding: '🔍 向量模型（语义检索）',
+  };
+
+  const groupedConfigs = configs.reduce((acc, c) => {
+    const cat = c.category || 'chat';
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(c);
+    return acc;
+  }, {} as Record<string, AIModelConfig[]>);
+
+  if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-green-500" /></div>;
+
+  return (
+    <div className="space-y-5">
+      {/* 说明卡片 */}
+      <div className="bg-gradient-to-br from-green-900 to-green-800 rounded-2xl p-4 text-white">
+        <div className="text-xs text-green-300 font-medium tracking-wider mb-1">平台管理 · 全局生效</div>
+        <div className="text-xl font-bold">AI 模型配置</div>
+        <div className="text-xs text-green-200 mt-1">在此配置各功能使用的 AI 模型，保存后全平台所有分身立即生效。</div>
+      </div>
+
+      {/* 按分类展示 */}
+      {Object.entries(groupedConfigs).map(([category, catConfigs]) => (
+        <div key={category}>
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-1">
+            {categoryLabel[category] || category}
+          </div>
+          <div className="space-y-3">
+            {catConfigs.map(cfg => {
+              const e = edits[cfg.use_case] || {};
+              const options = modelOptions[cfg.category] || [];
+              const selectedOpt = options.find(o => o.value === (e.model_name || cfg.model_name));
+              const isSaving = saving === cfg.use_case;
+              return (
+                <div key={cfg.use_case} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                  {/* 场景标题 */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="text-sm font-bold text-gray-800">{cfg.use_case_label}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">{cfg.use_case_desc}</div>
+                    </div>
+                    {selectedOpt && (
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                        selectedOpt.price_note.includes('免费') ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
+                      }`}>
+                        {selectedOpt.price_note.includes('免费') ? '免费' : '付费'}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* 模型选择下拉框 */}
+                  <div className="mb-3">
+                    <label className="text-xs text-gray-500 mb-1 block">选择模型</label>
+                    <select
+                      value={e.model_name || cfg.model_name}
+                      onChange={ev => updateEdit(cfg.use_case, 'model_name', ev.target.value)}
+                      className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-400"
+                    >
+                      {options.map(opt => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}  ·  {opt.price_note}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedOpt && (
+                      <div className="text-[11px] text-gray-400 mt-1 px-1">
+                        服务商：{selectedOpt.provider} &nbsp;·&nbsp; {selectedOpt.price_note}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* API Key 输入框（embedding 场景不需要单独输入，复用混元Key） */}
+                  {cfg.category !== 'embedding' && (
+                    <div className="mb-3">
+                      <label className="text-xs text-gray-500 mb-1 block">API Key</label>
+                      <div className="relative">
+                        <input
+                          type={showKey[cfg.use_case] ? 'text' : 'password'}
+                          value={e.api_key ?? cfg.api_key}
+                          onChange={ev => updateEdit(cfg.use_case, 'api_key', ev.target.value)}
+                          placeholder="输入 API Key（留空则使用平台默认）"
+                          className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-400 pr-10 font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowKey(prev => ({ ...prev, [cfg.use_case]: !prev[cfg.use_case] }))}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"
+                        >
+                          {showKey[cfg.use_case] ? '隐藏' : '显示'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {cfg.category === 'embedding' && (
+                    <div className="text-xs text-gray-400 bg-gray-50 rounded-xl px-3 py-2 mb-3">
+                      向量模型 API Key 与「图片识别」共用混元 Key，无需单独配置。
+                    </div>
+                  )}
+
+                  {/* 保存按钮 */}
+                  <button
+                    onClick={() => saveConfig(cfg.use_case)}
+                    disabled={isSaving}
+                    className="w-full flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white text-sm font-medium py-2 rounded-xl transition-colors"
+                  >
+                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    {isSaving ? '保存中...' : '保存'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // 平台共享 Tab：上方平台共享指令库 + 下方平台共享知识库
 interface SharedKb { id: number; name: string; description?: string | null; item_count: number; }
 
@@ -3136,6 +3349,7 @@ function PlatformKbView() {
     { key: 'overview', label: '总览', icon: <BarChart2 className="w-3.5 h-3.5" /> },
     { key: 'accounts', label: '分身账户', icon: <Bot className="w-3.5 h-3.5" /> },
     { key: 'shared', label: '平台共享', icon: <Shield className="w-3.5 h-3.5" /> },
+    { key: 'ai_model', label: 'AI模型', icon: <Zap className="w-3.5 h-3.5" /> },
     { key: 'usage', label: '用量统计', icon: <Coins className="w-3.5 h-3.5" /> },
   ];
 
@@ -3164,6 +3378,7 @@ function PlatformKbView() {
       {activeTab === 'overview' && <PlatformOverviewTab channels={channels} />}
       {activeTab === 'accounts' && <PlatformAccountsTab channels={channels} onRefresh={loadChannels} />}
       {activeTab === 'shared' && <PlatformSharedTab />}
+      {activeTab === 'ai_model' && <AIModelConfigTab />}
       {activeTab === 'usage' && <PlatformUsageTabView />}
     </div>
   );

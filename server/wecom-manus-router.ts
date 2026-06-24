@@ -30,6 +30,7 @@ import {
   DEDUP_THRESHOLD_SIMILAR,
 } from "./wecom-vector";
 import { getUsdtCnyRate } from "./price-scanner";
+import { getAIConfig, callAIVision, saveAIConfig, getAIConfigs, MODEL_OPTIONS, USE_CASE_META, type UseCase } from "./wecom-ai-config";
 import { isAIFeatureEnabled } from "./ai-monitor";
 import fs from "fs";
 import path from "path";
@@ -1299,18 +1300,37 @@ async function classifyMessage(userMessage: string, prompt: string, classifierMo
 // 工具函数：向 DeepSeek API 发送消息并获取回复
 // -----------------------------------------------------------
 interface DeepSeekReply { content: string; promptTokens: number; completionTokens: number; totalTokens: number; cacheHitTokens: number; }
-async function sendToDeepSeekAndGetReply(userMessage: string, model: string = "deepseek-chat", systemPrompt?: string): Promise<DeepSeekReply> {
+async function sendToDeepSeekAndGetReply(userMessage: string, model: string = "deepseek-chat", systemPrompt?: string, useCase: UseCase = "chat"): Promise<DeepSeekReply> {
   const errReply = (msg: string): DeepSeekReply => ({ content: msg, promptTokens: 0, completionTokens: 0, totalTokens: 0, cacheHitTokens: 0 });
   try {
-    if (!DEEPSEEK_API_KEY) {
-      return errReply("DeepSeek API Key 未配置，请联系管理员。");
+    // ===== 动态读取全局 AI 配置 =====
+    // 当 model 为 "auto" 或 "deepseek-chat" 时，优先从数据库读取全局配置
+    let apiKey = DEEPSEEK_API_KEY;
+    let apiBase = DEEPSEEK_API_BASE;
+    let resolvedModel = model;
+    const shouldUseGlobalConfig = model === "auto" || model === "deepseek-chat" || model === "deepseek-v4-flash";
+    if (shouldUseGlobalConfig) {
+      try {
+        const cfg = await getAIConfig(useCase);
+        if (cfg && cfg.api_key) {
+          apiKey = cfg.api_key;
+          apiBase = cfg.api_base;
+          resolvedModel = cfg.model_name;
+          console.log(`[AI] 使用全局配置 useCase=${useCase} provider=${cfg.provider} model=${cfg.model_name}`);
+        }
+      } catch (cfgErr) {
+        console.warn("[AI] 读取全局配置失败，降级使用 DeepSeek:", cfgErr);
+      }
     }
-    // 判断是否需要开启思考模式，并将模型名映射到实际 API 模型名
-    const isThinking = model.endsWith("-thinking");
-    const actualModel = isThinking ? model.replace("-thinking", "") : model;
-    // 兼容旧模型名：deepseek-chat 映射到 deepseek-v4-flash
-    const apiModel = actualModel === "deepseek-chat" ? "deepseek-v4-flash" : actualModel;
-    console.log(`[DeepSeek] 发送消息 model=${apiModel} thinking=${isThinking}: ${userMessage.substring(0, 50)}`);
+    if (!apiKey) {
+      return errReply("AI API Key 未配置，请在平台管理→AI模型配置中设置。");
+    }
+    // 判断是否需要开启思考模式
+    const isThinking = resolvedModel.endsWith("-thinking");
+    const actualModel = isThinking ? resolvedModel.replace("-thinking", "") : resolvedModel;
+    // 兼容旧模型名：deepseek-chat 映射到 deepseek-v4-flash（仅 DeepSeek 服务商）
+    const apiModel = (actualModel === "deepseek-chat" && apiBase.includes("deepseek")) ? "deepseek-v4-flash" : actualModel;
+    console.log(`[AI] 发送消息 model=${apiModel} thinking=${isThinking}: ${userMessage.substring(0, 50)}`);
     const messages: Array<{role: string; content: string}> = [];
     if (systemPrompt) {
       messages.push({ role: "system", content: systemPrompt });
@@ -1325,11 +1345,11 @@ async function sendToDeepSeekAndGetReply(userMessage: string, model: string = "d
     if (isThinking) {
       requestBody.thinking = { type: "enabled" };
     }
-    const res = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
+    const res = await fetch(`${apiBase}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
+        "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify(requestBody),
     });
@@ -1674,7 +1694,7 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
       const fullSystemPrompt = systemPrompt + twinContext + kbContext;
 
       // 7. 调用DeepSeek获取回复
-      const dsReply = await sendToDeepSeekAndGetReply(userText, aiModel, fullSystemPrompt);
+      const dsReply = await sendToDeepSeekAndGetReply(userText, aiModel, fullSystemPrompt, "chat_reply");
       console.log(`[KF] DeepSeek回复 tokens=${dsReply.totalTokens} 内容=${dsReply.content.substring(0, 50)}`);
 
       // 8. 发送回复给用户
@@ -1728,7 +1748,7 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
 星级标准：5星=极优精选训练集，4星=良好备选语料，3星=一般参考语料，2星=较差建议修改，1星=低质过滤丢弃。必须使用半星精度（如3.5、4.0、4.5）。`;
                 const scoreUserPrompt = `用户消息：${userText.substring(0, 300)}
 AI回复：${dsReply.content.substring(0, 300)}`;
-                const scoreReply = await sendToDeepSeekAndGetReply(scoreUserPrompt, 'deepseek-chat', scoreSystemPrompt);
+                const scoreReply = await sendToDeepSeekAndGetReply(scoreUserPrompt, 'deepseek-chat', scoreSystemPrompt, 'chat_score');
                 let stars = 3.0, reason = '', dimensions: any = null;
                 try {
                   const m = scoreReply.content.match(/\{[\s\S]*\}/);
@@ -1992,7 +2012,7 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
                 } catch (_) {}
                 await sendWeComMessage(userId, waitingMsg2);
                 if (isRuleDeepSeek) {
-                  const dsReply = await sendToDeepSeekAndGetReply(content, ruleModel, rulePrompt || undefined);
+                  const dsReply = await sendToDeepSeekAndGetReply(content, ruleModel, rulePrompt || undefined, 'rule_reply');
                   const chunks = dsReply.content.match(/[\s\S]{1,2000}/g) || [dsReply.content];
                   for (const chunk of chunks) {
                     await sendWeComMessage(userId, chunk);
@@ -2083,7 +2103,7 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
         return;
       }
       await sendWeComMessage(userId, waitingMsg);
-      const dsReply = await sendToDeepSeekAndGetReply(content, userModelProfile, globalSystemPrompt || undefined);
+      const dsReply = await sendToDeepSeekAndGetReply(content, userModelProfile, globalSystemPrompt || undefined, 'chat_reply');
       const dsReplyText = dsReply.content;
       if (dsReplyText.length <= 2048) {
         await sendWeComMessage(userId, dsReplyText);
@@ -3944,6 +3964,51 @@ router.put("/api/wecom/channels/:channelId/shared-kbs", async (req: Request, res
   }
 });
 
+// -------------------------------------------------------
+// AI 模型配置管理接口（平台管理→AI模型配置）
+// -------------------------------------------------------
+
+// GET /api/wecom/ai-model-configs - 获取全部AI模型配置列表 + 可选模型选项
+router.get("/api/wecom/ai-model-configs", async (_req: Request, res: Response) => {
+  try {
+    const configMap = await getAIConfigs();
+    // 将数据库配置与 USE_CASE_META 合并，补充前端需要的字段
+    const configs = Array.from(configMap.values()).map(c => {
+      const meta = USE_CASE_META[c.use_case] || { label: c.use_case, desc: "", category: "chat" };
+      return {
+        ...c,
+        use_case_label: meta.label,
+        use_case_desc: meta.desc,
+        category: meta.category,
+      };
+    });
+    // 按 category 分组返回模型选项（前端按分类展示下拉框）
+    const model_options: Record<string, typeof MODEL_OPTIONS> = {};
+    for (const opt of MODEL_OPTIONS) {
+      if (!model_options[opt.category]) model_options[opt.category] = [];
+      model_options[opt.category].push({ ...opt, value: opt.model_name } as any);
+    }
+    res.json({ ok: true, configs, model_options });
+  } catch (e) {
+    console.error("[AI模型配置] 获取失败:", e);
+    res.status(500).json({ error: "获取AI模型配置失败" });
+  }
+});
+
+// PUT /api/wecom/ai-model-configs/:useCase - 保存单条AI模型配置
+router.put("/api/wecom/ai-model-configs/:useCase", async (req: Request, res: Response) => {
+  const { useCase } = req.params;
+  const { provider, model_name, api_key, api_base } = req.body;
+  if (!provider || !model_name) return res.status(400).json({ error: "provider 和 model_name 不能为空" });
+  try {
+    await saveAIConfig({ use_case: useCase as UseCase, provider, model_name, api_key: api_key || "", api_base: api_base || "" });
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[AI模型配置] 保存失败:", e);
+    res.status(500).json({ error: "保存AI模型配置失败" });
+  }
+});
+
 // 获取渠道AI配置（欢迎词、System Prompt等）
 router.get("/api/wecom/channel-config/:channelId", async (req: Request, res: Response) => {
   const { channelId } = req.params;
@@ -4116,53 +4181,17 @@ router.put("/api/wecom/apps/:id", async (req: Request, res: Response) => {
 
 // ─── AI 辅助指令知识库维护 ────────────────────────────────────────────────────
 
-// 图片识别接口：接收 base64 图片，调用视觉模型提取文字内容
+// 图片识别接口：接收 base64 图片，自动读取平台AI模型配置（image_ocr场景）
 router.post("/api/wecom/ai-image-extract", async (req: Request, res: Response) => {
   const { imageBase64 } = req.body;
   if (!imageBase64) return res.status(400).json({ error: "请上传图片" });
-  if (!DEEPSEEK_API_KEY) return res.status(500).json({ error: "AI 服务未配置" });
 
   try {
-    // 使用 DeepSeek V4 视觉模型（deepseek-chat，V4版本内置视觉能力）识别图片内容
-    const res2 = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${DEEPSEEK_API_KEY}` },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "image_url",
-                image_url: { url: imageBase64.startsWith("data:") ? imageBase64 : `data:image/jpeg;base64,${imageBase64}` }
-              },
-              {
-                type: "text",
-                text: "请详细描述这张图片中的所有内容，包括文字、数字、表格、产品信息等。用中文回答，尽量完整保留原文内容。"
-              }
-            ]
-          }
-        ],
-        max_tokens: 2000,
-        stream: false,
-      })
-    });
-
-    if (!res2.ok) {
-      // DeepSeek 视觉模型不可用时，回退到文字模型提示用户手动输入
-      const errText = await res2.text();
-      console.error("[AI图片识别] 视觉模型失败:", errText.substring(0, 200));
-      return res.status(400).json({ error: "图片识别暂不可用，请手动输入内容" });
-    }
-
-    const data = await res2.json() as any;
-    const text = data?.choices?.[0]?.message?.content || "";
-    if (!text) return res.status(500).json({ error: "图片识别失败，请重试" });
-    res.json({ ok: true, text });
-  } catch (e) {
+    const result = await callAIVision(imageBase64);
+    res.json({ ok: true, text: result.text });
+  } catch (e: any) {
     console.error("[AI图片识别] 异常:", e);
-    res.status(500).json({ error: "图片识别失败，请重试" });
+    res.status(400).json({ error: e?.message || "图片识别失败，请在平台管理→AI模型配置中检查图片识别配置" });
   }
 });
 
@@ -4200,7 +4229,7 @@ router.post("/api/wecom/ai-assist-config", async (req: Request, res: Response) =
 只返回JSON，不要其他文字。如果某类没有内容则返回空数组[]。`;
 
   try {
-    const result = await sendToDeepSeekAndGetReply(text.trim(), "deepseek-chat", systemPrompt);
+    const result = await sendToDeepSeekAndGetReply(text.trim(), "deepseek-chat", systemPrompt, "ai_organize");
     // 尝试解析JSON
     let parsed: any = null;
     try {
@@ -4424,7 +4453,7 @@ router.post("/api/wecom/ai-analyze-rule", async (req: Request, res: Response) =>
 只返回JSON，不要其他文字。`;
 
   try {
-    const result = await sendToDeepSeekAndGetReply(content.trim(), "deepseek-chat", systemPrompt);
+    const result = await sendToDeepSeekAndGetReply(content.trim(), "deepseek-chat", systemPrompt, "ai_analyze");
     let parsed: any = null;
     try {
       const jsonMatch = result.content.match(/\{[\s\S]*\}/);
