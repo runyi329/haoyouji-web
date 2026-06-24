@@ -4337,11 +4337,10 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
             <div className="text-[15px] font-bold tracking-wide text-white leading-tight">数字分身 · {channelName}</div>
           </div>
           <button
-            onClick={() => loadAllData()}
-            disabled={refreshing}
+            onClick={() => window.location.reload()}
             className="text-xs px-2.5 py-1 rounded-lg"
-            style={{ backgroundColor: 'rgba(255,255,255,0.18)', color: refreshing ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.9)' }}
-          >{refreshing ? '刷新中...' : '刷新'}</button>
+            style={{ backgroundColor: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.9)' }}
+          >刷新</button>
         </div>
         {/* 当前账户卡片 */}
         <div className="mx-4 mb-3 rounded-xl px-4 py-3 flex items-center justify-between"

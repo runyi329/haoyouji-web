@@ -3103,8 +3103,8 @@ function ChannelTab() {
       <div className="sticky top-0 z-10" style={{ background: 'linear-gradient(135deg,#0d2818 0%,#1a5c2e 100%)' }}>
         <div className="flex items-center justify-between px-4" style={{ height: 48 }}>
           <div className="text-sm font-bold text-white">渠道</div>
-          <button onClick={() => { setLoading(true); fetch('/api/wecom/apps').then(r=>r.json()).then(d=>setApps(d.apps||[])).catch(()=>{}).finally(()=>setLoading(false)); }} className="text-[11px] text-green-300 border border-green-600/40 rounded-full px-3 py-1 active:opacity-70">
-            双新
+          <button onClick={() => window.location.reload()} className="text-[11px] text-green-300 border border-green-600/40 rounded-full px-3 py-1 active:opacity-70">
+            刷新
           </button>
         </div>
       </div>
@@ -3182,8 +3182,8 @@ function AppChannelList({
             <div className="text-sm font-bold text-white leading-tight">{app.name}</div>
             <div className="text-[10px] text-green-300">渠道 » {app.name}</div>
           </div>
-          <button onClick={() => { setLoading(true); fetch(`/api/wecom/channels?app_id=${app.id}`).then(r=>r.json()).then(d=>setChannels(d.channels||[])).catch(()=>{}).finally(()=>setLoading(false)); }} className="text-[11px] text-green-300 border border-green-600/40 rounded-full px-3 py-1 active:opacity-70">
-            双新
+          <button onClick={() => window.location.reload()} className="text-[11px] text-green-300 border border-green-600/40 rounded-full px-3 py-1 active:opacity-70">
+            刷新
           </button>
         </div>
       </div>
