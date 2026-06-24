@@ -4381,18 +4381,28 @@ router.post("/api/wecom/ai-assist-config", async (req: Request, res: Response) =
         const listText = judgeQueue.map((j, i) =>
           `[${i}] 新内容：${j.newText.slice(0, 200)}\n    现有最相似条目：${(j.matched || '').slice(0, 200)}`
         ).join('\n\n');
-        const judgePrompt = `你是营养顾问知识库管理助手。下面每一条是「新内容」与知识库中「现有最相似条目」的对比。请逐条判断新内容是否值得加入知识库：\n- 如果新内容与现有条目表达同一意思、无实质补充，判定为重复（keep=false）\n- 如果新内容提供了额外信息、更精确的数据、不同场景或补充角度，判定为有价值（keep=true）\n\n待判断列表：\n${listText}\n\n仅返回 JSON 数组，格式：[{"index":0,"keep":true,"reason":"简短理由（20字以内）"}]，不要其他文字。`;
+        const judgePrompt = `你是营养顾问知识库管理助手。下面每一条是「新内容」与知识库中「现有最相似条目」的对比。请逐条判断新内容该「加入」还是「去重」：\n- action="add"：新内容提供了额外信息、更精确的数据、不同场景、补充角度，或与现有条目主题不同（只是算法误判到一起）\n- action="skip"：新内容与现有条目表达同一意思、无实质补充，属于重复\n重要：reason 必须与 action 逻辑一致（说“提供了额外信息/不同主题”就必须 action=add；说“重复/相同”就必须 action=skip）\n\n待判断列表：\n${listText}\n\n仅返回 JSON 数组，格式：[{"index":0,"action":"add","reason":"简短理由（20字以内）"}]，不要其他文字。`;
         const judgeRes = await callAI('ai_organize', [
-          { role: 'system', content: '你是严谨的知识库去重助手，只返回 JSON。' },
+          { role: 'system', content: '你是严谨的知识库去重助手，只返回 JSON，reason 必须与 action 一致。' },
           { role: 'user', content: judgePrompt },
         ]);
         let jtext = (judgeRes.text || '').trim();
         const jm = jtext.match(/\[[\s\S]*\]/);
         if (jm) jtext = jm[0];
         const arr = JSON.parse(jtext);
+        // 理由中出现正向词（补充/额外/不同/新增）却判 skip，视为 AI 自相矛盾，纠正为 keep
+        const POSITIVE_RE = /额外|补充|不同|新增|更精确|更详细|不是重复|非重复|新信息|新内容|不相关/;
+        const NEGATIVE_RE = /重复|相同|一致|已有|重叠|同一/;
         for (const v of arr) {
           const item = judgeQueue[v.index];
-          if (item) aiVerdict[item.key] = { keep: !!v.keep, reason: v.reason || '' };
+          if (!item) continue;
+          const reason = String(v.reason || '');
+          let keep = String(v.action || '').toLowerCase() === 'add';
+          // 一致性兜底：理由明显正向但判 skip → 纠正为 add
+          if (!keep && POSITIVE_RE.test(reason) && !NEGATIVE_RE.test(reason)) keep = true;
+          // 理由明显负向但判 add → 纠正为 skip
+          if (keep && NEGATIVE_RE.test(reason) && !POSITIVE_RE.test(reason)) keep = false;
+          aiVerdict[item.key] = { keep, reason };
         }
       } catch (je) {
         console.error('[AI辅助] 二次归类判断失败，相似条目默认归入建议加入:', je);
