@@ -551,12 +551,12 @@ router.get("/api/wecom/ch/kb/sources", async (req: Request, res: Response) => {
     if (kbIds.length === 0) return res.json({ ok: true, sources: [] });
     const placeholders = kbIds.map(() => "?").join(",");
     const [rows] = await (conn as any).execute(
-      `SELECT COALESCE(source_file, '手动录入') AS source_file,
+      `SELECT COALESCE(source_file, 'AI整理') AS source_file,
               COUNT(*) AS item_count,
               MAX(created_at) AS imported_at,
               MAX(item_type) AS item_type
        FROM wecom_knowledge_items WHERE kb_id IN (${placeholders})
-       GROUP BY COALESCE(source_file, '手动录入')
+       GROUP BY COALESCE(source_file, 'AI整理')
        ORDER BY imported_at DESC`,
       kbIds
     );
@@ -593,8 +593,8 @@ router.get("/api/wecom/ch/kb/items", async (req: Request, res: Response) => {
                FROM wecom_knowledge_items WHERE kb_id IN (${placeholders})`;
     const params: any[] = [...kbIds];
     if (sourceFile) {
-      if (sourceFile === "手动录入") {
-        sql += " AND source_file IS NULL";
+      if (sourceFile === "AI整理") {
+        sql += " AND (source_file IS NULL OR source_file = 'AI整理')";
       } else {
         sql += " AND source_file = ?";
         params.push(sourceFile);
