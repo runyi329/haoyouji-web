@@ -1994,6 +1994,9 @@ function AIBrainTab() {
   const [showKbDrawer, setShowKbDrawer] = useState(false);
   const [kbSources, setKbSources] = useState<any[]>([]);
   const [loadingKbSources, setLoadingKbSources] = useState(false);
+  // 共享知识库管理抽屉
+  const [showSysKbDrawer, setShowSysKbDrawer] = useState(false);
+  const [sysKbSources, setSysKbSources] = useState<any[]>([]);
 
   async function handleStep0OcrImage(file: File) {
     setStep0OcrLoading(true);
@@ -2189,7 +2192,8 @@ function AIBrainTab() {
       fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/config`).then(r => r.json()).catch(() => ({})),
       fetch(`/api/wecom/knowledge-bases`).then(r => r.json()).catch(() => ({ ok: false })),
       fetch(`/api/wecom/ch/kb/sources?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).catch(() => ({ ok: false })),
-    ]).then(([priv, sys, chCfg, cfg, kbs, src]) => {
+      fetch(`/api/wecom/ch/kb/sources?channel_type=kf`).then(r => r.json()).catch(() => ({ ok: false })),
+    ]).then(([priv, sys, chCfg, cfg, kbs, src, sysSrc]) => {
       if (priv.ok) setKbStats({ item_count: priv.item_count || 0, file_count: priv.file_count || 0, char_count: priv.char_count || 0, month_count: priv.month_count || 0 });
       if (sys.ok) setSysKbStats({ item_count: sys.item_count || 0, file_count: sys.file_count || 0, char_count: sys.char_count || 0 });
       setSysKbEnabled(chCfg.disable_system_kb !== '1');
@@ -2202,6 +2206,7 @@ function AIBrainTab() {
       }
       if (kbs.ok && Array.isArray(kbs.kbs)) setKbList(kbs.kbs);
       if (src.ok && Array.isArray(src.sources)) setKbSources(src.sources);
+      if (sysSrc.ok && Array.isArray(sysSrc.sources)) setSysKbSources(sysSrc.sources);
     });
   }, []);
 
@@ -2779,19 +2784,70 @@ function AIBrainTab() {
                 <div className="space-y-3">
                   {/* 共享知识库 */}
                   <div className="rounded-xl border p-3" style={{ borderColor: C.line }}>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-1.5">
                         <span className="text-sm font-semibold" style={{ color: C.textMain }}>共享</span>
                         <span className="text-xs" style={{ color: C.textSub }}>{sysKbStats.item_count} 条 · {sysKbStats.file_count} 个文件</span>
                       </div>
-                      <div
-                        onClick={togglingKb ? undefined : handleToggleSysKb}
-                        style={{ position: 'relative', display: 'inline-block', width: 40, height: 22, borderRadius: 11, backgroundColor: sysKbEnabled ? C.brand : '#D1D5DB', cursor: togglingKb ? 'not-allowed' : 'pointer', opacity: togglingKb ? 0.5 : 1, flexShrink: 0, transition: 'background-color 0.2s' }}
-                      >
-                        <div style={{ position: 'absolute', top: 3, left: sysKbEnabled ? 19 : 3, width: 16, height: 16, borderRadius: '50%', backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.3)', transition: 'left 0.2s' }} />
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setShowSysKbDrawer(true)}
+                          className="text-xs px-2.5 py-1 rounded-lg flex-shrink-0"
+                          style={{ backgroundColor: C.brandLight, color: C.brand }}
+                        >编辑</button>
+                        <div
+                          onClick={togglingKb ? undefined : handleToggleSysKb}
+                          style={{ position: 'relative', display: 'inline-block', width: 40, height: 22, borderRadius: 11, backgroundColor: sysKbEnabled ? C.brand : '#D1D5DB', cursor: togglingKb ? 'not-allowed' : 'pointer', opacity: togglingKb ? 0.5 : 1, flexShrink: 0, transition: 'background-color 0.2s' }}
+                        >
+                          <div style={{ position: 'absolute', top: 3, left: sysKbEnabled ? 19 : 3, width: 16, height: 16, borderRadius: '50%', backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.3)', transition: 'left 0.2s' }} />
+                        </div>
                       </div>
                     </div>
+                    {sysKbSources.length === 0 ? (
+                      <div className="text-xs text-center py-3" style={{ color: C.textSub }}>暂无共享知识库内容</div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {sysKbSources.slice(0, 5).map((s: any) => (
+                          <div key={s.source_file} className="flex items-center gap-2 rounded-xl px-3 py-1.5" style={{ backgroundColor: C.brandLight }}>
+                            <span className="text-xs flex-1 truncate" style={{ color: C.textMain }}>
+                              {(s.source_file || '').slice(0, 28)}{(s.source_file || '').length > 28 ? '…' : ''}
+                            </span>
+                            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>{s.item_count} 条</span>
+                          </div>
+                        ))}
+                        {sysKbSources.length > 5 && (
+                          <button
+                            onClick={() => setShowSysKbDrawer(true)}
+                            className="w-full text-xs py-1.5 text-center rounded-xl"
+                            style={{ color: C.brand, backgroundColor: C.brandLight }}
+                          >查看全部 {sysKbSources.length} 个来源 ›</button>
+                        )}
+                      </div>
+                    )}
                   </div>
+                  {/* 共享知识库抽屉 */}
+                  {showSysKbDrawer && (
+                    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setShowSysKbDrawer(false)}>
+                      <div className="w-full max-w-lg rounded-t-2xl p-4 pb-10 space-y-3" style={{ backgroundColor: C.white, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between pb-1">
+                          <span className="text-sm font-semibold" style={{ color: C.textMain }}>共享知识库</span>
+                          <button onClick={() => setShowSysKbDrawer(false)} className="text-xs px-3 py-1 rounded-lg" style={{ backgroundColor: C.brandLight, color: C.brand }}>完成</button>
+                        </div>
+                        {sysKbSources.length === 0 ? (
+                          <div className="text-xs text-center py-8" style={{ color: C.textSub }}>暂无共享知识库内容</div>
+                        ) : (
+                          sysKbSources.map((s: any) => (
+                            <div key={s.source_file} className="rounded-xl border p-3" style={{ borderColor: C.line }}>
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-medium flex-1" style={{ color: C.textMain }}>{s.source_file}</span>
+                                <span className="text-xs flex-shrink-0 ml-2" style={{ color: C.textSub }}>{s.item_count} 条 · {formatDate(s.latest_time)}</span>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
                   {/* 私人知识库 */}
                   <div className="rounded-xl border p-3" style={{ borderColor: C.line }}>
                     <div className="flex items-center justify-between mb-2">
