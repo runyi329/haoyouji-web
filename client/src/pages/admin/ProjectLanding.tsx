@@ -878,9 +878,10 @@ function ConfigTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avata
             <div className="mt-3 flex flex-col items-center gap-2">
               <div className="rounded-xl overflow-hidden p-2" style={{ backgroundColor: '#fff', border: `1px solid ${C.line}` }}>
                 <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(`https://work.weixin.qq.com/kfid/${kfId}`)}`}
+                  src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/yxpMOYREnDHtcMuA.png"
                   alt="客服二维码"
                   className="w-40 h-40"
+                  style={{ objectFit: 'contain' }}
                 />
               </div>
               <div className="text-[10px] text-center" style={{ color: C.textSub }}>长按或截图保存二维码，分享给客户扫码咨询</div>
