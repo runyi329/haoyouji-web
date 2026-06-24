@@ -1838,6 +1838,7 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
       await sendKfMessage(KF_OPEN_KFID, fromUser, replyContent);
 
       // 8b. 发送素材消息（系统层面匹配命中的素材，在AI回复后发送）
+      console.log(`[KF] 即将发送素材 materialsToSend.length=${materialsToSend.length}`);
       for (const mat of materialsToSend) {
         if (!mat.storage_url) continue;
         try {
