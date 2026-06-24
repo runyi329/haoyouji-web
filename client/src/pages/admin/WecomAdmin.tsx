@@ -3803,12 +3803,26 @@ function ChannelDetail({ channel }: { channel: Channel }) {
 // ─── AI辅助指令知识库维护卡片 ──────────────────────────────────────────────────
 
 interface AiAssistResult {
-  prompt_additions: string[];
-  kb_items: { question: string; answer: string }[];
+  prompt_additions: PromptAddition[];
+  kb_items: KbItemResult[];
   summary: string;
+  dup_summary?: string;
   model_used?: string;
   tokens?: number;
 }
+type PromptAddition = {
+  content: string;
+  recommendation?: 'add' | 'skip';
+  dedup_reason?: string;
+  matched?: string;
+};
+type KbItemResult = {
+  question: string;
+  answer: string;
+  recommendation?: 'add' | 'skip';
+  dedup_reason?: string;
+  matched?: string;
+};
 
 function AiAssistConfigCard({
   channelId, kbId, onApplyPrompt
@@ -3884,8 +3898,9 @@ function AiAssistConfigCard({
       const d = await res.json();
       if (d.ok) {
         setResult(d);
-        setSelectedPrompts(d.prompt_additions.map(() => true));
-        setSelectedKbs(d.kb_items.map(() => true));
+        // 默认只勾选 recommendation==='add' 的条目（已去重的不勾）
+        setSelectedPrompts((d.prompt_additions || []).map((p: PromptAddition) => p.recommendation !== 'skip'));
+        setSelectedKbs((d.kb_items || []).map((k: KbItemResult) => k.recommendation !== 'skip'));
       } else {
         toast.error(d.error || "AI分析失败");
       }
@@ -3900,7 +3915,7 @@ function AiAssistConfigCard({
   function savePromptEdit(i: number) {
     if (!result) return;
     const updated = [...result.prompt_additions];
-    updated[i] = editDraftPrompt;
+    updated[i] = { ...updated[i], content: editDraftPrompt };
     setResult({ ...result, prompt_additions: updated });
     setEditingPromptIdx(null);
   }
@@ -3909,7 +3924,7 @@ function AiAssistConfigCard({
   function saveKbEdit(i: number) {
     if (!result) return;
     const updated = [...result.kb_items];
-    updated[i] = { question: editDraftQ, answer: editDraftA };
+    updated[i] = { ...updated[i], question: editDraftQ, answer: editDraftA };
     setResult({ ...result, kb_items: updated });
     setEditingKbIdx(null);
   }
@@ -3920,7 +3935,7 @@ function AiAssistConfigCard({
     try {
       const chosenPrompts = result.prompt_additions.filter((_, i) => selectedPrompts[i]);
       for (const p of chosenPrompts) {
-        onApplyPrompt(p);
+        onApplyPrompt(p.content);
       }
       const chosenKbs = result.kb_items.filter((_, i) => selectedKbs[i]);
       let kbSuccess = 0;
@@ -4009,14 +4024,16 @@ function AiAssistConfigCard({
 
           {result && (
             <div className="space-y-3">
-              {(result.summary || result.model_used) && (
+              {(result.summary || result.model_used || result.dup_summary) && (
                 <div className="text-xs text-purple-600 bg-purple-50 rounded-lg px-3 py-2 space-y-1">
                   {result.summary && <div>{result.summary}</div>}
+                  {result.dup_summary && <div className="font-medium text-gray-700">{result.dup_summary}</div>}
                   <div className="flex items-center gap-1 text-purple-400">
                     <Sparkles className="w-3 h-3" />
-                    <span>由 {result.model_used || 'DeepSeek V4 Flash'} 分析</span>
+                    <span>由 {result.model_used || 'AI智能归类'} 分析</span>
                     {result.tokens && <span className="ml-1">· {result.tokens.toLocaleString()} tokens</span>}
                   </div>
+                  <div className="text-gray-400">已自动归类：✅ 建议加入已默认勾选，⛔ 已去重默认不勾（可手动调整）</div>
                 </div>
               )}
 
@@ -4054,11 +4071,20 @@ function AiAssistConfigCard({
                               selectedPrompts[i] ? 'bg-purple-500 border-purple-500' : 'border-gray-300'
                             }`}>{selectedPrompts[i] && <Check className="w-3 h-3 text-white" />}</div>
                           </button>
-                          <span className={`flex-1 text-xs whitespace-pre-wrap ${
-                            selectedPrompts[i] ? 'text-purple-800' : 'text-gray-500'
-                          }`}>{p}</span>
+                          <div className="flex-1 min-w-0">
+                            <span className={`block text-xs whitespace-pre-wrap ${
+                              selectedPrompts[i] ? 'text-purple-800' : 'text-gray-400 line-through'
+                            }`}>{p.content}</span>
+                            {p.dedup_reason && (
+                              <div className={`mt-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded ${
+                                p.recommendation === 'skip' ? 'bg-gray-100 text-gray-500' : 'bg-green-50 text-green-600'
+                              }`}>
+                                {p.recommendation === 'skip' ? '⛔ ' : '✅ '}{p.dedup_reason}
+                              </div>
+                            )}
+                          </div>
                           <button
-                            onClick={() => { setEditingPromptIdx(i); setEditDraftPrompt(p); }}
+                            onClick={() => { setEditingPromptIdx(i); setEditDraftPrompt(p.content); }}
                             className="flex-shrink-0 text-gray-300 hover:text-purple-500 ml-1">
                             <Pencil className="w-3 h-3" />
                           </button>
@@ -4117,9 +4143,16 @@ function AiAssistConfigCard({
                               selectedKbs[i] ? 'bg-blue-500 border-blue-500' : 'border-gray-300'
                             }`}>{selectedKbs[i] && <Check className="w-3 h-3 text-white" />}</div>
                           </button>
-                          <div className="flex-1 text-xs">
-                            <div className={`font-medium ${ selectedKbs[i] ? 'text-blue-800' : 'text-gray-700' }`}>Q: {item.question}</div>
-                            <div className={`mt-0.5 ${ selectedKbs[i] ? 'text-blue-600' : 'text-gray-500' }`}>A: {item.answer}</div>
+                          <div className="flex-1 text-xs min-w-0">
+                            <div className={`font-medium ${ selectedKbs[i] ? 'text-blue-800' : 'text-gray-400 line-through' }`}>Q: {item.question}</div>
+                            <div className={`mt-0.5 ${ selectedKbs[i] ? 'text-blue-600' : 'text-gray-400 line-through' }`}>A: {item.answer}</div>
+                            {item.dedup_reason && (
+                              <div className={`mt-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded ${
+                                item.recommendation === 'skip' ? 'bg-gray-100 text-gray-500' : 'bg-green-50 text-green-600'
+                              }`}>
+                                {item.recommendation === 'skip' ? '⛔ ' : '✅ '}{item.dedup_reason}
+                              </div>
+                            )}
                           </div>
                           <button
                             onClick={() => { setEditingKbIdx(i); setEditDraftQ(item.question); setEditDraftA(item.answer); }}
@@ -5702,8 +5735,8 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
       const d = await res.json();
       if (d.ok) {
         setStep0Result(d);
-        setStep0SelPrompts(d.prompt_additions.map(() => true));
-        setStep0SelKbs(d.kb_items.map(() => true));
+        setStep0SelPrompts((d.prompt_additions || []).map((p: PromptAddition) => p.recommendation !== 'skip'));
+        setStep0SelKbs((d.kb_items || []).map((k: KbItemResult) => k.recommendation !== 'skip'));
       } else {
         toast.error(d.error || "AI分析失败");
       }
@@ -5729,7 +5762,7 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
             const r = await fetch(`/api/wecom/channels/${channelId}/prompt-rules`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ layer: 2, category: "行为规则", content: p }),
+              body: JSON.stringify({ layer: 2, category: "行为规则", content: p.content }),
             });
             const rd = await r.json();
             if (rd.rule) promptSuccess++;
@@ -5951,10 +5984,13 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
 
             {step0Result && (
               <div className="space-y-3">
-                {step0Result.summary && (
-                  <div className="text-xs text-purple-700 bg-purple-50 rounded-lg px-3 py-2 flex items-start gap-1.5">
-                    <Sparkles className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                    <span>{step0Result.summary}</span>
+                {(step0Result.summary || step0Result.dup_summary) && (
+                  <div className="text-xs text-purple-700 bg-purple-50 rounded-lg px-3 py-2 space-y-1">
+                    {step0Result.summary && (
+                      <div className="flex items-start gap-1.5"><Sparkles className="w-3 h-3 mt-0.5 flex-shrink-0" /><span>{step0Result.summary}</span></div>
+                    )}
+                    {step0Result.dup_summary && <div className="font-medium text-gray-700">{step0Result.dup_summary}</div>}
+                    <div className="text-gray-400">已自动归类：✅ 建议加入已默认勾选，⛔ 已去重默认不勾（可手动调整）</div>
                   </div>
                 )}
 
@@ -5982,7 +6018,7 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
                               <button onClick={() => setStep0EditPromptIdx(null)} className="text-xs text-gray-400 px-2 py-0.5 rounded hover:bg-gray-100">取消</button>
                               <button onClick={() => {
                                 const updated = [...step0Result!.prompt_additions];
-                                updated[i] = step0EditDraftPrompt;
+                                updated[i] = { ...updated[i], content: step0EditDraftPrompt };
                                 setStep0Result({ ...step0Result!, prompt_additions: updated });
                                 setStep0EditPromptIdx(null);
                               }} className="text-xs text-purple-600 px-2 py-0.5 rounded hover:bg-purple-100">保存</button>
@@ -5995,10 +6031,17 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
                                 step0SelPrompts[i] ? 'bg-purple-500 border-purple-500' : 'border-gray-300'
                               }`}>{step0SelPrompts[i] && <Check className="w-3 h-3 text-white" />}</div>
                             </button>
-                            <span className={`flex-1 text-xs whitespace-pre-wrap ${
-                              step0SelPrompts[i] ? 'text-purple-800' : 'text-gray-500'
-                            }`}>{p}</span>
-                            <button onClick={() => { setStep0EditPromptIdx(i); setStep0EditDraftPrompt(p); }} className="flex-shrink-0 text-gray-300 hover:text-purple-500">
+                            <div className="flex-1 min-w-0">
+                              <span className={`block text-xs whitespace-pre-wrap ${
+                                step0SelPrompts[i] ? 'text-purple-800' : 'text-gray-400 line-through'
+                              }`}>{p.content}</span>
+                              {p.dedup_reason && (
+                                <div className={`mt-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded ${
+                                  p.recommendation === 'skip' ? 'bg-gray-100 text-gray-500' : 'bg-green-50 text-green-600'
+                                }`}>{p.recommendation === 'skip' ? '⛔ ' : '✅ '}{p.dedup_reason}</div>
+                              )}
+                            </div>
+                            <button onClick={() => { setStep0EditPromptIdx(i); setStep0EditDraftPrompt(p.content); }} className="flex-shrink-0 text-gray-300 hover:text-purple-500">
                               <Pencil className="w-3 h-3" />
                             </button>
                           </div>
@@ -6034,7 +6077,7 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
                               <button onClick={() => setStep0EditKbIdx(null)} className="text-xs text-gray-400 px-2 py-0.5 rounded hover:bg-gray-100">取消</button>
                               <button onClick={() => {
                                 const updated = [...step0Result!.kb_items];
-                                updated[i] = { question: step0EditDraftQ, answer: step0EditDraftA };
+                                updated[i] = { ...updated[i], question: step0EditDraftQ, answer: step0EditDraftA };
                                 setStep0Result({ ...step0Result!, kb_items: updated });
                                 setStep0EditKbIdx(null);
                               }} className="text-xs text-blue-600 px-2 py-0.5 rounded hover:bg-blue-100">保存</button>
@@ -6047,9 +6090,14 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
                                 step0SelKbs[i] ? 'bg-blue-500 border-blue-500' : 'border-gray-300'
                               }`}>{step0SelKbs[i] && <Check className="w-3 h-3 text-white" />}</div>
                             </button>
-                            <div className="flex-1 text-xs">
-                              <div className={`font-medium ${ step0SelKbs[i] ? 'text-blue-800' : 'text-gray-700' }`}>Q: {item.question}</div>
-                              <div className={`mt-0.5 ${ step0SelKbs[i] ? 'text-blue-600' : 'text-gray-500' }`}>A: {item.answer}</div>
+                            <div className="flex-1 text-xs min-w-0">
+                              <div className={`font-medium ${ step0SelKbs[i] ? 'text-blue-800' : 'text-gray-400 line-through' }`}>Q: {item.question}</div>
+                              <div className={`mt-0.5 ${ step0SelKbs[i] ? 'text-blue-600' : 'text-gray-400 line-through' }`}>A: {item.answer}</div>
+                              {item.dedup_reason && (
+                                <div className={`mt-1 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded ${
+                                  item.recommendation === 'skip' ? 'bg-gray-100 text-gray-500' : 'bg-green-50 text-green-600'
+                                }`}>{item.recommendation === 'skip' ? '⛔ ' : '✅ '}{item.dedup_reason}</div>
+                              )}
                             </div>
                             <button onClick={() => { setStep0EditKbIdx(i); setStep0EditDraftQ(item.question); setStep0EditDraftA(item.answer); }} className="flex-shrink-0 text-gray-300 hover:text-blue-500">
                               <Pencil className="w-3 h-3" />

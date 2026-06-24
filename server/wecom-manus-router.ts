@@ -30,7 +30,7 @@ import {
   DEDUP_THRESHOLD_SIMILAR,
 } from "./wecom-vector";
 import { getUsdtCnyRate } from "./price-scanner";
-import { getAIConfig, callAIVision, saveAIConfig, getAIConfigs, MODEL_OPTIONS, USE_CASE_META, type UseCase } from "./wecom-ai-config";
+import { getAIConfig, callAI, callAIVision, saveAIConfig, getAIConfigs, MODEL_OPTIONS, USE_CASE_META, type UseCase } from "./wecom-ai-config";
 import { isAIFeatureEnabled } from "./ai-monitor";
 import fs from "fs";
 import path from "path";
@@ -4317,8 +4317,21 @@ router.post("/api/wecom/ai-assist-config", async (req: Request, res: Response) =
       return { level, score: best, text: bestText };
     }
 
+    // 关键词重叠辅助查重（向量不可用时降级用），返回 {level, score, text}
+    function kwDup(newText: string, existingTexts: string[]) {
+      let maxScore = 0, matched = "";
+      for (const ex of existingTexts) {
+        const s = simScoreRef(newText, ex);
+        if (s > maxScore) { maxScore = s; matched = ex; }
+      }
+      let level = "new";
+      if (maxScore >= 0.7) level = "duplicate";
+      else if (maxScore >= 0.4) level = "similar";
+      return { level, score: maxScore, text: matched };
+    }
+
     // 简单相似度：关键词重叠率
-    function simScore(a: string, b: string): number {
+    function simScoreRef(a: string, b: string): number {
       const wordsA = new Set(a.replace(/[，。！？、；：""''（）【】]/g, ' ').split(/\s+/).filter(w => w.length > 1));
       const wordsB = new Set(b.replace(/[，。！？、；：""''（）【】]/g, ' ').split(/\s+/).filter(w => w.length > 1));
       if (wordsA.size === 0 || wordsB.size === 0) return 0;
@@ -4327,69 +4340,119 @@ router.post("/api/wecom/ai-assist-config", async (req: Request, res: Response) =
       return overlap / Math.min(wordsA.size, wordsB.size);
     }
 
-    // 对每条prompt_addition做查重（向量优先，关键词兜底）
-    const promptAdditions = (parsed.prompt_additions || []).map((p: any, idx: number) => {
+    // 归类工具：先试向量，向量不可用时降级关键词，返回 {level, score, matched}
+    function classify(newText: string, newVec: number[] | null, existing: { text: string; vec: number[] | null }[], existingTexts: string[]) {
+      const vd = vecDup(newVec, existing);
+      if (vd) return { level: vd.level, score: vd.score, matched: vd.text };
+      const kd = kwDup(newText, existingTexts);
+      return { level: kd.level, score: kd.score, matched: kd.text };
+    }
+
+    // 收集需要 AI 二次判断的中间区间（similar）条目，批量一次问 AI
+    const judgeQueue: { key: string; newText: string; matched: string }[] = [];
+
+    // 初步归类 prompt_additions
+    const promptRaw = (parsed.prompt_additions || []).map((p: any, idx: number) => {
       const content = typeof p === 'string' ? p : (p.content || '');
-      let dupCheck = 'new';
-      const vd = vecDup(newRuleVecs[idx], ruleVecs);
-      if (vd && vd.level !== 'new') {
-        dupCheck = `${vd.level}:${vd.text.slice(0, 20)},语义相似度${Math.round(vd.score * 100)}%`;
-      } else if (!vd) {
-        // 向量不可用时降级关键词
-        let maxScore = 0, matchedRule = '';
-        for (const rule of existingRules) {
-          const score = simScore(content, rule);
-          if (score > maxScore) { maxScore = score; matchedRule = rule.slice(0, 20); }
-        }
-        if (maxScore >= 0.7) dupCheck = `duplicate:${matchedRule},相似度${Math.round(maxScore * 100)}%`;
-        else if (maxScore >= 0.4) dupCheck = `similar:${matchedRule},相似度${Math.round(maxScore * 100)}%`;
-      }
-      return { content, duplicate_check: dupCheck };
+      const c = classify(content, newRuleVecs[idx], ruleVecs, existingRules);
+      return { content, level: c.level, score: c.score, matched: c.matched, _key: `p${idx}` };
+    });
+    promptRaw.forEach((p: any) => {
+      if (p.level === 'similar') judgeQueue.push({ key: p._key, newText: p.content, matched: p.matched });
     });
 
-    // 对每条kb_item做查重（向量优先，关键词兜底）
-    const kbItems = (parsed.kb_items || []).map((item: any, idx: number) => {
+    // 初步归类 kb_items
+    const kbRaw = (parsed.kb_items || []).map((item: any, idx: number) => {
       const q = item.question || '';
       const a = item.answer || '';
-      let dupCheck = 'new';
-      const vd = vecDup(newKbVecs[idx], kbVecs);
-      if (vd && vd.level !== 'new') {
-        dupCheck = `${vd.level}:${vd.text.slice(0, 20)},语义相似度${Math.round(vd.score * 100)}%`;
-      } else if (!vd) {
-        let maxScore = 0, matchedQ = '';
-        for (const existing of existingKbItems) {
-          const scoreQ = simScore(q, existing.question);
-          const scoreA = simScore(a, existing.answer);
-          const score = Math.max(scoreQ, scoreA);
-          if (score > maxScore) { maxScore = score; matchedQ = existing.question.slice(0, 20); }
-        }
-        if (maxScore >= 0.7) dupCheck = `duplicate:${matchedQ},相似度${Math.round(maxScore * 100)}%`;
-        else if (maxScore >= 0.4) dupCheck = `similar:${matchedQ},相似度${Math.round(maxScore * 100)}%`;
-      }
-      return { question: q, answer: a, duplicate_check: dupCheck };
+      const text = `问：${q}\n答：${a}`;
+      const exTexts = existingKbItems.map((e: any) => `问：${e.question}\n答：${e.answer}`);
+      const c = classify(text, newKbVecs[idx], kbVecs, exTexts);
+      return { question: q, answer: a, level: c.level, score: c.score, matched: c.matched, _key: `k${idx}` };
+    });
+    kbRaw.forEach((k: any) => {
+      if (k.level === 'similar') judgeQueue.push({ key: k._key, newText: `问：${k.question}\n答：${k.answer}`, matched: k.matched });
     });
 
-    // 生成查重摘要
-    const dupCount = promptAdditions.filter((p: any) => p.duplicate_check.startsWith('duplicate')).length
-      + kbItems.filter((k: any) => k.duplicate_check.startsWith('duplicate')).length;
-    const simCount = promptAdditions.filter((p: any) => p.duplicate_check.startsWith('similar')).length
-      + kbItems.filter((k: any) => k.duplicate_check.startsWith('similar')).length;
-    const newCount = promptAdditions.filter((p: any) => p.duplicate_check === 'new').length
-      + kbItems.filter((k: any) => k.duplicate_check === 'new').length;
-    const dupSummary = dupCount > 0
-      ? `⚠ ${dupCount}条高度重复，${simCount}条相似，${newCount}条全新内容`
-      : simCount > 0
-      ? `~ ${simCount}条与现有内容相似，${newCount}条全新内容`
-      : `✓ 全部 ${newCount} 条均为全新内容，无重复`;
+    // AI 二次判断：对中间区间条目批量询问是否有补充价值
+    const aiVerdict: Record<string, { keep: boolean; reason: string }> = {};
+    if (judgeQueue.length > 0) {
+      try {
+        const listText = judgeQueue.map((j, i) =>
+          `[${i}] 新内容：${j.newText.slice(0, 200)}\n    现有最相似条目：${(j.matched || '').slice(0, 200)}`
+        ).join('\n\n');
+        const judgePrompt = `你是营养顾问知识库管理助手。下面每一条是「新内容」与知识库中「现有最相似条目」的对比。请逐条判断新内容是否值得加入知识库：\n- 如果新内容与现有条目表达同一意思、无实质补充，判定为重复（keep=false）\n- 如果新内容提供了额外信息、更精确的数据、不同场景或补充角度，判定为有价值（keep=true）\n\n待判断列表：\n${listText}\n\n仅返回 JSON 数组，格式：[{"index":0,"keep":true,"reason":"简短理由（20字以内）"}]，不要其他文字。`;
+        const judgeRes = await callAI('ai_organize', [
+          { role: 'system', content: '你是严谨的知识库去重助手，只返回 JSON。' },
+          { role: 'user', content: judgePrompt },
+        ]);
+        let jtext = (judgeRes.text || '').trim();
+        const jm = jtext.match(/\[[\s\S]*\]/);
+        if (jm) jtext = jm[0];
+        const arr = JSON.parse(jtext);
+        for (const v of arr) {
+          const item = judgeQueue[v.index];
+          if (item) aiVerdict[item.key] = { keep: !!v.keep, reason: v.reason || '' };
+        }
+      } catch (je) {
+        console.error('[AI辅助] 二次归类判断失败，相似条目默认归入建议加入:', je);
+      }
+    }
+
+    // 根据 level + AI 判决生成最终 recommendation/dedup_reason/matched
+    function finalize(level: string, score: number, matched: string, key: string) {
+      const pct = Math.round(score * 100);
+      if (level === 'duplicate') {
+        return { recommendation: 'skip', dedup_reason: `与现有条目高度重复（相似度${pct}%）`, matched };
+      }
+      if (level === 'similar') {
+        const v = aiVerdict[key];
+        if (v && !v.keep) {
+          return { recommendation: 'skip', dedup_reason: v.reason || `与现有条目重复（相似度${pct}%）`, matched };
+        }
+        if (v && v.keep) {
+          return { recommendation: 'add', dedup_reason: v.reason || `相似但有补充价值（相似度${pct}%）`, matched };
+        }
+        return { recommendation: 'add', dedup_reason: `与现有条目部分相似（相似度${pct}%），建议人工复核`, matched };
+      }
+      return { recommendation: 'add', dedup_reason: '全新内容', matched: '' };
+    }
+
+    const promptAdditions = promptRaw.map((p: any) => {
+      const f = finalize(p.level, p.score, p.matched, p._key);
+      return { content: p.content, recommendation: f.recommendation, dedup_reason: f.dedup_reason, matched: f.matched, duplicate_check: f.recommendation === 'skip' ? 'duplicate' : 'new' };
+    });
+    const kbItems = kbRaw.map((k: any) => {
+      const f = finalize(k.level, k.score, k.matched, k._key);
+      return { question: k.question, answer: k.answer, recommendation: f.recommendation, dedup_reason: f.dedup_reason, matched: f.matched, duplicate_check: f.recommendation === 'skip' ? 'duplicate' : 'new' };
+    });
+
+    // 按 recommendation 分组汇总
+    const addItems = [
+      ...promptAdditions.filter((p: any) => p.recommendation === 'add').map((p: any) => ({ kind: 'prompt', ...p })),
+      ...kbItems.filter((k: any) => k.recommendation === 'add').map((k: any) => ({ kind: 'kb', ...k })),
+    ];
+    const skipItems = [
+      ...promptAdditions.filter((p: any) => p.recommendation === 'skip').map((p: any) => ({ kind: 'prompt', ...p })),
+      ...kbItems.filter((k: any) => k.recommendation === 'skip').map((k: any) => ({ kind: 'kb', ...k })),
+    ];
+
+    const addCount = addItems.length;
+    const skipCount = skipItems.length;
+    const dupSummary = skipCount > 0
+      ? `✅ 建议加入 ${addCount} 条，已自动去重 ${skipCount} 条`
+      : `✅ 全部 ${addCount} 条均建议加入，无重复`;
 
     res.json({
       ok: true,
       prompt_additions: promptAdditions,
       kb_items: kbItems,
+      add_items: addItems,
+      skip_items: skipItems,
       summary: parsed.summary || "",
       dup_summary: dupSummary,
       tokens: result.totalTokens,
-      model_used: "DeepSeek V4 Flash",
+      model_used: "AI智能归类",
     });
   } catch (e) {
     console.error("[AI辅助] 分析失败:", e);
