@@ -430,7 +430,8 @@ export async function callAIVoice(
   let apiBase: string;
   let apiKey: string;
   if (provider === "manus" || !cfg?.api_base) {
-    apiBase = ENV.forgeApiUrl?.replace(/\/$/, "") ?? "";
+    // forgeApiUrl 已包含 /v1，去掉末尾 /v1 避免拼接时重复
+    apiBase = (ENV.forgeApiUrl ?? "").replace(/\/v1\/?$/, "").replace(/\/$/, "");
     apiKey = ENV.forgeApiKey ?? "";
   } else {
     apiBase = cfg.api_base.replace(/\/$/, "");

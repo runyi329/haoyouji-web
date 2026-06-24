@@ -1607,7 +1607,7 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
           userText = asrResult.text.trim();
           console.log(`[KF] 语音识别成功 from=${fromUser} text=${userText.substring(0, 50)}`);
         } catch (e) {
-          console.error(`[KF] 语音识别失败 from=${fromUser}:`, e);
+          console.error(`[KF] 语音识别失败 from=${fromUser}: ${e instanceof Error ? e.message : JSON.stringify(e)}`);
           await sendKfMessage(fromUser, kfOpenKfId, "(语音消息识别失败，请重新发送或改用文字)");
           continue;
         }
