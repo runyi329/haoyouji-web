@@ -186,6 +186,18 @@ let configCache: Map<UseCase, AIModelConfig> | null = null;
 let cacheTime = 0;
 const CACHE_TTL = 60_000;
 
+// 各场景的默认配置（数据库没有时自动 INSERT）
+const DEFAULT_CONFIGS: Record<string, { provider: string; model_name: string; api_key: string; api_base: string }> = {
+  chat_reply:  { provider: "hunyuan",  model_name: "hunyuan-turbo-s",        api_key: "", api_base: "https://api.hunyuan.cloud.tencent.com/v1" },
+  rule_reply:  { provider: "hunyuan",  model_name: "hunyuan-turbo-s",        api_key: "", api_base: "https://api.hunyuan.cloud.tencent.com/v1" },
+  chat_score:  { provider: "hunyuan",  model_name: "hunyuan-lite",           api_key: "", api_base: "https://api.hunyuan.cloud.tencent.com/v1" },
+  ai_organize: { provider: "hunyuan",  model_name: "hunyuan-turbo-s",        api_key: "", api_base: "https://api.hunyuan.cloud.tencent.com/v1" },
+  ai_analyze:  { provider: "hunyuan",  model_name: "hunyuan-lite",           api_key: "", api_base: "https://api.hunyuan.cloud.tencent.com/v1" },
+  image_ocr:   { provider: "hunyuan",  model_name: "hunyuan-turbos-vision",  api_key: "", api_base: "https://api.hunyuan.cloud.tencent.com/v1" },
+  embedding:   { provider: "hunyuan",  model_name: "hunyuan-embedding",      api_key: "", api_base: "https://api.hunyuan.cloud.tencent.com/v1" },
+  voice_asr:   { provider: "manus",    model_name: "whisper-1",              api_key: "", api_base: "" },
+};
+
 export async function getAIConfigs(): Promise<Map<UseCase, AIModelConfig>> {
   if (configCache && Date.now() - cacheTime < CACHE_TTL) return configCache;
   const conn = await getDbConnection();
@@ -195,6 +207,28 @@ export async function getAIConfigs(): Promise<Map<UseCase, AIModelConfig>> {
   const map = new Map<UseCase, AIModelConfig>();
   for (const row of rows) {
     map.set(row.use_case as UseCase, row as AIModelConfig);
+  }
+  // 补全：对 USE_CASE_META 里定义但数据库里没有的场景，自动 INSERT 默认配置
+  const missingCases = Object.keys(USE_CASE_META).filter(uc => !map.has(uc as UseCase));
+  for (const uc of missingCases) {
+    const def = DEFAULT_CONFIGS[uc] || { provider: "", model_name: "", api_key: "", api_base: "" };
+    const meta = USE_CASE_META[uc];
+    try {
+      await (conn as any).execute(
+        `INSERT IGNORE INTO wecom_ai_model_config (use_case, label, provider, model_name, api_key, api_base, note)
+         VALUES (?, ?, ?, ?, ?, ?, '')`,
+        [uc, meta.label, def.provider, def.model_name, def.api_key, def.api_base]
+      );
+      map.set(uc as UseCase, {
+        use_case: uc as UseCase,
+        label: meta.label,
+        provider: def.provider,
+        model_name: def.model_name,
+        api_key: def.api_key,
+        api_base: def.api_base,
+        note: "",
+      });
+    } catch (_) { /* 忽略，不影响主流程 */ }
   }
   configCache = map;
   cacheTime = Date.now();

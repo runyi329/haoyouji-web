@@ -2911,7 +2911,7 @@ router.get("/api/wecom/stats/api-usage", async (req: Request, res: Response) => 
          SUM(COALESCE(input_tokens,0)) AS total_input_tokens,
          SUM(COALESCE(output_tokens,0)) AS total_output_tokens,
          SUM(COALESCE(input_tokens,0)+COALESCE(output_tokens,0)) AS total_tokens,
-         SUM(COALESCE(audio_seconds,0)) AS total_audio_seconds
+         SUM(COALESCE(duration_sec,0)) AS total_audio_seconds
        FROM wecom_api_usage_log
        WHERE ${where}
        GROUP BY use_case, provider, model_name
