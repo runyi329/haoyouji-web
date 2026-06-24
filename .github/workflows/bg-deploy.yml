@@ -69,6 +69,12 @@ jobs:
           # 将 HUNYUAN_API_KEY（腾讯混元 embedding）写入服务器 .env（存在则更新，否则新增）
           ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
             'grep -q "HUNYUAN_API_KEY" /root/haoyouji-web/.env && sed -i "s|HUNYUAN_API_KEY=.*|HUNYUAN_API_KEY=\"sk-OAOVyNdZqmZsybgDDcU3FtgB56HWxgJxdhxUbSNsfgZKdbHb\"|" /root/haoyouji-web/.env || echo "HUNYUAN_API_KEY=\"sk-OAOVyNdZqmZsybgDDcU3FtgB56HWxgJxdhxUbSNsfgZKdbHb\"" >> /root/haoyouji-web/.env'
+          # 将 BUILT_IN_FORGE_API_URL 写入服务器 .env（Manus forgeApi 地址，用于语音识别/Whisper）
+          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            'grep -q "BUILT_IN_FORGE_API_URL" /root/haoyouji-web/.env && sed -i "s|BUILT_IN_FORGE_API_URL=.*|BUILT_IN_FORGE_API_URL=\"https://api.manus.im/api/llm-proxy/v1\"|" /root/haoyouji-web/.env || echo "BUILT_IN_FORGE_API_URL=\"https://api.manus.im/api/llm-proxy/v1\"" >> /root/haoyouji-web/.env'
+          # 将 BUILT_IN_FORGE_API_KEY 写入服务器 .env（Manus forgeApi key，用于语音识别/Whisper）
+          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            'grep -q "BUILT_IN_FORGE_API_KEY" /root/haoyouji-web/.env && sed -i "s|BUILT_IN_FORGE_API_KEY=.*|BUILT_IN_FORGE_API_KEY=\"sk-UYkiAKe6Pn6SWtsWt5r3qV\"|" /root/haoyouji-web/.env || echo "BUILT_IN_FORGE_API_KEY=\"sk-UYkiAKe6Pn6SWtsWt5r3qV\"" >> /root/haoyouji-web/.env'
           echo "Script uploaded and env updated"
 
       - name: start background deploy
