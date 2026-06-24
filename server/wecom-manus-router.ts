@@ -1458,7 +1458,7 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
     let safety = 0;
     while (safety < 10) {
       safety++;
-      const body: any = { token: callbackToken, limit: 1000, open_kfid: KF_OPEN_KFID };
+      const body: any = { token: callbackToken, limit: 1000, open_kfid: KF_OPEN_KFID, voice_format: 0 };
       if (cursor) body.cursor = cursor;
       const syncRes = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/kf/sync_msg?access_token=${token}`, {
         method: "POST",
@@ -1487,6 +1487,12 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
     }
 
     console.log(`[KF] syncMsg拉取到 ${msgList.length} 条消息`);
+    // 调试：记录非文本消息的原始结构（帮助排查语音等消息类型）
+    for (const m of msgList) {
+      if (m.msgtype !== 'text') {
+        console.log(`[KF-DEBUG] 非文本消息 msgtype=${m.msgtype} origin=${m.origin} external_userid=${m.external_userid} raw=${JSON.stringify(m).substring(0, 300)}`);
+      }
+    }
     if (msgList.length === 0) return;
 
     // 4. 读取kf渠道配置（按 open_kfid 动态查找，不存在则自动注册）
@@ -2952,6 +2958,31 @@ router.get("/api/wecom/stats/api-usage", async (req: Request, res: Response) => 
     console.error("[WeCom] API用量统计查询失败:", e);
     res.status(500).json({ error: "查询失败" });
   }
+});
+
+// -----------------------------------------------------------
+// 调试API：查看最近的服务器日志（用于排查语音等问题）
+// -----------------------------------------------------------
+const recentLogs: string[] = [];
+const MAX_LOG_LINES = 200;
+const origConsoleLog = console.log.bind(console);
+const origConsoleError = console.error.bind(console);
+console.log = (...args: any[]) => {
+  const line = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+  recentLogs.push(`[LOG] ${new Date().toISOString()} ${line}`);
+  if (recentLogs.length > MAX_LOG_LINES) recentLogs.shift();
+  origConsoleLog(...args);
+};
+console.error = (...args: any[]) => {
+  const line = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+  recentLogs.push(`[ERR] ${new Date().toISOString()} ${line}`);
+  if (recentLogs.length > MAX_LOG_LINES) recentLogs.shift();
+  origConsoleError(...args);
+};
+router.get("/api/wecom/debug-logs", (req: Request, res: Response) => {
+  const keyword = (req.query.keyword as string) || '';
+  const lines = keyword ? recentLogs.filter(l => l.includes(keyword)) : recentLogs;
+  res.json({ lines: lines.slice(-100), total: lines.length });
 });
 
 // -----------------------------------------------------------
