@@ -1998,6 +1998,10 @@ function AIBrainTab() {
   // 共享知识库管理抽屉
   const [showSysKbDrawer, setShowSysKbDrawer] = useState(false);
   const [sysKbSources, setSysKbSources] = useState<any[]>([]);
+  const [sysKbExpandedSource, setSysKbExpandedSource] = useState<string | null>(null);
+  const [sysKbItems, setSysKbItems] = useState<Record<string, any[]>>({});
+  const [kbExpandedSource, setKbExpandedSource] = useState<string | null>(null);
+  const [kbItems, setKbItems] = useState<Record<string, any[]>>({});
 
   async function handleStep0OcrImage(file: File) {
     setStep0OcrLoading(true);
@@ -2760,6 +2764,21 @@ ${step0Extra.trim()}`
                     )}
                   </div>
 
+                  {/* 共享规则详情弹窗 */}
+                  {platformRuleDetail && (
+                    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setPlatformRuleDetail(null)}>
+                      <div className="w-full max-w-lg rounded-t-2xl p-4 pb-10" style={{ backgroundColor: C.white }} onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-semibold" style={{ color: C.textMain }}>规则详情</span>
+                          <button onClick={() => setPlatformRuleDetail(null)} className="text-xs px-3 py-1 rounded-lg" style={{ backgroundColor: C.brandLight, color: C.brand }}>关闭</button>
+                        </div>
+                        <div className="rounded-xl p-3 text-xs leading-relaxed" style={{ backgroundColor: C.brandLight, color: C.textMain }}>
+                          {platformRuleDetail.rule_text}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* 私人规则管理抽屉 */}
                   {showRulesDrawer && (
                     <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => { setShowRulesDrawer(false); setEditingRuleId(null); }}>
@@ -2855,21 +2874,52 @@ ${step0Extra.trim()}`
                   </div>
                   {/* 共享知识库抽屉 */}
                   {showSysKbDrawer && (
-                    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setShowSysKbDrawer(false)}>
+                    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => { setShowSysKbDrawer(false); setSysKbExpandedSource(null); }}>
                       <div className="w-full max-w-lg rounded-t-2xl p-4 pb-10 space-y-3" style={{ backgroundColor: C.white, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between pb-1">
                           <span className="text-sm font-semibold" style={{ color: C.textMain }}>共享知识库</span>
-                          <button onClick={() => setShowSysKbDrawer(false)} className="text-xs px-3 py-1 rounded-lg" style={{ backgroundColor: C.brandLight, color: C.brand }}>完成</button>
+                          <button onClick={() => { setShowSysKbDrawer(false); setSysKbExpandedSource(null); }} className="text-xs px-3 py-1 rounded-lg" style={{ backgroundColor: C.brandLight, color: C.brand }}>完成</button>
                         </div>
                         {sysKbSources.length === 0 ? (
                           <div className="text-xs text-center py-8" style={{ color: C.textSub }}>暂无共享知识库内容</div>
                         ) : (
                           sysKbSources.map((s: any) => (
-                            <div key={s.source_file} className="rounded-xl border p-3" style={{ borderColor: C.line }}>
-                              <div className="flex items-center justify-between">
+                            <div key={s.source_file} className="rounded-xl border overflow-hidden" style={{ borderColor: C.line }}>
+                              <div
+                                className="flex items-center justify-between p-3 cursor-pointer"
+                                onClick={async () => {
+                                  const src = s.source_file;
+                                  if (sysKbExpandedSource === src) { setSysKbExpandedSource(null); return; }
+                                  setSysKbExpandedSource(src);
+                                  if (!sysKbItems[src]) {
+                                    try {
+                                      const r = await fetch(`/api/wecom/ch/kb/items?channel_type=kf&source_file=${encodeURIComponent(src)}`);
+                                      const d = await r.json();
+                                      if (d.ok) setSysKbItems(prev => ({ ...prev, [src]: d.items || [] }));
+                                    } catch {}
+                                  }
+                                }}
+                              >
                                 <span className="text-xs font-medium flex-1" style={{ color: C.textMain }}>{s.source_file}</span>
                                 <span className="text-xs flex-shrink-0 ml-2" style={{ color: C.textSub }}>{s.item_count} 条 · {formatDate(s.latest_time)}</span>
+                                <span className="ml-2 text-xs" style={{ color: C.brand }}>{sysKbExpandedSource === s.source_file ? '▲' : '▼'}</span>
                               </div>
+                              {sysKbExpandedSource === s.source_file && (
+                                <div className="border-t px-3 py-2 space-y-2" style={{ borderColor: C.line, backgroundColor: C.bg }}>
+                                  {!sysKbItems[s.source_file] ? (
+                                    <div className="text-xs text-center py-2" style={{ color: C.textSub }}>加载中...</div>
+                                  ) : sysKbItems[s.source_file].length === 0 ? (
+                                    <div className="text-xs text-center py-2" style={{ color: C.textSub }}>暂无条目</div>
+                                  ) : (
+                                    sysKbItems[s.source_file].map((item: any) => (
+                                      <div key={item.id} className="rounded-lg p-2.5" style={{ backgroundColor: C.white, border: `1px solid ${C.line}` }}>
+                                        {item.question && <div className="text-xs font-medium mb-1" style={{ color: C.textMain }}>Q: {item.question}</div>}
+                                        <div className="text-xs" style={{ color: C.textSub }}>A: {item.answer}</div>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              )}
                             </div>
                           ))
                         )}
@@ -2961,21 +3011,52 @@ ${step0Extra.trim()}`
 
                   {/* 私人知识库管理抽屉 */}
                   {showKbDrawer && (
-                    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setShowKbDrawer(false)}>
+                    <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => { setShowKbDrawer(false); setKbExpandedSource(null); }}>
                       <div className="w-full max-w-lg rounded-t-2xl p-4 pb-10 space-y-3" style={{ backgroundColor: C.white, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between pb-1">
                           <span className="text-sm font-semibold" style={{ color: C.textMain }}>私人知识库</span>
-                          <button onClick={() => setShowKbDrawer(false)} className="text-xs px-3 py-1 rounded-lg" style={{ backgroundColor: C.brandLight, color: C.brand }}>完成</button>
+                          <button onClick={() => { setShowKbDrawer(false); setKbExpandedSource(null); }} className="text-xs px-3 py-1 rounded-lg" style={{ backgroundColor: C.brandLight, color: C.brand }}>完成</button>
                         </div>
                         {kbSources.length === 0 ? (
                           <div className="text-xs text-center py-8" style={{ color: C.textSub }}>暂无知识库内容，可通过顶部「AI 智能整理」添加</div>
                         ) : (
                           kbSources.map((s: any) => (
-                            <div key={s.source_file} className="rounded-xl border p-3" style={{ borderColor: C.line }}>
-                              <div className="flex items-center justify-between">
+                            <div key={s.source_file} className="rounded-xl border overflow-hidden" style={{ borderColor: C.line }}>
+                              <div
+                                className="flex items-center justify-between p-3 cursor-pointer"
+                                onClick={async () => {
+                                  const src = s.source_file;
+                                  if (kbExpandedSource === src) { setKbExpandedSource(null); return; }
+                                  setKbExpandedSource(src);
+                                  if (!kbItems[src]) {
+                                    try {
+                                      const r = await fetch(`/api/wecom/ch/kb/items?channel_id=${KF_CHANNEL_ID}&source_file=${encodeURIComponent(src)}`);
+                                      const d = await r.json();
+                                      if (d.ok) setKbItems(prev => ({ ...prev, [src]: d.items || [] }));
+                                    } catch {}
+                                  }
+                                }}
+                              >
                                 <span className="text-xs font-medium flex-1" style={{ color: C.textMain }}>{s.source_file}</span>
                                 <span className="text-xs flex-shrink-0 ml-2" style={{ color: C.textSub }}>{s.item_count} 条 · {formatDate(s.latest_time)}</span>
+                                <span className="ml-2 text-xs" style={{ color: C.brand }}>{kbExpandedSource === s.source_file ? '▲' : '▼'}</span>
                               </div>
+                              {kbExpandedSource === s.source_file && (
+                                <div className="border-t px-3 py-2 space-y-2" style={{ borderColor: C.line, backgroundColor: C.bg }}>
+                                  {!kbItems[s.source_file] ? (
+                                    <div className="text-xs text-center py-2" style={{ color: C.textSub }}>加载中...</div>
+                                  ) : kbItems[s.source_file].length === 0 ? (
+                                    <div className="text-xs text-center py-2" style={{ color: C.textSub }}>暂无条目</div>
+                                  ) : (
+                                    kbItems[s.source_file].map((item: any) => (
+                                      <div key={item.id} className="rounded-lg p-2.5" style={{ backgroundColor: C.white, border: `1px solid ${C.line}` }}>
+                                        {item.question && <div className="text-xs font-medium mb-1" style={{ color: C.textMain }}>Q: {item.question}</div>}
+                                        <div className="text-xs" style={{ color: C.textSub }}>A: {item.answer}</div>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              )}
                             </div>
                           ))
                         )}
