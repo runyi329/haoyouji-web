@@ -1788,9 +1788,9 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
       }
 
       // 6b. 构建system prompt（含知识库内容）
-      // 6c. 素材库注入（把该分身的素材描述列表注入到 system prompt，让AI自主判断是否发送）
-      let materialsContext = "";
-      let materialsMap: Record<number, { type: string; storage_url: string; title: string }> = {};
+      // 6c. 素材库：系统层面语义匹配，不依赖AI加标记
+      // 用用户消息与素材触发描述做关键词/语义匹配，命中则在AI回复后直接发送素材
+      let materialsToSend: Array<{ id: number; type: string; storage_url: string; title: string }> = [];
       if (dbConn) {
         try {
           const [matRows] = await (dbConn as any).execute(
@@ -1800,11 +1800,23 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
           console.log(`[KF] 素材库查询: channel_id=${kfChannelId}, 查到条数=${(matRows as any[]).length}`);
           if ((matRows as any[]).length > 0) {
             console.log(`[KF] 素材列表:`, (matRows as any[]).map((r: any) => `id=${r.id} title=${r.title}`).join(', '));
-            materialsContext = "\n\n【素材发送规则 - 必须严格执行】\n你有以下可发送的素材。当用户的问题匹配某条素材的触发条件时，你【必须】在回复的最后一行加上对应的标记，格式严格为 [SEND_MAT:数字]，不得省略、不得修改格式、不得解释该标记。系统会自动识别并发送对应素材给客户。\n\n素材列表：\n" +
-              (matRows as any[]).map((r: any) => `触发条件：${r.description}\n→ 匹配时必须在回复末尾加：[SEND_MAT:${r.id}]`).join("\n\n") +
-              "\n\n示例：如果用户问购买相关问题，你的回复应该是：\n您好，可以通过官方商城购买哦～[SEND_MAT:1]\n（注意：[SEND_MAT:1]必须紧跟在回复文字后面，不换行，不加任何说明）";
+            // 系统层面匹配：把用户消息与每条素材的触发描述做关键词重叠度计算
+            const userWords = userText.replace(/[，。！？、\s]/g, '').split('');
             for (const r of (matRows as any[])) {
-              materialsMap[r.id] = { type: r.type, storage_url: r.storage_url, title: r.title };
+              const desc: string = r.description || '';
+              // 提取描述中的关键词（去掉常见停用词）
+              const stopWords = new Set(['当', '客', '户', '问', '到', '的', '时', '候', '我', '们', '会', '把', '这', '张', '发', '给', '他', '她', '可', '以', '在', '或', '者', '如', '果', '想', '要', '了', '和', '与', '及', '等', '一', '个', '这', '那', '是', '有', '没', '能', '不', '都', '也', '就', '了', '啊', '呢', '吧']);
+              const descWords = desc.replace(/[，。！？、\s]/g, '').split('').filter((c: string) => c.length > 0 && !stopWords.has(c));
+              // 计算用户消息与描述的字符重叠数
+              const userSet = new Set(userWords);
+              const overlap = descWords.filter((c: string) => userSet.has(c)).length;
+              const score = descWords.length > 0 ? overlap / descWords.length : 0;
+              console.log(`[KF] 素材匹配 id=${r.id} title=${r.title} overlap=${overlap}/${descWords.length} score=${score.toFixed(2)}`);
+              // 阈值：重叠率>=15% 或 重叠字数>=3 则触发发送
+              if (score >= 0.15 || overlap >= 3) {
+                materialsToSend.push({ id: r.id, type: r.type, storage_url: r.storage_url, title: r.title });
+                console.log(`[KF] 素材命中 id=${r.id} title=${r.title}，将在AI回复后发送`);
+              }
             }
           }
         } catch (matErr: any) {
@@ -1812,35 +1824,27 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
         }
       }
 
-      console.log(`[KF] 构建 fullSystemPrompt: kfChannelId=${kfChannelId} materialsContext长度=${materialsContext.length}`);
-      const fullSystemPrompt = systemPrompt + twinContext + kbContext + materialsContext;
+      console.log(`[KF] 构建 fullSystemPrompt: kfChannelId=${kfChannelId} materialsToSend=${materialsToSend.length}条`);
+      const fullSystemPrompt = systemPrompt + twinContext + kbContext;
 
       // 7. 调用DeepSeek获取回复
       const dsReply = await sendToDeepSeekAndGetReply(userText, aiModel, fullSystemPrompt, "chat_reply");
       console.log(`[KF] DeepSeek回复 tokens=${dsReply.totalTokens} 内容=${dsReply.content.substring(0, 50)}`);
 
       // 8. 发送回复给用户
-      // 解析 [SEND_MAT:id] 标记，提取要发送的素材ID列表，并从文字中移除标记
       console.log(`[KF] AI原始回复(${dsReply.content.length}字): ${dsReply.content.substring(0, 200)}`);
-      let replyContent = dsReply.content;
-      const matIdsToSend: number[] = [];
-      replyContent = replyContent.replace(/\[SEND_MAT:(\d+)\]/g, (_match: string, idStr: string) => {
-        const matId = parseInt(idStr, 10);
-        if (materialsMap[matId]) matIdsToSend.push(matId);
-        return "";
-      }).trim();
+      const replyContent = dsReply.content;
       
       await sendKfMessage(KF_OPEN_KFID, fromUser, replyContent);
 
-      // 8b. 发送素材消息（图片/文件/视频）
-      for (const matId of matIdsToSend) {
-        const mat = materialsMap[matId];
-        if (!mat || !mat.storage_url) continue;
+      // 8b. 发送素材消息（系统层面匹配命中的素材，在AI回复后发送）
+      for (const mat of materialsToSend) {
+        if (!mat.storage_url) continue;
         try {
           await sendKfMaterial(KF_OPEN_KFID, fromUser, mat.type, mat.storage_url, mat.title);
-          console.log(`[KF] 素材发送成功 matId=${matId} type=${mat.type} title=${mat.title}`);
+          console.log(`[KF] 素材发送成功 matId=${mat.id} type=${mat.type} title=${mat.title}`);
         } catch (matErr) {
-          console.error(`[KF] 素材发送失败 matId=${matId}:`, matErr);
+          console.error(`[KF] 素材发送失败 matId=${mat.id}:`, matErr);
         }
       }
 
