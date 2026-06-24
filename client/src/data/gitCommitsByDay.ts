@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-24
+// 生成时间：2026-06-25
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -7794,5 +7794,19 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-24T11:22:08Z", type: "feat", cleanMessage: "素材库功能 - 上传图片/文件+自然语言触发描述，AI自动判断发送" },
     { date: "2026-06-24T11:37:19Z", type: "fix", cleanMessage: "素材库上传改用腾讯云COS，不再使用Manus内置存储代理" },
     { date: "2026-06-24T11:54:50Z", type: "fix", cleanMessage: "素材库卡片移到AIBrainTab第③层知识库中，修复未显示问题" },
+    { date: "2026-06-24T12:12:15Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-24T12:59:59Z", type: "fix", cleanMessage: "修复素材库AI触发格式，统一标识符并加强指令" },
+    { date: "2026-06-24T13:07:26Z", type: "other", cleanMessage: "debug: 加素材库查询和AI回复日志" },
+    { date: "2026-06-24T13:19:04Z", type: "other", cleanMessage: "debug: 打印素材查询异常和kfChannelId" },
+    { date: "2026-06-24T13:36:22Z", type: "fix", cleanMessage: "加强素材发送指令，增加示例让AI严格遵从[SEND_MAT]标记" },
+    { date: "2026-06-24T13:45:40Z", type: "fix", cleanMessage: "素材发送改为系统层面关键词匹配，不依赖AI加[SEND_MAT]标记" },
+    { date: "2026-06-24T13:51:19Z", type: "other", cleanMessage: "debug: 在素材发送循环前加日志确认数组长度" },
+    { date: "2026-06-24T13:58:42Z", type: "other", cleanMessage: "debug: 在sendKfMaterial每步加详细日志" },
+    { date: "2026-06-24T14:02:57Z", type: "fix", cleanMessage: "WebP转JPG再上传企微，解决40123格式错误" },
+    { date: "2026-06-24T14:08:37Z", type: "fix", cleanMessage: "wecom-materials存JPG格式，sendKfMaterial用绝对路径加载sharp转换WebP" },
+    { date: "2026-06-24T14:37:51Z", type: "fix", cleanMessage: "add /api/wecom/ocr-image endpoint for AI organize image OCR" },
+    { date: "2026-06-24T14:57:36Z", type: "fix", cleanMessage: "OCR接口改为直接调用Forge API，绕过invokeLLM避免参数兼容问题" },
+    { date: "2026-06-24T15:03:10Z", type: "fix", cleanMessage: "修复OCR接口URL拼接错误（BUILT_IN_FORGE_API_URL已含/v1，不应重复拼接）" },
+    { date: "2026-06-24T15:53:41Z", type: "fix", cleanMessage: "OCR识别成功后自动清除图片预览" },
   ],
 };
