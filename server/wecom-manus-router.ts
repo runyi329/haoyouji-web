@@ -1798,9 +1798,9 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
             [kfChannelId]
           ) as any;
           if ((matRows as any[]).length > 0) {
-            materialsContext = "\n\n【可发送素材列表——当对话场景合适时，在回复末尾加上对应标记即可自动发送，格式：[SEND_MAT:ID]，只在真正合适时使用，不要强行插入】\n" +
-              (matRows as any[]).map((r: any) => `- [MAT_${r.id}] ${r.title}：${r.description}`).join("\n") +
-              "\n【注意】标记格式必须严格为 [SEND_MAT:数字ID]，如 [SEND_MAT:3]，不要修改格式";
+            materialsContext = "\n\n【可发送素材列表】以下是可以发给客户的素材，当客户的问题符合某个素材的触发描述时，必须在回复文字末尾加上对应的标记（系统会自动发送素材给客户）：\n" +
+              (matRows as any[]).map((r: any) => `- 素材ID=${r.id} 【${r.title}】触发条件：${r.description}。发送标记：[SEND_MAT:${r.id}]`).join("\n") +
+              "\n重要：标记格式必须严格为 [SEND_MAT:数字] ，如 [SEND_MAT:1]，将它直接写在回复文字末尾，不要解释该标记";
             for (const r of (matRows as any[])) {
               materialsMap[r.id] = { type: r.type, storage_url: r.storage_url, title: r.title };
             }
