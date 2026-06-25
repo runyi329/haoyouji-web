@@ -2020,7 +2020,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                     totalPaid={totalPaid}
                     openedPaymentList={showPaymentPanel === order.id ? openedPaymentList : []}
                     currentUser={currentUser}
-                    isAdmin={isAdminUser}
+                    isAdmin={false}
                     realMembers={realMembers}
                     ledgerId={ledgerId}
                     activeUserTab={activeUserTab}
