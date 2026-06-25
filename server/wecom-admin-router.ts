@@ -310,4 +310,218 @@ router.get("/api/admin/wecom/binding-stats", requireSuperAdmin, async (req: Requ
   }
 });
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 通知平台：企业微信推送配置 & 通知开关
+// ─────────────────────────────────────────────────────────────────────────────
+
+let _notifyTableEnsured = false;
+async function ensureNotifyTable() {
+  if (_notifyTableEnsured) return;
+  const conn = await getDbConnection();
+  if (!conn) return;
+  await (conn as any).execute(`
+    CREATE TABLE IF NOT EXISTS wecom_notify_config (
+      id         INT AUTO_INCREMENT PRIMARY KEY,
+      cfg_key    VARCHAR(100) NOT NULL UNIQUE COMMENT '配置键',
+      cfg_value  TEXT         COMMENT '配置值（JSON 或字符串）',
+      updated_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='企业微信通知平台配置'
+  `);
+  _notifyTableEnsured = true;
+}
+
+
+// GET /api/admin/wecom/notify-members  获取企业微信成员列表（用于下拉框）
+router.get("/api/admin/wecom/notify-members", requireSuperAdmin, async (req: Request, res: Response) => {
+  try {
+    // 先从数据库读取 corpid/corpsecret，如果没有就用环境变量默认值
+    await ensureNotifyTable();
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ ok: false, error: "数据库连接失败" });
+    const [rows] = await (conn as any).execute(
+      `SELECT cfg_key, cfg_value FROM wecom_notify_config WHERE cfg_key IN ('corpid','corpsecret')`
+    ) as any;
+    const cfg: Record<string, string> = {};
+    for (const row of rows as any[]) { cfg[row.cfg_key] = row.cfg_value; }
+    const corpid = cfg.corpid || "wwbbaccf1da5f886d9";
+    const corpsecret = cfg.corpsecret || "3-XQAnU8_8iKPA74O6_Gw3YQPdOIA2nIv4ILXpxcZ2g";
+
+    // 获取 access_token
+    const tokenResp = await fetch(
+      `https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=${corpid}&corpsecret=${corpsecret}`
+    );
+    const tokenData: any = await tokenResp.json();
+    if (tokenData.errcode !== 0) {
+      return res.status(400).json({ ok: false, error: `获取 token 失败：${tokenData.errmsg}` });
+    }
+    const accessToken = tokenData.access_token;
+
+    // 获取部门列表
+    const deptResp = await fetch(
+      `https://qyapi.weixin.qq.com/cgi-bin/department/list?access_token=${accessToken}`
+    );
+    const deptData: any = await deptResp.json();
+    const deptIds: number[] = (deptData.department || []).map((d: any) => d.id);
+    if (deptIds.length === 0) deptIds.push(1);
+
+    // 获取所有成员（去重）
+    const memberMap: Record<string, { userid: string; name: string; avatar?: string }> = {};
+    for (const deptId of deptIds.slice(0, 5)) { // 最多查5个部门避免超时
+      const userResp = await fetch(
+        `https://qyapi.weixin.qq.com/cgi-bin/user/list?access_token=${accessToken}&department_id=${deptId}&fetch_child=0`
+      );
+      const userData: any = await userResp.json();
+      for (const u of (userData.userlist || [])) {
+        memberMap[u.userid] = { userid: u.userid, name: u.name, avatar: u.avatar };
+      }
+    }
+    const members = Object.values(memberMap);
+    return res.json({ ok: true, members });
+  } catch (e: any) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// GET /api/admin/wecom/notify-config
+router.get("/api/admin/wecom/notify-config", requireSuperAdmin, async (req: Request, res: Response) => {
+  try {
+    await ensureNotifyTable();
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ ok: false, error: "数据库连接失败" });
+    const [rows] = await (conn as any).execute(
+      `SELECT cfg_key, cfg_value FROM wecom_notify_config`
+    ) as any;
+    const config: Record<string, any> = {};
+    for (const row of rows as any[]) {
+      try { config[row.cfg_key] = JSON.parse(row.cfg_value); } catch { config[row.cfg_key] = row.cfg_value; }
+    }
+    // 预填默认值（如果数据库里没有）
+    if (!config.corpid) config.corpid = "wwbbaccf1da5f886d9";
+    if (!config.corpsecret) config.corpsecret = "3-XQAnU8_8iKPA74O6_Gw3YQPdOIA2nIv4ILXpxcZ2g";
+    if (!config.agentid) config.agentid = "1000002";
+    return res.json({ ok: true, config });
+  } catch (e: any) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// POST /api/admin/wecom/notify-config
+router.post("/api/admin/wecom/notify-config", requireSuperAdmin, async (req: Request, res: Response) => {
+  try {
+    await ensureNotifyTable();
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ ok: false, error: "数据库连接失败" });
+    const updates: Record<string, any> = req.body || {};
+    for (const [key, value] of Object.entries(updates)) {
+      const strVal = typeof value === "string" ? value : JSON.stringify(value);
+      await (conn as any).execute(
+        `INSERT INTO wecom_notify_config (cfg_key, cfg_value) VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE cfg_value = VALUES(cfg_value)`,
+        [key, strVal]
+      );
+    }
+    return res.json({ ok: true });
+  } catch (e: any) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// POST /api/admin/wecom/notify-test
+router.post("/api/admin/wecom/notify-test", requireSuperAdmin, async (req: Request, res: Response) => {
+  try {
+    await ensureNotifyTable();
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ ok: false, error: "数据库连接失败" });
+    const [rows] = await (conn as any).execute(
+      `SELECT cfg_key, cfg_value FROM wecom_notify_config WHERE cfg_key IN ('corpid','corpsecret','agentid','test_touser')`
+    ) as any;
+    const cfg: Record<string, string> = {};
+    for (const row of rows as any[]) { cfg[row.cfg_key] = row.cfg_value; }
+    const { corpid, corpsecret, agentid, test_touser } = cfg;
+    if (!corpid || !corpsecret || !agentid) {
+      return res.status(400).json({ ok: false, error: "请先填写 corpid、corpsecret、agentid" });
+    }
+    const touser = req.body?.touser || test_touser || "@all";
+    const tokenResp = await fetch(
+      `https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=${corpid}&corpsecret=${corpsecret}`
+    );
+    const tokenData: any = await tokenResp.json();
+    if (tokenData.errcode !== 0) {
+      return res.status(400).json({ ok: false, error: `获取 access_token 失败：${tokenData.errmsg}` });
+    }
+    const accessToken = tokenData.access_token;
+    const msgResp = await fetch(
+      `https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=${accessToken}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          touser,
+          msgtype: "text",
+          agentid: parseInt(agentid),
+          text: { content: `【好友记通知平台】测试消息发送成功 ✅\n时间：${new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })}` },
+          safe: 0
+        })
+      }
+    );
+    const msgData: any = await msgResp.json();
+    if (msgData.errcode !== 0) {
+      return res.status(400).json({ ok: false, error: `发送失败：${msgData.errmsg}（errcode: ${msgData.errcode}）` });
+    }
+    return res.json({ ok: true, msg: "测试消息发送成功" });
+  } catch (e: any) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+
+
+// GET /api/admin/wecom/bound-members - 从绑定表获取成员列表（不依赖企微API，动态实时）
+router.get("/api/admin/wecom/bound-members", requireSuperAdmin, async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.json({ ok: false, members: [] });
+    const [rows] = await (conn as any).execute(
+      `SELECT wecom_user_id, site_username, bind_note FROM wecom_account_binding ORDER BY created_at ASC`
+    ) as any;
+    const members = (rows as any[]).map((r: any) => ({
+      userid: r.wecom_user_id,
+      name: r.bind_note || r.site_username || r.wecom_user_id,
+    }));
+    res.json({ ok: true, members });
+  } catch (e: any) {
+    console.error("[WecomAdmin] bound-members error:", e.message);
+    res.json({ ok: false, members: [] });
+  }
+});
+
+// 启动时自动建表并预填默认配置
+(async () => {
+  try {
+    await ensureNotifyTable();
+    const conn = await getDbConnection();
+    if (!conn) return;
+    // 预填默认值（如果还没有保存过）
+    const defaults: Record<string, string> = {
+      corpid: "wwbbaccf1da5f886d9",
+      corpsecret: "3-XQAnU8_8iKPA74O6_Gw3YQPdOIA2nIv4ILXpxcZ2g",
+      agentid: "1000002",
+    };
+    for (const [key, val] of Object.entries(defaults)) {
+      const [rows] = await (conn as any).execute(
+        `SELECT id FROM wecom_notify_config WHERE cfg_key = ?`, [key]
+      ) as any;
+      if ((rows as any[]).length === 0) {
+        await (conn as any).execute(
+          `INSERT INTO wecom_notify_config (cfg_key, cfg_value) VALUES (?, ?)`, [key, val]
+        );
+      }
+    }
+    console.log("[WecomAdmin] notify config table ready");
+  } catch (e: any) {
+    console.warn("[WecomAdmin] init notify table failed:", e.message);
+  }
+})();
+
 export default router;

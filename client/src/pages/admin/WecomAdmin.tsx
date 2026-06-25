@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
 import {
-  ArrowLeft, RefreshCw, Trash2, Edit2, Plus, Check, X, Bot,
+  ArrowLeft, RefreshCw, Trash2, Edit2, Plus, Check, X, Bot, Bell,
   Zap, MessageSquare, User, BarChart2, Menu, ChevronRight, ChevronDown,
   Clock, Settings, AlertCircle, PlayCircle, StopCircle, Coins, Loader2,
   Sparkles, Save, ToggleLeft, ToggleRight, Ban, Shield, Camera, Pencil, ImageIcon, FileText,
@@ -117,7 +117,7 @@ function creditsToYuan(credits: number) {
 
 // ─── Tab 按钮 ────────────────────────────────────────────────────────────────
 
-type TabKey = "binding" | "users" | "workflow" | "messages" | "stats" | "menu" | "channel" | "docs";
+type TabKey = "binding" | "users" | "workflow" | "messages" | "stats" | "menu" | "channel" | "docs" | "notify";
 
 // Link2 图标内联引入
 const Link2Icon = () => (
@@ -136,6 +136,7 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: "menu", label: "菜单", icon: <Menu className="w-4 h-4" /> },
   { key: "channel", label: "渠道", icon: <Settings className="w-4 h-4" /> },
   { key: "docs", label: "文档", icon: <FileText className="w-4 h-4" /> },
+  { key: "notify", label: "通知平台", icon: <Bell className="w-4 h-4" /> },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -158,6 +159,7 @@ export default function WecomAdmin() {
         {activeTab === "menu" && <MenuTab />}
         {activeTab === "channel" && <ChannelTab />}
         {activeTab === "docs" && <DocsTab />}
+        {activeTab === "notify" && <NotifyTab />}
       </div>
 
       {/* 底部 Tab 栏 */}
@@ -7273,6 +7275,204 @@ function DocsTab() {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 通知平台 Tab
+// ═══════════════════════════════════════════════════════════════════════════════
+function NotifyTab() {
+  const [cfg, setCfg] = useState<Record<string, any>>({
+    corpid: "wwbbaccf1da5f886d9",
+    corpsecret: "3-XQAnU8_8iKPA74O6_Gw3YQPdOIA2nIv4ILXpxcZ2g",
+    agentid: "1000002",
+  });
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testUser, setTestUser] = useState("");
+  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [members, setMembers] = useState<{ userid: string; name: string }[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+
+  const notifyItems = [
+    { key: "notify_collateral_gap", label: "担保缺口预警", desc: "订单担保缺口超过阈值时推送给资方" },
+    { key: "notify_interest_due", label: "结息提醒", desc: "结息日前 N 天提醒用户" },
+    { key: "notify_order_created", label: "新订单通知", desc: "管理员创建订单后通知对应用户" },
+    { key: "notify_order_settled", label: "订单结清通知", desc: "订单结清时通知用户" },
+    { key: "notify_price_drop", label: "价格大幅下跌预警", desc: "某币种跌幅超过设定值时推送风险提示" },
+  ];
+
+  useEffect(() => {
+    fetch("/api/admin/wecom/notify-config", {
+      headers: { Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` }
+    })
+      .then(r => r.json())
+      .then(d => { if (d.ok) setCfg(d.config || {}); })
+      .catch(() => {});
+    // 加载企业微信成员列表（复用已有接口）
+    setLoadingMembers(true);
+    fetch("/api/wecom/wecom-users", {
+      headers: { Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` }
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.users) {
+          setMembers(d.users.map((u: any) => ({ userid: u.wecom_user_id, name: u.wecom_user_id })));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingMembers(false));
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true); setMsg(null);
+    try {
+      const r = await fetch("/api/admin/wecom/notify-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` },
+        body: JSON.stringify(cfg)
+      });
+      const d = await r.json();
+      setMsg(d.ok ? { type: "ok", text: "配置已保存" } : { type: "err", text: d.error || "保存失败" });
+    } catch (e: any) { setMsg({ type: "err", text: e.message }); }
+    finally { setSaving(false); }
+  };
+
+  const handleTest = async () => {
+    setTesting(true); setMsg(null);
+    try {
+      const r = await fetch("/api/admin/wecom/notify-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` },
+        body: JSON.stringify({ touser: testUser || cfg.test_touser || "@all" })
+      });
+      const d = await r.json();
+      setMsg(d.ok ? { type: "ok", text: d.msg || "发送成功" } : { type: "err", text: d.error || "发送失败" });
+    } catch (e: any) { setMsg({ type: "err", text: e.message }); }
+    finally { setTesting(false); }
+  };
+
+  const set = (key: string, val: any) => setCfg(prev => ({ ...prev, [key]: val }));
+
+  return (
+    <div className="px-4 py-4 space-y-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Bell className="w-5 h-5 text-blue-600" />
+        <h2 className="text-base font-bold text-gray-800">企业微信通知平台</h2>
+      </div>
+
+      {/* 基础配置 */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-3">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">基础配置</p>
+        {[
+          { key: "corpid", label: "企业 ID（corpid）", placeholder: "ww开头的企业ID" },
+          { key: "corpsecret", label: "应用 Secret（corpsecret）", placeholder: "应用的 Secret" },
+          { key: "agentid", label: "应用 AgentID", placeholder: "应用的 agentid，如 1000002" },
+        ].map(({ key, label, placeholder }) => (
+          <div key={key}>
+            <label className="text-xs text-gray-500 mb-1 block">{label}</label>
+            <input
+              type="text"
+              value={cfg[key] || ""}
+              onChange={e => set(key, e.target.value)}
+              placeholder={placeholder}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            />
+          </div>
+        ))}
+        {/* 默认推送对象下拉框 */}
+        <div>
+          <label className="text-xs text-gray-500 mb-1 block">默认推送对象</label>
+          <select
+            value={cfg.test_touser || ""}
+            onChange={e => set("test_touser", e.target.value)}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+          >
+            <option value="">-- 选择成员 --</option>
+            <option value="@all">@all（全员）</option>
+            {loadingMembers ? (
+              <option disabled>加载中...</option>
+            ) : members.map(m => (
+              <option key={m.userid} value={m.userid}>{m.name}（{m.userid}）</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* 通知开关 */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-3">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">通知开关</p>
+        {notifyItems.map(({ key, label, desc }) => (
+          <div key={key} className="flex items-center justify-between py-1">
+            <div>
+              <p className="text-sm font-medium text-gray-800">{label}</p>
+              <p className="text-xs text-gray-400">{desc}</p>
+            </div>
+            <button
+              onClick={() => set(key, !cfg[key])}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${cfg[key] ? "bg-blue-500" : "bg-gray-200"}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${cfg[key] ? "translate-x-6" : "translate-x-1"}`} />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* 担保缺口阈值 */}
+      {cfg.notify_collateral_gap && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+          <label className="text-xs text-gray-500 mb-1 block">担保缺口预警阈值（U）</label>
+          <input
+            type="number"
+            value={cfg.collateral_gap_threshold || ""}
+            onChange={e => set("collateral_gap_threshold", e.target.value)}
+            placeholder="如 500，缺口绝对值超过此值时推送"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+          />
+        </div>
+      )}
+
+      {/* 保存 */}
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="w-full bg-blue-600 text-white rounded-xl py-3 text-sm font-semibold disabled:opacity-50"
+      >
+        {saving ? "保存中..." : "保存配置"}
+      </button>
+
+      {/* 测试发送 */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-3">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">测试发送</p>
+        <div>
+          <label className="text-xs text-gray-500 mb-1 block">发送对象（留空则用默认推送对象）</label>
+          <select
+            value={testUser}
+            onChange={e => setTestUser(e.target.value)}
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+          >
+            <option value="">-- 使用默认推送对象 --</option>
+            {members.map(m => (
+              <option key={m.userid} value={m.userid}>{m.name}（{m.userid}）</option>
+            ))}
+          </select>
+        </div>
+        <button
+          onClick={handleTest}
+          disabled={testing}
+          className="w-full bg-green-600 text-white rounded-xl py-3 text-sm font-semibold disabled:opacity-50"
+        >
+          {testing ? "发送中..." : "发送测试消息"}
+        </button>
+      </div>
+
+      {/* 结果提示 */}
+      {msg && (
+        <div className={`rounded-xl px-4 py-3 text-sm font-medium ${msg.type === "ok" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+          {msg.text}
+        </div>
+      )}
     </div>
   );
 }
