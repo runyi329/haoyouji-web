@@ -469,7 +469,7 @@ function FinanceOrderCard({
               )}
             </button>
           )}
-          {!order._isParticipant && !order._fromFunder && (activeUserTab === 'all' || Number(order.user_id) === Number(activeUserTab)) && (
+          {isAdmin && !order._isParticipant && !order._fromFunder && (activeUserTab === 'all' || Number(order.user_id) === Number(activeUserTab)) && (
             <button
               onClick={() => openEdit(order)}
               className="p-1.5 ml-1 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors"
@@ -918,6 +918,7 @@ function FinanceOrderCard({
           <span className="text-xs font-medium" style={{ color: '#1A2340' }}>
             {isGreenOrder ? '已结利息' : '已付利息'}：<span style={{ color: '#16A34A' }}>{displayPaid.toFixed(2)} {interestUnit}</span>
           </span>
+          {isAdmin && (
           <button
             onClick={() => { setShowPaymentPanel(showPaymentPanel === order.id ? null : order.id); setPaymentForm(() => ({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' })); }}
             className="text-xs px-3 py-1 rounded-full font-medium"
@@ -925,6 +926,7 @@ function FinanceOrderCard({
           >
             {showPaymentPanel === order.id ? '收起' : '+ 记录结息'}
           </button>
+          )}
         </div>
 
         {showPaymentPanel === order.id && (
