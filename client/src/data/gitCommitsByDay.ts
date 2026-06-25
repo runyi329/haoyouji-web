@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-25
+// 生成时间：2026-06-26
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -7822,5 +7822,21 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-25T07:47:41Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
     { date: "2026-06-25T09:42:53Z", type: "refactor", cleanMessage: "抽取FunderOrderCard为独立共享组件，老版重命名为Legacy并标记deprecated" },
     { date: "2026-06-25T10:35:47Z", type: "refactor", cleanMessage: "FunderOrderCard自包含，LedgerDetail全部用新版组件" },
+    { date: "2026-06-25T12:10:24Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-25T13:08:59Z", type: "fix", cleanMessage: "共享担保弹窗重构——实时缺口计算+担保物折算+风险敞口+保证金比例" },
+    { date: "2026-06-25T13:38:02Z", type: "fix", cleanMessage: "弹窗担保缺口公式改为 floatPnl-accrued，盈利可抵消缺口，颜色正红负绿" },
+    { date: "2026-06-25T13:53:10Z", type: "fix", cleanMessage: "第③部分风险敞口改为担保物+净缺口合计（正负相加，不再相减）" },
+    { date: "2026-06-25T14:32:47Z", type: "fix", cleanMessage: "pm2重启加root兜底，修复EACCES导致服务未重启问题" },
+    { date: "2026-06-25T14:38:24Z", type: "refactor", cleanMessage: "CryptoPrediction融资付息Tab替换renderMyCard/renderSharedCard为FunderOrderCard，与管理端完全一致" },
+    { date: "2026-06-25T14:53:05Z", type: "feat", cleanMessage: "融资付息Tab订单按担保类型分5组折叠，标题显示张数" },
+    { date: "2026-06-25T15:01:14Z", type: "feat", cleanMessage: "用户前端隐藏编辑/参与方/记录结息按钮（isAdmin=false时不显示）" },
+    { date: "2026-06-25T15:06:10Z", type: "fix", cleanMessage: "前端融资付息页面对所有人隐藏编辑/参与方/记录结息按钮（isAdmin固定为false）" },
+    { date: "2026-06-25T15:13:47Z", type: "fix", cleanMessage: "LedgerDetail资金方视图隐藏编辑/参与方/记录结息按钮（isAdmin固定false）" },
+    { date: "2026-06-25T15:22:11Z", type: "fix", cleanMessage: "FinanceOrderCard隐藏编辑/参与方/记录结息按钮（非管理员不显示）" },
+    { date: "2026-06-25T15:34:52Z", type: "fix", cleanMessage: "隐藏前端所有操作按钮+修复CryptoPrediction语法错误" },
+  ],
+  "2026-06-26": [
+    { date: "2026-06-25T16:03:05Z", type: "feat", cleanMessage: "通知平台 Tab - 企微配置预填+成员下拉框+隐藏前端操作按钮" },
+    { date: "2026-06-25T16:10:31Z", type: "fix", cleanMessage: "通知平台成员下拉框字段映射修复（u.userid / u.name）" },
   ],
 };
