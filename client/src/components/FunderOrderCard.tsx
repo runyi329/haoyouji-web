@@ -398,6 +398,106 @@ export function FunderOrderCard({
   onConfirmSettle,
   viewMode = 'default',
 }: FunderOrderCardProps) {
+  // ===== 内部 fallback：当父组件未传入对应 props 时，组件自己管理 state 和 mutation =====
+  const trpcUtils = trpc.useUtils();
+  // 结息面板
+  const [_intShowPayment, _intSetShowPayment] = useState<number | null>(null);
+  const [_intPaymentForm, _intSetPaymentForm] = useState({ amount: '', currency: 'U' as 'CNY' | 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' });
+  const [_intEditingPaymentId, _intSetEditingPaymentId] = useState<number | null>(null);
+  const [_intShowPaymentDatePicker, _intSetShowPaymentDatePicker] = useState(false);
+  // 参与方面板
+  const [_intShowParticipants, _intSetShowParticipants] = useState<number | null>(null);
+  const [_intParticipantsList, _intSetParticipantsList] = useState<{ userId: number; displayName: string; role: string; sortOrder: number; rate: string }[]>([]);
+  const [_intLedgerMembers, _intSetLedgerMembers] = useState<{ userId: number; displayName: string; memberRole?: string }[]>([]);
+  const [_intParticipantsLoading, _intSetParticipantsLoading] = useState(false);
+  const [_intParticipantsEditMode, _intSetParticipantsEditMode] = useState(false);
+  // 结清确认
+  const [_intConfirmSettleId, _intSetConfirmSettleId] = useState<number | null>(null);
+  // 内部 mutations
+  const _intUpdateMutation = trpc.ledger.financeUpdateOrder.useMutation({
+    onSuccess: () => { toast.success('更新成功'); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
+    onError: (err) => toast.error(err.message),
+  });
+  const _intDeleteMutation = trpc.ledger.funderDeleteAssetOrder.useMutation({
+    onSuccess: () => { toast.success('已移入回收站'); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
+    onError: (err) => toast.error(err.message),
+  });
+  const _intSaveParticipantsMutation = trpc.ledger.funderSaveOrderParticipants.useMutation({
+    onSuccess: () => { toast.success('参与方配置已保存'); _intSetShowParticipants(null); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
+    onError: (err) => toast.error(err.message),
+  });
+  // 内部结息查询（仅当未传入 interestPayments 时启用）
+  const _activeShowPaymentPanelForQuery = showPaymentPanel !== undefined ? showPaymentPanel : _intShowPayment;
+  const { data: _intInterestPayments, refetch: _intRefetchPayments } = trpc.ledger.funderGetInterestPayments.useQuery(
+    { ledgerId, orderId: _activeShowPaymentPanelForQuery! },
+    { enabled: interestPayments === undefined && _activeShowPaymentPanelForQuery === order.id }
+  );
+  const _intAddPaymentMutation = trpc.ledger.funderAddInterestPayment.useMutation({
+    onSuccess: () => { toast.success('结息记录已添加'); _intSetPaymentForm({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' }); _intRefetchPayments(); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
+    onError: (err) => toast.error(err.message),
+  });
+  const _intDeletePaymentMutation = trpc.ledger.funderDeleteInterestPayment.useMutation({
+    onSuccess: () => { toast.success('结息记录已删除'); _intRefetchPayments(); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
+    onError: (err) => toast.error(err.message),
+  });
+  // 内部 handleOpenParticipants
+  const _intHandleOpenParticipants = async (orderId: number, _orderInterestBase: string) => {
+    if (_intShowParticipants === orderId) { _intSetShowParticipants(null); return; }
+    _intSetShowParticipants(orderId);
+    _intSetParticipantsLoading(true);
+    try {
+      const result = await trpcUtils.ledger.funderGetOrderParticipants.fetch({ orderId, ledgerId });
+      const mapped = (result.participants || []).map((p: any) => ({ userId: p.user_id, displayName: p.username || p.nickname || p.userName || `用户${p.user_id}`, role: p.role, sortOrder: p.sort_order || 0, rate: (p.commission_rate != null && p.commission_rate !== '') ? String(p.commission_rate) : (p.rate != null ? String(p.rate) : '') }));
+      _intSetParticipantsList(mapped);
+      _intSetParticipantsEditMode(mapped.length === 0);
+      const mappedMembers = (result.members || []).map((m: any) => ({ userId: m.userId, displayName: m.username || m.nickname || m.userName || `用户${m.userId}`, memberRole: m.memberRole }));
+      _intSetLedgerMembers(mappedMembers);
+    } catch { toast.error('加载参与方失败'); _intSetParticipantsList([]); _intSetParticipantsEditMode(true); }
+    finally { _intSetParticipantsLoading(false); }
+  };
+  // 内部 handleAddParticipant
+  const _intHandleAddParticipant = (role: any) => {
+    _intSetParticipantsList(list => { const usedIds = list.map(p => p.userId); const firstAvail = _intLedgerMembers.find(m => !usedIds.includes(m.userId)); return [...list, { userId: firstAvail?.userId ?? 0, displayName: firstAvail?.displayName ?? '', role, sortOrder: list.length, rate: '' }]; });
+  };
+  // 内部 handleSaveParticipants
+  const _intHandleSaveParticipants = (orderId: number) => {
+    const valid = _intParticipantsList.filter(p => p.userId > 0);
+    _intSaveParticipantsMutation.mutate({ orderId, ledgerId, participants: valid.map((p, i) => ({ userId: p.userId, role: p.role, sortOrder: i, rate: (p.rate ?? '').toString().trim() || undefined })) });
+  };
+  // 合并后的活跃值（父组件传入优先，否则用内部 fallback）
+  const $showPaymentPanel = showPaymentPanel !== undefined ? showPaymentPanel : _intShowPayment;
+  const $setShowPaymentPanel = setShowPaymentPanel !== undefined ? setShowPaymentPanel : _intSetShowPayment;
+  const $paymentForm = paymentForm !== undefined ? paymentForm : _intPaymentForm;
+  const $setPaymentForm = setPaymentForm !== undefined ? setPaymentForm : _intSetPaymentForm;
+  const $editingPaymentId = editingPaymentId !== undefined ? editingPaymentId : _intEditingPaymentId;
+  const $setEditingPaymentId = setEditingPaymentId !== undefined ? setEditingPaymentId : _intSetEditingPaymentId;
+  const $showPaymentDatePicker = showPaymentDatePicker !== undefined ? showPaymentDatePicker : _intShowPaymentDatePicker;
+  const $setShowPaymentDatePicker = setShowPaymentDatePicker !== undefined ? setShowPaymentDatePicker : _intSetShowPaymentDatePicker;
+  const $addPaymentMutation = addPaymentMutation !== undefined ? addPaymentMutation : _intAddPaymentMutation;
+  const $deletePaymentMutation = deletePaymentMutation !== undefined ? deletePaymentMutation : _intDeletePaymentMutation;
+  const $interestPayments = interestPayments !== undefined ? interestPayments : (_intInterestPayments as any[] | undefined);
+  const $updateMutation = updateMutation !== undefined ? updateMutation : _intUpdateMutation;
+  const $showParticipantsPanel = showParticipantsPanel !== undefined ? showParticipantsPanel : _intShowParticipants;
+  const $participantsList = participantsList !== undefined ? participantsList : _intParticipantsList;
+  const $setParticipantsList = setParticipantsList !== undefined ? setParticipantsList : _intSetParticipantsList;
+  const $ledgerMembers = ledgerMembers !== undefined ? ledgerMembers : _intLedgerMembers;
+  const $participantsLoading = participantsLoading !== undefined ? participantsLoading : _intParticipantsLoading;
+  const $participantsEditMode = participantsEditMode !== undefined ? participantsEditMode : _intParticipantsEditMode;
+  const $setParticipantsEditMode = setParticipantsEditMode !== undefined ? setParticipantsEditMode : _intSetParticipantsEditMode;
+  const $saveParticipantsMutation = saveParticipantsMutation !== undefined ? saveParticipantsMutation : _intSaveParticipantsMutation;
+  const $handleOpenParticipants = handleOpenParticipants !== undefined ? handleOpenParticipants : _intHandleOpenParticipants;
+  const $handleAddParticipant = handleAddParticipant !== undefined ? handleAddParticipant : _intHandleAddParticipant;
+  const $handleSaveParticipants = handleSaveParticipants !== undefined ? handleSaveParticipants : _intHandleSaveParticipants;
+  const $handleDelete = handleDelete !== undefined ? handleDelete : (orderId: number) => _intDeleteMutation.mutate({ id: orderId, ledgerId });
+  const $handleOpenEdit = handleOpenEdit !== undefined ? handleOpenEdit : (_order: any) => {};
+  const $onConfirmSettle = onConfirmSettle !== undefined ? onConfirmSettle : _intSetConfirmSettleId;
+  const $getPaymentLabel = getPaymentLabel !== undefined ? getPaymentLabel : (val: string) => INTEREST_PAYMENT_OPTIONS.find(o => o.value === val)?.label || val;
+  const $roleOptions = roleOptions !== undefined ? roleOptions : [
+    { value: 'funder', label: '资方', color: '#3B82F6', defaultRateLabel: '利率' },
+    { value: 'broker', label: '中间方', color: '#8B5CF6', defaultRateLabel: '佣金率' },
+    { value: 'borrower', label: '借方', color: '#F59E0B', defaultRateLabel: '利率' },
+  ];
+  // ===== END 内部 fallback =====
   const { data: _cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: "USD", tocoin: "CNY", money: 1 }, { staleTime: 3000, refetchInterval: 3000 });
   const cnyRate = parseFloat((_cnyRateData as any)?.money ?? "7.2") || 7.2;
   // 共享担保池查询（仅当订单开启了本人订单共享时才查询）
@@ -517,6 +617,7 @@ export function FunderOrderCard({
   const isSufficient = exposure >= 0;
 
   return (
+    <>
     <div
       className="bg-white rounded-2xl overflow-hidden relative"
       style={isInvited
@@ -585,21 +686,21 @@ export function FunderOrderCard({
         <div className="flex items-center gap-0.5">
           {!isInvited && (
             <button
-              onClick={() => handleOpenParticipants(order.id, order.interest_base || '')}
+              onClick={() => $handleOpenParticipants(order.id, order.interest_base || '')}
               className="px-2 py-1 text-xs rounded-lg font-medium transition-colors"
-              style={{ backgroundColor: showParticipantsPanel === order.id ? '#059669' : '#ECFDF5', color: showParticipantsPanel === order.id ? '#fff' : '#059669' }}
+              style={{ backgroundColor: $showParticipantsPanel === order.id ? '#059669' : '#ECFDF5', color: $showParticipantsPanel === order.id ? '#fff' : '#059669' }}
             >
               参与方{order.participantCount > 0 ? ` ${order.participantCount}` : ''}
             </button>
           )}
           {!isInvited && (
-            <button onClick={() => handleOpenEdit(order)} className="p-1.5 ml-1 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors">
+            <button onClick={() => $handleOpenEdit(order)} className="p-1.5 ml-1 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors">
               <Pencil className="w-3.5 h-3.5" />
             </button>
           )}
           {!isInvited && isAdmin && !isSettled && (
             <button
-              onClick={() => onConfirmSettle?.(order.id)}
+              onClick={() => $onConfirmSettle?.(order.id)}
               className="px-2 py-1 text-xs rounded-lg font-medium transition-colors"
               style={{ backgroundColor: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }}
               title="标记为已结清"
@@ -612,7 +713,7 @@ export function FunderOrderCard({
               onClick={() => {
                 if (!window.confirm('确认删除这张订单？')) return;
                 if (!window.confirm('再次确认：订单将移入回收站，可随时恢复。确定删除？')) return;
-                handleDelete(order.id);
+                $handleDelete(order.id);
               }}
               className="p-1.5 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
               title="删除订单（移入回收站）"
@@ -711,7 +812,7 @@ export function FunderOrderCard({
             {order.interest_payment_type && show('interestPaymentType') && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">付息方式</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>{getPaymentLabel(order.interest_payment_type)}</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{$getPaymentLabel(order.interest_payment_type)}</span>
               </div>
             )}
             {order.storage_account && (
@@ -1149,19 +1250,19 @@ export function FunderOrderCard({
       )}
 
       {/* 参与方面板 */}
-      {showParticipantsPanel === order.id && (
+      {$showParticipantsPanel === order.id && (
         <div className="px-4 pt-3 pb-3 border-t border-green-100">
           <div className="flex items-center justify-between mb-3">
             <div className="text-xs font-semibold text-green-700 flex items-center gap-1">
               <Users2 className="w-3.5 h-3.5" />
               多视角订单参与方
             </div>
-            {participantsEditMode ? (
+            {$participantsEditMode ? (
               <div className="flex gap-1">
-                {roleOptions.map(r => (
+                {$roleOptions.map(r => (
                   <button
                     key={r.value}
-                    onClick={() => handleAddParticipant(r.value)}
+                    onClick={() => $handleAddParticipant(r.value)}
                     className="px-2 py-0.5 text-xs rounded-full font-medium border"
                     style={{ borderColor: r.color, color: r.color, backgroundColor: `${r.color}10` }}
                   >
@@ -1171,7 +1272,7 @@ export function FunderOrderCard({
               </div>
             ) : (
               <button
-                onClick={() => setParticipantsEditMode(true)}
+                onClick={() => $setParticipantsEditMode(true)}
                 className="px-2.5 py-0.5 text-xs rounded-full font-medium border flex items-center gap-1"
                 style={{ borderColor: '#059669', color: '#059669', backgroundColor: '#ECFDF5' }}
               >
@@ -1179,16 +1280,16 @@ export function FunderOrderCard({
               </button>
             )}
           </div>
-          {participantsLoading ? (
+          {$participantsLoading ? (
             <div className="text-center py-3 text-xs text-gray-400">加载中...</div>
-          ) : !participantsEditMode ? (
+          ) : !$participantsEditMode ? (
             /* 只读态：展示已保存的参与方（成员、角色、利率%、收/付） */
-            participantsList.length === 0 ? (
+            $participantsList.length === 0 ? (
               <div className="text-center py-3 text-xs text-gray-400 bg-gray-50 rounded-xl">暂无参与方配置</div>
             ) : (
               <div className="space-y-2">
-                {participantsList.map((p, idx) => {
-                  const roleOpt = roleOptions.find(r => r.value === p.role);
+                {$participantsList.map((p, idx) => {
+                  const roleOpt = $roleOptions.find(r => r.value === p.role);
                   const rateNum = parseFloat(p.rate || '');
                   const hasRate = isFinite(rateNum);
                   const isNeg = hasRate && rateNum < 0;
@@ -1215,26 +1316,26 @@ export function FunderOrderCard({
                 })}
               </div>
             )
-          ) : participantsList.length === 0 ? (
+          ) : $participantsList.length === 0 ? (
             <div className="text-center py-3 text-xs text-gray-400 bg-gray-50 rounded-xl">
               暂无参与方配置，点击上方按钮添加
             </div>
           ) : (
             <div className="space-y-2">
-              {participantsList.map((p, idx) => {
-                const roleOpt = roleOptions.find(r => r.value === p.role)!;
+              {$participantsList.map((p, idx) => {
+                const roleOpt = $roleOptions.find(r => r.value === p.role)!;
                 const rateNum = parseFloat(p.rate || '');
                 const isNeg = isFinite(rateNum) && rateNum < 0;
                 const absVal = isFinite(rateNum) ? Math.abs(rateNum) : '';
                 const setRate = (nextAbs: string, neg: boolean) => {
                   const v = nextAbs.toString().trim();
                   if (v === '') {
-                    setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, rate: '' } : item));
+                    $setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, rate: '' } : item));
                     return;
                   }
                   const num = Math.abs(parseFloat(v) || 0);
                   const signed = neg ? -num : num;
-                  setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, rate: String(signed) } : item));
+                  $setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, rate: String(signed) } : item));
                 };
                 return (
                   <div key={idx} className="bg-gray-50 rounded-xl px-2 py-1.5 flex items-center gap-1.5">
@@ -1245,13 +1346,13 @@ export function FunderOrderCard({
                       value={p.userId}
                       onChange={e => {
                         const uid = Number(e.target.value);
-                        const member = ledgerMembers.find(m => m.userId === uid);
-                        setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, userId: uid, displayName: member?.displayName || '' } : item));
+                        const member = $ledgerMembers.find(m => m.userId === uid);
+                        $setParticipantsList(list => list.map((item, i) => i === idx ? { ...item, userId: uid, displayName: member?.displayName || '' } : item));
                       }}
                       className="min-w-0 flex-1 px-1.5 py-1 text-xs border border-gray-200 rounded-md bg-white"
                     >
                       <option value={0}>选成员</option>
-                      {ledgerMembers.map(m => (
+                      {$ledgerMembers.map(m => (
                         <option key={m.userId} value={m.userId}>{m.displayName}</option>
                       ))}
                     </select>
@@ -1282,7 +1383,7 @@ export function FunderOrderCard({
                     >付</button>
                     {/* 删除 */}
                     <button
-                      onClick={() => setParticipantsList(list => list.filter((_, i) => i !== idx))}
+                      onClick={() => $setParticipantsList(list => list.filter((_, i) => i !== idx))}
                       className="p-0.5 text-gray-300 hover:text-red-400 shrink-0"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -1292,14 +1393,14 @@ export function FunderOrderCard({
               })}
             </div>
           )}
-          {participantsEditMode && (
+          {$participantsEditMode && (
             <button
-              onClick={() => handleSaveParticipants(order.id)}
-              disabled={saveParticipantsMutation.isPending}
+              onClick={() => $handleSaveParticipants(order.id)}
+              disabled={$saveParticipantsMutation.isPending}
               className="mt-3 w-full py-2 rounded-xl text-xs font-semibold text-white disabled:opacity-50"
               style={{ background: 'linear-gradient(135deg, #059669, #10B981)' }}
             >
-              {saveParticipantsMutation.isPending ? '保存中...' : '保存参与方配置'}
+              {$saveParticipantsMutation.isPending ? '保存中...' : '保存参与方配置'}
             </button>
           )}
         </div>
@@ -1312,15 +1413,15 @@ export function FunderOrderCard({
             {isInvited ? '已结佣金' : '已结利息'}：<span style={{ color: '#16A34A' }}>{displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}</span>
           </span>
           <button
-            onClick={() => { setShowPaymentPanel(showPaymentPanel === order.id ? null : order.id); setPaymentForm(() => ({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' })); }}
+            onClick={() => { $setShowPaymentPanel($showPaymentPanel === order.id ? null : order.id); $setPaymentForm(() => ({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' })); }}
             className="text-xs px-3 py-1 rounded-full font-medium"
             style={{ backgroundColor: '#EEF4FF', color: '#1A56DB' }}
           >
-            {showPaymentPanel === order.id ? '收起' : '+ 记录结息'}
+            {$showPaymentPanel === order.id ? '收起' : '+ 记录结息'}
           </button>
         </div>
 
-        {showPaymentPanel === order.id && (
+        {$showPaymentPanel === order.id && (
           <div className="bg-blue-50 rounded-xl p-3 mb-3 space-y-2">
             <div className="flex gap-2">
               <div className="flex-1">
@@ -1328,8 +1429,8 @@ export function FunderOrderCard({
                 <input
                   type="number"
                   inputMode="decimal"
-                  value={paymentForm.amount}
-                  onChange={e => setPaymentForm((f: any) => ({ ...f, amount: e.target.value }))}
+                  value={$paymentForm.amount}
+                  onChange={e => $setPaymentForm((f: any) => ({ ...f, amount: e.target.value }))}
                   className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
                   placeholder="如：500"
                   style={{ display: 'block', boxSizing: 'border-box' }}
@@ -1339,16 +1440,16 @@ export function FunderOrderCard({
                 <label className="block text-xs text-gray-500 mb-1">结息日期</label>
                 <div className="relative">
                   <button
-                    onClick={() => setShowPaymentDatePicker((v: boolean) => !v)}
+                    onClick={() => $setShowPaymentDatePicker((v: boolean) => !v)}
                     className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-left focus:outline-none"
-                    style={{ backgroundColor: '#fff', color: paymentForm.payDate ? '#1A2340' : '#9CA3AF', display: 'block', boxSizing: 'border-box' }}
+                    style={{ backgroundColor: '#fff', color: $paymentForm.payDate ? '#1A2340' : '#9CA3AF', display: 'block', boxSizing: 'border-box' }}
                   >
-                    {paymentForm.payDate || '选择日期'}
+                    {$paymentForm.payDate || '选择日期'}
                   </button>
-                  {showPaymentDatePicker && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }} onClick={() => setShowPaymentDatePicker(false)}>
+                  {$showPaymentDatePicker && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }} onClick={() => $setShowPaymentDatePicker(false)}>
                       <div className="bg-white rounded-xl shadow-2xl mx-4 w-full" style={{ maxWidth: 320 }} onClick={e => e.stopPropagation()}>
-                        <DatePicker value={paymentForm.payDate} onChange={v => { setPaymentForm((f: any) => ({ ...f, payDate: v })); setShowPaymentDatePicker(false); }} />
+                        <DatePicker value={$paymentForm.payDate} onChange={v => { $setPaymentForm((f: any) => ({ ...f, payDate: v })); $setShowPaymentDatePicker(false); }} />
                       </div>
                     </div>
                   )}
@@ -1359,8 +1460,8 @@ export function FunderOrderCard({
               <label className="block text-xs text-gray-500 mb-1">备注（可选）</label>
               <input
                 type="text"
-                value={paymentForm.note}
-                onChange={e => setPaymentForm((f: any) => ({ ...f, note: e.target.value }))}
+                value={$paymentForm.note}
+                onChange={e => $setPaymentForm((f: any) => ({ ...f, note: e.target.value }))}
                 className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
                 placeholder="结息说明"
                 style={{ display: 'block', boxSizing: 'border-box' }}
@@ -1368,21 +1469,21 @@ export function FunderOrderCard({
             </div>
             <button
               onClick={() => {
-                if (!paymentForm.amount || parseFloat(paymentForm.amount) <= 0) { toast.error('请填写结息金额'); return; }
-                addPaymentMutation.mutate({ ledgerId, orderId: order.id, amount: parseFloat(paymentForm.amount), currency: paymentForm.currency || 'U', exchangeRate: parseFloat(paymentForm.exchangeRate || '7.0'), payDate: paymentForm.payDate || new Date().toISOString().slice(0, 10), note: paymentForm.note || undefined });
+                if (!$paymentForm.amount || parseFloat($paymentForm.amount) <= 0) { toast.error('请填写结息金额'); return; }
+                $addPaymentMutation.mutate({ ledgerId, orderId: order.id, amount: parseFloat($paymentForm.amount), currency: $paymentForm.currency || 'U', exchangeRate: parseFloat($paymentForm.exchangeRate || '7.0'), payDate: $paymentForm.payDate || new Date().toISOString().slice(0, 10), note: $paymentForm.note || undefined });
               }}
-              disabled={addPaymentMutation.isPending}
+              disabled={$addPaymentMutation.isPending}
               className="w-full py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50"
               style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
             >
-              {addPaymentMutation.isPending ? '提交中...' : '确认记录'}
+              {$addPaymentMutation.isPending ? '提交中...' : '确认记录'}
             </button>
           </div>
         )}
 
-        {showPaymentPanel === order.id && Array.isArray(interestPayments) && interestPayments.length > 0 && (
+        {$showPaymentPanel === order.id && Array.isArray($interestPayments) && $interestPayments.length > 0 && (
           <div className="space-y-1.5">
-            {interestPayments.map((p: any) => (
+            {$interestPayments.map((p: any) => (
               <div key={p.id} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
                   <span className="font-medium" style={{ color: '#16A34A' }}>+{parseFloat(p.amount).toFixed(2)} {interestUnit}</span>
@@ -1393,7 +1494,7 @@ export function FunderOrderCard({
                   <button
                     onClick={() => {
                       if (window.confirm('确认删除这条结息记录？')) {
-                        deletePaymentMutation.mutate({ ledgerId, paymentId: p.id });
+                        $deletePaymentMutation.mutate({ ledgerId, paymentId: p.id });
                       }
                     }}
                     className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors"
@@ -1428,7 +1529,7 @@ export function FunderOrderCard({
             <div className="space-y-2">
               <button
                 onClick={() => {
-                  updateMutation.mutate({ id: order.id, ledgerId, status: 'active' });
+                  $updateMutation.mutate({ id: order.id, ledgerId, status: 'active' });
                   setShowStatusSheet(false);
                 }}
                 className="w-full py-3 rounded-xl text-sm font-medium transition-colors"
@@ -1438,7 +1539,7 @@ export function FunderOrderCard({
               </button>
               <button
                 onClick={() => {
-                  updateMutation.mutate({ id: order.id, ledgerId, status: 'settled' });
+                  $updateMutation.mutate({ id: order.id, ledgerId, status: 'settled' });
                   setShowStatusSheet(false);
                 }}
                 className="w-full py-3 rounded-xl text-sm font-medium transition-colors"
@@ -1449,7 +1550,7 @@ export function FunderOrderCard({
               <button
                 onClick={() => {
                   if (window.confirm('确认删除这张订单？订单将移入回收站，可随时恢复。')) {
-                    handleDelete(order.id);
+                    $handleDelete(order.id);
                     setShowStatusSheet(false);
                   }
                 }}
@@ -1463,6 +1564,27 @@ export function FunderOrderCard({
         </div>
       )}
     </div>
-  );
+    {/* 内部结清确认弹窗（仅当父组件未传入 onConfirmSettle 时使用） */}
+    {onConfirmSettle === undefined && _intConfirmSettleId !== null && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => _intSetConfirmSettleId(null)}>
+        <div className="absolute inset-0 bg-black/50" />
+        <div className="relative bg-white rounded-2xl p-6 mx-4 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
+          <h3 className="text-base font-semibold text-gray-900 mb-2">确认结清订单</h3>
+          <p className="text-sm text-gray-500 mb-1">结清后该订单利息将停止计算，状态变为「已结清」。</p>
+          <p className="text-sm font-medium text-red-600 mb-5">此操作不可撤销，确定继续？</p>
+          <div className="flex gap-3">
+            <button onClick={() => _intSetConfirmSettleId(null)} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600">取消</button>
+            <button
+              onClick={() => {
+                $updateMutation.mutate({ id: _intConfirmSettleId, ledgerId, status: 'settled' });
+                _intSetConfirmSettleId(null);
+              }}
+              className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-500 text-white"
+            >确认结清</button>
+          </div>
+        </div>
+      </div>
+    )}
+  </>;
 }
 // ===== END FunderOrderCard =====

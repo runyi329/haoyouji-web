@@ -5048,23 +5048,8 @@ export default function LedgerDetail() {
                     if (d.currency === 'CNY') { totalInU += d.exchangeRate > 0 ? d.total / d.exchangeRate : d.total / cnyRate; }
                     else { totalInU += d.total; }
                   }
-                  // FV0245（id=55）及之后的新订单使用新版组件，之前的老订单用老版组件
-                  if (order.id >= 55) {
-                    return (
-                      <FunderOrderCard
-                        key={order.id}
-                        order={order}
-                        ledgerId={ledgerId}
-                        livePrices={funderLivePrices}
-                        priceDirection={funderPriceDirection}
-                        currentUser={user}
-                        membersData={membersData as any[]}
-                        isAdmin={isOwner || isAdmin}
-                      />
-                    );
-                  }
                   return (
-                    <FunderOrderCardLegacy
+                    <FunderOrderCard
                       key={order.id}
                       order={order}
                       ledgerId={ledgerId}
@@ -5087,28 +5072,14 @@ export default function LedgerDetail() {
                     if (d.currency === 'CNY') { totalInU += d.exchangeRate > 0 ? d.total / d.exchangeRate : d.total / cnyRate; }
                     else { totalInU += d.total; }
                   }
-                  if (order.id >= 55) {
-                    return (
-                      <FunderOrderCard
-                        key={order.id}
-                        order={order}
-                        ledgerId={ledgerId}
-                        livePrices={funderLivePrices}
-                        priceDirection={funderPriceDirection}
-                        viewMode="large"
-                        currentUser={user}
-                        membersData={membersData as any[]}
-                        isAdmin={isOwner || isAdmin}
-                      />
-                    );
-                  }
                   return (
-                    <FunderOrderCardLegacy
+                    <FunderOrderCard
                       key={order.id}
                       order={order}
                       ledgerId={ledgerId}
                       livePrices={funderLivePrices}
                       priceDirection={funderPriceDirection}
+                      viewMode="large"
                       currentUser={user}
                       membersData={membersData as any[]}
                       isAdmin={isOwner || isAdmin}
@@ -5120,22 +5091,8 @@ export default function LedgerDetail() {
               /* 小图模式：只显示当前资产和待结利息 */
               <div className="space-y-2">
                 {(funderAssetOrders as any[]).map((order: any) => {
-                  if (order.id >= 55) {
-                    return (
-                      <FunderOrderCard
-                        key={order.id}
-                        order={order}
-                        ledgerId={ledgerId}
-                        livePrices={funderLivePrices}
-                        priceDirection={funderPriceDirection}
-                        currentUser={user}
-                        membersData={membersData as any[]}
-                        isAdmin={isOwner || isAdmin}
-                      />
-                    );
-                  }
                   return (
-                    <FunderOrderCardLegacy
+                    <FunderOrderCard
                       key={order.id}
                       order={order}
                       ledgerId={ledgerId}
