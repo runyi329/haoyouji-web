@@ -3296,7 +3296,7 @@ export default function CryptoPrediction() {
                             {showField('interestPaymentType') && order.interest_payment_type && (
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-gray-400 shrink-0">付息方式</span>
-                                <span className="font-medium" style={{ color: '#4B5563' }}>{order.interest_payment_type === 'monthly_prepaid' ? '月付先付' : order.interest_payment_type === 'monthly_postpaid' ? '月付后付' : order.interest_payment_type === 'end_postpaid' ? '结束后付' : order.interest_payment_type === 'quarterly' ? '季付' : order.interest_payment_type === 'maturity' ? '到期付' : order.interest_payment_type}</span>
+                                <span className="font-medium" style={{ color: '#4B5563' }}>{order.interest_payment_type === 'monthly_pre' ? '月付先付' : order.interest_payment_type === 'monthly_post' ? '月付后付' : order.interest_payment_type === 'end_post' ? '结束后付' : order.interest_payment_type === 'semi_pre' ? '半年付先付' : order.interest_payment_type === 'semi_post' ? '半年付后付' : order.interest_payment_type === 'annual_pre' ? '年付先付' : order.interest_payment_type === 'annual_post' ? '年付后付' : order.interest_payment_type}</span>
                               </div>
                             )}
                           </div>

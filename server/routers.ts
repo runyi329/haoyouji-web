@@ -15238,7 +15238,7 @@ ${klinesSummary}
     // ========== 资方资产订单管理 API ==========
     // 获取资方资产订单列表（资金方看自己的，管理员看全部或指定用户的）
     funderGetAssetOrders: protectedProcedure
-      .input(z.object({ ledgerId: z.number(), userId: z.number().optional(), roleFilter: z.enum(["funder", "admin"]).optional() }))
+      .input(z.object({ ledgerId: z.number(), userId: z.number().optional(), roleFilter: z.enum(["funder", "admin"]).optional(), financeOnly: z.boolean().optional() }))
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
         // 查询当前用户在账本中的角色
@@ -15266,6 +15266,8 @@ ${klinesSummary}
         // 无权限：既不是管理员/资金方，也不是任何订单的参与方
         if (!isManager && !isFunder && !isParticipant) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         // 资金方只能看自己的，管理员可以看指定用户或全部，参与方只能看自己参与的订单
+        // financeOnly: 查 member 角色用户的订单（借方），默认查 funder/owner/admin 角色用户的订单（资方）
+        const memberRoleFilter = input.financeOnly ? "'member'" : "'funder','owner','admin'";
         let targetUserId: number | null = null;
         if (isFunder && !isManager) {
           targetUserId = ctx.user.id;
@@ -15282,7 +15284,7 @@ ${klinesSummary}
                FROM ledger_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
                LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
-               WHERE fo.ledger_id = ? AND fo.order_role = 'funder' AND fo.deleted_at IS NULL AND (fo.user_id = ? OR fo.id IN (${placeholders}))
+               WHERE fo.ledger_id = ? AND fo.deleted_at IS NULL AND lm.role IN (${memberRoleFilter}) AND (fo.user_id = ? OR fo.id IN (${placeholders}))
                ORDER BY fo.created_at DESC`,
               [input.ledgerId, targetUserId, ...participantOrderIds]
             );
@@ -15292,7 +15294,7 @@ ${klinesSummary}
                FROM ledger_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
                LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
-               WHERE fo.ledger_id = ? AND fo.order_role = 'funder' AND fo.deleted_at IS NULL AND fo.user_id = ?
+               WHERE fo.ledger_id = ? AND fo.deleted_at IS NULL AND lm.role IN (${memberRoleFilter}) AND fo.user_id = ?
                ORDER BY fo.created_at DESC`,
               [input.ledgerId, targetUserId]
             );
@@ -15308,7 +15310,7 @@ ${klinesSummary}
                FROM ledger_orders fo
                LEFT JOIN users u ON u.id = fo.user_id
                LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
-               WHERE fo.ledger_id = ? AND fo.order_role = 'funder' AND fo.deleted_at IS NULL AND fo.id IN (${placeholders})
+               WHERE fo.ledger_id = ? AND fo.deleted_at IS NULL AND fo.id IN (${placeholders})
                ORDER BY fo.created_at DESC`,
               [input.ledgerId, ...participantOrderIds]
             );
@@ -15334,7 +15336,7 @@ ${klinesSummary}
                  FROM ledger_orders fo
                  LEFT JOIN users u ON u.id = fo.user_id
                  LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
-                 WHERE fo.ledger_id = ? AND fo.order_role = 'funder' AND fo.deleted_at IS NULL AND (fo.user_id = ? OR fo.id IN (${ph}))
+                 WHERE fo.ledger_id = ? AND fo.deleted_at IS NULL AND lm.role IN (${memberRoleFilter}) AND (fo.user_id = ? OR fo.id IN (${ph}))
                  ORDER BY fo.created_at DESC`,
                 [input.ledgerId, targetUserId, ...targetParticipantOrderIds]
               );
@@ -15344,7 +15346,7 @@ ${klinesSummary}
                  FROM ledger_orders fo
                  LEFT JOIN users u ON u.id = fo.user_id
                  LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
-                 WHERE fo.ledger_id = ? AND fo.order_role = 'funder' AND fo.deleted_at IS NULL AND fo.user_id = ?
+                 WHERE fo.ledger_id = ? AND fo.deleted_at IS NULL AND lm.role IN (${memberRoleFilter}) AND fo.user_id = ?
                  ORDER BY fo.created_at DESC`,
                 [input.ledgerId, targetUserId]
               );
@@ -15355,7 +15357,7 @@ ${klinesSummary}
                   FROM ledger_orders fo
                   LEFT JOIN users u ON u.id = fo.user_id
                   LEFT JOIN ledger_members lm ON lm.ledgerId = fo.ledger_id AND lm.userId = fo.user_id
-                  WHERE fo.ledger_id = ${input.ledgerId} AND fo.order_role = 'funder' AND fo.deleted_at IS NULL
+                  WHERE fo.ledger_id = ${input.ledgerId} AND fo.deleted_at IS NULL AND lm.role IN (${sql.raw(memberRoleFilter)})
                   ORDER BY fo.created_at DESC`
             );
           }
@@ -15486,6 +15488,120 @@ ${klinesSummary}
         }));
         return { orders: ordersWithPaid, livePrices };
       }),
+
+    // 获取本人名下共享担保池数据（用于担保缺口问号弹窗汇总展示）
+    funderGetSharedCollateralPool: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        userId: z.number(),  // 目标用户ID（本人或管理员查看某用户）
+      }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        const isManager = role === 'owner' || role === 'admin';
+        const isSelf = ctx.user.id === input.userId;
+        if (!isManager && !isSelf) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+
+        // 查询该用户名下所有开启了「本人订单共享」的活跃订单
+        const mysql = await import('mysql2/promise');
+        const dbUrl = process.env.ORIGINAL_DATABASE_URL || process.env.DATABASE_URL || 'mysql://root:Miao@20190603@124.223.54.69:3306/crm_db';
+        const parsedUrl = new URL(dbUrl.replace(/^mysql:\/\//, 'http://'));
+        const conn = await mysql.createConnection({
+          host: parsedUrl.hostname,
+          port: parseInt(parsedUrl.port) || 3306,
+          user: decodeURIComponent(parsedUrl.username),
+          password: decodeURIComponent(parsedUrl.password),
+          database: parsedUrl.pathname.replace(/^\//, ''),
+        });
+        try {
+          // 确保字段存在
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS collateral_share_mode VARCHAR(10) DEFAULT 'none'`).catch(() => {});
+
+          // 查询该用户名下所有开启了本人共享的活跃订单
+          const [sharedRows] = await conn.execute(
+            `SELECT fo.id, fo.order_no, fo.coin, fo.amount, fo.interest_base, fo.interest_rate_annual,
+                    fo.interest_start_date, fo.collateral_assets, fo.collateral_share_mode,
+                    fo.interest_base_currency, fo.interest_rate_currency, fo.interest_payment_type
+             FROM ledger_orders fo
+             WHERE fo.ledger_id = ? AND fo.user_id = ? AND fo.status = 'active'
+               AND fo.deleted_at IS NULL AND fo.collateral_share_mode = 'self'`,
+            [input.ledgerId, input.userId]
+          ) as any[];
+          const orders = Array.isArray(sharedRows) ? sharedRows : [];
+
+          // 查询每个订单的已结利息
+          const orderIds = orders.map((o: any) => Number(o.id));
+          let paidMap: Record<number, number> = {};
+          if (orderIds.length > 0) {
+            const placeholders = orderIds.map(() => '?').join(',');
+            const [paidRows] = await conn.execute(
+              `SELECT order_id, SUM(amount) as total_paid FROM ledger_order_payments WHERE order_id IN (${placeholders}) GROUP BY order_id`,
+              orderIds
+            ) as any[];
+            const paidArr = Array.isArray(paidRows) ? paidRows : [];
+            for (const r of paidArr) { paidMap[Number(r.order_id)] = parseFloat(r.total_paid || '0'); }
+          }
+
+          // 获取实时价格
+          const { getLatestPrice } = await import('./price-scanner');
+
+          // 汇总每张订单的担保物价值和担保需求
+          const orderDetails = orders.map((o: any) => {
+            const collateralAssets = (() => { try { return JSON.parse(o.collateral_assets || '[]'); } catch { return []; } })();
+            // 计算担保物总价值（U）
+            let collateralValue = 0;
+            for (const asset of collateralAssets) {
+              const qty = parseFloat(asset.qty) || 0;
+              const coin = (asset.coin || '').toUpperCase();
+              const price = coin === 'USDT' || coin === 'U' ? 1 : (getLatestPrice(coin) || 0);
+              collateralValue += qty * price;
+            }
+            // 计算待结利息（简化：本金 × 年利率 / 365 × 持有天数 - 已结利息）
+            const principal = parseFloat(o.interest_base || o.amount) || 0;
+            const annualRate = parseFloat(o.interest_rate_annual) || 0;
+            const startDate = o.interest_start_date ? new Date(o.interest_start_date) : null;
+            const holdDays = startDate ? Math.floor((Date.now() - startDate.getTime()) / 86400000) : 0;
+            const totalInterest = principal * (annualRate / 100) * holdDays / 365;
+            const paidInterest = paidMap[Number(o.id)] || 0;
+            const pendingInterest = Math.max(0, totalInterest - paidInterest);
+            // 担保需求 = 本金 + 待结利息
+            const collateralRequired = principal + pendingInterest;
+            return {
+              orderId: Number(o.id),
+              orderNo: o.order_no,
+              coin: o.coin,
+              principal,
+              pendingInterest,
+              collateralRequired,
+              collateralValue,
+              collateralGap: collateralValue - collateralRequired,
+              collateralAssets,
+              shareMode: o.collateral_share_mode,
+            };
+          });
+
+          // 汇总共享池总数据
+          const totalCollateralValue = orderDetails.reduce((s: number, o: any) => s + o.collateralValue, 0);
+          const totalCollateralRequired = orderDetails.reduce((s: number, o: any) => s + o.collateralRequired, 0);
+          const totalGap = totalCollateralValue - totalCollateralRequired;
+
+          await conn.end();
+          return {
+            orders: orderDetails,
+            totalCollateralValue,
+            totalCollateralRequired,
+            totalGap,
+            orderCount: orderDetails.length,
+          };
+        } catch (e: any) {
+          await conn.end();
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: e?.message || '查询失败' });
+        }
+      }),
+
     // 获取资方资产汇总（资金方首页用）
     funderGetAssetSummary: protectedProcedure
       .input(z.object({ ledgerId: z.number(), userId: z.number().optional() }))
@@ -15576,6 +15692,7 @@ ${klinesSummary}
         assetType: z.enum(['stock', 'crypto', '']).optional(),
         ownerLabel: z.string().optional(),
         tags: z.array(z.string()).optional(),
+        collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -15607,8 +15724,8 @@ ${klinesSummary}
           if (!exists) isUnique = true;
         }
         const insertResult = await db.execute(
-          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, show_profit_share, commission_share, collateral_assets, lent_out_assets, display_config, asset_type, tags, created_by)
-              VALUES (${orderNo}, ${orderRole}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets && input.lentOutAssets.length > 0 ? JSON.stringify(input.lentOutAssets) : null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${ctx.user.id})`
+          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, show_profit_share, commission_share, collateral_assets, lent_out_assets, display_config, asset_type, tags, collateral_share_mode, created_by)
+              VALUES (${orderNo}, ${orderRole}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets && input.lentOutAssets.length > 0 ? JSON.stringify(input.lentOutAssets) : null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${ctx.user.id})`
         ) as any;
         // 新订单创建后触发即时扫描
         const newOrderId = insertResult?.insertId || (insertResult?.[0] as any)?.insertId;
@@ -15742,7 +15859,7 @@ ${klinesSummary}
 
     // 获取账本中所有资金方用户列表（管理员用）
     funderGetFunderUsers: protectedProcedure
-      .input(z.object({ ledgerId: z.number(), roleFilter: z.enum(["funder", "admin"]).optional() }))
+      .input(z.object({ ledgerId: z.number(), roleFilter: z.enum(["funder", "admin"]).optional(), financeOnly: z.boolean().optional() }))
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
         // 验证管理员权限
@@ -15751,6 +15868,17 @@ ${klinesSummary}
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        if (input.financeOnly) {
+          // 借方模式：只返回账本角色为 member 的用户（普通成员）
+          const rows = await db.execute(
+            sql`SELECT lm.userId, lm.nickname, u.username, u.name, u.avatar
+                FROM ledger_members lm
+                LEFT JOIN users u ON u.id = lm.userId
+                WHERE lm.ledgerId = ${input.ledgerId} AND lm.role = 'member'
+                ORDER BY lm.id ASC`
+          ) as any;
+          return ((rows[0] || rows) as any[]) || [];
+        }
         const rows = await db.execute(
           sql`SELECT lm.userId, lm.nickname, u.username, u.name, u.avatar
               FROM ledger_members lm
@@ -16208,6 +16336,7 @@ ${klinesSummary}
         ownerLabel: z.string().optional(),
         interestRateCurrency: z.string().optional(),
         tags: z.array(z.string()).optional(),
+        collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -16219,7 +16348,7 @@ ${klinesSummary}
         // 自动建表时添加列（如果不存在）
         try {
           const mysql = await import('mysql2/promise');
-          const dbUrl = process.env.DATABASE_URL || '';
+          const dbUrl = process.env.ORIGINAL_DATABASE_URL || process.env.DATABASE_URL || 'mysql://root:Miao@20190603@124.223.54.69:3306/crm_db';
           const parsedUrl = new URL(dbUrl.replace(/^mysql:\/\//, 'http://'));
           const conn = await mysql.createConnection({
             host: parsedUrl.hostname, port: parseInt(parsedUrl.port) || 3306,
@@ -16237,6 +16366,7 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS interest_rate_currency VARCHAR(20) DEFAULT 'USDT'`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS tags TEXT DEFAULT NULL`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS amount_currency VARCHAR(20) DEFAULT NULL`);
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS collateral_share_mode VARCHAR(10) DEFAULT 'none'`).catch(() => {});
           await conn.end();
         } catch(e) {}
         // 生成唯一订单号
@@ -16253,8 +16383,8 @@ ${klinesSummary}
           if (!exists) isUnique = true;
         }
         await db.execute(
-          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, amount_currency, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, collateral_assets, lent_out_assets, show_profit_share, commission_share, display_config, asset_type, owner_label, tags, created_by)
-              VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.amountCurrency || null}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets ? JSON.stringify(input.lentOutAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${ctx.user.id})`
+          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, amount_currency, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, collateral_assets, lent_out_assets, show_profit_share, commission_share, display_config, asset_type, owner_label, tags, collateral_share_mode, created_by)
+              VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.amountCurrency || null}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets ? JSON.stringify(input.lentOutAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${ctx.user.id})`
         );
         return { success: true };
       }),
@@ -16293,6 +16423,7 @@ ${klinesSummary}
         ownerLabel: z.string().optional(),
         interestRateCurrency: z.string().optional(),
         tags: z.array(z.string()).optional(),
+        collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -16319,6 +16450,7 @@ ${klinesSummary}
         if (input.assetType !== undefined) { updateCols.push('asset_type = ?'); updateVals.push(input.assetType || null); }
         if (input.ownerLabel !== undefined) { updateCols.push('owner_label = ?'); updateVals.push(input.ownerLabel || null); }
         if (input.tags !== undefined) { updateCols.push('tags = ?'); updateVals.push(input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null); }
+        if (input.collateralShareMode !== undefined) { updateCols.push('collateral_share_mode = ?'); updateVals.push(input.collateralShareMode || 'none'); }
         // 特殊处理 collateralAssets（JSON 序列化）
         // 判断是否正在清空担保物（collateralAssets 为空数组）
         const isClearingCollateral = input.collateralAssets !== undefined && input.collateralAssets.length === 0;
@@ -16359,7 +16491,7 @@ ${klinesSummary}
         updateVals.push(input.id, input.ledgerId);
         // 使用 mysql2 直接连接执行（用 URL 解析避免密码含 @ 符号的问题）
         const mysql = await import('mysql2/promise');
-        const dbUrl = process.env.DATABASE_URL || '';
+        const dbUrl = process.env.ORIGINAL_DATABASE_URL || process.env.DATABASE_URL || 'mysql://root:Miao@20190603@124.223.54.69:3306/crm_db';
         // 将 mysql:// 替换为 http:// 以使用标准 URL 解析
         const parsedUrl = new URL(dbUrl.replace(/^mysql:\/\//, 'http://'));
         const conn = await mysql.createConnection({
@@ -16380,6 +16512,7 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS tags TEXT DEFAULT NULL`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS settled_at DATETIME DEFAULT NULL`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS lent_out_assets TEXT DEFAULT NULL`);
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS collateral_share_mode VARCHAR(10) DEFAULT 'none'`);
         } catch(e) {}
         try {
                 await conn.execute(`UPDATE ledger_orders SET ${updateCols.join(', ')} WHERE id = ? AND ledger_id = ?`, updateVals);
@@ -16420,7 +16553,7 @@ ${klinesSummary}
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         const mysql = await import('mysql2/promise');
-        const dbUrl = process.env.DATABASE_URL || '';
+        const dbUrl = process.env.ORIGINAL_DATABASE_URL || process.env.DATABASE_URL || 'mysql://root:Miao@20190603@124.223.54.69:3306/crm_db';
         const parsedUrl = new URL(dbUrl.replace(/^mysql:\/\//, 'http://'));
         const conn = await mysql.createConnection({
           host: parsedUrl.hostname,
@@ -16449,7 +16582,7 @@ ${klinesSummary}
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (!role) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         const mysql = await import('mysql2/promise');
-        const dbUrl = process.env.DATABASE_URL || '';
+        const dbUrl = process.env.ORIGINAL_DATABASE_URL || process.env.DATABASE_URL || 'mysql://root:Miao@20190603@124.223.54.69:3306/crm_db';
         const parsedUrl = new URL(dbUrl.replace(/^mysql:\/\//, 'http://'));
         const conn = await mysql.createConnection({
           host: parsedUrl.hostname,

@@ -2,7 +2,6 @@ import { useState, useCallback, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { ChevronLeft } from "lucide-react";
 import FunderManagement from "./FunderManagement";
-import FinanceManagement from "./FinanceManagement";
 export default function FinanceUnified() {
   const [, params] = useRoute("/ledger/:id/finance-unified");
   const [, setLocation] = useLocation();
@@ -85,7 +84,7 @@ export default function FinanceUnified() {
           <FunderManagement ledgerIdProp={ledgerId} hideHeader adminOnly onRecycleBinRef={handleRecycleBinRef} />
         )}
         {activeTab === 'finance' && (
-          <FinanceManagement ledgerIdProp={ledgerId} hideHeader />
+          <FunderManagement ledgerIdProp={ledgerId} hideHeader financeOnly onRecycleBinRef={handleRecycleBinRef} />
         )}
       </div>
     </div>
