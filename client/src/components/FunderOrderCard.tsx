@@ -1162,7 +1162,7 @@ export function FunderOrderCard({
                               totalRequired += oFloatPnlR - Number(o.pendingInterest ?? 0);
                             }
                             const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
-                            const diff = totalColl - totalRequired;
+                            const diff = totalColl + totalRequired; // totalRequired 已带符号（负=缺口，正=盈余）
                             const totalBuyValue = (sharedPoolInfo as any).totalBuyValue ?? 0;
                             const marginRatio = totalBuyValue > 0 ? (diff / totalBuyValue) * 100 : null;
                             // 负数（担保不足）显绿色，正数（担保充足）显红色
@@ -1172,10 +1172,10 @@ export function FunderOrderCard({
                               <>
                                 <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
                                   <div className="font-semibold mb-1" style={{ color: '#374151' }}>③ 总计风险敞口</div>
-                                  <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>担保物合计 − 缺口合计</div>
+                                  <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>担保物合计 + 净缺口合计</div>
                                   <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
                                     {allHaveGap
-                                      ? <>{totalColl.toFixed(2)} − {totalRequired.toFixed(2)} = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} U</span></>
+                                      ? <>{totalColl.toFixed(2)} + ({totalRequired >= 0 ? '+' : ''}{totalRequired.toFixed(2)}) = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} U</span></>
                                       : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
                                   </div>
                                 </div>
