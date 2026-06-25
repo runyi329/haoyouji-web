@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-24
+// 生成时间：2026-06-25
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -7794,5 +7794,30 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-24T11:22:08Z", type: "feat", cleanMessage: "素材库功能 - 上传图片/文件+自然语言触发描述，AI自动判断发送" },
     { date: "2026-06-24T11:37:19Z", type: "fix", cleanMessage: "素材库上传改用腾讯云COS，不再使用Manus内置存储代理" },
     { date: "2026-06-24T11:54:50Z", type: "fix", cleanMessage: "素材库卡片移到AIBrainTab第③层知识库中，修复未显示问题" },
+    { date: "2026-06-24T12:12:15Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-24T12:59:59Z", type: "fix", cleanMessage: "修复素材库AI触发格式，统一标识符并加强指令" },
+    { date: "2026-06-24T13:07:26Z", type: "other", cleanMessage: "debug: 加素材库查询和AI回复日志" },
+    { date: "2026-06-24T13:19:04Z", type: "other", cleanMessage: "debug: 打印素材查询异常和kfChannelId" },
+    { date: "2026-06-24T13:36:22Z", type: "fix", cleanMessage: "加强素材发送指令，增加示例让AI严格遵从[SEND_MAT]标记" },
+    { date: "2026-06-24T13:45:40Z", type: "fix", cleanMessage: "素材发送改为系统层面关键词匹配，不依赖AI加[SEND_MAT]标记" },
+    { date: "2026-06-24T13:51:19Z", type: "other", cleanMessage: "debug: 在素材发送循环前加日志确认数组长度" },
+    { date: "2026-06-24T13:58:42Z", type: "other", cleanMessage: "debug: 在sendKfMaterial每步加详细日志" },
+    { date: "2026-06-24T14:02:57Z", type: "fix", cleanMessage: "WebP转JPG再上传企微，解决40123格式错误" },
+    { date: "2026-06-24T14:08:37Z", type: "fix", cleanMessage: "wecom-materials存JPG格式，sendKfMaterial用绝对路径加载sharp转换WebP" },
+    { date: "2026-06-24T14:37:51Z", type: "fix", cleanMessage: "add /api/wecom/ocr-image endpoint for AI organize image OCR" },
+    { date: "2026-06-24T14:57:36Z", type: "fix", cleanMessage: "OCR接口改为直接调用Forge API，绕过invokeLLM避免参数兼容问题" },
+    { date: "2026-06-24T15:03:10Z", type: "fix", cleanMessage: "修复OCR接口URL拼接错误（BUILT_IN_FORGE_API_URL已含/v1，不应重复拼接）" },
+    { date: "2026-06-24T15:53:41Z", type: "fix", cleanMessage: "OCR识别成功后自动清除图片预览" },
+  ],
+  "2026-06-25": [
+    { date: "2026-06-24T17:54:38Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-24T23:05:12Z", type: "feat", cleanMessage: "开仓时间显示完整北京时间（YY-MM-DD HH:mm:ss）" },
+    { date: "2026-06-24T23:46:59Z", type: "feat", cleanMessage: "A107订单详情优化 - 开仓时间显示时分秒、最低扫描时间显示时分秒、USDT改为u、实际投入+订单价值同行、管理费合并计费区间" },
+    { date: "2026-06-25T00:56:30Z", type: "feat", cleanMessage: "A107/A108 UI improvements - time format, fee layout, byDate/byPerson tabs, forecast cards" },
+    { date: "2026-06-25T04:48:12Z", type: "feat", cleanMessage: "预收管理费功能 - 数据库字段/日志表/API/A108收费入口/订单详情展开/结算逻辑修改" },
+    { date: "2026-06-25T04:54:59Z", type: "fix", cleanMessage: "订单列表空白 - 在查询前幂等建prepaid_fee字段和日志表" },
+    { date: "2026-06-25T05:36:58Z", type: "feat", cleanMessage: "结清按钮改为页面内自定义弹窗，修复iOS WebView confirm问题；MSTR币种加入两侧订单；预收管理费功能" },
+    { date: "2026-06-25T05:46:53Z", type: "fix", cleanMessage: "MSTR加入后端coin枚举，修复添加MSTR订单报invalid_value错误" },
+    { date: "2026-06-25T06:26:21Z", type: "fix", cleanMessage: "新浪财经作为美股价格最后兜底（OKX/Yahoo被墙时自动切换）" },
   ],
 };
