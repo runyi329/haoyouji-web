@@ -1636,12 +1636,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 {/* 担保价值和担保缺口实时预览（始终显示，无担保物时显示 0） */}
                 <div className="rounded-xl px-4 py-3 space-y-1.5" style={{ background: collateralShareMode === 'self' ? '#FFF7ED' : '#EFF6FF', border: collateralShareMode === 'self' ? '1px solid #FED7AA' : 'none' }}>
                     <div className="flex items-center justify-between text-sm">
-                      <span style={{ color: collateralShareMode === 'self' ? '#DC2626' : '#6B7280', fontWeight: collateralShareMode === 'self' ? 600 : 400 }}>{collateralShareMode === 'self' ? '共享担保价值' : '担保价值'}</span>
+                      <span style={{ color: '#6B7280' }}>担保价值</span>
                       <span className="font-semibold text-blue-700">{computedCollateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
                     </div>
                     {computedCollateralGap !== null && (
                       <div className="flex items-center justify-between text-sm">
-                        <span style={{ color: collateralShareMode === 'self' ? '#DC2626' : '#6B7280', fontWeight: collateralShareMode === 'self' ? 600 : 400 }}>{collateralShareMode === 'self' ? '共享担保缺口' : '担保缺口'}</span>
+                        <span style={{ color: '#6B7280' }}>担保缺口</span>
                         <span className={`font-semibold ${
                           computedCollateralGap > 0 ? 'text-red-500' : 'text-green-600'
                         }`}>
@@ -2169,8 +2169,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               })}
                               {displayConfig.collateralValue && (
                                 <div className="flex items-center justify-between mt-0.5">
-                                  <span style={{ color: collateralShareMode === 'self' ? '#DC2626' : '#9CA3AF', fontWeight: collateralShareMode === 'self' ? 600 : 400 }}>{collateralShareMode === 'self' ? '共享担保价值' : (collateralAssets.filter(x => x.coin && x.qty !== '').length > 1 ? '担保价值(合计)' : '担保价值')}</span>
-                                  <span className="font-medium" style={{ color: collateralShareMode === 'self' ? '#DC2626' : '#4B5563' }}>
+                                  <span style={{ color: '#9CA3AF' }}>{collateralAssets.filter(x => x.coin && x.qty !== '').length > 1 ? '担保价值(合计)' : '担保价值'}</span>
+                                  <span className="font-medium" style={{ color: '#4B5563' }}>
                                     {collateralShareMode === 'self' && (sharedPoolData as any)?.totalCollateralValue !== undefined
                                       ? `${((sharedPoolData as any).totalCollateralValue as number).toLocaleString(undefined, { maximumFractionDigits: 0 })} U`
                                       : `${computedCollateralValue.toLocaleString(undefined, { maximumFractionDigits: 0 })} U`}
@@ -2200,7 +2200,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                                   <>
                                   <div className="flex items-center justify-between mt-0.5">
                                     <div className="flex items-center gap-0.5">
-                                      <span style={{ color: isShared ? '#DC2626' : '#9CA3AF', fontWeight: isShared ? 600 : 400 }}>{isShared ? '共享担保缺口' : '担保缺口'}</span>
+                                      <span style={{ color: '#9CA3AF' }}>担保缺口</span>
                                       <button
                                         type="button"
                                         onClick={e => { e.stopPropagation(); setShowPreviewCollateralInfo(true); }}

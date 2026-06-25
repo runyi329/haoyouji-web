@@ -15522,7 +15522,7 @@ ${klinesSummary}
 
           // 查询该用户名下所有开启了本人共享的活跃订单
           const [sharedRows] = await conn.execute(
-            `SELECT fo.id, fo.order_no, fo.coin, fo.amount, fo.interest_base, fo.interest_rate_annual,
+            `SELECT fo.id, fo.order_no, fo.coin, fo.amount, fo.buy_price, fo.buy_quantity, fo.interest_base, fo.interest_rate_annual,
                     fo.interest_start_date, fo.collateral_assets, fo.collateral_share_mode,
                     fo.interest_base_currency, fo.interest_rate_currency, fo.interest_payment_type
              FROM ledger_orders fo
@@ -15548,32 +15548,60 @@ ${klinesSummary}
           // 获取实时价格
           const { getLatestPrice } = await import('./price-scanner');
 
+          console.log('[SharedPool] orders count:', orders.length, orders.map((o: any) => ({ id: o.id, no: o.order_no, raw_assets: o.collateral_assets, type: typeof o.collateral_assets, isBuffer: Buffer.isBuffer(o.collateral_assets) })));
           // 汇总每张订单的担保物价值和担保需求
           const orderDetails = orders.map((o: any) => {
-            const collateralAssets = (() => { try { return JSON.parse(o.collateral_assets || '[]'); } catch { return []; } })();
+            const collateralAssets = (() => { try { const raw = o.collateral_assets; if (Array.isArray(raw)) return raw; if (Buffer.isBuffer(raw)) return JSON.parse(raw.toString('utf8')); if (typeof raw === 'string') return JSON.parse(raw || '[]'); return []; } catch { return []; } })();
             // 计算担保物总价值（U）
             let collateralValue = 0;
             for (const asset of collateralAssets) {
               const qty = parseFloat(asset.qty) || 0;
-              const coin = (asset.coin || '').toUpperCase();
-              const price = coin === 'USDT' || coin === 'U' ? 1 : (getLatestPrice(coin) || 0);
+              const coin = (asset.coin || '').toUpperCase().replace(/\s+/g, '');
+              const isStablecoin = coin === 'USDT' || coin === 'U' || coin === 'USDC' || coin === 'USDT.E' || coin === 'USDC.E' || coin === 'BUSD' || coin === 'DAI';
+              const price = isStablecoin ? 1 : (getLatestPrice(coin) || 0);
               collateralValue += qty * price;
             }
             // 计算待结利息（简化：本金 × 年利率 / 365 × 持有天数 - 已结利息）
-            const principal = parseFloat(o.interest_base || o.amount) || 0;
-            const annualRate = parseFloat(o.interest_rate_annual) || 0;
+            const principal = parseFloat(String(o.interest_base || o.amount || 0)) || 0;
+            const annualRate = parseFloat(String(o.interest_rate_annual || 0)) || 0;
             const startDate = o.interest_start_date ? new Date(o.interest_start_date) : null;
-            const holdDays = startDate ? Math.floor((Date.now() - startDate.getTime()) / 86400000) : 0;
+            // 按北京时间自然日计天，开始当天算1天
+            const holdDays = (() => {
+              if (!startDate) return 0;
+              const bjOffset = 8 * 60 * 60 * 1000;
+              const startBJ = new Date(startDate.getTime() + bjOffset);
+              const nowBJ = new Date(Date.now() + bjOffset);
+              const startDay = Math.floor(startBJ.getTime() / 86400000);
+              const nowDay = Math.floor(nowBJ.getTime() / 86400000);
+              return Math.max(0, nowDay - startDay + 1);
+            })();
             const totalInterest = principal * (annualRate / 100) * holdDays / 365;
             const paidInterest = paidMap[Number(o.id)] || 0;
             const pendingInterest = Math.max(0, totalInterest - paidInterest);
             // 担保需求 = 本金 + 待结利息
             const collateralRequired = principal + pendingInterest;
+            // 计算当前市值（数量 × 实时价）
+            const quantity = parseFloat(String(o.buy_quantity ?? 0)) || 0;
+            const coinUpper = (o.coin || '').toUpperCase().replace(/\s+/g, '');
+            const isStablecoinCoin = coinUpper === 'USDT' || coinUpper === 'U' || coinUpper === 'USDC' || coinUpper === 'BUSD' || coinUpper === 'DAI';
+            const currentPrice = isStablecoinCoin ? 1 : (getLatestPrice(coinUpper) || null);
+            const currentValue = currentPrice !== null ? quantity * currentPrice : null;
+            // 本金亏损：当前市值 < 计息基数时的差小
+            const principalLoss = currentValue !== null ? Math.max(0, principal - currentValue) : null;
+            console.log('[BuyPrice Debug]', o.order_no, 'buy_price raw:', o.buy_price, 'type:', typeof o.buy_price, 'constructor:', o.buy_price?.constructor?.name, 'string:', String(o.buy_price ?? 0));
+            const buyPrice = parseFloat(String(o.buy_price ?? 0)) || 0;
+            const buyValue = buyPrice * quantity;
             return {
               orderId: Number(o.id),
               orderNo: o.order_no,
               coin: o.coin,
+              quantity,
+              buyPrice,
+              buyValue,
               principal,
+              currentPrice,
+              currentValue,
+              principalLoss,
               pendingInterest,
               collateralRequired,
               collateralValue,
@@ -15587,6 +15615,7 @@ ${klinesSummary}
           const totalCollateralValue = orderDetails.reduce((s: number, o: any) => s + o.collateralValue, 0);
           const totalCollateralRequired = orderDetails.reduce((s: number, o: any) => s + o.collateralRequired, 0);
           const totalGap = totalCollateralValue - totalCollateralRequired;
+          const totalBuyValue = orderDetails.reduce((s: number, o: any) => s + (o.buyValue || 0), 0);
 
           await conn.end();
           return {
@@ -15594,6 +15623,7 @@ ${klinesSummary}
             totalCollateralValue,
             totalCollateralRequired,
             totalGap,
+            totalBuyValue,
             orderCount: orderDetails.length,
           };
         } catch (e: any) {

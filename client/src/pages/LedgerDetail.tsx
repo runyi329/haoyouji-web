@@ -5101,6 +5101,8 @@ export default function LedgerDetail() {
                       currentUser={user}
                       membersData={membersData as any[]}
                       isAdmin={isOwner || isAdmin}
+                      onExposureGapChange={handleExposureGapChange}
+                      sharedGapMap={sharedGapMap}
                     />
                   );
                 })}
