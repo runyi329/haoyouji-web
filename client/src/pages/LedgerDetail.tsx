@@ -5057,7 +5057,7 @@ export default function LedgerDetail() {
                       priceDirection={funderPriceDirection}
                       currentUser={user}
                       membersData={membersData as any[]}
-                      isAdmin={isOwner || isAdmin}
+                      isAdmin={false}
                     />
                   );
                 })}
@@ -5082,7 +5082,7 @@ export default function LedgerDetail() {
                       viewMode="large"
                       currentUser={user}
                       membersData={membersData as any[]}
-                      isAdmin={isOwner || isAdmin}
+                      isAdmin={false}
                     />
                   );
                 })}
@@ -5100,7 +5100,7 @@ export default function LedgerDetail() {
                       priceDirection={funderPriceDirection}
                       currentUser={user}
                       membersData={membersData as any[]}
-                      isAdmin={isOwner || isAdmin}
+                      isAdmin={false}
                       onExposureGapChange={handleExposureGapChange}
                       sharedGapMap={sharedGapMap}
                     />
