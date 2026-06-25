@@ -1108,21 +1108,16 @@ router.post("/api/admin/wecom/run-collateral-gap-scan", requireSuperAdmin, async
 
 // POST /api/admin/wecom/test-collateral-gap-send
 // 强制测试发送：不走阈值/新底逻辑，直接取当前保证金比例发一条测试消息
+// 支持两种模式：
+//   1. 已保存记录：传 cfg_id，从数据库读取配置
+//   2. 未保存记录：传 userid + monitor_user_id + order_scope + threshold
 router.post("/api/admin/wecom/test-collateral-gap-send", requireSuperAdmin, async (req: Request, res: Response) => {
   try {
-    const { cfg_id } = req.body;
-    if (!cfg_id) return res.status(400).json({ ok: false, error: "cfg_id 不能为空" });
+    const { cfg_id, userid: bodyUserid, monitor_user_id, order_scope, threshold: bodyThreshold, msgtype: bodyMsgtype } = req.body;
 
     await ensureUserNotifyTable();
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ ok: false, error: "数据库连接失败" });
-
-    // 查询配置记录
-    const [cfgRows] = await (conn as any).execute(
-      `SELECT * FROM wecom_user_notify_config WHERE id = ?`, [cfg_id]
-    ) as any;
-    if (!(cfgRows as any[]).length) return res.status(404).json({ ok: false, error: "配置记录不存在" });
-    const cfg = (cfgRows as any[])[0];
 
     // 获取企业微信基础配置
     const [cfgBase] = await (conn as any).execute(
@@ -1134,13 +1129,41 @@ router.post("/api/admin/wecom/test-collateral-gap-send", requireSuperAdmin, asyn
       return res.status(400).json({ ok: false, error: "企微基础配置不完整（缺少 corpid/corpsecret/agentid）" });
     }
 
+    // 确定配置参数：优先用 cfg_id 查询，如果没有则用前端直接传入的参数
+    let cfgUserid: string;
+    let cfgMonitorUserId: number | null;
+    let cfgOrderScope: string;
+    let cfgThreshold: string;
+    let cfgMsgtype: string;
+
+    if (cfg_id) {
+      const [cfgRows] = await (conn as any).execute(
+        `SELECT * FROM wecom_user_notify_config WHERE id = ?`, [cfg_id]
+      ) as any;
+      if (!(cfgRows as any[]).length) return res.status(404).json({ ok: false, error: "配置记录不存在" });
+      const cfg = (cfgRows as any[])[0];
+      cfgUserid = cfg.userid;
+      cfgMonitorUserId = cfg.monitor_user_id || null;
+      cfgOrderScope = cfg.order_scope || "all";
+      cfgThreshold = cfg.threshold || "";
+      cfgMsgtype = cfg.msgtype || "text";
+    } else {
+      // 未保存模式：直接用前端传入的参数
+      if (!bodyUserid) return res.status(400).json({ ok: false, error: "cfg_id 和 userid 至少传其中一个" });
+      cfgUserid = bodyUserid;
+      cfgMonitorUserId = monitor_user_id ? Number(monitor_user_id) : null;
+      cfgOrderScope = order_scope || "all";
+      cfgThreshold = bodyThreshold || "";
+      cfgMsgtype = bodyMsgtype || "text";
+    }
+
     // 计算当前保证金比例（不走阈值判断）
     let orderIds: number[] | null = null;
-    if (cfg.order_scope && cfg.order_scope !== "all") {
-      try { orderIds = JSON.parse(cfg.order_scope); } catch {}
+    if (cfgOrderScope && cfgOrderScope !== "all") {
+      try { orderIds = JSON.parse(cfgOrderScope); } catch {}
     }
     const { ratio, totalGap, totalBuyValue, orderCount } = await calcCollateralRatio(
-      conn, orderIds, cfg.monitor_user_id || null, "all"
+      conn, orderIds, cfgMonitorUserId, "all"
     );
 
     // 拼装测试消息
@@ -1151,20 +1174,20 @@ router.post("/api/admin/wecom/test-collateral-gap-send", requireSuperAdmin, asyn
 风险敞口：${totalGap.toFixed(2)}U
 总买入价值：${totalBuyValue.toFixed(2)}U
 订单数量：${orderCount} 张
-预警阈值：${cfg.threshold || "未设置"}%
+预警阈值：${cfgThreshold || "未设置"}%
 时间：${timeStr}`;
 
     // 强制发送（不走任何判断逻辑）
-    await sendWecomMessage(wecomCfg, cfg.userid, cfg.msgtype || "text", content);
+    await sendWecomMessage(wecomCfg, cfgUserid, cfgMsgtype, content);
 
     return res.json({
       ok: true,
-      userid: cfg.userid,
+      userid: cfgUserid,
       ratio: ratio !== null ? parseFloat(ratio.toFixed(2)) : null,
       totalGap: parseFloat(totalGap.toFixed(2)),
       totalBuyValue: parseFloat(totalBuyValue.toFixed(2)),
       orderCount,
-      message: `测试消息已发送给 ${cfg.userid}，当前比例=${ratioStr}%`,
+      message: `测试消息已发送给 ${cfgUserid}，当前比例=${ratioStr}%`,
     });
   } catch (e: any) {
     return res.status(500).json({ ok: false, error: e.message });

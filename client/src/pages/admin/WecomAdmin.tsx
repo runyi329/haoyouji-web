@@ -7576,11 +7576,21 @@ function NotifyTab() {
     try {
       // 担保缺口预警：使用强制测试发送 API（不走阈值/新底逻辑，直接取当前保证金比例）
       const notifyKey = rec.notify_key || editingKey;
-      if (notifyKey === "fz_notify_collateral_gap" && rec.id) {
+      if (notifyKey === "fz_notify_collateral_gap") {
+        // 已保存记录用 cfg_id，未保存记录直接传参数
+        const body = rec.id
+          ? { cfg_id: rec.id }
+          : {
+              userid: selectedUser?.userid,
+              monitor_user_id: rec.monitor_user_id || null,
+              order_scope: rec.order_scope || "all",
+              threshold: rec.threshold || "",
+              msgtype: rec.msgtype || "text",
+            };
         const r = await fetch("/api/admin/wecom/test-collateral-gap-send", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` },
-          body: JSON.stringify({ cfg_id: rec.id }),
+          body: JSON.stringify(body),
         });
         const d = await r.json();
         if (d.ok) {
