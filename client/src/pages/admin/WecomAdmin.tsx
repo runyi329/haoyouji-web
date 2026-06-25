@@ -7318,7 +7318,7 @@ function NotifyTab() {
       .then(r => r.json())
       .then(d => {
         if (d.users) {
-          setMembers(d.users.map((u: any) => ({ userid: u.wecom_user_id, name: u.wecom_user_id })));
+          setMembers(d.users.map((u: any) => ({ userid: u.userid, name: u.name || u.userid })));
         }
       })
       .catch(() => {})
