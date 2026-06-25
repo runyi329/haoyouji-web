@@ -6500,6 +6500,7 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
         </div>
       </div>
 
+
       {/* 操作按钮 */}
       <div className="grid grid-cols-3 gap-2">
         <button
@@ -7280,199 +7281,845 @@ function DocsTab() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 通知平台 Tab
+// 通知平台 Tab（用户维度）
 // ═══════════════════════════════════════════════════════════════════════════════
+
+interface UserNotifyItemConfig {
+  enabled: boolean;
+  msgtype: "text" | "markdown" | "textcard";
+  content: string;
+  card_title?: string;
+  card_url?: string;
+  threshold?: string;
+  advance_days?: string;
+  order_scope?: string; // "all" 或 JSON 数组字符串，如 "[1,2,3]"
+  alert_mode?: string; // 发送频率："new_low_24h" | "cooldown_1h" | "cooldown_4h" | "cooldown_24h" | "always"
+}
+
+const NOTIFY_ITEM_DEFAULTS: Record<string, UserNotifyItemConfig> = {
+  fz_notify_collateral_gap: {
+    enabled: false,
+    msgtype: "text",
+    content: "【融资付息·担保缺口预警】\n您的订单 #{order_id}（{coin}）当前担保缺口为 {gap_amount} U，已超过预警阈值 {threshold} U，请及时补充担保。\n时间：{time}",
+    threshold: "500",
+  },
+  fz_notify_interest_due: {
+    enabled: false,
+    msgtype: "text",
+    content: "【融资付息·结息提醒】\n您的订单 #{order_id}（{coin}）将于 {due_date} 结息，应付利息约 {interest} U，请提前准备资金。",
+    advance_days: "3",
+  },
+  fz_notify_order_created: {
+    enabled: false,
+    msgtype: "text",
+    content: "【融资付息·新订单通知】\n您有一笔新的融资付息订单已创建：\n订单号：#{order_id}\n币种：{coin}\n金额：{amount} U\n年化利率：{rate}%\n请登录好友记查看详情。",
+  },
+  fz_notify_order_settled: {
+    enabled: false,
+    msgtype: "text",
+    content: "【融资付息·订单结清通知】\n您的订单 #{order_id}（{coin}）已结清。\n本金：{principal} U\n累计利息：{total_interest} U\n感谢您的信任！",
+  },
+  fz_notify_price_drop: {
+    enabled: false,
+    msgtype: "text",
+    content: "【融资付息·价格下跌预警】\n{coin} 当前价格 {price} U，较买入价 {ref_price} U 下跌 {drop_pct}%，请关注担保风险。\n时间：{time}",
+    threshold: "10",
+  },
+};
+
+const NOTIFY_ITEMS_META2 = [
+  { key: "fz_notify_collateral_gap", label: "融资付息 · 担保缺口预警", desc: "融资付息：付息订单担保缺口超过阈值时推送", extraFields: ["threshold"] },
+  { key: "fz_notify_interest_due", label: "结息提醒", desc: "融资付息：结息日前 N 天提前提醒资方", extraFields: ["advance_days"] },
+  { key: "fz_notify_order_created", label: "新订单通知", desc: "融资付息：新建付息订单时通知对应资方", extraFields: [] },
+  { key: "fz_notify_order_settled", label: "订单结清通知", desc: "融资付息：付息订单结清时通知资方", extraFields: [] },
+  { key: "fz_notify_price_drop", label: "价格下跌预警", desc: "融资付息：持仓币种跌幅超过设定值时推送", extraFields: ["threshold"] },
+];
+
+const NOTIFY_VARS: Record<string, string> = {
+  fz_notify_collateral_gap: "{order_id} {coin} {gap_amount} {threshold} {time}",
+  fz_notify_interest_due: "{order_id} {coin} {due_date} {interest}",
+  fz_notify_order_created: "{order_id} {coin} {amount} {rate}",
+  fz_notify_order_settled: "{order_id} {coin} {principal} {total_interest}",
+  fz_notify_price_drop: "{coin} {price} {ref_price} {drop_pct} {time}",
+};
+
 function NotifyTab() {
-  const [cfg, setCfg] = useState<Record<string, any>>({
+  // 企业成员列表
+  const [members, setMembers] = useState<{ userid: string; name: string }[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+
+  // 用户搜索
+  const [userSearch, setUserSearch] = useState("");
+  const [userDropOpen, setUserDropOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<{ userid: string; name: string } | null>(null);
+
+  // 当前用户的通知配置（多条记录，按 notify_key 分组）
+  const [notifyRecords, setNotifyRecords] = useState<Record<string, any[]>>({});
+  const [loadingCfg, setLoadingCfg] = useState(false);
+
+  // 展开的通知项 key
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+
+  // 编辑中的记录（id=null 表示新增）
+  const [editingRecord, setEditingRecord] = useState<any | null>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+
+  // 保存/测试/删除状态
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  // 融资付息订单列表（供订单范围选择）
+  const [afOrders, setAfOrders] = useState<{ id: number; label: string; coin: string; order_no?: string; collateral_share_mode?: string; amount?: string }[]>([]);
+  const [afUsers, setAfUsers] = useState<{ id: number; username: string; name: string; label: string; display_label?: string; ledger_role?: string; active_order_count?: number }[]>([]);
+  const [selectedOrderUserId, setSelectedOrderUserId] = useState<number | null>(null);
+  const [orderUserSearch, setOrderUserSearch] = useState("");
+  const [orderUserDropOpen, setOrderUserDropOpen] = useState(false);
+  const [loadingOrderUsers, setLoadingOrderUsers] = useState(false);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  const [orderSearchText, setOrderSearchText] = useState("");
+
+  // 基础配置折叠
+  const [showBaseCfg, setShowBaseCfg] = useState(false);
+  const [baseCfg, setBaseCfg] = useState({
     corpid: "wwbbaccf1da5f886d9",
     corpsecret: "3-XQAnU8_8iKPA74O6_Gw3YQPdOIA2nIv4ILXpxcZ2g",
     agentid: "1000002",
   });
-  const [saving, setSaving] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [testUser, setTestUser] = useState("");
-  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
-  const [members, setMembers] = useState<{ userid: string; name: string }[]>([]);
-  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [savingBase, setSavingBase] = useState(false);
 
-  const notifyItems = [
-    { key: "notify_collateral_gap", label: "担保缺口预警", desc: "订单担保缺口超过阈值时推送给资方" },
-    { key: "notify_interest_due", label: "结息提醒", desc: "结息日前 N 天提醒用户" },
-    { key: "notify_order_created", label: "新订单通知", desc: "管理员创建订单后通知对应用户" },
-    { key: "notify_order_settled", label: "订单结清通知", desc: "订单结清时通知用户" },
-    { key: "notify_price_drop", label: "价格大幅下跌预警", desc: "某币种跌幅超过设定值时推送风险提示" },
-  ];
-
+  // 加载融资付息用户列表
   useEffect(() => {
-    fetch("/api/admin/wecom/notify-config", {
+    setLoadingOrderUsers(true);
+    fetch("/api/admin/wecom/af-users-list", {
       headers: { Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` }
     })
       .then(r => r.json())
-      .then(d => { if (d.ok) setCfg(d.config || {}); })
-      .catch(() => {});
-    // 加载企业微信成员列表（复用已有接口）
+      .then(d => {
+        if (d.ok && d.users) setAfUsers(d.users);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingOrderUsers(false));
+  }, []);
+
+  // 选中用户后加载该用户订单
+  const loadOrdersForUser = (userId: number) => {
+    setSelectedOrderUserId(userId);
+    setAfOrders([]);
+    setLoadingOrders(true);
+    fetch(`/api/admin/wecom/af-orders-list?userId=${userId}`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` }
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok && d.orders) setAfOrders(d.orders);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingOrders(false));
+  };
+
+  // 加载企业成员
+  useEffect(() => {
     setLoadingMembers(true);
     fetch("/api/wecom/wecom-users", {
       headers: { Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` }
     })
       .then(r => r.json())
       .then(d => {
-        if (d.users) {
-          setMembers(d.users.map((u: any) => ({ userid: u.userid, name: u.name || u.userid })));
+        const realUsers = d.users ? d.users.map((u: any) => ({ userid: u.userid, name: u.name || u.userid })) : [];
+        // IP不在白名单时（开发环境）追加模拟用户供UI预览
+        if (realUsers.length === 0) {
+          setMembers([{ userid: "mock_user_001", name: "模拟成员（预览用）" }]);
+        } else {
+          setMembers(realUsers);
         }
       })
-      .catch(() => {})
+      .catch(() => {
+        setMembers([{ userid: "mock_user_001", name: "模拟成员（预览用）" }]);
+      })
       .finally(() => setLoadingMembers(false));
   }, []);
 
-  const handleSave = async () => {
-    setSaving(true); setMsg(null);
+  // 加载基础配置
+  useEffect(() => {
+    fetch("/api/admin/wecom/notify-config", {
+      headers: { Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` }
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok && d.config) {
+          setBaseCfg(prev => ({ ...prev, ...d.config }));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // 加载某用户的通知配置（多条记录）
+  const loadUserCfg = (userid: string) => {
+    setLoadingCfg(true);
+    setNotifyRecords({});
+    setExpandedKey(null);
+    setEditingRecord(null);
+    setEditingKey(null);
+    setMsg(null);
+    fetch(`/api/admin/wecom/user-notify-config?userid=${encodeURIComponent(userid)}`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` }
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok) {
+          setNotifyRecords(d.records || {});
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingCfg(false));
+  };
+
+  const handleSelectUser = (u: { userid: string; name: string }) => {
+    setSelectedUser(u);
+    setUserSearch("");
+    setUserDropOpen(false);
+    loadUserCfg(u.userid);
+  };
+
+  // 开始新增一条记录
+  const handleAddRecord = (key: string) => {
+    const def = NOTIFY_ITEM_DEFAULTS[key] || { enabled: true, msgtype: "text", content: "", threshold: "", advance_days: "", order_scope: "all" };
+    setEditingKey(key);
+    setEditingRecord({ id: null, notify_key: key, label: "", enabled: true, msgtype: def.msgtype, content: def.content || "", card_title: "", card_url: "", threshold: def.threshold || "", advance_days: def.advance_days || "", order_scope: "all", monitor_user_id: null, monitor_user_name: "" });
+    setExpandedKey(key);
+    setSelectedOrderUserId(null);
+    setAfOrders([]);
+  };
+
+  // 开始编辑某条记录
+  const handleEditRecord = (rec: any) => {
+    setEditingKey(rec.notify_key);
+    setEditingRecord({ ...rec });
+    setExpandedKey(rec.notify_key);
+    // 如果有 monitor_user_id，加载该用户的订单
+    if (rec.monitor_user_id) {
+      loadOrdersForUser(rec.monitor_user_id);
+    }
+  };
+
+  // 保存记录（新增或更新）
+  const handleSaveRecord = async () => {
+    if (!selectedUser || !editingRecord) return;
+    const sid = editingRecord.id ? String(editingRecord.id) : "new";
+    setSavingId(sid);
+    setMsg(null);
+    try {
+      let r;
+      if (editingRecord.id) {
+        // 更新
+        r = await fetch(`/api/admin/wecom/user-notify-config/${editingRecord.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` },
+          body: JSON.stringify(editingRecord),
+        });
+      } else {
+        // 新增
+        r = await fetch("/api/admin/wecom/user-notify-config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` },
+          body: JSON.stringify({ userid: selectedUser.userid, ...editingRecord }),
+        });
+      }
+      const d = await r.json();
+      if (d.ok) {
+        setMsg({ type: "ok", text: "配置已保存" });
+        setEditingRecord(null);
+        setEditingKey(null);
+        loadUserCfg(selectedUser.userid);
+      } else {
+        setMsg({ type: "err", text: d.error || "保存失败" });
+      }
+    } catch (e: any) {
+      setMsg({ type: "err", text: e.message });
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  // 删除记录
+  const handleDeleteRecord = async (id: number, key: string) => {
+    if (!confirm("确定删除这条通知配置？")) return;
+    setDeletingId(id);
+    setMsg(null);
+    try {
+      const r = await fetch(`/api/admin/wecom/user-notify-config/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` },
+      });
+      const d = await r.json();
+      if (d.ok) {
+        setMsg({ type: "ok", text: "已删除" });
+        if (selectedUser) loadUserCfg(selectedUser.userid);
+      } else {
+        setMsg({ type: "err", text: d.error || "删除失败" });
+      }
+    } catch (e: any) {
+      setMsg({ type: "err", text: e.message });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // 测试发送
+  const handleTestRecord = async (rec: any) => {
+    if (!selectedUser) return;
+    const tid = rec.id ? String(rec.id) : "new";
+    setTestingId(tid);
+    setMsg(null);
+    try {
+      // 担保缺口预警：使用强制测试发送 API（不走阈值/新底逻辑，直接取当前保证金比例）
+      if (editingKey === "fz_notify_collateral_gap" && rec.id) {
+        const r = await fetch("/api/admin/wecom/test-collateral-gap-send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` },
+          body: JSON.stringify({ cfg_id: rec.id }),
+        });
+        const d = await r.json();
+        if (d.ok) {
+          setMsg({ type: "ok", text: `测试消息已发送！当前保证金比例：${d.ratio !== null ? d.ratio + "%" : "N/A"}，风险敞口：${d.totalGap}U，订单数：${d.orderCount}张` });
+        } else {
+          setMsg({ type: "err", text: d.error || "发送失败" });
+        }
+        return;
+      }
+      // 其他通知类型：发送模板内容
+      const r = await fetch("/api/admin/wecom/user-notify-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` },
+        body: JSON.stringify({
+          userid: selectedUser.userid,
+          msgtype: rec.msgtype,
+          content: rec.content,
+          card_title: rec.card_title,
+          card_url: rec.card_url,
+        }),
+      });
+      const d = await r.json();
+      setMsg(d.ok ? { type: "ok", text: d.msg || "发送成功" } : { type: "err", text: d.error || "发送失败" });
+    } catch (e: any) {
+      setMsg({ type: "err", text: e.message });
+    } finally {
+      setTestingId(null);
+    }
+  };
+
+  // 保存基础配置
+  const handleSaveBase = async () => {
+    setSavingBase(true);
+    setMsg(null);
     try {
       const r = await fetch("/api/admin/wecom/notify-config", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` },
-        body: JSON.stringify(cfg)
+        body: JSON.stringify(baseCfg),
       });
       const d = await r.json();
-      setMsg(d.ok ? { type: "ok", text: "配置已保存" } : { type: "err", text: d.error || "保存失败" });
-    } catch (e: any) { setMsg({ type: "err", text: e.message }); }
-    finally { setSaving(false); }
+      setMsg(d.ok ? { type: "ok", text: "基础配置已保存" } : { type: "err", text: d.error || "保存失败" });
+    } catch (e: any) {
+      setMsg({ type: "err", text: e.message });
+    } finally {
+      setSavingBase(false);
+    }
   };
 
-  const handleTest = async () => {
-    setTesting(true); setMsg(null);
-    try {
-      const r = await fetch("/api/admin/wecom/notify-test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` },
-        body: JSON.stringify({ touser: testUser || cfg.test_touser || "@all" })
-      });
-      const d = await r.json();
-      setMsg(d.ok ? { type: "ok", text: d.msg || "发送成功" } : { type: "err", text: d.error || "发送失败" });
-    } catch (e: any) { setMsg({ type: "err", text: e.message }); }
-    finally { setTesting(false); }
-  };
+  const filteredMembers = members.filter(m =>
+    !userSearch || m.name.toLowerCase().includes(userSearch.toLowerCase()) || m.userid.toLowerCase().includes(userSearch.toLowerCase())
+  );
 
-  const set = (key: string, val: any) => setCfg(prev => ({ ...prev, [key]: val }));
+  // 渲染编辑表单（新增或编辑某条记录）
+  const renderEditForm = (key: string) => {
+    if (!editingRecord || editingKey !== key) return null;
+    const meta = NOTIFY_ITEMS_META2.find(m => m.key === key)!;
+    const scope = editingRecord.order_scope || "all";
+    let selectedIds: number[] = [];
+    try { selectedIds = JSON.parse(scope); } catch {}
+    const selectedOrderUser = afUsers.find(u => u.id === selectedOrderUserId);
+    const filteredOrderUsers = afUsers.filter(u =>
+      !orderUserSearch || (u.display_label || u.label).toLowerCase().includes(orderUserSearch.toLowerCase())
+    );
+    const filteredOrders = afOrders.filter(o =>
+      !orderSearchText || o.label.toLowerCase().includes(orderSearchText.toLowerCase())
+    );
+    // 共享订单和非共享订单分组
+    const sharedOrders = filteredOrders.filter(o => o.collateral_share_mode === "self");
+    const normalOrders = filteredOrders.filter(o => o.collateral_share_mode !== "self");
 
-  return (
-    <div className="px-4 py-4 space-y-4">
-      <div className="flex items-center gap-2 mb-2">
-        <Bell className="w-5 h-5 text-blue-600" />
-        <h2 className="text-base font-bold text-gray-800">企业微信通知平台</h2>
-      </div>
-
-      {/* 基础配置 */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-3">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">基础配置</p>
-        {[
-          { key: "corpid", label: "企业 ID（corpid）", placeholder: "ww开头的企业ID" },
-          { key: "corpsecret", label: "应用 Secret（corpsecret）", placeholder: "应用的 Secret" },
-          { key: "agentid", label: "应用 AgentID", placeholder: "应用的 agentid，如 1000002" },
-        ].map(({ key, label, placeholder }) => (
-          <div key={key}>
-            <label className="text-xs text-gray-500 mb-1 block">{label}</label>
-            <input
-              type="text"
-              value={cfg[key] || ""}
-              onChange={e => set(key, e.target.value)}
-              placeholder={placeholder}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-            />
-          </div>
-        ))}
-        {/* 默认推送对象下拉框 */}
+    return (
+      <div className="mt-3 bg-blue-50 rounded-xl border border-blue-100 px-4 py-4 space-y-4">
+        {/* 备注名称 */}
         <div>
-          <label className="text-xs text-gray-500 mb-1 block">默认推送对象</label>
-          <select
-            value={cfg.test_touser || ""}
-            onChange={e => set("test_touser", e.target.value)}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-          >
-            <option value="">-- 选择成员 --</option>
-            <option value="@all">@all（全员）</option>
-            {loadingMembers ? (
-              <option disabled>加载中...</option>
-            ) : members.map(m => (
-              <option key={m.userid} value={m.userid}>{m.name}（{m.userid}）</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* 通知开关 */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-3">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">通知开关</p>
-        {notifyItems.map(({ key, label, desc }) => (
-          <div key={key} className="flex items-center justify-between py-1">
-            <div>
-              <p className="text-sm font-medium text-gray-800">{label}</p>
-              <p className="text-xs text-gray-400">{desc}</p>
-            </div>
-            <button
-              onClick={() => set(key, !cfg[key])}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${cfg[key] ? "bg-blue-500" : "bg-gray-200"}`}
-            >
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${cfg[key] ? "translate-x-6" : "translate-x-1"}`} />
-            </button>
-          </div>
-        ))}
-      </div>
-
-      {/* 担保缺口阈值 */}
-      {cfg.notify_collateral_gap && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-          <label className="text-xs text-gray-500 mb-1 block">担保缺口预警阈值（U）</label>
+          <label className="text-xs text-gray-500 mb-1 block">备注名称（可选，方便识别）</label>
           <input
-            type="number"
-            value={cfg.collateral_gap_threshold || ""}
-            onChange={e => set("collateral_gap_threshold", e.target.value)}
-            placeholder="如 500，缺口绝对值超过此值时推送"
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+            placeholder="如：监控大饼江湖的共享担保订单"
+            value={editingRecord.label || ""}
+            onChange={e => setEditingRecord((p: any) => ({ ...p, label: e.target.value }))}
           />
         </div>
-      )}
 
-      {/* 保存 */}
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        className="w-full bg-blue-600 text-white rounded-xl py-3 text-sm font-semibold disabled:opacity-50"
-      >
-        {saving ? "保存中..." : "保存配置"}
-      </button>
+        {/* 第一步：监控对象（仅融资付息类通知） */}
+        {key.startsWith("fz_") && (
+          <div>
+            <p className="text-xs font-semibold text-gray-600 mb-2">第一步：选择监控对象</p>
 
-      {/* 测试发送 */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-3">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">测试发送</p>
+            {/* 选择用户 */}
+            <div className="relative mb-2">
+              <label className="text-xs text-gray-400 mb-1 block">账本 52 号用户（有融资付息订单）</label>
+              <div
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white cursor-pointer flex items-center justify-between"
+                onClick={() => setOrderUserDropOpen(v => !v)}
+              >
+                <span className={selectedOrderUser ? "text-gray-800" : "text-gray-400"}>
+                  {selectedOrderUser ? (selectedOrderUser.display_label || selectedOrderUser.label) : (loadingOrderUsers ? "加载中..." : "搜索并选择用户...")}
+                </span>
+                <ChevronDown className="w-4 h-4 text-gray-400" />
+              </div>
+              {orderUserDropOpen && (
+                <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+                  <div className="p-2 border-b border-gray-100">
+                    <input
+                      autoFocus
+                      className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm"
+                      placeholder="搜索用户..."
+                      value={orderUserSearch}
+                      onChange={e => setOrderUserSearch(e.target.value)}
+                    />
+                  </div>
+                  {filteredOrderUsers.length === 0 ? (
+                    <div className="px-4 py-3 text-sm text-gray-400">无匹配用户</div>
+                  ) : filteredOrderUsers.map(u => (
+                    <div
+                      key={u.id}
+                      className="px-4 py-2.5 text-sm hover:bg-blue-50 cursor-pointer"
+                      onClick={() => { loadOrdersForUser(u.id); setEditingRecord((p: any) => ({ ...p, monitor_user_id: u.id, monitor_user_name: u.name || u.username })); setOrderUserDropOpen(false); setOrderUserSearch(""); }}
+                    >
+                      {u.display_label || u.label}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 选择订单范围 */}
+            {selectedOrderUserId && (
+              <div>
+                <label className="text-xs text-gray-400 mb-1 block">订单范围</label>
+                <div className="flex gap-3 mb-2">
+                  {["all", "specific"].map(v => (
+                    <label key={v} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                      <input
+                        type="radio"
+                        name={`scope_${key}`}
+                        checked={(v === "all" ? (scope === "all") : (scope !== "all"))}
+                        onChange={() => setEditingRecord((p: any) => ({ ...p, order_scope: v === "all" ? "all" : "[]" }))}
+                      />
+                      {v === "all" ? "该用户全部订单" : "指定订单"}
+                    </label>
+                  ))}
+                </div>
+
+                {scope !== "all" && (
+                  <div>
+                    <div className="mb-2">
+                      <input
+                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white"
+                        placeholder="搜索订单..."
+                        value={orderSearchText}
+                        onChange={e => setOrderSearchText(e.target.value)}
+                      />
+                    </div>
+                    {loadingOrders ? (
+                      <div className="text-sm text-gray-400 py-2">加载订单中...</div>
+                    ) : filteredOrders.length === 0 ? (
+                      <div className="text-sm text-gray-400 py-2">该用户无活跃订单</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {/* 共享担保金订单：作为整体一行选项，不逐条展开 */}
+                        {sharedOrders.length > 0 && (() => {
+                          const allSharedIds = sharedOrders.map(o => o.id);
+                          const allSelected = allSharedIds.every(id => selectedIds.includes(id));
+                          return (
+                            <label className="flex items-center gap-2 px-3 py-2 rounded-lg bg-orange-50 hover:bg-orange-100 cursor-pointer border border-orange-200">
+                              <input
+                                type="checkbox"
+                                checked={allSelected}
+                                onChange={() => {
+                                  const newIds = allSelected
+                                    ? selectedIds.filter(id => !allSharedIds.includes(id))
+                                    : [...new Set([...selectedIds, ...allSharedIds])];
+                                  setEditingRecord((p: any) => ({ ...p, order_scope: JSON.stringify(newIds) }));
+                                }}
+                              />
+                              <span className="text-sm font-medium text-orange-700">共享担保金订单（共 {sharedOrders.length} 张）</span>
+                            </label>
+                          );
+                        })()}
+                        {/* 独立担保金订单 */}
+                        {normalOrders.length > 0 && (
+                          <div>
+                            <div className="bg-gray-50 rounded-lg px-3 py-2 mb-1">
+                              <span className="text-xs font-semibold text-gray-600">独立担保金订单（共 {normalOrders.length} 张）</span>
+                            </div>
+                            {normalOrders.map(o => (
+                              <label key={o.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer ml-2">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedIds.includes(o.id)}
+                                  onChange={() => {
+                                    const newIds = selectedIds.includes(o.id)
+                                      ? selectedIds.filter(id => id !== o.id)
+                                      : [...selectedIds, o.id];
+                                    setEditingRecord((p: any) => ({ ...p, order_scope: JSON.stringify(newIds) }));
+                                  }}
+                                />
+                                <span className="text-sm text-gray-700">{o.label}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                        {selectedIds.length > 0 && (
+                          <p className="text-xs text-blue-600 px-1">已选 {selectedIds.length} 个订单</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 附加参数（阈值 / 提前天数） */}
+        {meta.extraFields?.includes("threshold") && (
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">预警阈值（%）</label>
+            <input
+              type="number"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+              placeholder="如：20（表示担保缺口低于20%时触发）"
+              value={editingRecord.threshold || ""}
+              onChange={e => setEditingRecord((p: any) => ({ ...p, threshold: e.target.value }))}
+            />
+          </div>
+        )}
+        {meta.extraFields?.includes("threshold") && (
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">发送频率</label>
+            <select
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+              value={editingRecord.alert_mode || "new_low_24h"}
+              onChange={e => setEditingRecord((p: any) => ({ ...p, alert_mode: e.target.value }))}
+            >
+              <option value="new_low_24h">新底预警·24h重置（推荐）跌破阈值后，只在跌破新低时再次预警，24小时后重置</option>
+              <option value="cooldown_1h">冷却1小时：触发后1小时内不重复发送</option>
+              <option value="cooldown_4h">冷却4小时：触发后4小时内不重复发送</option>
+              <option value="cooldown_24h">冷却24小时：触发后24小时内不重复发送</option>
+              <option value="always">每次触发都发（无限制，适合测试）</option>
+            </select>
+            {(editingRecord.alert_mode === "new_low_24h" || !editingRecord.alert_mode) && (
+              <p className="text-xs text-gray-400 mt-1">例：阈值20%，跌破20%发一次，继续跌破19%再发，18%再发；24小时后重置，下次跌破20%重新触发</p>
+            )}
+          </div>
+        )}
+        {meta.extraFields?.includes("advance_days") && (
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">提前提醒天数</label>
+            <input
+              type="number"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+              placeholder="如：3（结息日前3天提醒）"
+              value={editingRecord.advance_days || ""}
+              onChange={e => setEditingRecord((p: any) => ({ ...p, advance_days: e.target.value }))}
+            />
+          </div>
+        )}
+
+        {/* 消息格式 */}
         <div>
-          <label className="text-xs text-gray-500 mb-1 block">发送对象（留空则用默认推送对象）</label>
-          <select
-            value={testUser}
-            onChange={e => setTestUser(e.target.value)}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-          >
-            <option value="">-- 使用默认推送对象 --</option>
-            {members.map(m => (
-              <option key={m.userid} value={m.userid}>{m.name}（{m.userid}）</option>
+          <label className="text-xs text-gray-500 mb-1 block">消息格式</label>
+          <div className="flex gap-3">
+            {(["text", "markdown", "textcard"] as const).map(t => (
+              <label key={t} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                <input
+                  type="radio"
+                  name={`msgtype_edit_${key}`}
+                  checked={editingRecord.msgtype === t}
+                  onChange={() => setEditingRecord((p: any) => ({ ...p, msgtype: t }))}
+                />
+                {t === "text" ? "纯文本" : t === "markdown" ? "Markdown" : "卡片"}
+              </label>
             ))}
-          </select>
+          </div>
         </div>
-        <button
-          onClick={handleTest}
-          disabled={testing}
-          className="w-full bg-green-600 text-white rounded-xl py-3 text-sm font-semibold disabled:opacity-50"
-        >
-          {testing ? "发送中..." : "发送测试消息"}
-        </button>
-      </div>
 
-      {/* 结果提示 */}
+        {/* 消息内容 */}
+        <div>
+          <label className="text-xs text-gray-500 mb-1 block">
+            消息内容
+            {NOTIFY_VARS[key] && <span className="ml-2 text-gray-400">可用变量：{NOTIFY_VARS[key]}</span>}
+          </label>
+          <textarea
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white resize-none"
+            rows={5}
+            value={editingRecord.content || ""}
+            onChange={e => setEditingRecord((p: any) => ({ ...p, content: e.target.value }))}
+          />
+        </div>
+
+        {/* 卡片标题和链接 */}
+        {editingRecord.msgtype === "textcard" && (
+          <>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">卡片标题</label>
+              <input
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                value={editingRecord.card_title || ""}
+                onChange={e => setEditingRecord((p: any) => ({ ...p, card_title: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">跳转链接</label>
+              <input
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                value={editingRecord.card_url || ""}
+                onChange={e => setEditingRecord((p: any) => ({ ...p, card_url: e.target.value }))}
+              />
+            </div>
+          </>
+        )}
+
+        {/* 操作按钮 */}
+        <div className="flex gap-2 pt-1">
+          <button
+            className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-60"
+            disabled={savingId !== null}
+            onClick={handleSaveRecord}
+          >
+            {savingId ? "保存中..." : "保存配置"}
+          </button>
+          <button
+            className="flex-1 bg-gray-100 text-gray-700 rounded-lg py-2 text-sm font-medium disabled:opacity-60"
+            disabled={testingId !== null}
+            onClick={() => handleTestRecord(editingRecord)}
+          >
+            {testingId ? "发送中..." : "测试发送"}
+          </button>
+          <button
+            className="px-3 bg-gray-100 text-gray-500 rounded-lg py-2 text-sm"
+            onClick={() => { setEditingRecord(null); setEditingKey(null); }}
+          >
+            取消
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-4 pb-8">
+      {/* 消息提示 */}
       {msg && (
-        <div className={`rounded-xl px-4 py-3 text-sm font-medium ${msg.type === "ok" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+        <div className={`rounded-xl px-4 py-3 text-sm font-medium ${msg.type === "ok" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
           {msg.text}
         </div>
       )}
+
+      {/* 顶部：选择企业成员 */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-4">
+        <p className="text-sm font-semibold text-gray-700 mb-2">选择企业成员</p>
+        <div className="relative">
+          <div
+            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white cursor-pointer flex items-center justify-between"
+            onClick={() => setUserDropOpen(v => !v)}
+          >
+            <span className={selectedUser ? "text-gray-800 font-medium" : "text-gray-400"}>
+              {selectedUser ? selectedUser.name : (loadingMembers ? "加载成员中..." : "搜索并选择成员...")}
+            </span>
+            <ChevronDown className="w-4 h-4 text-gray-400" />
+          </div>
+          {userDropOpen && (
+            <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+              <div className="p-2 border-b border-gray-100">
+                <input
+                  autoFocus
+                  className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm"
+                  placeholder="搜索成员姓名或 userid..."
+                  value={userSearch}
+                  onChange={e => setUserSearch(e.target.value)}
+                />
+              </div>
+              {filteredMembers.length === 0 ? (
+                <div className="px-4 py-3 text-sm text-gray-400">无匹配成员</div>
+              ) : filteredMembers.map(m => (
+                <div
+                  key={m.userid}
+                  className={`px-4 py-2.5 text-sm hover:bg-blue-50 cursor-pointer ${selectedUser?.userid === m.userid ? "bg-blue-50 font-medium text-blue-700" : "text-gray-700"}`}
+                  onClick={() => handleSelectUser(m)}
+                >
+                  {m.name}
+                  {m.userid !== m.name && <span className="text-xs text-gray-400 ml-1">({m.userid})</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 未选用户时的提示 */}
+      {!selectedUser && (
+        <div className="bg-gray-50 rounded-xl border border-dashed border-gray-200 px-4 py-8 text-center">
+          <p className="text-sm text-gray-400">请先选择一位企业成员，查看并配置其通知订阅</p>
+        </div>
+      )}
+
+      {/* 已选用户：通知项列表 */}
+      {selectedUser && (
+        <>
+          {loadingCfg ? (
+            <div className="text-center py-6 text-sm text-gray-400">加载配置中...</div>
+          ) : (
+            NOTIFY_ITEMS_META2.map(meta => {
+              const records = notifyRecords[meta.key] || [];
+              const isExpanded = expandedKey === meta.key;
+              const isAddingNew = editingKey === meta.key && editingRecord && !editingRecord.id;
+
+              return (
+                <div key={meta.key} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                  {/* 头部：标题 + 记录数 + 展开 */}
+                  <button
+                    className="w-full flex items-center justify-between px-4 py-3 text-left"
+                    onClick={() => {
+                      setExpandedKey(isExpanded ? null : meta.key);
+                      if (isExpanded) { setEditingRecord(null); setEditingKey(null); }
+                    }}
+                  >
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-800">{meta.label}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">{meta.desc}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                      {records.length > 0 && (
+                        <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+                          已开通 {records.length} 条
+                        </span>
+                      )}
+                      {isExpanded
+                        ? <ChevronDown className="w-4 h-4 text-gray-400" />
+                        : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                    </div>
+                  </button>
+
+                  {/* 已保存的记录列表（折叠时也显示） */}
+                  {records.length > 0 && (
+                    <div className={`border-t border-gray-50 divide-y divide-gray-50 ${!isExpanded ? "hidden" : ""}`}>
+                      {records.map(rec => {
+                        const isEditingThis = editingRecord?.id === rec.id && editingKey === meta.key;
+                        return (
+                          <div key={rec.id} className="px-4 py-3">
+                            {!isEditingThis ? (
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-medium text-gray-700">
+                                    {rec.label || (rec.monitor_user_name ? `监控：${rec.monitor_user_name}` : "未命名配置")}
+                                  </p>
+                                  <p className="text-xs text-gray-400 mt-0.5">
+                                    {rec.monitor_user_name && <span>用户：{rec.monitor_user_name} · </span>}
+                                    {rec.order_scope === "all" ? "全部订单" : (() => { try { const ids = JSON.parse(rec.order_scope); return `指定${ids.length}张订单`; } catch { return rec.order_scope; } })()}
+                                    {rec.threshold && <span> · 阈值 {rec.threshold}%</span>}
+                                    {rec.advance_days && <span> · 提前 {rec.advance_days} 天</span>}
+                                    <span> · {rec.msgtype === "text" ? "纯文本" : rec.msgtype === "markdown" ? "Markdown" : "卡片"}</span>
+                                  </p>
+                                </div>
+                                <div className="flex gap-1 flex-shrink-0">
+                                  <button
+                                    className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded"
+                                    onClick={() => handleEditRecord(rec)}
+                                  >编辑</button>
+                                  <button
+                                    className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded disabled:opacity-50"
+                                    disabled={deletingId === rec.id}
+                                    onClick={() => handleDeleteRecord(rec.id, meta.key)}
+                                  >{deletingId === rec.id ? "删除中" : "删除"}</button>
+                                </div>
+                              </div>
+                            ) : (
+                              renderEditForm(meta.key)
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* 展开区：新增表单 或 新增按钮 */}
+                  {isExpanded && (
+                    <div className={`px-4 pb-4 ${records.length > 0 ? "pt-2 border-t border-gray-50" : "pt-3"}`}>
+                      {/* 如果正在新增 */}
+                      {isAddingNew ? (
+                        renderEditForm(meta.key)
+                      ) : (
+                        <button
+                          className="w-full border border-dashed border-blue-300 text-blue-600 rounded-xl py-2.5 text-sm hover:bg-blue-50 transition-colors"
+                          onClick={() => handleAddRecord(meta.key)}
+                        >
+                          + 新增一条配置
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </>
+      )}
+
+      {/* 基础配置（折叠，置底） */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <button
+          className="w-full flex items-center justify-between px-4 py-3 text-left"
+          onClick={() => setShowBaseCfg(v => !v)}
+        >
+          <div>
+            <p className="text-sm font-semibold text-gray-700">基础配置</p>
+            <p className="text-xs text-gray-400 mt-0.5">企业微信应用的 CorpID / Secret / AgentID</p>
+          </div>
+          {showBaseCfg
+            ? <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" />
+            : <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0 ml-2" />}
+        </button>
+        {showBaseCfg && (
+          <div className="border-t border-gray-50 px-4 pb-4 pt-3 space-y-3">
+            {(["corpid", "corpsecret", "agentid"] as const).map(k => (
+              <div key={k}>
+                <label className="text-xs text-gray-500 mb-1 block">{k}</label>
+                <input
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                  value={baseCfg[k]}
+                  onChange={e => setBaseCfg(prev => ({ ...prev, [k]: e.target.value }))}
+                />
+              </div>
+            ))}
+            <button
+              className="w-full bg-gray-800 text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-60"
+              disabled={savingBase}
+              onClick={handleSaveBase}
+            >
+              {savingBase ? "保存中..." : "保存基础配置"}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
+

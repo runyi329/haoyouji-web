@@ -639,6 +639,20 @@ async function startServer() {
     // 启动能源价格扫描器（每5分钟从 Yahoo Finance 更新石油/天然气价格）
     startEnergyPriceScanner();
 
+    // 启动担保缺口预警自适应扫描器（每分钟检查到期的配置，根据保证金比例自适应调整扫描频率）
+    setInterval(async () => {
+      try {
+        const { runCollateralGapScan } = await import('../wecom-admin-router');
+        const result = await runCollateralGapScan(true);
+        if (result.scanned > 0) {
+          console.log(`[CollateralScan] 定时扫描完成：扫描 ${result.scanned} 条配置，发送 ${result.results.filter((r: any) => r.sent).length} 条预警`);
+        }
+      } catch (e: any) {
+        console.error('[CollateralScan] 定时扫描失败:', e.message);
+      }
+    }, 60 * 1000); // 每分钟检查一次
+    console.log('[CollateralScan] 自适应扫描调度器已启动（每分钟检查，自适应频率：≥23%=1h, 21-23%=15min, <21%=1min）');
+
     // 启动股票日线数据定时扫描器（每个交易日 BJT 15:30 自动增量写入 ts_daily）
     const { startStockDailyScanner } = await import('../stock-daily-scanner');
     startStockDailyScanner();
