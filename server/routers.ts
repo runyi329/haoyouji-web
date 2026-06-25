@@ -12419,7 +12419,16 @@ ${klinesSummary}
 
         // 正确公式：userBalance（充值已写入）+ manual（委买/撤单/手动调账，不写users.balance）
         // recharged已包含在userBalance中，不能重复叠加
-        return { total: userBalance + manual, inviteCount, directReferralCount, indirectReferralCount, positions };
+        // 获取实时价格（从 price-scanner 内存缓存读取）
+        const livePrices: Record<string, number> = {};
+        try {
+          const { getAllLatestPrices } = await import('./price-scanner');
+          const allPrices = getAllLatestPrices();
+          for (const coin of ['BTC', 'ETH', 'SOL']) {
+            if (allPrices[coin]?.price) livePrices[coin] = allPrices[coin].price;
+          }
+        } catch {}
+        return { total: userBalance + manual, inviteCount, directReferralCount, indirectReferralCount, positions, livePrices };
       }),
     // AF 邀请树：递归查询所有被邀请用户并标注层数（仅YJH本人可调用）
     afGetInviteTree: protectedProcedure
@@ -13170,7 +13179,8 @@ ${klinesSummary}
                      COALESCE(o.original_limit_price, o.limit_price) as original_limit_price,
                      COALESCE(o.source_amount, '') as source_amount,
                      COALESCE(su.username, '') as source_username,
-                     o.sell_price, o.sell_quantity, o.sell_at, o.sell_confirmed_at, o.sell_status, o.confirmed_at
+                     o.sell_price, o.sell_quantity, o.sell_at, o.sell_confirmed_at, o.sell_status, o.confirmed_at,
+                     COALESCE(o.prepaid_fee, 0) as prepaid_fee
               FROM af_orders o
               LEFT JOIN users su ON su.id = o.source_user_id
               WHERE o.ledger_id = ${input.ledgerId} AND o.user_id = ${targetUserId}
@@ -13233,6 +13243,8 @@ ${klinesSummary}
           hasPendingSell: r.sell_status === 'selling',
           // 档位信息
           currentTier: tierMap[r.id] ?? 0,
+          // 预收管理费
+          prepaidFee: parseFloat(r.prepaid_fee || '0'),
         }));
         return list;
       }),
@@ -13344,7 +13356,8 @@ ${klinesSummary}
                      COALESCE(o.original_limit_price, o.limit_price) as original_limit_price,
                      COALESCE(o.source_amount, '') as source_amount,
                      COALESCE(su.username, '') as source_username,
-                     o.sell_price, o.sell_quantity, o.sell_at, o.sell_confirmed_at, o.sell_status, o.confirmed_at
+                     o.sell_price, o.sell_quantity, o.sell_at, o.sell_confirmed_at, o.sell_status, o.confirmed_at,
+                     COALESCE(o.prepaid_fee, 0) as prepaid_fee
               FROM af_orders o
               LEFT JOIN users u ON u.id = o.user_id
               LEFT JOIN users su ON su.id = o.source_user_id
@@ -13382,6 +13395,7 @@ ${klinesSummary}
           equityTier: 0,
           allTimeLowPrice: null as string | null,
           allTimeLowAt: null as string | null,
+          prepaidFee: parseFloat(r.prepaid_fee || '0'),
         }));
         
         // 批量查询每笔订单的扫描最低价（af_order_scan_stats）
@@ -13800,8 +13814,14 @@ ${klinesSummary}
           // 管理费基数：赠予订单用订单价值(oldAmount)，普通订单用本金*5.25
           const tradeValue = isGift ? oldAmount : oldAmount * 5.25;
           const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-          const managementFee = dailyFee * holdDays;
-          console.log(`[AF卖出成交] 管理费: 本金=${principal}, 成交价值=${tradeValue.toFixed(2)}, 下单日=${confirmedDate.toISOString().slice(0,10)}, 持有天数=${holdDays}, 累计管理费=${managementFee.toFixed(4)}`);
+          const totalManagementFee = dailyFee * holdDays;
+          // 查询该订单已预收的管理费
+          const prepaidFeeRow = await db.execute(
+            sql`SELECT COALESCE(prepaid_fee, 0) as prepaid_fee FROM af_orders WHERE id = ${input.orderId} LIMIT 1`
+          ) as any;
+          const prepaidFee = parseFloat((prepaidFeeRow[0]?.[0] ?? prepaidFeeRow[0])?.prepaid_fee || '0');
+          const managementFee = Math.max(0, totalManagementFee - prepaidFee);
+          console.log(`[AF卖出成交] 管理费: 本金=${principal}, 成交价值=${tradeValue.toFixed(2)}, 下单日=${confirmedDate.toISOString().slice(0,10)}, 持有天数=${holdDays}, 总管理费=${totalManagementFee.toFixed(4)}, 已预收=${prepaidFee.toFixed(4)}, 待付管理费=${managementFee.toFixed(4)}`);
           
           // 赠予订单买入时未扣本金，卖出时只结算纯利润，不加回本金
           const grossReturn = isGift ? Math.max(0, profit) : (principal + Math.max(0, profit));
@@ -14236,6 +14256,148 @@ ${klinesSummary}
           allTimeLowAt: scanStats?.all_time_low_at ? new Date(scanStats.all_time_low_at).toISOString() : null,
         };
       }),
+    // ========== 预收管理费 ==========
+    // 初始化预收管理费相关表和字段（幂等，服务启动时自动调用）
+    afInitPrepaidFee: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
+        if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new Error('数据库连接失败');
+        // 1. af_orders 加 prepaid_fee 字段（幂等）
+        try {
+          await (conn as any).execute(`ALTER TABLE af_orders ADD COLUMN prepaid_fee DECIMAL(20,8) NOT NULL DEFAULT 0`);
+        } catch (e: any) { if (!e.message?.includes('Duplicate column')) console.log('[prepaid_fee] 字段已存在'); }
+        // 2. 建 af_fee_prepaid_logs 日志表（幂等）
+        await (conn as any).execute(`
+          CREATE TABLE IF NOT EXISTS af_fee_prepaid_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ledger_id INT NOT NULL,
+            order_id INT NOT NULL,
+            user_id INT NOT NULL,
+            amount DECIMAL(20,8) NOT NULL,
+            note VARCHAR(255) DEFAULT '',
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_order (order_id),
+            INDEX idx_user (ledger_id, user_id)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+        return { success: true };
+      }),
+    // 管理员：预收管理费（扣用户余额 + 写日志 + 累加 prepaid_fee）
+    afAdminCollectPrepaidFee: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        orderId: z.number(),
+        amount: z.number().positive(),
+        note: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
+        if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
+        // 查询订单信息
+        const orderRows = await db.execute(
+          sql`SELECT id, user_id, coin, amount, status, sell_status, created_at, COALESCE(prepaid_fee, 0) as prepaid_fee, is_gift
+              FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
+        ) as any;
+        const order = (orderRows[0]?.[0] ?? orderRows[0]);
+        if (!order) throw new Error('订单不存在');
+        if (order.sell_status === 'sold') throw new Error('订单已结算，不可预收');
+        // 计算当前总管理费
+        const isGift = !!order.is_gift;
+        const oldAmount = parseFloat(order.amount || '0');
+        const tradeValue = isGift ? oldAmount : oldAmount * 5.25;
+        const dailyFee = tradeValue / 0.75 * 0.12 / 365;
+        const confirmedDate = new Date(order.created_at);
+        const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
+        const todayDay = new Date(); const td = new Date(todayDay.getFullYear(), todayDay.getMonth(), todayDay.getDate());
+        const holdDays = Math.max(1, Math.floor((td.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+        const totalFee = dailyFee * holdDays;
+        const alreadyPaid = parseFloat(order.prepaid_fee || '0');
+        const remaining = totalFee - alreadyPaid;
+        if (input.amount > remaining + 0.0001) throw new Error(`预收金额(${input.amount.toFixed(4)})超过待付管理费(${remaining.toFixed(4)})`);
+        // 扣用户余额
+        const note = input.note || `预收管理费 订单#${input.orderId} ${order.coin}`;
+        await db.execute(
+          sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+              VALUES (${input.ledgerId}, ${order.user_id}, ${-input.amount}, ${note}, NOW(), NOW())`
+        );
+        // 写预收日志
+        await db.execute(
+          sql`INSERT INTO af_fee_prepaid_logs (ledger_id, order_id, user_id, amount, note, created_at)
+              VALUES (${input.ledgerId}, ${input.orderId}, ${order.user_id}, ${input.amount}, ${note}, NOW())`
+        );
+        // 累加 prepaid_fee
+        await db.execute(
+          sql`UPDATE af_orders SET prepaid_fee = COALESCE(prepaid_fee, 0) + ${input.amount}, updated_at = NOW()
+              WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId}`
+        );
+        console.log(`[预收管理费] 订单#${input.orderId} 用户${order.user_id} 预收${input.amount} 已付合计${(alreadyPaid + input.amount).toFixed(4)}`);
+        return { success: true, totalFee: +totalFee.toFixed(4), alreadyPaid: +(alreadyPaid + input.amount).toFixed(4), remaining: +(remaining - input.amount).toFixed(4) };
+      }),
+    // 查询订单预收管理费日志
+    afGetPrepaidFeeLogs: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), orderId: z.number(), viewAsUserId: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        let targetUserId = ctx.user.id;
+        if (input.viewAsUserId) {
+          const roleRows = await db.execute(
+            sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+          ) as any;
+          const myRole = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
+          if (myRole === 'owner' || myRole === 'admin') targetUserId = input.viewAsUserId;
+        }
+        // 验证订单属于目标用户（或管理员可查任意订单）
+        const roleRows2 = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const myRole2 = (roleRows2[0]?.[0]?.role ?? roleRows2[0]?.role ?? '');
+        const isAdmin = myRole2 === 'owner' || myRole2 === 'admin';
+        const orderRows = await db.execute(
+          sql`SELECT id, user_id, coin, amount, created_at, COALESCE(prepaid_fee, 0) as prepaid_fee, is_gift
+              FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId}
+              ${isAdmin ? sql`` : sql`AND user_id = ${targetUserId}`} LIMIT 1`
+        ) as any;
+        const order = (orderRows[0]?.[0] ?? orderRows[0]);
+        if (!order) return { logs: [], totalFee: 0, prepaidFee: 0, remainingFee: 0 };
+        // 查日志
+        try {
+          const logRows = await db.execute(
+            sql`SELECT amount, note, created_at FROM af_fee_prepaid_logs
+                WHERE order_id = ${input.orderId} ORDER BY created_at ASC`
+          ) as any;
+          const logs = ((logRows[0] || logRows) as any[]).map((r: any) => ({
+            amount: parseFloat(r.amount),
+            note: r.note || '',
+            createdAt: toBeijingTimeStr(r.created_at),
+          }));
+          // 计算总管理费
+          const isGift = !!order.is_gift;
+          const oldAmount = parseFloat(order.amount || '0');
+          const tradeValue = isGift ? oldAmount : oldAmount * 5.25;
+          const dailyFee = tradeValue / 0.75 * 0.12 / 365;
+          const confirmedDate = new Date(order.created_at);
+          const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
+          const todayDay = new Date(); const td = new Date(todayDay.getFullYear(), todayDay.getMonth(), todayDay.getDate());
+          const holdDays = Math.max(1, Math.floor((td.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+          const totalFee = dailyFee * holdDays;
+          const prepaidFee = parseFloat(order.prepaid_fee || '0');
+          return { logs, totalFee: +totalFee.toFixed(4), prepaidFee: +prepaidFee.toFixed(4), remainingFee: +(totalFee - prepaidFee).toFixed(4) };
+        } catch (_e) {
+          return { logs: [], totalFee: 0, prepaidFee: 0, remainingFee: 0 };
+        }
+      }),
+
     // OKX 行情代理（国内服务器可访问，替代 Binance）
     getBinanceTicker: publicProcedure
       .input(z.object({ symbol: z.string() }))
@@ -14311,11 +14473,12 @@ ${klinesSummary}
           if (p) prices[coin] = p;
         }
         // 按币种分组计算盈亏
-        const coinPnl: Record<string, { pnl: number; orderCount: number; holdingCount: number; soldCount: number; pendingCount: number; totalCost: number; totalQty: number }> = {};
+        const coinPnl: Record<string, { pnl: number; orderCount: number; holdingCount: number; soldCount: number; pendingCount: number; giftCount: number; totalCost: number; totalQty: number; effTotalCost: number; effTotalQty: number; totalMgmtFee: number }> = {};
         for (const order of orders) {
           const coin = order.coin;
-          if (!coinPnl[coin]) coinPnl[coin] = { pnl: 0, orderCount: 0, holdingCount: 0, soldCount: 0, pendingCount: 0, totalCost: 0, totalQty: 0 };
+          if (!coinPnl[coin]) coinPnl[coin] = { pnl: 0, orderCount: 0, holdingCount: 0, soldCount: 0, pendingCount: 0, giftCount: 0, totalCost: 0, totalQty: 0, effTotalCost: 0, effTotalQty: 0, totalMgmtFee: 0 };
           coinPnl[coin].orderCount++;
+          if (parseInt(order.is_gift || '0') === 1) coinPnl[coin].giftCount++;
           const buyPrice = parseFloat(order.limit_price || '0');
           const originalQty = parseFloat(order.quantity || '0');
           if (order.status === 'pending') {
@@ -14334,6 +14497,19 @@ ${klinesSummary}
           if (order.sell_status !== 'sold' && buyPrice > 0 && originalQty > 0) {
             coinPnl[coin].totalCost += buyPrice * originalQty;
             coinPnl[coin].totalQty += originalQty;
+            // 含费均价：用折后数量和买入价计算折后持仓成本
+            coinPnl[coin].effTotalCost += buyPrice * effectiveQty;
+            coinPnl[coin].effTotalQty += effectiveQty;
+            // 累计管理费（仅持仓中订单）
+            const principal2 = parseFloat(order.amount || '0');
+            const isGift2 = parseInt(order.is_gift || '0') === 1;
+            const tradeValue2 = isGift2 ? principal2 : principal2 * 5.25;
+            const dailyFee2 = tradeValue2 / 0.75 * 0.12 / 365;
+            const createdDay2 = new Date(order.created_at);
+            const createdDayStart2 = new Date(createdDay2.getFullYear(), createdDay2.getMonth(), createdDay2.getDate());
+            const todayStart2 = new Date(); const ts2 = new Date(todayStart2.getFullYear(), todayStart2.getMonth(), todayStart2.getDate());
+            const holdDays2 = Math.max(1, Math.floor((ts2.getTime() - createdDayStart2.getTime()) / (1000*60*60*24)) + 1);
+            coinPnl[coin].totalMgmtFee += dailyFee2 * holdDays2;
           }
           if (order.sell_status === 'sold') {
             // 已卖出：用实际卖出价计算已实现盈亏，并扣除管理费（与结算逻辑保持一致）
@@ -14374,12 +14550,65 @@ ${klinesSummary}
           holdingCount: data.holdingCount,
           soldCount: data.soldCount,
           pendingCount: data.pendingCount,
+          giftCount: data.giftCount,
           avgCost: data.totalQty > 0 ? parseFloat((data.totalCost / data.totalQty).toFixed(2)) : 0,
+          // 含管理费盈亏平衡价 = (折后持仓成本 + 累计管理费) / 折后持仓数量
+          breakevenPrice: data.effTotalQty > 0 ? parseFloat(((data.effTotalCost + data.totalMgmtFee) / data.effTotalQty).toFixed(2)) : 0,
+          totalMgmtFee: parseFloat(data.totalMgmtFee.toFixed(4)),
         }));
         // 按 BTC > ETH > SOL 顺序排列
         const coinOrder = ['BTC', 'ETH', 'SOL'];
         coins.sort((a, b) => coinOrder.indexOf(a.coin) - coinOrder.indexOf(b.coin));
         const total = parseFloat(coins.reduce((sum, c) => sum + c.pnl, 0).toFixed(4));
+
+        // 计算团队均价：查询整个账本所有用户的持仓订单，算含费均价
+        const teamOrderRows = await db.execute(
+          sql`SELECT o.id, o.coin, o.limit_price, o.quantity, o.amount, o.is_gift, o.created_at
+              FROM af_orders o
+              WHERE o.ledger_id = ${input.ledgerId} AND o.side = 'buy' AND o.status = 'completed'
+                AND (o.sell_status IS NULL OR o.sell_status != 'sold')
+                AND (o.order_type = '无损合约' OR o.order_type IS NULL OR o.order_type = '')`
+        ) as any;
+        const teamOrders = ((teamOrderRows[0] || teamOrderRows) as any[]);
+        // 查询团队订单的档位
+        const teamOrderIds = teamOrders.map((o: any) => o.id);
+        const teamTierMap: Record<number, number> = {};
+        if (teamOrderIds.length > 0) {
+          const teamTierRows = await db.execute(
+            sql`SELECT order_id, COALESCE(MAX(tier), 0) as maxTier FROM af_order_tier_triggers WHERE order_id IN (${sql.join(teamOrderIds.map((id: number) => sql`${id}`), sql`,`)}) GROUP BY order_id`
+          ) as any;
+          for (const r of ((teamTierRows[0] || teamTierRows) as any[])) {
+            teamTierMap[r.order_id] = parseInt(r.maxTier?.toString() || '0') || 0;
+          }
+        }
+        // 按币种统计团队折后持仓成本和管理费
+        const teamPnl: Record<string, { effCost: number; effQty: number; mgmtFee: number }> = {};
+        const todayForTeam = new Date(); const todayTeamStart = new Date(todayForTeam.getFullYear(), todayForTeam.getMonth(), todayForTeam.getDate());
+        for (const order of teamOrders) {
+          const coin = order.coin;
+          if (!teamPnl[coin]) teamPnl[coin] = { effCost: 0, effQty: 0, mgmtFee: 0 };
+          const buyPrice = parseFloat(order.limit_price || '0');
+          const origQty = parseFloat(order.quantity || '0');
+          const tier = teamTierMap[order.id] || 0;
+          const rate = equityDiscountRates[tier] || 1.0;
+          const effQ = origQty * rate;
+          teamPnl[coin].effCost += buyPrice * effQ;
+          teamPnl[coin].effQty += effQ;
+          const principal = parseFloat(order.amount || '0');
+          const isGift = parseInt(order.is_gift || '0') === 1;
+          const tv = isGift ? principal : principal * 5.25;
+          const df = tv / 0.75 * 0.12 / 365;
+          const cd = new Date(order.created_at);
+          const cds = new Date(cd.getFullYear(), cd.getMonth(), cd.getDate());
+          const days = Math.max(1, Math.floor((todayTeamStart.getTime() - cds.getTime()) / (1000*60*60*24)) + 1);
+          teamPnl[coin].mgmtFee += df * days;
+        }
+        // 将团队均价写入 coins
+        for (const c of coins) {
+          const t = teamPnl[c.coin];
+          (c as any).teamBreakevenPrice = t && t.effQty > 0 ? parseFloat(((t.effCost + t.mgmtFee) / t.effQty).toFixed(2)) : 0;
+        }
+
         // 取最新价格扫描时间作为更新时间
         const { getAllLatestPrices } = await import('./price-scanner');
         const allPrices = getAllLatestPrices();

@@ -2049,6 +2049,22 @@ export default function LedgerDetail() {
   const [lotteryTab, setLotteryTab] = useState<'active' | 'past'>('active');
   // 倒计时刻度（每秒更新）
   const [tick, setTick] = useState(0);
+  // 权益卡片币种展开状态
+  const [expandedCoins, setExpandedCoins] = useState<Record<string, boolean>>({});
+  // 权益卡片模拟价格滑动条（每个币种独立，localStorage持久化）
+  const [sliderPrices, setSliderPrices] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem(`haoyouji_slider_${ledgerId}`);
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
+  const setSliderPrice = (coin: string, val: number) => {
+    setSliderPrices(prev => {
+      const next = { ...prev, [coin]: val };
+      try { localStorage.setItem(`haoyouji_slider_${ledgerId}`, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
   useEffect(() => {
     const timer = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(timer);
@@ -2132,8 +2148,10 @@ export default function LedgerDetail() {
   // AF 账本：总资产估值（充值到账 + 手动调账）
   const { data: afTotalAsset } = trpc.ledger.afGetMyTotalAsset.useQuery(
     { ledgerId: Number(ledgerId) },
-    { enabled: isCustomAF }
+    { enabled: isCustomAF, refetchInterval: 3000, staleTime: 0 }
   );
+  // 普通用户实时价格（从 afGetMyTotalAsset 返回的 livePrices，3秒刷新）
+  const userLivePrices: Record<string, number> = (afTotalAsset as any)?.livePrices ?? {};
   // AF 账本：管理员统计（订单数 + 管理费）——后端控制权限，无权限返回null
   const { data: afAdminStats } = trpc.ledger.afAdminGetStats.useQuery(
     { ledgerId: Number(ledgerId) },
@@ -2292,6 +2310,10 @@ export default function LedgerDetail() {
   let cachedPrices: Record<string, number> = {};
   try { cachedPrices = JSON.parse(localStorage.getItem(PRICE_CACHE_KEY) || '{}'); } catch {}
   const funderLivePrices: Record<string, number> = hasFreshPrices ? freshPrices : cachedPrices;
+  // 权益卡片用：资金方用 funderLivePrices，普通用户用 userLivePrices，两者合并
+  const equityLivePrices: Record<string, number> = effectiveIsFunder
+    ? funderLivePrices
+    : (Object.keys(userLivePrices).length > 0 ? userLivePrices : cachedPrices);
   // 实时 USD/CNY 汇率（3秒刷新，用于 CNY 订单折算 U 值）
   const { data: cnyRateData } = trpc.exchange.getRate.useQuery(
     { fromcoin: 'USD', tocoin: 'CNY', money: 1 },
@@ -3534,7 +3556,7 @@ export default function LedgerDetail() {
                       const bd = (funderAssetSummary?.coinBreakdown as any)?.[coin];
                       const qty = bd?.quantity ?? 0;
                       const avgCost = bd?.avgCost ?? 0;
-                      const livePrice = funderLivePrices[coin] || 0;
+                      const livePrice = equityLivePrices[coin] || 0;
                       const marketValue = qty > 0 && livePrice > 0 ? qty * livePrice : 0;
                       const decimals = coin === 'BTC' ? 6 : 4;
                       return (
@@ -3687,94 +3709,217 @@ export default function LedgerDetail() {
               )}
               {/* 卡片 3：仓位 & 累计盈亏（合并，占满整行）——资金方不显示 */}
               {!effectiveIsFunder && (
-              <div className="col-span-2 rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
-                <div className="flex items-baseline justify-between mb-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-white/70">权益</span>
+              <div className="col-span-2 rounded-2xl px-0 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.10)', overflow: 'hidden' }}>
+
+                {/* 表头 */}
+                <div className="grid mb-1.5 text-xs text-white/60" style={{ gridTemplateColumns: 'minmax(min-content, 56px) 1px 1fr 1px minmax(min-content, 44px) 1px 1fr 1px 1fr 20px' }}>
+                  <span className="flex items-center justify-center py-0.5">币种</span>
+                  <div style={{ background: 'rgba(255,255,255,0.07)' }}></div>
+                  <span className="text-center py-0.5">币数</span>
+                  <div style={{ background: 'rgba(255,255,255,0.07)' }}></div>
+                  <span className="text-center py-0.5">订单</span>
+                  <div style={{ background: 'rgba(255,255,255,0.07)' }}></div>
+                  <span className="text-center py-0.5">实时价</span>
+                  <div style={{ background: 'rgba(255,255,255,0.07)' }}></div>
+                  <span className="text-center py-0.5">浮盈</span>
+                  <span></span>
+                </div>
+                {(['BTC', 'ETH', 'SOL'].slice().sort((a, b) => {
+                  const qtyA = (afTotalAsset as any)?.positions?.[a] ?? 0;
+                  const qtyB = (afTotalAsset as any)?.positions?.[b] ?? 0;
+                  const priceA = equityLivePrices[a] || 0;
+                  const priceB = equityLivePrices[b] || 0;
+                  const valA = priceA > 0 ? qtyA * priceA : qtyA;
+                  const valB = priceB > 0 ? qtyB * priceB : qtyB;
+                  return valB - valA;
+                })).map(coin => {
+                  const qty = (afTotalAsset as any)?.positions?.[coin] ?? 0;
+                  const coinData = pnlData?.coins?.find((c: any) => c.coin === coin);
+                  const activeCount = (coinData?.holdingCount ?? 0) + (coinData?.pendingCount ?? 0);
+                  const giftCount = (coinData as any)?.giftCount ?? 0;
+                  const avgCost = coinData?.avgCost ?? 0;
+                  const breakevenPrice = (coinData as any)?.teamBreakevenPrice ?? 0;
+                  const livePrice = equityLivePrices[coin] || 0;
+                  // 浮盈用团队均价（含管理费）作为成本基准，更真实
+                  const costBase = breakevenPrice > 0 ? breakevenPrice : avgCost;
+                  const unrealizedPnl = qty > 0 && livePrice > 0 && costBase > 0
+                    ? qty * (livePrice - costBase)
+                    : 0;
+                  const pnlSign = unrealizedPnl >= 0 ? '+' : '';
+                  const fmtNum = (v: number) => {
+                    if (!v || v <= 0) return '-';
+                    const intDigits = Math.floor(Math.abs(v)).toString().length;
+                    const decPlaces = Math.max(0, 5 - intDigits);
+                    return v.toFixed(decPlaces);
+                  };
+                  const fmtQty = fmtNum(qty) === '-' ? '0' : fmtNum(qty);
+                  const coinColor: Record<string, string> = { BTC: '#fb923c', ETH: '#60a5fa', SOL: '#a78bfa' };
+                  // 浮盈为负时显示0，为正时正常显示
+                  const displayPnl = unrealizedPnl < 0 ? 0 : unrealizedPnl;
+                  const pnlColor = qty > 0 && livePrice > 0
+                    ? (displayPnl > 0 ? '#4ade80' : 'rgba(255,255,255,0.4)')
+                    : 'rgba(255,255,255,0.25)';
+                  const isExpanded = expandedCoins[coin] || false;
+                  return (
+                    <div key={coin} style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
+                      {/* 主行：币种 + 权益数量 + 订单 + 浮盈 + 箭头 */}
+                      <div
+                        className="grid items-center py-2.5 cursor-pointer active:opacity-70"
+                        style={{ gridTemplateColumns: 'minmax(min-content, 56px) 1px 1fr 1px minmax(min-content, 44px) 1px 1fr 1px 1fr 20px' }}
+                        onClick={() => setExpandedCoins(prev => ({ ...prev, [coin]: !prev[coin] }))}
+                      >
+                        <span className="flex items-center justify-center text-sm font-bold" style={{ color: coinColor[coin] || 'white' }}>{coin}</span>
+                        <div style={{ background: 'rgba(255,255,255,0.07)', alignSelf: 'stretch' }}></div>
+                        <span className={`text-center text-base font-bold ${qty > 0 ? 'text-white' : 'text-white/30'}`} style={{ fontVariantNumeric: 'tabular-nums', letterSpacing: '0.02em' }}>{fmtQty}</span>
+                        <div style={{ background: 'rgba(255,255,255,0.07)', alignSelf: 'stretch' }}></div>
+                        <div className="flex flex-col items-center justify-center gap-0">
+                          <span className="text-[11px] text-white/50">{activeCount > 0 ? `共${activeCount}` : '-'}</span>
+                          {giftCount > 0 && <span className="text-[11px]" style={{ color: '#fbbf24' }}>{`赠${giftCount}`}</span>}
+                        </div>
+                        <div style={{ background: 'rgba(255,255,255,0.07)', alignSelf: 'stretch' }}></div>
+                        <span className="text-center text-[11px] text-white/80" style={{ fontVariantNumeric: 'tabular-nums', fontFeatureSettings: '"tnum"' }}>{activeCount > 0 && livePrice > 0 ? fmtNum(livePrice) : '-'}</span>
+                        <div style={{ background: 'rgba(255,255,255,0.07)', alignSelf: 'stretch' }}></div>
+                        <span className="text-center text-sm font-semibold" style={{ color: pnlColor }}>
+                          {qty > 0 && livePrice > 0 ? (displayPnl > 0 ? `+${displayPnl.toFixed(2)}` : '0') : '-'}
+                        </span>
+                        <span className="flex items-center justify-center">
+                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', opacity: 0.5 }}>
+                            <polyline points="2,3 5,7 8,3" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </span>
+                      </div>
+                      {/* 展开详情：个人均价 / 团队均价 / 止盈+25% 一行平铺 + 模拟滑动条 */}
+                      {isExpanded && (() => {
+                        // 滑动条：每个币种固定区间（BTC 1万~20万, ETH 1000~5000, SOL 1~300）
+                        const costRef = avgCost > 0 ? avgCost : breakevenPrice;
+                        const coinRangeMap: Record<string, [number, number]> = { BTC: [10000, 200000], ETH: [1000, 5000], SOL: [1, 300] };
+                        const [sliderMin, sliderMax] = coinRangeMap[coin] ?? [costRef * 0.3 || 1, costRef * 3 || 300];
+                        const defaultSlider = livePrice > 0 ? livePrice : (costRef > 0 ? costRef * 1.5 : sliderMin);
+                        const rawSlider = sliderPrices[coin];
+                        const sliderVal = rawSlider !== undefined ? rawSlider : Math.min(Math.max(defaultSlider, sliderMin), sliderMax);
+                        const simPnl = qty > 0 && costRef > 0 ? qty * (sliderVal - costRef) : 0;
+                        const simPnlPositive = simPnl > 0;
+                        // 滑动条百分比位置（用于标记线）
+                        const sliderPct = (sliderVal - sliderMin) / (sliderMax - sliderMin);
+                        // 盈亏平衡点位置
+                        const breakPct = costRef > 0 ? Math.min(Math.max((costRef - sliderMin) / (sliderMax - sliderMin), 0), 1) : -1;
+                        return (
+                          <div style={{ background: 'rgba(0,0,0,0.15)', borderRadius: '0 0 8px 8px' }}>
+                            {/* 三列数据 */}
+                            <div className="flex items-center px-2 pt-2 pb-1 gap-1">
+                              <div className="flex-1 flex flex-col items-center gap-0.5">
+                                <span className="flex items-center gap-0.5 text-[9px] text-white/50">
+                                  个人均价
+                                  <span
+                                    onClick={e => { e.stopPropagation(); alert('个人均价：根据您所有持仓订单的买入价，减去已累计的实时管理费后，折算得出的实际持仓成本均价。'); }}
+                                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '12px', height: '12px', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.3)', color: 'rgba(255,255,255,0.4)', fontSize: '8px', cursor: 'pointer', flexShrink: 0 }}
+                                  >?</span>
+                                </span>
+                                <span className="text-[11px] text-white/80 font-medium">{avgCost > 0 ? fmtNum(avgCost) : '-'}</span>
+                              </div>
+                              <div className="w-px self-stretch" style={{ background: 'rgba(255,255,255,0.1)' }}></div>
+                              <div className="flex-1 flex flex-col items-center gap-0.5">
+                                <span className="flex items-center gap-0.5 text-[9px]" style={{ color: '#fbbf24' }}>
+                                  团队均价
+                                  <span
+                                    onClick={e => { e.stopPropagation(); alert('团队均价：本团队内所有用户持仓订单的整体均价，已包含各自累计的实时管理费。这是团队整体的持仓成本，价格超过此线即达到团队盈利区间。\n\n注意：团队均价并非固定，随着不同用户在不同价位持续下单，以及每日管理费的累积，团队均价会实时动态更新。'); }}
+                                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '12px', height: '12px', borderRadius: '50%', border: '1px solid rgba(251,191,36,0.4)', color: 'rgba(251,191,36,0.5)', fontSize: '8px', cursor: 'pointer', flexShrink: 0 }}
+                                  >?</span>
+                                </span>
+                                <span className="text-[11px] font-semibold" style={{ color: breakevenPrice > 0 ? '#fbbf24' : 'rgba(255,255,255,0.3)' }}>{breakevenPrice > 0 ? fmtNum(breakevenPrice) : '-'}</span>
+                              </div>
+                              <div className="w-px self-stretch" style={{ background: 'rgba(255,255,255,0.1)' }}></div>
+                              <div className="flex-1 flex flex-col items-center gap-0.5">
+                                <span className="text-[9px]" style={{ color: '#f87171' }}>最低止盈+25%</span>
+                                <span className="text-[11px] font-semibold" style={{ color: breakevenPrice > 0 ? '#f87171' : 'rgba(255,255,255,0.3)' }}>{breakevenPrice > 0 ? fmtNum(breakevenPrice * 1.25) : '-'}</span>
+                              </div>
+                            </div>
+                            {/* 分隔线 */}
+                            {qty > 0 && costRef > 0 && (
+                              <div style={{ height: '1px', background: 'rgba(255,255,255,0.08)', margin: '0 12px' }}></div>
+                            )}
+                            {/* 模拟滑动条 */}
+                            {qty > 0 && costRef > 0 && (
+                              <div className="px-3 pb-3 pt-2">
+                                {/* 结果行：目标价 + 预计盈亏 */}
+                                <div className="flex items-center justify-between mb-3">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[9px] text-white/40">目标价</span>
+                                    <span className="text-[13px] font-bold text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtNum(sliderVal)}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[9px] text-white/40">预计盈亏</span>
+                                    <span className="text-[13px] font-bold" style={{ color: simPnlPositive ? '#f87171' : 'rgba(255,255,255,0.3)', fontVariantNumeric: 'tabular-nums' }}>
+                                      {simPnlPositive ? `+${simPnl.toFixed(2)}` : '0'}
+                                    </span>
+                                  </div>
+                                </div>
+                                {/* 滑动条轨道 */}
+                                <div className="relative" style={{ height: '28px' }}>
+                                  {/* 轨道背景 */}
+                                  <div className="absolute left-0 right-0 rounded-full" style={{ height: '22px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.10)' }}></div>
+                                  {/* 已填充部分 */}
+                                  <div className="absolute left-0 rounded-full" style={{ height: '22px', top: '50%', transform: 'translateY(-50%)', width: `${sliderPct * 100}%`, background: simPnlPositive ? 'linear-gradient(90deg,#fbbf24,#f87171)' : 'linear-gradient(90deg,#4ade80,#fbbf24)' }}></div>
+                                  {/* 三根标记线：白=个人均价, 黄=团队均价, 绿=最低止盈 */}
+                                  {(() => {
+                                    const marks = [
+                                      { price: avgCost, color: 'rgba(255,255,255,0.8)', label: '' },
+                                      { price: breakevenPrice, color: '#fbbf24', label: '' },
+                                      { price: breakevenPrice > 0 ? breakevenPrice * 1.25 : 0, color: '#f87171', label: '' },
+                                    ];
+                                    return marks.map((m, i) => {
+                                      if (!m.price || m.price <= 0) return null;
+                                      const pct = Math.min(Math.max((m.price - sliderMin) / (sliderMax - sliderMin), 0), 1);
+                                      return (
+                                        <div key={i} className="absolute" style={{ left: `${pct * 100}%`, top: '50%', transform: 'translate(-50%,-50%)', zIndex: 2 }}>
+                                          <div style={{ width: '2px', height: '22px', background: m.color, borderRadius: '1px' }}></div>
+                                        </div>
+                                      );
+                                    });
+                                  })()}
+                                  {/* 滑块圆点（可视化，两端限制不超出轨道） */}
+                                  <div className="absolute pointer-events-none" style={{ left: `clamp(14px, calc(${sliderPct * 100}%), calc(100% - 14px))`, top: '50%', transform: 'translate(-50%,-50%)', width: '28px', height: '28px', borderRadius: '50%', background: 'white', boxShadow: '0 2px 10px rgba(0,0,0,0.6)', zIndex: 3, border: `3px solid ${simPnlPositive ? '#f87171' : '#4ade80'}` }}></div>
+                                  {/* 滑块input（透明覆盖，负责交互） */}
+                                  <input
+                                    type="range"
+                                    min={sliderMin}
+                                    max={sliderMax}
+                                    step={(sliderMax - sliderMin) / 200}
+                                    value={sliderVal}
+                                    onChange={e => setSliderPrice(coin, parseFloat(e.target.value))}
+                                    className="absolute inset-0 w-full cursor-pointer"
+                                    style={{ height: '28px', opacity: 0, zIndex: 4 }}
+                                  />
+                                </div>
+                                {/* 范围标签 */}
+                                <div className="flex justify-between mt-1">
+                                  <span className="text-[9px] text-white/25">{fmtNum(sliderMin)}</span>
+                                  <span className="text-[9px] text-white/25">{fmtNum(sliderMax)}</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  );
+                })}
+                {/* 更新时间：左下角 */}
+                {pnlData?.updatedAt && (
+                  <div className="mt-2 flex items-center gap-1 px-4">
                     <button
                       onClick={() => setLocation(`/ledger/${ledgerId}/crypto/funding-history`)}
                       style={{ background: "none", border: "none", padding: 0, cursor: "pointer", display: "flex", alignItems: "center" }}
                       title="查看自动赚费历史"
                     >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="2">
                         <circle cx="12" cy="12" r="10"/>
                         <polyline points="12 6 12 12 16 14"/>
                       </svg>
                     </button>
+                    <span className="text-[11px] text-white/35">更新 {new Date(pnlData.updatedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</span>
                   </div>
-                  {pnlData?.updatedAt && (
-                    <span className="text-[10px] text-white/40">
-                      更新时间 {new Date(pnlData.updatedAt).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
-                    </span>
-                  )}
-                </div>
-                {/* 表头 */}
-                <div className="flex items-baseline mb-1 text-[10px] text-white/40">
-                  <span className="w-9">币种</span>
-                  <span className="flex-1 text-right">权益</span>
-                  <span className="w-10 text-right">订单</span>
-                  <span className="flex-1 text-right">均价</span>
-                  <span className="flex-1 text-right">收益</span>
-                </div>
-                {['BTC', 'ETH', 'SOL'].map(coin => {
-                  const qty = (afTotalAsset as any)?.positions?.[coin] ?? 0;
-                  const coinData = pnlData?.coins?.find((c: any) => c.coin === coin);
-                  const activeCount = (coinData?.holdingCount ?? 0) + (coinData?.pendingCount ?? 0);
-                  const avgCost = coinData?.avgCost ?? 0;
-                  // 实时浮盈 = 持仓数量 × (实时价格 - 均价)
-                  const livePrice = funderLivePrices[coin] || 0;
-                  const unrealizedPnl = qty > 0 && livePrice > 0 && avgCost > 0
-                    ? qty * (livePrice - avgCost)
-                    : 0;
-                  const pnlSign = unrealizedPnl >= 0 ? '+' : '';
-                  // 智能去尾零
-                  const fmtQty = (() => {
-                    if (!qty || qty <= 0) return '0';
-                    const maxDec = coin === 'BTC' ? 8 : 6;
-                    const raw = qty.toFixed(maxDec);
-                    const [intPart, decPart] = raw.split('.');
-                    const trimmed = decPart.replace(/0+$/, '');
-                    const finalDec = trimmed.length < 2 ? trimmed.padEnd(2, '0') : trimmed;
-                    return `${intPart}.${finalDec}`;
-                  })();
-                  return (
-                    <div key={coin} className="flex items-baseline py-0.5">
-                      <span className="w-9 text-xs text-white/70 font-medium">{coin}</span>
-                      <span className={`flex-1 text-right text-xs font-bold ${qty > 0 ? 'text-white' : 'text-white/40'}`}>{fmtQty}</span>
-                      <span className="w-10 text-right text-[10px] text-white/50">{activeCount}笔</span>
-                      <span className="flex-1 text-right text-[11px] text-white/60">{avgCost > 0 ? avgCost.toLocaleString() : '-'}</span>
-                      <span className={`flex-1 text-right text-xs font-medium ${qty > 0 && livePrice > 0 ? 'text-green-400' : 'text-white/30'}`}>
-                        {qty > 0 && livePrice > 0 ? `${pnlSign}${unrealizedPnl.toFixed(2)}` : '-'}
-                      </span>
-                    </div>
-                  );
-                })}
-                {/* 总计：当前持仓实时浮盈之和 */}
-                {(() => {
-                  const totalUnrealized = ['BTC', 'ETH', 'SOL'].reduce((sum, coin) => {
-                    const qty = (afTotalAsset as any)?.positions?.[coin] ?? 0;
-                    const coinData = pnlData?.coins?.find((c: any) => c.coin === coin);
-                    const avgCost = coinData?.avgCost ?? 0;
-                    const livePrice = funderLivePrices[coin] || 0;
-                    if (qty > 0 && livePrice > 0 && avgCost > 0) {
-                      return sum + qty * (livePrice - avgCost);
-                    }
-                    return sum;
-                  }, 0);
-                  const hasLivePrices = Object.keys(funderLivePrices).length > 0;
-                  const totalSign = totalUnrealized >= 0 ? '+' : '';
-                  return (
-                    <div className="border-t border-white/20 pt-1 mt-1 flex items-baseline">
-                      <span className="w-9 text-xs text-white/80 font-medium">总计</span>
-                      <span className="flex-1"></span>
-                      <span className="w-10"></span>
-                      <span className="flex-1"></span>
-                      <span className={`flex-1 text-right text-sm font-bold whitespace-nowrap ${hasLivePrices ? 'text-green-400' : 'text-white/30'}`}>
-                        {hasLivePrices ? `${totalSign}${totalUnrealized.toFixed(2)} U` : '加载中...'}
-                      </span>
-                    </div>
-                  );
-                })()}
+                )}
               </div>
               )}
               {/* 管理员统计：累计订单（后端控制权限，代看模式下隐藏，资金方不显示） */}

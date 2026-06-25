@@ -151,6 +151,7 @@ const AJMarketTeam = lazy(() => import("./pages/AJMarketTeam"));
 const AJContract = lazy(() => import("./pages/AJContract"));
 
 const AfFeeDetail = lazy(() => import("./pages/AfFeeDetail"));
+const AfProfitForecast = lazy(() => import("./pages/AfProfitForecast"));
 const AfPayoutManage = lazy(() => import("./pages/AfPayoutManage"));
 const WaveRatioManage = lazy(() => import("./pages/WaveRatioManage"));
 const InterestManagePage = lazy(() => import("./pages/InterestManagePage"));
@@ -532,6 +533,7 @@ function Router() {
         <Route path="/ledger/:id/af-recharge-manage" component={AfRechargeManage} />
         <Route path="/ledger/:id/af-order-manage" component={AfOrderManage} />
         <Route path="/ledger/:id/af-fee-detail" component={AfFeeDetail} />
+        <Route path="/ledger/:id/af-profit-forecast" component={AfProfitForecast} />
         <Route path="/ledger/:id/af-payout-manage" component={AfPayoutManage} />
         <Route path="/ledger/:id/wave-ratio-manage" component={WaveRatioManage} />
         <Route path="/ledger/:id/interest-manage" component={InterestManagePage} />

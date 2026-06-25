@@ -164,6 +164,78 @@ function FeeDetailModal({ orders, onClose }: { orders: any[], onClose: () => voi
   );
 }
 
+// 订单详情管理费行（独立子组件，避免在IIFE中使用Hooks）
+function FeeRow({ order, ledgerId, viewAsUserId }: { order: any; ledgerId: number; viewAsUserId?: number }) {
+  const [feeExpanded, setFeeExpanded] = useState(false);
+  const { data: prepaidLogs } = trpc.ledger.afGetPrepaidFeeLogs.useQuery(
+    { ledgerId: order.ledgerId || ledgerId, orderId: order.id, viewAsUserId: viewAsUserId || undefined },
+    { enabled: feeExpanded }
+  );
+  const amount = parseFloat(order.amount);
+  const tradeValue = order.isGift ? amount : amount * 5.25;
+  const dailyFee = tradeValue / 0.75 * 0.12 / 365;
+  const startDate = new Date(order.createdAt);
+  const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+  const nowBJ = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+  nowBJ.setHours(0,0,0,0);
+  let endDay: Date;
+  if (order.sellStatus === 'sold' && order.sellConfirmedAt) {
+    const sellDate = new Date(new Date(order.sellConfirmedAt).toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+    endDay = new Date(sellDate.getFullYear(), sellDate.getMonth(), sellDate.getDate());
+  } else {
+    endDay = nowBJ;
+  }
+  const holdDays = Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
+  const totalFee = dailyFee * holdDays;
+  const isPending = order.status === 'pending';
+  const isSold = order.sellStatus === 'sold';
+  const fmtDay = (d: Date) => `${d.getMonth()+1}/${d.getDate()}`;
+  const prepaidFee = order.prepaidFee || 0;
+  const remainingFee = Math.max(0, totalFee - prepaidFee);
+  return (
+    <div className="col-span-2">
+      <div className="flex items-center gap-1 cursor-pointer" onClick={() => setFeeExpanded(v => !v)}>
+        <span className="text-gray-400 w-16 shrink-0">待付管理费</span>
+        <span className={`font-medium ${isPending ? 'text-gray-400' : isSold ? 'text-gray-500' : 'text-orange-500'}`}>
+          {remainingFee.toFixed(4)} <span className="text-gray-400">u</span>
+        </span>
+        <span className="text-gray-400 ml-1 text-[10px]">({fmtDay(startDay)}→{fmtDay(endDay)} {holdDays}天{isPending ? ' 撤单则作废' : ''}{isSold ? ' ✓已停计' : ''})</span>
+        <span className="ml-auto text-gray-400 text-xs">{feeExpanded ? '▲' : '▼'}</span>
+      </div>
+      {feeExpanded && (
+        <div className="mt-2 bg-gray-50 rounded-xl p-3 text-xs space-y-1.5">
+          <div className="flex justify-between">
+            <span className="text-gray-500">实际管理费</span>
+            <span className="font-medium text-gray-700">{totalFee.toFixed(4)} u
+              <span className="text-gray-400 ml-1">({dailyFee.toFixed(4)}/天×{holdDays}天)</span>
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-500">已付管理费</span>
+            <span className="font-medium text-green-600">{prepaidFee.toFixed(4)} u</span>
+          </div>
+          <div className="flex justify-between border-t border-gray-200 pt-1.5">
+            <span className="text-gray-500">待付管理费</span>
+            <span className="font-bold text-orange-500">{remainingFee.toFixed(4)} u</span>
+          </div>
+          {prepaidLogs && prepaidLogs.logs.length > 0 && (
+            <div className="mt-2 border-t border-gray-200 pt-2">
+              <div className="text-gray-400 mb-1">已付记录</div>
+              {prepaidLogs.logs.map((log: any, i: number) => (
+                <div key={i} className="flex justify-between text-[10px] py-0.5">
+                  <span className="text-gray-400">{log.createdAt?.slice(0,10)}</span>
+                  <span className="text-green-600 font-medium">+{log.amount.toFixed(4)} u</span>
+                  {log.note && <span className="text-gray-400 ml-1 truncate max-w-[80px]">{log.note}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AfOrderManage() {
   const params = useParams();
   const [, setLocation] = useLocation();
@@ -468,6 +540,16 @@ export default function AfOrderManage() {
                   <span className="text-white font-bold">{stats.fees.totalFee.toFixed(2)} U</span>
                 </div>
               </div>
+              <div className="mt-2 pt-2 border-t border-white/10 flex gap-4 text-xs">
+                <div className="flex items-center gap-1">
+                  <span className="text-white/50">今日管理费</span>
+                  <span className="text-sky-300 font-semibold">{(stats.fees as any).todayFee?.toFixed(4) ?? '0.0000'} U</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-white/50">今日新增</span>
+                  <span className="text-white font-bold">{(stats.fees as any).todayOrderCount ?? 0} 单</span>
+                </div>
+              </div>
             </button>
             {/* 第二行：累计订单 + 今日（各占一半） */}
             <div className="grid grid-cols-2 gap-2">
@@ -489,20 +571,18 @@ export default function AfOrderManage() {
                   </div>
                 </div>
               </div>
-              {/* 今日 */}
-              <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
-                <p className="text-white/55 text-xs mb-2">今日</p>
-                <div className="space-y-1.5">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-white/50">管理费</span>
-                    <span className="text-sky-300 font-semibold">{(stats.fees as any).todayFee?.toFixed(4) ?? '0.0000'} U</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-white/50">订单数</span>
-                    <span className="text-white font-bold">{(stats.fees as any).todayOrderCount ?? 0} 单</span>
-                  </div>
+              {/* 盈利预测 */}
+              <button
+                onClick={() => setLocation(`/ledger/${ledgerId}/af-profit-forecast`)}
+                className="rounded-2xl px-4 py-3 text-left w-full active:opacity-70 transition-opacity"
+                style={{ background: 'rgba(255,255,255,0.14)' }}
+              >
+                <p className="text-white/55 text-xs mb-2">盈利预测</p>
+                <div className="flex items-center justify-between h-10">
+                  <span className="text-white text-sm font-semibold">模拟目标价</span>
+                  <span className="text-white/60 text-xs">→</span>
                 </div>
-              </div>
+              </button>
             </div>
             {/* 持仓中各币种数量统计 */}
             {(() => {
@@ -1832,42 +1912,10 @@ export default function AfOrderManage() {
                         </div>
                       );
                     })()}
-                    {/* 累计管理费：从下单时间（createdAt）开始算，撤单则作废，成交/委卖/持仓均累计（含赠单） */}
-                    {(order.status === 'completed' || order.status === 'pending') && (() => {
-                      const amount = parseFloat(order.amount);
-                      // 赠单直接用amount（赠送市值），正单用amount×5.25（订单价值）
-                      const tradeValue = order.isGift ? amount : amount * 5.25;
-                      const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-                      // 开始日期：从下单时间（createdAt）算起，修改价格等操作不影响管理费
-                      const startDate = new Date(order.createdAt);
-                      const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-                      // 结束日期：已卖出用 sellConfirmedAt，其他状态用今天
-                      // 北京时间（UTC+8）当天日期
-                      const nowBJ = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
-                      nowBJ.setHours(0,0,0,0);
-                      let endDay: Date;
-                      if (order.sellStatus === 'sold' && order.sellConfirmedAt) {
-                        const sellDate = new Date(new Date(order.sellConfirmedAt).toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
-                        endDay = new Date(sellDate.getFullYear(), sellDate.getMonth(), sellDate.getDate());
-                      } else {
-                        endDay = nowBJ;
-                      }
-                      const holdDays = Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
-                      const totalFee = dailyFee * holdDays;
-                      const isPending = order.status === 'pending';
-                      const isSold = order.sellStatus === 'sold';
-                      // 日期格式化函数：M/D 格式
-                      const fmtDay = (d: Date) => `${d.getMonth()+1}/${d.getDate()}`;
-                      return (
-                        <div className="flex items-center gap-1 col-span-2">
-                          <span className="text-gray-400 w-12 shrink-0">管理费</span>
-                          <span className={`font-medium ${isPending ? 'text-gray-400' : isSold ? 'text-gray-500' : 'text-gray-900'}`}>
-                            {totalFee.toFixed(4)} <span className="text-gray-400">u</span>
-                          </span>
-                          <span className="text-gray-400 ml-1">({fmtDay(startDay)}→{fmtDay(endDay)} {holdDays}天 {dailyFee.toFixed(4)}/天{isPending ? ' 撤单则作废' : ''}{isSold ? ' ✓已停计' : ''})</span>
-                        </div>
-                      );
-                    })()}
+                    {/* 累计管理费：待付管理费（已扣预收部分） */}
+                    {(order.status === 'completed' || order.status === 'pending') && (
+                      <FeeRow order={order} ledgerId={ledgerId} />
+                    )}
                   </div>
 
                   {/* 赠送订单来源信息 */}

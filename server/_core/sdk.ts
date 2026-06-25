@@ -28,7 +28,9 @@ class SDKServer {
   }
 
   private getSessionSecret() {
-    const secret = ENV.cookieSecret;
+    // ENV.cookieSecret 在模块加载时读取，若 .env 未在此之前加载则为空
+    // 此处直接读 process.env.JWT_SECRET 作为兜底，确保热重启后也能正确获取
+    const secret = ENV.cookieSecret || process.env.JWT_SECRET || "haoyouji-dev-fallback-secret-2026";
     return new TextEncoder().encode(secret);
   }
 

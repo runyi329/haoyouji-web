@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useLocation, useParams } from "wouter";
-import { ArrowLeft, ChevronDown, ChevronRight } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, DollarSign } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
 const now = new Date();
@@ -60,6 +60,13 @@ export default function AfFeeDetail() {
   const [aprInfo, setAprInfo] = useState<any | null>(null);
   const [detailOrder, setDetailOrder] = useState<any | null>(null);
   const [finDetailOrder, setFinDetailOrder] = useState<any | null>(null);
+  // 预收管理费弹窗
+  const [collectModal, setCollectModal] = useState<{ order: any; totalFee: number; prepaidFee: number } | null>(null);
+  const [collectAmount, setCollectAmount] = useState('');
+  const [collectNote, setCollectNote] = useState('');
+  const [collectLoading, setCollectLoading] = useState(false);
+  const collectMutation = trpc.ledger.afAdminCollectPrepaidFee.useMutation();
+  const utils = trpc.useUtils();
   // 表格排序：点表头切换字段与正/倒序
   const [sortKey, setSortKey] = useState<'holdDays' | 'totalFee' | 'nominalApr' | 'actualApr' | null>(null);
   const [sortAsc, setSortAsc] = useState(false);
@@ -359,19 +366,34 @@ export default function AfFeeDetail() {
                       </div>
                     </button>
                     {isOpen && (
-                      <div className="border-t border-gray-100 divide-y divide-gray-50">
-                        {items.sort((a, b) => b.dailyFee - a.dailyFee).map(item => (
-                          <div key={item.id} className="flex items-center px-3 py-1 gap-1.5">
-                            <span className="text-[11px] font-medium text-gray-700 w-14 truncate shrink-0">{item.nickname || item.username}</span>
-                            <span className="text-[10px] text-gray-400 shrink-0">{item.coin}</span>
-                            <span className="text-[10px] text-gray-300 shrink-0">{Math.round(parseFloat(item.amount||'0'))}u</span>
-                            <span className="text-[11px] font-bold text-gray-800 ml-auto shrink-0">{item.dailyFee.toFixed(4)}</span>
-                          </div>
-                        ))}
-                        <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50">
-                          <span className="text-[10px] text-gray-500 font-semibold">当日合计</span>
-                          <span className="text-xs font-bold text-blue-600">{totalFee.toFixed(4)} U</span>
-                        </div>
+                      <div className="border-t border-gray-100">
+                        {/* 表格 */}
+                        <table className="w-full" style={{ borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr className="bg-gray-50">
+                              <th className="text-[9px] font-normal text-gray-400 text-left px-3 py-1 border-r border-b border-gray-200">用户</th>
+                              <th className="text-[9px] font-normal text-gray-400 text-center px-2 py-1 border-r border-b border-gray-200 w-12">币种</th>
+                              <th className="text-[9px] font-normal text-gray-400 text-right px-2 py-1 border-r border-b border-gray-200 w-18">持仓金额</th>
+                              <th className="text-[9px] font-normal text-gray-400 text-right px-3 py-1 border-b border-gray-200 w-20">当日费用(U)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                          {items.sort((a, b) => b.dailyFee - a.dailyFee).map((item, idx) => (
+                            <tr key={item.id} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+                              <td className="text-[11px] font-medium text-gray-700 truncate px-3 py-1.5 border-r border-gray-200 max-w-0" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.nickname || item.username}</td>
+                              <td className="text-[10px] text-gray-400 text-center px-2 py-1.5 border-r border-gray-200">{item.coin}</td>
+                              <td className="text-[10px] text-gray-400 text-right px-2 py-1.5 border-r border-gray-200">{Math.round(parseFloat(item.amount||'0'))}u</td>
+                              <td className="text-[11px] font-bold text-gray-800 text-right px-3 py-1.5">{item.dailyFee.toFixed(4)}</td>
+                            </tr>
+                          ))}
+                          </tbody>
+                          <tfoot>
+                            <tr className="bg-gray-50">
+                              <td className="text-[10px] text-gray-500 font-semibold px-3 py-1.5 border-t border-gray-200" colSpan={3}>当日合计</td>
+                              <td className="text-xs font-bold text-blue-600 text-right px-3 py-1.5 border-t border-gray-200">{totalFee.toFixed(4)}</td>
+                            </tr>
+                          </tfoot>
+                        </table>
                       </div>
                     )}
                   </div>
@@ -432,19 +454,55 @@ export default function AfFeeDetail() {
                       )}
                     </button>
                     {isOpen && (
-                      <div className="border-t border-gray-100 divide-y divide-gray-50">
-                        {person.orders.sort((a, b) => b.dailyFee - a.dailyFee).map(item => (
-                          <div key={item.id} className="flex items-center px-3 py-1 gap-1.5">
-                            <span className="text-[10px] text-gray-400 shrink-0">{item.coin}</span>
-                            <span className="text-[10px] text-gray-300 shrink-0">{Math.round(parseFloat(item.amount||'0'))}u</span>
-                            <span className="text-[10px] text-gray-400 shrink-0">{item.holdDays}天</span>
-                            <span className="text-[11px] font-bold text-gray-800 ml-auto shrink-0">{item.dailyFee.toFixed(4)}/天</span>
-                          </div>
-                        ))}
-                        <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50">
-                          <span className="text-[10px] text-gray-500 font-semibold">每日合计</span>
-                          <span className="text-xs font-bold text-blue-600">{person.dailyTotal.toFixed(4)} U/天</span>
-                        </div>
+                      <div className="border-t border-gray-100">
+                        {/* 表格 */}
+                        <table className="w-full" style={{ borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr className="bg-gray-50">
+                              <th className="text-[9px] font-normal text-gray-400 text-center px-2 py-1 border-r border-b border-gray-200 w-12">币种</th>
+                              <th className="text-[9px] font-normal text-gray-400 text-right px-2 py-1 border-r border-b border-gray-200 w-18">持仓金额</th>
+                              <th className="text-[9px] font-normal text-gray-400 text-right px-2 py-1 border-r border-b border-gray-200 w-14">持仓天</th>
+                              <th className="text-[9px] font-normal text-gray-400 text-right px-2 py-1 border-r border-b border-gray-200 w-24">累计管理费</th>
+                              <th className="text-[9px] font-normal text-gray-400 text-center px-2 py-1 border-b border-gray-200 w-12">操作</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                          {person.orders.sort((a, b) => b.dailyFee - a.dailyFee).map((item, idx) => {
+                              const prepaidFee = parseFloat(item.prepaidFee || '0');
+                              const remainingFee = Math.max(0, item.totalFee - prepaidFee);
+                              return (
+                            <tr key={item.id} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+                              <td className="text-[10px] text-gray-500 font-medium text-center px-2 py-1.5 border-r border-gray-200">{item.coin}</td>
+                              <td className="text-[10px] text-gray-400 text-right px-2 py-1.5 border-r border-gray-200">{Math.round(parseFloat(item.amount||'0'))}u</td>
+                              <td className="text-[10px] text-gray-400 text-right px-2 py-1.5 border-r border-gray-200">{item.holdDays}天</td>
+                              <td className="px-2 py-1.5 border-r border-gray-200">
+                                <div className="text-right">
+                                  <div className="text-[11px] font-bold text-gray-800">{item.totalFee.toFixed(4)}</div>
+                                  {prepaidFee > 0 && <div className="text-[9px] text-green-600">已付{prepaidFee.toFixed(4)}</div>}
+                                  <div className="text-[9px] text-orange-500">待付{remainingFee.toFixed(4)}</div>
+                                </div>
+                              </td>
+                              <td className="px-2 py-1.5 text-center">
+                                <button
+                                  onClick={() => {
+                                    setCollectModal({ order: item, totalFee: item.totalFee, prepaidFee });
+                                    setCollectAmount(remainingFee.toFixed(4));
+                                    setCollectNote('');
+                                  }}
+                                  className="bg-orange-500 text-white text-[9px] px-2 py-1 rounded-full font-medium"
+                                >收费</button>
+                              </td>
+                            </tr>
+                              );
+                          })}
+                          </tbody>
+                          <tfoot>
+                            <tr className="bg-gray-50">
+                              <td className="text-[10px] text-gray-500 font-semibold px-3 py-1.5 border-t border-gray-200" colSpan={4}>每日合计</td>
+                              <td className="text-xs font-bold text-blue-600 text-right px-3 py-1.5 border-t border-gray-200">{person.dailyTotal.toFixed(4)}</td>
+                            </tr>
+                          </tfoot>
+                        </table>
                       </div>
                     )}
                   </div>
@@ -901,6 +959,90 @@ export default function AfFeeDetail() {
                 <Row k="状态" v={statusMap[d.status] || d.status || '-'} />
               </div>
               <button onClick={() => setFinDetailOrder(null)} className="mt-4 w-full py-2 rounded-xl text-sm font-medium text-white" style={{ background: '#2563eb' }}>关闭</button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 预收管理费弹窗 */}
+      {collectModal && (() => {
+        const { order, totalFee, prepaidFee } = collectModal;
+        const remaining = Math.max(0, totalFee - prepaidFee);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setCollectModal(null)}>
+            <div className="bg-white rounded-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-bold text-gray-900">预收管理费</h3>
+                <button onClick={() => setCollectModal(null)} className="text-gray-400 text-xl">×</button>
+              </div>
+              <div className="mb-4 bg-gray-50 rounded-xl p-3 space-y-1.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">订单</span>
+                  <span className="font-medium">{order.coin} #{order.id}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">累计管理费</span>
+                  <span className="font-bold text-gray-800">{totalFee.toFixed(4)} U</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-gray-500">已付管理费</span>
+                  <span className="font-bold text-green-600">{prepaidFee.toFixed(4)} U</span>
+                </div>
+                <div className="flex justify-between text-xs border-t border-gray-200 pt-1.5">
+                  <span className="text-gray-500">待付管理费</span>
+                  <span className="font-bold text-orange-500">{remaining.toFixed(4)} U</span>
+                </div>
+              </div>
+              <div className="mb-3">
+                <label className="text-xs text-gray-500 mb-1 block">本次收取金额 (U)</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  min="0.0001"
+                  max={remaining}
+                  value={collectAmount}
+                  onChange={e => setCollectAmount(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+                  placeholder="输入金额"
+                />
+              </div>
+              <div className="mb-4">
+                <label className="text-xs text-gray-500 mb-1 block">备注（可选）</label>
+                <input
+                  type="text"
+                  value={collectNote}
+                  onChange={e => setCollectNote(e.target.value)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+                  placeholder="如：6月份管理费"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setCollectModal(null)} className="flex-1 py-2.5 rounded-xl text-sm text-gray-500 bg-gray-100">取消</button>
+                <button
+                  disabled={collectLoading || !collectAmount || parseFloat(collectAmount) <= 0}
+                  onClick={async () => {
+                    const amt = parseFloat(collectAmount);
+                    if (isNaN(amt) || amt <= 0) return;
+                    setCollectLoading(true);
+                    try {
+                      await collectMutation.mutateAsync({
+                        ledgerId,
+                        orderId: order.id,
+                        amount: amt,
+                        note: collectNote || undefined,
+                      });
+                      await utils.ledger.afAdminGetOrders.invalidate({ ledgerId });
+                      setCollectModal(null);
+                      alert(`预收成功！已从用户余额扣除 ${amt.toFixed(4)} U`);
+                    } catch (e: any) {
+                      alert('预收失败：' + (e.message || '未知错误'));
+                    } finally {
+                      setCollectLoading(false);
+                    }
+                  }}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-orange-500 disabled:opacity-50"
+                >{collectLoading ? '处理中...' : '确认收费'}</button>
+              </div>
             </div>
           </div>
         );
