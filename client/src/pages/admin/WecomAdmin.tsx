@@ -7575,7 +7575,8 @@ function NotifyTab() {
     setMsg(null);
     try {
       // 担保缺口预警：使用强制测试发送 API（不走阈值/新底逻辑，直接取当前保证金比例）
-      if (editingKey === "fz_notify_collateral_gap" && rec.id) {
+      const notifyKey = rec.notify_key || editingKey;
+      if (notifyKey === "fz_notify_collateral_gap" && rec.id) {
         const r = await fetch("/api/admin/wecom/test-collateral-gap-send", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` },
