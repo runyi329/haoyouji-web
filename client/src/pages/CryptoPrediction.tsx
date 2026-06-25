@@ -3115,7 +3115,7 @@ export default function CryptoPrediction() {
                   livePrices={financeLivePrices}
                   priceDirection={{}}
                   currentUser={meData ? { id: (meData as any).id, name: (meData as any).name, username: (meData as any).username, avatar: (meData as any).avatar } : undefined}
-                  isAdmin={isOwner}
+                  isAdmin={false}
                   membersData={(ledgerInfo as any)?.members || []}
                 />
               );
@@ -3238,7 +3238,7 @@ export default function CryptoPrediction() {
                               livePrices={financeLivePrices}
                               priceDirection={{}}
                               currentUser={meData ? { id: (meData as any).id, name: (meData as any).name, username: (meData as any).username, avatar: (meData as any).avatar } : undefined}
-                              isAdmin={isOwner}
+                              isAdmin={false}
                               membersData={(ledgerInfo as any)?.members || []}
                             />
                           );
