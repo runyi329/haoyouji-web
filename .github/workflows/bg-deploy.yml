@@ -52,8 +52,10 @@ jobs:
           echo "[$(date '+%Y-%m-%d %H:%M:%S')] pm2 restart..." >> $LOG
           # 先尝试重启 ubuntu 用户的 haoyouji-web 进程
           sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 restart /home/ubuntu/haoyouji-web/ecosystem.config.cjs --update-env' >> $LOG 2>&1 || \
-            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 start /home/ubuntu/haoyouji-web/ecosystem.config.cjs' >> $LOG 2>&1
-          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 save' >> $LOG 2>&1
+            sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 start /home/ubuntu/haoyouji-web/ecosystem.config.cjs' >> $LOG 2>&1 || \
+            pm2 restart haoyouji-web >> $LOG 2>&1 || \
+            pm2 start /home/ubuntu/haoyouji-web/ecosystem.config.cjs >> $LOG 2>&1 || true
+          sudo -u ubuntu bash -c 'HOME=/home/ubuntu pm2 save' >> $LOG 2>&1 || pm2 save >> $LOG 2>&1 || true
           # 同时重启 root 用户的 openclaw-gateway 进程（如果存在）
           pm2 restart openclaw-gateway >> $LOG 2>&1 || pm2 restart all >> $LOG 2>&1 || true
           echo "[$(date '+%Y-%m-%d %H:%M:%S')] pm2 status:" >> $LOG
