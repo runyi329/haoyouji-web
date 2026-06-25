@@ -1236,7 +1236,7 @@ export default function AfOrderManage() {
               // 按买入价格分组（同一价格归为一组）
               const priceMap = new Map<string, { price: number; coin: string; orders: any[] }>();
               const orphanGiftIdsP = new Set<number>(); // 孤儿赠单ID
-              (searchedOrders || []).forEach((order: any) => {
+              (searchedOrders || []).filter((order: any) => order.status !== 'cancelled').forEach((order: any) => {
                 const isGift = order.isGift === true || order.isGift === 1;
                 if (isGift) orphanGiftIdsP.add(order.id);
                 const price = parseFloat(order.limitPrice || '0');
@@ -1254,25 +1254,43 @@ export default function AfOrderManage() {
               return priceGroups.map(group => {
                 const gKey = `price_${group.coin}_${group.price}`;
                 const isOpen = expandedPersons[gKey] ?? false;
-                let totalQty = 0;
-                let giftQty = 0;
+                // 实际持仓中数量：只统计已成交且未卖出的订单
+                let holdingRawQty = 0;  // 持仓中正单原始数量（不折扣）
+                let holdingEffQty = 0;  // 持仓中正单折后数量
+                let holdingGiftQty = 0; // 持仓中赠单数量
                 let orderCount = 0;
                 let giftCount = 0;
+                let hasDiscount = false; // 是否有折扣档位
                 group.orders.forEach((o: any) => {
                   const isGift = o.isGift === true || o.isGift === 1;
-                  totalQty += parseFloat(o.quantity) || 0;
+                  const qty = parseFloat(o.quantity) || 0;
+                  const tier = o.equityTier || 0;
+                  const rate = EQUITY_DISCOUNT_RATES[tier] ?? 1.0;
+                  const effQty = qty * rate;
+                  const isCompleted = o.status === 'completed';
+                  const isSold = o.sellStatus === 'sold';
                   orderCount++;
-                  if (isGift) { giftQty += parseFloat(o.quantity) || 0; giftCount++; }
-                  if (!isGift) {
+                  if (isGift) {
+                    if (isCompleted && !isSold) holdingGiftQty += qty;
+                    giftCount++;
+                  } else {
+                    if (isCompleted && !isSold) {
+                      holdingRawQty += qty;
+                      holdingEffQty += effQty;
+                      if (tier > 0 && Math.abs(effQty - qty) > 0.00005) hasDiscount = true;
+                    }
+                    // 嵌套赠单
                     ((o.giftOrders as any[]) || []).forEach((g: any) => {
                       if (orphanGiftIdsP.has(g.id)) return;
                       const gQty = parseFloat(g.quantity) || 0;
-                      totalQty += gQty;
-                      giftQty += gQty;
+                      const gCompleted = g.status === 'completed';
+                      const gSold = g.sellStatus === 'sold';
+                      if (gCompleted && !gSold) holdingGiftQty += gQty;
                       giftCount++;
                     });
                   }
                 });
+                const totalHolding = holdingRawQty + holdingGiftQty;
                 // 展平
                 const flatOrders: any[] = [];
                 group.orders.forEach((o: any) => {
@@ -1301,8 +1319,22 @@ export default function AfOrderManage() {
                         <span className="text-xs text-gray-500">${group.price.toFixed(2)}</span>
                       </div>
                       <div className="flex items-center gap-1.5 flex-1 justify-end">
-                        <span className="text-[11px] text-gray-700 font-mono">{totalQty.toFixed(COIN_DECIMALS[group.coin] ?? 4)}</span>
-                        {giftQty > 0 && <span className="text-[11px] text-orange-400">+{giftQty.toFixed(COIN_DECIMALS[group.coin] ?? 4)}赠</span>}
+                        {totalHolding > 0 ? (() => {
+                          const dec = COIN_DECIMALS[group.coin] ?? 4;
+                          // 总数量 = 正单原始 + 赠单（赠单无折扣）
+                          const totalRaw = holdingRawQty + holdingGiftQty;
+                          // 折后有效数量 = 正单折后 + 赠单
+                          const totalEff = holdingEffQty + holdingGiftQty;
+                          const showEff = hasDiscount && Math.abs(totalEff - totalRaw) > 0.00005;
+                          return (
+                            <span className="text-[11px] text-gray-500">
+                              {totalRaw.toFixed(dec)}
+                              {showEff && <span className="text-green-600">({totalEff.toFixed(dec)})</span>}
+                            </span>
+                          );
+                        })() : (
+                          <span className="text-[11px] text-gray-400">无持仓</span>
+                        )}
                         <span className="text-[11px] text-blue-500">{orderCount}单</span>
                         {giftCount > 0 && <span className="text-[11px] text-orange-400">{giftCount}赠</span>}
                       </div>
@@ -1310,6 +1342,15 @@ export default function AfOrderManage() {
                     </button>
                     {isOpen && (
                       <div className="mt-1 mb-2 rounded-xl bg-white border border-gray-100 shadow-sm overflow-hidden">
+                        {/* 表头 */}
+                        <div className="grid text-[9px] font-semibold text-gray-400 bg-gray-50 border-b border-gray-100 px-2.5 py-1" style={{gridTemplateColumns:'20px 1fr 60px 36px 52px 44px'}}>
+                          <span></span>
+                          <span className="text-right">数量</span>
+                          <span className="text-right">投入</span>
+                          <span className="text-center">状态</span>
+                          <span className="text-right">日期</span>
+                          <span className="text-right">用户</span>
+                        </div>
                         <div className="divide-y divide-gray-50">
                           {flatOrders.map((order: any) => {
                             const isGift = order._isGift;
@@ -1319,29 +1360,31 @@ export default function AfOrderManage() {
                             const tier = order.equityTier || 0;
                             const rate = EQUITY_DISCOUNT_RATES[tier] ?? 1.0;
                             const effQty = qty * rate;
-                            const hasDiscount = Math.abs(effQty - qty) > 0.00005;
+                            const hasDiscount = !isGift && tier > 0 && Math.abs(effQty - qty) > 0.00005;
                             const amount = parseFloat(order.amount || 0);
                             const dateStr = formatDate(order.confirmedAt || order.createdAt);
                             const nickname = order.nickname || order.username || '';
                             return (
-                              <div key={order.id} className={`flex items-center px-2.5 py-1.5 gap-1 min-h-[28px] ${isGift ? 'bg-amber-50/40' : ''}`}>
+                              <div key={order.id} className={`grid items-center px-2.5 py-1.5 min-h-[28px] ${isGift ? 'bg-amber-50/40' : ''}`} style={{gridTemplateColumns:'20px 1fr 60px 36px 52px 44px'}}>
+                                {/* 列1: 标签 */}
                                 {isGift ? (
-                                  <span className="text-[9px] px-1 py-0 rounded bg-amber-100 text-amber-600 shrink-0">赠</span>
+                                  <span className="text-[9px] px-1 py-0 rounded bg-amber-100 text-amber-600 w-fit">赠</span>
                                 ) : (
-                                  <span className="text-[9px] px-1 py-0 rounded bg-blue-50 text-blue-500 shrink-0">正</span>
+                                  <span className="text-[9px] px-1 py-0 rounded bg-blue-50 text-blue-500 w-fit">正</span>
                                 )}
-                                <span className="text-[11px] text-gray-700 flex-1 text-right font-mono">
+                                {/* 列2: 数量（含折后） */}
+                                <span className="text-[11px] text-gray-700 text-right font-mono">
                                   {qty.toFixed(COIN_DECIMALS[oCoin] ?? 4)}
+                                  {hasDiscount && <span className="text-green-600 text-[9px]">({effQty.toFixed(COIN_DECIMALS[oCoin] ?? 4)})</span>}
                                 </span>
-                                {!isGift && tier > 0 && hasDiscount ? (
-                                  <span className="text-[9px] text-purple-500 shrink-0 w-16 text-right">T{tier}→{effQty.toFixed(COIN_DECIMALS[oCoin] ?? 4)}</span>
-                                ) : (
-                                  <span className="w-16 shrink-0" />
-                                )}
-                                <span className="text-[10px] text-gray-400 w-10 text-right shrink-0">{amount > 0 ? amount.toFixed(0)+'U' : ''}</span>
-                                <span className={`text-[9px] w-8 text-center shrink-0 ${statusDisplay.color}`}>{statusDisplay.label}</span>
-                                <span className="text-[9px] text-gray-400 w-14 text-right shrink-0">{dateStr}</span>
-                                {nickname && <span className="text-[9px] text-gray-400 shrink-0 ml-0.5 max-w-[40px] truncate">{nickname}</span>}
+                                {/* 列3: 投入金额 */}
+                                <span className="text-[10px] text-gray-400 text-right">{amount > 0 ? amount.toFixed(0)+'u' : ''}</span>
+                                {/* 列4: 状态 */}
+                                <span className={`text-[9px] text-center ${statusDisplay.color}`}>{statusDisplay.label}</span>
+                                {/* 列5: 日期 */}
+                                <span className="text-[9px] text-gray-400 text-right">{dateStr}</span>
+                                {/* 列6: 用户昵称 */}
+                                <span className="text-[9px] text-gray-400 text-right truncate">{nickname}</span>
                               </div>
                             );
                           })}
@@ -1358,7 +1401,7 @@ export default function AfOrderManage() {
             {/* 表头 */}
             <div
               className="grid items-center bg-gray-100 border border-gray-300 text-[11px] font-semibold text-gray-600"
-              style={{ gridTemplateColumns: '64px 1fr 56px' }}
+              style={{ gridTemplateColumns: '80px 1fr 56px' }}
             >
               <div className="px-1 py-1.5 text-center border-r border-gray-300">日期</div>
               <div className="px-2 py-1.5 border-r border-gray-300">持仓明细</div>
@@ -1431,10 +1474,10 @@ export default function AfOrderManage() {
                   <div key={dateKey}>
                     {/* 日期分组标题行 */}
                     {(() => {
-                      // 日期格式：「6月X号」（月份中文，号码数字）
+                      // 日期格式：「6月X日」（月份中文，日期数字）
                       const dateParts = dateKey.split('-'); // ["2026","05","28"]
                       const shortDate = dateParts.length === 3
-                        ? `${parseInt(dateParts[1], 10)}月${parseInt(dateParts[2], 10)}号`
+                        ? `${parseInt(dateParts[1], 10)}月${parseInt(dateParts[2], 10)}日`
                         : dateKey;
                       // 正单数量（非赠单，过滤掉已撤单）
                       const normalCount = activeOrders.filter((o: any) => !o.isGift).length;
@@ -1477,7 +1520,7 @@ export default function AfOrderManage() {
                           className={`w-full grid items-stretch text-left transition-colors border-x border-b border-gray-300 hover:bg-gray-50 ${
                             allSold ? 'bg-gray-50' : 'bg-white'
                           }`}
-                          style={{ gridTemplateColumns: '64px 1fr 56px' }}
+                          style={{ gridTemplateColumns: '80px 1fr 56px' }}
                         >
                           {/* 列一：日期 */}
                           <div className={`flex items-center justify-center px-1 py-2 border-r border-gray-300 text-sm font-bold ${allSold ? 'text-gray-400' : 'text-gray-900'}`}>

@@ -52,7 +52,11 @@ export default function AfFeeDetail() {
   const ledgerId = params?.id ? parseInt(params.id) : 0;
 
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
-  const [feeFilter, setFeeFilter] = useState<'all' | 'ongoing' | 'settled'>('all');
+  const [feeFilter, setFeeFilter] = useState<'all' | 'ongoing' | 'settled' | 'byDate' | 'byPerson'>('all');
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+  const toggleDate = (d: string) => setExpandedDates(prev => { const n = new Set(prev); n.has(d) ? n.delete(d) : n.add(d); return n; });
+  const [expandedPersons, setExpandedPersons] = useState<Set<string>>(new Set());
+  const togglePerson = (uid: string) => setExpandedPersons(prev => { const n = new Set(prev); n.has(uid) ? n.delete(uid) : n.add(uid); return n; });
   const [aprInfo, setAprInfo] = useState<any | null>(null);
   const [detailOrder, setDetailOrder] = useState<any | null>(null);
   const [finDetailOrder, setFinDetailOrder] = useState<any | null>(null);
@@ -255,6 +259,8 @@ export default function AfFeeDetail() {
           { key: 'all' as const, label: `全部 ${userGroups.length} 人` },
           { key: 'ongoing' as const, label: '进行中' },
           { key: 'settled' as const, label: '已结清' },
+          { key: 'byDate' as const, label: '按日期' },
+          { key: 'byPerson' as const, label: '按人员' },
         ]).map(tab => (
           <button
             key={tab.key}
@@ -270,8 +276,188 @@ export default function AfFeeDetail() {
       </div>
       )}
 
+      {/* ── 谷底增筹：按日期视图 ── */}
+      {mainTab === 'gujian' && feeFilter === 'byDate' && (
+      <div className="px-3 pt-3 pb-10">
+        {isLoading ? (
+          <div className="text-center py-16 text-gray-400 text-sm">加载中…</div>
+        ) : (() => {
+          // 按天展开：每个订单在其持仓区间内的每天都产生日费
+          // dateMap: 日期字符串 -> 当天活跃的订单列表
+          const dateMap = new Map<string, typeof feeItems>();
+          const todayBJ = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+          const todayKey = `${todayBJ.getFullYear()}-${String(todayBJ.getMonth()+1).padStart(2,'0')}-${String(todayBJ.getDate()).padStart(2,'0')}`;
+          for (const item of feeItems) {
+            // 开仓日（北京时间）
+            const startBJ = new Date(new Date(item.createdAt).toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+            const startDay = new Date(startBJ.getFullYear(), startBJ.getMonth(), startBJ.getDate());
+            // 结束日：已卖出用卖出日，否则用今天
+            let endDay: Date;
+            if (item.feeType === 'settled' && item.sellConfirmedAt) {
+              const sellBJ = new Date(new Date(item.sellConfirmedAt).toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+              endDay = new Date(sellBJ.getFullYear(), sellBJ.getMonth(), sellBJ.getDate());
+            } else {
+              endDay = new Date(todayBJ.getFullYear(), todayBJ.getMonth(), todayBJ.getDate());
+            }
+            // 按天展开
+            const cur = new Date(startDay);
+            while (cur <= endDay) {
+              const key = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;
+              if (!dateMap.has(key)) dateMap.set(key, []);
+              // 避免同一天同一订单重复添加
+              const existing = dateMap.get(key)!;
+              if (!existing.find((x: any) => x.id === item.id)) existing.push(item);
+              cur.setDate(cur.getDate() + 1);
+            }
+          }
+          const sortedDates = Array.from(dateMap.keys()).sort((a, b) => b.localeCompare(a));
+          if (sortedDates.length === 0) return <div className="text-center py-16 text-gray-400 text-sm">暂无记录</div>;
+          // 当前每日总费率 = 今天所有活跃订单的日费率之和
+          const todayItems = dateMap.get(todayKey) || [];
+          const currentDailyTotal = todayItems.reduce((s: number, i: any) => s + i.dailyFee, 0);
+          const monthlyForecast = currentDailyTotal * 30;
+          const yearlyForecast = currentDailyTotal * 365;
+          return (
+            <div className="space-y-2">
+              {/* 预测卡片 */}
+              <div className="rounded-2xl shadow-sm px-4 py-3 flex gap-3" style={{background:'linear-gradient(135deg,#eff6ff 0%,#e0f2fe 100%)',border:'1px solid #bfdbfe'}}>
+                <div className="flex-1 text-center">
+                  <p className="text-[10px] text-gray-400 mb-1">每日（当前）</p>
+                  <p className="text-sm font-bold text-gray-700">{currentDailyTotal.toFixed(2)} <span className="text-[10px] font-normal text-gray-400">U/天</span></p>
+                </div>
+                <div className="w-px bg-gray-100" />
+                <div className="flex-1 text-center">
+                  <p className="text-[10px] text-gray-400 mb-1">月预测（×30）</p>
+                  <p className="text-sm font-bold text-blue-600">{Math.round(monthlyForecast)} <span className="text-[10px] font-normal text-gray-400">U</span></p>
+                </div>
+                <div className="w-px bg-gray-100" />
+                <div className="flex-1 text-center">
+                  <p className="text-[10px] text-gray-400 mb-1">年预测（×365）</p>
+                  <p className="text-sm font-bold text-emerald-600">{Math.round(yearlyForecast)} <span className="text-[10px] font-normal text-gray-400">U</span></p>
+                </div>
+              </div>
+              {sortedDates.map(dateKey => {
+                const items = dateMap.get(dateKey)!;
+                const totalFee = items.reduce((s, i) => s + i.dailyFee, 0);
+                const totalOrders = items.length;
+                const isOpen = expandedDates.has(dateKey);
+                const parts = dateKey.split('-');
+                const shortDate = `${parseInt(parts[1])}月${parseInt(parts[2])}日`;
+                return (
+                  <div key={dateKey} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                    <button
+                      onClick={() => toggleDate(dateKey)}
+                      className="w-full flex items-center justify-between px-4 py-3"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-gray-800">{shortDate}</span>
+                        <span className="text-xs text-gray-400">{totalOrders}单</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-blue-600">{totalFee.toFixed(4)} U</span>
+                        {isOpen ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                      </div>
+                    </button>
+                    {isOpen && (
+                      <div className="border-t border-gray-100 divide-y divide-gray-50">
+                        {items.sort((a, b) => b.dailyFee - a.dailyFee).map(item => (
+                          <div key={item.id} className="flex items-center px-3 py-1 gap-1.5">
+                            <span className="text-[11px] font-medium text-gray-700 w-14 truncate shrink-0">{item.nickname || item.username}</span>
+                            <span className="text-[10px] text-gray-400 shrink-0">{item.coin}</span>
+                            <span className="text-[10px] text-gray-300 shrink-0">{Math.round(parseFloat(item.amount||'0'))}u</span>
+                            <span className="text-[11px] font-bold text-gray-800 ml-auto shrink-0">{item.dailyFee.toFixed(4)}</span>
+                          </div>
+                        ))}
+                        <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50">
+                          <span className="text-[10px] text-gray-500 font-semibold">当日合计</span>
+                          <span className="text-xs font-bold text-blue-600">{totalFee.toFixed(4)} U</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+      </div>
+      )}
+
+      {/* ── 谷底增筹：按人员视图 ── */}
+      {mainTab === 'gujian' && feeFilter === 'byPerson' && (
+      <div className="px-3 pt-3 pb-10">
+        {isLoading ? (
+          <div className="text-center py-16 text-gray-400 text-sm">加载中…</div>
+        ) : (() => {
+          const personMap = new Map<string, { nickname: string; dailyTotal: number; orders: typeof feeItems }>();
+          for (const item of feeItems) {
+            if (item.feeType === 'settled') continue;
+            const uid = String(item.userId || item.username || 'unknown');
+            const nickname = item.nickname || item.username || uid;
+            if (!personMap.has(uid)) personMap.set(uid, { nickname, dailyTotal: 0, orders: [] });
+            const p = personMap.get(uid)!;
+            p.dailyTotal += item.dailyFee;
+            p.orders.push(item);
+          }
+          const persons = Array.from(personMap.values()).sort((a, b) => b.dailyTotal - a.dailyTotal);
+          if (persons.length === 0) return <div className="text-center py-16 text-gray-400 text-sm">暂无进行中订单</div>;
+          return (
+            <div className="space-y-2">
+              {persons.map(person => {
+                const uid = person.nickname;
+                const isOpen = expandedPersons.has(uid);
+                return (
+                  <div key={uid} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                    <button
+                      onClick={() => togglePerson(uid)}
+                      className="w-full px-4 py-3 text-left"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-gray-800">{person.nickname}</span>
+                          <span className="text-xs text-gray-400">{person.orders.length}单</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-blue-600">{person.dailyTotal.toFixed(4)}</span>
+                          <span className="text-[10px] text-gray-400">U/天</span>
+                          {isOpen ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                        </div>
+                      </div>
+                      {!isOpen && (
+                        <div className="flex gap-3 mt-1">
+                          <span className="text-[10px] text-gray-400">月化 <span className="text-blue-500 font-semibold">{Math.round(person.dailyTotal*30)}</span>u</span>
+                          <span className="text-[10px] text-gray-400">季化 <span className="text-purple-500 font-semibold">{Math.round(person.dailyTotal*90)}</span>u</span>
+                          <span className="text-[10px] text-gray-400">年化 <span className="text-emerald-500 font-semibold">{Math.round(person.dailyTotal*365)}</span>u</span>
+                        </div>
+                      )}
+                    </button>
+                    {isOpen && (
+                      <div className="border-t border-gray-100 divide-y divide-gray-50">
+                        {person.orders.sort((a, b) => b.dailyFee - a.dailyFee).map(item => (
+                          <div key={item.id} className="flex items-center px-3 py-1 gap-1.5">
+                            <span className="text-[10px] text-gray-400 shrink-0">{item.coin}</span>
+                            <span className="text-[10px] text-gray-300 shrink-0">{Math.round(parseFloat(item.amount||'0'))}u</span>
+                            <span className="text-[10px] text-gray-400 shrink-0">{item.holdDays}天</span>
+                            <span className="text-[11px] font-bold text-gray-800 ml-auto shrink-0">{item.dailyFee.toFixed(4)}/天</span>
+                          </div>
+                        ))}
+                        <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50">
+                          <span className="text-[10px] text-gray-500 font-semibold">每日合计</span>
+                          <span className="text-xs font-bold text-blue-600">{person.dailyTotal.toFixed(4)} U/天</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+      </div>
+      )}
+
       {/* ── 谷底增筹：用户列表（表格） ── */}
-      {mainTab === 'gujian' && (
+      {mainTab === 'gujian' && feeFilter !== 'byDate' && feeFilter !== 'byPerson' && (
       <div className="px-3 pt-3">
         {isLoading ? (
           <div className="text-center py-16 text-gray-400 text-sm">加载中…</div>
