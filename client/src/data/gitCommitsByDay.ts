@@ -7819,5 +7819,8 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-25T05:36:58Z", type: "feat", cleanMessage: "结清按钮改为页面内自定义弹窗，修复iOS WebView confirm问题；MSTR币种加入两侧订单；预收管理费功能" },
     { date: "2026-06-25T05:46:53Z", type: "fix", cleanMessage: "MSTR加入后端coin枚举，修复添加MSTR订单报invalid_value错误" },
     { date: "2026-06-25T06:26:21Z", type: "fix", cleanMessage: "新浪财经作为美股价格最后兜底（OKX/Yahoo被墙时自动切换）" },
+    { date: "2026-06-25T07:47:41Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-25T09:42:53Z", type: "refactor", cleanMessage: "抽取FunderOrderCard为独立共享组件，老版重命名为Legacy并标记deprecated" },
+    { date: "2026-06-25T10:35:47Z", type: "refactor", cleanMessage: "FunderOrderCard自包含，LedgerDetail全部用新版组件" },
   ],
 };
