@@ -2142,6 +2142,8 @@ export default function CryptoPrediction() {
   const [sharedOrdersExpanded, setSharedOrdersExpanded] = useState(false);
   const [mySettledExpanded, setMySettledExpanded] = useState(false);
   const [sharedSettledExpanded, setSharedSettledExpanded] = useState(false);
+  const [mySharedCollExpanded, setMySharedCollExpanded] = useState(true);
+  const [mySoloCollExpanded, setMySoloCollExpanded] = useState(true);
   // 融资付息：资产汇总
   const { data: financeAssetSummary } = trpc.ledger.financeGetAssetSummary.useQuery(
     { ledgerId },
@@ -3096,52 +3098,119 @@ export default function CryptoPrediction() {
               });
               const myOrders = sortedOrders.filter((o: any) => !o._isParticipant && !o._fromFunder);
               const sharedOrders = sortedOrders.filter((o: any) => o._isParticipant || o._fromFunder);
-              const sharedActive = sharedOrders.filter((o: any) => o.status === 'active').length;
-              const sharedSettled = sharedOrders.filter((o: any) => o.status === 'settled' || o.status === 'completed' || o.status === 'cancelled').length;
+
+              // 自己订单按担保类型分组
+              const mySharedColl = myOrders.filter((o: any) => o.status === 'active' && o.collateral_mode === 'shared');
+              const mySoloColl = myOrders.filter((o: any) => o.status === 'active' && o.collateral_mode !== 'shared');
+              const mySettled = myOrders.filter((o: any) => o.status !== 'active');
+              // 共享订单（别人分享给我的）
+              const sharedActiveList = sharedOrders.filter((o: any) => o.status === 'active');
+              const sharedSettledList = sharedOrders.filter((o: any) => o.status !== 'active');
+
+              const renderCard = (order: any) => (
+                <FunderOrderCard
+                  key={order.id}
+                  order={order}
+                  ledgerId={ledgerId}
+                  livePrices={financeLivePrices}
+                  priceDirection={{}}
+                  currentUser={meData ? { id: (meData as any).id, name: (meData as any).name, username: (meData as any).username, avatar: (meData as any).avatar } : undefined}
+                  isAdmin={isOwner}
+                  membersData={(ledgerInfo as any)?.members || []}
+                />
+              );
+
+              // 折叠分组组件
+              const CollapseGroup = ({ title, count, color, bgColor, borderColor, expanded, onToggle, children }: {
+                title: string; count: number; color: string; bgColor: string; borderColor: string;
+                expanded: boolean; onToggle: () => void; children: React.ReactNode;
+              }) => (
+                <div className="mt-3">
+                  <button
+                    onClick={onToggle}
+                    className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl transition-all"
+                    style={{ backgroundColor: bgColor, border: `1px solid ${borderColor}` }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium" style={{ color }}>{title}</span>
+                      <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: borderColor, color }}>{count} 笔</span>
+                    </div>
+                    <ChevronDown className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''}`} style={{ color }} />
+                  </button>
+                  {expanded && <div className="space-y-3 mt-3">{children}</div>}
+                </div>
+              );
+
               return (
-                <div className="space-y-3">
-                  {/* 白底订单：用户自己的订单，进行中逐张陈列，已结束二级折叠 */}
-                  {(() => {
-                  const renderMyCard = (order: any) => (
-                    <FunderOrderCard
-                      key={order.id}
-                      order={order}
-                      ledgerId={ledgerId}
-                      livePrices={financeLivePrices}
-                      priceDirection={{}}
-                      currentUser={meData ? { id: (meData as any).id, name: (meData as any).name, username: (meData as any).username, avatar: (meData as any).avatar } : undefined}
-                      isAdmin={isOwner}
-                      membersData={(ledgerInfo as any)?.members || []}
-                    />
-                  );
-                  const myActive = myOrders.filter((o: any) => o.status === 'active');
-                  const mySettled = myOrders.filter((o: any) => o.status === 'settled' || o.status === 'completed' || o.status === 'cancelled');
-                  return (
-                    <>
-                      {myActive.map(renderMyCard)}
-                      {mySettled.length > 0 && (
-                        <div className="mt-2">
-                          <button
-                            onClick={() => setMySettledExpanded(!mySettledExpanded)}
-                            className="w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all"
-                            style={{ backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5' }}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium" style={{ color: '#DC2626' }}>自己的订单</span>
-                              <span className="text-xs" style={{ color: '#DC2626' }}>已结束 {mySettled.length} 笔</span>
-                            </div>
-                            <ChevronDown className={`w-4 h-4 transition-transform ${mySettledExpanded ? 'rotate-180' : ''}`} style={{ color: '#DC2626' }} />
-                          </button>
-                          {mySettledExpanded && (
-                            <div className="space-y-3 mt-3">
-                              {mySettled.map(renderMyCard)}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </>
-                  );
-                  })()}
+                <div className="space-y-1">
+                  {mySharedColl.length > 0 && (
+                    <CollapseGroup
+                      title="自己订单 · 共享担保"
+                      count={mySharedColl.length}
+                      color="#7C3AED"
+                      bgColor="#F5F3FF"
+                      borderColor="#DDD6FE"
+                      expanded={mySharedCollExpanded}
+                      onToggle={() => setMySharedCollExpanded(v => !v)}
+                    >
+                      {mySharedColl.map(renderCard)}
+                    </CollapseGroup>
+                  )}
+                  {mySoloColl.length > 0 && (
+                    <CollapseGroup
+                      title="自己订单 · 单独担保"
+                      count={mySoloColl.length}
+                      color="#1D4ED8"
+                      bgColor="#EFF6FF"
+                      borderColor="#BFDBFE"
+                      expanded={mySoloCollExpanded}
+                      onToggle={() => setMySoloCollExpanded(v => !v)}
+                    >
+                      {mySoloColl.map(renderCard)}
+                    </CollapseGroup>
+                  )}
+                  {mySettled.length > 0 && (
+                    <CollapseGroup
+                      title="自己订单 · 已结束"
+                      count={mySettled.length}
+                      color="#DC2626"
+                      bgColor="#FEF2F2"
+                      borderColor="#FCA5A5"
+                      expanded={mySettledExpanded}
+                      onToggle={() => setMySettledExpanded(v => !v)}
+                    >
+                      {mySettled.map(renderCard)}
+                    </CollapseGroup>
+                  )}
+                  {sharedActiveList.length > 0 && (
+                    <CollapseGroup
+                      title="共享订单 · 进行中"
+                      count={sharedActiveList.length}
+                      color="#16A34A"
+                      bgColor="#F0FDF4"
+                      borderColor="#86EFAC"
+                      expanded={sharedOrdersExpanded}
+                      onToggle={() => setSharedOrdersExpanded(v => !v)}
+                    >
+                      {sharedActiveList.map(renderCard)}
+                    </CollapseGroup>
+                  )}
+                  {sharedSettledList.length > 0 && (
+                    <CollapseGroup
+                      title="共享订单 · 已结束"
+                      count={sharedSettledList.length}
+                      color="#9CA3AF"
+                      bgColor="#F9FAFB"
+                      borderColor="#E5E7EB"
+                      expanded={sharedSettledExpanded}
+                      onToggle={() => setSharedSettledExpanded(v => !v)}
+                    >
+                      {sharedSettledList.map(renderCard)}
+                    </CollapseGroup>
+                  )}
+                </div>
+              );
+            })()}
                   {/* 绿底订单：别人分享的订单，收纳在可展开下拉框中 */}
                   {sharedOrders.length > 0 && (
                     <div className="mt-4">
