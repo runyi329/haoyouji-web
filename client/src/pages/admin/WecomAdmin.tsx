@@ -7709,7 +7709,7 @@ function NotifyTab() {
             </div>
 
             {/* 选择订单范围 */}
-            {selectedOrderUserId && (
+            {(selectedOrderUserId || editingRecord?.monitor_user_id) && (
               <div>
                 <label className="text-xs text-gray-400 mb-1 block">订单范围</label>
                 <div className="flex gap-3 mb-2">
