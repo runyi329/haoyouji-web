@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight } from "lucide-react";
 import { toast } from "sonner";
 
-const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU'] as const;
+const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU'] as const;
 type CoinType = typeof COIN_OPTIONS[number];
 
 // 整数型币种（单价较低，通常以整数计量）
@@ -176,6 +176,7 @@ interface FinanceOrderCardProps {
   updateMutation: any;
   openEdit: (order: any) => void;
   setConfirmDeleteId: (id: number | null) => void;
+  setConfirmSettleId: (id: number | null) => void;
   getPaymentLabel: (val: string) => string;
   // 参与方相关
   showParticipantsPanel: number | null;
@@ -215,6 +216,7 @@ function FinanceOrderCard({
   updateMutation,
   openEdit,
   setConfirmDeleteId,
+  setConfirmSettleId,
   getPaymentLabel,
   showParticipantsPanel,
   handleOpenParticipants,
@@ -473,6 +475,16 @@ function FinanceOrderCard({
               className="p-1.5 ml-1 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors"
             >
               <Pencil className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {isAdmin && !order._isParticipant && !order._fromFunder && !isSettled && (
+            <button
+              onClick={() => setConfirmSettleId(order.id)}
+              className="px-2 py-1 text-xs rounded-lg font-medium transition-colors"
+              style={{ backgroundColor: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }}
+              title="标记为已结清"
+            >
+              结清
             </button>
           )}
           {isAdmin && !order._isParticipant && !order._fromFunder && (
@@ -1430,6 +1442,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   const [paymentForm, setPaymentForm] = useState({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' });
   const [showPaymentDatePicker, setShowPaymentDatePicker] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [confirmSettleId, setConfirmSettleId] = useState<number | null>(null);
 
   const trpcUtils = trpc.useUtils();
 
@@ -2021,6 +2034,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                     updateMutation={updateMutation}
                     openEdit={openEdit}
                     setConfirmDeleteId={setConfirmDeleteId}
+                    setConfirmSettleId={setConfirmSettleId}
                     getPaymentLabel={getPaymentLabel}
                     showParticipantsPanel={showParticipantsPanel}
                     handleOpenParticipants={handleOpenParticipants}
@@ -3224,6 +3238,30 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
       )}
 
       {/* 删除二次确认弹窗 */}
+      {/* 结清确认弹窗 */}
+      {confirmSettleId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setConfirmSettleId(null)}>
+          <div className="bg-white rounded-2xl p-6 mx-4 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="text-center mb-5">
+              <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-3">
+                <span className="text-2xl">✔️</span>
+              </div>
+              <div className="text-base font-semibold text-gray-800 mb-1">确认结清订单</div>
+              <div className="text-sm text-gray-400 mb-1">结清后该订单利息将停止计算</div>
+              <div className="text-sm font-medium text-red-500">此操作不可撤销，确定继续？</div>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmSettleId(null)} className="flex-1 py-3 rounded-xl text-sm font-medium" style={{ backgroundColor: '#F3F4F6', color: '#374151' }}>取消</button>
+              <button
+                onClick={() => { updateMutation.mutate({ id: confirmSettleId, ledgerId, status: 'settled' }); setConfirmSettleId(null); }}
+                className="flex-1 py-3 rounded-xl text-sm font-semibold text-white"
+                style={{ backgroundColor: '#EF4444' }}
+              >确认结清</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirmDeleteId !== null && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setConfirmDeleteId(null)}>
           <div className="bg-white rounded-t-2xl w-full max-w-md px-5 pt-5 pb-8" onClick={e => e.stopPropagation()}>

@@ -60,7 +60,7 @@ const COINS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA'
 const STOCK_COINS = ['TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG'];
 // 仅 Yahoo Finance 有价格的美股（加密交易所无对应合约，如 CRCL=Circle 纽交所股票）。
 // 取美元股价直接作为 USDT 计价（USD≈USDT），每 3 秒轮询，与其它币种一致。
-const YAHOO_STOCKS = ['CRCL', 'DRAM', 'MU'];
+const YAHOO_STOCKS = ['CRCL', 'DRAM', 'MU', 'MSTR'];
 
 // 从文件恢复缓存（服务启动时调用）
 function loadCacheFromFile() {

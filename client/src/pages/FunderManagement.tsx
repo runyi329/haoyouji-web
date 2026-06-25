@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, Chevr
 import { toast } from "sonner";
 
 // 币种选项
-const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU'] as const;
+const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU'] as const;
 type CoinType = typeof COIN_OPTIONS[number];
 
 const STATUS_OPTIONS = [
@@ -581,6 +581,16 @@ function FunderOrderCard({
           {!isInvited && (
             <button onClick={() => handleOpenEdit(order)} className="p-1.5 ml-1 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors">
               <Pencil className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {!isInvited && isAdmin && !isSettled && (
+            <button
+              onClick={() => setConfirmSettleId(order.id)}
+              className="px-2 py-1 text-xs rounded-lg font-medium transition-colors"
+              style={{ backgroundColor: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }}
+              title="标记为已结清"
+            >
+              结清
             </button>
           )}
           {!isInvited && isAdmin && (
@@ -1505,6 +1515,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   // 员工名字筛选
   const [employeeNameFilter, setEmployeeNameFilter] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [confirmSettleId, setConfirmSettleId] = useState<number | null>(null);
 
   // 担保价值（在 assetOrdersData 定义后使用）——放到这里是为了先定义类型，实际计算在下方的 derivedCollateral 中
   // 当前登录用户信息（用于备注权限控制）
@@ -3669,6 +3680,28 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               >
                 {(createMutation.isPending || updateMutation.isPending) ? '提交中...' : (editingOrder ? '保存修改' : '确认添加')}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 结清确认弹窗 */}
+      {confirmSettleId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setConfirmSettleId(null)}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div className="relative bg-white rounded-2xl p-6 mx-4 w-full max-w-sm shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-gray-900 mb-2">确认结清订单</h3>
+            <p className="text-sm text-gray-500 mb-1">结清后该订单利息将停止计算，状态变为「已结清」。</p>
+            <p className="text-sm font-medium text-red-600 mb-5">此操作不可撤销，确定继续？</p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmSettleId(null)} className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-600">取消</button>
+              <button
+                onClick={() => {
+                  updateMutation.mutate({ id: confirmSettleId, ledgerId, status: 'settled' });
+                  setConfirmSettleId(null);
+                }}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-500 text-white"
+              >确认结清</button>
             </div>
           </div>
         </div>
