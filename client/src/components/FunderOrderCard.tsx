@@ -717,7 +717,7 @@ export function FunderOrderCard({
           })()}
         </div>
         <div className="flex items-center gap-0.5">
-          {!isInvited && (
+          {!isInvited && isAdmin && (
             <button
               onClick={() => $handleOpenParticipants(order.id, order.interest_base || '')}
               className="px-2 py-1 text-xs rounded-lg font-medium transition-colors"
@@ -726,7 +726,7 @@ export function FunderOrderCard({
               参与方{order.participantCount > 0 ? ` ${order.participantCount}` : ''}
             </button>
           )}
-          {!isInvited && (
+          {!isInvited && isAdmin && (
             <button onClick={() => $handleOpenEdit(order)} className="p-1.5 ml-1 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors">
               <Pencil className="w-3.5 h-3.5" />
             </button>
@@ -1561,6 +1561,7 @@ export function FunderOrderCard({
           <span className="text-xs font-medium" style={{ color: '#1A2340' }}>
             {isInvited ? '已结佣金' : '已结利息'}：<span style={{ color: '#16A34A' }}>{displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}</span>
           </span>
+          {isAdmin && (
           <button
             onClick={() => { $setShowPaymentPanel($showPaymentPanel === order.id ? null : order.id); $setPaymentForm(() => ({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' })); }}
             className="text-xs px-3 py-1 rounded-full font-medium"
@@ -1568,6 +1569,7 @@ export function FunderOrderCard({
           >
             {$showPaymentPanel === order.id ? '收起' : '+ 记录结息'}
           </button>
+          )}
         </div>
 
         {$showPaymentPanel === order.id && (
