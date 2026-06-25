@@ -630,16 +630,24 @@ export function FunderOrderCard({
   const isSharedMode = orderShareMode === 'self';
   const sharedPoolLoading = isSharedMode && !sharedPoolInfo;
   // 本金浮动亏损：亏损时取绝对值，盈利时为 0（盈利不算缺口）
-  const principalLoss = floatPnl !== null ? Math.max(0, -floatPnl) : 0;
-  // 共享担保缺口 = 本金亏损部分 + 待结利息（两者都是需要担保物覆盖的风险）
-  const sharedExposureGap = principalLoss + accrued;
-  // 共享模式：缺口始终为负数（需要补充），充足性由 sharedExposureGap 是否为 0 判断
+  const principalLoss = floatPnl !== null ? Math.max(0, -floatPnl) : 0; // 保留备用
+  // 共享担保缺口 = floatPnl - accrued（可正可负）
+  // 盈利订单：缺口为正（盈余，可抵消其他订单亏损）
+  // 亏损订单：缺口为负（需要担保物覆盖）
+  const sharedExposureGap = floatPnl !== null ? floatPnl - accrued : -accrued;
+  // 共享模式：effectiveExposure 直接用 sharedExposureGap（正=充足/盈余，负=缺口）
   // 非共享模式：使用原有 exposure 逻辑
-  const effectiveExposure = isSharedMode ? -sharedExposureGap : exposure;
+  const effectiveExposure = isSharedMode ? sharedExposureGap : exposure;
   const isSufficient = effectiveExposure >= 0;
   // 共享模式下缺口计算不再依赖 sharedPoolInfo，不需要显示「计算中...」
   // sharedPoolLoading 仅用于弹窗内共享池汇总区域的加载状态
   const showExposureLoading = false; // 缺口数字不再等待接口
+  // 每次 sharedExposureGap 变化时上报给父组件，供弹窗第①部分实时读取
+  useEffect(() => {
+    if (isSharedMode && onExposureGapChange) {
+      onExposureGapChange(order.id, sharedExposureGap);
+    }
+  }, [sharedExposureGap, isSharedMode, order.id]);
 
   return (
     <>
@@ -1049,46 +1057,52 @@ export function FunderOrderCard({
                               <>
                                 <div className="space-y-1.5">
                                   {((sharedPoolInfo as any).orders ?? []).map((o: any) => {
-                                    // 用接口同源返回的 livePrices 现场计算（币种齐全、键名一致），与卡片完全联动
-                                    const poolPrices = (sharedPoolInfo as any).livePrices ?? {};
-                                    const oCoin = o.coin || '';
-                                    const oLiveP = poolPrices[oCoin];
-                                    const oQty = Number(o.quantity) || 0;
-                                    const oPrincipal = Number(o.principal) || 0;
-                                    const oPendingInterest = o.pendingInterest ?? 0;
-                                    const gap = (oLiveP !== undefined && oLiveP !== null)
-                                      ? Math.max(0, -(oLiveP * oQty - oPrincipal)) + oPendingInterest
-                                      : ((o.principalLoss ?? 0) + oPendingInterest);
+                                    // 与卡片公式完全一致：gap = floatPnl - accrued（可正可负）
+                                    // 盈利订单缺口为正（盈余），亏损订单缺口为负
+                                    const oQty = Number(o.quantity ?? 0);
+                                    const oPrincipal = Number(o.principal ?? 0);
+                                    const oCoin = (o.coin || '').toUpperCase();
+                                    const oLiveP = livePrices[oCoin] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
+                                    const oCurrentValue = oLiveP !== null ? oLiveP * oQty : null;
+                                    const oFloatPnl = oCurrentValue !== null ? oCurrentValue - oPrincipal : null;
+                                    const oPendingInterest = Number(o.pendingInterest ?? 0);
+                                    const gap = oFloatPnl !== null ? oFloatPnl - oPendingInterest : null;
                                     return (
                                       <div key={o.orderId} className="flex justify-between items-center">
                                         <div>
                                           <span className="font-mono font-medium" style={{ color: '#374151' }}>{o.orderNo}</span>
                                           <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
-                                          {o.quantity ? <span className="ml-1" style={{ color: '#9CA3AF' }}>× {o.coin?.toUpperCase() === 'BTC' ? Number(o.quantity).toFixed(2) : Number(o.quantity)}</span> : null}
+                                          {o.quantity ? <span className="ml-1" style={{ color: '#9CA3AF' }}>× {oCoin === 'BTC' ? oQty.toFixed(2) : oQty}</span> : null}
                                         </div>
                                         <div className="text-right">
-                                          <span className="font-mono font-semibold" style={{ color: '#16A34A' }}>-{gap.toFixed(2)} U</span>
+                                          {gap !== null
+                                            ? <span className="font-mono font-semibold" style={{ color: gap >= 0 ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} U</span>
+                                            : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
                                         </div>
                                       </div>
                                     );
                                   })}
                                 </div>
                                 {(() => {
-                                  const poolPrices = (sharedPoolInfo as any).livePrices ?? {};
-                                  const totalGapLive = ((sharedPoolInfo as any).orders ?? []).reduce((s: number, o: any) => {
-                                    const oLiveP = poolPrices[o.coin || ''];
-                                    const oQty = Number(o.quantity) || 0;
-                                    const oPrincipal = Number(o.principal) || 0;
-                                    const oPendingInterest = o.pendingInterest ?? 0;
-                                    const gap = (oLiveP !== undefined && oLiveP !== null)
-                                      ? Math.max(0, -(oLiveP * oQty - oPrincipal)) + oPendingInterest
-                                      : ((o.principalLoss ?? 0) + oPendingInterest);
-                                    return s + gap;
-                                  }, 0);
+                                  // 合计用 livePrices 重算，与各行完全一致
+                                  const orders = (sharedPoolInfo as any).orders ?? [];
+                                  let totalGapLive = 0;
+                                  let allKnown = true;
+                                  for (const o of orders) {
+                                    const oQty = Number(o.quantity ?? 0);
+                                    const oPrincipal = Number(o.principal ?? 0);
+                                    const oCoin = (o.coin || '').toUpperCase();
+                                    const oLiveP = livePrices[oCoin] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
+                                    if (oLiveP === null) { allKnown = false; continue; }
+                                    const oFloatPnlT = oLiveP * oQty - oPrincipal;
+                                    totalGapLive += oFloatPnlT - Number(o.pendingInterest ?? 0);
+                                  }
                                   return (
                                     <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
                                       <span style={{ color: '#374151' }}>合计缺口需求</span>
-                                      <span className="font-mono" style={{ color: '#16A34A' }}>-{totalGapLive.toFixed(2)} U</span>
+                                      {allKnown
+                                        ? <span className="font-mono" style={{ color: totalGapLive >= 0 ? '#DC2626' : '#16A34A' }}>{totalGapLive >= 0 ? '+' : ''}{totalGapLive.toFixed(2)} U</span>
+                                        : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
                                     </div>
                                   );
                                 })()}
@@ -1134,17 +1148,19 @@ export function FunderOrderCard({
 
                           {/* ③ 差值：担保物 - 缺口需求 */}
                           {sharedPoolInfo && (() => {
-                            const poolPrices = (sharedPoolInfo as any).livePrices ?? {};
-                            const totalRequired = ((sharedPoolInfo as any).orders ?? []).reduce((s: number, o: any) => {
-                              const oLiveP = poolPrices[o.coin || ''];
-                              const oQty = Number(o.quantity) || 0;
-                              const oPrincipal = Number(o.principal) || 0;
-                              const oPendingInterest = o.pendingInterest ?? 0;
-                              const gap = (oLiveP !== undefined && oLiveP !== null)
-                                ? Math.max(0, -(oLiveP * oQty - oPrincipal)) + oPendingInterest
-                                : ((o.principalLoss ?? 0) + oPendingInterest);
-                              return s + gap;
-                            }, 0);
+                            // totalRequired 用 livePrices 重算，与第①部分完全一致
+                            const orders = (sharedPoolInfo as any).orders ?? [];
+                            let totalRequired = 0;
+                            let allHaveGap = true;
+                            for (const o of orders) {
+                              const oQty = Number(o.quantity ?? 0);
+                              const oPrincipal = Number(o.principal ?? 0);
+                              const oCoin = (o.coin || '').toUpperCase();
+                              const oLiveP = livePrices[oCoin] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
+                              if (oLiveP === null) { allHaveGap = false; continue; }
+                              const oFloatPnlR = oLiveP * oQty - oPrincipal;
+                              totalRequired += oFloatPnlR - Number(o.pendingInterest ?? 0);
+                            }
                             const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
                             const diff = totalColl - totalRequired;
                             const totalBuyValue = (sharedPoolInfo as any).totalBuyValue ?? 0;
@@ -1158,14 +1174,18 @@ export function FunderOrderCard({
                                   <div className="font-semibold mb-1" style={{ color: '#374151' }}>③ 总计风险敞口</div>
                                   <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>担保物合计 − 缺口合计</div>
                                   <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
-                                    {totalColl.toFixed(2)} − {totalRequired.toFixed(2)} = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} U</span>
+                                    {allHaveGap
+                                      ? <>{totalColl.toFixed(2)} − {totalRequired.toFixed(2)} = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} U</span></>
+                                      : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
                                   </div>
                                 </div>
                                 <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
                                   <div className="font-semibold mb-1" style={{ color: '#374151' }}>④ 保证金比例</div>
                                   <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>风险敞口 ÷ 总订单买入价値</div>
                                   <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
-                                    {diff >= 0 ? '+' : ''}{diff.toFixed(2)} ÷ {totalBuyValue.toFixed(2)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '--'}</span>
+                                    {allHaveGap
+                                      ? <>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} ÷ {totalBuyValue.toFixed(2)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '--'}</span></>
+                                      : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
                                   </div>
                                   <div className="text-xs" style={{ color: '#9CA3AF' }}>总买入价値 {totalBuyValue.toFixed(2)} U（各订单买入价 × 数量之和，不随币价变动）</div>
                                 </div>
