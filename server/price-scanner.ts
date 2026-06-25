@@ -1,6 +1,8 @@
 /**
  * 实时价格扫描器
- * 每10秒从 Gate.io / 火币 / OKX 获取 BTC/ETH/SOL 的最新价格
+ * 每3秒从 Gate.io / 火币 / OKX 获取 BTC/ETH/SOL 的最新价格
+ * 股票类合约：OKX SWAP → 新浪财经（兜底）
+ * Yahoo 美股：Yahoo Finance → 新浪财经（兜底）
  * 内存缓存供盈亏计算使用
  * 数据源优先级与 af-tier-scanner 保持一致：Gate.io > 火币 > OKX
  * 持久化：每次更新后写入本地文件，服务重启时自动恢复上次价格
@@ -56,11 +58,19 @@ export function getUsdtCnyRate(): number {
 }
 
 const COINS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM'];
-// 股票类合约（仅 OKX SWAP 有价格，Gate.io/火币无此品种）
+// 股票类合约（优先 OKX SWAP，兜底新浪财经）
 const STOCK_COINS = ['TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG'];
-// 仅 Yahoo Finance 有价格的美股（加密交易所无对应合约，如 CRCL=Circle 纽交所股票）。
-// 取美元股价直接作为 USDT 计价（USD≈USDT），每 3 秒轮询，与其它币种一致。
+// 优先 Yahoo Finance，兜底新浪财经
 const YAHOO_STOCKS = ['CRCL', 'DRAM', 'MU', 'MSTR'];
+
+// 新浪财经美股代码映射（所有股票统一用新浪兜底）
+const SINA_CODE_MAP: Record<string, string> = {
+  TSLA: 'gb_tsla', NVDA: 'gb_nvda', AAPL: 'gb_aapl', MSFT: 'gb_msft',
+  GOOGL: 'gb_googl', META: 'gb_meta', AMZN: 'gb_amzn', SPY: 'gb_spy',
+  QQQ: 'gb_qqq', NFLX: 'gb_nflx', ORCL: 'gb_orcl', TSM: 'gb_tsm',
+  AMD: 'gb_amd', CL: 'gb_cl', NG: 'gb_ng',
+  CRCL: 'gb_crcl', DRAM: 'gb_dram', MU: 'gb_mu', MSTR: 'gb_mstr',
+};
 
 // 从文件恢复缓存（服务启动时调用）
 function loadCacheFromFile() {
@@ -68,7 +78,7 @@ function loadCacheFromFile() {
     if (fs.existsSync(CACHE_FILE)) {
       const raw = fs.readFileSync(CACHE_FILE, 'utf-8');
       const cached = JSON.parse(raw);
-      for (const coin of [...COINS, ...STOCK_COINS, ...YAHOO_STOCKS]) {  // YAHOO_STOCKS 已含 DRAM, MU
+      for (const coin of [...COINS, ...STOCK_COINS, ...YAHOO_STOCKS]) {
         if (cached[coin]?.price && cached[coin]?.updatedAt) {
           latestPrices[coin] = { price: cached[coin].price, todayOpen: cached[coin].todayOpen ?? 0, changePercent: cached[coin].changePercent ?? 0, high24h: cached[coin].high24h ?? 0, low24h: cached[coin].low24h ?? 0, volume24h: cached[coin].volume24h ?? 0, quoteVolume24h: cached[coin].quoteVolume24h ?? 0, updatedAt: cached[coin].updatedAt };
         }
@@ -238,13 +248,62 @@ async function fetchStockPrice(coin: string): Promise<number | null> {
   return null;
 }
 
+/**
+ * 新浪财经批量获取美股价格（最后兜底）
+ * 格式：var hq_str_gb_tsla="特斯拉,375.53,..."
+ * 第2个字段（index=1）是最新价格
+ * 国内服务器（腾讯云等）可直接访问，无需翻墙
+ */
+async function fetchSinaStockPrices(coins: string[]): Promise<Record<string, number>> {
+  const result: Record<string, number> = {};
+  const validCoins = coins.filter(c => SINA_CODE_MAP[c]);
+  if (validCoins.length === 0) return result;
+
+  try {
+    const sinaSyms = validCoins.map(c => SINA_CODE_MAP[c]).join(',');
+    const r = await fetch(
+      `https://hq.sinajs.cn/list=${sinaSyms}`,
+      {
+        headers: {
+          'Referer': 'https://finance.sina.com.cn',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        },
+        signal: AbortSignal.timeout(8000),
+      }
+    );
+    if (!r.ok) return result;
+
+    const text = await r.text();
+    for (const line of text.split('\n')) {
+      if (!line.includes('hq_str_gb_')) continue;
+      // 解析 sina key: gb_tsla
+      const sinaKey = line.split('hq_str_')[1]?.split('=')[0]?.trim();
+      if (!sinaKey) continue;
+      const val = line.split('"')[1] ?? '';
+      const parts = val.split(',');
+      // 第1个字段是名称，第2个字段是价格
+      const priceStr = parts[1];
+      if (!priceStr) continue;
+      const price = parseFloat(priceStr);
+      if (!isNaN(price) && price > 0) {
+        // 反查 coin 名
+        const coin = Object.entries(SINA_CODE_MAP).find(([, v]) => v === sinaKey)?.[0];
+        if (coin) result[coin] = price;
+      }
+    }
+  } catch {}
+
+  return result;
+}
+
 async function scanPrices() {
   let updated = false;
+
+  // ── 加密货币：Gate.io > 火币 > OKX ──
   for (const coin of COINS) {
     try {
       const result = await fetchPriceWithChange(coin);
       if (result !== null && result.price > 0) {
-        // changePercent 为 null 时（火币日K查不到）保留上次缓存值，不覆盖
         const prevChange = latestPrices[coin]?.changePercent ?? 0;
         const prevOpen = latestPrices[coin]?.todayOpen ?? 0;
         latestPrices[coin] = {
@@ -263,22 +322,45 @@ async function scanPrices() {
       console.error(`[价格扫描] ${coin} 获取失败:`, err);
     }
   }
-  // 扫描股票类合约（OKX SWAP 接口）
+
+  // ── 股票类合约：OKX SWAP 主用，新浪财经兜底 ──
+  // 先尝试 OKX，记录哪些失败了
+  const stockMissing: string[] = [];
   for (const coin of STOCK_COINS) {
     try {
       const price = await fetchStockPrice(coin);
       if (price !== null && price > 0) {
-        // 股票类合约保留已有的 todayOpen 和 changePercent，暂不计算
         const prevChange = latestPrices[coin]?.changePercent ?? 0;
         const prevOpen = latestPrices[coin]?.todayOpen ?? 0;
         latestPrices[coin] = { price, todayOpen: prevOpen, changePercent: prevChange, high24h: latestPrices[coin]?.high24h ?? 0, low24h: latestPrices[coin]?.low24h ?? 0, volume24h: latestPrices[coin]?.volume24h ?? 0, quoteVolume24h: latestPrices[coin]?.quoteVolume24h ?? 0, updatedAt: new Date().toISOString() };
         updated = true;
+      } else {
+        stockMissing.push(coin);
       }
-    } catch (err) {
-      console.error(`[价格扫描] ${coin} 获取失败:`, err);
+    } catch {
+      stockMissing.push(coin);
     }
   }
-  // 扫描 Yahoo 美股（如 CRCL，按美元股价当 USDT 计价）
+  // OKX 失败的股票，批量用新浪财经兜底
+  if (stockMissing.length > 0) {
+    try {
+      const sinaResult = await fetchSinaStockPrices(stockMissing);
+      for (const coin of stockMissing) {
+        const price = sinaResult[coin];
+        if (price && price > 0) {
+          const prevChange = latestPrices[coin]?.changePercent ?? 0;
+          const prevOpen = latestPrices[coin]?.todayOpen ?? 0;
+          latestPrices[coin] = { price, todayOpen: prevOpen, changePercent: prevChange, high24h: latestPrices[coin]?.high24h ?? 0, low24h: latestPrices[coin]?.low24h ?? 0, volume24h: latestPrices[coin]?.volume24h ?? 0, quoteVolume24h: latestPrices[coin]?.quoteVolume24h ?? 0, updatedAt: new Date().toISOString() };
+          updated = true;
+        }
+      }
+    } catch (err) {
+      console.error('[价格扫描] 新浪财经股票兜底失败:', err);
+    }
+  }
+
+  // ── Yahoo 美股：Yahoo Finance 主用，新浪财经兜底 ──
+  const yahooMissing: string[] = [];
   for (const coin of YAHOO_STOCKS) {
     try {
       const price = await fetchYahooStockPrice(coin);
@@ -287,13 +369,34 @@ async function scanPrices() {
         const prevOpen = latestPrices[coin]?.todayOpen ?? 0;
         latestPrices[coin] = { price, todayOpen: prevOpen, changePercent: prevChange, high24h: latestPrices[coin]?.high24h ?? 0, low24h: latestPrices[coin]?.low24h ?? 0, volume24h: latestPrices[coin]?.volume24h ?? 0, quoteVolume24h: latestPrices[coin]?.quoteVolume24h ?? 0, updatedAt: new Date().toISOString() };
         updated = true;
+      } else {
+        yahooMissing.push(coin);
       }
-    } catch (err) {
-      console.error(`[价格扫描] ${coin} 获取失败:`, err);
+    } catch {
+      yahooMissing.push(coin);
     }
   }
+  // Yahoo 失败的股票，批量用新浪财经兜底
+  if (yahooMissing.length > 0) {
+    try {
+      const sinaResult = await fetchSinaStockPrices(yahooMissing);
+      for (const coin of yahooMissing) {
+        const price = sinaResult[coin];
+        if (price && price > 0) {
+          const prevChange = latestPrices[coin]?.changePercent ?? 0;
+          const prevOpen = latestPrices[coin]?.todayOpen ?? 0;
+          latestPrices[coin] = { price, todayOpen: prevOpen, changePercent: prevChange, high24h: latestPrices[coin]?.high24h ?? 0, low24h: latestPrices[coin]?.low24h ?? 0, volume24h: latestPrices[coin]?.volume24h ?? 0, quoteVolume24h: latestPrices[coin]?.quoteVolume24h ?? 0, updatedAt: new Date().toISOString() };
+          updated = true;
+        }
+      }
+    } catch (err) {
+      console.error('[价格扫描] 新浪财经Yahoo兜底失败:', err);
+    }
+  }
+
   // 有更新时持久化到文件
   if (updated) saveCacheToFile();
+
   // 同步更新 USDT/CNY 实时汇率
   try {
     const rate = await fetchUsdtCnyRate();
@@ -342,5 +445,5 @@ export function startPriceScanner() {
   setInterval(() => {
     scanPrices().catch(err => console.error('[价格扫描] 定时扫描失败:', err));
   }, 3 * 1000);
-  console.log('[价格扫描] 已启动，每3秒刷新加密货币+股票合约价格（含文件持久化）');
+  console.log('[价格扫描] 已启动，每3秒刷新加密货币+股票合约价格（含新浪财经兜底+文件持久化）');
 }
