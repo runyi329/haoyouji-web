@@ -215,7 +215,9 @@ export default function YabanPatientProfile() {
             <GroupTitle text="紧急联系人" />
             <Field label="联系人" value={val(r.emergency_contact)} span="sm" />
             <Field label="关系" value={val(r.emergency_relation)} span="sm" />
+            <Field label="职业" value={val(r.occupation)} span="sm" />
             <Field label="联系人电话" value={val(r.emergency_phone)} span="md" />
+            {r.license_plate && <Field label="车牌" value={val(r.license_plate)} span="sm" />}
 
             <GroupTitle text="顾客信息" />
             <Field label="顾客来源" value={val(r.source)} span="sm" />

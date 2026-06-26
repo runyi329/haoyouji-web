@@ -5,9 +5,9 @@
  * 顶栏：取消 / 新建顾客 / 保存；含「仅显示必填字段」开关
  * 布局：字段按实际输入宽度自适应流式排布，窄字段同行并排，充分利用横向空间
  */
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronDown, XCircle, Check, UserRound, Camera } from "lucide-react";
+import { ChevronDown, XCircle, Check, UserRound, Camera, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useYabanClinic } from "./useYabanClinic";
@@ -15,6 +15,8 @@ import MedicalHistoryPicker, { serializeHistory, parseHistory } from "./MedicalH
 import AddressPicker from "./AddressPicker";
 import AvatarPicker from "./AvatarPicker";
 import { autoAvatarKey, avatarSrc, type AvatarKey } from "@/lib/yaban-avatar";
+import { searchOccupations } from "./occupationData";
+import LicensePlatePicker from "./LicensePlatePicker";
 
 // 主题色
 const ACCENT = "#1E88D6";
@@ -30,7 +32,7 @@ const CONSULTANTS = ["洪紫钥", "杨文利", "侯睿"];
 const RELATIONS = ["配偶", "父母", "子女", "兄弟姐妹", "亲戚", "朋友", "其他"];
 
 // 字段类型
-type FieldKind = "input" | "select" | "textarea" | "history" | "address";
+type FieldKind = "input" | "select" | "textarea" | "history" | "address" | "occupation" | "license-plate";
 
 // 字段宽度档位：窄字段同行并排，宽字段独占
 // narrow ≈ 半屏内可挤 2-3 个；half ≈ 半屏；full ≈ 整行
@@ -61,9 +63,11 @@ const PERSONAL_FIELDS: FieldDef[] = [
   { key: "medicalNo", label: "顾客编号", placeholder: "系统自动生成", kind: "input", readOnly: true, width: "half" },
   { key: "emergencyContact", label: "紧急联系人", placeholder: "姓名", kind: "input", width: "half" },
   { key: "emergencyRelation", label: "关系", placeholder: "请选择", kind: "select", options: RELATIONS, width: "half" },
+  { key: "occupation", label: "职业", placeholder: "搜索职业名称…", kind: "occupation", width: "half" },
   { key: "emergencyPhone", label: "联系人电话", placeholder: "电话", kind: "input", inputType: "tel", width: "full" },
   { key: "email", label: "邮箱", placeholder: "请输入邮箱地址", kind: "input", inputType: "email", width: "full" },
   { key: "address", label: "地址", placeholder: "点击选择省市区并填写门牌号", kind: "address", width: "full" },
+  { key: "licensePlate", label: "车牌", placeholder: "点击输入车牌号", kind: "license-plate", width: "half" },
 ];
 const CUSTOMER_FIELDS: FieldDef[] = [
   { key: "patientType", label: "顾客类型", placeholder: "电子", kind: "select", options: PATIENT_TYPES, width: "half" },
@@ -143,6 +147,7 @@ export default function YabanPatientCreate() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [addressOpen, setAddressOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
+  const [licensePlateOpen, setLicensePlateOpen] = useState(false);
   // 头像：null 表示跟随年龄+性别自动适配；非 null 表示用户手动指定
   const [avatarManual, setAvatarManual] = useState<AvatarKey | null>(null);
   const [form, setForm] = useState<Record<string, string>>({
@@ -205,8 +210,10 @@ export default function YabanPatientCreate() {
       phone: d.phone ?? "",
       region: d.region ?? "",
       address: d.address ?? "",
+      licensePlate: d.license_plate ?? "",
       emergencyContact: d.emergency_contact ?? "",
       emergencyRelation: d.emergency_relation ?? "",
+      occupation: d.occupation ?? "",
       emergencyPhone: d.emergency_phone ?? "",
       source: d.source ?? "",
       netConsultant: d.net_consultant ?? "",
@@ -280,8 +287,10 @@ export default function YabanPatientCreate() {
       phone: form.phone,
       region: form.region,
       address: form.address,
+      licensePlate: form.licensePlate,
       emergencyContact: form.emergencyContact,
       emergencyRelation: form.emergencyRelation,
+      occupation: form.occupation,
       emergencyPhone: form.emergencyPhone,
       avatar: effectiveAvatar || undefined,
       source: form.source,
@@ -369,6 +378,7 @@ export default function YabanPatientCreate() {
                 }}
                 onOpenHistory={() => setHistoryOpen(true)}
                 onOpenAddress={() => setAddressOpen(true)}
+                onOpenLicensePlate={() => setLicensePlateOpen(true)}
               />
             ))}
           </div>
@@ -396,6 +406,26 @@ export default function YabanPatientCreate() {
             ))}
           </div>
         </div>
+      </div>
+
+      {/* 底部固定保存按鈕 */}
+      <div
+        className="sticky bottom-0 left-0 right-0 px-4 pt-3 pb-8 bg-white border-t border-gray-100"
+        style={{ boxShadow: "0 -2px 12px rgba(0,0,0,0.06)" }}
+      >
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={createMutation.isPending || updateMutation.isPending}
+          className="w-full h-12 rounded-xl text-base font-semibold text-white flex items-center justify-center gap-2 transition-all active:scale-95"
+          style={{
+            background: createMutation.isPending || updateMutation.isPending ? "#93C5FD" : ACCENT,
+            boxShadow: `0 3px 12px ${ACCENT}55`,
+          }}
+        >
+          <Check className="w-5 h-5" />
+          {createMutation.isPending || updateMutation.isPending ? "保存中…" : "保存"}
+        </button>
       </div>
 
       {/* AI健康标签选择器 */}
@@ -436,6 +466,17 @@ export default function YabanPatientCreate() {
           setAvatarOpen(false);
         }}
       />
+
+      {/* 车牌输入器 */}
+      <LicensePlatePicker
+        open={licensePlateOpen}
+        value={form.licensePlate || ""}
+        onClose={() => setLicensePlateOpen(false)}
+        onConfirm={(plate) => {
+          setField("licensePlate", plate);
+          setLicensePlateOpen(false);
+        }}
+      />
     </div>
   );
 }
@@ -450,6 +491,7 @@ function FieldCell({
   onSelect,
   onOpenHistory,
   onOpenAddress,
+  onOpenLicensePlate,
 }: {
   field: FieldDef;
   value: string;
@@ -459,6 +501,7 @@ function FieldCell({
   onSelect: (v: string) => void;
   onOpenHistory?: () => void;
   onOpenAddress?: () => void;
+  onOpenLicensePlate?: () => void;
 }) {
   const basis = WIDTH_BASIS[field.width || "full"];
   // 长内容字段（多行文本、AI健康标签、地址）标题在上、控件占满整行；其余短字段标题与控件同行
@@ -476,7 +519,141 @@ function FieldCell({
 
   let control: JSX.Element;
 
-  if (field.kind === "address") {
+  // 职业智能搜索控件内部状态
+  const [occQuery, setOccQuery] = useState(value);
+  const [occSuggestions, setOccSuggestions] = useState<string[]>([]);
+  const [occOpen, setOccOpen] = useState(false);
+  const occRef = useRef<HTMLDivElement>(null);
+
+  // 同步外部 value 变化到输入框
+  useEffect(() => {
+    setOccQuery(value);
+  }, [value]);
+
+  // 点击外部关闭下拉
+  useEffect(() => {
+    if (!occOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (occRef.current && !occRef.current.contains(e.target as Node)) {
+        setOccOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [occOpen]);
+
+  if (field.kind === "occupation") {
+    control = (
+      <div ref={occRef} className="relative w-full">
+        <div className={`${boxCls} gap-1`}>
+          <input
+            type="text"
+            value={occQuery}
+            placeholder={field.placeholder}
+            className="flex-1 min-w-0 bg-transparent outline-none placeholder:text-gray-300 text-gray-800 text-sm"
+            onChange={(e) => {
+              const q = e.target.value;
+              setOccQuery(q);
+              onInput(q);
+              if (q.trim()) {
+                setOccSuggestions(searchOccupations(q, 12));
+                setOccOpen(true);
+              } else {
+                setOccSuggestions([]);
+                setOccOpen(false);
+              }
+            }}
+            onFocus={() => {
+              if (occQuery.trim()) {
+                setOccSuggestions(searchOccupations(occQuery, 12));
+                setOccOpen(true);
+              }
+            }}
+          />
+          {occQuery ? (
+            <button
+              type="button"
+              onClick={() => {
+                setOccQuery("");
+                onInput("");
+                setOccSuggestions([]);
+                setOccOpen(false);
+              }}
+              className="shrink-0 text-gray-300 active:text-gray-500"
+            >
+              <XCircle className="w-4 h-4" />
+            </button>
+          ) : null}
+        </div>
+        {occOpen && occSuggestions.length > 0 && (
+          <>
+            <div className="fixed inset-0 z-20" onClick={() => setOccOpen(false)} />
+            <div className="absolute left-0 top-full z-30 mt-1 w-full max-w-[240px] bg-white rounded-lg shadow-lg ring-1 ring-black/5 overflow-hidden max-h-52 overflow-y-auto">
+              {occSuggestions.map((opt, i) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => {
+                    setOccQuery(opt);
+                    onInput(opt);
+                    onSelect(opt);
+                    setOccOpen(false);
+                  }}
+                  className={`w-full px-4 py-2.5 text-left text-sm active:bg-gray-100 flex items-center justify-between gap-3 ${
+                    i > 0 ? "border-t border-gray-50" : ""
+                  }`}
+                  style={value === opt ? { color: ACCENT, fontWeight: 600 } : { color: "#374151" }}
+                >
+                  {opt}
+                  {value === opt && <Check className="w-4 h-4 shrink-0" style={{ color: ACCENT }} />}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  } else if (field.kind === "license-plate") {
+    // 车牌显示：有値时显示车牌样式 + 复制按鈕
+    control = (
+      <div className={`${boxCls} justify-between`}>
+        <button
+          type="button"
+          onClick={onOpenLicensePlate}
+          className="flex-1 flex items-center min-w-0 active:opacity-70"
+        >
+          {value ? (
+            <span
+              className="font-bold tracking-widest text-sm px-1"
+              style={{ color: "#1a3a8f", letterSpacing: "0.12em" }}
+            >
+              {value}
+            </span>
+          ) : (
+            <span className="text-gray-300 text-sm">{field.placeholder}</span>
+          )}
+        </button>
+        <div className="flex items-center gap-1 shrink-0 ml-1">
+          {value && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(value).then(() => {
+                  toast.success("车牌已复制");
+                });
+              }}
+              className="p-1 rounded active:bg-gray-100"
+              title="复制车牌"
+            >
+              <Copy className="w-4 h-4" style={{ color: ACCENT }} />
+            </button>
+          )}
+          <ChevronDown className="w-4 h-4 text-gray-300" onClick={onOpenLicensePlate} />
+        </div>
+      </div>
+    );
+  } else if (field.kind === "address") {
     control = (
       <button
         type="button"

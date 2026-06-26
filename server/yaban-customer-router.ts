@@ -176,9 +176,11 @@ async function ensureCustomerTable(conn: any) {
       phone VARCHAR(32) DEFAULT NULL,
       region VARCHAR(64) DEFAULT NULL,
       address VARCHAR(255) DEFAULT NULL,
+      license_plate VARCHAR(16) DEFAULT NULL,
       avatar VARCHAR(255) DEFAULT NULL,
       emergency_contact VARCHAR(64) DEFAULT NULL,
       emergency_relation VARCHAR(32) DEFAULT NULL,
+      occupation VARCHAR(64) DEFAULT NULL,
       emergency_phone VARCHAR(32) DEFAULT NULL,
       source VARCHAR(64) DEFAULT NULL,
       net_consultant VARCHAR(64) DEFAULT NULL,
@@ -220,10 +222,15 @@ async function ensureCustomerTable(conn: any) {
   } catch (e) {
     // 已是 TEXT 或无权限时忽略
   }
+  // 兼容旧表：补充 license_plate 列
+  try {
+    await conn.execute(`ALTER TABLE yaban_customer ADD COLUMN license_plate VARCHAR(16) DEFAULT NULL AFTER address`);
+  } catch (e) { /* 列已存在则忽略 */ }
   // 兼容旧表：补充紧急联系人相关列
   for (const col of [
     `emergency_contact VARCHAR(64) DEFAULT NULL`,
     `emergency_relation VARCHAR(32) DEFAULT NULL`,
+    `occupation VARCHAR(64) DEFAULT NULL`,
     `emergency_phone VARCHAR(32) DEFAULT NULL`,
   ]) {
     try {
@@ -543,9 +550,11 @@ const createInput = z.object({
   phone: z.string().max(32).optional(),
   region: z.string().max(64).optional(),
   address: z.string().max(255).optional(),
+  licensePlate: z.string().max(16).optional(),
   avatar: z.string().max(255).optional(),
   emergencyContact: z.string().max(64).optional(),
   emergencyRelation: z.string().max(32).optional(),
+  occupation: z.string().max(64).optional(),
   emergencyPhone: z.string().max(32).optional(),
   source: z.string().max(64).optional(),
   netConsultant: z.string().max(64).optional(),
@@ -874,13 +883,13 @@ export const yabanCustomerRouter = router({
         (await (conn as any).execute(
           `INSERT INTO yaban_customer
            (tenant_id, name, gender, birthday, age, zodiac, chinese_zodiac, patient_type, medical_no, external_no, nickname,
-            email, mobile, phone, region, address, avatar,
-            emergency_contact, emergency_relation, emergency_phone,
+            email, mobile, phone, region, address, license_plate, avatar,
+            emergency_contact, emergency_relation, occupation, emergency_phone,
             source, net_consultant, consultant, history, remark,
             chief_complaint, health_status, drug_allergy, food_allergy,
             heart, hypertension, diabetes, kidney, infectious, bleeding, pregnant, medication,
             created_by)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?, ?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?)`,
+           VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?)`,
           [
             TENANT_ID,
             input.name.trim(),
@@ -898,9 +907,11 @@ export const yabanCustomerRouter = router({
             s(input.phone),
             s(input.region),
             s(input.address),
+            s(input.licensePlate),
             s(input.avatar),
             s(input.emergencyContact),
             s(input.emergencyRelation),
+            s(input.occupation),
             s(input.emergencyPhone),
             s(input.source),
             s(input.netConsultant),
@@ -985,8 +996,8 @@ export const yabanCustomerRouter = router({
       await (conn as any).execute(
         `UPDATE yaban_customer SET
            name = ?, gender = ?, birthday = ?, age = ?, zodiac = ?, chinese_zodiac = ?, patient_type = ?,
-           external_no = ?, nickname = ?, email = ?, mobile = ?, phone = ?, region = ?, address = ?, avatar = ?,
-           emergency_contact = ?, emergency_relation = ?, emergency_phone = ?,
+           external_no = ?, nickname = ?, email = ?, mobile = ?, phone = ?, region = ?, address = ?, license_plate = ?, avatar = ?,
+           emergency_contact = ?, emergency_relation = ?, occupation = ?, emergency_phone = ?,
            source = ?, net_consultant = ?, consultant = ?, history = ?, remark = ?,
            chief_complaint = ?, health_status = ?, drug_allergy = ?, food_allergy = ?,
            heart = ?, hypertension = ?, diabetes = ?, kidney = ?, infectious = ?, bleeding = ?, pregnant = ?, medication = ?
@@ -1006,9 +1017,11 @@ export const yabanCustomerRouter = router({
           s(input.phone),
           s(input.region),
           s(input.address),
+          s(input.licensePlate),
           s(input.avatar),
           s(input.emergencyContact),
           s(input.emergencyRelation),
+          s(input.occupation),
           s(input.emergencyPhone),
           s(input.source),
           s(input.netConsultant),

@@ -55,6 +55,8 @@ export default function YabanPatientDetail() {
     emergencyContact: row?.emergency_contact || '—',
     emergencyRelation: row?.emergency_relation || '',
     emergencyPhone: row?.emergency_phone || '',
+    occupation: row?.occupation || '',
+    licensePlate: row?.license_plate || '',
     tags: [row?.patient_type].filter(Boolean) as string[],
     hasWechat: false,
   };
@@ -159,6 +161,8 @@ export default function YabanPatientDetail() {
             <InfoItem label="手机" value={patient.mobile} span={2} />
             <InfoItem label="邮箱" value={patient.email} span={2} />
             <InfoItem label="紧急联系人" value={emergencyText} span={4} />
+            {patient.occupation && <InfoItem label="职业" value={patient.occupation} span={2} />}
+            {patient.licensePlate && <InfoItem label="车牌" value={patient.licensePlate} span={2} />}
             <InfoItem label="地址" value={patient.address} span={4} />
             <InfoItem label="来源" value={patient.source} span={2} />
             <InfoItem label="顾客类型" value={patient.tags.join('、') || '—'} span={2} />
