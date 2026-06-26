@@ -22,6 +22,7 @@ import {
   Loader2,
   LayoutDashboard,
   ShieldCheck,
+  Globe,
 } from "lucide-react";
 import YabanTabBar from "./YabanTabBar";
 import { trpc } from "@/lib/trpc";
@@ -168,6 +169,13 @@ export default function YabanProfile() {
     },
     ...(isOwner
       ? [
+          {
+            key: "website_features",
+            icon: <Globe className="w-5 h-5 text-[#1E88D6]" />,
+            label: "网站功能管理",
+            hint: "顾客来源设置等自定义配置",
+            onClick: () => navigate("/yaban/settings/website-features"),
+          } as RowItem,
           {
             key: "company",
             icon: <Building2 className="w-5 h-5 text-[#1E88D6]" />,

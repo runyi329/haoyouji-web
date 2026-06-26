@@ -780,6 +780,8 @@ function Router() {
         <Route path="/yaban/settings/data" component={YabanDataManage} />
         <Route path="/yaban/bind-email" component={YabanBindEmail} />
         <Route path="/yaban/settings/charge-products" component={YabanChargeProducts} />
+        <Route path="/yaban/settings/website-features" component={lazy(() => import("./pages/yaban/YabanWebsiteFeatures"))} />
+        <Route path="/yaban/settings/customer-source" component={lazy(() => import("./pages/yaban/YabanCustomerSource"))} />
         <Route path="/yaban/followup" component={lazy(() => import("./pages/yaban/YabanFollowUp"))} />
         <Route path="/yaban/followup/create" component={lazy(() => import("./pages/yaban/YabanFollowUpCreate"))} />
         <Route path="/yaban/followup/patient-select" component={lazy(() => import("./pages/yaban/YabanPatientSelect"))} />

@@ -156,6 +156,38 @@ async function nextCustomerCode(conn: any, tenantId: number): Promise<string> {
   return prefix + String(next).padStart(SEQ_WIDTH, "0");
 }
 
+// 确保顾客来源配置表存在，并初始化预设选项
+const DEFAULT_SOURCES = [
+  "到店（路过）", "到店（家近）", "到店（公司近）",
+  "转介绍", "网络预约", "电话预约", "微信预约", "老顾客推荐", "其他",
+];
+async function ensureCustomerSourceTable(conn: any, tenantId: number) {
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS yaban_customer_source (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      tenant_id INT NOT NULL DEFAULT 1,
+      label VARCHAR(64) NOT NULL,
+      sort_order INT NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      INDEX idx_tenant (tenant_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  // 如果该门店还没有任何来源配置，插入预设选项
+  const [existing] = (await conn.execute(
+    `SELECT COUNT(*) AS cnt FROM yaban_customer_source WHERE tenant_id = ?`,
+    [tenantId]
+  )) as any;
+  if (Number((existing as any[])[0]?.cnt || 0) === 0) {
+    for (let i = 0; i < DEFAULT_SOURCES.length; i++) {
+      await conn.execute(
+        `INSERT INTO yaban_customer_source (tenant_id, label, sort_order) VALUES (?, ?, ?)`,
+        [tenantId, DEFAULT_SOURCES[i], i + 1]
+      );
+    }
+  }
+}
+
 // 确保顾客表存在
 async function ensureCustomerTable(conn: any) {
   await conn.execute(`
@@ -2250,6 +2282,109 @@ export const yabanCustomerRouter = router({
         currentLevel = nextIds;
       }
       return result;
+    }),
+
+  // ============ 删除顾客档案 ============
+  deleteCustomer: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ input, ctx }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error("DB连接失败");
+      const TENANT_ID = await resolveTenantId(ctx);
+      // 确认该顾客属于当前租户
+      const [rows] = (await (conn as any).execute(
+        `SELECT id FROM yaban_customer WHERE id = ? AND tenant_id = ? LIMIT 1`,
+        [input.id, TENANT_ID]
+      )) as any;
+      if (!(rows as any[]).length) throw new Error("顾客不存在或无权限删除");
+      await (conn as any).execute(
+        `DELETE FROM yaban_customer WHERE id = ? AND tenant_id = ?`,
+        [input.id, TENANT_ID]
+      );
+      return { success: true };
+    }),
+
+  // ============ 顾客来源配置（院长可自定义） ============
+
+  /** 获取当前门店的顾客来源列表（按 sort_order 排序） */
+  listCustomerSources: protectedProcedure.query(async ({ ctx }) => {
+    const conn = await getDbConnection();
+    if (!conn) return [];
+    const TENANT_ID = await resolveTenantId(ctx);
+    await ensureCustomerSourceTable(conn, TENANT_ID);
+    const [rows] = (await (conn as any).execute(
+      `SELECT id, label, sort_order FROM yaban_customer_source WHERE tenant_id = ? ORDER BY sort_order ASC, id ASC`,
+      [TENANT_ID]
+    )) as any;
+    return (rows as any[]).map((r) => ({ id: Number(r.id), label: String(r.label), sortOrder: Number(r.sort_order) }));
+  }),
+
+  /** 新增一条来源（院长权限） */
+  addCustomerSource: protectedProcedure
+    .input(z.object({ label: z.string().min(1).max(32) }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error("数据库连接失败");
+      const TENANT_ID = await resolveTenantId(ctx);
+      await checkYabanPerm(ctx, "manage_customer_source", TENANT_ID);
+      await ensureCustomerSourceTable(conn, TENANT_ID);
+      const [maxRows] = (await (conn as any).execute(
+        `SELECT COALESCE(MAX(sort_order),0)+1 AS next_order FROM yaban_customer_source WHERE tenant_id = ?`,
+        [TENANT_ID]
+      )) as any;
+      const nextOrder = Number((maxRows as any[])[0]?.next_order || 1);
+      await (conn as any).execute(
+        `INSERT INTO yaban_customer_source (tenant_id, label, sort_order) VALUES (?, ?, ?)`,
+        [TENANT_ID, input.label.trim(), nextOrder]
+      );
+      return { success: true };
+    }),
+
+  /** 修改来源标签（院长权限） */
+  updateCustomerSource: protectedProcedure
+    .input(z.object({ id: z.number(), label: z.string().min(1).max(32) }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error("数据库连接失败");
+      const TENANT_ID = await resolveTenantId(ctx);
+      await checkYabanPerm(ctx, "manage_customer_source", TENANT_ID);
+      await (conn as any).execute(
+        `UPDATE yaban_customer_source SET label = ? WHERE id = ? AND tenant_id = ?`,
+        [input.label.trim(), input.id, TENANT_ID]
+      );
+      return { success: true };
+    }),
+
+  /** 删除来源（院长权限） */
+  deleteCustomerSource: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error("数据库连接失败");
+      const TENANT_ID = await resolveTenantId(ctx);
+      await checkYabanPerm(ctx, "manage_customer_source", TENANT_ID);
+      await (conn as any).execute(
+        `DELETE FROM yaban_customer_source WHERE id = ? AND tenant_id = ?`,
+        [input.id, TENANT_ID]
+      );
+      return { success: true };
+    }),
+
+  /** 调整排序（拖拽后批量更新 sort_order） */
+  reorderCustomerSources: protectedProcedure
+    .input(z.array(z.object({ id: z.number(), sortOrder: z.number() })))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error("数据库连接失败");
+      const TENANT_ID = await resolveTenantId(ctx);
+      await checkYabanPerm(ctx, "manage_customer_source", TENANT_ID);
+      for (const item of input) {
+        await (conn as any).execute(
+          `UPDATE yaban_customer_source SET sort_order = ? WHERE id = ? AND tenant_id = ?`,
+          [item.sortOrder, item.id, TENANT_ID]
+        );
+      }
+      return { success: true };
     }),
 
   // ============ 诊所员工列表（供业绩分配选人） ============

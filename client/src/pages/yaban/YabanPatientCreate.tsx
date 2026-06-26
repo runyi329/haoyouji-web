@@ -167,11 +167,18 @@ export default function YabanPatientCreate() {
   const [randomPwd] = useState(() => String(Math.floor(100000 + Math.random() * 900000)));
   // 牙伴账号 / 初始密码提示弹窗
   const [yabanTipType, setYabanTipType] = useState<"account" | "password" | null>(null);
+  // 顾客来源：动态读取门店配置
+  const customerSourcesQuery = trpc.yabanCustomer.listCustomerSources.useQuery(undefined, {
+    refetchOnWindowFocus: false,
+  });
+  const dynamicSources = customerSourcesQuery.data?.map((s) => s.label) ?? SOURCES;
+
   // 推荐人搜索
   const [referrerSearch, setReferrerSearch] = useState("");
+  const [referrerPickerOpen, setReferrerPickerOpen] = useState(false);
   const referrerQuery = trpc.yabanCustomer.searchReferrer.useQuery(
     { query: referrerSearch },
-    { enabled: referrerSearch.length >= 1, refetchOnWindowFocus: false }
+    { enabled: referrerPickerOpen && referrerSearch.length >= 1, refetchOnWindowFocus: false }
   );
   // 推荐人数（编辑模式下查询该顾客作为推荐人的人数）
   const referralCountQuery = trpc.yabanCustomer.getReferralCount.useQuery(
@@ -286,6 +293,17 @@ export default function YabanPatientCreate() {
       toast.error(e.message || "保存失败，请重试");
     },
   });
+  const deleteMutation = trpc.yabanCustomer.deleteCustomer.useMutation({
+    onSuccess: () => {
+      toast.success("档案已删除");
+      utils.yabanCustomer.list.invalidate();
+      setLocation("/yaban/patients");
+    },
+    onError: (e) => {
+      toast.error(e.message || "删除失败，请重试");
+    },
+  });
+
   const updateMutation = trpc.yabanCustomer.update.useMutation({
     onSuccess: () => {
       toast.success("修改成功");
@@ -495,60 +513,83 @@ export default function YabanPatientCreate() {
                   const countLabel = totalCount > 0 ? `直接${directCount}人 共${totalCount}人` : "0人";
                   return (
                     <>
-                      {/* 推荐人 + 推荐的人：和上面 FieldCell half 完全一致的布局 */}
-                      {/* 推荐人（左半） */}
+                      {/* 推荐人（左半）：内嵌搜索展开模式 */}
                       <div
                         key={f.key}
                         style={{ flex: "1 1 calc(50% - 6px)", minWidth: 150 }}
-                        className="py-1.5 flex items-center gap-2"
+                        className="py-1.5 flex items-start gap-2"
                       >
-                        <label className="text-gray-700 text-base shrink-0" style={{ minWidth: "4em", display: "inline-block" }}>推荐人</label>
-                        <div className="flex-1 min-w-0 relative">
-                          <div className="flex items-center bg-gray-50 rounded-lg border border-[#D6E6F5] h-10 px-3 gap-2">
-                            {/* 已选中推荐人时显示账号能牌，未选中时显示搜索输入框 */}
-                            {form.referrerUsername && !referrerSearch ? (
+                        <label className="text-gray-700 text-base shrink-0 mt-2.5" style={{ minWidth: "4em", display: "inline-block" }}>推荐人</label>
+                        <div className="flex-1 min-w-0">
+                          {/* 已选中状态：显示账号名 + 清除按鈕 */}
+                          {form.referrerUsername && !referrerPickerOpen ? (
+                            <div className="flex items-center bg-gray-50 rounded-lg border border-[#D6E6F5] h-10 px-3 gap-2">
                               <span className="flex-1 text-sm text-gray-800 truncate">{form.referrerUsername}</span>
-                            ) : (
-                              <input
-                                type="text"
-                                className="flex-1 bg-transparent text-sm outline-none min-w-0"
-                                placeholder="输入搜索"
-                                value={referrerSearch}
-                                onChange={(e) => {
-                                  const v = e.target.value;
-                                  setReferrerSearch(v);
-                                  // 搜索时暂清空已选值，选中后才回填
-                                  if (!v) setField("referrerUsername", "");
-                                }}
-                              />
-                            )}
-                            {(form.referrerUsername || referrerSearch) && (
                               <button
                                 type="button"
                                 className="text-gray-300 flex-shrink-0"
-                                onClick={() => { setField("referrerUsername", ""); setReferrerSearch(""); }}
+                                onClick={() => { setField("referrerUsername", ""); setReferrerPickerOpen(false); setReferrerSearch(""); }}
                               >
                                 <XCircle size={15} />
                               </button>
-                            )}
-                          </div>
-                          {showDropdown && (
-                            <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-                              {referrerResults.map((u: any) => (
-                                <button
-                                  key={u.id}
-                                  type="button"
-                                  className="w-full text-left px-4 py-2.5 text-sm text-gray-800 hover:bg-blue-50 active:bg-blue-100 border-b border-gray-50 last:border-0"
-                                  onClick={() => {
-                                    setField("referrerUsername", u.username);
-                                    setReferrerSearch("");
-                                  }}
-                                >
-                                  <span className="font-medium">{u.username}</span>
-                                  {u.name && <span className="ml-2 text-gray-400 text-xs">{u.name}</span>}
-                                  {u.mobile && <span className="ml-2 text-gray-300 text-xs">{u.mobile}</span>}
+                            </div>
+                          ) : !referrerPickerOpen ? (
+                            /* 未选中状态：点击展开搜索 */
+                            <button
+                              type="button"
+                              className="w-full flex items-center justify-between bg-gray-50 rounded-lg border border-[#D6E6F5] h-10 px-3 gap-2 active:bg-gray-100"
+                              onClick={() => { setReferrerSearch(""); setReferrerPickerOpen(true); }}
+                            >
+                              <span className="text-sm text-gray-300">AI搜索</span>
+                              <ChevronRight size={14} className="text-gray-300 flex-shrink-0" />
+                            </button>
+                          ) : (
+                            /* 展开状态：内嵌搜索框 + 候选列表（浮层，不占文档流） */
+                            <div className="relative">
+                              <div className="flex items-center bg-white rounded-lg border-2 border-[#1E88D6] h-10 px-3 gap-2">
+                                <input
+                                  type="text"
+                                  autoFocus
+                                  className="flex-1 bg-transparent text-sm outline-none min-w-0"
+                                  placeholder="AI搜索"
+                                  value={referrerSearch}
+                                  onChange={(e) => setReferrerSearch(e.target.value)}
+                                />
+                                <button type="button" onClick={() => { setReferrerPickerOpen(false); setReferrerSearch(""); }} className="text-gray-300">
+                                  <X size={15} />
                                 </button>
-                              ))}
+                              </div>
+                              {/* 候选列表：绝对定位浮层，不占位置 */}
+                              {referrerSearch.length >= 1 && (
+                                <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border border-gray-100 bg-white shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                                  {referrerQuery.isLoading ? (
+                                    <div className="text-center text-gray-400 text-sm py-4">搜索中...</div>
+                                  ) : !referrerQuery.data?.length ? (
+                                    <div className="text-center text-gray-400 text-sm py-4">未找到匹配用户</div>
+                                  ) : (
+                                    referrerQuery.data.map((u: any) => (
+                                      <button
+                                        key={u.id}
+                                        type="button"
+                                        className="w-full flex items-center gap-3 px-3 py-2.5 text-left active:bg-blue-50 border-b border-gray-50 last:border-0"
+                                        onClick={() => {
+                                          setField("referrerUsername", u.username);
+                                          setReferrerPickerOpen(false);
+                                          setReferrerSearch("");
+                                        }}
+                                      >
+                                        <div className="flex-1 min-w-0">
+                                          <div className="text-sm font-medium text-gray-800 truncate">{u.username}</div>
+                                          {u.name && u.name !== u.username && (
+                                            <div className="text-xs text-gray-400 truncate">{u.name}</div>
+                                          )}
+                                        </div>
+                                        {u.mobile && <span className="text-xs text-gray-400 flex-shrink-0">{u.mobile}</span>}
+                                      </button>
+                                    ))
+                                  )}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -590,10 +631,15 @@ export default function YabanPatientCreate() {
                   );
                 }
 
+                // 顾客来源字段动态替换 options
+                const fieldWithDynOpts = f.key === "source"
+                  ? { ...f, options: dynamicSources }
+                  : f;
+
                 return (
                   <FieldCell
                     key={f.key}
-                    field={f}
+                    field={fieldWithDynOpts}
                     value={displayValue}
                     open={openKey === f.key}
                     onInput={(v) => setField(f.key, v)}
@@ -630,22 +676,46 @@ export default function YabanPatientCreate() {
       >
         {(() => {
           const isBusy = createMutation.isPending || updateMutation.isPending;
+          const isDeleting = deleteMutation.isPending;
           const canSave = !!(form.name?.trim());
           const isDisabled = isBusy || !canSave;
           return (
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={isDisabled}
-              className="w-full h-12 rounded-xl text-base font-semibold text-white flex items-center justify-center gap-2 transition-all active:scale-95"
-              style={{
-                background: isDisabled ? "#C0C0C0" : ACCENT,
-                boxShadow: isDisabled ? "none" : `0 3px 12px ${ACCENT}55`,
-                cursor: isDisabled ? "not-allowed" : "pointer",
-              }}
-            >
-              {isBusy ? "保存中…" : "保存"}
-            </button>
+            <div className="flex gap-3">
+              {/* 删除档案：仅编辑模式显示 */}
+              {isEdit && (
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => {
+                    if (!window.confirm(`确定要删除「${form.name || "该顾客"}」的档案？`)) return;
+                    if (!window.confirm("删除后不可恢复，请再次确认！")) return;
+                    deleteMutation.mutate({ id: editId });
+                  }}
+                  className="flex-shrink-0 h-12 px-5 rounded-xl text-base font-semibold text-white flex items-center justify-center transition-all active:scale-95"
+                  style={{
+                    background: isDeleting ? "#C0C0C0" : "#E53E3E",
+                    boxShadow: isDeleting ? "none" : "0 3px 12px rgba(229,62,62,0.35)",
+                    cursor: isDeleting ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {isDeleting ? "删除中…" : "删除"}
+                </button>
+              )}
+              {/* 保存按鈕 */}
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isDisabled}
+                className="flex-1 h-12 rounded-xl text-base font-semibold text-white flex items-center justify-center gap-2 transition-all active:scale-95"
+                style={{
+                  background: isDisabled ? "#C0C0C0" : ACCENT,
+                  boxShadow: isDisabled ? "none" : `0 3px 12px ${ACCENT}55`,
+                  cursor: isDisabled ? "not-allowed" : "pointer",
+                }}
+              >
+                {isBusy ? "保存中…" : "保存"}
+              </button>
+            </div>
           );
         })()}
       </div>
