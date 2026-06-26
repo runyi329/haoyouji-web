@@ -201,8 +201,8 @@ export default function YabanPatientCreate() {
   const [referrerSearch, setReferrerSearch] = useState("");
   const [referrerPickerOpen, setReferrerPickerOpen] = useState(false);
   const referrerQuery = trpc.yabanCustomer.searchReferrer.useQuery(
-    { query: referrerSearch },
-    { enabled: referrerPickerOpen && referrerSearch.length >= 1, refetchOnWindowFocus: false }
+    { query: referrerSearch || "" },
+    { enabled: referrerPickerOpen, refetchOnWindowFocus: false }
   );
   // 推荐人数（编辑模式下查询该顾客作为推荐人的人数）
   const referralCountQuery = trpc.yabanCustomer.getReferralCount.useQuery(
@@ -543,8 +543,8 @@ export default function YabanPatientCreate() {
                 // 推荐人字段：自定义搜索输入框 + 下拉候选列表 + 所属医院（联动只读）
                 if (f.key === "referrerUsername") {
                   // 先渲染推荐人行，再在其后追加所属医院
-                  const referrerResults = referrerSearch.length >= 1 ? (referrerQuery.data || []) : [];
-                  const showDropdown = referrerSearch.length >= 1 && referrerResults.length > 0;
+                  const referrerResults = referrerQuery.data || [];
+                  const showDropdown = referrerPickerOpen && referrerResults.length > 0;
                   const refCount = referralCountQuery.data;
                   const directCount = refCount?.direct ?? 0;
                   const totalCount = refCount?.total ?? 0;

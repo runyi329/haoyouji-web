@@ -2249,12 +2249,12 @@ export const yabanCustomerRouter = router({
 
   // ============ 推荐人搜索（搜索脉动网已有用户） ============
   searchReferrer: protectedProcedure
-    .input(z.object({ query: z.string().min(1) }))
+    .input(z.object({ query: z.string().optional() }))
     .query(async ({ input, ctx }) => {
       const conn = await getDbConnection();
       if (!conn) return [];
       const TENANT_ID = await resolveTenantId(ctx);
-      const keyword = `%${input.query}%`;
+      const keyword = input.query ? `%${input.query}%` : "%";
 
       // 1. 搜索本院员工（users 表，避免字符集冲突用 COLLATE 强制转换）
       const [staffRows] = (await (conn as any).execute(
