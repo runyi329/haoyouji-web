@@ -17,6 +17,7 @@ import AvatarPicker from "./AvatarPicker";
 import { autoAvatarKey, avatarSrc, type AvatarKey } from "@/lib/yaban-avatar";
 import { searchOccupations } from "./occupationData";
 import LicensePlatePicker from "./LicensePlatePicker";
+import InvoicePicker, { type InvoiceInfo, EMPTY_INVOICE } from "./InvoicePicker";
 
 // 主题色
 const ACCENT = "#1E88D6";
@@ -68,6 +69,7 @@ const PERSONAL_FIELDS: FieldDef[] = [
   { key: "email", label: "邮箱", placeholder: "请输入邮箱地址", kind: "input", inputType: "email", width: "full" },
   { key: "address", label: "地址", placeholder: "点击选择省市区并填写门牌号", kind: "address", width: "full" },
   { key: "licensePlate", label: "车牌", placeholder: "点击输入车牌号", kind: "license-plate", width: "half" },
+  { key: "_invoice", label: "发票", placeholder: "点击填写开票信息", kind: "readonly", width: "half" },
 ];
 const CUSTOMER_FIELDS: FieldDef[] = [
   { key: "patientType", label: "顾客类型", placeholder: "电子", kind: "select", options: PATIENT_TYPES, width: "half" },
@@ -157,6 +159,11 @@ export default function YabanPatientCreate() {
   const [licensePlateIndex, setLicensePlateIndex] = useState<1 | 2 | 3>(1);
   // 当前显示几块车牌输入框（1~3，点「+」增加）
   const [plateCount, setPlateCount] = useState<1 | 2 | 3>(1);
+  // 发票开票信息（最多3条）
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [invoiceIndex, setInvoiceIndex] = useState<1 | 2 | 3>(1);
+  const [invoiceCount, setInvoiceCount] = useState<1 | 2 | 3>(1);
+  const [invoices, setInvoices] = useState<[InvoiceInfo, InvoiceInfo, InvoiceInfo]>([{ ...EMPTY_INVOICE }, { ...EMPTY_INVOICE }, { ...EMPTY_INVOICE }]);
   // 头像：null 表示跟随年龄+性别自动适配；非 null 表示用户手动指定
   const [avatarManual, setAvatarManual] = useState<AvatarKey | null>(null);
   // 备用随机密码：页面加载时生成一次，无手机号时使用
@@ -282,6 +289,18 @@ export default function YabanPatientCreate() {
       emergencyRelation: d.emergency_relation ?? "",
       occupation: d.occupation ?? "",
       emergencyPhone: d.emergency_phone ?? "",
+      invoiceCompany: d.invoice_company ?? "",
+      invoiceTitle: d.invoice_title ?? "",
+      invoiceEmail: d.invoice_email ?? "",
+      invoiceMobile: d.invoice_mobile ?? "",
+      invoiceCompany2: d.invoice_company2 ?? "",
+      invoiceTitle2: d.invoice_title2 ?? "",
+      invoiceEmail2: d.invoice_email2 ?? "",
+      invoiceMobile2: d.invoice_mobile2 ?? "",
+      invoiceCompany3: d.invoice_company3 ?? "",
+      invoiceTitle3: d.invoice_title3 ?? "",
+      invoiceEmail3: d.invoice_email3 ?? "",
+      invoiceMobile3: d.invoice_mobile3 ?? "",
       source: d.source ?? "",
       sourceTag: d.source_tag ?? "",
       netConsultant: d.net_consultant ?? "",
@@ -295,6 +314,14 @@ export default function YabanPatientCreate() {
       chiefComplaint: d.chief_complaint ?? "",
     });
     if (d.avatar) setAvatarManual(d.avatar as AvatarKey);
+    // 回填发票信息
+    setInvoices([
+      { company: d.invoice_company ?? "", title: d.invoice_title ?? "", email: d.invoice_email ?? "", mobile: d.invoice_mobile ?? "" },
+      { company: d.invoice_company2 ?? "", title: d.invoice_title2 ?? "", email: d.invoice_email2 ?? "", mobile: d.invoice_mobile2 ?? "" },
+      { company: d.invoice_company3 ?? "", title: d.invoice_title3 ?? "", email: d.invoice_email3 ?? "", mobile: d.invoice_mobile3 ?? "" },
+    ]);
+    const ic = d.invoice_company3 ? 3 : d.invoice_company2 ? 2 : 1;
+    setInvoiceCount(ic as 1 | 2 | 3);
     // 回填亲友关联
     if (d.relative_id) {
       setRelativeSelected({ id: d.relative_id, name: d.relative_name ?? String(d.relative_id), mobile: d.relative_mobile ?? "" });
@@ -381,6 +408,18 @@ export default function YabanPatientCreate() {
       licensePlate: form.licensePlate,
       licensePlate2: form.licensePlate2 || undefined,
       licensePlate3: form.licensePlate3 || undefined,
+      invoiceCompany: invoices[0].company || undefined,
+      invoiceTitle: invoices[0].title || undefined,
+      invoiceEmail: invoices[0].email || undefined,
+      invoiceMobile: invoices[0].mobile || undefined,
+      invoiceCompany2: invoices[1].company || undefined,
+      invoiceTitle2: invoices[1].title || undefined,
+      invoiceEmail2: invoices[1].email || undefined,
+      invoiceMobile2: invoices[1].mobile || undefined,
+      invoiceCompany3: invoices[2].company || undefined,
+      invoiceTitle3: invoices[2].title || undefined,
+      invoiceEmail3: invoices[2].email || undefined,
+      invoiceMobile3: invoices[2].mobile || undefined,
       emergencyContact: form.emergencyContact,
       emergencyRelation: form.emergencyRelation,
       occupation: form.occupation,
@@ -463,6 +502,58 @@ export default function YabanPatientCreate() {
           <div className="px-1 pb-2 text-[13px] font-semibold text-gray-800">个人信息</div>
           <div className="flex flex-wrap gap-x-2 gap-y-1">
             {PERSONAL_FIELDS.map((f) => {
+              // 发票字段：特殊处理，支持最多3条开票信息
+              if (f.key === "_invoice") {
+                const INVOICE_LABELS = invoiceCount === 1 ? ["发票"] : ["发票一", "发票二", "发票三"];
+                const nextInvoiceNum = invoiceCount + 1;
+                return (
+                  <React.Fragment key="_invoice">
+                    {([0, 1, 2] as const).slice(0, invoiceCount).map((idx) => {
+                      const inv = invoices[idx];
+                      const hasValue = !!(inv.company || inv.title);
+                      const isLast = idx === invoiceCount - 1;
+                      const displayText = hasValue ? inv.company || inv.title : undefined;
+                      return (
+                        <div
+                          key={`_invoice_${idx}`}
+                          style={{ flex: idx > 0 ? "1 1 100%" : "1 1 calc(50% - 8px)", minWidth: idx > 0 ? "100%" : 150 }}
+                          className="py-1.5 flex items-center gap-2"
+                        >
+                          <label className="text-gray-700 text-base shrink-0" style={{ minWidth: "4em", display: "inline-block" }}>
+                            {INVOICE_LABELS[idx]}
+                          </label>
+                          <div className="flex-1 min-w-0">
+                            <div className="w-full h-10 px-3 rounded-lg bg-gray-50 border border-[#D6E6F5] flex items-center text-sm transition-colors">
+                              <button
+                                type="button"
+                                className="flex-1 min-w-0 text-left truncate active:opacity-70"
+                                onClick={() => { setInvoiceIndex((idx + 1) as 1 | 2 | 3); setInvoiceOpen(true); }}
+                              >
+                                {displayText
+                                  ? <span className="text-gray-800 truncate">{displayText}</span>
+                                  : <span className="text-gray-300">点击填写开票信息</span>
+                                }
+                              </button>
+                              <div className="flex items-center gap-1 shrink-0 ml-1">
+                                {hasValue && isLast && invoiceCount < 3 && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); if (window.confirm(`是否添加第 ${nextInvoiceNum} 条开票信息？`)) setInvoiceCount((c) => Math.min(c + 1, 3) as 1 | 2 | 3); }}
+                                    className="p-1 rounded active:bg-gray-100"
+                                  >
+                                    <PlusCircle className="w-4 h-4" style={{ color: ACCENT }} />
+                                  </button>
+                                )}
+                                <ChevronDown className="w-4 h-4 text-gray-300" onClick={() => { setInvoiceIndex((idx + 1) as 1 | 2 | 3); setInvoiceOpen(true); }} />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              }
               // 车牌字段：特殊处理，支持多块 + 动态标题
               if (f.key === "licensePlate") {
                 const PLATE_KEYS: ("licensePlate" | "licensePlate2" | "licensePlate3")[] = ["licensePlate", "licensePlate2", "licensePlate3"];
@@ -952,6 +1043,23 @@ export default function YabanPatientCreate() {
           else if (licensePlateIndex === 2) setField("licensePlate2", plate);
           else setField("licensePlate3", plate);
           setLicensePlateOpen(false);
+        }}
+      />
+
+      {/* 发票开票信息编辑弹窗 */}
+      <InvoicePicker
+        open={invoiceOpen}
+        index={invoiceIndex}
+        value={invoices[invoiceIndex - 1]}
+        customerMobile={form.mobile || ""}
+        onClose={() => setInvoiceOpen(false)}
+        onConfirm={(info) => {
+          setInvoices((prev) => {
+            const next: [InvoiceInfo, InvoiceInfo, InvoiceInfo] = [...prev] as [InvoiceInfo, InvoiceInfo, InvoiceInfo];
+            next[invoiceIndex - 1] = info;
+            return next;
+          });
+          setInvoiceOpen(false);
         }}
       />
 
