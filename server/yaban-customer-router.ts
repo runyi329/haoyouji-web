@@ -189,6 +189,33 @@ async function ensurePatientTypeTable(conn: any, tenantId: number) {
     }
   }
 }
+
+const DEFAULT_RELATIONS = ["夫妻", "父母", "子女", "兄弟姐妹", "朋友", "其他"];
+async function ensureRelationTable(conn: any, tenantId: number) {
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS yaban_customer_relation (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      tenant_id INT NOT NULL,
+      name VARCHAR(50) NOT NULL,
+      sort INT DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_tenant (tenant_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  const [existing] = (await conn.execute(
+    `SELECT COUNT(*) AS cnt FROM yaban_customer_relation WHERE tenant_id = ?`,
+    [tenantId]
+  )) as any;
+  if (Number((existing as any[])[0]?.cnt || 0) === 0) {
+    for (let i = 0; i < DEFAULT_RELATIONS.length; i++) {
+      await conn.execute(
+        `INSERT INTO yaban_customer_relation (tenant_id, name, sort) VALUES (?, ?, ?)`,
+        [tenantId, DEFAULT_RELATIONS[i], i + 1]
+      );
+    }
+  }
+}
+
 async function ensureCustomerSourceTable(conn: any, tenantId: number) {
   // 主表
   await conn.execute(`
@@ -350,6 +377,13 @@ async function ensureCustomerTable(conn: any) {
   // 兼入顾客来源副标签列
   try {
     await conn.execute(`ALTER TABLE yaban_customer ADD COLUMN source_tag VARCHAR(64) DEFAULT NULL AFTER source`);
+  } catch (e) { /* 列已存在则忽略 */ }
+  // 兼入亲友关联列
+  try {
+    await conn.execute(`ALTER TABLE yaban_customer ADD COLUMN relative_id BIGINT DEFAULT NULL AFTER referrer_username`);
+  } catch (e) { /* 列已存在则忽略 */ }
+  try {
+    await conn.execute(`ALTER TABLE yaban_customer ADD COLUMN relative_relation VARCHAR(50) DEFAULT NULL AFTER relative_id`);
   } catch (e) { /* 列已存在则忽略 */ }
 }
 
@@ -675,6 +709,8 @@ const createInput = z.object({
   netConsultant: z.string().max(64).optional(),
   consultant: z.string().max(64).optional(),
   referrerUsername: z.string().max(64).optional(),
+  relativeId: z.number().int().positive().optional(),
+  relativeRelation: z.string().max(50).optional(),
   yabanPassword: z.string().max(32).optional(),
   history: z.string().max(2000).optional(),
   remark: z.string().max(255).optional(),
@@ -1051,11 +1087,11 @@ export const yabanCustomerRouter = router({
             (tenant_id, name, gender, birthday, age, zodiac, chinese_zodiac, patient_type, medical_no, external_no, nickname,
              email, mobile, phone, region, address, license_plate, license_plate2, license_plate3, avatar,
             emergency_contact, emergency_relation, occupation, emergency_phone,
-            source, source_tag, net_consultant, consultant, yaban_username, yaban_password, referrer_username, history, remark,
+            source, source_tag, net_consultant, consultant, yaban_username, yaban_password, referrer_username, relative_id, relative_relation, history, remark,
             chief_complaint, health_status, drug_allergy, food_allergy,
             heart, hypertension, diabetes, kidney, infectious, bleeding, pregnant, medication,
             created_by)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?, ?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?)`,
+           VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?, ?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?)\`,
           [
             TENANT_ID,
             (input.name || "").trim(),
@@ -1088,6 +1124,8 @@ export const yabanCustomerRouter = router({
             yabanUsername,
             yabanPassword,
             referrerUsername,
+            input.relativeId ?? null,
+            s(input.relativeRelation),
             s(input.history),
             s(input.remark),
             s(input.chiefComplaint),
@@ -1170,7 +1208,7 @@ export const yabanCustomerRouter = router({
            name = ?, gender = ?, birthday = ?, age = ?, zodiac = ?, chinese_zodiac = ?, patient_type = ?,
            external_no = ?, nickname = ?, email = ?, mobile = ?, phone = ?, region = ?, address = ?, license_plate = ?, license_plate2 = ?, license_plate3 = ?, avatar = ?,
            emergency_contact = ?, emergency_relation = ?, occupation = ?, emergency_phone = ?,
-           source = ?, source_tag = ?, net_consultant = ?, consultant = ?, history = ?, remark = ?,
+           source = ?, source_tag = ?, net_consultant = ?, consultant = ?, relative_id = ?, relative_relation = ?, history = ?, remark = ?,
            chief_complaint = ?, health_status = ?, drug_allergy = ?, food_allergy = ?,
            heart = ?, hypertension = ?, diabetes = ?, kidney = ?, infectious = ?, bleeding = ?, pregnant = ?, medication = ?
          WHERE id = ? AND tenant_id = ?`,
@@ -1201,6 +1239,8 @@ export const yabanCustomerRouter = router({
           s(input.sourceTag),
           s(input.netConsultant),
           s(input.consultant),
+          input.relativeId ?? null,
+          s(input.relativeRelation),
           s(input.history),
           s(input.remark),
           s(input.chiefComplaint),
@@ -2644,6 +2684,73 @@ export const yabanCustomerRouter = router({
       name: (m.name || m.username || "员工") as string,
       roleKey: m.role_key as string,
       roleName: (m.role_name || "") as string,
+    })),
+  }),
+
+  // ============ 亲友关系类型配置（院长可自定义） ============
+
+  /** 获取当前门店的亲友关系类型列表 */
+  listRelations: protectedProcedure.query(async ({ ctx }) => {
+    const conn = await getDbConnection();
+    if (!conn) return [];
+    const TENANT_ID = await resolveTenantId(ctx);
+    await ensureRelationTable(conn, TENANT_ID);
+    const [rows] = (await (conn as any).execute(
+      `SELECT id, name, sort FROM yaban_customer_relation WHERE tenant_id = ? ORDER BY sort ASC, id ASC`,
+      [TENANT_ID]
+    )) as any;
+    return (rows as any[]).map((r) => ({
+      id: Number(r.id),
+      name: String(r.name),
+      sort: Number(r.sort),
     }));
   }),
+
+  /** 新增亲友关系类型 */
+  addRelation: protectedProcedure
+    .input(z.object({ name: z.string().min(1).max(20) }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error("数据库连接失败");
+      const TENANT_ID = await resolveTenantId(ctx);
+      await ensureRelationTable(conn, TENANT_ID);
+      const [maxRows] = (await (conn as any).execute(
+        `SELECT COALESCE(MAX(sort), 0) AS mx FROM yaban_customer_relation WHERE tenant_id = ?`,
+        [TENANT_ID]
+      )) as any;
+      const nextSort = Number((maxRows as any[])[0]?.mx || 0) + 1;
+      await (conn as any).execute(
+        `INSERT INTO yaban_customer_relation (tenant_id, name, sort) VALUES (?, ?, ?)`,
+        [TENANT_ID, input.name.trim(), nextSort]
+      );
+      return { success: true };
+    }),
+
+  /** 修改亲友关系类型名称 */
+  updateRelation: protectedProcedure
+    .input(z.object({ id: z.number().int().positive(), name: z.string().min(1).max(20) }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error("数据库连接失败");
+      const TENANT_ID = await resolveTenantId(ctx);
+      await (conn as any).execute(
+        `UPDATE yaban_customer_relation SET name = ? WHERE id = ? AND tenant_id = ?`,
+        [input.name.trim(), input.id, TENANT_ID]
+      );
+      return { success: true };
+    }),
+
+  /** 删除亲友关系类型 */
+  deleteRelation: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error("数据库连接失败");
+      const TENANT_ID = await resolveTenantId(ctx);
+      await (conn as any).execute(
+        `DELETE FROM yaban_customer_relation WHERE id = ? AND tenant_id = ?`,
+        [input.id, TENANT_ID]
+      );
+      return { success: true };
+    }),
 });

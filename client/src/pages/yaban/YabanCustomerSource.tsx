@@ -372,6 +372,9 @@ export default function YabanCustomerSource() {
             <ChevronLeft className="w-6 h-6" />
           </button>
           <span className="text-base font-bold flex-1">顾客来源设置</span>
+          <button onClick={() => setIsAdding(true)} aria-label="新增">
+            <img src="/icon-add.webp" alt="" className="w-8 h-8 object-cover rounded-full" />
+          </button>
         </div>
         <div className="px-4 pb-3">
           <YabanClinicHeader asBar />

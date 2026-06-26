@@ -783,6 +783,7 @@ function Router() {
         <Route path="/yaban/settings/website-features" component={lazy(() => import("./pages/yaban/YabanWebsiteFeatures"))} />
         <Route path="/yaban/settings/customer-source" component={lazy(() => import("./pages/yaban/YabanCustomerSource"))} />
         <Route path="/yaban/settings/patient-type" component={lazy(() => import("./pages/yaban/YabanPatientType"))} />
+        <Route path="/yaban/settings/relation-type" component={lazy(() => import("./pages/yaban/YabanRelationType"))} />
         <Route path="/yaban/followup" component={lazy(() => import("./pages/yaban/YabanFollowUp"))} />
         <Route path="/yaban/followup/create" component={lazy(() => import("./pages/yaban/YabanFollowUpCreate"))} />
         <Route path="/yaban/followup/patient-select" component={lazy(() => import("./pages/yaban/YabanPatientSelect"))} />

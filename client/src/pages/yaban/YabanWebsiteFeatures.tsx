@@ -6,7 +6,7 @@
  */
 import { useLocation } from "wouter";
 import { useSmartBack } from "@/hooks/useSmartBack";
-import { ChevronLeft, ChevronRight, Tags, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, Tags, Users, Heart } from "lucide-react";
 import YabanClinicHeader from "./YabanClinicHeader";
 
 export default function YabanWebsiteFeatures() {
@@ -27,6 +27,13 @@ export default function YabanWebsiteFeatures() {
       label: "顾客来源设置",
       hint: "自定义新建顾客时的来源渠道选项",
       onClick: () => navigate("/yaban/settings/customer-source"),
+    },
+    {
+      key: "relation-type",
+      icon: <Heart className="w-5 h-5 text-[#1E88D6]" />,
+      label: "亲友关系设置",
+      hint: "自定义新建顾客时的亲友关系类型选项",
+      onClick: () => navigate("/yaban/settings/relation-type"),
     },
   ];
 

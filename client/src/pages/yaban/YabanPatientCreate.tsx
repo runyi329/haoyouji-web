@@ -74,6 +74,8 @@ const CUSTOMER_FIELDS: FieldDef[] = [
   { key: "consultant", label: "咨询师", placeholder: "请选择", kind: "select", options: CONSULTANTS, width: "half" },
   // source 已改为自定义两级选择渲染，单独占一行
   { key: "_sourceCustom", label: "顾客来源", placeholder: "请选择", kind: "readonly", width: "full" },
+  // 关联亲友 + 亲友关系：自定义渲染，单独占一行两列
+  { key: "_relativeCustom", label: "关联亲友", placeholder: "搜索顾客姓名/手机号", kind: "readonly", width: "full" },
   { key: "_yabanAccount", label: "牙伴账号", placeholder: "", kind: "readonly", width: "half" },
   { key: "_yabanPassword", label: "初始密码", placeholder: "", kind: "readonly", width: "half" },
   { key: "referrerUsername", label: "推荐人", placeholder: "搜索脉动网用户名", kind: "input", width: "full" },
@@ -177,6 +179,24 @@ export default function YabanPatientCreate() {
   // 当前选中的主标题（第一级）
   const [selectedSourceId, setSelectedSourceId] = useState<number | null>(null);
 
+  // 亲友关联：搜索已有顾客
+  const [relativeSearch, setRelativeSearch] = useState("");
+  const [relativePickerOpen, setRelativePickerOpen] = useState(false);
+  // 当前选中的亲友顾客对象
+  const [relativeSelected, setRelativeSelected] = useState<{ id: number; name: string; mobile?: string } | null>(null);
+  // 亲友关系类型：动态读取门店配置
+  const relationTypesQuery = trpc.yabanCustomer.listRelations.useQuery(undefined, {
+    refetchOnWindowFocus: false,
+  });
+  const dynamicRelationTypes = relationTypesQuery.data?.map((r: any) => r.label) ?? ["夫妻", "父母", "子女", "兄弟姐妹", "朋友", "其他"];
+  // 亲友关系下拉弹窗
+  const [relationPickerOpen, setRelationPickerOpen] = useState(false);
+  // 搜索亲友顾客
+  const relativeQuery = trpc.yabanCustomer.searchReferrer.useQuery(
+    { query: relativeSearch },
+    { enabled: relativePickerOpen && relativeSearch.length >= 1, refetchOnWindowFocus: false }
+  );
+
   // 推荐人搜索
   const [referrerSearch, setReferrerSearch] = useState("");
   const [referrerPickerOpen, setReferrerPickerOpen] = useState(false);
@@ -269,11 +289,16 @@ export default function YabanPatientCreate() {
       yabanUsername: d.yaban_username ?? "",
       yabanPassword: d.yaban_password ?? "",
       referrerUsername: d.referrer_username ?? "",
+      relativeRelation: d.relative_relation ?? "",
       history: d.history ?? "",
       patientRemark: d.remark ?? "",
       chiefComplaint: d.chief_complaint ?? "",
     });
     if (d.avatar) setAvatarManual(d.avatar as AvatarKey);
+    // 回填亲友关联
+    if (d.relative_id) {
+      setRelativeSelected({ id: d.relative_id, name: d.relative_name ?? String(d.relative_id), mobile: d.relative_mobile ?? "" });
+    }
     // 编辑模式：根据已有车牌数量初始化 plateCount
     const pc = d.license_plate3 ? 3 : d.license_plate2 ? 2 : 1;
     setPlateCount(pc as 1 | 2 | 3);
@@ -368,6 +393,8 @@ export default function YabanPatientCreate() {
       history: form.history,
       remark: form.patientRemark,
       referrerUsername: form.referrerUsername || undefined,
+      relativeId: relativeSelected?.id || undefined,
+      relativeRelation: form.relativeRelation || undefined,
       ...(finalPwd !== undefined ? { yabanPassword: finalPwd } : {}),
     };
     if (isEdit) {
@@ -684,6 +711,117 @@ export default function YabanPatientCreate() {
                         </button>
                       </div>
                     </div>
+                  );
+                }
+
+                // 关联亲友 + 亲友关系：自定义两列渲染
+                if (f.key === "_relativeCustom") {
+                  const relativeResults = relativeSearch.length >= 1 ? (relativeQuery.data || []) : [];
+                  const showRelativeDropdown = relativeSearch.length >= 1 && relativeResults.length > 0;
+                  return (
+                    <>
+                      {/* 关联亲友（左半）：内嵌搜索 */}
+                      <div
+                        key="_relativeCustom"
+                        style={{ flex: "1 1 calc(50% - 6px)", minWidth: 150 }}
+                        className="py-1.5 flex items-start gap-2"
+                      >
+                        <label className="text-gray-700 text-base shrink-0 mt-2.5" style={{ minWidth: "4em", display: "inline-block" }}>关联亲友</label>
+                        <div className="flex-1 min-w-0 relative">
+                          {relativeSelected && !relativePickerOpen ? (
+                            <div className="flex items-center bg-gray-50 rounded-lg border border-[#D6E6F5] h-10 px-3 gap-2">
+                              <span className="flex-1 text-sm text-gray-800 truncate">{relativeSelected.name}{relativeSelected.mobile ? ` (${relativeSelected.mobile.slice(-4)})` : ""}</span>
+                              <button type="button" className="text-gray-300 flex-shrink-0" onClick={() => { setRelativeSelected(null); setRelativeSearch(""); }}>
+                                <XCircle size={15} />
+                              </button>
+                            </div>
+                          ) : !relativePickerOpen ? (
+                            <button type="button" onClick={() => setRelativePickerOpen(true)} className="w-full flex items-center bg-gray-50 rounded-lg border border-[#D6E6F5] h-10 px-3">
+                              <span className="text-sm text-gray-300">搜索顾客姓名/手机号</span>
+                            </button>
+                          ) : (
+                            <div className="relative">
+                              <input
+                                autoFocus
+                                className="w-full h-10 px-3 rounded-lg border border-[#1E88D6] bg-white text-sm outline-none"
+                                placeholder="输入姓名或手机号..."
+                                value={relativeSearch}
+                                onChange={(e) => setRelativeSearch(e.target.value)}
+                              />
+                              <button type="button" onClick={() => { setRelativePickerOpen(false); setRelativeSearch(""); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300">
+                                <XCircle size={15} />
+                              </button>
+                              {relativeSearch.length >= 1 && (
+                                <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border border-gray-100 bg-white shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                                  {relativeQuery.isLoading ? (
+                                    <div className="text-center text-gray-400 text-sm py-4">搜索中...</div>
+                                  ) : !relativeQuery.data?.length ? (
+                                    <div className="text-center text-gray-400 text-sm py-4">未找到匹配顾客</div>
+                                  ) : (
+                                    relativeQuery.data.map((u: any) => (
+                                      <button
+                                        key={u.id}
+                                        type="button"
+                                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 border-b border-gray-50 last:border-0"
+                                        onClick={() => {
+                                          setRelativeSelected({ id: u.id, name: u.name || u.username, mobile: u.mobile });
+                                          setRelativePickerOpen(false);
+                                          setRelativeSearch("");
+                                        }}
+                                      >
+                                        <span className="font-medium text-gray-800">{u.name || u.username}</span>
+                                        {u.mobile && <span className="ml-2 text-gray-400 text-xs">{u.mobile}</span>}
+                                      </button>
+                                    ))
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      {/* 亲友关系（右半）：下拉选择 */}
+                      <div
+                        key="_relativeRelation"
+                        style={{ flex: "1 1 calc(50% - 6px)", minWidth: 150 }}
+                        className="py-1.5 flex items-start gap-2"
+                      >
+                        <label className="text-gray-700 text-base shrink-0 mt-2.5" style={{ minWidth: "4em", display: "inline-block" }}>亲友关系</label>
+                        <div className="flex-1 min-w-0 relative">
+                          <button
+                            type="button"
+                            onClick={() => setRelationPickerOpen(!relationPickerOpen)}
+                            className="w-full flex items-center justify-between bg-gray-50 rounded-lg border border-[#D6E6F5] h-10 px-3 gap-2 active:bg-gray-100"
+                          >
+                            <span className={`text-sm ${form.relativeRelation ? 'text-gray-800' : 'text-gray-300'}`}>
+                              {form.relativeRelation || "请选择关系"}
+                            </span>
+                            <ChevronDown className="w-4 h-4 text-gray-300 shrink-0" />
+                          </button>
+                          {relationPickerOpen && (
+                            <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border border-gray-100 bg-white shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                              {dynamicRelationTypes.map((rel: string) => (
+                                <button
+                                  key={rel}
+                                  type="button"
+                                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 border-b border-gray-50 last:border-0"
+                                  onClick={() => { setField("relativeRelation", rel); setRelationPickerOpen(false); }}
+                                >
+                                  {rel}
+                                </button>
+                              ))}
+                              <button
+                                type="button"
+                                className="w-full text-left px-4 py-2.5 text-sm text-gray-400 hover:bg-gray-50"
+                                onClick={() => { setField("relativeRelation", ""); setRelationPickerOpen(false); }}
+                              >
+                                清除
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </>
                   );
                 }
 
