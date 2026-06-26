@@ -61,8 +61,9 @@ export default function LicensePlatePicker({ open, value, onClose, onConfirm }: 
 
   const isGreen = plateChars.length === MAX_LEN;
   const fullPlate = province + plateChars.join("");
-  // 可确认：车牌位数完整(6或7)，或者完全为空（清空后保存=未填）
-  const canConfirm = !!(province && (plateChars.length === 0 || plateChars.length === 6 || plateChars.length === MAX_LEN));
+  // 可确认：车牌位数完整(6或7)，或者完全清空（连省份也为空 = 未填）
+  const isEmptyPlate = !province && plateChars.length === 0;
+  const canConfirm = isEmptyPlate || !!(province && (plateChars.length === 6 || plateChars.length === MAX_LEN));
 
   const plateBg = isGreen ? GREEN_BG : BLUE_BG;
   const plateText = isGreen ? GREEN_TEXT : BLUE_TEXT;
@@ -110,6 +111,7 @@ export default function LicensePlatePicker({ open, value, onClose, onConfirm }: 
   };
 
   const handleClear = () => {
+    setProvince("");
     setPlateChars([]);
     setFocusIdx(0);
   };
@@ -352,18 +354,18 @@ export default function LicensePlatePicker({ open, value, onClose, onConfirm }: 
               <button
                 type="button"
                 onClick={handleClear}
-                disabled={plateChars.length === 0}
+                disabled={isEmptyPlate}
                 className="flex-1 h-12 rounded-xl text-sm font-medium flex items-center justify-center transition-all active:scale-95"
                 style={{
                   background: "#FFF1E8",
-                  color: plateChars.length === 0 ? "#E8CBB6" : "#E07B39",
+                  color: isEmptyPlate ? "#E8CBB6" : "#E07B39",
                 }}
               >
                 清空
               </button>
               <button
                 type="button"
-                onClick={() => canConfirm && onConfirm(fullPlate)}
+                onClick={() => canConfirm && onConfirm(isEmptyPlate ? "" : fullPlate)}
                 disabled={!canConfirm}
                 className="flex-[2] h-12 rounded-xl text-sm font-semibold flex items-center justify-center transition-all active:scale-95"
                 style={{
