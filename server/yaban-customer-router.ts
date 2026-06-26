@@ -1064,10 +1064,12 @@ export const yabanCustomerRouter = router({
         for (let seq = 0; seq <= 99; seq++) {
           const candidate = seq === 0 ? baseName : `${baseName}${seq}`;
           try {
+            // openId 用 yaban_cust_{timestamp}_{seq} 保证唯一
+            const openIdVal = `yaban_cust_${Date.now()}_${seq}`;
             const [res] = await (conn as any).execute(
-              `INSERT IGNORE INTO users (username, passwordHash, name, loginMethod, role, invited_by_user_id, createdAt, updatedAt, lastSignedIn)
-               VALUES (?, ?, ?, 'password', 'parent', ?, NOW(), NOW(), NOW())`,
-              [candidate, passwordHash, candidate, referrerUserId]
+              `INSERT IGNORE INTO users (openId, username, passwordHash, name, loginMethod, role, invited_by_user_id, createdAt, updatedAt, lastSignedIn)
+               VALUES (?, ?, ?, ?, 'password', 'parent', ?, NOW(), NOW(), NOW())`,
+              [openIdVal, candidate, passwordHash, candidate, referrerUserId]
             ) as any;
             if (res.affectedRows > 0) {
               yabanUsername = candidate;
@@ -2253,38 +2255,54 @@ export const yabanCustomerRouter = router({
       if (!conn) return [];
       const TENANT_ID = await resolveTenantId(ctx);
       const keyword = `%${input.query}%`;
-      // 搜索范围：当前医院的员工账号 + 该医院所有顾客的牙伴账号，不跨医院
-      // 模糊查询范围：users表多字段 + yaban_customer的姓名/手机/昵称
-      const [rows] = (await (conn as any).execute(
-        `SELECT DISTINCT u.id, u.username, u.name, u.phone, c.mobile, c.nickname
+
+      // 1. 搜索本院员工（users 表，避免字符集冲突用 COLLATE 强制转换）
+      const [staffRows] = (await (conn as any).execute(
+        `SELECT DISTINCT u.id,
+                u.username COLLATE utf8mb4_0900_ai_ci AS username,
+                u.name    COLLATE utf8mb4_0900_ai_ci AS name,
+                u.phone   COLLATE utf8mb4_0900_ai_ci AS phone
            FROM users u
-           LEFT JOIN yaban_customer c ON c.yaban_username = u.username AND c.tenant_id = ?
-          WHERE (
-              u.username LIKE ? OR u.name LIKE ? OR u.phone LIKE ? OR u.realName LIKE ?
-              OR c.name LIKE ? OR c.mobile LIKE ? OR c.nickname LIKE ?
-            )
-            AND (
-              -- 该医院的员工
-              u.id IN (
-                SELECT user_id FROM yaban_clinic_member
-                 WHERE tenant_id = ? AND status = 'active'
-              )
-              OR
-              -- 该医院的顾客（有牙伴账号）
-              u.username IN (
-                SELECT yaban_username FROM yaban_customer
-                 WHERE tenant_id = ? AND yaban_username IS NOT NULL AND yaban_username != ''
-              )
-            )
+           JOIN yaban_clinic_member m ON m.user_id = u.id AND m.tenant_id = ? AND m.status = 'active'
+          WHERE (u.username COLLATE utf8mb4_0900_ai_ci LIKE ?
+              OR u.name    COLLATE utf8mb4_0900_ai_ci LIKE ?
+              OR u.phone   COLLATE utf8mb4_0900_ai_ci LIKE ?)
           LIMIT 20`,
-        [TENANT_ID, keyword, keyword, keyword, keyword, keyword, keyword, keyword, TENANT_ID, TENANT_ID]
+        [TENANT_ID, keyword, keyword, keyword]
       )) as any;
-      return (rows as any[]).map((u) => ({
-        id: Number(u.id),
-        username: u.username as string,
-        name: (u.name || u.nickname || "") as string,
-        mobile: (u.mobile || "") as string,
-      }));
+
+      // 2. 搜索本院有脉动账号的顾客（直接查 yaban_customer，再 JOIN users 取 username）
+      const [custRows] = (await (conn as any).execute(
+        `SELECT DISTINCT u.id,
+                u.username COLLATE utf8mb4_0900_ai_ci AS username,
+                c.name AS name,
+                c.mobile AS phone
+           FROM yaban_customer c
+           JOIN users u ON u.username = c.yaban_username COLLATE utf8mb4_unicode_ci
+          WHERE c.tenant_id = ?
+            AND c.yaban_username IS NOT NULL AND c.yaban_username != ''
+            AND (c.name LIKE ? OR c.mobile LIKE ? OR c.nickname LIKE ?
+              OR u.username COLLATE utf8mb4_0900_ai_ci LIKE ?)
+          LIMIT 20`,
+        [TENANT_ID, keyword, keyword, keyword, keyword]
+      )) as any;
+
+      // 合并去重，员工优先
+      const seen = new Set<number>();
+      const combined: { id: number; username: string; name: string; mobile: string }[] = [];
+      for (const row of [...(staffRows as any[]), ...(custRows as any[])]) {
+        const id = Number(row.id);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        combined.push({
+          id,
+          username: (row.username || "") as string,
+          name: (row.name || row.username || "") as string,
+          mobile: (row.phone || "") as string,
+        });
+      }
+      combined.sort((a, b) => a.name.localeCompare(b.name, "zh"));
+      return combined.slice(0, 20);
     }),
 
   // ============ 搜索顾客（关联亲友用，搜索所有顾客不限账号）============
