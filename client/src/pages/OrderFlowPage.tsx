@@ -966,7 +966,9 @@ export default function OrderFlowPage() {
                 <div className="text-center">
                   <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>{isPerp ? "保证金" : isOption ? "权利金" : "成本"}</div>
                   <div className="text-sm" style={{ color: OKX_TEXT_PRI, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                    {isOption && order.premium ? fmt(parseFloat(order.premium), 2) : fmt(calc.margin, 2)}
+                    {isOption && order.premium
+                      ? `${Math.round(parseFloat(order.premium)).toLocaleString("zh-CN")} U`
+                      : fmt(calc.margin, 2)}
                   </div>
                 </div>
                 <div className="text-right">
@@ -977,6 +979,98 @@ export default function OrderFlowPage() {
                 </div>
               </div>
 
+              {/* 期权专属信息行：行权价 / 盈亏平衡价 / 最大亏损 / 最大盈利 */}
+              {isOption && (
+                <div className="px-3 py-2 space-y-1.5" style={{ borderTop: `1px solid ${OKX_BORDER}` }}>
+                  {/* 第一行：合约类型 + 行权价 + 到期日 */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {order.option_type && (
+                      <span
+                        className="text-xs font-bold px-2 py-0.5 rounded"
+                        style={{
+                          backgroundColor: order.option_type === "call" ? "rgba(14,203,129,0.15)" : "rgba(246,70,93,0.15)",
+                          color: order.option_type === "call" ? "#0ECB81" : "#F6465D",
+                        }}
+                      >
+                        {order.option_type === "call" ? "CALL" : "PUT"}
+                      </span>
+                    )}
+                    {order.strike_price && (
+                      <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>
+                        行权价 <span style={{ color: OKX_TEXT_PRI, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>${parseFloat(order.strike_price).toLocaleString("zh-CN")}</span>
+                      </span>
+                    )}
+                    {order.expiry_date && (
+                      <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>
+                        到期 <span style={{ color: OKX_TEXT_PRI }}>{order.expiry_date?.slice(0, 10)}</span>
+                      </span>
+                    )}
+                  </div>
+                  {/* 第二行：盈亏平衡价 / 最大亏损 / 最大盈利 */}
+                  {(() => {
+                    const strike = order.strike_price ? parseFloat(order.strike_price) : null;
+                    const premium = order.premium ? parseFloat(order.premium) : null;
+                    const qty = parseFloat(order.quantity || "0");
+                    const isLongDir = order.direction === "long";
+                    const optType = order.option_type;
+
+                    // 盈亏平衡价（到期）
+                    let breakeven: number | null = null;
+                    if (strike != null && premium != null && qty > 0) {
+                      const premiumPerUnit = premium / qty;
+                      if (optType === "call") {
+                        breakeven = isLongDir ? strike + premiumPerUnit : strike - premiumPerUnit;
+                      } else {
+                        breakeven = isLongDir ? strike - premiumPerUnit : strike + premiumPerUnit;
+                      }
+                    }
+
+                    // 最大亏损（买入方：权利金；卖出方：理论上无限，显示"无限"）
+                    const maxLoss = isLongDir
+                      ? (premium != null ? Math.round(premium) : null)
+                      : null; // 卖出方无限亏损
+
+                    // 最大盈利（买入 Call：无限；买入 Put：(strike - 0) * qty - premium）
+                    let maxProfit: number | null | "无限" = null;
+                    if (isLongDir && strike != null && premium != null) {
+                      if (optType === "call") {
+                        maxProfit = "无限";
+                      } else {
+                        maxProfit = Math.round(strike * qty - premium);
+                      }
+                    } else if (!isLongDir && premium != null) {
+                      maxProfit = Math.round(premium); // 卖出方最大盈利 = 权利金
+                    }
+
+                    return (
+                      <div className="grid grid-cols-3 gap-0">
+                        <div>
+                          <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>盈亏平衡</div>
+                          <div className="text-sm" style={{ color: OKX_TEXT_PRI, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
+                            {breakeven != null ? `$${breakeven.toLocaleString("zh-CN", { minimumFractionDigits: 0, maximumFractionDigits: 1 })}` : "--"}
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>最大亏损</div>
+                          <div className="text-sm" style={{ color: "#F6465D", fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
+                            {isLongDir
+                              ? (maxLoss != null ? `-${maxLoss.toLocaleString("zh-CN")} U` : "--")
+                              : <span style={{ color: "#F6465D", fontSize: "0.7rem" }}>理论无限</span>}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>最大盈利</div>
+                          <div className="text-sm" style={{ color: "#0ECB81", fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
+                            {maxProfit === "无限"
+                              ? <span style={{ color: "#0ECB81", fontSize: "0.7rem" }}>理论无限</span>
+                              : maxProfit != null ? `+${(maxProfit as number).toLocaleString("zh-CN")} U` : "--"}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
               {/* 行4：止盈止损 + 预计净利润/净亏损 */}
               {(order.take_profit || order.stop_loss) && (() => {
                 const entry = parseFloat(order.entry_price);
