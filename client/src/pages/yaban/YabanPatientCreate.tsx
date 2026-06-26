@@ -425,7 +425,6 @@ export default function YabanPatientCreate() {
                 cursor: isDisabled ? "not-allowed" : "pointer",
               }}
             >
-              <Check className="w-5 h-5" />
               {isBusy ? "保存中…" : "保存"}
             </button>
           );

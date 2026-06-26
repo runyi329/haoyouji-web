@@ -546,7 +546,7 @@ const createInput = z.object({
   externalNo: z.string().max(64).optional(),
   nickname: z.string().max(64).optional(),
   email: z.string().max(128).optional(),
-  mobile: z.string().min(1, "手机号必填").max(32),
+  mobile: z.string().max(32).optional(),
   phone: z.string().max(32).optional(),
   region: z.string().max(64).optional(),
   address: z.string().max(255).optional(),
