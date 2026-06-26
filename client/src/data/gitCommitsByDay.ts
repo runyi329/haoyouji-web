@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-26
+// 生成时间：2026-06-27
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -7875,5 +7875,12 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-26T08:25:31Z", type: "feat", cleanMessage: "推荐人搜索下拉修复/车牌第2-3块另起一行/牙伴账号同名自动加序号" },
     { date: "2026-06-26T08:56:44Z", type: "feat", cleanMessage: "网站功能管理-顾客来源设置；多车牌另起一行；推荐人内嵌搜索；删除按钮文字；牙伴账号同名加序号" },
     { date: "2026-06-26T09:07:42Z", type: "feat", cleanMessage: "网站功能管理/顾客来源设置页面加帽檐医院切换；推荐人改内嵌搜索；删除按钮文字简化；车牌第2/3块另起一行；牙伴账号同名加序号" },
+    { date: "2026-06-26T12:05:25Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-26T10:46:00Z", type: "feat", cleanMessage: "顾客来源改为主标题+副标签两级结构" },
+    { date: "2026-06-26T12:07:01Z", type: "feat", cleanMessage: "顾客类型+来源两级结构(主标题+副标签)，设置页开放院长编辑，删除网电咨询字段，布局调整，设置页乐观显示" },
+    { date: "2026-06-26T13:20:47Z", type: "feat", cleanMessage: "新增关联亲友+亲友关系字段，顾客类型/亲友关系设置页开放院长管理，来源设置页加号按钮样式统一" },
+    { date: "2026-06-26T13:47:44Z", type: "fix", cleanMessage: "修复 yaban-customer-router.ts 语法错误（模板字符串转义反引号 + 逗号运算符）" },
+    { date: "2026-06-26T14:04:28Z", type: "fix", cleanMessage: "修复关联亲友搜索 UNION 字符集冲突，改为分开查询顾客+员工再合并" },
+    { date: "2026-06-26T15:49:12Z", type: "fix", cleanMessage: "修复推荐人搜索字符集冲突 + 新建顾客时 INSERT users 补充 openId 字段" },
   ],
 };
