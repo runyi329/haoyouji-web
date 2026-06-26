@@ -4650,7 +4650,7 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
 
   useEffect(() => {
     // 加载分身名称和头像
-    fetch(`/api/wecom/channels/${channelId}`)
+    fetch(`/api/wecom/channels/${KF_CHANNEL_ID}`)
       .then(r => r.json())
       .then(ch => {
         if (ch && ch.name) setChannelName(ch.name);
@@ -4660,11 +4660,11 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
 
     // 并行拉取各 Tab 的数量
     Promise.all([
-      fetch(`/api/wecom/prompt-rules?channel_id=${channelId}`).then(r => r.json()).then(d => d.ok ? (d.rules || []).filter((r: any) => r.enabled).length : 0).catch(() => 0),
-      fetch(`/api/wecom/custom-rules?channel_type=${channelType}`).then(r => r.json()).then(d => d.ok ? (d.rules || []).length : 0).catch(() => 0),
-      fetch(`/api/wecom/ch/kb/stats?channel_id=${channelId}`).then(r => r.json()).then(d => d.item_count || 0).catch(() => 0),
-      fetch(`/api/wecom/ch/logs?channel_id=${channelId}&channel_type=${channelType}&limit=1`).then(r => r.json()).then(d => d.total || 0).catch(() => 0),
-      fetch(`/api/wecom/corpus/stats?channel_id=${channelId}`).then(r => r.json()).then(d => {
+      fetch(`/api/wecom/prompt-rules?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).then(d => d.ok ? (d.rules || []).filter((r: any) => r.enabled).length : 0).catch(() => 0),
+      fetch(`/api/wecom/custom-rules?channel_type=${KF_CHANNEL_TYPE}`).then(r => r.json()).then(d => d.ok ? (d.rules || []).length : 0).catch(() => 0),
+      fetch(`/api/wecom/ch/kb/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).then(d => d.item_count || 0).catch(() => 0),
+      fetch(`/api/wecom/ch/logs?channel_id=${KF_CHANNEL_ID}&channel_type=${KF_CHANNEL_TYPE}&limit=1`).then(r => r.json()).then(d => d.total || 0).catch(() => 0),
+      fetch(`/api/wecom/corpus/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).then(d => {
         const corpus = d.ok ? (d.quality_count || 0) : 0;
         return corpus;
       }).catch(() => 0),
