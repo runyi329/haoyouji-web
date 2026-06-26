@@ -7869,5 +7869,11 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-26T06:46:46Z", type: "feat", cleanMessage: "顾客来源到店三选项+牙伴账号密码自动生成并展示" },
     { date: "2026-06-26T07:37:28Z", type: "feat", cleanMessage: "推荐人搜索模糊查询+推荐列表弹窗+已推荐人数点击概览" },
     { date: "2026-06-26T07:40:11Z", type: "other", cleanMessage: "Revert \"feat: 推荐人搜索模糊查询+推荐列表弹窗+已推荐人数点击概览\"" },
+    { date: "2026-06-26T07:56:18Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-26T07:37:28Z", type: "feat", cleanMessage: "推荐人搜索模糊查询+推荐列表弹窗+已推荐人数点击概览" },
+    { date: "2026-06-26T08:16:04Z", type: "feat", cleanMessage: "牙伴账号/初始密码/推荐人/所属医院/顾客来源到店三选项/AI健康标签多标签/车牌多块(最多3块)/个人信息字段宽度修复" },
+    { date: "2026-06-26T08:25:31Z", type: "feat", cleanMessage: "推荐人搜索下拉修复/车牌第2-3块另起一行/牙伴账号同名自动加序号" },
+    { date: "2026-06-26T08:56:44Z", type: "feat", cleanMessage: "网站功能管理-顾客来源设置；多车牌另起一行；推荐人内嵌搜索；删除按钮文字；牙伴账号同名加序号" },
+    { date: "2026-06-26T09:07:42Z", type: "feat", cleanMessage: "网站功能管理/顾客来源设置页面加帽檐医院切换；推荐人改内嵌搜索；删除按钮文字简化；车牌第2/3块另起一行；牙伴账号同名加序号" },
   ],
 };
