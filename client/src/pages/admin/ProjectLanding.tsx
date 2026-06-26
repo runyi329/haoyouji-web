@@ -241,7 +241,7 @@ interface Material {
   created_at: string;
 }
 
-function MaterialsCard({ channelId }: { channelId: number }) {
+function MaterialsCard({ channelId, theme = C }: { channelId: number; theme?: typeof C }) {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -352,9 +352,9 @@ function MaterialsCard({ channelId }: { channelId: number }) {
   }
 
   function getTypeIcon(type: string) {
-    if (type === "image") return <ImageIcon className="w-4 h-4" style={{ color: C.brand }} />;
-    if (type === "video") return <span className="text-xs font-bold" style={{ color: C.brand }}>视频</span>;
-    return <FileText className="w-4 h-4" style={{ color: C.brand }} />;
+    if (type === "image") return <ImageIcon className="w-4 h-4" style={{ color: theme.brand }} />;
+    if (type === "video") return <span className="text-xs font-bold" style={{ color: theme.brand }}>视频</span>;
+    return <FileText className="w-4 h-4" style={{ color: theme.brand }} />;
   }
 
   function fmtSize(bytes: number) {
@@ -365,12 +365,12 @@ function MaterialsCard({ channelId }: { channelId: number }) {
   }
 
   return (
-    <div className="rounded-xl border overflow-hidden" style={{ borderColor: C.line }}>
+    <div className="rounded-xl border overflow-hidden" style={{ borderColor: theme.line }}>
       {/* 标题行 */}
-      <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: C.brandLight, borderBottom: `1px solid ${C.line}` }}>
+      <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: theme.brandLight, borderBottom: `1px solid ${theme.line}` }}>
         <div className="flex items-center gap-2">
-          <div className="text-xs font-semibold" style={{ color: C.textMain }}>素材库</div>
-          <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: C.brand, color: '#fff' }}>{materials.length}</span>
+          <div className="text-xs font-semibold" style={{ color: theme.textMain }}>素材库</div>
+          <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: theme.brand, color: '#fff' }}>{materials.length}</span>
         </div>
         <div>
           <input ref={matFileRef} type="file" className="hidden" accept="image/*,video/*,.pdf,.docx,.xlsx,.pptx,.txt" onChange={handleFileSelect} />
@@ -379,7 +379,7 @@ function MaterialsCard({ channelId }: { channelId: number }) {
             style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
               width: 26, height: 26, borderRadius: 13,
-              backgroundColor: C.brand, cursor: 'pointer',
+              backgroundColor: theme.brand, cursor: 'pointer',
               fontSize: 11, color: '#fff', fontWeight: 600, userSelect: 'none' as const,
             }}
           >+</div>
@@ -387,52 +387,52 @@ function MaterialsCard({ channelId }: { channelId: number }) {
       </div>
 
       {/* 说明文字 */}
-      <div className="px-4 py-2.5" style={{ backgroundColor: '#FAFBFF', borderBottom: `1px solid ${C.line}` }}>
-        <p className="text-xs leading-relaxed" style={{ color: C.textSub }}>
+      <div className="px-4 py-2.5" style={{ backgroundColor: '#FAFBFF', borderBottom: `1px solid ${theme.line}` }}>
+        <p className="text-xs leading-relaxed" style={{ color: theme.textSub }}>
           上传图片、视频、文件，并用自然语言描述「什么时候发这个」。AI 对话时会自动判断并发送对应素材给客户。
         </p>
       </div>
 
       {/* 素材列表 */}
-      <div style={{ backgroundColor: C.white }}>
+      <div style={{ backgroundColor: theme.white }}>
         {loading ? (
-          <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin" style={{ color: C.brand }} /></div>
+          <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin" style={{ color: theme.brand }} /></div>
         ) : materials.length === 0 ? (
-          <div className="py-10 text-center text-sm" style={{ color: C.textSub }}>暂无素材，点击右上角 + 上传</div>
+          <div className="py-10 text-center text-sm" style={{ color: theme.textSub }}>暂无素材，点击右上角 + 上传</div>
         ) : (
-          <ul className="divide-y" style={{ borderColor: C.line }}>
+          <ul className="divide-y" style={{ borderColor: theme.line }}>
             {materials.map((mat) => (
               <li key={mat.id} className="px-4 py-3">
                 {editingId === mat.id ? (
                   <div className="space-y-2">
                     <div>
-                      <div className="text-xs mb-1" style={{ color: C.textSub }}>名称</div>
+                      <div className="text-xs mb-1" style={{ color: theme.textSub }}>名称</div>
                       <input
                         value={editTitle}
                         onChange={e => setEditTitle(e.target.value)}
                         className="w-full text-sm rounded-lg border px-3 py-1.5 outline-none"
-                        style={{ borderColor: C.brand }}
+                        style={{ borderColor: theme.brand }}
                         autoFocus
                       />
                     </div>
                     <div>
-                      <div className="text-xs mb-1" style={{ color: C.textSub }}>触发描述（告诉 AI 什么时候发这个）</div>
+                      <div className="text-xs mb-1" style={{ color: theme.textSub }}>触发描述（告诉 AI 什么时候发这个）</div>
                       <textarea
                         value={editDesc}
                         onChange={e => setEditDesc(e.target.value)}
                         rows={3}
                         placeholder="例：当客户询问如何订购、怎么下单时，发送这张扫码订购二维码海报"
                         className="w-full text-sm rounded-lg border px-3 py-2 resize-none outline-none"
-                        style={{ borderColor: C.line }}
+                        style={{ borderColor: theme.line }}
                       />
                     </div>
                     <div className="flex gap-2 justify-end">
-                      <button onClick={() => setEditingId(null)} className="text-xs px-3 py-1.5 rounded-lg border" style={{ borderColor: C.line, color: C.textSub }}>取消</button>
+                      <button onClick={() => setEditingId(null)} className="text-xs px-3 py-1.5 rounded-lg border" style={{ borderColor: theme.line, color: theme.textSub }}>取消</button>
                       <button
                         onClick={() => handleSaveEdit(mat.id)}
                         disabled={savingEdit}
                         className="text-xs px-3 py-1.5 rounded-lg text-white flex items-center gap-1 disabled:opacity-60"
-                        style={{ backgroundColor: C.brand }}
+                        style={{ backgroundColor: theme.brand }}
                       >
                         {savingEdit ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
                         保存
@@ -442,7 +442,7 @@ function MaterialsCard({ channelId }: { channelId: number }) {
                 ) : (
                   <div className="flex items-start gap-3">
                     {/* 缩略图 / 类型图标 */}
-                    <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ backgroundColor: C.brandLight }}>
+                    <div className="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ backgroundColor: theme.brandLight }}>
                       {mat.type === "image" && mat.storage_url ? (
                         <img src={mat.storage_url} alt={mat.title} className="w-full h-full object-cover" />
                       ) : (
@@ -451,9 +451,9 @@ function MaterialsCard({ channelId }: { channelId: number }) {
                     </div>
                     {/* 信息区 */}
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate" style={{ color: C.textMain }}>{mat.title}</div>
+                      <div className="text-sm font-medium truncate" style={{ color: theme.textMain }}>{mat.title}</div>
                       {mat.description ? (
-                        <div className="text-xs mt-0.5 line-clamp-2" style={{ color: C.textSub }}>{mat.description}</div>
+                        <div className="text-xs mt-0.5 line-clamp-2" style={{ color: theme.textSub }}>{mat.description}</div>
                       ) : (
                         <div className="text-xs mt-0.5 italic" style={{ color: '#D1D5DB' }}>未设置触发描述（AI 不会自动发送）</div>
                       )}
@@ -464,12 +464,12 @@ function MaterialsCard({ channelId }: { channelId: number }) {
                       <button
                         onClick={() => { setEditingId(mat.id); setEditTitle(mat.title); setEditDesc(mat.description || ""); }}
                         className="text-xs border rounded-lg px-2 py-1"
-                        style={{ borderColor: C.line, color: C.textSub }}
+                        style={{ borderColor: theme.line, color: theme.textSub }}
                       >编辑</button>
                       {deleteConfirm === mat.id ? (
                         <div className="flex gap-1">
                           <button onClick={() => handleDelete(mat.id)} className="text-xs text-white bg-red-500 rounded-lg px-2 py-1">确删</button>
-                          <button onClick={() => setDeleteConfirm(null)} className="text-xs border rounded-lg px-2 py-1" style={{ borderColor: C.line, color: C.textSub }}>取消</button>
+                          <button onClick={() => setDeleteConfirm(null)} className="text-xs border rounded-lg px-2 py-1" style={{ borderColor: theme.line, color: theme.textSub }}>取消</button>
                         </div>
                       ) : (
                         <button onClick={() => setDeleteConfirm(mat.id)} className="p-1.5 rounded-lg text-red-400"><Trash2 className="w-4 h-4" /></button>
@@ -488,51 +488,51 @@ function MaterialsCard({ channelId }: { channelId: number }) {
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={() => { if (!uploading) { setShowUploadModal(false); setUploadFile(null); setUploadPreview(null); } }}>
           <div className="bg-white rounded-t-3xl w-full max-w-lg p-5 space-y-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
-              <span className="font-semibold" style={{ color: C.textMain }}>上传素材</span>
+              <span className="font-semibold" style={{ color: theme.textMain }}>上传素材</span>
               <button onClick={() => { if (!uploading) { setShowUploadModal(false); setUploadFile(null); setUploadPreview(null); } }}><X className="w-5 h-5 text-gray-400" /></button>
             </div>
 
             {uploadPreview && (
-              <div className="w-full h-40 rounded-xl overflow-hidden" style={{ backgroundColor: C.brandLight }}>
+              <div className="w-full h-40 rounded-xl overflow-hidden" style={{ backgroundColor: theme.brandLight }}>
                 <img src={uploadPreview} alt="预览" className="w-full h-full object-contain" />
               </div>
             )}
             {!uploadPreview && uploadFile && (
-              <div className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ backgroundColor: C.brandLight }}>
-                <FileText className="w-5 h-5" style={{ color: C.brand }} />
-                <span className="text-sm truncate" style={{ color: C.textMain }}>{uploadFile.name}</span>
+              <div className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ backgroundColor: theme.brandLight }}>
+                <FileText className="w-5 h-5" style={{ color: theme.brand }} />
+                <span className="text-sm truncate" style={{ color: theme.textMain }}>{uploadFile.name}</span>
               </div>
             )}
 
             <div>
-              <label className="text-xs font-medium mb-1 block" style={{ color: C.textSub }}>素材名称</label>
+              <label className="text-xs font-medium mb-1 block" style={{ color: theme.textSub }}>素材名称</label>
               <input
                 value={uploadTitle}
                 onChange={e => setUploadTitle(e.target.value)}
                 className="w-full text-sm rounded-xl border p-3 outline-none"
-                style={{ borderColor: C.line }}
+                style={{ borderColor: theme.line }}
                 placeholder="为这个素材起个名字"
               />
             </div>
 
             <div>
-              <label className="text-xs font-medium mb-1 block" style={{ color: C.textSub }}>触发描述（告诉 AI 什么时候发这个）</label>
+              <label className="text-xs font-medium mb-1 block" style={{ color: theme.textSub }}>触发描述（告诉 AI 什么时候发这个）</label>
               <textarea
                 value={uploadDesc}
                 onChange={e => setUploadDesc(e.target.value)}
                 rows={3}
                 placeholder="例：当客户询问如何订购、怎么下单、购买流程时，发送这张扫码订购二维码海报"
                 className="w-full text-sm rounded-xl border p-3 resize-none outline-none"
-                style={{ borderColor: C.line }}
+                style={{ borderColor: theme.line }}
               />
-              <p className="text-xs mt-1" style={{ color: C.textSub }}>建议写具体场景，越具体 AI 判断越准确</p>
+              <p className="text-xs mt-1" style={{ color: theme.textSub }}>建议写具体场景，越具体 AI 判断越准确</p>
             </div>
 
             <button
               onClick={handleUpload}
               disabled={uploading || !uploadFile}
               className="w-full py-3 rounded-2xl text-white font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-60"
-              style={{ backgroundColor: C.brand }}
+              style={{ backgroundColor: theme.brand }}
             >
               {uploading ? <><Loader2 className="w-4 h-4 animate-spin" />上传中...</> : <><Upload className="w-4 h-4" />确认上传</>}
             </button>
@@ -544,7 +544,7 @@ function MaterialsCard({ channelId }: { channelId: number }) {
 }
 
 // ─── 数字分身卡片（客户端只读概览） ────────────────────────────────────────────
-function DigitalTwinCard({ channelId }: { channelId: string }) {
+function DigitalTwinCard({ channelId, theme = C }: { channelId: string; theme?: typeof C }) {
   const [stats, setStats] = useState<any>(null);
   const [enabled, setEnabled] = useState(false);
   const [toggling, setToggling] = useState(false);
@@ -584,17 +584,17 @@ function DigitalTwinCard({ channelId }: { channelId: string }) {
   };
 
   return (
-    <div className="rounded-xl border overflow-hidden" style={{ borderColor: C.line }}>
+    <div className="rounded-xl border overflow-hidden" style={{ borderColor: theme.line }}>
       {/* 标题栏（浅绿背景） */}
-      <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: C.brandLight, borderBottom: `1px solid ${C.line}` }}>
-        <span className="text-sm font-semibold" style={{ color: C.textMain }}>我的数字分身</span>
+      <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: theme.brandLight, borderBottom: `1px solid ${theme.line}` }}>
+        <span className="text-sm font-semibold" style={{ color: theme.textMain }}>我的数字分身</span>
         {/* 与共享知识库完全一致的 toggle 开关 */}
         <div
           onClick={toggling ? undefined : handleToggle}
           style={{
             position: 'relative', display: 'inline-block',
             width: 40, height: 22, borderRadius: 11,
-            backgroundColor: enabled ? C.brand : '#D1D5DB',
+            backgroundColor: enabled ? theme.brand : '#D1D5DB',
             cursor: toggling ? 'not-allowed' : 'pointer',
             opacity: toggling ? 0.5 : 1,
             flexShrink: 0, transition: 'background-color 0.2s',
@@ -612,34 +612,34 @@ function DigitalTwinCard({ channelId }: { channelId: string }) {
       </div>
 
       {/* 数据概览 */}
-      <div className="px-4 py-3" style={{ backgroundColor: C.white }}>
+      <div className="px-4 py-3" style={{ backgroundColor: theme.white }}>
         {loading ? (
-          <div className="text-center py-4 text-sm" style={{ color: C.textSub }}>加载中…</div>
+          <div className="text-center py-4 text-sm" style={{ color: theme.textSub }}>加载中…</div>
         ) : (
           <div className="space-y-2">
             {/* 三个指标：知识库数 / 条目数 / 字符数 */}
             <div className="flex items-baseline gap-4">
-              <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{kbStats.kb_count}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>知识库</span></span>
-              <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{kbStats.item_count.toLocaleString()}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>条目</span></span>
-              <span><span className="text-lg font-bold" style={{ color: C.textMain }}>{kbStats.char_count >= 10000 ? `${(kbStats.char_count / 10000).toFixed(1)}万` : kbStats.char_count.toLocaleString()}</span><span className="text-xs ml-0.5" style={{ color: C.textSub }}>字符</span></span>
+              <span><span className="text-lg font-bold" style={{ color: theme.textMain }}>{kbStats.kb_count}</span><span className="text-xs ml-0.5" style={{ color: theme.textSub }}>知识库</span></span>
+              <span><span className="text-lg font-bold" style={{ color: theme.textMain }}>{kbStats.item_count.toLocaleString()}</span><span className="text-xs ml-0.5" style={{ color: theme.textSub }}>条目</span></span>
+              <span><span className="text-lg font-bold" style={{ color: theme.textMain }}>{kbStats.char_count >= 10000 ? `${(kbStats.char_count / 10000).toFixed(1)}万` : kbStats.char_count.toLocaleString()}</span><span className="text-xs ml-0.5" style={{ color: theme.textSub }}>字符</span></span>
             </div>
             {/* 覆盖场景标签 */}
             {stats?.scene_tags?.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {stats.scene_tags.map((s: any) => (
-                  <span key={s.tag} className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: C.brandLight, color: C.brand }}>
+                  <span key={s.tag} className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: theme.brandLight, color: theme.brand }}>
                     {SCENE_LABEL[s.tag] || s.tag}
                   </span>
                 ))}
               </div>
             )}
             {/* 底部更新时间 */}
-            <div className="flex items-center justify-between pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
-              <span className="text-xs" style={{ color: C.textSub }}>
+            <div className="flex items-center justify-between pt-2" style={{ borderTop: `1px solid ${theme.line}` }}>
+              <span className="text-xs" style={{ color: theme.textSub }}>
                 {stats?.last_updated ? `更新至 ${new Date(stats.last_updated).toLocaleDateString('zh-CN')}` : '暂无更新记录'}
               </span>
-              <span className="text-xs" style={{ color: C.textSub }}>
-                分身风格 <span className="font-semibold" style={{ color: enabled ? C.brand : '#9CA3AF' }}>{enabled ? '已开启' : '未开启'}</span>
+              <span className="text-xs" style={{ color: theme.textSub }}>
+                分身风格 <span className="font-semibold" style={{ color: enabled ? theme.brand : '#9CA3AF' }}>{enabled ? '已开启' : '未开启'}</span>
               </span>
             </div>
           </div>
@@ -731,7 +731,7 @@ interface KnowledgeBase {
 // ═══════════════════════════════════════════════════════════════
 // 配置 Tab（完整版：渠道状态 + 欢迎语 + 等待提示 + AI 指令 + 模型 + 消息抄送）
 // ═══════════════════════════════════════════════════════════════
-function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_TYPE }: { onProfileUpdate?: (name: string, avatarUrl: string) => void; channelId?: number; channelType?: string } = {}) {
+function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_TYPE, theme = C }: { onProfileUpdate?: (name: string, avatarUrl: string) => void; channelId?: number; channelType?: string; theme?: typeof C } = {}) {
   const [enabled, setEnabled] = useState(true);
   const [showGuide, setShowGuide] = useState(false);
   const [welcomeMsg, setWelcomeMsg] = useState("");
@@ -934,7 +934,7 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
 
 
   if (loading) {
-    return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin" style={{ color: C.brand }} /></div>;
+    return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin" style={{ color: theme.brand }} /></div>;
   }
 
   return (
@@ -943,24 +943,24 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
       {showGuide && <SetupGuideModal onClose={() => setShowGuide(false)} />}
 
       {/* 渠道状态 */}
-      <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: C.line }}>
+      <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: theme.line }}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="text-sm font-semibold" style={{ color: C.textMain }}>渠道状态</span>
+                <span className="text-sm font-semibold" style={{ color: theme.textMain }}>渠道状态</span>
                 <button
                   onClick={() => setShowChannelHelp(v => !v)}
                   style={{
                     width: 14, height: 14, borderRadius: '50%',
-                    backgroundColor: C.brand, color: '#fff',
+                    backgroundColor: theme.brand, color: '#fff',
                     fontSize: 10, fontWeight: 700,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     flexShrink: 0, border: 'none', cursor: 'pointer',
                   }}
                 >?</button>
               </div>
-              <div className="text-xs mt-0.5" style={{ color: enabled ? C.brand : C.textSub }}>
+              <div className="text-xs mt-0.5" style={{ color: enabled ? theme.brand : theme.textSub }}>
                 {enabled ? "已启用，AI 正在接收消息" : "已停用，AI 不接收消息"}
               </div>
             </div>
@@ -969,7 +969,7 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
             <button
               onClick={() => setShowGuide(true)}
               className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border"
-              style={{ borderColor: C.brand, color: C.brand, backgroundColor: C.brandLight }}
+              style={{ borderColor: theme.brand, color: theme.brand, backgroundColor: theme.brandLight }}
             >
               <HelpCircle className="w-3.5 h-3.5" />
               接入指引
@@ -979,7 +979,7 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
               style={{
                 position: 'relative', display: 'inline-block',
                 width: 40, height: 22, borderRadius: 11,
-                backgroundColor: enabled ? C.brand : '#D1D5DB',
+                backgroundColor: enabled ? theme.brand : '#D1D5DB',
                 cursor: 'pointer',
                 flexShrink: 0, transition: 'background-color 0.2s',
               }}
@@ -996,27 +996,27 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
           </div>
         </div>
         {showChannelHelp && (
-          <div className="rounded-xl p-3 mt-2 text-xs space-y-2" style={{ backgroundColor: C.brandLight, color: C.textMain, border: `1px solid ${C.line}` }}>
-            <div className="font-semibold" style={{ color: C.brand }}>开启状态</div>
-            <div style={{ color: C.textSub }}>客户发消息到企业微信客服，AI 自动接收并回复，欢迎语、等待提示语、抄送通知均正常工作。</div>
-            <div className="font-semibold" style={{ color: C.brand }}>关闭状态</div>
-            <div style={{ color: C.textSub }}>AI 停止自动回复，客户消息将不被处理。适用场景：系统维护、紧急暂停、切换为全人工接待。</div>
-            <div className="font-semibold" style={{ color: C.brand }}>注意</div>
-            <div style={{ color: C.textSub }}>关闭后客户消息将无人处理，请确认已有人工接待方案再操作。</div>
+          <div className="rounded-xl p-3 mt-2 text-xs space-y-2" style={{ backgroundColor: theme.brandLight, color: theme.textMain, border: `1px solid ${theme.line}` }}>
+            <div className="font-semibold" style={{ color: theme.brand }}>开启状态</div>
+            <div style={{ color: theme.textSub }}>客户发消息到企业微信客服，AI 自动接收并回复，欢迎语、等待提示语、抄送通知均正常工作。</div>
+            <div className="font-semibold" style={{ color: theme.brand }}>关闭状态</div>
+            <div style={{ color: theme.textSub }}>AI 停止自动回复，客户消息将不被处理。适用场景：系统维护、紧急暂停、切换为全人工接待。</div>
+            <div className="font-semibold" style={{ color: theme.brand }}>注意</div>
+            <div style={{ color: theme.textSub }}>关闭后客户消息将无人处理，请确认已有人工接待方案再操作。</div>
           </div>
         )}
       </div>
 
       {/* 欢迎语 */}
-      <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: C.line }}>
+      <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: theme.line }}>
         <div className="flex items-center justify-between mb-2">
-          <div className="text-sm font-semibold" style={{ color: C.textMain }}>欢迎语</div>
+          <div className="text-sm font-semibold" style={{ color: theme.textMain }}>欢迎语</div>
           <div
             onClick={() => setWelcomeEnabled(!welcomeEnabled)}
             style={{
               position: 'relative', display: 'inline-block',
               width: 40, height: 22, borderRadius: 11,
-              backgroundColor: welcomeEnabled ? C.brand : '#D1D5DB',
+              backgroundColor: welcomeEnabled ? theme.brand : '#D1D5DB',
               cursor: 'pointer', flexShrink: 0, transition: 'background-color 0.2s',
             }}
           >
@@ -1035,25 +1035,25 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
             value={welcomeMsg}
             onChange={(e) => setWelcomeMsg(e.target.value)}
             className="w-full text-sm rounded-xl border p-3 outline-none"
-            style={{ borderColor: C.line, color: C.textMain, backgroundColor: C.bg }}
+            style={{ borderColor: theme.line, color: theme.textMain, backgroundColor: theme.bg }}
             placeholder="用户首次发消息时自动回复..."
           />
         )}
         {!welcomeEnabled && (
-          <div className="text-xs py-1" style={{ color: C.textSub }}>已关闭，不发送欢迎语</div>
+          <div className="text-xs py-1" style={{ color: theme.textSub }}>已关闭，不发送欢迎语</div>
         )}
       </div>
 
       {/* 等待提示语 */}
-      <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: C.line }}>
+      <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: theme.line }}>
         <div className="flex items-center justify-between mb-2">
-          <div className="text-sm font-semibold" style={{ color: C.textMain }}>等待提示语</div>
+          <div className="text-sm font-semibold" style={{ color: theme.textMain }}>等待提示语</div>
           <div
             onClick={() => setWaitingEnabled(!waitingEnabled)}
             style={{
               position: 'relative', display: 'inline-block',
               width: 40, height: 22, borderRadius: 11,
-              backgroundColor: waitingEnabled ? C.brand : '#D1D5DB',
+              backgroundColor: waitingEnabled ? theme.brand : '#D1D5DB',
               cursor: 'pointer', flexShrink: 0, transition: 'background-color 0.2s',
             }}
           >
@@ -1072,26 +1072,26 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
             value={waitingMsg}
             onChange={(e) => setWaitingMsg(e.target.value)}
             className="w-full text-sm rounded-xl border p-3 outline-none"
-            style={{ borderColor: C.line, color: C.textMain, backgroundColor: C.bg }}
+            style={{ borderColor: theme.line, color: theme.textMain, backgroundColor: theme.bg }}
             placeholder="如：收到，AI 正在思考中，请稍候..."
           />
         )}
         {!waitingEnabled && (
-          <div className="text-xs py-1" style={{ color: C.textSub }}>已关闭，不发送等待提示语</div>
+          <div className="text-xs py-1" style={{ color: theme.textSub }}>已关闭，不发送等待提示语</div>
         )}
       </div>
 
 
       {/* 消息抄送 */}
-      <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: C.line }}>
+      <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: theme.line }}>
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1.5">
-            <span className="text-sm font-semibold" style={{ color: C.textMain }}>消息抄送通知</span>
+            <span className="text-sm font-semibold" style={{ color: theme.textMain }}>消息抄送通知</span>
             <button
               onClick={() => setShowNotifyHelp(v => !v)}
               style={{
                 width: 14, height: 14, borderRadius: '50%',
-                backgroundColor: C.brand, color: '#fff',
+                backgroundColor: theme.brand, color: '#fff',
                 fontSize: 10, fontWeight: 700,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 flexShrink: 0, border: 'none', cursor: 'pointer',
@@ -1103,7 +1103,7 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
             style={{
               position: 'relative', display: 'inline-block',
               width: 40, height: 22, borderRadius: 11,
-              backgroundColor: notifyEnabled ? C.brand : '#D1D5DB',
+              backgroundColor: notifyEnabled ? theme.brand : '#D1D5DB',
               cursor: 'pointer', flexShrink: 0, transition: 'background-color 0.2s',
             }}
           >
@@ -1118,28 +1118,28 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
           </div>
         </div>
         {showNotifyHelp && (
-          <div className="rounded-xl p-3 mb-2 text-xs space-y-2" style={{ backgroundColor: C.brandLight, color: C.textMain, border: `1px solid ${C.line}` }}>
-            <div className="font-semibold" style={{ color: C.brand }}>什么是 userid？</div>
-            <div style={{ color: C.textSub }}>userid 是企业微信内部成员的帐号 ID，仅内部员工可收到抄送通知，客户（外部人员）无法收到。</div>
-            <div className="font-semibold" style={{ color: C.brand }}>如何查看 userid？</div>
-            <div style={{ color: C.textSub }}>方式一：登录企业微信管理后台 → 通讯录 → 点击某个成员 → 查看「账号」字段</div>
-            <div style={{ color: C.textSub }}>方式二：手机企业微信 → 我 → 个人信息 → 账号，即为本人 userid</div>
-            <div className="font-semibold" style={{ color: C.brand }}>填写示例</div>
-            <div style={{ color: C.textSub }}>单人：<span style={{color: C.brand}}>HuXX</span>　多人：<span style={{color: C.brand}}>HuXX,ZhangXX,LiXX</span>（英文逗号分隔）</div>
+          <div className="rounded-xl p-3 mb-2 text-xs space-y-2" style={{ backgroundColor: theme.brandLight, color: theme.textMain, border: `1px solid ${theme.line}` }}>
+            <div className="font-semibold" style={{ color: theme.brand }}>什么是 userid？</div>
+            <div style={{ color: theme.textSub }}>userid 是企业微信内部成员的帐号 ID，仅内部员工可收到抄送通知，客户（外部人员）无法收到。</div>
+            <div className="font-semibold" style={{ color: theme.brand }}>如何查看 userid？</div>
+            <div style={{ color: theme.textSub }}>方式一：登录企业微信管理后台 → 通讯录 → 点击某个成员 → 查看「账号」字段</div>
+            <div style={{ color: theme.textSub }}>方式二：手机企业微信 → 我 → 个人信息 → 账号，即为本人 userid</div>
+            <div className="font-semibold" style={{ color: theme.brand }}>填写示例</div>
+            <div style={{ color: theme.textSub }}>单人：<span style={{color: theme.brand}}>HuXX</span>　多人：<span style={{color: theme.brand}}>HuXX,ZhangXX,LiXX</span>（英文逗号分隔）</div>
           </div>
         )}
         {notifyEnabled && (
           <div className="space-y-2 mt-2">
-            <div className="text-xs" style={{ color: C.textSub }}>输入接收人 userid（多个用英文逗号分隔）</div>
+            <div className="text-xs" style={{ color: theme.textSub }}>输入接收人 userid（多个用英文逗号分隔）</div>
             <input
               value={notifyUserids.join(",")}
               onChange={e => setNotifyUserids(e.target.value.split(",").map(s => s.trim()).filter(Boolean))}
               placeholder="如：HuXX,ZhangXX"
               className="w-full text-sm rounded-xl border p-3 outline-none"
-              style={{ borderColor: C.line, color: C.textMain, backgroundColor: C.bg }}
+              style={{ borderColor: theme.line, color: theme.textMain, backgroundColor: theme.bg }}
             />
             {notifyUserids.length > 0 && (
-              <div className="text-xs px-3 py-2 rounded-xl" style={{ backgroundColor: C.brandLight, color: C.brand }}>
+              <div className="text-xs px-3 py-2 rounded-xl" style={{ backgroundColor: theme.brandLight, color: theme.brand }}>
                 已选 {notifyUserids.length} 人：{notifyUserids.join("、")}
               </div>
             )}
@@ -1150,27 +1150,27 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
 
       {/* 推广链接卡片 */}
       {kfId && (
-        <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: C.line }}>
+        <div className="bg-white rounded-2xl p-4 shadow-sm border" style={{ borderColor: theme.line }}>
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: C.brandLight }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.brand} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: theme.brandLight }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={theme.brand} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                 <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
               </svg>
             </div>
             <div>
-              <div className="text-sm font-semibold" style={{ color: C.textMain }}>推广链接</div>
-              <div className="text-[10px]" style={{ color: C.textSub }}>客户点击后可直接发起咨询</div>
+              <div className="text-sm font-semibold" style={{ color: theme.textMain }}>推广链接</div>
+              <div className="text-[10px]" style={{ color: theme.textSub }}>客户点击后可直接发起咨询</div>
             </div>
           </div>
           {/* 链接展示 */}
-          <div className="rounded-xl px-3 py-2.5 mb-3 flex items-center gap-2" style={{ backgroundColor: C.bg, border: `1px solid ${C.line}` }}>
+          <div className="rounded-xl px-3 py-2.5 mb-3 flex items-center gap-2" style={{ backgroundColor: theme.bg, border: `1px solid ${theme.line}` }}>
             <a
               href={`https://work.weixin.qq.com/kfid/${kfId}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex-1 text-xs truncate"
-              style={{ color: C.brand, textDecoration: 'underline', wordBreak: 'break-all' }}
+              style={{ color: theme.brand, textDecoration: 'underline', wordBreak: 'break-all' }}
             >
               {`https://work.weixin.qq.com/kfid/${kfId}`}
             </a>
@@ -1182,7 +1182,7 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
                 });
               }}
               className="flex-shrink-0 text-xs px-2.5 py-1 rounded-lg font-medium transition-all"
-              style={{ backgroundColor: copiedLink ? '#16A34A' : C.brand, color: '#fff' }}
+              style={{ backgroundColor: copiedLink ? '#16A34A' : theme.brand, color: '#fff' }}
             >
               {copiedLink ? '已复制' : '复制'}
             </button>
@@ -1191,13 +1191,13 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
           <button
             onClick={() => setShowQr(true)}
             className="flex items-center gap-1.5 w-full justify-center py-2 rounded-xl transition-all active:opacity-70"
-            style={{ backgroundColor: C.brandLight, border: `1px solid ${C.line}` }}
+            style={{ backgroundColor: theme.brandLight, border: `1px solid ${theme.line}` }}
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={C.brand} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={theme.brand} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
               <path d="M14 14h3v3" /><path d="M17 21v-4" /><path d="M21 14v3h-4" />
             </svg>
-            <span className="text-xs font-medium" style={{ color: C.brand }}>查看二维码</span>
+            <span className="text-xs font-medium" style={{ color: theme.brand }}>查看二维码</span>
           </button>
           {/* 全屏二维码覆盖层 */}
           {showQr && (
@@ -1221,9 +1221,9 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
       )}
 
       {/* 系统连接总览 */}
-      <div className="rounded-2xl border overflow-hidden" style={{ borderColor: C.line }}>
+      <div className="rounded-2xl border overflow-hidden" style={{ borderColor: theme.line }}>
         {/* 标题行 */}
-        <div className="px-4 py-3 flex items-center gap-2" style={{ backgroundColor: C.brand }}>
+        <div className="px-4 py-3 flex items-center gap-2" style={{ backgroundColor: theme.brand }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="3" />
             <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
@@ -1231,20 +1231,20 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
           <span className="text-sm font-semibold text-white">系统连接总览</span>
         </div>
 
-        <div className="divide-y" style={{ backgroundColor: '#fff', borderColor: C.line }}>
+        <div className="divide-y" style={{ backgroundColor: '#fff', borderColor: theme.line }}>
 
           {/* 区块标题：企业微信 */}
           <div className="px-4 pt-3 pb-1">
-            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: C.brand }}>企业微信</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: theme.brand }}>企业微信</span>
           </div>
 
           {/* 企业号 */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
             <div className="flex flex-col flex-shrink-0">
-              <span className="text-xs" style={{ color: C.textSub }}>企业号</span>
-              <span className="text-[10px]" style={{ color: C.textSub, opacity: 0.6 }}>corpid</span>
+              <span className="text-xs" style={{ color: theme.textSub }}>企业号</span>
+              <span className="text-[10px]" style={{ color: theme.textSub, opacity: 0.6 }}>corpid</span>
             </div>
-            <span className="text-xs font-mono" style={{ color: C.textMain }}>
+            <span className="text-xs font-mono" style={{ color: theme.textMain }}>
               {corpId ? `${corpId.substring(0, 6)}${'*'.repeat(corpId.length - 10)}${corpId.slice(-4)}` : '-'}
             </span>
           </div>
@@ -1252,23 +1252,23 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
           {/* 客服账号 open_kfid */}
           <div className="px-4 py-2.5 flex items-start justify-between gap-2">
             <div className="flex flex-col flex-shrink-0">
-              <span className="text-xs" style={{ color: C.textSub }}>客服账号 ID</span>
-              <span className="text-[10px]" style={{ color: C.textSub, opacity: 0.6 }}>open_kfid</span>
+              <span className="text-xs" style={{ color: theme.textSub }}>客服账号 ID</span>
+              <span className="text-[10px]" style={{ color: theme.textSub, opacity: 0.6 }}>open_kfid</span>
             </div>
-            <span className="text-xs font-mono text-right break-all max-w-[55%]" style={{ color: C.textMain }}>
-              {kfId ? `${kfId.substring(0, 6)}${'*'.repeat(Math.max(0, kfId.length - 10))}${kfId.slice(-4)}` : <span style={{ color: C.textSub }}>未配置</span>}
+            <span className="text-xs font-mono text-right break-all max-w-[55%]" style={{ color: theme.textMain }}>
+              {kfId ? `${kfId.substring(0, 6)}${'*'.repeat(Math.max(0, kfId.length - 10))}${kfId.slice(-4)}` : <span style={{ color: theme.textSub }}>未配置</span>}
             </span>
           </div>
 
           {/* 接入方式 */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
-            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>接入方式</span>
-            <span className="text-xs" style={{ color: C.textMain }}>微信客服 API 回调</span>
+            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>接入方式</span>
+            <span className="text-xs" style={{ color: theme.textMain }}>微信客服 API 回调</span>
           </div>
 
           {/* 企微连接状态 */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
-            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>连接状态</span>
+            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>连接状态</span>
             <span className="flex items-center gap-1 text-xs font-medium" style={{ color: kfId ? '#16A34A' : '#EF4444' }}>
               <span className={`w-1.5 h-1.5 rounded-full inline-block ${kfId ? 'bg-green-500' : 'bg-red-400'}`}></span>
               {kfId ? '已连接' : '未配置'}
@@ -1277,91 +1277,91 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
 
           {/* 区块标题： AI 引擎 */}
           <div className="px-4 pt-3 pb-1">
-            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: C.brand }}>AI 引擎</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: theme.brand }}>AI 引擎</span>
           </div>
 
           {/* DeepSeek API */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
-            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>DeepSeek API</span>
-            <span className="text-xs font-mono" style={{ color: C.textMain }}>api.deepseek.com</span>
+            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>DeepSeek API</span>
+            <span className="text-xs font-mono" style={{ color: theme.textMain }}>api.deepseek.com</span>
           </div>
 
           {/* DeepSeek API Key */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
-            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>DeepSeek Key</span>
-            <span className="text-xs font-mono" style={{ color: C.textMain }}>sk-***...***已配置</span>
+            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>DeepSeek Key</span>
+            <span className="text-xs font-mono" style={{ color: theme.textMain }}>sk-***...***已配置</span>
           </div>
 
           {/* Manus API */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
-            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>Manus API</span>
-            <span className="text-xs font-mono" style={{ color: C.textMain }}>api.manus.ai/v2</span>
+            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>Manus API</span>
+            <span className="text-xs font-mono" style={{ color: theme.textMain }}>api.manus.ai/v2</span>
           </div>
 
           {/* Manus API Key */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
-            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>Manus Key</span>
-            <span className="text-xs font-mono" style={{ color: C.textMain }}>***已配置</span>
+            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>Manus Key</span>
+            <span className="text-xs font-mono" style={{ color: theme.textMain }}>***已配置</span>
           </div>
 
           {/* 当前模型 */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
-            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>当前模型</span>
-            <span className="text-xs font-medium" style={{ color: C.textMain }}>
+            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>当前模型</span>
+            <span className="text-xs font-medium" style={{ color: theme.textMain }}>
               {AI_MODELS.find(m => m.value === aiModel)?.label || aiModel}
             </span>
           </div>
 
           {/* 区块标题：向量引擎（语义检索） */}
           <div className="px-4 pt-3 pb-1">
-            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: C.brand }}>向量引擎·语义检索</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: theme.brand }}>向量引擎·语义检索</span>
           </div>
 
           {/* Embedding 服务商 */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
-            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>向量服务</span>
-            <span className="text-xs font-medium" style={{ color: C.textMain }}>腾讯混元 Embedding</span>
+            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>向量服务</span>
+            <span className="text-xs font-medium" style={{ color: theme.textMain }}>腾讯混元 Embedding</span>
           </div>
 
           {/* Embedding API 域名 */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
-            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>Embedding API</span>
-            <span className="text-xs font-mono" style={{ color: C.textMain }}>api.hunyuan.cloud.tencent.com</span>
+            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>Embedding API</span>
+            <span className="text-xs font-mono" style={{ color: theme.textMain }}>api.hunyuan.cloud.tencent.com</span>
           </div>
 
           {/* Embedding Key（脱敏） */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
-            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>Embedding Key</span>
-            <span className="text-xs font-mono" style={{ color: C.textMain }}>sk-OAOV***...***KdbHb</span>
+            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>Embedding Key</span>
+            <span className="text-xs font-mono" style={{ color: theme.textMain }}>sk-OAOV***...***KdbHb</span>
           </div>
 
           {/* 向量模型 */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
-            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>向量模型</span>
-            <span className="text-xs font-medium" style={{ color: C.textMain }}>hunyuan-embedding（1024维）</span>
+            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>向量模型</span>
+            <span className="text-xs font-medium" style={{ color: theme.textMain }}>hunyuan-embedding（1024维）</span>
           </div>
 
           {/* 用途 */}
           <div className="px-4 py-2.5 flex items-start justify-between gap-2">
-            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>用途</span>
-            <span className="text-xs text-right max-w-[60%]" style={{ color: C.textMain }}>知识库/规则语义检索与查重</span>
+            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>用途</span>
+            <span className="text-xs text-right max-w-[60%]" style={{ color: theme.textMain }}>知识库/规则语义检索与查重</span>
           </div>
 
           {/* 区块标题：知识库 */}
           <div className="px-4 pt-3 pb-1">
-            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: C.brand }}>知识库</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: theme.brand }}>知识库</span>
           </div>
 
           {/* 绑定知识库 */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
-            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>私人知识库</span>
-            <span className="text-xs" style={{ color: kbName ? C.textMain : C.textSub }}>{kbName || '未绑定'}</span>
+            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>私人知识库</span>
+            <span className="text-xs" style={{ color: kbName ? theme.textMain : theme.textSub }}>{kbName || '未绑定'}</span>
           </div>
 
           {/* 共享知识库 */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
-            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>共享知识库</span>
-            <span className="text-xs" style={{ color: C.textMain }}>平台共享库（自动接入）</span>
+            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>共享知识库</span>
+            <span className="text-xs" style={{ color: theme.textMain }}>平台共享库（自动接入）</span>
           </div>
 
 
@@ -1373,7 +1373,7 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
         onClick={handleSave}
         disabled={saving || justSaved || !isDirty}
         className="w-full py-3 rounded-2xl text-white font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all disabled:opacity-60"
-        style={{ backgroundColor: justSaved ? "#16A34A" : isDirty ? C.brand : "#9CA3AF" }}
+        style={{ backgroundColor: justSaved ? "#16A34A" : isDirty ? theme.brand : "#9CA3AF" }}
       >
         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : justSaved ? <Check className="w-4 h-4" /> : <Save className="w-4 h-4" />}
         {saving ? "保存中..." : justSaved ? "已保存" : isDirty ? "保存配置" : "配置未更改"}
@@ -1847,7 +1847,7 @@ function RadarChart({ scores }: { scores: { label: string; score: number; icon: 
   );
 }
 
-function AvatarGrowthTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_TYPE }: { onProfileUpdate?: (name: string, avatarUrl: string) => void; channelId?: number; channelType?: string } = {}) {
+function AvatarGrowthTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_TYPE, theme = C }: { onProfileUpdate?: (name: string, avatarUrl: string) => void; channelId?: number; channelType?: string; theme?: typeof C } = {}) {
   const [loading, setLoading] = useState(true);
   const [kbCount, setKbCount] = useState(0);
   const [kbFileCount, setKbFileCount] = useState(0);
@@ -1987,7 +1987,7 @@ function AvatarGrowthTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelTy
   }
 
   if (loading) {
-    return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin" style={{ color: C.brand }} /></div>;
+    return <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin" style={{ color: theme.brand }} /></div>;
   }
 
   // 成长曲线 SVG（只显示已达到的等级刻度）
@@ -2010,7 +2010,7 @@ function AvatarGrowthTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelTy
     <div className="space-y-3 pb-8">
 
       {/* ── 资产总览卡片（原等级卡片） ── */}
-      <div className="rounded-2xl overflow-hidden" style={{ background: `linear-gradient(145deg, ${C.brandDeep} 0%, ${C.brand} 100%)` }}>
+      <div className="rounded-2xl overflow-hidden" style={{ background: `linear-gradient(145deg, ${theme.brandDeep} 0%, ${theme.brand} 100%)` }}>
         <div className="px-5 pt-5 pb-4">
           {/* 头像 + 名称区块 */}
           <div className="flex items-center gap-3 mb-4">
@@ -2170,14 +2170,14 @@ function AvatarGrowthTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelTy
         const tx = (i: number) => pL + (n <= 1 ? iW / 2 : (i / (n - 1)) * iW);
         const ty = (v: number) => pT + iH - (v / 100) * iH;
         return (
-          <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: C.white, border: `1px solid ${C.line}`, boxShadow: '0 2px 12px rgba(39,174,96,0.08)' }}>
+          <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: theme.white, border: `1px solid ${theme.line}`, boxShadow: '0 2px 12px rgba(39,174,96,0.08)' }}>
             <div className="px-4 pt-4 pb-2 flex items-center justify-between flex-wrap gap-1">
-              <div className="text-sm font-semibold" style={{ color: C.textMain }}>克隆维度成长曲线</div>
+              <div className="text-sm font-semibold" style={{ color: theme.textMain }}>克隆维度成长曲线</div>
               <div className="flex items-center gap-3">
                 {CLONE_LINES.map(ab => (
                   <div key={ab.key} className="flex items-center gap-1">
                     <div className="w-3 h-0.5 rounded-full" style={{ backgroundColor: ab.color }} />
-                    <span className="text-[10px]" style={{ color: C.textSub }}>{ab.label} {ab.cur}%</span>
+                    <span className="text-[10px]" style={{ color: theme.textSub }}>{ab.label} {ab.cur}%</span>
                   </div>
                 ))}
               </div>
@@ -2212,9 +2212,9 @@ function AvatarGrowthTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelTy
       })()}
 
       {/* ── 已解锁能力（2列网格） ── */}
-      <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: C.white, border: `1px solid ${C.line}`, boxShadow: '0 2px 12px rgba(39,174,96,0.06)' }}>
+      <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: theme.white, border: `1px solid ${theme.line}`, boxShadow: '0 2px 12px rgba(39,174,96,0.06)' }}>
         <div className="px-4 pt-4 pb-3">
-          <div className="text-sm font-bold mb-3" style={{ color: C.textMain }}>分身已解锁的能力</div>
+          <div className="text-sm font-bold mb-3" style={{ color: theme.textMain }}>分身已解锁的能力</div>
           <div className="grid grid-cols-2 gap-2">
             {ABILITIES.map(ab => {
               const unlocked = equiv >= ab.unlockEquiv;
@@ -2223,18 +2223,18 @@ function AvatarGrowthTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelTy
               return (
                 <div key={ab.key} className="rounded-xl p-3"
                   style={{
-                    backgroundColor: unlocked ? C.brandLight : '#F9FAFB',
-                    border: `1px solid ${unlocked ? C.brand + '40' : '#E5E7EB'}`,
+                    backgroundColor: unlocked ? theme.brandLight : '#F9FAFB',
+                    border: `1px solid ${unlocked ? theme.brand + '40' : '#E5E7EB'}`,
                   }}>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold" style={{ color: unlocked ? C.textMain : '#9CA3AF' }}>{ab.label}</span>
+                    <span className="text-xs font-semibold" style={{ color: unlocked ? theme.textMain : '#9CA3AF' }}>{ab.label}</span>
                     <span style={{ fontSize: 14 }}>{unlocked ? '' : ''}</span>
                   </div>
                   <div className="rounded-full overflow-hidden mb-1.5" style={{ height: 3, backgroundColor: unlocked ? 'rgba(39,174,96,0.2)' : 'rgba(0,0,0,0.06)' }}>
                     <div className="h-full rounded-full transition-all"
-                      style={{ width: `${abProgress}%`, backgroundColor: unlocked ? C.brand : '#D1D5DB' }} />
+                      style={{ width: `${abProgress}%`, backgroundColor: unlocked ? theme.brand : '#D1D5DB' }} />
                   </div>
-                  <div className="text-[10px]" style={{ color: unlocked ? C.brand : '#9CA3AF' }}>
+                  <div className="text-[10px]" style={{ color: unlocked ? theme.brand : '#9CA3AF' }}>
                     {unlocked ? ab.desc : `还差 ${stillNeed.toLocaleString()} 单元`}
                   </div>
                 </div>
@@ -2247,7 +2247,7 @@ function AvatarGrowthTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelTy
       {/* ── 投喂成功提示 ── */}
       {feedResult?.show && (
         <div className="rounded-2xl px-4 py-3 flex items-center gap-3"
-          style={{ background: `linear-gradient(135deg, ${C.brandDeep} 0%, ${C.brand} 100%)` }}>
+          style={{ background: `linear-gradient(135deg, ${theme.brandDeep} 0%, ${theme.brand} 100%)` }}>
           <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0"
             style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
             <span style={{ fontSize: 18 }}></span>
@@ -2260,15 +2260,15 @@ function AvatarGrowthTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelTy
       )}
 
       {/* ── 存入知识资产 ── */}
-      <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: C.white, border: `1px solid ${C.line}`, boxShadow: '0 2px 12px rgba(39,174,96,0.06)' }}>
+      <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: theme.white, border: `1px solid ${theme.line}`, boxShadow: '0 2px 12px rgba(39,174,96,0.06)' }}>
         <div className="px-4 pt-4 pb-3">
-          <div className="text-sm font-bold mb-0.5" style={{ color: C.textMain }}>存入知识资产</div>
-          <div className="text-[10px] mb-4" style={{ color: C.textSub }}>投喂的知识将永久存入分身记忆</div>
+          <div className="text-sm font-bold mb-0.5" style={{ color: theme.textMain }}>存入知识资产</div>
+          <div className="text-[10px] mb-4" style={{ color: theme.textSub }}>投喂的知识将永久存入分身记忆</div>
           {/* 文字存入 */}
           <div className="mb-3">
             <div className="flex items-center justify-between mb-1.5">
-              <div className="text-xs font-medium" style={{ color: C.textMain }}>文字内容</div>
-              <div className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: C.brandLight, color: C.brand }}>+1 单元</div>
+              <div className="text-xs font-medium" style={{ color: theme.textMain }}>文字内容</div>
+              <div className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: theme.brandLight, color: theme.brand }}>+1 单元</div>
             </div>
             <textarea
               rows={3}
@@ -2276,21 +2276,21 @@ function AvatarGrowthTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelTy
               onChange={e => setFeedText(e.target.value)}
               placeholder="粘贴专业知识、产品说明、对话范例…"
               className="w-full rounded-xl border px-3 py-2.5 text-sm resize-none outline-none"
-              style={{ borderColor: C.line, color: C.textMain, backgroundColor: C.bg }}
+              style={{ borderColor: theme.line, color: theme.textMain, backgroundColor: theme.bg }}
             />
             <button
               onClick={handleFeedText}
               disabled={!feedText.trim() || feedingText}
               className="mt-2 w-full py-2.5 rounded-xl text-sm font-semibold transition-opacity"
-              style={{ backgroundColor: feedText.trim() ? C.brand : '#D1D5DB', color: '#fff', opacity: feedingText ? 0.6 : 1 }}
+              style={{ backgroundColor: feedText.trim() ? theme.brand : '#D1D5DB', color: '#fff', opacity: feedingText ? 0.6 : 1 }}
             >
               {feedingText ? '存入中…' : '存入知识库'}
             </button>
           </div>
           {/* 链接存入 */}
-          <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 14 }}>
+          <div style={{ borderTop: `1px solid ${theme.line}`, paddingTop: 14 }}>
             <div className="flex items-center justify-between mb-1.5">
-              <div className="text-xs font-medium" style={{ color: C.textMain }}>网页链接</div>
+              <div className="text-xs font-medium" style={{ color: theme.textMain }}>网页链接</div>
               <div className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#FEF3C7', color: '#D97706' }}>+10~50 单元</div>
             </div>
             <div className="flex gap-2">
@@ -2300,13 +2300,13 @@ function AvatarGrowthTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelTy
                 onChange={e => setFeedUrl(e.target.value)}
                 placeholder="https://… 公众号、健康期刊、专业文章"
                 className="flex-1 rounded-xl border px-3 py-2.5 text-sm outline-none"
-                style={{ borderColor: C.line, color: C.textMain, backgroundColor: C.bg }}
+                style={{ borderColor: theme.line, color: theme.textMain, backgroundColor: theme.bg }}
               />
               <button
                 onClick={handleFeedUrl}
                 disabled={!feedUrl.trim() || feedingUrl}
                 className="px-4 py-2.5 rounded-xl text-sm font-semibold flex-shrink-0"
-                style={{ backgroundColor: feedUrl.trim() ? C.brand : '#D1D5DB', color: '#fff', opacity: feedingUrl ? 0.6 : 1 }}
+                style={{ backgroundColor: feedUrl.trim() ? theme.brand : '#D1D5DB', color: '#fff', opacity: feedingUrl ? 0.6 : 1 }}
               >
                 {feedingUrl ? '抓取中…' : '抓入'}
               </button>
@@ -2322,7 +2322,7 @@ function AvatarGrowthTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelTy
 // ═══════════════════════════════════════════════════════════════
 // AI 智库 Tab（4 层架构）
 // ═══════════════════════════════════════════════════════════════
-function AIBrainTab({ refreshKey = 0, channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_TYPE }: { refreshKey?: number; channelId?: number; channelType?: string } = {}) {
+function AIBrainTab({ refreshKey = 0, channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_TYPE, theme = C }: { refreshKey?: number; channelId?: number; channelType?: string; theme?: typeof C } = {}) {
   // ── 第0步：AI智能整理 ──
   const [step0Open, setStep0Open] = useState(false);
   const [step0HelpOpen, setStep0HelpOpen] = useState(false);
@@ -2687,36 +2687,36 @@ ${step0Extra.trim()}`
   const layers = [
     {
       id: 1,
-      color: C.brand,
-      bgColor: C.brandLight,
-      borderColor: C.line,
+      color: theme.brand,
+      bgColor: theme.brandLight,
+      borderColor: theme.line,
       label: '① 角色定义 & 行为规则',
       subtitle: 'AI 的基础人设与规则',
       badge: loadingRules || loadingPlatformRules ? '-' : `${platformLayer1Rules.length + layer2Rules.length} 条`,
     },
     {
       id: 2,
-      color: C.brand,
-      bgColor: C.brandLight,
-      borderColor: C.line,
+      color: theme.brand,
+      bgColor: theme.brandLight,
+      borderColor: theme.line,
       label: '② 数字分身',
       subtitle: '客服本人的风格克隆',
       badge: null,
     },
     {
       id: 3,
-      color: C.brand,
-      bgColor: C.brandLight,
-      borderColor: C.line,
+      color: theme.brand,
+      bgColor: theme.brandLight,
+      borderColor: theme.line,
       label: '③ 知识库',
       subtitle: '标准答案库（共享 + 私人）',
       badge: `${kbStats.item_count + sysKbStats.item_count} 条`,
     },
     {
       id: 4,
-      color: C.brand,
-      bgColor: C.brandLight,
-      borderColor: C.line,
+      color: theme.brand,
+      bgColor: theme.brandLight,
+      borderColor: theme.line,
       label: '④ 历史对话记忆',
       subtitle: 'AI 对客户的理解',
       badge: `${contextRounds} 轮`,
@@ -2726,20 +2726,20 @@ ${step0Extra.trim()}`
   return (
     <div className="space-y-3 pb-8 pt-2">
       {/* 第0步：AI智能整理 */}
-      <div className="rounded-2xl border overflow-hidden shadow-sm" style={{ borderColor: C.line }}>
-        <div className="w-full px-4 py-3 flex items-center justify-between" style={{ backgroundColor: C.brandLight }}>
+      <div className="rounded-2xl border overflow-hidden shadow-sm" style={{ borderColor: theme.line }}>
+        <div className="w-full px-4 py-3 flex items-center justify-between" style={{ backgroundColor: theme.brandLight }}>
           <div className="flex items-center gap-1.5">
-            <button onClick={() => setStep0Open(v => !v)} className="text-sm font-bold" style={{ color: C.brand }}>⓪ AI 智能整理</button>
+            <button onClick={() => setStep0Open(v => !v)} className="text-sm font-bold" style={{ color: theme.brand }}>⓪ AI 智能整理</button>
             <button
               onClick={e => { e.stopPropagation(); setStep0HelpOpen(true); }}
               className="flex items-center justify-center"
-              style={{ color: C.textMain, opacity: 0.6 }}
+              style={{ color: theme.textMain, opacity: 0.6 }}
             >
               <HelpCircle className="w-4 h-4" />
             </button>
           </div>
           <button onClick={() => setStep0Open(v => !v)}>
-            <ChevronRight className={`w-4 h-4 transition-transform ${step0Open ? 'rotate-90' : ''}`} style={{ color: C.brand, opacity: 0.7 }} />
+            <ChevronRight className={`w-4 h-4 transition-transform ${step0Open ? 'rotate-90' : ''}`} style={{ color: theme.brand, opacity: 0.7 }} />
           </button>
         </div>
 
@@ -2747,41 +2747,41 @@ ${step0Extra.trim()}`
           <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setStep0HelpOpen(false)}>
             <div className="w-full max-w-lg rounded-t-2xl bg-white px-5 pt-5 pb-8" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-4">
-                <span className="text-base font-bold" style={{ color: C.textMain }}>为什么要有「⓪ AI 智能整理」？</span>
-                <button onClick={() => setStep0HelpOpen(false)} className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: C.bg }}>
-                  <X className="w-4 h-4" style={{ color: C.textSub }} />
+                <span className="text-base font-bold" style={{ color: theme.textMain }}>为什么要有「⓪ AI 智能整理」？</span>
+                <button onClick={() => setStep0HelpOpen(false)} className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: theme.bg }}>
+                  <X className="w-4 h-4" style={{ color: theme.textSub }} />
                 </button>
               </div>
-              <div className="space-y-3 text-sm leading-relaxed" style={{ color: C.textMain }}>
+              <div className="space-y-3 text-sm leading-relaxed" style={{ color: theme.textMain }}>
                 <p>一个优秀的 AI 分身，需要三类信息共同支擔：</p>
-                <div className="rounded-xl p-3 space-y-2" style={{ backgroundColor: C.brandLight }}>
+                <div className="rounded-xl p-3 space-y-2" style={{ backgroundColor: theme.brandLight }}>
                   <div className="flex items-start gap-2">
-                    <span className="font-bold flex-shrink-0" style={{ color: C.brand }}>① 角色定义</span>
-                    <span style={{ color: C.textSub }}>—— AI 是谁？性格怎样？说话风格是什么？</span>
+                    <span className="font-bold flex-shrink-0" style={{ color: theme.brand }}>① 角色定义</span>
+                    <span style={{ color: theme.textSub }}>—— AI 是谁？性格怎样？说话风格是什么？</span>
                   </div>
                   <div className="flex items-start gap-2">
-                    <span className="font-bold flex-shrink-0" style={{ color: C.brand }}>② 行为规则</span>
-                    <span style={{ color: C.textSub }}>—— 遇到哪些情况该怎么做？什么不能说？</span>
+                    <span className="font-bold flex-shrink-0" style={{ color: theme.brand }}>② 行为规则</span>
+                    <span style={{ color: theme.textSub }}>—— 遇到哪些情况该怎么做？什么不能说？</span>
                   </div>
                   <div className="flex items-start gap-2">
-                    <span className="font-bold flex-shrink-0" style={{ color: C.brand }}>③ 知识库</span>
-                    <span style={{ color: C.textSub }}>—— 产品价格、常见问题、专业知识等具体信息</span>
+                    <span className="font-bold flex-shrink-0" style={{ color: theme.brand }}>③ 知识库</span>
+                    <span style={{ color: theme.textSub }}>—— 产品价格、常见问题、专业知识等具体信息</span>
                   </div>
                 </div>
-                <p style={{ color: C.textSub }}>大多数人并不知道自己输入的内容属于哪一类。<span className="font-medium" style={{ color: C.textMain }}>第⓪步就是解决这个问题的</span>——你只需要把想说的内容粘贴进来，AI 会自动判断并分类写入对应的位置，不需要你手动区分。</p>
-                <p style={{ color: C.textSub }}>建议每次添加新内容时，优先使用这一步。</p>
+                <p style={{ color: theme.textSub }}>大多数人并不知道自己输入的内容属于哪一类。<span className="font-medium" style={{ color: theme.textMain }}>第⓪步就是解决这个问题的</span>——你只需要把想说的内容粘贴进来，AI 会自动判断并分类写入对应的位置，不需要你手动区分。</p>
+                <p style={{ color: theme.textSub }}>建议每次添加新内容时，优先使用这一步。</p>
               </div>
             </div>
           </div>
         )}
 
         {step0Open && (
-          <div className="px-4 pb-4 space-y-3" style={{ borderTop: `1px solid ${C.line}` }}>
-            <div className="relative rounded-lg overflow-hidden mt-3" style={{ border: `1px solid ${C.textMain}`, backgroundColor: '#fff' }}>
+          <div className="px-4 pb-4 space-y-3" style={{ borderTop: `1px solid ${theme.line}` }}>
+            <div className="relative rounded-lg overflow-hidden mt-3" style={{ border: `1px solid ${theme.textMain}`, backgroundColor: '#fff' }}>
               {/* 顶部提示行 */}
               <div className="flex items-center justify-between px-3 pt-2.5 pb-1">
-                <span className="text-xs" style={{ color: step0Input.length > 0 ? 'transparent' : C.textSub }}>请输入内容...</span>
-                <span className="text-xs" style={{ color: step0Input.length > 0 ? C.brand : C.textSub }}>{step0Input.length} 字</span>
+                <span className="text-xs" style={{ color: step0Input.length > 0 ? 'transparent' : theme.textSub }}>请输入内容...</span>
+                <span className="text-xs" style={{ color: step0Input.length > 0 ? theme.brand : theme.textSub }}>{step0Input.length} 字</span>
               </div>
               <textarea
                 value={step0Input}
@@ -2797,7 +2797,7 @@ ${step0Extra.trim()}`
                 placeholder=""
                 rows={3}
                 className="w-full text-base px-3 pb-2 resize-none focus:outline-none overflow-hidden bg-transparent"
-                style={{ color: C.textMain, minHeight: '72px', border: 'none', outline: 'none' }}
+                style={{ color: theme.textMain, minHeight: '72px', border: 'none', outline: 'none' }}
               />
               {/* 输入框内部底部：拍照/上传按钮 */}
               <div className="flex items-center gap-2 px-3 pb-2.5 pt-1">
@@ -2822,7 +2822,7 @@ ${step0Extra.trim()}`
                   onClick={() => step0FileRef.current?.click()}
                   disabled={step0OcrLoading || step0FileLoading}
                   className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border disabled:opacity-50 transition-all"
-                  style={{ color: C.textSub, borderColor: C.line, backgroundColor: C.bg }}
+                  style={{ color: theme.textSub, borderColor: theme.line, backgroundColor: theme.bg }}
                 >
                   {(step0OcrLoading || step0FileLoading)
                     ? <><Loader2 className="w-3 h-3 animate-spin" />识别中...</>
@@ -2834,14 +2834,14 @@ ${step0Extra.trim()}`
                     <button
                       onClick={() => setStep0ImagePreview(null)}
                       className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center"
-                      style={{ backgroundColor: C.textSub, color: '#fff' }}
+                      style={{ backgroundColor: theme.textSub, color: '#fff' }}
                     >
                       <X className="w-2 h-2" />
                     </button>
                   </div>
                 )}
                 {step0UploadedFile && (
-                  <span className="text-xs truncate max-w-[120px]" style={{ color: C.brand }}>
+                  <span className="text-xs truncate max-w-[120px]" style={{ color: theme.brand }}>
                     {step0UploadedFile}
                   </span>
                 )}
@@ -2849,7 +2849,7 @@ ${step0Extra.trim()}`
                 <button
                   onClick={() => setStep0EmailPopup(v => !v)}
                   className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-all"
-                  style={{ color: step0EmailPopup ? C.brand : C.textSub, borderColor: step0EmailPopup ? C.brand : C.line, backgroundColor: C.bg }}
+                  style={{ color: step0EmailPopup ? theme.brand : theme.textSub, borderColor: step0EmailPopup ? theme.brand : theme.line, backgroundColor: theme.bg }}
                 >
                   <Mail className="w-3 h-3" />邮件
                 </button>
@@ -2857,11 +2857,11 @@ ${step0Extra.trim()}`
 
               {/* 邮件地址弹出卡片 */}
               {step0EmailPopup && (
-                <div className="mx-3 mb-3 rounded-xl p-3" style={{ backgroundColor: C.brandLight, border: `1px solid ${C.brand}30` }}>
-                  <p className="text-xs mb-2" style={{ color: C.brandDeep }}>转发你的邮件至以下地址，AI 会帮你处理下一步。</p>
+                <div className="mx-3 mb-3 rounded-xl p-3" style={{ backgroundColor: theme.brandLight, border: `1px solid ${theme.brand}30` }}>
+                  <p className="text-xs mb-2" style={{ color: theme.brandDeep }}>转发你的邮件至以下地址，AI 会帮你处理下一步。</p>
                   <div
                     className="relative flex items-center px-2.5 py-1.5 rounded-lg cursor-pointer select-all"
-                    style={{ backgroundColor: C.white, border: `1px solid ${C.line}` }}
+                    style={{ backgroundColor: theme.white, border: `1px solid ${theme.line}` }}
                     onClick={() => {
                       navigator.clipboard.writeText(INBOX_EMAIL).then(() => {
                         setStep0EmailCopied(true);
@@ -2869,21 +2869,21 @@ ${step0Extra.trim()}`
                       });
                     }}
                   >
-                    <span className="flex-1 text-xs font-mono" style={{ color: C.textMain }}>{INBOX_EMAIL}</span>
-                    <span className="ml-2 flex-shrink-0" style={{ color: step0EmailCopied ? C.brand : C.textSub }}>
+                    <span className="flex-1 text-xs font-mono" style={{ color: theme.textMain }}>{INBOX_EMAIL}</span>
+                    <span className="ml-2 flex-shrink-0" style={{ color: step0EmailCopied ? theme.brand : theme.textSub }}>
                       {step0EmailCopied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                     </span>
                   </div>
-                  <p className="text-xs mt-2" style={{ color: C.textSub }}>支持正文及附件（PDF、Word、图片等）</p>
+                  <p className="text-xs mt-2" style={{ color: theme.textSub }}>支持正文及附件（PDF、Word、图片等）</p>
                 </div>
               )}
             </div>
 
             {/* 补充说明输入框：上传图片/文字后可继续输入需求 */}
-            <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${C.line}`, backgroundColor: '#fff' }}>
+            <div className="rounded-lg overflow-hidden" style={{ border: `1px solid ${theme.line}`, backgroundColor: '#fff' }}>
               <div className="flex items-center justify-between px-3 pt-2 pb-0.5">
-                <span className="text-xs" style={{ color: C.textSub }}>补充说明（可选）</span>
-                <span className="text-xs" style={{ color: step0Extra.length > 0 ? C.brand : C.textSub }}>{step0Extra.length} 字</span>
+                <span className="text-xs" style={{ color: theme.textSub }}>补充说明（可选）</span>
+                <span className="text-xs" style={{ color: step0Extra.length > 0 ? theme.brand : theme.textSub }}>{step0Extra.length} 字</span>
               </div>
               <textarea
                 value={step0Extra}
@@ -2891,7 +2891,7 @@ ${step0Extra.trim()}`
                 placeholder="例如：帮我整理成客户常问的问答格式，重点提取退款政策..."
                 rows={2}
                 className="w-full text-sm px-3 pb-2.5 resize-none focus:outline-none bg-transparent"
-                style={{ color: C.textMain, border: 'none', outline: 'none', minHeight: '52px' }}
+                style={{ color: theme.textMain, border: 'none', outline: 'none', minHeight: '52px' }}
               />
             </div>
 
@@ -2899,7 +2899,7 @@ ${step0Extra.trim()}`
               onClick={handleStep0Analyze}
               disabled={step0Analyzing || (!step0Input.trim() && !step0Extra.trim())}
               className="w-full py-2.5 rounded-xl text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
-              style={{ backgroundColor: C.brand, color: '#fff' }}
+              style={{ backgroundColor: theme.brand, color: '#fff' }}
             >
               {step0Analyzing
                 ? <><Loader2 className="w-4 h-4 animate-spin" />分析中...</>
@@ -2909,7 +2909,7 @@ ${step0Extra.trim()}`
             {step0Result && (
               <div className="space-y-3">
                 {step0Result.summary && (
-                  <div className="text-xs rounded-lg px-3 py-2 flex items-start gap-1.5" style={{ color: C.brandDeep, backgroundColor: C.brandLight }}>
+                  <div className="text-xs rounded-lg px-3 py-2 flex items-start gap-1.5" style={{ color: theme.brandDeep, backgroundColor: theme.brandLight }}>
                     <Sparkles className="w-3 h-3 mt-0.5 flex-shrink-0" />
                     <span>{step0Result.summary}</span>
                   </div>
@@ -2925,24 +2925,24 @@ ${step0Extra.trim()}`
 
                 {step0Result.prompt_additions.length > 0 && (
                   <div className="space-y-1.5">
-                    <div className="text-xs font-semibold flex items-center gap-1" style={{ color: C.textSub }}>
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: C.brand }} />
+                    <div className="text-xs font-semibold flex items-center gap-1" style={{ color: theme.textSub }}>
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: theme.brand }} />
                       建议写入「角色/行为规则」
                     </div>
                     {step0Result.prompt_additions.map((p, i) => (
-                      <div key={i} className="rounded-lg border transition-all" style={step0SelPrompts[i] ? { borderColor: C.brand, backgroundColor: C.brandLight } : { borderColor: C.line, backgroundColor: C.white }}>
+                      <div key={i} className="rounded-lg border transition-all" style={step0SelPrompts[i] ? { borderColor: theme.brand, backgroundColor: theme.brandLight } : { borderColor: theme.line, backgroundColor: theme.white }}>
                         {step0EditPromptIdx === i ? (
                           <div className="p-2 space-y-2">
                             <textarea value={step0EditDraftPrompt} onChange={e => setStep0EditDraftPrompt(e.target.value)} rows={3} autoFocus className="w-full text-xs rounded px-2 py-1 resize-none focus:outline-none" style={{ border: '1px solid #7C3AED' }} />
                             <div className="flex gap-2 justify-end">
-                              <button onClick={() => setStep0EditPromptIdx(null)} className="text-xs px-2 py-0.5 rounded" style={{ color: C.textSub }}>取消</button>
-                              <button onClick={() => { const u=[...step0Result!.prompt_additions]; u[i]={...u[i], content: step0EditDraftPrompt}; setStep0Result({...step0Result!, prompt_additions: u}); setStep0EditPromptIdx(null); }} className="text-xs px-2 py-0.5 rounded" style={{ color: C.brand }}>保存</button>
+                              <button onClick={() => setStep0EditPromptIdx(null)} className="text-xs px-2 py-0.5 rounded" style={{ color: theme.textSub }}>取消</button>
+                              <button onClick={() => { const u=[...step0Result!.prompt_additions]; u[i]={...u[i], content: step0EditDraftPrompt}; setStep0Result({...step0Result!, prompt_additions: u}); setStep0EditPromptIdx(null); }} className="text-xs px-2 py-0.5 rounded" style={{ color: theme.brand }}>保存</button>
                             </div>
                           </div>
                         ) : (
                           <div className="flex items-start gap-2 px-3 py-2">
                             <button onClick={() => setStep0SelPrompts(prev => { const n=[...prev]; n[i]=!n[i]; return n; })} className="flex-shrink-0 mt-0.5">
-                              <div className="w-4 h-4 rounded border flex items-center justify-center" style={step0SelPrompts[i] ? { backgroundColor: C.brand, borderColor: C.brand } : { borderColor: C.line }}>
+                              <div className="w-4 h-4 rounded border flex items-center justify-center" style={step0SelPrompts[i] ? { backgroundColor: theme.brand, borderColor: theme.brand } : { borderColor: theme.line }}>
                                 {step0SelPrompts[i] && <Check className="w-3 h-3 text-white" />}
                               </div>
                             </button>
@@ -2953,9 +2953,9 @@ ${step0Extra.trim()}`
                                   {p.duplicate_check.includes(',') && <span style={{ color: '#6B7280' }}>（{p.duplicate_check.split(',').slice(1).join(',')}）</span>}
                                 </div>
                               )}
-                              <span className="whitespace-pre-wrap" style={{ color: step0SelPrompts[i] ? C.brandDeep : C.textSub }}>{p.content}</span>
+                              <span className="whitespace-pre-wrap" style={{ color: step0SelPrompts[i] ? theme.brandDeep : theme.textSub }}>{p.content}</span>
                             </div>
-                            <button onClick={() => { setStep0EditPromptIdx(i); setStep0EditDraftPrompt(p.content); }} className="flex-shrink-0" style={{ color: C.line }}>
+                            <button onClick={() => { setStep0EditPromptIdx(i); setStep0EditDraftPrompt(p.content); }} className="flex-shrink-0" style={{ color: theme.line }}>
                               <Pencil className="w-3 h-3" />
                             </button>
                           </div>
@@ -2967,31 +2967,31 @@ ${step0Extra.trim()}`
 
                 {step0Result.kb_items.length > 0 && (
                   <div className="space-y-1.5">
-                    <div className="text-xs font-semibold flex items-center gap-1" style={{ color: C.textSub }}>
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: C.brand }} />
+                    <div className="text-xs font-semibold flex items-center gap-1" style={{ color: theme.textSub }}>
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: theme.brand }} />
                       建议写入「知识库」
                     </div>
                     {step0Result.kb_items.map((item, i) => (
-                      <div key={i} className="rounded-lg border transition-all" style={step0SelKbs[i] ? { borderColor: C.brand, backgroundColor: C.brandLight } : { borderColor: C.line, backgroundColor: C.white }}>
+                      <div key={i} className="rounded-lg border transition-all" style={step0SelKbs[i] ? { borderColor: theme.brand, backgroundColor: theme.brandLight } : { borderColor: theme.line, backgroundColor: theme.white }}>
                         {step0EditKbIdx === i ? (
                           <div className="p-2 space-y-2">
                             <div>
-                              <div className="text-xs mb-0.5" style={{ color: C.textSub }}>Q 问题</div>
-                              <input value={step0EditDraftQ} onChange={e => setStep0EditDraftQ(e.target.value)} autoFocus className="w-full text-xs rounded px-2 py-1 focus:outline-none" style={{ border: `1px solid ${C.brand}` }} />
+                              <div className="text-xs mb-0.5" style={{ color: theme.textSub }}>Q 问题</div>
+                              <input value={step0EditDraftQ} onChange={e => setStep0EditDraftQ(e.target.value)} autoFocus className="w-full text-xs rounded px-2 py-1 focus:outline-none" style={{ border: `1px solid ${theme.brand}` }} />
                             </div>
                             <div>
-                              <div className="text-xs mb-0.5" style={{ color: C.textSub }}>A 答案</div>
-                              <textarea value={step0EditDraftA} onChange={e => setStep0EditDraftA(e.target.value)} rows={3} className="w-full text-xs rounded px-2 py-1 resize-none focus:outline-none" style={{ border: `1px solid ${C.brand}` }} />
+                              <div className="text-xs mb-0.5" style={{ color: theme.textSub }}>A 答案</div>
+                              <textarea value={step0EditDraftA} onChange={e => setStep0EditDraftA(e.target.value)} rows={3} className="w-full text-xs rounded px-2 py-1 resize-none focus:outline-none" style={{ border: `1px solid ${theme.brand}` }} />
                             </div>
                             <div className="flex gap-2 justify-end">
-                              <button onClick={() => setStep0EditKbIdx(null)} className="text-xs px-2 py-0.5 rounded" style={{ color: C.textSub }}>取消</button>
-                              <button onClick={() => { const u=[...step0Result!.kb_items]; u[i]={question:step0EditDraftQ,answer:step0EditDraftA}; setStep0Result({...step0Result!, kb_items: u}); setStep0EditKbIdx(null); }} className="text-xs px-2 py-0.5 rounded" style={{ color: C.brand }}>保存</button>
+                              <button onClick={() => setStep0EditKbIdx(null)} className="text-xs px-2 py-0.5 rounded" style={{ color: theme.textSub }}>取消</button>
+                              <button onClick={() => { const u=[...step0Result!.kb_items]; u[i]={question:step0EditDraftQ,answer:step0EditDraftA}; setStep0Result({...step0Result!, kb_items: u}); setStep0EditKbIdx(null); }} className="text-xs px-2 py-0.5 rounded" style={{ color: theme.brand }}>保存</button>
                             </div>
                           </div>
                         ) : (
                           <div className="flex items-start gap-2 px-3 py-2">
                             <button onClick={() => setStep0SelKbs(prev => { const n=[...prev]; n[i]=!n[i]; return n; })} className="flex-shrink-0 mt-0.5">
-                              <div className="w-4 h-4 rounded border flex items-center justify-center" style={step0SelKbs[i] ? { backgroundColor: C.brand, borderColor: C.brand } : { borderColor: C.line }}>
+                              <div className="w-4 h-4 rounded border flex items-center justify-center" style={step0SelKbs[i] ? { backgroundColor: theme.brand, borderColor: theme.brand } : { borderColor: theme.line }}>
                                 {step0SelKbs[i] && <Check className="w-3 h-3 text-white" />}
                               </div>
                             </button>
@@ -3002,10 +3002,10 @@ ${step0Extra.trim()}`
                                   {item.duplicate_check.includes(',') && <span style={{ color: '#6B7280' }}>（{item.duplicate_check.split(',').slice(1).join(',')}）</span>}
                                 </div>
                               )}
-                              <div className="font-medium" style={{ color: step0SelKbs[i] ? C.brandDeep : C.textMain }}>Q: {item.question}</div>
-                              <div className="mt-0.5" style={{ color: step0SelKbs[i] ? C.brand : C.textSub }}>A: {item.answer}</div>
+                              <div className="font-medium" style={{ color: step0SelKbs[i] ? theme.brandDeep : theme.textMain }}>Q: {item.question}</div>
+                              <div className="mt-0.5" style={{ color: step0SelKbs[i] ? theme.brand : theme.textSub }}>A: {item.answer}</div>
                             </div>
-                            <button onClick={() => { setStep0EditKbIdx(i); setStep0EditDraftQ(item.question); setStep0EditDraftA(item.answer); }} className="flex-shrink-0" style={{ color: C.line }}>
+                            <button onClick={() => { setStep0EditKbIdx(i); setStep0EditDraftQ(item.question); setStep0EditDraftA(item.answer); }} className="flex-shrink-0" style={{ color: theme.line }}>
                               <Pencil className="w-3 h-3" />
                             </button>
                           </div>
@@ -3020,7 +3020,7 @@ ${step0Extra.trim()}`
                     onClick={handleStep0Apply}
                     disabled={step0Applying || step0Done}
                     className="w-full py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all disabled:opacity-50"
-                    style={{ backgroundColor: step0Done ? C.brand : C.textMain, color: '#fff' }}
+                    style={{ backgroundColor: step0Done ? theme.brand : theme.textMain, color: '#fff' }}
                   >
                     {step0Applying ? <><Loader2 className="w-4 h-4 animate-spin" />写入中...</>
                     : step0Done ? <><Check className="w-4 h-4" />已全部写入</>
@@ -3059,17 +3059,17 @@ ${step0Extra.trim()}`
               {layer.id === 1 && (
                 <div className="space-y-3">
                   {/* 平台共享指令卡片（带开关，参考第③层共享知识库样式） */}
-                  <div className="rounded-xl border p-3" style={{ borderColor: C.line }}>
+                  <div className="rounded-xl border p-3" style={{ borderColor: theme.line }}>
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                        <span className="text-sm font-semibold" style={{ color: C.textMain }}>共享</span>
-                        <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>
+                        <span className="text-sm font-semibold" style={{ color: theme.textMain }}>共享</span>
+                        <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>
                           {loadingPlatformRules ? '加载中...' : `${platformLayer1Rules.length} 条`}
                         </span>
                       </div>
                       <div
                         onClick={togglingPlatformRules ? undefined : handleTogglePlatformRules}
-                        style={{ position: 'relative', display: 'inline-block', width: 40, height: 22, borderRadius: 11, backgroundColor: platformRulesEnabled ? C.brand : '#D1D5DB', cursor: togglingPlatformRules ? 'not-allowed' : 'pointer', opacity: togglingPlatformRules ? 0.5 : 1, flexShrink: 0, transition: 'background-color 0.2s' }}
+                        style={{ position: 'relative', display: 'inline-block', width: 40, height: 22, borderRadius: 11, backgroundColor: platformRulesEnabled ? theme.brand : '#D1D5DB', cursor: togglingPlatformRules ? 'not-allowed' : 'pointer', opacity: togglingPlatformRules ? 0.5 : 1, flexShrink: 0, transition: 'background-color 0.2s' }}
                       >
                         <div style={{ position: 'absolute', top: 3, left: platformRulesEnabled ? 19 : 3, width: 16, height: 16, borderRadius: '50%', backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.3)', transition: 'left 0.2s' }} />
                       </div>
@@ -3077,25 +3077,25 @@ ${step0Extra.trim()}`
                     {platformRulesEnabled && (
                       loadingPlatformRules ? (
                         <div className="flex items-center justify-center py-3">
-                          <Loader2 className="w-4 h-4 animate-spin" style={{ color: C.brand }} />
+                          <Loader2 className="w-4 h-4 animate-spin" style={{ color: theme.brand }} />
                         </div>
                       ) : platformLayer1Rules.length === 0 ? (
-                        <div className="text-xs text-center py-3" style={{ color: C.textSub }}>暂无平台共享指令</div>
+                        <div className="text-xs text-center py-3" style={{ color: theme.textSub }}>暂无平台共享指令</div>
                       ) : (
                         <div className="space-y-1.5 mt-1">
                             {platformLayer1Rules.map(rule => (
                               <div
                                 key={rule.id}
                                 className={`flex items-center justify-between gap-2 rounded-xl px-3 py-1.5 ${!rule.enabled ? 'opacity-40' : ''}`}
-                                style={{ backgroundColor: C.brandLight }}
+                                style={{ backgroundColor: theme.brandLight }}
                               >
-                                <span className="text-xs flex-1 truncate" style={{ color: C.textMain }}>
+                                <span className="text-xs flex-1 truncate" style={{ color: theme.textMain }}>
                                   {(rule.rule_text || '').slice(0, 24)}{(rule.rule_text || '').length > 24 ? '…' : ''}
                                 </span>
                                 <button
                                   onClick={() => setPlatformRuleDetail(rule)}
                                   className="text-xs flex-shrink-0 ml-2"
-                                  style={{ color: C.brand }}
+                                  style={{ color: theme.brand }}
                                 >
                                   详情
                                 </button>
@@ -3107,27 +3107,27 @@ ${step0Extra.trim()}`
                   </div>
 
                   {/* 私人指令卡片（纯预览，编辑按钮开抽屉） */}
-                  <div className="rounded-xl border p-3" style={{ borderColor: C.line }}>
+                  <div className="rounded-xl border p-3" style={{ borderColor: theme.line }}>
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-semibold" style={{ color: C.textMain }}>私人</span>
-                        <span className="text-xs" style={{ color: C.textSub }}>
+                        <span className="text-sm font-semibold" style={{ color: theme.textMain }}>私人</span>
+                        <span className="text-xs" style={{ color: theme.textSub }}>
                           {loadingRules ? '加载中...' : `${layer2Rules.length} 条`}
                         </span>
                       </div>
                       <button
                         onClick={() => { setShowRulesDrawer(true); setEditingRuleId(null); }}
                         className="text-xs px-2.5 py-1 rounded-lg flex-shrink-0"
-                        style={{ backgroundColor: C.brandLight, color: C.brand }}
+                        style={{ backgroundColor: theme.brandLight, color: theme.brand }}
                       >编辑</button>
                     </div>
                     {layer2Rules.length === 0 ? (
-                      <div className="text-xs text-center py-3" style={{ color: C.textSub }}>暂无私人规则，可通过顶部「AI 智能整理」添加</div>
+                      <div className="text-xs text-center py-3" style={{ color: theme.textSub }}>暂无私人规则，可通过顶部「AI 智能整理」添加</div>
                     ) : (
                       <div className="space-y-1.5">
                         {layer2Rules.slice(0, 5).map(rule => (
-                          <div key={rule.id} className={`flex items-center gap-2 rounded-xl px-3 py-1.5 ${!rule.enabled ? 'opacity-40' : ''}`} style={{ backgroundColor: C.brandLight }}>
-                            <span className="text-xs flex-1 truncate" style={{ color: C.textMain }}>
+                          <div key={rule.id} className={`flex items-center gap-2 rounded-xl px-3 py-1.5 ${!rule.enabled ? 'opacity-40' : ''}`} style={{ backgroundColor: theme.brandLight }}>
+                            <span className="text-xs flex-1 truncate" style={{ color: theme.textMain }}>
                               {(rule.rule_text || '').slice(0, 28)}{(rule.rule_text || '').length > 28 ? '…' : ''}
                             </span>
                           </div>
@@ -3136,7 +3136,7 @@ ${step0Extra.trim()}`
                           <button
                             onClick={() => { setShowRulesDrawer(true); setEditingRuleId(null); }}
                             className="w-full text-xs py-1.5 text-center rounded-xl"
-                            style={{ color: C.brand, backgroundColor: C.brandLight }}
+                            style={{ color: theme.brand, backgroundColor: theme.brandLight }}
                           >查看全部 {layer2Rules.length} 条 ›</button>
                         )}
                       </div>
@@ -3146,12 +3146,12 @@ ${step0Extra.trim()}`
                   {/* 共享规则详情弹窗 */}
                   {platformRuleDetail && (
                     <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setPlatformRuleDetail(null)}>
-                      <div className="w-full max-w-lg rounded-t-2xl p-4 pb-10" style={{ backgroundColor: C.white }} onClick={e => e.stopPropagation()}>
+                      <div className="w-full max-w-lg rounded-t-2xl p-4 pb-10" style={{ backgroundColor: theme.white }} onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-3">
-                          <span className="text-sm font-semibold" style={{ color: C.textMain }}>规则详情</span>
-                          <button onClick={() => setPlatformRuleDetail(null)} className="text-xs px-3 py-1 rounded-lg" style={{ backgroundColor: C.brandLight, color: C.brand }}>关闭</button>
+                          <span className="text-sm font-semibold" style={{ color: theme.textMain }}>规则详情</span>
+                          <button onClick={() => setPlatformRuleDetail(null)} className="text-xs px-3 py-1 rounded-lg" style={{ backgroundColor: theme.brandLight, color: theme.brand }}>关闭</button>
                         </div>
-                        <div className="rounded-xl p-3 text-xs leading-relaxed" style={{ backgroundColor: C.brandLight, color: C.textMain }}>
+                        <div className="rounded-xl p-3 text-xs leading-relaxed" style={{ backgroundColor: theme.brandLight, color: theme.textMain }}>
                           {platformRuleDetail.rule_text}
                         </div>
                       </div>
@@ -3161,32 +3161,32 @@ ${step0Extra.trim()}`
                   {/* 私人规则管理抽屉 */}
                   {showRulesDrawer && (
                     <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => { setShowRulesDrawer(false); setEditingRuleId(null); }}>
-                      <div className="w-full max-w-lg rounded-t-2xl p-4 pb-10 space-y-3" style={{ backgroundColor: C.white, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+                      <div className="w-full max-w-lg rounded-t-2xl p-4 pb-10 space-y-3" style={{ backgroundColor: theme.white, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between pb-1">
-                          <span className="text-sm font-semibold" style={{ color: C.textMain }}>私人规则管理</span>
-                          <button onClick={() => { setShowRulesDrawer(false); setEditingRuleId(null); }} className="text-xs px-3 py-1 rounded-lg" style={{ backgroundColor: C.brandLight, color: C.brand }}>完成</button>
+                          <span className="text-sm font-semibold" style={{ color: theme.textMain }}>私人规则管理</span>
+                          <button onClick={() => { setShowRulesDrawer(false); setEditingRuleId(null); }} className="text-xs px-3 py-1 rounded-lg" style={{ backgroundColor: theme.brandLight, color: theme.brand }}>完成</button>
                         </div>
                         {layer2Rules.length === 0 ? (
-                          <div className="text-xs text-center py-8" style={{ color: C.textSub }}>暂无私人规则，可通过顶部「AI 智能整理」添加</div>
+                          <div className="text-xs text-center py-8" style={{ color: theme.textSub }}>暂无私人规则，可通过顶部「AI 智能整理」添加</div>
                         ) : (
                           layer2Rules.map(rule => (
-                            <div key={rule.id} className={`rounded-xl border p-3 ${!rule.enabled ? 'opacity-50' : ''}`} style={{ borderColor: C.line }}>
+                            <div key={rule.id} className={`rounded-xl border p-3 ${!rule.enabled ? 'opacity-50' : ''}`} style={{ borderColor: theme.line }}>
                               {editingRuleId === rule.id ? (
                                 <div className="space-y-2">
-                                  <textarea value={editingRuleText} onChange={e => setEditingRuleText(e.target.value)} rows={4} className="w-full text-xs rounded-lg border p-2 resize-none outline-none" style={{ borderColor: C.brand, color: C.textMain }} autoFocus />
+                                  <textarea value={editingRuleText} onChange={e => setEditingRuleText(e.target.value)} rows={4} className="w-full text-xs rounded-lg border p-2 resize-none outline-none" style={{ borderColor: theme.brand, color: theme.textMain }} autoFocus />
                                   <div className="flex gap-1.5">
-                                    <button onClick={() => handleSaveRule(rule)} disabled={savingRule} className="flex-1 py-1.5 rounded-lg text-xs text-white flex items-center justify-center gap-1" style={{ backgroundColor: C.brand }}>
+                                    <button onClick={() => handleSaveRule(rule)} disabled={savingRule} className="flex-1 py-1.5 rounded-lg text-xs text-white flex items-center justify-center gap-1" style={{ backgroundColor: theme.brand }}>
                                       {savingRule ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}保存
                                     </button>
-                                    <button onClick={() => setEditingRuleId(null)} className="flex-1 py-1.5 rounded-lg text-xs border" style={{ borderColor: C.line, color: C.textSub }}>取消</button>
+                                    <button onClick={() => setEditingRuleId(null)} className="flex-1 py-1.5 rounded-lg text-xs border" style={{ borderColor: theme.line, color: theme.textSub }}>取消</button>
                                   </div>
                                 </div>
                               ) : (
                                 <div className="flex items-start gap-2">
-                                  <div className="flex-1 text-xs leading-relaxed" style={{ color: C.textMain }}>{rule.rule_text}</div>
+                                  <div className="flex-1 text-xs leading-relaxed" style={{ color: theme.textMain }}>{rule.rule_text}</div>
                                   <div className="flex gap-1 flex-shrink-0 mt-0.5">
-                                    <button onClick={() => { setEditingRuleId(rule.id); setEditingRuleText(rule.rule_text); }} className="text-xs px-1.5 py-0.5 rounded border" style={{ borderColor: C.line, color: C.textSub }}>编辑</button>
-                                    <button onClick={() => handleToggleRule(rule)} className="text-xs px-1.5 py-0.5 rounded border" style={{ borderColor: rule.enabled ? C.line : C.brand, color: rule.enabled ? C.textSub : C.brand }}>{rule.enabled ? '停用' : '启用'}</button>
+                                    <button onClick={() => { setEditingRuleId(rule.id); setEditingRuleText(rule.rule_text); }} className="text-xs px-1.5 py-0.5 rounded border" style={{ borderColor: theme.line, color: theme.textSub }}>编辑</button>
+                                    <button onClick={() => handleToggleRule(rule)} className="text-xs px-1.5 py-0.5 rounded border" style={{ borderColor: rule.enabled ? theme.line : theme.brand, color: rule.enabled ? theme.textSub : theme.brand }}>{rule.enabled ? '停用' : '启用'}</button>
                                     <button onClick={() => handleDeleteRule(rule.id)} className="text-xs px-1.5 py-0.5 rounded border border-red-100 text-red-400">删除</button>
                                   </div>
                                 </div>
@@ -3202,50 +3202,50 @@ ${step0Extra.trim()}`
 
               {/* ── 第②层内容：数字分身 ── */}
               {layer.id === 2 && (
-                <DigitalTwinCard channelId={String(channelId)} />
+                <DigitalTwinCard channelId={String(channelId)} theme={theme} />
               )}
 
               {/* ── 第③层内容：知识库 ── */}
               {layer.id === 3 && (
                 <div className="space-y-3">
                   {/* 共享知识库 */}
-                  <div className="rounded-xl border p-3" style={{ borderColor: C.line }}>
+                  <div className="rounded-xl border p-3" style={{ borderColor: theme.line }}>
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-semibold" style={{ color: C.textMain }}>共享</span>
-                        <span className="text-xs" style={{ color: C.textSub }}>{sysKbStats.item_count} 条 · {sysKbStats.file_count} 个文件</span>
+                        <span className="text-sm font-semibold" style={{ color: theme.textMain }}>共享</span>
+                        <span className="text-xs" style={{ color: theme.textSub }}>{sysKbStats.item_count} 条 · {sysKbStats.file_count} 个文件</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setShowSysKbDrawer(true)}
                           className="text-xs px-2.5 py-1 rounded-lg flex-shrink-0"
-                          style={{ backgroundColor: C.brandLight, color: C.brand }}
+                          style={{ backgroundColor: theme.brandLight, color: theme.brand }}
                         >编辑</button>
                         <div
                           onClick={togglingKb ? undefined : handleToggleSysKb}
-                          style={{ position: 'relative', display: 'inline-block', width: 40, height: 22, borderRadius: 11, backgroundColor: sysKbEnabled ? C.brand : '#D1D5DB', cursor: togglingKb ? 'not-allowed' : 'pointer', opacity: togglingKb ? 0.5 : 1, flexShrink: 0, transition: 'background-color 0.2s' }}
+                          style={{ position: 'relative', display: 'inline-block', width: 40, height: 22, borderRadius: 11, backgroundColor: sysKbEnabled ? theme.brand : '#D1D5DB', cursor: togglingKb ? 'not-allowed' : 'pointer', opacity: togglingKb ? 0.5 : 1, flexShrink: 0, transition: 'background-color 0.2s' }}
                         >
                           <div style={{ position: 'absolute', top: 3, left: sysKbEnabled ? 19 : 3, width: 16, height: 16, borderRadius: '50%', backgroundColor: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.3)', transition: 'left 0.2s' }} />
                         </div>
                       </div>
                     </div>
                     {sysKbSources.length === 0 ? (
-                      <div className="text-xs text-center py-3" style={{ color: C.textSub }}>暂无共享知识库内容</div>
+                      <div className="text-xs text-center py-3" style={{ color: theme.textSub }}>暂无共享知识库内容</div>
                     ) : (
                       <div className="space-y-1.5">
                         {sysKbSources.slice(0, 5).map((s: any) => (
-                          <div key={s.source_file} className="flex items-center gap-2 rounded-xl px-3 py-1.5" style={{ backgroundColor: C.brandLight }}>
-                            <span className="text-xs flex-1 truncate" style={{ color: C.textMain }}>
+                          <div key={s.source_file} className="flex items-center gap-2 rounded-xl px-3 py-1.5" style={{ backgroundColor: theme.brandLight }}>
+                            <span className="text-xs flex-1 truncate" style={{ color: theme.textMain }}>
                               {(s.source_file || '').slice(0, 28)}{(s.source_file || '').length > 28 ? '…' : ''}
                             </span>
-                            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>{s.item_count} 条</span>
+                            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>{s.item_count} 条</span>
                           </div>
                         ))}
                         {sysKbSources.length > 5 && (
                           <button
                             onClick={() => setShowSysKbDrawer(true)}
                             className="w-full text-xs py-1.5 text-center rounded-xl"
-                            style={{ color: C.brand, backgroundColor: C.brandLight }}
+                            style={{ color: theme.brand, backgroundColor: theme.brandLight }}
                           >查看全部 {sysKbSources.length} 个来源 ›</button>
                         )}
                       </div>
@@ -3254,16 +3254,16 @@ ${step0Extra.trim()}`
                   {/* 共享知识库抽屉 */}
                   {showSysKbDrawer && (
                     <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => { setShowSysKbDrawer(false); setSysKbExpandedSource(null); }}>
-                      <div className="w-full max-w-lg rounded-t-2xl p-4 pb-10 space-y-3" style={{ backgroundColor: C.white, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+                      <div className="w-full max-w-lg rounded-t-2xl p-4 pb-10 space-y-3" style={{ backgroundColor: theme.white, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between pb-1">
-                          <span className="text-sm font-semibold" style={{ color: C.textMain }}>共享知识库</span>
-                          <button onClick={() => { setShowSysKbDrawer(false); setSysKbExpandedSource(null); }} className="text-xs px-3 py-1 rounded-lg" style={{ backgroundColor: C.brandLight, color: C.brand }}>完成</button>
+                          <span className="text-sm font-semibold" style={{ color: theme.textMain }}>共享知识库</span>
+                          <button onClick={() => { setShowSysKbDrawer(false); setSysKbExpandedSource(null); }} className="text-xs px-3 py-1 rounded-lg" style={{ backgroundColor: theme.brandLight, color: theme.brand }}>完成</button>
                         </div>
                         {sysKbSources.length === 0 ? (
-                          <div className="text-xs text-center py-8" style={{ color: C.textSub }}>暂无共享知识库内容</div>
+                          <div className="text-xs text-center py-8" style={{ color: theme.textSub }}>暂无共享知识库内容</div>
                         ) : (
                           sysKbSources.map((s: any) => (
-                            <div key={s.source_file} className="rounded-xl border overflow-hidden" style={{ borderColor: C.line }}>
+                            <div key={s.source_file} className="rounded-xl border overflow-hidden" style={{ borderColor: theme.line }}>
                               <div
                                 className="flex items-center justify-between p-3 cursor-pointer"
                                 onClick={async () => {
@@ -3279,21 +3279,21 @@ ${step0Extra.trim()}`
                                   }
                                 }}
                               >
-                                <span className="text-xs font-medium flex-1" style={{ color: C.textMain }}>{s.source_file}</span>
-                                <span className="text-xs flex-shrink-0 ml-2" style={{ color: C.textSub }}>{s.item_count} 条 · {formatDate(s.latest_time)}</span>
-                                <span className="ml-2 text-xs" style={{ color: C.brand }}>{sysKbExpandedSource === s.source_file ? '▲' : '▼'}</span>
+                                <span className="text-xs font-medium flex-1" style={{ color: theme.textMain }}>{s.source_file}</span>
+                                <span className="text-xs flex-shrink-0 ml-2" style={{ color: theme.textSub }}>{s.item_count} 条 · {formatDate(s.latest_time)}</span>
+                                <span className="ml-2 text-xs" style={{ color: theme.brand }}>{sysKbExpandedSource === s.source_file ? '▲' : '▼'}</span>
                               </div>
                               {sysKbExpandedSource === s.source_file && (
-                                <div className="border-t px-3 py-2 space-y-2" style={{ borderColor: C.line, backgroundColor: C.bg }}>
+                                <div className="border-t px-3 py-2 space-y-2" style={{ borderColor: theme.line, backgroundColor: theme.bg }}>
                                   {!sysKbItems[s.source_file] ? (
-                                    <div className="text-xs text-center py-2" style={{ color: C.textSub }}>加载中...</div>
+                                    <div className="text-xs text-center py-2" style={{ color: theme.textSub }}>加载中...</div>
                                   ) : sysKbItems[s.source_file].length === 0 ? (
-                                    <div className="text-xs text-center py-2" style={{ color: C.textSub }}>暂无条目</div>
+                                    <div className="text-xs text-center py-2" style={{ color: theme.textSub }}>暂无条目</div>
                                   ) : (
                                     sysKbItems[s.source_file].map((item: any) => (
-                                      <div key={item.id} className="rounded-lg p-2.5" style={{ backgroundColor: C.white, border: `1px solid ${C.line}` }}>
-                                        {item.question && <div className="text-xs font-medium mb-1" style={{ color: C.textMain }}>Q: {item.question}</div>}
-                                        <div className="text-xs" style={{ color: C.textSub }}>A: {item.answer}</div>
+                                      <div key={item.id} className="rounded-lg p-2.5" style={{ backgroundColor: theme.white, border: `1px solid ${theme.line}` }}>
+                                        {item.question && <div className="text-xs font-medium mb-1" style={{ color: theme.textMain }}>Q: {item.question}</div>}
+                                        <div className="text-xs" style={{ color: theme.textSub }}>A: {item.answer}</div>
                                       </div>
                                     ))
                                   )}
@@ -3306,35 +3306,35 @@ ${step0Extra.trim()}`
                     </div>
                   )}
                   {/* 私人知识库 */}
-                  <div className="rounded-xl border p-3" style={{ borderColor: C.line }}>
+                  <div className="rounded-xl border p-3" style={{ borderColor: theme.line }}>
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-semibold" style={{ color: C.textMain }}>私人</span>
-                        <span className="text-xs" style={{ color: C.textSub }}>{kbStats.item_count} 条 · {kbStats.file_count} 个文件 · 本月新增 {kbStats.month_count}</span>
+                        <span className="text-sm font-semibold" style={{ color: theme.textMain }}>私人</span>
+                        <span className="text-xs" style={{ color: theme.textSub }}>{kbStats.item_count} 条 · {kbStats.file_count} 个文件 · 本月新增 {kbStats.month_count}</span>
                       </div>
                       <button
                         onClick={() => setShowKbDrawer(true)}
                         className="text-xs px-2.5 py-1 rounded-lg flex-shrink-0"
-                        style={{ backgroundColor: C.brandLight, color: C.brand }}
+                        style={{ backgroundColor: theme.brandLight, color: theme.brand }}
                       >编辑</button>
                     </div>
                     {kbSources.length === 0 ? (
-                      <div className="text-xs text-center py-3" style={{ color: C.textSub }}>暂无知识库内容，可通过顶部「AI 智能整理」添加</div>
+                      <div className="text-xs text-center py-3" style={{ color: theme.textSub }}>暂无知识库内容，可通过顶部「AI 智能整理」添加</div>
                     ) : (
                       <div className="space-y-1.5">
                         {kbSources.slice(0, 5).map((s: any) => (
-                          <div key={s.source_file} className="flex items-center gap-2 rounded-xl px-3 py-1.5" style={{ backgroundColor: C.brandLight }}>
-                            <span className="text-xs flex-1 truncate" style={{ color: C.textMain }}>
+                          <div key={s.source_file} className="flex items-center gap-2 rounded-xl px-3 py-1.5" style={{ backgroundColor: theme.brandLight }}>
+                            <span className="text-xs flex-1 truncate" style={{ color: theme.textMain }}>
                               {(s.source_file || '').slice(0, 28)}{(s.source_file || '').length > 28 ? '…' : ''}
                             </span>
-                            <span className="text-xs flex-shrink-0" style={{ color: C.textSub }}>{s.item_count} 条</span>
+                            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>{s.item_count} 条</span>
                           </div>
                         ))}
                         {kbSources.length > 5 && (
                           <button
                             onClick={() => setShowKbDrawer(true)}
                             className="w-full text-xs py-1.5 text-center rounded-xl"
-                            style={{ color: C.brand, backgroundColor: C.brandLight }}
+                            style={{ color: theme.brand, backgroundColor: theme.brandLight }}
                           >查看全部 {kbSources.length} 个来源 ›</button>
                         )}
                       </div>
@@ -3342,15 +3342,15 @@ ${step0Extra.trim()}`
                   </div>
                   {/* 绑定知识库选择器 */}
                   {kbList.length > 0 && (
-                    <div className="rounded-xl border p-3" style={{ borderColor: C.line }}>
-                      <div className="text-sm font-semibold mb-2" style={{ color: C.textMain }}>绑定知识库（选择一个私人知识库供 AI 优先检索）</div>
+                    <div className="rounded-xl border p-3" style={{ borderColor: theme.line }}>
+                      <div className="text-sm font-semibold mb-2" style={{ color: theme.textMain }}>绑定知识库（选择一个私人知识库供 AI 优先检索）</div>
                       <div className="space-y-1.5">
                         <button
                           onClick={() => { setKbId(0); setKbBindSaved(false); }}
                           className="w-full text-left text-xs px-3 py-2 rounded-xl border-2 transition-all"
                           style={kbId === 0
-                            ? { borderColor: C.textSub, backgroundColor: C.bg, color: C.textSub }
-                            : { borderColor: C.line, color: C.textSub }}
+                            ? { borderColor: theme.textSub, backgroundColor: theme.bg, color: theme.textSub }
+                            : { borderColor: theme.line, color: theme.textSub }}
                         >不绑定知识库</button>
                         {kbList.map(kb => (
                           <button
@@ -3358,12 +3358,12 @@ ${step0Extra.trim()}`
                             onClick={() => { setKbId(kb.id); setKbBindSaved(false); }}
                             className="w-full text-left text-xs px-3 py-2 rounded-xl border-2 transition-all"
                             style={kbId === kb.id
-                              ? { borderColor: C.brand, backgroundColor: C.brandLight, color: C.brandDeep }
-                              : { borderColor: C.line, color: C.textMain }}
+                              ? { borderColor: theme.brand, backgroundColor: theme.brandLight, color: theme.brandDeep }
+                              : { borderColor: theme.line, color: theme.textMain }}
                           >
                             <div className="font-medium">{kb.name}</div>
-                            {kb.description && <div className="mt-0.5" style={{ color: C.textSub }}>{kb.description}</div>}
-                            <div className="mt-0.5" style={{ color: C.textSub }}>{kb.item_count} 条记录</div>
+                            {kb.description && <div className="mt-0.5" style={{ color: theme.textSub }}>{kb.description}</div>}
+                            <div className="mt-0.5" style={{ color: theme.textSub }}>{kb.item_count} 条记录</div>
                           </button>
                         ))}
                       </div>
@@ -3380,7 +3380,7 @@ ${step0Extra.trim()}`
                         }}
                         disabled={savingKbBind || kbBindSaved}
                         className="mt-2 w-full py-1.5 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-1 disabled:opacity-60"
-                        style={{ backgroundColor: C.brand }}
+                        style={{ backgroundColor: theme.brand }}
                       >
                         {savingKbBind ? <Loader2 className="w-3 h-3 animate-spin" /> : kbBindSaved ? <Check className="w-3 h-3" /> : <Save className="w-3 h-3" />}
                         {savingKbBind ? '保存中...' : kbBindSaved ? '已保存' : '保存绑定'}
@@ -3389,21 +3389,21 @@ ${step0Extra.trim()}`
                   )}
 
                   {/* 素材库 */}
-                  <MaterialsCard channelId={channelId} />
+                  <MaterialsCard channelId={channelId} theme={theme} />
 
                   {/* 私人知识库管理抽屉 */}
                   {showKbDrawer && (
                     <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => { setShowKbDrawer(false); setKbExpandedSource(null); }}>
-                      <div className="w-full max-w-lg rounded-t-2xl p-4 pb-10 space-y-3" style={{ backgroundColor: C.white, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+                      <div className="w-full max-w-lg rounded-t-2xl p-4 pb-10 space-y-3" style={{ backgroundColor: theme.white, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between pb-1">
-                          <span className="text-sm font-semibold" style={{ color: C.textMain }}>私人知识库</span>
-                          <button onClick={() => { setShowKbDrawer(false); setKbExpandedSource(null); }} className="text-xs px-3 py-1 rounded-lg" style={{ backgroundColor: C.brandLight, color: C.brand }}>完成</button>
+                          <span className="text-sm font-semibold" style={{ color: theme.textMain }}>私人知识库</span>
+                          <button onClick={() => { setShowKbDrawer(false); setKbExpandedSource(null); }} className="text-xs px-3 py-1 rounded-lg" style={{ backgroundColor: theme.brandLight, color: theme.brand }}>完成</button>
                         </div>
                         {kbSources.length === 0 ? (
-                          <div className="text-xs text-center py-8" style={{ color: C.textSub }}>暂无知识库内容，可通过顶部「AI 智能整理」添加</div>
+                          <div className="text-xs text-center py-8" style={{ color: theme.textSub }}>暂无知识库内容，可通过顶部「AI 智能整理」添加</div>
                         ) : (
                           kbSources.map((s: any) => (
-                            <div key={s.source_file} className="rounded-xl border overflow-hidden" style={{ borderColor: C.line }}>
+                            <div key={s.source_file} className="rounded-xl border overflow-hidden" style={{ borderColor: theme.line }}>
                               <div
                                 className="flex items-center justify-between p-3 cursor-pointer"
                                 onClick={async () => {
@@ -3419,21 +3419,21 @@ ${step0Extra.trim()}`
                                   }
                                 }}
                               >
-                                <span className="text-xs font-medium flex-1" style={{ color: C.textMain }}>{s.source_file}</span>
-                                <span className="text-xs flex-shrink-0 ml-2" style={{ color: C.textSub }}>{s.item_count} 条 · {formatDate(s.latest_time)}</span>
-                                <span className="ml-2 text-xs" style={{ color: C.brand }}>{kbExpandedSource === s.source_file ? '▲' : '▼'}</span>
+                                <span className="text-xs font-medium flex-1" style={{ color: theme.textMain }}>{s.source_file}</span>
+                                <span className="text-xs flex-shrink-0 ml-2" style={{ color: theme.textSub }}>{s.item_count} 条 · {formatDate(s.latest_time)}</span>
+                                <span className="ml-2 text-xs" style={{ color: theme.brand }}>{kbExpandedSource === s.source_file ? '▲' : '▼'}</span>
                               </div>
                               {kbExpandedSource === s.source_file && (
-                                <div className="border-t px-3 py-2 space-y-2" style={{ borderColor: C.line, backgroundColor: C.bg }}>
+                                <div className="border-t px-3 py-2 space-y-2" style={{ borderColor: theme.line, backgroundColor: theme.bg }}>
                                   {!kbItems[s.source_file] ? (
-                                    <div className="text-xs text-center py-2" style={{ color: C.textSub }}>加载中...</div>
+                                    <div className="text-xs text-center py-2" style={{ color: theme.textSub }}>加载中...</div>
                                   ) : kbItems[s.source_file].length === 0 ? (
-                                    <div className="text-xs text-center py-2" style={{ color: C.textSub }}>暂无条目</div>
+                                    <div className="text-xs text-center py-2" style={{ color: theme.textSub }}>暂无条目</div>
                                   ) : (
                                     kbItems[s.source_file].map((item: any) => (
-                                      <div key={item.id} className="rounded-lg p-2.5" style={{ backgroundColor: C.white, border: `1px solid ${C.line}` }}>
-                                        {item.question && <div className="text-xs font-medium mb-1" style={{ color: C.textMain }}>Q: {item.question}</div>}
-                                        <div className="text-xs" style={{ color: C.textSub }}>A: {item.answer}</div>
+                                      <div key={item.id} className="rounded-lg p-2.5" style={{ backgroundColor: theme.white, border: `1px solid ${theme.line}` }}>
+                                        {item.question && <div className="text-xs font-medium mb-1" style={{ color: theme.textMain }}>Q: {item.question}</div>}
+                                        <div className="text-xs" style={{ color: theme.textSub }}>A: {item.answer}</div>
                                       </div>
                                     ))
                                   )}
@@ -3454,37 +3454,37 @@ ${step0Extra.trim()}`
                   {/* 本轮上下文轮数 */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <div className="text-sm font-semibold" style={{ color: C.textMain }}>本轮上下文保留轮数</div>
-                      <span className="text-sm font-bold" style={{ color: C.brand }}>{contextRounds} 轮</span>
+                      <div className="text-sm font-semibold" style={{ color: theme.textMain }}>本轮上下文保留轮数</div>
+                      <span className="text-sm font-bold" style={{ color: theme.brand }}>{contextRounds} 轮</span>
                     </div>
-                    <p className="text-xs mb-3" style={{ color: C.textSub }}>AI 记忆多少轮对话历史，数值越大越消耗积分（建议 5-20）</p>
-                    <input type="range" min={1} max={50} value={contextRounds} onChange={e => setContextRounds(Number(e.target.value))} className="w-full" style={{ accentColor: C.brand }} />
-                    <div className="flex justify-between text-xs mt-1" style={{ color: C.textSub }}>
+                    <p className="text-xs mb-3" style={{ color: theme.textSub }}>AI 记忆多少轮对话历史，数值越大越消耗积分（建议 5-20）</p>
+                    <input type="range" min={1} max={50} value={contextRounds} onChange={e => setContextRounds(Number(e.target.value))} className="w-full" style={{ accentColor: theme.brand }} />
+                    <div className="flex justify-between text-xs mt-1" style={{ color: theme.textSub }}>
                       <span>1轮（省积分）</span><span>50轮（强记忆）</span>
                     </div>
                     <button
                       onClick={handleSaveContextRounds}
                       disabled={savingCtx || ctxSaved}
                       className="mt-3 w-full py-2 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-1.5 disabled:opacity-60"
-                      style={{ backgroundColor: C.brand }}
+                      style={{ backgroundColor: theme.brand }}
                     >
                       {savingCtx ? <Loader2 className="w-3 h-3 animate-spin" /> : ctxSaved ? <Check className="w-3 h-3" /> : <Save className="w-3 h-3" />}
                       {savingCtx ? '保存中...' : ctxSaved ? '已保存' : '保存设置'}
                     </button>
                   </div>
                   {/* 客户长期记忆（规划中） */}
-                  <div className="rounded-xl border p-3" style={{ borderColor: C.line, backgroundColor: C.brandLight }}>
+                  <div className="rounded-xl border p-3" style={{ borderColor: theme.line, backgroundColor: theme.brandLight }}>
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-sm font-semibold" style={{ color: C.brand }}>客户长期偏好记忆</div>
-                        <div className="text-xs mt-0.5" style={{ color: C.textSub }}>历史对话提炼，持久化存储客户画像</div>
+                        <div className="text-sm font-semibold" style={{ color: theme.brand }}>客户长期偏好记忆</div>
+                        <div className="text-xs mt-0.5" style={{ color: theme.textSub }}>历史对话提炼，持久化存储客户画像</div>
                       </div>
-                      <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: C.line, color: C.brand }}>规划中</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ backgroundColor: theme.line, color: theme.brand }}>规划中</span>
                     </div>
                   </div>
                   {/* 说明 */}
-                  <div className="text-xs rounded-xl p-2.5" style={{ backgroundColor: C.brandLight, color: C.textSub, border: `1px solid ${C.line}` }}>
-                    <span className="font-medium" style={{ color: C.brand }}>提示：</span>已启用数字分身（第②层）后，AI 可通过长期记忆理解用户偏好，短期上下文轮数的重要性自动降低。
+                  <div className="text-xs rounded-xl p-2.5" style={{ backgroundColor: theme.brandLight, color: theme.textSub, border: `1px solid ${theme.line}` }}>
+                    <span className="font-medium" style={{ color: theme.brand }}>提示：</span>已启用数字分身（第②层）后，AI 可通过长期记忆理解用户偏好，短期上下文轮数的重要性自动降低。
                   </div>
                 </div>
               )}
@@ -4099,10 +4099,10 @@ function KnowledgeTab() {
       </div>
 
       {/* 素材库 */}
-      <MaterialsCard channelId={channelId} />
+      <MaterialsCard channelId={channelId} theme={theme} />
 
       {/* 我的数字分身卡片 */}
-      <DigitalTwinCard channelId={String(channelId)} />
+      <DigitalTwinCard channelId={String(channelId)} theme={theme} />
 
       {/* 手动添加弹窗 */}
       {showAddModal && (
@@ -4177,7 +4177,7 @@ function getCdDateRange(range: CdTimeRange): { start: string; end: string } | nu
   return null;
 }
 
-function CustomerDataTab({ channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_TYPE }: { channelId?: number; channelType?: string } = {}) {
+function CustomerDataTab({ channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_TYPE, theme = C }: { channelId?: number; channelType?: string; theme?: typeof C } = {}) {
   // ── 汇总数据 ──
   const [summary, setSummary] = useState<{ total_logs: number; total_users: number; month_logs: number; avg_credits: number; models: string[] } | null>(null);
   // ── 用户列表（用于下拉筛选） ──
@@ -4316,14 +4316,14 @@ function CustomerDataTab({ channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_T
       {summary && (
         <div className="grid grid-cols-2 gap-2">
           {[
-            { label: '总对话', value: summary.total_logs, color: C.brand },
-            { label: '总用户', value: summary.total_users, color: C.textMain },
-            { label: '本月对话', value: summary.month_logs, color: C.brand },
-            { label: '均积分/条', value: summary.avg_credits, color: C.textSub },
+            { label: '总对话', value: summary.total_logs, color: theme.brand },
+            { label: '总用户', value: summary.total_users, color: theme.textMain },
+            { label: '本月对话', value: summary.month_logs, color: theme.brand },
+            { label: '均积分/条', value: summary.avg_credits, color: theme.textSub },
           ].map(s => (
-            <div key={s.label} className="bg-white rounded-xl p-3 text-center border shadow-sm" style={{ borderColor: C.line }}>
+            <div key={s.label} className="bg-white rounded-xl p-3 text-center border shadow-sm" style={{ borderColor: theme.line }}>
               <div className="text-xl font-bold" style={{ color: s.color }}>{s.value}</div>
-              <div className="text-xs mt-0.5" style={{ color: C.textSub }}>{s.label}</div>
+              <div className="text-xs mt-0.5" style={{ color: theme.textSub }}>{s.label}</div>
             </div>
           ))}
         </div>
@@ -4337,18 +4337,18 @@ function CustomerDataTab({ channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_T
             onClick={() => { setShowTimeDD(v => !v); setShowUserDD(false); setShowModelDD(false); }}
             className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium border transition-all"
             style={timeRange !== 'all'
-              ? { backgroundColor: C.brandLight, borderColor: C.brand, color: C.brand }
-              : { backgroundColor: C.white, borderColor: C.line, color: C.textSub }}
+              ? { backgroundColor: theme.brandLight, borderColor: theme.brand, color: theme.brand }
+              : { backgroundColor: theme.white, borderColor: theme.line, color: theme.textSub }}
           >
             <span>{timeLabels[timeRange]}</span>
             <ChevronRight className="w-3 h-3" style={{ transform: showTimeDD ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
           </button>
           {showTimeDD && (
-            <div className="absolute top-10 left-0 z-30 rounded-xl shadow-lg w-32 py-1" style={{ backgroundColor: C.white, border: `1px solid ${C.line}` }}>
+            <div className="absolute top-10 left-0 z-30 rounded-xl shadow-lg w-32 py-1" style={{ backgroundColor: theme.white, border: `1px solid ${theme.line}` }}>
               {(['all', 'today', 'week', 'month'] as CdTimeRange[]).map(v => (
                 <button key={v} onClick={() => { setTimeRange(v); setShowTimeDD(false); }}
                   className="w-full text-left px-3 py-2 text-xs"
-                  style={{ color: timeRange === v ? C.brand : C.textMain, fontWeight: timeRange === v ? 600 : 400 }}
+                  style={{ color: timeRange === v ? theme.brand : theme.textMain, fontWeight: timeRange === v ? 600 : 400 }}
                 >{timeLabels[v]}</button>
               ))}
             </div>
@@ -4361,27 +4361,27 @@ function CustomerDataTab({ channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_T
             onClick={() => { setShowUserDD(v => !v); setShowTimeDD(false); setShowModelDD(false); }}
             className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium border transition-all"
             style={filterUser
-              ? { backgroundColor: C.brandLight, borderColor: C.brand, color: C.brand }
-              : { backgroundColor: C.white, borderColor: C.line, color: C.textSub }}
+              ? { backgroundColor: theme.brandLight, borderColor: theme.brand, color: theme.brand }
+              : { backgroundColor: theme.white, borderColor: theme.line, color: theme.textSub }}
           >
             <span className="truncate">{filterUser ? (allUsers.find(u => u.wecom_user_id === filterUser)?.nickname || filterUser.slice(0, 8)) : '全部用户'}</span>
             <ChevronRight className="w-3 h-3 flex-shrink-0" style={{ transform: showUserDD ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
           </button>
           {showUserDD && (
-            <div className="absolute top-10 left-0 z-30 rounded-xl shadow-lg w-52" style={{ backgroundColor: C.white, border: `1px solid ${C.line}` }}>
+            <div className="absolute top-10 left-0 z-30 rounded-xl shadow-lg w-52" style={{ backgroundColor: theme.white, border: `1px solid ${theme.line}` }}>
               <div className="px-3 pt-2 pb-1">
                 <input type="text" placeholder="搜索用户…" value={userSearch} onChange={e => setUserSearch(e.target.value)}
                   className="w-full text-xs rounded-lg px-2 py-1.5 outline-none"
-                  style={{ border: `1px solid ${C.line}` }} autoFocus />
+                  style={{ border: `1px solid ${theme.line}` }} autoFocus />
               </div>
               <div className="max-h-48 overflow-y-auto py-1">
                 <button onClick={() => { setFilterUser(''); setShowUserDD(false); setUserSearch(''); }}
                   className="w-full text-left px-3 py-2 text-xs"
-                  style={{ color: !filterUser ? C.brand : C.textMain, fontWeight: !filterUser ? 600 : 400 }}>全部用户</button>
+                  style={{ color: !filterUser ? theme.brand : theme.textMain, fontWeight: !filterUser ? 600 : 400 }}>全部用户</button>
                 {filteredUsers.map(u => (
                   <button key={u.wecom_user_id} onClick={() => { setFilterUser(u.wecom_user_id); setShowUserDD(false); setUserSearch(''); }}
                     className="w-full text-left px-3 py-2 text-xs truncate"
-                    style={{ color: filterUser === u.wecom_user_id ? C.brand : C.textMain, fontWeight: filterUser === u.wecom_user_id ? 600 : 400 }}
+                    style={{ color: filterUser === u.wecom_user_id ? theme.brand : theme.textMain, fontWeight: filterUser === u.wecom_user_id ? 600 : 400 }}
                   >{u.nickname || u.wecom_user_id}</button>
                 ))}
               </div>
@@ -4395,21 +4395,21 @@ function CustomerDataTab({ channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_T
             onClick={() => { setShowModelDD(v => !v); setShowTimeDD(false); setShowUserDD(false); }}
             className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium border transition-all"
             style={filterModel
-              ? { backgroundColor: C.brandLight, borderColor: C.brand, color: C.brand }
-              : { backgroundColor: C.white, borderColor: C.line, color: C.textSub }}
+              ? { backgroundColor: theme.brandLight, borderColor: theme.brand, color: theme.brand }
+              : { backgroundColor: theme.white, borderColor: theme.line, color: theme.textSub }}
           >
             <span className="truncate">{filterModel ? filterModel.replace('deepseek-', 'DS-').replace('manus-1.6', 'M1.6') : '全部模型'}</span>
             <ChevronRight className="w-3 h-3 flex-shrink-0" style={{ transform: showModelDD ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
           </button>
           {showModelDD && (
-            <div className="absolute top-10 right-0 z-30 rounded-xl shadow-lg w-44 py-1" style={{ backgroundColor: C.white, border: `1px solid ${C.line}` }}>
+            <div className="absolute top-10 right-0 z-30 rounded-xl shadow-lg w-44 py-1" style={{ backgroundColor: theme.white, border: `1px solid ${theme.line}` }}>
               <button onClick={() => { setFilterModel(''); setShowModelDD(false); }}
                 className="w-full text-left px-3 py-2 text-xs"
-                style={{ color: !filterModel ? C.brand : C.textMain, fontWeight: !filterModel ? 600 : 400 }}>全部模型</button>
+                style={{ color: !filterModel ? theme.brand : theme.textMain, fontWeight: !filterModel ? 600 : 400 }}>全部模型</button>
               {modelOptions.map(m => (
                 <button key={m} onClick={() => { setFilterModel(m); setShowModelDD(false); }}
                   className="w-full text-left px-3 py-2 text-xs"
-                  style={{ color: filterModel === m ? C.brand : C.textMain, fontWeight: filterModel === m ? 600 : 400 }}
+                  style={{ color: filterModel === m ? theme.brand : theme.textMain, fontWeight: filterModel === m ? 600 : 400 }}
                 >{m}</button>
               ))}
             </div>
@@ -4419,36 +4419,36 @@ function CustomerDataTab({ channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_T
 
       {/* ── 记录数 + 刷新 ── */}
       <div className="flex items-center justify-between">
-        <span className="text-xs" style={{ color: C.textSub }}>共 {total} 条对话记录</span>
-        <button onClick={() => fetchLogs(page)} className="p-1.5 rounded-lg" style={{ color: C.brand }}><RefreshCw className="w-4 h-4" /></button>
+        <span className="text-xs" style={{ color: theme.textSub }}>共 {total} 条对话记录</span>
+        <button onClick={() => fetchLogs(page)} className="p-1.5 rounded-lg" style={{ color: theme.brand }}><RefreshCw className="w-4 h-4" /></button>
       </div>
 
       {/* ── 聊天记录列表 ── */}
       {loading ? (
-        <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin" style={{ color: C.brand }} /></div>
+        <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin" style={{ color: theme.brand }} /></div>
       ) : logs.length === 0 ? (
         <div className="py-16 text-center">
-          <MessageSquare className="w-10 h-10 mx-auto mb-2" style={{ color: C.line }} />
-          <div className="text-sm" style={{ color: C.textSub }}>暂无对话记录</div>
+          <MessageSquare className="w-10 h-10 mx-auto mb-2" style={{ color: theme.line }} />
+          <div className="text-sm" style={{ color: theme.textSub }}>暂无对话记录</div>
         </div>
       ) : (
         <div className="space-y-2">
           {logs.map(log => (
-            <div key={log.id} className="bg-white rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: C.line }}>
+            <div key={log.id} className="bg-white rounded-2xl border shadow-sm overflow-hidden" style={{ borderColor: theme.line }}>
               <button className="w-full px-3 py-2 text-left"
                 onClick={() => setExpanded(expanded === log.id ? null : log.id)}>
                 {/* 时间 + 用户名 + 展开按钮 */}
                 <div className="flex items-center gap-1.5 mb-1.5">
-                  <span className="text-[10px] flex-shrink-0" style={{ color: C.textSub }}>{formatDate(log.created_at)}</span>
-                  <span className="text-[10px] truncate flex-1" style={{ color: C.textSub }}>{log.nickname || log.wecom_user_id.slice(0, 12)}</span>
+                  <span className="text-[10px] flex-shrink-0" style={{ color: theme.textSub }}>{formatDate(log.created_at)}</span>
+                  <span className="text-[10px] truncate flex-1" style={{ color: theme.textSub }}>{log.nickname || log.wecom_user_id.slice(0, 12)}</span>
                   {expanded === log.id
-                    ? <ChevronDown className="w-3 h-3 flex-shrink-0" style={{ color: C.textSub }} />
-                    : <ChevronRight className="w-3 h-3 flex-shrink-0" style={{ color: C.textSub }} />}
+                    ? <ChevronDown className="w-3 h-3 flex-shrink-0" style={{ color: theme.textSub }} />
+                    : <ChevronRight className="w-3 h-3 flex-shrink-0" style={{ color: theme.textSub }} />}
                 </div>
                 {/* 用户气泡：头像左侧，气泡内只显示纯内容 */}
                 <div className="flex items-start gap-1.5 mb-1">
-                  <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: C.brandLight }}>
-                    <User className="w-3 h-3" style={{ color: C.brand }} />
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: theme.brandLight }}>
+                    <User className="w-3 h-3" style={{ color: theme.brand }} />
                   </div>
                   <div className="rounded-2xl rounded-tl-none px-2.5 py-1.5 flex-1 min-w-0" style={{ backgroundColor: '#f0f0f0' }}>
                     <div className={`text-sm leading-snug ${expanded === log.id ? '' : 'line-clamp-1'}`} style={{ color: '#1a1a1a' }}>{log.user_message || '(无内容)'}</div>
@@ -4460,21 +4460,21 @@ function CustomerDataTab({ channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_T
                     {log.channel_avatar ? (
                       <img src={log.channel_avatar} alt="" className="w-6 h-6 rounded-full flex-shrink-0 object-cover" />
                     ) : (
-                      <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: C.brand }}>
+                      <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: theme.brand }}>
                         <span className="text-white" style={{ fontSize: '9px', fontWeight: 700 }}>分</span>
                       </div>
                     )}
-                    <div className="rounded-2xl rounded-tr-none px-2.5 py-1.5 flex-1 min-w-0" style={{ backgroundColor: C.brand }}>
+                    <div className="rounded-2xl rounded-tr-none px-2.5 py-1.5 flex-1 min-w-0" style={{ backgroundColor: theme.brand }}>
                       <div className={`text-sm leading-snug ${expanded === log.id ? '' : 'line-clamp-1'}`} style={{ color: '#fff' }}>{log.reply_preview}</div>
                     </div>
                   </div>
                 )}
               </button>
               {/* 卡片底部细线下方：始终可见 */}
-              <div className="px-4 pb-3 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+              <div className="px-4 pb-3 pt-2" style={{ borderTop: `1px solid ${theme.line}` }}>
                 {/* 模型 + token + 星级（同一行） + 渠道 */}
-                <div className="flex gap-2 text-xs flex-wrap items-center" style={{ color: C.textSub }}>
-                  {log.model_used && <span className="px-2 py-0.5 rounded-full" style={{ backgroundColor: C.brandLight, color: C.brand }}>{log.model_used}</span>}
+                <div className="flex gap-2 text-xs flex-wrap items-center" style={{ color: theme.textSub }}>
+                  {log.model_used && <span className="px-2 py-0.5 rounded-full" style={{ backgroundColor: theme.brandLight, color: theme.brand }}>{log.model_used}</span>}
                   {log.credits_used > 0 && <span>{log.credits_used} token</span>}
                   {/* 星级：跟在 token 后面，收窄显示 */}
                   {(() => {
@@ -4529,7 +4529,7 @@ function CustomerDataTab({ channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_T
                   const stars = Math.round((log.dialog_score / 20) * 2) / 2;
                   const starColor = stars >= 4.5 ? '#16a34a' : stars >= 3.5 ? '#2563eb' : stars >= 2.5 ? '#d97706' : '#dc2626';
                   return (
-                    <div className="space-y-2 mt-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+                    <div className="space-y-2 mt-2 pt-2" style={{ borderTop: `1px solid ${theme.line}` }}>
                       {/* 等级标签 + 调整按钮 */}
                       <div className="flex items-center gap-2">
                         <span className="text-xs px-1.5 py-0.5 rounded-full font-medium"
@@ -4539,22 +4539,22 @@ function CustomerDataTab({ channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_T
                           }}>
                           {stars >= 4.5 ? '极优' : stars >= 3.5 ? '良好' : stars >= 2.5 ? '一般' : stars >= 1.5 ? '较差' : '低质'}
                         </span>
-                        <span className="text-xs" style={{ color: C.textSub }}>训练语料</span>
+                        <span className="text-xs" style={{ color: theme.textSub }}>训练语料</span>
                         <button onClick={e => { e.stopPropagation(); setAdjustingId(adjustingId === log.id ? null : log.id); setAdjustScore(log.dialog_score!); }}
-                          className="text-xs px-2 py-0.5 rounded-lg border ml-auto" style={{ borderColor: C.line, color: C.textSub }}>
+                          className="text-xs px-2 py-0.5 rounded-lg border ml-auto" style={{ borderColor: theme.line, color: theme.textSub }}>
                           调整
                         </button>
                       </div>
                       {/* 总评 */}
                       {log.score_reason && (
-                        <div className="text-xs px-2 py-1.5 rounded-lg" style={{ backgroundColor: C.bg, color: C.textSub }}>
+                        <div className="text-xs px-2 py-1.5 rounded-lg" style={{ backgroundColor: theme.bg, color: theme.textSub }}>
                           {log.score_reason}
                         </div>
                       )}
                       {/* 维度详情 */}
                       {log.score_dimensions && (
                         <div className="space-y-1.5 pt-1">
-                          <div className="text-xs font-medium mb-1" style={{ color: C.textSub }}>评分维度详情</div>
+                          <div className="text-xs font-medium mb-1" style={{ color: theme.textSub }}>评分维度详情</div>
                           {([
                             { key: 'intent_clarity', label: '意图清晰度', max: 20, desc: '用户意图是否清晰、AI是否准确理解' },
                             { key: 'reply_quality', label: '回复质量', max: 30, desc: '回复准确完整专业、有无错误信息' },
@@ -4569,8 +4569,8 @@ function CustomerDataTab({ channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_T
                               <div key={dim.key}>
                                 <div className="flex items-center justify-between mb-0.5">
                                   <div>
-                                    <span className="text-xs font-medium" style={{ color: C.textMain }}>{dim.label}</span>
-                                    <span className="text-xs ml-1" style={{ color: C.textSub }}>({dim.desc})</span>
+                                    <span className="text-xs font-medium" style={{ color: theme.textMain }}>{dim.label}</span>
+                                    <span className="text-xs ml-1" style={{ color: theme.textSub }}>({dim.desc})</span>
                                   </div>
                                   <span className="text-xs font-bold" style={{ color: barColor }}>{val}/{dim.max}</span>
                                 </div>
@@ -4584,21 +4584,21 @@ function CustomerDataTab({ channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_T
                       )}
                       {/* 手动调整滑块 */}
                       {adjustingId === log.id && (
-                        <div className="flex items-center gap-2 mt-1 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
-                          <span className="text-xs" style={{ color: C.textSub }}>1星</span>
+                        <div className="flex items-center gap-2 mt-1 pt-2" style={{ borderTop: `1px solid ${theme.line}` }}>
+                          <span className="text-xs" style={{ color: theme.textSub }}>1星</span>
                           <input type="range" min={20} max={100} step={10} value={adjustScore}
                             onChange={e => setAdjustScore(Number(e.target.value))}
                             className="flex-1 h-1.5 rounded-full accent-green-600" />
-                          <span className="text-xs" style={{ color: C.textSub }}>5星</span>
-                          <span className="text-sm font-bold w-12 text-center" style={{ color: C.brand }}>
+                          <span className="text-xs" style={{ color: theme.textSub }}>5星</span>
+                          <span className="text-sm font-bold w-12 text-center" style={{ color: theme.brand }}>
                             {(Math.round((adjustScore / 20) * 2) / 2).toFixed(1)}星
                           </span>
                           <button onClick={e => { e.stopPropagation(); handleAdjustScore(log.id, adjustScore); }}
-                            className="text-xs px-3 py-1 rounded-lg text-white" style={{ backgroundColor: C.brand }}>
+                            className="text-xs px-3 py-1 rounded-lg text-white" style={{ backgroundColor: theme.brand }}>
                             确定
                           </button>
                           <button onClick={e => { e.stopPropagation(); setAdjustingId(null); }}
-                            className="text-xs px-2 py-1 rounded-lg border" style={{ borderColor: C.line, color: C.textSub }}>
+                            className="text-xs px-2 py-1 rounded-lg border" style={{ borderColor: theme.line, color: theme.textSub }}>
                             取消
                           </button>
                         </div>
@@ -4618,11 +4618,11 @@ function CustomerDataTab({ channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_T
         <div className="flex items-center justify-center gap-3 pt-2">
           <button onClick={() => fetchLogs(page - 1)} disabled={page === 0 || loading}
             className="px-4 py-2 rounded-xl text-sm border disabled:opacity-40"
-            style={{ borderColor: C.line, color: C.brand }}>上一页</button>
-          <span className="text-sm" style={{ color: C.textSub }}>{page + 1} / {totalPages}</span>
+            style={{ borderColor: theme.line, color: theme.brand }}>上一页</button>
+          <span className="text-sm" style={{ color: theme.textSub }}>{page + 1} / {totalPages}</span>
           <button onClick={() => fetchLogs(page + 1)} disabled={page >= totalPages - 1 || loading}
             className="px-4 py-2 rounded-xl text-sm border disabled:opacity-40"
-            style={{ borderColor: C.line, color: C.brand }}>下一页</button>
+            style={{ borderColor: theme.line, color: theme.brand }}>下一页</button>
         </div>
       )}
     </div>
@@ -4909,10 +4909,10 @@ export function LiuLifanPage({ onBack }: { onBack?: () => void } = {}) {
       </div>
 
       <main className="flex-1 overflow-y-auto px-4 pt-2">
-        {activeTab === "avatar" && <AvatarGrowthTab onProfileUpdate={(name, url) => { setChannelName(name); setChannelAvatarUrl(url); }} channelId={KF_CHANNEL_ID_LLF} channelType={KF_CHANNEL_TYPE_LLF} />}
-        {activeTab === "config" && <ConfigTab onProfileUpdate={(name, avatarUrl) => { setChannelName(name); setChannelAvatarUrl(avatarUrl); }} channelId={KF_CHANNEL_ID_LLF} channelType={KF_CHANNEL_TYPE_LLF} />}
-        {activeTab === "aibrain" && <AIBrainTab refreshKey={refreshKey} channelId={KF_CHANNEL_ID_LLF} channelType={KF_CHANNEL_TYPE_LLF} />}
-        {activeTab === "customers" && <CustomerDataTab channelId={KF_CHANNEL_ID_LLF} channelType={KF_CHANNEL_TYPE_LLF} />}
+        {activeTab === "avatar" && <AvatarGrowthTab onProfileUpdate={(name, url) => { setChannelName(name); setChannelAvatarUrl(url); }} channelId={KF_CHANNEL_ID_LLF} channelType={KF_CHANNEL_TYPE_LLF} theme={C_PINK} />}
+        {activeTab === "config" && <ConfigTab onProfileUpdate={(name, avatarUrl) => { setChannelName(name); setChannelAvatarUrl(avatarUrl); }} channelId={KF_CHANNEL_ID_LLF} channelType={KF_CHANNEL_TYPE_LLF} theme={C_PINK} />}
+        {activeTab === "aibrain" && <AIBrainTab refreshKey={refreshKey} channelId={KF_CHANNEL_ID_LLF} channelType={KF_CHANNEL_TYPE_LLF} theme={C_PINK} />}
+        {activeTab === "customers" && <CustomerDataTab channelId={KF_CHANNEL_ID_LLF} channelType={KF_CHANNEL_TYPE_LLF} theme={C_PINK} />}
       </main>
     </div>
   );
@@ -5027,10 +5027,10 @@ export function WeightCoachPage({ onBack }: { onBack?: () => void } = {}) {
       </div>
 
       <main className="flex-1 overflow-y-auto px-4 pt-2">
-        {activeTab === "avatar" && <AvatarGrowthTab onProfileUpdate={(name, url) => { setChannelName(name); setChannelAvatarUrl(url); }} channelId={KF_CHANNEL_ID_TZ} channelType={KF_CHANNEL_TYPE_TZ} />}
-        {activeTab === "config" && <ConfigTab onProfileUpdate={(name, avatarUrl) => { setChannelName(name); setChannelAvatarUrl(avatarUrl); }} channelId={KF_CHANNEL_ID_TZ} channelType={KF_CHANNEL_TYPE_TZ} />}
-        {activeTab === "aibrain" && <AIBrainTab refreshKey={refreshKey} channelId={KF_CHANNEL_ID_TZ} channelType={KF_CHANNEL_TYPE_TZ} />}
-        {activeTab === "customers" && <CustomerDataTab channelId={KF_CHANNEL_ID_TZ} channelType={KF_CHANNEL_TYPE_TZ} />}
+        {activeTab === "avatar" && <AvatarGrowthTab onProfileUpdate={(name, url) => { setChannelName(name); setChannelAvatarUrl(url); }} channelId={KF_CHANNEL_ID_TZ} channelType={KF_CHANNEL_TYPE_TZ} theme={C_BLUE} />}
+        {activeTab === "config" && <ConfigTab onProfileUpdate={(name, avatarUrl) => { setChannelName(name); setChannelAvatarUrl(avatarUrl); }} channelId={KF_CHANNEL_ID_TZ} channelType={KF_CHANNEL_TYPE_TZ} theme={C_BLUE} />}
+        {activeTab === "aibrain" && <AIBrainTab refreshKey={refreshKey} channelId={KF_CHANNEL_ID_TZ} channelType={KF_CHANNEL_TYPE_TZ} theme={C_BLUE} />}
+        {activeTab === "customers" && <CustomerDataTab channelId={KF_CHANNEL_ID_TZ} channelType={KF_CHANNEL_TYPE_TZ} theme={C_BLUE} />}
       </main>
     </div>
   );
