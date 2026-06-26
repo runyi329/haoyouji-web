@@ -167,7 +167,7 @@ export default function YabanProfile() {
       hint: "编辑昵称、手机号与头像",
       onClick: () => navigate("/yaban/account"),
     },
-    ...(isOwner
+    ...(isOwner || isFounder
       ? [
           {
             key: "website_features",

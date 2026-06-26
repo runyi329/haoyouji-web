@@ -1,8 +1,9 @@
 /**
  * 牙伴齿科管理 - 顾客来源设置
  * 路由：/yaban/settings/customer-source
- * 权限：仅院长可见
+ * 权限：院长 + 创始人可见
  * 功能：查看/新增/编辑/删除顾客来源渠道，支持上下移动排序
+ * 医院：通过顶部帽檐切换，所有操作均针对当前选中医院
  */
 import { useState } from "react";
 import { useSmartBack } from "@/hooks/useSmartBack";
@@ -19,12 +20,18 @@ import {
   Loader2,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useYabanClinic } from "./useYabanClinic";
+import YabanClinicHeader from "./YabanClinicHeader";
 
 export default function YabanCustomerSource() {
   const goBack = useSmartBack("/yaban/settings/website-features");
   const utils = trpc.useUtils();
+  const { currentTenantId } = useYabanClinic();
 
-  const { data: sources = [], isLoading } = trpc.yabanCustomer.listCustomerSources.useQuery();
+  const { data: sources = [], isLoading } = trpc.yabanCustomer.listCustomerSources.useQuery(
+    { tenantId: currentTenantId ?? undefined },
+    { enabled: currentTenantId != null }
+  );
 
   const addMutation = trpc.yabanCustomer.addCustomerSource.useMutation({
     onSuccess: () => {
@@ -67,7 +74,7 @@ export default function YabanCustomerSource() {
   const handleAdd = () => {
     const label = addingLabel.trim();
     if (!label) { toast.error("来源名称不能为空"); return; }
-    addMutation.mutate({ label });
+    addMutation.mutate({ label, tenantId: currentTenantId ?? undefined });
   };
 
   const handleUpdate = () => {
@@ -99,7 +106,11 @@ export default function YabanCustomerSource() {
           <button onClick={goBack} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <span className="text-base font-bold">顾客来源设置</span>
+          <span className="text-base font-bold flex-1">顾客来源设置</span>
+        </div>
+        {/* 医院切换帽檐 */}
+        <div className="px-4 pb-3">
+          <YabanClinicHeader asBar />
         </div>
       </div>
 

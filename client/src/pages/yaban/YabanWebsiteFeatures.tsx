@@ -1,12 +1,13 @@
 /**
  * 牙伴齿科管理 - 网站功能管理
  * 路由：/yaban/settings/website-features
- * 权限：仅院长可见
+ * 权限：院长 + 创始人可见
  * 功能：顾客来源设置（第1项），后续可扩展更多配置项
  */
 import { useLocation } from "wouter";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { ChevronLeft, ChevronRight, Tags } from "lucide-react";
+import YabanClinicHeader from "./YabanClinicHeader";
 
 export default function YabanWebsiteFeatures() {
   const [, navigate] = useLocation();
@@ -30,7 +31,11 @@ export default function YabanWebsiteFeatures() {
           <button onClick={goBack} aria-label="返回">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <span className="text-base font-bold">网站功能管理</span>
+          <span className="text-base font-bold flex-1">网站功能管理</span>
+        </div>
+        {/* 医院切换帽檐 */}
+        <div className="px-4 pb-3">
+          <YabanClinicHeader asBar />
         </div>
       </div>
 
