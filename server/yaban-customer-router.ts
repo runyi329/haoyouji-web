@@ -9,6 +9,7 @@
  */
 import { z } from "zod";
 import { pinyin } from "pinyin-pro";
+import bcrypt from "bcrypt";
 import { router, protectedProcedure, adminProcedure } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDbConnection } from "./db";
@@ -239,6 +240,13 @@ async function ensureCustomerTable(conn: any) {
       // 列已存在则忽略
     }
   }
+  // 兼容旧表：补充牙伴账号/密码列
+  try {
+    await conn.execute(`ALTER TABLE yaban_customer ADD COLUMN yaban_username VARCHAR(64) DEFAULT NULL AFTER consultant`);
+  } catch (e) { /* 列已存在则忽略 */ }
+  try {
+    await conn.execute(`ALTER TABLE yaban_customer ADD COLUMN yaban_password VARCHAR(32) DEFAULT NULL AFTER yaban_username`);
+  } catch (e) { /* 列已存在则忽略 */ }
 }
 
 // 确保标签表与关联表存在
@@ -879,13 +887,32 @@ export const yabanCustomerRouter = router({
           ? null
           : parseInt(String(input.age), 10) || null;
 
+      // 生成牙伴账号和密码
+      const yabanUsername = (input.name || "").trim();
+      const mobile = (input.mobile || "").trim();
+      const yabanPassword = mobile.length >= 6
+        ? mobile.slice(-6)
+        : String(Math.floor(10000 + Math.random() * 90000)); // 5位随机数
+
+      // 同步在 users 表创建脉动网账号（姓名已存则跳过）
+      try {
+        const passwordHash = await bcrypt.hash(yabanPassword, 10);
+        await (conn as any).execute(
+          `INSERT IGNORE INTO users (username, passwordHash, name, loginMethod, role, createdAt, updatedAt, lastSignedIn)
+           VALUES (?, ?, ?, 'password', 'parent', NOW(), NOW(), NOW())`,
+          [yabanUsername, passwordHash, yabanUsername]
+        );
+      } catch (e) {
+        console.warn("[YabanCustomer] 同步创建 users 账号失败（可忽略）", e);
+      }
+
       const doInsert = async (code: string) =>
         (await (conn as any).execute(
           `INSERT INTO yaban_customer
            (tenant_id, name, gender, birthday, age, zodiac, chinese_zodiac, patient_type, medical_no, external_no, nickname,
             email, mobile, phone, region, address, license_plate, avatar,
             emergency_contact, emergency_relation, occupation, emergency_phone,
-            source, net_consultant, consultant, history, remark,
+            source, net_consultant, consultant, yaban_username, yaban_password, history, remark,
             chief_complaint, health_status, drug_allergy, food_allergy,
             heart, hypertension, diabetes, kidney, infectious, bleeding, pregnant, medication,
             created_by)
@@ -916,6 +943,8 @@ export const yabanCustomerRouter = router({
             s(input.source),
             s(input.netConsultant),
             s(input.consultant),
+            yabanUsername,
+            yabanPassword,
             s(input.history),
             s(input.remark),
             s(input.chiefComplaint),

@@ -26,7 +26,13 @@ const ACCENT = "#1E88D6";
 // 选项配置
 const GENDERS = ["无", "男", "女"];
 const PATIENT_TYPES = ["电子", "临时", "普通"];
-const SOURCES = ["到店", "转介绍", "网络预约", "电话预约", "微信预约", "老顾客推荐", "其他"];
+// 顾客来源：「到店」展开为三个子选项（路过/家近/公司近）
+const SOURCES = [
+  "到店（路过）", "到店（家近）", "到店（公司近）",
+  "转介绍", "网络预约", "电话预约", "微信预约", "老顾客推荐", "其他",
+];
+// 需要以蓝色标签形式展示的“到店”类选项
+const STORE_VISIT_SOURCES = ["到店（路过）", "到店（家近）", "到店（公司近）"];
 const NET_CONSULTANTS = ["杨文利", "侯睿", "洪紫钥"];
 const CONSULTANTS = ["洪紫钥", "杨文利", "侯睿"];
 const RELATIONS = ["配偶", "父母", "子女", "兄弟姐妹", "亲戚", "朋友", "其他"];
@@ -699,9 +705,21 @@ function FieldCell({
           style={genderStyle}
           className={`${boxCls} ${field.key === "gender" && value ? "justify-center" : "justify-between"} active:bg-gray-100`}
         >
-          <span className={`truncate ${field.key === "gender" && value ? "text-center" : ""} ${value ? "text-gray-800" : "text-gray-300"}`}>
-            {value || field.placeholder}
-          </span>
+          {field.key === "source" && STORE_VISIT_SOURCES.includes(value) ? (
+            <span className="flex items-center gap-2">
+              <span className="text-gray-800 text-sm">到店</span>
+              <span
+                className="inline-flex items-center px-1 rounded font-medium leading-4"
+                style={{ background: ACCENT, color: "#fff", fontSize: "9px" }}
+              >
+                {value.replace(/到店（(.+)）/, '$1')}
+              </span>
+            </span>
+          ) : (
+            <span className={`truncate ${field.key === "gender" && value ? "text-center" : ""} ${value ? "text-gray-800" : "text-gray-300"}`}>
+              {value || field.placeholder}
+            </span>
+          )}
           {showArrow && (
             <ChevronDown
               className={`w-4 h-4 text-gray-300 shrink-0 ml-1 transition-transform ${open ? "rotate-180" : ""}`}
@@ -711,18 +729,31 @@ function FieldCell({
         {open && (
           <>
             <div className="fixed inset-0 z-20" onClick={onToggle} />
-            <div className="absolute left-0 top-full z-30 mt-1 min-w-full max-w-[220px] bg-white rounded-lg shadow-lg ring-1 ring-black/5 overflow-hidden">
+            <div className="absolute left-0 top-full z-30 mt-1 min-w-full max-w-[240px] bg-white rounded-lg shadow-lg ring-1 ring-black/5 overflow-hidden">
               {(field.options || []).map((opt, i) => {
                 const selected = value === opt;
+                const isTag = field.key === "source" && STORE_VISIT_SOURCES.includes(opt);
                 return (
                   <button
                     key={opt}
                     type="button"
                     onClick={() => onSelect(opt)}
                     className={`w-full px-4 py-2.5 text-left text-sm active:bg-gray-100 flex items-center justify-between gap-3 ${i > 0 ? "border-t border-gray-50" : ""}`}
-                    style={selected ? { color: ACCENT, fontWeight: 600 } : { color: "#374151" }}
+                    style={!isTag && selected ? { color: ACCENT, fontWeight: 600 } : { color: "#374151" }}
                   >
-                    {opt}
+                    {isTag ? (
+                      <span className="flex items-center gap-2">
+                        <span style={{ color: "#374151" }}>到店</span>
+                        <span
+                          className="inline-flex items-center px-1 rounded font-medium leading-4"
+                          style={{ background: ACCENT, color: "#fff", fontSize: "9px" }}
+                        >
+                          {opt.replace(/到店（(.+)）/, '$1')}
+                        </span>
+                      </span>
+                    ) : (
+                      opt
+                    )}
                     {selected && <Check className="w-4 h-4" style={{ color: ACCENT }} />}
                   </button>
                 );

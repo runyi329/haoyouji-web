@@ -40,6 +40,8 @@ export default function YabanPatientDetail() {
     source: row?.source || '—',
     netConsultant: row?.net_consultant || '',
     consultant: row?.consultant || '',
+    yabanUsername: row?.yaban_username || '',
+    yabanPassword: row?.yaban_password || '',
     clinic: clinicName,
     lastDoctor: row?.last_doctor || '—',
     lastVisit: row?.last_visit || '',
@@ -168,6 +170,8 @@ export default function YabanPatientDetail() {
             <InfoItem label="顾客类型" value={patient.tags.join('、') || '—'} span={2} />
             <InfoItem label="网电咨询师" value={patient.netConsultant || '—'} span={2} />
             <InfoItem label="咨询师" value={patient.consultant || '—'} span={2} />
+            <InfoItem label="牙伴账号" value={patient.yabanUsername || '—'} span={2} />
+            <InfoItem label="登录密码" value={patient.yabanPassword || '—'} span={2} />
             <InfoItem label="上次就诊医生" value={patient.lastDoctor} span={2} />
             <InfoItem label="上次就诊" value={patient.lastVisit || '—'} span={2} />
             <InfoItem label="健康标签" value={healthTags || '—'} span={4} />
