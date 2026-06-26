@@ -60,7 +60,7 @@ const PERSONAL_FIELDS: FieldDef[] = [
   { key: "zodiac", label: "星座", placeholder: "", kind: "input", readOnly: true, width: "zodiac" },
   { key: "chineseZodiac", label: "生肖", placeholder: "", kind: "input", readOnly: true, width: "zodiac" },
   { key: "mobile", label: "手机", placeholder: "请输入手机号", kind: "input", inputType: "tel", width: "full" },
-  { key: "occupation", label: "职业", placeholder: "搜索职业名称…", kind: "occupation", width: "half" },
+  { key: "occupation", label: "职业", placeholder: "AI搜索", kind: "occupation", width: "half" },
   { key: "medicalNo", label: "顾客编号", placeholder: "系统自动生成", kind: "input", readOnly: true, width: "half" },
   { key: "emergencyContact", label: "紧急联系人", placeholder: "姓名", kind: "input", width: "half" },
   { key: "emergencyRelation", label: "关系", placeholder: "请选择", kind: "select", options: RELATIONS, width: "half" },
