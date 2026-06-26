@@ -2294,40 +2294,71 @@ export const yabanCustomerRouter = router({
       const conn = await getDbConnection();
       if (!conn) return [];
       const TENANT_ID = await resolveTenantId(ctx);
-      let sql: string;
-      let params: any[];
-      if (input?.query && input.query.trim().length > 0) {
-        const keyword = `%${input.query.trim()}%`;
-        // 有关键词：搜索顾客+工作人员
-        sql = `SELECT DISTINCT c.id, c.name, c.mobile, c.nickname, NULL as staff_name
-          FROM yaban_customer c
-          WHERE c.tenant_id = ? AND (c.name LIKE ? OR c.mobile LIKE ? OR c.nickname LIKE ?)
-          UNION
-          SELECT DISTINCT u.id, u.name, u.phone as mobile, u.username as nickname, u.name as staff_name
-          FROM users u
-          JOIN yaban_clinic_member m ON m.user_id = u.id AND m.tenant_id = ? AND m.status = 'active'
-          WHERE u.name LIKE ? OR u.username LIKE ? OR u.phone LIKE ?
-          ORDER BY name LIMIT 30`;
-        params = [TENANT_ID, keyword, keyword, keyword, TENANT_ID, keyword, keyword, keyword];
+      const keyword = input?.query?.trim() ? `%${input.query.trim()}%` : null;
+
+      // 查询本院顾客
+      let custRows: any[] = [];
+      if (keyword) {
+        const [r] = (await (conn as any).execute(
+          `SELECT id, name, mobile, nickname FROM yaban_customer
+           WHERE tenant_id = ? AND (name LIKE ? OR mobile LIKE ? OR nickname LIKE ?)
+           LIMIT 30`,
+          [TENANT_ID, keyword, keyword, keyword]
+        )) as any;
+        custRows = r as any[];
       } else {
-        // 无关键词：返回全量顾客+工作人员（最夐50条）
-        sql = `SELECT DISTINCT c.id, c.name, c.mobile, c.nickname
-          FROM yaban_customer c
-          WHERE c.tenant_id = ? AND c.name IS NOT NULL AND c.name != ''
-          UNION
-          SELECT DISTINCT u.id, u.name, u.phone as mobile, u.username as nickname
-          FROM users u
-          JOIN yaban_clinic_member m ON m.user_id = u.id AND m.tenant_id = ? AND m.status = 'active'
-          WHERE u.name IS NOT NULL AND u.name != ''
-          ORDER BY name LIMIT 50`;
-        params = [TENANT_ID, TENANT_ID];
+        const [r] = (await (conn as any).execute(
+          `SELECT id, name, mobile, nickname FROM yaban_customer
+           WHERE tenant_id = ? AND name IS NOT NULL AND name != ''
+           LIMIT 50`,
+          [TENANT_ID]
+        )) as any;
+        custRows = r as any[];
       }
-      const [rows] = (await (conn as any).execute(sql, params)) as any;
-      return (rows as any[]).map((u) => ({
-        id: Number(u.id),
-        name: (u.name || u.nickname || "") as string,
-        mobile: (u.mobile || "") as string,
-      }));
+
+      // 查询本院员工（含院长，通过 yaban_clinic_member 关联 users）
+      let staffRows: any[] = [];
+      if (keyword) {
+        const [r] = (await (conn as any).execute(
+          `SELECT DISTINCT u.id, u.name COLLATE utf8mb4_0900_ai_ci AS name,
+                  u.phone AS mobile, u.username AS nickname
+           FROM users u
+           JOIN yaban_clinic_member m ON m.user_id = u.id AND m.tenant_id = ? AND m.status = 'active'
+           WHERE (u.name COLLATE utf8mb4_0900_ai_ci LIKE ?
+              OR u.username COLLATE utf8mb4_0900_ai_ci LIKE ?
+              OR u.phone COLLATE utf8mb4_0900_ai_ci LIKE ?)
+           LIMIT 20`,
+          [TENANT_ID, keyword, keyword, keyword]
+        )) as any;
+        staffRows = r as any[];
+      } else {
+        const [r] = (await (conn as any).execute(
+          `SELECT DISTINCT u.id, u.name COLLATE utf8mb4_0900_ai_ci AS name,
+                  u.phone AS mobile, u.username AS nickname
+           FROM users u
+           JOIN yaban_clinic_member m ON m.user_id = u.id AND m.tenant_id = ? AND m.status = 'active'
+           WHERE u.name IS NOT NULL AND u.name != ''
+           LIMIT 20`,
+          [TENANT_ID]
+        )) as any;
+        staffRows = r as any[];
+      }
+
+      // 合并去重（顾客优先），按姓名排序
+      const seen = new Set<number>();
+      const combined: { id: number; name: string; mobile: string }[] = [];
+      for (const row of [...custRows, ...staffRows]) {
+        const id = Number(row.id);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        combined.push({
+          id,
+          name: (row.name || row.nickname || "") as string,
+          mobile: (row.mobile || "") as string,
+        });
+      }
+      combined.sort((a, b) => a.name.localeCompare(b.name, "zh"));
+      return combined.slice(0, 50);
     }),
 
   // ============ 查询某顾客作为推荐人的所有代数被推荐人数 ============
