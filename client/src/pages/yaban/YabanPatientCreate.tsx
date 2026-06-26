@@ -7,7 +7,7 @@
  */
 import { useState, useEffect, useRef } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronDown, ChevronRight, XCircle, Check, UserRound, Camera, Copy, X, PlusCircle } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronLeft, XCircle, Check, UserRound, Camera, Copy, X, PlusCircle } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useYabanClinic } from "./useYabanClinic";
@@ -26,13 +26,7 @@ const ACCENT = "#1E88D6";
 // 选项配置
 const GENDERS = ["无", "男", "女"];
 const PATIENT_TYPES = ["电子", "临时", "普通"];
-// 顾客来源：「到店」展开为三个子选项（路过/家近/公司近）
-const SOURCES = [
-  "到店（路过）", "到店（家近）", "到店（公司近）",
-  "转介绍", "网络预约", "电话预约", "微信预约", "老顾客推荐", "其他",
-];
-// 需要以蓝色标签形式展示的“到店”类选项
-const STORE_VISIT_SOURCES = ["到店（路过）", "到店（家近）", "到店（公司近）"];
+// 顾客来源：改为两级动态加载，不再使用静态常量
 const NET_CONSULTANTS = ["杨文利", "侯睿", "洪紫钥"];
 const CONSULTANTS = ["洪紫钥", "杨文利", "侯睿"];
 const RELATIONS = ["配偶", "父母", "子女", "兄弟姐妹", "亲戚", "朋友", "其他"];
@@ -77,7 +71,8 @@ const PERSONAL_FIELDS: FieldDef[] = [
 ];
 const CUSTOMER_FIELDS: FieldDef[] = [
   { key: "patientType", label: "顾客类型", placeholder: "电子", kind: "select", options: PATIENT_TYPES, width: "half" },
-  { key: "source", label: "顾客来源", placeholder: "请选择", kind: "select", options: SOURCES, width: "half" },
+  // source 已改为自定义两级选择渲染
+  { key: "_sourceCustom", label: "顾客来源", placeholder: "请选择", kind: "readonly", width: "half" },
   { key: "netConsultant", label: "网电咨询", placeholder: "请选择", kind: "select", options: NET_CONSULTANTS, width: "half" },
   { key: "consultant", label: "咨询师", placeholder: "请选择", kind: "select", options: CONSULTANTS, width: "half" },
   { key: "_yabanAccount", label: "牙伴账号", placeholder: "", kind: "readonly", width: "half" },
@@ -167,11 +162,15 @@ export default function YabanPatientCreate() {
   const [randomPwd] = useState(() => String(Math.floor(100000 + Math.random() * 900000)));
   // 牙伴账号 / 初始密码提示弹窗
   const [yabanTipType, setYabanTipType] = useState<"account" | "password" | null>(null);
-  // 顾客来源：动态读取门店配置
+  // 顾客来源：动态读取门店配置（两级结构）
   const customerSourcesQuery = trpc.yabanCustomer.listCustomerSources.useQuery(undefined, {
     refetchOnWindowFocus: false,
   });
-  const dynamicSources = customerSourcesQuery.data?.map((s) => s.label) ?? SOURCES;
+  const dynamicSourceList = customerSourcesQuery.data ?? [];
+  // 来源两级选择弹窗状态
+  const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
+  // 当前选中的主标题（第一级）
+  const [selectedSourceId, setSelectedSourceId] = useState<number | null>(null);
 
   // 推荐人搜索
   const [referrerSearch, setReferrerSearch] = useState("");
@@ -259,6 +258,7 @@ export default function YabanPatientCreate() {
       occupation: d.occupation ?? "",
       emergencyPhone: d.emergency_phone ?? "",
       source: d.source ?? "",
+      sourceTag: d.source_tag ?? "",
       netConsultant: d.net_consultant ?? "",
       consultant: d.consultant ?? "",
       yabanUsername: d.yaban_username ?? "",
@@ -357,6 +357,7 @@ export default function YabanPatientCreate() {
       emergencyPhone: form.emergencyPhone,
       avatar: effectiveAvatar || undefined,
       source: form.source,
+      sourceTag: form.sourceTag || undefined,
       netConsultant: form.netConsultant,
       consultant: form.consultant,
       history: form.history,
@@ -631,15 +632,55 @@ export default function YabanPatientCreate() {
                   );
                 }
 
-                // 顾客来源字段动态替换 options
-                const fieldWithDynOpts = f.key === "source"
-                  ? { ...f, options: dynamicSources }
-                  : f;
+                // 顾客来源：自定义两级选择渲染
+                if (f.key === "_sourceCustom") {
+                  // 显示当前选中的来源（主标题 + 副标签）
+                  const srcLabel = form.source || "";
+                  const tagLabel = form.sourceTag || "";
+                  const srcObj = dynamicSourceList.find((s) => s.label === srcLabel);
+                  const tagObj = srcObj?.tags.find((t) => t.label === tagLabel);
+                  return (
+                    <div
+                      key="_sourceCustom"
+                      style={{ flex: "1 1 calc(50% - 6px)", minWidth: 150 }}
+                      className="py-1.5 flex items-center gap-2"
+                    >
+                      <label className="text-gray-700 text-base shrink-0" style={{ minWidth: "4em", display: "inline-block" }}>顾客来源</label>
+                      <div className="flex-1 min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => { setSelectedSourceId(null); setSourcePickerOpen(true); }}
+                          className="w-full flex items-center justify-between bg-gray-50 rounded-lg border border-[#D6E6F5] h-10 px-3 gap-2 active:bg-gray-100"
+                        >
+                          {srcLabel ? (
+                            <span className="flex items-center gap-1.5 flex-1 min-w-0">
+                              <span className="text-sm text-gray-800 truncate">{srcLabel}</span>
+                              {tagObj && (
+                                <span
+                                  className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium text-white flex-shrink-0"
+                                  style={{ backgroundColor: tagObj.color || "#9E9E9E" }}
+                                >
+                                  {tagLabel}
+                                </span>
+                              )}
+                              {tagLabel && !tagObj && (
+                                <span className="text-xs text-gray-400 flex-shrink-0">{tagLabel}</span>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-300">请选择</span>
+                          )}
+                          <ChevronDown className="w-4 h-4 text-gray-300 shrink-0" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
 
                 return (
                   <FieldCell
                     key={f.key}
-                    field={fieldWithDynOpts}
+                    field={f}
                     value={displayValue}
                     open={openKey === f.key}
                     onInput={(v) => setField(f.key, v)}
@@ -824,6 +865,144 @@ export default function YabanPatientCreate() {
                     </div>
                   ))}
                 </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 顾客来源两级选择弹窗 */}
+      {sourcePickerOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/40" onClick={() => { setSourcePickerOpen(false); setSelectedSourceId(null); }}>
+          <div
+            className="mt-auto bg-white rounded-t-2xl max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 弹窗头部 */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100">
+              <span className="text-base font-bold text-gray-800">
+                {selectedSourceId == null ? "选择来源" : "选择副标签"}
+              </span>
+              <button
+                onClick={() => {
+                  if (selectedSourceId != null) {
+                    setSelectedSourceId(null);
+                  } else {
+                    setSourcePickerOpen(false);
+                  }
+                }}
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100"
+              >
+                {selectedSourceId != null ? <ChevronLeft className="w-4 h-4 text-gray-500" /> : <X className="w-4 h-4 text-gray-500" />}
+              </button>
+            </div>
+
+            <div className="px-4 py-3">
+              {selectedSourceId == null ? (
+                /* 第一级：选主标题 */
+                <div className="space-y-1">
+                  {dynamicSourceList.length === 0 ? (
+                    <p className="text-sm text-gray-400 text-center py-6">暂无来源选项</p>
+                  ) : (
+                    dynamicSourceList.map((src) => (
+                      <button
+                        key={src.id}
+                        type="button"
+                        onClick={() => {
+                          if (src.tags.length === 0) {
+                            // 无副标签，直接确认
+                            setField("source", src.label);
+                            setField("sourceTag", "");
+                            setSourcePickerOpen(false);
+                            setSelectedSourceId(null);
+                          } else {
+                            // 有副标签，进入第二级
+                            setSelectedSourceId(src.id);
+                          }
+                        }}
+                        className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gray-50 active:bg-blue-50"
+                      >
+                        <span className="text-sm font-medium text-gray-800">{src.label}</span>
+                        <div className="flex items-center gap-2">
+                          {src.tags.slice(0, 3).map((t) => (
+                            <span
+                              key={t.id}
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium text-white"
+                              style={{ backgroundColor: t.color || "#9E9E9E" }}
+                            >
+                              {t.label}
+                            </span>
+                          ))}
+                          {src.tags.length > 3 && <span className="text-xs text-gray-400">+{src.tags.length - 3}</span>}
+                          {src.tags.length > 0 && <ChevronRight className="w-4 h-4 text-gray-300" />}
+                        </div>
+                      </button>
+                    ))
+                  )}
+                  {/* 清除选择 */}
+                  {form.source && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setField("source", "");
+                        setField("sourceTag", "");
+                        setSourcePickerOpen(false);
+                        setSelectedSourceId(null);
+                      }}
+                      className="w-full flex items-center justify-center py-3 text-sm text-red-400"
+                    >
+                      清除来源
+                    </button>
+                  )}
+                </div>
+              ) : (
+                /* 第二级：选副标签 */
+                (() => {
+                  const srcObj = dynamicSourceList.find((s) => s.id === selectedSourceId);
+                  if (!srcObj) return null;
+                  return (
+                    <div className="space-y-2">
+                      <p className="text-xs text-gray-400 mb-3">已选主标题：<span className="font-medium text-gray-700">{srcObj.label}</span></p>
+                      {/* 不选副标签（仅选主标题） */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setField("source", srcObj.label);
+                          setField("sourceTag", "");
+                          setSourcePickerOpen(false);
+                          setSelectedSourceId(null);
+                        }}
+                        className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gray-50 active:bg-blue-50 border-2 border-dashed border-gray-200"
+                      >
+                        <span className="text-sm text-gray-500">仅选「{srcObj.label}」，不选副标签</span>
+                      </button>
+                      {/* 副标签列表 */}
+                      {srcObj.tags.map((tag) => (
+                        <button
+                          key={tag.id}
+                          type="button"
+                          onClick={() => {
+                            setField("source", srcObj.label);
+                            setField("sourceTag", tag.label);
+                            setSourcePickerOpen(false);
+                            setSelectedSourceId(null);
+                          }}
+                          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-gray-50 active:bg-blue-50"
+                        >
+                          <span
+                            className="inline-flex items-center px-2.5 py-1 rounded-full text-sm font-medium text-white"
+                            style={{ backgroundColor: tag.color || "#9E9E9E" }}
+                          >
+                            {tag.label}
+                          </span>
+                          {form.source === srcObj.label && form.sourceTag === tag.label && (
+                            <Check className="w-4 h-4 ml-auto" style={{ color: ACCENT }} />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()
               )}
             </div>
           </div>
@@ -1173,21 +1352,9 @@ function FieldCell({
           style={genderStyle}
           className={`${boxCls} ${field.key === "gender" && value ? "justify-center" : "justify-between"} active:bg-gray-100`}
         >
-          {field.key === "source" && STORE_VISIT_SOURCES.includes(value) ? (
-            <span className="flex items-center gap-2">
-              <span className="text-gray-800 text-sm">到店</span>
-              <span
-                className="inline-flex items-center px-1 rounded font-medium leading-4"
-                style={{ background: ACCENT, color: "#fff", fontSize: "9px" }}
-              >
-                {value.replace(/到店（(.+)）/, '$1')}
-              </span>
-            </span>
-          ) : (
-            <span className={`truncate ${field.key === "gender" && value ? "text-center" : ""} ${value ? "text-gray-800" : "text-gray-300"}`}>
+          <span className={`truncate ${field.key === "gender" && value ? "text-center" : ""} ${value ? "text-gray-800" : "text-gray-300"}`}>
               {value || field.placeholder}
             </span>
-          )}
           {showArrow && (
             <ChevronDown
               className={`w-4 h-4 text-gray-300 shrink-0 ml-1 transition-transform ${open ? "rotate-180" : ""}`}
@@ -1200,28 +1367,15 @@ function FieldCell({
             <div className="absolute left-0 top-full z-30 mt-1 min-w-full max-w-[240px] bg-white rounded-lg shadow-lg ring-1 ring-black/5 overflow-hidden">
               {(field.options || []).map((opt, i) => {
                 const selected = value === opt;
-                const isTag = field.key === "source" && STORE_VISIT_SOURCES.includes(opt);
                 return (
                   <button
                     key={opt}
                     type="button"
                     onClick={() => onSelect(opt)}
                     className={`w-full px-4 py-2.5 text-left text-sm active:bg-gray-100 flex items-center justify-between gap-3 ${i > 0 ? "border-t border-gray-50" : ""}`}
-                    style={!isTag && selected ? { color: ACCENT, fontWeight: 600 } : { color: "#374151" }}
+                    style={selected ? { color: ACCENT, fontWeight: 600 } : { color: "#374151" }}
                   >
-                    {isTag ? (
-                      <span className="flex items-center gap-2">
-                        <span style={{ color: "#374151" }}>到店</span>
-                        <span
-                          className="inline-flex items-center px-1 rounded font-medium leading-4"
-                          style={{ background: ACCENT, color: "#fff", fontSize: "9px" }}
-                        >
-                          {opt.replace(/到店（(.+)）/, '$1')}
-                        </span>
-                      </span>
-                    ) : (
-                      opt
-                    )}
+                    {opt}
                     {selected && <Check className="w-4 h-4" style={{ color: ACCENT }} />}
                   </button>
                 );
