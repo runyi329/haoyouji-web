@@ -1023,7 +1023,7 @@ export const yabanCustomerRouter = router({
           [TENANT_ID, medicalNo]
         )) as any;
         if ((dupRows as any[]).length > 0) {
-          throw new TRPCError({ code: "CONFLICT", message: `顾客编号 ${medicalNo} 已存在，请更换` });
+          throw new TRPCError({ code: "CONFLICT", message: "顾客编号 " + medicalNo + " 已存在，请更换" });
         }
       }
 
@@ -1091,7 +1091,7 @@ export const yabanCustomerRouter = router({
             chief_complaint, health_status, drug_allergy, food_allergy,
             heart, hypertension, diabetes, kidney, infectious, bleeding, pregnant, medication,
             created_by)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?, ?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?)\`,
+           VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?, ?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?,?)`,
           [
             TENANT_ID,
             (input.name || "").trim(),
@@ -1159,7 +1159,7 @@ export const yabanCustomerRouter = router({
             continue;
           }
           if (dup) {
-            throw new TRPCError({ code: "CONFLICT", message: `顾客编号 ${medicalNo} 已存在，请更换` });
+            throw new TRPCError({ code: "CONFLICT", message: "顾客编号 " + medicalNo + " 已存在，请更换" });
           }
           throw e;
         }
@@ -2287,6 +2287,49 @@ export const yabanCustomerRouter = router({
       }));
     }),
 
+  // ============ 搜索顾客（关联亲友用，搜索所有顾客不限账号）============
+  searchCustomer: protectedProcedure
+    .input(z.object({ query: z.string().optional() }))
+    .query(async ({ input, ctx }) => {
+      const conn = await getDbConnection();
+      if (!conn) return [];
+      const TENANT_ID = await resolveTenantId(ctx);
+      let sql: string;
+      let params: any[];
+      if (input?.query && input.query.trim().length > 0) {
+        const keyword = `%${input.query.trim()}%`;
+        // 有关键词：搜索顾客+工作人员
+        sql = `SELECT DISTINCT c.id, c.name, c.mobile, c.nickname, NULL as staff_name
+          FROM yaban_customer c
+          WHERE c.tenant_id = ? AND (c.name LIKE ? OR c.mobile LIKE ? OR c.nickname LIKE ?)
+          UNION
+          SELECT DISTINCT u.id, u.name, u.phone as mobile, u.username as nickname, u.name as staff_name
+          FROM users u
+          JOIN yaban_clinic_member m ON m.user_id = u.id AND m.tenant_id = ? AND m.status = 'active'
+          WHERE u.name LIKE ? OR u.username LIKE ? OR u.phone LIKE ?
+          ORDER BY name LIMIT 30`;
+        params = [TENANT_ID, keyword, keyword, keyword, TENANT_ID, keyword, keyword, keyword];
+      } else {
+        // 无关键词：返回全量顾客+工作人员（最夐50条）
+        sql = `SELECT DISTINCT c.id, c.name, c.mobile, c.nickname
+          FROM yaban_customer c
+          WHERE c.tenant_id = ? AND c.name IS NOT NULL AND c.name != ''
+          UNION
+          SELECT DISTINCT u.id, u.name, u.phone as mobile, u.username as nickname
+          FROM users u
+          JOIN yaban_clinic_member m ON m.user_id = u.id AND m.tenant_id = ? AND m.status = 'active'
+          WHERE u.name IS NOT NULL AND u.name != ''
+          ORDER BY name LIMIT 50`;
+        params = [TENANT_ID, TENANT_ID];
+      }
+      const [rows] = (await (conn as any).execute(sql, params)) as any;
+      return (rows as any[]).map((u) => ({
+        id: Number(u.id),
+        name: (u.name || u.nickname || "") as string,
+        mobile: (u.mobile || "") as string,
+      }));
+    }),
+
   // ============ 查询某顾客作为推荐人的所有代数被推荐人数 ============
   getReferralCount: protectedProcedure
     .input(z.object({ customerId: z.number().int().positive() }))
@@ -2684,7 +2727,7 @@ export const yabanCustomerRouter = router({
       name: (m.name || m.username || "员工") as string,
       roleKey: m.role_key as string,
       roleName: (m.role_name || "") as string,
-    })),
+    }));
   }),
 
   // ============ 亲友关系类型配置（院长可自定义） ============

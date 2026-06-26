@@ -192,9 +192,9 @@ export default function YabanPatientCreate() {
   // 亲友关系下拉弹窗
   const [relationPickerOpen, setRelationPickerOpen] = useState(false);
   // 搜索亲友顾客
-  const relativeQuery = trpc.yabanCustomer.searchReferrer.useQuery(
-    { query: relativeSearch },
-    { enabled: relativePickerOpen && relativeSearch.length >= 1, refetchOnWindowFocus: false }
+  const relativeQuery = trpc.yabanCustomer.searchCustomer.useQuery(
+    { query: relativeSearch || undefined },
+    { enabled: relativePickerOpen, refetchOnWindowFocus: false }
   );
 
   // 推荐人搜索
@@ -737,22 +737,21 @@ export default function YabanPatientCreate() {
                             </div>
                           ) : !relativePickerOpen ? (
                             <button type="button" onClick={() => setRelativePickerOpen(true)} className="w-full flex items-center bg-gray-50 rounded-lg border border-[#D6E6F5] h-10 px-3">
-                              <span className="text-sm text-gray-300">搜索顾客姓名/手机号</span>
+                              <span className="text-sm text-gray-300">AI 搜索</span>
                             </button>
                           ) : (
                             <div className="relative">
                               <input
                                 autoFocus
                                 className="w-full h-10 px-3 rounded-lg border border-[#1E88D6] bg-white text-sm outline-none"
-                                placeholder="输入姓名或手机号..."
+                                placeholder="AI 搜索..."
                                 value={relativeSearch}
                                 onChange={(e) => setRelativeSearch(e.target.value)}
                               />
                               <button type="button" onClick={() => { setRelativePickerOpen(false); setRelativeSearch(""); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300">
                                 <XCircle size={15} />
                               </button>
-                              {relativeSearch.length >= 1 && (
-                                <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border border-gray-100 bg-white shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                              <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border border-gray-100 bg-white shadow-lg overflow-hidden max-h-48 overflow-y-auto">
                                   {relativeQuery.isLoading ? (
                                     <div className="text-center text-gray-400 text-sm py-4">搜索中...</div>
                                   ) : !relativeQuery.data?.length ? (
@@ -775,7 +774,6 @@ export default function YabanPatientCreate() {
                                     ))
                                   )}
                                 </div>
-                              )}
                             </div>
                           )}
                         </div>
@@ -794,12 +792,20 @@ export default function YabanPatientCreate() {
                             className="w-full flex items-center justify-between bg-gray-50 rounded-lg border border-[#D6E6F5] h-10 px-3 gap-2 active:bg-gray-100"
                           >
                             <span className={`text-sm ${form.relativeRelation ? 'text-gray-800' : 'text-gray-300'}`}>
-                              {form.relativeRelation || "请选择关系"}
+                              {form.relativeRelation || ""}
                             </span>
                             <ChevronDown className="w-4 h-4 text-gray-300 shrink-0" />
                           </button>
                           {relationPickerOpen && (
                             <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border border-gray-100 bg-white shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                              {/* 空选项，可取消已选关系 */}
+                              <button
+                                type="button"
+                                className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-50 border-b border-gray-50"
+                                onClick={() => { setField("relativeRelation", ""); setRelationPickerOpen(false); }}
+                              >
+                                &nbsp;
+                              </button>
                               {dynamicRelationTypes.map((rel: string) => (
                                 <button
                                   key={rel}
@@ -810,13 +816,6 @@ export default function YabanPatientCreate() {
                                   {rel}
                                 </button>
                               ))}
-                              <button
-                                type="button"
-                                className="w-full text-left px-4 py-2.5 text-sm text-gray-400 hover:bg-gray-50"
-                                onClick={() => { setField("relativeRelation", ""); setRelationPickerOpen(false); }}
-                              >
-                                清除
-                              </button>
                             </div>
                           )}
                         </div>
