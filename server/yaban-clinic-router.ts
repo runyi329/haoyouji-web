@@ -200,8 +200,7 @@ export const yabanClinicRouter = router({
         status: r.status || "",
       });
     }
-    // 公共演示院(tenant=9999)：所有登录用户均可见，承载演示数据。
-    // 演示院成员已收敛为 5 名演示医生，不再依赖成员关系判可见性，故此处无条件追加。
+    // 演示院(tenant=9999)：所有登录用户均可见，无条件追加
     const MODEL_TID = 9999;
     if (!seen.has(MODEL_TID)) {
       try {

@@ -70,6 +70,8 @@ export async function resolveTenantId(ctx: any): Promise<number> {
     // 若 header 指定了有效门店
     if (!isNaN(wanted) && wanted > 0) {
       if (isFounderLike) return wanted;
+      // 演示院(9999)：所有登录用户均可访问，无需成员资格
+      if (wanted === 9999) return 9999;
       // 校验成员资格
       const [m] = (await (conn as any).execute(
         `SELECT 1 FROM yaban_clinic_member WHERE user_id = ? AND tenant_id = ? AND status = 'active' LIMIT 1`,
