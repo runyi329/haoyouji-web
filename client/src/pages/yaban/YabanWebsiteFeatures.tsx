@@ -6,7 +6,7 @@
  */
 import { useLocation } from "wouter";
 import { useSmartBack } from "@/hooks/useSmartBack";
-import { ChevronLeft, ChevronRight, Tags } from "lucide-react";
+import { ChevronLeft, ChevronRight, Tags, Users } from "lucide-react";
 import YabanClinicHeader from "./YabanClinicHeader";
 
 export default function YabanWebsiteFeatures() {
@@ -14,6 +14,13 @@ export default function YabanWebsiteFeatures() {
   const goBack = useSmartBack("/yaban/profile");
 
   const items = [
+    {
+      key: "patient-type",
+      icon: <Users className="w-5 h-5 text-[#1E88D6]" />,
+      label: "顾客类型设置",
+      hint: "自定义新建顾客时的顾客类型选项",
+      onClick: () => navigate("/yaban/settings/patient-type"),
+    },
     {
       key: "customer-source",
       icon: <Tags className="w-5 h-5 text-[#1E88D6]" />,

@@ -71,10 +71,9 @@ const PERSONAL_FIELDS: FieldDef[] = [
 ];
 const CUSTOMER_FIELDS: FieldDef[] = [
   { key: "patientType", label: "顾客类型", placeholder: "电子", kind: "select", options: PATIENT_TYPES, width: "half" },
-  // source 已改为自定义两级选择渲染
-  { key: "_sourceCustom", label: "顾客来源", placeholder: "请选择", kind: "readonly", width: "half" },
-  { key: "netConsultant", label: "网电咨询", placeholder: "请选择", kind: "select", options: NET_CONSULTANTS, width: "half" },
   { key: "consultant", label: "咨询师", placeholder: "请选择", kind: "select", options: CONSULTANTS, width: "half" },
+  // source 已改为自定义两级选择渲染，单独占一行
+  { key: "_sourceCustom", label: "顾客来源", placeholder: "请选择", kind: "readonly", width: "full" },
   { key: "_yabanAccount", label: "牙伴账号", placeholder: "", kind: "readonly", width: "half" },
   { key: "_yabanPassword", label: "初始密码", placeholder: "", kind: "readonly", width: "half" },
   { key: "referrerUsername", label: "推荐人", placeholder: "搜索脉动网用户名", kind: "input", width: "full" },
@@ -162,6 +161,12 @@ export default function YabanPatientCreate() {
   const [randomPwd] = useState(() => String(Math.floor(100000 + Math.random() * 900000)));
   // 牙伴账号 / 初始密码提示弹窗
   const [yabanTipType, setYabanTipType] = useState<"account" | "password" | null>(null);
+  // 顾客类型：动态读取门店配置
+  const patientTypesQuery = trpc.yabanCustomer.listPatientTypes.useQuery(undefined, {
+    refetchOnWindowFocus: false,
+  });
+  const dynamicPatientTypes = patientTypesQuery.data?.map((t) => t.label) ?? ["电子", "临时", "普通"];
+
   // 顾客来源：动态读取门店配置（两级结构）
   const customerSourcesQuery = trpc.yabanCustomer.listCustomerSources.useQuery(undefined, {
     refetchOnWindowFocus: false,
@@ -499,6 +504,11 @@ export default function YabanPatientCreate() {
                 ? (form.yabanPassword || "")
                 : (mob.length >= 6 ? mob.slice(-6) : uname ? randomPwd : "");
               return CUSTOMER_FIELDS.map((f) => {
+                // 顾客类型：动态替换选项
+                const field = f.key === "patientType"
+                  ? { ...f, options: dynamicPatientTypes }
+                  : f;
+                const fResolved = field;
                 let displayValue = form[f.key] || "";
                 if (f.key === "_yabanAccount") displayValue = previewAccount;
                 if (f.key === "_yabanPassword") displayValue = previewPwd;
@@ -642,7 +652,7 @@ export default function YabanPatientCreate() {
                   return (
                     <div
                       key="_sourceCustom"
-                      style={{ flex: "1 1 calc(50% - 6px)", minWidth: 150 }}
+                      style={{ flex: "1 1 100%", minWidth: 0 }}
                       className="py-1.5 flex items-center gap-2"
                     >
                       <label className="text-gray-700 text-base shrink-0" style={{ minWidth: "4em", display: "inline-block" }}>顾客来源</label>
@@ -680,8 +690,8 @@ export default function YabanPatientCreate() {
                 return (
                   <FieldCell
                     key={f.key}
-                    field={f}
-                    value={displayValue}
+                     field={fResolved}
+                     value={displayValue}
                     open={openKey === f.key}
                     onInput={(v) => setField(f.key, v)}
                     onToggle={() => setOpenKey(openKey === f.key ? null : f.key)}

@@ -196,12 +196,12 @@ function SourceSettingDrawer({
               <span className="ml-1 text-gray-300">（可选，选来源时可进一步细分）</span>
             </p>
 
-            {source.tags.length === 0 && !addingTag && (
+            {(source.tags ?? []).length === 0 && !addingTag && (
               <p className="text-xs text-gray-300 mb-2">暂无副标签</p>
             )}
 
             <div className="space-y-2">
-              {source.tags.map((tag) => (
+              {(source.tags ?? []).map((tag) => (
                 <div key={tag.id} className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5">
                   {editingTagId === tag.id ? (
                     <div className="space-y-2">
@@ -307,7 +307,7 @@ export default function YabanCustomerSource() {
 
   const { data: sources = [], isLoading } = trpc.yabanCustomer.listCustomerSources.useQuery(
     undefined,
-    { enabled: currentTenantId != null }
+    { staleTime: 0 }
   );
 
   const addMutation = trpc.yabanCustomer.addCustomerSource.useMutation({
@@ -344,8 +344,9 @@ export default function YabanCustomerSource() {
   };
 
   const handleDelete = (src: Source) => {
-    const msg = src.tags.length > 0
-      ? `确定删除「${src.label}」及其 ${src.tags.length} 个副标签？`
+    const tags = src.tags ?? [];
+    const msg = tags.length > 0
+      ? `确定删除「${src.label}」及其 ${tags.length} 个副标签？`
       : `确定删除「${src.label}」？`;
     if (!window.confirm(msg)) return;
     deleteMutation.mutate({ id: src.id });
@@ -419,13 +420,13 @@ export default function YabanCustomerSource() {
                   <span className="flex-1 text-sm font-medium text-gray-800">{src.label}</span>
 
                   {/* 副标签预览（最多3个） */}
-                  {src.tags.length > 0 && (
+                  {(src.tags ?? []).length > 0 && (
                     <div className="flex items-center gap-1 flex-shrink-0">
-                      {src.tags.slice(0, 3).map((t) => (
+                      {(src.tags ?? []).slice(0, 3).map((t) => (
                         <TagPill key={t.id} label={t.label} color={t.color} />
                       ))}
-                      {src.tags.length > 3 && (
-                        <span className="text-xs text-gray-400">+{src.tags.length - 3}</span>
+                      {(src.tags ?? []).length > 3 && (
+                        <span className="text-xs text-gray-400">+{(src.tags ?? []).length - 3}</span>
                       )}
                     </div>
                   )}
@@ -452,8 +453,8 @@ export default function YabanCustomerSource() {
           )}
         </div>
 
-        {/* 新增区域 */}
-        {isAdding ? (
+        {/* 新增输入框（仅 isAdding 时显示） */}
+        {isAdding && (
           <div className="bg-white rounded-2xl px-4 py-3 shadow-sm flex items-center gap-2">
             <input
               autoFocus
@@ -477,14 +478,6 @@ export default function YabanCustomerSource() {
               <X className="w-4 h-4" />
             </button>
           </div>
-        ) : (
-          <button
-            onClick={() => setIsAdding(true)}
-            className="w-full flex items-center justify-center gap-2 bg-white rounded-2xl py-3.5 shadow-sm text-[#1E88D6] text-sm font-medium active:bg-gray-50"
-          >
-            <Plus className="w-4 h-4" />
-            添加来源渠道
-          </button>
         )}
       </div>
 

@@ -160,6 +160,35 @@ async function nextCustomerCode(conn: any, tenantId: number): Promise<string> {
 const DEFAULT_SOURCES = [
   "到店", "转介绍", "网络预约", "电话预约", "微信预约", "老顾客推荐", "其他",
 ];
+
+const DEFAULT_PATIENT_TYPES = ["电子", "临时", "普通"];
+
+async function ensurePatientTypeTable(conn: any, tenantId: number) {
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS yaban_patient_type (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      tenant_id INT NOT NULL DEFAULT 1,
+      label VARCHAR(64) NOT NULL,
+      sort_order INT NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      INDEX idx_tenant (tenant_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  // 如果该门店还没有任何顾客类型配置，插入预设选项
+  const [existing] = (await conn.execute(
+    `SELECT COUNT(*) AS cnt FROM yaban_patient_type WHERE tenant_id = ?`,
+    [tenantId]
+  )) as any;
+  if (Number((existing as any[])[0]?.cnt || 0) === 0) {
+    for (let i = 0; i < DEFAULT_PATIENT_TYPES.length; i++) {
+      await conn.execute(
+        `INSERT INTO yaban_patient_type (tenant_id, label, sort_order) VALUES (?, ?, ?)`,
+        [tenantId, DEFAULT_PATIENT_TYPES[i], i + 1]
+      );
+    }
+  }
+}
 async function ensureCustomerSourceTable(conn: any, tenantId: number) {
   // 主表
   await conn.execute(`
@@ -2337,6 +2366,93 @@ export const yabanCustomerRouter = router({
       return { success: true };
     }),
 
+  // ============ 顾客类型配置（院长可自定义） ============
+
+  /** 获取当前门店的顾客类型列表 */
+  listPatientTypes: protectedProcedure.query(async ({ ctx }) => {
+    const conn = await getDbConnection();
+    if (!conn) return [];
+    const TENANT_ID = await resolveTenantId(ctx);
+    await ensurePatientTypeTable(conn, TENANT_ID);
+    const [rows] = (await (conn as any).execute(
+      `SELECT id, label, sort_order FROM yaban_patient_type WHERE tenant_id = ? ORDER BY sort_order ASC, id ASC`,
+      [TENANT_ID]
+    )) as any;
+    return (rows as any[]).map((r) => ({
+      id: Number(r.id),
+      label: String(r.label),
+      sortOrder: Number(r.sort_order),
+    }));
+  }),
+
+  /** 新增顾客类型 */
+  addPatientType: protectedProcedure
+    .input(z.object({ label: z.string().min(1).max(32) }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error("数据库连接失败");
+      const TENANT_ID = await resolveTenantId(ctx);
+      await checkYabanPerm(ctx, "manage_customer_source", TENANT_ID);
+      await ensurePatientTypeTable(conn, TENANT_ID);
+      const [maxRows] = (await (conn as any).execute(
+        `SELECT COALESCE(MAX(sort_order), 0) AS mx FROM yaban_patient_type WHERE tenant_id = ?`,
+        [TENANT_ID]
+      )) as any;
+      const nextSort = Number((maxRows as any[])[0]?.mx || 0) + 1;
+      await (conn as any).execute(
+        `INSERT INTO yaban_patient_type (tenant_id, label, sort_order) VALUES (?, ?, ?)`,
+        [TENANT_ID, input.label.trim(), nextSort]
+      );
+      return { success: true };
+    }),
+
+  /** 修改顾客类型名称 */
+  updatePatientType: protectedProcedure
+    .input(z.object({ id: z.number().int().positive(), label: z.string().min(1).max(32) }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error("数据库连接失败");
+      const TENANT_ID = await resolveTenantId(ctx);
+      await checkYabanPerm(ctx, "manage_customer_source", TENANT_ID);
+      await (conn as any).execute(
+        `UPDATE yaban_patient_type SET label = ? WHERE id = ? AND tenant_id = ?`,
+        [input.label.trim(), input.id, TENANT_ID]
+      );
+      return { success: true };
+    }),
+
+  /** 删除顾客类型 */
+  deletePatientType: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error("数据库连接失败");
+      const TENANT_ID = await resolveTenantId(ctx);
+      await checkYabanPerm(ctx, "manage_customer_source", TENANT_ID);
+      await (conn as any).execute(
+        `DELETE FROM yaban_patient_type WHERE id = ? AND tenant_id = ?`,
+        [input.id, TENANT_ID]
+      );
+      return { success: true };
+    }),
+
+  /** 顾客类型排序 */
+  reorderPatientTypes: protectedProcedure
+    .input(z.object({ ids: z.array(z.number().int().positive()) }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error("数据库连接失败");
+      const TENANT_ID = await resolveTenantId(ctx);
+      await checkYabanPerm(ctx, "manage_customer_source", TENANT_ID);
+      for (let i = 0; i < input.ids.length; i++) {
+        await (conn as any).execute(
+          `UPDATE yaban_patient_type SET sort_order = ? WHERE id = ? AND tenant_id = ?`,
+          [i + 1, input.ids[i], TENANT_ID]
+        );
+      }
+      return { success: true };
+    }),
+
   // ============ 顾客来源配置（院长可自定义） ============
 
   /** 获取当前门店的顾客来源列表（每个来源包含其副标签数组） */
@@ -2366,7 +2482,7 @@ export const yabanCustomerRouter = router({
       label: String(r.label),
       color: r.color || null,
       sortOrder: Number(r.sort_order),
-      tags: tagMap[Number(r.id)] || [],
+      tags: tagMap[Number(r.id)] ?? [],
     }));
   }),
 
