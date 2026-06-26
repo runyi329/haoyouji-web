@@ -118,6 +118,7 @@ const InviteCode = lazy(() => import("./pages/InviteCode"));
 const InvitedFriendsList = lazy(() => import("./pages/InvitedFriendsList"));
 const Academy = lazy(() => import("./pages/Academy"));
 const AIManagement = lazy(() => import("./pages/AIManagement"));
+const InvoiceManagement = lazy(() => import("./pages/InvoiceManagement"));
 const Moments = lazy(() => import("./pages/Moments"));
 const AIChat = lazy(() => import("./pages/AIChat"));
 const Ledger = lazy(() => import("./pages/Ledger"));
@@ -489,6 +490,7 @@ function Router() {
         <Route path="/custom-showcase" component={CustomShowcase} />
         <Route path="/custom-showcase/share" component={CustomShowcaseShare} />
         <Route path="/parent/ai-management" component={AIManagement} />
+        <Route path="/parent/invoice-management" component={InvoiceManagement} />
         <Route path="/parent/points" component={PointsDetail} />
         <Route path="/parent/my-equity" component={MyEquityRedWhite} />
         <Route path="/parent/my-equity-old" component={MyEquity} />
