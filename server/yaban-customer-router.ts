@@ -892,7 +892,7 @@ export const yabanCustomerRouter = router({
            VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?)`,
           [
             TENANT_ID,
-            input.name.trim(),
+            (input.name || "").trim(),
             s(input.gender) || "无",
             s(input.birthday),
             ageNum,
@@ -903,7 +903,7 @@ export const yabanCustomerRouter = router({
             s(input.externalNo),
             s(input.nickname),
             s(input.email),
-            input.mobile.trim(),
+            (input.mobile || "").trim(),
             s(input.phone),
             s(input.region),
             s(input.address),
@@ -1003,7 +1003,7 @@ export const yabanCustomerRouter = router({
            heart = ?, hypertension = ?, diabetes = ?, kidney = ?, infectious = ?, bleeding = ?, pregnant = ?, medication = ?
          WHERE id = ? AND tenant_id = ?`,
         [
-          input.name.trim(),
+          (input.name || "").trim(),
           s(input.gender) || "无",
           s(input.birthday),
           ageNum,
@@ -1013,7 +1013,7 @@ export const yabanCustomerRouter = router({
           s(input.externalNo),
           s(input.nickname),
           s(input.email),
-          input.mobile.trim(),
+          (input.mobile || "").trim(),
           s(input.phone),
           s(input.region),
           s(input.address),
