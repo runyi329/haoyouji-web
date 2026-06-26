@@ -530,7 +530,7 @@ function FieldCell({
 
   // 同步外部 value 变化到输入框
   useEffect(() => {
-    setOccQuery(value);
+    setOccQuery(value || "");
   }, [value]);
 
   // 点击外部关闭下拉
@@ -558,7 +558,7 @@ function FieldCell({
               const q = e.target.value;
               setOccQuery(q);
               onInput(q);
-              if (q.trim()) {
+              if ((q || "").trim()) {
                 setOccSuggestions(searchOccupations(q, 12));
                 setOccOpen(true);
               } else {
@@ -567,7 +567,7 @@ function FieldCell({
               }
             }}
             onFocus={() => {
-              if (occQuery.trim()) {
+              if ((occQuery || "").trim()) {
                 setOccSuggestions(searchOccupations(occQuery, 12));
                 setOccOpen(true);
               }
