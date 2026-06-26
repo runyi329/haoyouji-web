@@ -161,16 +161,16 @@ export default function YabanPatientDetail() {
             <InfoItem label="手机" value={patient.mobile} span={2} />
             <InfoItem label="邮箱" value={patient.email} span={2} />
             <InfoItem label="紧急联系人" value={emergencyText} span={4} />
-            {patient.occupation && <InfoItem label="职业" value={patient.occupation} span={2} />}
-            {patient.licensePlate && <InfoItem label="车牌" value={patient.licensePlate} span={2} />}
+            <InfoItem label="职业" value={patient.occupation || '—'} span={2} />
+            <InfoItem label="车牌" value={patient.licensePlate || '—'} span={2} />
             <InfoItem label="地址" value={patient.address} span={4} />
             <InfoItem label="来源" value={patient.source} span={2} />
             <InfoItem label="顾客类型" value={patient.tags.join('、') || '—'} span={2} />
-            {patient.netConsultant && <InfoItem label="网电咨询师" value={patient.netConsultant} />}
-            {patient.consultant && <InfoItem label="咨询师" value={patient.consultant} />}
+            <InfoItem label="网电咨询师" value={patient.netConsultant || '—'} span={2} />
+            <InfoItem label="咨询师" value={patient.consultant || '—'} span={2} />
             <InfoItem label="上次就诊医生" value={patient.lastDoctor} span={2} />
             <InfoItem label="上次就诊" value={patient.lastVisit || '—'} span={2} />
-            {healthTags && <InfoItem label="健康标签" value={healthTags} span={4} />}
+            <InfoItem label="健康标签" value={healthTags || '—'} span={4} />
             <InfoItem label="备注" value={patient.remark} span={4} />
           </div>
         </div>
