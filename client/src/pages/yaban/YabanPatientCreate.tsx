@@ -523,7 +523,7 @@ function FieldCell({
   let control: JSX.Element;
 
   // 职业智能搜索控件内部状态
-  const [occQuery, setOccQuery] = useState(value);
+  const [occQuery, setOccQuery] = useState(value || "");
   const [occSuggestions, setOccSuggestions] = useState<string[]>([]);
   const [occOpen, setOccOpen] = useState(false);
   const occRef = useRef<HTMLDivElement>(null);
