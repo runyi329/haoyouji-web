@@ -905,7 +905,7 @@ export const yabanCustomerRouter = router({
           : parseInt(String(input.age), 10) || null;
 
       // 生成牙伴账号和密码
-      const yabanUsername = (input.name || "").trim();
+      const baseName = (input.name || "").trim();
       const mobile = (input.mobile || "").trim();
       // 优先用前端传来的密码（页面预生成），否则后端生成
       const yabanPassword = s(input.yabanPassword) ||
@@ -928,14 +928,27 @@ export const yabanCustomerRouter = router({
         }
       }
 
-      // 同步在 users 表创建脉动网账号（姓名已存则跳过）
+      // 同名账号自动加序号：张三 → 张三1 → 张三2 …
+      let yabanUsername = baseName;
       try {
         const passwordHash = await bcrypt.hash(yabanPassword, 10);
-        await (conn as any).execute(
-          `INSERT IGNORE INTO users (username, passwordHash, name, loginMethod, role, invited_by_user_id, createdAt, updatedAt, lastSignedIn)
-           VALUES (?, ?, ?, 'password', 'parent', ?, NOW(), NOW(), NOW())`,
-          [yabanUsername, passwordHash, yabanUsername, referrerUserId]
-        );
+        let inserted = false;
+        for (let seq = 0; seq <= 99; seq++) {
+          const candidate = seq === 0 ? baseName : `${baseName}${seq}`;
+          try {
+            const [res] = await (conn as any).execute(
+              `INSERT IGNORE INTO users (username, passwordHash, name, loginMethod, role, invited_by_user_id, createdAt, updatedAt, lastSignedIn)
+               VALUES (?, ?, ?, 'password', 'parent', ?, NOW(), NOW(), NOW())`,
+              [candidate, passwordHash, candidate, referrerUserId]
+            ) as any;
+            if (res.affectedRows > 0) {
+              yabanUsername = candidate;
+              inserted = true;
+              break;
+            }
+          } catch (_) { /* 继续尝试下一个序号 */ }
+        }
+        if (!inserted) yabanUsername = baseName; // 兜底：沿用原名
       } catch (e) {
         console.warn("[YabanCustomer] 同步创建 users 账号失败（可忽略）", e);
       }

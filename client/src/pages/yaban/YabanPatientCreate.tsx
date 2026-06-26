@@ -439,6 +439,7 @@ export default function YabanPatientCreate() {
                               setPlateCount((c) => Math.min(c + 1, 3) as 1 | 2 | 3);
                             }
                           } : undefined}
+                          extraWrapClass={idx > 0 ? "w-full" : undefined}
                         />
                       );
                     })}
@@ -504,18 +505,24 @@ export default function YabanPatientCreate() {
                         <label className="text-gray-700 text-base shrink-0" style={{ minWidth: "4em", display: "inline-block" }}>推荐人</label>
                         <div className="flex-1 min-w-0 relative">
                           <div className="flex items-center bg-gray-50 rounded-lg border border-[#D6E6F5] h-10 px-3 gap-2">
-                            <input
-                              type="text"
-                              className="flex-1 bg-transparent text-sm outline-none min-w-0"
-                              placeholder="输入搜索"
-                              value={form.referrerUsername || ""}
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                setField("referrerUsername", v);
-                                setReferrerSearch(v);
-                              }}
-                            />
-                            {form.referrerUsername && (
+                            {/* 已选中推荐人时显示账号能牌，未选中时显示搜索输入框 */}
+                            {form.referrerUsername && !referrerSearch ? (
+                              <span className="flex-1 text-sm text-gray-800 truncate">{form.referrerUsername}</span>
+                            ) : (
+                              <input
+                                type="text"
+                                className="flex-1 bg-transparent text-sm outline-none min-w-0"
+                                placeholder="输入搜索"
+                                value={referrerSearch}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  setReferrerSearch(v);
+                                  // 搜索时暂清空已选值，选中后才回填
+                                  if (!v) setField("referrerUsername", "");
+                                }}
+                              />
+                            )}
+                            {(form.referrerUsername || referrerSearch) && (
                               <button
                                 type="button"
                                 className="text-gray-300 flex-shrink-0"
@@ -837,6 +844,7 @@ function FieldCell({
   historyTags,
   onRemoveHistoryTag,
   onAddPlate,
+  extraWrapClass,
 }: {
   field: FieldDef;
   value: string;
@@ -853,6 +861,8 @@ function FieldCell({
   onRemoveHistoryTag?: (tag: string) => void;
   /** 车牌字段：传入则在复制按鈕右边显示「+」，点击后弹确认添加下一块车牌 */
   onAddPlate?: () => void;
+  /** 额外的外层 wrapper className，例如 w-full 强制另起一行 */
+  extraWrapClass?: string;
 }) {
   const basis = WIDTH_BASIS[field.width || "full"];
   // 长内容字段（多行文本、AI健康标签、地址）标题在上、控件占满整行；其余短字段标题与控件同行
@@ -1273,8 +1283,8 @@ function FieldCell({
 
   return (
     <div
-      style={{ flex: flexStyle, minWidth: minW, maxWidth: w === "date" ? 150 : "100%" }}
-      className={`py-1.5 flex items-center ${w === "tiny" || w === "zodiac" || w === "date" ? "gap-1.5" : "gap-2"}`}
+      style={extraWrapClass === "w-full" ? { flex: "1 1 100%", minWidth: "100%" } : { flex: flexStyle, minWidth: minW, maxWidth: w === "date" ? 150 : "100%" }}
+      className={`py-1.5 flex items-center ${w === "tiny" || w === "zodiac" || w === "date" ? "gap-1.5" : "gap-2"}${extraWrapClass ? ` ${extraWrapClass}` : ""}`}
     >
       {label}
       <div className="flex-1 min-w-0">{control}</div>
