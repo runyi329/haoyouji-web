@@ -950,12 +950,23 @@ async function calcCollateralRatio(
     const totalInterest = principal * (annualRate / 100) * holdDays / 365;
     const paidInterest = paidMap[Number(o.id)] || 0;
     const pendingInterest = Math.max(0, totalInterest - paidInterest);
-    const collateralRequired = principal + pendingInterest;
 
     // 买入价值（固定值）
     const buyPrice = parseFloat(String(o.buy_price ?? 0)) || 0;
     const buyQty = parseFloat(String(o.buy_quantity ?? 0)) || 0;
     const buyValue = buyPrice * buyQty;
+
+    // 当前市值（数量 × 实时价）
+    const coinUpper = (o.coin || "").toUpperCase().replace(/\s+/g, "");
+    const isStableCoin = ["USDT","U","USDC","USDT.E","USDC.E","BUSD","DAI"].includes(coinUpper);
+    const currentPrice = isStableCoin ? 1 : (getLatestPrice(coinUpper) || 0);
+    const currentValue = buyQty * currentPrice;
+
+    // 本金亏损 = max(0, 本金 - 当前市值)（与弹窗公式一致）
+    const principalLoss = Math.max(0, principal - currentValue);
+
+    // 缺口需求 = 本金亏损 + 待结利息
+    const collateralRequired = principalLoss + pendingInterest;
 
     totalCollateralValue += collateralValue;
     totalCollateralRequired += collateralRequired;
