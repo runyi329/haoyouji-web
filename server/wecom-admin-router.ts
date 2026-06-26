@@ -1143,12 +1143,13 @@ router.post("/api/admin/wecom/test-collateral-gap-send", requireSuperAdmin, asyn
     // 确定配置参数：优先用 cfg_id 查询，如果没有则用前端直接传入的参数
     let cfgUserid: string;
     let cfgMonitorUserId: number | null;
+    let cfgMonitorUserName: string;
     let cfgOrderScope: string;
     let cfgThreshold: string;
     let cfgMsgtype: string;
     let cfgContentTemplate: string;
 
-    const { content: bodyContent } = req.body;
+    const { content: bodyContent, monitor_user_name: bodyMonitorUserName } = req.body;
 
     if (cfg_id) {
       const [cfgRows] = await (conn as any).execute(
@@ -1158,6 +1159,7 @@ router.post("/api/admin/wecom/test-collateral-gap-send", requireSuperAdmin, asyn
       const cfg = (cfgRows as any[])[0];
       cfgUserid = cfg.userid;
       cfgMonitorUserId = cfg.monitor_user_id || null;
+      cfgMonitorUserName = cfg.monitor_user_name || "";
       cfgOrderScope = cfg.order_scope || "all";
       cfgThreshold = cfg.threshold || "";
       cfgMsgtype = cfg.msgtype || "text";
@@ -1167,6 +1169,7 @@ router.post("/api/admin/wecom/test-collateral-gap-send", requireSuperAdmin, asyn
       if (!bodyUserid) return res.status(400).json({ ok: false, error: "cfg_id 和 userid 至少传其中一个" });
       cfgUserid = bodyUserid;
       cfgMonitorUserId = monitor_user_id ? Number(monitor_user_id) : null;
+      cfgMonitorUserName = bodyMonitorUserName || "";
       cfgOrderScope = order_scope || "all";
       cfgThreshold = bodyThreshold || "";
       cfgMsgtype = bodyMsgtype || "text";
@@ -1185,7 +1188,7 @@ router.post("/api/admin/wecom/test-collateral-gap-send", requireSuperAdmin, asyn
     // 用配置里的 content 模板替换变量（与实际预警消息保持一致）
     const timeStr = new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
     const ratioStr = ratio !== null ? ratio.toFixed(2) : "N/A";
-    // 支持的模板变量：{ratio} {gap_amount} {total_buy_value} {order_count} {threshold} {time}
+    // 支持的模板变量：{ratio} {gap_amount} {total_buy_value} {order_count} {threshold} {time} {monitor_user_name}
     // 兼容旧变量：{order_id} {coin}
     const cfgContent = cfgContentTemplate || "";
     const renderedContent = cfgContent
@@ -1195,6 +1198,7 @@ router.post("/api/admin/wecom/test-collateral-gap-send", requireSuperAdmin, asyn
       .replace(/\{order_count\}/g, String(orderCount))
       .replace(/\{threshold\}/g, cfgThreshold || "未设置")
       .replace(/\{time\}/g, timeStr)
+      .replace(/\{monitor_user_name\}/g, cfgMonitorUserName || "未知用户")
       .replace(/\{order_id\}/g, `共${orderCount}张`)
       .replace(/\{coin\}/g, "多币种");
     const content = `[测试] ${renderedContent}`;

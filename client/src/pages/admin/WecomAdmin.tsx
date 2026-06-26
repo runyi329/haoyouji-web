@@ -7583,6 +7583,7 @@ function NotifyTab() {
           : {
               userid: selectedUser?.userid,
               monitor_user_id: rec.monitor_user_id || null,
+              monitor_user_name: rec.monitor_user_name || "",
               order_scope: rec.order_scope || "all",
               threshold: rec.threshold || "",
               msgtype: rec.msgtype || "text",
