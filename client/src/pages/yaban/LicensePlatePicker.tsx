@@ -5,7 +5,7 @@
  * 自动识别：输满6位=蓝牌，输第7位自动变绿牌
  */
 import React, { useState, useEffect } from "react";
-import { ChevronLeft, X, Check, Delete } from "lucide-react";
+import { ChevronLeft, X } from "lucide-react";
 
 const ACCENT = "#1E88D6";
 const ACCENT_LIGHT = "#E8F4FD";
@@ -61,7 +61,8 @@ export default function LicensePlatePicker({ open, value, onClose, onConfirm }: 
 
   const isGreen = plateChars.length === MAX_LEN;
   const fullPlate = province + plateChars.join("");
-  const canConfirm = !!(province && (plateChars.length === 6 || plateChars.length === MAX_LEN));
+  // 可确认：车牌位数完整(6或7)，或者完全为空（清空后保存=未填）
+  const canConfirm = !!(province && (plateChars.length === 0 || plateChars.length === 6 || plateChars.length === MAX_LEN));
 
   const plateBg = isGreen ? GREEN_BG : BLUE_BG;
   const plateText = isGreen ? GREEN_TEXT : BLUE_TEXT;
@@ -106,6 +107,11 @@ export default function LicensePlatePicker({ open, value, onClose, onConfirm }: 
     next.splice(delIdx, 1);
     setPlateChars(next);
     setFocusIdx(Math.max(0, delIdx === 0 ? 0 : delIdx - (focusIdx >= next.length ? 1 : 0)));
+  };
+
+  const handleClear = () => {
+    setPlateChars([]);
+    setFocusIdx(0);
   };
 
   const handleCellClick = (idx: number) => {
@@ -329,34 +335,44 @@ export default function LicensePlatePicker({ open, value, onClose, onConfirm }: 
               ))}
             </div>
           </div>
-          {/* 底部确认栏：固定在底部，不随键盘滚动 */}
+          {/* 底部按钮栏：删除 / 清空 / 确认，固定在底部 */}
           <div className="px-3 pt-3 pb-6 border-t border-gray-100 bg-white flex gap-2 flex-shrink-0">
               <button
                 type="button"
                 onClick={handleDelete}
                 disabled={plateChars.length === 0}
-                className="flex-1 h-12 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 transition-all active:scale-95"
+                className="flex-1 h-12 rounded-xl text-sm font-medium flex items-center justify-center transition-all active:scale-95"
                 style={{
                   background: "#F3F4F6",
                   color: plateChars.length === 0 ? "#D1D5DB" : "#374151",
                 }}
               >
-                <Delete className="w-4 h-4" />
                 删除
+              </button>
+              <button
+                type="button"
+                onClick={handleClear}
+                disabled={plateChars.length === 0}
+                className="flex-1 h-12 rounded-xl text-sm font-medium flex items-center justify-center transition-all active:scale-95"
+                style={{
+                  background: "#FFF1E8",
+                  color: plateChars.length === 0 ? "#E8CBB6" : "#E07B39",
+                }}
+              >
+                清空
               </button>
               <button
                 type="button"
                 onClick={() => canConfirm && onConfirm(fullPlate)}
                 disabled={!canConfirm}
-                className="flex-[2] h-12 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-95"
+                className="flex-[2] h-12 rounded-xl text-sm font-semibold flex items-center justify-center transition-all active:scale-95"
                 style={{
                   background: canConfirm ? (isGreen ? "#1a8a45" : ACCENT) : "#E5E7EB",
                   color: canConfirm ? "#fff" : "#9CA3AF",
                   boxShadow: canConfirm ? `0 2px 8px ${isGreen ? "#1a8a45" : ACCENT}44` : "none",
                 }}
               >
-                <Check className="w-4 h-4" />
-                确认车牌
+                确认
               </button>
             </div>
           </>
