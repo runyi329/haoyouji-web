@@ -4782,11 +4782,256 @@ export default function ProjectLanding() {
     return <NutritionClubPage />;
   }
 
+  if (slug === "proj_liulifan") {
+    return <LiuLifanPage />;
+  }
+
+  if (slug === "proj_tizong") {
+    return <WeightCoachPage />;
+  }
+
   // 其他 slug：占位页
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center" style={{ backgroundColor: "#F7F4F2" }}>
       <div className="text-4xl font-bold text-gray-300 mb-3">{slug}</div>
       <div className="text-gray-500 text-sm">该项目页面正在建设中</div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 刘力凡 · 奢贝美容院（粉色主题，channel_id=8）
+// ═══════════════════════════════════════════════════════════════
+const C_PINK = {
+  brand: "#E91E8C",
+  brandDeep: "#A0135F",
+  brandLight: "#FDE8F4",
+  bg: "#FDF5FA",
+  white: "#FFFFFF",
+  textMain: "#2E1A26",
+  textSub: "#8F6B7C",
+  line: "#EDD4E4",
+} as const;
+
+const KF_CHANNEL_ID_LLF = 8;
+const KF_CHANNEL_TYPE_LLF = "kf";
+
+export function LiuLifanPage({ onBack }: { onBack?: () => void } = {}) {
+  const [activeTab, setActiveTab] = useState<TabKey>("avatar");
+  const [tabCounts, setTabCounts] = useState<Partial<Record<TabKey, number>>>({});
+  const [channelName, setChannelName] = useState("刘力凡分身");
+  const [channelAvatarUrl, setChannelAvatarUrl] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    fetch(`/api/wecom/channels/${KF_CHANNEL_ID_LLF}`)
+      .then(r => r.json())
+      .then(ch => {
+        if (ch && ch.name) setChannelName(ch.name);
+        if (ch && ch.avatar_url) setChannelAvatarUrl(ch.avatar_url);
+      })
+      .catch(() => {});
+
+    Promise.all([
+      fetch(`/api/wecom/prompt-rules?channel_id=${KF_CHANNEL_ID_LLF}`).then(r => r.json()).then(d => d.ok ? (d.rules || []).filter((r: any) => r.enabled).length : 0).catch(() => 0),
+      fetch(`/api/wecom/custom-rules?channel_type=${KF_CHANNEL_TYPE_LLF}`).then(r => r.json()).then(d => d.ok ? (d.rules || []).length : 0).catch(() => 0),
+      fetch(`/api/wecom/ch/kb/stats?channel_id=${KF_CHANNEL_ID_LLF}`).then(r => r.json()).then(d => d.item_count || 0).catch(() => 0),
+      fetch(`/api/wecom/ch/logs?channel_id=${KF_CHANNEL_ID_LLF}&channel_type=${KF_CHANNEL_TYPE_LLF}&limit=1`).then(r => r.json()).then(d => d.total || 0).catch(() => 0),
+      fetch(`/api/wecom/corpus/stats?channel_id=${KF_CHANNEL_ID_LLF}`).then(r => r.json()).then(d => d.ok ? (d.quality_count || 0) : 0).catch(() => 0),
+    ]).then(([config, rules, aibrain, customers, corpusQuality]) => {
+      const avatarScore = aibrain * 1 + corpusQuality * 3 + customers * 0.5;
+      let avatarLevel = 1;
+      const lvThresholds = [0, 100, 300, 700, 1500, 3000];
+      for (let i = lvThresholds.length - 1; i >= 0; i--) { if (avatarScore >= lvThresholds[i]) { avatarLevel = i + 1; break; } }
+      setTabCounts({ config, rules, aibrain, customers, avatar: avatarLevel });
+    });
+  }, []);
+
+  // 用粉色主题覆盖全局 C，通过内联 style 传递
+  const CP = C_PINK;
+
+  return (
+    <div
+      className="min-h-screen flex flex-col"
+      style={{
+        maxWidth: 480,
+        margin: "0 auto",
+        backgroundColor: CP.bg,
+        fontFamily: "'Noto Sans SC', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif",
+      }}
+    >
+      <header className="sticky top-0 z-10" style={{ background: `linear-gradient(135deg,${CP.brandDeep} 0%,${CP.brand} 100%)` }}>
+        <div className="flex items-center justify-between px-4" style={{ height: 52 }}>
+          <button onClick={() => onBack ? onBack() : window.history.back()} className="p-1.5 rounded-full" style={{ color: "rgba(255,255,255,0.8)" }}>
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div className="text-center">
+            <div className="text-[15px] font-bold tracking-wide text-white leading-tight">数字分身 · {channelName}</div>
+          </div>
+          <button onClick={() => setRefreshKey(k => k + 1)} className="text-xs px-2.5 py-1 rounded-lg" style={{ backgroundColor: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.9)' }}>刷新</button>
+        </div>
+        <div className="mx-4 mb-3 rounded-xl px-4 py-3 flex items-center justify-between" style={{ backgroundColor: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.18)' }}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+              {channelAvatarUrl ? <img src={channelAvatarUrl} alt="分身" className="w-full h-full object-cover" /> : <Bot className="w-4 h-4 text-white" />}
+            </div>
+            <div>
+              <div className="text-white text-[13px] font-semibold leading-tight">{channelName}</div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="sticky top-[116px] z-10" style={{ backgroundColor: CP.bg, borderBottom: `1px solid ${CP.line}` }}>
+        <div className="flex">
+          {TABS.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+              className="flex-1 flex flex-col items-center justify-center gap-0.5 text-xs py-2.5 px-1 font-medium transition-colors"
+              style={{
+                ...(activeTab === t.key ? { color: CP.brand, borderBottom: `2px solid ${CP.brand}` } : { color: CP.textSub, borderBottom: '2px solid transparent' }),
+                borderRight: t.key !== 'customers' ? `1px solid ${CP.line}` : 'none',
+                fontSize: t.key === 'aibrain' ? 11 : undefined,
+                minWidth: t.key === 'aibrain' ? 70 : undefined,
+              }}
+            >
+              <span>{t.label}</span>
+              <span className="text-[11px] leading-none font-semibold px-1.5 py-0.5 rounded-full mt-0.5"
+                style={activeTab === t.key ? { backgroundColor: CP.brandLight, color: CP.brand } : { backgroundColor: 'rgba(0,0,0,0.06)', color: CP.textSub }}>
+                {t.key === 'avatar'
+                  ? (() => { const eq = (tabCounts['aibrain'] || 0) + (tabCounts['customers'] || 0) * 0.1; const pct = Math.min(100, Math.round((eq / 10000) * 100)); return `${pct}%`; })()
+                  : (tabCounts[t.key] !== undefined ? tabCounts[t.key] : '-')}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <main className="flex-1 overflow-y-auto px-4 pt-2">
+        {activeTab === "avatar" && <AvatarGrowthTab onProfileUpdate={(name, url) => { setChannelName(name); setChannelAvatarUrl(url); }} />}
+        {activeTab === "config" && <ConfigTab onProfileUpdate={(name, avatarUrl) => { setChannelName(name); setChannelAvatarUrl(avatarUrl); }} />}
+        {activeTab === "aibrain" && <AIBrainTab refreshKey={refreshKey} />}
+        {activeTab === "customers" && <CustomerDataTab />}
+      </main>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 体重管理教练（蓝色主题，channel_id=4）
+// ═══════════════════════════════════════════════════════════════
+const C_BLUE = {
+  brand: "#1976D2",
+  brandDeep: "#0D47A1",
+  brandLight: "#E3F2FD",
+  bg: "#F5F9FF",
+  white: "#FFFFFF",
+  textMain: "#1A2233",
+  textSub: "#5B7A9D",
+  line: "#BBDEFB",
+} as const;
+
+const KF_CHANNEL_ID_TZ = 4;
+const KF_CHANNEL_TYPE_TZ = "kf";
+
+export function WeightCoachPage({ onBack }: { onBack?: () => void } = {}) {
+  const [activeTab, setActiveTab] = useState<TabKey>("avatar");
+  const [tabCounts, setTabCounts] = useState<Partial<Record<TabKey, number>>>({});
+  const [channelName, setChannelName] = useState("体重管理教练");
+  const [channelAvatarUrl, setChannelAvatarUrl] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    fetch(`/api/wecom/channels/${KF_CHANNEL_ID_TZ}`)
+      .then(r => r.json())
+      .then(ch => {
+        if (ch && ch.name) setChannelName(ch.name);
+        if (ch && ch.avatar_url) setChannelAvatarUrl(ch.avatar_url);
+      })
+      .catch(() => {});
+
+    Promise.all([
+      fetch(`/api/wecom/prompt-rules?channel_id=${KF_CHANNEL_ID_TZ}`).then(r => r.json()).then(d => d.ok ? (d.rules || []).filter((r: any) => r.enabled).length : 0).catch(() => 0),
+      fetch(`/api/wecom/custom-rules?channel_type=${KF_CHANNEL_TYPE_TZ}`).then(r => r.json()).then(d => d.ok ? (d.rules || []).length : 0).catch(() => 0),
+      fetch(`/api/wecom/ch/kb/stats?channel_id=${KF_CHANNEL_ID_TZ}`).then(r => r.json()).then(d => d.item_count || 0).catch(() => 0),
+      fetch(`/api/wecom/ch/logs?channel_id=${KF_CHANNEL_ID_TZ}&channel_type=${KF_CHANNEL_TYPE_TZ}&limit=1`).then(r => r.json()).then(d => d.total || 0).catch(() => 0),
+      fetch(`/api/wecom/corpus/stats?channel_id=${KF_CHANNEL_ID_TZ}`).then(r => r.json()).then(d => d.ok ? (d.quality_count || 0) : 0).catch(() => 0),
+    ]).then(([config, rules, aibrain, customers, corpusQuality]) => {
+      const avatarScore = aibrain * 1 + corpusQuality * 3 + customers * 0.5;
+      let avatarLevel = 1;
+      const lvThresholds = [0, 100, 300, 700, 1500, 3000];
+      for (let i = lvThresholds.length - 1; i >= 0; i--) { if (avatarScore >= lvThresholds[i]) { avatarLevel = i + 1; break; } }
+      setTabCounts({ config, rules, aibrain, customers, avatar: avatarLevel });
+    });
+  }, []);
+
+  const CB = C_BLUE;
+
+  return (
+    <div
+      className="min-h-screen flex flex-col"
+      style={{
+        maxWidth: 480,
+        margin: "0 auto",
+        backgroundColor: CB.bg,
+        fontFamily: "'Noto Sans SC', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif",
+      }}
+    >
+      <header className="sticky top-0 z-10" style={{ background: `linear-gradient(135deg,${CB.brandDeep} 0%,${CB.brand} 100%)` }}>
+        <div className="flex items-center justify-between px-4" style={{ height: 52 }}>
+          <button onClick={() => onBack ? onBack() : window.history.back()} className="p-1.5 rounded-full" style={{ color: "rgba(255,255,255,0.8)" }}>
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div className="text-center">
+            <div className="text-[15px] font-bold tracking-wide text-white leading-tight">数字分身 · {channelName}</div>
+          </div>
+          <button onClick={() => setRefreshKey(k => k + 1)} className="text-xs px-2.5 py-1 rounded-lg" style={{ backgroundColor: 'rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.9)' }}>刷新</button>
+        </div>
+        <div className="mx-4 mb-3 rounded-xl px-4 py-3 flex items-center justify-between" style={{ backgroundColor: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.18)' }}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
+              {channelAvatarUrl ? <img src={channelAvatarUrl} alt="分身" className="w-full h-full object-cover" /> : <Bot className="w-4 h-4 text-white" />}
+            </div>
+            <div>
+              <div className="text-white text-[13px] font-semibold leading-tight">{channelName}</div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="sticky top-[116px] z-10" style={{ backgroundColor: CB.bg, borderBottom: `1px solid ${CB.line}` }}>
+        <div className="flex">
+          {TABS.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+              className="flex-1 flex flex-col items-center justify-center gap-0.5 text-xs py-2.5 px-1 font-medium transition-colors"
+              style={{
+                ...(activeTab === t.key ? { color: CB.brand, borderBottom: `2px solid ${CB.brand}` } : { color: CB.textSub, borderBottom: '2px solid transparent' }),
+                borderRight: t.key !== 'customers' ? `1px solid ${CB.line}` : 'none',
+                fontSize: t.key === 'aibrain' ? 11 : undefined,
+                minWidth: t.key === 'aibrain' ? 70 : undefined,
+              }}
+            >
+              <span>{t.label}</span>
+              <span className="text-[11px] leading-none font-semibold px-1.5 py-0.5 rounded-full mt-0.5"
+                style={activeTab === t.key ? { backgroundColor: CB.brandLight, color: CB.brand } : { backgroundColor: 'rgba(0,0,0,0.06)', color: CB.textSub }}>
+                {t.key === 'avatar'
+                  ? (() => { const eq = (tabCounts['aibrain'] || 0) + (tabCounts['customers'] || 0) * 0.1; const pct = Math.min(100, Math.round((eq / 10000) * 100)); return `${pct}%`; })()
+                  : (tabCounts[t.key] !== undefined ? tabCounts[t.key] : '-')}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <main className="flex-1 overflow-y-auto px-4 pt-2">
+        {activeTab === "avatar" && <AvatarGrowthTab onProfileUpdate={(name, url) => { setChannelName(name); setChannelAvatarUrl(url); }} />}
+        {activeTab === "config" && <ConfigTab onProfileUpdate={(name, avatarUrl) => { setChannelName(name); setChannelAvatarUrl(avatarUrl); }} />}
+        {activeTab === "aibrain" && <AIBrainTab refreshKey={refreshKey} />}
+        {activeTab === "customers" && <CustomerDataTab />}
+      </main>
     </div>
   );
 }
