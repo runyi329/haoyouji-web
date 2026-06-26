@@ -262,17 +262,13 @@ export default function YabanPatientCreate() {
 
   const handleSave = () => {
     if (createMutation.isPending || updateMutation.isPending) return;
-    // 校验必填字段
-    const missing: string[] = [];
-    ALL_FIELDS.forEach((f) => {
-      if (f.required && !form[f.key]?.trim()) {
-        missing.push(f.label);
-      }
-    });
-    if (missing.length > 0) {
-      toast.error(`请完善必填项：${missing.slice(0, 3).join("、")}${missing.length > 3 ? " 等" : ""}`);
+    // 编辑模式下，若顾客数据尚未加载完成，禁止保存
+    if (isEdit && !detailQuery.data) {
+      toast.error("数据加载中，请稍候再保存");
       return;
     }
+    // 姓名必填（按钮已禁用，此处作二次保护）
+    if (!form.name?.trim()) return;
     const payload = {
       name: form.name,
       gender: form.gender,
@@ -413,19 +409,27 @@ export default function YabanPatientCreate() {
         className="sticky bottom-0 left-0 right-0 px-4 pt-3 pb-8 bg-white border-t border-gray-100"
         style={{ boxShadow: "0 -2px 12px rgba(0,0,0,0.06)" }}
       >
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={createMutation.isPending || updateMutation.isPending}
-          className="w-full h-12 rounded-xl text-base font-semibold text-white flex items-center justify-center gap-2 transition-all active:scale-95"
-          style={{
-            background: createMutation.isPending || updateMutation.isPending ? "#93C5FD" : ACCENT,
-            boxShadow: `0 3px 12px ${ACCENT}55`,
-          }}
-        >
-          <Check className="w-5 h-5" />
-          {createMutation.isPending || updateMutation.isPending ? "保存中…" : "保存"}
-        </button>
+        {(() => {
+          const isBusy = createMutation.isPending || updateMutation.isPending;
+          const canSave = !!(form.name?.trim());
+          const isDisabled = isBusy || !canSave;
+          return (
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={isDisabled}
+              className="w-full h-12 rounded-xl text-base font-semibold text-white flex items-center justify-center gap-2 transition-all active:scale-95"
+              style={{
+                background: isDisabled ? "#C0C0C0" : ACCENT,
+                boxShadow: isDisabled ? "none" : `0 3px 12px ${ACCENT}55`,
+                cursor: isDisabled ? "not-allowed" : "pointer",
+              }}
+            >
+              <Check className="w-5 h-5" />
+              {isBusy ? "保存中…" : "保存"}
+            </button>
+          );
+        })()}
       </div>
 
       {/* AI健康标签选择器 */}
