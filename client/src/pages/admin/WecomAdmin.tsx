@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import WecomBindingManager from "./WecomBindingManager";
 import WecomRoutePanel from "@/components/WecomRoutePanel";
-import { NutritionClubPage } from "./ProjectLanding";
+import { NutritionClubPage, LiuLifanPage, WeightCoachPage } from "./ProjectLanding";
 
 // ─── 类型定义 ────────────────────────────────────────────────────────────────
 
@@ -3742,6 +3742,12 @@ function ChannelTab() {
   if (selectedChannel) {
     if (selectedChannel.id === 3) {
       return <NutritionClubPage onBack={() => setSelectedChannel(null)} />;
+    }
+    if (selectedChannel.id === 8) {
+      return <LiuLifanPage onBack={() => setSelectedChannel(null)} />;
+    }
+    if (selectedChannel.id === 4) {
+      return <WeightCoachPage onBack={() => setSelectedChannel(null)} />;
     }
     return (
       <div>
