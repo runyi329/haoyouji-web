@@ -731,7 +731,7 @@ interface KnowledgeBase {
 // ═══════════════════════════════════════════════════════════════
 // 配置 Tab（完整版：渠道状态 + 欢迎语 + 等待提示 + AI 指令 + 模型 + 消息抄送）
 // ═══════════════════════════════════════════════════════════════
-function ConfigTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avatarUrl: string) => void } = {}) {
+function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_TYPE }: { onProfileUpdate?: (name: string, avatarUrl: string) => void; channelId?: number; channelType?: string } = {}) {
   const [enabled, setEnabled] = useState(true);
   const [showGuide, setShowGuide] = useState(false);
   const [welcomeMsg, setWelcomeMsg] = useState("");
@@ -773,9 +773,9 @@ function ConfigTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avata
       setLoading(true);
       try {
         const [cfgRes, kbsRes, chCfgRes, channelRes] = await Promise.all([
-          fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/config`),
+          fetch(`/api/wecom/channels/${channelId}/config`),
           fetch(`/api/wecom/knowledge-bases`),
-          fetch(`/api/wecom/channel-config/${KF_CHANNEL_ID}`),
+          fetch(`/api/wecom/channel-config/${channelId}`),
           fetch(`/api/wecom/channels`),
         ]);
         const cfg = await cfgRes.json();
@@ -808,7 +808,7 @@ function ConfigTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avata
         setCorpId("wwbbaccf1da5f886d9");
         // 加载分身名称和头像
         if (channelList?.channels) {
-          const ch = channelList.channels.find((c: any) => c.id === KF_CHANNEL_ID);
+          const ch = channelList.channels.find((c: any) => c.id === channelId);
           if (ch) {
             setAvatarName(ch.name || "营养顾问分身");
             setAvatarUrl(ch.avatar_url || "");
@@ -827,7 +827,7 @@ function ConfigTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avata
     setSaving(true);
     try {
       // 保存渠道配置（含知识库绑定）
-      const r = await fetch(`/api/wecom/channel-config/${KF_CHANNEL_ID}`, {
+      const r = await fetch(`/api/wecom/channel-config/${channelId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -858,7 +858,7 @@ function ConfigTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avata
     const newVal = !enabled;
     setEnabled(newVal);
     try {
-      await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/config`, {
+      await fetch(`/api/wecom/channels/${channelId}/config`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ config: { enabled: newVal } }),
@@ -875,9 +875,9 @@ function ConfigTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avata
     setSavingProfile(true);
     try {
       // 先获取当前渠道完整信息再更新
-      const r = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}`);
+      const r = await fetch(`/api/wecom/channels/${channelId}`);
       const ch = r.ok ? await r.json() : {};
-      const res = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}`, {
+      const res = await fetch(`/api/wecom/channels/${channelId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -903,9 +903,9 @@ function ConfigTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avata
   async function handleSaveAvatar() {
     setSavingProfile(true);
     try {
-      const r = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}`);
+      const r = await fetch(`/api/wecom/channels/${channelId}`);
       const ch = r.ok ? await r.json() : {};
-      const res = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}`, {
+      const res = await fetch(`/api/wecom/channels/${channelId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1411,7 +1411,7 @@ function RulesTab() {
   const loadRules = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/wecom/custom-rules?channel_type=${KF_CHANNEL_TYPE}`);
+      const res = await fetch(`/api/wecom/custom-rules?channel_type=${channelType}`);
       const d = await res.json();
       if (d.ok) setRules(d.rules || []);
     } catch { toast.error("加载失败"); }
@@ -1420,7 +1420,7 @@ function RulesTab() {
 
   const loadUsers = async () => {
     try {
-      const res = await fetch(`/api/wecom/ch/users?channel_type=${KF_CHANNEL_TYPE}`);
+      const res = await fetch(`/api/wecom/ch/users?channel_type=${channelType}`);
       const d = await res.json();
       if (d.ok) setUsers(d.users || []);
     } catch {}
@@ -1447,7 +1447,7 @@ function RulesTab() {
     if (!form.trigger_intent.trim()) { toast.error("请输入触发意图描述"); return; }
     setSaving(true);
     try {
-      const body = { ...form, target_user_ids: form.target_type === "all" ? [] : form.selected_user_ids, channel_type: KF_CHANNEL_TYPE, enabled: 1 };
+      const body = { ...form, target_user_ids: form.target_type === "all" ? [] : form.selected_user_ids, channel_type: channelType, enabled: 1 };
       let res;
       if (editingRule) {
         res = await fetch(`/api/wecom/custom-rules/${editingRule.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -1847,7 +1847,7 @@ function RadarChart({ scores }: { scores: { label: string; score: number; icon: 
   );
 }
 
-function AvatarGrowthTab({ onProfileUpdate }: { onProfileUpdate?: (name: string, avatarUrl: string) => void } = {}) {
+function AvatarGrowthTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_TYPE }: { onProfileUpdate?: (name: string, avatarUrl: string) => void; channelId?: number; channelType?: string } = {}) {
   const [loading, setLoading] = useState(true);
   const [kbCount, setKbCount] = useState(0);
   const [kbFileCount, setKbFileCount] = useState(0);
@@ -1875,7 +1875,7 @@ function AvatarGrowthTab({ onProfileUpdate }: { onProfileUpdate?: (name: string,
 
   useEffect(() => {
     // 加载分身名称和头像
-    fetch(`/api/wecom/channels/${KF_CHANNEL_ID}`)
+    fetch(`/api/wecom/channels/${channelId}`)
       .then(r => r.json())
       .then(ch => {
         if (ch && ch.name) setAvatarName(ch.name);
@@ -1884,11 +1884,11 @@ function AvatarGrowthTab({ onProfileUpdate }: { onProfileUpdate?: (name: string,
       .catch(() => {});
 
     Promise.all([
-      fetch(`/api/wecom/ch/kb/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).catch(() => ({})),
+      fetch(`/api/wecom/ch/kb/stats?channel_id=${channelId}`).then(r => r.json()).catch(() => ({})),
       fetch(`/api/wecom/ch/kb/stats?channel_type=kf`).then(r => r.json()).catch(() => ({})),
-      fetch(`/api/wecom/channel-config/${KF_CHANNEL_ID}`).then(r => r.json()).catch(() => ({})),
-      fetch(`/api/wecom/corpus/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).catch(() => ({})),
-      fetch(`/api/wecom/ch/logs?channel_id=${KF_CHANNEL_ID}&channel_type=${KF_CHANNEL_TYPE}&limit=1`).then(r => r.json()).catch(() => ({})),
+      fetch(`/api/wecom/channel-config/${channelId}`).then(r => r.json()).catch(() => ({})),
+      fetch(`/api/wecom/corpus/stats?channel_id=${channelId}`).then(r => r.json()).catch(() => ({})),
+      fetch(`/api/wecom/ch/logs?channel_id=${channelId}&channel_type=${channelType}&limit=1`).then(r => r.json()).catch(() => ({})),
     ]).then(([kb, sysKb, cfg, corpus, logs]) => {
       const kb_ = kb.item_count || 0;
       const kbFile_ = kb.file_count || 0;
@@ -1947,7 +1947,7 @@ function AvatarGrowthTab({ onProfileUpdate }: { onProfileUpdate?: (name: string,
     try {
       const r = await fetch('/api/wecom/ch/kb/add-item', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel_id: KF_CHANNEL_ID, content: feedText.trim(), source: 'manual' }),
+        body: JSON.stringify({ channel_id: channelId, content: feedText.trim(), source: 'manual' }),
       });
       const d = await r.json();
       if (d.ok) {
@@ -1969,7 +1969,7 @@ function AvatarGrowthTab({ onProfileUpdate }: { onProfileUpdate?: (name: string,
     try {
       const r = await fetch('/api/wecom/ch/kb/add-url', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel_id: KF_CHANNEL_ID, url: feedUrl.trim() }),
+        body: JSON.stringify({ channel_id: channelId, url: feedUrl.trim() }),
       });
       const d = await r.json();
       if (d.ok) {
@@ -2052,9 +2052,9 @@ function AvatarGrowthTab({ onProfileUpdate }: { onProfileUpdate?: (name: string,
                     if (!nameInput.trim()) return;
                     setSavingProfile(true);
                     try {
-                      const r = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}`);
+                      const r = await fetch(`/api/wecom/channels/${channelId}`);
                       const ch = r.ok ? await r.json() : {};
-                      const res = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}`, {
+                      const res = await fetch(`/api/wecom/channels/${channelId}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ name: nameInput.trim(), channel_type: ch.channel_type || 'kf', project_key: ch.project_key || null, kf_id: ch.kf_id || null, is_enabled: ch.is_enabled ?? 1, avatar_url: avatarUrl }),
@@ -2322,7 +2322,7 @@ function AvatarGrowthTab({ onProfileUpdate }: { onProfileUpdate?: (name: string,
 // ═══════════════════════════════════════════════════════════════
 // AI 智库 Tab（4 层架构）
 // ═══════════════════════════════════════════════════════════════
-function AIBrainTab({ refreshKey = 0 }: { refreshKey?: number } = {}) {
+function AIBrainTab({ refreshKey = 0, channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_TYPE }: { refreshKey?: number; channelId?: number; channelType?: string } = {}) {
   // ── 第0步：AI智能整理 ──
   const [step0Open, setStep0Open] = useState(false);
   const [step0HelpOpen, setStep0HelpOpen] = useState(false);
@@ -2442,7 +2442,7 @@ ${step0Extra.trim()}`
       const res = await fetch("/api/wecom/ai-assist-config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: combinedText, channelId: KF_CHANNEL_ID, kbId: 0 }),
+        body: JSON.stringify({ text: combinedText, channelId: channelId, kbId: 0 }),
       });
       const d = await res.json();
       if (d.ok) {
@@ -2477,7 +2477,7 @@ ${step0Extra.trim()}`
       if (chosenPrompts.length > 0) {
         for (const p of chosenPrompts) {
           try {
-            const r = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/prompt-rules`, {
+            const r = await fetch(`/api/wecom/channels/${channelId}/prompt-rules`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ layer: 2, category: "行为规则", content: p }),
@@ -2493,7 +2493,7 @@ ${step0Extra.trim()}`
             const r = await fetch("/api/wecom/ch/kb/adopt", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ channel_id: KF_CHANNEL_ID, channel_type: KF_CHANNEL_TYPE, question: item.question, answer: item.answer }),
+              body: JSON.stringify({ channel_id: channelId, channel_type: channelType, question: item.question, answer: item.answer }),
             });
             const rd = await r.json();
             if (rd.ok) kbSuccess++;
@@ -2552,7 +2552,7 @@ ${step0Extra.trim()}`
   async function loadAllData() {
     setRefreshing(true);
     // 加载第①层：AI 指令
-    fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/prompt-rules`)
+    fetch(`/api/wecom/channels/${channelId}/prompt-rules`)
       .then(r => r.json())
       .then(d => {
         const rules = Array.isArray(d.rules) ? d.rules : Array.isArray(d) ? d : [];
@@ -2571,12 +2571,12 @@ ${step0Extra.trim()}`
 
     // 加载第③层：知识库统计
     await Promise.all([
-      fetch(`/api/wecom/ch/kb/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()),
+      fetch(`/api/wecom/ch/kb/stats?channel_id=${channelId}`).then(r => r.json()),
       fetch(`/api/wecom/ch/kb/stats?channel_type=kf`).then(r => r.json()),
-      fetch(`/api/wecom/channel-config/${KF_CHANNEL_ID}`).then(r => r.json()).catch(() => ({})),
-      fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/config`).then(r => r.json()).catch(() => ({})),
+      fetch(`/api/wecom/channel-config/${channelId}`).then(r => r.json()).catch(() => ({})),
+      fetch(`/api/wecom/channels/${channelId}/config`).then(r => r.json()).catch(() => ({})),
       fetch(`/api/wecom/knowledge-bases`).then(r => r.json()).catch(() => ({ ok: false })),
-      fetch(`/api/wecom/ch/kb/sources?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).catch(() => ({ ok: false })),
+      fetch(`/api/wecom/ch/kb/sources?channel_id=${channelId}`).then(r => r.json()).catch(() => ({ ok: false })),
       fetch(`/api/wecom/ch/kb/sources?channel_type=kf`).then(r => r.json()).catch(() => ({ ok: false })),
     ]).then(([priv, sys, chCfg, cfg, kbs, src, sysSrc]) => {
       if (priv.ok) setKbStats({ item_count: priv.item_count || 0, file_count: priv.file_count || 0, char_count: priv.char_count || 0, month_count: priv.month_count || 0 });
@@ -2605,7 +2605,7 @@ ${step0Extra.trim()}`
   async function handleSaveRule(rule: PromptRule) {
     setSavingRule(true);
     try {
-      const res = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/prompt-rules/${rule.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: editingRuleText }) });
+      const res = await fetch(`/api/wecom/channels/${channelId}/prompt-rules/${rule.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: editingRuleText }) });
       const d = await res.json();
       if (d.ok || d.rule) { toast.success("已保存"); setEditingRuleId(null); setPromptRules(prev => prev.map(r => r.id === rule.id ? { ...r, rule_text: editingRuleText, content: editingRuleText } : r)); }
       else toast.error(d.error || "保存失败");
@@ -2615,7 +2615,7 @@ ${step0Extra.trim()}`
 
   async function handleToggleRule(rule: PromptRule) {
     try {
-      const res = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/prompt-rules/${rule.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: rule.enabled ? 0 : 1 }) });
+      const res = await fetch(`/api/wecom/channels/${channelId}/prompt-rules/${rule.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: rule.enabled ? 0 : 1 }) });
       const d = await res.json();
       if (d.ok || d.rule) setPromptRules(prev => prev.map(r => r.id === rule.id ? { ...r, enabled: !r.enabled } : r));
       else toast.error(d.error || "操作失败");
@@ -2626,11 +2626,11 @@ ${step0Extra.trim()}`
     if (!newRuleText.trim()) { toast.error("请输入指令内容"); return; }
     setSavingRule(true);
     try {
-      const res = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/prompt-rules`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ layer: 2, category: "custom", content: newRuleText, enabled: 1, sort_order: 1 }) });
+      const res = await fetch(`/api/wecom/channels/${channelId}/prompt-rules`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ layer: 2, category: "custom", content: newRuleText, enabled: 1, sort_order: 1 }) });
       const d = await res.json();
       if (d.rule) {
         toast.success("添加成功"); setAddingRule(false); setNewRuleText("");
-        const rulesRes = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/prompt-rules`);
+        const rulesRes = await fetch(`/api/wecom/channels/${channelId}/prompt-rules`);
         const rulesData = await rulesRes.json();
         if (Array.isArray(rulesData.rules)) setPromptRules(rulesData.rules.map((r: any) => ({ ...r, rule_text: r.content || r.rule_text || "" })));
         else if (Array.isArray(rulesData)) setPromptRules(rulesData.map((r: any) => ({ ...r, rule_text: r.content || r.rule_text || "" })));
@@ -2641,7 +2641,7 @@ ${step0Extra.trim()}`
 
   async function handleDeleteRule(id: number) {
     try {
-      const res = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/prompt-rules/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/wecom/channels/${channelId}/prompt-rules/${id}`, { method: "DELETE" });
       const d = await res.json();
       if (d.ok) { toast.success("已删除"); setPromptRules(prev => prev.filter(r => r.id !== id)); }
       else toast.error(d.error || "删除失败");
@@ -2652,7 +2652,7 @@ ${step0Extra.trim()}`
     setTogglingKb(true);
     try {
       const newVal = !sysKbEnabled;
-      const res = await fetch(`/api/wecom/channel-config/${KF_CHANNEL_ID}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ disable_system_kb: newVal ? '0' : '1' }) });
+      const res = await fetch(`/api/wecom/channel-config/${channelId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ disable_system_kb: newVal ? '0' : '1' }) });
       const d = await res.json();
       if (d.ok) { setSysKbEnabled(newVal); toast.success(newVal ? '共享知识库已启用' : '共享知识库已禁用'); }
       else toast.error(d.error || '操作失败');
@@ -2664,7 +2664,7 @@ ${step0Extra.trim()}`
     setTogglingPlatformRules(true);
     try {
       const newVal = !platformRulesEnabled;
-      const res = await fetch(`/api/wecom/channel-config/${KF_CHANNEL_ID}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ disable_platform_rules: newVal ? '0' : '1' }) });
+      const res = await fetch(`/api/wecom/channel-config/${channelId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ disable_platform_rules: newVal ? '0' : '1' }) });
       const d = await res.json();
       if (d.ok) { setPlatformRulesEnabled(newVal); toast.success(newVal ? '平台共享指令已启用' : '平台共享指令已禁用'); }
       else toast.error(d.error || '操作失败');
@@ -2675,7 +2675,7 @@ ${step0Extra.trim()}`
   async function handleSaveContextRounds() {
     setSavingCtx(true);
     try {
-      const res = await fetch(`/api/wecom/channel-config/${KF_CHANNEL_ID}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ context_rounds: contextRounds }) });
+      const res = await fetch(`/api/wecom/channel-config/${channelId}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ context_rounds: contextRounds }) });
       const d = await res.json();
       if (d.ok) { setCtxSaved(true); toast.success('已保存'); setTimeout(() => setCtxSaved(false), 2000); }
       else toast.error(d.error || '保存失败');
@@ -3202,7 +3202,7 @@ ${step0Extra.trim()}`
 
               {/* ── 第②层内容：数字分身 ── */}
               {layer.id === 2 && (
-                <DigitalTwinCard channelId={String(KF_CHANNEL_ID)} />
+                <DigitalTwinCard channelId={String(channelId)} />
               )}
 
               {/* ── 第③层内容：知识库 ── */}
@@ -3371,7 +3371,7 @@ ${step0Extra.trim()}`
                         onClick={async () => {
                           setSavingKbBind(true);
                           try {
-                            const res = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ knowledge_base_id: kbId }) });
+                            const res = await fetch(`/api/wecom/channels/${channelId}/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ knowledge_base_id: kbId }) });
                             const d = await res.json();
                             if (d.ok) { setKbBindSaved(true); toast.success('绑定已保存'); setTimeout(() => setKbBindSaved(false), 2000); }
                             else toast.error(d.error || '保存失败');
@@ -3389,7 +3389,7 @@ ${step0Extra.trim()}`
                   )}
 
                   {/* 素材库 */}
-                  <MaterialsCard channelId={KF_CHANNEL_ID} />
+                  <MaterialsCard channelId={channelId} />
 
                   {/* 私人知识库管理抽屉 */}
                   {showKbDrawer && (
@@ -3412,7 +3412,7 @@ ${step0Extra.trim()}`
                                   setKbExpandedSource(src);
                                   if (!kbItems[src]) {
                                     try {
-                                      const r = await fetch(`/api/wecom/ch/kb/items?channel_id=${KF_CHANNEL_ID}&source_file=${encodeURIComponent(src)}`);
+                                      const r = await fetch(`/api/wecom/ch/kb/items?channel_id=${channelId}&source_file=${encodeURIComponent(src)}`);
                                       const d = await r.json();
                                       if (d.ok) setKbItems(prev => ({ ...prev, [src]: d.items || [] }));
                                     } catch {}
@@ -3544,7 +3544,7 @@ function KnowledgeTab() {
       const res = await fetch("/api/wecom/ai-assist-config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: step0Input, channelId: KF_CHANNEL_ID, kbId: 0 }),
+        body: JSON.stringify({ text: step0Input, channelId: channelId, kbId: 0 }),
       });
       const d = await res.json();
       if (d.ok) {
@@ -3572,7 +3572,7 @@ function KnowledgeTab() {
       if (chosenPrompts.length > 0) {
         for (const p of chosenPrompts) {
           try {
-            const r = await fetch(`/api/wecom/channels/${KF_CHANNEL_ID}/prompt-rules`, {
+            const r = await fetch(`/api/wecom/channels/${channelId}/prompt-rules`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ layer: 2, category: "行为规则", content: p }),
@@ -3588,7 +3588,7 @@ function KnowledgeTab() {
             const r = await fetch("/api/wecom/ch/kb/adopt", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ channel_id: KF_CHANNEL_ID, channel_type: KF_CHANNEL_TYPE, question: item.question, answer: item.answer }),
+              body: JSON.stringify({ channel_id: channelId, channel_type: channelType, question: item.question, answer: item.answer }),
             });
             const rd = await r.json();
             if (rd.ok) kbSuccess++;
@@ -3612,11 +3612,11 @@ function KnowledgeTab() {
     setLoading(true);
     try {
       const [s, src, sys] = await Promise.all([
-        fetch(`/api/wecom/ch/kb/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()),
-        fetch(`/api/wecom/ch/kb/sources?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()),
+        fetch(`/api/wecom/ch/kb/stats?channel_id=${channelId}`).then(r => r.json()),
+        fetch(`/api/wecom/ch/kb/sources?channel_id=${channelId}`).then(r => r.json()),
         fetch(`/api/wecom/ch/kb/stats?channel_type=kf`).then(r => r.json()),
       ]);
-      const chCfg = await fetch(`/api/wecom/channel-config/${KF_CHANNEL_ID}`).then(r => r.json()).catch(() => ({}));
+      const chCfg = await fetch(`/api/wecom/channel-config/${channelId}`).then(r => r.json()).catch(() => ({}));
       if (s.ok) setStats({ kb_count: s.kb_count || 0, item_count: s.item_count || 0, file_count: s.file_count || 0, char_count: s.char_count || 0, last_updated: s.last_updated || null, month_count: s.month_count || 0 });
       if (src.ok) setSources(src.sources || []);
       if (sys.ok) setSysStats({ kb_count: sys.kb_count || 0, item_count: sys.item_count || 0, file_count: sys.file_count || 0, char_count: sys.char_count || 0, month_count: sys.month_count || 0 });
@@ -3631,7 +3631,7 @@ function KnowledgeTab() {
     setTogglingKb(true);
     try {
       const newVal = !sysKbEnabled;
-      const res = await fetch(`/api/wecom/channel-config/${KF_CHANNEL_ID}`, {
+      const res = await fetch(`/api/wecom/channel-config/${channelId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ disable_system_kb: newVal ? '0' : '1' }),
@@ -3650,8 +3650,8 @@ function KnowledgeTab() {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      fd.append("channel_type", KF_CHANNEL_TYPE);
-      fd.append("channel_id", String(KF_CHANNEL_ID));
+      fd.append("channel_type", channelType);
+      fd.append("channel_id", String(channelId));
       const res = await fetch("/api/wecom/ch/kb/upload", { method: "POST", body: fd });
       const d = await res.json();
       if (d.ok) { toast.success(`导入成功，新增 ${d.imported} 条`); loadData(); }
@@ -3667,7 +3667,7 @@ function KnowledgeTab() {
       const res = await fetch("/api/wecom/ch/kb/adopt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channel_type: KF_CHANNEL_TYPE, channel_id: KF_CHANNEL_ID, question: addQuestion || null, answer: addAnswer }),
+        body: JSON.stringify({ channel_type: channelType, channel_id: channelId, question: addQuestion || null, answer: addAnswer }),
       });
       const d = await res.json();
       if (d.ok) { toast.success("添加成功"); setShowAddModal(false); setAddQuestion(""); setAddAnswer(""); loadData(); }
@@ -3678,7 +3678,7 @@ function KnowledgeTab() {
 
   async function handleDelete(sourceFile: string) {
     try {
-      const res = await fetch(`/api/wecom/ch/kb/source?channel_id=${KF_CHANNEL_ID}&source_file=${encodeURIComponent(sourceFile)}`, { method: "DELETE" });
+      const res = await fetch(`/api/wecom/ch/kb/source?channel_id=${channelId}&source_file=${encodeURIComponent(sourceFile)}`, { method: "DELETE" });
       const d = await res.json();
       if (d.ok) { toast.success(`已删除 ${d.deleted} 条`); setDeleteConfirm(null); loadData(); }
       else toast.error(d.error || "删除失败");
@@ -3688,7 +3688,7 @@ function KnowledgeTab() {
   async function loadSourceItems(sourceFile: string) {
     setLoadingItems(true);
     try {
-      const res = await fetch(`/api/wecom/ch/kb/items?channel_id=${KF_CHANNEL_ID}&source_file=${encodeURIComponent(sourceFile)}&limit=50`);
+      const res = await fetch(`/api/wecom/ch/kb/items?channel_id=${channelId}&source_file=${encodeURIComponent(sourceFile)}&limit=50`);
       const d = await res.json();
       if (d.ok) setSourceItems(d.items || []);
     } catch {}
@@ -4063,7 +4063,7 @@ function KnowledgeTab() {
                   const r = await fetch('/api/wecom/ch/kb/ai-parse', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ channel_type: KF_CHANNEL_TYPE, channel_id: KF_CHANNEL_ID, content: pasteText.trim() }),
+                    body: JSON.stringify({ channel_type: channelType, channel_id: channelId, content: pasteText.trim() }),
                   }).then(x => x.json());
                   if (r.ok) {
                     setPasteText('');
@@ -4099,10 +4099,10 @@ function KnowledgeTab() {
       </div>
 
       {/* 素材库 */}
-      <MaterialsCard channelId={KF_CHANNEL_ID} />
+      <MaterialsCard channelId={channelId} />
 
       {/* 我的数字分身卡片 */}
-      <DigitalTwinCard channelId={String(KF_CHANNEL_ID)} />
+      <DigitalTwinCard channelId={String(channelId)} />
 
       {/* 手动添加弹窗 */}
       {showAddModal && (
@@ -4177,7 +4177,7 @@ function getCdDateRange(range: CdTimeRange): { start: string; end: string } | nu
   return null;
 }
 
-function CustomerDataTab() {
+function CustomerDataTab({ channelId = KF_CHANNEL_ID, channelType = KF_CHANNEL_TYPE }: { channelId?: number; channelType?: string } = {}) {
   // ── 汇总数据 ──
   const [summary, setSummary] = useState<{ total_logs: number; total_users: number; month_logs: number; avg_credits: number; models: string[] } | null>(null);
   // ── 用户列表（用于下拉筛选） ──
@@ -4206,8 +4206,8 @@ function CustomerDataTab() {
   // 初始化：并行加载汇总 + 用户列表 + 静默触发批量打分
   useEffect(() => {
     Promise.all([
-      fetch(`/api/wecom/ch/data/summary?channel_id=${KF_CHANNEL_ID}&channel_type=${KF_CHANNEL_TYPE}`).then(r => r.json()).catch(() => null),
-      fetch(`/api/wecom/ch/users?channel_type=${KF_CHANNEL_TYPE}`).then(r => r.json()).catch(() => null),
+      fetch(`/api/wecom/ch/data/summary?channel_id=${channelId}&channel_type=${channelType}`).then(r => r.json()).catch(() => null),
+      fetch(`/api/wecom/ch/users?channel_type=${channelType}`).then(r => r.json()).catch(() => null),
     ]).then(([sum, usersData]) => {
       if (sum?.ok) setSummary(sum);
       if (usersData?.ok) setAllUsers(usersData.users || []);
@@ -4221,8 +4221,8 @@ function CustomerDataTab() {
 
   function buildParams(p = 0) {
     const params = new URLSearchParams();
-    params.set('channel_id', String(KF_CHANNEL_ID));
-    params.set('channel_type', KF_CHANNEL_TYPE);
+    params.set('channel_id', String(channelId));
+    params.set('channel_type', channelType);
     params.set('limit', String(PAGE_SIZE));
     params.set('offset', String(p * PAGE_SIZE));
     const dr = getCdDateRange(timeRange);
@@ -4272,7 +4272,7 @@ function CustomerDataTab() {
       const res = await fetch(`/api/wecom/ch/logs/${logId}/score`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channel_id: KF_CHANNEL_ID, channel_type: KF_CHANNEL_TYPE, avatar_role: '营养顾问，为用户提供专业的营养和健康咨询服务' })
+        body: JSON.stringify({ channel_id: channelId, channel_type: channelType, avatar_role: '营养顾问，为用户提供专业的营养和健康咨询服务' })
       });
       const d = await res.json();
       if (d.ok) {
@@ -4650,7 +4650,7 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
 
   useEffect(() => {
     // 加载分身名称和头像
-    fetch(`/api/wecom/channels/${KF_CHANNEL_ID}`)
+    fetch(`/api/wecom/channels/${channelId}`)
       .then(r => r.json())
       .then(ch => {
         if (ch && ch.name) setChannelName(ch.name);
@@ -4660,11 +4660,11 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
 
     // 并行拉取各 Tab 的数量
     Promise.all([
-      fetch(`/api/wecom/prompt-rules?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).then(d => d.ok ? (d.rules || []).filter((r: any) => r.enabled).length : 0).catch(() => 0),
-      fetch(`/api/wecom/custom-rules?channel_type=${KF_CHANNEL_TYPE}`).then(r => r.json()).then(d => d.ok ? (d.rules || []).length : 0).catch(() => 0),
-      fetch(`/api/wecom/ch/kb/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).then(d => d.item_count || 0).catch(() => 0),
-      fetch(`/api/wecom/ch/logs?channel_id=${KF_CHANNEL_ID}&channel_type=${KF_CHANNEL_TYPE}&limit=1`).then(r => r.json()).then(d => d.total || 0).catch(() => 0),
-      fetch(`/api/wecom/corpus/stats?channel_id=${KF_CHANNEL_ID}`).then(r => r.json()).then(d => {
+      fetch(`/api/wecom/prompt-rules?channel_id=${channelId}`).then(r => r.json()).then(d => d.ok ? (d.rules || []).filter((r: any) => r.enabled).length : 0).catch(() => 0),
+      fetch(`/api/wecom/custom-rules?channel_type=${channelType}`).then(r => r.json()).then(d => d.ok ? (d.rules || []).length : 0).catch(() => 0),
+      fetch(`/api/wecom/ch/kb/stats?channel_id=${channelId}`).then(r => r.json()).then(d => d.item_count || 0).catch(() => 0),
+      fetch(`/api/wecom/ch/logs?channel_id=${channelId}&channel_type=${channelType}&limit=1`).then(r => r.json()).then(d => d.total || 0).catch(() => 0),
+      fetch(`/api/wecom/corpus/stats?channel_id=${channelId}`).then(r => r.json()).then(d => {
         const corpus = d.ok ? (d.quality_count || 0) : 0;
         return corpus;
       }).catch(() => 0),
@@ -4909,10 +4909,10 @@ export function LiuLifanPage({ onBack }: { onBack?: () => void } = {}) {
       </div>
 
       <main className="flex-1 overflow-y-auto px-4 pt-2">
-        {activeTab === "avatar" && <AvatarGrowthTab onProfileUpdate={(name, url) => { setChannelName(name); setChannelAvatarUrl(url); }} />}
-        {activeTab === "config" && <ConfigTab onProfileUpdate={(name, avatarUrl) => { setChannelName(name); setChannelAvatarUrl(avatarUrl); }} />}
-        {activeTab === "aibrain" && <AIBrainTab refreshKey={refreshKey} />}
-        {activeTab === "customers" && <CustomerDataTab />}
+        {activeTab === "avatar" && <AvatarGrowthTab onProfileUpdate={(name, url) => { setChannelName(name); setChannelAvatarUrl(url); }} channelId={KF_CHANNEL_ID_LLF} channelType={KF_CHANNEL_TYPE_LLF} />}
+        {activeTab === "config" && <ConfigTab onProfileUpdate={(name, avatarUrl) => { setChannelName(name); setChannelAvatarUrl(avatarUrl); }} channelId={KF_CHANNEL_ID_LLF} channelType={KF_CHANNEL_TYPE_LLF} />}
+        {activeTab === "aibrain" && <AIBrainTab refreshKey={refreshKey} channelId={KF_CHANNEL_ID_LLF} channelType={KF_CHANNEL_TYPE_LLF} />}
+        {activeTab === "customers" && <CustomerDataTab channelId={KF_CHANNEL_ID_LLF} channelType={KF_CHANNEL_TYPE_LLF} />}
       </main>
     </div>
   );
@@ -5027,10 +5027,10 @@ export function WeightCoachPage({ onBack }: { onBack?: () => void } = {}) {
       </div>
 
       <main className="flex-1 overflow-y-auto px-4 pt-2">
-        {activeTab === "avatar" && <AvatarGrowthTab onProfileUpdate={(name, url) => { setChannelName(name); setChannelAvatarUrl(url); }} />}
-        {activeTab === "config" && <ConfigTab onProfileUpdate={(name, avatarUrl) => { setChannelName(name); setChannelAvatarUrl(avatarUrl); }} />}
-        {activeTab === "aibrain" && <AIBrainTab refreshKey={refreshKey} />}
-        {activeTab === "customers" && <CustomerDataTab />}
+        {activeTab === "avatar" && <AvatarGrowthTab onProfileUpdate={(name, url) => { setChannelName(name); setChannelAvatarUrl(url); }} channelId={KF_CHANNEL_ID_TZ} channelType={KF_CHANNEL_TYPE_TZ} />}
+        {activeTab === "config" && <ConfigTab onProfileUpdate={(name, avatarUrl) => { setChannelName(name); setChannelAvatarUrl(avatarUrl); }} channelId={KF_CHANNEL_ID_TZ} channelType={KF_CHANNEL_TYPE_TZ} />}
+        {activeTab === "aibrain" && <AIBrainTab refreshKey={refreshKey} channelId={KF_CHANNEL_ID_TZ} channelType={KF_CHANNEL_TYPE_TZ} />}
+        {activeTab === "customers" && <CustomerDataTab channelId={KF_CHANNEL_ID_TZ} channelType={KF_CHANNEL_TYPE_TZ} />}
       </main>
     </div>
   );
