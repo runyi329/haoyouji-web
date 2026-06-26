@@ -3719,7 +3719,7 @@ router.get("/api/wecom/channels", async (req: Request, res: Response) => {
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ error: "数据库连接失败" });
     const appId = req.query.app_id;
-    let sql = `SELECT id, name, channel_type, project_key, kf_id, is_enabled, app_id, created_at FROM wecom_channels`;
+    let sql = `SELECT id, name, channel_type, project_key, kf_id, is_enabled, app_id, created_at, site_username FROM wecom_channels`;
     const params: any[] = [];
     if (appId) { sql += " WHERE app_id = ?"; params.push(Number(appId)); }
     sql += " ORDER BY id ASC";

@@ -767,6 +767,7 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
   const [aiModel, setAiModel] = useState("deepseek-chat");
   const [kbName, setKbName] = useState("");
   const [corpId, setCorpId] = useState("");
+  const [siteUsername, setSiteUsername] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -813,6 +814,7 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
             setAvatarName(ch.name || "营养顾问分身");
             setAvatarUrl(ch.avatar_url || "");
             setKfId(ch.kf_id || "");
+            setSiteUsername(ch.site_username || "");
           }
         }
       } catch {
@@ -1362,6 +1364,22 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
             <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>共享知识库</span>
             <span className="text-xs" style={{ color: theme.textMain }}>平台共享库（自动接入）</span>
+          </div>
+
+          {/* 区块标题：脉动网 */}
+          <div className="px-4 pt-3 pb-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: theme.brand }}>脉动网</span>
+          </div>
+
+          {/* 绑定账户 */}
+          <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+            <div className="flex flex-col flex-shrink-0">
+              <span className="text-xs" style={{ color: theme.textSub }}>绑定账户</span>
+              <span className="text-[10px]" style={{ color: theme.textSub, opacity: 0.6 }}>site_username</span>
+            </div>
+            <span className="text-xs font-mono" style={{ color: siteUsername ? theme.textMain : theme.textSub }}>
+              {siteUsername || '未绑定'}
+            </span>
           </div>
 
 
