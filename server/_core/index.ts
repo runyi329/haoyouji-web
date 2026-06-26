@@ -653,6 +653,20 @@ async function startServer() {
     }, 60 * 1000); // 每分钟检查一次
     console.log('[CollateralScan] 自适应扫描调度器已启动（每分钟检查，自适应频率：≥23%=1h, 21-23%=15min, <21%=1min）');
 
+    // 启动谷底增筹·清单委托扫描器（每分钟检查 52 号账本新增委托单）
+    setInterval(async () => {
+      try {
+        const { runGdEntrustScan } = await import('../wecom-admin-router');
+        const result = await runGdEntrustScan();
+        if (result.scanned > 0 && result.results.some((r: any) => r.sent)) {
+          console.log(`[GdEntrustScan] 扫描完成：扫描 ${result.scanned} 条配置，发送 ${result.results.filter((r: any) => r.sent).length} 条通知`);
+        }
+      } catch (e: any) {
+        console.error('[GdEntrustScan] 定时扫描失败:', e.message);
+      }
+    }, 60 * 1000); // 每分钟检查一次
+    console.log('[GdEntrustScan] 谷底增筹委托扫描调度器已启动（每分钟检查 52 号账本新增委托单）');
+
     // 启动股票日线数据定时扫描器（每个交易日 BJT 15:30 自动增量写入 ts_daily）
     const { startStockDailyScanner } = await import('../stock-daily-scanner');
     startStockDailyScanner();

@@ -527,6 +527,8 @@ async function ensureUserNotifyTable() {
   try { await (conn as any).execute(`ALTER TABLE wecom_user_notify_config ADD COLUMN last_alerted_at DATETIME DEFAULT NULL COMMENT '上次发送预警的时间' AFTER last_alerted_pct`); } catch {}
   try { await (conn as any).execute(`ALTER TABLE wecom_user_notify_config ADD COLUMN last_scan_ratio DECIMAL(10,4) DEFAULT NULL COMMENT '上次扫描的保证金比例'`); } catch {}
   try { await (conn as any).execute(`ALTER TABLE wecom_user_notify_config ADD COLUMN next_scan_at DATETIME DEFAULT NULL COMMENT '下次扫描时间（自适应调度）'`); } catch {}
+  try { await (conn as any).execute(`ALTER TABLE wecom_user_notify_config ADD COLUMN touser TEXT DEFAULT NULL COMMENT '推送成员列表，多个用|分隔'`); } catch {}
+  try { await (conn as any).execute(`ALTER TABLE wecom_user_notify_config ADD COLUMN last_notified_order_id BIGINT DEFAULT NULL COMMENT '上次推送时最大订单ID（谷底增筹委托用）'`); } catch {}
   _userNotifyTableEnsured = true;
 }
 
@@ -540,7 +542,7 @@ router.get("/api/admin/wecom/user-notify-config", requireSuperAdmin, async (req:
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ ok: false, error: "数据库连接失败" });
     const [rows] = await (conn as any).execute(
-      `SELECT id, notify_key, label, enabled, msgtype, content, card_title, card_url, threshold, advance_days, order_scope, monitor_user_id, monitor_user_name, alert_mode, last_alerted_pct, last_alerted_at, created_at FROM wecom_user_notify_config WHERE userid = ? ORDER BY notify_key, created_at ASC`,
+      `SELECT id, userid, notify_key, label, enabled, msgtype, content, card_title, card_url, threshold, advance_days, order_scope, monitor_user_id, monitor_user_name, alert_mode, last_alerted_pct, last_alerted_at, touser, created_at FROM wecom_user_notify_config WHERE userid = ? ORDER BY notify_key, created_at ASC`,
       [userid]
     ) as any;
     // 按 notify_key 分组，每组是一个数组
@@ -564,6 +566,7 @@ router.get("/api/admin/wecom/user-notify-config", requireSuperAdmin, async (req:
         alert_mode: row.alert_mode || "new_low_24h",
         last_alerted_pct: row.last_alerted_pct != null ? Number(row.last_alerted_pct) : null,
         last_alerted_at: row.last_alerted_at || null,
+        touser: row.touser || "",
         created_at: row.created_at,
       });
     }
@@ -578,14 +581,14 @@ router.get("/api/admin/wecom/user-notify-config", requireSuperAdmin, async (req:
 router.post("/api/admin/wecom/user-notify-config", requireSuperAdmin, async (req: Request, res: Response) => {
   try {
     await ensureUserNotifyTable();
-    const { userid, notify_key, label, enabled, msgtype, content, card_title, card_url, threshold, advance_days, order_scope, monitor_user_id, monitor_user_name, alert_mode } = req.body || {};
+    const { userid, notify_key, label, enabled, msgtype, content, card_title, card_url, threshold, advance_days, order_scope, monitor_user_id, monitor_user_name, alert_mode, touser } = req.body || {};
     if (!userid || !notify_key) return res.status(400).json({ ok: false, error: "userid 和 notify_key 不能为空" });
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ ok: false, error: "数据库连接失败" });
     const [result] = await (conn as any).execute(
-      `INSERT INTO wecom_user_notify_config (userid, notify_key, label, enabled, msgtype, content, card_title, card_url, threshold, advance_days, order_scope, monitor_user_id, monitor_user_name, alert_mode)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [userid, notify_key, label || "", enabled !== false ? 1 : 0, msgtype || "text", content || "", card_title || "", card_url || "", threshold || "", advance_days || "", order_scope || "all", monitor_user_id || null, monitor_user_name || "", alert_mode || "new_low_24h"]
+      `INSERT INTO wecom_user_notify_config (userid, notify_key, label, enabled, msgtype, content, card_title, card_url, threshold, advance_days, order_scope, monitor_user_id, monitor_user_name, alert_mode, touser)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [userid, notify_key, label || "", enabled !== false ? 1 : 0, msgtype || "text", content || "", card_title || "", card_url || "", threshold || "", advance_days || "", order_scope || "all", monitor_user_id || null, monitor_user_name || "", alert_mode || "new_low_24h", touser || ""]
     ) as any;
     return res.json({ ok: true, id: result.insertId });
   } catch (e: any) {
@@ -599,13 +602,13 @@ router.put("/api/admin/wecom/user-notify-config/:id", requireSuperAdmin, async (
   try {
     await ensureUserNotifyTable();
     const id = Number(req.params.id);
-    const { label, enabled, msgtype, content, card_title, card_url, threshold, advance_days, order_scope, monitor_user_id, monitor_user_name, alert_mode } = req.body || {};
+    const { label, enabled, msgtype, content, card_title, card_url, threshold, advance_days, order_scope, monitor_user_id, monitor_user_name, alert_mode, touser } = req.body || {};
     if (!id) return res.status(400).json({ ok: false, error: "id 不能为空" });
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ ok: false, error: "数据库连接失败" });
     await (conn as any).execute(
-      `UPDATE wecom_user_notify_config SET label=?, enabled=?, msgtype=?, content=?, card_title=?, card_url=?, threshold=?, advance_days=?, order_scope=?, monitor_user_id=?, monitor_user_name=?, alert_mode=? WHERE id=?`,
-      [label || "", enabled !== false ? 1 : 0, msgtype || "text", content || "", card_title || "", card_url || "", threshold || "", advance_days || "", order_scope || "all", monitor_user_id || null, monitor_user_name || "", alert_mode || "new_low_24h", id]
+      `UPDATE wecom_user_notify_config SET label=?, enabled=?, msgtype=?, content=?, card_title=?, card_url=?, threshold=?, advance_days=?, order_scope=?, monitor_user_id=?, monitor_user_name=?, alert_mode=?, touser=? WHERE id=?`,
+      [label || "", enabled !== false ? 1 : 0, msgtype || "text", content || "", card_title || "", card_url || "", threshold || "", advance_days || "", order_scope || "all", monitor_user_id || null, monitor_user_name || "", alert_mode || "new_low_24h", touser || "", id]
     );
     return res.json({ ok: true });
   } catch (e: any) {
@@ -623,6 +626,49 @@ router.delete("/api/admin/wecom/user-notify-config/:id", requireSuperAdmin, asyn
     if (!conn) return res.status(500).json({ ok: false, error: "数据库连接失败" });
     await (conn as any).execute(`DELETE FROM wecom_user_notify_config WHERE id = ?`, [id]);
     return res.json({ ok: true });
+  } catch (e: any) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// GET /api/admin/wecom/all-notify-tasks
+// 按内容维度返回所有推送任务（不需要 userid 筛选）
+router.get("/api/admin/wecom/all-notify-tasks", requireSuperAdmin, async (req: Request, res: Response) => {
+  try {
+    await ensureUserNotifyTable();
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ ok: false, error: "数据库连接失败" });
+    const [rows] = await (conn as any).execute(
+      `SELECT id, userid, notify_key, label, enabled, msgtype, content, card_title, card_url, threshold, advance_days, order_scope, monitor_user_id, monitor_user_name, alert_mode, last_alerted_pct, last_alerted_at, touser, last_notified_order_id, created_at FROM wecom_user_notify_config ORDER BY notify_key, created_at ASC`
+    ) as any;
+    // 按 notify_key 分组
+    const tasksByKey: Record<string, any[]> = {};
+    for (const row of rows as any[]) {
+      if (!tasksByKey[row.notify_key]) tasksByKey[row.notify_key] = [];
+      tasksByKey[row.notify_key].push({
+        id: row.id,
+        userid: row.userid,
+        notify_key: row.notify_key,
+        label: row.label || "",
+        enabled: !!row.enabled,
+        msgtype: row.msgtype || "text",
+        content: row.content || "",
+        card_title: row.card_title || "",
+        card_url: row.card_url || "",
+        threshold: row.threshold || "",
+        advance_days: row.advance_days || "",
+        order_scope: row.order_scope || "all",
+        monitor_user_id: row.monitor_user_id || null,
+        monitor_user_name: row.monitor_user_name || "",
+        alert_mode: row.alert_mode || "new_low_24h",
+        last_alerted_pct: row.last_alerted_pct != null ? Number(row.last_alerted_pct) : null,
+        last_alerted_at: row.last_alerted_at || null,
+        touser: row.touser || "",
+        last_notified_order_id: row.last_notified_order_id != null ? Number(row.last_notified_order_id) : null,
+        created_at: row.created_at,
+      });
+    }
+    return res.json({ ok: true, tasksByKey });
   } catch (e: any) {
     return res.status(500).json({ ok: false, error: e.message });
   }
@@ -1214,6 +1260,208 @@ router.post("/api/admin/wecom/test-collateral-gap-send", requireSuperAdmin, asyn
       totalBuyValue: parseFloat(totalBuyValue.toFixed(2)),
       orderCount,
       message: `测试消息已发送给 ${cfgUserid}，当前比例=${ratioStr}%`,
+    });
+  } catch (e: any) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+/**
+ * 谷底增筹·清单委托扫描主函数（供 HTTP 接口和定时任务共用）
+ * 监控 52 号账本（ledger_id=52）af_orders 表，有新的非赠送买单委托时推送企微消息
+ */
+export async function runGdEntrustScan(): Promise<{ scanned: number; results: any[] }> {
+  await ensureUserNotifyTable();
+  const conn = await getDbConnection();
+  if (!conn) throw new Error("数据库连接失败");
+
+  // 1. 获取所有启用的谷底增筹委托通知配置
+  const [cfgRows] = await (conn as any).execute(
+    `SELECT * FROM wecom_user_notify_config WHERE notify_key = 'fz_notify_gd_entrust' AND enabled = 1`
+  ) as any;
+
+  if ((cfgRows as any[]).length === 0) {
+    return { scanned: 0, results: [] };
+  }
+
+  // 2. 获取企业微信基础配置
+  const [cfgBase] = await (conn as any).execute(
+    `SELECT cfg_key, cfg_value FROM wecom_notify_config WHERE cfg_key IN ('corpid','corpsecret','agentid')`
+  ) as any;
+  const wecomCfg: Record<string, string> = {};
+  for (const r of cfgBase as any[]) wecomCfg[r.cfg_key] = r.cfg_value;
+
+  // 3. 查询 52 号账本当前所有委托中的非赠送买单（status=pending, side=buy, is_gift=0 or null）
+  const [allPendingRows] = await (conn as any).execute(
+    `SELECT id, user_id, coin, limit_price, amount, created_at
+     FROM af_orders
+     WHERE ledger_id = 52 AND status = 'pending' AND side = 'buy'
+       AND (is_gift = 0 OR is_gift IS NULL)
+     ORDER BY id DESC`
+  ) as any;
+  const allPending = allPendingRows as any[];
+  const totalCount = allPending.length;
+  const maxOrderId = totalCount > 0 ? allPending[0].id : 0;
+
+  const results: any[] = [];
+
+  for (const cfg of cfgRows as any[]) {
+    try {
+      const lastNotifiedId = cfg.last_notified_order_id ? Number(cfg.last_notified_order_id) : 0;
+
+      // 4. 找出比上次推送时更新的订单（id > last_notified_order_id）
+      const newOrders = allPending.filter((o: any) => o.id > lastNotifiedId);
+      const newCount = newOrders.length;
+
+      if (newCount === 0) {
+        // 无新单，不推送，但更新 last_notified_order_id 为当前最大值（防止重复推送历史单）
+        if (lastNotifiedId === 0 && maxOrderId > 0) {
+          await (conn as any).execute(
+            `UPDATE wecom_user_notify_config SET last_notified_order_id = ? WHERE id = ?`,
+            [maxOrderId, cfg.id]
+          );
+        }
+        results.push({ cfg_id: cfg.id, userid: cfg.userid, newCount: 0, totalCount, sent: false, reason: "无新委托单" });
+        continue;
+      }
+
+      // 5. 确定推送目标（touser 支持多成员 userid1|userid2|... 格式）
+      const touserList = (cfg.touser || cfg.userid || "").split("|").map((s: string) => s.trim()).filter(Boolean);
+      if (touserList.length === 0) {
+        results.push({ cfg_id: cfg.id, userid: cfg.userid, newCount, totalCount, sent: false, reason: "无推送目标" });
+        continue;
+      }
+
+      // 6. 逐人发送：每个成员看到自己的名字
+      const timeStr = new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
+      const defaultTemplate = "{推送对象}，您关注的谷底增筹有 {new_count} 张新委托单，当前共有 {total_count} 张委托中";
+      const template = cfg.content || defaultTemplate;
+
+      // 获取企业微信成员列表（用于查找名字）
+      let wecomMembers: any[] = [];
+      try {
+        const memberRes = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/user/simplelist?access_token=${wecomCfg.access_token}&department_id=1&fetch_child=1`);
+        const memberData = await memberRes.json();
+        wecomMembers = memberData.userlist || [];
+      } catch {}
+
+      for (const uid of touserList) {
+        // 查找该成员的名字
+        const memberInfo = wecomMembers.find((m: any) => m.userid === uid);
+        const memberName = memberInfo?.name || uid;
+        const content = template
+          .replace(/\{推送对象\}/g, memberName)
+          .replace(/\{monitor_user_name\}/g, memberName)
+          .replace(/\{new_count\}/g, String(newCount))
+          .replace(/\{total_count\}/g, String(totalCount))
+          .replace(/\{time\}/g, timeStr);
+        try {
+          await sendWecomMessage(wecomCfg, uid, cfg.msgtype || "text", content);
+          console.log(`[GdEntrustScan] 已发送委托通知给 ${uid}(${memberName})，新增=${newCount}，总计=${totalCount}`);
+        } catch (sendErr: any) {
+          console.warn(`[GdEntrustScan] 发送给 ${uid} 失败:`, sendErr.message);
+        }
+      }
+
+      // 8. 更新 last_notified_order_id 为当前最大值
+      await (conn as any).execute(
+        `UPDATE wecom_user_notify_config SET last_notified_order_id = ?, last_alerted_at = NOW() WHERE id = ?`,
+        [maxOrderId, cfg.id]
+      );
+
+      results.push({ cfg_id: cfg.id, userid: cfg.userid, newCount, totalCount, maxOrderId, sent: true });
+    } catch (cfgErr: any) {
+      console.error(`[GdEntrustScan] 配置 ${cfg.id} 扫描失败:`, cfgErr.message);
+      results.push({ cfg_id: cfg.id, error: cfgErr.message });
+    }
+  }
+
+  return { scanned: (cfgRows as any[]).length, results };
+}
+
+// POST /api/admin/wecom/run-gd-entrust-scan
+// 手动触发谷底增筹委托扫描
+router.post("/api/admin/wecom/run-gd-entrust-scan", requireSuperAdmin, async (req: Request, res: Response) => {
+  try {
+    const result = await runGdEntrustScan();
+    return res.json({ ok: true, ...result });
+  } catch (e: any) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// POST /api/admin/wecom/test-gd-entrust-send
+// 强制测试发送谷底增筹委托通知（不走新单判断，直接用当前数据发送）
+router.post("/api/admin/wecom/test-gd-entrust-send", requireSuperAdmin, async (req: Request, res: Response) => {
+  try {
+    await ensureUserNotifyTable();
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ ok: false, error: "数据库连接失败" });
+
+    const { cfg_id } = req.body || {};
+    if (!cfg_id) return res.status(400).json({ ok: false, error: "cfg_id 不能为空" });
+
+    const [cfgRows] = await (conn as any).execute(
+      `SELECT * FROM wecom_user_notify_config WHERE id = ? AND notify_key = 'fz_notify_gd_entrust' LIMIT 1`,
+      [cfg_id]
+    ) as any;
+    const cfg = (cfgRows as any[])[0];
+    if (!cfg) return res.status(404).json({ ok: false, error: "未找到对应配置" });
+
+    // 获取企微配置
+    const [cfgBase] = await (conn as any).execute(
+      `SELECT cfg_key, cfg_value FROM wecom_notify_config WHERE cfg_key IN ('corpid','corpsecret','agentid')`
+    ) as any;
+    const wecomCfg: Record<string, string> = {};
+    for (const r of cfgBase as any[]) wecomCfg[r.cfg_key] = r.cfg_value;
+
+    // 查询当前委托中总数
+    const [pendingRows] = await (conn as any).execute(
+      `SELECT COUNT(*) as cnt, MAX(id) as max_id FROM af_orders
+       WHERE ledger_id = 52 AND status = 'pending' AND side = 'buy'
+         AND (is_gift = 0 OR is_gift IS NULL)`
+    ) as any;
+    const totalCount = Number((pendingRows as any[])[0]?.cnt || 0);
+    const maxOrderId = Number((pendingRows as any[])[0]?.max_id || 0);
+
+    const timeStr = new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
+    const defaultTemplate = "{推送对象}，您关注的谷底增筹有 {new_count} 张新委托单，当前共有 {total_count} 张委托中\n{time}";
+    const template = cfg.content || defaultTemplate;
+
+    const touserList = (cfg.touser || cfg.userid || "").split("|").map((s: string) => s.trim()).filter(Boolean);
+    if (touserList.length === 0) return res.status(400).json({ ok: false, error: "无推送目标" });
+
+    // 获取企业微信成员列表（用于查找名字）
+    let wecomMembers: any[] = [];
+    try {
+      const memberRes = await fetch(`https://qyapi.weixin.qq.com/cgi-bin/user/simplelist?access_token=${wecomCfg.access_token}&department_id=1&fetch_child=1`);
+      const memberData = await memberRes.json();
+      wecomMembers = memberData.userlist || [];
+    } catch {}
+
+    const sentTo: string[] = [];
+    for (const uid of touserList) {
+      const memberInfo = wecomMembers.find((m: any) => m.userid === uid);
+      const memberName = memberInfo?.name || uid;
+      const content = "[测试] " + template
+        .replace(/\{推送对象\}/g, memberName)
+        .replace(/\{monitor_user_name\}/g, memberName)
+        .replace(/\{new_count\}/g, "0")
+        .replace(/\{total_count\}/g, String(totalCount))
+        .replace(/\{time\}/g, timeStr);
+      try {
+        await sendWecomMessage(wecomCfg, uid, cfg.msgtype || "text", content);
+        sentTo.push(`${uid}(${memberName})`);
+      } catch (sendErr: any) {
+        console.warn(`[GdEntrustScan测试] 发送给 ${uid} 失败:`, sendErr.message);
+      }
+    }
+
+    return res.json({
+      ok: true,
+      totalCount,
+      maxOrderId,
+      message: `测试消息已发送给 ${sentTo.join("、")}，当前委托中总数=${totalCount}`,
     });
   } catch (e: any) {
     return res.status(500).json({ ok: false, error: e.message });

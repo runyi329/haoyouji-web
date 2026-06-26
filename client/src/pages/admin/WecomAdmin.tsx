@@ -7325,9 +7325,15 @@ const NOTIFY_ITEM_DEFAULTS: Record<string, UserNotifyItemConfig> = {
     content: "【融资付息·价格下跌预警】\n{coin} 当前价格 {price} U，较买入价 {ref_price} U 下跌 {drop_pct}%，请关注担保风险。\n时间：{time}",
     threshold: "10",
   },
+  fz_notify_gd_entrust: {
+    enabled: true,
+    msgtype: "text",
+    content: "{推送对象}，您关注的谷底增筹有 {new_count} 张新委托单，当前共有 {total_count} 张委托中\n{time}",
+  },
 };
 
 const NOTIFY_ITEMS_META2 = [
+  { key: "fz_notify_gd_entrust", label: "谷底增筹 · 清单委托", desc: "谷底增筹：52 号账本有新委托单时推送（赠送单不计入）", extraFields: [] },
   { key: "fz_notify_collateral_gap", label: "融资付息 · 担保缺口预警", desc: "融资付息：付息订单担保缺口超过阈值时推送", extraFields: ["threshold"] },
   { key: "fz_notify_interest_due", label: "结息提醒", desc: "融资付息：结息日前 N 天提前提醒资方", extraFields: ["advance_days"] },
   { key: "fz_notify_order_created", label: "新订单通知", desc: "融资付息：新建付息订单时通知对应资方", extraFields: [] },
@@ -7335,13 +7341,55 @@ const NOTIFY_ITEMS_META2 = [
   { key: "fz_notify_price_drop", label: "价格下跌预警", desc: "融资付息：持仓币种跌幅超过设定值时推送", extraFields: ["threshold"] },
 ];
 
-const NOTIFY_VARS: Record<string, string> = {
-  fz_notify_collateral_gap: "{order_id} {coin} {gap_amount} {threshold} {time}",
-  fz_notify_interest_due: "{order_id} {coin} {due_date} {interest}",
-  fz_notify_order_created: "{order_id} {coin} {amount} {rate}",
-  fz_notify_order_settled: "{order_id} {coin} {principal} {total_interest}",
-  fz_notify_price_drop: "{coin} {price} {ref_price} {drop_pct} {time}",
+// 变量标签定义：{ key: 变量占位符, label: 显示名称, preview: 预览示例值 }
+const NOTIFY_VARS_DEF: Record<string, { key: string; label: string; preview: string }[]> = {
+  fz_notify_collateral_gap: [
+    { key: "{monitor_user_name}", label: "用户名", preview: "张三" },
+    { key: "{order_id}", label: "订单号", preview: "FM2245" },
+    { key: "{coin}", label: "币种", preview: "BTC" },
+    { key: "{ratio}", label: "保证金比例", preview: "25.05%" },
+    { key: "{gap_amount}", label: "风险敎口", preview: "51823.18" },
+    { key: "{total_buy_value}", label: "总买入价值", preview: "206904.25" },
+    { key: "{order_count}", label: "订单数量", preview: "7" },
+    { key: "{threshold}", label: "预警阈值", preview: "20" },
+    { key: "{time}", label: "时间", preview: "2026/6/26 08:28" },
+  ],
+  fz_notify_interest_due: [
+    { key: "{order_id}", label: "订单号", preview: "FM2245" },
+    { key: "{coin}", label: "币种", preview: "BTC" },
+    { key: "{due_date}", label: "结息日", preview: "2026/7/1" },
+    { key: "{interest}", label: "应付利息", preview: "1200.00" },
+  ],
+  fz_notify_order_created: [
+    { key: "{order_id}", label: "订单号", preview: "FM2245" },
+    { key: "{coin}", label: "币种", preview: "BTC" },
+    { key: "{amount}", label: "金额", preview: "50000" },
+    { key: "{rate}", label: "年化利率", preview: "12" },
+  ],
+  fz_notify_order_settled: [
+    { key: "{order_id}", label: "订单号", preview: "FM2245" },
+    { key: "{coin}", label: "币种", preview: "BTC" },
+    { key: "{principal}", label: "本金", preview: "50000" },
+    { key: "{total_interest}", label: "累计利息", preview: "3200.00" },
+  ],
+  fz_notify_price_drop: [
+    { key: "{coin}", label: "币种", preview: "BTC" },
+    { key: "{price}", label: "当前价格", preview: "58000" },
+    { key: "{ref_price}", label: "买入价", preview: "65000" },
+    { key: "{drop_pct}", label: "跌幅", preview: "10.77" },
+    { key: "{time}", label: "时间", preview: "2026/6/26 08:28" },
+  ],
+  fz_notify_gd_entrust: [
+    { key: "{推送对象}", label: "推送对象", preview: "张三" },
+    { key: "{new_count}", label: "新增委托数", preview: "2" },
+    { key: "{total_count}", label: "当前委托总数", preview: "15" },
+    { key: "{time}", label: "推送时间", preview: "2026/6/26 08:28" },
+  ],
 };
+// 兼容旧代码
+const NOTIFY_VARS: Record<string, string> = Object.fromEntries(
+  Object.entries(NOTIFY_VARS_DEF).map(([k, v]) => [k, v.map(x => x.key).join(" ")])
+);
 
 function NotifyTab() {
   // 企业成员列表
@@ -7352,10 +7400,23 @@ function NotifyTab() {
   const [userSearch, setUserSearch] = useState("");
   const [userDropOpen, setUserDropOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<{ userid: string; name: string } | null>(null);
+  // 表单内置多选成员
+  const [selectedRecipients, setSelectedRecipients] = useState<{ userid: string; name: string }[]>([]);
+  const [removingRecipientId, setRemovingRecipientId] = useState<string | null>(null); // 将要移除的成员 userid（二次确认用）
 
   // 当前用户的通知配置（多条记录，按 notify_key 分组）
   const [notifyRecords, setNotifyRecords] = useState<Record<string, any[]>>({});
   const [loadingCfg, setLoadingCfg] = useState(false);
+
+  // 全量任务（按内容维度，不依赖 userid 筛选）
+  const [allTasks, setAllTasks] = useState<Record<string, any[]>>({});
+  const [loadingAllTasks, setLoadingAllTasks] = useState(false);
+
+  // 通知平台双 Tab
+  const [notifyTab, setNotifyTab] = useState<"content" | "member">("content");
+  const [selectedMemberUid, setSelectedMemberUid] = useState<string | null>(null);
+  const [memberTabDropOpen, setMemberTabDropOpen] = useState(false);
+  const [memberTabSearch, setMemberTabSearch] = useState("");
 
   // 展开的通知项 key
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -7429,14 +7490,22 @@ function NotifyTab() {
       .then(d => {
         const realUsers = d.users ? d.users.map((u: any) => ({ userid: u.userid, name: u.name || u.userid })) : [];
         // IP不在白名单时（开发环境）追加模拟用户供UI预览
-        if (realUsers.length === 0) {
-          setMembers([{ userid: "mock_user_001", name: "模拟成员（预览用）" }]);
-        } else {
-          setMembers(realUsers);
-        }
+          if (realUsers.length === 0) {
+            setMembers([
+              { userid: "mock_user_001", name: "模拟成员 A（预览用）" },
+              { userid: "mock_user_002", name: "模拟成员 B（预览用）" },
+              { userid: "mock_user_003", name: "模拟成员 C（预览用）" },
+            ]);
+          } else {
+            setMembers(realUsers);
+          }
       })
       .catch(() => {
-        setMembers([{ userid: "mock_user_001", name: "模拟成员（预览用）" }]);
+        setMembers([
+          { userid: "mock_user_001", name: "模拟成员 A（预览用）" },
+          { userid: "mock_user_002", name: "模拟成员 B（预览用）" },
+          { userid: "mock_user_003", name: "模拟成员 C（预览用）" },
+        ]);
       })
       .finally(() => setLoadingMembers(false));
   }, []);
@@ -7454,6 +7523,9 @@ function NotifyTab() {
       })
       .catch(() => {});
   }, []);
+
+  // 初始化加载全量任务
+  useEffect(() => { loadAllTasks(); }, []);
 
   // 加载某用户的通知配置（多条记录）
   const loadUserCfg = (userid: string) => {
@@ -7476,6 +7548,18 @@ function NotifyTab() {
       .finally(() => setLoadingCfg(false));
   };
 
+  // 加载全量任务
+  const loadAllTasks = () => {
+    setLoadingAllTasks(true);
+    fetch("/api/admin/wecom/all-notify-tasks", {
+      headers: { Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` }
+    })
+      .then(r => r.json())
+      .then(d => { if (d.ok) setAllTasks(d.tasksByKey || {}); })
+      .catch(() => {})
+      .finally(() => setLoadingAllTasks(false));
+  };
+
   const handleSelectUser = (u: { userid: string; name: string }) => {
     setSelectedUser(u);
     setUserSearch("");
@@ -7486,11 +7570,22 @@ function NotifyTab() {
   // 开始新增一条记录
   const handleAddRecord = (key: string) => {
     const def = NOTIFY_ITEM_DEFAULTS[key] || { enabled: true, msgtype: "text", content: "", threshold: "", advance_days: "", order_scope: "all" };
+    // 尝试恢复 localStorage 草稿
+    let draftContent = def.content || "";
+    try {
+      const draftRaw = localStorage.getItem(`notify_content_draft_${key}`);
+      if (draftRaw) {
+        const draft = JSON.parse(draftRaw);
+        if (draft.content) draftContent = draft.content;
+      }
+    } catch {}
     setEditingKey(key);
-    setEditingRecord({ id: null, notify_key: key, label: "", enabled: true, msgtype: def.msgtype, content: def.content || "", card_title: "", card_url: "", threshold: def.threshold || "", advance_days: def.advance_days || "", order_scope: "all", monitor_user_id: null, monitor_user_name: "" });
+    setEditingRecord({ id: null, notify_key: key, label: "", enabled: true, msgtype: def.msgtype, content: draftContent, card_title: "", card_url: "", threshold: def.threshold || "", advance_days: def.advance_days || "", order_scope: "all", monitor_user_id: null, monitor_user_name: "", touser: "" });
     setExpandedKey(key);
     setSelectedOrderUserId(null);
     setAfOrders([]);
+    setSelectedRecipients([]);
+    setRemovingRecipientId(null);
   };
 
   // 开始编辑某条记录
@@ -7502,11 +7597,29 @@ function NotifyTab() {
     if (rec.monitor_user_id) {
       loadOrdersForUser(rec.monitor_user_id);
     }
+    // 恢复已保存的推送成员列表（touser 存为 userid1|userid2 格式）
+    setRemovingRecipientId(null);
+    if (rec.touser) {
+      const ids = rec.touser.split("|").filter(Boolean);
+      const restored = ids.map((uid: string) => {
+        const found = members.find(m => m.userid === uid);
+        return found || { userid: uid, name: uid };
+      });
+      setSelectedRecipients(restored);
+    } else {
+      setSelectedRecipients([]);
+    }
   };
 
   // 保存记录（新增或更新）
   const handleSaveRecord = async () => {
-    if (!selectedUser || !editingRecord) return;
+    if (!editingRecord) return;
+    if (selectedRecipients.length === 0) {
+      setMsg({ type: "err", text: "请至少选择一位推送成员" });
+      return;
+    }
+    const touser = selectedRecipients.map(r => r.userid).join("|");
+    const recordToSave = { ...editingRecord, touser };
     const sid = editingRecord.id ? String(editingRecord.id) : "new";
     setSavingId(sid);
     setMsg(null);
@@ -7517,14 +7630,14 @@ function NotifyTab() {
         r = await fetch(`/api/admin/wecom/user-notify-config/${editingRecord.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` },
-          body: JSON.stringify(editingRecord),
+          body: JSON.stringify(recordToSave),
         });
       } else {
-        // 新增
+        // 新增（用第一个成员的 userid 作为主键）
         r = await fetch("/api/admin/wecom/user-notify-config", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` },
-          body: JSON.stringify({ userid: selectedUser.userid, ...editingRecord }),
+          body: JSON.stringify({ userid: selectedRecipients[0].userid, ...recordToSave }),
         });
       }
       const d = await r.json();
@@ -7532,7 +7645,9 @@ function NotifyTab() {
         setMsg({ type: "ok", text: "配置已保存" });
         setEditingRecord(null);
         setEditingKey(null);
-        loadUserCfg(selectedUser.userid);
+        setSelectedRecipients([]);
+        // 刷新全量任务列表
+        loadAllTasks();
       } else {
         setMsg({ type: "err", text: d.error || "保存失败" });
       }
@@ -7556,7 +7671,7 @@ function NotifyTab() {
       const d = await r.json();
       if (d.ok) {
         setMsg({ type: "ok", text: "已删除" });
-        if (selectedUser) loadUserCfg(selectedUser.userid);
+        loadAllTasks();
       } else {
         setMsg({ type: "err", text: d.error || "删除失败" });
       }
@@ -7569,10 +7684,13 @@ function NotifyTab() {
 
   // 测试发送
   const handleTestRecord = async (rec: any) => {
-    if (!selectedUser) return;
     const tid = rec.id ? String(rec.id) : "new";
     setTestingId(tid);
     setMsg(null);
+    // 确定发送目标：已保存记录用 touser，未保存记录用 selectedRecipients[0]
+    const testUserid = rec.touser
+      ? rec.touser.split("|")[0]
+      : (selectedRecipients[0]?.userid || "");
     try {
       // 担保缺口预警：使用强制测试发送 API（不走阈值/新底逻辑，直接取当前保证金比例）
       const notifyKey = rec.notify_key || editingKey;
@@ -7581,7 +7699,7 @@ function NotifyTab() {
         const body = rec.id
           ? { cfg_id: rec.id }
           : {
-              userid: selectedUser?.userid,
+              userid: testUserid,
               monitor_user_id: rec.monitor_user_id || null,
               monitor_user_name: rec.monitor_user_name || "",
               order_scope: rec.order_scope || "all",
@@ -7596,7 +7714,26 @@ function NotifyTab() {
         });
         const d = await r.json();
         if (d.ok) {
-          setMsg({ type: "ok", text: `测试消息已发送！当前保证金比例：${d.ratio !== null ? d.ratio + "%" : "N/A"}，风险敞口：${d.totalGap}U，订单数：${d.orderCount}张` });
+          setMsg({ type: "ok", text: `测试消息已发送！当前保证金比例：${d.ratio !== null ? d.ratio + "%" : "N/A"}，风险敎口：${d.totalGap}U，订单数：${d.orderCount}张` });
+        } else {
+          setMsg({ type: "err", text: d.error || "发送失败" });
+        }
+        return;
+      }
+      // 谷底增筹委托：使用强制测试发送 API
+      if (notifyKey === "fz_notify_gd_entrust") {
+        if (!rec.id) {
+          setMsg({ type: "err", text: "请先保存配置再测试发送" });
+          return;
+        }
+        const r = await fetch("/api/admin/wecom/test-gd-entrust-send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` },
+          body: JSON.stringify({ cfg_id: rec.id }),
+        });
+        const d = await r.json();
+        if (d.ok) {
+          setMsg({ type: "ok", text: `测试消息已发送！当前委托中总数：${d.totalCount}张` });
         } else {
           setMsg({ type: "err", text: d.error || "发送失败" });
         }
@@ -7607,7 +7744,7 @@ function NotifyTab() {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("auth-token") || ""}` },
         body: JSON.stringify({
-          userid: selectedUser.userid,
+          userid: testUserid,
           msgtype: rec.msgtype,
           content: rec.content,
           card_title: rec.card_title,
@@ -7666,23 +7803,117 @@ function NotifyTab() {
 
     return (
       <div className="mt-3 bg-blue-50 rounded-xl border border-blue-100 px-4 py-4 space-y-4">
-        {/* 备注名称 */}
+        {/* 所有通知类型：内置多选推送成员（第一步） */}
         <div>
-          <label className="text-xs text-gray-500 mb-1 block">备注名称（可选，方便识别）</label>
-          <input
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
-            placeholder="如：监控大饼江湖的共享担保订单"
-            value={editingRecord.label || ""}
-            onChange={e => setEditingRecord((p: any) => ({ ...p, label: e.target.value }))}
-          />
+          <p className="text-xs font-semibold text-gray-600 mb-2">第一步：选择推送的企业成员（可多选）</p>
+          {/* 下拉选择添加成员 */}
+          <div className="relative mb-2">
+            <div
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white cursor-pointer flex items-center justify-between"
+              onClick={() => setUserDropOpen(v => !v)}
+            >
+              <span className="text-gray-400">{loadingMembers ? "加载成员中..." : "点击添加成员..."}</span>
+              <ChevronDown className="w-4 h-4 text-gray-400" />
+            </div>
+            {userDropOpen && (
+              <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                <div className="p-2 border-b border-gray-100">
+                  <input
+                    autoFocus
+                    className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm"
+                    placeholder="搜索成员姓名或 userid..."
+                    value={userSearch}
+                    onChange={e => setUserSearch(e.target.value)}
+                  />
+                </div>
+                {filteredMembers.filter(m => !selectedRecipients.find(r => r.userid === m.userid)).length === 0 ? (
+                  <div className="px-4 py-3 text-sm text-gray-400">无可选成员</div>
+                ) : filteredMembers.filter(m => !selectedRecipients.find(r => r.userid === m.userid)).map(m => (
+                  <div
+                    key={m.userid}
+                    className="px-4 py-2.5 text-sm hover:bg-blue-50 cursor-pointer text-gray-700"
+                    onClick={() => {
+                      setSelectedRecipients(prev => [...prev, m]);
+                      setUserSearch("");
+                      setUserDropOpen(false);
+                    }}
+                  >
+                    {m.name}
+                    {m.userid !== m.name && <span className="text-xs text-gray-400 ml-1">({m.userid})</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* 已选成员标签列表 */}
+          {selectedRecipients.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-1">
+              {selectedRecipients.map(r => (
+                <div key={r.userid} className="relative inline-flex items-center bg-blue-100 text-blue-800 text-sm font-medium px-3 py-1.5 rounded-full">
+                  {r.name}
+                  {/* 小叉按钒 */}
+                  <button
+                    className="ml-2 w-4 h-4 rounded-full bg-blue-300 hover:bg-red-400 text-white flex items-center justify-center text-xs leading-none"
+                    onClick={() => setRemovingRecipientId(r.userid)}
+                    title="移除成员"
+                  >×</button>
+                  {/* 二次确认弹层 */}
+                  {removingRecipientId === r.userid && (
+                    <div className="absolute left-0 top-full mt-1 z-30 bg-white border border-red-200 rounded-xl shadow-lg px-4 py-3 min-w-[160px]">
+                      <p className="text-xs text-gray-700 mb-2">确认移除 <span className="font-semibold text-red-600">{r.name}</span>？</p>
+                      <div className="flex gap-2">
+                        <button
+                          className="flex-1 text-xs bg-red-500 text-white rounded-lg py-1 hover:bg-red-600"
+                          onClick={() => {
+                            setSelectedRecipients(prev => prev.filter(x => x.userid !== r.userid));
+                            setRemovingRecipientId(null);
+                          }}
+                        >确认移除</button>
+                        <button
+                          className="flex-1 text-xs bg-gray-100 text-gray-600 rounded-lg py-1 hover:bg-gray-200"
+                          onClick={() => setRemovingRecipientId(null)}
+                        >取消</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {selectedRecipients.length === 0 && (
+            <p className="text-xs text-orange-400 mt-1">请至少选择一位成员</p>
+          )}
         </div>
 
-        {/* 第一步：监控对象（仅融资付息类通知） */}
+        {/* 备注名称（担保缺口预警、谷底增筹委托不显示） */}
+        {key !== "fz_notify_collateral_gap" && key !== "fz_notify_gd_entrust" && (
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">备注名称（可选，方便识别）</label>
+            <input
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+              placeholder="如：监控大饥江湖的共享担保订单"
+              value={editingRecord.label || ""}
+              onChange={e => setEditingRecord((p: any) => ({ ...p, label: e.target.value }))}
+            />
+          </div>
+        )}
+
+        {/* 第二步（担保缺口/谷底增筹）/ 第一步（其他）：监控/关注对象（仅融资付息类通知） */}
         {key.startsWith("fz_") && (
           <div>
-            <p className="text-xs font-semibold text-gray-600 mb-2">第一步：选择监控对象</p>
+            <p className="text-xs font-semibold text-gray-600 mb-2">
+              {key === "fz_notify_collateral_gap" ? "第二步：选择监控对象" : key === "fz_notify_gd_entrust" ? "第二步：关注对象" : "第一步：选择监控对象"}
+            </p>
 
-            {/* 选择用户 */}
+            {/* 谷底增筹委托：关注对象写死，不需要选择 */}
+            {key === "fz_notify_gd_entrust" ? (
+              <div className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-gray-50 text-gray-600">
+                52 号账本 · 谷底增筹（全部委托单，赠送单不计入）
+              </div>
+            ) : null}
+
+            {/* 选择用户（谷底增筹委托不需要） */}
+            {key !== "fz_notify_gd_entrust" && (
             <div className="relative mb-2">
               <label className="text-xs text-gray-400 mb-1 block">账本 52 号用户（有融资付息订单）</label>
               <div
@@ -7719,9 +7950,9 @@ function NotifyTab() {
                 </div>
               )}
             </div>
-
+            )}
             {/* 选择订单范围 */}
-            {(selectedOrderUserId || editingRecord?.monitor_user_id) && (
+            {(selectedOrderUserId || editingRecord?.monitor_user_id) && key !== "fz_notify_gd_entrust" && (
               <div>
                 <label className="text-xs text-gray-400 mb-1 block">订单范围</label>
                 <div className="flex gap-3 mb-2">
@@ -7874,16 +8105,108 @@ function NotifyTab() {
 
         {/* 消息内容 */}
         <div>
-          <label className="text-xs text-gray-500 mb-1 block">
-            消息内容
-            {NOTIFY_VARS[key] && <span className="ml-2 text-gray-400">可用变量：{NOTIFY_VARS[key]}</span>}
-          </label>
+          <label className="text-xs text-gray-500 mb-1 block">消息内容</label>
+          {/* 可点击变量标签 */}
+          {NOTIFY_VARS_DEF[key] && (
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {NOTIFY_VARS_DEF[key].map(v => (
+                <button
+                  key={v.key}
+                  type="button"
+                  onClick={() => {
+                    const ta = document.getElementById("notify-content-textarea") as HTMLTextAreaElement | null;
+                    if (!ta) return;
+                    const start = ta.selectionStart ?? (editingRecord.content || "").length;
+                    const end = ta.selectionEnd ?? start;
+                    const cur = editingRecord.content || "";
+                    const next = cur.slice(0, start) + v.key + cur.slice(end);
+                    setEditingRecord((p: any) => ({ ...p, content: next }));
+                    setTimeout(() => {
+                      ta.focus();
+                      const pos = start + v.key.length;
+                      ta.setSelectionRange(pos, pos);
+                    }, 0);
+                  }}
+                  className="text-xs px-2 py-0.5 rounded-full border border-blue-300 text-blue-600 bg-blue-50 active:bg-blue-100"
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+          )}
           <textarea
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white resize-none"
+            id="notify-content-textarea"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xl bg-white resize-none"
             rows={5}
             value={editingRecord.content || ""}
-            onChange={e => setEditingRecord((p: any) => ({ ...p, content: e.target.value }))}
+            onChange={e => {
+              const newContent = e.target.value;
+              setEditingRecord((p: any) => ({ ...p, content: newContent }));
+              // 自动保存草稿到 localStorage（按通知类型区分）
+              try {
+                localStorage.setItem(
+                  `notify_content_draft_${key}`,
+                  JSON.stringify({ content: newContent, savedAt: Date.now() })
+                );
+              } catch {}
+            }}
           />
+          {/* 实时发送预览 */}
+          {(editingRecord.content || "").trim() && NOTIFY_VARS_DEF[key] && (() => {
+            // 动态预览：优先用当前表单实际值，如果没有则用示例值
+            // 第一个接收人名字：已保存的用 touser 第一个，未保存的用 selectedRecipients 第一个
+            const firstRecipientName = (() => {
+              if (selectedRecipients.length > 0) return selectedRecipients[0].name;
+              if (editingRecord.touser) {
+                const firstUid = editingRecord.touser.split("|")[0];
+                const found = members.find((m: any) => m.userid === firstUid);
+                return found ? found.name : firstUid;
+              }
+              return editingRecord.monitor_user_name || "未选用户";
+            })();
+            const dynamicPreviews: Record<string, string> = {
+              "{monitor_user_name}": firstRecipientName,
+              "{推送对象}": firstRecipientName,
+              "{order_id}": (() => {
+                if (selectedIds.length === 0) return "无";
+                const selectedOrdObjs = afOrders.filter(o => selectedIds.includes(o.id));
+                const hasShared = selectedOrdObjs.some(o => o.collateral_share_mode === "self");
+                const hasNormal = selectedOrdObjs.some(o => o.collateral_share_mode !== "self");
+                const sharedCount = selectedOrdObjs.filter(o => o.collateral_share_mode === "self").length;
+                const normalNos = selectedOrdObjs.filter(o => o.collateral_share_mode !== "self").map(o => o.order_no || o.label).join("、");
+                if (hasShared && !hasNormal) return `共享担保订单（共${sharedCount}张）`;
+                if (!hasShared && hasNormal) return normalNos;
+                return `共享担保订单（共${sharedCount}张）、${normalNos}`;
+              })(),
+              "{coin}": selectedIds.length > 0
+                ? [...new Set(afOrders.filter(o => selectedIds.includes(o.id)).map(o => o.coin).filter(Boolean))].join("/")
+                : "无",
+              "{order_count}": selectedIds.length > 0 ? String(selectedIds.length) : (scope === "all" ? "全部" : "0"),
+            };
+            // 将模板分割成文本段和变量段，变量段用红色渲染
+            const allVarKeys = NOTIFY_VARS_DEF[key].map(v => v.key);
+            const varPattern = new RegExp(
+              "(" + allVarKeys.map(k => k.replace(/[{}]/g, "\\$&")).join("|") + ")",
+              "g"
+            );
+            const rawContent = editingRecord.content || "";
+            const parts = rawContent.split(varPattern);
+            const previewNodes = parts.map((part, i) => {
+              if (allVarKeys.includes(part)) {
+                const val = dynamicPreviews[part] !== undefined
+                  ? dynamicPreviews[part]
+                  : (NOTIFY_VARS_DEF[key].find(v => v.key === part)?.preview || part);
+                return <span key={i} className="text-red-500 font-medium">{val}</span>;
+              }
+              return <span key={i}>{part}</span>;
+            });
+            return (
+              <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                <div className="text-xs text-gray-400 mb-1">发送预览（红色为变量实际值）</div>
+                <div className="text-sm text-gray-700 whitespace-pre-wrap">{previewNodes}</div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* 卡片标题和链接 */}
@@ -7944,73 +8267,54 @@ function NotifyTab() {
         </div>
       )}
 
-      {/* 顶部：选择企业成员 */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-4">
-        <p className="text-sm font-semibold text-gray-700 mb-2">选择企业成员</p>
-        <div className="relative">
-          <div
-            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white cursor-pointer flex items-center justify-between"
-            onClick={() => setUserDropOpen(v => !v)}
-          >
-            <span className={selectedUser ? "text-gray-800 font-medium" : "text-gray-400"}>
-              {selectedUser ? selectedUser.name : (loadingMembers ? "加载成员中..." : "搜索并选择成员...")}
-            </span>
-            <ChevronDown className="w-4 h-4 text-gray-400" />
-          </div>
-          {userDropOpen && (
-            <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-              <div className="p-2 border-b border-gray-100">
-                <input
-                  autoFocus
-                  className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm"
-                  placeholder="搜索成员姓名或 userid..."
-                  value={userSearch}
-                  onChange={e => setUserSearch(e.target.value)}
-                />
-              </div>
-              {filteredMembers.length === 0 ? (
-                <div className="px-4 py-3 text-sm text-gray-400">无匹配成员</div>
-              ) : filteredMembers.map(m => (
-                <div
-                  key={m.userid}
-                  className={`px-4 py-2.5 text-sm hover:bg-blue-50 cursor-pointer ${selectedUser?.userid === m.userid ? "bg-blue-50 font-medium text-blue-700" : "text-gray-700"}`}
-                  onClick={() => handleSelectUser(m)}
-                >
-                  {m.name}
-                  {m.userid !== m.name && <span className="text-xs text-gray-400 ml-1">({m.userid})</span>}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      {/* 双 Tab 切换栏 */}
+      <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
+        <button
+          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
+            notifyTab === "content" ? "bg-white text-gray-800 shadow-sm" : "text-gray-500 hover:text-gray-700"
+          }`}
+          onClick={() => setNotifyTab("content")}
+        >按推送内容</button>
+        <button
+          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
+            notifyTab === "member" ? "bg-white text-gray-800 shadow-sm" : "text-gray-500 hover:text-gray-700"
+          }`}
+          onClick={() => setNotifyTab("member")}
+        >按成员</button>
       </div>
 
-      {/* 未选用户时的提示 */}
-      {!selectedUser && (
-        <div className="bg-gray-50 rounded-xl border border-dashed border-gray-200 px-4 py-8 text-center">
-          <p className="text-sm text-gray-400">请先选择一位企业成员，查看并配置其通知订阅</p>
-        </div>
-      )}
-
-      {/* 已选用户：通知项列表 */}
-      {selectedUser && (
+      {/* Tab 1：按推送内容 */}
+      {notifyTab === "content" && (
         <>
-          {loadingCfg ? (
-            <div className="text-center py-6 text-sm text-gray-400">加载配置中...</div>
+          {loadingAllTasks ? (
+            <div className="text-center py-6 text-sm text-gray-400">加载中...</div>
           ) : (
             NOTIFY_ITEMS_META2.map(meta => {
-              const records = notifyRecords[meta.key] || [];
+              const records = allTasks[meta.key] || [];
               const isExpanded = expandedKey === meta.key;
               const isAddingNew = editingKey === meta.key && editingRecord && !editingRecord.id;
 
               return (
                 <div key={meta.key} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                  {/* 头部：标题 + 记录数 + 展开 */}
                   <button
                     className="w-full flex items-center justify-between px-4 py-3 text-left"
                     onClick={() => {
-                      setExpandedKey(isExpanded ? null : meta.key);
-                      if (isExpanded) { setEditingRecord(null); setEditingKey(null); }
+                      if (isExpanded) {
+                        setExpandedKey(null);
+                        setEditingRecord(null);
+                        setEditingKey(null);
+                      } else {
+                        setExpandedKey(meta.key);
+                        // 谷底增筹委托：展开时直接进入编辑状态（已有记录则编辑第一条，无记录则新增）
+                        if (meta.key === "fz_notify_gd_entrust") {
+                          const existRecs = allTasks[meta.key] || [];
+                          if (existRecs.length > 0) {
+                            handleEditRecord(existRecs[0]);
+                          } else {
+                            handleAddRecord(meta.key);
+                          }
+                        }
+                      }
                     }}
                   >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -8022,7 +8326,7 @@ function NotifyTab() {
                     <div className="flex items-center gap-2 flex-shrink-0 ml-2">
                       {records.length > 0 && (
                         <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full">
-                          已开通 {records.length} 条
+                          {records.length} 个任务
                         </span>
                       )}
                       {isExpanded
@@ -8031,32 +8335,36 @@ function NotifyTab() {
                     </div>
                   </button>
 
-                  {/* 已保存的记录列表（折叠时也显示） */}
-                  {records.length > 0 && (
-                    <div className={`border-t border-gray-50 divide-y divide-gray-50 ${!isExpanded ? "hidden" : ""}`}>
-                      {records.map(rec => {
+                  {isExpanded && records.length > 0 && (
+                    <div className="border-t border-gray-50 divide-y divide-gray-50">
+                      {records.map((rec: any) => {
                         const isEditingThis = editingRecord?.id === rec.id && editingKey === meta.key;
+                        const recipientNames = rec.touser
+                          ? rec.touser.split("|").map((uid: string) => {
+                              const found = members.find(m => m.userid === uid);
+                              return found ? found.name : uid;
+                            }).join("、")
+                          : (rec.userid ? (members.find(m => m.userid === rec.userid)?.name || rec.userid) : "未设置");
                         return (
                           <div key={rec.id} className="px-4 py-3">
-                            {!isEditingThis ? (
+                            {/* 谷底增筹委托是单一任务，展开时直接显示编辑表单 */}
+                            {meta.key === "fz_notify_gd_entrust" ? (
+                              renderEditForm(meta.key)
+                            ) : !isEditingThis ? (
                               <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0 flex-1">
                                   <p className="text-sm font-medium text-gray-700">
-                                    {rec.label || (rec.monitor_user_name ? `监控：${rec.monitor_user_name}` : "未命名配置")}
+                                    {rec.monitor_user_name ? `监控：${rec.monitor_user_name}` : (rec.label || "未命名配置")}
                                   </p>
                                   <p className="text-xs text-gray-400 mt-0.5">
-                                    {rec.monitor_user_name && <span>用户：{rec.monitor_user_name} · </span>}
-                                    {rec.order_scope === "all" ? "全部订单" : (() => { try { const ids = JSON.parse(rec.order_scope); return `指定${ids.length}张订单`; } catch { return rec.order_scope; } })()}
+                                    <span className="text-blue-500">推送给：{recipientNames}</span>
+                                    {rec.order_scope === "all" ? <span> · 全部订单</span> : (() => { try { const ids = JSON.parse(rec.order_scope); return <span> · 指定{ids.length}张订单</span>; } catch { return null; } })()}
                                     {rec.threshold && <span> · 阈值 {rec.threshold}%</span>}
                                     {rec.advance_days && <span> · 提前 {rec.advance_days} 天</span>}
-                                    <span> · {rec.msgtype === "text" ? "纯文本" : rec.msgtype === "markdown" ? "Markdown" : "卡片"}</span>
                                   </p>
                                 </div>
                                 <div className="flex gap-1 flex-shrink-0">
-                                  <button
-                                    className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded"
-                                    onClick={() => handleEditRecord(rec)}
-                                  >编辑</button>
+                                  <button className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded" onClick={() => handleEditRecord(rec)}>编辑</button>
                                   <button
                                     className="text-xs text-red-500 hover:text-red-700 px-2 py-1 rounded disabled:opacity-50"
                                     disabled={deletingId === rec.id}
@@ -8073,19 +8381,18 @@ function NotifyTab() {
                     </div>
                   )}
 
-                  {/* 展开区：新增表单 或 新增按钮 */}
                   {isExpanded && (
                     <div className={`px-4 pb-4 ${records.length > 0 ? "pt-2 border-t border-gray-50" : "pt-3"}`}>
-                      {/* 如果正在新增 */}
                       {isAddingNew ? (
                         renderEditForm(meta.key)
                       ) : (
-                        <button
-                          className="w-full border border-dashed border-blue-300 text-blue-600 rounded-xl py-2.5 text-sm hover:bg-blue-50 transition-colors"
-                          onClick={() => handleAddRecord(meta.key)}
-                        >
-                          + 新增一条配置
-                        </button>
+                        // 谷底增筹委托是单一任务，展开时已自动进入编辑，不显示新增按钒
+                        meta.key !== "fz_notify_gd_entrust" && (
+                          <button
+                            className="w-full border border-dashed border-blue-300 text-blue-600 rounded-xl py-2.5 text-sm hover:bg-blue-50 transition-colors"
+                            onClick={() => handleAddRecord(meta.key)}
+                          >+ 新增一个任务</button>
+                        )
                       )}
                     </div>
                   )}
@@ -8095,6 +8402,127 @@ function NotifyTab() {
           )}
         </>
       )}
+
+      {/* Tab 2：按成员 */}
+      {notifyTab === "member" && (() => {
+        // 构建成员任务映射
+        const memberTaskMap: Record<string, { userid: string; name: string; tasks: { key: string; label: string; rec: any }[] }> = {};
+        NOTIFY_ITEMS_META2.forEach(meta => {
+          (allTasks[meta.key] || []).forEach((rec: any) => {
+            const touserIds = rec.touser ? rec.touser.split("|").filter(Boolean) : (rec.userid ? [rec.userid] : []);
+            touserIds.forEach((uid: string) => {
+              if (!memberTaskMap[uid]) {
+                const found = members.find(m => m.userid === uid);
+                memberTaskMap[uid] = { userid: uid, name: found?.name || uid, tasks: [] };
+              }
+              memberTaskMap[uid].tasks.push({ key: meta.key, label: meta.label, rec });
+            });
+          });
+        });
+        const selectedMemberTasks = selectedMemberUid ? memberTaskMap[selectedMemberUid] : null;
+        return (
+          <>
+            {/* 成员下拉选择框 */}
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-4">
+              <p className="text-sm font-semibold text-gray-700 mb-2">选择成员</p>
+              <div className="relative">
+                <div
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white cursor-pointer flex items-center justify-between"
+                  onClick={() => setMemberTabDropOpen(v => !v)}
+                >
+                  <span className={selectedMemberUid ? "text-gray-800 font-medium" : "text-gray-400"}>
+                    {selectedMemberUid
+                      ? (members.find(m => m.userid === selectedMemberUid)?.name || selectedMemberUid)
+                      : "请选择成员查看其推送任务..."}
+                  </span>
+                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                </div>
+                {memberTabDropOpen && (
+                  <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                    <div className="p-2 border-b border-gray-100">
+                      <input
+                        autoFocus
+                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm"
+                        placeholder="搜索成员姓名或 userid..."
+                        value={memberTabSearch}
+                        onChange={e => setMemberTabSearch(e.target.value)}
+                      />
+                    </div>
+                    {members.filter(m =>
+                      !memberTabSearch ||
+                      m.name.toLowerCase().includes(memberTabSearch.toLowerCase()) ||
+                      m.userid.toLowerCase().includes(memberTabSearch.toLowerCase())
+                    ).length === 0 ? (
+                      <div className="px-4 py-3 text-sm text-gray-400">无匹配成员</div>
+                    ) : members.filter(m =>
+                      !memberTabSearch ||
+                      m.name.toLowerCase().includes(memberTabSearch.toLowerCase()) ||
+                      m.userid.toLowerCase().includes(memberTabSearch.toLowerCase())
+                    ).map(m => (
+                      <div
+                        key={m.userid}
+                        className={`px-4 py-2.5 text-sm hover:bg-blue-50 cursor-pointer flex items-center justify-between ${
+                          selectedMemberUid === m.userid ? "bg-blue-50 font-medium text-blue-700" : "text-gray-700"
+                        }`}
+                        onClick={() => { setSelectedMemberUid(m.userid); setMemberTabDropOpen(false); setMemberTabSearch(""); }}
+                      >
+                        <span>{m.name}{m.userid !== m.name && <span className="text-xs text-gray-400 ml-1">({m.userid})</span>}</span>
+                        {memberTaskMap[m.userid] && (
+                          <span className="text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full ml-2">
+                            {memberTaskMap[m.userid].tasks.length} 个任务
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 未选成员时的提示 */}
+            {!selectedMemberUid && (
+              <div className="bg-gray-50 rounded-xl border border-dashed border-gray-200 px-4 py-8 text-center">
+                <p className="text-sm text-gray-400">请选择一位成员，查看其所有推送任务</p>
+              </div>
+            )}
+
+            {/* 已选成员的任务列表 */}
+            {selectedMemberUid && (
+              selectedMemberTasks ? (
+                <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="px-4 py-3 border-b border-gray-50">
+                    <p className="text-sm font-semibold text-gray-800">{selectedMemberTasks.name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{selectedMemberTasks.tasks.length} 个推送任务</p>
+                  </div>
+                  <div className="divide-y divide-gray-50">
+                    {selectedMemberTasks.tasks.map((t, i) => (
+                      <div key={i} className="px-4 py-3 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-700">{t.label}</p>
+                          <p className="text-xs text-gray-400 mt-0.5">
+                            {t.rec.monitor_user_name && <span>监控：{t.rec.monitor_user_name} · </span>}
+                            {t.rec.threshold && <span>阈值 {t.rec.threshold}% · </span>}
+                            {t.rec.order_scope === "all" ? "全部订单" : (() => { try { const ids = JSON.parse(t.rec.order_scope); return `指定${ids.length}张订单`; } catch { return ""; } })()}
+                          </p>
+                        </div>
+                        <button
+                          className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 rounded flex-shrink-0"
+                          onClick={() => { setNotifyTab("content"); handleEditRecord(t.rec); }}
+                        >编辑</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-gray-50 rounded-xl border border-dashed border-gray-200 px-4 py-8 text-center">
+                  <p className="text-sm text-gray-400">该成员暂无任何推送任务</p>
+                </div>
+              )
+            )}
+          </>
+        );
+      })()}
+
 
       {/* 基础配置（折叠，置底） */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
