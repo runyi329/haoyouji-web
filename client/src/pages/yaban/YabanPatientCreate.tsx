@@ -7,7 +7,7 @@
  */
 import { useState, useEffect, useRef } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronDown, ChevronRight, XCircle, Check, UserRound, Camera, Copy, X } from "lucide-react";
+import { ChevronDown, ChevronRight, XCircle, Check, UserRound, Camera, Copy, X, PlusCircle } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useYabanClinic } from "./useYabanClinic";
@@ -78,7 +78,7 @@ const PERSONAL_FIELDS: FieldDef[] = [
 const CUSTOMER_FIELDS: FieldDef[] = [
   { key: "patientType", label: "顾客类型", placeholder: "电子", kind: "select", options: PATIENT_TYPES, width: "half" },
   { key: "source", label: "顾客来源", placeholder: "请选择", kind: "select", options: SOURCES, width: "half" },
-  { key: "netConsultant", label: "网电咨询师", placeholder: "请选择", kind: "select", options: NET_CONSULTANTS, width: "half" },
+  { key: "netConsultant", label: "网电咨询", placeholder: "请选择", kind: "select", options: NET_CONSULTANTS, width: "half" },
   { key: "consultant", label: "咨询师", placeholder: "请选择", kind: "select", options: CONSULTANTS, width: "half" },
   { key: "_yabanAccount", label: "牙伴账号", placeholder: "", kind: "readonly", width: "half" },
   { key: "_yabanPassword", label: "初始密码", placeholder: "", kind: "readonly", width: "half" },
@@ -157,6 +157,10 @@ export default function YabanPatientCreate() {
   const [addressOpen, setAddressOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [licensePlateOpen, setLicensePlateOpen] = useState(false);
+  // 当前正在编辑第几块车牌（1/2/3）
+  const [licensePlateIndex, setLicensePlateIndex] = useState<1 | 2 | 3>(1);
+  // 当前显示几块车牌输入框（1~3，点「+」增加）
+  const [plateCount, setPlateCount] = useState<1 | 2 | 3>(1);
   // 头像：null 表示跟随年龄+性别自动适配；非 null 表示用户手动指定
   const [avatarManual, setAvatarManual] = useState<AvatarKey | null>(null);
   // 备用随机密码：页面加载时生成一次，无手机号时使用
@@ -241,6 +245,8 @@ export default function YabanPatientCreate() {
       region: d.region ?? "",
       address: d.address ?? "",
       licensePlate: d.license_plate ?? "",
+      licensePlate2: d.license_plate2 ?? "",
+      licensePlate3: d.license_plate3 ?? "",
       emergencyContact: d.emergency_contact ?? "",
       emergencyRelation: d.emergency_relation ?? "",
       occupation: d.occupation ?? "",
@@ -256,6 +262,9 @@ export default function YabanPatientCreate() {
       chiefComplaint: d.chief_complaint ?? "",
     });
     if (d.avatar) setAvatarManual(d.avatar as AvatarKey);
+    // 编辑模式：根据已有车牌数量初始化 plateCount
+    const pc = d.license_plate3 ? 3 : d.license_plate2 ? 2 : 1;
+    setPlateCount(pc as 1 | 2 | 3);
   }, [detailQuery.data, isEdit]);
 
   const handleBack = () => {
@@ -322,6 +331,8 @@ export default function YabanPatientCreate() {
       region: form.region,
       address: form.address,
       licensePlate: form.licensePlate,
+      licensePlate2: form.licensePlate2 || undefined,
+      licensePlate3: form.licensePlate3 || undefined,
       emergencyContact: form.emergencyContact,
       emergencyRelation: form.emergencyRelation,
       occupation: form.occupation,
@@ -400,23 +411,58 @@ export default function YabanPatientCreate() {
         <div className="bg-white mt-2 px-3 py-3">
           <div className="px-1 pb-2 text-[13px] font-semibold text-gray-800">个人信息</div>
           <div className="flex flex-wrap gap-x-2 gap-y-1">
-            {PERSONAL_FIELDS.map((f) => (
-              <FieldCell
-                key={f.key}
-                field={f}
-                value={form[f.key] || ""}
-                open={openKey === f.key}
-                onInput={(v) => setField(f.key, v)}
-                onToggle={() => setOpenKey(openKey === f.key ? null : f.key)}
-                onSelect={(v) => {
-                  setField(f.key, v);
-                  setOpenKey(null);
-                }}
-                onOpenHistory={() => setHistoryOpen(true)}
-                onOpenAddress={() => setAddressOpen(true)}
-                onOpenLicensePlate={() => setLicensePlateOpen(true)}
-              />
-            ))}
+            {PERSONAL_FIELDS.map((f) => {
+              // 车牌字段：特殊处理，支持多块 + 动态标题
+              if (f.key === "licensePlate") {
+                const PLATE_KEYS: ("licensePlate" | "licensePlate2" | "licensePlate3")[] = ["licensePlate", "licensePlate2", "licensePlate3"];
+                const PLATE_LABELS = plateCount === 1 ? ["车牌"] : ["车牌一", "车牌二", "车牌三"];
+                const nextPlateNum = plateCount + 1;
+                return (
+                  <>
+                    {PLATE_KEYS.slice(0, plateCount).map((pk, idx) => {
+                      const isLast = idx === plateCount - 1;
+                      return (
+                        <FieldCell
+                          key={pk}
+                          field={{ ...f, key: pk, label: PLATE_LABELS[idx] }}
+                          value={form[pk] || ""}
+                          open={false}
+                          onInput={() => {}}
+                          onToggle={() => {}}
+                          onSelect={() => {}}
+                          onOpenLicensePlate={() => {
+                            setLicensePlateIndex((idx + 1) as 1 | 2 | 3);
+                            setLicensePlateOpen(true);
+                          }}
+                          onAddPlate={isLast && plateCount < 3 ? () => {
+                            if (window.confirm(`是否添加第 ${nextPlateNum} 块车牌？`)) {
+                              setPlateCount((c) => Math.min(c + 1, 3) as 1 | 2 | 3);
+                            }
+                          } : undefined}
+                        />
+                      );
+                    })}
+                  </>
+                );
+              }
+              return (
+                <FieldCell
+                  key={f.key}
+                  field={f}
+                  value={form[f.key] || ""}
+                  open={openKey === f.key}
+                  onInput={(v) => setField(f.key, v)}
+                  onToggle={() => setOpenKey(openKey === f.key ? null : f.key)}
+                  onSelect={(v) => {
+                    setField(f.key, v);
+                    setOpenKey(null);
+                  }}
+                  onOpenHistory={() => setHistoryOpen(true)}
+                  onOpenAddress={() => setAddressOpen(true)}
+                  onOpenLicensePlate={() => setLicensePlateOpen(true)}
+                />
+              );
+            })}
           </div>
         </div>
 
@@ -437,84 +483,103 @@ export default function YabanPatientCreate() {
                 if (f.key === "_yabanAccount") displayValue = previewAccount;
                 if (f.key === "_yabanPassword") displayValue = previewPwd;
 
-                // 推荐人字段：自定义搜索输入框 + 下拉候选列表
+                // 推荐人字段：自定义搜索输入框 + 下拉候选列表 + 所属医院（联动只读）
                 if (f.key === "referrerUsername") {
+                  // 先渲染推荐人行，再在其后追加所属医院
                   const referrerResults = referrerSearch.length >= 1 ? (referrerQuery.data || []) : [];
                   const showDropdown = referrerSearch.length >= 1 && referrerResults.length > 0;
                   const refCount = referralCountQuery.data;
                   const directCount = refCount?.direct ?? 0;
                   const totalCount = refCount?.total ?? 0;
-                  const countLabel = isEdit
-                    ? (totalCount > 0 ? `直接${directCount}人 共${totalCount}人` : "暂无")
-                    : "保存后显示";
+                  const countLabel = totalCount > 0 ? `直接${directCount}人 共${totalCount}人` : "0人";
                   return (
-                    <div key={f.key} className="w-full flex gap-x-2 relative">
-                      {/* 左：推荐人搜索 */}
-                      <div className="relative" style={{ flex: "1 1 calc(50% - 6px)" }}>
-                        <div className="px-1 pb-1 pt-0.5">
-                          <span className="text-[11px] text-gray-400">推荐人</span>
-                        </div>
-                        <div className="flex items-center bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
-                          <input
-                            type="text"
-                            className="flex-1 bg-transparent text-sm text-gray-800 outline-none placeholder-gray-300"
-                            placeholder="搜索脉动网用户名"
-                            value={form.referrerUsername || ""}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              setField("referrerUsername", v);
-                              setReferrerSearch(v);
-                            }}
-                          />
-                          {form.referrerUsername && (
-                            <button
-                              type="button"
-                              className="ml-1 text-gray-300 active:text-gray-500"
-                              onClick={() => { setField("referrerUsername", ""); setReferrerSearch(""); }}
-                            >
-                              <XCircle size={15} />
-                            </button>
-                          )}
-                        </div>
-                        {showDropdown && (
-                          <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-                            {referrerResults.map((u: any) => (
+                    <>
+                      {/* 推荐人 + 推荐的人：和上面 FieldCell half 完全一致的布局 */}
+                      {/* 推荐人（左半） */}
+                      <div
+                        key={f.key}
+                        style={{ flex: "1 1 calc(50% - 6px)", minWidth: 150 }}
+                        className="py-1.5 flex items-center gap-2"
+                      >
+                        <label className="text-gray-700 text-base shrink-0" style={{ minWidth: "4em", display: "inline-block" }}>推荐人</label>
+                        <div className="flex-1 min-w-0 relative">
+                          <div className="flex items-center bg-gray-50 rounded-lg border border-[#D6E6F5] h-10 px-3 gap-2">
+                            <input
+                              type="text"
+                              className="flex-1 bg-transparent text-sm outline-none min-w-0"
+                              placeholder="输入搜索"
+                              value={form.referrerUsername || ""}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setField("referrerUsername", v);
+                                setReferrerSearch(v);
+                              }}
+                            />
+                            {form.referrerUsername && (
                               <button
-                                key={u.id}
                                 type="button"
-                                className="w-full text-left px-4 py-2.5 text-sm text-gray-800 hover:bg-blue-50 active:bg-blue-100 border-b border-gray-50 last:border-0"
-                                onClick={() => {
-                                  setField("referrerUsername", u.username);
-                                  setReferrerSearch("");
-                                }}
+                                className="text-gray-300 flex-shrink-0"
+                                onClick={() => { setField("referrerUsername", ""); setReferrerSearch(""); }}
                               >
-                                <span className="font-medium">{u.username}</span>
-                                {u.name && <span className="ml-2 text-gray-400 text-xs">{u.name}</span>}
-                                {u.mobile && <span className="ml-2 text-gray-300 text-xs">{u.mobile}</span>}
+                                <XCircle size={15} />
                               </button>
-                            ))}
+                            )}
                           </div>
-                        )}
-                      </div>
-                      {/* 右：推荐人数（只读，可点击查看列表） */}
-                      <div style={{ flex: "1 1 calc(50% - 6px)" }}>
-                        <div className="px-1 pb-1 pt-0.5">
-                          <span className="text-[11px] text-gray-400">已推荐人数</span>
-                        </div>
-                        <button
-                          type="button"
-                          className="w-full flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100 min-h-[42px] active:bg-gray-100"
-                          onClick={() => isEdit && setReferralListOpen(true)}
-                        >
-                          <span className="text-sm" style={{ color: totalCount > 0 ? "#1E88D6" : undefined }}>
-                            {countLabel}
-                          </span>
-                          {isEdit && totalCount > 0 && (
-                            <ChevronRight size={14} className="text-gray-300 ml-1 flex-shrink-0" />
+                          {showDropdown && (
+                            <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+                              {referrerResults.map((u: any) => (
+                                <button
+                                  key={u.id}
+                                  type="button"
+                                  className="w-full text-left px-4 py-2.5 text-sm text-gray-800 hover:bg-blue-50 active:bg-blue-100 border-b border-gray-50 last:border-0"
+                                  onClick={() => {
+                                    setField("referrerUsername", u.username);
+                                    setReferrerSearch("");
+                                  }}
+                                >
+                                  <span className="font-medium">{u.username}</span>
+                                  {u.name && <span className="ml-2 text-gray-400 text-xs">{u.name}</span>}
+                                  {u.mobile && <span className="ml-2 text-gray-300 text-xs">{u.mobile}</span>}
+                                </button>
+                              ))}
+                            </div>
                           )}
-                        </button>
+                        </div>
                       </div>
-                    </div>
+                      {/* 推荐的人（右半） */}
+                      <div
+                        key="_referralCount"
+                        style={{ flex: "1 1 calc(50% - 6px)", minWidth: 150 }}
+                        className="py-1.5 flex items-center gap-2"
+                      >
+                        <label className="text-gray-700 text-base shrink-0" style={{ minWidth: "4em", display: "inline-block" }}>推荐的人</label>
+                        <div className="flex-1 min-w-0">
+                          <button
+                            type="button"
+                            className="w-full flex items-center justify-between bg-gray-50 rounded-lg border border-[#D6E6F5] h-10 px-3 gap-1 active:bg-gray-100"
+                            onClick={() => totalCount > 0 && setReferralListOpen(true)}
+                          >
+                            <span className="text-sm" style={{ color: totalCount > 0 ? "#1E88D6" : undefined }}>
+                              {countLabel}
+                            </span>
+                            {totalCount > 0 && (
+                              <ChevronRight size={14} className="text-gray-300 ml-1 flex-shrink-0" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                      {/* 所属医院（只读联动，整行，标题在左内容框在右） */}
+                      <div key="_clinic" style={{ flex: "1 1 100%", minWidth: 0 }} className="py-1.5 flex items-center gap-2">
+                        <label className="text-gray-700 text-base shrink-0" style={{ minWidth: "4em", display: "inline-block" }}>所属医院</label>
+                        <div className="flex-1 min-w-0">
+                          <div className="w-full h-10 px-3 rounded-lg bg-gray-50 border border-[#D6E6F5] flex items-center text-sm">
+                            <span style={{ color: clinicName ? "#1E88D6" : "#9ca3af" }}>
+                              {clinicName || "—"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </>
                   );
                 }
 
@@ -532,6 +597,13 @@ export default function YabanPatientCreate() {
                     }}
                     onOpenHistory={() => setHistoryOpen(true)}
                     onOpenAddress={() => setAddressOpen(true)}
+                    fixedLabelWidth
+                    historyTags={f.key === "history" ? parseHistory(form.history || "").names : undefined}
+                    onRemoveHistoryTag={f.key === "history" ? (tag) => {
+                      const parsed = parseHistory(form.history || "");
+                      const newNames = parsed.names.filter((n) => n !== tag);
+                      setField("history", serializeHistory(newNames, parsed.remark));
+                    } : undefined}
                     onReadonlyClick={f.key === "_yabanAccount" || f.key === "_yabanPassword"
                       ? () => setYabanTipType(f.key === "_yabanAccount" ? "account" : "password")
                       : undefined
@@ -610,13 +682,15 @@ export default function YabanPatientCreate() {
         }}
       />
 
-      {/* 车牌输入器 */}
+      {/* 车牌输入器（支持3块，按 licensePlateIndex 区分） */}
       <LicensePlatePicker
         open={licensePlateOpen}
-        value={form.licensePlate || ""}
+        value={licensePlateIndex === 1 ? (form.licensePlate || "") : licensePlateIndex === 2 ? (form.licensePlate2 || "") : (form.licensePlate3 || "")}
         onClose={() => setLicensePlateOpen(false)}
         onConfirm={(plate) => {
-          setField("licensePlate", plate);
+          if (licensePlateIndex === 1) setField("licensePlate", plate);
+          else if (licensePlateIndex === 2) setField("licensePlate2", plate);
+          else setField("licensePlate3", plate);
           setLicensePlateOpen(false);
         }}
       />
@@ -759,6 +833,10 @@ function FieldCell({
   onOpenAddress,
   onOpenLicensePlate,
   onReadonlyClick,
+  fixedLabelWidth,
+  historyTags,
+  onRemoveHistoryTag,
+  onAddPlate,
 }: {
   field: FieldDef;
   value: string;
@@ -770,13 +848,21 @@ function FieldCell({
   onOpenAddress?: () => void;
   onOpenLicensePlate?: () => void;
   onReadonlyClick?: () => void;
+  fixedLabelWidth?: boolean;
+  historyTags?: string[];
+  onRemoveHistoryTag?: (tag: string) => void;
+  /** 车牌字段：传入则在复制按鈕右边显示「+」，点击后弹确认添加下一块车牌 */
+  onAddPlate?: () => void;
 }) {
   const basis = WIDTH_BASIS[field.width || "full"];
   // 长内容字段（多行文本、AI健康标签、地址）标题在上、控件占满整行；其余短字段标题与控件同行
   const stacked = field.kind === "textarea" || field.kind === "history";
 
   const label = (
-    <label className={`text-gray-700 truncate shrink-0 ${stacked ? "block text-base mb-1.5" : "text-base"}`}>
+    <label
+      className={`text-gray-700 shrink-0 ${stacked ? "block text-base mb-1.5" : "text-base"}`}
+      style={!stacked && fixedLabelWidth ? { minWidth: "4em", display: "inline-block" } : undefined}
+    >
       {field.label}
     </label>
   );
@@ -882,7 +968,7 @@ function FieldCell({
       </div>
     );
   } else if (field.kind === "license-plate") {
-    // 车牌显示：有値时显示车牌样式 + 复制按鈕
+    // 车牌显示：有值时显示车牌样式 + 复制按钮 + 「+」（最后一块且有值时）
     control = (
       <div className={`${boxCls} justify-between`}>
         <button
@@ -917,6 +1003,16 @@ function FieldCell({
               <Copy className="w-4 h-4" style={{ color: ACCENT }} />
             </button>
           )}
+          {value && onAddPlate && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onAddPlate(); }}
+              className="p-1 rounded active:bg-gray-100"
+              title="添加车牌"
+            >
+              <PlusCircle className="w-4 h-4" style={{ color: ACCENT }} />
+            </button>
+          )}
           <ChevronDown className="w-4 h-4 text-gray-300" onClick={onOpenLicensePlate} />
         </div>
       </div>
@@ -935,18 +1031,51 @@ function FieldCell({
       </button>
     );
   } else if (field.kind === "history") {
-    control = (
-      <button
-        type="button"
-        onClick={onOpenHistory}
-        className={`${boxCls} justify-between text-left active:bg-gray-100`}
-      >
-        <span className={`truncate ${value ? "text-gray-800" : "text-gray-300"}`}>
-          {value || field.placeholder}
-        </span>
-        <ChevronDown className="w-4 h-4 text-gray-300 shrink-0 ml-1" />
-      </button>
-    );
+    const tags = historyTags || [];
+    if (tags.length > 0) {
+      // 已有标签：胶囊展示 + 末尾「+」按钮继续添加
+      control = (
+        <div className="flex flex-wrap gap-1.5 items-center min-h-[40px] py-1">
+          {tags.map((tag) => (
+            <span
+              key={tag}
+              className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-medium"
+              style={{ background: "#E3F0FB", color: ACCENT, border: `1px solid #BBD9F2` }}
+            >
+              {tag}
+              <button
+                type="button"
+                className="ml-0.5 flex items-center justify-center rounded-full hover:bg-blue-200 active:bg-blue-300"
+                style={{ width: 14, height: 14 }}
+                onClick={() => onRemoveHistoryTag?.(tag)}
+              >
+                <X size={10} />
+              </button>
+            </span>
+          ))}
+          <button
+            type="button"
+            onClick={onOpenHistory}
+            className="inline-flex items-center justify-center rounded-full border border-dashed border-[#1E88D6] text-[#1E88D6] active:bg-blue-50"
+            style={{ width: 28, height: 28, flexShrink: 0 }}
+          >
+            <span style={{ fontSize: 18, lineHeight: 1, marginTop: -1 }}>+</span>
+          </button>
+        </div>
+      );
+    } else {
+      // 无标签：显示占位按钮
+      control = (
+        <button
+          type="button"
+          onClick={onOpenHistory}
+          className={`${boxCls} justify-between text-left active:bg-gray-100`}
+        >
+          <span className="text-gray-300">{field.placeholder}</span>
+          <ChevronDown className="w-4 h-4 text-gray-300 shrink-0 ml-1" />
+        </button>
+      );
+    }
   } else if (field.kind === "select") {
     // 性别选中时的淡色底色（女=淡粉 男=淡蓝），不影响字色
     let genderStyle: React.CSSProperties = {};

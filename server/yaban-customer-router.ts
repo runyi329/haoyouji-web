@@ -178,6 +178,8 @@ async function ensureCustomerTable(conn: any) {
       region VARCHAR(64) DEFAULT NULL,
       address VARCHAR(255) DEFAULT NULL,
       license_plate VARCHAR(16) DEFAULT NULL,
+      license_plate2 VARCHAR(16) DEFAULT NULL,
+      license_plate3 VARCHAR(16) DEFAULT NULL,
       avatar VARCHAR(255) DEFAULT NULL,
       emergency_contact VARCHAR(64) DEFAULT NULL,
       emergency_relation VARCHAR(32) DEFAULT NULL,
@@ -226,6 +228,13 @@ async function ensureCustomerTable(conn: any) {
   // 兼容旧表：补充 license_plate 列
   try {
     await conn.execute(`ALTER TABLE yaban_customer ADD COLUMN license_plate VARCHAR(16) DEFAULT NULL AFTER address`);
+  } catch (e) { /* 列已存在则忽略 */ }
+  // 兼容旧表：补充 license_plate2/3 列
+  try {
+    await conn.execute(`ALTER TABLE yaban_customer ADD COLUMN license_plate2 VARCHAR(16) DEFAULT NULL AFTER license_plate`);
+  } catch (e) { /* 列已存在则忽略 */ }
+  try {
+    await conn.execute(`ALTER TABLE yaban_customer ADD COLUMN license_plate3 VARCHAR(16) DEFAULT NULL AFTER license_plate2`);
   } catch (e) { /* 列已存在则忽略 */ }
   // 兼容旧表：补充紧急联系人相关列
   for (const col of [
@@ -563,6 +572,8 @@ const createInput = z.object({
   region: z.string().max(64).optional(),
   address: z.string().max(255).optional(),
   licensePlate: z.string().max(16).optional(),
+  licensePlate2: z.string().max(16).optional(),
+  licensePlate3: z.string().max(16).optional(),
   avatar: z.string().max(255).optional(),
   emergencyContact: z.string().max(64).optional(),
   emergencyRelation: z.string().max(32).optional(),
@@ -932,14 +943,14 @@ export const yabanCustomerRouter = router({
       const doInsert = async (code: string) =>
         (await (conn as any).execute(
           `INSERT INTO yaban_customer
-           (tenant_id, name, gender, birthday, age, zodiac, chinese_zodiac, patient_type, medical_no, external_no, nickname,
-            email, mobile, phone, region, address, license_plate, avatar,
+            (tenant_id, name, gender, birthday, age, zodiac, chinese_zodiac, patient_type, medical_no, external_no, nickname,
+             email, mobile, phone, region, address, license_plate, license_plate2, license_plate3, avatar,
             emergency_contact, emergency_relation, occupation, emergency_phone,
             source, net_consultant, consultant, yaban_username, yaban_password, referrer_username, history, remark,
             chief_complaint, health_status, drug_allergy, food_allergy,
             heart, hypertension, diabetes, kidney, infectious, bleeding, pregnant, medication,
             created_by)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?, ?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?)`,
+           VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?, ?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?)`,
           [
             TENANT_ID,
             (input.name || "").trim(),
@@ -958,6 +969,8 @@ export const yabanCustomerRouter = router({
             s(input.region),
             s(input.address),
             s(input.licensePlate),
+            s(input.licensePlate2),
+            s(input.licensePlate3),
             s(input.avatar),
             s(input.emergencyContact),
             s(input.emergencyRelation),
@@ -1049,7 +1062,7 @@ export const yabanCustomerRouter = router({
       await (conn as any).execute(
         `UPDATE yaban_customer SET
            name = ?, gender = ?, birthday = ?, age = ?, zodiac = ?, chinese_zodiac = ?, patient_type = ?,
-           external_no = ?, nickname = ?, email = ?, mobile = ?, phone = ?, region = ?, address = ?, license_plate = ?, avatar = ?,
+           external_no = ?, nickname = ?, email = ?, mobile = ?, phone = ?, region = ?, address = ?, license_plate = ?, license_plate2 = ?, license_plate3 = ?, avatar = ?,
            emergency_contact = ?, emergency_relation = ?, occupation = ?, emergency_phone = ?,
            source = ?, net_consultant = ?, consultant = ?, history = ?, remark = ?,
            chief_complaint = ?, health_status = ?, drug_allergy = ?, food_allergy = ?,
@@ -1071,6 +1084,8 @@ export const yabanCustomerRouter = router({
           s(input.region),
           s(input.address),
           s(input.licensePlate),
+          s(input.licensePlate2),
+          s(input.licensePlate3),
           s(input.avatar),
           s(input.emergencyContact),
           s(input.emergencyRelation),
