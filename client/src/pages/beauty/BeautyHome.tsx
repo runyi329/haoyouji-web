@@ -218,42 +218,47 @@ export default function BeautyHome() {
                 )}
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {/* 素材按钮 */}
-              <Link href="/beauty/showcase">
+            <div className="flex flex-col items-end gap-1.5">
+              {/* 第一行：三个原有按鈕 */}
+              <div className="flex items-center gap-2">
+                {/* 素材按鈕 */}
+                <Link href="/beauty/showcase">
+                  <button
+                    className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center active:scale-90 transition-transform"
+                  >
+                    <BarChart3 className="w-4 h-4 text-white/80" />
+                  </button>
+                </Link>
+                {/* 分享按鈕 */}
                 <button
+                  onClick={handleShare}
                   className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center active:scale-90 transition-transform"
                 >
-                  <BarChart3 className="w-4 h-4 text-white/80" />
+                  <Share2 className="w-4 h-4 text-white/80" />
                 </button>
-              </Link>
-              {/* 分享按钮 */}
-              <button
-                onClick={handleShare}
-                className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center active:scale-90 transition-transform"
-              >
-                <Share2 className="w-4 h-4 text-white/80" />
-              </button>
-              {/* 洗衣服务按钮 */}
-              <Link href="/beauty/laundry">
-                <button
-                  className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center active:scale-90 transition-transform"
+                {/* 洗衣服务按鈕 */}
+                <Link href="/beauty/laundry">
+                  <button
+                    className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center active:scale-90 transition-transform"
+                  >
+                    <WashingMachine className="w-4 h-4 text-white/80" />
+                  </button>
+                </Link>
+              </div>
+              {/* 第二行：微信联系按鈕（靠左第一个） */}
+              <div className="flex items-center w-full">
+                <a
+                  href="https://work.weixin.qq.com/kfid/kfc0bdbfc36aa369410"
+                  target="_blank"
+                  rel="noopener noreferrer"
                 >
-                  <WashingMachine className="w-4 h-4 text-white/80" />
-                </button>
-              </Link>
-              {/* 微信联系按钮 */}
-              <a
-                href="https://work.weixin.qq.com/kfid/kfc0bdbfc36aa369410"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <button
-                  className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center active:scale-90 transition-transform"
-                >
-                  <img src="/wechat-logo.png" alt="微信联系" className="w-5 h-5 object-contain" />
-                </button>
-              </a>
+                  <button
+                    className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center active:scale-90 transition-transform"
+                  >
+                    <img src="/wechat-logo.png" alt="微信联系" className="w-5 h-5 object-contain" />
+                  </button>
+                </a>
+              </div>
             </div>
             <div className="flex flex-col items-center gap-1 relative" ref={menuRef}>
               {/* 头像区域 */}
