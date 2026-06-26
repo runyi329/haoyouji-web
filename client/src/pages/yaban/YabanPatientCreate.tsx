@@ -598,7 +598,7 @@ export default function YabanPatientCreate() {
                                 </button>
                               </div>
                               {/* 候选列表：绝对定位浮层，不占位置 */}
-                              {referrerSearch.length >= 1 && (
+                              {referrerPickerOpen && (
                                 <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border border-gray-100 bg-white shadow-lg overflow-hidden max-h-48 overflow-y-auto">
                                   {referrerQuery.isLoading ? (
                                     <div className="text-center text-gray-400 text-sm py-4">搜索中...</div>
