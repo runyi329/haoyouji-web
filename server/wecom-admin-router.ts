@@ -1146,6 +1146,9 @@ router.post("/api/admin/wecom/test-collateral-gap-send", requireSuperAdmin, asyn
     let cfgOrderScope: string;
     let cfgThreshold: string;
     let cfgMsgtype: string;
+    let cfgContentTemplate: string;
+
+    const { content: bodyContent } = req.body;
 
     if (cfg_id) {
       const [cfgRows] = await (conn as any).execute(
@@ -1158,6 +1161,7 @@ router.post("/api/admin/wecom/test-collateral-gap-send", requireSuperAdmin, asyn
       cfgOrderScope = cfg.order_scope || "all";
       cfgThreshold = cfg.threshold || "";
       cfgMsgtype = cfg.msgtype || "text";
+      cfgContentTemplate = cfg.content || "";
     } else {
       // 未保存模式：直接用前端传入的参数
       if (!bodyUserid) return res.status(400).json({ ok: false, error: "cfg_id 和 userid 至少传其中一个" });
@@ -1166,6 +1170,7 @@ router.post("/api/admin/wecom/test-collateral-gap-send", requireSuperAdmin, asyn
       cfgOrderScope = order_scope || "all";
       cfgThreshold = bodyThreshold || "";
       cfgMsgtype = bodyMsgtype || "text";
+      cfgContentTemplate = bodyContent || "";
     }
 
     // 计算当前保证金比例（不走阈值判断）
@@ -1177,16 +1182,22 @@ router.post("/api/admin/wecom/test-collateral-gap-send", requireSuperAdmin, asyn
       conn, orderIds, cfgMonitorUserId, "all"
     );
 
-    // 拼装测试消息
+    // 用配置里的 content 模板替换变量（与实际预警消息保持一致）
     const timeStr = new Date().toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
     const ratioStr = ratio !== null ? ratio.toFixed(2) : "N/A";
-    const content = `[测试] 担保缺口预警测试消息
-当前保证金比例：${ratioStr}%
-风险敞口：${totalGap.toFixed(2)}U
-总买入价值：${totalBuyValue.toFixed(2)}U
-订单数量：${orderCount} 张
-预警阈值：${cfgThreshold || "未设置"}%
-时间：${timeStr}`;
+    // 支持的模板变量：{ratio} {gap_amount} {total_buy_value} {order_count} {threshold} {time}
+    // 兼容旧变量：{order_id} {coin}
+    const cfgContent = cfgContentTemplate || "";
+    const renderedContent = cfgContent
+      .replace(/\{ratio\}/g, ratioStr + "%")
+      .replace(/\{gap_amount\}/g, totalGap.toFixed(2))
+      .replace(/\{total_buy_value\}/g, totalBuyValue.toFixed(2))
+      .replace(/\{order_count\}/g, String(orderCount))
+      .replace(/\{threshold\}/g, cfgThreshold || "未设置")
+      .replace(/\{time\}/g, timeStr)
+      .replace(/\{order_id\}/g, `共${orderCount}张`)
+      .replace(/\{coin\}/g, "多币种");
+    const content = `[测试] ${renderedContent}`;
 
     // 强制发送（不走任何判断逻辑）
     await sendWecomMessage(wecomCfg, cfgUserid, cfgMsgtype, content);

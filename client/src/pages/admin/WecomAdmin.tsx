@@ -7586,6 +7586,7 @@ function NotifyTab() {
               order_scope: rec.order_scope || "all",
               threshold: rec.threshold || "",
               msgtype: rec.msgtype || "text",
+              content: rec.content || "",
             };
         const r = await fetch("/api/admin/wecom/test-collateral-gap-send", {
           method: "POST",
