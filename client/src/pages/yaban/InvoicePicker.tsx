@@ -1,27 +1,34 @@
 /**
- * 牙伴 - 发票开票信息编辑弹窗
- * 支持最多3条开票信息，每条包含：公司名称（必填）、发票抬头（必填）、邮箱（选填）、手机（选填）
+ * 牙伴 - 发票开票信息编辑（全屏页面）
+ * 风格与全站一致：蓝色渐变顶栏、蓝色点缀、大字体输入框
+ * 邮箱输入支持智能后缀提示
  */
-import React, { useState, useEffect } from "react";
-import { X, ChevronLeft, PlusCircle, Trash2 } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { ChevronLeft, Mail, Phone, Building2, AlignLeft } from "lucide-react";
+import type { InvoiceInfo } from "./invoice-types";
+import { EMPTY_INVOICE } from "./invoice-types";
 
+const SKY_D = "#1E88D6";
+const SKY = "#3D9FD6";
 const ACCENT = "#1E88D6";
+const ACCENT_LIGHT = "#E8F4FD";
+const ACCENT_BORDER = "#D6E6F5";
 
-export interface InvoiceInfo {
-  company: string;   // 公司名称（必填）
-  title: string;     // 发票抬头（必填）
-  email: string;     // 邮箱（选填）
-  mobile: string;    // 手机（选填）
-}
-
-export const EMPTY_INVOICE: InvoiceInfo = { company: "", title: "", email: "", mobile: "" };
+const EMAIL_SUFFIXES = [
+  "@qq.com",
+  "@163.com",
+  "@126.com",
+  "@gmail.com",
+  "@outlook.com",
+  "@sina.com",
+  "@hotmail.com",
+  "@foxmail.com",
+];
 
 interface Props {
   open: boolean;
-  /** 当前正在编辑第几条（1/2/3） */
   index: 1 | 2 | 3;
   value: InvoiceInfo;
-  /** 顾客手机号，用于自动填充 */
   customerMobile?: string;
   onClose: () => void;
   onConfirm: (info: InvoiceInfo) => void;
@@ -29,6 +36,8 @@ interface Props {
 
 export default function InvoicePicker({ open, index, value, customerMobile, onClose, onConfirm }: Props) {
   const [form, setForm] = useState<InvoiceInfo>(EMPTY_INVOICE);
+  const [emailSuggestions, setEmailSuggestions] = useState<string[]>([]);
+  const emailRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -38,7 +47,19 @@ export default function InvoicePicker({ open, index, value, customerMobile, onCl
       email: value.email || "",
       mobile: value.mobile || (customerMobile || ""),
     });
+    setEmailSuggestions([]);
   }, [open]);
+
+  useEffect(() => {
+    if (!emailSuggestions.length) return;
+    const handler = (e: MouseEvent) => {
+      if (emailRef.current && !emailRef.current.contains(e.target as Node)) {
+        setEmailSuggestions([]);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [emailSuggestions]);
 
   if (!open) return null;
 
@@ -46,51 +67,102 @@ export default function InvoicePicker({ open, index, value, customerMobile, onCl
     setForm((prev) => ({ ...prev, [key]: val }));
   };
 
+  const handleEmailChange = (val: string) => {
+    setField("email", val);
+    const atIdx = val.indexOf("@");
+    if (atIdx === -1) {
+      if (val.trim()) {
+        setEmailSuggestions(EMAIL_SUFFIXES.map((s) => val + s));
+      } else {
+        setEmailSuggestions([]);
+      }
+    } else {
+      const prefix = val.slice(0, atIdx);
+      const suffix = val.slice(atIdx);
+      const filtered = EMAIL_SUFFIXES.filter((s) => s.startsWith(suffix) && s !== suffix);
+      setEmailSuggestions(filtered.length ? filtered.map((s) => prefix + s) : []);
+    }
+  };
+
   const canConfirm = form.company.trim() && form.title.trim();
 
   const inputCls =
-    "w-full h-10 px-3 rounded-lg bg-gray-50 border border-[#D6E6F5] text-sm text-gray-800 outline-none placeholder:text-gray-300 focus:bg-white focus:border-[#1E88D6] transition-colors";
+    "w-full h-14 px-4 rounded-xl bg-white border border-[#D6E6F5] text-lg text-gray-800 outline-none placeholder:text-gray-300 focus:border-[#1E88D6] focus:shadow-[0_0_0_3px_rgba(30,136,214,0.12)] transition-all";
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-
+    <div
+      className="fixed inset-0 z-50 flex flex-col"
+      style={{ background: "#F4F8FC" }}
+    >
+      {/* 蓝色渐变顶栏（与全站统一） */}
       <div
-        className="relative bg-white rounded-t-2xl shadow-2xl flex flex-col"
-        style={{ maxHeight: "90vh" }}
-        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: `linear-gradient(90deg, ${SKY_D}, ${SKY})`,
+          color: "#fff",
+          padding: "calc(env(safe-area-inset-top) + 14px) 12px 12px",
+          flexShrink: 0,
+        }}
       >
-        {/* 顶部标题栏 */}
-        <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-100">
-          <div className="w-10" />
-          <span className="text-base font-semibold text-gray-800">
+        <div style={{ position: "relative", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 28 }}>
+          {/* 返回按钮 */}
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 36, height: 36, border: "none", background: "transparent", color: "#fff", cursor: "pointer", padding: 0,
+            }}
+          >
+            <ChevronLeft size={24} />
+          </button>
+
+          {/* 标题 */}
+          <span style={{ fontSize: 16, fontWeight: 600, lineHeight: 1.2 }}>
             开票信息{index > 1 ? `（第${index}条）` : ""}
           </span>
-          <button type="button" onClick={onClose} className="p-1 text-gray-400 active:text-gray-600">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
 
-        {/* 表单内容 */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
-          {/* 公司名称（必填） */}
-          <div>
-            <label className="block text-sm text-gray-700 mb-1.5">
-              公司名称 <span className="text-red-400">*</span>
+          <div style={{ width: 60 }} />
+        </div>
+      </div>
+
+
+
+      {/* 表单内容区（含底部按钮，随内容滚动） */}
+      <div className="flex-1 overflow-y-auto px-4 pt-4" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 24px)" }}>
+
+        {/* 必填区块 */}
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
+          <div
+            className="px-4 py-2.5 flex items-center gap-2"
+            style={{ background: ACCENT_LIGHT, borderBottom: `1px solid ${ACCENT_BORDER}` }}
+          >
+            <div style={{ width: 3, height: 14, background: ACCENT, borderRadius: 2 }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: ACCENT }}>必填信息</span>
+          </div>
+
+          {/* 公司名称 */}
+          <div className="px-4 pt-4 pb-3">
+            <label className="flex items-center gap-1.5 text-base font-medium text-gray-600 mb-2">
+              <Building2 size={15} style={{ color: ACCENT }} />
+              公司名称
+              <span className="text-red-400 text-xs">*</span>
             </label>
             <input
               type="text"
               className={inputCls}
-              placeholder="请输入公司名称"
+              placeholder="请输入公司全称"
               value={form.company}
               onChange={(e) => setField("company", e.target.value)}
             />
           </div>
 
-          {/* 发票抬头（必填） */}
-          <div>
-            <label className="block text-sm text-gray-700 mb-1.5">
-              发票抬头 <span className="text-red-400">*</span>
+          {/* 发票抬头 */}
+          <div className="px-4 pb-4">
+            <label className="flex items-center gap-1.5 text-base font-medium text-gray-600 mb-2">
+              <AlignLeft size={15} style={{ color: ACCENT }} />
+              发票抬头
+              <span className="text-red-400 text-xs">*</span>
             </label>
             <input
               type="text"
@@ -100,22 +172,67 @@ export default function InvoicePicker({ open, index, value, customerMobile, onCl
               onChange={(e) => setField("title", e.target.value)}
             />
           </div>
+        </div>
 
-          {/* 邮箱（选填） */}
-          <div>
-            <label className="block text-sm text-gray-700 mb-1.5">邮箱</label>
+        {/* 选填区块 */}
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+          <div
+            className="px-4 py-2.5 flex items-center gap-2"
+            style={{ background: "#F9FAFB", borderBottom: "1px solid #F0F0F0" }}
+          >
+            <div style={{ width: 3, height: 14, background: "#C0C0C0", borderRadius: 2 }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: "#9CA3AF" }}>选填信息</span>
+          </div>
+
+          {/* 邮箱 */}
+          <div className="px-4 pt-4 pb-3" ref={emailRef} style={{ position: "relative" }}>
+            <label className="flex items-center gap-1.5 text-base font-medium text-gray-600 mb-2">
+              <Mail size={15} style={{ color: "#9CA3AF" }} />
+              邮箱
+            </label>
             <input
               type="email"
               className={inputCls}
-              placeholder="选填"
+              placeholder="输入邮箱，自动提示后缀"
               value={form.email}
-              onChange={(e) => setField("email", e.target.value)}
+              onChange={(e) => handleEmailChange(e.target.value)}
+              autoComplete="off"
             />
+            {emailSuggestions.length > 0 && (
+              <div
+                style={{
+                  position: "absolute", left: 16, right: 16, top: "100%", marginTop: 4,
+                  background: "#fff", border: `1px solid ${ACCENT_BORDER}`,
+                  borderRadius: 14, boxShadow: "0 4px 20px rgba(30,136,214,0.12)",
+                  zIndex: 10, overflow: "hidden",
+                }}
+              >
+                {emailSuggestions.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className="w-full text-left px-4 py-3 text-base text-gray-700 border-b border-gray-50 last:border-0"
+                    style={{ background: "transparent" }}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setField("email", s);
+                      setEmailSuggestions([]);
+                    }}
+                  >
+                    <span style={{ color: "#9CA3AF" }}>{s.slice(0, s.indexOf("@"))}</span>
+                    <span style={{ color: ACCENT, fontWeight: 600 }}>{s.slice(s.indexOf("@"))}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
-          {/* 手机（选填，自动读取顾客手机） */}
-          <div>
-            <label className="block text-sm text-gray-700 mb-1.5">手机号码</label>
+          {/* 手机 */}
+          <div className="px-4 pb-4">
+            <label className="flex items-center gap-1.5 text-base font-medium text-gray-600 mb-2">
+              <Phone size={15} style={{ color: "#9CA3AF" }} />
+              手机号码
+            </label>
             <input
               type="tel"
               className={inputCls}
@@ -126,18 +243,44 @@ export default function InvoicePicker({ open, index, value, customerMobile, onCl
           </div>
         </div>
 
-        {/* 底部确认按钮 */}
-        <div className="px-5 pb-8 pt-3 border-t border-gray-100">
+        {/* 底部按钮栏：删除 / 清空 / 完成，随内容滚动 */}
+        <div className="flex gap-2 mt-4">
           <button
             type="button"
-            disabled={!canConfirm}
-            onClick={() => {
-              if (canConfirm) onConfirm(form);
+            onClick={() => setForm((prev) => ({ ...prev, company: prev.company.slice(0, -1) }))}
+            disabled={!form.company && !form.title && !form.email && !form.mobile}
+            className="flex-1 h-12 rounded-xl text-sm font-medium flex items-center justify-center transition-all active:scale-95"
+            style={{
+              background: "#F3F4F6",
+              color: (!form.company && !form.title && !form.email && !form.mobile) ? "#D1D5DB" : "#374151",
             }}
-            className="w-full h-12 rounded-xl text-base font-semibold text-white transition-opacity"
-            style={{ background: canConfirm ? ACCENT : "#B0C4D8", opacity: canConfirm ? 1 : 0.7 }}
           >
-            确认
+            删除
+          </button>
+          <button
+            type="button"
+            onClick={() => setForm(EMPTY_INVOICE)}
+            disabled={!form.company && !form.title && !form.email && !form.mobile}
+            className="flex-1 h-12 rounded-xl text-sm font-medium flex items-center justify-center transition-all active:scale-95"
+            style={{
+              background: "#FFF1E8",
+              color: (!form.company && !form.title && !form.email && !form.mobile) ? "#E8CBB6" : "#E07B39",
+            }}
+          >
+            清空
+          </button>
+          <button
+            type="button"
+            onClick={() => { if (canConfirm) onConfirm(form); }}
+            disabled={!canConfirm}
+            className="flex-[2] h-12 rounded-xl text-sm font-semibold flex items-center justify-center transition-all active:scale-95"
+            style={{
+              background: canConfirm ? ACCENT : "#E5E7EB",
+              color: canConfirm ? "#fff" : "#9CA3AF",
+              boxShadow: canConfirm ? `0 2px 8px ${ACCENT}44` : "none",
+            }}
+          >
+            完成
           </button>
         </div>
       </div>

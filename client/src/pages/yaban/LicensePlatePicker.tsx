@@ -337,8 +337,8 @@ export default function LicensePlatePicker({ open, value, onClose, onConfirm }: 
               ))}
             </div>
           </div>
-          {/* 底部按钮栏：删除 / 清空 / 确认，固定在底部 */}
-          <div className="px-3 pt-3 pb-6 border-t border-gray-100 bg-white flex gap-2 flex-shrink-0">
+          {/* 底部按钮栏：删除 / 清空 / 确认，随内容滚动 */}
+          <div className="px-3 pt-3 pb-6 border-t border-gray-100 bg-white flex gap-2">
               <button
                 type="button"
                 onClick={handleDelete}

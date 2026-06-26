@@ -5,7 +5,7 @@
  * 顶栏：取消 / 新建顾客 / 保存；含「仅显示必填字段」开关
  * 布局：字段按实际输入宽度自适应流式排布，窄字段同行并排，充分利用横向空间
  */
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useLocation, useRoute } from "wouter";
 import { ChevronDown, ChevronRight, ChevronLeft, XCircle, Check, UserRound, Camera, Copy, X, PlusCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -17,7 +17,8 @@ import AvatarPicker from "./AvatarPicker";
 import { autoAvatarKey, avatarSrc, type AvatarKey } from "@/lib/yaban-avatar";
 import { searchOccupations } from "./occupationData";
 import LicensePlatePicker from "./LicensePlatePicker";
-import InvoicePicker, { type InvoiceInfo, EMPTY_INVOICE } from "./InvoicePicker";
+import InvoicePicker from "./InvoicePicker";
+import { type InvoiceInfo, EMPTY_INVOICE } from "./invoice-types";
 
 // 主题色
 const ACCENT = "#1E88D6";
@@ -68,8 +69,8 @@ const PERSONAL_FIELDS: FieldDef[] = [
   { key: "emergencyPhone", label: "紧急联系人电话", placeholder: "电话", kind: "input", inputType: "tel", width: "full" },
   { key: "email", label: "邮箱", placeholder: "请输入邮箱地址", kind: "input", inputType: "email", width: "full" },
   { key: "address", label: "地址", placeholder: "点击选择省市区并填写门牌号", kind: "address", width: "full" },
-  { key: "licensePlate", label: "车牌", placeholder: "点击输入车牌号", kind: "license-plate", width: "half" },
-  { key: "_invoice", label: "发票", placeholder: "点击填写开票信息", kind: "readonly", width: "half" },
+  { key: "licensePlate", label: "车牌", placeholder: "点击输入车牌号", kind: "license-plate", width: "full" },
+  { key: "_invoice", label: "发票", placeholder: "点击填写开票信息", kind: "readonly", width: "full" },
 ];
 const CUSTOMER_FIELDS: FieldDef[] = [
   { key: "patientType", label: "顾客类型", placeholder: "电子", kind: "select", options: PATIENT_TYPES, width: "half" },
@@ -516,10 +517,10 @@ export default function YabanPatientCreate() {
                       return (
                         <div
                           key={`_invoice_${idx}`}
-                          style={{ flex: idx > 0 ? "1 1 100%" : "1 1 calc(50% - 8px)", minWidth: idx > 0 ? "100%" : 150 }}
+                          style={{ flex: "1 1 100%", minWidth: "100%" }}
                           className="py-1.5 flex items-center gap-2"
                         >
-                          <label className="text-gray-700 text-base shrink-0" style={{ minWidth: "4em", display: "inline-block" }}>
+                          <label className="text-gray-700 text-base shrink-0">
                             {INVOICE_LABELS[idx]}
                           </label>
                           <div className="flex-1 min-w-0">
