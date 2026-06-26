@@ -7,7 +7,7 @@
  */
 import { useState, useEffect, useRef } from "react";
 import { useLocation, useRoute } from "wouter";
-import { ChevronDown, ChevronRight, XCircle, Check, UserRound, Camera, Copy, X } from "lucide-react";
+import { ChevronDown, XCircle, Check, UserRound, Camera, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { useYabanClinic } from "./useYabanClinic";
@@ -38,7 +38,7 @@ const CONSULTANTS = ["洪紫钥", "杨文利", "侯睿"];
 const RELATIONS = ["配偶", "父母", "子女", "兄弟姐妹", "亲戚", "朋友", "其他"];
 
 // 字段类型
-type FieldKind = "input" | "select" | "textarea" | "history" | "address" | "occupation" | "license-plate" | "readonly";
+type FieldKind = "input" | "select" | "textarea" | "history" | "address" | "occupation" | "license-plate";
 
 // 字段宽度档位：窄字段同行并排，宽字段独占
 // narrow ≈ 半屏内可挤 2-3 个；half ≈ 半屏；full ≈ 整行
@@ -80,9 +80,6 @@ const CUSTOMER_FIELDS: FieldDef[] = [
   { key: "source", label: "顾客来源", placeholder: "请选择", kind: "select", options: SOURCES, width: "half" },
   { key: "netConsultant", label: "网电咨询师", placeholder: "请选择", kind: "select", options: NET_CONSULTANTS, width: "half" },
   { key: "consultant", label: "咨询师", placeholder: "请选择", kind: "select", options: CONSULTANTS, width: "half" },
-  { key: "_yabanAccount", label: "牙伴账号", placeholder: "", kind: "readonly", width: "half" },
-  { key: "_yabanPassword", label: "初始密码", placeholder: "", kind: "readonly", width: "half" },
-  { key: "referrerUsername", label: "推荐人", placeholder: "搜索脉动网用户名", kind: "input", width: "full" },
   { key: "history", label: "AI健康标签", placeholder: "点击选择或搜索", kind: "history", width: "full" },
   { key: "patientRemark", label: "顾客备注", placeholder: "请输入顾客备注", kind: "textarea", width: "full" },
 ];
@@ -159,27 +156,6 @@ export default function YabanPatientCreate() {
   const [licensePlateOpen, setLicensePlateOpen] = useState(false);
   // 头像：null 表示跟随年龄+性别自动适配；非 null 表示用户手动指定
   const [avatarManual, setAvatarManual] = useState<AvatarKey | null>(null);
-  // 备用随机密码：页面加载时生成一次，无手机号时使用
-  const [randomPwd] = useState(() => String(Math.floor(100000 + Math.random() * 900000)));
-  // 牙伴账号 / 初始密码提示弹窗
-  const [yabanTipType, setYabanTipType] = useState<"account" | "password" | null>(null);
-  // 推荐人搜索
-  const [referrerSearch, setReferrerSearch] = useState("");
-  const referrerQuery = trpc.yabanCustomer.searchReferrer.useQuery(
-    { query: referrerSearch },
-    { enabled: referrerSearch.length >= 1, refetchOnWindowFocus: false }
-  );
-  // 推荐人数（编辑模式下查询该顾客作为推荐人的人数）
-  const referralCountQuery = trpc.yabanCustomer.getReferralCount.useQuery(
-    { customerId: editId },
-    { enabled: isEdit && editId > 0, refetchOnWindowFocus: false }
-  );
-  // 推荐列表弹窗
-  const [referralListOpen, setReferralListOpen] = useState(false);
-  const referralListQuery = trpc.yabanCustomer.getReferralList.useQuery(
-    { customerId: editId },
-    { enabled: referralListOpen && isEdit && editId > 0, refetchOnWindowFocus: false }
-  );
   const [form, setForm] = useState<Record<string, string>>({
     gender: "无",
     patientType: "电子",
@@ -248,9 +224,6 @@ export default function YabanPatientCreate() {
       source: d.source ?? "",
       netConsultant: d.net_consultant ?? "",
       consultant: d.consultant ?? "",
-      yabanUsername: d.yaban_username ?? "",
-      yabanPassword: d.yaban_password ?? "",
-      referrerUsername: d.referrer_username ?? "",
       history: d.history ?? "",
       patientRemark: d.remark ?? "",
       chiefComplaint: d.chief_complaint ?? "",
@@ -302,11 +275,6 @@ export default function YabanPatientCreate() {
     }
     // 姓名必填（按钮已禁用，此处作二次保护）
     if (!form.name?.trim()) return;
-    // 新建时计算实际密码（手机号后6位或页面预生成的随机密码）
-    const mob = (form.mobile || "").trim();
-    const finalPwd = !isEdit
-      ? (mob.length >= 6 ? mob.slice(-6) : randomPwd)
-      : undefined; // 编辑模式不传密码，后端保持原值
     const payload = {
       name: form.name,
       gender: form.gender,
@@ -332,8 +300,6 @@ export default function YabanPatientCreate() {
       consultant: form.consultant,
       history: form.history,
       remark: form.patientRemark,
-      referrerUsername: form.referrerUsername || undefined,
-      ...(finalPwd !== undefined ? { yabanPassword: finalPwd } : {}),
     };
     if (isEdit) {
       // 编辑：不修改顾客编号，传入 id
@@ -424,122 +390,22 @@ export default function YabanPatientCreate() {
         <div className="bg-white mt-2 px-3 py-3">
           <div className="px-1 pb-2 text-[13px] font-semibold text-gray-800">顾客信息</div>
           <div className="flex flex-wrap gap-x-2 gap-y-1">
-            {(() => {
-              // 新建模式：联动实时预览；编辑模式：显示第一次保存时固定的值（不可改）
-              const uname = (form.name || "").trim();
-              const mob = (form.mobile || "").trim();
-              const previewAccount = isEdit ? (form.yabanUsername || "") : uname;
-              const previewPwd = isEdit
-                ? (form.yabanPassword || "")
-                : (mob.length >= 6 ? mob.slice(-6) : uname ? randomPwd : "");
-              return CUSTOMER_FIELDS.map((f) => {
-                let displayValue = form[f.key] || "";
-                if (f.key === "_yabanAccount") displayValue = previewAccount;
-                if (f.key === "_yabanPassword") displayValue = previewPwd;
-
-                // 推荐人字段：自定义搜索输入框 + 下拉候选列表
-                if (f.key === "referrerUsername") {
-                  const referrerResults = referrerSearch.length >= 1 ? (referrerQuery.data || []) : [];
-                  const showDropdown = referrerSearch.length >= 1 && referrerResults.length > 0;
-                  const refCount = referralCountQuery.data;
-                  const directCount = refCount?.direct ?? 0;
-                  const totalCount = refCount?.total ?? 0;
-                  const countLabel = isEdit
-                    ? (totalCount > 0 ? `直接${directCount}人 共${totalCount}人` : "暂无")
-                    : "保存后显示";
-                  return (
-                    <div key={f.key} className="w-full flex gap-x-2 relative">
-                      {/* 左：推荐人搜索 */}
-                      <div className="relative" style={{ flex: "1 1 calc(50% - 6px)" }}>
-                        <div className="px-1 pb-1 pt-0.5">
-                          <span className="text-[11px] text-gray-400">推荐人</span>
-                        </div>
-                        <div className="flex items-center bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100">
-                          <input
-                            type="text"
-                            className="flex-1 bg-transparent text-sm text-gray-800 outline-none placeholder-gray-300"
-                            placeholder="搜索脉动网用户名"
-                            value={form.referrerUsername || ""}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              setField("referrerUsername", v);
-                              setReferrerSearch(v);
-                            }}
-                          />
-                          {form.referrerUsername && (
-                            <button
-                              type="button"
-                              className="ml-1 text-gray-300 active:text-gray-500"
-                              onClick={() => { setField("referrerUsername", ""); setReferrerSearch(""); }}
-                            >
-                              <XCircle size={15} />
-                            </button>
-                          )}
-                        </div>
-                        {showDropdown && (
-                          <div className="absolute z-50 left-0 right-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
-                            {referrerResults.map((u: any) => (
-                              <button
-                                key={u.id}
-                                type="button"
-                                className="w-full text-left px-4 py-2.5 text-sm text-gray-800 hover:bg-blue-50 active:bg-blue-100 border-b border-gray-50 last:border-0"
-                                onClick={() => {
-                                  setField("referrerUsername", u.username);
-                                  setReferrerSearch("");
-                                }}
-                              >
-                                <span className="font-medium">{u.username}</span>
-                                {u.name && <span className="ml-2 text-gray-400 text-xs">{u.name}</span>}
-                                {u.mobile && <span className="ml-2 text-gray-300 text-xs">{u.mobile}</span>}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      {/* 右：推荐人数（只读，可点击查看列表） */}
-                      <div style={{ flex: "1 1 calc(50% - 6px)" }}>
-                        <div className="px-1 pb-1 pt-0.5">
-                          <span className="text-[11px] text-gray-400">已推荐人数</span>
-                        </div>
-                        <button
-                          type="button"
-                          className="w-full flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2.5 border border-gray-100 min-h-[42px] active:bg-gray-100"
-                          onClick={() => isEdit && setReferralListOpen(true)}
-                        >
-                          <span className="text-sm" style={{ color: totalCount > 0 ? "#1E88D6" : undefined }}>
-                            {countLabel}
-                          </span>
-                          {isEdit && totalCount > 0 && (
-                            <ChevronRight size={14} className="text-gray-300 ml-1 flex-shrink-0" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                }
-
-                return (
-                  <FieldCell
-                    key={f.key}
-                    field={f}
-                    value={displayValue}
-                    open={openKey === f.key}
-                    onInput={(v) => setField(f.key, v)}
-                    onToggle={() => setOpenKey(openKey === f.key ? null : f.key)}
-                    onSelect={(v) => {
-                      setField(f.key, v);
-                      setOpenKey(null);
-                    }}
-                    onOpenHistory={() => setHistoryOpen(true)}
-                    onOpenAddress={() => setAddressOpen(true)}
-                    onReadonlyClick={f.key === "_yabanAccount" || f.key === "_yabanPassword"
-                      ? () => setYabanTipType(f.key === "_yabanAccount" ? "account" : "password")
-                      : undefined
-                    }
-                  />
-                );
-              });
-            })()}
+            {CUSTOMER_FIELDS.map((f) => (
+              <FieldCell
+                key={f.key}
+                field={f}
+                value={form[f.key] || ""}
+                open={openKey === f.key}
+                onInput={(v) => setField(f.key, v)}
+                onToggle={() => setOpenKey(openKey === f.key ? null : f.key)}
+                onSelect={(v) => {
+                  setField(f.key, v);
+                  setOpenKey(null);
+                }}
+                onOpenHistory={() => setHistoryOpen(true)}
+                onOpenAddress={() => setAddressOpen(true)}
+              />
+            ))}
           </div>
         </div>
       </div>
@@ -620,129 +486,6 @@ export default function YabanPatientCreate() {
           setLicensePlateOpen(false);
         }}
       />
-
-      {/* 牙伴账号 / 初始密码提示弹窗 */}
-      {/* 推荐列表概览弹窗 */}
-      {referralListOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => setReferralListOpen(false)}>
-          <div
-            className="w-full max-w-md bg-white rounded-t-2xl shadow-2xl px-5 pt-5 pb-10 max-h-[75vh] flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* 标题行 */}
-            <div className="flex items-center justify-between mb-4 flex-shrink-0">
-              <span className="text-base font-semibold text-gray-800">已推荐人员概览</span>
-              <button type="button" onClick={() => setReferralListOpen(false)} className="text-gray-400">
-                <X size={18} />
-              </button>
-            </div>
-            {/* 统计摘要 */}
-            {(() => {
-              const cnt = referralCountQuery.data;
-              return (
-                <div className="flex gap-3 mb-4 flex-shrink-0">
-                  <div className="flex-1 bg-blue-50 rounded-xl px-4 py-2.5 text-center">
-                    <div className="text-lg font-bold" style={{ color: "#1E88D6" }}>{cnt?.direct ?? 0}</div>
-                    <div className="text-xs text-gray-400 mt-0.5">直接推荐</div>
-                  </div>
-                  <div className="flex-1 bg-blue-50 rounded-xl px-4 py-2.5 text-center">
-                    <div className="text-lg font-bold" style={{ color: "#1E88D6" }}>{cnt?.total ?? 0}</div>
-                    <div className="text-xs text-gray-400 mt-0.5">全部代数</div>
-                  </div>
-                </div>
-              );
-            })()}
-            {/* 列表 */}
-            <div className="overflow-y-auto flex-1">
-              {referralListQuery.isLoading ? (
-                <div className="text-center text-gray-400 text-sm py-8">加载中...</div>
-              ) : !referralListQuery.data?.length ? (
-                <div className="text-center text-gray-400 text-sm py-8">暂无推荐记录</div>
-              ) : (
-                <div className="space-y-1">
-                  {referralListQuery.data.map((item: any) => (
-                    <div key={item.userId} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-gray-50">
-                      <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "#E3F0FB", color: "#1E88D6", minWidth: 28, textAlign: "center" }}>第{item.level}代</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-gray-800 truncate">{item.name || item.username}</div>
-                        {item.name && item.username !== item.name && (
-                          <div className="text-xs text-gray-400 truncate">{item.username}</div>
-                        )}
-                      </div>
-                      {item.mobile && <span className="text-xs text-gray-400 flex-shrink-0">{item.mobile}</span>}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {yabanTipType && (() => {
-        const uname = (form.name || "").trim();
-        const mob = (form.mobile || "").trim();
-        const previewAccount = isEdit ? (form.yabanUsername || "") : uname;
-        const previewPwd = isEdit
-          ? (form.yabanPassword || "")
-          : (mob.length >= 6 ? mob.slice(-6) : uname ? randomPwd : "");
-        const isAccount = yabanTipType === "account";
-        const copyValue = isAccount ? previewAccount : previewPwd;
-        return (
-          <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={() => setYabanTipType(null)}>
-            <div
-              className="w-full max-w-md bg-white rounded-t-2xl shadow-2xl px-5 pt-5 pb-10"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* 标题行 */}
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-base font-semibold text-gray-800">
-                  {isAccount ? "牙伴账号说明" : "初始密码说明"}
-                </span>
-                <button type="button" onClick={() => setYabanTipType(null)} className="text-gray-400 text-xl leading-none">×</button>
-              </div>
-
-              {/* 当前内容展示 + 复制 */}
-              <div className="flex items-center gap-2 bg-blue-50 rounded-xl px-4 py-3 mb-4">
-                <span className="flex-1 text-sm font-semibold" style={{ color: ACCENT }}>{copyValue || "—"}</span>
-                {copyValue && (
-                  <button
-                    type="button"
-                    className="flex items-center gap-1 text-xs text-white px-3 py-1.5 rounded-lg active:opacity-70"
-                    style={{ background: ACCENT }}
-                    onClick={() => {
-                      navigator.clipboard.writeText(copyValue);
-                      toast.success("已复制");
-                    }}
-                  >
-                    <Copy className="w-3 h-3" />复制
-                  </button>
-                )}
-              </div>
-
-              {/* 引导文案 */}
-              <div className="text-sm text-gray-600 leading-relaxed space-y-2">
-                {isAccount ? (
-                  <>
-                    <p>可将此账号分享给客户，客户可使用账号和初始密码登录牙伴网，查看个人诊疗档案。</p>
-                    <p className="font-medium text-gray-700">登录方式：</p>
-                    <p>① 微信小程序搜索「人脉永动」</p>
-                    <p>② 网页版：<span className="text-blue-500">www.jiangyuchen.cn</span>（苹果用户可添加到桌面，作为 App 使用）</p>
-                  </>
-                ) : (
-                  <>
-                    <p>此为系统初始密码，客户可使用此密码登录牙伴网。</p>
-                    <p>登录后建议客户自行修改密码以保障安全。</p>
-                    <p className="font-medium text-gray-700">登录方式：</p>
-                    <p>① 微信小程序搜索「人脉永动」</p>
-                    <p>② 网页版：<span className="text-blue-500">www.jiangyuchen.cn</span>（苹果用户可添加到桌面，作为 App 使用）</p>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 }
@@ -758,7 +501,6 @@ function FieldCell({
   onOpenHistory,
   onOpenAddress,
   onOpenLicensePlate,
-  onReadonlyClick,
 }: {
   field: FieldDef;
   value: string;
@@ -769,7 +511,6 @@ function FieldCell({
   onOpenHistory?: () => void;
   onOpenAddress?: () => void;
   onOpenLicensePlate?: () => void;
-  onReadonlyClick?: () => void;
 }) {
   const basis = WIDTH_BASIS[field.width || "full"];
   // 长内容字段（多行文本、AI健康标签、地址）标题在上、控件占满整行；其余短字段标题与控件同行
@@ -1049,35 +790,6 @@ function FieldCell({
           onChange={(e) => onInput(e.target.value)}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
         />
-      </div>
-    );
-  } else if (field.kind === "readonly") {
-    // 牙伴账号 / 初始密码只读联动展示，右侧复制按鈕，点击内容区弹提示
-    control = (
-      <div className={`${boxCls} bg-gray-50 gap-1`}>
-        <button
-          type="button"
-          className="flex-1 min-w-0 text-left text-sm truncate"
-          style={{ color: value ? ACCENT : undefined, background: "transparent", border: "none", padding: 0 }}
-          onClick={() => value && onReadonlyClick?.()}
-        >
-          {value || <span className="text-gray-300">—</span>}
-        </button>
-        {value && (
-          <button
-            type="button"
-            className="shrink-0 text-gray-400 active:text-blue-500 p-0.5"
-            onClick={(e) => {
-              e.stopPropagation();
-              navigator.clipboard.writeText(value).then(() => {
-                // 复制成功短暂反馈
-              });
-            }}
-            title="复制"
-          >
-            <Copy className="w-3.5 h-3.5" />
-          </button>
-        )}
       </div>
     );
   } else {

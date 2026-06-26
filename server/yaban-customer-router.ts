@@ -247,10 +247,6 @@ async function ensureCustomerTable(conn: any) {
   try {
     await conn.execute(`ALTER TABLE yaban_customer ADD COLUMN yaban_password VARCHAR(32) DEFAULT NULL AFTER yaban_username`);
   } catch (e) { /* 列已存在则忽略 */ }
-  // 兑入推荐人列
-  try {
-    await conn.execute(`ALTER TABLE yaban_customer ADD COLUMN referrer_username VARCHAR(64) DEFAULT NULL AFTER yaban_password`);
-  } catch (e) { /* 列已存在则忽略 */ }
 }
 
 // 确保标签表与关联表存在
@@ -571,8 +567,6 @@ const createInput = z.object({
   source: z.string().max(64).optional(),
   netConsultant: z.string().max(64).optional(),
   consultant: z.string().max(64).optional(),
-  referrerUsername: z.string().max(64).optional(),
-  yabanPassword: z.string().max(32).optional(),
   history: z.string().max(2000).optional(),
   remark: z.string().max(255).optional(),
   chiefComplaint: z.string().max(128).optional(),
@@ -896,34 +890,17 @@ export const yabanCustomerRouter = router({
       // 生成牙伴账号和密码
       const yabanUsername = (input.name || "").trim();
       const mobile = (input.mobile || "").trim();
-      // 优先用前端传来的密码（页面预生成），否则后端生成
-      const yabanPassword = s(input.yabanPassword) ||
-        (mobile.length >= 6 ? mobile.slice(-6) : String(Math.floor(100000 + Math.random() * 900000)));
-
-      // 查找推荐人的 user_id
-      let referrerUserId: number | null = null;
-      const referrerUsername = s(input.referrerUsername);
-      if (referrerUsername) {
-        try {
-          const [refRows] = await (conn as any).execute(
-            `SELECT id FROM users WHERE username = ? OR name = ? LIMIT 1`,
-            [referrerUsername, referrerUsername]
-          ) as any;
-          if ((refRows as any[]).length > 0) {
-            referrerUserId = (refRows as any[])[0].id;
-          }
-        } catch (e) {
-          console.warn("[YabanCustomer] 查找推荐人失败", e);
-        }
-      }
+      const yabanPassword = mobile.length >= 6
+        ? mobile.slice(-6)
+        : String(Math.floor(10000 + Math.random() * 90000)); // 5位随机数
 
       // 同步在 users 表创建脉动网账号（姓名已存则跳过）
       try {
         const passwordHash = await bcrypt.hash(yabanPassword, 10);
         await (conn as any).execute(
-          `INSERT IGNORE INTO users (username, passwordHash, name, loginMethod, role, invited_by_user_id, createdAt, updatedAt, lastSignedIn)
-           VALUES (?, ?, ?, 'password', 'parent', ?, NOW(), NOW(), NOW())`,
-          [yabanUsername, passwordHash, yabanUsername, referrerUserId]
+          `INSERT IGNORE INTO users (username, passwordHash, name, loginMethod, role, createdAt, updatedAt, lastSignedIn)
+           VALUES (?, ?, ?, 'password', 'parent', NOW(), NOW(), NOW())`,
+          [yabanUsername, passwordHash, yabanUsername]
         );
       } catch (e) {
         console.warn("[YabanCustomer] 同步创建 users 账号失败（可忽略）", e);
@@ -935,11 +912,11 @@ export const yabanCustomerRouter = router({
            (tenant_id, name, gender, birthday, age, zodiac, chinese_zodiac, patient_type, medical_no, external_no, nickname,
             email, mobile, phone, region, address, license_plate, avatar,
             emergency_contact, emergency_relation, occupation, emergency_phone,
-            source, net_consultant, consultant, yaban_username, yaban_password, referrer_username, history, remark,
+            source, net_consultant, consultant, yaban_username, yaban_password, history, remark,
             chief_complaint, health_status, drug_allergy, food_allergy,
             heart, hypertension, diabetes, kidney, infectious, bleeding, pregnant, medication,
             created_by)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?, ?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?)`,
+           VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?)`,
           [
             TENANT_ID,
             (input.name || "").trim(),
@@ -968,7 +945,6 @@ export const yabanCustomerRouter = router({
             s(input.consultant),
             yabanUsername,
             yabanPassword,
-            referrerUsername,
             s(input.history),
             s(input.remark),
             s(input.chiefComplaint),
@@ -2081,147 +2057,6 @@ export const yabanCustomerRouter = router({
         [input.isCommon ? 1 : 0, TENANT_ID, Number(input.id)]
       );
       return { success: true };
-    }),
-
-  // ============ 推荐人搜索（搜索脉动网已有用户） ============
-  searchReferrer: protectedProcedure
-    .input(z.object({ query: z.string().min(1) }))
-    .query(async ({ input, ctx }) => {
-      const conn = await getDbConnection();
-      if (!conn) return [];
-      const TENANT_ID = await resolveTenantId(ctx);
-      const keyword = `%${input.query}%`;
-      // 搜索范围：当前医院的员工账号 + 该医院所有顾客的牙伴账号，不跨医院
-      // 模糊查询范围：users表多字段 + yaban_customer的姓名/手机/昵称
-      const [rows] = (await (conn as any).execute(
-        `SELECT DISTINCT u.id, u.username, u.name, u.phone, c.mobile, c.nickname
-           FROM users u
-           LEFT JOIN yaban_customer c ON c.yaban_username = u.username AND c.tenant_id = ?
-          WHERE (
-              u.username LIKE ? OR u.name LIKE ? OR u.phone LIKE ? OR u.realName LIKE ?
-              OR c.name LIKE ? OR c.mobile LIKE ? OR c.nickname LIKE ?
-            )
-            AND (
-              -- 该医院的员工
-              u.id IN (
-                SELECT user_id FROM yaban_clinic_member
-                 WHERE tenant_id = ? AND status = 'active'
-              )
-              OR
-              -- 该医院的顾客（有牙伴账号）
-              u.username IN (
-                SELECT yaban_username FROM yaban_customer
-                 WHERE tenant_id = ? AND yaban_username IS NOT NULL AND yaban_username != ''
-              )
-            )
-          LIMIT 20`,
-        [TENANT_ID, keyword, keyword, keyword, keyword, keyword, keyword, keyword, TENANT_ID, TENANT_ID]
-      )) as any;
-      return (rows as any[]).map((u) => ({
-        id: Number(u.id),
-        username: u.username as string,
-        name: (u.name || u.nickname || "") as string,
-        mobile: (u.mobile || "") as string,
-      }));
-    }),
-
-  // ============ 查询某顾客作为推荐人的所有代数被推荐人数 ============
-  getReferralCount: protectedProcedure
-    .input(z.object({ customerId: z.number().int().positive() }))
-    .query(async ({ input, ctx }) => {
-      const conn = await getDbConnection();
-      if (!conn) return { direct: 0, total: 0 };
-      const TENANT_ID = await resolveTenantId(ctx);
-      // 获取该顾客的 yaban_username，再查 users 表得到 user_id
-      const [custRows] = (await (conn as any).execute(
-        `SELECT yaban_username FROM yaban_customer WHERE id = ? AND tenant_id = ? LIMIT 1`,
-        [input.customerId, TENANT_ID]
-      )) as any;
-      if (!(custRows as any[]).length || !(custRows as any[])[0].yaban_username) {
-        return { direct: 0, total: 0 };
-      }
-      const yabanUsername = (custRows as any[])[0].yaban_username;
-      const [userRows] = (await (conn as any).execute(
-        `SELECT id FROM users WHERE username = ? LIMIT 1`,
-        [yabanUsername]
-      )) as any;
-      if (!(userRows as any[]).length) return { direct: 0, total: 0 };
-      const userId = Number((userRows as any[])[0].id);
-      // 第1代：直接被推荐人数
-      const [directRows] = (await (conn as any).execute(
-        `SELECT COUNT(*) AS cnt FROM users WHERE invited_by_user_id = ?`,
-        [userId]
-      )) as any;
-      const direct = Number((directRows as any[])[0]?.cnt || 0);
-      // 所有代数：递归查询（最多 10 层，防止死循环）
-      let total = 0;
-      let currentLevel = [userId];
-      const visited = new Set<number>([userId]);
-      for (let depth = 0; depth < 10 && currentLevel.length > 0; depth++) {
-        const placeholders = currentLevel.map(() => '?').join(',');
-        const [nextRows] = (await (conn as any).execute(
-          `SELECT id FROM users WHERE invited_by_user_id IN (${placeholders})`,
-          currentLevel
-        )) as any;
-        const nextIds = (nextRows as any[]).map((r: any) => Number(r.id)).filter((id: number) => !visited.has(id));
-        nextIds.forEach((id: number) => visited.add(id));
-        total += nextIds.length;
-        currentLevel = nextIds;
-      }
-      return { direct, total };
-    }),
-
-  // ============ 查询某顾客推荐的所有人列表（按层级） ============
-  getReferralList: protectedProcedure
-    .input(z.object({ customerId: z.number().int().positive() }))
-    .query(async ({ input, ctx }) => {
-      const conn = await getDbConnection();
-      if (!conn) return [];
-      const TENANT_ID = await resolveTenantId(ctx);
-      // 获取该顾客的 yaban_username -> user_id
-      const [custRows] = (await (conn as any).execute(
-        `SELECT yaban_username FROM yaban_customer WHERE id = ? AND tenant_id = ? LIMIT 1`,
-        [input.customerId, TENANT_ID]
-      )) as any;
-      if (!(custRows as any[]).length || !(custRows as any[])[0].yaban_username) return [];
-      const yabanUsername = (custRows as any[])[0].yaban_username;
-      const [userRows] = (await (conn as any).execute(
-        `SELECT id FROM users WHERE username = ? LIMIT 1`,
-        [yabanUsername]
-      )) as any;
-      if (!(userRows as any[]).length) return [];
-      const rootUserId = Number((userRows as any[])[0].id);
-      // 递归按层查询（最多 10 层）
-      const result: { level: number; userId: number; username: string; name: string; mobile: string }[] = [];
-      let currentLevel = [rootUserId];
-      const visited = new Set<number>([rootUserId]);
-      for (let depth = 1; depth <= 10 && currentLevel.length > 0; depth++) {
-        const placeholders = currentLevel.map(() => '?').join(',');
-        // 查这一层的用户，并尝试关联到 yaban_customer 获取手机号
-        const [nextRows] = (await (conn as any).execute(
-          `SELECT u.id, u.username, u.name, c.mobile, c.name AS cname
-             FROM users u
-             LEFT JOIN yaban_customer c ON c.yaban_username = u.username AND c.tenant_id = ?
-            WHERE u.invited_by_user_id IN (${placeholders})`,
-          [TENANT_ID, ...currentLevel]
-        )) as any;
-        const nextIds: number[] = [];
-        for (const r of nextRows as any[]) {
-          const uid = Number(r.id);
-          if (visited.has(uid)) continue;
-          visited.add(uid);
-          nextIds.push(uid);
-          result.push({
-            level: depth,
-            userId: uid,
-            username: r.username || "",
-            name: r.cname || r.name || "",
-            mobile: r.mobile || "",
-          });
-        }
-        currentLevel = nextIds;
-      }
-      return result;
     }),
 
   // ============ 诊所员工列表（供业绩分配选人） ============
