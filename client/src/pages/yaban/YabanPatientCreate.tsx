@@ -618,11 +618,7 @@ export default function YabanPatientCreate() {
                                       >
                                         <div className="flex-1 min-w-0">
                                           <div className="text-sm font-medium text-gray-800 truncate">{u.username}</div>
-                                          {u.name && u.name !== u.username && (
-                                            <div className="text-xs text-gray-400 truncate">{u.name}</div>
-                                          )}
                                         </div>
-                                        {u.mobile && <span className="text-xs text-gray-400 flex-shrink-0">{u.mobile}</span>}
                                       </button>
                                     ))
                                   )}
@@ -769,7 +765,6 @@ export default function YabanPatientCreate() {
                                         }}
                                       >
                                         <span className="font-medium text-gray-800">{u.name || u.username}</span>
-                                        {u.mobile && <span className="ml-2 text-gray-400 text-xs">{u.mobile}</span>}
                                       </button>
                                     ))
                                   )}
