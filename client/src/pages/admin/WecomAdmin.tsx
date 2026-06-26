@@ -3837,14 +3837,38 @@ function AppChannelList({
 }) {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
 
-  useEffect(() => {
+  function loadChannels() {
+    setLoading(true);
     fetch(`/api/wecom/channels?app_id=${app.id}`)
       .then(r => r.json())
       .then(d => setChannels(d.channels || []))
       .catch(() => toast.error("获取渠道失败"))
       .finally(() => setLoading(false));
-  }, [app.id]);
+  }
+
+  useEffect(() => { loadChannels(); }, [app.id]);
+
+  async function handleSync() {
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/wecom/channels/sync-kf-accounts', { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        const newCount = (data.created || []).length;
+        const updCount = (data.updated || []).length;
+        toast.success(`同步完成：新增 ${newCount} 个，更新 ${updCount} 个`);
+        loadChannels();
+      } else {
+        toast.error('同步失败：' + (data.error || '未知错误'));
+      }
+    } catch {
+      toast.error('同步请求失败');
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   return (
     <div>
@@ -3858,9 +3882,19 @@ function AppChannelList({
             <div className="text-sm font-bold text-white leading-tight">{app.name}</div>
             <div className="text-[10px] text-green-300">渠道 » {app.name}</div>
           </div>
-          <button onClick={() => window.location.reload()} className="text-[11px] text-green-300 border border-green-600/40 rounded-full px-3 py-1 active:opacity-70">
-            刷新
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="text-[11px] text-green-300 border border-green-600/40 rounded-full px-3 py-1 active:opacity-70 disabled:opacity-50 flex items-center gap-1"
+            >
+              {syncing ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+              同步
+            </button>
+            <button onClick={() => window.location.reload()} className="text-[11px] text-green-300 border border-green-600/40 rounded-full px-3 py-1 active:opacity-70">
+              刷新
+            </button>
+          </div>
         </div>
       </div>
 
