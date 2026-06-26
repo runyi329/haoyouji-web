@@ -4803,14 +4803,14 @@ export default function ProjectLanding() {
 // 刘力凡 · 奢贝美容院（粉色主题，channel_id=8）
 // ═══════════════════════════════════════════════════════════════
 const C_PINK = {
-  brand: "#E91E8C",
-  brandDeep: "#A0135F",
-  brandLight: "#FDE8F4",
-  bg: "#FDF5FA",
+  brand: "#2196C8",
+  brandDeep: "#1565A8",
+  brandLight: "#E8F4FD",
+  bg: "#F5FAFD",
   white: "#FFFFFF",
-  textMain: "#2E1A26",
-  textSub: "#8F6B7C",
-  line: "#EDD4E4",
+  textMain: "#1A2A36",
+  textSub: "#5B7A90",
+  line: "#D6EEFB",
 } as const;
 
 const KF_CHANNEL_ID_LLF = 8;
@@ -4860,7 +4860,7 @@ export function LiuLifanPage({ onBack }: { onBack?: () => void } = {}) {
         fontFamily: "'Noto Sans SC', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif",
       }}
     >
-      <header className="sticky top-0 z-10" style={{ background: `linear-gradient(135deg,${CP.brandDeep} 0%,${CP.brand} 100%)` }}>
+      <header className="sticky top-0 z-10" style={{ background: `linear-gradient(135deg, #1565A8 0%, #2196C8 60%, #4DB8E8 100%)` }}>
         <div className="flex items-center justify-between px-4" style={{ height: 52 }}>
           <button onClick={() => onBack ? onBack() : window.history.back()} className="p-1.5 rounded-full" style={{ color: "rgba(255,255,255,0.8)" }}>
             <ArrowLeft className="w-5 h-5" />
