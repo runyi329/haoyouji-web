@@ -195,6 +195,8 @@ interface OrderFormData {
   stopLoss: string;
   entryDate: string;
   expiryDate: string;
+  optionType: "call" | "put";
+  strikePrice: string;
   premium: string;
   exitDate: string;
   status: "open" | "closed";
@@ -215,6 +217,8 @@ const defaultForm = (): OrderFormData => ({
   stopLoss: "",
   entryDate: todayStr(),
   expiryDate: "",
+  optionType: "call",
+  strikePrice: "",
   premium: "",
   exitDate: "",
   status: "open",
@@ -456,6 +460,7 @@ export default function OrderFlowPage() {
   });
 
   // UI 状态
+  const [showPageMenu, setShowPageMenu] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<OrderFormData>(defaultForm());
@@ -542,6 +547,8 @@ export default function OrderFlowPage() {
       stopLoss: order.stop_loss ? String(order.stop_loss) : "",
       entryDate: order.entry_date || todayStr(),
       expiryDate: order.expiry_date || "",
+      optionType: (order.option_type as "call" | "put") || "call",
+      strikePrice: order.strike_price ? String(order.strike_price) : "",
       premium: order.premium ? String(order.premium) : "",
       exitDate: order.exit_date || "",
       status: order.status || "open",
@@ -583,6 +590,8 @@ export default function OrderFlowPage() {
       stopLoss: form.stopLoss ? parseFloat(form.stopLoss) : undefined,
       entryDate: form.entryDate,
       expiryDate: form.expiryDate || undefined,
+      optionType: form.marketType === "option" ? form.optionType : undefined,
+      strikePrice: form.marketType === "option" && form.strikePrice ? parseFloat(form.strikePrice) : undefined,
       premium: form.premium ? parseFloat(form.premium) : undefined,
       note: form.note || undefined,
     };
@@ -633,9 +642,9 @@ export default function OrderFlowPage() {
           <ChevronLeft className="w-5 h-5 text-white" />
         </button>
 
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 relative">
           <button
-            onClick={() => setLocation(`/ledger/${ledgerId}/position-calc`)}
+            onClick={() => setShowPageMenu((v: boolean) => !v)}
             className="flex items-center gap-1 font-semibold text-base"
             style={{
               letterSpacing: "0.02em",
@@ -651,6 +660,38 @@ export default function OrderFlowPage() {
             <span>订单流管理</span>
             <ChevronDown className="w-3.5 h-3.5 opacity-60" style={{ color: OKX_TEXT_SEC }} />
           </button>
+          {showPageMenu && (
+            <div
+              className="absolute top-full left-0 mt-1 rounded-xl overflow-hidden z-50"
+              style={{ background: "#1a1a1a", border: "1px solid rgba(192,192,192,0.2)", minWidth: "160px", boxShadow: "0 8px 32px rgba(0,0,0,0.8)" }}
+            >
+              <div className="px-3 py-2 text-xs" style={{ color: "#555", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>切换页面</div>
+              <button
+                className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2"
+                style={{ color: "#c0c0c0" }}
+                onClick={() => { setShowPageMenu(false); setLocation(`/ledger/${ledgerId}/position-calc`); }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-600 flex-shrink-0" />
+                智能仓位管理
+              </button>
+              <button
+                className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2"
+                style={{ color: "#c0c0c0", backgroundColor: "rgba(240,185,11,0.08)" }}
+                onClick={() => setShowPageMenu(false)}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 flex-shrink-0" />
+                订单流管理
+              </button>
+              <button
+                className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2"
+                style={{ color: "#c0c0c0" }}
+                onClick={() => { setShowPageMenu(false); setLocation(`/ledger/${ledgerId}/option-analysis`); }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-600 flex-shrink-0" />
+                期权分析总览
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1318,6 +1359,48 @@ export default function OrderFlowPage() {
               </div>
             )}
 
+            {/* Call/Put 类型（仅期权） */}
+            {form.marketType === "option" && (
+              <div className="mb-3">
+                <label className="block text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>期权类型</label>
+                <div className="flex gap-2">
+                  {(["call", "put"] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setForm((f) => ({ ...f, optionType: t }))}
+                      className="flex-1 py-1.5 rounded-lg text-xs font-medium"
+                      style={
+                        form.optionType === t
+                          ? { backgroundColor: t === "call" ? "rgba(14,203,129,0.15)" : "rgba(246,70,93,0.15)", color: t === "call" ? "#0ECB81" : "#F6465D", border: `1px solid ${t === "call" ? "rgba(14,203,129,0.4)" : "rgba(246,70,93,0.4)"}` }
+                          : { backgroundColor: "rgba(255,255,255,0.05)", color: OKX_TEXT_SEC, border: `1px solid ${OKX_BORDER}` }
+                      }
+                    >
+                      {t === "call" ? "Call 看涨" : "Put 看跌"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* 行权价（仅期权） */}
+            {form.marketType === "option" && (
+              <div className="mb-3">
+                <label className="block text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>行权价 (Strike)</label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={form.strikePrice}
+                  onChange={(e) => setForm((f) => ({ ...f, strikePrice: e.target.value }))}
+                  placeholder="输入行权价格"
+                  className="w-full px-3 py-2 rounded-xl text-sm"
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    border: `1px solid ${OKX_BORDER}`,
+                    color: OKX_TEXT_PRI,
+                    outline: "none",
+                  }}
+                />
+              </div>
+            )}
             {/* 权利金（仅期权） */}
             {form.marketType === "option" && (
               <div className="mb-3">

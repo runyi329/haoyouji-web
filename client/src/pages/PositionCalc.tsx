@@ -795,6 +795,14 @@ export default function PositionCalc() {
                 <span className="w-1.5 h-1.5 rounded-full bg-gray-600 flex-shrink-0" />
                 订单流管理
               </button>
+              <button
+                className="w-full text-left px-4 py-2.5 text-sm flex items-center gap-2"
+                style={{ color: '#c0c0c0' }}
+                onClick={() => { setShowPageMenu(false); setLocation(`/ledger/${ledgerId}/option-analysis`); }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-600 flex-shrink-0" />
+                期权分析总览
+              </button>
             </div>
           )}
         </div>
