@@ -4983,6 +4983,153 @@ router.get("/api/wecom/channels/:id/wallet-info", async (req: Request, res: Resp
   }
 });
 
+// -----------------------------------------------------------
+// POST /api/wecom/web-chat  -- 网页内嵌聊天接口（牙伴在线，不走微信回调）
+// -----------------------------------------------------------
+router.post("/api/wecom/web-chat", async (req: Request, res: Response) => {
+  try {
+    const { message, channel_id = 4, session_id, user_id } = req.body as {
+      message: string;
+      channel_id?: number;
+      session_id?: string;
+      user_id?: string;
+    };
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: "消息不能为空" });
+    }
+    const userText = message.trim();
+    const kfChannelId = Number(channel_id) || 4;
+    const webUserId = user_id || session_id || "web_anonymous";
+
+    const dbConn = await getDbConnection();
+
+    // 1. 读取渠道配置（system prompt + AI model + kb）
+    let systemPrompt = "";
+    let aiModel = "deepseek-chat";
+    let kbId: number | null = null;
+    if (dbConn) {
+      try {
+        const [cfgRows] = await (dbConn as any).execute(
+          "SELECT config_key, config_val FROM wecom_channel_config WHERE channel_id = ?",
+          [kfChannelId]
+        );
+        const cfg: Record<string, string> = {};
+        for (const r of cfgRows as any[]) cfg[r.config_key] = r.config_val;
+        if (cfg.ai_model) aiModel = cfg.ai_model;
+        if (cfg.knowledge_base_id) kbId = parseInt(cfg.knowledge_base_id, 10) || null;
+        // 拼接 system prompt
+        const disablePlatformRules = cfg.disable_platform_rules === '1';
+        const [platformRuleRows] = disablePlatformRules
+          ? [[]]
+          : await (dbConn as any).execute(
+              "SELECT layer, category, content FROM wecom_prompt_rules WHERE channel_id = 1 AND enabled = 1 ORDER BY layer ASC, sort_order ASC, id ASC",
+              []
+            );
+        const [ruleRows] = await (dbConn as any).execute(
+          "SELECT layer, category, content FROM wecom_prompt_rules WHERE channel_id = ? AND enabled = 1 ORDER BY layer ASC, sort_order ASC, id ASC",
+          [kfChannelId]
+        );
+        const platformRules = platformRuleRows as any[];
+        const rules = ruleRows as any[];
+        const allLayer1 = [...platformRules.filter((r: any) => r.layer === 1), ...rules.filter((r: any) => r.layer === 1)];
+        const allLayer2 = [...platformRules.filter((r: any) => r.layer === 2), ...rules.filter((r: any) => r.layer === 2)];
+        const parts: string[] = [];
+        if (allLayer1.length > 0) parts.push(allLayer1.map((r: any) => r.content).join("\n"));
+        if (allLayer2.length > 0) parts.push("行为规则：\n" + allLayer2.map((r: any, i: number) => `${i + 1}. ${r.content}`).join("\n"));
+        if (parts.length > 0) systemPrompt = parts.join("\n\n");
+        if (!systemPrompt && cfg.system_prompt) systemPrompt = cfg.system_prompt;
+      } catch (e) { console.error("[WEB-CHAT] 读取渠道配置失败:", e); }
+    }
+    // 兜底知识库
+    if (dbConn && !kbId) {
+      try {
+        const [kbRows] = await (dbConn as any).execute(
+          "SELECT id FROM wecom_knowledge_bases WHERE channel_id = ? ORDER BY id LIMIT 1",
+          [kfChannelId]
+        );
+        if ((kbRows as any[]).length > 0) kbId = (kbRows as any[])[0].id;
+      } catch (_) {}
+    }
+
+    // 2. 知识库检索
+    let kbContext = "";
+    if (dbConn) {
+      try {
+        const kbIdSet = new Set<number>();
+        try {
+          const [boundKbRows] = await (dbConn as any).execute(
+            `SELECT sk.kb_id FROM wecom_channel_shared_kb sk JOIN wecom_knowledge_bases kb ON sk.kb_id = kb.id WHERE sk.channel_id = ? AND kb.is_shared = 1`,
+            [kfChannelId]
+          );
+          for (const r of (boundKbRows as any[])) kbIdSet.add(r.kb_id);
+        } catch (_) {
+          const [sysKbRows] = await (dbConn as any).execute("SELECT id FROM wecom_knowledge_bases WHERE is_system = 1 ORDER BY id");
+          for (const r of (sysKbRows as any[])) kbIdSet.add(r.id);
+        }
+        if (kbId) kbIdSet.add(kbId);
+        if (kbIdSet.size > 0) {
+          const kbIds = Array.from(kbIdSet);
+          let kbItems: any[] = [];
+          if (isVectorEnabled()) {
+            try {
+              const hits = await searchKnowledgeSemantic(dbConn, kbIds, userText, 5, 0.5);
+              if (hits && hits.length > 0) kbItems = hits.map((h) => ({ question: h.question, answer: h.answer }));
+            } catch (_) {}
+          }
+          if (kbItems.length === 0) {
+            const keywords = userText.replace(/[？?！!。，,、\s]/g, " ").split(" ").filter((k: string) => k.length >= 2).slice(0, 8);
+            if (keywords.length > 0) {
+              const kbPlaceholders = kbIds.map(() => "?").join(",");
+              const qLike = keywords.map(() => "question LIKE ?").join(" OR ");
+              const [qItems] = await (dbConn as any).execute(
+                `SELECT question, answer FROM wecom_knowledge_items WHERE kb_id IN (${kbPlaceholders}) AND enabled = 1 AND (${qLike}) LIMIT 5`,
+                [...kbIds, ...keywords.map((kw: string) => `%${kw}%`)]
+              );
+              kbItems = qItems as any[];
+            }
+          }
+          if (kbItems.length > 0) {
+            kbContext = "\n\n【知识库标准答案——必须优先使用】\n" + kbItems.slice(0, 5).map((item: any, i: number) =>
+              `${i + 1}. 问：${(item.question || "").split("\n")[0]}\n   答：${item.answer}`
+            ).join("\n") + "\n【重要】以上是标准答案，回复时必须严格依照上述内容，不得修改或忽略。";
+          }
+        }
+      } catch (e) { console.error("[WEB-CHAT] 知识库检索失败:", e); }
+    }
+
+    // 3. 调用 AI 生成回复
+    const fullSystemPrompt = systemPrompt + kbContext;
+    const dsReply = await sendToDeepSeekAndGetReply(userText, aiModel, fullSystemPrompt, "chat_reply");
+
+    // 4. 写入消息日志（channel_id 字段）
+    if (dbConn) {
+      try {
+        await (dbConn as any).execute(
+          `INSERT INTO wecom_message_credits (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, input_tokens, output_tokens, cache_hit_tokens, model_used, reply_preview, channel_type, channel_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'web', ?)`,
+          [
+            webUserId,
+            `web-chat-${kfChannelId}`,
+            userText.substring(0, 200),
+            0, dsReply.totalTokens, dsReply.totalTokens,
+            Math.max(0, dsReply.promptTokens - (dsReply.cacheHitTokens || 0)),
+            dsReply.completionTokens,
+            dsReply.cacheHitTokens || 0,
+            dsReply.modelUsed || aiModel,
+            dsReply.content.substring(0, 100),
+            kfChannelId
+          ]
+        );
+      } catch (e) { console.error("[WEB-CHAT] 写入日志失败:", e); }
+    }
+
+    res.json({ ok: true, reply: dsReply.content });
+  } catch (e: any) {
+    console.error("[WEB-CHAT] 异常:", e);
+    res.status(500).json({ error: "AI 回复失败，请稍后重试" });
+  }
+});
+
 export default router;
 
 
