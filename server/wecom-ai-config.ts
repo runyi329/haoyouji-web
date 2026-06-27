@@ -430,9 +430,12 @@ export async function callAIVoice(
   let apiBase: string;
   let apiKey: string;
   if (provider === "manus" || !cfg?.api_base) {
-    // forgeApiUrl 已包含 /v1，去掉末尾 /v1 避免拼接时重复
-    apiBase = (ENV.forgeApiUrl ?? "").replace(/\/v1\/?$/, "").replace(/\/$/, "");
-    apiKey = ENV.forgeApiKey ?? "";
+    // 优先使用系统注入的 OPENAI_API_BASE（llm-proxy），去掉末尾 /v1 避免拼接时重复
+    // BUILT_IN_FORGE_API_URL 在 .env 中路径不正确（/api/forge 404），改用 llm-proxy
+    const openaiBase = process.env.OPENAI_API_BASE ?? ENV.forgeApiUrl ?? "";
+    apiBase = openaiBase.replace(/\/v1\/?$/, "").replace(/\/$/, "");
+    // BUILT_IN_FORGE_API_KEY 在 .env 中是字面量 "${OPENAI_API_KEY}"（未展开），改用系统注入的真实 key
+    apiKey = process.env.OPENAI_API_KEY ?? ENV.forgeApiKey ?? "";
   } else {
     apiBase = cfg.api_base.replace(/\/$/, "");
     apiKey = cfg.api_key;
@@ -444,21 +447,37 @@ export async function callAIVoice(
 
   // 构建 multipart form
   const formData = new FormData();
-  const ext = mimeType.includes("amr") ? "amr" : mimeType.includes("mp3") || mimeType.includes("mpeg") ? "mp3" : mimeType.includes("wav") ? "wav" : "audio";
-  const audioBlob = new Blob([new Uint8Array(audioBuffer)], { type: mimeType });
+  // iOS Safari 录音时 MIME type 为 "audio/webm; codecs=opus"，但实际内部是 mp4 容器格式，
+  // 直接用 webm 后缀会导致 Whisper 报 "File is corrupted"，必须改为 mp4。
+  // 判断方式：如果包含 "webm" 且包含 "opus" （iOS 特征），强制用 mp4。
+  const isIosWebm = mimeType.includes("webm") && mimeType.includes("opus");
+  const ext = mimeType.includes("amr") ? "amr"
+    : mimeType.includes("mp3") || mimeType.includes("mpeg") ? "mp3"
+    : mimeType.includes("wav") ? "wav"
+    : mimeType.includes("mp4") || mimeType.includes("m4a") ? "mp4"
+    : mimeType.includes("ogg") ? "ogg"
+    : isIosWebm ? "mp4"  // iOS 的 webm+opus 实际是 mp4 容器，用 mp4 后缀
+    : mimeType.includes("webm") ? "webm"
+    : mimeType.includes("flac") ? "flac"
+    : "mp4";
+  // 对应地，如果是 iOS webm，把 blob 的 type 也改为 audio/mp4
+  const effectiveMime = isIosWebm ? "audio/mp4" : mimeType;
+  const audioBlob = new Blob([new Uint8Array(audioBuffer)], { type: effectiveMime });
   formData.append("file", audioBlob, `voice.${ext}`);
   formData.append("model", modelName);
   formData.append("response_format", "verbose_json");
   formData.append("prompt", "请将用户语音转写为文字，保持原意不要翻译");
 
-  const resp = await fetch(`${apiBase}/v1/audio/transcriptions`, {
+    const transcribeUrl = `${apiBase}/v1/audio/transcriptions`;
+  console.log(`[callAIVoice] 调用语音识别: url=${transcribeUrl}, ext=${ext}, mimeType=${mimeType}, size=${audioBuffer.length}bytes, keyPrefix=${(apiKey || "").substring(0, 8)}`);
+  const resp = await fetch(transcribeUrl, {
     method: "POST",
     headers: { authorization: `Bearer ${apiKey}`, "Accept-Encoding": "identity" },
     body: formData,
   });
-
   if (!resp.ok) {
     const errText = await resp.text().catch(() => "");
+    console.error(`[callAIVoice] 语音识别失败 status=${resp.status}, url=${transcribeUrl}, body=${errText.substring(0, 200)}`);
     throw new Error(`语音识别失败(${resp.status}): ${errText.substring(0, 100)}`);
   }
 

@@ -1891,6 +1891,30 @@ function AvatarGrowthTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelTy
   const [feedingUrl, setFeedingUrl] = useState(false);
   const [feedResult, setFeedResult] = useState<{show: boolean; count: number; level: string} | null>(null);
 
+  // 智能钱包
+  const [walletInfo, setWalletInfo] = useState<{
+    bound: boolean;
+    username?: string;
+    balance: number;
+    month_usdt: number;
+    month_tokens: number;
+    manus_credits: number;
+    ds_tokens: number;
+    record_count: number;
+    recent_logs: { id: number; amount: number; note: string; created_at: string }[];
+  } | null>(null);
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [showWallet, setShowWallet] = useState(false);
+
+  const loadWalletInfo = () => {
+    setWalletLoading(true);
+    fetch(`/api/wecom/channels/${channelId}/wallet-info`)
+      .then(r => r.json())
+      .then(d => { if (d.ok) setWalletInfo(d); })
+      .catch(() => {})
+      .finally(() => setWalletLoading(false));
+  };
+
   useEffect(() => {
     // 加载分身名称和头像
     fetch(`/api/wecom/channels/${channelId}`)
@@ -1944,6 +1968,8 @@ function AvatarGrowthTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelTy
       }
       setGrowthHistory(hist);
     }).finally(() => setLoading(false));
+    // 自动加载钱包数据，页面打开即显示余额
+    loadWalletInfo();
   }, []);
 
   const { cur, next, equiv, progress } = calcLevel(kbCount, corpusQuality, dialogCount);
@@ -2047,10 +2073,11 @@ function AvatarGrowthTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelTy
                   onClick={() => { setNameInput(avatarName); setEditingName(true); }}
                   className="text-xs px-2 py-0.5 rounded-full flex-shrink-0 font-medium"
                   style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.85)' }}
-                >设置</button>
+>设置</button>
               </div>
               <div className="text-white text-[10px] opacity-50 mt-0.5">数字分身</div>
             </div>
+
           </div>
           {/* 设置面板：编辑分身名称 */}
           {editingName && (
@@ -2099,41 +2126,56 @@ function AvatarGrowthTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelTy
               </div>
             </div>
           )}
-          {/* 账户标题 */}
-          <div className="text-white text-[10px] opacity-55 tracking-widest uppercase mb-4">分身资产账户</div>
-          {/* 资产总值—大号数字 */}
+          {/* 资产区块：左侧 2/3 知识资产 + 竖线 + 右侧 1/3 智能钱包 */}
           {(() => {
             const totalItems = kbCount + sysKbCount;
             const totalChars = kbCharCount + sysKbCharCount;
-            const kbNum = sysKbEnabled ? 2 : 1; // 私人库 + 共享库
+            const kbNum = sysKbEnabled ? 2 : 1;
             const fmtChar = (n: number) => n >= 10000 ? `${(n / 10000).toFixed(1)}万` : n.toLocaleString();
             return (
-              <>
-                <div className="mb-1">
-                  <div className="text-white text-[11px] opacity-55 mb-0.5">知识资产总量</div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-white font-bold tracking-tight" style={{ fontSize: 36, lineHeight: 1 }}>{totalItems.toLocaleString()}</span>
-                    <span className="text-white text-sm opacity-70">条目</span>
+              <div className="flex items-stretch mb-4" style={{ gap: 0 }}>
+                {/* 左侧：数字资产账户 */}
+                <div className="flex flex-col justify-center" style={{ flex: '1 1 0', paddingRight: 14 }}>
+                  <div className="text-white text-[10px] opacity-55 mb-2">数字资产账户</div>
+                  <div className="flex items-baseline gap-1 mb-1.5">
+                    <span className="text-white font-bold tracking-tight" style={{ fontSize: 28, lineHeight: 1 }}>{totalItems.toLocaleString()}</span>
+                    <span className="text-white text-xs opacity-60">条目</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-white text-[10px] opacity-45">知识库 {kbNum}个</span>
+                    <span className="text-white opacity-20 text-[10px]">/</span>
+                    <span className="text-white text-[10px] opacity-45">{fmtChar(totalChars)}字符</span>
                   </div>
                 </div>
-                {/* 资产明细：库数 / 条目 / 字符 */}
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="flex items-center gap-1">
-                    <span className="text-white text-[10px] opacity-45">知识库</span>
-                    <span className="text-white text-[11px] font-semibold opacity-80">{kbNum} 个</span>
+                {/* 竖分隔线 */}
+                <div style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.25)', flexShrink: 0, alignSelf: 'stretch' }} />
+                {/* 右侧：智能钱包账户 */}
+                <button
+                  className="flex flex-col justify-center"
+                  style={{ flex: '1 1 0', paddingLeft: 14 }}
+                  onClick={() => {
+                    setShowWallet(true);
+                    if (!walletInfo) loadWalletInfo();
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-white text-[10px] opacity-55">智能钱包账户</span>
+                    <span className="text-white opacity-30" style={{ fontSize: 12 }}>›</span>
                   </div>
-                  <span className="text-white opacity-25 text-[10px]">/</span>
-                  <div className="flex items-center gap-1">
-                    <span className="text-white text-[10px] opacity-45">条目</span>
-                    <span className="text-white text-[11px] font-semibold opacity-80">{totalItems}</span>
+                  <div className="flex items-baseline gap-1 mb-1.5">
+                    <span className="text-white font-bold tracking-tight" style={{ fontSize: 28, lineHeight: 1 }}>
+                      {walletLoading && !walletInfo ? '--' : walletInfo?.bound ? walletInfo.balance.toFixed(2) : '--'}
+                    </span>
+                    <span className="text-white text-xs opacity-60">USDT</span>
                   </div>
-                  <span className="text-white opacity-25 text-[10px]">/</span>
-                  <div className="flex items-center gap-1">
-                    <span className="text-white text-[10px] opacity-45">字符</span>
-                    <span className="text-white text-[11px] font-semibold opacity-80">{fmtChar(totalChars)}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-white text-[10px] opacity-45">本月 token</span>
+                    <span className="text-white text-[10px] opacity-70 font-medium">
+                      {walletLoading && !walletInfo ? '--' : walletInfo?.bound ? `${((walletInfo.month_tokens ?? 0) >= 10000 ? ((walletInfo.month_tokens ?? 0) / 10000).toFixed(1) + '万' : (walletInfo.month_tokens ?? 0).toLocaleString())}` : '--'}
+                    </span>
                   </div>
-                </div>
-              </>
+                </button>
+              </div>
             );
           })()}
           {/* 分隔线 */}
@@ -2165,6 +2207,95 @@ function AvatarGrowthTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelTy
           })()}
       </div>
       </div>
+
+      {/* ── 智能钱包详情层 ── */}
+      {showWallet && (
+        <div className="fixed inset-0 z-50 flex flex-col" style={{ backgroundColor: '#fff' }}>
+          {/* 顶部导航 */}
+          <div className="flex items-center px-4 py-3" style={{ background: `linear-gradient(145deg, ${theme.brandDeep} 0%, ${theme.brand} 100%)`, minHeight: 56 }}>
+            <button
+              onClick={() => setShowWallet(false)}
+              className="mr-3 text-white opacity-80 text-lg"
+            >←</button>
+            <span className="text-white font-semibold text-base">智能钱包</span>
+            <button
+              onClick={loadWalletInfo}
+              className="ml-auto text-white opacity-60 text-xs"
+            >{walletLoading ? '刷新中…' : '刷新'}</button>
+          </div>
+
+          {/* 内容区 */}
+          <div className="flex-1 overflow-y-auto px-4 pt-5 pb-8">
+            {walletLoading && !walletInfo && (
+              <div className="text-center py-12 text-gray-400 text-sm">加载中…</div>
+            )}
+            {walletInfo && !walletInfo.bound && (
+              <div className="text-center py-12 text-gray-400 text-sm">该渠道尚未绑定脉动网账户，请先在「设置」中绑定账户</div>
+            )}
+            {walletInfo?.bound && (
+              <>
+                {/* 余额卡片 */}
+                <div className="rounded-2xl p-5 mb-4" style={{ background: `linear-gradient(145deg, ${theme.brandDeep} 0%, ${theme.brand} 100%)` }}>
+                  <div className="text-white text-xs opacity-60 mb-1">账户余额</div>
+                  <div className="flex items-baseline gap-1 mb-3">
+                    <span className="text-white text-4xl font-bold">{walletInfo.balance.toFixed(2)}</span>
+                    <span className="text-white text-lg opacity-70 ml-1">USDT</span>
+                  </div>
+                  <div className="text-white text-xs opacity-50">账户：{walletInfo.username}</div>
+                </div>
+
+                {/* 本月消耗 */}
+                <div className="rounded-xl p-4 mb-4" style={{ border: `1px solid ${theme.line}`, backgroundColor: theme.white }}>
+                  <div className="text-xs font-semibold mb-3" style={{ color: theme.textMain }}>本月 AI 消耗</div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs" style={{ color: theme.textSub }}>Manus 积分</span>
+                    <span className="text-xs font-medium" style={{ color: theme.textMain }}>{walletInfo.manus_credits.toLocaleString()} 积分</span>
+                  </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs" style={{ color: theme.textSub }}>DeepSeek Tokens</span>
+                    <span className="text-xs font-medium" style={{ color: theme.textMain }}>{walletInfo.ds_tokens.toLocaleString()} tokens</span>
+                  </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs" style={{ color: theme.textSub }}>对话次数</span>
+                    <span className="text-xs font-medium" style={{ color: theme.textMain }}>{walletInfo.record_count} 次</span>
+                  </div>
+                  <div style={{ height: 1, backgroundColor: theme.line, margin: '8px 0' }} />
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold" style={{ color: theme.textMain }}>合计费用</span>
+                    <span className="text-sm font-bold" style={{ color: theme.brand }}>{(walletInfo.month_tokens ?? 0).toLocaleString()} tokens</span>
+                  </div>
+                </div>
+
+                {/* 扣费流水 */}
+                <div className="rounded-xl p-4" style={{ border: `1px solid ${theme.line}`, backgroundColor: theme.white }}>
+                  <div className="text-xs font-semibold mb-3" style={{ color: theme.textMain }}>扣费记录</div>
+                  {walletInfo.recent_logs.length === 0 && (
+                    <div className="text-xs text-center py-4" style={{ color: theme.textSub }}>暂无扣费记录</div>
+                  )}
+                  {walletInfo.recent_logs.map(log => (
+                    <div key={log.id} className="flex items-center justify-between py-2" style={{ borderBottom: `1px solid ${theme.line}` }}>
+                      <div>
+                        <div className="text-xs" style={{ color: theme.textMain }}>{log.note}</div>
+                        <div className="text-[10px] mt-0.5" style={{ color: theme.textSub }}>
+                          {new Date(log.created_at).toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })}
+                        </div>
+                      </div>
+                      <span className="text-xs font-semibold" style={{ color: log.amount < 0 ? '#ef4444' : '#22c55e' }}>
+                        {log.amount > 0 ? '+' : ''}{log.amount.toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 联系充値提示 */}
+                <div className="text-center mt-6">
+                  <p className="text-xs" style={{ color: theme.textSub }}>需要充値？请联系管理员</p>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── 克隆维度成长曲线 ── */}
       {(() => {

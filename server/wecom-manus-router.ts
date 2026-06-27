@@ -30,6 +30,7 @@ import {
   DEDUP_THRESHOLD_SIMILAR,
 } from "./wecom-vector";
 import { getUsdtCnyRate } from "./price-scanner";
+import { getUserCnyBalance, getUserCnyHistory, getUserBalance } from "./db-recharge";
 import { getAIConfig, callAI, callAIVision, callAIVoice, logApiUsage, saveAIConfig, getAIConfigs, MODEL_OPTIONS, USE_CASE_META, type UseCase } from "./wecom-ai-config";
 import { isAIFeatureEnabled } from "./ai-monitor";
 import fs from "fs";
@@ -4883,6 +4884,102 @@ router.post("/api/wecom/ai-analyze-rule", async (req: Request, res: Response) =>
   } catch (e) {
     console.error("[AI分析指令] 失败:", e);
     res.status(500).json({ error: "AI分析失败，请稍后重试" });
+  }
+});
+
+// -----------------------------------------------------------
+// 智能钱包：通过 channel_id 查绑定账户余额 + 本月消耗
+// GET /api/wecom/channels/:id/wallet-info
+// -----------------------------------------------------------
+router.get("/api/wecom/channels/:id/wallet-info", async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const channelId = Number(req.params.id);
+    if (isNaN(channelId)) return res.status(400).json({ error: "无效的渠道ID" });
+
+    // 1. 查渠道绑定的 site_username
+    const [chRows] = await (conn as any).execute(
+      `SELECT site_username FROM wecom_channels WHERE id = ? LIMIT 1`,
+      [channelId]
+    ) as any;
+    const siteUsername: string | null = (chRows as any[])[0]?.site_username || null;
+    if (!siteUsername) {
+      return res.json({ ok: true, bound: false, balance: 0, month_usdt: 0, recent_logs: [] });
+    }
+
+    // 2. 通过 username 查 user_id
+    const [userRows] = await (conn as any).execute(
+      `SELECT id FROM users WHERE username = ? LIMIT 1`,
+      [siteUsername]
+    ) as any;
+    const userId: number | null = (userRows as any[])[0]?.id || null;
+    if (!userId) {
+      return res.json({ ok: true, bound: true, username: siteUsername, balance: 0, month_usdt: 0, recent_logs: [] });
+    }
+
+    // 3. 查 USDT 余额（主钱包）
+    const balance = await getUserBalance(userId).catch(() => 0);
+
+    // 4. 查本月该渠道 AI 消耗（manus_task_id 包含 channelId）
+    const now = new Date();
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    const taskIdPattern = `%${channelId}`;
+    const [statsRows] = await (conn as any).execute(
+      `SELECT
+         SUM(CASE WHEN manus_task_id NOT LIKE 'kf-deepseek-%' AND manus_task_id != 'deepseek' THEN COALESCE(credits_used,0) ELSE 0 END) AS manus_credits,
+         SUM(CASE WHEN manus_task_id LIKE 'kf-deepseek-%' OR manus_task_id = 'deepseek' THEN COALESCE(input_tokens,0) ELSE 0 END) AS ds_input,
+         SUM(CASE WHEN manus_task_id LIKE 'kf-deepseek-%' OR manus_task_id = 'deepseek' THEN COALESCE(output_tokens,0) ELSE 0 END) AS ds_output,
+         SUM(CASE WHEN manus_task_id LIKE 'kf-deepseek-%' OR manus_task_id = 'deepseek' THEN COALESCE(cache_hit_tokens,0) ELSE 0 END) AS ds_cache,
+         SUM(COALESCE(credits_used,0)) AS ds_tokens_total,
+         COUNT(*) AS record_count
+       FROM wecom_message_credits
+       WHERE manus_task_id LIKE ?
+         AND created_at >= ?`,
+      [taskIdPattern, monthStart]
+    ) as any;
+    const sr = (statsRows as any[])[0] || {};
+    const manusCredits = Number(sr.manus_credits) || 0;
+    const manusCny = manusCredits * MANUS_CREDIT_PRICE;
+    const dsInput = Number(sr.ds_input) || 0;
+    const dsOutput = Number(sr.ds_output) || 0;
+    const dsCache = Number(sr.ds_cache) || 0;
+    const dsCny = calcDeepSeekCost('deepseek-v4-flash', dsInput, dsCache, dsOutput);
+    // 本月消耗换算为 USDT（1 USDT ≈ 7.25 CNY）
+    const CNY_TO_USDT = 1 / 7.25;
+    const monthUsdt = parseFloat(((manusCny + dsCny) * CNY_TO_USDT).toFixed(6));
+
+    // 5. 查最近流水（企微相关）
+    const recentLogs = await getUserCnyHistory(userId, 20).catch(() => []);
+    const wecomLogs = recentLogs
+      .filter((l: any) => l.note && (l.note.includes('企微') || l.note.includes('AI客服') || l.note.includes('数字分身')))
+      .slice(0, 10)
+      .map((l: any) => ({
+        id: l.id,
+        amount: Number(l.amount),
+        note: String(l.note).replace('[CNY]', '').trim(),
+        created_at: l.created_at,
+      }));
+
+    // 本月总 token：Manus 积分（每个积分对应一次调用）+ DeepSeek tokens
+    const dsTokensTotal = dsInput + dsOutput + dsCache;
+    const monthTokens = manusCredits + dsTokensTotal;
+
+    return res.json({
+      ok: true,
+      bound: true,
+      username: siteUsername,
+      balance: parseFloat(balance.toFixed(4)),   // USDT 余额
+      month_usdt: monthUsdt,                     // 本月消耗 USDT
+      month_tokens: monthTokens,                 // 本月总 token 数
+      manus_credits: manusCredits,
+      ds_tokens: dsTokensTotal,
+      record_count: Number(sr.record_count) || 0,
+      recent_logs: wecomLogs,
+    });
+  } catch (e) {
+    console.error("[智能钱包] 查询失败:", e);
+    res.status(500).json({ error: "查询失败" });
   }
 });
 

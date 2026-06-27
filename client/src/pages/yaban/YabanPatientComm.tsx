@@ -22,6 +22,7 @@ import {
   Check,
   Pause,
   Play,
+  RefreshCw,
 } from "lucide-react";
 
 // ---- 类型定义 ----
@@ -47,6 +48,13 @@ function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+// ---- 文件大小格式化 ----
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 // ---- 日期格式化 ----
@@ -347,6 +355,11 @@ export default function YabanPatientComm() {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [showManualInput, setShowManualInput] = useState(false);
 
+  // 待处理录音（分析失败时保留，供用户重新分析或播放）
+  const [pendingBlob, setPendingBlob] = useState<Blob | null>(null);
+  const [pendingDuration, setPendingDuration] = useState(0);
+  const [pendingBlobUrl, setPendingBlobUrl] = useState<string | null>(null);
+
   // 录音相关 ref
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -373,13 +386,21 @@ export default function YabanPatientComm() {
     onError: (e) => { toast.error(`AI 分析失败：${e.message}`); setRecordingState("idle"); },
   });
 
-  // 清理定时器
+  // 清理定时器和 blobUrl
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
     };
   }, []);
+
+  // 清除待处理录音
+  const clearPending = useCallback(() => {
+    if (pendingBlobUrl) URL.revokeObjectURL(pendingBlobUrl);
+    setPendingBlob(null);
+    setPendingDuration(0);
+    setPendingBlobUrl(null);
+  }, [pendingBlobUrl]);
 
   // 开始录音
   const startRecording = useCallback(async () => {
@@ -425,49 +446,102 @@ export default function YabanPatientComm() {
     }
   }, []);
 
+  // 执行语音分析（传入 blob 和 mimeType）
+  const doAnalyze = useCallback(async (blob: Blob, mimeType: string, savedDuration: number) => {
+    // 失败时统一回退：保存 blob 供用户重新分析
+    const fallbackToPending = () => {
+      const url = URL.createObjectURL(blob);
+      setPendingBlob(blob);
+      setPendingDuration(savedDuration);
+      setPendingBlobUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return url; });
+      setRecordingState("idle");
+      setDuration(0);
+      audioChunksRef.current = [];
+    };
+    const reader = new FileReader();
+    reader.onerror = () => {
+      toast.error("录音文件读取失败，请重新分析");
+      fallbackToPending();
+    };
+    reader.onloadend = async () => {
+      const base64 = (reader.result as string)?.split(",")[1];
+      if (!base64) {
+        toast.error("录音文件为空，请重新录音");
+        fallbackToPending();
+        return;
+      }
+      // 45 秒超时保护，避免请求挂起导致一直转圈圈
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("分析超时（45秒），请重试")), 45000)
+      );
+      try {
+        const result = await Promise.race([
+          analyzeVoiceMutation.mutateAsync({
+            customerId: patientId,
+            audioBase64: base64,
+            mimeType,
+          }),
+          timeoutPromise,
+        ]);
+        setAnalysisResult({
+          rawText: result.rawText,
+          audioUrl: result.audioUrl || null,
+          summaryDemand: result.summaryDemand,
+          summaryKeyPoints: result.summaryKeyPoints,
+          summaryFollowup: result.summaryFollowup,
+          summaryRemark: result.summaryRemark,
+        });
+        // 分析成功：清除待处理录音
+        setPendingBlob(null);
+        setPendingDuration(0);
+        setPendingBlobUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+        setRecordingState("idle");
+        setDuration(0);
+        audioChunksRef.current = [];
+      } catch (err: any) {
+        // 分析失败/超时：提示并保存 blob 供用户重新分析
+        toast.error(`分析失败：${err?.message || "请重试"}`);
+        fallbackToPending();
+      }
+    };
+    reader.readAsDataURL(blob);
+  }, [patientId, analyzeVoiceMutation]);
+
   // 结束并分析
   const stopAndAnalyze = useCallback(() => {
     if (!mediaRecorderRef.current) return;
     if (timerRef.current) clearInterval(timerRef.current);
 
+    // 时长校验：太短会导致文件损坏，太长会超时
+    if (duration < 2) {
+      toast.error("录音太短，请至少录制 2 秒后再停止");
+      cancelRecording();
+      return;
+    }
+    if (duration > 900) {
+      toast.warning("录音最长支持 15 分钟，已自动截断，正在分析...");
+    }
+
     const recorder = mediaRecorderRef.current;
+    const savedDuration = duration;
     setRecordingState("analyzing");
 
     recorder.onstop = async () => {
       if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
-      const mimeType = recorder.mimeType || "audio/webm";
+      const mimeType = recorder.mimeType || "audio/mp4";
       const blob = new Blob(audioChunksRef.current, { type: mimeType });
-
-      // 转 base64
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = (reader.result as string).split(",")[1];
-        try {
-          const result = await analyzeVoiceMutation.mutateAsync({
-            customerId: patientId,
-            audioBase64: base64,
-            mimeType,
-          });
-          setAnalysisResult({
-            rawText: result.rawText,
-            audioUrl: result.audioUrl || null,
-            summaryDemand: result.summaryDemand,
-            summaryKeyPoints: result.summaryKeyPoints,
-            summaryFollowup: result.summaryFollowup,
-            summaryRemark: result.summaryRemark,
-          });
-          setRecordingState("idle");
-          setDuration(0);
-          audioChunksRef.current = [];
-        } catch {
-          setRecordingState("idle");
-        }
-      };
-      reader.readAsDataURL(blob);
+      await doAnalyze(blob, mimeType, savedDuration);
     };
-
     recorder.stop();
-  }, [patientId, analyzeVoiceMutation]);
+  }, [duration, doAnalyze]);
+
+  // 重新分析待处理录音
+  const reanalyzeBlob = useCallback(async () => {
+    if (!pendingBlob) return;
+    setRecordingState("analyzing");
+    const mimeType = pendingBlob.type || "audio/mp4";
+    await doAnalyze(pendingBlob, mimeType, pendingDuration);
+  }, [pendingBlob, pendingDuration, doAnalyze]);
 
   // 取消录音
   const cancelRecording = useCallback(() => {
@@ -542,24 +616,62 @@ export default function YabanPatientComm() {
 
     if (recordingState === "idle") {
       return (
-        <div className="flex gap-3">
-          {/* AI 语音秘书 */}
-          <button
-            onClick={startRecording}
-            className="flex-1 flex flex-col items-center gap-2 py-4 rounded-2xl bg-blue-600 text-white"
-          >
-            <Mic size={24} />
-            <span className="text-sm font-medium">开启 AI 语音秘书</span>
-          </button>
-          {/* AI 文字秘书（占位） */}
-          <button
-            disabled
-            className="flex-1 flex flex-col items-center gap-2 py-4 rounded-2xl bg-gray-100 text-gray-400"
-          >
-            <MessageSquare size={24} />
-            <span className="text-sm font-medium">AI 文字秘书</span>
-            <span className="text-xs">即将上线</span>
-          </button>
+        <div className="space-y-3">
+          {/* 待处理录音预览卡片（分析失败时显示） */}
+          {pendingBlob && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+                <span className="text-sm font-medium text-amber-700">录音待处理</span>
+                <span className="ml-auto text-xs text-gray-400 flex-shrink-0">
+                  {formatDuration(pendingDuration)} · {formatFileSize(pendingBlob.size)}
+                </span>
+              </div>
+              {pendingBlobUrl && (
+                <audio
+                  controls
+                  src={pendingBlobUrl}
+                  className="w-full"
+                  style={{ height: "36px" }}
+                />
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={clearPending}
+                  className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-500 text-sm"
+                >
+                  丢弃
+                </button>
+                <button
+                  onClick={reanalyzeBlob}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-medium"
+                >
+                  <RefreshCw size={14} />
+                  重新分析
+                </button>
+              </div>
+            </div>
+          )}
+          {/* 录音入口按钮 */}
+          <div className="flex gap-3">
+            {/* AI 语音秘书 */}
+            <button
+              onClick={startRecording}
+              className="flex-1 flex flex-col items-center gap-2 py-4 rounded-2xl bg-blue-600 text-white"
+            >
+              <Mic size={24} />
+              <span className="text-sm font-medium">开启 AI 语音秘书</span>
+            </button>
+            {/* AI 文字秘书（占位） */}
+            <button
+              disabled
+              className="flex-1 flex flex-col items-center gap-2 py-4 rounded-2xl bg-gray-100 text-gray-400"
+            >
+              <MessageSquare size={24} />
+              <span className="text-sm font-medium">AI 文字秘书</span>
+              <span className="text-xs">即将上线</span>
+            </button>
+          </div>
         </div>
       );
     }

@@ -7,7 +7,7 @@ import { useLocation, Link } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import {
-  ArrowLeft, Users, Star, Calendar, ChevronRight, Gift, ClipboardList, Settings
+  ArrowLeft, Users, Star, Calendar, ChevronRight, Gift, ClipboardList, Settings, Bot
 } from "lucide-react";
 import BottomNav from "@/components/BottomNav";
 
@@ -141,6 +141,16 @@ export default function BeautyProfile() {
                 <Settings className="w-4.5 h-4.5" />
               </div>
               <span className="flex-1 text-left text-sm text-gray-700">商户设置</span>
+              <ChevronRight className="w-4 h-4 text-gray-300" />
+            </button>
+            <button
+              onClick={() => setLocation('/p/proj_liulifan')}
+              className="w-full px-5 py-4 flex items-center gap-3 active:bg-gray-50 transition-colors border-t border-gray-50"
+            >
+              <div className="w-9 h-9 rounded-full bg-purple-50 flex items-center justify-center text-purple-400 flex-shrink-0">
+                <Bot className="w-4.5 h-4.5" />
+              </div>
+              <span className="flex-1 text-left text-sm text-gray-700">数字分身管理</span>
               <ChevronRight className="w-4 h-4 text-gray-300" />
             </button>
           </div>

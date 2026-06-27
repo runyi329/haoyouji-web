@@ -27,7 +27,14 @@ const DEFAULT_COMM_PROMPT = `你是一名专业的牙科诊所助理，请根据
   "remark": "客户对价格较敏感，可适当优惠"
 }
 
-如果某个维度没有相关信息，对应字段返回空字符串。只返回 JSON，不要其他内容。`;
+重要要求：
+- 每个字段的值必须是一段纯文本字符串，绝对不能是嵌套的对象或数组。
+- 如果某个维度有多条信息，请用顿号或逗号连接成一句话。
+- 如果某个维度没有相关信息，对应字段返回空字符串。
+- 只返回 JSON，不要包含 markdown 代码块标记或其他任何内容。
+
+正确示例（所有字段都是字符串）：
+{"demand":"牙齿敏感，询问是否需要检查","keyPoints":"建议做全口检查，报价200元","followup":"约下周三下午3点复诊","remark":"客户对价格较敏感"}`;
 
 export const yabanCommRouter = router({
   /** 获取某顾客的沟通记录列表（按时间倒序） */
@@ -231,13 +238,25 @@ export const yabanCommRouter = router({
 
         const hunyuanData = await hunyuanResp.json() as any;
         const content = hunyuanData?.choices?.[0]?.message?.content || '';
+        console.log('[AI语音秘书] 混元返回原始内容:', content.substring(0, 300));
         if (content) {
-          const jsonStr = content.replace(/```json\n?|\n?```/g, '').trim();
+          // 容错：提取 JSON（去掉 markdown 代码块，取第一个 {...} 片段）
+          let jsonStr = content.replace(/```json\n?|```\n?|\n?```/g, '').trim();
+          const braceMatch = jsonStr.match(/\{[\s\S]*\}/);
+          if (braceMatch) jsonStr = braceMatch[0];
           const parsed = JSON.parse(jsonStr);
-          summaryDemand = parsed.demand || '';
-          summaryKeyPoints = parsed.keyPoints || '';
-          summaryFollowup = parsed.followup || '';
-          summaryRemark = parsed.remark || '';
+          // 容错：字段可能被模型返回为对象/数组，统一展平为字符串
+          const toStr = (v: any): string => {
+            if (v == null) return '';
+            if (typeof v === 'string') return v;
+            if (Array.isArray(v)) return v.map(toStr).filter(Boolean).join('；');
+            if (typeof v === 'object') return Object.values(v).map(toStr).filter(Boolean).join('；');
+            return String(v);
+          };
+          summaryDemand = toStr(parsed.demand);
+          summaryKeyPoints = toStr(parsed.keyPoints);
+          summaryFollowup = toStr(parsed.followup);
+          summaryRemark = toStr(parsed.remark);
         }
       } catch (e) {
         console.error('[AI语音秘书] AI摘要提取失败:', e);
