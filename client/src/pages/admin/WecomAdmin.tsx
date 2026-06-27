@@ -3635,9 +3635,97 @@ function PlatformUsageTabView() {
   );
 }
 
+// ─── 脉动网设计部自建应用平台管理（合并视图，11个Tab）────────────────────────────
+function PlatformUnifiedView({ appChannelId }: { appChannelId: number | null }) {
+  const [activeTab, setActiveTab] = useState<
+    'config' | 'rules' | 'kb' | 'users' | 'logs' | 'bindings' |
+    'overview' | 'accounts' | 'shared' | 'ai_model' | 'usage'
+  >('overview');
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [loadingChannels, setLoadingChannels] = useState(true);
+
+  async function loadChannels() {
+    setLoadingChannels(true);
+    try {
+      const res = await fetch('/api/wecom/channels?app_id=1');
+      const d = await res.json();
+      setChannels(d.channels || []);
+    } catch {}
+    finally { setLoadingChannels(false); }
+  }
+
+  useEffect(() => { loadChannels(); }, []);
+
+  // 取自建应用渠道（app 类型）的 channelId
+  const appCh = channels.find(ch => ch.channel_type === 'app');
+  const channelId = appChannelId ?? appCh?.id ?? 0;
+  const appChannel: Channel | undefined = appCh ?? (appChannelId ? { id: appChannelId, name: '自建应用', channel_type: 'app', is_enabled: 1, project_key: '', kf_id: '', app_id: 1 } as Channel : undefined);
+
+  const tabs = [
+    // 平台管理原有 Tab
+    { key: 'overview',  label: '总览',     icon: <BarChart2 className="w-3.5 h-3.5" /> },
+    { key: 'accounts',  label: '分身账户', icon: <Bot className="w-3.5 h-3.5" /> },
+    { key: 'shared',    label: '平台共享', icon: <Shield className="w-3.5 h-3.5" /> },
+    { key: 'ai_model',  label: 'AI模型',   icon: <Zap className="w-3.5 h-3.5" /> },
+    { key: 'usage',     label: '用量统计', icon: <Coins className="w-3.5 h-3.5" /> },
+    // 自建应用渠道原有 Tab
+    { key: 'config',    label: '配置',     icon: <Settings className="w-3.5 h-3.5" /> },
+    { key: 'rules',     label: '专属规则', icon: <Sparkles className="w-3.5 h-3.5" /> },
+    { key: 'kb',        label: '知识库',   icon: <Shield className="w-3.5 h-3.5" /> },
+    { key: 'users',     label: '用户',     icon: <User className="w-3.5 h-3.5" /> },
+    { key: 'logs',      label: '日志',     icon: <MessageSquare className="w-3.5 h-3.5" /> },
+    { key: 'bindings',  label: '绑定服务商', icon: <Link2Icon /> },
+  ];
+
+  if (loadingChannels) return <div className="flex justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-green-500" /></div>;
+
+  return (
+    <div>
+      {/* Tab 切换（横向滚动，11个） */}
+      <div className="flex gap-0.5 mb-4 bg-gray-100 rounded-xl p-1 overflow-x-auto">
+        {tabs.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setActiveTab(t.key as any)}
+            className={`flex-shrink-0 flex items-center justify-center gap-1 text-xs py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap px-2 ${
+              activeTab === t.key
+                ? 'bg-white text-green-700 shadow-sm'
+                : 'text-gray-500'
+            }`}
+          >
+            {t.icon}
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 平台管理 Tab 内容 */}
+      {activeTab === 'overview'  && <PlatformOverviewTab channels={channels} />}
+      {activeTab === 'accounts'  && <PlatformAccountsTab channels={channels} onRefresh={loadChannels} />}
+      {activeTab === 'shared'    && <PlatformSharedTab />}
+      {activeTab === 'ai_model'  && <AIModelConfigTab />}
+      {activeTab === 'usage'     && <PlatformUsageTabView />}
+
+      {/* 自建应用渠道 Tab 内容（需要 channelId） */}
+      {channelId > 0 && appChannel ? (
+        <>
+          {activeTab === 'config'   && <ChannelConfigTab channel={appChannel} onJumpToKb={() => setActiveTab('kb')} />}
+          {activeTab === 'rules'    && <ChannelCustomRulesTab channelType="app" />}
+          {activeTab === 'kb'       && <ChannelKnowledgeTab channelType="app" channelId={channelId} />}
+          {activeTab === 'users'    && <ChannelUsersTab channelType="app" />}
+          {activeTab === 'logs'     && <ChannelLogsTab channelType="app" channelId={channelId} />}
+          {activeTab === 'bindings' && <ChannelServiceBindingsTab channelId={channelId} />}
+        </>
+      ) : (['config','rules','kb','users','logs','bindings'] as const).includes(activeTab as any) ? (
+        <div className="text-center py-10 text-gray-400 text-sm">暂无自建应用渠道数据</div>
+      ) : null}
+    </div>
+  );
+}
+
 // 主PlatformKbView组件
 function PlatformKbView() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'accounts' | 'shared' | 'usage'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'accounts' | 'shared' | 'ai_model' | 'usage'>('overview');
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -3727,13 +3815,13 @@ function ChannelTab() {
               <ArrowLeft className="w-4 h-4" />
             </button>
             <div className="flex-1">
-              <div className="text-sm font-bold text-white leading-tight">平台管理</div>
+              <div className="text-sm font-bold text-white leading-tight">脉动网设计部自建应用平台管理</div>
               <div className="text-[10px] text-green-300">渠道 » 平台管理</div>
             </div>
           </div>
         </div>
         <div className="px-4 py-4">
-          <PlatformKbView />
+          <PlatformUnifiedView appChannelId={null} />
         </div>
       </div>
     );
@@ -3917,37 +4005,26 @@ function AppChannelList({
         const kfChannels = channels.filter(ch => ch.channel_type === "kf" && ch.project_key !== "__platform__");
         return (
           <div className="space-y-5">
-            {/* 客户联系分组 */}
-            {appChannels.length > 0 && (
+            {/* 平台管理入口（合并自建应用 + 平台管理） */}
+            {onShowPlatform && (
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="w-1 h-3.5 rounded-full bg-blue-400" />
-                  <p className="text-xs font-semibold text-gray-500">客户联系</p>
-                  <span className="text-xs text-gray-400">{appChannels.length} 个</span>
+                  <div className="w-1 h-3.5 rounded-full bg-amber-400" />
+                  <p className="text-xs font-semibold text-gray-500">平台管理</p>
                 </div>
-                <div className="space-y-2">
-                  {appChannels.map(ch => (
-                    <button
-                      key={ch.id}
-                      onClick={() => onSelectChannel(ch)}
-                      className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3.5 flex items-center gap-3 active:bg-gray-50 transition-colors"
-                    >
-                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center flex-shrink-0">
-                        <Bot className="w-4.5 h-4.5 text-white" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-gray-900">{ch.name}</p>
-                        <p className="text-xs text-gray-400 mt-0.5">客户联系渠道</p>
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-                          ch.is_enabled ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'
-                        }`}>{ch.is_enabled ? '启用' : '停用'}</span>
-                        <ChevronRight className="w-4 h-4 text-gray-300" />
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                <button
+                  onClick={onShowPlatform}
+                  className="w-full text-left bg-gradient-to-r from-[#0d2818] to-[#1a5c2e] rounded-xl shadow-sm px-4 py-3.5 flex items-center gap-3 active:opacity-90 transition-opacity"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
+                    <Shield className="w-4 h-4 text-[#4ade80]" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white">脉动网设计部自建应用平台管理</p>
+                    <p className="text-xs text-green-300 mt-0.5">自建应用 · 共享指令库 · 分身账户 · 绑定服务商</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-green-400 flex-shrink-0" />
+                </button>
               </div>
             )}
 
@@ -3982,29 +4059,6 @@ function AppChannelList({
                     </button>
                   ))}
                 </div>
-              </div>
-            )}
-
-            {/* 平台管理入口 */}
-            {onShowPlatform && (
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-1 h-3.5 rounded-full bg-amber-400" />
-                  <p className="text-xs font-semibold text-gray-500">平台管理</p>
-                </div>
-                <button
-                  onClick={onShowPlatform}
-                  className="w-full text-left bg-gradient-to-r from-[#0d2818] to-[#1a5c2e] rounded-xl shadow-sm px-4 py-3.5 flex items-center gap-3 active:opacity-90 transition-opacity"
-                >
-                  <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
-                    <Shield className="w-4 h-4 text-[#4ade80]" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white">平台管理</p>
-                    <p className="text-xs text-green-300 mt-0.5">共享指令库 · 共享知识库 · 分身账户</p>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-green-400 flex-shrink-0" />
-                </button>
               </div>
             )}
 
