@@ -307,9 +307,7 @@ export default function YabanWechatChat() {
         <div className="absolute left-1/2 -translate-x-1/2 text-center">
           <div className="text-[17px] font-medium text-gray-900 leading-tight">
             牙伴在线
-            <span className="text-[13px] text-[#576B95] ml-0.5">›</span>
           </div>
-          <div className="text-[11px] text-gray-500 leading-tight">润仪商业</div>
         </div>
 
         {/* 右侧更多 */}
