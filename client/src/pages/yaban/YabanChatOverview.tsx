@@ -18,14 +18,15 @@ import {
   Zap,
   Search,
   Settings2,
-  Save,
-  RefreshCw,
+  BookOpen,
 } from "lucide-react";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { trpc } from "@/lib/trpc";
 import { useYabanClinic } from "./useYabanClinic";
 import YabanClinicHeader from "./YabanClinicHeader";
 import { toast } from "sonner";
+import { ChannelConfigTab } from "@/components/channel/ChannelConfigTab";
+import { ChannelKnowledgeTab } from "@/components/channel/ChannelKnowledgeTab";
 
 // ---- 类型 ----
 interface ChatLog {
@@ -37,15 +38,6 @@ interface ChatLog {
   credits_used: number;
   created_at: string;
   nickname: string | null;
-}
-
-interface ChannelConfig {
-  channel_id: string | number;
-  welcome_msg: string;
-  waiting_msg: string;
-  system_prompt: string;
-  ai_model: string;
-  context_rounds: number;
 }
 
 // ---- 工具函数 ----
@@ -63,35 +55,17 @@ const PAGE_SIZE = 20;
 const BRAND = "#1E88D6";
 const BRAND_LIGHT = "#EAF4FE";
 
-const AI_MODEL_OPTIONS = [
-  { value: "deepseek-chat", label: "DeepSeek 快速（推荐）" },
-  { value: "deepseek-v4-flash", label: "DeepSeek V4 Flash" },
-  { value: "deepseek-v4-pro", label: "DeepSeek V4 Pro" },
-  { value: "manus-1.6", label: "Manus 标准" },
-  { value: "manus-1.6-max", label: "Manus Max" },
-];
-
-// ---- AI 配置编辑区子组件 ----
-function AiConfigEditor({ tenantId }: { tenantId: number | null }) {
+// ---- AI 配置区（折叠，内含设置+知识库两个子 Tab）----
+function AiConfigSection({ tenantId }: { tenantId: number | null }) {
   const [channelId, setChannelId] = useState<number | null>(null);
   const [loadingChannel, setLoadingChannel] = useState(false);
-  const [config, setConfig] = useState<ChannelConfig | null>(null);
-  const [loadingConfig, setLoadingConfig] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState<"settings" | "kb">("settings");
 
-  // 本地编辑态
-  const [welcomeMsg, setWelcomeMsg] = useState("");
-  const [waitingMsg, setWaitingMsg] = useState("");
-  const [systemPrompt, setSystemPrompt] = useState("");
-  const [aiModel, setAiModel] = useState("deepseek-chat");
-  const [contextRounds, setContextRounds] = useState(10);
-
-  // 第一步：根据 tenantId 查绑定的 channel_id
+  // 根据 tenantId 查绑定的 channel_id
   useEffect(() => {
     if (!tenantId) return;
     setChannelId(null);
-    setConfig(null);
     setLoadingChannel(true);
     fetch(`/api/wecom/service-binding/channel?service_type=yaban&service_tenant_id=${tenantId}`)
       .then(r => r.json())
@@ -106,53 +80,6 @@ function AiConfigEditor({ tenantId }: { tenantId: number | null }) {
       .finally(() => setLoadingChannel(false));
   }, [tenantId]);
 
-  // 第二步：channel_id 确定后加载 AI 配置
-  useEffect(() => {
-    if (!channelId) return;
-    setLoadingConfig(true);
-    fetch(`/api/wecom/channel-config/${channelId}`)
-      .then(r => r.json())
-      .then(d => {
-        setConfig(d);
-        setWelcomeMsg(d.welcome_msg || "");
-        setWaitingMsg(d.waiting_msg || "收到，稍等为您解答～");
-        setSystemPrompt(d.system_prompt || "");
-        setAiModel(d.ai_model || "deepseek-chat");
-        setContextRounds(d.context_rounds ?? 10);
-      })
-      .catch(() => setConfig(null))
-      .finally(() => setLoadingConfig(false));
-  }, [channelId]);
-
-  async function handleSave() {
-    if (!channelId) return;
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/wecom/channel-config/${channelId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          welcome_msg: welcomeMsg,
-          waiting_msg: waitingMsg,
-          system_prompt: systemPrompt,
-          ai_model: aiModel,
-          context_rounds: contextRounds,
-        }),
-      });
-      const d = await res.json();
-      if (d.ok) {
-        toast.success("AI 配置已保存");
-      } else {
-        toast.error(d.error || "保存失败");
-      }
-    } catch {
-      toast.error("网络错误");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  // 未绑定渠道
   if (loadingChannel) {
     return (
       <div className="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-2">
@@ -189,14 +116,12 @@ function AiConfigEditor({ tenantId }: { tenantId: number | null }) {
         <div className="flex items-center gap-2">
           <Settings2 className="w-4 h-4" style={{ color: BRAND }} />
           <span className="text-sm font-semibold text-gray-800">AI 配置</span>
-          {channelId && (
-            <span
-              className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
-              style={{ backgroundColor: BRAND_LIGHT, color: BRAND }}
-            >
-              渠道 #{channelId}
-            </span>
-          )}
+          <span
+            className="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
+            style={{ backgroundColor: BRAND_LIGHT, color: BRAND }}
+          >
+            渠道 #{channelId}
+          </span>
         </div>
         {expanded ? (
           <ChevronDown className="w-4 h-4 text-gray-400" />
@@ -206,94 +131,47 @@ function AiConfigEditor({ tenantId }: { tenantId: number | null }) {
       </button>
 
       {expanded && (
-        <div className="px-4 pb-4 space-y-3 border-t border-gray-50">
-          {loadingConfig ? (
-            <div className="flex justify-center py-6">
-              <Loader2 className="w-5 h-5 animate-spin" style={{ color: BRAND }} />
-            </div>
-          ) : (
-            <>
-              {/* 欢迎语 */}
-              <div>
-                <label className="text-xs text-gray-500 font-medium block mb-1 mt-3">欢迎语</label>
-                <textarea
-                  rows={2}
-                  value={welcomeMsg}
-                  onChange={e => setWelcomeMsg(e.target.value)}
-                  placeholder="用户首次发消息时的欢迎语（留空则不发送）"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 resize-none focus:outline-none focus:border-blue-400"
-                />
-              </div>
+        <div className="border-t border-gray-50">
+          {/* 子 Tab 切换 */}
+          <div className="flex border-b border-gray-100 px-4 pt-2">
+            <button
+              onClick={() => setActiveTab("settings")}
+              className={`flex items-center gap-1.5 text-sm pb-2 mr-5 border-b-2 transition-colors ${
+                activeTab === "settings"
+                  ? "border-blue-500 text-blue-600 font-medium"
+                  : "border-transparent text-gray-400"
+              }`}
+            >
+              <Settings2 className="w-3.5 h-3.5" />
+              设置
+            </button>
+            <button
+              onClick={() => setActiveTab("kb")}
+              className={`flex items-center gap-1.5 text-sm pb-2 border-b-2 transition-colors ${
+                activeTab === "kb"
+                  ? "border-blue-500 text-blue-600 font-medium"
+                  : "border-transparent text-gray-400"
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              知识库
+            </button>
+          </div>
 
-              {/* 等待提示 */}
-              <div>
-                <label className="text-xs text-gray-500 font-medium block mb-1">等待提示语</label>
-                <input
-                  type="text"
-                  value={waitingMsg}
-                  onChange={e => setWaitingMsg(e.target.value)}
-                  placeholder="收到，稍等为您解答～"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-400"
-                />
-              </div>
-
-              {/* 系统 Prompt */}
-              <div>
-                <label className="text-xs text-gray-500 font-medium block mb-1">系统 Prompt</label>
-                <textarea
-                  rows={4}
-                  value={systemPrompt}
-                  onChange={e => setSystemPrompt(e.target.value)}
-                  placeholder="定义 AI 的角色、语气和回答范围..."
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 resize-none focus:outline-none focus:border-blue-400"
-                />
-              </div>
-
-              {/* AI 模型 + 上下文轮数 */}
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs text-gray-500 font-medium block mb-1">AI 模型</label>
-                  <select
-                    value={aiModel}
-                    onChange={e => setAiModel(e.target.value)}
-                    className="w-full border border-gray-200 rounded-xl px-2 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-400 bg-white"
-                  >
-                    {AI_MODEL_OPTIONS.map(o => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 font-medium block mb-1">上下文轮数</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={30}
-                    value={contextRounds}
-                    onChange={e => setContextRounds(Number(e.target.value))}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-800 focus:outline-none focus:border-blue-400"
-                  />
-                </div>
-              </div>
-
-              {/* 保存按钮 */}
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 transition-colors"
-                style={{
-                  backgroundColor: saving ? "#93C5FD" : BRAND,
-                  color: "white",
-                }}
-              >
-                {saving ? (
-                  <><Loader2 className="w-3.5 h-3.5 animate-spin" />保存中...</>
-                ) : (
-                  <><Save className="w-3.5 h-3.5" />保存 AI 配置</>
-                )}
-              </button>
-            </>
-          )}
+          {/* 子 Tab 内容 */}
+          <div className="px-4 py-4">
+            {activeTab === "settings" ? (
+              <ChannelConfigTab
+                channel={{ id: channelId, name: "牙伴在线", channel_type: "kf" }}
+                yabanMode
+              />
+            ) : (
+              <ChannelKnowledgeTab
+                channelType="kf"
+                channelId={channelId}
+              />
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -373,8 +251,8 @@ export default function YabanChatOverview() {
 
       <div className="px-4 pt-4 space-y-3">
 
-        {/* ===== AI 配置编辑区 ===== */}
-        <AiConfigEditor tenantId={currentTenantId} />
+        {/* ===== AI 配置区（折叠，含设置+知识库）===== */}
+        <AiConfigSection tenantId={currentTenantId} />
 
         {/* ===== 统计卡片（2×2 网格）===== */}
         <div className="grid grid-cols-2 gap-2.5">
@@ -412,42 +290,36 @@ export default function YabanChatOverview() {
           <input
             type="text"
             value={keywordInput}
-            onChange={(e) => setKeywordInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            placeholder="搜索消息内容..."
-            className="flex-1 text-sm text-gray-900 bg-transparent outline-none placeholder:text-gray-300"
+            onChange={e => setKeywordInput(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleSearch()}
+            placeholder="搜索对话内容或用户昵称"
+            className="flex-1 text-sm bg-transparent outline-none text-gray-700 placeholder-gray-300"
           />
+          {keywordInput && (
+            <button
+              onClick={() => { setKeywordInput(""); setKeyword(""); setPage(0); }}
+              className="text-gray-300 active:text-gray-500"
+            >
+              ×
+            </button>
+          )}
           <button
             onClick={handleSearch}
-            className="px-3 py-1.5 text-white text-xs font-medium rounded-xl active:opacity-80 transition-opacity"
-            style={{ backgroundColor: BRAND }}
+            className="text-xs font-medium px-2.5 py-1 rounded-lg"
+            style={{ backgroundColor: BRAND_LIGHT, color: BRAND }}
           >
             搜索
           </button>
         </div>
 
-        {/* ===== 总条数提示 ===== */}
-        {!loading && (
-          <div className="text-xs text-gray-400 text-center">
-            共 {total} 条对话记录
-          </div>
-        )}
-
         {/* ===== 日志列表 ===== */}
         {loading ? (
-          <div className="flex justify-center py-16">
-            <Loader2 size={24} className="animate-spin" style={{ color: BRAND }} />
+          <div className="flex justify-center py-12">
+            <Loader2 className="w-6 h-6 animate-spin" style={{ color: BRAND }} />
           </div>
         ) : logs.length === 0 ? (
-          <div className="flex flex-col items-center py-20 gap-3">
-            <div
-              className="w-14 h-14 rounded-2xl flex items-center justify-center"
-              style={{ backgroundColor: BRAND_LIGHT }}
-            >
-              <MessageSquare className="w-7 h-7" style={{ color: BRAND }} />
-            </div>
-            <p className="text-sm text-gray-500 font-medium">暂无聊天记录</p>
-            <p className="text-xs text-gray-300">客户与 AI 助手的对话将显示在这里</p>
+          <div className="text-center py-16 text-gray-400 text-sm">
+            {keyword ? `未找到包含「${keyword}」的对话` : "暂无对话记录"}
           </div>
         ) : (
           <div className="space-y-2">
@@ -456,48 +328,46 @@ export default function YabanChatOverview() {
                 key={log.id}
                 className="bg-white rounded-2xl shadow-sm overflow-hidden"
               >
-                <button
-                  className="w-full px-4 py-3 text-left active:bg-[#F0F7FD] transition-colors"
-                  onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
-                >
-                  {/* 头部：用户名 + 时间 + 展开箭头 */}
-                  <div className="flex items-center gap-2 mb-2.5">
+                {/* 头部：昵称 + 时间 */}
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-50">
+                  <div className="flex items-center gap-2">
                     <div
-                      className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[11px] font-bold"
-                      style={{ backgroundColor: BRAND }}
+                      className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
+                      style={{ backgroundColor: BRAND_LIGHT }}
                     >
-                      {(log.nickname || "用").slice(0, 1)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium text-gray-800 truncate block">
-                        {log.nickname || `用户 ${log.wecom_user_id.slice(0, 8)}`}
+                      <span className="text-[10px] font-bold" style={{ color: BRAND }}>
+                        {(log.nickname || "匿名").charAt(0)}
                       </span>
                     </div>
-                    <span className="text-[11px] text-gray-400 flex-shrink-0">
-                      {formatDate(log.created_at)}
+                    <span className="text-sm font-medium text-gray-700">
+                      {log.nickname || "匿名用户"}
                     </span>
-                    {expandedLog === log.id ? (
-                      <ChevronDown className="w-4 h-4 text-gray-300 flex-shrink-0" />
-                    ) : (
-                      <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />
-                    )}
                   </div>
+                  <span className="text-xs text-gray-400">{formatDate(log.created_at)}</span>
+                </div>
 
+                {/* 对话气泡 */}
+                <button
+                  className="w-full px-4 py-3 space-y-2 text-left active:bg-gray-50"
+                  onClick={() => setExpandedLog(expandedLog === log.id ? null : log.id)}
+                >
                   {/* 用户消息气泡（灰色，左对齐） */}
-                  <div className="flex items-start gap-2 mb-2">
-                    <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-gray-500 font-bold" style={{ fontSize: "9px" }}>客</span>
+                  {log.user_message && (
+                    <div className="flex items-start gap-2">
+                      <div className="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <span className="text-gray-500 font-bold" style={{ fontSize: "8px" }}>用</span>
+                      </div>
+                      <div className="bg-gray-100 rounded-2xl rounded-tl-none px-3 py-2 flex-1 min-w-0">
+                        <p
+                          className={`text-sm leading-snug text-gray-700 ${
+                            expandedLog === log.id ? "" : "line-clamp-2"
+                          }`}
+                        >
+                          {log.user_message}
+                        </p>
+                      </div>
                     </div>
-                    <div className="rounded-2xl rounded-tl-none px-3 py-2 bg-gray-100 flex-1 min-w-0">
-                      <p
-                        className={`text-sm leading-snug text-gray-800 ${
-                          expandedLog === log.id ? "" : "line-clamp-2"
-                        }`}
-                      >
-                        {log.user_message || "(无内容)"}
-                      </p>
-                    </div>
-                  </div>
+                  )}
 
                   {/* AI 回复气泡（蓝色，右对齐） */}
                   {log.reply_preview && (
