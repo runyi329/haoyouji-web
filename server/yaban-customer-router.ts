@@ -2902,4 +2902,36 @@ export const yabanCustomerRouter = router({
       );
       return { success: true };
     }),
+  /** 获取当前登录用户的头像：优先脸动网头像，没有则按牙伴应用内年龄+性别自动推算 */
+  myAvatar: protectedProcedure.query(async ({ ctx }) => {
+    // 第一优先：脸动网用户头像（URL）
+    const maidongAvatar = (ctx.user as any).avatar as string | null | undefined;
+    if (maidongAvatar) return { avatar: maidongAvatar, type: "url" as const };
+
+    // 第二优先：按牙伴应用内年龄+性别自动推算卡通头像
+    const conn = await getDbConnection();
+    if (!conn) return { avatar: null, type: "none" as const };
+    const username = (ctx.user as any).username as string | undefined;
+    if (!username) return { avatar: null, type: "none" as const };
+    const [rows] = await (conn as any).execute(
+      `SELECT age, gender FROM yaban_customer WHERE yaban_username = ? LIMIT 1`,
+      [username]
+    );
+    const row = (rows as any[])[0];
+    if (!row) return { avatar: null, type: "none" as const };
+    const age = row.age ? String(row.age) : undefined;
+    const gender = row.gender ? String(row.gender) : undefined;
+    if (!age) return { avatar: null, type: "none" as const };
+    const ageNum = parseInt(age, 10);
+    if (isNaN(ageNum)) return { avatar: null, type: "none" as const };
+    let ageBucket: string;
+    if (ageNum <= 11) ageBucket = "child";
+    else if (ageNum <= 17) ageBucket = "teen";
+    else if (ageNum <= 39) ageBucket = "youth";
+    else if (ageNum <= 54) ageBucket = "middle";
+    else if (ageNum <= 69) ageBucket = "senior";
+    else ageBucket = "elder";
+    const genderKey = gender === "女" ? "female" : "male";
+    return { avatar: `${genderKey}_${ageBucket}`, type: "key" as const };
+  }),
 });
