@@ -2934,4 +2934,182 @@ export const yabanCustomerRouter = router({
     const genderKey = gender === "女" ? "female" : "male";
     return { avatar: `${genderKey}_${ageBucket}`, type: "key" as const };
   }),
+
+  // ===== 聊天记录接口 =====
+
+  /** 初始化聊天记录表（首次调用自动建表） */
+  initChatTable: protectedProcedure.mutation(async () => {
+    const conn = await getDbConnection();
+    if (!conn) return { ok: false };
+    await (conn as any).execute(`
+      CREATE TABLE IF NOT EXISTS yaban_chat_messages (
+        id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+        yaban_username VARCHAR(100) NOT NULL COMMENT '关联 yaban_customer.yaban_username',
+        tenant_id     INT          NOT NULL DEFAULT 1 COMMENT '诊所ID',
+        role          ENUM('user','ai') NOT NULL COMMENT '发送方',
+        content       TEXT         NOT NULL COMMENT '消息内容',
+        msg_type      ENUM('text','voice') NOT NULL DEFAULT 'text' COMMENT '消息类型',
+        duration_sec  INT          NULL COMMENT '语音时长（秒）',
+        created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_ycm_username (yaban_username),
+        INDEX idx_ycm_tenant (tenant_id),
+        INDEX idx_ycm_created (created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='牙伴微信聊天记录'
+    `);
+    return { ok: true };
+  }),
+
+  /** 客户端发送消息时写入聊天记录 */
+  saveChatMessage: protectedProcedure
+    .input(z.object({
+      role:        z.enum(["user", "ai"]),
+      content:     z.string().max(10000),
+      msg_type:    z.enum(["text", "voice"]).default("text"),
+      duration_sec: z.number().int().min(0).max(3600).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) return { ok: false };
+      const username = (ctx.user as any).username as string | undefined;
+      if (!username) return { ok: false };
+      const tenantId = await resolveTenantId(username);
+      // 确保表存在
+      await (conn as any).execute(`
+        CREATE TABLE IF NOT EXISTS yaban_chat_messages (
+          id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+          yaban_username VARCHAR(100) NOT NULL,
+          tenant_id     INT          NOT NULL DEFAULT 1,
+          role          ENUM('user','ai') NOT NULL,
+          content       TEXT         NOT NULL,
+          msg_type      ENUM('text','voice') NOT NULL DEFAULT 'text',
+          duration_sec  INT          NULL,
+          created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          INDEX idx_ycm_username (yaban_username),
+          INDEX idx_ycm_tenant (tenant_id),
+          INDEX idx_ycm_created (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+      `);
+      await (conn as any).execute(
+        `INSERT INTO yaban_chat_messages (yaban_username, tenant_id, role, content, msg_type, duration_sec)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [username, tenantId ?? 1, input.role, input.content, input.msg_type, input.duration_sec ?? null]
+      );
+      return { ok: true };
+    }),
+
+  /** 客户端进入聊天页时加载历史记录（最近 50 条） */
+  getChatHistory: protectedProcedure
+    .input(z.object({ limit: z.number().int().min(1).max(200).default(50) }))
+    .query(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) return { messages: [] };
+      const username = (ctx.user as any).username as string | undefined;
+      if (!username) return { messages: [] };
+      try {
+        const [rows] = await (conn as any).execute(
+          `SELECT id, role, content, msg_type, duration_sec, created_at
+           FROM yaban_chat_messages
+           WHERE yaban_username = ?
+           ORDER BY created_at ASC
+           LIMIT ?`,
+          [username, input.limit]
+        );
+        return { messages: rows as any[] };
+      } catch (_) {
+        return { messages: [] };
+      }
+    }),
+
+  /** 管理员查看某客户的聊天记录（按 yaban_username 筛选，分页） */
+  adminGetChatHistory: protectedProcedure
+    .input(z.object({
+      yaban_username: z.string(),
+      page:           z.number().int().min(1).default(1),
+      page_size:      z.number().int().min(1).max(100).default(30),
+    }))
+    .query(async ({ ctx, input }) => {
+      // 仅管理员可调用
+      const role = (ctx.user as any).role as string;
+      if (role !== 'super_admin' && role !== 'admin' && role !== 'parent') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      const conn = await getDbConnection();
+      if (!conn) return { messages: [], total: 0 };
+      const offset = (input.page - 1) * input.page_size;
+      try {
+        const [countRows] = await (conn as any).execute(
+          `SELECT COUNT(*) AS total FROM yaban_chat_messages WHERE yaban_username = ?`,
+          [input.yaban_username]
+        );
+        const total = (countRows as any[])[0]?.total ?? 0;
+        const [rows] = await (conn as any).execute(
+          `SELECT id, role, content, msg_type, duration_sec, created_at
+           FROM yaban_chat_messages
+           WHERE yaban_username = ?
+           ORDER BY created_at DESC
+           LIMIT ? OFFSET ?`,
+          [input.yaban_username, input.page_size, offset]
+        );
+        return { messages: (rows as any[]).reverse(), total };
+      } catch (_) {
+        return { messages: [], total: 0 };
+      }
+    }),
+
+  /** 管理员查看某客户的聊天记录（按 customerId → yaban_username → user_id → wecom_message_credits） */
+  getCustomerChatHistory: protectedProcedure
+    .input(z.object({
+      customerId: z.number().int().positive(),
+      page:       z.number().int().min(1).default(1),
+      page_size:  z.number().int().min(1).max(100).default(50),
+    }))
+    .query(async ({ ctx, input }) => {
+      const role = (ctx.user as any).role as string;
+      if (role !== 'super_admin' && role !== 'admin' && role !== 'parent') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      const conn = await getDbConnection();
+      if (!conn) return { messages: [], total: 0, hasAccount: false };
+      const TENANT_ID = await resolveTenantId(ctx);
+      try {
+        // 1. 通过 customerId 获取 yaban_username
+        const [custRows] = await (conn as any).execute(
+          `SELECT yaban_username FROM yaban_customer WHERE id = ? AND tenant_id = ? LIMIT 1`,
+          [input.customerId, TENANT_ID]
+        );
+        const yabanUsername = (custRows as any[])[0]?.yaban_username;
+        if (!yabanUsername) return { messages: [], total: 0, hasAccount: false };
+        // 2. 通过 yaban_username 获取 users.id（脉动网 UID）
+        const [userRows] = await (conn as any).execute(
+          `SELECT id FROM users WHERE username = ? LIMIT 1`,
+          [yabanUsername]
+        );
+        const userId = (userRows as any[])[0]?.id;
+        if (!userId) return { messages: [], total: 0, hasAccount: true };
+        const wecomUserId = String(userId);
+        // 3. 查询 wecom_message_credits
+        const offset = (input.page - 1) * input.page_size;
+        const [countRows] = await (conn as any).execute(
+          `SELECT COUNT(*) AS total FROM wecom_message_credits WHERE wecom_user_id = ?`,
+          [wecomUserId]
+        );
+        const total = Number((countRows as any[])[0]?.total ?? 0);
+        const [rows] = await (conn as any).execute(
+          `SELECT id, wecom_user_id, user_message, reply_preview, model_used, created_at
+           FROM wecom_message_credits
+           WHERE wecom_user_id = ?
+           ORDER BY created_at DESC
+           LIMIT ? OFFSET ?`,
+          [wecomUserId, input.page_size, offset]
+        );
+        return {
+          messages: (rows as any[]).reverse(),
+          total,
+          hasAccount: true,
+        };
+      } catch (e) {
+        console.error('[getCustomerChatHistory] error:', e);
+        return { messages: [], total: 0, hasAccount: false };
+      }
+    }),
 });

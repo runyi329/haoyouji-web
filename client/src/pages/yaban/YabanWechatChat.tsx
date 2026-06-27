@@ -236,10 +236,12 @@ export default function YabanWechatChat() {
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recordSecsRef = useRef(0);
 
+  // 获取当前登录用户 ID（脉动网 UID），用于关联聊天记录
+  const { data: meData } = trpc.auth.me.useQuery();
+
   // 动态获取用户头像
   const { data: avatarData } = trpc.yabanCustomer.myAvatar.useQuery(undefined, {
     retry: false,
-    onError: () => {/* 静默失败，使用默认头像 */},
   });
   const userAvatar = avatarData?.avatar
     ? avatarData.type === "url"
@@ -292,7 +294,7 @@ export default function YabanWechatChat() {
         body: JSON.stringify({
           message: text,
           channel_id: 4,
-          session_id: sessionId.current,
+          user_id: meData?.id ? String(meData.id) : sessionId.current,
         }),
       });
       const data = await resp.json();
@@ -402,7 +404,7 @@ export default function YabanWechatChat() {
       body: JSON.stringify({
         message: "[用户发送了一条语音消息]",
         channel_id: 4,
-        session_id: sessionId.current,
+        user_id: meData?.id ? String(meData.id) : sessionId.current,
       }),
     })
       .then((r) => r.json())

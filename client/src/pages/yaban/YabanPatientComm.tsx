@@ -47,7 +47,7 @@ interface CommRecord {
 }
 
 type RecordingState = "idle" | "countdown" | "recording" | "paused" | "analyzing";
-type InputMode = "none" | "voice" | "manual" | "wechat";
+type InputMode = "none" | "voice" | "manual" | "wechat_view";
 
 // ---- 工具函数 ----
 function formatDuration(seconds: number): string {
@@ -253,50 +253,117 @@ function ManualInputModal({
   );
 }
 
-// ---- 微信聊天记录弹窗 ----
-function WechatInputModal({
-  onAnalyze,
-  onCancel,
-  isAnalyzing,
+// ---- 客户聊天记录查看弹窗 ----
+function CustomerChatViewModal({
+  customerId,
+  patientName,
+  onClose,
 }: {
-  onAnalyze: (text: string) => void;
-  onCancel: () => void;
-  isAnalyzing: boolean;
+  customerId: number;
+  patientName: string;
+  onClose: () => void;
 }) {
-  const [text, setText] = useState("");
+  const { data, isLoading } = trpc.yabanCustomer.getCustomerChatHistory.useQuery(
+    { customerId, page: 1, page_size: 50 },
+    { enabled: customerId > 0, refetchOnWindowFocus: false }
+  );
+  const messages = data?.messages || [];
+  const hasAccount = data?.hasAccount ?? false;
+  const total = data?.total ?? 0;
+
+  function formatMsgTime(dateStr: string) {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    const mo = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const h = String(d.getHours()).padStart(2, "0");
+    const mi = String(d.getMinutes()).padStart(2, "0");
+    return `${mo}/${day} ${h}:${mi}`;
+  }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-black/40">
-      <div className="w-full bg-white rounded-t-2xl max-h-[88vh] flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <MessageSquare size={16} className="text-green-600" />
-            <span className="text-base font-semibold text-gray-900">粘贴微信聊天记录</span>
+    <div className="fixed inset-0 z-50 flex flex-col bg-white">
+      {/* 顶部导航 */}
+      <div className="bg-gradient-to-r from-green-600 to-green-500 text-white flex items-center justify-between px-4 py-3 flex-shrink-0">
+        <button onClick={onClose} className="p-1 text-white/80">
+          <X size={22} />
+        </button>
+        <div className="flex flex-col items-center">
+          <span className="text-base font-bold leading-tight">微信聊天记录</span>
+          {patientName && (
+            <span className="text-[11px] text-white/80 mt-0.5">{patientName}</span>
+          )}
+        </div>
+        <span className="w-8" />
+      </div>
+
+      {/* 内容区 */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-gray-50">
+        {isLoading ? (
+          <div className="flex justify-center py-20">
+            <Loader2 size={24} className="text-green-500 animate-spin" />
           </div>
-          <button onClick={onCancel} className="p-1 text-gray-400"><X size={20} /></button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-4 py-3">
-          <p className="text-xs text-gray-400 mb-2">将微信聊天记录粘贴到下方，AI 自动提取沟通要点</p>
-          <textarea
-            className="w-full text-sm text-gray-900 bg-gray-50 rounded-xl px-3 py-3 border-0 outline-none resize-none"
-            style={{ minHeight: "220px" }}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder={"在微信中长按消息 → 更多 → 转发到文件传输助手，复制后粘贴到此处..."}
-            autoFocus
-          />
-        </div>
-        <div className="px-4 py-3 border-t border-gray-100 flex gap-3">
-          <button onClick={onCancel} className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium">取消</button>
-          <button
-            onClick={() => text.trim() && onAnalyze(text.trim())}
-            disabled={!text.trim() || isAnalyzing}
-            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-green-600 text-white text-sm font-medium disabled:opacity-50"
-          >
-            {isAnalyzing ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
-            {isAnalyzing ? "AI 分析中..." : "AI 智能分析"}
-          </button>
-        </div>
+        ) : !hasAccount ? (
+          <div className="flex flex-col items-center py-20 text-gray-400 gap-3">
+            <MessageSquare size={40} className="text-gray-200" />
+            <p className="text-sm">该客户尚未绑定牙伴账号</p>
+            <p className="text-xs text-gray-300">绑定账号后，AI 聊天记录将自动同步到此处</p>
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="flex flex-col items-center py-20 text-gray-400 gap-3">
+            <MessageSquare size={40} className="text-gray-200" />
+            <p className="text-sm">暂无聊天记录</p>
+            <p className="text-xs text-gray-300">客户与 AI 助手的对话将显示在这里</p>
+          </div>
+        ) : (
+          <>
+            {/* 总条数提示 */}
+            <div className="text-center">
+              <span className="text-xs text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
+                共 {total} 条对话记录
+              </span>
+            </div>
+            {/* 对话卡片列表 */}
+            {messages.map((msg: any) => (
+              <div key={msg.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                {/* 时间 */}
+                <div className="px-3 pt-2.5 pb-1">
+                  <span className="text-[10px] text-gray-400">{formatMsgTime(msg.created_at)}</span>
+                </div>
+                {/* 用户气泡 */}
+                <div className="px-3 pb-2">
+                  <div className="flex items-start gap-1.5">
+                    <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                      <span className="text-green-600" style={{ fontSize: '10px', fontWeight: 700 }}>客</span>
+                    </div>
+                    <div className="rounded-2xl rounded-tl-none px-2.5 py-1.5 flex-1 min-w-0 bg-gray-100">
+                      <p className="text-sm text-gray-900 leading-snug">{msg.user_message || '(无内容)'}</p>
+                    </div>
+                  </div>
+                </div>
+                {/* AI 回复气泡 */}
+                {msg.reply_preview && (
+                  <div className="px-3 pb-2.5">
+                    <div className="flex items-start gap-1.5 flex-row-reverse">
+                      <div className="w-6 h-6 rounded-full bg-green-600 flex items-center justify-center flex-shrink-0">
+                        <span className="text-white" style={{ fontSize: '9px', fontWeight: 700 }}>AI</span>
+                      </div>
+                      <div className="rounded-2xl rounded-tr-none px-2.5 py-1.5 flex-1 min-w-0 bg-green-600">
+                        <p className="text-sm text-white leading-snug">{msg.reply_preview}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {/* 底部：模型标签 */}
+                {msg.model_used && (
+                  <div className="px-3 pb-2.5 border-t border-gray-50 pt-1.5">
+                    <span className="text-[10px] text-green-600 bg-green-50 px-2 py-0.5 rounded-full">{msg.model_used}</span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </>
+        )}
       </div>
     </div>
   );
@@ -457,7 +524,6 @@ export default function YabanPatientComm() {
 
   // 输入模式
   const [inputMode, setInputMode] = useState<InputMode>("none");
-  const [wechatAnalyzing, setWechatAnalyzing] = useState(false);
 
   // 待处理录音（分析失败时保留）
   const [pendingBlob, setPendingBlob] = useState<Blob | null>(null);
@@ -656,35 +722,6 @@ export default function YabanPatientComm() {
     const mimeType = pendingBlob.type || "audio/mp4";
     await doAnalyze(pendingBlob, mimeType, pendingDuration);
   }, [pendingBlob, pendingDuration, doAnalyze]);
-
-  // ---- 微信聊天 AI 分析 ----
-  const handleWechatAnalyze = useCallback(async (text: string) => {
-    setWechatAnalyzing(true);
-    try {
-      // 复用 analyzeVoice 的摘要逻辑，传文字而非音频
-      // 直接调用后端 analyzeVoice 但传空音频？不行。
-      // 改为：先保存 raw_text，再调用 AI 摘要
-      // 这里用一个简单的方案：直接调用混元 API 提取摘要（通过 tRPC analyzeText 接口）
-      // 由于后端暂无 analyzeText，先用 create 保存原文，摘要字段为空，提示用户手动填写
-      // TODO: 后端加 analyzeText 接口后改为 AI 分析
-      setAnalysisTitle("微信聊天记录");
-      setAnalysisRecordType("text");
-      setAnalysisResult({
-        rawText: text,
-        audioUrl: null,
-        summaryDemand: "",
-        summaryHospital: "",
-        summaryKeyPoints: "",
-        summaryFollowup: "",
-        summaryRemark: "",
-      });
-      setInputMode("none");
-    } catch (err: any) {
-      toast.error(`分析失败：${err?.message || "请重试"}`);
-    } finally {
-      setWechatAnalyzing(false);
-    }
-  }, []);
 
   // ---- 保存记录 ----
   const handleConfirmAnalysis = useCallback(
@@ -988,7 +1025,7 @@ export default function YabanPatientComm() {
             </button>
             {/* 微信聊天 */}
             <button
-              onClick={() => setInputMode("wechat")}
+              onClick={() => setInputMode("wechat_view")}
               className="flex-1 flex flex-col items-center gap-1 py-3 rounded-2xl bg-green-50 text-green-700"
             >
               <MessageSquare size={20} />
@@ -1016,12 +1053,12 @@ export default function YabanPatientComm() {
         />
       )}
 
-      {/* 弹窗：微信聊天记录 */}
-      {inputMode === "wechat" && (
-        <WechatInputModal
-          onAnalyze={handleWechatAnalyze}
-          onCancel={() => setInputMode("none")}
-          isAnalyzing={wechatAnalyzing}
+      {/* 弹窗：微信聊天记录查看 */}
+      {inputMode === "wechat_view" && (
+        <CustomerChatViewModal
+          customerId={patientId}
+          patientName={patientName}
+          onClose={() => setInputMode("none")}
         />
       )}
     </div>

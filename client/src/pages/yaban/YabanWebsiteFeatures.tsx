@@ -6,7 +6,7 @@
  */
 import { useLocation } from "wouter";
 import { useSmartBack } from "@/hooks/useSmartBack";
-import { ChevronLeft, ChevronRight, Tags, Users, Heart } from "lucide-react";
+import { ChevronLeft, ChevronRight, Tags, Users, Heart, MessageSquare } from "lucide-react";
 import YabanClinicHeader from "./YabanClinicHeader";
 
 export default function YabanWebsiteFeatures() {
@@ -34,6 +34,13 @@ export default function YabanWebsiteFeatures() {
       label: "亲友关系设置",
       hint: "自定义新建顾客时的亲友关系类型选项",
       onClick: () => navigate("/yaban/settings/relation-type"),
+    },
+    {
+      key: "chat-overview",
+      icon: <MessageSquare className="w-5 h-5 text-[#1E88D6]" />,
+      label: "聊天总览",
+      hint: "查看客户与 AI 助手的全部对话记录",
+      onClick: () => navigate("/yaban/settings/chat-overview"),
     },
   ];
 
