@@ -420,6 +420,18 @@ export const yabanClinicRouter = router({
          VALUES (?, ${setParams.map(() => "?").join(",")}, 'active', ?, NOW())`,
         [tenantId, ...setParams, ctx.user.id]
       )) as any;
+      // 自动绑定到「牙伴在线」企微客服渠道（channel_id=4，硬编码）
+      try {
+        const clinicName = (input as any).name || `诊所${tenantId}`;
+        await conn.execute(
+          `INSERT IGNORE INTO wecom_channel_service_binding
+           (channel_id, service_type, service_tenant_id, service_tenant_name, created_at)
+           VALUES (4, 'yaban', ?, ?, NOW())`,
+          [String(tenantId), clinicName]
+        );
+      } catch (_e) {
+        // 自动绑定失败不影响主流程
+      }
       return { success: true, clinicId: res.insertId, tenantId };
     }),
 
@@ -469,6 +481,18 @@ export const yabanClinicRouter = router({
            ON DUPLICATE KEY UPDATE role_key='owner', status='active', updated_at=CURRENT_TIMESTAMP`,
           [tenantId, clinic.apply_user_id, ctx.user.id]
         );
+      }
+      // 自动绑定到「牙伴在线」企微客服渠道（channel_id=4，硬编码）
+      try {
+        const clinicName = clinic.name || `诊所${tenantId}`;
+        await conn.execute(
+          `INSERT IGNORE INTO wecom_channel_service_binding
+           (channel_id, service_type, service_tenant_id, service_tenant_name, created_at)
+           VALUES (4, 'yaban', ?, ?, NOW())`,
+          [String(tenantId), clinicName]
+        );
+      } catch (_e) {
+        // 自动绑定失败不影响主流程
       }
       return { success: true };
     }),
