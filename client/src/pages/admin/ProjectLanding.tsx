@@ -680,6 +680,29 @@ const AI_MODELS: AiModelOption[] = [
   { value: "manus-1.6-max",              label: "Manus 1.6 Max",              desc: "最强能力，适合复杂任务，消耗积分较高",   group: "Manus" },
 ];
 
+// 服务商代码 → 中文名称
+function providerLabel(provider?: string): string {
+  if (!provider) return '-';
+  const map: Record<string, string> = {
+    hunyuan: '腾讯混元',
+    deepseek: 'DeepSeek',
+    manus: 'Manus',
+    openai: 'OpenAI',
+  };
+  return map[provider] || provider;
+}
+// 从 api_base 提取域名（去掉协议与路径）
+function apiHost(apiBase?: string): string {
+  if (!apiBase) return '';
+  return apiBase.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+}
+// API Key 脱敏展示
+function maskKey(key?: string): string {
+  if (!key) return '未配置';
+  if (key.length <= 10) return '***已配置';
+  return `${key.substring(0, 6)}***...***${key.slice(-4)}`;
+}
+
 const RULE_MODELS = [
   { value: "deepseek-chat", label: "DeepSeek Flash" },
   { value: "deepseek-v4-pro", label: "DeepSeek Pro" },
@@ -765,6 +788,9 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
   const [showQr, setShowQr] = useState(false);
   // 连接信息
   const [aiModel, setAiModel] = useState("deepseek-chat");
+  // 全局 AI 配置（平台管理→AI模型配置，对话回复 chat_reply 场景），用于渠道详情页联动显示
+  const [globalAi, setGlobalAi] = useState<{ provider: string; model_name: string; api_base: string; api_key: string; label?: string } | null>(null);
+  const [globalEmbed, setGlobalEmbed] = useState<{ provider: string; model_name: string; api_base: string; api_key: string } | null>(null);
   const [kbName, setKbName] = useState("");
   const [corpId, setCorpId] = useState("");
   const [siteUsername, setSiteUsername] = useState("");
@@ -773,16 +799,27 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
     (async () => {
       setLoading(true);
       try {
-        const [cfgRes, kbsRes, chCfgRes, channelRes] = await Promise.all([
+        const [cfgRes, kbsRes, chCfgRes, channelRes, aiCfgRes] = await Promise.all([
           fetch(`/api/wecom/channels/${channelId}/config`),
           fetch(`/api/wecom/knowledge-bases`),
           fetch(`/api/wecom/channel-config/${channelId}`),
           fetch(`/api/wecom/channels`),
+          fetch(`/api/wecom/ai-model-configs`),
         ]);
         const cfg = await cfgRes.json();
         const kbs = await kbsRes.json();
         const chCfg = await chCfgRes.json();
         const channelList = await channelRes.json();
+        // 解析全局 AI 模型配置，提取对话回复（chat_reply）与向量（embedding）场景
+        try {
+          const aiCfg = await aiCfgRes.json();
+          if (aiCfg?.ok && Array.isArray(aiCfg.configs)) {
+            const chatCfg = aiCfg.configs.find((c: any) => c.use_case === "chat_reply");
+            if (chatCfg) setGlobalAi({ provider: chatCfg.provider, model_name: chatCfg.model_name, api_base: chatCfg.api_base, api_key: chatCfg.api_key, label: chatCfg.use_case_label });
+            const embedCfg = aiCfg.configs.find((c: any) => c.use_case === "embedding");
+            if (embedCfg) setGlobalEmbed({ provider: embedCfg.provider, model_name: embedCfg.model_name, api_base: embedCfg.api_base, api_key: embedCfg.api_key });
+          }
+        } catch (_) { /* 全局配置获取失败不阻断主流程 */ }
         if (cfg.config) {
           const c = cfg.config;
           setEnabled(c.enabled !== false);
@@ -1277,40 +1314,35 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
             </span>
           </div>
 
-          {/* 区块标题： AI 引擎 */}
-          <div className="px-4 pt-3 pb-1">
+          {/* 区块标题： AI 引擎（联动平台全局配置） */}
+          <div className="px-4 pt-3 pb-1 flex items-center gap-2">
             <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: theme.brand }}>AI 引擎</span>
+            <span className="text-[9px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: theme.brand + '1A', color: theme.brand }}>跟随平台全局</span>
           </div>
 
-          {/* DeepSeek API */}
+          {/* 服务商 */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
-            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>DeepSeek API</span>
-            <span className="text-xs font-mono" style={{ color: theme.textMain }}>api.deepseek.com</span>
+            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>服务商</span>
+            <span className="text-xs font-medium" style={{ color: theme.textMain }}>{providerLabel(globalAi?.provider)}</span>
           </div>
 
-          {/* DeepSeek API Key */}
+          {/* API 域名 */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
-            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>DeepSeek Key</span>
-            <span className="text-xs font-mono" style={{ color: theme.textMain }}>sk-***...***已配置</span>
+            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>API 域名</span>
+            <span className="text-xs font-mono text-right break-all max-w-[60%]" style={{ color: theme.textMain }}>{apiHost(globalAi?.api_base) || '-'}</span>
           </div>
 
-          {/* Manus API */}
+          {/* API Key 状态 */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
-            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>Manus API</span>
-            <span className="text-xs font-mono" style={{ color: theme.textMain }}>api.manus.ai/v2</span>
+            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>API Key</span>
+            <span className="text-xs font-mono" style={{ color: globalAi?.api_key ? theme.textMain : '#EF4444' }}>{maskKey(globalAi?.api_key)}</span>
           </div>
 
-          {/* Manus API Key */}
-          <div className="px-4 py-2.5 flex items-center justify-between gap-2">
-            <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>Manus Key</span>
-            <span className="text-xs font-mono" style={{ color: theme.textMain }}>***已配置</span>
-          </div>
-
-          {/* 当前模型 */}
+          {/* 当前模型（来自全局配置） */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
             <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>当前模型</span>
             <span className="text-xs font-medium" style={{ color: theme.textMain }}>
-              {AI_MODELS.find(m => m.value === aiModel)?.label || aiModel}
+              {globalAi?.model_name || (AI_MODELS.find(m => m.value === aiModel)?.label || aiModel)}
             </span>
           </div>
 
@@ -1322,25 +1354,25 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
           {/* Embedding 服务商 */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
             <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>向量服务</span>
-            <span className="text-xs font-medium" style={{ color: theme.textMain }}>腾讯混元 Embedding</span>
+            <span className="text-xs font-medium" style={{ color: theme.textMain }}>{providerLabel(globalEmbed?.provider)}</span>
           </div>
 
           {/* Embedding API 域名 */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
             <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>Embedding API</span>
-            <span className="text-xs font-mono" style={{ color: theme.textMain }}>api.hunyuan.cloud.tencent.com</span>
+            <span className="text-xs font-mono text-right break-all max-w-[60%]" style={{ color: theme.textMain }}>{apiHost(globalEmbed?.api_base) || '-'}</span>
           </div>
 
           {/* Embedding Key（脱敏） */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
             <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>Embedding Key</span>
-            <span className="text-xs font-mono" style={{ color: theme.textMain }}>sk-OAOV***...***KdbHb</span>
+            <span className="text-xs font-mono" style={{ color: globalEmbed?.api_key ? theme.textMain : '#EF4444' }}>{maskKey(globalEmbed?.api_key)}</span>
           </div>
 
           {/* 向量模型 */}
           <div className="px-4 py-2.5 flex items-center justify-between gap-2">
             <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>向量模型</span>
-            <span className="text-xs font-medium" style={{ color: theme.textMain }}>hunyuan-embedding（1024维）</span>
+            <span className="text-xs font-medium" style={{ color: theme.textMain }}>{globalEmbed?.model_name || '-'}</span>
           </div>
 
           {/* 用途 */}
