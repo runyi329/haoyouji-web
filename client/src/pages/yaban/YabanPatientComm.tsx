@@ -470,9 +470,9 @@ export default function YabanPatientComm() {
         fallbackToPending();
         return;
       }
-      // 45 秒超时保护，避免请求挂起导致一直转圈圈
+      // 120 秒超时保护，避免请求挂起导致一直转圈圈（长录音转写需要更多时间）
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("分析超时（45秒），请重试")), 45000)
+        setTimeout(() => reject(new Error("分析超时（120秒），请重试")), 120000)
       );
       try {
         const result = await Promise.race([

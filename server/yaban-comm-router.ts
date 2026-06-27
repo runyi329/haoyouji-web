@@ -150,7 +150,7 @@ export const yabanCommRouter = router({
     }))
     .mutation(async ({ ctx, input }) => {
       const TENANT_ID = await resolveTenantId(ctx);
-
+      console.log(`[AI语音秘书] analyzeVoice 收到请求: mimeType=${input.mimeType}, base64长度=${input.audioBase64.length}, 估算大小=${Math.round(input.audioBase64.length * 0.75 / 1024)}KB`);
       // Step 1: 上传音频到 COS，获取 URL
       let audioUrl: string | null = null;
       try {
