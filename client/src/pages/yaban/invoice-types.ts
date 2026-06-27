@@ -4,8 +4,9 @@
 export interface InvoiceInfo {
   company: string;
   title: string;
+  taxNo: string;
   email: string;
   mobile: string;
 }
 
-export const EMPTY_INVOICE: InvoiceInfo = { company: "", title: "", email: "", mobile: "" };
+export const EMPTY_INVOICE: InvoiceInfo = { company: "", title: "", taxNo: "", email: "", mobile: "" };

@@ -317,9 +317,9 @@ export default function YabanPatientCreate() {
     if (d.avatar) setAvatarManual(d.avatar as AvatarKey);
     // 回填发票信息
     setInvoices([
-      { company: d.invoice_company ?? "", title: d.invoice_title ?? "", email: d.invoice_email ?? "", mobile: d.invoice_mobile ?? "" },
-      { company: d.invoice_company2 ?? "", title: d.invoice_title2 ?? "", email: d.invoice_email2 ?? "", mobile: d.invoice_mobile2 ?? "" },
-      { company: d.invoice_company3 ?? "", title: d.invoice_title3 ?? "", email: d.invoice_email3 ?? "", mobile: d.invoice_mobile3 ?? "" },
+      { company: d.invoice_company ?? "", title: d.invoice_title ?? "", taxNo: d.invoice_tax_no_1 ?? "", email: d.invoice_email ?? "", mobile: d.invoice_mobile ?? "" },
+      { company: d.invoice_company2 ?? "", title: d.invoice_title2 ?? "", taxNo: d.invoice_tax_no_2 ?? "", email: d.invoice_email2 ?? "", mobile: d.invoice_mobile2 ?? "" },
+      { company: d.invoice_company3 ?? "", title: d.invoice_title3 ?? "", taxNo: d.invoice_tax_no_3 ?? "", email: d.invoice_email3 ?? "", mobile: d.invoice_mobile3 ?? "" },
     ]);
     const ic = d.invoice_company3 ? 3 : d.invoice_company2 ? 2 : 1;
     setInvoiceCount(ic as 1 | 2 | 3);
@@ -411,14 +411,17 @@ export default function YabanPatientCreate() {
       licensePlate3: form.licensePlate3 || undefined,
       invoiceCompany: invoices[0].company || undefined,
       invoiceTitle: invoices[0].title || undefined,
+      invoiceTaxNo1: invoices[0].taxNo || undefined,
       invoiceEmail: invoices[0].email || undefined,
       invoiceMobile: invoices[0].mobile || undefined,
       invoiceCompany2: invoices[1].company || undefined,
       invoiceTitle2: invoices[1].title || undefined,
+      invoiceTaxNo2: invoices[1].taxNo || undefined,
       invoiceEmail2: invoices[1].email || undefined,
       invoiceMobile2: invoices[1].mobile || undefined,
       invoiceCompany3: invoices[2].company || undefined,
       invoiceTitle3: invoices[2].title || undefined,
+      invoiceTaxNo3: invoices[2].taxNo || undefined,
       invoiceEmail3: invoices[2].email || undefined,
       invoiceMobile3: invoices[2].mobile || undefined,
       emergencyContact: form.emergencyContact,
@@ -505,49 +508,86 @@ export default function YabanPatientCreate() {
             {PERSONAL_FIELDS.map((f) => {
               // 发票字段：特殊处理，支持最多3条开票信息
               if (f.key === "_invoice") {
-                const INVOICE_LABELS = invoiceCount === 1 ? ["发票"] : ["发票一", "发票二", "发票三"];
+                const INVOICE_LABELS_SINGLE = ["发票", "发票二", "发票三"];
                 const nextInvoiceNum = invoiceCount + 1;
                 return (
                   <React.Fragment key="_invoice">
                     {([0, 1, 2] as const).slice(0, invoiceCount).map((idx) => {
                       const inv = invoices[idx];
-                      const hasValue = !!(inv.company || inv.title);
+                      const hasValue = !!(inv.title);
                       const isLast = idx === invoiceCount - 1;
-                      const displayText = hasValue ? inv.company || inv.title : undefined;
+                      // 有内容时复制文本：抬头 + 税号
+                      const copyText = hasValue ? [inv.title, inv.taxNo].filter(Boolean).join("\n") : "";
                       return (
                         <div
                           key={`_invoice_${idx}`}
                           style={{ flex: "1 1 100%", minWidth: "100%" }}
-                          className="py-1.5 flex items-center gap-2"
+                          className={`py-1.5 flex gap-2 ${hasValue ? "items-start" : "items-center"}`}
                         >
-                          <label className="text-gray-700 text-base shrink-0">
-                            {INVOICE_LABELS[idx]}
+                          {/* 左侧标签：有内容时显示"发票\n信息"两行，无内容时显示单行 */}
+                          <label
+                            className="text-gray-700 text-base shrink-0"
+                            style={hasValue ? { lineHeight: 1.3, textAlign: "center", paddingTop: 8 } : {}}
+                          >
+                            {hasValue ? (
+                              <span style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                                <span>{invoiceCount === 1 ? "发票" : (idx === 0 ? "发票" : `发票${["二","三"][idx-1]}`)}</span>
+                                {hasValue && <span>信息</span>}
+                              </span>
+                            ) : INVOICE_LABELS_SINGLE[idx]}
                           </label>
                           <div className="flex-1 min-w-0">
-                            <div className="w-full h-10 px-3 rounded-lg bg-gray-50 border border-[#D6E6F5] flex items-center text-sm transition-colors">
-                              <button
-                                type="button"
-                                className="flex-1 min-w-0 text-left truncate active:opacity-70"
-                                onClick={() => { setInvoiceIndex((idx + 1) as 1 | 2 | 3); setInvoiceOpen(true); }}
+                            {hasValue ? (
+                              /* 有内容：两行展示框（抬头 + 税号） */
+                              <div
+                                className="w-full px-3 py-2 rounded-lg bg-gray-50 border border-[#D6E6F5] flex items-center gap-1 text-sm"
+                                style={{ minHeight: 44 }}
                               >
-                                {displayText
-                                  ? <span className="text-gray-800 truncate">{displayText}</span>
-                                  : <span className="text-gray-300">点击填写开票信息</span>
-                                }
-                              </button>
-                              <div className="flex items-center gap-1 shrink-0 ml-1">
-                                {hasValue && isLast && invoiceCount < 3 && (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); if (window.confirm(`是否添加第 ${nextInvoiceNum} 条开票信息？`)) setInvoiceCount((c) => Math.min(c + 1, 3) as 1 | 2 | 3); }}
-                                    className="p-1 rounded active:bg-gray-100"
-                                  >
-                                    <PlusCircle className="w-4 h-4" style={{ color: ACCENT }} />
-                                  </button>
-                                )}
-                                <ChevronDown className="w-4 h-4 text-gray-300" onClick={() => { setInvoiceIndex((idx + 1) as 1 | 2 | 3); setInvoiceOpen(true); }} />
+                                <button
+                                  type="button"
+                                  className="flex-1 min-w-0 text-left active:opacity-70"
+                                  onClick={() => { setInvoiceIndex((idx + 1) as 1 | 2 | 3); setInvoiceOpen(true); }}
+                                >
+                                  <div className="text-gray-800 truncate">{inv.title || "—"}</div>
+                                  <div className="text-gray-800 truncate text-sm mt-0.5">{inv.taxNo || "税号未填"}</div>
+                                </button>
+                                <div className="flex items-center gap-1 shrink-0 ml-1">
+                                  {copyText && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigator.clipboard.writeText(copyText).then(() => toast.success("开票信息已复制"));
+                                      }}
+                                      className="p-2 rounded active:bg-gray-100"
+                                      title="复制开票信息"
+                                    >
+                                      <Copy className="w-5 h-5" style={{ color: ACCENT }} />
+                                    </button>
+                                  )}
+                                  {isLast && invoiceCount < 3 && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); if (window.confirm(`是否添加第 ${nextInvoiceNum} 条开票信息？`)) setInvoiceCount((c) => Math.min(c + 1, 3) as 1 | 2 | 3); }}
+                                      className="p-2 rounded active:bg-gray-100"
+                                    >
+                                      <PlusCircle className="w-5 h-5" style={{ color: ACCENT }} />
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-                            </div>
+                            ) : (
+                              /* 无内容：单行占位框 */
+                              <div className="w-full h-10 px-3 rounded-lg bg-gray-50 border border-[#D6E6F5] flex items-center text-sm transition-colors">
+                                <button
+                                  type="button"
+                                  className="flex-1 min-w-0 text-left truncate active:opacity-70"
+                                  onClick={() => { setInvoiceIndex((idx + 1) as 1 | 2 | 3); setInvoiceOpen(true); }}
+                                >
+                                  <span className="text-gray-300">点击填写开票信息</span>
+                                </button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
@@ -1523,7 +1563,6 @@ function FieldCell({
               <PlusCircle className="w-4 h-4" style={{ color: ACCENT }} />
             </button>
           )}
-          <ChevronDown className="w-4 h-4 text-gray-300" onClick={onOpenLicensePlate} />
         </div>
       </div>
     );
@@ -1537,7 +1576,6 @@ function FieldCell({
         <span className={`truncate ${value ? "text-gray-800" : "text-gray-300"}`}>
           {value || field.placeholder}
         </span>
-        <ChevronDown className="w-4 h-4 text-gray-300 shrink-0 ml-1" />
       </button>
     );
   } else if (field.kind === "history") {

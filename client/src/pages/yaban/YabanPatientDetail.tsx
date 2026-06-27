@@ -2,8 +2,10 @@ import { useLocation, useRoute } from 'wouter';
 import {
   ChevronLeft,
   Edit,
+  Copy,
 } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
+import { toast } from 'sonner';
 import { avatarSrc, avatarBg, ageToBucket, type AvatarKey } from '@/lib/yaban-avatar';
 import { useYabanClinic } from './useYabanClinic';
 
@@ -37,28 +39,36 @@ export default function YabanPatientDetail() {
     avatar: '',
     medicalNo: row?.medical_no || '',
     avatarKey: ((row?.avatar as AvatarKey) || (`${row?.gender === '女' ? 'female' : 'male'}_${ageToBucket(row?.age ? Number(row.age) : 0)}` as AvatarKey)),
-    source: row?.source || '—',
+    source: row?.source || '',
     netConsultant: row?.net_consultant || '',
     consultant: row?.consultant || '',
     yabanUsername: row?.yaban_username || '',
     yabanPassword: row?.yaban_password || '',
     clinic: clinicName,
-    lastDoctor: row?.last_doctor || '—',
+    lastDoctor: row?.last_doctor || '',
     lastVisit: row?.last_visit || '',
-    remark: row?.remark || '—',
-    mobile: row?.mobile || '—',
-    address: row?.address || '—',
+    remark: row?.remark || '',
+    mobile: row?.mobile || '',
+    address: row?.address || '',
     history: row?.history || '',
     nickname: row?.nickname || '—',
     birthday: row?.birthday || '—',
     zodiac: row?.zodiac || '—',
     chineseZodiac: row?.chinese_zodiac || '—',
-    email: row?.email || '—',
-    emergencyContact: row?.emergency_contact || '—',
+    email: row?.email || '',
+    emergencyContact: row?.emergency_contact || '',
     emergencyRelation: row?.emergency_relation || '',
     emergencyPhone: row?.emergency_phone || '',
     occupation: row?.occupation || '',
     licensePlate: row?.license_plate || '',
+    licensePlate2: row?.license_plate2 || '',
+    licensePlate3: row?.license_plate3 || '',
+    invoiceTitle: row?.invoice_title || '',
+    invoiceTaxNo: row?.invoice_tax_no_1 || '',
+    invoiceTitle2: row?.invoice_title2 || '',
+    invoiceTaxNo2: row?.invoice_tax_no_2 || '',
+    invoiceTitle3: row?.invoice_title3 || '',
+    invoiceTaxNo3: row?.invoice_tax_no_3 || '',
     tags: [row?.patient_type].filter(Boolean) as string[],
     hasWechat: false,
   };
@@ -160,22 +170,102 @@ export default function YabanPatientDetail() {
           </div>
           {/* 第二区：其余字段（4列Grid，按需跨列） */}
           <div className="grid grid-cols-4">
-            <InfoItem label="手机" value={patient.mobile} span={2} />
-            <InfoItem label="邮箱" value={patient.email} span={2} />
-            <InfoItem label="紧急联系人" value={emergencyText} span={4} />
-            <InfoItem label="职业" value={patient.occupation || '—'} span={2} />
-            <InfoItem label="车牌" value={patient.licensePlate || '—'} span={2} />
-            <InfoItem label="地址" value={patient.address} span={4} />
-            <InfoItem label="来源" value={patient.source} span={2} />
-            <InfoItem label="顾客类型" value={patient.tags.join('、') || '—'} span={2} />
-            <InfoItem label="网电咨询师" value={patient.netConsultant || '—'} span={2} />
-            <InfoItem label="咨询师" value={patient.consultant || '—'} span={2} />
-            <InfoItem label="牙伴账号" value={patient.yabanUsername || '—'} span={2} />
-            <InfoItem label="初始密码" value={patient.yabanPassword || '—'} span={2} />
-            <InfoItem label="上次就诊医生" value={patient.lastDoctor} span={2} />
-            <InfoItem label="上次就诊" value={patient.lastVisit || '—'} span={2} />
-            <InfoItem label="健康标签" value={healthTags || '—'} span={4} />
-            <InfoItem label="备注" value={patient.remark} span={4} />
+            {/* 手机 + 邮箱：各自独立判断 */}
+            {(patient.mobile || patient.email) && (() => {
+              const showMobile = !!patient.mobile;
+              const showEmail = !!patient.email;
+              if (showMobile && showEmail) return (
+                <>
+                  <InfoItem label="手机" value={patient.mobile} span={2} copyable />
+                  <InfoItem label="邮箱" value={patient.email} span={2} copyable />
+                </>
+              );
+              if (showMobile) return <InfoItem label="手机" value={patient.mobile} span={4} copyable />;
+              return <InfoItem label="邮箱" value={patient.email} span={4} copyable />;
+            })()}
+            {/* 紧急联系人 */}
+            {(row?.emergency_contact || row?.emergency_phone) && (
+              <InfoItem label="紧急联系人" value={emergencyText} span={4} copyable />
+            )}
+            {/* 职业 + 车牌：各自独立判断 */}
+            {(patient.occupation || patient.licensePlate || patient.licensePlate2 || patient.licensePlate3) && (() => {
+              const showOcc = !!patient.occupation;
+              const plateVal = [patient.licensePlate, patient.licensePlate2, patient.licensePlate3].filter(Boolean).join(' / ');
+              const showPlate = !!plateVal;
+              if (showOcc && showPlate) return (
+                <>
+                  <InfoItem label="职业" value={patient.occupation} span={2} />
+                  <InfoItem label="车牌" value={plateVal} span={2} copyable />
+                </>
+              );
+              if (showOcc) return <InfoItem label="职业" value={patient.occupation} span={4} />;
+              return <InfoItem label="车牌" value={plateVal} span={4} copyable />;
+            })()}
+            {/* 地址 */}
+            {patient.address && (
+              <InfoItem label="地址" value={patient.address} span={4} copyable />
+            )}
+            {/* 发票信息 */}
+            {patient.invoiceTitle && (
+              <InfoItem label="发票信息" value={[patient.invoiceTitle, patient.invoiceTaxNo].filter(Boolean).join('\n')} span={4} copyable />
+            )}
+            {patient.invoiceTitle2 && (
+              <InfoItem label="发票信息2" value={[patient.invoiceTitle2, patient.invoiceTaxNo2].filter(Boolean).join('\n')} span={4} copyable />
+            )}
+            {patient.invoiceTitle3 && (
+              <InfoItem label="发票信息3" value={[patient.invoiceTitle3, patient.invoiceTaxNo3].filter(Boolean).join('\n')} span={4} copyable />
+            )}
+            {/* 来源 + 顾客类型：各自独立判断，凑成一行 */}
+            {(patient.source || patient.tags.length > 0) && (() => {
+              const showSource = !!patient.source;
+              const showType = patient.tags.length > 0;
+              if (showSource && showType) return (
+                <>
+                  <InfoItem label="来源" value={patient.source} span={2} />
+                  <InfoItem label="顾客类型" value={patient.tags.join('、')} span={2} />
+                </>
+              );
+              if (showSource) return <InfoItem label="来源" value={patient.source} span={4} />;
+              return <InfoItem label="顾客类型" value={patient.tags.join('、')} span={4} />;
+            })()}
+            {/* 网电咨询师 + 咨询师：各自独立判断 */}
+            {(patient.netConsultant || patient.consultant) && (() => {
+              const showNet = !!patient.netConsultant;
+              const showCon = !!patient.consultant;
+              if (showNet && showCon) return (
+                <>
+                  <InfoItem label="网电咨询师" value={patient.netConsultant} span={2} />
+                  <InfoItem label="咨询师" value={patient.consultant} span={2} />
+                </>
+              );
+              if (showNet) return <InfoItem label="网电咨询师" value={patient.netConsultant} span={4} />;
+              return <InfoItem label="咨询师" value={patient.consultant} span={4} />;
+            })()}
+            {/* 牙伴账号 */}
+            {patient.yabanUsername && (
+              <InfoItem label="牙伴账号" value={patient.yabanUsername} span={4} copyable />
+            )}
+            {/* 上次就诊医生 + 上次就诊：各自独立判断 */}
+            {(patient.lastDoctor || patient.lastVisit) && (() => {
+              const showDoc = !!patient.lastDoctor;
+              const showVisit = !!patient.lastVisit;
+              if (showDoc && showVisit) return (
+                <>
+                  <InfoItem label="上次就诊医生" value={patient.lastDoctor} span={2} />
+                  <InfoItem label="上次就诊" value={patient.lastVisit} span={2} />
+                </>
+              );
+              if (showDoc) return <InfoItem label="上次就诊医生" value={patient.lastDoctor} span={4} />;
+              return <InfoItem label="上次就诊" value={patient.lastVisit} span={4} />;
+            })()}
+            {/* 健康标签 */}
+            {healthTags && (
+              <InfoItem label="健康标签" value={healthTags} span={4} copyable />
+            )}
+            {/* 备注 */}
+            {patient.remark && (
+              <InfoItem label="备注" value={patient.remark} span={4} />
+            )}
           </div>
         </div>
       </div>
@@ -210,12 +300,27 @@ export default function YabanPatientDetail() {
 
 // 资料档案格子：带右/下边框，label 在上、value 在下，内容居中
 // span=占据的列数（1~4），基于父容器 4 列 Grid
-function InfoItem({ label, value, span = 1 }: { label: string; value: string; span?: number }) {
+function InfoItem({ label, value, span = 1, copyable = false }: { label: string; value: string; span?: number; copyable?: boolean }) {
   const spanCls = span >= 4 ? 'col-span-4' : span === 3 ? 'col-span-3' : span === 2 ? 'col-span-2' : 'col-span-1';
+  const handleCopy = () => {
+    if (!value || value === '—') return;
+    navigator.clipboard.writeText(value).then(() => toast.success('已复制'));
+  };
   return (
     <div className={`${spanCls} min-w-0 border-r border-b border-gray-200 px-2.5 py-1.5 flex flex-col justify-center`}>
       <div className="text-[10px] text-gray-400 leading-tight">{label}</div>
-      <div className="text-[12.5px] text-gray-700 leading-tight break-words">{value}</div>
+      <div className="flex items-start gap-1">
+        <div className="flex-1 text-[12.5px] text-gray-700 leading-tight break-words whitespace-pre-line">{value}</div>
+        {copyable && value && value !== '—' && (
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="shrink-0 p-0.5 rounded active:bg-gray-100 mt-0.5"
+          >
+            <Copy className="w-3 h-3 text-gray-400" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
