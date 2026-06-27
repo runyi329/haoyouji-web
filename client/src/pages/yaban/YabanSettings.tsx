@@ -16,6 +16,7 @@ import {
   Info,
   LogOut,
   Loader2,
+  Bot,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -177,6 +178,20 @@ export default function YabanSettings() {
               <span className="text-sm text-gray-800">{phone || "未绑定"}</span>
             )}
           </div>
+        </div>
+
+        {/* AI 提示词配置 */}
+        <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
+          <button
+            onClick={() => navigate("/yaban/settings/ai-prompts")}
+            className="w-full flex items-center gap-3 px-4 py-3.5 active:bg-[#F0F7FD] transition-colors"
+          >
+            <span className="w-9 h-9 rounded-xl bg-[#EAF4FE] flex items-center justify-center shrink-0">
+              <Bot className="w-5 h-5 text-[#1E88D6]" />
+            </span>
+            <span className="flex-1 text-left text-sm font-medium text-gray-800">AI 提示词配置</span>
+            <ChevronRight className="w-5 h-5 text-gray-300 shrink-0" />
+          </button>
         </div>
 
         {/* 关于 */}

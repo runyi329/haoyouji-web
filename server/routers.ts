@@ -66,6 +66,7 @@ import { yabanShopOpsRouter } from "./yaban-shop-ops-router";
 import { yabanRoleRouter } from "./yaban-role-router";
 import { yabanClinicRouter } from "./yaban-clinic-router";
 import { yabanCustomerRouter } from "./yaban-customer-router";
+import { yabanCommRouter } from "./yaban-comm-router";
 import { yabanInventoryRouter } from "./yaban-inventory-router";
 import { yabanAppointmentRouter, yabanShiftRouter } from "./yaban-appointment-router";
 import { yabanValuationRouter } from "./yaban-valuation-router";
@@ -205,6 +206,7 @@ export const appRouter = router({
   yabanRole: yabanRoleRouter,
   yabanClinic: yabanClinicRouter,
   yabanCustomer: yabanCustomerRouter,
+  yabanComm: yabanCommRouter,
   yabanInventory: yabanInventoryRouter,
   yabanAppointment: yabanAppointmentRouter,
   yabanShift: yabanShiftRouter,

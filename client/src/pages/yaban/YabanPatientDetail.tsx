@@ -16,7 +16,7 @@ const FEATURE_ENTRIES = [
   { icon: `${ICON_BASE}/bingli_jilu.webp`, label: '诊疗记录', route: '' },
   { icon: `${ICON_BASE}/yingxiang_jilu.webp`, label: '影像记录', route: 'media' },
   { icon: `${ICON_BASE}/shoufei_jilu.webp`, label: '收费记录', route: 'charge' },
-  { icon: `${ICON_BASE}/yuyue_jilu.webp`, label: '售前售后', route: '' },
+  { icon: `${ICON_BASE}/yuyue_jilu.webp`, label: '售前售后', route: 'comm' },
 ];
 
 export default function YabanPatientDetail() {
@@ -281,6 +281,8 @@ export default function YabanPatientDetail() {
                   navigate(`/yaban/patient/${id}/media`);
                 } else if (feat.route === 'charge') {
                   navigate(`/yaban/patient/${id}/charge`);
+                } else if (feat.route === 'comm') {
+                  navigate(`/yaban/patient/${id}/comm`);
                 } else if (feat.route) {
                   navigate(feat.route);
                 }

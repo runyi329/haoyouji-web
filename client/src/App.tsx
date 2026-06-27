@@ -788,6 +788,7 @@ function Router() {
         <Route path="/yaban/settings/customer-source" component={lazy(() => import("./pages/yaban/YabanCustomerSource"))} />
         <Route path="/yaban/settings/patient-type" component={lazy(() => import("./pages/yaban/YabanPatientType"))} />
         <Route path="/yaban/settings/relation-type" component={lazy(() => import("./pages/yaban/YabanRelationType"))} />
+        <Route path="/yaban/settings/ai-prompts" component={lazy(() => import("./pages/yaban/YabanAIPrompts"))} />
         <Route path="/yaban/followup" component={lazy(() => import("./pages/yaban/YabanFollowUp"))} />
         <Route path="/yaban/followup/create" component={lazy(() => import("./pages/yaban/YabanFollowUpCreate"))} />
         <Route path="/yaban/followup/patient-select" component={lazy(() => import("./pages/yaban/YabanPatientSelect"))} />
@@ -802,6 +803,7 @@ function Router() {
         <Route path="/yaban/patient/:id/media" component={lazy(() => import("./pages/yaban/YabanPatientMedia"))} />
         <Route path="/yaban/patient/:id/charge" component={lazy(() => import("./pages/yaban/YabanPatientCharge"))} />
         <Route path="/yaban/patient/:id/edit" component={YabanPatientCreate} />
+        <Route path="/yaban/patient/:id/comm" component={lazy(() => import("./pages/yaban/YabanPatientComm"))} />
         <Route path="/yaban/patient/:id" component={YabanPatientDetail} />
         <Route path="/yaban/followup/detail/:id" component={lazy(() => import("./pages/yaban/YabanFollowUpDetail"))} />
         {/* 库存模块 */}
