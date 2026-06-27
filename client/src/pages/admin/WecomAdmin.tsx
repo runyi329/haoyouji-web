@@ -3714,7 +3714,7 @@ function PlatformUnifiedView({ appChannelId }: { appChannelId: number | null }) 
           {activeTab === 'kb'       && <ChannelKnowledgeTab channelType="app" channelId={channelId} />}
           {activeTab === 'users'    && <ChannelUsersTab channelType="app" />}
           {activeTab === 'logs'     && <ChannelLogsTab channelType="app" channelId={channelId} />}
-          {activeTab === 'bindings' && <ChannelServiceBindingsTab channelId={channelId} />}
+          {activeTab === 'bindings' && <ChannelServiceBindingsTab channels={channels} />}
         </>
       ) : (['config','rules','kb','users','logs','bindings'] as const).includes(activeTab as any) ? (
         <div className="text-center py-10 text-gray-400 text-sm">暂无自建应用渠道数据</div>
@@ -4199,7 +4199,7 @@ function ChannelDetail({ channel }: { channel: Channel }) {
       {activeTab === "kb" && <ChannelKnowledgeTab channelType={channel.channel_type} channelId={channel.id} />}
       {activeTab === "users" && <ChannelUsersTab channelType={channel.channel_type} />}
       {activeTab === "logs" && <ChannelLogsTab channelType={channel.channel_type} channelId={channel.id} />}
-      {activeTab === "bindings" && <ChannelServiceBindingsTab channelId={channel.id} />}
+      {activeTab === "bindings" && <ChannelServiceBindingsTab channels={[channel]} />}
     </div>
   );
 }
@@ -7125,15 +7125,22 @@ const SERVICE_TYPE_LABELS: Record<string, string> = {
   yaban: "牙伴",
 };
 
-function ChannelServiceBindingsTab({ channelId }: { channelId: number }) {
+function ChannelServiceBindingsTab({ channels }: { channels: Channel[] }) {
+  // 第一层：选择企微客服渠道
+  const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
+
+  // 第二层：某渠道的绑定详情
   const [bindings, setBindings] = useState<ServiceBinding[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [serviceType, setServiceType] = useState("yaban");
   const [selectedClinic, setSelectedClinic] = useState<{ tenantId: number; name: string } | null>(null);
   const [clinicSearch, setClinicSearch] = useState("");
   const [adding, setAdding] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  // 所有渠道的绑定数量（用于列表展示）
+  const [bindingCounts, setBindingCounts] = useState<Record<number, number>>({});
 
   // 获取牙伴诊所列表（tRPC）
   const clinicsQuery = trpc.yabanClinic.adminListClinics.useQuery(
@@ -7142,10 +7149,31 @@ function ChannelServiceBindingsTab({ channelId }: { channelId: number }) {
   );
   const clinics = clinicsQuery.data || [];
 
-  async function loadBindings() {
+  // kf 类型渠道（排除平台管理渠道）
+  const kfChannels = channels.filter(ch => ch.channel_type === 'kf' && ch.project_key !== '__platform__');
+
+  // 加载所有渠道的绑定数量
+  useEffect(() => {
+    if (kfChannels.length === 0) return;
+    Promise.all(
+      kfChannels.map(ch =>
+        fetch(`/api/wecom/channels/${ch.id}/service-bindings`)
+          .then(r => r.json())
+          .then(d => ({ id: ch.id, count: d.ok ? (d.bindings || []).length : 0 }))
+          .catch(() => ({ id: ch.id, count: 0 }))
+      )
+    ).then(results => {
+      const counts: Record<number, number> = {};
+      results.forEach(r => { counts[r.id] = r.count; });
+      setBindingCounts(counts);
+    });
+  }, [channels]);
+
+  async function loadBindings(ch: Channel) {
     setLoading(true);
+    setBindings([]);
     try {
-      const res = await fetch(`/api/wecom/channels/${channelId}/service-bindings`);
+      const res = await fetch(`/api/wecom/channels/${ch.id}/service-bindings`);
       const d = await res.json();
       if (d.ok) setBindings(d.bindings || []);
       else toast.error(d.error || "加载失败");
@@ -7153,13 +7181,27 @@ function ChannelServiceBindingsTab({ channelId }: { channelId: number }) {
     finally { setLoading(false); }
   }
 
-  useEffect(() => { loadBindings(); }, [channelId]);
+  function handleSelectChannel(ch: Channel) {
+    setSelectedChannel(ch);
+    setShowAdd(false);
+    setSelectedClinic(null);
+    setClinicSearch("");
+    loadBindings(ch);
+  }
+
+  function handleBack() {
+    setSelectedChannel(null);
+    setShowAdd(false);
+    setSelectedClinic(null);
+    setClinicSearch("");
+    setBindings([]);
+  }
 
   async function handleAdd() {
-    if (!selectedClinic) { toast.error("请选择诊所"); return; }
+    if (!selectedChannel || !selectedClinic) { toast.error("请选择诊所"); return; }
     setAdding(true);
     try {
-      const res = await fetch(`/api/wecom/channels/${channelId}/service-bindings`, {
+      const res = await fetch(`/api/wecom/channels/${selectedChannel.id}/service-bindings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -7174,7 +7216,9 @@ function ChannelServiceBindingsTab({ channelId }: { channelId: number }) {
         setShowAdd(false);
         setSelectedClinic(null);
         setClinicSearch("");
-        loadBindings();
+        loadBindings(selectedChannel);
+        // 更新计数
+        setBindingCounts(prev => ({ ...prev, [selectedChannel.id]: (prev[selectedChannel.id] || 0) + 1 }));
       } else {
         toast.error(d.error || "绑定失败");
       }
@@ -7183,26 +7227,84 @@ function ChannelServiceBindingsTab({ channelId }: { channelId: number }) {
   }
 
   async function handleDelete(bindingId: number) {
+    if (!selectedChannel) return;
     if (!confirm("确认解除此服务商绑定？")) return;
     setDeletingId(bindingId);
     try {
-      const res = await fetch(`/api/wecom/channels/${channelId}/service-bindings/${bindingId}`, {
+      const res = await fetch(`/api/wecom/channels/${selectedChannel.id}/service-bindings/${bindingId}`, {
         method: "DELETE",
       });
       const d = await res.json();
-      if (d.ok) { toast.success("已解除绑定"); loadBindings(); }
+      if (d.ok) {
+        toast.success("已解除绑定");
+        loadBindings(selectedChannel);
+        setBindingCounts(prev => ({ ...prev, [selectedChannel.id]: Math.max(0, (prev[selectedChannel.id] || 1) - 1) }));
+      }
       else toast.error(d.error || "操作失败");
     } catch { toast.error("网络错误"); }
     finally { setDeletingId(null); }
   }
 
+  // ── 第一层：渠道列表 ──────────────────────────────────────────────
+  if (!selectedChannel) {
+    return (
+      <div className="space-y-3">
+        <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
+          <div className="text-xs text-blue-700 font-medium mb-1">渠道-服务商绑定</div>
+          <div className="text-xs text-blue-600 leading-relaxed">
+            选择一个企微客服渠道，将其与牙伴诊所绑定。绑定后，该诊所院长端的聊天功能将自动关联此渠道的 AI 配置。
+          </div>
+        </div>
+
+        {kfChannels.length === 0 ? (
+          <div className="text-center py-10 text-gray-400 text-sm">暂无企微客服渠道</div>
+        ) : (
+          <div className="space-y-2">
+            {kfChannels.map(ch => (
+              <button
+                key={ch.id}
+                onClick={() => handleSelectChannel(ch)}
+                className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3.5 flex items-center gap-3 active:bg-gray-50 transition-colors"
+              >
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#1a5c2e] to-[#2d8a47] flex items-center justify-center flex-shrink-0">
+                  <MessageSquare className="w-4 h-4 text-[#4ade80]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900">{ch.name}</p>
+                  <p className="text-xs text-gray-400 mt-0.5 font-mono truncate">{ch.kf_id || '企微客服'}</p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {(bindingCounts[ch.id] ?? 0) > 0 ? (
+                    <span className="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-medium">
+                      已绑 {bindingCounts[ch.id]} 个
+                    </span>
+                  ) : (
+                    <span className="text-[10px] bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full">未绑定</span>
+                  )}
+                  <ChevronRight className="w-4 h-4 text-gray-300" />
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── 第二层：某渠道的绑定详情 ──────────────────────────────────────
   return (
     <div className="space-y-4">
-      {/* 说明卡片 */}
-      <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
-        <div className="text-xs text-blue-700 font-medium mb-1">渠道-服务商绑定</div>
-        <div className="text-xs text-blue-600 leading-relaxed">
-          将此渠道与具体服务商（如牙伴诊所）绑定后，该诊所院长端的「聊天功能设置」将自动关联此渠道的 AI 配置，实现权限隔离与个性化配置。
+      {/* 返回 + 渠道名 */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleBack}
+          className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0 active:bg-gray-200"
+        >
+          <ChevronRight className="w-4 h-4 text-gray-500 rotate-180" />
+        </button>
+        <div>
+          <div className="text-sm font-semibold text-gray-900">{selectedChannel.name}</div>
+          <div className="text-xs text-gray-400 font-mono">{selectedChannel.kf_id || '企微客服'}</div>
         </div>
       </div>
 
@@ -7210,7 +7312,7 @@ function ChannelServiceBindingsTab({ channelId }: { channelId: number }) {
       {loading ? (
         <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>
       ) : bindings.length === 0 ? (
-        <div className="text-center py-10 text-gray-400 text-sm">暂无绑定记录</div>
+        <div className="text-center py-8 text-gray-400 text-sm">暂无绑定记录</div>
       ) : (
         <div className="space-y-2">
           {bindings.map(b => (
