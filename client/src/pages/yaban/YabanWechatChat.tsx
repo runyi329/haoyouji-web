@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { ChevronLeft, MoreHorizontal, Wifi } from "lucide-react";
 import { trpc } from "../../lib/trpc";
 import { avatarSrc, type AvatarKey } from "../../lib/yaban-avatar";
+import { useYabanClinic } from "./useYabanClinic";
 
 interface Message {
   id: string;
@@ -239,6 +240,21 @@ export default function YabanWechatChat() {
   // 获取当前登录用户 ID（脉动网 UID），用于关联聊天记录
   const { data: meData } = trpc.auth.me.useQuery();
 
+  // 动态获取当前诊所绑定的 channel_id
+  const { currentTenantId } = useYabanClinic();
+  const [dynamicChannelId, setDynamicChannelId] = useState<number>(4); // 默认 4，等待动态覆盖
+  useEffect(() => {
+    if (!currentTenantId) return;
+    fetch(`/api/wecom/service-binding/channel?service_type=yaban&service_tenant_id=${currentTenantId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.binding?.channel_id) {
+          setDynamicChannelId(Number(d.binding.channel_id));
+        }
+      })
+      .catch(() => {/* 查询失败保持默认 */});
+  }, [currentTenantId]);
+
   // 动态获取用户头像
   const { data: avatarData } = trpc.yabanCustomer.myAvatar.useQuery(undefined, {
     retry: false,
@@ -293,7 +309,7 @@ export default function YabanWechatChat() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
-          channel_id: 4,
+          channel_id: dynamicChannelId,
           user_id: meData?.id ? String(meData.id) : sessionId.current,
         }),
       });
@@ -403,7 +419,7 @@ export default function YabanWechatChat() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message: "[用户发送了一条语音消息]",
-        channel_id: 4,
+        channel_id: dynamicChannelId,
         user_id: meData?.id ? String(meData.id) : sessionId.current,
       }),
     })

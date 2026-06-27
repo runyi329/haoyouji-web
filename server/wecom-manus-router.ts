@@ -726,9 +726,21 @@ async function ensureSessionTable(): Promise<void> {
     console.error('[PromptRules] 自动迁移失败:', e);
   }
 
+    // 服务商绑定表
+  await (conn as any).execute(`
+    CREATE TABLE IF NOT EXISTS wecom_channel_service_binding (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      channel_id INT NOT NULL COMMENT '关联 wecom_channels.id',
+      service_type VARCHAR(50) NOT NULL COMMENT '服务商类型，如 yaban',
+      service_tenant_id INT NOT NULL COMMENT '服务商下的租户ID（牙伴为 yaban_clinic.tenant_id）',
+      service_tenant_name VARCHAR(100) DEFAULT '' COMMENT '租户名称（冗余）',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_channel_service_tenant (channel_id, service_type, service_tenant_id),
+      INDEX idx_service_lookup (service_type, service_tenant_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='渠道-服务商绑定关系'
+  `);
   _tableEnsured = true;
 }
-
 // -----------------------------------------------------------
 // 工具函数：获取或创建用户的 Manus task_id
 // -----------------------------------------------------------
@@ -1689,14 +1701,14 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
           const mimeType = audioResp.headers.get("content-type") || "audio/amr";
           const asrResult = await callAIVoice(audioBuffer, mimeType, kfChannelId);
           if (!asrResult.text?.trim()) {
-            await sendKfMessage(fromUser, kfOpenKfId, "(语音已收到，但未能识别内容，请重新发送或改用文字)");
+            await sendKfMessage(fromUser, KF_OPEN_KFID, "(语音已收到，但未能识别内容，请重新发送或改用文字)");
             continue;
           }
           userText = asrResult.text.trim();
           console.log(`[KF] 语音识别成功 from=${fromUser} text=${userText.substring(0, 50)}`);
         } catch (e) {
           console.error(`[KF] 语音识别失败 from=${fromUser}: ${e instanceof Error ? e.message : JSON.stringify(e)}`);
-          await sendKfMessage(fromUser, kfOpenKfId, "(语音消息识别失败，请重新发送或改用文字)");
+          await sendKfMessage(fromUser, KF_OPEN_KFID, "(语音消息识别失败，请重新发送或改用文字)");
           continue;
         }
       } else {
@@ -4249,6 +4261,86 @@ router.put("/api/wecom/channels/:channelId/shared-kbs", async (req: Request, res
   } catch (e) {
     console.error("[公共库] 设置分身绑定失败:", e);
     res.status(500).json({ error: "保存失败" });
+  }
+});
+
+// -------------------------------------------------------
+// 服务商绑定接口 (wecom_channel_service_binding)
+// -------------------------------------------------------
+// GET /api/wecom/channels/:id/service-bindings - 查询某渠道的服务商绑定列表
+router.get("/api/wecom/channels/:id/service-bindings", async (req: Request, res: Response) => {
+  const channelId = Number(req.params.id);
+  if (!channelId) return res.status(400).json({ error: "channelId 无效" });
+  const conn = await getDbConnection();
+  try {
+    await ensureSessionTable();
+    const [rows] = await (conn as any).execute(
+      `SELECT id, channel_id, service_type, service_tenant_id, service_tenant_name, created_at FROM wecom_channel_service_binding WHERE channel_id = ? ORDER BY id ASC`,
+      [channelId]
+    );
+    res.json({ ok: true, bindings: rows });
+  } catch (e) {
+    console.error("[服务商绑定] 查询失败:", e);
+    res.status(500).json({ ok: false, error: "查询失败" });
+  }
+});
+
+// POST /api/wecom/channels/:id/service-bindings - 新增服务商绑定
+router.post("/api/wecom/channels/:id/service-bindings", async (req: Request, res: Response) => {
+  const channelId = Number(req.params.id);
+  const { service_type, service_tenant_id, service_tenant_name } = req.body;
+  if (!channelId || !service_type || !service_tenant_id) {
+    return res.status(400).json({ error: "channel_id、service_type、service_tenant_id 均为必填" });
+  }
+  const conn = await getDbConnection();
+  try {
+    await ensureSessionTable();
+    const [result] = await (conn as any).execute(
+      `INSERT INTO wecom_channel_service_binding (channel_id, service_type, service_tenant_id, service_tenant_name) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE service_tenant_name = VALUES(service_tenant_name)`,
+      [channelId, service_type, Number(service_tenant_id), service_tenant_name || ""]
+    );
+    res.json({ ok: true, id: (result as any).insertId });
+  } catch (e) {
+    console.error("[服务商绑定] 新增失败:", e);
+    res.status(500).json({ error: "新增失败" });
+  }
+});
+
+// DELETE /api/wecom/channels/:id/service-bindings/:bindingId - 删除服务商绑定
+router.delete("/api/wecom/channels/:id/service-bindings/:bindingId", async (req: Request, res: Response) => {
+  const channelId = Number(req.params.id);
+  const bindingId = Number(req.params.bindingId);
+  if (!channelId || !bindingId) return res.status(400).json({ error: "参数无效" });
+  const conn = await getDbConnection();
+  try {
+    await (conn as any).execute(
+      `DELETE FROM wecom_channel_service_binding WHERE id = ? AND channel_id = ?`,
+      [bindingId, channelId]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[服务商绑定] 删除失败:", e);
+    res.status(500).json({ error: "删除失败" });
+  }
+});
+
+// GET /api/wecom/service-binding/channel?service_type=yaban&service_tenant_id=xxx - 按服务商+租户查渠道
+router.get("/api/wecom/service-binding/channel", async (req: Request, res: Response) => {
+  const { service_type, service_tenant_id } = req.query;
+  if (!service_type || !service_tenant_id) {
+    return res.status(400).json({ error: "service_type 和 service_tenant_id 均为必填" });
+  }
+  const conn = await getDbConnection();
+  try {
+    const [rows] = await (conn as any).execute(
+      `SELECT b.channel_id, c.name AS channel_name, c.kf_id, c.channel_type FROM wecom_channel_service_binding b LEFT JOIN wecom_channels c ON c.id = b.channel_id WHERE b.service_type = ? AND b.service_tenant_id = ? LIMIT 1`,
+      [service_type, Number(service_tenant_id)]
+    );
+    const binding = (rows as any[])[0] || null;
+    res.json({ binding });
+  } catch (e) {
+    console.error("[服务商绑定] 查渠道失败:", e);
+    res.status(500).json({ error: "查询失败" });
   }
 });
 

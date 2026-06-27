@@ -3112,4 +3112,113 @@ export const yabanCustomerRouter = router({
         return { messages: [], total: 0, hasAccount: false };
       }
     }),
+
+  /**
+   * 聊天功能设置 - 统计摘要
+   * - 创始人/super_admin：查全部 channel_type='web' 记录
+   * - 普通院长：只查本医院客户（通过 yaban_customer.yaban_username -> users.id 关联）
+   */
+  getChatSummary: protectedProcedure
+    .input(z.object({ tenantId: z.number().int().optional() }))
+    .query(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) return { total_logs: 0, total_users: 0, month_logs: 0, avg_credits: 0 };
+      const founder = await isYabanPureFounder(ctx);
+      const isSA = (ctx.user as any).role === 'super_admin';
+      try {
+        const now = new Date();
+        const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01 00:00:00`;
+        if (founder || isSA) {
+          const [[totals]] = await (conn as any).execute(
+            `SELECT COUNT(*) AS total_logs,
+                    COUNT(DISTINCT wecom_user_id) AS total_users,
+                    AVG(credits_used) AS avg_credits
+             FROM wecom_message_credits WHERE channel_type='web'`
+          ) as any;
+          const [[monthRow]] = await (conn as any).execute(
+            `SELECT COUNT(*) AS month_logs FROM wecom_message_credits
+             WHERE channel_type='web' AND created_at >= ?`,
+            [monthStart]
+          ) as any;
+          return {
+            total_logs: Number(totals?.total_logs || 0),
+            total_users: Number(totals?.total_users || 0),
+            month_logs: Number(monthRow?.month_logs || 0),
+            avg_credits: Math.round(Number(totals?.avg_credits || 0)),
+          };
+        }
+        // 普通院长：按 tenant_id 过滤
+        const TENANT_ID = input?.tenantId ?? (await resolveTenantId(ctx));
+        const [custRows] = await (conn as any).execute(
+          `SELECT u.id AS uid FROM yaban_customer yc
+           JOIN users u ON u.username = yc.yaban_username
+           WHERE yc.tenant_id = ? AND yc.yaban_username IS NOT NULL AND yc.yaban_username != ''`,
+          [TENANT_ID]
+        ) as any;
+        const uids: string[] = (custRows as any[]).map((r: any) => String(r.uid));
+        if (uids.length === 0) return { total_logs: 0, total_users: 0, month_logs: 0, avg_credits: 0 };
+        const ph = uids.map(() => '?').join(',');
+        const [[totals]] = await (conn as any).execute(
+          `SELECT COUNT(*) AS total_logs,
+                  COUNT(DISTINCT wecom_user_id) AS total_users,
+                  AVG(credits_used) AS avg_credits
+           FROM wecom_message_credits
+           WHERE channel_type='web' AND wecom_user_id IN (${ph})`,
+          uids
+        ) as any;
+        const [[monthRow]] = await (conn as any).execute(
+          `SELECT COUNT(*) AS month_logs FROM wecom_message_credits
+           WHERE channel_type='web' AND created_at >= ? AND wecom_user_id IN (${ph})`,
+          [monthStart, ...uids]
+        ) as any;
+        return {
+          total_logs: Number(totals?.total_logs || 0),
+          total_users: Number(totals?.total_users || 0),
+          month_logs: Number(monthRow?.month_logs || 0),
+          avg_credits: Math.round(Number(totals?.avg_credits || 0)),
+        };
+      } catch (e) {
+        console.error('[getChatSummary] error:', e);
+        return { total_logs: 0, total_users: 0, month_logs: 0, avg_credits: 0 };
+      }
+    }),
+
+  /**
+   * 聊天功能设置 - 对话记录列表
+   * web 渠道访客使用临时 session ID（web_xxx），无法按 tenant 关联
+   * 仅创始人/super_admin 可访问，展示全部 channel_type='web' 记录
+   */
+  getChatLogs: protectedProcedure
+    .input(z.object({
+      page:     z.number().int().min(0).default(0),
+      pageSize: z.number().int().min(1).max(50).default(20),
+      keyword:  z.string().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) return { logs: [], total: 0 };
+      try {
+        const offset = input.page * input.pageSize;
+        const limitVal = input.pageSize;
+        let countSql = `SELECT COUNT(*) AS total FROM wecom_message_credits WHERE channel_type='web'`;
+        let listSql = `SELECT id, wecom_user_id, user_message, reply_preview, model_used, credits_used, created_at
+           FROM wecom_message_credits
+           WHERE channel_type='web'`;
+        const params: any[] = [];
+        if (input.keyword) {
+          const kw = `%${input.keyword}%`;
+          countSql += ` AND (user_message LIKE ? OR reply_preview LIKE ?)`;
+          listSql  += ` AND (user_message LIKE ? OR reply_preview LIKE ?)`;
+          params.push(kw, kw);
+        }
+        listSql += ` ORDER BY created_at DESC LIMIT ${limitVal} OFFSET ${offset}`;
+        const [countRows] = await (conn as any).execute(countSql, params) as any;
+        const total = Number((countRows as any[])[0]?.total ?? 0);
+        const [rows] = await (conn as any).execute(listSql, params) as any;
+        return { logs: rows as any[], total };
+      } catch (e) {
+        console.error('[getChatLogs] error:', e);
+        return { logs: [], total: 0 };
+      }
+    }),
 });

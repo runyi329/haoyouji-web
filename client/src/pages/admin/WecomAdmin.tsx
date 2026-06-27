@@ -10,6 +10,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import WecomBindingManager from "./WecomBindingManager";
+import { trpc } from "@/lib/trpc";
 import WecomRoutePanel from "@/components/WecomRoutePanel";
 import { NutritionClubPage, LiuLifanPage, WeightCoachPage } from "./ProjectLanding";
 
@@ -4108,7 +4109,7 @@ const CHANNEL_AI_MODELS = [
 // ─── 统一渠道详情主组件 ────────────────────────────────────────────────────────
 
 function ChannelDetail({ channel }: { channel: Channel }) {
-  const [activeTab, setActiveTab] = useState<"config" | "rules" | "kb" | "users" | "logs">("config");
+  const [activeTab, setActiveTab] = useState<"config" | "rules" | "kb" | "users" | "logs" | "bindings">("config");
 
   const tabs = [
     { key: "config", label: "配置", icon: <Settings className="w-3.5 h-3.5" /> },
@@ -4116,6 +4117,7 @@ function ChannelDetail({ channel }: { channel: Channel }) {
     { key: "kb", label: "知识库", icon: <Shield className="w-3.5 h-3.5" /> },
     { key: "users", label: "用户", icon: <User className="w-3.5 h-3.5" /> },
     { key: "logs", label: "日志", icon: <MessageSquare className="w-3.5 h-3.5" /> },
+    { key: "bindings", label: "绑定服务商", icon: <Link2Icon /> },
   ];
 
   return (
@@ -4143,6 +4145,7 @@ function ChannelDetail({ channel }: { channel: Channel }) {
       {activeTab === "kb" && <ChannelKnowledgeTab channelType={channel.channel_type} channelId={channel.id} />}
       {activeTab === "users" && <ChannelUsersTab channelType={channel.channel_type} />}
       {activeTab === "logs" && <ChannelLogsTab channelType={channel.channel_type} channelId={channel.id} />}
+      {activeTab === "bindings" && <ChannelServiceBindingsTab channelId={channel.id} />}
     </div>
   );
 }
@@ -7052,6 +7055,242 @@ function ChannelLogsTab({ channelType, channelId }: { channelType: string, chann
   );
 }
 
+
+// ─── 服务商绑定Tab ──────────────────────────────────────────────────────────────
+
+interface ServiceBinding {
+  id: number;
+  channel_id: number;
+  service_type: string;
+  service_tenant_id: string;
+  service_tenant_name: string;
+  created_at: string;
+}
+
+const SERVICE_TYPE_LABELS: Record<string, string> = {
+  yaban: "牙伴",
+};
+
+function ChannelServiceBindingsTab({ channelId }: { channelId: number }) {
+  const [bindings, setBindings] = useState<ServiceBinding[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [serviceType, setServiceType] = useState("yaban");
+  const [selectedClinic, setSelectedClinic] = useState<{ tenantId: number; name: string } | null>(null);
+  const [clinicSearch, setClinicSearch] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  // 获取牙伴诊所列表（tRPC）
+  const clinicsQuery = trpc.yabanClinic.adminListClinics.useQuery(
+    { keyword: clinicSearch },
+    { enabled: showAdd && serviceType === "yaban" }
+  );
+  const clinics = clinicsQuery.data || [];
+
+  async function loadBindings() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/wecom/channels/${channelId}/service-bindings`);
+      const d = await res.json();
+      if (d.ok) setBindings(d.bindings || []);
+      else toast.error(d.error || "加载失败");
+    } catch { toast.error("网络错误"); }
+    finally { setLoading(false); }
+  }
+
+  useEffect(() => { loadBindings(); }, [channelId]);
+
+  async function handleAdd() {
+    if (!selectedClinic) { toast.error("请选择诊所"); return; }
+    setAdding(true);
+    try {
+      const res = await fetch(`/api/wecom/channels/${channelId}/service-bindings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          service_type: serviceType,
+          service_tenant_id: String(selectedClinic.tenantId),
+          service_tenant_name: selectedClinic.name,
+        }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        toast.success("绑定成功");
+        setShowAdd(false);
+        setSelectedClinic(null);
+        setClinicSearch("");
+        loadBindings();
+      } else {
+        toast.error(d.error || "绑定失败");
+      }
+    } catch { toast.error("网络错误"); }
+    finally { setAdding(false); }
+  }
+
+  async function handleDelete(bindingId: number) {
+    if (!confirm("确认解除此服务商绑定？")) return;
+    setDeletingId(bindingId);
+    try {
+      const res = await fetch(`/api/wecom/channels/${channelId}/service-bindings/${bindingId}`, {
+        method: "DELETE",
+      });
+      const d = await res.json();
+      if (d.ok) { toast.success("已解除绑定"); loadBindings(); }
+      else toast.error(d.error || "操作失败");
+    } catch { toast.error("网络错误"); }
+    finally { setDeletingId(null); }
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* 说明卡片 */}
+      <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
+        <div className="text-xs text-blue-700 font-medium mb-1">渠道-服务商绑定</div>
+        <div className="text-xs text-blue-600 leading-relaxed">
+          将此渠道与具体服务商（如牙伴诊所）绑定后，该诊所院长端的「聊天功能设置」将自动关联此渠道的 AI 配置，实现权限隔离与个性化配置。
+        </div>
+      </div>
+
+      {/* 绑定列表 */}
+      {loading ? (
+        <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>
+      ) : bindings.length === 0 ? (
+        <div className="text-center py-10 text-gray-400 text-sm">暂无绑定记录</div>
+      ) : (
+        <div className="space-y-2">
+          {bindings.map(b => (
+            <div key={b.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                    <Link2Icon />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-gray-800">{b.service_tenant_name || b.service_tenant_id}</div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                        {SERVICE_TYPE_LABELS[b.service_type] || b.service_type}
+                      </span>
+                      <span className="text-xs text-gray-400">tenant_id: {b.service_tenant_id}</span>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleDelete(b.id)}
+                  disabled={deletingId === b.id}
+                  className="text-xs text-red-400 border border-red-100 rounded-lg px-2 py-1 flex items-center gap-1 hover:bg-red-50 transition-colors"
+                >
+                  {deletingId === b.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                  解除
+                </button>
+              </div>
+              <div className="text-xs text-gray-400 mt-2 pl-10">绑定时间：{formatShortDate(b.created_at)}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 新增绑定区域 */}
+      {!showAdd ? (
+        <button
+          onClick={() => setShowAdd(true)}
+          className="w-full py-2.5 rounded-xl border border-dashed border-blue-300 text-blue-600 text-sm font-medium flex items-center justify-center gap-1.5 hover:bg-blue-50 transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          新增服务商绑定
+        </button>
+      ) : (
+        <div className="bg-white rounded-xl border border-blue-200 shadow-sm p-4 space-y-3">
+          <div className="text-sm font-semibold text-gray-800">新增绑定</div>
+
+          {/* 服务商类型 */}
+          <div>
+            <div className="text-xs text-gray-500 mb-1.5">服务商类型</div>
+            <div className="flex gap-2">
+              {Object.entries(SERVICE_TYPE_LABELS).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => { setServiceType(key); setSelectedClinic(null); }}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                    serviceType === key
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-gray-600 border-gray-200 hover:border-blue-300"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 选择诊所 */}
+          {serviceType === "yaban" && (
+            <div>
+              <div className="text-xs text-gray-500 mb-1.5">选择诊所</div>
+              <input
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-2 focus:outline-none focus:border-blue-400"
+                placeholder="搜索诊所名称..."
+                value={clinicSearch}
+                onChange={e => setClinicSearch(e.target.value)}
+              />
+              {clinicsQuery.isLoading ? (
+                <div className="flex justify-center py-3"><Loader2 className="w-4 h-4 animate-spin text-gray-400" /></div>
+              ) : (
+                <div className="max-h-40 overflow-y-auto space-y-1 border border-gray-100 rounded-lg p-1">
+                  {clinics.length === 0 ? (
+                    <div className="text-xs text-gray-400 text-center py-3">无匹配诊所</div>
+                  ) : clinics.map((c: any) => (
+                    <button
+                      key={c.tenantId}
+                      onClick={() => setSelectedClinic({ tenantId: c.tenantId, name: c.name || c.shortName || `诊所${c.tenantId}` })}
+                      className={`w-full text-left px-2.5 py-2 rounded-lg text-xs transition-colors ${
+                        selectedClinic?.tenantId === c.tenantId
+                          ? "bg-blue-100 text-blue-700 font-medium"
+                          : "hover:bg-gray-50 text-gray-700"
+                      }`}
+                    >
+                      <span className="font-medium">{c.name || c.shortName || `诊所${c.tenantId}`}</span>
+                      <span className="text-gray-400 ml-1.5">tenant_id: {c.tenantId}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 已选提示 */}
+          {selectedClinic && (
+            <div className="bg-blue-50 rounded-lg px-3 py-2 text-xs text-blue-700">
+              已选：<span className="font-medium">{selectedClinic.name}</span>（tenant_id: {selectedClinic.tenantId}）
+            </div>
+          )}
+
+          {/* 操作按钮 */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => { setShowAdd(false); setSelectedClinic(null); setClinicSearch(""); }}
+              className="flex-1 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleAdd}
+              disabled={adding || !selectedClinic}
+              className={`flex-1 py-2 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 transition-colors ${
+                adding || !selectedClinic
+                  ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                  : "bg-blue-600 text-white hover:bg-blue-700"
+              }`}
+            >
+              {adding ? <><Loader2 className="w-3.5 h-3.5 animate-spin" />绑定中...</> : <>确认绑定</>}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 文档 Tab：AI 智库 4 层架构系统设计文档
