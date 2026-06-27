@@ -528,10 +528,15 @@ export default function YabanPatientComm() {
 
     recorder.onstop = async () => {
       if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
+      // iOS WebKit bug: onstop 触发时最后一个数据块可能还没写入内存
+      // 延迟 500ms 再读取，避免 FileReader 报 Load failed
+      await new Promise((resolve) => setTimeout(resolve, 500));
       const mimeType = recorder.mimeType || "audio/mp4";
       const blob = new Blob(audioChunksRef.current, { type: mimeType });
       await doAnalyze(blob, mimeType, savedDuration);
     };
+    // 先请求最后一批数据（iOS 上确保最后的 chunk 被收集）
+    try { recorder.requestData(); } catch (_) { /* 部分浏览器不支持 requestData */ }
     recorder.stop();
   }, [duration, doAnalyze]);
 

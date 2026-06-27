@@ -722,6 +722,27 @@ export async function initDatabase() {
       console.log('[DB Init] ✅ merchant_products.pointsPrice column checked');
     }
 
+    // yaban_voice_segment: 录音分段临时转写缓存（每3分钟一段，分析完成后清空）
+    const dbConnVoiceSeg = await getDbConnection();
+    if (dbConnVoiceSeg) {
+      await (dbConnVoiceSeg as any).execute(`
+        CREATE TABLE IF NOT EXISTS \`yaban_voice_segment\` (
+          \`id\` INT NOT NULL AUTO_INCREMENT,
+          \`tenant_id\` INT NOT NULL,
+          \`customer_id\` INT NOT NULL,
+          \`session_key\` VARCHAR(64) NOT NULL COMMENT '前端会话唯一标识',
+          \`segment_index\` INT NOT NULL DEFAULT 0 COMMENT '段序号（从0开始）',
+          \`raw_text\` TEXT NOT NULL COMMENT '该段转写文字',
+          \`audio_url\` VARCHAR(512) DEFAULT NULL COMMENT 'COS音频文件URL',
+          \`duration_sec\` INT NOT NULL DEFAULT 0 COMMENT '该段时长（秒）',
+          \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (\`id\`),
+          UNIQUE KEY \`uq_voice_seg\` (\`tenant_id\`, \`customer_id\`, \`session_key\`, \`segment_index\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      console.log('[DB Init] ✅ yaban_voice_segment table ready');
+    }
+
     console.log("[DB Init] Database initialization completed successfully");
   } catch (error) {
     console.error("[DB Init] Error during database initialization:", error);

@@ -361,7 +361,203 @@ export const yabanCommRouter = router({
       return { success: true };
     }),
 
-  /** 重置 AI 提示词为默认值 */
+  /**
+   * 保存录音分段：每3分钟自动调用，转写并存入临时表
+   * 前端录音不中断，后台静默切段保存
+   */
+  saveVoiceSegment: protectedProcedure
+    .input(z.object({
+      customerId: z.number().int().positive(),
+      sessionKey: z.string().min(1).max(64), // 前端会话唯一标识
+      segmentIndex: z.number().int().min(0),
+      audioBase64: z.string(),
+      mimeType: z.string().default('audio/mp4'),
+      durationSec: z.number().int().min(0).default(0),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const TENANT_ID = await resolveTenantId(ctx);
+      console.log(`[AI语音秘书] saveVoiceSegment: 客户${input.customerId} 第${input.segmentIndex}段, 时长${input.durationSec}s, base64长度=${input.audioBase64.length}`);
+
+      // Step 1: Whisper 转写
+      const base64Data = input.audioBase64.replace(/^data:[^;]+;base64,/, '');
+      const audioBuffer = Buffer.from(base64Data, 'base64');
+      let rawText = '';
+      try {
+        const asrResult = await callAIVoice(audioBuffer, input.mimeType);
+        rawText = asrResult.text?.trim() || '';
+      } catch (e: any) {
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `第${input.segmentIndex + 1}段语音转写失败：${e?.message || '未知错误'}`,
+        });
+      }
+
+      // Step 2: 上传音频到 COS
+      let audioUrl: string | null = null;
+      try {
+        const { uploadFileToCOS } = await import('./cos-upload');
+        audioUrl = await uploadFileToCOS(
+          input.audioBase64,
+          'yaban-voice-records',
+          `seg_${TENANT_ID}_${input.customerId}_${input.sessionKey}_${input.segmentIndex}.mp4`,
+          input.mimeType
+        );
+      } catch (e) {
+        console.error('[AI语音秘书] 分段音频上传失败，不阻断流程:', e);
+      }
+
+      // Step 3: 存入临时表
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      await (conn as any).execute(
+        `INSERT INTO yaban_voice_segment
+          (tenant_id, customer_id, session_key, segment_index, raw_text, audio_url, duration_sec)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE raw_text = VALUES(raw_text), audio_url = VALUES(audio_url), duration_sec = VALUES(duration_sec)`,
+        [TENANT_ID, input.customerId, input.sessionKey, input.segmentIndex, rawText, audioUrl, input.durationSec]
+      );
+
+      console.log(`[AI语音秘书] 分段${input.segmentIndex}保存成功，转写内容：${rawText.substring(0, 50)}...`);
+      return { success: true, rawText, segmentIndex: input.segmentIndex };
+    }),
+
+  /**
+   * 合并分段并分析：将所有临时段文字拼接，再调用混元提取摘要
+   * 前端点“结束并分析”时调用，传入最后一段音频（如果有）
+   */
+  analyzeWithSegments: protectedProcedure
+    .input(z.object({
+      customerId: z.number().int().positive(),
+      sessionKey: z.string().min(1).max(64),
+      // 最后一段音频（如果录音未达3分钟就结束，直接传入）
+      lastAudioBase64: z.string().optional(),
+      lastMimeType: z.string().default('audio/mp4'),
+      lastDurationSec: z.number().int().min(0).default(0),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const TENANT_ID = await resolveTenantId(ctx);
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+
+      // Step 1: 转写最后一段（如果有）
+      let lastRawText = '';
+      if (input.lastAudioBase64) {
+        try {
+          const base64Data = input.lastAudioBase64.replace(/^data:[^;]+;base64,/, '');
+          const audioBuffer = Buffer.from(base64Data, 'base64');
+          const asrResult = await callAIVoice(audioBuffer, input.lastMimeType);
+          lastRawText = asrResult.text?.trim() || '';
+          // 保存最后一段
+          const [existRows] = await (conn as any).execute(
+            `SELECT MAX(segment_index) as maxIdx FROM yaban_voice_segment WHERE tenant_id = ? AND customer_id = ? AND session_key = ?`,
+            [TENANT_ID, input.customerId, input.sessionKey]
+          );
+          const nextIdx = ((existRows as any[])[0]?.maxIdx ?? -1) + 1;
+          let lastAudioUrl: string | null = null;
+          try {
+            const { uploadFileToCOS } = await import('./cos-upload');
+            lastAudioUrl = await uploadFileToCOS(
+              input.lastAudioBase64,
+              'yaban-voice-records',
+              `seg_${TENANT_ID}_${input.customerId}_${input.sessionKey}_${nextIdx}.mp4`,
+              input.lastMimeType
+            );
+          } catch (e) { /* COS 失败不阻断 */ }
+          await (conn as any).execute(
+            `INSERT INTO yaban_voice_segment (tenant_id, customer_id, session_key, segment_index, raw_text, audio_url, duration_sec) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [TENANT_ID, input.customerId, input.sessionKey, nextIdx, lastRawText, lastAudioUrl, input.lastDurationSec]
+          );
+        } catch (e: any) {
+          console.error('[AI语音秘书] 最后一段转写失败:', e);
+          // 不阻断，用已有分段继续
+        }
+      }
+
+      // Step 2: 合并所有分段文字
+      const [segRows] = await (conn as any).execute(
+        `SELECT segment_index, raw_text FROM yaban_voice_segment
+         WHERE tenant_id = ? AND customer_id = ? AND session_key = ?
+         ORDER BY segment_index ASC`,
+        [TENANT_ID, input.customerId, input.sessionKey]
+      );
+      const segments = segRows as any[];
+      if (segments.length === 0) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: '没有找到录音分段，请重新录音' });
+      }
+      const fullRawText = segments.map((s: any) => s.raw_text).filter(Boolean).join(' ');
+      console.log(`[AI语音秘书] 合并${segments.length}段，总文字长度=${fullRawText.length}`);
+
+      // Step 3: 获取 AI 提示词
+      let promptContent = DEFAULT_COMM_PROMPT;
+      try {
+        const [rows] = await (conn as any).execute(
+          `SELECT prompt_content FROM yaban_ai_prompt_config WHERE tenant_id = ? AND prompt_key = 'comm_summary' LIMIT 1`,
+          [TENANT_ID]
+        );
+        if ((rows as any[]).length > 0) promptContent = (rows as any[])[0].prompt_content;
+      } catch (e) { /* 使用默认 */ }
+
+      // Step 4: 混元提取摘要
+      let summaryDemand = '', summaryKeyPoints = '', summaryFollowup = '', summaryRemark = '';
+      try {
+        const hunyuanApiKey = ENV.hunyuanApiKey;
+        const hunyuanApiBase = ENV.hunyuanApiBase;
+        if (!hunyuanApiKey) throw new Error('混元 API Key 未配置');
+        const hunyuanResp = await fetch(`${hunyuanApiBase}/chat/completions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${hunyuanApiKey}` },
+          body: JSON.stringify({
+            model: 'hunyuan-lite',
+            messages: [
+              { role: 'system', content: promptContent },
+              { role: 'user', content: `对话内容如下：\n\n${fullRawText}` },
+            ],
+            max_tokens: 1024,
+          }),
+        });
+        if (!hunyuanResp.ok) throw new Error(`混元请求失败(${hunyuanResp.status})`);
+        const hunyuanData = await hunyuanResp.json() as any;
+        const content = hunyuanData?.choices?.[0]?.message?.content || '';
+        console.log('[AI语音秘书] 混元返回:', content.substring(0, 200));
+        if (content) {
+          let jsonStr = content.replace(/```json\n?|```\n?|\n?```/g, '').trim();
+          const braceMatch = jsonStr.match(/\{[\s\S]*\}/);
+          if (braceMatch) jsonStr = braceMatch[0];
+          const parsed = JSON.parse(jsonStr);
+          const toStr = (v: any): string => {
+            if (v == null) return '';
+            if (typeof v === 'string') return v;
+            if (Array.isArray(v)) return v.map(toStr).filter(Boolean).join('；');
+            if (typeof v === 'object') return Object.values(v).map(toStr).filter(Boolean).join('；');
+            return String(v);
+          };
+          summaryDemand = toStr(parsed.demand);
+          summaryKeyPoints = toStr(parsed.keyPoints);
+          summaryFollowup = toStr(parsed.followup);
+          summaryRemark = toStr(parsed.remark);
+        }
+      } catch (e) {
+        console.error('[AI语音秘书] 摘要提取失败:', e);
+      }
+
+      // Step 5: 清空临时分段记录
+      await (conn as any).execute(
+        `DELETE FROM yaban_voice_segment WHERE tenant_id = ? AND customer_id = ? AND session_key = ?`,
+        [TENANT_ID, input.customerId, input.sessionKey]
+      );
+
+      return {
+        rawText: fullRawText,
+        audioUrl: null,
+        summaryDemand,
+        summaryKeyPoints,
+        summaryFollowup,
+        summaryRemark,
+        segmentCount: segments.length,
+      };
+    }),
+
+  /** 重置 AI 提示词为默认値 */
   resetPromptConfig: protectedProcedure
     .input(z.object({ promptKey: z.string() }))
     .mutation(async ({ ctx, input }) => {
