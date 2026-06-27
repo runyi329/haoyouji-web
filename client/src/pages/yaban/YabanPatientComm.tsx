@@ -458,13 +458,20 @@ export default function YabanPatientComm() {
       setDuration(0);
       audioChunksRef.current = [];
     };
-    const reader = new FileReader();
-    reader.onerror = () => {
-      toast.error("录音文件读取失败，请重新分析");
-      fallbackToPending();
-    };
-    reader.onloadend = async () => {
-      const base64 = (reader.result as string)?.split(",")[1];
+    // 使用 arrayBuffer + btoa 替代 FileReader.readAsDataURL
+    // iOS Safari 对大 Blob 的 FileReader 有内存限制，会报 Load failed
+    // arrayBuffer() + 分块 btoa 是 iOS 推荐的大文件读取方式
+    try {
+      const arrayBuffer = await blob.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+      // 分块 btoa，避免 call stack 溢出（每块 8KB）
+      let base64 = "";
+      const chunkSize = 8192;
+      for (let i = 0; i < uint8Array.length; i += chunkSize) {
+        const chunk = uint8Array.subarray(i, i + chunkSize);
+        base64 += String.fromCharCode(...chunk);
+      }
+      base64 = btoa(base64);
       if (!base64) {
         toast.error("录音文件为空，请重新录音");
         fallbackToPending();
@@ -474,37 +481,34 @@ export default function YabanPatientComm() {
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("分析超时（120秒），请重试")), 120000)
       );
-      try {
-        const result = await Promise.race([
-          analyzeVoiceMutation.mutateAsync({
-            customerId: patientId,
-            audioBase64: base64,
-            mimeType,
-          }),
-          timeoutPromise,
-        ]);
-        setAnalysisResult({
-          rawText: result.rawText,
-          audioUrl: result.audioUrl || null,
-          summaryDemand: result.summaryDemand,
-          summaryKeyPoints: result.summaryKeyPoints,
-          summaryFollowup: result.summaryFollowup,
-          summaryRemark: result.summaryRemark,
-        });
-        // 分析成功：清除待处理录音
-        setPendingBlob(null);
-        setPendingDuration(0);
-        setPendingBlobUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
-        setRecordingState("idle");
-        setDuration(0);
-        audioChunksRef.current = [];
-      } catch (err: any) {
-        // 分析失败/超时：提示并保存 blob 供用户重新分析
-        toast.error(`分析失败：${err?.message || "请重试"}`);
-        fallbackToPending();
-      }
-    };
-    reader.readAsDataURL(blob);
+      const result = await Promise.race([
+        analyzeVoiceMutation.mutateAsync({
+          customerId: patientId,
+          audioBase64: base64,
+          mimeType,
+        }),
+        timeoutPromise,
+      ]);
+      setAnalysisResult({
+        rawText: result.rawText,
+        audioUrl: result.audioUrl || null,
+        summaryDemand: result.summaryDemand,
+        summaryKeyPoints: result.summaryKeyPoints,
+        summaryFollowup: result.summaryFollowup,
+        summaryRemark: result.summaryRemark,
+      });
+      // 分析成功：清除待处理录音
+      setPendingBlob(null);
+      setPendingDuration(0);
+      setPendingBlobUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+      setRecordingState("idle");
+      setDuration(0);
+      audioChunksRef.current = [];
+    } catch (err: any) {
+      // 分析失败/超时：提示并保存 blob 供用户重新分析
+      toast.error(`分析失败：${err?.message || "请重试"}`);
+      fallbackToPending();
+    }
   }, [patientId, analyzeVoiceMutation]);
 
   // 结束并分析
