@@ -505,7 +505,7 @@ export default function YabanWechatChat() {
         style={{
           backgroundColor: "#f5f5f5",
           borderTop: "0.5px solid #d0d0d0",
-          paddingBottom: "env(safe-area-inset-bottom, 0px)",
+          paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
         }}
       >
         <div className="flex items-end px-2 py-[12px]" style={{ gap: 6 }}>
@@ -576,6 +576,7 @@ export default function YabanWechatChat() {
               onKeyDown={handleKeyDown}
               placeholder=""
               rows={1}
+              enterKeyHint="send"
               className="flex-1 px-3 py-2 text-[18px] text-gray-900 resize-none outline-none leading-[1.5] overflow-hidden"
               style={{
                 backgroundColor: "#fff",
@@ -587,7 +588,7 @@ export default function YabanWechatChat() {
             />
           )}
 
-          {/* 右侧按钮组：笑脸 + 加号/发送，紧靠在一起 */}
+          {/* 右侧按钮组：笑脸 + 加号，始终显示（发送通过键盘 enterKeyHint=send 触发） */}
           <div className="flex items-end flex-shrink-0" style={{ gap: 0 }}>
             {/* 表情按钮：圆形边框 + 笑脸 */}
             <button
@@ -602,37 +603,18 @@ export default function YabanWechatChat() {
               </svg>
             </button>
 
-            {/* 发送 or 加号 */}
-            {inputText.trim() ? (
-              <button
-                className="flex-shrink-0 text-[18px] font-medium text-white active:opacity-80 transition-opacity"
-                style={{
-                  height: 44,
-                  paddingLeft: 14,
-                  paddingRight: 14,
-                  backgroundColor: "#07C160",
-                  borderRadius: 4,
-                  minWidth: 60,
-                }}
-                onClick={sendMessage}
-                disabled={loading}
-              >
-                发送
-              </button>
-            ) : (
-              /* 加号按钮：圆形边框 + 加号 */
-              <button
-                className="flex items-center justify-center text-gray-600 active:opacity-60"
-                style={{ width: 44, height: 44 }}
-                onClick={() => setShowExtra((v) => !v)}
-              >
-                <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="7" x2="12" y2="17" strokeLinecap="round" />
-                  <line x1="7" y1="12" x2="17" y2="12" strokeLinecap="round" />
-                </svg>
-              </button>
-            )}
+            {/* 加号按钮：始终显示 */}
+            <button
+              className="flex items-center justify-center text-gray-600 active:opacity-60"
+              style={{ width: 44, height: 44 }}
+              onClick={() => setShowExtra((v) => !v)}
+            >
+              <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="7" x2="12" y2="17" strokeLinecap="round" />
+                <line x1="7" y1="12" x2="17" y2="12" strokeLinecap="round" />
+              </svg>
+            </button>
           </div>
         </div>
 
