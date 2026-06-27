@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-27
+// 生成时间：2026-06-28
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -7915,5 +7915,11 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-27T10:34:13Z", type: "feat", cleanMessage: "牙伴微信聊天UI优化 - 语音气泡秒数显示/Wifi图标/去掉AI占位气泡/用户头像优先脉动网" },
     { date: "2026-06-27T11:03:18Z", type: "feat", cleanMessage: "微信聊天按钮改为查看AI聊天记录，新增院长端聊天总览页" },
     { date: "2026-06-27T11:08:57Z", type: "fix", cleanMessage: "聊天页底部输入栏上移+键盘发送按钮" },
+    { date: "2026-06-27T11:17:31Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-27T12:38:50Z", type: "feat", cleanMessage: "渠道-服务商绑定体系" },
+    { date: "2026-06-27T12:57:52Z", type: "feat", cleanMessage: "合并自建应用与平台管理为「脉动网设计部自建应用平台管理」，11个Tab平铺展示" },
+    { date: "2026-06-27T13:11:58Z", type: "feat", cleanMessage: "绑定服务商改为先选企微客服渠道，再绑定诊所" },
+    { date: "2026-06-27T13:22:40Z", type: "feat", cleanMessage: "新增/批准医院时自动绑定牙伴在线渠道（channel_id=4）" },
+    { date: "2026-06-27T13:52:43Z", type: "feat", cleanMessage: "院长端 AI 配置区整合设置+知识库（方案A抽取独立组件）" },
   ],
 };
