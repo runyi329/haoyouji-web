@@ -13,18 +13,20 @@ import { TRPCError } from "@trpc/server";
 // 默认 AI 提示词
 const DEFAULT_COMM_PROMPT = `你是一名专业的牙科诊所助理，请根据以下对话内容，提取关键信息并以 JSON 格式返回。
 
-请提取以下四个维度：
-1. demand（客户诉求）：客户提到的问题、需求、主诉，用简洁的语言概括
-2. keyPoints（沟通要点）：员工给出的建议、方案、报价、重要说明等
-3. followup（跟进事项）：下次联系时间、待办事项、需要跟进的内容
-4. remark（备注）：其他需要记录的补充信息
+请提取以下五个维度：
+1. demand（客户记录）：客户提到的问题、需求、主诉，用简洁的语言概括
+2. hospital（医院记录）：医生给出的建议、诊断、方案、报价、重要说明等
+3. keyPoints（沟通要点）：本次沟通的其他重要要点
+4. followup（跟进事项）：下次联系时间、待办事项、需要跟进的内容
+5. remark（备注）：其他需要记录的补充信息
 
 返回格式示例：
 {
   "demand": "客户主诉牙齿敏感，询问是否需要做检查",
-  "keyPoints": "建议做全口检查，报价 200 元，可使用医保",
+  "hospital": "建议做全口检查，报价 200 元，可使用医保",
+  "keyPoints": "客户对价格较敏感",
   "followup": "约定下周三下午 3 点复诊",
-  "remark": "客户对价格较敏感，可适当优惠"
+  "remark": ""
 }
 
 重要要求：
@@ -34,7 +36,7 @@ const DEFAULT_COMM_PROMPT = `你是一名专业的牙科诊所助理，请根据
 - 只返回 JSON，不要包含 markdown 代码块标记或其他任何内容。
 
 正确示例（所有字段都是字符串）：
-{"demand":"牙齿敏感，询问是否需要检查","keyPoints":"建议做全口检查，报价200元","followup":"约下周三下午3点复诊","remark":"客户对价格较敏感"}`;
+{"demand":"牙齿敏感，询问是否需要检查","hospital":"建议做全口检查，报价200元","keyPoints":"客户对价格较敏感","followup":"约下周三下午3点复诊","remark":""}`;
 
 export const yabanCommRouter = router({
   /** 获取某顾客的沟通记录列表（按时间倒序） */
@@ -48,7 +50,7 @@ export const yabanCommRouter = router({
       const TENANT_ID = await resolveTenantId(ctx);
       const [rows] = await (conn as any).execute(
         `SELECT id, customer_id, record_type, raw_text, audio_url,
-                summary_demand, summary_key_points, summary_followup, summary_remark,
+                summary_demand, summary_hospital, summary_key_points, summary_followup, summary_remark,
                 ai_generated, operator_id, operator_name, comm_at, created_at
          FROM yaban_comm_record
          WHERE tenant_id = ? AND customer_id = ?
@@ -66,6 +68,7 @@ export const yabanCommRouter = router({
       rawText: z.string().optional(),
       audioUrl: z.string().optional(),
       summaryDemand: z.string().optional(),
+      summaryHospital: z.string().optional(),
       summaryKeyPoints: z.string().optional(),
       summaryFollowup: z.string().optional(),
       summaryRemark: z.string().optional(),
@@ -81,13 +84,14 @@ export const yabanCommRouter = router({
       const [result] = await (conn as any).execute(
         `INSERT INTO yaban_comm_record
           (tenant_id, customer_id, record_type, raw_text, audio_url,
-           summary_demand, summary_key_points, summary_followup, summary_remark,
+           summary_demand, summary_hospital, summary_key_points, summary_followup, summary_remark,
            ai_generated, operator_id, operator_name, comm_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           TENANT_ID, input.customerId, input.recordType,
           input.rawText || null, input.audioUrl || null,
-          input.summaryDemand || null, input.summaryKeyPoints || null,
+          input.summaryDemand || null, input.summaryHospital || null,
+          input.summaryKeyPoints || null,
           input.summaryFollowup || null, input.summaryRemark || null,
           input.aiGenerated ? 1 : 0,
           ctx.user.id, operatorName, commAt,
@@ -101,6 +105,7 @@ export const yabanCommRouter = router({
     .input(z.object({
       id: z.number().int().positive(),
       summaryDemand: z.string().optional(),
+      summaryHospital: z.string().optional(),
       summaryKeyPoints: z.string().optional(),
       summaryFollowup: z.string().optional(),
       summaryRemark: z.string().optional(),
@@ -112,11 +117,12 @@ export const yabanCommRouter = router({
       const TENANT_ID = await resolveTenantId(ctx);
       await (conn as any).execute(
         `UPDATE yaban_comm_record
-         SET summary_demand = ?, summary_key_points = ?, summary_followup = ?, summary_remark = ?,
+         SET summary_demand = ?, summary_hospital = ?, summary_key_points = ?, summary_followup = ?, summary_remark = ?,
              raw_text = COALESCE(?, raw_text), updated_at = NOW()
          WHERE id = ? AND tenant_id = ?`,
         [
-          input.summaryDemand || null, input.summaryKeyPoints || null,
+          input.summaryDemand || null, input.summaryHospital || null,
+          input.summaryKeyPoints || null,
           input.summaryFollowup || null, input.summaryRemark || null,
           input.rawText || null, input.id, TENANT_ID,
         ]
@@ -206,6 +212,7 @@ export const yabanCommRouter = router({
 
       // Step 4: 调用混元提取摘要
       let summaryDemand = '';
+      let summaryHospital = '';
       let summaryKeyPoints = '';
       let summaryFollowup = '';
       let summaryRemark = '';
@@ -254,6 +261,7 @@ export const yabanCommRouter = router({
             return String(v);
           };
           summaryDemand = toStr(parsed.demand);
+          summaryHospital = toStr(parsed.hospital);
           summaryKeyPoints = toStr(parsed.keyPoints);
           summaryFollowup = toStr(parsed.followup);
           summaryRemark = toStr(parsed.remark);
@@ -267,6 +275,7 @@ export const yabanCommRouter = router({
         rawText,
         audioUrl,
         summaryDemand,
+        summaryHospital,
         summaryKeyPoints,
         summaryFollowup,
         summaryRemark,
@@ -498,7 +507,7 @@ export const yabanCommRouter = router({
       } catch (e) { /* 使用默认 */ }
 
       // Step 4: 混元提取摘要
-      let summaryDemand = '', summaryKeyPoints = '', summaryFollowup = '', summaryRemark = '';
+      let summaryDemand = '', summaryHospital = '', summaryKeyPoints = '', summaryFollowup = '', summaryRemark = '';
       try {
         const hunyuanApiKey = ENV.hunyuanApiKey;
         const hunyuanApiBase = ENV.hunyuanApiBase;
@@ -532,6 +541,7 @@ export const yabanCommRouter = router({
             return String(v);
           };
           summaryDemand = toStr(parsed.demand);
+          summaryHospital = toStr(parsed.hospital);
           summaryKeyPoints = toStr(parsed.keyPoints);
           summaryFollowup = toStr(parsed.followup);
           summaryRemark = toStr(parsed.remark);
@@ -550,6 +560,7 @@ export const yabanCommRouter = router({
         rawText: fullRawText,
         audioUrl: null,
         summaryDemand,
+        summaryHospital,
         summaryKeyPoints,
         summaryFollowup,
         summaryRemark,

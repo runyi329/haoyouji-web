@@ -33,7 +33,7 @@ export const ALL_FEATURE_DICT: FeatureDef[] = [
   { key: "attendance", name: "考勤打卡", icon: `${ICON_BASE}/kaoqin_daka.webp`, route: "" },
   { key: "purchase", name: "采购", icon: `${ICON_BASE}/caigou.webp`, route: "" },
   { key: "goods", name: "物品", icon: `${ICON_BASE}/wupin.webp`, route: "" },
-  { key: "wechat_consult", name: "微信咨询", icon: `${ICON_BASE}/weixin_zixun.webp`, route: "" },
+  { key: "wechat_consult", name: "微信咨询", icon: `${ICON_BASE}/weixin_zixun.webp`, route: "https://work.weixin.qq.com/kfid/wkCdHxNQAAqjbKv2yEIWLxgY92dnYngA" },
   { key: "online_booking", name: "网络预约", icon: `${ICON_BASE}/wangluo_yuyue.webp`, route: "" },
   { key: "approval", name: "审批", icon: `${ICON_BASE}/shenpi.webp`, route: "" },
   { key: "work_remind", name: "工作提醒", icon: `${ICON_BASE}/gongzuo_tixing.webp`, route: "" },
@@ -61,6 +61,7 @@ export const DEFAULT_HOME_KEYS: string[] = [
   "followup",
   "ops_report",
   "inventory",
+  "wechat_consult",
 ];
 
 export function getFeatureByKey(key: string): FeatureDef | undefined {

@@ -148,6 +148,7 @@ router.post(
 
       // 6. 混元摘要
       let summaryDemand = "";
+      let summaryHospital = "";
       let summaryKeyPoints = "";
       let summaryFollowup = "";
       let summaryRemark = "";
@@ -190,6 +191,7 @@ router.post(
             return String(v);
           };
           summaryDemand = toStr(parsed.demand);
+          summaryHospital = toStr(parsed.hospital);
           summaryKeyPoints = toStr(parsed.keyPoints);
           summaryFollowup = toStr(parsed.followup);
           summaryRemark = toStr(parsed.remark);
@@ -206,15 +208,16 @@ router.post(
           const [insertResult] = await (conn as any).execute(
             `INSERT INTO yaban_comm_record
               (tenant_id, customer_id, record_type, raw_text, audio_url,
-               summary_demand, summary_key_points, summary_followup, summary_remark,
+               summary_demand, summary_hospital, summary_key_points, summary_followup, summary_remark,
                created_by, created_at)
-             VALUES (?, ?, 'voice_ai', ?, ?, ?, ?, ?, ?, ?, NOW())`,
+             VALUES (?, ?, 'voice_ai', ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
             [
               TENANT_ID,
               customerId,
               rawText,
               audioUrl || null,
               summaryDemand || null,
+              summaryHospital || null,
               summaryKeyPoints || null,
               summaryFollowup || null,
               summaryRemark || null,
@@ -233,6 +236,7 @@ router.post(
         rawText,
         audioUrl,
         summaryDemand,
+        summaryHospital,
         summaryKeyPoints,
         summaryFollowup,
         summaryRemark,

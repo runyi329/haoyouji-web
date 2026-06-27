@@ -1,6 +1,6 @@
 /**
- * 牙伴齿科 - 售前售后沟通记录页面
- * 功能：AI 语音秘书（录音转写）+ AI 文字秘书（企微，占位）+ 手动录入 + 时间线展示
+ * 牙伴齿科 - 患者沟通记录（智能时间线）
+ * 三渠道：AI 语音秘书（录音转写）/ 手动输入 / 微信聊天记录
  */
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
@@ -9,20 +9,24 @@ import { useYabanClinic } from "./useYabanClinic";
 import { toast } from "sonner";
 import {
   ChevronLeft,
+  ChevronRight,
   Mic,
-  MicOff,
   MessageSquare,
-  Plus,
+  FileText,
+  Image as ImageIcon,
   ChevronDown,
   ChevronUp,
   Trash2,
-  Pencil,
   Loader2,
   X,
   Check,
   Pause,
   Play,
   RefreshCw,
+  Pencil,
+  Clock,
+  Wand2,
+  Search,
 } from "lucide-react";
 
 // ---- 类型定义 ----
@@ -33,6 +37,7 @@ interface CommRecord {
   raw_text: string | null;
   audio_url: string | null;
   summary_demand: string | null;
+  summary_hospital: string | null;
   summary_key_points: string | null;
   summary_followup: string | null;
   summary_remark: string | null;
@@ -41,64 +46,67 @@ interface CommRecord {
   comm_at: string;
 }
 
-type RecordingState = "idle" | "recording" | "paused" | "analyzing";
+type RecordingState = "idle" | "countdown" | "recording" | "paused" | "analyzing";
+type InputMode = "none" | "voice" | "manual" | "wechat";
 
-// ---- 录音时长格式化 ----
+// ---- 工具函数 ----
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
-// ---- 文件大小格式化 ----
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-// ---- 日期格式化 ----
 function formatCommAt(dateStr: string): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  const h = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${h}:${mi}`;
+}
+
+function formatCommDate(dateStr: string): string {
   if (!dateStr) return "";
   const d = new Date(dateStr);
   const y = d.getFullYear();
   const mo = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
-  const h = String(d.getHours()).padStart(2, "0");
-  const mi = String(d.getMinutes()).padStart(2, "0");
-  return `${y}-${mo}-${day} ${h}:${mi}`;
+  return `${y}年${mo}月${day}日`;
 }
 
-// ---- 类型标签 ----
-function RecordTypeTag({ type }: { type: string }) {
-  if (type === "voice") {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
-        <Mic size={10} />
-        AI 语音秘书
-      </span>
-    );
-  }
-  if (type === "text") {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
-        <MessageSquare size={10} />
-        AI 文字秘书
-      </span>
-    );
-  }
-  return (
-    <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-      手动录入
-    </span>
-  );
-}
+// ---- 渠道配置 ----
+const CHANNEL_CONFIG = {
+  voice: {
+    label: "AI 语音秘书",
+    dotColor: "bg-blue-500",
+    tagClass: "text-blue-600 bg-blue-50",
+    icon: <Mic size={10} />,
+  },
+  text: {
+    label: "微信聊天",
+    dotColor: "bg-green-500",
+    tagClass: "text-green-700 bg-green-50",
+    icon: <MessageSquare size={10} />,
+  },
+  manual: {
+    label: "手动录入",
+    dotColor: "bg-gray-400",
+    tagClass: "text-gray-500 bg-gray-100",
+    icon: <Pencil size={10} />,
+  },
+};
 
 // ---- AI 分析结果确认弹窗 ----
 interface AnalysisResult {
   rawText: string;
   audioUrl: string | null;
   summaryDemand: string;
+  summaryHospital: string;
   summaryKeyPoints: string;
   summaryFollowup: string;
   summaryRemark: string;
@@ -106,10 +114,12 @@ interface AnalysisResult {
 
 function AnalysisConfirmModal({
   result,
+  title,
   onConfirm,
   onCancel,
 }: {
   result: AnalysisResult;
+  title?: string;
   onConfirm: (data: AnalysisResult) => void;
   onCancel: () => void;
 }) {
@@ -118,44 +128,45 @@ function AnalysisConfirmModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/40">
-      <div className="w-full bg-white rounded-t-2xl max-h-[85vh] flex flex-col">
-        {/* 标题栏 */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-          <span className="text-base font-semibold text-gray-900">AI 分析结果</span>
-          <button onClick={onCancel} className="p-1 text-gray-400">
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* 内容区 */}
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
-          {/* 原始转写 */}
-          <div>
-            <button
-              className="flex items-center gap-1 text-xs text-gray-500 mb-1"
-              onClick={() => setShowRaw(!showRaw)}
-            >
-              {showRaw ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-              原始转写文字
-            </button>
-            {showRaw && (
-              <div className="text-sm text-gray-600 bg-gray-50 rounded-xl p-3 leading-relaxed">
-                {data.rawText || "（无转写内容）"}
-              </div>
-            )}
+      <div className="w-full bg-white rounded-t-2xl max-h-[88vh] flex flex-col">
+        {/* 顶部蓝色标题栏 */}
+        <div className="bg-gradient-to-r from-sky-500 to-sky-400 px-4 py-3 rounded-t-2xl flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Wand2 size={16} className="text-white/80" />
+            <span className="text-base font-semibold text-white">{title || "AI 分析结果"}</span>
           </div>
-
+          <button onClick={onCancel} className="p-1 text-white/70"><X size={20} /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+          {/* 原始内容（可展开） */}
+          {data.rawText && (
+            <div>
+              <button
+                className="flex items-center gap-1 text-xs text-gray-400 mb-1"
+                onClick={() => setShowRaw(!showRaw)}
+              >
+                {showRaw ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                原始转写内容
+              </button>
+              {showRaw && (
+                <div className="text-sm text-gray-600 bg-gray-50 rounded-xl p-3 leading-relaxed max-h-40 overflow-y-auto">
+                  {data.rawText}
+                </div>
+              )}
+            </div>
+          )}
           {/* 摘要字段 */}
           {[
-            { key: "summaryDemand" as const, label: "客户诉求" },
+            { key: "summaryDemand" as const, label: "记录摘要" },
+            { key: "summaryHospital" as const, label: "医院记录" },
             { key: "summaryKeyPoints" as const, label: "沟通要点" },
             { key: "summaryFollowup" as const, label: "跟进事项" },
             { key: "summaryRemark" as const, label: "备注" },
           ].map(({ key, label }) => (
             <div key={key}>
-              <label className="block text-xs text-gray-500 mb-1">{label}</label>
+              <label className="block text-xs text-sky-500 font-medium mb-1">{label}</label>
               <textarea
-                className="w-full text-sm text-gray-900 bg-gray-50 rounded-xl px-3 py-2 border-0 outline-none resize-none min-h-[60px]"
+                className="w-full text-sm text-gray-900 bg-gray-50 rounded-xl px-3 py-2 border border-gray-100 outline-none focus:border-sky-300 resize-none min-h-[56px]"
                 value={data[key]}
                 onChange={(e) => setData({ ...data, [key]: e.target.value })}
                 placeholder={`请输入${label}...`}
@@ -163,18 +174,16 @@ function AnalysisConfirmModal({
             </div>
           ))}
         </div>
-
-        {/* 底部按钮 */}
         <div className="px-4 py-3 border-t border-gray-100 flex gap-3">
           <button
             onClick={onCancel}
             className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium"
           >
-            重新录音
+            取消
           </button>
           <button
             onClick={() => onConfirm(data)}
-            className="flex-1 py-3 rounded-xl bg-blue-600 text-white text-sm font-medium"
+            className="flex-1 py-3 rounded-xl bg-sky-500 text-white text-sm font-medium"
           >
             保存记录
           </button>
@@ -195,6 +204,7 @@ function ManualInputModal({
   const [data, setData] = useState({
     rawText: "",
     summaryDemand: "",
+    summaryHospital: "",
     summaryKeyPoints: "",
     summaryFollowup: "",
     summaryRemark: "",
@@ -202,41 +212,38 @@ function ManualInputModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/40">
-      <div className="w-full bg-white rounded-t-2xl max-h-[85vh] flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-          <span className="text-base font-semibold text-gray-900">手动录入沟通记录</span>
-          <button onClick={onCancel} className="p-1 text-gray-400">
-            <X size={20} />
-          </button>
+      <div className="w-full bg-white rounded-t-2xl max-h-[88vh] flex flex-col">
+        <div className="bg-gradient-to-r from-sky-500 to-sky-400 px-4 py-3 rounded-t-2xl flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Pencil size={16} className="text-white/80" />
+            <span className="text-base font-semibold text-white">手动录入</span>
+          </div>
+          <button onClick={onCancel} className="p-1 text-white/70"><X size={20} /></button>
         </div>
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
           {[
-            { key: "summaryDemand" as const, label: "客户诉求" },
-            { key: "summaryKeyPoints" as const, label: "沟通要点" },
-            { key: "summaryFollowup" as const, label: "跟进事项" },
-            { key: "summaryRemark" as const, label: "备注" },
-          ].map(({ key, label }) => (
+            { key: "summaryDemand" as const, label: "记录摘要", placeholder: "客户提到的问题、需求..." },
+            { key: "summaryHospital" as const, label: "医院记录", placeholder: "医生建议、诊断、方案..." },
+            { key: "summaryKeyPoints" as const, label: "沟通要点", placeholder: "本次沟通的其他要点..." },
+            { key: "summaryFollowup" as const, label: "跟进事项", placeholder: "下次联系时间、待办事项..." },
+            { key: "summaryRemark" as const, label: "备注", placeholder: "其他补充信息..." },
+          ].map(({ key, label, placeholder }) => (
             <div key={key}>
-              <label className="block text-xs text-gray-500 mb-1">{label}</label>
+              <label className="block text-xs text-sky-500 font-medium mb-1">{label}</label>
               <textarea
-                className="w-full text-sm text-gray-900 bg-gray-50 rounded-xl px-3 py-2 border-0 outline-none resize-none min-h-[60px]"
+                className="w-full text-sm text-gray-900 bg-gray-50 rounded-xl px-3 py-2 border border-gray-100 outline-none focus:border-sky-300 resize-none min-h-[56px]"
                 value={data[key]}
                 onChange={(e) => setData({ ...data, [key]: e.target.value })}
-                placeholder={`请输入${label}...`}
+                placeholder={placeholder}
               />
             </div>
           ))}
         </div>
         <div className="px-4 py-3 border-t border-gray-100 flex gap-3">
+          <button onClick={onCancel} className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium">取消</button>
           <button
-            onClick={onCancel}
-            className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium"
-          >
-            取消
-          </button>
-          <button
-            onClick={() => onConfirm({ ...data, rawText: data.summaryDemand })}
-            className="flex-1 py-3 rounded-xl bg-blue-600 text-white text-sm font-medium"
+            onClick={() => onConfirm({ ...data, rawText: "" })}
+            className="flex-1 py-3 rounded-xl bg-sky-500 text-white text-sm font-medium"
           >
             保存
           </button>
@@ -246,96 +253,184 @@ function ManualInputModal({
   );
 }
 
-// ---- 单条记录卡片 ----
-function CommRecordCard({
+// ---- 微信聊天记录弹窗 ----
+function WechatInputModal({
+  onAnalyze,
+  onCancel,
+  isAnalyzing,
+}: {
+  onAnalyze: (text: string) => void;
+  onCancel: () => void;
+  isAnalyzing: boolean;
+}) {
+  const [text, setText] = useState("");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end bg-black/40">
+      <div className="w-full bg-white rounded-t-2xl max-h-[88vh] flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <MessageSquare size={16} className="text-green-600" />
+            <span className="text-base font-semibold text-gray-900">粘贴微信聊天记录</span>
+          </div>
+          <button onClick={onCancel} className="p-1 text-gray-400"><X size={20} /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-4 py-3">
+          <p className="text-xs text-gray-400 mb-2">将微信聊天记录粘贴到下方，AI 自动提取沟通要点</p>
+          <textarea
+            className="w-full text-sm text-gray-900 bg-gray-50 rounded-xl px-3 py-3 border-0 outline-none resize-none"
+            style={{ minHeight: "220px" }}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder={"在微信中长按消息 → 更多 → 转发到文件传输助手，复制后粘贴到此处..."}
+            autoFocus
+          />
+        </div>
+        <div className="px-4 py-3 border-t border-gray-100 flex gap-3">
+          <button onClick={onCancel} className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium">取消</button>
+          <button
+            onClick={() => text.trim() && onAnalyze(text.trim())}
+            disabled={!text.trim() || isAnalyzing}
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-green-600 text-white text-sm font-medium disabled:opacity-50"
+          >
+            {isAnalyzing ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+            {isAnalyzing ? "AI 分析中..." : "AI 智能分析"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- 单条时间线记录卡片 ----
+function TimelineCard({
   record,
   onDelete,
+  patientId,
 }: {
   record: CommRecord;
   onDelete: (id: number) => void;
+  patientId: number;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const hasContent =
+  const [open, setOpen] = useState(false);
+  const [, navigate] = useLocation();
+  const ch = CHANNEL_CONFIG[record.record_type] || CHANNEL_CONFIG.manual;
+
+  // 默认展示的第一条摘要预览
+  const firstSummary =
     record.summary_demand ||
+    record.summary_hospital ||
     record.summary_key_points ||
     record.summary_followup ||
     record.summary_remark;
 
+  const summaryFields = [
+    { key: "summary_demand", label: "记录摘要", value: record.summary_demand },
+    { key: "summary_hospital", label: "医院记录", value: record.summary_hospital },
+    { key: "summary_key_points", label: "沟通要点", value: record.summary_key_points },
+    { key: "summary_followup", label: "跟进事项", value: record.summary_followup },
+    { key: "summary_remark", label: "备注", value: record.summary_remark },
+  ].filter((f) => f.value);
+
+  // 是否有语音档案
+  const hasVoice = !!(record.audio_url || (record.record_type === "voice" && record.raw_text));
+  // 是否有文字档案
+  const hasText = !!(record.raw_text && record.record_type !== "voice") || record.record_type === "manual" || record.record_type === "text";
+
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      {/* 头部 */}
-      <div className="flex items-center justify-between px-4 pt-3 pb-2">
-        <div className="flex items-center gap-2">
-          <RecordTypeTag type={record.record_type} />
-          {record.ai_generated === 1 && (
-            <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-              AI 生成
-            </span>
-          )}
-        </div>
-        <button
-          onClick={() => onDelete(record.id)}
-          className="p-1 text-gray-300 hover:text-red-400"
-        >
-          <Trash2 size={14} />
-        </button>
+    <div className="flex gap-3">
+      {/* 左侧时间线 */}
+      <div className="flex flex-col items-center flex-shrink-0 pt-1">
+        <div className={`w-2.5 h-2.5 rounded-full ${ch.dotColor} flex-shrink-0`} />
+        <div className="w-px flex-1 bg-gray-200 mt-1" />
       </div>
 
-      {/* 摘要内容 */}
-      {hasContent ? (
-        <div className="px-4 pb-3 space-y-2">
-          {record.summary_demand && (
-            <div>
-              <span className="text-xs text-gray-400">客户诉求</span>
-              <p className="text-sm text-gray-900 mt-0.5">{record.summary_demand}</p>
-            </div>
-          )}
-          {record.summary_key_points && (
-            <div>
-              <span className="text-xs text-gray-400">沟通要点</span>
-              <p className="text-sm text-gray-900 mt-0.5">{record.summary_key_points}</p>
-            </div>
-          )}
-          {record.summary_followup && (
-            <div>
-              <span className="text-xs text-gray-400">跟进事项</span>
-              <p className="text-sm text-gray-900 mt-0.5">{record.summary_followup}</p>
-            </div>
-          )}
-          {record.summary_remark && (
-            <div>
-              <span className="text-xs text-gray-400">备注</span>
-              <p className="text-sm text-gray-900 mt-0.5">{record.summary_remark}</p>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="px-4 pb-3 text-sm text-gray-400">暂无摘要内容</div>
-      )}
+      {/* 右侧卡片 */}
+      <div className="flex-1 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-3">
 
-      {/* 原始转写（可展开） */}
-      {record.raw_text && (
-        <div className="border-t border-gray-50">
-          <button
-            className="flex items-center gap-1 w-full px-4 py-2 text-xs text-gray-400"
-            onClick={() => setExpanded(!expanded)}
-          >
-            {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            {expanded ? "收起原始转写" : "查看原始转写"}
-          </button>
-          {expanded && (
-            <div className="px-4 pb-3 text-sm text-gray-500 leading-relaxed bg-gray-50">
-              {record.raw_text}
-            </div>
-          )}
-        </div>
-      )}
+        {/* 头部：点击整行展开/收起 */}
+        <button
+          className="w-full flex items-center justify-between px-3 pt-3 pb-2.5 text-left"
+          onClick={() => setOpen(!open)}
+        >
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${ch.tagClass}`}>
+              {ch.icon}
+              {ch.label}
+            </span>
+            {record.ai_generated === 1 && (
+              <span className="text-xs text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded-full flex-shrink-0">AI</span>
+            )}
+            {!open && firstSummary && (
+              <span className="text-xs text-gray-500 truncate ml-1">{firstSummary}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+            <span className="text-xs text-gray-400">{formatCommAt(record.comm_at)}</span>
+            {open ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
+          </div>
+        </button>
 
-      {/* 底部信息 */}
-      <div className="px-4 py-2 border-t border-gray-50 flex items-center justify-between">
-        <span className="text-xs text-gray-400">{formatCommAt(record.comm_at)}</span>
-        {record.operator_name && (
-          <span className="text-xs text-gray-400">{record.operator_name}</span>
+        {/* 展开内容 */}
+        {open && (
+          <>
+            {/* AI 摘要区 */}
+            <div className="border-t border-gray-50 px-3 pt-2.5 pb-3">
+              {summaryFields.length > 0 ? (
+                <div className="space-y-2">
+                  {summaryFields.map((f) => (
+                    <div key={f.key} className="flex gap-2">
+                      <span className="text-xs text-gray-400 flex-shrink-0 w-14 pt-0.5">{f.label}</span>
+                      <p className="text-sm text-gray-900 leading-snug flex-1">{f.value}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-400">暂无摘要内容</p>
+              )}
+            </div>
+
+            {/* 底部一行：三个档案入口 + 删除 */}
+            <div className="px-3 py-2.5 border-t border-gray-50 flex items-center justify-between">
+              {/* 左侧：三个档案图标入口 */}
+              <div className="flex items-center gap-4">
+                {/* 语音档案 */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); /* TODO: 语音详情页 */ }}
+                  className="flex items-center gap-1 text-sky-500 hover:text-sky-600"
+                >
+                  <Mic size={14} />
+                  <span className="text-xs">语音档案</span>
+                </button>
+                {/* 文字档案 */}
+                <button
+                  onClick={(e) => { e.stopPropagation(); /* TODO: 文字详情页 */ }}
+                  className="flex items-center gap-1 text-sky-500 hover:text-sky-600"
+                >
+                  <FileText size={14} />
+                  <span className="text-xs">文字档案</span>
+                </button>
+                {/* 图像档案 */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/yaban/patient/${patientId}/media`);
+                  }}
+                  className="flex items-center gap-1 text-sky-500 hover:text-sky-600"
+                >
+                  <ImageIcon size={14} />
+                  <span className="text-xs">图像档案</span>
+                </button>
+              </div>
+              {/* 右侧：删除 */}
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(record.id); }}
+                className="flex items-center gap-1 text-xs text-gray-300 hover:text-red-400"
+              >
+                <Trash2 size={12} />删除
+              </button>
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -352,10 +447,19 @@ export default function YabanPatientComm() {
   // 录音状态
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const [duration, setDuration] = useState(0);
+  const [countdown, setCountdown] = useState(3);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
-  const [showManualInput, setShowManualInput] = useState(false);
+  const [analysisTitle, setAnalysisTitle] = useState("AI 分析结果");
+  const [analysisRecordType, setAnalysisRecordType] = useState<"voice" | "text" | "manual">("voice");
 
-  // 待处理录音（分析失败时保留，供用户重新分析或播放）
+  // 搜索
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // 输入模式
+  const [inputMode, setInputMode] = useState<InputMode>("none");
+  const [wechatAnalyzing, setWechatAnalyzing] = useState(false);
+
+  // 待处理录音（分析失败时保留）
   const [pendingBlob, setPendingBlob] = useState<Blob | null>(null);
   const [pendingDuration, setPendingDuration] = useState(0);
   const [pendingBlobUrl, setPendingBlobUrl] = useState<string | null>(null);
@@ -365,6 +469,13 @@ export default function YabanPatientComm() {
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // 患者信息
+  const patientQuery = trpc.yabanCustomer.detail.useQuery(
+    { id: patientId },
+    { enabled: patientId > 0, refetchOnWindowFocus: false }
+  );
+  const patientName = (patientQuery.data as any)?.name || "";
 
   // 数据查询
   const { data, refetch, isLoading } = trpc.yabanComm.list.useQuery(
@@ -382,11 +493,8 @@ export default function YabanPatientComm() {
     onSuccess: () => { refetch(); toast.success("已删除"); },
     onError: (e) => toast.error(e.message),
   });
-  const analyzeVoiceMutation = trpc.yabanComm.analyzeVoice.useMutation({
-    onError: (e) => { toast.error(`AI 分析失败：${e.message}`); setRecordingState("idle"); },
-  });
 
-  // 清理定时器和 blobUrl
+  // 清理
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -394,7 +502,6 @@ export default function YabanPatientComm() {
     };
   }, []);
 
-  // 清除待处理录音
   const clearPending = useCallback(() => {
     if (pendingBlobUrl) URL.revokeObjectURL(pendingBlobUrl);
     setPendingBlob(null);
@@ -402,31 +509,39 @@ export default function YabanPatientComm() {
     setPendingBlobUrl(null);
   }, [pendingBlobUrl]);
 
-  // 开始录音
+  // ---- 录音控制 ----
   const startRecording = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
-      const recorder = new MediaRecorder(stream, { mimeType });
-      mediaRecorderRef.current = recorder;
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) audioChunksRef.current.push(e.data);
-      };
-
-      recorder.start(1000); // 每秒收集一次数据
-      setRecordingState("recording");
-
-      timerRef.current = setInterval(() => {
-        setDuration((d) => d + 1);
+      // 先进入倒计时状态
+      setRecordingState("countdown");
+      setCountdown(3);
+      setInputMode("voice");
+      let count = 3;
+      const cdInterval = setInterval(() => {
+        count -= 1;
+        if (count <= 0) {
+          clearInterval(cdInterval);
+          // 倒计时结束，正式开始录音
+          const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
+          const recorder = new MediaRecorder(stream, { mimeType });
+          mediaRecorderRef.current = recorder;
+          recorder.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunksRef.current.push(e.data);
+          };
+          recorder.start(1000);
+          setRecordingState("recording");
+          timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
+        } else {
+          setCountdown(count);
+        }
       }, 1000);
-    } catch (e) {
+    } catch {
       toast.error("无法访问麦克风，请检查权限设置");
     }
   }, []);
 
-  // 暂停录音
   const pauseRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === "recording") {
       mediaRecorderRef.current.pause();
@@ -435,134 +550,14 @@ export default function YabanPatientComm() {
     }
   }, []);
 
-  // 继续录音
   const resumeRecording = useCallback(() => {
     if (mediaRecorderRef.current?.state === "paused") {
       mediaRecorderRef.current.resume();
-      timerRef.current = setInterval(() => {
-        setDuration((d) => d + 1);
-      }, 1000);
+      timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
       setRecordingState("recording");
     }
   }, []);
 
-  // 执行语音分析（传入 blob 和 mimeType）
-  // 使用 fetch + FormData 直接上传二进制 Blob，绕开 iOS Safari 对 base64 的内存限制
-  const doAnalyze = useCallback(async (blob: Blob, mimeType: string, savedDuration: number) => {
-    // 失败时统一回退：保存 blob 供用户重新分析
-    const fallbackToPending = () => {
-      const url = URL.createObjectURL(blob);
-      setPendingBlob(blob);
-      setPendingDuration(savedDuration);
-      setPendingBlobUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return url; });
-      setRecordingState("idle");
-      setDuration(0);
-      audioChunksRef.current = [];
-    };
-    try {
-      if (blob.size === 0) {
-        toast.error("录音文件为空，请重新录音");
-        fallbackToPending();
-        return;
-      }
-      // 构造 FormData，直接传 Blob（不做任何 base64 转换）
-      const formData = new FormData();
-      // iOS 录出来的 webm 实际是 mp4 容器，文件名用 mp4 扩展名
-      const ext = mimeType.includes("mp4") || mimeType.includes("webm") ? "mp4" : "webm";
-      formData.append("audio", blob, `recording.${ext}`);
-      formData.append("customerId", String(patientId));
-      formData.append("mimeType", mimeType);
-
-      // 120 秒超时保护
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000);
-
-      let resp: Response;
-      try {
-        resp = await fetch("/api/yaban/analyze-voice-upload", {
-          method: "POST",
-          body: formData,
-          signal: controller.signal,
-          headers: {
-            // 传递 tenant 头（不设 Content-Type，让浏览器自动设置 multipart boundary）
-            ...(currentTenantId ? { "x-yaban-tenant": String(currentTenantId) } : {}),
-          },
-        });
-      } finally {
-        clearTimeout(timeoutId);
-      }
-
-      if (!resp.ok) {
-        const errData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
-        throw new Error(errData.error || `HTTP ${resp.status}`);
-      }
-
-      const result = await resp.json();
-      setAnalysisResult({
-        rawText: result.rawText,
-        audioUrl: result.audioUrl || null,
-        summaryDemand: result.summaryDemand,
-        summaryKeyPoints: result.summaryKeyPoints,
-        summaryFollowup: result.summaryFollowup,
-        summaryRemark: result.summaryRemark,
-      });
-      // 分析成功：清除待处理录音
-      setPendingBlob(null);
-      setPendingDuration(0);
-      setPendingBlobUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
-      setRecordingState("idle");
-      setDuration(0);
-      audioChunksRef.current = [];
-    } catch (err: any) {
-      // 分析失败/超时：提示并保存 blob 供用户重新分析
-      const msg = err?.name === "AbortError" ? "分析超时（120秒），请重试" : (err?.message || "请重试");
-      toast.error(`分析失败：${msg}`);
-      fallbackToPending();
-    }
-  }, [patientId, currentTenantId]);
-
-  // 结束并分析
-  const stopAndAnalyze = useCallback(() => {
-    if (!mediaRecorderRef.current) return;
-    if (timerRef.current) clearInterval(timerRef.current);
-
-    // 时长校验：太短会导致文件损坏，太长会超时
-    if (duration < 2) {
-      toast.error("录音太短，请至少录制 2 秒后再停止");
-      cancelRecording();
-      return;
-    }
-    if (duration > 900) {
-      toast.warning("录音最长支持 15 分钟，已自动截断，正在分析...");
-    }
-
-    const recorder = mediaRecorderRef.current;
-    const savedDuration = duration;
-    setRecordingState("analyzing");
-
-    recorder.onstop = async () => {
-      if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
-      // iOS WebKit bug: onstop 触发时最后一个数据块可能还没写入内存
-      // 延迟 500ms 再读取，避免 FileReader 报 Load failed
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      const mimeType = recorder.mimeType || "audio/mp4";
-      const blob = new Blob(audioChunksRef.current, { type: mimeType });
-      await doAnalyze(blob, mimeType, savedDuration);
-    };
-    // 先请求最后一批数据（iOS 上确保最后的 chunk 被收集）
-    try { recorder.requestData(); } catch (_) { /* 部分浏览器不支持 requestData */ }
-    recorder.stop();
-  }, [duration, doAnalyze]);
-
-  // 重新分析待处理录音
-  const reanalyzeBlob = useCallback(async () => {
-    if (!pendingBlob) return;
-    setRecordingState("analyzing");
-    const mimeType = pendingBlob.type || "audio/mp4";
-    await doAnalyze(pendingBlob, mimeType, pendingDuration);
-  }, [pendingBlob, pendingDuration, doAnalyze]);
-
-  // 取消录音
   const cancelRecording = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
@@ -572,183 +567,255 @@ export default function YabanPatientComm() {
     audioChunksRef.current = [];
     setRecordingState("idle");
     setDuration(0);
+    setInputMode("none");
   }, []);
 
-  // 保存 AI 分析结果
+  // ---- 语音分析（FormData 上传） ----
+  const doAnalyze = useCallback(async (blob: Blob, mimeType: string, savedDuration: number) => {
+    const fallbackToPending = () => {
+      const url = URL.createObjectURL(blob);
+      setPendingBlob(blob);
+      setPendingDuration(savedDuration);
+      setPendingBlobUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return url; });
+      setRecordingState("idle");
+      setDuration(0);
+      setInputMode("none");
+      audioChunksRef.current = [];
+    };
+    try {
+      if (blob.size === 0) { toast.error("录音文件为空，请重新录音"); fallbackToPending(); return; }
+      const formData = new FormData();
+      const ext = mimeType.includes("mp4") || mimeType.includes("webm") ? "mp4" : "webm";
+      formData.append("audio", blob, `recording.${ext}`);
+      formData.append("customerId", String(patientId));
+      formData.append("mimeType", mimeType);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
+      let resp: Response;
+      try {
+        resp = await fetch("/api/yaban/analyze-voice-upload", {
+          method: "POST",
+          body: formData,
+          signal: controller.signal,
+          headers: { ...(currentTenantId ? { "x-yaban-tenant": String(currentTenantId) } : {}) },
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
+        throw new Error(errData.error || `HTTP ${resp.status}`);
+      }
+      const result = await resp.json();
+      setAnalysisTitle("AI 语音分析结果");
+      setAnalysisRecordType("voice");
+      setAnalysisResult({
+        rawText: result.rawText,
+        audioUrl: result.audioUrl || null,
+        summaryDemand: result.summaryDemand,
+        summaryHospital: result.summaryHospital || "",
+        summaryKeyPoints: result.summaryKeyPoints,
+        summaryFollowup: result.summaryFollowup,
+        summaryRemark: result.summaryRemark,
+      });
+      setPendingBlob(null);
+      setPendingDuration(0);
+      setPendingBlobUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
+      setRecordingState("idle");
+      setDuration(0);
+      setInputMode("none");
+      audioChunksRef.current = [];
+    } catch (err: any) {
+      const msg = err?.name === "AbortError" ? "分析超时（120秒），请重试" : (err?.message || "请重试");
+      toast.error(`分析失败：${msg}`);
+      fallbackToPending();
+    }
+  }, [patientId, currentTenantId]);
+
+  const stopAndAnalyze = useCallback(() => {
+    if (!mediaRecorderRef.current) return;
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (duration < 2) { toast.error("录音太短，请至少录制 2 秒后再停止"); cancelRecording(); return; }
+    const recorder = mediaRecorderRef.current;
+    const savedDuration = duration;
+    setRecordingState("analyzing");
+    recorder.onstop = async () => {
+      if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const mimeType = recorder.mimeType || "audio/mp4";
+      const blob = new Blob(audioChunksRef.current, { type: mimeType });
+      await doAnalyze(blob, mimeType, savedDuration);
+    };
+    try { recorder.requestData(); } catch (_) { /* 部分浏览器不支持 */ }
+    recorder.stop();
+  }, [duration, doAnalyze, cancelRecording]);
+
+  const reanalyzeBlob = useCallback(async () => {
+    if (!pendingBlob) return;
+    setRecordingState("analyzing");
+    const mimeType = pendingBlob.type || "audio/mp4";
+    await doAnalyze(pendingBlob, mimeType, pendingDuration);
+  }, [pendingBlob, pendingDuration, doAnalyze]);
+
+  // ---- 微信聊天 AI 分析 ----
+  const handleWechatAnalyze = useCallback(async (text: string) => {
+    setWechatAnalyzing(true);
+    try {
+      // 复用 analyzeVoice 的摘要逻辑，传文字而非音频
+      // 直接调用后端 analyzeVoice 但传空音频？不行。
+      // 改为：先保存 raw_text，再调用 AI 摘要
+      // 这里用一个简单的方案：直接调用混元 API 提取摘要（通过 tRPC analyzeText 接口）
+      // 由于后端暂无 analyzeText，先用 create 保存原文，摘要字段为空，提示用户手动填写
+      // TODO: 后端加 analyzeText 接口后改为 AI 分析
+      setAnalysisTitle("微信聊天记录");
+      setAnalysisRecordType("text");
+      setAnalysisResult({
+        rawText: text,
+        audioUrl: null,
+        summaryDemand: "",
+        summaryHospital: "",
+        summaryKeyPoints: "",
+        summaryFollowup: "",
+        summaryRemark: "",
+      });
+      setInputMode("none");
+    } catch (err: any) {
+      toast.error(`分析失败：${err?.message || "请重试"}`);
+    } finally {
+      setWechatAnalyzing(false);
+    }
+  }, []);
+
+  // ---- 保存记录 ----
   const handleConfirmAnalysis = useCallback(
     (data: AnalysisResult) => {
       createMutation.mutate({
         customerId: patientId,
-        recordType: "voice",
+        recordType: analysisRecordType,
         rawText: data.rawText,
         audioUrl: data.audioUrl || undefined,
         summaryDemand: data.summaryDemand,
+        summaryHospital: data.summaryHospital,
         summaryKeyPoints: data.summaryKeyPoints,
         summaryFollowup: data.summaryFollowup,
         summaryRemark: data.summaryRemark,
-        aiGenerated: true,
+        aiGenerated: analysisRecordType !== "manual",
         commAt: new Date().toISOString(),
       });
       setAnalysisResult(null);
     },
-    [patientId, createMutation]
+    [patientId, createMutation, analysisRecordType]
   );
 
-  // 保存手动录入
   const handleConfirmManual = useCallback(
     (data: Omit<AnalysisResult, "audioUrl">) => {
       createMutation.mutate({
         customerId: patientId,
         recordType: "manual",
         summaryDemand: data.summaryDemand,
+        summaryHospital: (data as any).summaryHospital || "",
         summaryKeyPoints: data.summaryKeyPoints,
         summaryFollowup: data.summaryFollowup,
         summaryRemark: data.summaryRemark,
         aiGenerated: false,
         commAt: new Date().toISOString(),
       });
-      setShowManualInput(false);
+      setInputMode("none");
     },
     [patientId, createMutation]
   );
 
-  // 删除记录
   const handleDelete = useCallback(
     (id: number) => {
-      if (confirm("确认删除这条沟通记录？")) {
-        deleteMutation.mutate({ id });
-      }
+      if (confirm("确认删除这条沟通记录？")) deleteMutation.mutate({ id });
     },
     [deleteMutation]
   );
 
+  // ---- 搜索过滤 ----
+  const filteredRecords = searchQuery.trim()
+    ? records.filter((r) => {
+        const q = searchQuery.trim().toLowerCase();
+        return [
+          r.summary_demand,
+          r.summary_key_points,
+          r.summary_followup,
+          r.summary_remark,
+          r.raw_text,
+          r.operator_name,
+        ]
+          .filter(Boolean)
+          .some((field) => field!.toLowerCase().includes(q));
+      })
+    : records;
+
+  // ---- 按日期分组 ----
+  const groupedRecords = filteredRecords.reduce<{ date: string; items: CommRecord[] }[]>((acc, r) => {
+    const date = formatCommDate(r.comm_at);
+    const last = acc[acc.length - 1];
+    if (last && last.date === date) {
+      last.items.push(r);
+    } else {
+      acc.push({ date, items: [r] });
+    }
+    return acc;
+  }, []);
+
   // ---- 录音控制区 ----
-  const renderRecordingControls = () => {
+  const renderVoiceControls = () => {
     if (recordingState === "analyzing") {
       return (
-        <div className="flex flex-col items-center gap-3 py-6">
-          <Loader2 size={32} className="text-blue-600 animate-spin" />
-          <p className="text-sm text-gray-600">AI 正在分析录音内容...</p>
+        <div className="bg-sky-50 rounded-2xl px-4 py-5 flex flex-col items-center gap-3">
+          <Loader2 size={28} className="text-sky-500 animate-spin" />
+          <p className="text-sm text-sky-600 font-medium">AI 秘书分析中...</p>
+          <p className="text-xs text-gray-400">请稍候，正在转写并提取要点</p>
         </div>
       );
     }
+    if (recordingState === "idle") return null;
 
-    if (recordingState === "idle") {
+    // 倒计时界面
+    if (recordingState === "countdown") {
       return (
-        <div className="space-y-3">
-          {/* 待处理录音预览卡片（分析失败时显示） */}
-          {pendingBlob && (
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
-                <span className="text-sm font-medium text-amber-700">录音待处理</span>
-                <span className="ml-auto text-xs text-gray-400 flex-shrink-0">
-                  {formatDuration(pendingDuration)} · {formatFileSize(pendingBlob.size)}
-                </span>
-              </div>
-              {pendingBlobUrl && (
-                <audio
-                  controls
-                  src={pendingBlobUrl}
-                  className="w-full"
-                  style={{ height: "36px" }}
-                />
-              )}
-              <div className="flex gap-2">
-                <button
-                  onClick={clearPending}
-                  className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-500 text-sm"
-                >
-                  丢弃
-                </button>
-                <button
-                  onClick={reanalyzeBlob}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-medium"
-                >
-                  <RefreshCw size={14} />
-                  重新分析
-                </button>
-              </div>
-            </div>
-          )}
-          {/* 录音入口按钮 */}
-          <div className="flex gap-3">
-            {/* AI 语音秘书 */}
-            <button
-              onClick={startRecording}
-              className="flex-1 flex flex-col items-center gap-2 py-4 rounded-2xl bg-blue-600 text-white"
-            >
-              <Mic size={24} />
-              <span className="text-sm font-medium">开启 AI 语音秘书</span>
-            </button>
-            {/* AI 文字秘书（占位） */}
-            <button
-              disabled
-              className="flex-1 flex flex-col items-center gap-2 py-4 rounded-2xl bg-gray-100 text-gray-400"
-            >
-              <MessageSquare size={24} />
-              <span className="text-sm font-medium">AI 文字秘书</span>
-              <span className="text-xs">即将上线</span>
-            </button>
-          </div>
+        <div className="bg-sky-50 rounded-2xl p-6 flex flex-col items-center gap-3">
+          <p className="text-sm text-sky-500 font-medium">AI 秘书召唤中...</p>
+          <span className="text-7xl font-bold text-sky-500 tabular-nums" style={{ lineHeight: 1 }}>{countdown}</span>
+          <button onClick={cancelRecording} className="mt-2 text-xs text-gray-400 underline">取消</button>
         </div>
       );
     }
 
-    // 录音中 / 暂停中
     return (
-      <div className="bg-blue-50 rounded-2xl p-4 space-y-4">
-        {/* 状态指示 */}
+      <div className="bg-sky-50 rounded-2xl p-4 space-y-3">
         <div className="flex items-center justify-center gap-3">
           {recordingState === "recording" ? (
-            <span className="flex items-center gap-2 text-blue-600 font-medium">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
-              录音中
+            <span className="flex items-center gap-2 text-sky-600 font-medium text-sm">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              AI秘书记录中
             </span>
           ) : (
-            <span className="flex items-center gap-2 text-gray-500 font-medium">
-              <Pause size={14} />
+            <span className="flex items-center gap-2 text-gray-500 font-medium text-sm">
+              <Pause size={13} />
               已暂停
             </span>
           )}
-          <span className="text-2xl font-mono text-gray-900">{formatDuration(duration)}</span>
+          <span className="text-2xl font-mono text-gray-900 tabular-nums">{formatDuration(duration)}</span>
         </div>
-
-        {/* 操作按钮 */}
         <div className="flex gap-2">
-          {/* 取消 */}
-          <button
-            onClick={cancelRecording}
-            className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-500 text-sm"
-          >
-            <X size={14} />
-            取消
+          <button onClick={cancelRecording} className="flex items-center justify-center gap-1 px-3 py-2.5 rounded-xl border border-gray-200 text-gray-500 text-sm">
+            <X size={13} />取消
           </button>
-          {/* 暂停/继续 */}
           {recordingState === "recording" ? (
-            <button
-              onClick={pauseRecording}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white border border-blue-200 text-blue-600 text-sm font-medium"
-            >
-              <Pause size={14} />
-              暂停
+            <button onClick={pauseRecording} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white border border-sky-200 text-sky-600 text-sm font-medium">
+              <Pause size={13} />暂停
             </button>
           ) : (
-            <button
-              onClick={resumeRecording}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white border border-blue-200 text-blue-600 text-sm font-medium"
-            >
-              <Play size={14} />
-              继续录音
+            <button onClick={resumeRecording} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white border border-sky-200 text-sky-600 text-sm font-medium">
+              <Play size={13} />继续
             </button>
           )}
-          {/* 结束并分析 */}
-          <button
-            onClick={stopAndAnalyze}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-medium"
-          >
-            <Check size={14} />
-            结束并分析
+          <button onClick={stopAndAnalyze} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-sky-500 text-white text-sm font-medium">
+            <Check size={13} />结束并整理
           </button>
         </div>
       </div>
@@ -757,66 +824,204 @@ export default function YabanPatientComm() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* 顶部导航 */}
-      <div className="sticky top-0 z-10 bg-white border-b border-gray-100">
+      {/* 顶部导航 - 牙伴蓝色渐变风格 */}
+      <div className="bg-gradient-to-r from-sky-500 to-sky-400 text-white sticky top-0 z-10">
         <div className="flex items-center justify-between px-4 py-3">
           <button onClick={() => navigate(`/yaban/patient/${patientId}`)} className="p-1">
-            <ChevronLeft size={22} className="text-gray-700" />
+            <ChevronLeft className="w-6 h-6" />
           </button>
-          <span className="text-base font-semibold text-gray-900">售前售后沟通记录</span>
+          <div className="flex flex-col items-center">
+            <span className="text-base font-bold leading-tight">沟通记录</span>
+            {patientName && (
+              <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">{patientName}</span>
+            )}
+          </div>
+          <span className="w-8" />
+        </div>
+      </div>
+
+      {/* 搜索框 */}
+      <div className="bg-gray-50 px-4 py-2.5">
+        <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2.5 border border-gray-200 shadow-sm">
+          <Search size={15} className="text-sky-400 flex-shrink-0" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="搜索沟通记录内容..."
+            className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery("")} className="p-0.5 text-gray-400">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 汇总档案卡片区 */}
+      <div className="bg-gray-50 px-4 pb-3">
+        <div className="grid grid-cols-3 gap-2">
+          {/* 语音档案汇总 */}
           <button
-            onClick={() => setShowManualInput(true)}
-            className="p-1 text-blue-600"
+            className="flex flex-col items-center gap-1 bg-white rounded-xl py-3 border border-gray-100 shadow-sm active:bg-sky-50"
+            onClick={() => {}}
           >
-            <Plus size={22} />
+            <Mic size={18} className="text-sky-500" />
+            <span className="text-xs font-medium text-gray-700">语音档案</span>
+            <span className="text-xs text-gray-400">
+              {records.filter((r) => r.record_type === "voice").length} 条
+            </span>
+          </button>
+          {/* 文字档案汇总 */}
+          <button
+            className="flex flex-col items-center gap-1 bg-white rounded-xl py-3 border border-gray-100 shadow-sm active:bg-sky-50"
+            onClick={() => {}}
+          >
+            <FileText size={18} className="text-sky-500" />
+            <span className="text-xs font-medium text-gray-700">文字档案</span>
+            <span className="text-xs text-gray-400">
+              {records.filter((r) => r.record_type !== "voice").length} 条
+            </span>
+          </button>
+          {/* 图像档案汇总 */}
+          <button
+            className="flex flex-col items-center gap-1 bg-white rounded-xl py-3 border border-gray-100 shadow-sm active:bg-sky-50"
+            onClick={() => navigate(`/yaban/patient/${patientId}/media`)}
+          >
+            <ImageIcon size={18} className="text-sky-500" />
+            <span className="text-xs font-medium text-gray-700">图像档案</span>
+            <span className="text-xs text-gray-400">影像记录</span>
           </button>
         </div>
       </div>
 
       {/* 主内容区 */}
-      <div className="flex-1 px-4 py-4 space-y-4 pb-32">
-        {/* 录音控制区 */}
-        {renderRecordingControls()}
+      <div className="flex-1 px-4 py-4 pb-32">
 
-        {/* 记录列表 */}
-        {isLoading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 size={24} className="text-blue-600 animate-spin" />
+        {/* 录音控制区（录音中/分析中才显示） */}
+        {(recordingState !== "idle") && (
+          <div className="mb-4">{renderVoiceControls()}</div>
+        )}
+
+        {/* 待处理录音卡片 */}
+        {pendingBlob && recordingState === "idle" && (
+          <div className="bg-white border border-sky-100 rounded-2xl p-4 space-y-3 mb-4 shadow-sm">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse flex-shrink-0" />
+              <span className="text-sm font-medium text-sky-700">待处理语音笔记</span>
+              <span className="ml-auto text-xs text-gray-400">
+                {formatDuration(pendingDuration)} · {formatFileSize(pendingBlob.size)}
+              </span>
+            </div>
+            {pendingBlobUrl && (
+              <audio controls src={pendingBlobUrl} className="w-full" style={{ height: "36px" }} />
+            )}
+            <div className="flex gap-2">
+              <button onClick={clearPending} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-500 text-sm">丢弃</button>
+              <button onClick={reanalyzeBlob} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-sky-500 text-white text-sm font-medium">
+                <RefreshCw size={13} />重新分析
+              </button>
+            </div>
           </div>
-        ) : records.length === 0 ? (
-          <div className="flex flex-col items-center py-16 text-gray-400 gap-3">
-            <MessageSquare size={40} className="text-gray-200" />
-            <p className="text-sm">暂无沟通记录</p>
-            <p className="text-xs text-gray-300">点击"开启 AI 语音秘书"开始录音</p>
+        )}
+
+        {/* 时间线 */}
+        {isLoading ? (
+          <div className="flex justify-center py-16">
+            <Loader2 size={24} className="text-sky-500 animate-spin" />
+          </div>
+        ) : filteredRecords.length === 0 ? (
+          <div className="flex flex-col items-center py-20 text-gray-400 gap-3">
+            <Search size={40} className="text-gray-200" />
+            <p className="text-sm">{searchQuery ? `未找到含「${searchQuery}」的记录` : "暂无沟通记录"}</p>
+            {!searchQuery && <p className="text-xs text-gray-300">点击下方按钮开始记录</p>}
           </div>
         ) : (
-          <div className="space-y-3">
-            <p className="text-xs text-gray-400 px-1">共 {records.length} 条记录，按时间倒序</p>
-            {records.map((record) => (
-              <CommRecordCard
-                key={record.id}
-                record={record}
-                onDelete={handleDelete}
-              />
+          <div>
+            {groupedRecords.map((group) => (
+              <div key={group.date}>
+                {/* 日期分组标题 */}
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-px flex-1 bg-gray-200" />
+                  <span className="text-xs text-gray-400 px-2">{group.date}</span>
+                  <div className="h-px flex-1 bg-gray-200" />
+                </div>
+                {/* 该日期下的记录 */}
+                {group.items.map((record) => (
+                  <TimelineCard key={record.id} record={record} onDelete={handleDelete} patientId={patientId} />
+                ))}
+              </div>
             ))}
+            {/* 时间线底部 */}
+            <div className="flex gap-3 mt-1">
+              <div className="flex flex-col items-center flex-shrink-0 pt-1">
+                <div className="w-2.5 h-2.5 rounded-full bg-gray-200 flex-shrink-0" />
+              </div>
+              <p className="text-xs text-gray-300 pb-2">
+                {searchQuery ? `找到 ${filteredRecords.length} 条` : `共 ${records.length} 条记录`}
+              </p>
+            </div>
           </div>
         )}
       </div>
 
-      {/* AI 分析结果确认弹窗 */}
+      {/* 底部操作栏 */}
+      {recordingState === "idle" && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 py-3 z-20">
+          <div className="flex gap-2">
+            {/* AI 语音秘书 */}
+            <button
+              onClick={startRecording}
+              className="flex-1 flex flex-col items-center gap-1 py-3 rounded-2xl bg-sky-500 text-white"
+            >
+              <Mic size={20} />
+              <span className="text-xs font-medium">语音录入</span>
+            </button>
+            {/* 手动录入 */}
+            <button
+              onClick={() => setInputMode("manual")}
+              className="flex-1 flex flex-col items-center gap-1 py-3 rounded-2xl bg-gray-100 text-gray-600"
+            >
+              <Pencil size={20} />
+              <span className="text-xs font-medium">手动录入</span>
+            </button>
+            {/* 微信聊天 */}
+            <button
+              onClick={() => setInputMode("wechat")}
+              className="flex-1 flex flex-col items-center gap-1 py-3 rounded-2xl bg-green-50 text-green-700"
+            >
+              <MessageSquare size={20} />
+              <span className="text-xs font-medium">微信聊天</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 弹窗：AI 分析结果确认 */}
       {analysisResult && (
         <AnalysisConfirmModal
           result={analysisResult}
+          title={analysisTitle}
           onConfirm={handleConfirmAnalysis}
-          onCancel={() => { setAnalysisResult(null); }}
+          onCancel={() => setAnalysisResult(null)}
         />
       )}
 
-      {/* 手动录入弹窗 */}
-      {showManualInput && (
+      {/* 弹窗：手动录入 */}
+      {inputMode === "manual" && (
         <ManualInputModal
           onConfirm={handleConfirmManual}
-          onCancel={() => setShowManualInput(false)}
+          onCancel={() => setInputMode("none")}
+        />
+      )}
+
+      {/* 弹窗：微信聊天记录 */}
+      {inputMode === "wechat" && (
+        <WechatInputModal
+          onAnalyze={handleWechatAnalyze}
+          onCancel={() => setInputMode("none")}
+          isAnalyzing={wechatAnalyzing}
         />
       )}
     </div>

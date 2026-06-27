@@ -107,7 +107,11 @@ export default function YabanHome() {
 
   const handleFeatureClick = (name: string, route?: string) => {
     if (route) {
-      setLocation(route);
+      if (route.startsWith("http")) {
+        window.open(route, "_blank");
+      } else {
+        setLocation(route);
+      }
     } else {
       toast.info(`"${name}" 功能开发中，敬请期待`);
     }
