@@ -114,3 +114,4 @@ dev.local.config.sh
 
 # 运行时价格缓存文件（价格扫描任务自动生成，不纳入版本控制）
 price-cache.json
+.push-authorized
