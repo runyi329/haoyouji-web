@@ -77,6 +77,25 @@ jobs:
           # 将 BUILT_IN_FORGE_API_KEY 写入服务器 .env（Manus forgeApi key，用于语音识别/Whisper）
           ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
             'grep -q "BUILT_IN_FORGE_API_KEY" /root/haoyouji-web/.env && sed -i "s|BUILT_IN_FORGE_API_KEY=.*|BUILT_IN_FORGE_API_KEY=\"sk-UYkiAKe6Pn6SWtsWt5r3qV\"|" /root/haoyouji-web/.env || echo "BUILT_IN_FORGE_API_KEY=\"sk-UYkiAKe6Pn6SWtsWt5r3qV\"" >> /root/haoyouji-web/.env'
+          # 配置 Nginx client_max_body_size 为 50m，支持大音频文件上传
+          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
+            # 查找 Nginx 配置文件中包含 server_name 的文件
+            NGINX_CONF=$(grep -rl "server_name" /etc/nginx/sites-enabled/ /etc/nginx/conf.d/ 2>/dev/null | head -1)
+            if [ -z "$NGINX_CONF" ]; then
+              NGINX_CONF=$(grep -rl "server_name" /etc/nginx/ 2>/dev/null | grep -v "nginx.conf" | head -1)
+            fi
+            if [ -n "$NGINX_CONF" ]; then
+              # 如果已有 client_max_body_size 则更新，否则在第一个 server { 后插入
+              if grep -q "client_max_body_size" "$NGINX_CONF"; then
+                sed -i "s|client_max_body_size.*|client_max_body_size 50m;|g" "$NGINX_CONF"
+              else
+                sed -i "/server[[:space:]]*{/a\\    client_max_body_size 50m;" "$NGINX_CONF"
+              fi
+              nginx -t && nginx -s reload && echo "Nginx reloaded with client_max_body_size 50m" || echo "Nginx reload failed, check config"
+            else
+              echo "Nginx config not found, skipping"
+            fi
+          '
           echo "Script uploaded and env updated"
 
       - name: start background deploy
