@@ -445,6 +445,9 @@ async function startServer() {
   // 牙办齿科商城 - 真实支付(微信/支付宝)创建与回调路由
   const yabanPayModule = await import('../yaban-payment-callback-router.js');
   app.use(yabanPayModule.default);
+  // 牙伴 AI 语音秘书 - 二进制上传接口（绕开 iOS base64 内存限制）
+  const yabanVoiceUploadModule = await import('../yaban-voice-upload-router.js');
+  app.use(yabanVoiceUploadModule.default);
   // 食物热量扫描路由
   const foodCalorieModule = await import('../food-calorie-router.js');
   app.use(foodCalorieModule.default);

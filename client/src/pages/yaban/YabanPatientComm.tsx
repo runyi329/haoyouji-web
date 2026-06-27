@@ -447,6 +447,7 @@ export default function YabanPatientComm() {
   }, []);
 
   // 执行语音分析（传入 blob 和 mimeType）
+  // 使用 fetch + FormData 直接上传二进制 Blob，绕开 iOS Safari 对 base64 的内存限制
   const doAnalyze = useCallback(async (blob: Blob, mimeType: string, savedDuration: number) => {
     // 失败时统一回退：保存 blob 供用户重新分析
     const fallbackToPending = () => {
@@ -458,37 +459,45 @@ export default function YabanPatientComm() {
       setDuration(0);
       audioChunksRef.current = [];
     };
-    // 使用 arrayBuffer + btoa 替代 FileReader.readAsDataURL
-    // iOS Safari 对大 Blob 的 FileReader 有内存限制，会报 Load failed
-    // arrayBuffer() + 分块 btoa 是 iOS 推荐的大文件读取方式
     try {
-      const arrayBuffer = await blob.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
-      // 分块 btoa，避免 call stack 溢出（每块 8KB）
-      let base64 = "";
-      const chunkSize = 8192;
-      for (let i = 0; i < uint8Array.length; i += chunkSize) {
-        const chunk = uint8Array.subarray(i, i + chunkSize);
-        base64 += String.fromCharCode(...chunk);
-      }
-      base64 = btoa(base64);
-      if (!base64) {
+      if (blob.size === 0) {
         toast.error("录音文件为空，请重新录音");
         fallbackToPending();
         return;
       }
-      // 120 秒超时保护，避免请求挂起导致一直转圈圈（长录音转写需要更多时间）
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("分析超时（120秒），请重试")), 120000)
-      );
-      const result = await Promise.race([
-        analyzeVoiceMutation.mutateAsync({
-          customerId: patientId,
-          audioBase64: base64,
-          mimeType,
-        }),
-        timeoutPromise,
-      ]);
+      // 构造 FormData，直接传 Blob（不做任何 base64 转换）
+      const formData = new FormData();
+      // iOS 录出来的 webm 实际是 mp4 容器，文件名用 mp4 扩展名
+      const ext = mimeType.includes("mp4") || mimeType.includes("webm") ? "mp4" : "webm";
+      formData.append("audio", blob, `recording.${ext}`);
+      formData.append("customerId", String(patientId));
+      formData.append("mimeType", mimeType);
+
+      // 120 秒超时保护
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+      let resp: Response;
+      try {
+        resp = await fetch("/api/yaban/analyze-voice-upload", {
+          method: "POST",
+          body: formData,
+          signal: controller.signal,
+          headers: {
+            // 传递 tenant 头（不设 Content-Type，让浏览器自动设置 multipart boundary）
+            ...(currentTenantId ? { "x-yaban-tenant": String(currentTenantId) } : {}),
+          },
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
+        throw new Error(errData.error || `HTTP ${resp.status}`);
+      }
+
+      const result = await resp.json();
       setAnalysisResult({
         rawText: result.rawText,
         audioUrl: result.audioUrl || null,
@@ -506,10 +515,11 @@ export default function YabanPatientComm() {
       audioChunksRef.current = [];
     } catch (err: any) {
       // 分析失败/超时：提示并保存 blob 供用户重新分析
-      toast.error(`分析失败：${err?.message || "请重试"}`);
+      const msg = err?.name === "AbortError" ? "分析超时（120秒），请重试" : (err?.message || "请重试");
+      toast.error(`分析失败：${msg}`);
       fallbackToPending();
     }
-  }, [patientId, analyzeVoiceMutation]);
+  }, [patientId, currentTenantId]);
 
   // 结束并分析
   const stopAndAnalyze = useCallback(() => {
