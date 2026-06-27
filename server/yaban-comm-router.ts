@@ -6,8 +6,8 @@ import { z } from "zod";
 import { router, protectedProcedure } from "./_core/trpc";
 import { getDbConnection } from "./db";
 import { resolveTenantId } from "./yaban-customer-router";
-import { transcribeAudio } from "./_core/voiceTranscription";
-import { invokeLLM } from "./_core/llm";
+import { callAIVoice } from "./wecom-ai-config";
+import { ENV } from "./_core/env";
 import { TRPCError } from "@trpc/server";
 
 // 默认 AI 提示词
@@ -159,22 +159,26 @@ export const yabanCommRouter = router({
         // 上传失败不阻断流程，继续转写
       }
 
-      // Step 2: 调用 Whisper 转写
-      const transcribeResult = await transcribeAudio({
-        audioUrl: audioUrl || `data:${input.mimeType};base64,${input.audioBase64.replace(/^data:[^;]+;base64,/, '')}`,
-        mimeType: input.mimeType as any,
-        language: 'zh',
-        prompt: '这是一段牙科诊所的客户沟通录音，包含客户诉求和员工建议。',
-      });
-
-      if ('error' in transcribeResult) {
+      // Step 2: 调用 Whisper 转写（复用企业微信 callAIVoice，共用同一套 voice_asr 配置）
+      const base64Data = input.audioBase64.replace(/^data:[^;]+;base64,/, '');
+      const audioBuffer = Buffer.from(base64Data, 'base64');
+      let rawText = '';
+      try {
+        const asrResult = await callAIVoice(audioBuffer, input.mimeType);
+        rawText = asrResult.text?.trim() || '';
+        if (!rawText) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: '语音转写失败：未能识别到内容，请重新录音',
+          });
+        }
+      } catch (e: any) {
+        if (e instanceof TRPCError) throw e;
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
-          message: `语音转写失败：${transcribeResult.error}`,
+          message: `语音转写失败：${e?.message || '未知错误'}`,
         });
       }
-
-      const rawText = transcribeResult.text;
 
       // Step 3: 获取 AI 提示词（优先使用院长自定义，否则用默认）
       let promptContent = DEFAULT_COMM_PROMPT;
@@ -193,24 +197,42 @@ export const yabanCommRouter = router({
         console.error('[AI语音秘书] 获取提示词失败，使用默认:', e);
       }
 
-      // Step 4: 调用 DeepSeek 提取摘要
+      // Step 4: 调用混元提取摘要
       let summaryDemand = '';
       let summaryKeyPoints = '';
       let summaryFollowup = '';
       let summaryRemark = '';
 
       try {
-        const llmResult = await invokeLLM({
-          messages: [
-            { role: 'system', content: promptContent },
-            { role: 'user', content: `对话内容如下：\n\n${rawText}` },
-          ],
-          featureKey: 'yaban_comm_summary',
-          userId: ctx.user.id,
+        const hunyuanApiKey = ENV.hunyuanApiKey;
+        const hunyuanApiBase = ENV.hunyuanApiBase;
+        if (!hunyuanApiKey) throw new Error('混元 API Key 未配置');
+
+        const hunyuanResp = await fetch(`${hunyuanApiBase}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${hunyuanApiKey}`,
+          },
+          body: JSON.stringify({
+            model: 'hunyuan-lite',
+            messages: [
+              { role: 'system', content: promptContent },
+              { role: 'user', content: `对话内容如下：\n\n${rawText}` },
+            ],
+            max_tokens: 1024,
+          }),
         });
 
-        if (llmResult.content) {
-          const jsonStr = (llmResult.content as string).replace(/```json\n?|\n?```/g, '').trim();
+        if (!hunyuanResp.ok) {
+          const errText = await hunyuanResp.text().catch(() => '');
+          throw new Error(`混元 API 请求失败(${hunyuanResp.status}): ${errText.substring(0, 100)}`);
+        }
+
+        const hunyuanData = await hunyuanResp.json() as any;
+        const content = hunyuanData?.choices?.[0]?.message?.content || '';
+        if (content) {
+          const jsonStr = content.replace(/```json\n?|\n?```/g, '').trim();
           const parsed = JSON.parse(jsonStr);
           summaryDemand = parsed.demand || '';
           summaryKeyPoints = parsed.keyPoints || '';
