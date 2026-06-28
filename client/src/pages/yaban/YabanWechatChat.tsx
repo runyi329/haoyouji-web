@@ -243,6 +243,7 @@ export default function YabanWechatChat() {
   // 动态获取当前诊所绑定的 channel_id
   const { currentTenantId } = useYabanClinic();
   const [dynamicChannelId, setDynamicChannelId] = useState<number>(4); // 默认 4，等待动态覆盖
+  const [channelResolved, setChannelResolved] = useState(false); // channel_id 是否已从后端确认
   useEffect(() => {
     if (!currentTenantId) return;
     fetch(`/api/wecom/service-binding/channel?service_type=yaban&service_tenant_id=${currentTenantId}`)
@@ -251,8 +252,9 @@ export default function YabanWechatChat() {
         if (d.binding?.channel_id) {
           setDynamicChannelId(Number(d.binding.channel_id));
         }
+        setChannelResolved(true); // 无论是否有绑定，都标记为已确认
       })
-      .catch(() => {/* 查询失败保持默认 */});
+      .catch(() => setChannelResolved(true)); // 查询失败也标记，用默认值继续
   }, [currentTenantId]);
 
   // 动态获取用户头像
@@ -266,10 +268,15 @@ export default function YabanWechatChat() {
     : DEFAULT_USER_AVATAR;
 
   // 欢迎消息：从后端按优先级链获取（诊所级 > 渠道级 > 平台级），开关关闭则不显示
+  // 等 channelResolved=true（channel_id 已从后端确认）后再发请求，避免用默认值查不到诊所级配置
+  const welcomeFetchedRef = useRef(false);
   useEffect(() => {
+    if (!currentTenantId || !channelResolved) return;
+    if (welcomeFetchedRef.current) return;
+    welcomeFetchedRef.current = true;
     const params = new URLSearchParams();
     params.set('channel_id', String(dynamicChannelId));
-    if (currentTenantId) params.set('tenant_id', String(currentTenantId));
+    params.set('tenant_id', String(currentTenantId));
     fetch(`/api/wecom/web-chat-welcome?${params.toString()}`)
       .then(r => r.json())
       .then((data: { enabled: boolean; message: string }) => {
@@ -286,7 +293,7 @@ export default function YabanWechatChat() {
         }
       })
       .catch(() => setMessages([]));
-  }, [dynamicChannelId, currentTenantId]);
+  }, [currentTenantId, channelResolved, dynamicChannelId]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
