@@ -67,8 +67,180 @@ async function resolveTenantIdFromReq(req: any, userId: number): Promise<number>
   }
 }
 
+// 内存任务队列： jobId -> { status, result, error }
+const jobMap = new Map<string, { status: "pending" | "done" | "error"; result?: any; error?: string }>();
+
+// 异步处理主逻辑
+async function processVoiceJob(
+  jobId: string,
+  audioBuffer: Buffer,
+  mimeType: string,
+  customerId: number,
+  userId: number,
+  TENANT_ID: number
+) {
+  try {
+    // 1. 上传音频到 COS
+    let audioUrl: string | null = null;
+    try {
+      const { uploadFileToCOS } = await import("./cos-upload");
+      audioUrl = await uploadFileToCOS(
+        audioBuffer,
+        "yaban-voice-records",
+        `comm_${TENANT_ID}_${customerId}_${Date.now()}.mp4`,
+        mimeType
+      );
+    } catch (e) {
+      console.error("[AI语音秘书] COS上传失败:", e);
+    }
+
+    // 2. Whisper 转写
+    let rawText = "";
+    const asrResult = await callAIVoice(audioBuffer, mimeType);
+    rawText = asrResult.text?.trim() || "";
+    if (!rawText) {
+      jobMap.set(jobId, { status: "error", error: "语音转写失败：未能识别到内容，请重新录音" });
+      return;
+    }
+
+    // 3. 获取 AI 提示词
+    let promptContent = DEFAULT_COMM_PROMPT;
+    try {
+      const conn = await getDbConnection();
+      if (conn) {
+        const [rows] = await (conn as any).execute(
+          `SELECT prompt_content FROM yaban_ai_prompt_config WHERE tenant_id = ? AND prompt_key = 'comm_summary' LIMIT 1`,
+          [TENANT_ID]
+        );
+        if ((rows as any[]).length > 0) promptContent = (rows as any[])[0].prompt_content;
+      }
+    } catch (e) { /* 使用默认 */ }
+
+    // 4. 混元摘要
+    let summaryDemand = "", summaryHospital = "", summaryKeyPoints = "", summaryFollowup = "", summaryRemark = "";
+    try {
+      const hunyuanApiKey = ENV.hunyuanApiKey;
+      const hunyuanApiBase = ENV.hunyuanApiBase;
+      if (!hunyuanApiKey) throw new Error("混元 API Key 未配置");
+      const hunyuanResp = await fetch(`${hunyuanApiBase}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${hunyuanApiKey}` },
+        body: JSON.stringify({
+          model: "hunyuan-lite",
+          messages: [
+            { role: "system", content: promptContent },
+            { role: "user", content: `对话内容如下：\n\n${rawText}` },
+          ],
+          max_tokens: 512,
+        }),
+      });
+      if (hunyuanResp.ok) {
+        const hunyuanData = (await hunyuanResp.json()) as any;
+        const content = hunyuanData?.choices?.[0]?.message?.content || "";
+        if (content) {
+          let jsonStr = content.replace(/```json\n?|```\n?|\n?```/g, "").trim();
+          const braceMatch = jsonStr.match(/\{[\s\S]*\}/);
+          if (braceMatch) jsonStr = braceMatch[0];
+          const parsed = JSON.parse(jsonStr);
+          if (Array.isArray(parsed.items)) {
+            summaryKeyPoints = parsed.items.filter(Boolean).join("\n");
+          } else {
+            const toStr = (v: any): string => {
+              if (v == null) return "";
+              if (typeof v === "string") return v;
+              if (Array.isArray(v)) return v.map(toStr).filter(Boolean).join("；");
+              if (typeof v === "object") return Object.values(v).map(toStr).filter(Boolean).join("；");
+              return String(v);
+            };
+            summaryDemand = toStr(parsed.demand);
+            summaryHospital = toStr(parsed.hospital);
+            summaryKeyPoints = toStr(parsed.keyPoints);
+            summaryFollowup = toStr(parsed.followup);
+            summaryRemark = toStr(parsed.remark);
+          }
+        }
+      }
+    } catch (e) { console.error("[AI语音秘书] 混元摘要失败:", e); }
+
+    // 5. 保存到数据库
+    let recordId: number | null = null;
+    const conn = await getDbConnection();
+    if (conn) {
+      const [insertResult] = await (conn as any).execute(
+        `INSERT INTO yaban_comm_record
+          (tenant_id, customer_id, record_type, raw_text, audio_url,
+           summary_demand, summary_hospital, summary_key_points, summary_followup, summary_remark,
+           created_by, created_at)
+         VALUES (?, ?, 'voice_ai', ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [TENANT_ID, customerId, rawText, audioUrl || null,
+         summaryDemand || null, summaryHospital || null, summaryKeyPoints || null,
+         summaryFollowup || null, summaryRemark || null, userId]
+      );
+      recordId = (insertResult as any).insertId ?? null;
+    }
+
+    jobMap.set(jobId, {
+      status: "done",
+      result: { recordId, rawText, audioUrl, summaryDemand, summaryHospital, summaryKeyPoints, summaryFollowup, summaryRemark },
+    });
+  } catch (e: any) {
+    console.error("[AI语音秘书] 异步处理失败:", e);
+    jobMap.set(jobId, { status: "error", error: e?.message || "未知错误" });
+  }
+}
+
+// 主接口：收到录音后立即返回 jobId
 router.post(
   "/api/yaban/analyze-voice-upload",
+  upload.single("audio"),
+  async (req: any, res: any) => {
+    try {
+      // 认证
+      let userId: number | null = null;
+      try {
+        const user = await sdk.authenticateRequest(req);
+        userId = user?.id ?? null;
+      } catch { userId = null; }
+      if (!userId) return res.status(401).json({ error: "请先登录" });
+
+      // 参数校验
+      const customerId = parseInt(req.body?.customerId, 10);
+      if (!customerId || isNaN(customerId)) return res.status(400).json({ error: "customerId 无效" });
+      const mimeType: string = req.body?.mimeType || "audio/webm";
+      const audioBuffer: Buffer | undefined = req.file?.buffer;
+      if (!audioBuffer || audioBuffer.length === 0) return res.status(400).json({ error: "未收到音频文件" });
+      console.log(`[AI语音秘书] 收到录音: userId=${userId}, customerId=${customerId}, size=${Math.round(audioBuffer.length / 1024)}KB`);
+
+      const TENANT_ID = await resolveTenantIdFromReq(req, userId);
+
+      // 生成 jobId，异步处理
+      const jobId = `${Date.now()}_${customerId}_${Math.random().toString(36).slice(2, 8)}`;
+      jobMap.set(jobId, { status: "pending" });
+      processVoiceJob(jobId, audioBuffer, mimeType, customerId, userId, TENANT_ID); // 不 await，立即返回
+
+      return res.json({ success: true, jobId });
+    } catch (e: any) {
+      console.error("[AI语音秘书] 未处理错误:", e);
+      return res.status(500).json({ error: e?.message || "服务器内部错误" });
+    }
+  }
+);
+
+// 查询接口：前端轮询 jobId 状态
+router.get("/api/yaban/analyze-voice-job/:jobId", async (req: any, res: any) => {
+  const { jobId } = req.params;
+  const job = jobMap.get(jobId);
+  if (!job) return res.status(404).json({ error: "job not found" });
+  // done 或 error 后清除任务
+  if (job.status === "done" || job.status === "error") {
+    jobMap.delete(jobId);
+  }
+  return res.json(job);
+});
+
+// 以下是备用旧接口（保留居山）
+router.post(
+  "/api/yaban/analyze-voice-upload-legacy",
   upload.single("audio"),
   async (req: any, res: any) => {
     try {
@@ -96,7 +268,7 @@ router.post(
 
       const TENANT_ID = await resolveTenantIdFromReq(req, userId);
 
-      // 3. 上传音频到 COS（失败不阻断）
+      // 3. 上传音频到 COS
       let audioUrl: string | null = null;
       try {
         const { uploadFileToCOS } = await import("./cos-upload");

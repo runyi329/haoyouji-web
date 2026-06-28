@@ -39,7 +39,7 @@ const DEFAULT_COMM_PROMPT = `你是一名专业的牙科诊所助理，请根据
 {"demand":"牙齿敏感，询问是否需要检查","hospital":"建议做全口检查，报价200元","keyPoints":"客户对价格较敏感","followup":"约下周三下午3点复诊","remark":""}`;
 
 export const yabanCommRouter = router({
-  /** 获取某顾客的沟通记录列表（按时间倒序） */
+  /** 获取某顾客的沟通记录列表（按时间倒序），同时返回该患者的预约记录 */
   list: protectedProcedure
     .input(z.object({
       customerId: z.number().int().positive(),
@@ -57,7 +57,36 @@ export const yabanCommRouter = router({
          ORDER BY comm_at DESC`,
         [TENANT_ID, input.customerId]
       );
-      return { records: rows as any[] };
+      // 同时查询该患者的预约记录
+      let appointments: any[] = [];
+      try {
+        const [apptRows] = await (conn as any).execute(
+          `SELECT id, patient_id, patient_name, doctor, room, project,
+                  appoint_date, appoint_time, end_time, duration, status, remark, created_at
+           FROM yaban_appointment
+           WHERE tenant_id = ? AND patient_id = ?
+           ORDER BY appoint_date DESC, appoint_time DESC`,
+          [TENANT_ID, input.customerId]
+        );
+        appointments = (apptRows as any[]).map((r: any) => ({
+          id: Number(r.id),
+          patientId: Number(r.patient_id),
+          doctor: r.doctor || "",
+          room: r.room || "",
+          project: r.project || "",
+          appointDate: r.appoint_date instanceof Date
+            ? r.appoint_date.toISOString().slice(0, 10)
+            : String(r.appoint_date || ""),
+          appointTime: r.appoint_time || "",
+          endTime: r.end_time || "",
+          duration: r.duration ? Number(r.duration) : 30,
+          status: r.status || "booked",
+          remark: r.remark || "",
+        }));
+      } catch (e) {
+        // 预约表查询失败不影响主流程
+      }
+      return { records: rows as any[], appointments };
     }),
 
   /** 创建沟通记录（手动录入） */

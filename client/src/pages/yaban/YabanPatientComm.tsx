@@ -28,6 +28,8 @@ import {
   Wand2,
   Search,
   Copy,
+  Filter,
+  Download,
 } from "lucide-react";
 
 // ---- 类型定义 ----
@@ -49,6 +51,20 @@ interface CommRecord {
 
 type RecordingState = "idle" | "countdown" | "recording" | "paused" | "analyzing";
 type InputMode = "none" | "voice" | "manual" | "wechat_view";
+
+interface Appointment {
+  id: number;
+  patientId: number;
+  doctor: string;
+  room: string;
+  project: string;
+  appointDate: string; // YYYY-MM-DD
+  appointTime: string;
+  endTime: string;
+  duration: number;
+  status: string;
+  remark: string;
+}
 
 // ---- 工具函数 ----
 function formatDuration(seconds: number): string {
@@ -456,18 +472,410 @@ function SummaryItemRow({ index, text }: { index: number; text: string }) {
   );
 }
 
+// ---- 预约卡片组件 ----
+const STATUS_MAP: Record<string, { label: string; color: string }> = {
+  booked:    { label: "已预约", color: "bg-sky-100 text-sky-600" },
+  confirmed: { label: "已确认", color: "bg-green-100 text-green-600" },
+  arrived:   { label: "已到诊", color: "bg-emerald-100 text-emerald-600" },
+  done:      { label: "已完成", color: "bg-gray-100 text-gray-500" },
+  cancelled: { label: "已取消", color: "bg-red-100 text-red-400" },
+  missed:    { label: "未到诊", color: "bg-orange-100 text-orange-400" },
+};
+
+function AppointmentCard({ appointment }: { appointment: Appointment }) {
+  const [open, setOpen] = useState(false);
+  const status = STATUS_MAP[appointment.status] || { label: appointment.status, color: "bg-gray-100 text-gray-500" };
+  const d = new Date(appointment.appointDate + "T00:00:00");
+  const mo = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const weekDay = ["日","一","二","三","四","五","六"][d.getDay()];
+
+  return (
+    <div className="flex gap-3 mb-3">
+      {/* 左侧日期列 */}
+      <div className="flex flex-col items-center flex-shrink-0" style={{ minWidth: 28 }}>
+        <button
+          className="flex flex-col items-center justify-center rounded-lg py-1"
+          style={{ minWidth: 28, height: 56 }}
+          onClick={() => setOpen(!open)}
+        >
+          <span className="text-[10px] text-gray-400 leading-none">{mo}月</span>
+          <span className="text-base font-bold leading-none text-purple-500">{day}</span>
+          <span className="text-[10px] text-gray-400 leading-none">{d.getFullYear()}</span>
+          <span className="text-[10px] text-gray-400 leading-none">周{weekDay}</span>
+        </button>
+      </div>
+      {/* 右侧卡片 */}
+      <div className="flex-1 min-w-0 bg-purple-50 rounded-2xl border border-purple-100 shadow-sm overflow-hidden mb-0">
+        <button
+          className="w-full flex items-center justify-between px-3 pt-2.5 pb-2 text-left"
+          onClick={() => setOpen(!open)}
+        >
+          <div className="flex flex-col flex-1 min-w-0 gap-0.5">
+            {!open && (
+              <span className="text-sm font-medium text-purple-700 truncate leading-snug">
+                {appointment.project || "预约就诊"}
+              </span>
+            )}
+            <div className="flex items-center gap-1.5">
+              <span className={`inline-flex items-center text-[10px] px-1.5 py-0 rounded flex-shrink-0 ${status.color}`}>
+                {status.label}
+              </span>
+              {appointment.appointTime && (
+                <span className="text-[10px] text-gray-400">{appointment.appointTime}{appointment.endTime ? ` ~ ${appointment.endTime}` : ""}</span>
+              )}
+            </div>
+          </div>
+          <div className="flex-shrink-0 ml-2">
+            {open ? <ChevronUp size={14} className="text-purple-300" /> : <ChevronDown size={14} className="text-purple-300" />}
+          </div>
+        </button>
+        {open && (
+          <div className="border-t border-purple-100 px-3 pt-2 pb-3 space-y-1.5">
+            {appointment.project && (
+              <div className="flex items-start gap-2">
+                <span className="text-[10px] text-gray-400 w-10 flex-shrink-0 pt-0.5">项目</span>
+                <span className="text-xs text-gray-700">{appointment.project}</span>
+              </div>
+            )}
+            {appointment.doctor && (
+              <div className="flex items-start gap-2">
+                <span className="text-[10px] text-gray-400 w-10 flex-shrink-0 pt-0.5">医生</span>
+                <span className="text-xs text-gray-700">{appointment.doctor}</span>
+              </div>
+            )}
+            {appointment.room && (
+              <div className="flex items-start gap-2">
+                <span className="text-[10px] text-gray-400 w-10 flex-shrink-0 pt-0.5">诊室</span>
+                <span className="text-xs text-gray-700">{appointment.room}</span>
+              </div>
+            )}
+            {appointment.remark && (
+              <div className="flex items-start gap-2">
+                <span className="text-[10px] text-gray-400 w-10 flex-shrink-0 pt-0.5">备注</span>
+                <span className="text-xs text-gray-500">{appointment.remark}</span>
+              </div>
+            )}
+            <div className="flex items-start gap-2">
+              <span className="text-[10px] text-gray-400 w-10 flex-shrink-0 pt-0.5">时间</span>
+              <span className="text-[10px] text-gray-300">{appointment.appointDate} {appointment.appointTime}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---- DayCard: 同一天合并卡片 ----
+function DayCard({
+  group,
+  onDelete,
+  patientId,
+  showConnector = false,
+  patientBirthday = "",
+  onOpenArchive,
+}: {
+  group: { date: string; items: CommRecord[]; appointment?: Appointment };
+  onDelete: (id: number) => void;
+  patientId: number;
+  showConnector?: boolean;
+  patientBirthday?: string;
+  onOpenArchive?: (tab: "voice" | "text" | "wechat", recordId?: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [showDateTip, setShowDateTip] = useState(false);
+  const [, navigate] = useLocation();
+
+  // 日期信息
+  const dateStr = group.items[0]?.comm_at
+    ? String(group.items[0].comm_at)
+    : (group.appointment?.appointDate ? group.appointment.appointDate + "T00:00:00" : "");
+  const d = dateStr ? new Date(dateStr) : new Date();
+  const mo = String(d.getMonth() + 1).padStart(2, "0");
+  const dayNum = String(d.getDate()).padStart(2, "0");
+  const year = d.getFullYear();
+  const holidays: Record<string, string> = {
+    "1-1":"元旦","2-4":"春节","2-5":"春节","2-6":"春节","2-7":"春节","2-8":"春节","2-9":"春节","2-10":"春节",
+    "4-4":"清明","4-5":"清明","4-6":"清明",
+    "5-1":"劳动节","5-2":"劳动节","5-3":"劳动节",
+    "5-31":"端午","6-1":"端午","6-2":"端午",
+    "10-1":"国庆","10-2":"国庆","10-3":"国庆","10-4":"国庆","10-5":"国庆","10-6":"国庆","10-7":"国庆",
+  };
+  const hKey = `${d.getMonth()+1}-${d.getDate()}`;
+  const isHoliday = !!holidays[hKey];
+  const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+  const isBirthday = (() => {
+    if (!patientBirthday) return false;
+    try { const bd = new Date(patientBirthday); return bd.getMonth() === d.getMonth() && bd.getDate() === d.getDate(); }
+    catch { return false; }
+  })();
+  const dateColor = isBirthday ? "text-pink-500" : isHoliday ? "text-red-500" : isWeekend ? "text-orange-400" : "text-sky-500";
+  const weekDays = ["周日","周一","周二","周三","周四","周五","周六"];
+  const dateLabel = isBirthday ? "生日" : (holidays[hKey] || weekDays[d.getDay()]);
+
+  // 折叠时摘要：预约项目或第一条记录第一行
+  const appointment = group.appointment;
+  const status = appointment ? (STATUS_MAP[appointment.status] || { label: appointment.status, color: "bg-gray-100 text-gray-500" }) : null;
+  const firstRecord = group.items[0];
+  const firstSummary = (() => {
+    if (!firstRecord) return appointment?.project || "预约就诊";
+    if (firstRecord.summary_key_points) {
+      const line = firstRecord.summary_key_points.split("\n").filter(Boolean)[0];
+      if (line) return line;
+    }
+    return firstRecord.summary_demand || firstRecord.summary_key_points || "暂无摘要";
+  })();
+  const totalItems = group.items.length;
+  const voiceCount = group.items.filter(r => r.record_type === 'voice').length;
+
+  return (
+    <div className="flex gap-2 items-stretch mb-3">
+      {/* 左侧日期列 */}
+      <div className="flex flex-col items-center flex-shrink-0" style={{ width: '28px', alignSelf: 'flex-start' }}>
+        <div className="relative flex flex-col items-center leading-none w-full">
+          <button
+            className="flex flex-col items-center justify-between w-full py-1"
+            style={{ minWidth: 0, minHeight: '56px' }}
+            onClick={(e) => { e.stopPropagation(); setShowDateTip(!showDateTip); }}
+          >
+            <span className="text-[9px] text-gray-400 font-normal tracking-tight">{mo}月</span>
+            {isBirthday ? (
+              <span className="text-xs font-bold leading-tight" style={{
+                background: 'linear-gradient(90deg,#f472b6,#fb923c,#facc15,#4ade80,#60a5fa,#c084fc)',
+                backgroundSize: '200% auto', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+                animation: 'birthdayShine 1.5s linear infinite',
+              }}>{dayNum}</span>
+            ) : (
+              <span className={`text-xs font-bold leading-tight ${dateColor}`}>{dayNum}</span>
+            )}
+            <span className="text-[9px] text-gray-400 font-normal tracking-tight leading-tight">{year}</span>
+            <span className="text-[9px] font-normal tracking-tight leading-tight text-gray-400">{dateLabel}</span>
+          </button>
+          {showDateTip && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowDateTip(false)} />
+              <div className="absolute left-9 top-0 z-50 bg-white border border-gray-200 rounded-xl shadow-lg px-4 py-3 w-40" onClick={(e) => e.stopPropagation()}>
+                <p className="text-xs text-gray-500 mb-2 font-medium">日期颜色说明</p>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-sky-500 flex-shrink-0" /><span className="text-xs text-gray-600">工作日</span></div>
+                  <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-orange-400 flex-shrink-0" /><span className="text-xs text-gray-600">双休日</span></div>
+                  <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0" /><span className="text-xs text-gray-600">法定节假日</span></div>
+                  <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: 'linear-gradient(135deg,#f472b6,#fb923c,#facc15,#4ade80,#60a5fa,#c084fc)' }} /><span className="text-xs text-gray-600">患者生日</span></div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+        {showConnector && (
+          <div className="w-px bg-gray-200" style={{ height: '12px', marginTop: '2px' }} />
+        )}
+      </div>
+
+      {/* 右侧卡片：一天内全部内容，整张展开/收起 */}
+      <div className="flex-1 min-w-0 bg-white rounded shadow-sm border border-gray-100 overflow-hidden">
+
+        {/* 头部：点击整行展开/收起 */}
+        <button
+          className="w-full flex items-center justify-between px-3 pt-2.5 pb-2 text-left"
+          onClick={() => setOpen(!open)}
+        >
+          <div className="flex flex-col flex-1 min-w-0 gap-0.5">
+            {/* 预约标签（有预约才显示） */}
+            {appointment && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-xs font-medium text-purple-600">{appointment.project || "预约就诊"}</span>
+                {status && <span className={`inline-flex items-center text-[10px] px-1.5 py-0 rounded flex-shrink-0 ${status.color}`}>{status.label}</span>}
+                {appointment.appointTime && <span className="text-[10px] text-gray-400">{appointment.appointTime}</span>}
+              </div>
+            )}
+            {/* 折叠时显示第一条摘要 */}
+            {!open && (
+              <span className="text-sm text-gray-800 truncate leading-snug">{firstSummary}</span>
+            )}
+            {/* 副行：记录数量标签 */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {totalItems > 0 && (
+                <span className="text-[10px] text-gray-400">
+                  {totalItems}条记录{voiceCount > 0 ? `（包含${voiceCount}段语音）` : ""}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex-shrink-0 ml-2">
+            {open ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
+          </div>
+        </button>
+
+        {/* 展开内容：所有记录平铺 */}
+        {open && (
+          <div className="border-t border-gray-50">
+            {/* 预约详情（有预约才显示） */}
+            {appointment && (
+              <div className="bg-purple-50 px-3 py-2 border-b border-purple-100">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-medium text-purple-700">{appointment.project || "预约就诊"}</span>
+                  {status && <span className={`inline-flex items-center text-[10px] px-1.5 py-0 rounded flex-shrink-0 ${status.color}`}>{status.label}</span>}
+                  {appointment.appointTime && <span className="text-[10px] text-gray-400">{appointment.appointTime}{appointment.endTime ? ` ~ ${appointment.endTime}` : ""}</span>}
+                  {appointment.doctor && <span className="text-[10px] text-gray-400">医生: {appointment.doctor}</span>}
+                </div>
+                {appointment.remark && <p className="text-xs text-gray-400 mt-0.5">{appointment.remark}</p>}
+              </div>
+            )}
+            {/* 每条记录内容 */}
+            {group.items.map((record, idx) => {
+              const ch = CHANNEL_CONFIG[record.record_type] || CHANNEL_CONFIG.manual;
+              const summaryItems: string[] = (() => {
+                if (record.summary_key_points) {
+                  const lines = record.summary_key_points.split("\n").filter(Boolean);
+                  if (lines.length > 0) return lines;
+                }
+                return [record.summary_demand, record.summary_hospital, record.summary_key_points, record.summary_followup, record.summary_remark].filter(Boolean) as string[];
+              })();
+              return (
+                <div key={record.id} className={idx > 0 ? "border-t border-gray-100" : ""}>
+                  {/* 条目标签行 */}
+                  <div className="flex items-center gap-2 px-3 pt-2">
+                    <span className={`inline-flex items-center text-[10px] px-1.5 py-0 rounded flex-shrink-0 ${ch.tagClass}`}>{ch.label}</span>
+                    <span className="text-[10px] text-gray-300 ml-auto">
+                      {new Date(record.comm_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                  {/* 语音播放器 */}
+                  {record.record_type === 'voice' && record.audio_url && (
+                    <div className="px-3 pt-1.5">
+                      <audio controls src={record.audio_url} className="w-full" style={{ height: '36px' }} />
+                    </div>
+                  )}
+                  {/* 摘要条目 */}
+                  <div className="px-3 pt-1.5 pb-2">
+                    {summaryItems.length > 0 ? (
+                      <div className="space-y-1">
+                        {summaryItems.map((item, i) => <SummaryItemRow key={i} index={i} text={item} />)}
+                      </div>
+                    ) : (
+                      record.raw_text ? (
+                        <p className="text-xs text-gray-500 leading-relaxed line-clamp-3">{record.raw_text}</p>
+                      ) : (
+                        <p className="text-xs text-gray-300">暂无摘要</p>
+                      )
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {/* 底部操作行：档案入口 + 删除 */}
+            {group.items.length > 0 && (
+              <div className="px-3 pt-1.5 pb-2.5 border-t border-gray-50 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {group.items.some(r => r.record_type === 'voice') && (
+                    <button onClick={(e) => { e.stopPropagation(); onOpenArchive?.('voice', group.items.find(r => r.record_type === 'voice')?.id); }} className="flex items-center gap-1 text-sky-500">
+                      <Mic size={13} /><span className="text-xs">语音档案</span>
+                    </button>
+                  )}
+                  {group.items.some(r => r.record_type === 'manual' || r.record_type === 'text') && (
+                    <button onClick={(e) => { e.stopPropagation(); onOpenArchive?.('text', group.items.find(r => r.record_type === 'manual' || r.record_type === 'text')?.id); }} className="flex items-center gap-1 text-sky-500">
+                      <FileText size={13} /><span className="text-xs">文字档案</span>
+                    </button>
+                  )}
+                  <button onClick={(e) => { e.stopPropagation(); navigate(`/yaban/patient/${patientId}/media`); }} className="flex items-center gap-1 text-sky-500">
+                    <ImageIcon size={13} /><span className="text-xs">图像档案</span>
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  {group.items.length === 1 && (
+                    <button onClick={(e) => { e.stopPropagation(); onDelete(group.items[0].id); }} className="flex items-center gap-1 text-xs text-gray-300 hover:text-red-400">
+                      <Trash2 size={12} />删除
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TimelineCard({
   record,
   onDelete,
   patientId,
+  showConnector = false,
+  patientBirthday = "",
+  hasVoice = false,
+  hasText = false,
+  onOpenArchive,
 }: {
   record: CommRecord;
   onDelete: (id: number) => void;
   patientId: number;
+  showConnector?: boolean;
+  patientBirthday?: string;
+  hasVoice?: boolean;
+  hasText?: boolean;
+  onOpenArchive?: (tab: "voice" | "text" | "wechat", recordId?: number) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [showDateTip, setShowDateTip] = useState(false);
   const [, navigate] = useLocation();
   const ch = CHANNEL_CONFIG[record.record_type] || CHANNEL_CONFIG.manual;
+
+  // 日期类型判断
+  const getDateType = (dateStr: string): "holiday" | "weekend" | "workday" => {
+    const d = new Date(dateStr);
+    const y = d.getFullYear();
+    const m = d.getMonth() + 1;
+    const day = d.getDate();
+    // 中国法定节假日（月-日格式）
+    const holidays = [
+      "1-1","2-4","2-5","2-6","2-7","2-8","2-9","2-10",// 元旦、春节
+      "4-4","4-5","4-6",// 清明
+      "5-1","5-2","5-3",// 劳动节
+      "5-31","6-1","6-2",// 端午
+      "10-1","10-2","10-3","10-4","10-5","10-6","10-7",// 国庆
+    ];
+    const key = `${m}-${day}`;
+    if (holidays.includes(key)) return "holiday";
+    const dow = d.getDay();
+    if (dow === 0 || dow === 6) return "weekend";
+    return "workday";
+  };
+  const dateType = getDateType(record.comm_at);
+
+  // 判断是否是患者生日（只比较月/日）
+  const isBirthday = (() => {
+    if (!patientBirthday) return false;
+    try {
+      const bd = new Date(patientBirthday);
+      const rd = new Date(record.comm_at);
+      return bd.getMonth() === rd.getMonth() && bd.getDate() === rd.getDate();
+    } catch { return false; }
+  })();
+
+  const dateColor = isBirthday ? "text-pink-500" : dateType === "holiday" ? "text-red-500" : dateType === "weekend" ? "text-orange-400" : "text-sky-500";
+
+  // 返回星期几或节日名称
+  const getDateLabel = (dateStr: string): string => {
+    const d = new Date(dateStr);
+    const m = d.getMonth() + 1;
+    const day = d.getDate();
+    const holidayNames: Record<string, string> = {
+      "1-1": "元旦",
+      "2-4": "春节","2-5": "春节","2-6": "春节","2-7": "春节","2-8": "春节","2-9": "春节","2-10": "春节",
+      "4-4": "清明节","4-5": "清明节","4-6": "清明节",
+      "5-1": "劳动节","5-2": "劳动节","5-3": "劳动节",
+      "5-31": "端午节","6-1": "端午节","6-2": "端午节",
+      "10-1": "国庆","10-2": "国庆","10-3": "国庆","10-4": "国庆","10-5": "国庆","10-6": "国庆","10-7": "国庆",
+    };
+    const key = `${m}-${day}`;
+    if (holidayNames[key]) return holidayNames[key];
+    const weekDays = ["周日","周一","周二","周三","周四","周五","周六"];
+    return weekDays[d.getDay()];
+  };
+  const dateLabelRaw = getDateLabel(record.comm_at);
+  const dateLabel = isBirthday ? "生日" : dateLabelRaw;
 
   // 解析摘要条目：优先用 summary_key_points 按 \n 分割，否则兼容旧字段
   const summaryItems: string[] = (() => {
@@ -487,41 +895,109 @@ function TimelineCard({
 
   const firstSummary = summaryItems[0] || "";
 
-  // 是否有语音档案
-  const hasVoice = !!(record.audio_url || (record.record_type === "voice" && record.raw_text));
-  // 是否有文字档案
-  const hasText = !!(record.raw_text && record.record_type !== "voice") || record.record_type === "manual" || record.record_type === "text";
+  // 内部判断（已由外部 props 传入 hasVoice/hasText，旧变量删除）
 
   return (
-    <div className="flex gap-3">
-      {/* 左侧时间线 */}
-      <div className="flex flex-col items-center flex-shrink-0 pt-1">
-        <div className={`w-2.5 h-2.5 rounded-full ${ch.dotColor} flex-shrink-0`} />
-        <div className="w-px flex-1 bg-gray-200 mt-1" />
+    <div className="flex gap-2 items-stretch">
+      {/* 左侧时间列 */}
+      <div className="flex flex-col items-center flex-shrink-0" style={{ width: '28px', alignSelf: 'flex-start' }}>
+        {/* 竖排叠字日期 */}
+        <div className="relative flex flex-col items-center leading-none w-full">
+          <button
+            className="flex flex-col items-center justify-between w-full py-1"
+            style={{ minWidth: 0, minHeight: '56px' }}
+            onClick={(e) => { e.stopPropagation(); setShowDateTip(!showDateTip); }}
+          >
+            <span className="text-[9px] text-gray-400 font-normal tracking-tight">
+              {String(new Date(record.comm_at).getMonth()+1).padStart(2,'0')}月
+            </span>
+            {isBirthday ? (
+              <span className="text-xs font-bold leading-tight animate-pulse" style={{
+                background: 'linear-gradient(90deg, #f472b6, #fb923c, #facc15, #4ade80, #60a5fa, #c084fc)',
+                backgroundSize: '200% auto',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                animation: 'birthdayShine 1.5s linear infinite',
+              }}>
+                {String(new Date(record.comm_at).getDate()).padStart(2,'0')}
+              </span>
+            ) : (
+              <span className={`text-xs font-bold leading-tight ${dateColor}`}>
+                {String(new Date(record.comm_at).getDate()).padStart(2,'0')}
+              </span>
+            )}
+            <span className="text-[9px] text-gray-400 font-normal tracking-tight leading-tight">
+              {new Date(record.comm_at).getFullYear()}
+            </span>
+            <span className="text-[9px] font-normal tracking-tight leading-tight text-gray-400">
+              {dateLabel}
+            </span>
+          </button>
+          {/* 图例 tooltip */}
+          {showDateTip && (
+            <>
+              {/* 透明遮罩层，点击关闭 */}
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setShowDateTip(false)}
+              />
+              <div
+                className="absolute left-9 top-0 z-50 bg-white border border-gray-200 rounded-xl shadow-lg px-4 py-3 w-40"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <p className="text-xs text-gray-500 mb-2 font-medium">日期颜色说明</p>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-sky-500 flex-shrink-0" />
+                    <span className="text-xs text-gray-600">工作日</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-orange-400 flex-shrink-0" />
+                    <span className="text-xs text-gray-600">双休日</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0" />
+                    <span className="text-xs text-gray-600">法定节假日</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: 'linear-gradient(135deg,#f472b6,#fb923c,#facc15,#4ade80,#60a5fa,#c084fc)' }} />
+                    <span className="text-xs text-gray-600">患者生日</span>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+        {/* 不同日期间短连接线 */}
+        {showConnector && (
+          <div className="w-px bg-gray-200" style={{ height: '12px', marginTop: '2px' }} />
+        )}
       </div>
 
       {/* 右侧卡片 */}
-      <div className="flex-1 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-3">
+      <div className="flex-1 bg-white rounded shadow-sm border border-gray-100 overflow-hidden mb-3" style={{ minHeight: '56px' }}>
 
         {/* 头部：点击整行展开/收起 */}
         <button
-          className="w-full flex items-center justify-between px-3 pt-3 pb-2.5 text-left"
+          className="w-full flex items-center justify-between px-3 pt-2.5 pb-2 text-left"
           onClick={() => setOpen(!open)}
         >
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${ch.tagClass}`}>
-              {ch.icon}
-              {ch.label}
-            </span>
-            {record.ai_generated === 1 && (
-              <span className="text-xs text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded-full flex-shrink-0">AI</span>
+          <div className="flex flex-col flex-1 min-w-0 gap-0.5">
+            {/* 主内容：摘要第一条（展开时隐藏） */}
+            {!open && (
+              <span className="text-sm text-gray-800 truncate leading-snug">
+                {firstSummary || "暂无摘要"}
+              </span>
             )}
-            {!open && firstSummary && (
-              <span className="text-xs text-gray-500 truncate ml-1">{firstSummary}</span>
-            )}
+            {/* 副行：小标签 + 时间 */}
+            <div className="flex items-center gap-1.5">
+              <span className={`inline-flex items-center text-[10px] px-1.5 py-0 rounded flex-shrink-0 ${ch.tagClass}`}>
+                {ch.label}
+              </span>
+
+            </div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-            <span className="text-xs text-gray-400">{formatCommAt(record.comm_at)}</span>
+          <div className="flex-shrink-0 ml-2">
             {open ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
           </div>
         </button>
@@ -543,30 +1019,34 @@ function TimelineCard({
             </div>
 
             {/* 底部一行：三个档案入口 + 删除 */}
-            <div className="px-3 py-2.5 border-t border-gray-50 flex items-center justify-between">
-              {/* 左侧：三个档案图标入口 */}
+            <div className="px-3 pt-1.5 pb-2 border-t border-gray-50 flex items-center justify-between">
+              {/* 左侧：三个档案入口（有内容才显示） */}
               <div className="flex items-center gap-4">
-                {/* 语音档案 */}
-                <button
-                  onClick={(e) => { e.stopPropagation(); /* TODO: 语音详情页 */ }}
-                  className="flex items-center gap-1 text-sky-500 hover:text-sky-600"
-                >
-                  <Mic size={14} />
-                  <span className="text-xs">语音档案</span>
-                </button>
-                {/* 文字档案 */}
-                <button
-                  onClick={(e) => { e.stopPropagation(); /* TODO: 文字详情页 */ }}
-                  className="flex items-center gap-1 text-sky-500 hover:text-sky-600"
-                >
-                  <FileText size={14} />
-                  <span className="text-xs">文字档案</span>
-                </button>
-                {/* 图像档案 */}
+                {/* 语音档案：有语音记录才显示 */}
+                {hasVoice && record.record_type === 'voice' && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onOpenArchive?.('voice', record.id); }}
+                    className="flex items-center gap-1 text-sky-500 hover:text-sky-600"
+                  >
+                    <Mic size={14} />
+                    <span className="text-xs">语音档案</span>
+                  </button>
+                )}
+                {/* 文字档案：当前记录是手动/微信才显示 */}
+                {hasText && (record.record_type === 'manual' || record.record_type === 'text') && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onOpenArchive?.('text', record.id); }}
+                    className="flex items-center gap-1 text-sky-500 hover:text-sky-600"
+                  >
+                    <FileText size={14} />
+                    <span className="text-xs">文字档案</span>
+                  </button>
+                )}
+                {/* 图像档案：始终显示 */}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    navigate(`/yaban/patient/${patientId}/media`);
+                    navigate(`/yaban/patient/${patientId}/media?recordId=${record.id}`);
                   }}
                   className="flex items-center gap-1 text-sky-500 hover:text-sky-600"
                 >
@@ -574,14 +1054,20 @@ function TimelineCard({
                   <span className="text-xs">图像档案</span>
                 </button>
               </div>
-              {/* 右侧：删除 */}
-              <button
-                onClick={(e) => { e.stopPropagation(); onDelete(record.id); }}
-                className="flex items-center gap-1 text-xs text-gray-300 hover:text-red-400"
-              >
-                <Trash2 size={12} />删除
-              </button>
+              {/* 右侧：删除 + 时间戳 */}
+              <div className="flex flex-col items-end gap-0.5">
+                <button
+                  onClick={(e) => { e.stopPropagation(); onDelete(record.id); }}
+                  className="flex items-center gap-1 text-xs text-gray-300 hover:text-red-400"
+                >
+                  <Trash2 size={12} />删除
+                </button>
+                <span className="text-[10px] text-gray-300">
+                  {new Date(record.comm_at).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+              </div>
             </div>
+
           </>
         )}
       </div>
@@ -607,8 +1093,33 @@ export default function YabanPatientComm() {
   // 搜索
   const [searchQuery, setSearchQuery] = useState("");
 
+  // 时间筛选
+  const [timeFilter, setTimeFilter] = useState<"all"|"today"|"week"|"month"|"quarter"|"year"|"custom">("all");
+  const [showTimeFilter, setShowTimeFilter] = useState(false);
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+
+  const TIME_FILTER_LABELS = { all: "全部", today: "今日", week: "本周", month: "本月", quarter: "本季度", year: "本年", custom: "自定义" };
+
+  const getTimeRange = (filter: string): { start: Date | null; end: Date | null } => {
+    const now = new Date();
+    const sod = (d: Date) => { const r = new Date(d); r.setHours(0,0,0,0); return r; };
+    if (filter === "today") return { start: sod(now), end: now };
+    if (filter === "week") { const s = new Date(now); s.setDate(now.getDate() - ((now.getDay() + 6) % 7)); return { start: sod(s), end: now }; }
+    if (filter === "month") return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: now };
+    if (filter === "quarter") { const q = Math.floor(now.getMonth() / 3); return { start: new Date(now.getFullYear(), q * 3, 1), end: now }; }
+    if (filter === "year") return { start: new Date(now.getFullYear(), 0, 1), end: now };
+    if (filter === "custom" && customStart && customEnd) return { start: new Date(customStart), end: new Date(customEnd + "T23:59:59") };
+    return { start: null, end: null };
+  };
+
   // 输入模式
   const [inputMode, setInputMode] = useState<InputMode>("none");
+
+  // 档案全览抽屉
+  const [showArchive, setShowArchive] = useState(false);
+  const [archiveTab, setArchiveTab] = useState<"voice" | "text" | "wechat">("voice");
+  const [archiveHighlightId, setArchiveHighlightId] = useState<number | null>(null);
 
   // 待处理录音（分析失败时保留）
   const [pendingBlob, setPendingBlob] = useState<Blob | null>(null);
@@ -627,6 +1138,7 @@ export default function YabanPatientComm() {
     { enabled: patientId > 0, refetchOnWindowFocus: false }
   );
   const patientName = (patientQuery.data as any)?.name || "";
+  const patientBirthday = (patientQuery.data as any)?.birthday || "";
 
   // 数据查询
   const { data, refetch, isLoading } = trpc.yabanComm.list.useQuery(
@@ -634,16 +1146,32 @@ export default function YabanPatientComm() {
     { enabled: patientId > 0 }
   );
   const records: CommRecord[] = (data?.records as CommRecord[]) || [];
+  const appointments: Appointment[] = (data?.appointments as Appointment[]) || [];
 
   // mutations
   const createMutation = trpc.yabanComm.create.useMutation({
-    onSuccess: () => { refetch(); toast.success("沟通记录已保存"); },
+    onSuccess: () => {
+      refetch();
+      toast.success("沟通记录已保存");
+      setAnalysisResult(null);
+      setInputMode("none");
+    },
     onError: (e) => toast.error(e.message),
   });
   const deleteMutation = trpc.yabanComm.delete.useMutation({
     onSuccess: () => { refetch(); toast.success("已删除"); },
     onError: (e) => toast.error(e.message),
   });
+
+  // 档案全览打开后自动滚动到高亮记录
+  useEffect(() => {
+    if (showArchive && archiveHighlightId) {
+      setTimeout(() => {
+        const el = document.getElementById(`archive-record-${archiveHighlightId}`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 150);
+    }
+  }, [showArchive, archiveHighlightId]);
 
   // 清理
   useEffect(() => {
@@ -721,7 +1249,7 @@ export default function YabanPatientComm() {
     setInputMode("none");
   }, []);
 
-  // ---- 语音分析（FormData 上传） ----
+  // ---- 语音分析（FormData 上传，异步轮询） ----
   const doAnalyze = useCallback(async (blob: Blob, mimeType: string, savedDuration: number) => {
     const fallbackToPending = () => {
       const url = URL.createObjectURL(blob);
@@ -740,40 +1268,20 @@ export default function YabanPatientComm() {
       formData.append("audio", blob, `recording.${ext}`);
       formData.append("customerId", String(patientId));
       formData.append("mimeType", mimeType);
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000);
-      let resp: Response;
-      try {
-        resp = await fetch("/api/yaban/analyze-voice-upload", {
-          method: "POST",
-          body: formData,
-          signal: controller.signal,
-          headers: { ...(currentTenantId ? { "x-yaban-tenant": String(currentTenantId) } : {}) },
-        });
-      } finally {
-        clearTimeout(timeoutId);
-      }
+
+      // 1. 上传录音，立即返回 jobId
+      const resp = await fetch("/api/yaban/analyze-voice-upload", {
+        method: "POST",
+        body: formData,
+        headers: { ...(currentTenantId ? { "x-yaban-tenant": String(currentTenantId) } : {}) },
+      });
       if (!resp.ok) {
         const errData = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
         throw new Error(errData.error || `HTTP ${resp.status}`);
       }
-      const result = await resp.json();
-      setAnalysisTitle("AI 语音分析结果");
-      setAnalysisRecordType("voice");
-      // 将 summaryKeyPoints 按 \n 分割成数组，兼容旧格式
-      const rawItems: string[] = result.summaryKeyPoints
-        ? result.summaryKeyPoints.split("\n").filter(Boolean)
-        : [];
-      setAnalysisResult({
-        rawText: result.rawText,
-        audioUrl: result.audioUrl || null,
-        summaryItems: rawItems,
-        summaryDemand: result.summaryDemand,
-        summaryHospital: result.summaryHospital || "",
-        summaryKeyPoints: result.summaryKeyPoints,
-        summaryFollowup: result.summaryFollowup,
-        summaryRemark: result.summaryRemark,
-      });
+      const { jobId } = await resp.json();
+
+      // 2. 立即恢复界面，显示「AI 处理中」toast
       setPendingBlob(null);
       setPendingDuration(0);
       setPendingBlobUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null; });
@@ -781,12 +1289,58 @@ export default function YabanPatientComm() {
       setDuration(0);
       setInputMode("none");
       audioChunksRef.current = [];
+      const toastId = toast.loading("AI 正在处理录音，完成后自动更新...");
+
+      // 3. 轮询 jobId，最多等 3 分钟
+      const maxWait = 180000;
+      const interval = 2000;
+      const startTime = Date.now();
+      const poll = async () => {
+        if (Date.now() - startTime > maxWait) {
+          toast.dismiss(toastId);
+          toast.error("AI 处理超时，请稍后刷新页面查看结果");
+          return;
+        }
+        try {
+          const jobResp = await fetch(`/api/yaban/analyze-voice-job/${jobId}`, {
+            headers: { ...(currentTenantId ? { "x-yaban-tenant": String(currentTenantId) } : {}) },
+          });
+          if (!jobResp.ok) { setTimeout(poll, interval); return; }
+          const job = await jobResp.json();
+          if (job.status === "pending") { setTimeout(poll, interval); return; }
+          toast.dismiss(toastId);
+          if (job.status === "error") {
+            toast.error(`AI 处理失败：${job.error || "未知错误"}`);
+            return;
+          }
+          // done：刷新列表，弹出确认弹窗
+          refetch();
+          const result = job.result;
+          setAnalysisTitle("AI 语音分析结果");
+          setAnalysisRecordType("voice");
+          const rawItems: string[] = result.summaryKeyPoints
+            ? result.summaryKeyPoints.split("\n").filter(Boolean)
+            : [];
+          setAnalysisResult({
+            rawText: result.rawText,
+            audioUrl: result.audioUrl || null,
+            summaryItems: rawItems,
+            summaryDemand: result.summaryDemand,
+            summaryHospital: result.summaryHospital || "",
+            summaryKeyPoints: result.summaryKeyPoints,
+            summaryFollowup: result.summaryFollowup,
+            summaryRemark: result.summaryRemark,
+          });
+          toast.success("AI 处理完成！");
+        } catch (_) { setTimeout(poll, interval); }
+      };
+      setTimeout(poll, interval);
     } catch (err: any) {
-      const msg = err?.name === "AbortError" ? "分析超时（120秒），请重试" : (err?.message || "请重试");
-      toast.error(`分析失败：${msg}`);
+      const msg = err?.message || "请重试";
+      toast.error(`上传失败：${msg}`);
       fallbackToPending();
     }
-  }, [patientId, currentTenantId]);
+  }, [patientId, currentTenantId, refetch]);
 
   const stopAndAnalyze = useCallback(() => {
     if (!mediaRecorderRef.current) return;
@@ -833,7 +1387,7 @@ export default function YabanPatientComm() {
         aiGenerated: analysisRecordType !== "manual",
         commAt: new Date().toISOString(),
       });
-      setAnalysisResult(null);
+      // 关闭弹窗由 onSuccess 回调统一处理，确保数据已刷新后再关闭
     },
     [patientId, createMutation, analysisRecordType]
   );
@@ -851,7 +1405,7 @@ export default function YabanPatientComm() {
         aiGenerated: false,
         commAt: new Date().toISOString(),
       });
-      setInputMode("none");
+      // 关闭弹窗由 onSuccess 回调统一处理
     },
     [patientId, createMutation]
   );
@@ -864,33 +1418,51 @@ export default function YabanPatientComm() {
   );
 
   // ---- 搜索过滤 ----
-  const filteredRecords = searchQuery.trim()
-    ? records.filter((r) => {
-        const q = searchQuery.trim().toLowerCase();
-        return [
-          r.summary_demand,
-          r.summary_key_points,
-          r.summary_followup,
-          r.summary_remark,
-          r.raw_text,
-          r.operator_name,
-        ]
-          .filter(Boolean)
-          .some((field) => field!.toLowerCase().includes(q));
-      })
-    : records;
+  const { start: timeStart, end: timeEnd } = getTimeRange(timeFilter);
+  const filteredRecords = records.filter((r) => {
+    // 时间过滤
+    if (timeStart && timeEnd) {
+      const t = new Date(r.comm_at);
+      if (t < timeStart || t > timeEnd) return false;
+    }
+    // 关键词搜索
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      return [
+        r.summary_demand,
+        r.summary_key_points,
+        r.summary_followup,
+        r.summary_remark,
+        r.raw_text,
+        r.operator_name,
+      ].filter(Boolean).some((field) => field!.toLowerCase().includes(q));
+    }
+    return true;
+  });
 
-  // ---- 按日期分组 ----
-  const groupedRecords = filteredRecords.reduce<{ date: string; items: CommRecord[] }[]>((acc, r) => {
+  // ---- 按日期分组（合并预约信息） ----
+  const groupedRecords = filteredRecords.reduce<{ date: string; items: CommRecord[]; appointment?: Appointment }[]>((acc, r) => {
     const date = formatCommDate(r.comm_at);
     const last = acc[acc.length - 1];
     if (last && last.date === date) {
       last.items.push(r);
     } else {
-      acc.push({ date, items: [r] });
+      // 找到当天的预约（匹配 YYYY-MM-DD 格式）
+      const dateKey = r.comm_at ? String(r.comm_at).slice(0, 10) : "";
+      const appt = appointments.find(a => a.appointDate === dateKey);
+      acc.push({ date, items: [r], appointment: appt });
     }
     return acc;
   }, []);
+
+  // 对于有预约但当天无沟通记录的日期，也要展示预约卡片
+  const appointmentOnlyDates = appointments
+    .filter(a => !filteredRecords.some(r => String(r.comm_at).slice(0, 10) === a.appointDate))
+    .map(a => ({ date: a.appointDate, items: [] as CommRecord[], appointment: a }));
+
+  // 合并并按日期倒序排列
+  const allGroups = [...groupedRecords, ...appointmentOnlyDates]
+    .sort((a, b) => b.date.localeCompare(a.date));
 
   // ---- 录音控制区 ----
   const renderVoiceControls = () => {
@@ -964,75 +1536,119 @@ export default function YabanPatientComm() {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* 顶部导航 - 牙伴蓝色渐变风格 */}
       <div className="bg-gradient-to-r from-sky-500 to-sky-400 text-white sticky top-0 z-10">
+        {/* 标题行 */}
         <div className="flex items-center justify-between px-4 py-3">
           <button onClick={() => navigate(`/yaban/patient/${patientId}`)} className="p-1">
             <ChevronLeft className="w-6 h-6" />
           </button>
           <div className="flex flex-col items-center">
-            <span className="text-base font-bold leading-tight">沟通记录</span>
-            {patientName && (
-              <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">{patientName}</span>
-            )}
+            <span className="text-base font-bold leading-tight">{patientName ? `${patientName} · 动态全览` : '动态全览'}</span>
           </div>
           <span className="w-8" />
         </div>
+        {/* 快捷入口容器行 */}
+        <div className="px-4 pb-3 flex gap-2">
+          <button
+            onClick={() => setShowArchive(true)}
+            className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 rounded-xl px-3 py-2 text-white text-xs font-medium transition-colors"
+          >
+            <FileText size={13} />
+            档案全览
+          </button>
+        </div>
       </div>
 
-      {/* 搜索框 */}
+      {/* 搜索框 + 筛选按鈕 */}
       <div className="bg-gray-50 px-4 py-2.5">
-        <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2.5 border border-gray-200 shadow-sm">
-          <Search size={15} className="text-sky-400 flex-shrink-0" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="搜索沟通记录内容..."
-            className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery("")} className="p-0.5 text-gray-400">
-              <X size={14} />
-            </button>
-          )}
+        <div className="flex items-center gap-2">
+          <div className="flex-1 flex items-center gap-2 bg-white rounded-xl px-3 py-2.5 border border-gray-200 shadow-sm">
+            <Search size={15} className="text-sky-400 flex-shrink-0" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="搜索沟通记录内容..."
+              className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery("")} className="p-0.5 text-gray-400">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+          {/* 时间筛选按鈕 */}
+          <button
+            onClick={() => setShowTimeFilter(!showTimeFilter)}
+            className={`flex items-center gap-1 px-3 py-2.5 rounded-xl border shadow-sm text-xs font-medium flex-shrink-0 transition-colors ${
+              timeFilter !== "all"
+                ? "bg-sky-500 text-white border-sky-500"
+                : "bg-white text-gray-500 border-gray-200"
+            }`}
+          >
+            <Filter size={13} />
+            {TIME_FILTER_LABELS[timeFilter]}
+          </button>
         </div>
+        {/* 时间筛选卡片面板 */}
+        {showTimeFilter && (() => {
+          // 计算每个时间段的条数
+          const countFor = (key: string) => {
+            if (key === "all") return records.length;
+            const { start, end } = getTimeRange(key);
+            if (!start || !end) return 0;
+            return records.filter(r => { const t = new Date(r.comm_at); return t >= start && t <= end; }).length;
+          };
+          const visibleKeys = (["all", "today", "week", "month", "quarter", "year"] as const).filter(k => countFor(k) > 0);
+          return (
+            <div className="mt-2 bg-white rounded-xl border border-gray-200 shadow-md overflow-hidden">
+              {/* 有数据的时间段卡片 */}
+              {visibleKeys.length > 0 && (
+                <div className="grid grid-cols-3 gap-2 p-3">
+                  {visibleKeys.map((key) => (
+                    <button
+                      key={key}
+                      onClick={() => { setTimeFilter(key); setShowTimeFilter(false); }}
+                      className={`flex flex-col items-center px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
+                        timeFilter === key
+                          ? "bg-sky-500 text-white border-sky-500"
+                          : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-sky-50 hover:border-sky-300"
+                      }`}
+                    >
+                      <span className="text-sm font-medium">{TIME_FILTER_LABELS[key]}</span>
+                      <span className={`text-xs leading-tight ${
+                        timeFilter === key ? "text-white/80" : "text-sky-400"
+                      }`}>{countFor(key)}条</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {/* 自定义时间段 */}
+              <div className="border-t border-gray-100 px-3 py-2.5">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <p className="text-xs text-gray-400">自定义时间段</p>
+                  {customStart && customEnd && (
+                    <span className="text-xs text-sky-400">{countFor("custom")}条</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)}
+                    className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:border-sky-400" />
+                  <span className="text-xs text-gray-400">至</span>
+                  <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)}
+                    className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:border-sky-400" />
+                  <button
+                    onClick={() => { if (customStart && customEnd) { setTimeFilter("custom"); setShowTimeFilter(false); } }}
+                    className="px-3 py-1.5 bg-sky-500 text-white text-xs rounded-lg disabled:opacity-40"
+                    disabled={!customStart || !customEnd}
+                  >确定</button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
-      {/* 汇总档案卡片区 */}
-      <div className="bg-gray-50 px-4 pb-3">
-        <div className="grid grid-cols-3 gap-2">
-          {/* 语音档案汇总 */}
-          <button
-            className="flex flex-col items-center gap-1 bg-white rounded-xl py-3 border border-gray-100 shadow-sm active:bg-sky-50"
-            onClick={() => {}}
-          >
-            <Mic size={18} className="text-sky-500" />
-            <span className="text-xs font-medium text-gray-700">语音档案</span>
-            <span className="text-xs text-gray-400">
-              {records.filter((r) => r.record_type === "voice").length} 条
-            </span>
-          </button>
-          {/* 文字档案汇总 */}
-          <button
-            className="flex flex-col items-center gap-1 bg-white rounded-xl py-3 border border-gray-100 shadow-sm active:bg-sky-50"
-            onClick={() => {}}
-          >
-            <FileText size={18} className="text-sky-500" />
-            <span className="text-xs font-medium text-gray-700">文字档案</span>
-            <span className="text-xs text-gray-400">
-              {records.filter((r) => r.record_type !== "voice").length} 条
-            </span>
-          </button>
-          {/* 图像档案汇总 */}
-          <button
-            className="flex flex-col items-center gap-1 bg-white rounded-xl py-3 border border-gray-100 shadow-sm active:bg-sky-50"
-            onClick={() => navigate(`/yaban/patient/${patientId}/media`)}
-          >
-            <ImageIcon size={18} className="text-sky-500" />
-            <span className="text-xs font-medium text-gray-700">图像档案</span>
-            <span className="text-xs text-gray-400">影像记录</span>
-          </button>
-        </div>
-      </div>
+
 
       {/* 主内容区 */}
       <div className="flex-1 px-4 py-4 pb-32">
@@ -1069,27 +1685,24 @@ export default function YabanPatientComm() {
           <div className="flex justify-center py-16">
             <Loader2 size={24} className="text-sky-500 animate-spin" />
           </div>
-        ) : filteredRecords.length === 0 ? (
+        ) : (filteredRecords.length === 0 && allGroups.length === 0) ? (
           <div className="flex flex-col items-center py-20 text-gray-400 gap-3">
             <Search size={40} className="text-gray-200" />
             <p className="text-sm">{searchQuery ? `未找到含「${searchQuery}」的记录` : "暂无沟通记录"}</p>
-            {!searchQuery && <p className="text-xs text-gray-300">点击下方按钮开始记录</p>}
+            {!searchQuery && <p className="text-xs text-gray-300">点击下方按鈕开始记录</p>}
           </div>
         ) : (
           <div>
-            {groupedRecords.map((group) => (
-              <div key={group.date}>
-                {/* 日期分组标题 */}
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="h-px flex-1 bg-gray-200" />
-                  <span className="text-xs text-gray-400 px-2">{group.date}</span>
-                  <div className="h-px flex-1 bg-gray-200" />
-                </div>
-                {/* 该日期下的记录 */}
-                {group.items.map((record) => (
-                  <TimelineCard key={record.id} record={record} onDelete={handleDelete} patientId={patientId} />
-                ))}
-              </div>
+            {allGroups.map((group, groupIdx) => (
+              <DayCard
+                key={group.date}
+                group={group}
+                onDelete={handleDelete}
+                patientId={patientId}
+                showConnector={groupIdx < allGroups.length - 1}
+                patientBirthday={patientBirthday}
+                onOpenArchive={(tab, recordId) => { setArchiveTab(tab); setArchiveHighlightId(recordId ?? null); setShowArchive(true); }}
+              />
             ))}
             {/* 时间线底部 */}
             <div className="flex gap-3 mt-1">
@@ -1104,11 +1717,182 @@ export default function YabanPatientComm() {
         )}
       </div>
 
+      {/* 档案全览抽屉 */}
+      {showArchive && (
+        <div className="fixed inset-0 z-40 flex flex-col justify-end bg-black/40" onClick={() => setShowArchive(false)}>
+          <div className="bg-white rounded-t-2xl max-h-[80vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
+            {/* 抽屉标题 */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+              <span className="text-base font-semibold text-gray-800">档案全览</span>
+              <button onClick={() => setShowArchive(false)} className="p-1 text-gray-400"><X size={20} /></button>
+            </div>
+            {/* Tab 切换 */}
+            <div className="flex border-b border-gray-100">
+              {([
+                { key: "voice" as const, label: "语音档案", icon: <Mic size={13} /> },
+                { key: "text" as const, label: "文字档案", icon: <Pencil size={13} /> },
+                { key: "wechat" as const, label: "微信聊天", icon: <MessageSquare size={13} /> },
+              ]).map(({ key, label, icon }) => (
+                <button
+                  key={key}
+                  onClick={() => setArchiveTab(key)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium border-b-2 transition-colors ${
+                    archiveTab === key ? "border-sky-500 text-sky-600" : "border-transparent text-gray-400"
+                  }`}
+                >
+                  {icon}{label}
+                </button>
+              ))}
+            </div>
+            {/* Tab 内容 */}
+            <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-3" style={{ WebkitOverflowScrolling: 'touch' }}>
+              {archiveTab === "voice" && (
+                <div className="space-y-3">
+                  <button
+                    onClick={() => { setShowArchive(false); startRecording(); }}
+                    className="w-full flex items-center gap-2 py-3 px-4 rounded-xl bg-sky-500 text-white text-sm font-medium"
+                  >
+                    <Mic size={16} />
+                    <span>开始语音录入</span>
+                  </button>
+                  {records.filter(r => r.record_type === "voice").length === 0 ? (
+                    <p className="text-center text-xs text-gray-300 py-8">暂无语音档案</p>
+                  ) : (
+                    <>
+                      {archiveHighlightId && (
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-sky-500">当前记录</span>
+                          <button
+                            onClick={() => setArchiveHighlightId(null)}
+                            className="text-xs text-gray-400 hover:text-sky-500"
+                          >查看全部</button>
+                        </div>
+                      )}
+                      {records
+                        .filter(r => r.record_type === "voice" && (!archiveHighlightId || r.id === archiveHighlightId))
+                        .map(r => {
+                          const summaryLines = r.summary_key_points
+                            ? r.summary_key_points.split("\n").filter(Boolean)
+                            : [r.summary_demand, r.summary_key_points, r.summary_followup].filter(Boolean) as string[];
+                          return (
+                            <div
+                              key={r.id}
+                              id={`archive-record-${r.id}`}
+                              className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden"
+                            >
+                              {/* 播放器 */}
+                              {r.audio_url && (
+                                <div className="px-3 pt-3">
+                                  <audio controls src={r.audio_url} className="w-full h-8" style={{ outline: 'none' }} />
+                                </div>
+                              )}
+                              {/* 摘要内容 */}
+                              {summaryLines.length > 0 ? (
+                                <div className="px-3 pt-2 pb-2 space-y-1">
+                                  {summaryLines.map((line, idx) => (
+                                    <div key={idx} className="flex items-start gap-1.5">
+                                      <span className="mt-1 w-1 h-1 rounded-full bg-sky-400 flex-shrink-0" />
+                                      <span className="text-xs text-gray-700 leading-relaxed">{line}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : r.raw_text ? (
+                                <p className="px-3 pt-2 pb-2 text-xs text-gray-500 leading-relaxed line-clamp-3">{r.raw_text}</p>
+                              ) : (
+                                <p className="px-3 pt-2 pb-2 text-xs text-gray-300">暂无转写内容</p>
+                              )}
+                              {/* 底部：完整时间 + 下载 */}
+                              <div className="flex items-center justify-between px-3 py-2 border-t border-gray-50">
+                                <span className="text-[10px] text-gray-300">
+                                  {new Date(r.comm_at).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                </span>
+                                {r.audio_url && (
+                                  <a
+                                    href={r.audio_url}
+                                    download
+                                    onClick={e => e.stopPropagation()}
+                                    className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-sky-500"
+                                  >
+                                    <Download size={13} />
+                                    <span>下载</span>
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      }
+                    </>
+                  )}
+                </div>
+              )}
+              {archiveTab === "text" && (
+                <div className="space-y-2">
+                  <button
+                    onClick={() => { setShowArchive(false); setInputMode("manual"); }}
+                    className="w-full flex items-center gap-2 py-3 px-4 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium"
+                  >
+                    <Pencil size={16} />
+                    <span>新增文字记录</span>
+                  </button>
+                  {records.filter(r => r.record_type === "manual").length === 0 ? (
+                    <p className="text-center text-xs text-gray-300 py-8">暂无文字档案</p>
+                  ) : (
+                    <>
+                      {archiveHighlightId && (
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-sky-500">当前记录</span>
+                          <button onClick={() => setArchiveHighlightId(null)} className="text-xs text-gray-400 hover:text-sky-500">查看全部</button>
+                        </div>
+                      )}
+                      {records
+                        .filter(r => r.record_type === "manual" && (!archiveHighlightId || r.id === archiveHighlightId))
+                        .map(r => (
+                          <TimelineCard key={r.id} record={r} onDelete={handleDelete} patientId={patientId} />
+                        ))
+                      }
+                    </>
+                  )}
+                </div>
+              )}
+              {archiveTab === "wechat" && (
+                <div className="space-y-2">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowArchive(false); setTimeout(() => setInputMode("wechat_view"), 50); }}
+                    className="w-full flex items-center gap-2 py-3 px-4 rounded-xl bg-green-50 text-green-700 text-sm font-medium"
+                  >
+                    <MessageSquare size={16} />
+                    <span>查看微信聊天记录</span>
+                  </button>
+                  {records.filter(r => r.record_type === "text").length === 0 ? (
+                    <p className="text-center text-xs text-gray-300 py-8">暂无微信聊天档案</p>
+                  ) : (
+                    <>
+                      {archiveHighlightId && (
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs text-sky-500">当前记录</span>
+                          <button onClick={() => setArchiveHighlightId(null)} className="text-xs text-gray-400 hover:text-sky-500">查看全部</button>
+                        </div>
+                      )}
+                      {records
+                        .filter(r => r.record_type === "text" && (!archiveHighlightId || r.id === archiveHighlightId))
+                        .map(r => (
+                          <TimelineCard key={r.id} record={r} onDelete={handleDelete} patientId={patientId} />
+                        ))
+                      }
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 底部操作栏 */}
       {recordingState === "idle" && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 py-3 z-20">
           <div className="flex gap-2">
-            {/* AI 语音秘书 */}
             <button
               onClick={startRecording}
               className="flex-1 flex flex-col items-center gap-1 py-3 rounded-2xl bg-sky-500 text-white"
@@ -1116,7 +1900,6 @@ export default function YabanPatientComm() {
               <Mic size={20} />
               <span className="text-xs font-medium">语音录入</span>
             </button>
-            {/* 手动录入 */}
             <button
               onClick={() => setInputMode("manual")}
               className="flex-1 flex flex-col items-center gap-1 py-3 rounded-2xl bg-gray-100 text-gray-600"
@@ -1124,7 +1907,6 @@ export default function YabanPatientComm() {
               <Pencil size={20} />
               <span className="text-xs font-medium">手动录入</span>
             </button>
-            {/* 微信聊天 */}
             <button
               onClick={() => setInputMode("wechat_view")}
               className="flex-1 flex flex-col items-center gap-1 py-3 rounded-2xl bg-green-50 text-green-700"
