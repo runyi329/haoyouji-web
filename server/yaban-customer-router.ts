@@ -3186,7 +3186,11 @@ export const yabanCustomerRouter = router({
           }
         } catch (_) {}
         const idList = Array.from(allWecomIds);
-        const offset = (input.page - 1) * input.page_size;
+        // 注意：mysql2 的 execute（预处理语句）对 LIMIT/OFFSET 的参数绑定类型敏感，
+        // 传入会被当作字符串而报 "Incorrect arguments to mysqld_stmt_execute"。
+        // page/page_size 已由 zod 校验为正整数，这里直接内联到 SQL，安全且避免该坑。
+        const pageSize = Math.max(1, Math.min(100, Number(input.page_size) || 50));
+        const offset = Math.max(0, (Number(input.page) - 1) * pageSize);
         const placeholders = idList.map(() => '?').join(', ');
         const [countRows] = await (conn as any).execute(
           `SELECT COUNT(*) AS total FROM wecom_message_credits WHERE wecom_user_id IN (${placeholders})`,
@@ -3198,8 +3202,8 @@ export const yabanCustomerRouter = router({
            FROM wecom_message_credits
            WHERE wecom_user_id IN (${placeholders})
            ORDER BY created_at DESC
-           LIMIT ? OFFSET ?`,
-          [...idList, input.page_size, offset]
+           LIMIT ${pageSize} OFFSET ${offset}`,
+          idList
         );
         return {
           messages: (rows as any[]).reverse(),
