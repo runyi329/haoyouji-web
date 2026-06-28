@@ -554,23 +554,59 @@ export function ProjectAIBrainTab({
       })
       .finally(() => setLoadingRules(false));
 
-    fetch(`/api/wecom/channels/${PLATFORM_PROMPT_CHANNEL_ID}/prompt-rules`)
+    // 加载该渠道授权的共享库（知识库 + 指令库）
+    const grantsData = await fetch(`/api/wecom/channel-grants?channel_id=${channelId}`)
       .then(r => r.json())
-      .then(d => {
-        const rules = Array.isArray(d.rules) ? d.rules : Array.isArray(d) ? d : [];
-        setPlatformRules(rules.map((r: any) => ({ ...r, rule_text: r.content || r.rule_text || "" })));
-      })
-      .catch(() => setPlatformRules([]))
-      .finally(() => setLoadingPlatformRules(false));
+      .catch(() => ({ ok: false, kb_grants: [], rule_grants: [] }));
+
+    // 根据授权的共享指令库，加载对应的指令内容
+    if (grantsData.ok && Array.isArray(grantsData.rule_grants) && grantsData.rule_grants.length > 0) {
+      const enabledRuleLibIds = grantsData.rule_grants
+        .filter((g: any) => g.enabled)
+        .map((g: any) => g.shared_rule_lib_id);
+      if (enabledRuleLibIds.length > 0) {
+        const allRules: any[] = [];
+        for (const libId of enabledRuleLibIds) {
+          try {
+            const r = await fetch(`/api/wecom/shared-rule-libs/${libId}/rules`).then(res => res.json());
+            if (r.ok && Array.isArray(r.rules)) {
+              allRules.push(...r.rules);
+            }
+          } catch {}
+        }
+        setPlatformRules(allRules.map((r: any) => ({ ...r, rule_text: r.content || r.rule_text || "" })));
+      } else {
+        setPlatformRules([]);
+      }
+    } else {
+      // 如果没有绑定诊所，尝试读取默认平台指令（兴容旧逻辑）
+      fetch(`/api/wecom/channels/${PLATFORM_PROMPT_CHANNEL_ID}/prompt-rules`)
+        .then(r => r.json())
+        .then(d => {
+          const rules = Array.isArray(d.rules) ? d.rules : Array.isArray(d) ? d : [];
+          setPlatformRules(rules.map((r: any) => ({ ...r, rule_text: r.content || r.rule_text || "" })));
+        })
+        .catch(() => setPlatformRules([]));
+    }
+    setLoadingPlatformRules(false);
+
+    // 根据授权的共享知识库，构建共享知识库的统计查询参数
+    const enabledKbIds = grantsData.ok && Array.isArray(grantsData.kb_grants)
+      ? grantsData.kb_grants.filter((g: any) => g.enabled).map((g: any) => g.shared_kb_id)
+      : [];
 
     await Promise.all([
       fetch(`/api/wecom/ch/kb/stats?channel_id=${channelId}`).then(r => r.json()),
-      fetch(`/api/wecom/ch/kb/stats?channel_type=kf`).then(r => r.json()),
+      enabledKbIds.length > 0
+        ? fetch(`/api/wecom/ch/kb/stats?kb_ids=${enabledKbIds.join(',')}`).then(r => r.json())
+        : Promise.resolve({ ok: true, item_count: 0, file_count: 0, char_count: 0 }),
       fetch(`/api/wecom/channel-config/${channelId}`).then(r => r.json()).catch(() => ({})),
       fetch(`/api/wecom/channels/${channelId}/config`).then(r => r.json()).catch(() => ({})),
       fetch(`/api/wecom/knowledge-bases`).then(r => r.json()).catch(() => ({ ok: false })),
       fetch(`/api/wecom/ch/kb/sources?channel_id=${channelId}`).then(r => r.json()).catch(() => ({ ok: false })),
-      fetch(`/api/wecom/ch/kb/sources?channel_type=kf`).then(r => r.json()).catch(() => ({ ok: false })),
+      enabledKbIds.length > 0
+        ? fetch(`/api/wecom/ch/kb/sources?kb_ids=${enabledKbIds.join(',')}`).then(r => r.json()).catch(() => ({ ok: false }))
+        : Promise.resolve({ ok: true, sources: [] }),
     ]).then(([priv, sys, chCfg, cfg, kbs, src, sysSrc]) => {
       if (priv.ok) setKbStats({ item_count: priv.item_count || 0, file_count: priv.file_count || 0, char_count: priv.char_count || 0, month_count: priv.month_count || 0 });
       if (sys.ok) setSysKbStats({ item_count: sys.item_count || 0, file_count: sys.file_count || 0, char_count: sys.char_count || 0 });

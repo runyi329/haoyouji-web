@@ -4906,6 +4906,39 @@ router.patch("/api/wecom/tenant-grants/rule/:grantId/toggle", async (req: Reques
   }
 });
 
+// GET /api/wecom/channel-grants?channel_id=xxx - 按渠道ID查询该渠道授权的共享知识库和指令库
+// 通过 wecom_channel_service_binding 找到绑定的诊所，再查 tenant_kb_grant / tenant_rule_grant
+router.get("/api/wecom/channel-grants", async (req: Request, res: Response) => {
+  const { channel_id } = req.query;
+  if (!channel_id) return res.status(400).json({ error: "channel_id 为必填" });
+  const conn = await getDbConnection();
+  try {
+    // 1. 找到该渠道绑定的诊所
+    const [bindRows] = await (conn as any).execute(
+      `SELECT service_type, service_tenant_id FROM wecom_channel_service_binding WHERE channel_id = ? LIMIT 1`,
+      [Number(channel_id)]
+    );
+    if ((bindRows as any[]).length === 0) {
+      return res.json({ ok: true, kb_grants: [], rule_grants: [] });
+    }
+    const { service_type, service_tenant_id } = (bindRows as any[])[0];
+    // 2. 查询该诊所授权的知识库
+    const [kbGrants] = await (conn as any).execute(
+      `SELECT id, shared_kb_id, shared_kb_name, enabled FROM wecom_tenant_kb_grant WHERE service_type = ? AND service_tenant_id = ? ORDER BY id ASC`,
+      [service_type, service_tenant_id]
+    );
+    // 3. 查询该诊所授权的指令库
+    const [ruleGrants] = await (conn as any).execute(
+      `SELECT id, shared_rule_lib_id, shared_rule_lib_name, enabled FROM wecom_tenant_rule_grant WHERE service_type = ? AND service_tenant_id = ? ORDER BY id ASC`,
+      [service_type, service_tenant_id]
+    );
+    res.json({ ok: true, kb_grants: kbGrants as any[], rule_grants: ruleGrants as any[] });
+  } catch (e) {
+    console.error("[渠道授权库] 查询失败:", e);
+    res.status(500).json({ error: "查询失败" });
+  }
+});
+
 // GET /api/wecom/service-binding/channel?service_type=yaban&service_tenant_id=xxx - 按服务商+租户查渠道
 // 权限下放：返回诊所子渠道id（优先层），前端院长端读写诊所私有数据；附带父渠道id作为兜底层
 router.get("/api/wecom/service-binding/channel", async (req: Request, res: Response) => {

@@ -199,11 +199,23 @@ router.get("/api/wecom/ch/kb/stats", async (req: Request, res: Response) => {
   const channelType = (req.query.channel_type as string) || "app";
   const channelId = req.query.channel_id as string;
   const kbIdParam = req.query.kb_id as string;
+  const kbIdsParam = req.query.kb_ids as string; // 逗号分隔的多个kb_id
+  const isShared = req.query.is_shared === '1';
   const conn = await getDbConnection();
   try {
     let kbRows;
-    if (kbIdParam) {
+    if (kbIdsParam) {
+      // 直接指定多个kb_id（前端根据授权库列表传入）
+      const ids = kbIdsParam.split(',').map(s => Number(s.trim())).filter(n => !isNaN(n) && n > 0);
+      kbRows = ids.map(id => ({ id }));
+    } else if (kbIdParam) {
       kbRows = [{ id: Number(kbIdParam) }];
+    } else if (channelId && isShared) {
+      // 按渠道授权的共享知识库列表查询（管理员在「绑定服务商→配置知识库」中分配的库）
+      [kbRows] = await (conn as any).execute(
+        "SELECT kb_id AS id FROM wecom_channel_shared_kb WHERE channel_id = ?",
+        [channelId]
+      );
     } else if (channelId) {
       [kbRows] = await (conn as any).execute(
         "SELECT id FROM wecom_knowledge_bases WHERE channel_id = ?",
@@ -555,11 +567,22 @@ router.get("/api/wecom/ch/kb/sources", async (req: Request, res: Response) => {
   const channelType = (req.query.channel_type as string) || "app";
   const channelId = req.query.channel_id as string;
   const kbIdParam = req.query.kb_id as string;
+  const kbIdsParam = req.query.kb_ids as string; // 逗号分隔的多个kb_id
+  const isShared = req.query.is_shared === '1';
   const conn = await getDbConnection();
   try {
     let kbRows;
-    if (kbIdParam) {
+    if (kbIdsParam) {
+      const ids = kbIdsParam.split(',').map(s => Number(s.trim())).filter(n => !isNaN(n) && n > 0);
+      kbRows = ids.map(id => ({ id }));
+    } else if (kbIdParam) {
       kbRows = [{ id: Number(kbIdParam) }];
+    } else if (channelId && isShared) {
+      // 按渠道授权的共享知识库列表查询
+      [kbRows] = await (conn as any).execute(
+        "SELECT kb_id AS id FROM wecom_channel_shared_kb WHERE channel_id = ?",
+        [channelId]
+      );
     } else if (channelId) {
       [kbRows] = await (conn as any).execute(
         "SELECT id FROM wecom_knowledge_bases WHERE channel_id = ?",
