@@ -795,6 +795,13 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
   const [corpId, setCorpId] = useState("");
   const [siteUsername, setSiteUsername] = useState("");
 
+  // 服务商共享库配置
+  const [serviceBindings, setServiceBindings] = useState<{ id: number; service_tenant_id: number; service_tenant_name: string; clinic_channel_id?: number }[]>([]);
+  const [allSharedKbs, setAllSharedKbs] = useState<{ id: number; name: string; description?: string }[]>([]);
+  const [clinicKbMap, setClinicKbMap] = useState<Record<number, number[]>>({}); // clinic_channel_id → kb_ids[]
+  const [showClinicKbPanel, setShowClinicKbPanel] = useState<number | null>(null); // 当前展开的 clinic_channel_id
+  const [savingClinicKb, setSavingClinicKb] = useState<number | null>(null);
+
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -844,6 +851,40 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
           }
         }
         setCorpId("wwbbaccf1da5f886d9");
+        // 加载服务商绑定列表和共享库列表
+        try {
+          const [bindRes, sharedKbRes] = await Promise.all([
+            fetch(`/api/wecom/channels/${channelId}/service-bindings`),
+            fetch(`/api/wecom/shared-kbs`),
+          ]);
+          const bindData = await bindRes.json();
+          const sharedKbData = await sharedKbRes.json();
+          const bindings: { id: number; service_tenant_id: number; service_tenant_name: string; clinic_channel_id?: number }[] = [];
+          if (Array.isArray(bindData?.bindings)) {
+            for (const b of bindData.bindings) {
+              // 查询每个诊所的子渠道 channel_id
+              try {
+                const r = await fetch(`/api/wecom/service-binding/channel?service_type=yaban&service_tenant_id=${b.service_tenant_id}`);
+                const d = await r.json();
+                bindings.push({ ...b, clinic_channel_id: d?.binding?.channel_id || undefined });
+              } catch { bindings.push(b); }
+            }
+          }
+          setServiceBindings(bindings);
+          if (Array.isArray(sharedKbData)) setAllSharedKbs(sharedKbData);
+          // 加载每个诊所子渠道已绑定的共享库
+          const map: Record<number, number[]> = {};
+          for (const b of bindings) {
+            if (b.clinic_channel_id) {
+              try {
+                const r = await fetch(`/api/wecom/channels/${b.clinic_channel_id}/shared-kbs`);
+                const d = await r.json();
+                map[b.clinic_channel_id] = Array.isArray(d?.kb_ids) ? d.kb_ids : [];
+              } catch { map[b.clinic_channel_id] = []; }
+            }
+          }
+          setClinicKbMap(map);
+        } catch { /* 服务商配置加载失败不阻断主流程 */ }
         // 加载分身名称和头像
         if (channelList?.channels) {
           const ch = channelList.channels.find((c: any) => c.id === channelId);
@@ -1397,6 +1438,106 @@ function ConfigTab({ onProfileUpdate, channelId = KF_CHANNEL_ID, channelType = K
             <span className="text-xs flex-shrink-0" style={{ color: theme.textSub }}>共享知识库</span>
             <span className="text-xs" style={{ color: theme.textMain }}>平台共享库（自动接入）</span>
           </div>
+
+          {/* 服务商共享库配置 */}
+          {serviceBindings.length > 0 && (
+            <>
+              <div className="px-4 pt-3 pb-1">
+                <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: theme.brand }}>服务商共享库配置</span>
+              </div>
+              <div className="px-4 pb-2 text-[11px]" style={{ color: theme.textSub }}>为每家已绑定诊所指定可访问的平台共享库</div>
+              {serviceBindings.map(b => (
+                <div key={b.id} className="mx-4 mb-2 rounded-xl overflow-hidden" style={{ border: `1px solid ${theme.line}` }}>
+                  {/* 诊所标题行 */}
+                  <div
+                    className="flex items-center justify-between px-3 py-2.5 cursor-pointer"
+                    style={{ backgroundColor: showClinicKbPanel === b.clinic_channel_id ? theme.brandLight : 'transparent' }}
+                    onClick={() => setShowClinicKbPanel(showClinicKbPanel === b.clinic_channel_id ? null : (b.clinic_channel_id ?? null))}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0" style={{ backgroundColor: theme.brandLight }}>
+                        <span className="text-[10px] font-bold" style={{ color: theme.brand }}>{b.service_tenant_name?.[0] || '诊'}</span>
+                      </div>
+                      <span className="text-xs font-medium" style={{ color: theme.textMain }}>{b.service_tenant_name || `诊所 ${b.service_tenant_id}`}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {b.clinic_channel_id ? (
+                        <span className="text-[11px] px-1.5 py-0.5 rounded-full" style={{ backgroundColor: theme.brandLight, color: theme.brand }}>
+                          {(clinicKbMap[b.clinic_channel_id] || []).length} 个共享库
+                        </span>
+                      ) : (
+                        <span className="text-[11px]" style={{ color: '#EF4444' }}>未建子渠道</span>
+                      )}
+                      <span className="text-xs" style={{ color: theme.textSub }}>{showClinicKbPanel === b.clinic_channel_id ? '▲' : '▼'}</span>
+                    </div>
+                  </div>
+                  {/* 展开的共享库选择面板 */}
+                  {showClinicKbPanel === b.clinic_channel_id && b.clinic_channel_id && (
+                    <div className="px-3 pb-3 pt-1" style={{ borderTop: `1px solid ${theme.line}` }}>
+                      {allSharedKbs.length === 0 ? (
+                        <div className="text-xs py-2" style={{ color: theme.textSub }}>暂无平台共享库，请先在「知识库」中创建共享库</div>
+                      ) : (
+                        <>
+                          <div className="text-[11px] mb-2" style={{ color: theme.textSub }}>勾选该诊所可访问的共享库：</div>
+                          {allSharedKbs.map(kb => {
+                            const selected = (clinicKbMap[b.clinic_channel_id!] || []).includes(kb.id);
+                            return (
+                              <div
+                                key={kb.id}
+                                className="flex items-center gap-2 py-1.5 cursor-pointer"
+                                onClick={() => {
+                                  const cid = b.clinic_channel_id!;
+                                  const cur = clinicKbMap[cid] || [];
+                                  const next = selected ? cur.filter(id => id !== kb.id) : [...cur, kb.id];
+                                  setClinicKbMap(prev => ({ ...prev, [cid]: next }));
+                                }}
+                              >
+                                <div
+                                  className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0"
+                                  style={{
+                                    backgroundColor: selected ? theme.brand : 'transparent',
+                                    border: `1.5px solid ${selected ? theme.brand : theme.line}`
+                                  }}
+                                >
+                                  {selected && <span className="text-white text-[10px] font-bold">✓</span>}
+                                </div>
+                                <div>
+                                  <div className="text-xs font-medium" style={{ color: theme.textMain }}>{kb.name}</div>
+                                  {kb.description && <div className="text-[11px]" style={{ color: theme.textSub }}>{kb.description}</div>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                          <button
+                            className="mt-2 w-full py-2 rounded-xl text-white text-xs font-semibold flex items-center justify-center gap-1"
+                            style={{ backgroundColor: savingClinicKb === b.clinic_channel_id ? '#9CA3AF' : theme.brand }}
+                            disabled={savingClinicKb === b.clinic_channel_id}
+                            onClick={async () => {
+                              const cid = b.clinic_channel_id!;
+                              setSavingClinicKb(cid);
+                              try {
+                                const r = await fetch(`/api/wecom/channels/${cid}/shared-kbs`, {
+                                  method: 'PUT',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ kb_ids: clinicKbMap[cid] || [] }),
+                                });
+                                const d = await r.json();
+                                if (d.ok) { toast.success(`已为 ${b.service_tenant_name} 保存共享库配置`); setShowClinicKbPanel(null); }
+                                else toast.error(d.error || '保存失败');
+                              } catch { toast.error('网络错误'); }
+                              finally { setSavingClinicKb(null); }
+                            }}
+                          >
+                            {savingClinicKb === b.clinic_channel_id ? '保存中...' : '保存共享库配置'}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </>
+          )}
 
           {/* 区块标题：脉动网 */}
           <div className="px-4 pt-3 pb-1">

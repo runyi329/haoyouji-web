@@ -42,6 +42,9 @@ export default function YabanProfile() {
   const utils = trpc.useUtils();
   const { data: user } = trpc.auth.me.useQuery();
   const { currentTenantId } = useYabanClinic();
+  // 顾客判断：myClinics 返回空数组 = 顾客（未加入任何门店）
+  const { data: myClinicsResp } = trpc.yabanClinic.myClinics.useQuery();
+  const isCustomer = myClinicsResp !== undefined && (myClinicsResp.clinics || []).length === 0;
   // 角色信息：判断是否院长/股东(owner) 或 创始人(founder)
   const { data: membership } = trpc.yabanRole.myMembership.useQuery({ tenantId: currentTenantId ?? undefined });
   const isOwner = (membership as any)?.member?.role_key === "owner";
@@ -293,11 +296,47 @@ export default function YabanProfile() {
 
       {/* 功能分组列表：按「医院经营」与「平台管理」两个角度分区 */}
       <div className="max-w-lg mx-auto px-4 mt-4 space-y-5">
-        {/* 医院经营 */}
-        <div className="space-y-2">
-          <div className="px-1 text-xs font-semibold text-gray-400">医院经营</div>
-          {renderGroup(clinicRows)}
-        </div>
+        {/* 顾客专属：微信咨询 + 账号资料管理 */}
+        {isCustomer && (
+          <div className="space-y-2">
+            <div className="px-1 text-xs font-semibold text-gray-400">我的服务</div>
+            <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
+              <button
+                onClick={() => navigate("/yaban/wechat-chat")}
+                className="w-full flex items-center gap-3 px-4 py-3.5 active:bg-[#F0F7FD] transition-colors border-b border-gray-100"
+              >
+                <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "linear-gradient(135deg, #1AAD19, #2DC12C)" }}>
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                </span>
+                <span className="flex-1 text-left">
+                  <span className="block text-sm font-medium text-gray-800">微信咨询</span>
+                  <span className="block text-xs text-gray-400 mt-0.5">AI 智能助手在线解答您的问题</span>
+                </span>
+                <ChevronRight className="w-5 h-5 text-gray-300 shrink-0" />
+              </button>
+              <button
+                onClick={() => navigate("/yaban/account")}
+                className="w-full flex items-center gap-3 px-4 py-3.5 active:bg-[#F0F7FD] transition-colors"
+              >
+                <span className="w-9 h-9 rounded-xl bg-[#EAF4FE] flex items-center justify-center shrink-0">
+                  <Settings className="w-5 h-5 text-[#1E88D6]" />
+                </span>
+                <span className="flex-1 text-left">
+                  <span className="block text-sm font-medium text-gray-800">账号资料管理</span>
+                  <span className="block text-xs text-gray-400 mt-0.5">编辑昵称、手机号与头像</span>
+                </span>
+                <ChevronRight className="w-5 h-5 text-gray-300 shrink-0" />
+              </button>
+            </div>
+          </div>
+        )}
+        {/* 医院经营（员工可见，顾客隐藏） */}
+        {!isCustomer && (
+          <div className="space-y-2">
+            <div className="px-1 text-xs font-semibold text-gray-400">医院经营</div>
+            {renderGroup(clinicRows)}
+          </div>
+        )}
 
         {/* 平台管理（仅创始人可见） */}
         {isFounder && (

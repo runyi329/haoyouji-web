@@ -2,10 +2,11 @@
  * 牙伴齿科管理 - 首页（工作 Tab）
  * 路由：/yaban
  * 蓝色系顶栏 + 白色内容区 + 功能网格
+ * 权限：员工（clinics 非空）显示工作台；顾客（clinics 为空）显示顾客专属视图
  */
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { ChevronDown, ChevronUp, ScanLine, UserPlus, CalendarPlus, PhoneCall, ArrowDownToLine, ArrowUpFromLine, Grip } from "lucide-react";
+import { ChevronDown, ChevronUp, ScanLine, UserPlus, CalendarPlus, PhoneCall, ArrowDownToLine, ArrowUpFromLine, Grip, MessageCircle, User, Loader2 } from "lucide-react";
 import YabanCalendar from "./YabanCalendar";
 import YabanTabBar from "./YabanTabBar";
 import VersionSwitcher from "@/components/VersionSwitcher";
@@ -26,6 +27,106 @@ const CREATE_MENU = [
   { name: "新建入库", icon: ArrowDownToLine, route: "/yaban/inventory/inbound" },
   { name: "新建出库", icon: ArrowUpFromLine, route: "/yaban/inventory/outbound" },
 ];
+
+// ── 顾客专属首页视图 ──────────────────────────────────────────
+function CustomerHomeView() {
+  const [, setLocation] = useLocation();
+  const { data: user } = trpc.auth.me.useQuery();
+  const displayName = (user as any)?.name || (user as any)?.username || "顾客";
+  const avatar = (user as any)?.avatar as string | undefined;
+
+  return (
+    <div className="min-h-screen pb-20" style={{ background: "linear-gradient(180deg, #E8F4FD 0%, #F5F9FE 100%)" }}>
+      {/* 顶部蓝色 Header */}
+      <div
+        className="text-white sticky top-0 z-40"
+        style={{ background: "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)" }}
+      >
+        <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded bg-white/20 flex items-center justify-center">
+              <span className="text-[10px] font-bold">牙</span>
+            </div>
+            <span className="text-sm font-bold">牙伴</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <VersionSwitcher variant="inline" />
+          </div>
+        </div>
+      </div>
+
+      {/* 欢迎卡片 */}
+      <div className="max-w-lg mx-auto px-4 mt-6">
+        <div
+          className="rounded-2xl p-5 text-white shadow-lg"
+          style={{ background: "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)" }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-14 h-14 rounded-full bg-white/20 ring-2 ring-white/40 overflow-hidden flex items-center justify-center shrink-0">
+              {avatar ? (
+                <img src={avatar} alt="头像" className="w-full h-full object-cover" />
+              ) : (
+                <User className="w-7 h-7 text-white" />
+              )}
+            </div>
+            <div>
+              <div className="text-base font-bold">你好，{displayName}</div>
+              <div className="text-xs text-white/80 mt-0.5">欢迎使用牙伴齿科服务</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 微信咨询大按钮 */}
+      <div className="max-w-lg mx-auto px-4 mt-5">
+        <button
+          className="w-full rounded-2xl p-5 flex items-center gap-4 shadow-md active:scale-[0.98] transition-transform"
+          style={{ background: "linear-gradient(135deg, #1AAD19 0%, #2DC12C 100%)" }}
+          onClick={() => setLocation("/yaban/wechat-chat")}
+        >
+          <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+            <MessageCircle className="w-7 h-7 text-white" strokeWidth={1.8} />
+          </div>
+          <div className="text-left flex-1">
+            <div className="text-base font-bold text-white">微信咨询</div>
+            <div className="text-xs text-white/80 mt-0.5">AI 智能助手在线解答您的问题</div>
+          </div>
+          <ChevronDown className="w-5 h-5 text-white/60 rotate-[-90deg]" />
+        </button>
+      </div>
+
+      {/* 快捷入口 */}
+      <div className="max-w-lg mx-auto px-4 mt-4">
+        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100">
+            <span className="text-xs font-semibold text-gray-400">我的服务</span>
+          </div>
+          {[
+            { label: "我的积分", hint: "查看积分余额与明细", route: "/yaban/profile" },
+            { label: "我的钱包", hint: "查看余额与充值记录", route: "/yaban/wallet" },
+            { label: "牙科商城", hint: "浏览并购买牙科产品", route: "/yaban/shop" },
+            { label: "我的订单", hint: "查看历史订单与核销", route: "/yaban/shop/my-orders" },
+          ].map((item, idx, arr) => (
+            <button
+              key={item.label}
+              className={`w-full flex items-center justify-between px-4 py-3.5 active:bg-[#F0F7FD] transition-colors ${idx !== arr.length - 1 ? "border-b border-gray-100" : ""}`}
+              onClick={() => setLocation(item.route)}
+            >
+              <div className="text-left">
+                <div className="text-sm font-medium text-gray-800">{item.label}</div>
+                <div className="text-xs text-gray-400 mt-0.5">{item.hint}</div>
+              </div>
+              <ChevronDown className="w-4 h-4 text-gray-300 rotate-[-90deg]" />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 底部 Tab 栏 */}
+      <YabanTabBar />
+    </div>
+  );
+}
 
 export default function YabanHome() {
   const [, setLocation] = useLocation();
@@ -52,7 +153,7 @@ export default function YabanHome() {
   const [showCreateMenu, setShowCreateMenu] = useState(false);
 
   // 门店列表：来自当前用户实际加入的门店（参加几家显示几家）
-  const { data: myClinicsResp } = trpc.yabanClinic.myClinics.useQuery();
+  const { data: myClinicsResp, isLoading: clinicsLoading } = trpc.yabanClinic.myClinics.useQuery();
   const clinics = myClinicsResp?.clinics || [];
 
   // 当前选中门店 tenantId，持久化到 localStorage 以便跨页面一致
@@ -80,7 +181,7 @@ export default function YabanHome() {
   const currentClinic =
     clinics.find((c) => c.tenantId === currentTenantId)?.name ||
     (clinics.length > 0 ? clinics[0].name : "暂无门店");
-  // 门店名过长时按中点均衡折成上下两行（避免“司”字单独掉行），<=8 字不处理
+  // 门店名过长时按中点均衡折成上下两行（避免"司"字单独掉行），<=8 字不处理
   const clinicNameLines = (() => {
     const name = currentClinic || "";
     if (name.length <= 8) return [name];
@@ -125,6 +226,21 @@ export default function YabanHome() {
       toast.info(`"${name}" 功能开发中，敬请期待`);
     }
   };
+
+  // ── 权限判断：clinics 加载完成后，无门店 = 顾客，显示顾客专属视图 ──
+  // clinicsLoading 时先显示加载态，避免闪烁
+  if (clinicsLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "linear-gradient(180deg, #E8F4FD 0%, #F5F9FE 100%)" }}>
+        <Loader2 className="w-8 h-8 animate-spin text-[#2196C8]" />
+      </div>
+    );
+  }
+
+  // 顾客（未加入任何门店）→ 显示顾客专属视图
+  if (myClinicsResp && clinics.length === 0) {
+    return <CustomerHomeView />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

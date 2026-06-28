@@ -742,6 +742,99 @@ async function ensureSessionTable(): Promise<void> {
   _tableEnsured = true;
 }
 // -----------------------------------------------------------
+// -----------------------------------------------------------
+// 工具函数：诊所子渠道解析（权限下放核心）
+// -----------------------------------------------------------
+// 给定服务商类型和租户ID，返回诊所子渠道 channel_id（优先层）和父渠道 channel_id（兜底层）
+// 若该诊所尚未建立子渠道，自动创建一个并建立映射
+async function resolveClinicChannel(
+  serviceType: string,
+  tenantId: number,
+  parentChannelId: number,
+  tenantName?: string
+): Promise<{ clinicChannelId: number; parentChannelId: number }> {
+  const conn = await getDbConnection();
+  if (!conn) return { clinicChannelId: parentChannelId, parentChannelId };
+  try {
+    // 1. 查映射
+    const [rows] = await (conn as any).execute(
+      `SELECT clinic_channel_id, parent_channel_id FROM wecom_clinic_channel WHERE service_type = ? AND service_tenant_id = ? LIMIT 1`,
+      [serviceType, tenantId]
+    );
+    if ((rows as any[]).length > 0) {
+      return {
+        clinicChannelId: (rows as any[])[0].clinic_channel_id,
+        parentChannelId: (rows as any[])[0].parent_channel_id,
+      };
+    }
+    // 2. 未建立子渠道：自动创建（继承父渠道 kf_id）
+    const [pRows] = await (conn as any).execute(
+      `SELECT name, kf_id FROM wecom_channels WHERE id = ? LIMIT 1`,
+      [parentChannelId]
+    );
+    const pName = (pRows as any[])[0]?.name || '渠道';
+    const pKf = (pRows as any[])[0]?.kf_id || null;
+    const cName = (tenantName || pName) + '·诊所专属';
+    const [insRes] = await (conn as any).execute(
+      `INSERT INTO wecom_channels (name, channel_type, project_key, kf_id, is_enabled) VALUES (?, 'kf', ?, ?, 1)`,
+      [cName, `${serviceType}:${tenantId}`, pKf]
+    );
+    const clinicChannelId = (insRes as any).insertId;
+    await (conn as any).execute(
+      `INSERT INTO wecom_clinic_channel (parent_channel_id, service_type, service_tenant_id, clinic_channel_id) VALUES (?, ?, ?, ?)`,
+      [parentChannelId, serviceType, tenantId, clinicChannelId]
+    );
+    // 为诊所子渠道建一个空私有知识库
+    await (conn as any).execute(
+      `INSERT INTO wecom_knowledge_bases (name, description, channel_type, channel_id, is_system, is_shared) VALUES (?, ?, 'kf', ?, 0, 0)`,
+      [(tenantName || pName) + '·私有知识库', '诊所专属知识库', clinicChannelId]
+    );
+    // 共享库不自动继承，由总台（A127）在「渠道管理 → 绑定服务商」中手动为该诊所子渠道配置允许访问的共享库
+    console.log(`[ClinicChannel] 新建子渠道时不自动继承共享库，等待总台手动配置: channel=${clinicChannelId}`);
+    console.log(`[ClinicChannel] 自动创建诊所子渠道: tenant=${tenantId} -> channel=${clinicChannelId}`);
+    return { clinicChannelId, parentChannelId };
+  } catch (e) {
+    console.error('[ClinicChannel] 解析失败，回退父渠道:', e);
+    return { clinicChannelId: parentChannelId, parentChannelId };
+  }
+}
+
+// 给定脉动网账号 user_id，返回其归属诊所的子渠道信息；无归属返回 null
+async function resolveClinicByUserId(
+  userId: number,
+  parentChannelId: number
+): Promise<{ clinicChannelId: number; tenantId: number } | null> {
+  const conn = await getDbConnection();
+  if (!conn) return null;
+  try {
+    const [rows] = await (conn as any).execute(
+      `SELECT pb.tenant_id, m.clinic_channel_id
+       FROM yaban_patient_binding pb
+       LEFT JOIN wecom_clinic_channel m
+         ON m.service_type = 'yaban' AND m.service_tenant_id = pb.tenant_id
+       WHERE pb.user_id = ? AND pb.status = 'active' LIMIT 1`,
+      [userId]
+    );
+    if ((rows as any[]).length === 0) return null;
+    const row = (rows as any[])[0];
+    let clinicChannelId = row.clinic_channel_id;
+    // 该诊所尚未建子渠道时按需创建
+    if (!clinicChannelId) {
+      const [cRows] = await (conn as any).execute(
+        `SELECT name FROM yaban_clinic WHERE tenant_id = ? LIMIT 1`, [row.tenant_id]
+      );
+      const cName = (cRows as any[])[0]?.name || `诊所${row.tenant_id}`;
+      const resolved = await resolveClinicChannel('yaban', row.tenant_id, parentChannelId, cName);
+      clinicChannelId = resolved.clinicChannelId;
+    }
+    return { clinicChannelId, tenantId: row.tenant_id };
+  } catch (e) {
+    console.error('[ClinicChannel] 按用户解析诊所失败:', e);
+    return null;
+  }
+}
+
+// -----------------------------------------------------------
 // 工具函数：获取或创建用户的 Manus task_id
 // -----------------------------------------------------------
 async function getOrCreateManusTask(wecomUserId: string): Promise<string | null> {
@@ -1718,6 +1811,67 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
 
       console.log(`[KF] 处理消息 from=${fromUser} text=${userText.substring(0, 50)}`);
 
+      // ========== 权限下放：按用户归属诊所解析有效渠道 ==========
+      // 已绑定诊所的用户 -> 用诊所子渠道（优先层）；未绑定 -> 用父渠道（兜底层 kfChannelId）
+      let effectiveChannelId = kfChannelId;
+      let effectiveSystemPrompt = systemPrompt;
+      let effectiveAiModel = aiModel;
+      let effectiveKbId = kbId;
+      if (dbConn) {
+        try {
+          // external_userid -> 脉动网账号 users.id
+          const [abRows] = await (dbConn as any).execute(
+            `SELECT site_user_id FROM wecom_account_binding WHERE wecom_user_id = ? LIMIT 1`,
+            [fromUser]
+          );
+          const siteUserId = (abRows as any[])[0]?.site_user_id || null;
+          if (siteUserId) {
+            const clinic = await resolveClinicByUserId(Number(siteUserId), kfChannelId);
+            if (clinic && clinic.clinicChannelId && clinic.clinicChannelId !== kfChannelId) {
+              effectiveChannelId = clinic.clinicChannelId;
+              console.log(`[KF] 用户 ${fromUser} 归属诊所 tenant=${clinic.tenantId} -> 子渠道 channel=${effectiveChannelId}`);
+              // 重新加载诊所子渠道的配置 + 规则
+              const [cCfgRows] = await (dbConn as any).execute(
+                "SELECT config_key, config_val FROM wecom_channel_config WHERE channel_id = ?",
+                [effectiveChannelId]
+              );
+              const cCfg: Record<string, string> = {};
+              for (const r of cCfgRows as any[]) cCfg[r.config_key] = r.config_val;
+              if (cCfg.ai_model) effectiveAiModel = cCfg.ai_model;
+              effectiveKbId = cCfg.knowledge_base_id ? (parseInt(cCfg.knowledge_base_id, 10) || null) : null;
+              // 拼接系统提示词：平台总库(channel_id=1) + 诊所私有规则
+              const cDisablePlatform = cCfg.disable_platform_rules === '1';
+              const [cPlatRows] = cDisablePlatform ? [[]] : await (dbConn as any).execute(
+                "SELECT layer, category, content FROM wecom_prompt_rules WHERE channel_id = 1 AND enabled = 1 ORDER BY layer ASC, sort_order ASC, id ASC", []
+              );
+              const [cRuleRows] = await (dbConn as any).execute(
+                "SELECT layer, category, content FROM wecom_prompt_rules WHERE channel_id = ? AND enabled = 1 ORDER BY layer ASC, sort_order ASC, id ASC",
+                [effectiveChannelId]
+              );
+              const cPlat = cPlatRows as any[]; const cRules = cRuleRows as any[];
+              const cParts: string[] = [];
+              const cL1 = [...cPlat.filter((r: any) => r.layer === 1), ...cRules.filter((r: any) => r.layer === 1)];
+              if (cL1.length > 0) cParts.push(cL1.map((r: any) => r.content).join("\n"));
+              const cL2 = [...cPlat.filter((r: any) => r.layer === 2), ...cRules.filter((r: any) => r.layer === 2)];
+              if (cL2.length > 0) cParts.push("行为规则：\n" + cL2.map((r: any, i: number) => `${i + 1}. ${r.content}`).join("\n"));
+              if (cParts.length > 0) effectiveSystemPrompt = cParts.join("\n\n");
+              else if (cCfg.system_prompt) effectiveSystemPrompt = cCfg.system_prompt;
+              // 兜底诊所私有知识库
+              if (!effectiveKbId) {
+                const [cKbRows] = await (dbConn as any).execute(
+                  "SELECT id FROM wecom_knowledge_bases WHERE channel_id = ? ORDER BY id LIMIT 1",
+                  [effectiveChannelId]
+                );
+                if ((cKbRows as any[]).length > 0) effectiveKbId = (cKbRows as any[])[0].id;
+              }
+            }
+          }
+        } catch (clinicErr) {
+          console.error(`[KF] 解析用户归属诊所失败，回退父渠道:`, clinicErr);
+        }
+      }
+      // ========== 权限下放解析结束 ==========
+
       // 5. 知识库检索（两层：系统默认知识库 + 私有知识库，合并检索，取前5条）
       let kbContext = "";
       if (dbConn) {
@@ -1730,7 +1884,7 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
               `SELECT sk.kb_id FROM wecom_channel_shared_kb sk
                JOIN wecom_knowledge_bases kb ON sk.kb_id = kb.id
                WHERE sk.channel_id = ? AND kb.is_shared = 1`,
-              [kfChannelId]
+              [effectiveChannelId]
             );
             for (const r of (boundKbRows as any[])) kbIdSet.add(r.kb_id);
           } catch (bindErr) {
@@ -1741,8 +1895,8 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
             );
             for (const r of (sysKbRows as any[])) kbIdSet.add(r.id);
           }
-          // 当前渠道私有知识库
-          if (kbId) kbIdSet.add(kbId);
+          // 当前渠道私有知识库（诊所子渠道或父渠道）
+          if (effectiveKbId) kbIdSet.add(effectiveKbId);
           // 如果没有任何知识库，跳过
           if (kbIdSet.size > 0) {
             const kbIds = Array.from(kbIdSet);
@@ -1805,12 +1959,12 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
         try {
           const [[twinRow]] = await (dbConn as any).execute(
             `SELECT twin_enabled FROM wecom_digital_twin WHERE channel_id = ? LIMIT 1`,
-            [kfChannelId]
+            [effectiveChannelId]
           ) as any;
           if (twinRow && twinRow.twin_enabled === 1) {
             const [corpusRows] = await (dbConn as any).execute(
               `SELECT user_msg, agent_reply FROM wecom_corpus WHERE channel_id = ? AND quality = 1 ORDER BY id DESC LIMIT 3`,
-              [kfChannelId]
+              [effectiveChannelId]
             ) as any;
             if ((corpusRows as any[]).length > 0) {
               twinContext = "\n\n[参考回复风格示例（请模仿这些示例的语气和表达方式）]\n" +
@@ -1832,9 +1986,9 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
         try {
           const [matRows] = await (dbConn as any).execute(
             `SELECT id, type, title, description, storage_url FROM wecom_materials WHERE channel_id = ? AND is_active = 1 AND description != '' ORDER BY id`,
-            [kfChannelId]
+            [effectiveChannelId]
           ) as any;
-          console.log(`[KF] 素材库查询: channel_id=${kfChannelId}, 查到条数=${(matRows as any[]).length}`);
+          console.log(`[KF] 素材库查询: channel_id=${effectiveChannelId}, 查到条数=${(matRows as any[]).length}`);
           if ((matRows as any[]).length > 0) {
             console.log(`[KF] 素材列表:`, (matRows as any[]).map((r: any) => `id=${r.id} title=${r.title}`).join(', '));
             // 系统层面匹配：把用户消息与每条素材的触发描述做关键词重叠度计算
@@ -1857,15 +2011,15 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
             }
           }
         } catch (matErr: any) {
-          console.error(`[KF] 素材库查询异常 channel_id=${kfChannelId}:`, matErr?.message || matErr);
+          console.error(`[KF] 素材库查询异常 channel_id=${effectiveChannelId}:`, matErr?.message || matErr);
         }
       }
 
-      console.log(`[KF] 构建 fullSystemPrompt: kfChannelId=${kfChannelId} materialsToSend=${materialsToSend.length}条`);
-      const fullSystemPrompt = systemPrompt + twinContext + kbContext;
+      console.log(`[KF] 构建 fullSystemPrompt: effectiveChannelId=${effectiveChannelId} materialsToSend=${materialsToSend.length}条`);
+      const fullSystemPrompt = effectiveSystemPrompt + twinContext + kbContext;
 
       // 7. 调用DeepSeek获取回复
-      const dsReply = await sendToDeepSeekAndGetReply(userText, aiModel, fullSystemPrompt, "chat_reply");
+      const dsReply = await sendToDeepSeekAndGetReply(userText, effectiveAiModel, fullSystemPrompt, "chat_reply");
       console.log(`[KF] DeepSeek回复 tokens=${dsReply.totalTokens} 内容=${dsReply.content.substring(0, 50)}`);
 
       // 8. 发送回复给用户
@@ -1903,8 +2057,8 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
             `INSERT INTO wecom_message_credits
              (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, input_tokens, output_tokens, cache_hit_tokens, model_used, reply_preview, channel_type)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [fromUser, `kf-deepseek-${kfChannelId}`, userText.substring(0, 200), 0, dsReply.totalTokens, dsReply.totalTokens,
-             inputTokensMiss, dsReply.completionTokens, cacheHitTokens, dsReply.modelUsed || aiModel, dsReply.content.substring(0, 100), 'kf']
+            [fromUser, `kf-deepseek-${effectiveChannelId}`, userText.substring(0, 200), 0, dsReply.totalTokens, dsReply.totalTokens,
+             inputTokensMiss, dsReply.completionTokens, cacheHitTokens, dsReply.modelUsed || effectiveAiModel, dsReply.content.substring(0, 100), 'kf']
           );
           // 异步触发对话评分（不阻塞回复发送）
           const newLogId = (insertResult as any).insertId;
@@ -4325,6 +4479,7 @@ router.delete("/api/wecom/channels/:id/service-bindings/:bindingId", async (req:
 });
 
 // GET /api/wecom/service-binding/channel?service_type=yaban&service_tenant_id=xxx - 按服务商+租户查渠道
+// 权限下放：返回诊所子渠道id（优先层），前端院长端读写诊所私有数据；附带父渠道id作为兜底层
 router.get("/api/wecom/service-binding/channel", async (req: Request, res: Response) => {
   const { service_type, service_tenant_id } = req.query;
   if (!service_type || !service_tenant_id) {
@@ -4333,11 +4488,27 @@ router.get("/api/wecom/service-binding/channel", async (req: Request, res: Respo
   const conn = await getDbConnection();
   try {
     const [rows] = await (conn as any).execute(
-      `SELECT b.channel_id, c.name AS channel_name, c.kf_id, c.channel_type FROM wecom_channel_service_binding b LEFT JOIN wecom_channels c ON c.id = b.channel_id WHERE b.service_type = ? AND b.service_tenant_id = ? LIMIT 1`,
+      `SELECT b.channel_id, b.service_tenant_name, c.name AS channel_name, c.kf_id, c.channel_type FROM wecom_channel_service_binding b LEFT JOIN wecom_channels c ON c.id = b.channel_id WHERE b.service_type = ? AND b.service_tenant_id = ? LIMIT 1`,
       [service_type, Number(service_tenant_id)]
     );
-    const binding = (rows as any[])[0] || null;
-    res.json({ binding });
+    const raw = (rows as any[])[0] || null;
+    if (!raw) {
+      return res.json({ binding: null });
+    }
+    // 解析诊所子渠道（不存在则自动创建）
+    const { clinicChannelId, parentChannelId } = await resolveClinicChannel(
+      String(service_type), Number(service_tenant_id), raw.channel_id, raw.service_tenant_name
+    );
+    // binding.channel_id 返回诊所子渠道id，前端据此读写诊所私有配置/规则/知识库
+    res.json({
+      binding: {
+        channel_id: clinicChannelId,
+        parent_channel_id: parentChannelId,
+        channel_name: raw.channel_name,
+        kf_id: raw.kf_id,
+        channel_type: raw.channel_type,
+      },
+    });
   } catch (e) {
     console.error("[服务商绑定] 查渠道失败:", e);
     res.status(500).json({ error: "查询失败" });

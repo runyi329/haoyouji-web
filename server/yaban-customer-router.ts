@@ -988,10 +988,22 @@ export const yabanCustomerRouter = router({
       await ensureCustomerTable(conn);
       const TENANT_ID = await resolveTenantId(ctx);
       const [rows] = (await (conn as any).execute(
-        `SELECT * FROM yaban_customer WHERE id = ? AND tenant_id = ? LIMIT 1`,
+        `SELECT c.*,
+                ref.username AS referrer_username_from_users,
+                ref.id       AS referrer_user_id
+         FROM yaban_customer c
+         LEFT JOIN users cu ON CONVERT(cu.username USING utf8mb4) = CONVERT(c.yaban_username USING utf8mb4)
+         LEFT JOIN users ref ON ref.id = cu.invited_by_user_id
+         WHERE c.id = ? AND c.tenant_id = ? LIMIT 1`,
         [input.id, TENANT_ID]
       )) as any;
-      return (rows as any[])[0] || null;
+      const row = (rows as any[])[0];
+      if (!row) return null;
+      // 优先用 users.invited_by_user_id 对应的推荐人用户名，回退到 referrer_username 字段
+      if (row.referrer_username_from_users) {
+        row.referrer_username = row.referrer_username_from_users;
+      }
+      return row;
     }),
 
   // ============ 创建顾客 ============
@@ -1057,9 +1069,28 @@ export const yabanCustomerRouter = router({
         (mobile.length >= 6 ? mobile.slice(-6) : String(Math.floor(100000 + Math.random() * 900000)));
 
       // 查找推荐人的 user_id
+      // 若未填推荐人，自动默认为该诊所院长（role_key='owner'）
       let referrerUserId: number | null = null;
-      const referrerUsername = s(input.referrerUsername);
-      if (referrerUsername) {
+      let referrerUsername = s(input.referrerUsername);
+      if (!referrerUsername) {
+        try {
+          const [ownerRows] = await (conn as any).execute(
+            `SELECT m.user_id, u.username
+             FROM yaban_clinic_member m
+             JOIN users u ON u.id = m.user_id
+             WHERE m.tenant_id = ? AND m.role_key = 'owner' AND m.status = 'active'
+             LIMIT 1`,
+            [TENANT_ID]
+          ) as any;
+          if ((ownerRows as any[]).length > 0) {
+            referrerUsername = (ownerRows as any[])[0].username;
+            referrerUserId = (ownerRows as any[])[0].user_id;
+          }
+        } catch (e) {
+          console.warn("[YabanCustomer] 查找院长推荐人失败", e);
+        }
+      }
+      if (referrerUsername && !referrerUserId) {
         try {
           const [refRows] = await (conn as any).execute(
             `SELECT id FROM users WHERE username = ? OR name = ? LIMIT 1`,
@@ -1314,14 +1345,48 @@ export const yabanCustomerRouter = router({
           s(input.bleeding),
           s(input.pregnant),
           s(input.medication),
-          input.id,
+                    input.id,
           TENANT_ID,
         ]
       );
-
+      // 同步推荐人到 users.invited_by_user_id（以脉动网为唯一来源）
+      const newReferrerUsername = s(input.referrerUsername);
+      if (newReferrerUsername !== undefined) {
+        try {
+          // 找到该顾客的脉动网 user_id
+          const [custUserRows] = await (conn as any).execute(
+            `SELECT u.id FROM users u
+             JOIN yaban_customer c ON CONVERT(u.username USING utf8mb4) = CONVERT(c.yaban_username USING utf8mb4)
+             WHERE c.id = ? AND c.tenant_id = ? LIMIT 1`,
+            [input.id, TENANT_ID]
+          ) as any;
+          const custUserId = (custUserRows as any[])[0]?.id;
+          if (custUserId) {
+            if (newReferrerUsername) {
+              // 找推荐人的 user_id
+              const [refRows] = await (conn as any).execute(
+                `SELECT id FROM users WHERE username = ? LIMIT 1`,
+                [newReferrerUsername]
+              ) as any;
+              const refUserId = (refRows as any[])[0]?.id || null;
+              await (conn as any).execute(
+                `UPDATE users SET invited_by_user_id = ? WHERE id = ?`,
+                [refUserId, custUserId]
+              );
+            } else {
+              // 清空推荐人
+              await (conn as any).execute(
+                `UPDATE users SET invited_by_user_id = NULL WHERE id = ?`,
+                [custUserId]
+              );
+            }
+          }
+        } catch (e) {
+          console.warn('[YabanCustomer] 同步 invited_by_user_id 失败', e);
+        }
+      }
       return { success: true, id: input.id };
     }),
-
   // ============ 我可导出的医院列表 ============
   // 资格：在该医院 status=active，且对该医院拥有 data_export 权限（owner 默认有；其他角色需院长单独开启）
   listExportableClinics: protectedProcedure.query(async ({ ctx }) => {
@@ -3064,10 +3129,8 @@ export const yabanCustomerRouter = router({
       page_size:  z.number().int().min(1).max(100).default(50),
     }))
     .query(async ({ ctx, input }) => {
-      const role = (ctx.user as any).role as string;
-      if (role !== 'super_admin' && role !== 'admin' && role !== 'parent') {
-        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
-      }
+      // 权限：所有已登录的牙伴成员（院长/医生/助理等）均可查看本院顾客聊天记录
+      // resolveTenantId 已验证身份属于本院，无需额外 role 限制
       const conn = await getDbConnection();
       if (!conn) return { messages: [], total: 0, hasAccount: false };
       const TENANT_ID = await resolveTenantId(ctx);
@@ -3086,21 +3149,37 @@ export const yabanCustomerRouter = router({
         );
         const userId = (userRows as any[])[0]?.id;
         if (!userId) return { messages: [], total: 0, hasAccount: true };
-        const wecomUserId = String(userId);
-        // 3. 查询 wecom_message_credits
+        // 3. 合并两种 wecom_user_id 来源：
+        //    a) 牙伴在线聊天（web-chat）：存的是 String(users.id)，如 "4958020"
+        //    b) 企微客服聊天（kf）：存的是企微外部用户ID（wmCdHxNQ...），需通过 wecom_account_binding 映射
+        const allWecomIds = new Set<string>();
+        // a) 直接用 user_id 字符串（牙伴在线聊天的 wecom_user_id 格式）
+        allWecomIds.add(String(userId));
+        // b) 通过 wecom_account_binding 找企微外部用户ID
+        try {
+          const [bindRows] = await (conn as any).execute(
+            `SELECT wecom_user_id FROM wecom_account_binding WHERE site_user_id = ? LIMIT 10`,
+            [userId]
+          );
+          for (const r of (bindRows as any[])) {
+            if (r.wecom_user_id) allWecomIds.add(r.wecom_user_id);
+          }
+        } catch (_) {}
+        const idList = Array.from(allWecomIds);
         const offset = (input.page - 1) * input.page_size;
+        const placeholders = idList.map(() => '?').join(', ');
         const [countRows] = await (conn as any).execute(
-          `SELECT COUNT(*) AS total FROM wecom_message_credits WHERE wecom_user_id = ?`,
-          [wecomUserId]
+          `SELECT COUNT(*) AS total FROM wecom_message_credits WHERE wecom_user_id IN (${placeholders})`,
+          idList
         );
         const total = Number((countRows as any[])[0]?.total ?? 0);
         const [rows] = await (conn as any).execute(
           `SELECT id, wecom_user_id, user_message, reply_preview, model_used, created_at
            FROM wecom_message_credits
-           WHERE wecom_user_id = ?
+           WHERE wecom_user_id IN (${placeholders})
            ORDER BY created_at DESC
            LIMIT ? OFFSET ?`,
-          [wecomUserId, input.page_size, offset]
+          [...idList, input.page_size, offset]
         );
         return {
           messages: (rows as any[]).reverse(),

@@ -200,9 +200,9 @@ export const yabanClinicRouter = router({
         status: r.status || "",
       });
     }
-    // 演示院(tenant=9999)：所有登录用户均可见，无条件追加
+    // 演示院(tenant=9999)：仅对已加入至少一家门店的员工可见，顾客（clinics 为空）不追加
     const MODEL_TID = 9999;
-    if (!seen.has(MODEL_TID)) {
+    if (clinics.length > 0 && !seen.has(MODEL_TID)) {
       try {
         const [mrows] = (await conn.execute(
           `SELECT id AS clinicId, name, short_name AS shortName, status FROM yaban_clinic WHERE tenant_id = ? LIMIT 1`,
