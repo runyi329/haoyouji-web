@@ -63,6 +63,343 @@ function daysUntil(dateStr: string): number {
 type TabId = "summary" | "matrix" | "pnl" | "greeks";
 
 
+// ===== 汇总曲线 Canvas组件（所有订单叠加）=====
+function CombinedPnlCanvas({
+  perOrderPnL,
+  combinedPnL,
+  currentPrice,
+  highlightId,
+  onHighlight,
+}: {
+  perOrderPnL: { id: number; label: string; color: string; strikePrice: number; data: { price: number; pnl: number }[] }[];
+  combinedPnL: { price: number; pnl: number }[];
+  currentPrice?: number;
+  highlightId: number | null;
+  onHighlight: (id: number | null) => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [dragPrice, setDragPrice] = useState<number | null>(null);
+  const [isDragMode, setIsDragMode] = useState(false);
+  const dragTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const priceRangeRef = useRef<{ minP: number; maxP: number; W: number; padL: number; padR: number } | null>(null);
+
+  const resetDragTimer = useCallback(() => {
+    if (dragTimerRef.current) clearTimeout(dragTimerRef.current);
+    dragTimerRef.current = setTimeout(() => {
+      setIsDragMode(false);
+      setDragPrice(null);
+    }, 30000);
+  }, []);
+
+  const xToPrice = useCallback((clientX: number): number | null => {
+    const canvas = canvasRef.current;
+    if (!canvas || !priceRangeRef.current) return null;
+    const rect = canvas.getBoundingClientRect();
+    const { minP, maxP, W, padL, padR } = priceRangeRef.current;
+    const x = clientX - rect.left;
+    const ratio = (x - padL) / (W - padL - padR);
+    const logMin = Math.log(Math.max(minP, 1));
+    const logMax = Math.log(Math.max(maxP, 1));
+    const logP = logMin + ratio * (logMax - logMin);
+    return Math.max(minP, Math.min(maxP, Math.exp(logP)));
+  }, []);
+
+  const handleMove = useCallback((clientX: number) => {
+    if (!isDragMode) return;
+    const p = xToPrice(clientX);
+    if (p !== null) { setDragPrice(p); resetDragTimer(); }
+  }, [isDragMode, xToPrice, resetDragTimer]);
+
+  const displayPrice = dragPrice ?? currentPrice;
+
+  // 计算拖动时的P&L
+  const dragPnL = useMemo(() => {
+    if (!dragPrice || combinedPnL.length < 2) return null;
+    const sorted = [...combinedPnL].sort((a, b) => a.price - b.price);
+    for (let i = 0; i < sorted.length - 1; i++) {
+      if (sorted[i].price <= dragPrice && sorted[i + 1].price >= dragPrice) {
+        const ratio = (dragPrice - sorted[i].price) / (sorted[i + 1].price - sorted[i].price);
+        return sorted[i].pnl + ratio * (sorted[i + 1].pnl - sorted[i].pnl);
+      }
+    }
+    return null;
+  }, [dragPrice, combinedPnL]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || combinedPnL.length < 2) return;
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.offsetWidth;
+    const H = 280;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    const ctx = canvas.getContext("2d")!;
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, W, H);
+
+    const pad = { top: 28, right: 12, bottom: 28, left: 8 };
+    const minP = 1200, maxP = 4000;
+    const logMin = Math.log(Math.max(minP, 1));
+    const logMax = Math.log(Math.max(maxP, 1));
+    const toX = (p: number) => {
+      const ratio = (Math.log(Math.max(p, 1)) - logMin) / (logMax - logMin);
+      return pad.left + ratio * (W - pad.left - pad.right);
+    };
+
+    // 计算Y轴范围
+    let allMin = Infinity, allMax = -Infinity;
+    for (const s of perOrderPnL) {
+      for (const d of s.data) { allMin = Math.min(allMin, d.pnl); allMax = Math.max(allMax, d.pnl); }
+    }
+    for (const d of combinedPnL) { allMin = Math.min(allMin, d.pnl); allMax = Math.max(allMax, d.pnl); }
+    const margin = (allMax - allMin) * 0.12 || 1000;
+    const minV = allMin - margin, maxV = allMax + margin;
+    const vRange = maxV - minV;
+    const chartH = H - pad.top - pad.bottom;
+    const toY = (v: number) => pad.top + ((maxV - v) / vRange) * chartH;
+    // 保存价格范围供 touch/mouse 事件使用
+    priceRangeRef.current = { minP, maxP, W, padL: pad.left, padR: pad.right };
+
+    // 背景网格
+    ctx.strokeStyle = "rgba(255,255,255,0.04)";
+    ctx.lineWidth = 0.5;
+    ctx.setLineDash([2, 4]);
+    for (let p = 1400; p <= 4000; p += 200) {
+      const x = toX(p);
+      ctx.beginPath(); ctx.moveTo(x, pad.top); ctx.lineTo(x, H - pad.bottom); ctx.stroke();
+    }
+    const step = 10000;
+    const startY = Math.ceil(minV / step) * step;
+    for (let v = startY; v <= maxV; v += step) {
+      const y = toY(v);
+      if (y < pad.top || y > H - pad.bottom) continue;
+      ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // 零轴线
+    const zeroY = toY(0);
+    ctx.strokeStyle = "rgba(255,255,255,0.35)";
+    ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.moveTo(pad.left, zeroY); ctx.lineTo(W - pad.right, zeroY); ctx.stroke();
+
+    // 三色分段辅助函数
+    const getSegColor = (data: {price:number;pnl:number}[], idx: number, strike: number) => {
+      const { price, pnl } = data[idx];
+      if (pnl >= 0) return "#F6465D";
+      if (price > strike) return "rgba(160,160,160,0.85)";
+      return "#0ECB81";
+    };
+    const drawThreeColor = (
+      data: {price:number;pnl:number}[],
+      strike: number,
+      lineWidth: number,
+      alpha: number
+    ) => {
+      if (data.length < 2) return;
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth = lineWidth;
+      ctx.setLineDash([]);
+      for (let i = 0; i < data.length - 1; i++) {
+        const a = data[i], b = data[i + 1];
+        const ca = getSegColor(data, i, strike);
+        const cb = getSegColor(data, i + 1, strike);
+        if (a.pnl < 0 && b.pnl >= 0) {
+          const ratio = Math.abs(a.pnl) / (Math.abs(a.pnl) + Math.abs(b.pnl));
+          const cx2 = toX(a.price + ratio * (b.price - a.price));
+          const cy2 = toY(0);
+          ctx.strokeStyle = ca; ctx.beginPath(); ctx.moveTo(toX(a.price), toY(a.pnl)); ctx.lineTo(cx2, cy2); ctx.stroke();
+          ctx.strokeStyle = "#F6465D"; ctx.beginPath(); ctx.moveTo(cx2, cy2); ctx.lineTo(toX(b.price), toY(b.pnl)); ctx.stroke();
+        } else if (a.pnl >= 0 && b.pnl < 0) {
+          const ratio = Math.abs(a.pnl) / (Math.abs(a.pnl) + Math.abs(b.pnl));
+          const cx2 = toX(a.price + ratio * (b.price - a.price));
+          const cy2 = toY(0);
+          ctx.strokeStyle = "#F6465D"; ctx.beginPath(); ctx.moveTo(toX(a.price), toY(a.pnl)); ctx.lineTo(cx2, cy2); ctx.stroke();
+          ctx.strokeStyle = cb; ctx.beginPath(); ctx.moveTo(cx2, cy2); ctx.lineTo(toX(b.price), toY(b.pnl)); ctx.stroke();
+        } else if (ca !== cb) {
+          const mx = (toX(a.price) + toX(b.price)) / 2, my = (toY(a.pnl) + toY(b.pnl)) / 2;
+          ctx.strokeStyle = ca; ctx.beginPath(); ctx.moveTo(toX(a.price), toY(a.pnl)); ctx.lineTo(mx, my); ctx.stroke();
+          ctx.strokeStyle = cb; ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(toX(b.price), toY(b.pnl)); ctx.stroke();
+        } else {
+          ctx.strokeStyle = ca; ctx.beginPath(); ctx.moveTo(toX(a.price), toY(a.pnl)); ctx.lineTo(toX(b.price), toY(b.pnl)); ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = 1;
+    };
+
+    // 绘制每个订单的曲线（细线、半透明、三色分段）
+    for (const s of perOrderPnL) {
+      if (s.data.length < 2) continue;
+      const isHighlighted = highlightId === s.id;
+      const alpha = highlightId === null ? 0.35 : isHighlighted ? 0.7 : 0.12;
+      drawThreeColor(s.data, s.strikePrice, isHighlighted ? 1.5 : 0.8, alpha);
+    }
+
+    // 组合总曲线（粗线、高饱和度、三色分段）
+    const combinedStrike = perOrderPnL.length > 0
+      ? Math.min(...perOrderPnL.map(s => s.strikePrice))
+      : 0;
+    drawThreeColor(combinedPnL, combinedStrike, 2.5, 1);
+
+    // 当前价格黄线（拖动时跟随 displayPrice）
+    if (displayPrice) {
+      const cx = toX(displayPrice);
+      ctx.strokeStyle = "#F6C90E";
+      ctx.lineWidth = 0.8;
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 0.85;
+      if (zeroY > pad.top + 4) {
+        ctx.beginPath(); ctx.moveTo(cx, pad.top); ctx.lineTo(cx, zeroY - 3); ctx.stroke();
+      }
+      if (zeroY < H - pad.bottom - 4) {
+        ctx.beginPath(); ctx.moveTo(cx, zeroY + 3); ctx.lineTo(cx, H - pad.bottom); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      // 实时价格标签在图表内侧（X轴数字上方）
+      ctx.font = "bold 9px Inter, -apple-system, sans-serif";
+      ctx.fillStyle = "#F6C90E";
+      ctx.textAlign = "center";
+      // 价格标签（底部内侧，与MiniPnlCanvas一致）
+      ctx.font = "bold 9px Inter, -apple-system, sans-serif";
+      const clabel = `${Math.round(displayPrice)}U`;
+      const ctw = ctx.measureText(clabel).width;
+      const clx = Math.min(cx - ctw / 2, W - pad.right - ctw - 2);
+      ctx.fillStyle = "rgba(0,0,0,0.6)";
+      ctx.fillRect(clx - 2, H - pad.bottom - 14, ctw + 6, 12);
+      ctx.fillStyle = "#F6C90E";
+      ctx.textAlign = "left";
+      ctx.fillText(clabel, clx, H - pad.bottom - 4);
+
+      // 拖动时：在黄线顶部绘制该价格对应的组合 P&L
+      if (dragPrice !== null) {
+        const sorted = [...combinedPnL].sort((a, b) => a.price - b.price);
+        let pnlAtDrag = 0;
+        for (let i = 1; i < sorted.length; i++) {
+          if (sorted[i - 1].price <= displayPrice && sorted[i].price >= displayPrice) {
+            const t = (displayPrice - sorted[i - 1].price) / (sorted[i].price - sorted[i - 1].price);
+            pnlAtDrag = sorted[i - 1].pnl + t * (sorted[i].pnl - sorted[i - 1].pnl);
+            break;
+          }
+        }
+        const pnlLabel = pnlAtDrag >= 0 ? `+${Math.round(pnlAtDrag)}U` : `${Math.round(pnlAtDrag)}U`;
+        const pnlColor = pnlAtDrag >= 0 ? "#F6465D" : "#0ECB81";
+        ctx.font = "bold 10px Inter, -apple-system, sans-serif";
+        const ptw = ctx.measureText(pnlLabel).width;
+        const plx = Math.max(pad.left + 2, Math.min(cx - ptw / 2, W - pad.right - ptw - 4));
+        ctx.fillStyle = "rgba(0,0,0,0.75)";
+        ctx.fillRect(plx - 3, pad.top + 4, ptw + 8, 15);
+        ctx.fillStyle = pnlColor;
+        ctx.textAlign = "left";
+        ctx.fillText(pnlLabel, plx, pad.top + 15);
+      }
+    }
+
+    // X轴底边线
+    ctx.strokeStyle = "rgba(255,255,255,0.15)";
+    ctx.lineWidth = 0.5;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, H - pad.bottom);
+    ctx.lineTo(W - pad.right, H - pad.bottom);
+    ctx.stroke();
+
+    // X轴到10度（稀疏，避免拥挤）——放在最下面
+    const xTicks = [1200, 1400, 1600, 1800, 2000, 2500, 3000, 3500, 4000];
+    ctx.font = "9px Inter, -apple-system, sans-serif";
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.textAlign = "center";
+    for (const p of xTicks) {
+      const x = toX(p);
+      if (x < pad.left + 2 || x > W - pad.right - 2) continue;
+      ctx.fillText(`${p}`, x, H - pad.bottom + 10);
+    }
+
+    // Y轴标注
+    const yStep = 50000;
+    const yStart = Math.ceil(minV / yStep) * yStep;
+    ctx.font = "9px Inter, -apple-system, sans-serif";
+    ctx.textAlign = "left";
+    for (let v = yStart; v <= maxV; v += yStep) {
+      const y = toY(v);
+      if (y < pad.top + 4 || y > H - pad.bottom - 4) continue;
+      const label = v === 0 ? "0" : v > 0 ? `+${Math.round(v / 1000)}k` : `${Math.round(v / 1000)}k`;
+      ctx.fillStyle = v > 0 ? "rgba(246,70,93,0.7)" : v < 0 ? "rgba(14,203,129,0.7)" : "rgba(255,255,255,0.5)";
+      ctx.fillText(label, pad.left + 2, y - 2);
+    }
+
+  }, [perOrderPnL, combinedPnL, displayPrice, highlightId]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    e.preventDefault();
+    const p = xToPrice(e.touches[0].clientX);
+    if (p !== null) { setDragPrice(p); resetDragTimer(); }
+  }, [xToPrice, resetDragTimer]);
+
+  const handleTouchEnd = useCallback(() => {}, []);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    const p = xToPrice(e.clientX);
+    if (p !== null) { setDragPrice(p); resetDragTimer(); }
+  }, [xToPrice, resetDragTimer]);
+
+  const handleMouseUp = useCallback(() => {}, []);
+
+  return (
+    <div style={{ position: "relative", touchAction: isDragMode ? "none" : "auto" }}>
+      <canvas
+        ref={canvasRef}
+        style={{
+          width: "100%", height: 280, display: "block",
+          touchAction: isDragMode ? "none" : "auto",
+          cursor: isDragMode ? "crosshair" : "default",
+        }}
+        onTouchMove={isDragMode ? handleTouchMove : undefined}
+        onTouchEnd={isDragMode ? handleTouchEnd : undefined}
+        onMouseMove={isDragMode ? handleMouseMove : undefined}
+        onMouseUp={isDragMode ? handleMouseUp : undefined}
+        onMouseLeave={isDragMode ? handleMouseUp : undefined}
+      />
+      {/* 拖动按鈕 */}
+      <button
+        onClick={() => {
+          const next = !isDragMode;
+          setIsDragMode(next);
+          if (next) resetDragTimer();
+          else { setDragPrice(null); if (dragTimerRef.current) clearTimeout(dragTimerRef.current); }
+        }}
+        style={{
+          position: "absolute", bottom: 28, right: 6,
+          width: 28, height: 28, borderRadius: "50%",
+          border: isDragMode ? "1.5px solid #F6C90E" : "1.5px solid rgba(255,255,255,0.25)",
+          background: isDragMode ? "rgba(246,201,14,0.18)" : "rgba(0,0,0,0.45)",
+          color: isDragMode ? "#F6C90E" : "rgba(255,255,255,0.5)",
+          fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 10, transition: "all 0.2s", lineHeight: 1, padding: 0,
+        }}
+        title={isDragMode ? "退出拖动" : "拖动黄线"}
+      >↔</button>
+
+      <div className="flex flex-wrap gap-x-3 gap-y-1 px-3 pb-2">
+        {perOrderPnL.map(s => (
+          <button
+            key={s.id}
+            onClick={() => onHighlight(highlightId === s.id ? null : s.id)}
+            className="flex items-center gap-1 text-xs"
+            style={{ color: highlightId === null || highlightId === s.id ? s.color : "rgba(255,255,255,0.3)", background: "none", border: "none", cursor: "pointer", padding: "2px 0" }}
+          >
+            <span style={{ width: 16, height: 2, background: s.color, display: "inline-block", borderRadius: 1 }} />
+            {s.label}
+          </button>
+        ))}
+        <span className="flex items-center gap-1 text-xs" style={{ color: "rgba(255,255,255,0.6)" }}>
+          <span style={{ width: 16, height: 2, background: "rgba(255,255,255,0.8)", display: "inline-block", borderRadius: 1 }} />
+          组合
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ===== 迷你P&L曲线 Canvas组件 =====
 function MiniPnlCanvas({
   data,
@@ -78,13 +415,15 @@ function MiniPnlCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // 拖动黄线状态：null 表示展示实时价格
   const [dragPrice, setDragPrice] = useState<number | null>(null);
+  const [isLongPressed, setIsLongPressed] = useState(false);
   const dragTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isDraggingRef = useRef(false);
   const priceRangeRef = useRef<{ minP: number; maxP: number; W: number; padL: number; padR: number } | null>(null);
 
   const resetDragTimer = useCallback(() => {
     if (dragTimerRef.current) clearTimeout(dragTimerRef.current);
-    dragTimerRef.current = setTimeout(() => { setDragPrice(null); }, 30000);
+    dragTimerRef.current = setTimeout(() => { setDragPrice(null); setIsLongPressed(false); }, 30000);
   }, []);
 
   const xToPrice = useCallback((clientX: number) => {
@@ -102,12 +441,6 @@ function MiniPnlCanvas({
     return Math.max(minP, Math.min(maxP, p));
   }, []);
 
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    isDraggingRef.current = true;
-    const p = xToPrice(e.touches[0].clientX);
-    if (p !== null) { setDragPrice(p); resetDragTimer(); }
-  }, [xToPrice, resetDragTimer]);
-
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!isDraggingRef.current) return;
     e.preventDefault();
@@ -115,13 +448,9 @@ function MiniPnlCanvas({
     if (p !== null) { setDragPrice(p); resetDragTimer(); }
   }, [xToPrice, resetDragTimer]);
 
-  const handleTouchEnd = useCallback(() => { isDraggingRef.current = false; }, []);
-
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    isDraggingRef.current = true;
-    const p = xToPrice(e.clientX);
-    if (p !== null) { setDragPrice(p); resetDragTimer(); }
-  }, [xToPrice, resetDragTimer]);
+  const handleTouchEnd = useCallback(() => {
+    isDraggingRef.current = false;
+  }, []);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (!isDraggingRef.current) return;
@@ -129,7 +458,25 @@ function MiniPnlCanvas({
     if (p !== null) { setDragPrice(p); resetDragTimer(); }
   }, [xToPrice, resetDragTimer]);
 
-  const handleMouseUp = useCallback(() => { isDraggingRef.current = false; }, []);
+  const handleMouseUp = useCallback(() => {
+    isDraggingRef.current = false;
+  }, []);
+
+  // 点击按鈕切换拖动模式
+  const toggleDragMode = useCallback(() => {
+    if (isDraggingRef.current || dragPrice !== null) {
+      // 退出拖动模式
+      isDraggingRef.current = false;
+      setIsLongPressed(false);
+      setDragPrice(null);
+      if (dragTimerRef.current) { clearTimeout(dragTimerRef.current); dragTimerRef.current = null; }
+    } else {
+      // 进入拖动模式，初始化到当前价格
+      isDraggingRef.current = true;
+      setIsLongPressed(true);
+      if (currentPrice != null) { setDragPrice(currentPrice); resetDragTimer(); }
+    }
+  }, [dragPrice, currentPrice, resetDragTimer]);
 
   // 显示的价格：拖动时用 dragPrice，否则用 currentPrice
   const displayPrice = dragPrice ?? currentPrice;
@@ -423,18 +770,51 @@ function MiniPnlCanvas({
       }
     }
   }, [data, strikePrice, color, displayPrice]);
+  const isDragMode = dragPrice !== null;
+
   return (
-    <canvas
-      ref={canvasRef}
-      style={{ width: "100%", height: 300, display: "block", touchAction: "none", cursor: "crosshair" }}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-    />
+    <div style={{ position: "relative", width: "100%", height: 300 }}>
+      <canvas
+        ref={canvasRef}
+        style={{
+          width: "100%", height: 300, display: "block",
+          touchAction: isDragMode ? "none" : "auto",
+          cursor: isDragMode ? "crosshair" : "default"
+        }}
+        onTouchMove={isDragMode ? handleTouchMove : undefined}
+        onTouchEnd={isDragMode ? handleTouchEnd : undefined}
+        onMouseMove={isDragMode ? handleMouseMove : undefined}
+        onMouseUp={isDragMode ? handleMouseUp : undefined}
+        onMouseLeave={isDragMode ? handleMouseUp : undefined}
+      />
+      {/* 拖动模式切换按鈕 */}
+      <button
+        onClick={toggleDragMode}
+        style={{
+          position: "absolute",
+          bottom: 28,
+          right: 6,
+          width: 28,
+          height: 28,
+          borderRadius: "50%",
+          border: isDragMode ? "1.5px solid #F6C90E" : "1.5px solid rgba(255,255,255,0.25)",
+          background: isDragMode ? "rgba(246,201,14,0.18)" : "rgba(0,0,0,0.45)",
+          color: isDragMode ? "#F6C90E" : "rgba(255,255,255,0.5)",
+          fontSize: 14,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          zIndex: 10,
+          transition: "all 0.2s",
+          lineHeight: 1,
+          padding: 0,
+        }}
+        title={isDragMode ? "退出拖动" : "拖动黄线"}
+      >
+        ↔
+      </button>
+    </div>
   );
 }
 
@@ -564,6 +944,7 @@ export default function OptionAnalysisPage() {
       id: pos.id,
       label: pos.label,
       color: pos.color,
+      strikePrice: pos.strikePrice,
       data: calcExpiryPnL([pos], [minP, maxP], 80),
     }));
   }, [positions, S]);
@@ -1427,6 +1808,21 @@ export default function OptionAnalysisPage() {
       {/* ===== P&L 曲线 Tab（含订单列表）===== */}
       {!isLoading && optionOrders.length > 0 && activeTab === "pnl" && (
         <div className="flex flex-col overflow-y-auto" style={{ height: "calc(100vh - 160px)" }}>
+          {/* 汇总曲线图 */}
+          {positions.length > 1 && (
+            <div className="flex-shrink-0 px-3 pt-3 pb-2" style={{ borderTop: `1px solid ${OKX_BORDER}` }}>
+              <div className="text-xs font-medium mb-2" style={{ color: OKX_TEXT_SEC }}>组合总览 · 所有订单叠加</div>
+              <div className="rounded-2xl overflow-hidden" style={{ background: OKX_CARD, border: `1px solid ${OKX_BORDER}` }}>
+                <CombinedPnlCanvas
+                  perOrderPnL={perOrderPnL}
+                  combinedPnL={pnlData}
+                  currentPrice={S}
+                  highlightId={highlightId}
+                  onHighlight={setHighlightId}
+                />
+              </div>
+            </div>
+          )}
           {/* 订单列表 */}
           <div className="flex-shrink-0 px-3 pt-3 pb-2" style={{ borderTop: `1px solid ${OKX_BORDER}` }}>
             <div className="text-xs font-medium mb-2" style={{ color: OKX_TEXT_SEC }}>期权订单 · 点击卡片高亮曲线</div>
