@@ -7935,5 +7935,7 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-28T04:04:03Z", type: "fix", cleanMessage: "共享知识库/指令库按service_tenant_id精准匹配，修复显示空白问题" },
     { date: "2026-06-28T04:37:06Z", type: "feat", cleanMessage: "微信聊天记录返回箭头、AI秘书UI优化、随访详情加沟通记录入口" },
     { date: "2026-06-28T04:55:54Z", type: "feat", cleanMessage: "AI语音分析改为内容摘要版 - 逐条短句+每条复制按钮" },
+    { date: "2026-06-28T07:52:56Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-28T07:54:45Z", type: "feat", cleanMessage: "时间线重构+预约联动+录音异步处理+COS配置+生日动画等优化" },
   ],
 };
