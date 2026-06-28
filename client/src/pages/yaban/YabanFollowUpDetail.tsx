@@ -17,6 +17,7 @@ import {
   FileText,
   Stethoscope,
   ClipboardList,
+  MessageSquare,
 } from "lucide-react";
 
 // 状态颜色映射
@@ -75,6 +76,13 @@ export default function YabanFollowUpDetail() {
   const handleReFollowUp = () => {
     // 再随访操作
     navigate("/yaban/followup/create");
+  };
+
+  // 跳转到该患者的沟通记录（售前售后）
+  // 目前随访详情为模拟数据，暂用患者列表页搜索姓名的方式过渡
+  // 待随访接入真实数据后，可直接用 patient_id 跳转
+  const handleViewComm = () => {
+    navigate(`/yaban/patients?keyword=${encodeURIComponent(detail.patient.name)}`);
   };
 
   return (
@@ -226,22 +234,33 @@ export default function YabanFollowUpDetail() {
       )}
 
       {/* 占位，防止底部操作栏遮挡 */}
-      <div className="h-20" />
+      <div className="h-32" />
 
       {/* 底部操作栏 */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 py-3 flex gap-3">
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 py-3 space-y-2">
+        {/* 查看沟通记录 - 快捷入口 */}
         <button
-          onClick={handleReFollowUp}
-          className="flex-1 py-3 rounded-lg border border-sky-500 text-sky-600 font-bold text-sm"
+          onClick={handleViewComm}
+          className="w-full py-2.5 rounded-lg bg-sky-50 border border-sky-200 text-sky-600 font-medium text-sm flex items-center justify-center gap-2"
         >
-          再随访
+          <MessageSquare size={15} />
+          查看沟通记录（售前售后）
         </button>
-        <button
-          onClick={handleExecute}
-          className="flex-1 py-3 rounded-lg bg-gradient-to-r from-sky-500 to-sky-400 text-white font-bold text-sm shadow-sm"
-        >
-          执行随访
-        </button>
+        {/* 主操作 */}
+        <div className="flex gap-3">
+          <button
+            onClick={handleReFollowUp}
+            className="flex-1 py-3 rounded-lg border border-sky-500 text-sky-600 font-bold text-sm"
+          >
+            再随访
+          </button>
+          <button
+            onClick={handleExecute}
+            className="flex-1 py-3 rounded-lg bg-gradient-to-r from-sky-500 to-sky-400 text-white font-bold text-sm shadow-sm"
+          >
+            执行随访
+          </button>
+        </div>
       </div>
     </div>
   );

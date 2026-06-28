@@ -124,7 +124,7 @@ function AnalysisConfirmModal({
   onCancel: () => void;
 }) {
   const [data, setData] = useState(result);
-  const [showRaw, setShowRaw] = useState(false);
+  const [showRaw, setShowRaw] = useState(true);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/40">
@@ -138,15 +138,18 @@ function AnalysisConfirmModal({
           <button onClick={onCancel} className="p-1 text-white/70"><X size={20} /></button>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-          {/* 原始内容（可展开） */}
+          {/* 原始转写内容（默认展开） */}
           {data.rawText && (
             <div>
               <button
-                className="flex items-center gap-1 text-xs text-gray-400 mb-1"
+                className="flex items-center justify-between w-full text-xs text-gray-400 mb-1.5"
                 onClick={() => setShowRaw(!showRaw)}
               >
-                {showRaw ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
-                原始转写内容
+                <span className="flex items-center gap-1">
+                  {showRaw ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                  原始转写内容
+                </span>
+                <span className="text-sky-400 font-medium">本次内容记录了 {data.rawText.replace(/\s/g, '').length} 字</span>
               </button>
               {showRaw && (
                 <div className="text-sm text-gray-600 bg-gray-50 rounded-xl p-3 leading-relaxed max-h-40 overflow-y-auto">
@@ -286,7 +289,7 @@ function CustomerChatViewModal({
       {/* 顶部导航 */}
       <div className="bg-gradient-to-r from-green-600 to-green-500 text-white flex items-center justify-between px-4 py-3 flex-shrink-0">
         <button onClick={onClose} className="p-1 text-white/80">
-          <X size={22} />
+          <ChevronLeft size={26} />
         </button>
         <div className="flex flex-col items-center">
           <span className="text-base font-bold leading-tight">微信聊天记录</span>
@@ -802,10 +805,17 @@ export default function YabanPatientComm() {
   const renderVoiceControls = () => {
     if (recordingState === "analyzing") {
       return (
-        <div className="bg-sky-50 rounded-2xl px-4 py-5 flex flex-col items-center gap-3">
-          <Loader2 size={28} className="text-sky-500 animate-spin" />
-          <p className="text-sm text-sky-600 font-medium">AI 秘书分析中...</p>
-          <p className="text-xs text-gray-400">请稍候，正在转写并提取要点</p>
+        <div className="bg-sky-50 rounded-2xl px-4 py-4 flex flex-col items-center gap-2">
+          <div className="flex items-center gap-2">
+            <Loader2 size={16} className="text-sky-500 animate-spin flex-shrink-0" />
+            <p className="text-sm text-sky-500 font-medium">AI 秘书正在转写并提取要点</p>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
+          <p className="text-xs text-gray-400">AI 秘书处理中，请稍候...</p>
         </div>
       );
     }
@@ -826,17 +836,17 @@ export default function YabanPatientComm() {
       <div className="bg-sky-50 rounded-2xl p-4 space-y-3">
         <div className="flex items-center justify-center gap-3">
           {recordingState === "recording" ? (
-            <span className="flex items-center gap-2 text-sky-600 font-medium text-sm">
+            <span className="flex items-center gap-2 text-sky-600 font-semibold text-base">
               <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
               AI秘书记录中
             </span>
           ) : (
-            <span className="flex items-center gap-2 text-gray-500 font-medium text-sm">
-              <Pause size={13} />
+            <span className="flex items-center gap-2 text-gray-500 font-semibold text-base">
+              <Pause size={14} />
               已暂停
             </span>
           )}
-          <span className="text-2xl font-mono text-gray-900 tabular-nums">{formatDuration(duration)}</span>
+          <span className="text-sm font-mono text-gray-400 tabular-nums">{formatDuration(duration)}</span>
         </div>
         <div className="flex gap-2">
           <button onClick={cancelRecording} className="flex items-center justify-center gap-1 px-3 py-2.5 rounded-xl border border-gray-200 text-gray-500 text-sm">
