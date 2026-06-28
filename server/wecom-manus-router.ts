@@ -5393,6 +5393,68 @@ router.post("/api/wecom/web-chat", async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/wecom/web-chat-welcome  -- 获取牙伴在线聊天欢迎语（多级优先级链）
+// 优先级：诊所级 > 渠道级 > 平台级；下级开关关闭则不发欢迎语
+router.get("/api/wecom/web-chat-welcome", async (req: Request, res: Response) => {
+  try {
+    const { channel_id, tenant_id } = req.query as { channel_id?: string; tenant_id?: string };
+    const kfChannelId = Number(channel_id) || 4;
+    const tenantId = Number(tenant_id) || null;
+    const dbConn = await getDbConnection();
+    if (!dbConn) return res.json({ enabled: false, message: '' });
+
+    // 查询函数：获取指定 channel_id 的欢迎语配置
+    const getWelcomeConfig = async (cid: number): Promise<{ enabled: boolean; message: string } | null> => {
+      const [rows] = await (dbConn as any).execute(
+        "SELECT config_key, config_val FROM wecom_channel_config WHERE channel_id = ? AND config_key IN ('welcome_msg', 'welcome_enabled')",
+        [cid]
+      ) as any;
+      if (!(rows as any[]).length) return null;
+      const cfg: Record<string, string> = {};
+      for (const r of rows as any[]) cfg[r.config_key] = r.config_val;
+      if (!('welcome_enabled' in cfg)) return null;
+      const enabled = cfg.welcome_enabled === '1' || cfg.welcome_enabled === 'true';
+      const message = cfg.welcome_msg || '';
+      return { enabled, message };
+    };
+
+    // 1. 诊所级：通过 tenant_id 找到 clinic_channel_id
+    if (tenantId) {
+      try {
+        const [ccRows] = await (dbConn as any).execute(
+          "SELECT clinic_channel_id FROM wecom_clinic_channel WHERE service_tenant_id = ? AND parent_channel_id = ? LIMIT 1",
+          [tenantId, kfChannelId]
+        ) as any;
+        if ((ccRows as any[]).length > 0) {
+          const clinicChannelId = (ccRows as any[])[0].clinic_channel_id;
+          const cfg = await getWelcomeConfig(clinicChannelId);
+          if (cfg !== null) {
+            return res.json({ enabled: cfg.enabled, message: cfg.message });
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 2. 渠道级（kfChannelId，如 4）
+    try {
+      const cfg = await getWelcomeConfig(kfChannelId);
+      if (cfg !== null) return res.json({ enabled: cfg.enabled, message: cfg.message });
+    } catch (_) {}
+
+    // 3. 平台级（channel_id=1）
+    try {
+      const cfg = await getWelcomeConfig(1);
+      if (cfg !== null) return res.json({ enabled: cfg.enabled, message: cfg.message });
+    } catch (_) {}
+
+    // 都没有配置：不发欢迎语
+    return res.json({ enabled: false, message: '' });
+  } catch (e: any) {
+    console.error('[WEB-CHAT-WELCOME] 异常:', e);
+    res.json({ enabled: false, message: '' });
+  }
+});
+
 export default router;
 
 

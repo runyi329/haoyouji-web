@@ -265,17 +265,28 @@ export default function YabanWechatChat() {
       : avatarSrc(avatarData.avatar as AvatarKey)  // 年龄+性别匹配的卡通头像 key
     : DEFAULT_USER_AVATAR;
 
-  // 欢迎消息
+  // 欢迎消息：从后端按优先级链获取（诊所级 > 渠道级 > 平台级），开关关闭则不显示
   useEffect(() => {
-    const welcome: Message = {
-      id: "welcome",
-      role: "assistant",
-      content: "您好！我是牙伴在线客服，很高兴为您服务。请问有什么可以帮助您的？",
-      time: new Date(),
-      sending: false,
-    };
-    setMessages([welcome]);
-  }, []);
+    const params = new URLSearchParams();
+    params.set('channel_id', String(dynamicChannelId));
+    if (currentTenantId) params.set('tenant_id', String(currentTenantId));
+    fetch(`/api/wecom/web-chat-welcome?${params.toString()}`)
+      .then(r => r.json())
+      .then((data: { enabled: boolean; message: string }) => {
+        if (data.enabled && data.message) {
+          setMessages([{
+            id: 'welcome',
+            role: 'assistant',
+            content: data.message,
+            time: new Date(),
+            sending: false,
+          }]);
+        } else {
+          setMessages([]);
+        }
+      })
+      .catch(() => setMessages([]));
+  }, [dynamicChannelId, currentTenantId]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
