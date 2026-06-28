@@ -5,7 +5,7 @@ import {
   Zap, MessageSquare, User, BarChart2, Menu, ChevronRight, ChevronDown,
   Clock, Settings, AlertCircle, PlayCircle, StopCircle, Coins, Loader2,
   Sparkles, Save, ToggleLeft, ToggleRight, Ban, Shield, Camera, Pencil, ImageIcon, FileText,
-  FolderPlus, Library, ArrowRight
+  FolderPlus, Library, ArrowRight, BookOpen, Database
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -148,8 +148,23 @@ export default function WecomAdmin() {
   const [, navigate] = useLocation();
   const [activeTab, setActiveTab] = useState<TabKey>("binding");
 
+  const currentLabel = TABS.find(t => t.key === activeTab)?.label || "企业微信";
+
   return (
     <div className="min-h-screen bg-gray-50 pb-24 max-w-md mx-auto">
+      {/* 统一帽檐（各 tab 共用，返回个人中心） */}
+      <div className="sticky top-0 z-30" style={{ background: 'linear-gradient(135deg,#0d2818 0%,#1a5c2e 100%)' }}>
+        <div className="flex items-center gap-3 px-4 max-w-md mx-auto" style={{ height: 48 }}>
+          <button onClick={() => navigate("/profile")} className="p-1.5 rounded-full" style={{ color: 'rgba(255,255,255,0.9)' }} aria-label="返回个人中心">
+            <ArrowLeft className="w-4 h-4" />
+          </button>
+          <div className="flex-1">
+            <div className="text-sm font-bold text-white leading-tight">{currentLabel}</div>
+            <div className="text-[10px] text-green-300">个人中心 » 企业微信</div>
+          </div>
+        </div>
+      </div>
+
       {/* Tab 内容 */}
       <div className="pt-2">
         {activeTab === "binding" && <WecomBindingManager />}
@@ -2516,6 +2531,22 @@ function PlatformAccountsTab({ channels, onRefresh }: { channels: Channel[]; onR
   );
 }
 
+// 指令适用范围标签
+function RuleScopeTag({ rule, sharedKbs }: { rule: { kb_ids?: number[] }; sharedKbs: { id: number; name: string }[] }) {
+  const ids = rule.kb_ids || [];
+  if (ids.length === 0) {
+    return <span className="inline-block mt-1.5 text-[10px] px-1.5 py-0.5 rounded bg-green-50 text-green-600 border border-green-100">全局通用 · 所有库</span>;
+  }
+  const names = ids.map(id => sharedKbs.find(k => k.id === id)?.name || `库#${id}`);
+  return (
+    <div className="mt-1.5 flex flex-wrap gap-1">
+      {names.map((n, i) => (
+        <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100">专属 · {n}</span>
+      ))}
+    </div>
+  );
+}
+
 // 平台指令库Tab（管理 channel_id=1 的共享 prompt-rules）
 function PlatformRulesTab() {
   interface PromptRule {
@@ -2529,13 +2560,16 @@ function PlatformRulesTab() {
     remark: string;
     created_at: string;
     updated_at: string;
+    kb_ids?: number[];
   }
+  interface SharedKb { id: number; name: string; }
   const [rules, setRules] = useState<PromptRule[]>([]);
+  const [sharedKbs, setSharedKbs] = useState<SharedKb[]>([]);
   const [loading, setLoading] = useState(true);
   const [addingRule, setAddingRule] = useState(false);
   const [editingRuleId, setEditingRuleId] = useState<number | null>(null);
   const [editRuleDraft, setEditRuleDraft] = useState<Partial<PromptRule>>({});
-  const [newRule, setNewRule] = useState({ layer: 1, category: '角色定义', content: '', remark: '' });
+  const [newRule, setNewRule] = useState<{ layer: number; category: string; content: string; remark: string; kb_ids: number[] }>({ layer: 1, category: '角色定义', content: '', remark: '', kb_ids: [] });
   const [savingRule, setSavingRule] = useState(false);
   const [ruleSearch, setRuleSearch] = useState('');
   const PLATFORM_CHANNEL_ID = 1;
@@ -2596,7 +2630,17 @@ function PlatformRulesTab() {
     finally { setLoading(false); }
   }
 
-  useEffect(() => { loadRules(); }, []);
+  async function loadSharedKbs() {
+    try {
+      const res = await fetch('/api/wecom/knowledge-bases');
+      const d = await res.json();
+      const list = (Array.isArray(d) ? d : (d.bases || d.knowledgeBases || d.list || [])) as any[];
+      // 只取平台公共库(is_shared=1)供选择
+      setSharedKbs(list.filter((b: any) => b.is_shared === 1 || b.is_shared === true).map((b: any) => ({ id: Number(b.id), name: b.name })));
+    } catch { /* 静默失败，范围选择不可用时退化为仅全局 */ }
+  }
+
+  useEffect(() => { loadRules(); loadSharedKbs(); }, []);
 
   async function handleAddRule() {
     if (!newRule.content.trim()) return;
@@ -2610,8 +2654,9 @@ function PlatformRulesTab() {
       const d = await res.json();
       if (d.rule) {
         setRules(prev => [...prev, d.rule]);
-        setNewRule({ layer: 1, category: '角色定义', content: '', remark: '' });
+        setNewRule({ layer: 1, category: '角色定义', content: '', remark: '', kb_ids: [] });
         setAddingRule(false);
+        loadRules();
         toast.success('指令已添加');
       } else toast.error(d.error || '添加失败');
     } catch { toast.error('网络错误'); }
@@ -2689,7 +2734,7 @@ function PlatformRulesTab() {
           )}
         </div>
         <button
-          onClick={() => { setAddingRule(true); setNewRule({ layer: 1, category: '角色定义', content: '', remark: '' }); }}
+          onClick={() => { setAddingRule(true); setNewRule({ layer: 1, category: '角色定义', content: '', remark: '', kb_ids: [] }); }}
           className="flex items-center gap-1 px-4 py-2 rounded-xl bg-gradient-to-r from-[#1a5c2e] to-[#2d8a47] text-white text-sm font-medium"
         >
           <Plus className="w-4 h-4" />新增
@@ -2741,6 +2786,7 @@ function PlatformRulesTab() {
                       </div>
                     </div>
                     {rule.remark && <p className="text-xs text-gray-400 mt-1">📌 {rule.remark}</p>}
+                    <RuleScopeTag rule={rule} sharedKbs={sharedKbs} />
                   </div>
                 )}
               </div>
@@ -2800,6 +2846,7 @@ function PlatformRulesTab() {
                       </div>
                     </div>
                     {rule.remark && <p className="text-xs text-gray-400 mt-1">📌 {rule.remark}</p>}
+                    <RuleScopeTag rule={rule} sharedKbs={sharedKbs} />
                   </div>
                 )}
               </div>
@@ -2901,6 +2948,33 @@ function PlatformRulesTab() {
                     />
                     <p className="text-[10px] text-gray-400 mt-1">可直接编辑上方内容进行调整</p>
                   </div>
+                </div>
+
+                {/* 适用范围 */}
+                <div className="border border-gray-100 rounded-lg p-2.5 bg-gray-50/60">
+                  <p className="text-[11px] font-semibold text-gray-500 mb-1.5">适用范围</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setNewRule(r => ({ ...r, kb_ids: [] }))}
+                      className={`text-[11px] px-2 py-1 rounded-full border ${ (newRule.kb_ids?.length ?? 0) === 0 ? 'bg-green-600 text-white border-green-600' : 'bg-white text-gray-600 border-gray-200'}`}
+                    >全局通用（所有库）</button>
+                    {sharedKbs.map(kb => {
+                      const active = newRule.kb_ids?.includes(kb.id);
+                      return (
+                        <button
+                          key={kb.id}
+                          type="button"
+                          onClick={() => setNewRule(r => {
+                            const cur = r.kb_ids || [];
+                            return active ? { ...r, kb_ids: cur.filter(x => x !== kb.id) } : { ...r, kb_ids: [...cur, kb.id] };
+                          })}
+                          className={`text-[11px] px-2 py-1 rounded-full border ${active ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200'}`}
+                        >{kb.name}</button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-1.5">{(newRule.kb_ids?.length ?? 0) === 0 ? '该指令对所有知识库生效' : `仅对所选 ${newRule.kb_ids.length} 个库专属生效`}</p>
                 </div>
 
                 {/* 备注 */}
@@ -3152,6 +3226,8 @@ function AIModelConfigTab() {
 
 // 平台共享 Tab：上方平台共享指令库 + 下方平台共享知识库
 interface SharedKb { id: number; name: string; description?: string | null; item_count: number; }
+interface SharedRuleLib { id: number; name: string; description?: string | null; rule_count: number; }
+interface SharedRule { id: number; lib_id: number; layer: number; category: string; content: string; remark?: string | null; enabled: number; }
 
 // 平台版「零步 AI 辅助整理」：把大白话智能归类后写入平台共享规则(channel_id=1)与选中的共享库
 interface PlatAddPrompt { content: string; original?: string; action?: 'add' | 'merge' | 'skip'; recommendation?: 'add' | 'skip'; dedup_reason?: string; matched?: string; }
@@ -3386,6 +3462,108 @@ function PlatformSharedTab() {
   const [savingKb, setSavingKb] = useState(false);
   const [deletingKb, setDeletingKb] = useState<SharedKb | null>(null);
 
+  // 共享指令库区块展开/折叠
+  const [ruleLibOpen, setRuleLibOpen] = useState(true);
+  // 共享指令库列表
+  const [sharedRuleLibs, setSharedRuleLibs] = useState<SharedRuleLib[]>([]);
+  const [ruleLibLoading, setRuleLibLoading] = useState(true);
+  // 当前进入管理的指令库（null = 列表视图）
+  const [activeRuleLib, setActiveRuleLib] = useState<SharedRuleLib | null>(null);
+  // 库内指令列表
+  const [ruleLibRules, setRuleLibRules] = useState<SharedRule[]>([]);
+  const [ruleLibRulesLoading, setRuleLibRulesLoading] = useState(false);
+  // 新建/重命名库弹窗
+  const [showRuleLibModal, setShowRuleLibModal] = useState(false);
+  const [editingRuleLib, setEditingRuleLib] = useState<SharedRuleLib | null>(null);
+  const [ruleLibNameDraft, setRuleLibNameDraft] = useState("");
+  const [ruleLibDescDraft, setRuleLibDescDraft] = useState("");
+  const [savingRuleLib, setSavingRuleLib] = useState(false);
+  const [deletingRuleLib, setDeletingRuleLib] = useState<SharedRuleLib | null>(null);
+  // 库内新增指令弹窗
+  const [showAddRuleModal, setShowAddRuleModal] = useState(false);
+  const [newRuleContent, setNewRuleContent] = useState("");
+  const [newRuleRemark, setNewRuleRemark] = useState("");
+  const [newRuleCategory, setNewRuleCategory] = useState("角色定义");
+  const [savingNewRule, setSavingNewRule] = useState(false);
+  const [deletingRule, setDeletingRule] = useState<SharedRule | null>(null);
+
+  async function loadSharedRuleLibs() {
+    setRuleLibLoading(true);
+    try {
+      const r = await fetch('/api/wecom/shared-rule-libs');
+      const d = await r.json();
+      if (Array.isArray(d)) setSharedRuleLibs(d.map((l: any) => ({ ...l, rule_count: Number(l.rule_count || 0) })));
+    } catch {} finally { setRuleLibLoading(false); }
+  }
+
+  async function loadRuleLibRules(libId: number) {
+    setRuleLibRulesLoading(true);
+    try {
+      const r = await fetch(`/api/wecom/shared-rule-libs/${libId}/rules`);
+      const d = await r.json();
+      if (d.rules) setRuleLibRules(d.rules);
+    } catch {} finally { setRuleLibRulesLoading(false); }
+  }
+
+  function openCreateRuleLib() {
+    setEditingRuleLib(null); setRuleLibNameDraft(""); setRuleLibDescDraft(""); setShowRuleLibModal(true);
+  }
+  function openRenameRuleLib(lib: SharedRuleLib) {
+    setEditingRuleLib(lib); setRuleLibNameDraft(lib.name); setRuleLibDescDraft(lib.description || ""); setShowRuleLibModal(true);
+  }
+  async function handleSaveRuleLib() {
+    if (!ruleLibNameDraft.trim()) { toast.error("请输入库名"); return; }
+    setSavingRuleLib(true);
+    try {
+      if (editingRuleLib) {
+        const r = await fetch(`/api/wecom/shared-rule-libs/${editingRuleLib.id}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: ruleLibNameDraft.trim(), description: ruleLibDescDraft.trim() || null }),
+        });
+        if ((await r.json()).ok) { toast.success("已保存"); setShowRuleLibModal(false); loadSharedRuleLibs(); }
+        else toast.error("保存失败");
+      } else {
+        const r = await fetch('/api/wecom/shared-rule-libs', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: ruleLibNameDraft.trim(), description: ruleLibDescDraft.trim() || null }),
+        });
+        if ((await r.json()).ok) { toast.success("已创建"); setShowRuleLibModal(false); loadSharedRuleLibs(); }
+        else toast.error("创建失败");
+      }
+    } catch { toast.error("网络错误"); } finally { setSavingRuleLib(false); }
+  }
+  async function handleDeleteRuleLib() {
+    if (!deletingRuleLib) return;
+    try {
+      const r = await fetch(`/api/wecom/shared-rule-libs/${deletingRuleLib.id}`, { method: 'DELETE' });
+      if ((await r.json()).ok) { toast.success("已删除"); setDeletingRuleLib(null); loadSharedRuleLibs(); }
+      else toast.error("删除失败");
+    } catch { toast.error("删除失败"); }
+  }
+  async function handleAddRuleToLib() {
+    if (!activeRuleLib || !newRuleContent.trim()) { toast.error("请输入指令内容"); return; }
+    setSavingNewRule(true);
+    try {
+      const r = await fetch(`/api/wecom/shared-rule-libs/${activeRuleLib.id}/rules`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: newRuleContent.trim(), remark: newRuleRemark.trim() || null, category: newRuleCategory }),
+      });
+      if ((await r.json()).ok) {
+        toast.success("已添加"); setShowAddRuleModal(false);
+        setNewRuleContent(""); setNewRuleRemark(""); setNewRuleCategory("角色定义");
+        loadRuleLibRules(activeRuleLib.id);
+      } else toast.error("添加失败");
+    } catch { toast.error("网络错误"); } finally { setSavingNewRule(false); }
+  }
+  async function handleDeleteRule() {
+    if (!deletingRule || !activeRuleLib) return;
+    try {
+      const r = await fetch(`/api/wecom/shared-rule-libs/${activeRuleLib.id}/rules/${deletingRule.id}`, { method: 'DELETE' });
+      if ((await r.json()).ok) { toast.success("已删除"); setDeletingRule(null); loadRuleLibRules(activeRuleLib.id); }
+      else toast.error("删除失败");
+    } catch { toast.error("删除失败"); }
+  }
+
   async function loadSharedKbs() {
     setKbLoading(true);
     try {
@@ -3395,7 +3573,7 @@ function PlatformSharedTab() {
     } catch {} finally { setKbLoading(false); }
   }
 
-  useEffect(() => { loadSharedKbs(); }, []);
+  useEffect(() => { loadSharedKbs(); loadSharedRuleLibs(); }, []);
 
   const totalItems = sharedKbs.reduce((s, k) => s + (k.item_count || 0), 0);
 
@@ -3446,8 +3624,9 @@ function PlatformSharedTab() {
         <div className="text-2xl font-bold mt-2">平台共享资源</div>
         <div className="grid grid-cols-2 gap-3 mt-4">
           <div className="bg-white/10 rounded-xl p-3">
-            <div className="text-xs text-green-300 mb-1">平台指令库</div>
-            <div className="text-xs text-green-400">角色定义 + 行为规则</div>
+            <div className="text-xs text-green-300 mb-1">共享指令库</div>
+            <div className="text-xl font-bold text-[#a78bfa]">{ruleLibLoading ? '-' : `${sharedRuleLibs.length} 个`}</div>
+            <div className="text-xs text-green-400">共 {sharedRuleLibs.reduce((s, l) => s + (l.rule_count || 0), 0)} 条指令</div>
           </div>
           <div className="bg-white/10 rounded-xl p-3">
             <div className="text-xs text-green-300 mb-1">共享知识库</div>
@@ -3460,31 +3639,137 @@ function PlatformSharedTab() {
       {/* 零步 AI 辅助整理（平台共享） */}
       <PlatformAiAssistCard sharedKbs={sharedKbs} onApplied={loadSharedKbs} />
 
-      {/* 区块1：平台指令库 */}
+      {/* 区块1：共享指令库（多库） */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <button
-          onClick={() => setRulesOpen(v => !v)}
+          onClick={() => setRuleLibOpen(v => !v)}
           className="w-full flex items-center justify-between px-4 py-3.5"
         >
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-purple-50 flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-purple-500" />
+            <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+              <BookOpen className="w-4 h-4 text-blue-500" />
             </div>
             <div className="text-left">
-              <p className="text-sm font-semibold text-gray-900">平台指令库</p>
-              <p className="text-xs text-gray-400">角色定义与行为规则，所有分身共享</p>
+              <p className="text-sm font-semibold text-gray-900">共享指令库</p>
+              <p className="text-xs text-gray-400">角色定义与行为规则，可建多库，分身按需调用</p>
             </div>
           </div>
-          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${rulesOpen ? 'rotate-180' : ''}`} />
+          <div className="flex items-center gap-2">
+            {!ruleLibLoading && (
+              <span className="text-xs text-gray-400">{sharedRuleLibs.length} 个库</span>
+            )}
+            <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${ruleLibOpen ? 'rotate-180' : ''}`} />
+          </div>
         </button>
-        {rulesOpen && (
+        {ruleLibOpen && (
           <div className="border-t border-gray-100 px-4 pb-4 pt-3">
-            <PlatformRulesTab />
+            {activeRuleLib ? (
+              /* 进入单库管理视图 */
+              <div>
+                <button
+                  onClick={() => { setActiveRuleLib(null); setRuleLibRules([]); loadSharedRuleLibs(); }}
+                  className="flex items-center gap-1.5 text-sm text-green-600 mb-3"
+                >
+                  <ArrowLeft className="w-4 h-4" /> 返回指令库列表
+                </button>
+                <div className="flex items-center justify-between mb-3 px-1">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-blue-500" />
+                    <span className="text-sm font-semibold text-gray-900">{activeRuleLib.name}</span>
+                    <span className="text-xs text-gray-400">共享指令库</span>
+                  </div>
+                  <button
+                    onClick={() => setShowAddRuleModal(true)}
+                    className="flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2.5 py-1.5 rounded-lg"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> 新增指令
+                  </button>
+                </div>
+                {ruleLibRulesLoading ? (
+                  <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-blue-500" /></div>
+                ) : ruleLibRules.length === 0 ? (
+                  <div className="text-center py-6 text-gray-400 text-sm">暂无指令，点击「新增指令」添加</div>
+                ) : (
+                  <div className="space-y-2">
+                    {ruleLibRules.map(rule => (
+                      <div key={rule.id} className="bg-gray-50 rounded-xl px-3 py-3 border border-gray-100">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <span className="text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded">{rule.category}</span>
+                              {rule.enabled === 0 && <span className="text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded">已禁用</span>}
+                            </div>
+                            <p className="text-sm text-gray-800 leading-relaxed">{rule.content}</p>
+                            {rule.remark && <p className="text-xs text-gray-400 mt-1">{rule.remark}</p>}
+                          </div>
+                          <button
+                            onClick={() => setDeletingRule(rule)}
+                            className="p-1.5 text-gray-400 hover:text-red-500 shrink-0"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* 共享指令库列表视图 */
+              <div className="space-y-2">
+                {ruleLibLoading ? (
+                  <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-blue-500" /></div>
+                ) : (
+                  <>
+                    {sharedRuleLibs.length === 0 && (
+                      <div className="text-center py-6 text-gray-400 text-sm">暂无共享指令库，点击下方「新建指令库」创建</div>
+                    )}
+                    {sharedRuleLibs.map(lib => (
+                      <div key={lib.id} className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-3 border border-gray-100">
+                        <button
+                          className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
+                          onClick={() => { setActiveRuleLib(lib); loadRuleLibRules(lib.id); }}
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                            <BookOpen className="w-4 h-4 text-blue-500" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{lib.name}</p>
+                            <p className="text-xs text-gray-400">{lib.rule_count} 条指令{lib.description ? ` · ${lib.description}` : ''}</p>
+                          </div>
+                        </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => openRenameRuleLib(lib)} className="p-1.5 text-gray-400 hover:text-gray-600" title="重命名">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => setDeletingRuleLib(lib)} className="p-1.5 text-gray-400 hover:text-red-500" title="删除">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => { setActiveRuleLib(lib); loadRuleLibRules(lib.id); }}
+                            className="p-1.5 text-blue-500"
+                            title="管理"
+                          >
+                            <ArrowRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    <button
+                      onClick={openCreateRuleLib}
+                      className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-dashed border-blue-300 text-blue-600 text-sm font-medium hover:bg-blue-50"
+                    >
+                      <FolderPlus className="w-4 h-4" /> 新建指令库
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* 区块2：平台公共知识库（多库） */}
+      {/* 区块3：平台公共知识库（多库） */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <button
           onClick={() => setKbOpen(v => !v)}
@@ -3599,7 +3884,7 @@ function PlatformSharedTab() {
         </div>
       )}
 
-      {/* 删除确认弹窗 */}
+      {/* 删除公共知识库确认弹窗 */}
       {deletingKb && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6" onClick={() => setDeletingKb(null)}>
           <div className="bg-white rounded-2xl p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
@@ -3608,6 +3893,99 @@ function PlatformSharedTab() {
             <div className="flex gap-2">
               <button onClick={() => setDeletingKb(null)} className="flex-1 py-2 rounded-lg border border-gray-200 text-sm text-gray-600">取消</button>
               <button onClick={handleDeleteKb} className="flex-1 py-2 rounded-lg bg-red-500 text-white text-sm font-medium">确认删除</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 新建/重命名共享指令库弹窗 */}
+      {showRuleLibModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6" onClick={() => setShowRuleLibModal(false)}>
+          <div className="bg-white rounded-2xl p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <p className="text-base font-semibold text-gray-900 mb-3">{editingRuleLib ? '重命名指令库' : '新建指令库'}</p>
+            <label className="text-xs text-gray-500">库名</label>
+            <input
+              value={ruleLibNameDraft} onChange={e => setRuleLibNameDraft(e.target.value)}
+              placeholder="如：医美咨询、健康管理"
+              className="w-full mt-1 mb-3 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-blue-400"
+            />
+            <label className="text-xs text-gray-500">描述（可选）</label>
+            <input
+              value={ruleLibDescDraft} onChange={e => setRuleLibDescDraft(e.target.value)}
+              placeholder="一句话描述这个库的用途"
+              className="w-full mt-1 mb-4 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-blue-400"
+            />
+            <div className="flex gap-2">
+              <button onClick={() => setShowRuleLibModal(false)} className="flex-1 py-2 rounded-lg border border-gray-200 text-sm text-gray-600">取消</button>
+              <button onClick={handleSaveRuleLib} disabled={savingRuleLib} className="flex-1 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium disabled:opacity-50">
+                {savingRuleLib ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 删除共享指令库确认弹窗 */}
+      {deletingRuleLib && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6" onClick={() => setDeletingRuleLib(null)}>
+          <div className="bg-white rounded-2xl p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <p className="text-base font-semibold text-gray-900 mb-2">删除指令库？</p>
+            <p className="text-sm text-gray-500 mb-4">将删除「{deletingRuleLib.name}」及其内 {deletingRuleLib.rule_count} 条指令。此操作不可恢复。</p>
+            <div className="flex gap-2">
+              <button onClick={() => setDeletingRuleLib(null)} className="flex-1 py-2 rounded-lg border border-gray-200 text-sm text-gray-600">取消</button>
+              <button onClick={handleDeleteRuleLib} className="flex-1 py-2 rounded-lg bg-red-500 text-white text-sm font-medium">确认删除</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 库内新增指令弹窗 */}
+      {showAddRuleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6" onClick={() => setShowAddRuleModal(false)}>
+          <div className="bg-white rounded-2xl p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <p className="text-base font-semibold text-gray-900 mb-3">新增指令</p>
+            <label className="text-xs text-gray-500">分类</label>
+            <select
+              value={newRuleCategory}
+              onChange={e => setNewRuleCategory(e.target.value)}
+              className="w-full mt-1 mb-3 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-blue-400"
+            >
+              {['角色定义', '知识库规则', '回复格式', '语气风格', '安全边界'].map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            <label className="text-xs text-gray-500">指令内容</label>
+            <textarea
+              value={newRuleContent} onChange={e => setNewRuleContent(e.target.value)}
+              placeholder="输入指令内容…"
+              rows={4}
+              className="w-full mt-1 mb-3 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-blue-400 resize-none"
+            />
+            <label className="text-xs text-gray-500">备注（可选）</label>
+            <input
+              value={newRuleRemark} onChange={e => setNewRuleRemark(e.target.value)}
+              placeholder="这条指令的用途说明"
+              className="w-full mt-1 mb-4 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-blue-400"
+            />
+            <div className="flex gap-2">
+              <button onClick={() => setShowAddRuleModal(false)} className="flex-1 py-2 rounded-lg border border-gray-200 text-sm text-gray-600">取消</button>
+              <button onClick={handleAddRuleToLib} disabled={savingNewRule} className="flex-1 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium disabled:opacity-50">
+                {savingNewRule ? '添加中...' : '添加'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 删除库内指令确认弹窗 */}
+      {deletingRule && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6" onClick={() => setDeletingRule(null)}>
+          <div className="bg-white rounded-2xl p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <p className="text-base font-semibold text-gray-900 mb-2">删除指令？</p>
+            <p className="text-sm text-gray-500 mb-4 line-clamp-3">将删除这条指令：「{deletingRule.content.slice(0, 50)}{deletingRule.content.length > 50 ? '...' : ''}」。此操作不可恢复。</p>
+            <div className="flex gap-2">
+              <button onClick={() => setDeletingRule(null)} className="flex-1 py-2 rounded-lg border border-gray-200 text-sm text-gray-600">取消</button>
+              <button onClick={handleDeleteRule} className="flex-1 py-2 rounded-lg bg-red-500 text-white text-sm font-medium">确认删除</button>
             </div>
           </div>
         </div>
@@ -3782,8 +4160,8 @@ function ChannelTab() {
   // 三级导航： null=应用列表, WecomApp=渠道列表, Channel=渠道详情
   const [selectedApp, setSelectedApp] = useState<WecomApp | null>(null);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
-  // 平台管理视图（系统默认知识库）
-  const [showPlatform, setShowPlatform] = useState(false);
+  // 平台管理视图（系统默认知识库）——目前仅一个应用，进「渠道」直接进平台管理
+  const [showPlatform, setShowPlatform] = useState(true);
 
   useEffect(() => { fetchApps(); }, []);
 
@@ -3800,25 +4178,11 @@ function ChannelTab() {
     }
   }
 
-  // 平台管理视图
+  // 平台管理视图（外层已有统一帽檐，此处不再重复）
   if (showPlatform) {
     return (
-      <div>
-        {/* 帽子 */}
-        <div className="sticky top-0 z-10" style={{ background: 'linear-gradient(135deg,#0d2818 0%,#1a5c2e 100%)' }}>
-          <div className="flex items-center gap-3 px-4" style={{ height: 48 }}>
-            <button onClick={() => setShowPlatform(false)} className="p-1.5 rounded-full" style={{ color: 'rgba(255,255,255,0.8)' }}>
-              <ArrowLeft className="w-4 h-4" />
-            </button>
-            <div className="flex-1">
-              <div className="text-sm font-bold text-white leading-tight">脉动网设计部自建应用平台管理</div>
-              <div className="text-[10px] text-green-300">渠道 » 平台管理</div>
-            </div>
-          </div>
-        </div>
-        <div className="px-4 py-4">
-          <PlatformUnifiedView appChannelId={null} />
-        </div>
+      <div className="px-4 py-4">
+        <PlatformUnifiedView appChannelId={null} />
       </div>
     );
   }
@@ -7138,6 +7502,86 @@ function ChannelServiceBindingsTab({ channels }: { channels: Channel[] }) {
   // 所有渠道的绑定数量（用于列表展示）
   const [bindingCounts, setBindingCounts] = useState<Record<number, number>>({});
 
+  // 库配置弹窗相关 state
+  type GrantPanelType = 'kb' | 'rule';
+  const [grantPanel, setGrantPanel] = useState<{ binding: ServiceBinding; type: GrantPanelType } | null>(null);
+  const [grantKbs, setGrantKbs] = useState<{ id: number; shared_kb_id: number; shared_kb_name: string; enabled: number }[]>([]);
+  const [grantRules, setGrantRules] = useState<{ id: number; shared_rule_lib_id: number; shared_rule_lib_name: string; enabled: number }[]>([]);
+  const [grantLoading, setGrantLoading] = useState(false);
+  const [allSharedKbs, setAllSharedKbs] = useState<{ id: number; name: string }[]>([]);
+  const [allSharedRules, setAllSharedRules] = useState<{ id: number; name: string }[]>([]);
+  const [grantSaving, setGrantSaving] = useState(false);
+
+  async function loadGrants(binding: ServiceBinding) {
+    setGrantLoading(true);
+    try {
+      const [grantsRes, kbsRes, rulesRes] = await Promise.all([
+        fetch(`/api/wecom/tenant-grants?service_type=${binding.service_type}&service_tenant_id=${binding.service_tenant_id}`).then(r => r.json()),
+        fetch('/api/wecom/shared-kbs').then(r => r.json()),
+        fetch('/api/wecom/shared-rule-libs').then(r => r.json()),
+      ]);
+      if (grantsRes.ok) {
+        setGrantKbs(grantsRes.kb_grants || []);
+        setGrantRules(grantsRes.rule_grants || []);
+      }
+      if (Array.isArray(kbsRes)) setAllSharedKbs(kbsRes.map((k: any) => ({ id: k.id, name: k.name })));
+      if (Array.isArray(rulesRes)) setAllSharedRules(rulesRes.map((r: any) => ({ id: r.id, name: r.name })));
+    } catch { toast.error('加载失败'); }
+    finally { setGrantLoading(false); }
+  }
+
+  async function handleGrantKb(binding: ServiceBinding, kbId: number, kbName: string) {
+    setGrantSaving(true);
+    try {
+      const res = await fetch('/api/wecom/tenant-grants/kb', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ service_type: binding.service_type, service_tenant_id: binding.service_tenant_id, shared_kb_id: kbId, shared_kb_name: kbName }),
+      });
+      const d = await res.json();
+      if (d.ok) { toast.success('已授权'); await loadGrants(binding); }
+      else toast.error(d.error || '授权失败');
+    } catch { toast.error('网络错误'); }
+    finally { setGrantSaving(false); }
+  }
+
+  async function handleRevokeKb(binding: ServiceBinding, grantId: number) {
+    setGrantSaving(true);
+    try {
+      const res = await fetch(`/api/wecom/tenant-grants/kb/${grantId}`, { method: 'DELETE' });
+      const d = await res.json();
+      if (d.ok) { toast.success('已撤销'); await loadGrants(binding); }
+      else toast.error(d.error || '撤销失败');
+    } catch { toast.error('网络错误'); }
+    finally { setGrantSaving(false); }
+  }
+
+  async function handleGrantRule(binding: ServiceBinding, ruleId: number, ruleName: string) {
+    setGrantSaving(true);
+    try {
+      const res = await fetch('/api/wecom/tenant-grants/rule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ service_type: binding.service_type, service_tenant_id: binding.service_tenant_id, shared_rule_lib_id: ruleId, shared_rule_lib_name: ruleName }),
+      });
+      const d = await res.json();
+      if (d.ok) { toast.success('已授权'); await loadGrants(binding); }
+      else toast.error(d.error || '授权失败');
+    } catch { toast.error('网络错误'); }
+    finally { setGrantSaving(false); }
+  }
+
+  async function handleRevokeRule(binding: ServiceBinding, grantId: number) {
+    setGrantSaving(true);
+    try {
+      const res = await fetch(`/api/wecom/tenant-grants/rule/${grantId}`, { method: 'DELETE' });
+      const d = await res.json();
+      if (d.ok) { toast.success('已撤销'); await loadGrants(binding); }
+      else toast.error(d.error || '撤销失败');
+    } catch { toast.error('网络错误'); }
+    finally { setGrantSaving(false); }
+  }
+
   // 获取牙伴诊所列表（tRPC）
   const clinicsQuery = trpc.yabanClinic.adminListClinics.useQuery(
     { keyword: clinicSearch },
@@ -7338,6 +7782,117 @@ function ChannelServiceBindingsTab({ channels }: { channels: Channel[] }) {
                 </button>
               </div>
               <div className="text-xs text-gray-400 mt-2 pl-10">绑定时间：{formatShortDate(b.created_at)}</div>
+              {/* 配置库按鈕 */}
+              <div className="flex gap-2 mt-2 pl-10">
+                <button
+                  onClick={() => {
+                    if (grantPanel?.binding.id === b.id && grantPanel?.type === 'kb') {
+                      setGrantPanel(null);
+                    } else {
+                      setGrantPanel({ binding: b, type: 'kb' });
+                      loadGrants(b);
+                    }
+                  }}
+                  className={`text-xs px-2.5 py-1 rounded-lg border flex items-center gap-1 transition-colors ${
+                    grantPanel?.binding.id === b.id && grantPanel?.type === 'kb'
+                      ? 'bg-amber-500 text-white border-amber-500'
+                      : 'text-amber-600 border-amber-200 hover:bg-amber-50'
+                  }`}
+                >
+                  <Database className="w-3 h-3" />
+                  配置知识库
+                </button>
+                <button
+                  onClick={() => {
+                    if (grantPanel?.binding.id === b.id && grantPanel?.type === 'rule') {
+                      setGrantPanel(null);
+                    } else {
+                      setGrantPanel({ binding: b, type: 'rule' });
+                      loadGrants(b);
+                    }
+                  }}
+                  className={`text-xs px-2.5 py-1 rounded-lg border flex items-center gap-1 transition-colors ${
+                    grantPanel?.binding.id === b.id && grantPanel?.type === 'rule'
+                      ? 'bg-purple-500 text-white border-purple-500'
+                      : 'text-purple-600 border-purple-200 hover:bg-purple-50'
+                  }`}
+                >
+                  <BookOpen className="w-3 h-3" />
+                  配置指令库
+                </button>
+              </div>
+              {/* 配置面板：展开在该绑定记录下方 */}
+              {grantPanel?.binding.id === b.id && (
+                <div className="mt-3 border-t border-gray-100 pt-3">
+                  {grantLoading ? (
+                    <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-gray-400" /></div>
+                  ) : grantPanel.type === 'kb' ? (
+                    <div className="space-y-2">
+                      <div className="text-xs font-semibold text-amber-700 mb-1">已授权知识库</div>
+                      {grantKbs.length === 0 && <div className="text-xs text-gray-400 text-center py-2">暂未授权任何知识库</div>}
+                      {grantKbs.map(g => (
+                        <div key={g.id} className="flex items-center justify-between bg-amber-50 rounded-lg px-3 py-2">
+                          <span className="text-xs text-amber-800 font-medium">{g.shared_kb_name || `库#${g.shared_kb_id}`}</span>
+                          <button
+                            onClick={() => handleRevokeKb(b, g.id)}
+                            disabled={grantSaving}
+                            className="text-xs text-red-400 hover:text-red-600 flex items-center gap-0.5"
+                          >
+                            <X className="w-3 h-3" />撤销
+                          </button>
+                        </div>
+                      ))}
+                      <div className="text-xs font-semibold text-gray-500 mt-2 mb-1">可添加的库</div>
+                      {allSharedKbs.filter(k => !grantKbs.some(g => g.shared_kb_id === k.id)).length === 0 && (
+                        <div className="text-xs text-gray-400 text-center py-2">全部库已授权</div>
+                      )}
+                      {allSharedKbs.filter(k => !grantKbs.some(g => g.shared_kb_id === k.id)).map(k => (
+                        <button
+                          key={k.id}
+                          onClick={() => handleGrantKb(b, k.id, k.name)}
+                          disabled={grantSaving}
+                          className="w-full flex items-center justify-between bg-white border border-dashed border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700 hover:bg-amber-50 transition-colors"
+                        >
+                          <span>{k.name}</span>
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="text-xs font-semibold text-purple-700 mb-1">已授权指令库</div>
+                      {grantRules.length === 0 && <div className="text-xs text-gray-400 text-center py-2">暂未授权任何指令库</div>}
+                      {grantRules.map(g => (
+                        <div key={g.id} className="flex items-center justify-between bg-purple-50 rounded-lg px-3 py-2">
+                          <span className="text-xs text-purple-800 font-medium">{g.shared_rule_lib_name || `库#${g.shared_rule_lib_id}`}</span>
+                          <button
+                            onClick={() => handleRevokeRule(b, g.id)}
+                            disabled={grantSaving}
+                            className="text-xs text-red-400 hover:text-red-600 flex items-center gap-0.5"
+                          >
+                            <X className="w-3 h-3" />撤销
+                          </button>
+                        </div>
+                      ))}
+                      <div className="text-xs font-semibold text-gray-500 mt-2 mb-1">可添加的库</div>
+                      {allSharedRules.filter(r => !grantRules.some(g => g.shared_rule_lib_id === r.id)).length === 0 && (
+                        <div className="text-xs text-gray-400 text-center py-2">全部库已授权</div>
+                      )}
+                      {allSharedRules.filter(r => !grantRules.some(g => g.shared_rule_lib_id === r.id)).map(r => (
+                        <button
+                          key={r.id}
+                          onClick={() => handleGrantRule(b, r.id, r.name)}
+                          disabled={grantSaving}
+                          className="w-full flex items-center justify-between bg-white border border-dashed border-purple-200 rounded-lg px-3 py-2 text-xs text-purple-700 hover:bg-purple-50 transition-colors"
+                        >
+                          <span>{r.name}</span>
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -7392,20 +7947,29 @@ function ChannelServiceBindingsTab({ channels }: { channels: Channel[] }) {
                 <div className="max-h-40 overflow-y-auto space-y-1 border border-gray-100 rounded-lg p-1">
                   {clinics.length === 0 ? (
                     <div className="text-xs text-gray-400 text-center py-3">无匹配诊所</div>
-                  ) : clinics.map((c: any) => (
-                    <button
-                      key={c.tenantId}
-                      onClick={() => setSelectedClinic({ tenantId: c.tenantId, name: c.name || c.shortName || `诊所${c.tenantId}` })}
-                      className={`w-full text-left px-2.5 py-2 rounded-lg text-xs transition-colors ${
-                        selectedClinic?.tenantId === c.tenantId
-                          ? "bg-blue-100 text-blue-700 font-medium"
-                          : "hover:bg-gray-50 text-gray-700"
-                      }`}
-                    >
-                      <span className="font-medium">{c.name || c.shortName || `诊所${c.tenantId}`}</span>
-                      <span className="text-gray-400 ml-1.5">tenant_id: {c.tenantId}</span>
-                    </button>
-                  ))}
+                  ) : clinics.map((c: any) => {
+                    const alreadyBound = bindings.some(
+                      b => b.service_type === serviceType && String(b.service_tenant_id) === String(c.tenantId)
+                    );
+                    return (
+                      <button
+                        key={c.tenantId}
+                        disabled={alreadyBound}
+                        onClick={() => !alreadyBound && setSelectedClinic({ tenantId: c.tenantId, name: c.name || c.shortName || `诊所${c.tenantId}` })}
+                        className={`w-full text-left px-2.5 py-2 rounded-lg text-xs transition-colors ${
+                          alreadyBound
+                            ? "bg-gray-50 text-gray-400 cursor-not-allowed"
+                            : selectedClinic?.tenantId === c.tenantId
+                              ? "bg-blue-100 text-blue-700 font-medium"
+                              : "hover:bg-gray-50 text-gray-700"
+                        }`}
+                      >
+                        <span className="font-medium">{c.name || c.shortName || `诊所${c.tenantId}`}</span>
+                        <span className="text-gray-400 ml-1.5">tenant_id: {c.tenantId}</span>
+                        {alreadyBound && <span className="ml-1.5 text-green-500 font-medium">· 已绑定</span>}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>

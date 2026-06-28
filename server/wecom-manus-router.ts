@@ -688,6 +688,46 @@ async function ensureSessionTable(): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='结构化AI指令条目'
   `);
 
+  // 迁移：给 wecom_prompt_rules 补充 lib_id 字段（共享指令库关联）
+  try { await (conn as any).execute(`ALTER TABLE wecom_prompt_rules ADD COLUMN lib_id INT DEFAULT NULL COMMENT '关联共享指令库 ID， NULL 表示属于渠道专属指令'`); } catch (_) {}
+
+  // 共享知识库表
+  await (conn as any).execute(`
+    CREATE TABLE IF NOT EXISTS wecom_shared_kbs (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(100) NOT NULL COMMENT '库名称',
+      description VARCHAR(500) DEFAULT '' COMMENT '库描述',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='共享知识库'
+  `);
+
+  // 共享指令库表
+  await (conn as any).execute(`
+    CREATE TABLE IF NOT EXISTS wecom_shared_rule_libs (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(100) NOT NULL COMMENT '库名称',
+      description VARCHAR(500) DEFAULT '' COMMENT '库描述',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='共享指令库'
+  `);
+
+  // 共享指令库-指令条目表
+  await (conn as any).execute(`
+    CREATE TABLE IF NOT EXISTS wecom_shared_rule_items (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      lib_id INT NOT NULL COMMENT '关联 wecom_shared_rule_libs.id',
+      layer TINYINT NOT NULL DEFAULT 2 COMMENT '层级：1=角色定义 2=行为规则',
+      category VARCHAR(50) NOT NULL DEFAULT '行为规则' COMMENT '分类标签',
+      content TEXT NOT NULL COMMENT '指令内容',
+      enabled TINYINT(1) NOT NULL DEFAULT 1,
+      sort_order INT NOT NULL DEFAULT 0,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_lib_id (lib_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='共享指令库条目'
+  `);
+
   // 自动迁移：如果 wecom_prompt_rules 为空，但 wecom_channel_config 里有旧的 system_prompt，则自动拆分迁移
   try {
     const [countRows] = await (conn as any).execute(`SELECT COUNT(*) as cnt FROM wecom_prompt_rules`);
@@ -739,6 +779,37 @@ async function ensureSessionTable(): Promise<void> {
       INDEX idx_service_lookup (service_type, service_tenant_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='渠道-服务商绑定关系'
   `);
+
+  // 诊所-共享知识库授权表
+  await (conn as any).execute(`
+    CREATE TABLE IF NOT EXISTS wecom_tenant_kb_grant (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      service_type VARCHAR(50) NOT NULL COMMENT '服务商类型，如 yaban',
+      service_tenant_id INT NOT NULL COMMENT '服务商租户ID',
+      shared_kb_id INT NOT NULL COMMENT '关联 wecom_shared_kb.id',
+      shared_kb_name VARCHAR(100) DEFAULT '' COMMENT '库名称冗余存储',
+      enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用（1=开，0=关）',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_tenant_kb (service_type, service_tenant_id, shared_kb_id),
+      INDEX idx_tenant_lookup (service_type, service_tenant_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='诊所-共享知识库授权'
+  `);
+
+  // 诊所-共享指令库授权表
+  await (conn as any).execute(`
+    CREATE TABLE IF NOT EXISTS wecom_tenant_rule_grant (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      service_type VARCHAR(50) NOT NULL COMMENT '服务商类型，如 yaban',
+      service_tenant_id INT NOT NULL COMMENT '服务商租户ID',
+      shared_rule_lib_id INT NOT NULL COMMENT '关联 wecom_shared_rule_lib.id',
+      shared_rule_lib_name VARCHAR(100) DEFAULT '' COMMENT '库名称冗余存储',
+      enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用（1=开，0=关）',
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_tenant_rule (service_type, service_tenant_id, shared_rule_lib_id),
+      INDEX idx_tenant_rule_lookup (service_type, service_tenant_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='诊所-共享指令库授权'
+  `);
+
   _tableEnsured = true;
 }
 // -----------------------------------------------------------
@@ -4146,7 +4217,23 @@ router.get("/api/wecom/channels/:channelId/prompt-rules", async (req: Request, r
       `SELECT * FROM wecom_prompt_rules WHERE channel_id = ? ORDER BY layer ASC, sort_order ASC, id ASC`,
       [channelId]
     );
-    res.json({ rules: rows });
+    // 附带每条指令关联的知识库 kb_ids（空数组=全局通用）
+    const ruleList = rows as any[];
+    if (ruleList.length > 0) {
+      const ids = ruleList.map(r => r.id);
+      const placeholders = ids.map(() => '?').join(',');
+      const [maps] = await (conn as any).execute(
+        `SELECT rule_id, kb_id FROM wecom_rule_kb_map WHERE rule_id IN (${placeholders})`,
+        ids
+      );
+      const mapByRule: Record<number, number[]> = {};
+      for (const m of (maps as any[])) {
+        if (!mapByRule[m.rule_id]) mapByRule[m.rule_id] = [];
+        mapByRule[m.rule_id].push(Number(m.kb_id));
+      }
+      for (const r of ruleList) r.kb_ids = mapByRule[r.id] || [];
+    }
+    res.json({ rules: ruleList });
   } catch (e) {
     console.error("[指令条目] 获取失败:", e);
     res.status(500).json({ error: "获取失败" });
@@ -4168,8 +4255,20 @@ router.post("/api/wecom/channels/:channelId/prompt-rules", async (req: Request, 
     const insertId = (result as any).insertId;
     // 异步回填规则向量（内容即 embed 文本）
     backfillEmbeddingAsync(conn, "wecom_prompt_rules", insertId, String(content || ""));
+    // 写入指令-知识库关联（kb_ids 为空或未传=全局通用）
+    const kbIds: number[] = Array.isArray(req.body.kb_ids) ? req.body.kb_ids.map((x: any) => Number(x)).filter((x: number) => x > 0) : [];
+    if (kbIds.length > 0) {
+      for (const kbId of kbIds) {
+        await (conn as any).execute(
+          `INSERT IGNORE INTO wecom_rule_kb_map (rule_id, kb_id) VALUES (?, ?)`,
+          [insertId, kbId]
+        );
+      }
+    }
     const [rows] = await (conn as any).execute(`SELECT * FROM wecom_prompt_rules WHERE id = ?`, [insertId]);
-    res.json({ rule: (rows as any[])[0] });
+    const outRule = (rows as any[])[0];
+    if (outRule) outRule.kb_ids = kbIds;
+    res.json({ rule: outRule });
   } catch (e) {
     console.error("[指令条目] 新增失败:", e);
     res.status(500).json({ error: "新增失败" });
@@ -4193,13 +4292,28 @@ router.put("/api/wecom/channels/:channelId/prompt-rules/:ruleId", async (req: Re
     if (remark !== undefined) { fields.push("remark=?"); values.push(remark); }
     if (fields.length === 0) return res.status(400).json({ error: "无更新字段" });
     values.push(ruleId);
-    await (conn as any).execute(`UPDATE wecom_prompt_rules SET ${fields.join(",")} WHERE id=?`, values);
+    if (fields.length > 0) {
+      await (conn as any).execute(`UPDATE wecom_prompt_rules SET ${fields.join(",")} WHERE id=?`, values);
+    }
     // 内容变更时重新回填向量
     if (content !== undefined) {
       backfillEmbeddingAsync(conn, "wecom_prompt_rules", Number(ruleId), String(content || ""));
     }
+    // 若传了 kb_ids，全量重置该指令的关联库
+    if (Array.isArray(req.body.kb_ids)) {
+      const kbIds: number[] = req.body.kb_ids.map((x: any) => Number(x)).filter((x: number) => x > 0);
+      await (conn as any).execute(`DELETE FROM wecom_rule_kb_map WHERE rule_id = ?`, [ruleId]);
+      for (const kbId of kbIds) {
+        await (conn as any).execute(`INSERT IGNORE INTO wecom_rule_kb_map (rule_id, kb_id) VALUES (?, ?)`, [ruleId, kbId]);
+      }
+    }
     const [rows] = await (conn as any).execute(`SELECT * FROM wecom_prompt_rules WHERE id = ?`, [ruleId]);
-    res.json({ rule: (rows as any[])[0] });
+    const outRule = (rows as any[])[0];
+    if (outRule) {
+      const [maps] = await (conn as any).execute(`SELECT kb_id FROM wecom_rule_kb_map WHERE rule_id = ?`, [ruleId]);
+      outRule.kb_ids = (maps as any[]).map(m => Number(m.kb_id));
+    }
+    res.json({ rule: outRule });
   } catch (e) {
     console.error("[指令条目] 更新失败:", e);
     res.status(500).json({ error: "更新失败" });
@@ -4212,11 +4326,42 @@ router.delete("/api/wecom/channels/:channelId/prompt-rules/:ruleId", async (req:
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ error: "数据库连接失败" });
     const { ruleId } = req.params;
+    await (conn as any).execute(`DELETE FROM wecom_rule_kb_map WHERE rule_id=?`, [ruleId]);
     await (conn as any).execute(`DELETE FROM wecom_prompt_rules WHERE id=?`, [ruleId]);
     res.json({ ok: true });
   } catch (e) {
     console.error("[指令条目] 删除失败:", e);
     res.status(500).json({ error: "删除失败" });
+  }
+});
+
+// 按知识库查询其继承的指令：全局通用指令(无任何映射) + 本库专属指令(映射到该kb)
+router.get("/api/wecom/knowledge-bases/:kbId/prompt-rules", async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const { kbId } = req.params;
+    const PLATFORM_CHANNEL_ID = 1;
+    // 该库专属指令
+    const [specificRows] = await (conn as any).execute(
+      `SELECT r.* FROM wecom_prompt_rules r
+       INNER JOIN wecom_rule_kb_map m ON m.rule_id = r.id
+       WHERE m.kb_id = ? AND r.channel_id = ?
+       ORDER BY r.layer ASC, r.sort_order ASC, r.id ASC`,
+      [kbId, PLATFORM_CHANNEL_ID]
+    );
+    // 全局通用指令：channel=1 且在映射表中完全没有记录
+    const [globalRows] = await (conn as any).execute(
+      `SELECT r.* FROM wecom_prompt_rules r
+       WHERE r.channel_id = ?
+       AND r.id NOT IN (SELECT DISTINCT rule_id FROM wecom_rule_kb_map)
+       ORDER BY r.layer ASC, r.sort_order ASC, r.id ASC`,
+      [PLATFORM_CHANNEL_ID]
+    );
+    res.json({ specific: specificRows, global: globalRows });
+  } catch (e) {
+    console.error("[指令-按库查询] 失败:", e);
+    res.status(500).json({ error: "查询失败" });
   }
 });
 
@@ -4419,6 +4564,151 @@ router.put("/api/wecom/channels/:channelId/shared-kbs", async (req: Request, res
 });
 
 // -------------------------------------------------------
+// 共享平台指令库接口 (wecom_shared_rule_libs)
+// -------------------------------------------------------
+
+// GET /api/wecom/shared-rule-libs - 获取所有共享指令库列表（含指令数量）
+router.get("/api/wecom/shared-rule-libs", async (_req: Request, res: Response) => {
+  const conn = await getDbConnection();
+  try {
+    const [rows] = await (conn as any).execute(
+      `SELECT l.*, COUNT(r.id) AS rule_count
+       FROM wecom_shared_rule_libs l
+       LEFT JOIN wecom_prompt_rules r ON r.lib_id = l.id
+       GROUP BY l.id
+       ORDER BY l.id`
+    );
+    res.json(rows);
+  } catch (e) {
+    console.error("[共享指令库] 获取列表失败:", e);
+    res.status(500).json({ error: "获取失败" });
+  }
+});
+
+// POST /api/wecom/shared-rule-libs - 新建共享指令库
+router.post("/api/wecom/shared-rule-libs", async (req: Request, res: Response) => {
+  const { name, description } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: "库名不能为空" });
+  const conn = await getDbConnection();
+  try {
+    const [result] = await (conn as any).execute(
+      `INSERT INTO wecom_shared_rule_libs (name, description) VALUES (?, ?)`,
+      [name.trim(), description?.trim() || null]
+    );
+    res.json({ ok: true, id: (result as any).insertId });
+  } catch (e) {
+    console.error("[共享指令库] 新建失败:", e);
+    res.status(500).json({ error: "新建失败" });
+  }
+});
+
+// PUT /api/wecom/shared-rule-libs/:libId - 重命名/更新共享指令库
+router.put("/api/wecom/shared-rule-libs/:libId", async (req: Request, res: Response) => {
+  const { libId } = req.params;
+  const { name, description } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: "库名不能为空" });
+  const conn = await getDbConnection();
+  try {
+    await (conn as any).execute(
+      `UPDATE wecom_shared_rule_libs SET name = ?, description = ? WHERE id = ?`,
+      [name.trim(), description?.trim() || null, libId]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[共享指令库] 更新失败:", e);
+    res.status(500).json({ error: "更新失败" });
+  }
+});
+
+// DELETE /api/wecom/shared-rule-libs/:libId - 删除共享指令库（含库内所有指令）
+router.delete("/api/wecom/shared-rule-libs/:libId", async (req: Request, res: Response) => {
+  const { libId } = req.params;
+  const conn = await getDbConnection();
+  try {
+    await (conn as any).execute(`DELETE FROM wecom_prompt_rules WHERE lib_id = ?`, [libId]);
+    await (conn as any).execute(`DELETE FROM wecom_shared_rule_libs WHERE id = ?`, [libId]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[共享指令库] 删除失败:", e);
+    res.status(500).json({ error: "删除失败" });
+  }
+});
+
+// GET /api/wecom/shared-rule-libs/:libId/rules - 获取某指令库内的所有指令
+router.get("/api/wecom/shared-rule-libs/:libId/rules", async (req: Request, res: Response) => {
+  const { libId } = req.params;
+  const conn = await getDbConnection();
+  try {
+    const [rows] = await (conn as any).execute(
+      `SELECT * FROM wecom_prompt_rules WHERE lib_id = ? ORDER BY layer, id`,
+      [libId]
+    );
+    res.json({ rules: rows });
+  } catch (e) {
+    console.error("[共享指令库] 获取指令失败:", e);
+    res.status(500).json({ error: "获取失败" });
+  }
+});
+
+// POST /api/wecom/shared-rule-libs/:libId/rules - 向指令库新增一条指令
+router.post("/api/wecom/shared-rule-libs/:libId/rules", async (req: Request, res: Response) => {
+  const { libId } = req.params;
+  const { layer = 1, category = '角色定义', content, remark, enabled = 1 } = req.body;
+  if (!content?.trim()) return res.status(400).json({ error: "指令内容不能为空" });
+  const conn = await getDbConnection();
+  try {
+    const [result] = await (conn as any).execute(
+      `INSERT INTO wecom_prompt_rules (channel_id, lib_id, layer, category, content, remark, enabled)
+       VALUES (1, ?, ?, ?, ?, ?, ?)`,
+      [libId, layer, category, content.trim(), remark?.trim() || null, enabled]
+    );
+    const [[rule]] = await (conn as any).execute(`SELECT * FROM wecom_prompt_rules WHERE id = ?`, [(result as any).insertId]);
+    res.json({ ok: true, rule });
+  } catch (e) {
+    console.error("[共享指令库] 新增指令失败:", e);
+    res.status(500).json({ error: "新增失败" });
+  }
+});
+
+// PUT /api/wecom/shared-rule-libs/:libId/rules/:ruleId - 更新库内指令
+router.put("/api/wecom/shared-rule-libs/:libId/rules/:ruleId", async (req: Request, res: Response) => {
+  const { ruleId } = req.params;
+  const { content, remark, enabled, layer, category, lib_id } = req.body;
+  const conn = await getDbConnection();
+  try {
+    const fields: string[] = [];
+    const vals: any[] = [];
+    if (content !== undefined) { fields.push('content = ?'); vals.push(content.trim()); }
+    if (remark !== undefined) { fields.push('remark = ?'); vals.push(remark?.trim() || null); }
+    if (enabled !== undefined) { fields.push('enabled = ?'); vals.push(enabled); }
+    if (layer !== undefined) { fields.push('layer = ?'); vals.push(layer); }
+    if (category !== undefined) { fields.push('category = ?'); vals.push(category); }
+    if (lib_id !== undefined) { fields.push('lib_id = ?'); vals.push(lib_id === null ? null : Number(lib_id)); }
+    if (fields.length === 0) return res.status(400).json({ error: "无更新字段" });
+    vals.push(ruleId);
+    await (conn as any).execute(`UPDATE wecom_prompt_rules SET ${fields.join(', ')} WHERE id = ?`, vals);
+    const [[rule]] = await (conn as any).execute(`SELECT * FROM wecom_prompt_rules WHERE id = ?`, [ruleId]);
+    res.json({ ok: true, rule });
+  } catch (e) {
+    console.error("[共享指令库] 更新指令失败:", e);
+    res.status(500).json({ error: "更新失败" });
+  }
+});
+
+// DELETE /api/wecom/shared-rule-libs/:libId/rules/:ruleId - 删除库内一条指令
+router.delete("/api/wecom/shared-rule-libs/:libId/rules/:ruleId", async (req: Request, res: Response) => {
+  const { ruleId } = req.params;
+  const conn = await getDbConnection();
+  try {
+    await (conn as any).execute(`DELETE FROM wecom_prompt_rules WHERE id = ?`, [ruleId]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[共享指令库] 删除指令失败:", e);
+    res.status(500).json({ error: "删除失败" });
+  }
+});
+
+// -------------------------------------------------------
 // 服务商绑定接口 (wecom_channel_service_binding)
 // -------------------------------------------------------
 // GET /api/wecom/channels/:id/service-bindings - 查询某渠道的服务商绑定列表
@@ -4475,6 +4765,144 @@ router.delete("/api/wecom/channels/:id/service-bindings/:bindingId", async (req:
   } catch (e) {
     console.error("[服务商绑定] 删除失败:", e);
     res.status(500).json({ error: "删除失败" });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 诊所-库授权接口（管理员为每个绑定诊所分配可用的共享知识库和共享指令库）
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/wecom/tenant-grants?service_type=yaban&service_tenant_id=123
+// 查询某诊所已被授权的知识库和指令库列表
+router.get("/api/wecom/tenant-grants", async (req: Request, res: Response) => {
+  const { service_type, service_tenant_id } = req.query as Record<string, string>;
+  if (!service_type || !service_tenant_id) {
+    return res.status(400).json({ error: "service_type 和 service_tenant_id 为必填" });
+  }
+  const conn = await getDbConnection();
+  if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+  try {
+    await ensureSessionTable();
+    const [kbRows] = await (conn as any).execute(
+      `SELECT id, shared_kb_id, shared_kb_name, enabled FROM wecom_tenant_kb_grant WHERE service_type = ? AND service_tenant_id = ? ORDER BY id ASC`,
+      [service_type, Number(service_tenant_id)]
+    );
+    const [ruleRows] = await (conn as any).execute(
+      `SELECT id, shared_rule_lib_id, shared_rule_lib_name, enabled FROM wecom_tenant_rule_grant WHERE service_type = ? AND service_tenant_id = ? ORDER BY id ASC`,
+      [service_type, Number(service_tenant_id)]
+    );
+    res.json({ ok: true, kb_grants: kbRows, rule_grants: ruleRows });
+  } catch (e) {
+    console.error("[诊所库授权] 查询失败:", e);
+    res.status(500).json({ error: "查询失败" });
+  }
+});
+
+// POST /api/wecom/tenant-grants/kb - 为诊所授权一个共享知识库
+router.post("/api/wecom/tenant-grants/kb", async (req: Request, res: Response) => {
+  const { service_type, service_tenant_id, shared_kb_id, shared_kb_name } = req.body;
+  if (!service_type || !service_tenant_id || !shared_kb_id) {
+    return res.status(400).json({ error: "service_type、service_tenant_id、shared_kb_id 为必填" });
+  }
+  const conn = await getDbConnection();
+  if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+  try {
+    await ensureSessionTable();
+    const [result] = await (conn as any).execute(
+      `INSERT INTO wecom_tenant_kb_grant (service_type, service_tenant_id, shared_kb_id, shared_kb_name, enabled)
+       VALUES (?, ?, ?, ?, 1)
+       ON DUPLICATE KEY UPDATE shared_kb_name = VALUES(shared_kb_name), enabled = 1`,
+      [service_type, Number(service_tenant_id), Number(shared_kb_id), shared_kb_name || ""]
+    );
+    res.json({ ok: true, id: (result as any).insertId });
+  } catch (e) {
+    console.error("[诊所库授权] 知识库授权失败:", e);
+    res.status(500).json({ error: "授权失败" });
+  }
+});
+
+// DELETE /api/wecom/tenant-grants/kb/:grantId - 撤销诊所的某个知识库授权
+router.delete("/api/wecom/tenant-grants/kb/:grantId", async (req: Request, res: Response) => {
+  const grantId = Number(req.params.grantId);
+  if (!grantId) return res.status(400).json({ error: "参数无效" });
+  const conn = await getDbConnection();
+  if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+  try {
+    await (conn as any).execute(`DELETE FROM wecom_tenant_kb_grant WHERE id = ?`, [grantId]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[诊所库授权] 知识库撤销失败:", e);
+    res.status(500).json({ error: "撤销失败" });
+  }
+});
+
+// PATCH /api/wecom/tenant-grants/kb/:grantId/toggle - 切换知识库授权的启用状态
+router.patch("/api/wecom/tenant-grants/kb/:grantId/toggle", async (req: Request, res: Response) => {
+  const grantId = Number(req.params.grantId);
+  const { enabled } = req.body; // 0 或 1
+  if (!grantId || enabled === undefined) return res.status(400).json({ error: "参数无效" });
+  const conn = await getDbConnection();
+  if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+  try {
+    await (conn as any).execute(`UPDATE wecom_tenant_kb_grant SET enabled = ? WHERE id = ?`, [enabled ? 1 : 0, grantId]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[诊所库授权] 知识库开关失败:", e);
+    res.status(500).json({ error: "操作失败" });
+  }
+});
+
+// POST /api/wecom/tenant-grants/rule - 为诊所授权一个共享指令库
+router.post("/api/wecom/tenant-grants/rule", async (req: Request, res: Response) => {
+  const { service_type, service_tenant_id, shared_rule_lib_id, shared_rule_lib_name } = req.body;
+  if (!service_type || !service_tenant_id || !shared_rule_lib_id) {
+    return res.status(400).json({ error: "service_type、service_tenant_id、shared_rule_lib_id 为必填" });
+  }
+  const conn = await getDbConnection();
+  if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+  try {
+    await ensureSessionTable();
+    const [result] = await (conn as any).execute(
+      `INSERT INTO wecom_tenant_rule_grant (service_type, service_tenant_id, shared_rule_lib_id, shared_rule_lib_name, enabled)
+       VALUES (?, ?, ?, ?, 1)
+       ON DUPLICATE KEY UPDATE shared_rule_lib_name = VALUES(shared_rule_lib_name), enabled = 1`,
+      [service_type, Number(service_tenant_id), Number(shared_rule_lib_id), shared_rule_lib_name || ""]
+    );
+    res.json({ ok: true, id: (result as any).insertId });
+  } catch (e) {
+    console.error("[诊所库授权] 指令库授权失败:", e);
+    res.status(500).json({ error: "授权失败" });
+  }
+});
+
+// DELETE /api/wecom/tenant-grants/rule/:grantId - 撤销诊所的某个指令库授权
+router.delete("/api/wecom/tenant-grants/rule/:grantId", async (req: Request, res: Response) => {
+  const grantId = Number(req.params.grantId);
+  if (!grantId) return res.status(400).json({ error: "参数无效" });
+  const conn = await getDbConnection();
+  if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+  try {
+    await (conn as any).execute(`DELETE FROM wecom_tenant_rule_grant WHERE id = ?`, [grantId]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[诊所库授权] 指令库撤销失败:", e);
+    res.status(500).json({ error: "撤销失败" });
+  }
+});
+
+// PATCH /api/wecom/tenant-grants/rule/:grantId/toggle - 切换指令库授权的启用状态
+router.patch("/api/wecom/tenant-grants/rule/:grantId/toggle", async (req: Request, res: Response) => {
+  const grantId = Number(req.params.grantId);
+  const { enabled } = req.body; // 0 或 1
+  if (!grantId || enabled === undefined) return res.status(400).json({ error: "参数无效" });
+  const conn = await getDbConnection();
+  if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+  try {
+    await (conn as any).execute(`UPDATE wecom_tenant_rule_grant SET enabled = ? WHERE id = ?`, [enabled ? 1 : 0, grantId]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("[诊所库授权] 指令库开关失败:", e);
+    res.status(500).json({ error: "操作失败" });
   }
 });
 
