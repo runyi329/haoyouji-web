@@ -3133,14 +3133,34 @@ export const yabanCustomerRouter = router({
       // resolveTenantId 已验证身份属于本院，无需额外 role 限制
       const conn = await getDbConnection();
       if (!conn) return { messages: [], total: 0, hasAccount: false };
-      const TENANT_ID = await resolveTenantId(ctx);
       try {
-        // 1. 通过 customerId 获取 yaban_username
+        // 1. 按 customerId 查客户的真实 tenant_id 与 yaban_username
+        //    不依赖前端 x-yaban-tenant header：客户档案一旦能打开即说明已定位到该客户，
+        //    这里以客户记录自身的 tenant_id 为准，避免 header 与客户实际门店不一致导致查不到。
         const [custRows] = await (conn as any).execute(
-          `SELECT yaban_username FROM yaban_customer WHERE id = ? AND tenant_id = ? LIMIT 1`,
-          [input.customerId, TENANT_ID]
+          `SELECT yaban_username, tenant_id FROM yaban_customer WHERE id = ? LIMIT 1`,
+          [input.customerId]
         );
-        const yabanUsername = (custRows as any[])[0]?.yaban_username;
+        const custRow = (custRows as any[])[0];
+        if (!custRow) return { messages: [], total: 0, hasAccount: false };
+        const custTenantId = Number(custRow.tenant_id);
+        // 2. 越权校验：超管/创始人放行；普通用户须为该客户所属门店的 active 成员
+        let allowed = false;
+        try {
+          allowed = await isYabanPureFounder(ctx);
+        } catch { allowed = false; }
+        if (!allowed) {
+          const uid = Number(ctx?.user?.id);
+          if (uid) {
+            const [mRows] = await (conn as any).execute(
+              `SELECT 1 FROM yaban_clinic_member WHERE user_id = ? AND tenant_id = ? AND status = 'active' LIMIT 1`,
+              [uid, custTenantId]
+            );
+            allowed = (mRows as any[]).length > 0;
+          }
+        }
+        if (!allowed) return { messages: [], total: 0, hasAccount: false };
+        const yabanUsername = custRow.yaban_username;
         if (!yabanUsername) return { messages: [], total: 0, hasAccount: false };
         // 2. 通过 yaban_username 获取 users.id（脉动网 UID）
         const [userRows] = await (conn as any).execute(
