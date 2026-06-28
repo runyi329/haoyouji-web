@@ -21,27 +21,20 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 },
 });
 
-// 默认 AI 提示词（与 yaban-comm-router.ts 保持一致）
-const DEFAULT_COMM_PROMPT = `你是一名专业的牙科诊所助理，请根据以下对话内容，提取关键信息并以 JSON 格式返回。
-请提取以下四个维度：
-1. demand（客户诉求）：客户提到的问题、需求、主诉，用简洁的语言概括
-2. keyPoints（沟通要点）：员工给出的建议、方案、报价、重要说明等
-3. followup（跟进事项）：下次联系时间、待办事项、需要跟进的内容
-4. remark（备注）：其他需要记录的补充信息
+// 默认 AI 提示词
+const DEFAULT_COMM_PROMPT = `你是一名专业的牙科诊所助理，请根据以下对话内容，提取与诊所业务相关的关键信息，整理成简短的摘要条目。
+
+要求：
+1. 只提取与业务相关的内容，忽略所有寒暄、客套、无关闲聊
+2. 每条摘要是一句简短的中文短句，20字以内
+3. 条目数量根据内容决定，通常3-6条，内容少可以更少
+4. 返回格式为 JSON，字段名为 "items"，值为字符串数组
+5. 只返回 JSON，不要包含 markdown 代码块标记或其他任何内容
+
 返回格式示例：
-{
-  "demand": "客户主诉牙齿敏感，询问是否需要做检查",
-  "keyPoints": "建议做全口检查，报价 200 元，可使用医保",
-  "followup": "约定下周三下午 3 点复诊",
-  "remark": "客户对价格较敏感，可适当优惠"
-}
-重要要求：
-- 每个字段的值必须是一段纯文本字符串，绝对不能是嵌套的对象或数组。
-- 如果某个维度有多条信息，请用顿号或逗号连接成一句话。
-- 如果某个维度没有相关信息，对应字段返回空字符串。
-- 只返回 JSON，不要包含 markdown 代码块标记或其他任何内容。
-正确示例（所有字段都是字符串）：
-{"demand":"牙齿敏感，询问是否需要检查","keyPoints":"建议做全口检查，报价200元","followup":"约下周三下午3点复诊","remark":"客户对价格较敏感"}`;
+{"items":["下周三下午两点复诊","复查由张医生负责","无需携带任何材料","可以正常进食"]}
+
+如果对话中没有任何业务相关内容，返回：{"items":[]}`;
 
 /** 解析 tenantId（复用 yaban-customer-router 的逻辑） */
 async function resolveTenantIdFromReq(req: any, userId: number): Promise<number> {
@@ -149,7 +142,7 @@ router.post(
       // 6. 混元摘要
       let summaryDemand = "";
       let summaryHospital = "";
-      let summaryKeyPoints = "";
+      let summaryKeyPoints = ""; // 存储业务摘要条目，用 \n 分隔
       let summaryFollowup = "";
       let summaryRemark = "";
       try {
@@ -168,7 +161,7 @@ router.post(
               { role: "system", content: promptContent },
               { role: "user", content: `对话内容如下：\n\n${rawText}` },
             ],
-            max_tokens: 1024,
+            max_tokens: 512,
           }),
         });
         if (!hunyuanResp.ok) {
@@ -183,18 +176,24 @@ router.post(
           const braceMatch = jsonStr.match(/\{[\s\S]*\}/);
           if (braceMatch) jsonStr = braceMatch[0];
           const parsed = JSON.parse(jsonStr);
-          const toStr = (v: any): string => {
-            if (v == null) return "";
-            if (typeof v === "string") return v;
-            if (Array.isArray(v)) return v.map(toStr).filter(Boolean).join("；");
-            if (typeof v === "object") return Object.values(v).map(toStr).filter(Boolean).join("；");
-            return String(v);
-          };
-          summaryDemand = toStr(parsed.demand);
-          summaryHospital = toStr(parsed.hospital);
-          summaryKeyPoints = toStr(parsed.keyPoints);
-          summaryFollowup = toStr(parsed.followup);
-          summaryRemark = toStr(parsed.remark);
+          // 新格式： items 数组，用 \n 拼接存入 summaryKeyPoints
+          if (Array.isArray(parsed.items)) {
+            summaryKeyPoints = parsed.items.filter(Boolean).join("\n");
+          } else {
+            // 兼容旧格式
+            const toStr = (v: any): string => {
+              if (v == null) return "";
+              if (typeof v === "string") return v;
+              if (Array.isArray(v)) return v.map(toStr).filter(Boolean).join("；");
+              if (typeof v === "object") return Object.values(v).map(toStr).filter(Boolean).join("；");
+              return String(v);
+            };
+            summaryDemand = toStr(parsed.demand);
+            summaryHospital = toStr(parsed.hospital);
+            summaryKeyPoints = toStr(parsed.keyPoints);
+            summaryFollowup = toStr(parsed.followup);
+            summaryRemark = toStr(parsed.remark);
+          }
         }
       } catch (e) {
         console.error("[AI语音秘书-upload] AI摘要提取失败:", e);

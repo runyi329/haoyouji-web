@@ -27,6 +27,7 @@ import {
   Clock,
   Wand2,
   Search,
+  Copy,
 } from "lucide-react";
 
 // ---- 类型定义 ----
@@ -105,11 +106,13 @@ const CHANNEL_CONFIG = {
 interface AnalysisResult {
   rawText: string;
   audioUrl: string | null;
-  summaryDemand: string;
-  summaryHospital: string;
-  summaryKeyPoints: string;
-  summaryFollowup: string;
-  summaryRemark: string;
+  summaryItems: string[]; // 业务摘要条目数组
+  // 兼容旧字段
+  summaryDemand?: string;
+  summaryHospital?: string;
+  summaryKeyPoints?: string;
+  summaryFollowup?: string;
+  summaryRemark?: string;
 }
 
 function AnalysisConfirmModal({
@@ -123,8 +126,33 @@ function AnalysisConfirmModal({
   onConfirm: (data: AnalysisResult) => void;
   onCancel: () => void;
 }) {
-  const [data, setData] = useState(result);
+  const [items, setItems] = useState<string[]>(result.summaryItems || []);
   const [showRaw, setShowRaw] = useState(true);
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+
+  const handleCopy = (text: string, idx: number) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedIdx(idx);
+      setTimeout(() => setCopiedIdx(null), 1500);
+    }).catch(() => {
+      // fallback
+      const el = document.createElement('textarea');
+      el.value = text;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopiedIdx(idx);
+      setTimeout(() => setCopiedIdx(null), 1500);
+    });
+  };
+
+  const handleCopyAll = () => {
+    const text = items.filter(Boolean).join('\n');
+    navigator.clipboard.writeText(text).catch(() => {});
+    setCopiedIdx(-1);
+    setTimeout(() => setCopiedIdx(null), 1500);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end bg-black/40">
@@ -139,7 +167,7 @@ function AnalysisConfirmModal({
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
           {/* 原始转写内容（默认展开） */}
-          {data.rawText && (
+          {result.rawText && (
             <div>
               <button
                 className="flex items-center justify-between w-full text-xs text-gray-400 mb-1.5"
@@ -149,33 +177,56 @@ function AnalysisConfirmModal({
                   {showRaw ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
                   原始转写内容
                 </span>
-                <span className="text-sky-400 font-medium">本次内容记录了 {data.rawText.replace(/\s/g, '').length} 字</span>
+                <span className="text-sky-400 font-medium">本次内容记录了 {result.rawText.replace(/\s/g, '').length} 字</span>
               </button>
               {showRaw && (
                 <div className="text-sm text-gray-600 bg-gray-50 rounded-xl p-3 leading-relaxed max-h-40 overflow-y-auto">
-                  {data.rawText}
+                  {result.rawText}
                 </div>
               )}
             </div>
           )}
-          {/* 摘要字段 */}
-          {[
-            { key: "summaryDemand" as const, label: "记录摘要" },
-            { key: "summaryHospital" as const, label: "医院记录" },
-            { key: "summaryKeyPoints" as const, label: "沟通要点" },
-            { key: "summaryFollowup" as const, label: "跟进事项" },
-            { key: "summaryRemark" as const, label: "备注" },
-          ].map(({ key, label }) => (
-            <div key={key}>
-              <label className="block text-xs text-sky-500 font-medium mb-1">{label}</label>
-              <textarea
-                className="w-full text-sm text-gray-900 bg-gray-50 rounded-xl px-3 py-2 border border-gray-100 outline-none focus:border-sky-300 resize-none min-h-[56px]"
-                value={data[key]}
-                onChange={(e) => setData({ ...data, [key]: e.target.value })}
-                placeholder={`请输入${label}...`}
-              />
+          {/* 业务摘要条目 */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-sky-500 font-medium">内容摘要</span>
+              {items.length > 0 && (
+                <button
+                  onClick={handleCopyAll}
+                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-sky-500"
+                >
+                  <Copy size={11} />
+                  {copiedIdx === -1 ? '已全部复制' : '全部复制'}
+                </button>
+              )}
             </div>
-          ))}
+            {items.length > 0 ? (
+              <div className="space-y-2">
+                {items.map((item, idx) => (
+                  <div key={idx} className="flex items-start gap-2 bg-gray-50 rounded-xl px-3 py-2">
+                    <span className="text-xs text-sky-400 font-bold flex-shrink-0 mt-0.5">{idx + 1}.</span>
+                    <input
+                      className="flex-1 text-sm text-gray-900 bg-transparent outline-none"
+                      value={item}
+                      onChange={(e) => {
+                        const next = [...items];
+                        next[idx] = e.target.value;
+                        setItems(next);
+                      }}
+                    />
+                    <button
+                      onClick={() => handleCopy(item, idx)}
+                      className="flex-shrink-0 p-1 text-gray-300 hover:text-sky-500"
+                    >
+                      {copiedIdx === idx ? <Check size={13} className="text-green-500" /> : <Copy size={13} />}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-4">未提取到业务相关内容</p>
+            )}
+          </div>
         </div>
         <div className="px-4 py-3 border-t border-gray-100 flex gap-3">
           <button
@@ -185,7 +236,7 @@ function AnalysisConfirmModal({
             取消
           </button>
           <button
-            onClick={() => onConfirm(data)}
+            onClick={() => onConfirm({ ...result, summaryItems: items })}
             className="flex-1 py-3 rounded-xl bg-sky-500 text-white text-sm font-medium"
           >
             保存记录
@@ -245,7 +296,7 @@ function ManualInputModal({
         <div className="px-4 py-3 border-t border-gray-100 flex gap-3">
           <button onClick={onCancel} className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium">取消</button>
           <button
-            onClick={() => onConfirm({ ...data, rawText: "" })}
+            onClick={() => onConfirm({ ...data, rawText: "", summaryItems: [] })}
             className="flex-1 py-3 rounded-xl bg-sky-500 text-white text-sm font-medium"
           >
             保存
@@ -373,6 +424,38 @@ function CustomerChatViewModal({
 }
 
 // ---- 单条时间线记录卡片 ----
+// 摘要条目行：显示序号+文字+复制按钮
+function SummaryItemRow({ index, text }: { index: number; text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {
+      const el = document.createElement('textarea');
+      el.value = text;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <div className="flex items-center gap-2 group">
+      <span className="text-xs text-sky-400 font-bold flex-shrink-0 w-4">{index + 1}.</span>
+      <p className="flex-1 text-sm text-gray-800 leading-snug">{text}</p>
+      <button
+        onClick={(e) => { e.stopPropagation(); handleCopy(); }}
+        className="flex-shrink-0 p-1 text-gray-300 hover:text-sky-500 opacity-0 group-hover:opacity-100 transition-opacity"
+      >
+        {copied ? <Check size={12} className="text-green-500" /> : <Copy size={12} />}
+      </button>
+    </div>
+  );
+}
+
 function TimelineCard({
   record,
   onDelete,
@@ -386,21 +469,23 @@ function TimelineCard({
   const [, navigate] = useLocation();
   const ch = CHANNEL_CONFIG[record.record_type] || CHANNEL_CONFIG.manual;
 
-  // 默认展示的第一条摘要预览
-  const firstSummary =
-    record.summary_demand ||
-    record.summary_hospital ||
-    record.summary_key_points ||
-    record.summary_followup ||
-    record.summary_remark;
+  // 解析摘要条目：优先用 summary_key_points 按 \n 分割，否则兼容旧字段
+  const summaryItems: string[] = (() => {
+    if (record.summary_key_points) {
+      const lines = record.summary_key_points.split("\n").filter(Boolean);
+      if (lines.length > 0) return lines;
+    }
+    // 旧格式兼容
+    return [
+      record.summary_demand,
+      record.summary_hospital,
+      record.summary_key_points,
+      record.summary_followup,
+      record.summary_remark,
+    ].filter(Boolean) as string[];
+  })();
 
-  const summaryFields = [
-    { key: "summary_demand", label: "记录摘要", value: record.summary_demand },
-    { key: "summary_hospital", label: "医院记录", value: record.summary_hospital },
-    { key: "summary_key_points", label: "沟通要点", value: record.summary_key_points },
-    { key: "summary_followup", label: "跟进事项", value: record.summary_followup },
-    { key: "summary_remark", label: "备注", value: record.summary_remark },
-  ].filter((f) => f.value);
+  const firstSummary = summaryItems[0] || "";
 
   // 是否有语音档案
   const hasVoice = !!(record.audio_url || (record.record_type === "voice" && record.raw_text));
@@ -444,15 +529,12 @@ function TimelineCard({
         {/* 展开内容 */}
         {open && (
           <>
-            {/* AI 摘要区 */}
+            {/* 摘要条目区 */}
             <div className="border-t border-gray-50 px-3 pt-2.5 pb-3">
-              {summaryFields.length > 0 ? (
-                <div className="space-y-2">
-                  {summaryFields.map((f) => (
-                    <div key={f.key} className="flex gap-2">
-                      <span className="text-xs text-gray-400 flex-shrink-0 w-14 pt-0.5">{f.label}</span>
-                      <p className="text-sm text-gray-900 leading-snug flex-1">{f.value}</p>
-                    </div>
+              {summaryItems.length > 0 ? (
+                <div className="space-y-1.5">
+                  {summaryItems.map((item, idx) => (
+                    <SummaryItemRow key={idx} index={idx} text={item} />
                   ))}
                 </div>
               ) : (
@@ -678,9 +760,14 @@ export default function YabanPatientComm() {
       const result = await resp.json();
       setAnalysisTitle("AI 语音分析结果");
       setAnalysisRecordType("voice");
+      // 将 summaryKeyPoints 按 \n 分割成数组，兼容旧格式
+      const rawItems: string[] = result.summaryKeyPoints
+        ? result.summaryKeyPoints.split("\n").filter(Boolean)
+        : [];
       setAnalysisResult({
         rawText: result.rawText,
         audioUrl: result.audioUrl || null,
+        summaryItems: rawItems,
         summaryDemand: result.summaryDemand,
         summaryHospital: result.summaryHospital || "",
         summaryKeyPoints: result.summaryKeyPoints,
@@ -729,16 +816,20 @@ export default function YabanPatientComm() {
   // ---- 保存记录 ----
   const handleConfirmAnalysis = useCallback(
     (data: AnalysisResult) => {
+      // 新格式：将 summaryItems 数组用 \n 拼接存入 summaryKeyPoints
+      const keyPoints = data.summaryItems && data.summaryItems.length > 0
+        ? data.summaryItems.filter(Boolean).join("\n")
+        : (data.summaryKeyPoints || "");
       createMutation.mutate({
         customerId: patientId,
         recordType: analysisRecordType,
         rawText: data.rawText,
         audioUrl: data.audioUrl || undefined,
-        summaryDemand: data.summaryDemand,
-        summaryHospital: data.summaryHospital,
-        summaryKeyPoints: data.summaryKeyPoints,
-        summaryFollowup: data.summaryFollowup,
-        summaryRemark: data.summaryRemark,
+        summaryDemand: data.summaryDemand || "",
+        summaryHospital: data.summaryHospital || "",
+        summaryKeyPoints: keyPoints,
+        summaryFollowup: data.summaryFollowup || "",
+        summaryRemark: data.summaryRemark || "",
         aiGenerated: analysisRecordType !== "manual",
         commAt: new Date().toISOString(),
       });
