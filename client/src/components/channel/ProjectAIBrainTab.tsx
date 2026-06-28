@@ -322,12 +322,16 @@ export function ProjectAIBrainTab({
   channelType = DEFAULT_CHANNEL_TYPE,
   theme = YABAN_THEME,
   hideDigitalTwin = true,
+  serviceType,
+  serviceTenantId,
 }: {
   refreshKey?: number;
   channelId?: number;
   channelType?: string;
   theme?: typeof YABAN_THEME;
   hideDigitalTwin?: boolean;
+  serviceType?: string;
+  serviceTenantId?: number;
 } = {}) {
   // ── 第0步：AI智能整理 ──
   const [step0Open, setStep0Open] = useState(false);
@@ -555,7 +559,11 @@ export function ProjectAIBrainTab({
       .finally(() => setLoadingRules(false));
 
     // 加载该渠道授权的共享库（知识库 + 指令库）
-    const grantsData = await fetch(`/api/wecom/channel-grants?channel_id=${channelId}`)
+    // 优先用 serviceType + serviceTenantId 直接查，否则用 channel_id 查
+    const grantsUrl = (serviceType && serviceTenantId)
+      ? `/api/wecom/tenant-grants?service_type=${serviceType}&service_tenant_id=${serviceTenantId}`
+      : `/api/wecom/channel-grants?channel_id=${channelId}`;
+    const grantsData = await fetch(grantsUrl)
       .then(r => r.json())
       .catch(() => ({ ok: false, kb_grants: [], rule_grants: [] }));
 

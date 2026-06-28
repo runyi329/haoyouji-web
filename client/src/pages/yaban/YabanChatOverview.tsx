@@ -138,7 +138,7 @@ function AiConfigSection({ tenantId, expanded, onClose }: { tenantId: number | n
           <>
             <ProjectConfigTab channelId={channelId} channelType="kf" />
             <div className="border-t border-gray-200" />
-            <ProjectAIBrainTab channelId={channelId} channelType="kf" hideDigitalTwin />
+            <ProjectAIBrainTab channelId={channelId} channelType="kf" hideDigitalTwin serviceType="yaban" serviceTenantId={tenantId ? Number(tenantId) : undefined} />
           </>
         )}
       </div>
