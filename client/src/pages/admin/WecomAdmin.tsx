@@ -3670,8 +3670,6 @@ function PlatformUnifiedView({ appChannelId }: { appChannelId: number | null }) 
     { key: 'usage',     label: '用量统计', icon: <Coins className="w-3.5 h-3.5" /> },
     // 自建应用渠道原有 Tab
     { key: 'config',    label: '配置',     icon: <Settings className="w-3.5 h-3.5" /> },
-    { key: 'rules',     label: '专属规则', icon: <Sparkles className="w-3.5 h-3.5" /> },
-    { key: 'kb',        label: '知识库',   icon: <Shield className="w-3.5 h-3.5" /> },
     { key: 'users',     label: '用户',     icon: <User className="w-3.5 h-3.5" /> },
     { key: 'logs',      label: '日志',     icon: <MessageSquare className="w-3.5 h-3.5" /> },
     { key: 'bindings',  label: '绑定服务商', icon: <Link2Icon /> },
@@ -3709,14 +3707,12 @@ function PlatformUnifiedView({ appChannelId }: { appChannelId: number | null }) 
       {/* 自建应用渠道 Tab 内容（需要 channelId） */}
       {channelId > 0 && appChannel ? (
         <>
-          {activeTab === 'config'   && <ChannelConfigTab channel={appChannel} onJumpToKb={() => setActiveTab('kb')} />}
-          {activeTab === 'rules'    && <ChannelCustomRulesTab channelType="app" />}
-          {activeTab === 'kb'       && <ChannelKnowledgeTab channelType="app" channelId={channelId} />}
+          {activeTab === 'config'   && <ChannelConfigTab channel={appChannel} onJumpToKb={() => setActiveTab('shared')} />}
           {activeTab === 'users'    && <ChannelUsersTab channelType="app" />}
           {activeTab === 'logs'     && <ChannelLogsTab channelType="app" channelId={channelId} />}
           {activeTab === 'bindings' && <ChannelServiceBindingsTab channels={channels} />}
         </>
-      ) : (['config','rules','kb','users','logs','bindings'] as const).includes(activeTab as any) ? (
+      ) : (['config','users','logs','bindings'] as const).includes(activeTab as any) ? (
         <div className="text-center py-10 text-gray-400 text-sm">暂无自建应用渠道数据</div>
       ) : null}
     </div>
