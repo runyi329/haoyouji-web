@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-06-28
+// 生成时间：2026-06-29
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -7937,5 +7937,8 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-28T04:55:54Z", type: "feat", cleanMessage: "AI语音分析改为内容摘要版 - 逐条短句+每条复制按钮" },
     { date: "2026-06-28T07:52:56Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
     { date: "2026-06-28T07:54:45Z", type: "feat", cleanMessage: "时间线重构+预约联动+录音异步处理+COS配置+生日动画等优化" },
+    { date: "2026-06-28T11:29:49Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-28T13:17:58Z", type: "feat", cleanMessage: "P&L曲线优化 - 对数坐标/价格范围1200-4000/拖动黄线/颜色反转/Y轴10k间距/订单卡片颜色修正" },
+    { date: "2026-06-28T14:18:51Z", type: "fix", cleanMessage: "CombinedPnlCanvas 拖动黄线/P&L数字跟随/三色曲线/按钮位置" },
   ],
 };
