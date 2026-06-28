@@ -196,10 +196,15 @@ interface OrderFormData {
   entryDate: string;
   expiryDate: string;
   optionType: "call" | "put";
+  optionDirection: "buy_call" | "buy_put" | "sell_call" | "sell_put";
   strikePrice: string;
-  premium: string;
+  premium: string;       // 总权利金（可手动覆盖）
+  premiumUnit: string;   // 权利金单价（每张/每币）
   exitDate: string;
   status: "open" | "closed";
+  settlementType: "usdt" | "coin";
+  contractSize: string;
+  impliedVol: string;
   note: string;
 }
 
@@ -218,10 +223,15 @@ const defaultForm = (): OrderFormData => ({
   entryDate: todayStr(),
   expiryDate: "",
   optionType: "call",
+  optionDirection: "buy_call" as const,
   strikePrice: "",
   premium: "",
+  premiumUnit: "",
   exitDate: "",
   status: "open",
+  settlementType: "usdt" as const,
+  contractSize: "0.1",
+  impliedVol: "",
   note: "",
 });
 
@@ -415,6 +425,7 @@ export default function OrderFlowPage() {
   }, [cryptoPricesRaw]);
   // 默认止盈价（来自智能仓位管理目标止盈）
   const [takeProfitModified, setTakeProfitModified] = useState(false); // 是否已手动修改止盈价
+  const [premiumModified, setPremiumModified] = useState(false); // 是否已手动修改总权利金
   const { data: defaultTpData } = trpc.orderFlow.getDefaultTakeProfit.useQuery(
     { ledgerId },
     { enabled: ledgerId > 0, staleTime: 5000, refetchInterval: 10000 }
@@ -466,6 +477,7 @@ export default function OrderFlowPage() {
   const [form, setForm] = useState<OrderFormData>(defaultForm());
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<"all" | "open" | "closed">("all");
+  const [filterMarket, setFilterMarket] = useState<"all" | "option" | "perp" | "spot">("all");
   // 备注区域状态
   const [expandedNotes, setExpandedNotes] = useState<Set<number>>(new Set()); // 已展开备注的订单ID
   const [noteInputs, setNoteInputs] = useState<Record<number, string>>({}); // 各订单的输入框内容
@@ -479,6 +491,20 @@ export default function OrderFlowPage() {
       setTakeProfitModified(false);
     }
   }, [defaultTakeProfit, showForm]);
+  // 期权总权利金自动计算：开仓价（权利金单价）× 数量 × 面值
+  useEffect(() => {
+    if (form.marketType !== "option" || premiumModified) return;
+    const unit = parseFloat(form.entryPrice); // 期权模式下开仓价=权利金单价
+    const qty = parseFloat(form.quantity);
+    const size = parseFloat(form.contractSize);
+    if (unit > 0 && qty > 0 && size > 0) {
+      const total = unit * qty * size;
+      setForm(f => ({ ...f, premium: String(Math.round(total * 100) / 100) }));
+    } else {
+      setForm(f => ({ ...f, premium: "" }));
+    }
+  }, [form.entryPrice, form.quantity, form.contractSize, form.marketType, premiumModified]);
+
   // 资金费率（在form定义后，按当前弹窗选择的币种）
   const formSymbol = form.symbol || 'ETHUSDT';
   const { data: fundingRateData } = trpc.orderFlow.getLatestFundingRate.useQuery(
@@ -489,9 +515,11 @@ export default function OrderFlowPage() {
     if (fundingRateData?.rate != null) setFundingRate(fundingRateData.rate);
   }, [fundingRateData]);
   const filteredOrders = useMemo(() => {
-    if (filterStatus === "all") return orders as any[];
-    return (orders as any[]).filter((o: any) => o.status === filterStatus);
-  }, [orders, filterStatus]);
+    let result = orders as any[];
+    if (filterStatus !== "all") result = result.filter((o: any) => o.status === filterStatus);
+    if (filterMarket !== "all") result = result.filter((o: any) => o.market_type === filterMarket);
+    return result;
+  }, [orders, filterStatus, filterMarket]);
 
   // 汇总计算（基于当前筛选结果）
   const summary = useMemo(() => {
@@ -548,15 +576,26 @@ export default function OrderFlowPage() {
       entryDate: order.entry_date || todayStr(),
       expiryDate: order.expiry_date || "",
       optionType: (order.option_type as "call" | "put") || "call",
+      optionDirection: (
+        order.direction === "long" && order.option_type === "call" ? "buy_call" :
+        order.direction === "long" && order.option_type === "put" ? "buy_put" :
+        order.direction === "short" && order.option_type === "call" ? "sell_call" :
+        "sell_put"
+      ) as "buy_call" | "buy_put" | "sell_call" | "sell_put",
       strikePrice: order.strike_price ? String(order.strike_price) : "",
       premium: order.premium ? String(order.premium) : "",
+      premiumUnit: order.premium_unit ? String(order.premium_unit) : "",
       exitDate: order.exit_date || "",
       status: order.status || "open",
+      settlementType: (order.settlement_type as "usdt" | "coin") || "usdt",
+      contractSize: order.contract_size ? String(order.contract_size) : "0.1",
+      impliedVol: order.implied_vol ? String(order.implied_vol) : "",
       note: order.note || "",
     });
     const tp = order.take_profit ? String(order.take_profit) : "";
     const isDefaultTp = defaultTakeProfit && tp === String(defaultTakeProfit);
     setTakeProfitModified(!isDefaultTp && tp !== "");
+    setPremiumModified(order.premium_unit != null); // 编辑时若有单价则视为手动模式
     setEditingId(order.id);
     setShowForm(true);
   }
@@ -593,6 +632,10 @@ export default function OrderFlowPage() {
       optionType: form.marketType === "option" ? form.optionType : undefined,
       strikePrice: form.marketType === "option" && form.strikePrice ? parseFloat(form.strikePrice) : undefined,
       premium: form.premium ? parseFloat(form.premium) : undefined,
+      premiumUnit: form.marketType === "option" && form.premiumUnit ? parseFloat(form.premiumUnit) : undefined,
+      settlementType: form.marketType === "option" ? form.settlementType : undefined,
+      contractSize: form.marketType === "option" && form.contractSize ? parseFloat(form.contractSize) : undefined,
+      impliedVol: form.marketType === "option" && form.impliedVol ? parseFloat(form.impliedVol) : undefined,
       note: form.note || undefined,
     };
 
@@ -696,7 +739,7 @@ export default function OrderFlowPage() {
       </div>
 
       {/* ===== 状态过滤 Tab ===== */}
-      <div className="flex gap-2 px-4 pt-3 pb-2 items-center">
+      <div className="flex gap-2 px-4 pt-3 pb-1 items-center">
         {(["all", "open", "closed"] as const).map((s) => (
           <button
             key={s}
@@ -714,6 +757,23 @@ export default function OrderFlowPage() {
         <span className="ml-auto text-xs" style={{ color: OKX_TEXT_SEC }}>
           {filteredOrders.length} 笔
         </span>
+      </div>
+      {/* ===== 市场类型过滤 ===== */}
+      <div className="flex gap-2 px-4 pb-2 items-center">
+        {(["all", "option", "perp", "spot"] as const).map((m) => (
+          <button
+            key={m}
+            onClick={() => setFilterMarket(m)}
+            className="px-3 py-1 rounded-full text-xs font-medium transition-all"
+            style={
+              filterMarket === m
+                ? { backgroundColor: "rgba(14,203,129,0.15)", color: "#0ECB81", border: `1px solid rgba(14,203,129,0.4)` }
+                : { backgroundColor: "rgba(255,255,255,0.05)", color: OKX_TEXT_SEC, border: `1px solid ${OKX_BORDER}` }
+            }
+          >
+            {m === "all" ? "全类型" : m === "option" ? "期权" : m === "perp" ? "永续" : "现货"}
+          </button>
+        ))}
       </div>
 
       {/* ===== 汇总栏 ===== */}
@@ -1270,24 +1330,75 @@ export default function OrderFlowPage() {
                   <option value="option">期权</option>
                 </select>
               </div>
-              {/* 方向 */}
-              <div>
-                <label className="block text-xs mb-1.5" style={{ color: OKX_TEXT_SEC }}>方向</label>
-                <select
-                  value={form.direction}
-                  onChange={(e) => setForm((f) => ({ ...f, direction: e.target.value as "long" | "short" }))}
-                  className="w-full px-2 py-2 rounded-xl text-sm font-semibold"
-                  style={{
-                    background: "rgba(255,255,255,0.05)",
-                    border: `1px solid ${OKX_BORDER}`,
-                    color: form.direction === "long" ? "#F6465D" : "#0ECB81",
-                  }}
-                >
-                  <option value="long">做多</option>
-                  <option value="short">做空</option>
-                </select>
-              </div>
+              {/* 方向（非期权） */}
+              {form.marketType !== "option" && (
+                <div>
+                  <label className="block text-xs mb-1.5" style={{ color: OKX_TEXT_SEC }}>方向</label>
+                  <select
+                    value={form.direction}
+                    onChange={(e) => setForm((f) => ({ ...f, direction: e.target.value as "long" | "short" }))}
+                    className="w-full px-2 py-2 rounded-xl text-sm font-semibold"
+                    style={{
+                      background: "rgba(255,255,255,0.05)",
+                      border: `1px solid ${OKX_BORDER}`,
+                      color: form.direction === "long" ? "#F6465D" : "#0ECB81",
+                    }}
+                  >
+                    <option value="long">做多</option>
+                    <option value="short">做空</option>
+                  </select>
+                </div>
+              )}
             </div>
+
+            {/* 期权四选一方向按钮组（仅期权） */}
+            {form.marketType === "option" && (
+              <div className="mb-4">
+                <label className="block text-xs mb-2" style={{ color: OKX_TEXT_SEC }}>方向 / 类型</label>
+                <div className="space-y-2">
+                  {([
+                    { id: "buy_call" as const, label: "买Call", desc: "看涨 · 付权利金 · 无限盈利", color: "#0ECB81", bg: "rgba(14,203,129,0.15)", border: "rgba(14,203,129,0.4)" },
+                    { id: "buy_put" as const, label: "买Put", desc: "看跌 · 付权利金 · 有限盈利", color: "#F6465D", bg: "rgba(246,70,93,0.15)", border: "rgba(246,70,93,0.4)" },
+                    { id: "sell_call" as const, label: "卖Call", desc: "看跌/中性 · 收权利金 · 无限风险", color: "#0ECB81", bg: "rgba(14,203,129,0.15)", border: "rgba(14,203,129,0.4)" },
+                    { id: "sell_put" as const, label: "卖Put", desc: "看涨/中性 · 收权利金 · 有限风险", color: "#F6465D", bg: "rgba(246,70,93,0.15)", border: "rgba(246,70,93,0.4)" },
+                  ]).map(({ id, label, desc, color, bg, border: btnBorder }) => {
+                    const isSelected = form.optionDirection === id;
+                    return (
+                      <button
+                        key={id}
+                        onClick={() => {
+                          const direction = id.startsWith("buy") ? "long" : "short";
+                          const optionType = id.endsWith("call") ? "call" : "put";
+                          setForm((f) => ({ ...f, optionDirection: id, direction, optionType }));
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-left transition-all"
+                        style={
+                          isSelected
+                            ? { backgroundColor: bg, border: `1px solid ${btnBorder}` }
+                            : { backgroundColor: "rgba(255,255,255,0.04)", border: `1px solid ${OKX_BORDER}` }
+                        }
+                      >
+                        <span
+                          className="text-xs font-bold px-1.5 py-0.5 rounded flex-shrink-0"
+                          style={{
+                            minWidth: "3rem",
+                            textAlign: "center",
+                            backgroundColor: isSelected ? bg : "rgba(255,255,255,0.06)",
+                            color: isSelected ? color : OKX_TEXT_SEC,
+                            border: `1px solid ${isSelected ? btnBorder : OKX_BORDER}`,
+                          }}
+                        >
+                          {label}
+                        </span>
+                        <span className="text-xs" style={{ color: isSelected ? OKX_TEXT_PRI : OKX_TEXT_SEC }}>
+                          {desc}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
                         {/* VIP等级 + 挂单类型 + 手续费率（一行三列） */}
             <div className="grid grid-cols-3 gap-2 mb-4">
@@ -1332,10 +1443,10 @@ export default function OrderFlowPage() {
 
             {/* 数字输入字段 */}
             {[
-              { label: "开仓价 (USDT)", key: "entryPrice", placeholder: "如 2500.00" },
+              { label: form.marketType === "option" ? "开仓价（权利金单价）" : "开仓价 (USDT)", key: "entryPrice", placeholder: form.marketType === "option" ? "如 149.5（OKX显示的开仓均价）" : "如 2500.00" },
               { label: "数量 (ETH)", key: "quantity", placeholder: "如 0.5" },
               ...(form.marketType === "perp" ? [{ label: "杠杆倍数", key: "leverage", placeholder: "如 5" }] : []),
-              { label: "止损价 (可选)", key: "stopLoss", placeholder: "如 2200" },
+              ...(form.marketType !== "option" ? [{ label: "止损价 (可选)", key: "stopLoss", placeholder: "如 2200" }] : []),
             ].map(({ label, key, placeholder }) => (
               <div key={key} className="mb-3">
                 <label className="block text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>{label}</label>
@@ -1357,8 +1468,8 @@ export default function OrderFlowPage() {
                 />
               </div>
             ))}
-            {/* 止盈价（带默认值跟踪） */}
-            <div className="mb-3">
+            {/* 止盈价（带默认值跟踪，期权不显示） */}
+            {form.marketType !== "option" && <div className="mb-3">
               <div className="flex items-center justify-between mb-1">
                 <label className="text-xs" style={{ color: OKX_TEXT_SEC }}>止盈价 (可选)</label>
                 <button
@@ -1409,7 +1520,7 @@ export default function OrderFlowPage() {
                   maxWidth: "100%",
                 }}
               />
-            </div>
+            </div>}
 
             {/* 开仓日期 */}
             <div className="mb-3">
@@ -1453,28 +1564,7 @@ export default function OrderFlowPage() {
               </div>
             )}
 
-            {/* Call/Put 类型（仅期权） */}
-            {form.marketType === "option" && (
-              <div className="mb-3">
-                <label className="block text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>期权类型</label>
-                <div className="flex gap-2">
-                  {(["call", "put"] as const).map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setForm((f) => ({ ...f, optionType: t }))}
-                      className="flex-1 py-1.5 rounded-lg text-xs font-medium"
-                      style={
-                        form.optionType === t
-                          ? { backgroundColor: t === "call" ? "rgba(14,203,129,0.15)" : "rgba(246,70,93,0.15)", color: t === "call" ? "#0ECB81" : "#F6465D", border: `1px solid ${t === "call" ? "rgba(14,203,129,0.4)" : "rgba(246,70,93,0.4)"}` }
-                          : { backgroundColor: "rgba(255,255,255,0.05)", color: OKX_TEXT_SEC, border: `1px solid ${OKX_BORDER}` }
-                      }
-                    >
-                      {t === "call" ? "Call 看涨" : "Put 看跌"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+
             {/* 行权价（仅期权） */}
             {form.marketType === "option" && (
               <div className="mb-3">
@@ -1495,17 +1585,106 @@ export default function OrderFlowPage() {
                 />
               </div>
             )}
-            {/* 权利金（仅期权） */}
+            {/* 权利金单价已合并到开仓价字段 */}
+            {/* 总权利金（自动计算，可手动覆盖） */}
             {form.marketType === "option" && (
               <div className="mb-3">
-                <label className="block text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>权利金 (USDT)</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs" style={{ color: OKX_TEXT_SEC }}>总权利金 (USDT)</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (premiumModified) {
+                        // 切回自动模式
+                        setPremiumModified(false);
+                      } else {
+                        // 切换为手动模式
+                        setForm(f => ({ ...f, premium: '' }));
+                        setPremiumModified(true);
+                      }
+                    }}
+                    className="text-xs px-2 py-0.5 rounded font-bold"
+                    style={{
+                      backgroundColor: premiumModified ? "rgba(240,185,11,0.15)" : "rgba(76,175,80,0.15)",
+                      color: premiumModified ? OKX_YELLOW : "#4CAF50",
+                      border: `1px solid ${premiumModified ? OKX_YELLOW : "#4CAF50"}`,
+                    }}
+                  >
+                    {premiumModified ? "手动" : "自动"}
+                  </button>
+                </div>
                 <input
                   type="number"
                   inputMode="decimal"
                   value={form.premium}
-                  onChange={(e) => setForm((f) => ({ ...f, premium: e.target.value }))}
-                  placeholder="输入权利金金额"
-                  className="w-full px-3 py-2 rounded-xl text-sm"
+                  onChange={(e) => {
+                    setForm((f) => ({ ...f, premium: e.target.value }));
+                    if (!premiumModified) setPremiumModified(true);
+                  }}
+                  placeholder={
+                    !premiumModified && form.entryPrice && form.quantity && form.contractSize
+                      ? `自动 = ${form.entryPrice} × ${form.quantity} × ${form.contractSize}`
+                      : "如 7475"
+                  }
+                  className="w-full px-3 py-2 rounded-xl text-sm font-mono"
+                  style={{
+                    background: premiumModified ? "rgba(255,255,255,0.05)" : "rgba(76,175,80,0.05)",
+                    border: `1px solid ${premiumModified ? OKX_YELLOW : "#4CAF50"}`,
+                    color: OKX_TEXT_PRI,
+                    outline: "none",
+                  }}
+                />
+              </div>
+            )}
+
+            {/* 结算方式 + 面值（仅期权） */}
+            {form.marketType === "option" && (
+              <div className="mb-3">
+                <label className="block text-xs mb-2" style={{ color: OKX_TEXT_SEC }}>结算方式</label>
+                <div className="flex gap-2 mb-3">
+                  {(["usdt", "coin"] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setForm((f) => ({ ...f, settlementType: t, contractSize: t === "usdt" ? "0.1" : "1" }))}
+                      className="flex-1 py-1.5 rounded-lg text-xs font-medium"
+                      style={
+                        form.settlementType === t
+                          ? { backgroundColor: "rgba(240,185,11,0.15)", color: OKX_YELLOW, border: `1px solid rgba(240,185,11,0.4)` }
+                          : { backgroundColor: "rgba(255,255,255,0.05)", color: OKX_TEXT_SEC, border: `1px solid ${OKX_BORDER}` }
+                      }
+                    >
+                      {t === "usdt" ? "U本位" : "币本位"}
+                    </button>
+                  ))}
+                </div>
+                <label className="block text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>合约面值（每张对应多少币）</label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={form.contractSize}
+                  onChange={(e) => setForm((f) => ({ ...f, contractSize: e.target.value }))}
+                  placeholder="如 0.1（OKX ETH）或 1（Deribit）"
+                  className="w-full px-3 py-2 rounded-xl text-sm font-mono"
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    border: `1px solid ${OKX_BORDER}`,
+                    color: OKX_TEXT_PRI,
+                    outline: "none",
+                  }}
+                />
+              </div>
+            )}
+            {/* 隐含波动率 IV（仅期权） */}
+            {form.marketType === "option" && (
+              <div className="mb-3">
+                <label className="block text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>隐含波动率 IV (%)</label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={form.impliedVol}
+                  onChange={(e) => setForm((f) => ({ ...f, impliedVol: e.target.value }))}
+                  placeholder="如 80.5，开仓时的IV百分比"
+                  className="w-full px-3 py-2 rounded-xl text-sm font-mono"
                   style={{
                     background: "rgba(255,255,255,0.05)",
                     border: `1px solid ${OKX_BORDER}`,

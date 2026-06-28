@@ -25563,6 +25563,10 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         optionType: z.enum(['call', 'put']).optional(),
         strikePrice: z.number().optional(),
         premium: z.number().optional(),
+        premiumUnit: z.number().optional(),
+        settlementType: z.enum(['usdt', 'coin']).optional(),
+        contractSize: z.number().optional(),
+        impliedVol: z.number().optional(),
         note: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -25570,12 +25574,14 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
         await db.execute(
           sql`INSERT INTO order_flow_trades
-              (ledger_id, user_id, symbol, direction, market_type, order_type, vip_level, entry_price, quantity, leverage, take_profit, stop_loss, entry_date, expiry_date, option_type, strike_price, premium, note, created_by)
+              (ledger_id, user_id, symbol, direction, market_type, order_type, vip_level, entry_price, quantity, leverage, take_profit, stop_loss, entry_date, expiry_date, option_type, strike_price, premium, premium_unit, settlement_type, contract_size, implied_vol, note, created_by)
               VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.symbol}, ${input.direction},
                       ${input.marketType}, ${input.orderType}, ${input.vipLevel},
                       ${input.entryPrice}, ${input.quantity}, ${input.leverage},
                       ${input.takeProfit ?? null}, ${input.stopLoss ?? null},
-                      ${input.entryDate}, ${input.expiryDate ?? null}, ${input.optionType ?? null}, ${input.strikePrice ?? null}, ${input.premium ?? null}, ${input.note ?? null}, ${ctx.user.id})`
+                      ${input.entryDate}, ${input.expiryDate ?? null}, ${input.optionType ?? null}, ${input.strikePrice ?? null}, ${input.premium ?? null},
+                      ${input.premiumUnit ?? null}, ${input.settlementType ?? null}, ${input.contractSize ?? null}, ${input.impliedVol ?? null},
+                      ${input.note ?? null}, ${ctx.user.id})`
         );
         return { success: true };
       }),
@@ -25600,6 +25606,10 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         optionType: z.enum(['call', 'put']).nullable().optional(),
         strikePrice: z.number().nullable().optional(),
         premium: z.number().nullable().optional(),
+        premiumUnit: z.number().nullable().optional(),
+        settlementType: z.enum(['usdt', 'coin']).nullable().optional(),
+        contractSize: z.number().nullable().optional(),
+        impliedVol: z.number().nullable().optional(),
         exitDate: z.string().nullable().optional(),
         status: z.enum(['open', 'closed']).optional(),
         note: z.string().nullable().optional(),
@@ -25627,7 +25637,11 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
               expiry_date = CASE WHEN ${input.expiryDate !== undefined} THEN ${input.expiryDate ?? null} ELSE expiry_date END,
               option_type = CASE WHEN ${input.optionType !== undefined} THEN ${input.optionType ?? null} ELSE option_type END,
               strike_price = CASE WHEN ${input.strikePrice !== undefined} THEN ${input.strikePrice ?? null} ELSE strike_price END,
-              premium = CASE WHEN ${input.premium !== undefined} THEN ${input.premium ?? null} ELSE premium END
+              premium = CASE WHEN ${input.premium !== undefined} THEN ${input.premium ?? null} ELSE premium END,
+              premium_unit = CASE WHEN ${input.premiumUnit !== undefined} THEN ${input.premiumUnit ?? null} ELSE premium_unit END,
+              settlement_type = CASE WHEN ${input.settlementType !== undefined} THEN ${input.settlementType ?? null} ELSE settlement_type END,
+              contract_size = CASE WHEN ${input.contractSize !== undefined} THEN ${input.contractSize ?? null} ELSE contract_size END,
+              implied_vol = CASE WHEN ${input.impliedVol !== undefined} THEN ${input.impliedVol ?? null} ELSE implied_vol END
               WHERE id = ${input.id} AND ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}`
         );
         return { success: true };
