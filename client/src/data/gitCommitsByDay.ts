@@ -7922,4 +7922,18 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-27T13:22:40Z", type: "feat", cleanMessage: "新增/批准医院时自动绑定牙伴在线渠道（channel_id=4）" },
     { date: "2026-06-27T13:52:43Z", type: "feat", cleanMessage: "院长端 AI 配置区整合设置+知识库（方案A抽取独立组件）" },
   ],
+  "2026-06-28": [
+    { date: "2026-06-27T17:10:33Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-28T00:03:54Z", type: "feat", cleanMessage: "顾客权限控制、推荐人统一、微信聊天修复、服务商共享库配置UI" },
+    { date: "2026-06-28T00:20:04Z", type: "feat", cleanMessage: "欢迎语多级开关控制（去掉前端硬编码，后端按诊所>渠道>平台优先级链返回）" },
+    { date: "2026-06-28T00:29:35Z", type: "fix", cleanMessage: "欢迎语时序修复——等 channel_id 从后端确认后再请求，避免用默认值查不到诊所级配置" },
+    { date: "2026-06-28T00:50:33Z", type: "fix", cleanMessage: "顾客微信聊天记录改为按客户自身tenant_id定位+越权校验，不再依赖前端header" },
+    { date: "2026-06-28T01:17:18Z", type: "fix", cleanMessage: "修复聊天记录查询 mysql2 LIMIT/OFFSET 占位符报错（Incorrect arguments），改为内联分页避免被catch吞掉导致误报未绑定" },
+    { date: "2026-06-28T01:36:29Z", type: "other", cleanMessage: "删除平台管理页冗余的「专属规则」「知识库」tab，知识库入口统一跳转平台共享" },
+    { date: "2026-06-28T03:31:47Z", type: "feat", cleanMessage: "平台共享-共享指令库多库支持+绑定服务商配置知识库/指令库+齿科知识库365条问答导入" },
+    { date: "2026-06-28T03:45:17Z", type: "fix", cleanMessage: "修复A235共享知识库/指令库按渠道授权配置显示，新增channel-grants接口，支持kb_ids多库查询" },
+    { date: "2026-06-28T04:04:03Z", type: "fix", cleanMessage: "共享知识库/指令库按service_tenant_id精准匹配，修复显示空白问题" },
+    { date: "2026-06-28T04:37:06Z", type: "feat", cleanMessage: "微信聊天记录返回箭头、AI秘书UI优化、随访详情加沟通记录入口" },
+    { date: "2026-06-28T04:55:54Z", type: "feat", cleanMessage: "AI语音分析改为内容摘要版 - 逐条短句+每条复制按钮" },
+  ],
 };
