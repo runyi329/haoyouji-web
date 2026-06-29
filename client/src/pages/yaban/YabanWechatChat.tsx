@@ -234,7 +234,7 @@ export default function YabanWechatChat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const [viewportHeight, setViewportHeight] = useState<number>(() => window.visualViewport?.height ?? window.innerHeight);
+
   const sessionId = useRef(`web_${Date.now()}_${Math.random().toString(36).slice(2)}`);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recordSecsRef = useRef(0);
@@ -312,13 +312,11 @@ export default function YabanWechatChat() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  // 监听键盘弹起/收起（visualViewport，微信内置浏览器支持）
-  // 同步更新容器高度 + 滚到底部
+  // 键盘弹起时滚到底部（不再动态设置容器高度，改用 fixed 底部栏方案）
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
     const onResize = () => {
-      setViewportHeight(vv.height);
       requestAnimationFrame(() => scrollToBottom(false));
     };
     vv.addEventListener("resize", onResize);
@@ -497,7 +495,7 @@ export default function YabanWechatChat() {
   return (
     <div
       className="flex flex-col overflow-hidden select-none"
-      style={{ backgroundColor: "#ebebeb", fontFamily: "-apple-system, 'PingFang SC', sans-serif", height: viewportHeight }}
+      style={{ backgroundColor: "#ebebeb", fontFamily: "-apple-system, 'PingFang SC', sans-serif", height: "100dvh", overflow: "hidden" }}
     >
       {/* ===== 顶部导航栏 ===== */}
       <div
@@ -528,7 +526,7 @@ export default function YabanWechatChat() {
       <div
         ref={messagesContainerRef}
         className="flex-1 overflow-y-auto px-4 py-3"
-        style={{ backgroundColor: "#ebebeb" }}
+        style={{ backgroundColor: "#ebebeb", paddingBottom: "160px" }}
         onClick={() => { setShowExtra(false); inputRef.current?.blur(); }}
       >
         {messages.map((msg, idx) => {
@@ -556,13 +554,17 @@ export default function YabanWechatChat() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* ===== 底部输入栏 ===== */}
+      {/* ===== 底部输入栏（fixed定位，键盘弹起时自动贴键盘顶部）===== */}
       <div
-        className="flex-shrink-0"
         style={{
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 10,
           backgroundColor: "#f5f5f5",
           borderTop: "0.5px solid #d0d0d0",
-          paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
+          paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 4px)",
         }}
       >
         <div className="flex items-end px-2 py-[12px]" style={{ gap: 6 }}>
