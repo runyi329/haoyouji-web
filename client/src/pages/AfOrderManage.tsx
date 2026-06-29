@@ -1927,7 +1927,7 @@ export default function AfOrderManage() {
                         const buyP = parseFloat(order.limitPrice || '0');
                         const allLow = order.allTimeLowPrice ? parseFloat(String(order.allTimeLowPrice)) : 0;
                         rate = (buyP > 0 && allLow > 0) ? Math.max(0, 1 - (buyP - allLow) / buyP) : 1.0;
-                        tierLabel = '线性';
+                        tierLabel = 'L';
                       } else {
                         rate = EQUITY_DISCOUNT_RATES[order.equityTier] || 1.0;
                         tierLabel = order.equityTier === 0 ? 'D0档' : `D${order.equityTier}档`;
@@ -2059,7 +2059,7 @@ export default function AfOrderManage() {
                                   <div className="flex items-center gap-2">
                                     {g.tierMode === 'linear' ? (
                                       <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">
-                                        线性 · 权益{(giftRate * 100).toFixed(1)}%
+                                        L · 权益{(giftRate * 100).toFixed(2)}%
                                       </span>
                                     ) : (
                                       <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${

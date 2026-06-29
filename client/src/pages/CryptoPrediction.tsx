@@ -2886,13 +2886,16 @@ export default function CryptoPrediction() {
                             {/* 档位列 */}
                             <td className="py-2 px-1 text-center" style={{ whiteSpace: 'nowrap', borderRight: '1px solid #E8EEFF', verticalAlign: 'middle' }}>
                               {(() => {
+                                if (order.status !== 'completed') return null;
+                                // 线性模式显示L
+                                if ((order as any).tierMode === 'linear') {
+                                  return <span className="font-bold text-[11px]" style={{ color: '#3B82F6' }}>L</span>;
+                                }
                                 const tier = (order as any).currentTier ?? 0;
-                                // 颜色从绿(0档)到红(9档)渐变
+                                // 阶梯模式：颜色从绳(0档)到红(9档)渐变
                                 const tierColors = ['#0EA56A', '#4CAF50', '#8BC34A', '#CDDC39', '#FFC107', '#FF9800', '#FF5722', '#F44336', '#D32F2F', '#B71C1C'];
                                 const color = tierColors[Math.min(tier, 9)];
-                                return order.status === 'completed' ? (
-                                  <span className="font-bold text-[11px]" style={{ color }}>{tier}</span>
-                                ) : null;
+                                return <span className="font-bold text-[11px]" style={{ color }}>{tier}</span>;
                               })()}
                             </td>
                             {/* 数量列（占满剩余宽度，靠右） */}

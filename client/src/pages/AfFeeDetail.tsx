@@ -580,7 +580,7 @@ export default function AfFeeDetail() {
                           ) : (
                             <span title="进行中" className="ml-1.5 inline-block w-2 h-2 rounded-full align-middle" style={{ background: '#22c55e' }} />
                           )}
-                          <span className="block text-[10px] text-gray-400 mt-0.5">{Math.round(parseFloat(item.amount || '0'))} U · <span className="font-semibold" style={{ color: '#0d9488' }}>D{item.equityTier}</span></span>
+                          <span className="block text-[10px] text-gray-400 mt-0.5">{Math.round(parseFloat(item.amount || '0'))} U · <span className="font-semibold" style={{ color: (item as any).tierMode === 'linear' ? '#3B82F6' : '#0d9488' }}>{(item as any).tierMode === 'linear' ? 'L' : `D${item.equityTier}`}</span></span>
                         </td>
                         <td className="px-1 py-2 text-center border border-gray-200 whitespace-nowrap" style={{ width: 28, minWidth: 28, maxWidth: 28 }}>
                           {(() => {
