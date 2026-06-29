@@ -93,6 +93,20 @@ export async function updateEthPositionLevelNotes(
 ): Promise<void> {
   const db = await getLedgerDb();
   if (!db) return;
+
+  // 先读取旧备注，用于日志对比
+  const oldRows = await db
+    .select()
+    .from(ethPositionLevels)
+    .where(and(
+      eq(ethPositionLevels.ledgerId, ledgerId),
+      eq(ethPositionLevels.userId, userId),
+      eq(ethPositionLevels.price, price)
+    ))
+    .limit(1);
+  const oldBaseNotes = oldRows[0] ? (oldRows[0] as any).baseNotes : null;
+  const oldTacticalNotes = oldRows[0] ? (oldRows[0] as any).tacticalNotes : null;
+
   await db
     .update(ethPositionLevels)
     .set({ baseNotes, tacticalNotes } as any)
@@ -101,6 +115,29 @@ export async function updateEthPositionLevelNotes(
       eq(ethPositionLevels.userId, userId),
       eq(ethPositionLevels.price, price)
     ));
+
+  // 写入详细变更日志（notes类型）
+  // 将备注内容序列化到 note 字段，方便日后恢复
+  const noteContent = JSON.stringify({
+    baseNotes: baseNotes ?? null,
+    tacticalNotes: tacticalNotes ?? null,
+    prevBaseNotes: oldBaseNotes ?? null,
+    prevTacticalNotes: oldTacticalNotes ?? null,
+  });
+  try {
+    await db.insert(ethPositionChangeLogs).values({
+      ledgerId,
+      userId,
+      price,
+      changeType: 'notes',
+      oldValue: '0',
+      newValue: '0',
+      note: noteContent,
+    });
+  } catch (e: any) {
+    // 日志写入失败不影响主流程
+    console.error('[ETH Log] 备注日志写入失败:', e.message);
+  }
 }
 
 /**
@@ -236,7 +273,7 @@ export async function addEthPositionChangeLog(
   ledgerId: number,
   userId: number,
   price: number,
-  changeType: 'actual' | 'planned',
+  changeType: 'actual' | 'planned' | 'notes',
   oldValue: number,
   newValue: number,
   note: string = ''
