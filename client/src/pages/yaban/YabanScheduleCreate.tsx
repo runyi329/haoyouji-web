@@ -11,7 +11,7 @@
  * - 点击热区加大到约 52px 高；保存按钮固定底部安全区
  * - 禁止 Emoji
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import { ChevronRight, User, Clock, Stethoscope, FileText, Check, Search, Calendar } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -114,6 +114,26 @@ export default function YabanScheduleCreate() {
   const handleSelectPatient = () => {
     setLocation("/yaban/followup/patient-select");
   };
+
+  // 挂载时回填选中的顾客（来自顾客选择页或“保存并立即预约”）
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("selectedPatient");
+      if (raw) {
+        const p = JSON.parse(raw) as { id?: number; name?: string; mobile?: string };
+        if (p && p.name) {
+          setForm((prev) => ({
+            ...prev,
+            patientName: p.name || "",
+            patientId: p.id != null ? String(p.id) : "",
+          }));
+        }
+        sessionStorage.removeItem("selectedPatient");
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const handleSave = () => {
     if (!form.patientName) { alert("请选择顾客"); return; }

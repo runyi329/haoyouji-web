@@ -341,11 +341,16 @@ export default function YabanPatientCreate() {
   };
 
   const utils = trpc.useUtils();
+  // 新建成功后的客户信息，用于弹出「仅保存 / 保存并立即预约」选择层
+  const [savedInfo, setSavedInfo] = useState<{ id: number; name: string; mobile: string } | null>(null);
   const createMutation = trpc.yabanCustomer.create.useMutation({
-    onSuccess: () => {
-      toast.success("保存成功");
+    onSuccess: (res: any) => {
       utils.yabanCustomer.list.invalidate();
-      setLocation("/yaban/patients");
+      setSavedInfo({
+        id: Number(res?.id) || 0,
+        name: form.name || "",
+        mobile: (form.mobile || "").trim(),
+      });
     },
     onError: (e) => {
       toast.error(e.message || "保存失败，请重试");
@@ -1364,6 +1369,99 @@ export default function YabanPatientCreate() {
           </div>
         );
       })()}
+
+      {/* ===== 保存成功弹层 ===== */}
+      {savedInfo && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "0 24px",
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: 20,
+              padding: "36px 24px 28px",
+              width: "100%",
+              maxWidth: 360,
+              textAlign: "center",
+              boxShadow: "0 8px 40px rgba(30,136,214,0.18)",
+            }}
+          >
+            {/* 成功图标 */}
+            <div
+              style={{
+                width: 72, height: 72,
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, #1E88D6 0%, #42A5F5 100%)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                margin: "0 auto 18px",
+                boxShadow: "0 4px 16px rgba(30,136,214,0.32)",
+              }}
+            >
+              <Check size={36} color="#fff" strokeWidth={2.8} />
+            </div>
+
+            {/* 标题 */}
+            <div style={{ fontSize: 22, fontWeight: 700, color: "#1a2233", marginBottom: 6 }}>
+              保存成功
+            </div>
+            {/* 客户名 */}
+            <div style={{ fontSize: 14, color: "#6b7a99", marginBottom: 28 }}>
+              顾客「{savedInfo.name}」的档案已创建
+            </div>
+
+            {/* 两个按钮 */}
+            <div style={{ display: "flex", gap: 12 }}>
+              {/* 返回首页 */}
+              <button
+                onClick={() => { setSavedInfo(null); setLocation("/yaban"); }}
+                style={{
+                  flex: 1,
+                  padding: "13px 0",
+                  fontSize: 15, fontWeight: 600,
+                  color: ACCENT,
+                  background: "#EBF5FF",
+                  border: "none",
+                  borderRadius: 12,
+                  cursor: "pointer",
+                }}
+              >
+                返回首页
+              </button>
+
+              {/* 马上预约 */}
+              <button
+                onClick={() => {
+                  sessionStorage.setItem("selectedPatient", JSON.stringify({
+                    id: savedInfo.id,
+                    name: savedInfo.name,
+                    mobile: savedInfo.mobile,
+                  }));
+                  setSavedInfo(null);
+                  setLocation("/yaban/schedule/create");
+                }}
+                style={{
+                  flex: 1,
+                  padding: "13px 0",
+                  fontSize: 15, fontWeight: 600,
+                  color: "#fff",
+                  background: "linear-gradient(90deg, #1E88D6, #42A5F5)",
+                  border: "none",
+                  borderRadius: 12,
+                  cursor: "pointer",
+                  boxShadow: "0 4px 12px rgba(30,136,214,0.28)",
+                }}
+              >
+                马上预约
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
