@@ -418,12 +418,13 @@ export default function AfFeeDetail() {
         {isLoading ? (
           <div className="text-center py-16 text-gray-400 text-sm">加载中…</div>
         ) : (() => {
-          const personMap = new Map<string, { nickname: string; dailyTotal: number; orders: typeof feeItems }>();
+          const personMap = new Map<string, { nickname: string; userId: number; dailyTotal: number; orders: typeof feeItems }>();
           for (const item of feeItems) {
             if (item.feeType === 'settled') continue;
             const uid = String(item.userId || item.username || 'unknown');
             const nickname = item.nickname || item.username || uid;
-            if (!personMap.has(uid)) personMap.set(uid, { nickname, dailyTotal: 0, orders: [] });
+            const numericUserId = parseInt(uid);
+            if (!personMap.has(uid)) personMap.set(uid, { nickname, userId: Number.isFinite(numericUserId) ? numericUserId : 0, dailyTotal: 0, orders: [] });
             const p = personMap.get(uid)!;
             p.dailyTotal += item.dailyFee;
             p.orders.push(item);
@@ -445,6 +446,16 @@ export default function AfFeeDetail() {
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-bold text-gray-800">{person.nickname}</span>
                           <span className="text-xs text-gray-400">{person.orders.length}单</span>
+                          {person.userId > 0 && memberBalances && (
+                            <span className="text-xs px-1.5 py-0.5 rounded-full"
+                              style={{
+                                background: (memberBalances[person.userId] ?? 0) >= 0 ? '#fef3c7' : '#fee2e2',
+                                color: (memberBalances[person.userId] ?? 0) >= 0 ? '#92400e' : '#991b1b',
+                              }}
+                            >
+                              {(memberBalances[person.userId] ?? 0).toFixed(2)}U
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-bold text-blue-600">{person.dailyTotal.toFixed(4)}</span>
