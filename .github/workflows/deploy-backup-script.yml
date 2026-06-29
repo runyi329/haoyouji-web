@@ -76,7 +76,7 @@ jobs:
                   
                   if ! command -v coscmd &> /dev/null; then
                       log "安装 coscmd..."
-                      pip3 install coscmd -q || true
+                      pip3 install coscmd --break-system-packages -q || true
                   fi
                   
                   # 查找 coscmd 路径
