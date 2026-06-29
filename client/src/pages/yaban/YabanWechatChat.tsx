@@ -234,6 +234,8 @@ export default function YabanWechatChat() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // 键盘高度：用于动态调整外层容器 bottom，让顶部导航栏不被推出视口
+  const [keyboardBottom, setKeyboardBottom] = useState(0);
 
   const sessionId = useRef(`web_${Date.now()}_${Math.random().toString(36).slice(2)}`);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -312,15 +314,26 @@ export default function YabanWechatChat() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  // 键盘弹起时滚到底部（不再动态设置容器高度，改用 fixed 底部栏方案）
+  // 监听键盘弹起：动态调整外层容器 bottom = 键盘高度，让整个容器随键盘收缩
+  // 这样顶部导航栏和底部输入栏都不会被推出视口
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
     const onResize = () => {
+      // 键盘高度 = 窗口高度 - 可视视口高度 - 可视视口偏移量
+      const keyboardHeight = Math.max(
+        0,
+        window.innerHeight - vv.height - (vv.offsetTop ?? 0)
+      );
+      setKeyboardBottom(keyboardHeight);
       requestAnimationFrame(() => scrollToBottom(false));
     };
     vv.addEventListener("resize", onResize);
-    return () => vv.removeEventListener("resize", onResize);
+    vv.addEventListener("scroll", onResize);
+    return () => {
+      vv.removeEventListener("resize", onResize);
+      vv.removeEventListener("scroll", onResize);
+    };
   }, [scrollToBottom]);
 
   const sendMessage = useCallback(async () => {
@@ -502,7 +515,7 @@ export default function YabanWechatChat() {
         top: 0,
         left: 0,
         right: 0,
-        bottom: 0,
+        bottom: keyboardBottom,
       }}
     >
       {/* ===== 顶部导航栏（flex子元素，flex-shrink-0，始终占据顶部空间）===== */}
