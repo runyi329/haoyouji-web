@@ -137,8 +137,9 @@ export async function batchUpsertEthPositionLevels(
           actualQty: String(finalActual),
           baseQty: String(baseQty),
           tacticalQty: String(tacticalQty),
-          baseNotes: level.baseNotes ?? null,
-          tacticalNotes: level.tacticalNotes ?? null,
+          // 若传入 null 则保留原有备注，防止调整计划时意外清空
+          ...(level.baseNotes !== null && level.baseNotes !== undefined ? { baseNotes: level.baseNotes } : {}),
+          ...(level.tacticalNotes !== null && level.tacticalNotes !== undefined ? { tacticalNotes: level.tacticalNotes } : {}),
         } as any,
       });
   }
