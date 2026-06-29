@@ -633,7 +633,13 @@ export default function PositionCalc() {
         // 批量保存到数据库
         const levels = priceLevels
           .filter(p => (planned[p] || 0) > 0 || (newActual[p] || 0) > 0)
-          .map(p => ({ price: p, plannedQty: planned[p] || 0, actualQty: newActual[p] || 0 }));
+          .map(p => ({
+            price: p,
+            plannedQty: planned[p] || 0,
+            actualQty: newActual[p] || 0,
+            baseNotes: baseNotes[p] ? JSON.stringify(baseNotes[p]) : null,
+            tacticalNotes: tacticalNotes[p] ? JSON.stringify(tacticalNotes[p]) : null,
+          }));
         batchSaveMutation.mutate({ ledgerId, levels });
       }
     } else {
@@ -650,7 +656,13 @@ export default function PositionCalc() {
         // 批量保存到数据库
         const levels = priceLevels
           .filter(p => (newPlanned[p] || 0) > 0 || (actual[p] || 0) > 0)
-          .map(p => ({ price: p, plannedQty: newPlanned[p] || 0, actualQty: actual[p] || 0 }));
+          .map(p => ({
+            price: p,
+            plannedQty: newPlanned[p] || 0,
+            actualQty: actual[p] || 0,
+            baseNotes: baseNotes[p] ? JSON.stringify(baseNotes[p]) : null,
+            tacticalNotes: tacticalNotes[p] ? JSON.stringify(tacticalNotes[p]) : null,
+          }));
         batchSaveMutation.mutate({ ledgerId, levels });
       }
     }
@@ -2477,7 +2489,13 @@ export default function PositionCalc() {
                           });
                           setPlanned(newPlanned);
                           // 保存到数据库
-                          const levels = priceLevels.map(p => ({ price: p, plannedQty: newPlanned[p] || 0, actualQty: actual[p] || 0 }));
+                          const levels = priceLevels.map(p => ({
+                            price: p,
+                            plannedQty: newPlanned[p] || 0,
+                            actualQty: actual[p] || 0,
+                            baseNotes: baseNotes[p] ? JSON.stringify(baseNotes[p]) : null,
+                            tacticalNotes: tacticalNotes[p] ? JSON.stringify(tacticalNotes[p]) : null,
+                          }));
                           batchSaveMutation.mutate({ ledgerId, levels });
                           // 将分配方式和参数存入 localStorage，下次打开时恢复
                           try {
