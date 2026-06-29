@@ -494,22 +494,23 @@ export default function YabanWechatChat() {
 
   return (
     <div
-      className="flex flex-col select-none"
+      className="select-none"
       style={{
         backgroundColor: "#ebebeb",
         fontFamily: "-apple-system, 'PingFang SC', sans-serif",
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
+        height: "100vh",
         overflow: "hidden",
       }}
     >
-      {/* ===== 顶部导航栏 ===== */}
+      {/* ===== 顶部导航栏（fixed定位，始终可见）===== */}
       <div
-        className="flex items-center px-2 py-2 flex-shrink-0 relative"
+        className="flex items-center px-2 py-2 relative"
         style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 20,
           backgroundColor: "#ededed",
           borderBottom: "0.5px solid #d0d0d0",
           paddingTop: "calc(env(safe-area-inset-top, 0px) + 8px)",
@@ -531,11 +532,17 @@ export default function YabanWechatChat() {
         </button>
       </div>
 
-      {/* ===== 消息列表 ===== */}
+      {/* ===== 消息列表（paddingTop为顶部导航栏留空间，paddingBottom为底部输入栏留空间）===== */}
       <div
         ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto px-4 py-3"
-        style={{ backgroundColor: "#ebebeb", paddingBottom: "160px" }}
+        className="overflow-y-auto px-4"
+        style={{
+          backgroundColor: "#ebebeb",
+          paddingTop: "calc(env(safe-area-inset-top, 0px) + 64px)",
+          paddingBottom: "160px",
+          height: "100vh",
+          boxSizing: "border-box",
+        }}
         onClick={() => { setShowExtra(false); inputRef.current?.blur(); }}
       >
         {messages.map((msg, idx) => {
