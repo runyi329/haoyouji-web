@@ -113,7 +113,7 @@ jobs:
               fi
               
               log "清理COS上 ${CUTOFF_DATE} 之前的备份..."
-              COS_FILES=$($COSCMD_PATH list /database-backups/ | grep "haoyouji_backup_" | awk '{print $NF}')
+              COS_FILES=$($COSCMD_PATH list /database-backups/ 2>/dev/null | grep "haoyouji_backup_" | awk '{print $NF}') || true
               for cos_file in $COS_FILES; do
                   FILE_DATE=$(echo "$cos_file" | grep -o "202[0-9][0-9][0-9][0-9][0-9]")
                   if [ -n "$FILE_DATE" ] && [ "$FILE_DATE" -lt "$CUTOFF_DATE" ]; then
