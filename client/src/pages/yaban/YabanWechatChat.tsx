@@ -232,7 +232,9 @@ export default function YabanWechatChat() {
   const [recordState, setRecordState] = useState<RecordState>("idle");
   const [recordSecs, setRecordSecs] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [viewportHeight, setViewportHeight] = useState<number>(() => window.visualViewport?.height ?? window.innerHeight);
   const sessionId = useRef(`web_${Date.now()}_${Math.random().toString(36).slice(2)}`);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recordSecsRef = useRef(0);
@@ -295,13 +297,33 @@ export default function YabanWechatChat() {
       .catch(() => setMessages([]));
   }, [currentTenantId, channelResolved, dynamicChannelId]);
 
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  // 直接操作容器 scrollTop，比 scrollIntoView 在微信 WebView 里更可靠
+  const scrollToBottom = useCallback((smooth = true) => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    if (smooth) {
+      container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+    } else {
+      container.scrollTop = container.scrollHeight;
+    }
   }, []);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
+
+  // 监听键盘弹起/收起（visualViewport，微信内置浏览器支持）
+  // 同步更新容器高度 + 滚到底部
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onResize = () => {
+      setViewportHeight(vv.height);
+      requestAnimationFrame(() => scrollToBottom(false));
+    };
+    vv.addEventListener("resize", onResize);
+    return () => vv.removeEventListener("resize", onResize);
+  }, [scrollToBottom]);
 
   const sendMessage = useCallback(async () => {
     const text = inputText.trim();
@@ -474,8 +496,8 @@ export default function YabanWechatChat() {
 
   return (
     <div
-      className="flex flex-col h-screen overflow-hidden select-none"
-      style={{ backgroundColor: "#ebebeb", fontFamily: "-apple-system, 'PingFang SC', sans-serif" }}
+      className="flex flex-col overflow-hidden select-none"
+      style={{ backgroundColor: "#ebebeb", fontFamily: "-apple-system, 'PingFang SC', sans-serif", height: viewportHeight }}
     >
       {/* ===== 顶部导航栏 ===== */}
       <div
@@ -504,6 +526,7 @@ export default function YabanWechatChat() {
 
       {/* ===== 消息列表 ===== */}
       <div
+        ref={messagesContainerRef}
         className="flex-1 overflow-y-auto px-4 py-3"
         style={{ backgroundColor: "#ebebeb" }}
         onClick={() => { setShowExtra(false); inputRef.current?.blur(); }}
