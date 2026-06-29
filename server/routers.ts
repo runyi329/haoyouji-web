@@ -11797,8 +11797,8 @@ ${klinesSummary}
         let rows: any;
         if (input.tagName) {
           [rows] = await (conn as any).execute(
-            `SELECT l.id, l.ledger_id, l.tag_name, l.action, l.detail, l.remark, l.created_by, l.created_at,
-             u.username, u.nickname as user_nickname
+            `             SELECT l.id, l.ledger_id, l.tag_name, l.action, l.detail, l.remark, l.created_by, l.created_at,
+             u.username, u.name as user_nickname
              FROM ledger_margin_logs l
              LEFT JOIN users u ON u.id = l.created_by
              WHERE l.ledger_id = ? AND l.tag_name = ?
@@ -11807,8 +11807,8 @@ ${klinesSummary}
           );
         } else {
           [rows] = await (conn as any).execute(
-            `SELECT l.id, l.ledger_id, l.tag_name, l.action, l.detail, l.remark, l.created_by, l.created_at,
-             u.username, u.nickname as user_nickname
+            `             SELECT l.id, l.ledger_id, l.tag_name, l.action, l.detail, l.remark, l.created_by, l.created_at,
+             u.username, u.name as user_nickname
              FROM ledger_margin_logs l
              LEFT JOIN users u ON u.id = l.created_by
              WHERE l.ledger_id = ?
