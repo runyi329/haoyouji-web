@@ -804,7 +804,7 @@ export default function AfOrderManage() {
         );
         // 按 limitPrice 档位分组，每个档位内再按用户分组
         // 注：顶层 orders 已包含独立赠单行（isGift=true），不需要再展开嵌套 giftOrders
-        interface UserDetail { name: string; rawQty: number; effQty: number; orderCount: number; isGift: boolean; equityTier: number; rate: number }
+        interface UserDetail { name: string; rawQty: number; effQty: number; orderCount: number; isGift: boolean; equityTier: number; rate: number; isLinear?: boolean }
         interface TierGroup { price: number; rawQty: number; effQty: number; orderCount: number; giftCount: number; users: Record<string, UserDetail> }
         const tierMap: Record<string, TierGroup> = {};
         holdingOrders.forEach((o: any) => {
@@ -815,17 +815,28 @@ export default function AfOrderManage() {
           }
           const tier = tierMap[key];
           const qty = parseFloat(o.quantity) || 0;
-          const eqTier = o.equityTier || 0;
-          const rate = EQUITY_DISCOUNT_RATES[eqTier] ?? 1.0;
+          const isLinear = o.tierMode === 'linear';
+          let rate: number;
+          let eqTier: number;
+          if (isLinear) {
+            const buyPrice = parseFloat(o.limitPrice) || 0;
+            const lowPrice = parseFloat(o.allTimeLowPrice) || buyPrice;
+            const dropPct = buyPrice > 0 ? Math.max(0, (buyPrice - lowPrice) / buyPrice) : 0;
+            rate = Math.max(0, 1 - dropPct);
+            eqTier = 0;
+          } else {
+            eqTier = o.equityTier || 0;
+            rate = EQUITY_DISCOUNT_RATES[eqTier] ?? 1.0;
+          }
           tier.rawQty += qty;
           tier.effQty += qty * rate;
           tier.orderCount += 1;
           const isGift = o.isGift === true || o.isGift === 1;
           if (isGift) tier.giftCount += 1;
           const name = o.nickname || o.username || `用户${o.userId}`;
-          const userKey = `${name}_${isGift ? 'gift' : 'normal'}_${eqTier}`;
+          const userKey = `${name}_${isGift ? 'gift' : 'normal'}_${isLinear ? 'L' : eqTier}`;
           if (!tier.users[userKey]) {
-            tier.users[userKey] = { name, rawQty: 0, effQty: 0, orderCount: 0, isGift, equityTier: eqTier, rate };
+            tier.users[userKey] = { name, rawQty: 0, effQty: 0, orderCount: 0, isGift, equityTier: eqTier, rate, isLinear };
           }
           tier.users[userKey].rawQty += qty;
           tier.users[userKey].effQty += qty * rate;
@@ -873,7 +884,10 @@ export default function AfOrderManage() {
                             <span className="text-gray-600 whitespace-nowrap">
                               {fmtD(u.rawQty)}
                               <span className="text-gray-300 mx-0.5">x</span>
-                              <span className="text-gray-400">{Math.round(u.rate * 100)}%</span>
+                              {u.isLinear
+                                ? <span className="text-blue-500">{(u.rate * 100).toFixed(2)}%<span className="text-[9px] ml-0.5">L</span></span>
+                                : <span className="text-gray-400">{Math.round(u.rate * 100)}%</span>
+                              }
                               <span className="text-gray-300 mx-0.5">=</span>
                               <span className="text-blue-600 font-medium">{fmtD(u.effQty)}</span>
                             </span>
