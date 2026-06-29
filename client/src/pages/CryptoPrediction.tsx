@@ -1785,9 +1785,14 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
             // ===== 线性模式档位表 =====
             const buyPrice = parseFloat(order.limitPrice);
             const allTimeLow = tierData?.allTimeLowPrice ? parseFloat(String(tierData.allTimeLowPrice)) : 0;
+            // 精确到0.01%的实际跌幅
             const currentDropPct = (allTimeLow > 0 && buyPrice > 0) ? (buyPrice - allTimeLow) / buyPrice * 100 : 0;
-            const currentLinearPct = Math.max(0, 1 - currentDropPct / 100);
-            const nodes = Array.from({ length: 20 }, (_, i) => (i + 1) * 5);
+            const currentEquityPct = Math.max(0, 100 - currentDropPct);
+            // 只生成已触发的节点：每1%一行，从-1%到当前跌幅（向下取整到0.01%）
+            const maxDropFloor = Math.floor(currentDropPct * 100) / 100; // 精确到0.01%
+            // 生成节点：每1%一个整数节点，只到已触发的最大整数跌幅
+            const maxDropInt = Math.floor(currentDropPct); // 已触发的最大整数跌幅
+            const nodes1pct = Array.from({ length: maxDropInt }, (_, i) => i + 1);
             return (
               <>
                 <div className="grid grid-cols-4 text-xs mb-1 px-1" style={{ color: '#9CA3AF' }}>
@@ -1798,33 +1803,46 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
                 </div>
                 {/* 基准行 */}
                 <div className="grid grid-cols-4 items-center py-1 px-1 rounded-lg mb-0.5"
-                  style={currentDropPct < 5
+                  style={currentDropPct < 1
                     ? { backgroundColor: 'rgba(14,165,106,0.1)', border: '1px solid rgba(14,165,106,0.4)' }
                     : { backgroundColor: '#F8FAFF' }}>
-                  <span style={{ color: currentDropPct < 5 ? '#0EA56A' : '#9CA3AF', fontWeight: currentDropPct < 5 ? 600 : 400 }}>基准</span>
-                  <span className="text-center font-semibold" style={{ color: currentDropPct < 5 ? '#0EA56A' : '#9CA3AF' }}>100%</span>
+                  <span style={{ color: currentDropPct < 1 ? '#0EA56A' : '#9CA3AF', fontWeight: currentDropPct < 1 ? 600 : 400 }}>基准</span>
+                  <span className="text-center font-semibold" style={{ color: currentDropPct < 1 ? '#0EA56A' : '#9CA3AF' }}>100%</span>
                   <span className="text-center" style={{ color: '#C0C8D8' }}>--</span>
                   <span className="text-right" style={{ color: '#C0C8D8' }}>{buyPrice > 0 ? buyPrice.toLocaleString() : '--'}</span>
                 </div>
-                {nodes.map((dropPct) => {
-                  const equityPct = Math.max(0, 1 - dropPct / 100);
-                  const triggerPrice = buyPrice > 0 ? buyPrice * (1 - dropPct / 100) : 0;
-                  const isActive = currentDropPct >= dropPct - 5 && currentDropPct < dropPct;
-                  const isTriggered = allTimeLow > 0 && allTimeLow <= triggerPrice + 0.01;
+                {/* 每1%一行，只显示已触发的整数节点 */}
+                {nodes1pct.map((dropInt) => {
+                  const triggerPrice = buyPrice > 0 ? buyPrice * (1 - dropInt / 100) : 0;
+                  const equityAtNode = 100 - dropInt;
+                  const isCurrentNode = dropInt === maxDropInt && currentDropPct % 1 < 0.01;
+                  const isLastNode = dropInt === maxDropInt;
                   return (
-                    <div key={dropPct} className="grid grid-cols-4 items-center py-1 px-1 rounded-lg mb-0.5"
-                      style={isActive
+                    <div key={dropInt} className="grid grid-cols-4 items-center py-1 px-1 rounded-lg mb-0.5"
+                      style={isLastNode
                         ? { backgroundColor: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)' }
-                        : isTriggered ? { backgroundColor: '#EEF2FF' } : { backgroundColor: '#F8FAFF' }}>
-                      <span style={{ color: isActive ? '#EF4444' : isTriggered ? '#6B7A9A' : '#C0C8D8', fontWeight: isActive ? 600 : 400 }}>-{dropPct}%</span>
-                      <span className="text-center font-semibold" style={{ color: isActive ? '#EF4444' : isTriggered ? '#1A56DB' : '#C0C8D8' }}>{(equityPct * 100).toFixed(0)}%</span>
+                        : { backgroundColor: '#EEF2FF' }}>
+                      <span style={{ color: isLastNode ? '#EF4444' : '#6B7A9A', fontWeight: isLastNode ? 600 : 400 }}>-{dropInt}%</span>
+                      <span className="text-center font-semibold" style={{ color: isLastNode ? '#EF4444' : '#1A56DB' }}>{equityAtNode}%</span>
                       <span className="text-center text-xs" style={{ color: '#D0DBFF' }}>--</span>
-                      <span className="text-right" style={{ color: isTriggered ? '#EF4444' : '#C0C8D8' }}>
+                      <span className="text-right" style={{ color: '#EF4444' }}>
                         {triggerPrice > 0 ? triggerPrice.toFixed(2) : '--'}
                       </span>
                     </div>
                   );
                 })}
+                {/* 当前精确节点行（如果跌幅有小数部分，额外显示一行精确值） */}
+                {currentDropPct > 0 && currentDropPct % 1 > 0.005 && (
+                  <div className="grid grid-cols-4 items-center py-1 px-1 rounded-lg mb-0.5"
+                    style={{ backgroundColor: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.5)' }}>
+                    <span style={{ color: '#EF4444', fontWeight: 700 }}>-{currentDropPct.toFixed(2)}%</span>
+                    <span className="text-center font-bold" style={{ color: '#EF4444' }}>{currentEquityPct.toFixed(2)}%</span>
+                    <span className="text-center text-xs" style={{ color: '#D0DBFF' }}>当前</span>
+                    <span className="text-right" style={{ color: '#EF4444' }}>
+                      {allTimeLow > 0 ? allTimeLow.toLocaleString('zh-CN', { maximumFractionDigits: 2 }) : '--'}
+                    </span>
+                  </div>
+                )}
               </>
             );
           })() : (

@@ -337,12 +337,14 @@ function GudizengchouDetail({ order, ledgerId }: { order: any; ledgerId: number 
             // ===== 线性模式档位表 =====
             const buyPrice = parseFloat(order.limitPrice);
             const allTimeLow = tierData?.allTimeLowPrice ? parseFloat(String(tierData.allTimeLowPrice)) : 0;
-            // 当前跌幅（基于历史最低价）
+            // 精确到0.01%的实际跌幅
             const currentDropPct = (buyPrice > 0 && allTimeLow > 0)
               ? Math.max(0, (buyPrice - allTimeLow) / buyPrice * 100)
               : 0;
-            // 线性模式的展示节点（每5%一行，共20行到-100%）
-            const LINEAR_NODES = [5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95,100];
+            const currentEquityPct = Math.max(0, 100 - currentDropPct);
+            // 只生成已触发的整数节点：每1%一行
+            const maxDropInt = Math.floor(currentDropPct);
+            const nodes1pct = Array.from({ length: maxDropInt }, (_, i) => i + 1);
             return (
               <>
                 <div className="grid grid-cols-3 text-xs mb-1 px-1" style={{ color: '#9CA3AF' }}>
@@ -352,31 +354,40 @@ function GudizengchouDetail({ order, ledgerId }: { order: any; ledgerId: number 
                 </div>
                 {/* 基准行 */}
                 <div className="grid grid-cols-3 items-center py-1 px-1 rounded-lg mb-0.5"
-                  style={currentDropPct < 5
+                  style={currentDropPct < 1
                     ? { backgroundColor: 'rgba(14,165,106,0.1)', border: '1px solid rgba(14,165,106,0.4)' }
                     : { backgroundColor: '#FFF7ED' }}>
-                  <span style={{ color: currentDropPct < 5 ? '#0EA56A' : '#9CA3AF', fontWeight: currentDropPct < 5 ? 600 : 400 }}>基准</span>
-                  <span className="text-center font-semibold" style={{ color: currentDropPct < 5 ? '#0EA56A' : '#9CA3AF' }}>100%</span>
+                  <span style={{ color: currentDropPct < 1 ? '#0EA56A' : '#9CA3AF', fontWeight: currentDropPct < 1 ? 600 : 400 }}>基准</span>
+                  <span className="text-center font-semibold" style={{ color: currentDropPct < 1 ? '#0EA56A' : '#9CA3AF' }}>100%</span>
                   <span className="text-right" style={{ color: '#C0C8D8' }}>{buyPrice > 0 ? buyPrice.toLocaleString() : '--'}</span>
                 </div>
-                {LINEAR_NODES.map((dropPct) => {
-                  const equityPct = 100 - dropPct;
-                  const nodePrice = buyPrice > 0 ? (buyPrice * (1 - dropPct / 100)).toFixed(2) : '--';
-                  const isCurrentNode = currentDropPct >= dropPct && currentDropPct < dropPct + 5;
-                  const isTriggeredNode = allTimeLow > 0 && currentDropPct >= dropPct;
+                {/* 每1%一行，只显示已触发的整数节点 */}
+                {nodes1pct.map((dropInt) => {
+                  const nodePrice = buyPrice > 0 ? (buyPrice * (1 - dropInt / 100)).toFixed(2) : '--';
+                  const equityAtNode = 100 - dropInt;
+                  const isLastNode = dropInt === maxDropInt;
                   return (
-                    <div key={dropPct} className="grid grid-cols-3 items-center py-1 px-1 rounded-lg mb-0.5"
-                      style={isCurrentNode
+                    <div key={dropInt} className="grid grid-cols-3 items-center py-1 px-1 rounded-lg mb-0.5"
+                      style={isLastNode
                         ? { backgroundColor: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)' }
-                        : isTriggeredNode
-                        ? { backgroundColor: '#FEF3C7' }
-                        : { backgroundColor: '#FFF7ED' }}>
-                      <span style={{ color: isCurrentNode ? '#EF4444' : isTriggeredNode ? '#D97706' : '#C0C8D8', fontWeight: isCurrentNode ? 600 : 400 }}>-{dropPct}%</span>
-                      <span className="text-center font-semibold" style={{ color: isCurrentNode ? '#EF4444' : isTriggeredNode ? '#D97706' : '#C0C8D8' }}>{equityPct}%</span>
-                      <span className="text-right" style={{ color: isTriggeredNode ? '#EF4444' : '#C0C8D8' }}>{nodePrice !== '--' ? parseFloat(nodePrice).toLocaleString() : '--'}</span>
+                        : { backgroundColor: '#FEF3C7' }}>
+                      <span style={{ color: isLastNode ? '#EF4444' : '#D97706', fontWeight: isLastNode ? 600 : 400 }}>-{dropInt}%</span>
+                      <span className="text-center font-semibold" style={{ color: isLastNode ? '#EF4444' : '#D97706' }}>{equityAtNode}%</span>
+                      <span className="text-right" style={{ color: '#EF4444' }}>{nodePrice !== '--' ? parseFloat(nodePrice).toLocaleString() : '--'}</span>
                     </div>
                   );
                 })}
+                {/* 当前精确节点行（跌幅有小数时额外显示实时精确值） */}
+                {currentDropPct > 0 && currentDropPct % 1 > 0.005 && (
+                  <div className="grid grid-cols-3 items-center py-1 px-1 rounded-lg mb-0.5"
+                    style={{ backgroundColor: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.5)' }}>
+                    <span style={{ color: '#EF4444', fontWeight: 700 }}>-{currentDropPct.toFixed(2)}%</span>
+                    <span className="text-center font-bold" style={{ color: '#EF4444' }}>{currentEquityPct.toFixed(2)}%</span>
+                    <span className="text-right" style={{ color: '#EF4444' }}>
+                      {allTimeLow > 0 ? allTimeLow.toLocaleString('zh-CN', { maximumFractionDigits: 2 }) : '--'}
+                    </span>
+                  </div>
+                )}
               </>
             );
           })() : (
@@ -439,7 +450,7 @@ function GudizengchouDetail({ order, ledgerId }: { order: any; ledgerId: number 
                 const allLow = tierData?.allTimeLowPrice ? parseFloat(String(tierData.allTimeLowPrice)) : 0;
                 const linearRate = (buyP > 0 && allLow > 0) ? Math.max(0, 1 - (buyP - allLow) / buyP) : 1;
                 pct = linearRate;
-                pctStr = (linearRate * 100).toFixed(1) + '%';
+                pctStr = (linearRate * 100).toFixed(2) + '%';
               } else {
                 pctStr = currentTier === 0 ? '100%' : (TIER_LABELS[currentTier - 1]?.pct || '100%');
                 pct = parseFloat(pctStr) / 100;
