@@ -2010,7 +2010,14 @@ export default function AfOrderManage() {
                               const giftQty = parseFloat(g.quantity || '0');
                               const giftAmt = parseFloat(g.amount || '0');
                               const giftTier = g.equityTier || 0;
-                              const giftRate = EQUITY_DISCOUNT_RATES[giftTier] || 1.0;
+                              let giftRate: number;
+                              if (g.tierMode === 'linear') {
+                                const buyP = parseFloat(g.limitPrice || '0');
+                                const allLow = g.allTimeLowPrice ? parseFloat(String(g.allTimeLowPrice)) : 0;
+                                giftRate = (buyP > 0 && allLow > 0) ? Math.max(0, 1 - (buyP - allLow) / buyP) : 1.0;
+                              } else {
+                                giftRate = EQUITY_DISCOUNT_RATES[giftTier] || 1.0;
+                              }
                               const effectiveQty = giftQty * giftRate;
                               // 优先用 payoutRatio（真实拨比%），fallback 不显示
                               const ratioLabel = g.payoutRatio != null
@@ -2050,18 +2057,24 @@ export default function AfOrderManage() {
                                   </div>
                                   {/* 第四行：权益档位信息 */}
                                   <div className="flex items-center gap-2">
-                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                                      giftTier === 0 ? 'bg-green-50 text-green-600' :
-                                      giftTier <= 3 ? 'bg-blue-50 text-blue-600' :
-                                      giftTier <= 6 ? 'bg-orange-50 text-orange-600' : 'bg-red-50 text-red-600'
-                                    }`}>
-                                      D{giftTier}档 · 权益{(giftRate * 100).toFixed(1)}%
-                                    </span>
+                                    {g.tierMode === 'linear' ? (
+                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">
+                                        线性 · 权益{(giftRate * 100).toFixed(1)}%
+                                      </span>
+                                    ) : (
+                                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                        giftTier === 0 ? 'bg-green-50 text-green-600' :
+                                        giftTier <= 3 ? 'bg-blue-50 text-blue-600' :
+                                        giftTier <= 6 ? 'bg-orange-50 text-orange-600' : 'bg-red-50 text-red-600'
+                                      }`}>
+                                        D{giftTier}档 · 权益{(giftRate * 100).toFixed(1)}%
+                                      </span>
+                                    )}
                                     <span className="text-gray-400">实际有效数量</span>
-                                    <span className={`font-medium ${giftTier > 0 ? 'text-orange-500' : 'text-gray-700'}`}>
+                                    <span className={`font-medium ${giftRate < 1.0 ? 'text-orange-500' : 'text-gray-700'}`}>
                                       {effectiveQty.toFixed(4)} {g.coin}
                                     </span>
-                                    {giftTier > 0 && <span className="text-gray-400 text-[10px]">(已折扣{((1 - giftRate) * 100).toFixed(1)}%)</span>}
+                                    {giftRate < 1.0 && <span className="text-gray-400 text-[10px]">(已折扣{((1 - giftRate) * 100).toFixed(1)}%)</span>}
                                   </div>
                                 </div>
                               );

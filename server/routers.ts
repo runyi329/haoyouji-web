@@ -13469,6 +13469,7 @@ ${klinesSummary}
               const [giftRows] = await (conn as any).execute(
                 `SELECT g.id, g.source_order_id, g.user_id, g.amount, g.quantity, g.coin,
                         g.status, g.sell_status, g.gift_multiplier, g.limit_price, g.created_at,
+                        COALESCE(g.tier_mode, 'step') as tier_mode,
                         u.username, COALESCE(u.name,'') as user_name,
                         COALESCE(pr.ratio, NULL) as payout_ratio
                  FROM af_orders g
@@ -13496,6 +13497,15 @@ ${klinesSummary}
                 for (const t of (tierRows as any[])) {
                   tierMap[Number(t.order_id)] = parseInt(t.maxTier || '0') || 0;
                 }
+                // 批量查询赠予订单的历史最低价（线性模式计算权益用）
+                const [giftScanRows] = await (conn as any).execute(
+                  `SELECT order_id, all_time_low_price FROM af_order_scan_stats WHERE order_id IN (${giftPlaceholders})`,
+                  giftIds
+                );
+                const giftScanMap: Record<number, string | null> = {};
+                for (const s of (giftScanRows as any[])) {
+                  giftScanMap[Number(s.order_id)] = s.all_time_low_price ? String(s.all_time_low_price) : null;
+                }
                 // 按 source_order_id 分组
                 const giftMap: Record<number, any[]> = {};
                 for (const g of giftList) {
@@ -13522,6 +13532,8 @@ ${klinesSummary}
                     giftMultiplier: String(g.gift_multiplier || ''),
                     payoutRatio: g.payout_ratio != null ? String(g.payout_ratio) : null,
                     equityTier: tierMap[Number(g.id)] ?? 0,
+                    tierMode: (g.tier_mode || 'step') as 'step' | 'linear',
+                    allTimeLowPrice: giftScanMap[Number(g.id)] ?? null,
                   });
                 }
                 for (const order of list) {
@@ -13958,6 +13970,14 @@ ${klinesSummary}
           await db.execute(
             sql`UPDATE af_orders SET ${sql.raw(updates.join(', '))}, updated_at = NOW() WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId}`
           );
+        }
+        // 如果修改了 tier_mode，联动更新所有关联赠予订单（不论状态）
+        if (input.tierMode !== undefined) {
+          await db.execute(
+            sql`UPDATE af_orders SET tier_mode = ${input.tierMode}, updated_at = NOW()
+                WHERE source_order_id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND is_gift = 1`
+          );
+          console.log(`[档位联动] 订单#${input.orderId}档位模式改为${input.tierMode}，已同步更新关联赠予订单`);
         }
         // 如果是 pending 订单且价格或金额有变化，联动更新关联的 pending 赠予订单
         if (newStatus === 'pending' && (input.limitPrice !== undefined || input.amount !== undefined)) {
