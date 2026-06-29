@@ -1,0 +1,194 @@
+name: 部署数据库备份脚本
+on:
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: setup ssh
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf 'Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n' > ~/.ssh/config
+      - name: 生成并上传备份脚本
+        run: |
+          cat > /tmp/backup-local.sh << 'EOF'
+          #!/bin/bash
+          #############################################
+          # 好友记数据库自动备份脚本 (v2)
+          # 功能：
+          # 1. 自动备份数据库到本地
+          # 2. 压缩备份文件节省空间
+          # 3. 自动同步备份到腾讯云COS
+          # 4. 自动清理60天前的旧备份 (本地和COS)
+          # 5. 详细日志记录
+          #############################################
+
+          set -e
+
+          # 颜色输出
+          RED='\033[0;31m'
+          GREEN='\033[0;32m'
+          YELLOW='\033[1;33m'
+          BLUE='\033[0;34m'
+          NC='\033[0m' # No Color
+
+          # 自动检测脚本所在目录
+          SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+          # 配置
+          BACKUP_DIR="$HOME/database-backups"
+          KEEP_DAYS=60
+          LOG_FILE="$BACKUP_DIR/backup.log"
+
+          # 从.env文件读取配置
+          ENV_FILE="$SCRIPT_DIR/.env"
+
+          if [ ! -f "$ENV_FILE" ]; then
+              echo -e "${RED}❌ 错误: .env文件不存在${NC}"
+              exit 1
+          fi
+
+          # 解析配置
+          DATABASE_URL=$(grep "^DATABASE_URL=" "$ENV_FILE" | cut -d '=' -f2- | sed 's/^"\(.*\)"$/\1/' | sed "s/^'\(.*\)'$/\1/")
+          COS_SECRET_ID=$(grep "^COS_SECRET_ID=" "$ENV_FILE" | cut -d '=' -f2- | tr -d '"')
+          COS_SECRET_KEY=$(grep "^COS_SECRET_KEY=" "$ENV_FILE" | cut -d '=' -f2- | tr -d '"')
+          COS_BUCKET=$(grep "^COS_BUCKET=" "$ENV_FILE" | cut -d '=' -f2- | tr -d '"')
+          COS_REGION=$(grep "^COS_REGION=" "$ENV_FILE" | cut -d '=' -f2- | tr -d '"')
+
+          if [ -z "$DATABASE_URL" ]; then
+              echo -e "${RED}❌ 错误: DATABASE_URL未配置${NC}"
+              exit 1
+          fi
+
+          # 从URL中提取数据库信息
+          TEMP_URL="${DATABASE_URL#mysql://}"
+          DB_USER="${TEMP_URL%%:*}"
+          TEMP_URL="${TEMP_URL#*:}"
+          DB_NAME="${TEMP_URL##*/}"
+          DB_NAME="${DB_NAME%%\?*}"
+          TEMP_URL="${TEMP_URL%/*}"
+          DB_PORT="${TEMP_URL##*:}"
+          TEMP_URL="${TEMP_URL%:*}"
+          DB_HOST="${TEMP_URL##*@}"
+          DB_PASS="${TEMP_URL%@*}"
+
+          # 生成备份文件名
+          TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+          BACKUP_FILE="$BACKUP_DIR/haoyouji_backup_$TIMESTAMP.sql"
+          BACKUP_FILE_GZ="$BACKUP_FILE.gz"
+
+          # 创建备份目录
+          mkdir -p "$BACKUP_DIR"
+
+          # 记录日志
+          log() {
+              echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
+          }
+
+          echo ""
+          echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+          echo -e "${BLUE}🚀 好友记数据库备份任务启动 (保留60天+COS同步)${NC}"
+          echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+          echo ""
+
+          log "开始备份数据库: $DB_NAME"
+          echo -e "${YELLOW}📦 正在备份数据库...${NC}"
+
+          # 1. 导出数据库
+          if mysqldump -h "$DB_HOST" -P "$DB_PORT" -u "$DB_USER" -p"$DB_PASS" \
+              --set-gtid-purged=OFF --column-statistics=0 \
+              --single-transaction --routines --triggers --events \
+              "$DB_NAME" > "$BACKUP_FILE"; then
+              
+              # 2. 压缩备份文件
+              gzip -f "$BACKUP_FILE"
+              FILE_SIZE=$(du -h "$BACKUP_FILE_GZ" | cut -f1)
+              
+              echo -e "${GREEN}✅ 本地备份成功！${NC}"
+              echo "   文件: $(basename $BACKUP_FILE_GZ)"
+              echo "   大小: $FILE_SIZE"
+              log "本地备份成功: $(basename $BACKUP_FILE_GZ) (大小: $FILE_SIZE)"
+              
+              # 3. 同步到COS
+              if [ -n "$COS_SECRET_ID" ] && [ -n "$COS_SECRET_KEY" ]; then
+                  echo -e "${YELLOW}☁️ 正在同步到腾讯云COS...${NC}"
+                  log "开始上传到COS: $COS_BUCKET"
+                  
+                  # 安装coscmd (如果未安装)
+                  if ! command -v coscmd &> /dev/null; then
+                      pip3 install coscmd -q 2>/dev/null || true
+                  fi
+                  
+                  # 配置并上传
+                  coscmd config -a "$COS_SECRET_ID" -s "$COS_SECRET_KEY" -b "$COS_BUCKET" -r "$COS_REGION" > /dev/null 2>&1
+                  
+                  if coscmd upload "$BACKUP_FILE_GZ" "/database-backups/$(basename $BACKUP_FILE_GZ)" > /dev/null 2>&1; then
+                      echo -e "${GREEN}✅ COS上传成功！${NC}"
+                      log "COS上传成功"
+                  else
+                      echo -e "${RED}❌ COS上传失败！${NC}"
+                      log "COS上传失败"
+                  fi
+              else
+                  echo -e "${YELLOW}⚠️ 未配置COS参数，跳过云端同步${NC}"
+                  log "跳过COS同步(未配置)"
+              fi
+              
+          else
+              echo -e "${RED}❌ 备份失败！${NC}"
+              log "备份失败"
+              exit 1
+          fi
+
+          # 4. 清理旧备份 (60天前)
+          echo -e "${YELLOW}🧹 清理${KEEP_DAYS}天前的旧备份...${NC}"
+          
+          # 清理本地
+          OLD_BACKUPS=$(find "$BACKUP_DIR" -name "haoyouji_backup_*.sql.gz" -mtime +$KEEP_DAYS)
+          if [ -n "$OLD_BACKUPS" ]; then
+              log "清理${KEEP_DAYS}天前的本地备份..."
+              for old_file in $OLD_BACKUPS; do
+                  rm -f "$old_file"
+                  echo "   删除: $(basename $old_file)"
+                  log "已删除本地旧备份: $(basename $old_file)"
+              done
+          else
+              echo "   没有需要清理的本地备份"
+          fi
+
+          # 清理COS
+          if command -v coscmd &> /dev/null && [ -n "$COS_SECRET_ID" ]; then
+              # 计算60天前的时间戳 (macOS和Linux的date命令兼容写法)
+              if date -v-60d >/dev/null 2>&1; then
+                  CUTOFF_DATE=$(date -v-${KEEP_DAYS}d +"%Y%m%d") # macOS
+              else
+                  CUTOFF_DATE=$(date -d "${KEEP_DAYS} days ago" +"%Y%m%d") # Linux
+              fi
+              
+              log "清理COS上 ${CUTOFF_DATE} 之前的备份..."
+              # 获取COS文件列表
+              COS_FILES=$(coscmd list /database-backups/ | grep "haoyouji_backup_" | awk '{print $NF}')
+              for cos_file in $COS_FILES; do
+                  # 提取文件名中的日期
+                  FILE_DATE=$(echo "$cos_file" | grep -o "202[0-9][0-9][0-9][0-9][0-9]")
+                  if [ -n "$FILE_DATE" ] && [ "$FILE_DATE" -lt "$CUTOFF_DATE" ]; then
+                      coscmd delete "/database-backups/$cos_file" -f > /dev/null 2>&1
+                      echo "   删除COS: $cos_file"
+                      log "已删除COS旧备份: $cos_file"
+                  fi
+              done
+          fi
+
+          echo ""
+          echo -e "${GREEN}✨ 备份任务全部完成！${NC}"
+          log "备份任务完成"
+          echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+          EOF
+          
+          chmod +x /tmp/backup-local.sh
+          scp -i ~/.ssh/id_rsa -P ${{ secrets.DEPLOY_PORT }} /tmp/backup-local.sh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/root/haoyouji-web/backup-local.sh
+          
+          # 手动触发一次备份测试
+          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '/root/haoyouji-web/backup-local.sh'
