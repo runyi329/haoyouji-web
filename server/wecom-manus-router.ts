@@ -1565,7 +1565,17 @@ async function sendToDeepSeekAndGetReply(userMessage: string, model: string = "d
     if (!res.ok) {
       const errText = await res.text();
       console.error(`[DeepSeek] API 错误 ${res.status}:`, errText);
-      return errReply(`DeepSeek 服务暂时不可用（${res.status}），请稍后重试。`);
+      // 主模型调用失败，尝试切换兜底模型（仅 chat_reply 场景且尚未使用兜底）
+      if (useCase === "chat_reply" && !isFallback) {
+        try {
+          const fallbackCfg = await getAIFallbackConfig();
+          if (fallbackCfg) {
+            console.warn(`[AI] 主模型返回 ${res.status}，切换兜底模型 provider=${fallbackCfg.provider} model=${fallbackCfg.model_name}`);
+            return sendToDeepSeekAndGetReply(userMessage, fallbackCfg.model_name, systemPrompt, "chat_reply_fallback" as UseCase);
+          }
+        } catch (_) {}
+      }
+      return errReply(`AI 服务暂时不可用，请稍后重试。`);
     }
     const data = await res.json() as any;
     // 思考模式下，content 是最终答案，reasoning_content 是思维链（不发给用户）
