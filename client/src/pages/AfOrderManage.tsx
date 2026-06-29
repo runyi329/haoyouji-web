@@ -46,6 +46,7 @@ interface EditState {
   quantity: string;
   status: "pending" | "completed" | "cancelled";
   sellStatus: string | null; // selling / sold / sell_cancelled / null
+  tierMode: 'step' | 'linear'; // 档位计算模式
 }
 
 interface ProfitCalculation {
@@ -392,6 +393,7 @@ export default function AfOrderManage() {
       quantity: order.quantity?.toString() ?? "",
       status: order.status as "pending" | "completed" | "cancelled",
       sellStatus: order.sellStatus || null,
+      tierMode: (order.tierMode || 'step') as 'step' | 'linear',
     });
   };
 
@@ -428,6 +430,7 @@ export default function AfOrderManage() {
       // 卖出相关
       sellStatus: editState.sellStatus || undefined,
       sellPrice: isConfirmingSellComplete ? editState.actualSellPrice : undefined,
+      tierMode: editState.tierMode,
     });
   };
 
@@ -1679,6 +1682,12 @@ export default function AfOrderManage() {
                       <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
                         {order.nickname || order.username || `用户${order.userId}`}
                       </span>
+                      {/* 档位模式标签 */}
+                      {order.status === 'completed' && (
+                        order.tierMode === 'linear'
+                          ? <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#EFF6FF', color: '#3B82F6', border: '1px solid #BFDBFE' }}>线性档位</span>
+                          : <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#FFF7ED', color: '#D97706', border: '1px solid #FED7AA' }}>阶梯档位</span>
+                      )}
                       {order.isGift && (
                         <span
                           className="inline-flex items-center justify-center font-black select-none"
@@ -1778,6 +1787,32 @@ export default function AfOrderManage() {
                         <span className={`font-medium ${statusDisplay.color}`}>{statusDisplay.label}</span>
                       )}
                     </div>
+                    {/* 档位计算方式（仅已成交订单显示） */}
+                    {isEditing && editState!.status === 'completed' && (
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-400 w-12 shrink-0">档位模式</span>
+                        <div className="flex rounded overflow-hidden border border-gray-300 text-xs">
+                          <button
+                            type="button"
+                            onClick={() => setEditState({ ...editState!, tierMode: 'step' })}
+                            className={`px-2 py-0.5 transition-colors ${
+                              editState!.tierMode === 'step'
+                                ? 'bg-blue-500 text-white'
+                                : 'bg-white text-gray-600 hover:bg-gray-50'
+                            }`}
+                          >阶梯</button>
+                          <button
+                            type="button"
+                            onClick={() => setEditState({ ...editState!, tierMode: 'linear' })}
+                            className={`px-2 py-0.5 transition-colors ${
+                              editState!.tierMode === 'linear'
+                                ? 'bg-blue-500 text-white'
+                                : 'bg-white text-gray-600 hover:bg-gray-50'
+                            }`}
+                          >线性</button>
+                        </div>
+                      </div>
+                    )}
                     {/* 买入委托价 */}
                     <div className="flex items-center gap-1">
                       <span className="text-gray-400 w-12 shrink-0">买入价</span>
@@ -1807,10 +1842,18 @@ export default function AfOrderManage() {
                       </span>
                     </div>
                     {/* 实际有效持仓（单独一行，仅当权益有折扣档位>0时显示） */}
-                    {order.status === 'completed' && order.equityTier > 0 && (() => {
+                    {order.status === 'completed' && (() => {
                       const raw = order.quantity;
                       const num = parseFloat(raw);
-                      const rate = EQUITY_DISCOUNT_RATES[order.equityTier] || 1.0;
+                      let rate: number;
+                      if (order.tierMode === 'linear') {
+                        const buyP = parseFloat(order.limitPrice || '0');
+                        const allLow = order.allTimeLowPrice ? parseFloat(String(order.allTimeLowPrice)) : 0;
+                        rate = (buyP > 0 && allLow > 0) ? Math.max(0, 1 - (buyP - allLow) / buyP) : 1.0;
+                      } else {
+                        rate = EQUITY_DISCOUNT_RATES[order.equityTier] || 1.0;
+                      }
+                      if (rate >= 1.0) return null;
                       const effectiveNum = num * rate;
                       const pct = (rate * 100).toFixed(2);
                       return (
@@ -1878,9 +1921,18 @@ export default function AfOrderManage() {
                     )}
                     {/* 当前权益 */}
                     {order.status === 'completed' && (() => {
-                      const rate = EQUITY_DISCOUNT_RATES[order.equityTier] || 1.0;
+                      let rate: number;
+                      let tierLabel: string;
+                      if (order.tierMode === 'linear') {
+                        const buyP = parseFloat(order.limitPrice || '0');
+                        const allLow = order.allTimeLowPrice ? parseFloat(String(order.allTimeLowPrice)) : 0;
+                        rate = (buyP > 0 && allLow > 0) ? Math.max(0, 1 - (buyP - allLow) / buyP) : 1.0;
+                        tierLabel = '线性';
+                      } else {
+                        rate = EQUITY_DISCOUNT_RATES[order.equityTier] || 1.0;
+                        tierLabel = order.equityTier === 0 ? 'D0档' : `D${order.equityTier}档`;
+                      }
                       const pct = (rate * 100).toFixed(2);
-                      const tierLabel = order.equityTier === 0 ? 'D0档' : `D${order.equityTier}档`;
                       return (
                         <div className="flex items-center gap-1 col-span-2">
                           <span className="text-gray-400 w-12 shrink-0">当前权益</span>

@@ -36,7 +36,14 @@ function calcFeeItem(o: any) {
   // 名义年化费率 与 实际年化费率（按档位折扣率折算）
   const nominalApr = tradeValue > 0 ? (dailyFee * 365 / tradeValue) : 0;
   const equityTier = o.equityTier || 0;
-  const discountRate = EQUITY_DISCOUNT_RATES[equityTier] ?? 1.0;
+  let discountRate: number;
+  if (o.tierMode === 'linear') {
+    const buyP = parseFloat(o.limitPrice || '0');
+    const allLow = o.allTimeLowPrice ? parseFloat(String(o.allTimeLowPrice)) : 0;
+    discountRate = (buyP > 0 && allLow > 0) ? Math.max(0, 1 - (buyP - allLow) / buyP) : 1.0;
+  } else {
+    discountRate = EQUITY_DISCOUNT_RATES[equityTier] ?? 1.0;
+  }
   const actualApr = discountRate > 0 ? (nominalApr / discountRate) : nominalApr;
   const orderDate = new Date(o.createdAt);
   const yy = String(orderDate.getFullYear()).slice(2);

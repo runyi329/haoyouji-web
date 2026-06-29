@@ -84,7 +84,14 @@ export default function AfProfitForecast() {
       const key = price.toString();
       if (!groups[key]) groups[key] = { price, rawQty: 0, effQty: 0, orders: [] };
       const qty = parseFloat(o.quantity) || 0;
-      const rate = EQUITY_DISCOUNT_RATES[o.equityTier || 0] ?? 1.0;
+      let rate: number;
+      if (o.tierMode === 'linear') {
+        const buyP = parseFloat(o.limitPrice || '0');
+        const allLow = o.allTimeLowPrice ? parseFloat(String(o.allTimeLowPrice)) : 0;
+        rate = (buyP > 0 && allLow > 0) ? Math.max(0, 1 - (buyP - allLow) / buyP) : 1.0;
+      } else {
+        rate = EQUITY_DISCOUNT_RATES[o.equityTier || 0] ?? 1.0;
+      }
       groups[key].rawQty += qty;
       groups[key].effQty += qty * rate;
       groups[key].orders.push(o);
@@ -344,12 +351,19 @@ export default function AfProfitForecast() {
                 <div className="border-t border-gray-100 divide-y divide-gray-50">
                   {g.orders.map((o: any) => {
                     const qty = parseFloat(o.quantity) || 0;
-                    const rate = EQUITY_DISCOUNT_RATES[o.equityTier || 0] ?? 1.0;
+                    let rate: number;
+                    if (o.tierMode === 'linear') {
+                      const buyP = parseFloat(o.limitPrice || '0');
+                      const allLow = o.allTimeLowPrice ? parseFloat(String(o.allTimeLowPrice)) : 0;
+                      rate = (buyP > 0 && allLow > 0) ? Math.max(0, 1 - (buyP - allLow) / buyP) : 1.0;
+                    } else {
+                      rate = EQUITY_DISCOUNT_RATES[o.equityTier || 0] ?? 1.0;
+                    }
                     const effQ = qty * rate;
                     const oPnl = currentSimulPrice ? (currentSimulPrice - g.price) * effQ : 0;
                     const oPnlColor = oPnl >= 0 ? "text-red-400" : "text-green-700";
                     const name = o.nickname || o.username || `用户${o.userId}`;
-                    const tierLabel = o.equityTier > 0 ? `${Math.round(rate * 100)}%` : null;
+                    const tierLabel = rate < 1.0 ? `${Math.round(rate * 100)}%` : null;
                     return (
                       <div key={o.id} className="flex items-center px-4 py-2 gap-2 text-xs">
                         <span className="text-gray-700 font-medium w-16 truncate">{name}</span>

@@ -13374,7 +13374,8 @@ ${klinesSummary}
                      COALESCE(o.source_amount, '') as source_amount,
                      COALESCE(su.username, '') as source_username,
                      o.sell_price, o.sell_quantity, o.sell_at, o.sell_confirmed_at, o.sell_status, o.confirmed_at,
-                     COALESCE(o.prepaid_fee, 0) as prepaid_fee
+                     COALESCE(o.prepaid_fee, 0) as prepaid_fee,
+                     COALESCE(o.tier_mode, 'step') as tier_mode
               FROM af_orders o
               LEFT JOIN users u ON u.id = o.user_id
               LEFT JOIN users su ON su.id = o.source_user_id
@@ -13413,6 +13414,7 @@ ${klinesSummary}
           allTimeLowPrice: null as string | null,
           allTimeLowAt: null as string | null,
           prepaidFee: parseFloat(r.prepaid_fee || '0'),
+          tierMode: (r.tier_mode || 'step') as 'step' | 'linear',
         }));
         
         // 批量查询每笔订单的扫描最低价（af_order_scan_stats）
@@ -13765,6 +13767,7 @@ ${klinesSummary}
         // 新增：确认卖出成交
         sellStatus: z.enum(['selling', 'sold', 'sell_cancelled']).optional(),
         sellPrice: z.string().optional(), // 实际卖出成交价
+        tierMode: z.enum(['step', 'linear']).optional(), // 档位计算模式
       }))
       .mutation(async ({ ctx, input }) => {
         
@@ -13777,7 +13780,7 @@ ${klinesSummary}
         if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
         // 查询原始订单信息
         const orderRows = await db.execute(
-          sql`SELECT id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, source_order_id, sell_status, sell_price, sell_confirmed_at FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
+          sql`SELECT id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, source_order_id, sell_status, sell_price, sell_confirmed_at, tier_mode, created_at FROM af_orders WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} LIMIT 1`
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
         if (!order) throw new Error('订单不存在');
@@ -13804,23 +13807,37 @@ ${klinesSummary}
           const buyPrice = parseFloat(order.limit_price || '0');
           const originalQty = parseFloat(order.quantity || '0');
           
-          // 查询收益权最高档位
-          const tierRows = await db.execute(
-            sql`SELECT COALESCE(MAX(tier), 0) as maxTier FROM af_order_tier_triggers WHERE order_id = ${input.orderId}`
-          ) as any;
-          const maxTier = parseInt((tierRows[0]?.[0]?.maxTier ?? tierRows[0]?.maxTier ?? '0').toString()) || 0;
-          
-          const equityDiscountRates: Record<number, number> = {
-            0: 1.0, 1: 0.6667, 2: 0.4444, 3: 0.3333, 4: 0.2667,
-            5: 0.2222, 6: 0.1905, 7: 0.1667, 8: 0.1481, 9: 0.1333,
-          };
-          const discountRate = equityDiscountRates[maxTier] || 1.0;
+          // 读取档位模式（优先用本次传入的，否则用订单原值）
+          const resolvedTierMode = input.tierMode || order.tier_mode || 'step';
+          let discountRate = 1.0;
+          if (resolvedTierMode === 'linear') {
+            // 线性档位：读取历史最低价，跌幅%直接等于让渡收益权%
+            const scanStatsRows = await db.execute(
+              sql`SELECT all_time_low_price FROM af_order_scan_stats WHERE order_id = ${input.orderId} LIMIT 1`
+            ) as any;
+            const allTimeLowPrice = parseFloat((scanStatsRows[0]?.[0] ?? scanStatsRows[0])?.all_time_low_price || '0');
+            if (allTimeLowPrice > 0 && buyPrice > 0) {
+              discountRate = Math.max(0, 1 - (buyPrice - allTimeLowPrice) / buyPrice);
+            }
+            console.log(`[AF卖出成交-线性] 订单#${input.orderId}: 买入价=${buyPrice}, 历史最低价=${allTimeLowPrice}, 折扣率=${discountRate.toFixed(4)}`);
+          } else {
+            // 阶梯档位：查询收益权最高档位
+            const tierRows = await db.execute(
+              sql`SELECT COALESCE(MAX(tier), 0) as maxTier FROM af_order_tier_triggers WHERE order_id = ${input.orderId}`
+            ) as any;
+            const maxTier = parseInt((tierRows[0]?.[0]?.maxTier ?? tierRows[0]?.maxTier ?? '0').toString()) || 0;
+            const equityDiscountRates: Record<number, number> = {
+              0: 1.0, 1: 0.6667, 2: 0.4444, 3: 0.3333, 4: 0.2667,
+              5: 0.2222, 6: 0.1905, 7: 0.1667, 8: 0.1481, 9: 0.1333,
+            };
+            discountRate = equityDiscountRates[maxTier] || 1.0;
+          }
           const effectiveQty = originalQty * discountRate;
           let profit = 0;
           if (actualSellPrice > 0 && buyPrice > 0) {
             profit = effectiveQty * (actualSellPrice - buyPrice);
           }
-          console.log(`[AF卖出成交] 订单#${input.orderId}: 本金=${principal}, 买入价=${buyPrice}, 卖出价=${actualSellPrice}, 原始币数=${originalQty}, 最高档位=${maxTier}, 有效币数=${effectiveQty.toFixed(8)}, 收益=${profit.toFixed(4)}`);
+          console.log(`[AF卖出成交] 订单#${input.orderId}: 本金=${principal}, 买入价=${buyPrice}, 卖出价=${actualSellPrice}, 原始币数=${originalQty}, 模式=${resolvedTierMode}, 折扣率=${discountRate.toFixed(4)}, 有效币数=${effectiveQty.toFixed(8)}, 收益=${profit.toFixed(4)}`);
           
           // 计算累计管理费：从下单时间（created_at）开始，修改价格等操作不影响管理费
           const confirmedDate = new Date(order.created_at);
@@ -13918,6 +13935,10 @@ ${klinesSummary}
         }
         // 构建动态 UPDATE
         const updates: string[] = [];
+        // 更新 tier_mode 字段
+        if (input.tierMode !== undefined) {
+          updates.push(`tier_mode = '${input.tierMode}'`);
+        }
         if (input.limitPrice !== undefined) {
           updates.push(`limit_price = '${input.limitPrice.replace(/'/g, '')}' `);
           const newPrice = parseFloat(input.limitPrice);
@@ -14219,11 +14240,11 @@ ${klinesSummary}
         }
         // 验证订单属于目标用户
         const orderRows = await db.execute(
-          sql`SELECT id, coin, limit_price, status FROM af_orders
+          sql`SELECT id, coin, limit_price, status, tier_mode FROM af_orders
               WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND user_id = ${targetUserId} LIMIT 1`
         ) as any;
         const order = (orderRows[0]?.[0] ?? orderRows[0]);
-        if (!order) return { triggers: [], scanStatus: null, latestLowPrice: null, scanCount: 0, allTimeLowPrice: null, allTimeLowAt: null };
+        if (!order) return { triggers: [], scanStatus: null, latestLowPrice: null, scanCount: 0, allTimeLowPrice: null, allTimeLowAt: null, tierMode: 'step' as 'step' | 'linear' };
 
         // 查询该订单的所有档位触发记录
         const triggerRows = await db.execute(
@@ -14271,6 +14292,7 @@ ${klinesSummary}
           scanCount: scanStats?.scan_count ?? 0,
           allTimeLowPrice: scanStats?.all_time_low_price ?? null,
           allTimeLowAt: scanStats?.all_time_low_at ? new Date(scanStats.all_time_low_at).toISOString() : null,
+          tierMode: (order.tier_mode || 'step') as 'step' | 'linear',
         };
       }),
     // ========== 预收管理费 ==========
@@ -25563,10 +25585,6 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         optionType: z.enum(['call', 'put']).optional(),
         strikePrice: z.number().optional(),
         premium: z.number().optional(),
-        premiumUnit: z.number().optional(),
-        settlementType: z.enum(['usdt', 'coin']).optional(),
-        contractSize: z.number().optional(),
-        impliedVol: z.number().optional(),
         note: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -25574,14 +25592,12 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
         await db.execute(
           sql`INSERT INTO order_flow_trades
-              (ledger_id, user_id, symbol, direction, market_type, order_type, vip_level, entry_price, quantity, leverage, take_profit, stop_loss, entry_date, expiry_date, option_type, strike_price, premium, premium_unit, settlement_type, contract_size, implied_vol, note, created_by)
+              (ledger_id, user_id, symbol, direction, market_type, order_type, vip_level, entry_price, quantity, leverage, take_profit, stop_loss, entry_date, expiry_date, option_type, strike_price, premium, note, created_by)
               VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.symbol}, ${input.direction},
                       ${input.marketType}, ${input.orderType}, ${input.vipLevel},
                       ${input.entryPrice}, ${input.quantity}, ${input.leverage},
                       ${input.takeProfit ?? null}, ${input.stopLoss ?? null},
-                      ${input.entryDate}, ${input.expiryDate ?? null}, ${input.optionType ?? null}, ${input.strikePrice ?? null}, ${input.premium ?? null},
-                      ${input.premiumUnit ?? null}, ${input.settlementType ?? null}, ${input.contractSize ?? null}, ${input.impliedVol ?? null},
-                      ${input.note ?? null}, ${ctx.user.id})`
+                      ${input.entryDate}, ${input.expiryDate ?? null}, ${input.optionType ?? null}, ${input.strikePrice ?? null}, ${input.premium ?? null}, ${input.note ?? null}, ${ctx.user.id})`
         );
         return { success: true };
       }),
@@ -25606,10 +25622,6 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         optionType: z.enum(['call', 'put']).nullable().optional(),
         strikePrice: z.number().nullable().optional(),
         premium: z.number().nullable().optional(),
-        premiumUnit: z.number().nullable().optional(),
-        settlementType: z.enum(['usdt', 'coin']).nullable().optional(),
-        contractSize: z.number().nullable().optional(),
-        impliedVol: z.number().nullable().optional(),
         exitDate: z.string().nullable().optional(),
         status: z.enum(['open', 'closed']).optional(),
         note: z.string().nullable().optional(),
@@ -25637,11 +25649,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
               expiry_date = CASE WHEN ${input.expiryDate !== undefined} THEN ${input.expiryDate ?? null} ELSE expiry_date END,
               option_type = CASE WHEN ${input.optionType !== undefined} THEN ${input.optionType ?? null} ELSE option_type END,
               strike_price = CASE WHEN ${input.strikePrice !== undefined} THEN ${input.strikePrice ?? null} ELSE strike_price END,
-              premium = CASE WHEN ${input.premium !== undefined} THEN ${input.premium ?? null} ELSE premium END,
-              premium_unit = CASE WHEN ${input.premiumUnit !== undefined} THEN ${input.premiumUnit ?? null} ELSE premium_unit END,
-              settlement_type = CASE WHEN ${input.settlementType !== undefined} THEN ${input.settlementType ?? null} ELSE settlement_type END,
-              contract_size = CASE WHEN ${input.contractSize !== undefined} THEN ${input.contractSize ?? null} ELSE contract_size END,
-              implied_vol = CASE WHEN ${input.impliedVol !== undefined} THEN ${input.impliedVol ?? null} ELSE implied_vol END
+              premium = CASE WHEN ${input.premium !== undefined} THEN ${input.premium ?? null} ELSE premium END
               WHERE id = ${input.id} AND ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}`
         );
         return { success: true };
