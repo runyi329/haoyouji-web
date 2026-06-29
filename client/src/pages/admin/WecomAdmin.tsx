@@ -3039,6 +3039,8 @@ function AIModelConfigTab() {
   const [saving, setSaving] = useState<string | null>(null);
   // 本地编辑状态
   const [edits, setEdits] = useState<Record<string, Partial<AIModelConfig>>>({});
+  // 编辑态控制：哪些卡片处于编辑中
+  const [editing, setEditing] = useState<Record<string, boolean>>({});
   // API Key 显示/隐藏
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
 
@@ -3075,7 +3077,8 @@ function AIModelConfigTab() {
       });
       const d = await res.json();
       if (d.ok) {
-        toast.success('已保存');
+        toast.success('已保存，全平台立即生效');
+        setEditing(prev => ({ ...prev, [useCase]: false }));
         loadConfigs();
       } else {
         toast.error(d.error || '保存失败');
@@ -3143,6 +3146,7 @@ function AIModelConfigTab() {
               const options = modelOptions[cfg.category] || [];
               const selectedOpt = options.find(o => o.value === (e.model_name || cfg.model_name));
               const isSaving = saving === cfg.use_case;
+              const isEditing = !!editing[cfg.use_case];
               return (
                 <div key={cfg.use_case} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
                   {/* 场景标题 */}
@@ -3151,15 +3155,41 @@ function AIModelConfigTab() {
                       <div className="text-sm font-bold text-gray-800">{cfg.use_case_label}</div>
                       <div className="text-xs text-gray-400 mt-0.5">{cfg.use_case_desc}</div>
                     </div>
-                    {selectedOpt && (
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                        selectedOpt.price_note.includes('免费') ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
-                      }`}>
-                        {selectedOpt.price_note.includes('免费') ? '免费' : '付费'}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {selectedOpt && (
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                          selectedOpt.price_note.includes('免费') ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
+                        }`}>
+                          {selectedOpt.price_note.includes('免费') ? '免费' : '付费'}
+                        </span>
+                      )}
+                      {!isEditing && (
+                        <button
+                          onClick={() => setEditing(prev => ({ ...prev, [cfg.use_case]: true }))}
+                          className="text-xs text-gray-400 hover:text-green-600 flex items-center gap-0.5 transition-colors"
+                        >
+                          <Pencil className="w-3 h-3" /> 编辑
+                        </button>
+                      )}
+                    </div>
                   </div>
 
+                  {/* 只读展示 */}
+                  {!isEditing ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2">
+                        <span className="text-xs text-gray-500">当前模型</span>
+                        <span className="text-xs font-medium text-gray-800">{selectedOpt?.label || cfg.model_name}</span>
+                      </div>
+                      {cfg.category !== 'embedding' && (
+                        <div className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2">
+                          <span className="text-xs text-gray-500">API Key</span>
+                          <span className="text-xs font-mono text-gray-400">{cfg.api_key ? '••••••••' + cfg.api_key.slice(-4) : '未配置'}</span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <>
                   {/* 模型选择下拉框 */}
                   <div className="mb-3">
                     <label className="text-xs text-gray-500 mb-1 block">选择模型</label>
@@ -3209,15 +3239,25 @@ function AIModelConfigTab() {
                     </div>
                   )}
 
-                  {/* 保存按鈕 */}
-                  <button
-                    onClick={() => saveConfig(cfg.use_case)}
-                    disabled={isSaving}
-                    className="w-full flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white text-sm font-medium py-2 rounded-xl transition-colors"
-                  >
-                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    {isSaving ? '保存中...' : '保存'}
-                  </button>
+                  {/* 保存/取消按钮 */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setEditing(prev => ({ ...prev, [cfg.use_case]: false })); }}
+                      className="flex-1 flex items-center justify-center gap-1 border border-gray-200 text-gray-500 text-sm font-medium py-2 rounded-xl transition-colors hover:bg-gray-50"
+                    >
+                      取消
+                    </button>
+                    <button
+                      onClick={() => saveConfig(cfg.use_case)}
+                      disabled={isSaving}
+                      className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white text-sm font-medium py-2 rounded-xl transition-colors"
+                    >
+                      {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      {isSaving ? '保存中...' : '保存'}
+                    </button>
+                  </div>
+                    </>
+                  )}
 
                   {/* 分身对话回复卡片下方内嵌展示兜底模型配置 */}
                   {cfg.use_case === 'chat_reply' && fallbackConfig && (() => {
@@ -3226,12 +3266,36 @@ function AIModelConfigTab() {
                     const fbOptions = modelOptions[fb.category] || [];
                     const fbSelectedOpt = fbOptions.find(o => o.value === (fbEdit.model_name || fb.model_name));
                     const fbIsSaving = saving === fb.use_case;
+                    const fbIsEditing = !!editing[fb.use_case];
                     return (
                       <div className="mt-3 border-t border-dashed border-gray-200 pt-3">
-                        <div className="flex items-center gap-1.5 mb-2">
-                          <span className="text-xs font-semibold text-orange-600">⚡ 兜底模型</span>
-                          <span className="text-[10px] text-gray-400">主模型失败时自动切换，建议选免费模型</span>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-semibold text-orange-600">⚡ 兜底模型</span>
+                            <span className="text-[10px] text-gray-400">主模型失败时自动切换</span>
+                          </div>
+                          {!fbIsEditing && (
+                            <button
+                              onClick={() => setEditing(prev => ({ ...prev, [fb.use_case]: true }))}
+                              className="text-xs text-gray-400 hover:text-orange-500 flex items-center gap-0.5 transition-colors"
+                            >
+                              <Pencil className="w-3 h-3" /> 编辑
+                            </button>
+                          )}
                         </div>
+                        {!fbIsEditing ? (
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between bg-orange-50 rounded-xl px-3 py-2">
+                              <span className="text-xs text-gray-500">兜底模型</span>
+                              <span className="text-xs font-medium text-gray-800">{fbSelectedOpt?.label || fb.model_name}</span>
+                            </div>
+                            <div className="flex items-center justify-between bg-orange-50 rounded-xl px-3 py-2">
+                              <span className="text-xs text-gray-500">API Key</span>
+                              <span className="text-xs font-mono text-gray-400">{fb.api_key ? '••••••••' + fb.api_key.slice(-4) : '未配置'}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
                         <div className="mb-2">
                           <label className="text-xs text-gray-500 mb-1 block">选择兜底模型</label>
                           <select
@@ -3270,14 +3334,24 @@ function AIModelConfigTab() {
                             </button>
                           </div>
                         </div>
-                        <button
-                          onClick={() => saveConfig(fb.use_case)}
-                          disabled={fbIsSaving}
-                          className="w-full flex items-center justify-center gap-1.5 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white text-sm font-medium py-2 rounded-xl transition-colors"
-                        >
-                          {fbIsSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                          {fbIsSaving ? '保存中...' : '保存兜底模型'}
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setEditing(prev => ({ ...prev, [fb.use_case]: false }))}
+                            className="flex-1 flex items-center justify-center gap-1 border border-gray-200 text-gray-500 text-sm font-medium py-2 rounded-xl transition-colors hover:bg-gray-50"
+                          >
+                            取消
+                          </button>
+                          <button
+                            onClick={() => saveConfig(fb.use_case)}
+                            disabled={fbIsSaving}
+                            className="flex-1 flex items-center justify-center gap-1.5 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white text-sm font-medium py-2 rounded-xl transition-colors"
+                          >
+                            {fbIsSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                            {fbIsSaving ? '保存中...' : '保存兜底模型'}
+                          </button>
+                        </div>
+                          </>
+                        )}
                       </div>
                     );
                   })()}
