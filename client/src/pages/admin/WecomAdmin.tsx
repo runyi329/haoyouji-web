@@ -1890,6 +1890,7 @@ function StatsTab() {
                     {/* 常显底部信息 */}
                     <div className="px-3 pb-2.5 pt-1.5 border-t border-gray-50 flex items-center gap-2 flex-wrap">
                       {log.model_used && <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-blue-50 text-blue-600">{log.model_used}</span>}
+                      {log.is_fallback === 1 && <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-orange-100 text-orange-600 font-medium">⚠️ 降级</span>}
                       <span className="text-[10px] text-gray-400">{totalTok > 0 ? `${totalTok.toLocaleString()} tokens` : `${log.credits_used || 0} credits`}</span>
                       {/* 星级评分 */}
                       {log.dialog_score != null ? (() => {
@@ -3109,7 +3110,10 @@ function AIModelConfigTab() {
     embedding: '🔍 向量模型（语义检索）',
   };
 
+  // 将 chat_reply_fallback 从列表中单独提取，在 chat_reply 卡片下方内嵌显示
+  const fallbackConfig = configs.find(c => c.use_case === 'chat_reply_fallback');
   const groupedConfigs = configs.reduce((acc, c) => {
+    if (c.use_case === 'chat_reply_fallback') return acc; // 单独处理，不展入分组
     const cat = c.category || 'chat';
     if (!acc[cat]) acc[cat] = [];
     acc[cat].push(c);
@@ -3205,7 +3209,7 @@ function AIModelConfigTab() {
                     </div>
                   )}
 
-                  {/* 保存按钮 */}
+                  {/* 保存按鈕 */}
                   <button
                     onClick={() => saveConfig(cfg.use_case)}
                     disabled={isSaving}
@@ -3214,6 +3218,69 @@ function AIModelConfigTab() {
                     {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     {isSaving ? '保存中...' : '保存'}
                   </button>
+
+                  {/* 分身对话回复卡片下方内嵌展示兜底模型配置 */}
+                  {cfg.use_case === 'chat_reply' && fallbackConfig && (() => {
+                    const fb = fallbackConfig;
+                    const fbEdit = edits[fb.use_case] || {};
+                    const fbOptions = modelOptions[fb.category] || [];
+                    const fbSelectedOpt = fbOptions.find(o => o.value === (fbEdit.model_name || fb.model_name));
+                    const fbIsSaving = saving === fb.use_case;
+                    return (
+                      <div className="mt-3 border-t border-dashed border-gray-200 pt-3">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <span className="text-xs font-semibold text-orange-600">⚡ 兜底模型</span>
+                          <span className="text-[10px] text-gray-400">主模型失败时自动切换，建议选免费模型</span>
+                        </div>
+                        <div className="mb-2">
+                          <label className="text-xs text-gray-500 mb-1 block">选择兜底模型</label>
+                          <select
+                            value={fbEdit.model_name || fb.model_name}
+                            onChange={ev => updateEdit(fb.use_case, 'model_name', ev.target.value)}
+                            className="w-full text-sm border border-orange-200 rounded-xl px-3 py-2 bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                          >
+                            {fbOptions.map(opt => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}  ·  {opt.price_note}
+                              </option>
+                            ))}
+                          </select>
+                          {fbSelectedOpt && (
+                            <div className="text-[11px] text-gray-400 mt-1 px-1">
+                              服务商：{fbSelectedOpt.provider} &nbsp;·&nbsp; {fbSelectedOpt.price_note}
+                            </div>
+                          )}
+                        </div>
+                        <div className="mb-2">
+                          <label className="text-xs text-gray-500 mb-1 block">API Key</label>
+                          <div className="relative">
+                            <input
+                              type={showKey[fb.use_case] ? 'text' : 'password'}
+                              value={fbEdit.api_key ?? fb.api_key}
+                              onChange={ev => updateEdit(fb.use_case, 'api_key', ev.target.value)}
+                              placeholder="输入兜底模型 API Key"
+                              className="w-full text-xs border border-orange-200 rounded-xl px-3 py-2 bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-400 pr-10 font-mono"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowKey(prev => ({ ...prev, [fb.use_case]: !prev[fb.use_case] }))}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"
+                            >
+                              {showKey[fb.use_case] ? '隐藏' : '显示'}
+                            </button>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => saveConfig(fb.use_case)}
+                          disabled={fbIsSaving}
+                          className="w-full flex items-center justify-center gap-1.5 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white text-sm font-medium py-2 rounded-xl transition-colors"
+                        >
+                          {fbIsSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                          {fbIsSaving ? '保存中...' : '保存兜底模型'}
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}

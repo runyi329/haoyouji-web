@@ -1399,7 +1399,7 @@ router.get("/api/wecom/platform/logs", async (req: Request, res: Response) => {
                 WHEN mc.manus_task_id LIKE 'kf-deepseek-%' THEN CONCAT('渠道', REGEXP_SUBSTR(mc.manus_task_id, '[0-9]+$'))
                 ELSE mc.channel_type
               END) AS channel_name,
-              mc.dialog_score, mc.score_level
+              mc.dialog_score, mc.score_level, mc.is_fallback
        FROM wecom_message_credits mc
        LEFT JOIN wecom_manus_sessions ws ON ws.wecom_user_id = mc.wecom_user_id
        LEFT JOIN wecom_channels wc ON wc.id = mc.channel_id

@@ -31,7 +31,7 @@ import {
 } from "./wecom-vector";
 import { getUsdtCnyRate } from "./price-scanner";
 import { getUserCnyBalance, getUserCnyHistory, getUserBalance } from "./db-recharge";
-import { getAIConfig, callAI, callAIVision, callAIVoice, logApiUsage, saveAIConfig, getAIConfigs, MODEL_OPTIONS, USE_CASE_META, type UseCase } from "./wecom-ai-config";
+import { getAIConfig, getAIFallbackConfig, callAI, callAIVision, callAIVoice, logApiUsage, saveAIConfig, getAIConfigs, MODEL_OPTIONS, USE_CASE_META, type UseCase } from "./wecom-ai-config";
 import { isAIFeatureEnabled } from "./ai-monitor";
 import fs from "fs";
 import path from "path";
@@ -1479,31 +1479,60 @@ async function classifyMessage(userMessage: string, prompt: string, classifierMo
 // -----------------------------------------------------------
 // 工具函数：向 DeepSeek API 发送消息并获取回复
 // -----------------------------------------------------------
-interface DeepSeekReply { content: string; promptTokens: number; completionTokens: number; totalTokens: number; cacheHitTokens: number; modelUsed?: string; }
+interface DeepSeekReply { content: string; promptTokens: number; completionTokens: number; totalTokens: number; cacheHitTokens: number; modelUsed?: string; isFallback?: boolean; }
 async function sendToDeepSeekAndGetReply(userMessage: string, model: string = "deepseek-chat", systemPrompt?: string, useCase: UseCase = "chat"): Promise<DeepSeekReply> {
   const errReply = (msg: string): DeepSeekReply => ({ content: msg, promptTokens: 0, completionTokens: 0, totalTokens: 0, cacheHitTokens: 0 });
   try {
     // ===== 动态读取全局 AI 配置 =====
-    // 当 model 为 "auto" 或 "deepseek-chat" 时，优先从数据库读取全局配置
-    let apiKey = DEEPSEEK_API_KEY;
+    // 统一从数据库读取全局配置，不再降级到 DeepSeek 环境变量
+    let apiKey = "";
     let apiBase = DEEPSEEK_API_BASE;
     let resolvedModel = model;
-    const shouldUseGlobalConfig = model === "auto" || model === "deepseek-chat" || model === "deepseek-v4-flash";
+    let isFallback = false;
+    const shouldUseGlobalConfig = model === "auto" || model === "deepseek-chat" || model === "deepseek-v4-flash" || !DEEPSEEK_PROFILES.has(model);
     if (shouldUseGlobalConfig) {
       try {
-        const cfg = await getAIConfig(useCase);
+        const cfg = await getAIConfig(useCase as UseCase);
         if (cfg && cfg.api_key) {
           apiKey = cfg.api_key;
           apiBase = cfg.api_base;
           resolvedModel = cfg.model_name;
           console.log(`[AI] 使用全局配置 useCase=${useCase} provider=${cfg.provider} model=${cfg.model_name}`);
+        } else {
+          // 主模型 API Key 未配置，尝试兜底模型（仅 chat_reply 场景）
+          if (useCase === "chat_reply") {
+            const fallbackCfg = await getAIFallbackConfig();
+            if (fallbackCfg) {
+              apiKey = fallbackCfg.api_key;
+              apiBase = fallbackCfg.api_base;
+              resolvedModel = fallbackCfg.model_name;
+              isFallback = true;
+              console.warn(`[AI] 主模型 API Key 未配置，切换兜底模型 provider=${fallbackCfg.provider} model=${fallbackCfg.model_name}`);
+            }
+          }
         }
       } catch (cfgErr) {
-        console.warn("[AI] 读取全局配置失败，降级使用 DeepSeek:", cfgErr);
+        console.warn("[AI] 读取全局配置失败:", cfgErr);
+        // 主模型读取失败，尝试兜底模型（仅 chat_reply 场景）
+        if (useCase === "chat_reply") {
+          try {
+            const fallbackCfg = await getAIFallbackConfig();
+            if (fallbackCfg) {
+              apiKey = fallbackCfg.api_key;
+              apiBase = fallbackCfg.api_base;
+              resolvedModel = fallbackCfg.model_name;
+              isFallback = true;
+              console.warn(`[AI] 主模型读取失败，切换兜底模型 provider=${fallbackCfg.provider} model=${fallbackCfg.model_name}`);
+            }
+          } catch (_) {}
+        }
       }
+    } else {
+      // 明确指定了 DeepSeek 模型（如 deepseek-v4-pro），直接使用 DEEPSEEK_API_KEY
+      apiKey = DEEPSEEK_API_KEY;
     }
     if (!apiKey) {
-      return errReply("AI API Key 未配置，请在平台管理→AI模型配置中设置。");
+      return errReply("AI 服务暂时不可用，请稍后重试。");
     }
     // 判断是否需要开启思考模式
     const isThinking = resolvedModel.endsWith("-thinking");
@@ -1559,10 +1588,10 @@ async function sendToDeepSeekAndGetReply(userMessage: string, model: string = "d
     } else {
       console.log(`[DeepSeek] 回复成功，长度=${finalContent.length}，tokens=${totalTokens}，cacheHit=${cacheHitTokens}`);
     }
-    return { content: finalContent, promptTokens, completionTokens, totalTokens, cacheHitTokens, modelUsed: apiModel };
+    return { content: finalContent, promptTokens, completionTokens, totalTokens, cacheHitTokens, modelUsed: apiModel, isFallback };
   } catch (e) {
-    console.error("[DeepSeek] 通信异常:", e);
-    return errReply("与 DeepSeek 通信时发生错误，请稍后重试。");
+    console.error("[AI] 通信异常:", e);
+    return errReply("AI 服务暂时不可用，请稍后重试。");
   }
 }
 
@@ -2126,10 +2155,10 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
           const inputTokensMiss = Math.max(0, dsReply.promptTokens - cacheHitTokens);
           const [insertResult] = await (dbConn as any).execute(
             `INSERT INTO wecom_message_credits
-             (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, input_tokens, output_tokens, cache_hit_tokens, model_used, reply_preview, channel_type)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, input_tokens, output_tokens, cache_hit_tokens, model_used, reply_preview, channel_type, is_fallback)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [fromUser, `kf-deepseek-${effectiveChannelId}`, userText.substring(0, 200), 0, dsReply.totalTokens, dsReply.totalTokens,
-             inputTokensMiss, dsReply.completionTokens, cacheHitTokens, dsReply.modelUsed || effectiveAiModel, dsReply.content.substring(0, 100), 'kf']
+             inputTokensMiss, dsReply.completionTokens, cacheHitTokens, dsReply.modelUsed || effectiveAiModel, dsReply.content.substring(0, 100), 'kf', dsReply.isFallback ? 1 : 0]
           );
           // 异步触发对话评分（不阻塞回复发送）
           const newLogId = (insertResult as any).insertId;
@@ -5829,8 +5858,8 @@ router.post("/api/wecom/web-chat", async (req: Request, res: Response) => {
     if (dbConn) {
       try {
         await (dbConn as any).execute(
-          `INSERT INTO wecom_message_credits (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, input_tokens, output_tokens, cache_hit_tokens, model_used, reply_preview, channel_type, channel_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'web', ?)`,
+          `INSERT INTO wecom_message_credits (wecom_user_id, manus_task_id, user_message, credits_before, credits_after, credits_used, input_tokens, output_tokens, cache_hit_tokens, model_used, reply_preview, channel_type, channel_id, is_fallback)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'web', ?, ?)`,
           [
             webUserId,
             `web-chat-${kfChannelId}`,
@@ -5841,7 +5870,8 @@ router.post("/api/wecom/web-chat", async (req: Request, res: Response) => {
             dsReply.cacheHitTokens || 0,
             dsReply.modelUsed || aiModel,
             dsReply.content.substring(0, 100),
-            kfChannelId
+            kfChannelId,
+            dsReply.isFallback ? 1 : 0
           ]
         );
       } catch (e) { console.error("[WEB-CHAT] 写入日志失败:", e); }

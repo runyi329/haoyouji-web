@@ -30,7 +30,8 @@ export type UseCase =
   | "ai_analyze"
   | "image_ocr"
   | "embedding"
-  | "voice_asr";  // 语音识别（Whisper/forgeApi）
+  | "voice_asr"  // 语音识别（Whisper/forgeApi）
+  | "chat_reply_fallback";  // 分身对话回复兜底模型（主模型失败时自动切换）
 
 // -------------------------------------------------------
 // 模型选项（供前端下拉框使用，含价格说明）
@@ -49,6 +50,7 @@ export interface ModelOption {
 // use_case 元数据（中文名称、说明、分类）
 export const USE_CASE_META: Record<string, { label: string; desc: string; category: "chat" | "vision" | "embedding" }> = {
   chat_reply:  { label: "分身对话回复",     desc: "分身自动回复客户消息，影响客户体验，建议用质量较好的模型",  category: "chat" },
+  chat_reply_fallback: { label: "分身对话回复（兜底）", desc: "主模型失败时自动切换，建议选永久免费模型（如智谱GLM-4-Flash）", category: "chat" },
   rule_reply:  { label: "规则触发回复",     desc: "客户触发特定关键词时的专属规则回复",                    category: "chat" },
   chat_score:  { label: "对话质量评分",     desc: "后台自动给每条对话打星，建议用免费模型",                category: "chat" },
   ai_organize: { label: "AI 辅助整理",       desc: "大白话输入→自动提炼指令+知识库条目，管理员操作",        category: "chat" },
@@ -96,6 +98,27 @@ export const MODEL_OPTIONS: ModelOption[] = [
     label: "混元 Pro（输入¥4/百万）",
     price_note: "输入¥4/百万token，输出¥16/百万token，最强旗舰版",
     api_base: "https://api.hunyuan.cloud.tencent.com/v1",
+    supports_vision: false,
+    supports_embedding: false,
+    category: "chat",
+  },
+  // ===== 智谱 GLM - 对话模型 =====
+  {
+    provider: "zhipu",
+    model_name: "glm-4-flash",
+    label: "智谱 GLM-4-Flash（永久免费）",
+    price_note: "永久免费，无限量，适合兜底场景",
+    api_base: "https://open.bigmodel.cn/api/paas/v4",
+    supports_vision: false,
+    supports_embedding: false,
+    category: "chat",
+  },
+  {
+    provider: "zhipu",
+    model_name: "glm-4-air",
+    label: "智谱 GLM-4-Air（输入¥1/百万）",
+    price_note: "输入¥1/百万token，输出¥1/百万token，高性价比",
+    api_base: "https://open.bigmodel.cn/api/paas/v4",
     supports_vision: false,
     supports_embedding: false,
     category: "chat",
@@ -196,6 +219,7 @@ const DEFAULT_CONFIGS: Record<string, { provider: string; model_name: string; ap
   image_ocr:   { provider: "hunyuan",  model_name: "hunyuan-turbos-vision",  api_key: "", api_base: "https://api.hunyuan.cloud.tencent.com/v1" },
   embedding:   { provider: "hunyuan",  model_name: "hunyuan-embedding",      api_key: "", api_base: "https://api.hunyuan.cloud.tencent.com/v1" },
   voice_asr:   { provider: "manus",    model_name: "whisper-1",              api_key: "", api_base: "" },
+  chat_reply_fallback: { provider: "zhipu", model_name: "glm-4-flash", api_key: "", api_base: "https://open.bigmodel.cn/api/paas/v4" },
 };
 
 export async function getAIConfigs(): Promise<Map<UseCase, AIModelConfig>> {
@@ -238,6 +262,14 @@ export async function getAIConfigs(): Promise<Map<UseCase, AIModelConfig>> {
 export async function getAIConfig(useCase: UseCase): Promise<AIModelConfig | null> {
   const map = await getAIConfigs();
   return map.get(useCase) ?? null;
+}
+
+/** 获取 chat_reply 的兜底配置（api_key 有值才返回） */
+export async function getAIFallbackConfig(): Promise<AIModelConfig | null> {
+  const map = await getAIConfigs();
+  const cfg = map.get("chat_reply_fallback") ?? null;
+  if (!cfg || !cfg.api_key) return null;
+  return cfg;
 }
 
 /** 保存单条配置，清空缓存 */
