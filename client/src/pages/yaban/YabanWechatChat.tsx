@@ -494,23 +494,21 @@ export default function YabanWechatChat() {
 
   return (
     <div
-      className="select-none"
+      className="select-none flex flex-col"
       style={{
         backgroundColor: "#ebebeb",
         fontFamily: "-apple-system, 'PingFang SC', sans-serif",
-        height: "100vh",
-        overflow: "hidden",
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
       }}
     >
-      {/* ===== 顶部导航栏（fixed定位，始终可见）===== */}
+      {/* ===== 顶部导航栏（flex子元素，flex-shrink-0，始终占据顶部空间）===== */}
       <div
-        className="flex items-center px-2 py-2 relative"
+        className="flex items-center px-2 py-2 relative flex-shrink-0"
         style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          right: 0,
-          zIndex: 20,
           backgroundColor: "#ededed",
           borderBottom: "0.5px solid #d0d0d0",
           paddingTop: "calc(env(safe-area-inset-top, 0px) + 8px)",
@@ -532,16 +530,14 @@ export default function YabanWechatChat() {
         </button>
       </div>
 
-      {/* ===== 消息列表（paddingTop为顶部导航栏留空间，paddingBottom为底部输入栏留空间）===== */}
+      {/* ===== 消息列表（flex:1占满中间，独立滚动）===== */}
       <div
         ref={messagesContainerRef}
-        className="overflow-y-auto px-4"
+        className="overflow-y-auto px-4 py-3"
         style={{
+          flex: 1,
           backgroundColor: "#ebebeb",
-          paddingTop: "calc(env(safe-area-inset-top, 0px) + 64px)",
-          paddingBottom: "160px",
-          height: "100vh",
-          boxSizing: "border-box",
+          overscrollBehavior: "contain",
         }}
         onClick={() => { setShowExtra(false); inputRef.current?.blur(); }}
       >
@@ -570,14 +566,10 @@ export default function YabanWechatChat() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* ===== 底部输入栏（fixed定位，键盘弹起时自动贴键盘顶部）===== */}
+      {/* ===== 底部输入栏（flex子元素，flex-shrink-0，始终占据底部空间）===== */}
       <div
         style={{
-          position: "fixed",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: 10,
+          flexShrink: 0,
           backgroundColor: "#f5f5f5",
           borderTop: "0.5px solid #d0d0d0",
           paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 4px)",
