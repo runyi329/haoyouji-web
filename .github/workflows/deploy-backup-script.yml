@@ -106,6 +106,7 @@ jobs:
           fi
           
           if [ -n "$COS_SECRET_ID" ]; then
+              set +e
               if date -v-60d >/dev/null 2>&1; then
                   CUTOFF_DATE=$(date -v-${KEEP_DAYS}d +"%Y%m%d")
               else
@@ -123,6 +124,7 @@ jobs:
               done
           fi
           
+          set -e
           log "备份任务完成"
           SCRIPT
           
