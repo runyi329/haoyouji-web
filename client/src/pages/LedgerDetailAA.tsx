@@ -365,6 +365,7 @@ export default function LedgerDetailAA({
   const [showCapitalHistory, setShowCapitalHistory] = useState(false);
   const [showWithdrawHistory, setShowWithdrawHistory] = useState(false);
   const [showPnlExplain, setShowPnlExplain] = useState(false);
+  const [showAllModeHelp, setShowAllModeHelp] = useState<'value' | 'pnl' | 'margin' | null>(null);
 
   // 客户端查看备注
   // 分红备注按标签维度：记录当前查看的标签名
@@ -525,6 +526,9 @@ export default function LedgerDetailAA({
   const [tooltipRatioTag, setTooltipRatioTag] = useState<string | null>(null);
   const [tooltipTodayPnlTag, setTooltipTodayPnlTag] = useState<string | null>(null);
   const [showTotalTodayTooltip, setShowTotalTodayTooltip] = useState(false);
+  const [overviewTab, setOverviewTab] = useState<'overview' | 'calendar' | 'chart'>('overview');
+  const overviewHeaderInnerRef = useRef<HTMLDivElement>(null); // 表头行内层div，用translateX同步横向位置
+  const overviewBodyScrollRef = useRef<HTMLDivElement>(null); // 数据行横向滚动容器
   const [overviewSort, setOverviewSort] = useState<{ col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend'; dir: 'asc' | 'desc' } | null>(null);
   const handleOverviewSort = (col: 'days' | 'ratio' | 'amount' | 'pnl' | 'annualized' | 'dividend') => {
     setOverviewSort(prev => prev && prev.col === col ? { col, dir: prev.dir === 'desc' ? 'asc' : 'desc' } : { col, dir: 'desc' });
@@ -650,6 +654,16 @@ export default function LedgerDetailAA({
     let totalPnl = 0;
     let hasCrypto = false;
     const cryptoMap: Record<string, { amount: number, cnyValue: number }> = {};
+    const perTagDetail: Array<{
+      tagName: string;
+      margin: number; marginCoin: string; marginCny: number;
+      initialBalance: number; capitalChange: number; effectiveInitial: number;
+      latestBalance: number; latestDate: string;
+      tagWithdraw: number;
+      ratio: number;
+      tagPnl: number;
+      hasData: boolean;
+    }> = [];
     categories.forEach((cat: any) => {
       const tagName = cat.name;
       // 保证金
@@ -703,14 +717,53 @@ export default function LedgerDetailAA({
       if (filteredTagDaysStats.length > 0) {
         const last = filteredTagDaysStats[filteredTagDaysStats.length - 1];
         const effectiveInitial = initialBalance + tagCapitalChange;
+        const tagPnl = effectiveInitial > 0 ? (effectiveInitial - last.balance - tagWithdraw) * ratio : 0;
         if (effectiveInitial > 0) {
-          // 盈亏 = (初始本金 + 增减本金 - 最新余额 - 累计提现) * ratio
-          totalPnl += (effectiveInitial - last.balance - tagWithdraw) * ratio;
+          totalPnl += tagPnl;
         }
+        const coinRaw2 = (initialBalancesData.balances as any)[`${tagName}__marginCoin`];
+        const coin2 = coinRaw2 ? String(coinRaw2) : '';
+        const marginNum = margin !== undefined && margin !== null ? Number(margin) : 0;
+        const price2 = coin2 && CRYPTO_COINS_AA.includes(coin2) ? (aaCryptoPrices[coin2] ?? 0) : 0;
+        perTagDetail.push({
+          tagName,
+          margin: marginNum,
+          marginCoin: coin2,
+          marginCny: coin2 && CRYPTO_COINS_AA.includes(coin2) ? marginNum * price2 : marginNum,
+          initialBalance,
+          capitalChange: tagCapitalChange,
+          effectiveInitial,
+          latestBalance: last.balance,
+          latestDate: last.date,
+          tagWithdraw,
+          ratio,
+          tagPnl,
+          hasData: true,
+        });
+      } else {
+        const coinRaw2 = (initialBalancesData.balances as any)[`${tagName}__marginCoin`];
+        const coin2 = coinRaw2 ? String(coinRaw2) : '';
+        const marginNum = margin !== undefined && margin !== null ? Number(margin) : 0;
+        const price2 = coin2 && CRYPTO_COINS_AA.includes(coin2) ? (aaCryptoPrices[coin2] ?? 0) : 0;
+        perTagDetail.push({
+          tagName,
+          margin: marginNum,
+          marginCoin: coin2,
+          marginCny: coin2 && CRYPTO_COINS_AA.includes(coin2) ? marginNum * price2 : marginNum,
+          initialBalance,
+          capitalChange: tagCapitalChange,
+          effectiveInitial: initialBalance + tagCapitalChange,
+          latestBalance: 0,
+          latestDate: '',
+          tagWithdraw,
+          ratio,
+          tagPnl: 0,
+          hasData: false,
+        });
       }
     });
     const cryptoDetails = Object.entries(cryptoMap).map(([coin, v]) => ({ coin, amount: v.amount, cnyValue: v.cnyValue }));
-    return { totalMargin, totalPnl, diff: totalMargin + totalPnl, hasCrypto, cryptoDetails };
+    return { totalMargin, totalPnl, diff: totalMargin + totalPnl, hasCrypto, cryptoDetails, perTagDetail };
   }, [initialBalancesData, categories, activeMemberTransactions, aaCryptoPrices, withdrawByTag, capitalByTag]);
 
   // ─── 统计数据 ─────────────────────────────────────────────────────────────
@@ -1264,12 +1317,12 @@ export default function LedgerDetailAA({
             </div>
           </div>
         </div>
-        {/* 第二行：刷新 + 返回（靠左）+ 标签下拉（充满剩余宽度） */}
-        <div className="px-4 pb-2 flex items-center gap-1.5 w-full">
+        {/* 第二行：刷新 + 返回 + AI数据（平铺整行） */}
+        <div className="px-4 pb-2 flex items-center gap-1.5">
               {/* 刷新按钮 */}
               <button
                 onClick={() => window.location.reload()}
-                className="w-16 flex-shrink-0 flex items-center justify-center h-9 rounded-full text-sm font-medium"
+                className="flex-1 flex items-center justify-center h-9 rounded-full text-sm font-medium"
                 style={{
                   backgroundColor: "rgba(255,255,255,0.9)",
                   color: "#D32F2F",
@@ -1281,7 +1334,7 @@ export default function LedgerDetailAA({
               {/* 返回按钮 */}
               <button
                 onClick={() => setLocation("/ledger")}
-                className="w-16 flex-shrink-0 flex items-center justify-center h-9 rounded-full text-sm font-medium"
+                className="flex-1 flex items-center justify-center h-9 rounded-full text-sm font-medium"
                 style={{
                   backgroundColor: "rgba(255,255,255,0.9)",
                   color: "#D32F2F",
@@ -1290,159 +1343,62 @@ export default function LedgerDetailAA({
               >
                 返回
               </button>
-
-            {/* 标签下拉选择器（全部按钮变大） */}
-            {categories && categories.length > 0 && (
-              <div className="relative flex-1">
-                <button
-                  onClick={() => setShowTagDropdown(!showTagDropdown)}
-                  className="w-full flex items-center justify-center gap-1 h-9 rounded-full text-sm font-semibold transition-all"
-                  style={{
-                    backgroundColor: selectedTag ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.2)",
-                    color: selectedTag ? "#D32F2F" : "#FFFFFF",
-                    border: "1px solid rgba(255,255,255,0.4)",
-                  }}
-                >
-                  <span>{selectedTagId === null ? "全部" : (selectedTag?.name ?? "全部")}</span>
-                  <ChevronDown className="w-3.5 h-3.5 flex-shrink-0" />
-                </button>
-
-                {showTagDropdown && (
-                  <>
-                    {/* 遮罩 */}
-                    <div
-                      className="fixed inset-0 z-40"
-                      onClick={() => setShowTagDropdown(false)}
-                    />
-                    {/* 下拉菜单 */}
-                    <div
-                      className="absolute right-0 top-full mt-1 rounded-xl shadow-lg z-50"
-                      style={{
-                        backgroundColor: "#FFFFFF",
-                        border: "1px solid #E0E0E0",
-                        minWidth: "140px",
-                        maxHeight: "calc(5 * 41px)",
-                        overflowY: "scroll",
-                        overflowX: "hidden",
-                      }}
-                    >
-                      {/* 全部（不筛选） */}
-                      <button
-                        onClick={() => { setSelectedTagId(null); setShowTagDropdown(false); }}
-                        className="w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[#FFEBEE]"
-                        style={{
-                          color: selectedTagId === null ? "#D32F2F" : "#222222",
-                          fontWeight: selectedTagId === null ? 600 : 400,
-                          borderBottom: "1px solid #F5F5F5",
-                        }}
-                      >
-                        全部
-                      </button>
-                      {[...categories]
-                        .sort((a: any, b: any) => {
-                          const balances = initialBalancesData?.balances ?? {};
-                          const aPaused = !!balances[`${a.name}__pauseDate`];
-                          const bPaused = !!balances[`${b.name}__pauseDate`];
-                          if (aPaused && !bPaused) return 1;
-                          if (!aPaused && bPaused) return -1;
-                          return 0;
-                        })
-                        .map((cat: any) => {
-                          const catPauseDate = initialBalancesData?.balances ? (initialBalancesData.balances as any)[`${cat.name}__pauseDate`] : null;
-                          const isCatPaused = !!catPauseDate;
-                          let pauseInfo = '';
-                          if (isCatPaused) {
-                            const [y, m, d] = catPauseDate.split('-');
-                            const pauseD = new Date(catPauseDate);
-                            const today = new Date();
-                            const diffDays = Math.floor((today.getTime() - pauseD.getTime()) / 86400000);
-                            pauseInfo = `(${Number(m)}月${Number(d)}日暂停，已${diffDays}天)`;
-                          }
-                          return (
-                            <button
-                              key={cat.id}
-                              onClick={() => { setSelectedTagId(cat.id); setShowTagDropdown(false); }}
-                              className="w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[#FFEBEE]"
-                              style={{
-                                fontWeight: selectedTagId === cat.id ? 600 : 400,
-                                borderBottom: "1px solid #F5F5F5",
-                              }}
-                            >
-                              <span style={{ color: selectedTagId === cat.id ? '#D32F2F' : '#222222' }}>{cat.name}</span>
-                              {isCatPaused && <span style={{ marginLeft: 4, fontSize: 11, color: '#1565C0' }}>{pauseInfo}</span>}
-                            </button>
-                          );
-                        })}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
+              {/* AI数据按钮 */}
+              <button
+                onClick={() => setLocation(`/ledger/${ledgerId}/ai-database`)}
+                className="flex-1 flex items-center justify-center h-9 rounded-full text-sm font-medium"
+                style={{
+                  backgroundColor: "rgba(255,255,255,0.9)",
+                  color: "#D32F2F",
+                  border: "1px solid rgba(255,255,255,0.4)",
+                }}
+              >
+                AI数据
+              </button>
         </div>
 
+
         {/* 4个统计卡片 */}
-        <div className="px-4 pb-3 grid grid-cols-2 gap-2">
+        <div className={`px-4 pb-3 grid gap-1.5 ${selectedTagId === null ? 'grid-cols-3' : 'grid-cols-2'}`}>
           {selectedTagId === null ? (
-            /* ─── 全部模式：保证金总和 + 盈亏总和 + 差値 ─── */
+            /* ─── 全部模式：价値 + 盈亏总计 + 保证金 ─── */
             <>
-              <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-                <div className="text-xs opacity-75 mb-0.5">保证金总计</div>
-                {allTagsStats.hasCrypto ? (
-                  <>
-                    {allTagsStats.cryptoDetails.map(d => (
-                      <div key={d.coin} className="text-base font-bold leading-tight">
-                        {d.amount.toLocaleString('zh-CN', { maximumFractionDigits: 4 })} {d.coin}
-                      </div>
-                    ))}
-                    <div className="text-xs opacity-60 mt-0.5">
-                      {allTagsStats.cryptoDetails.length > 0 && aaCryptoPrices[allTagsStats.cryptoDetails[0]?.coin]
-                        ? `≈ ¥${allTagsStats.totalMargin.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`
-                        : '≈ 获取中...'}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="text-base font-bold">
-                      ¥{allTagsStats.totalMargin.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </div>
-                    <div className="text-xs opacity-60 mt-0.5">全部保证金之和</div>
-                  </>
-                )}
-              </div>
-              <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
-                <div className="text-xs opacity-75 mb-0.5">数据总计</div>
-                <div className="text-base font-bold">
-                  {allTagsStats.totalPnl > 0 ? '+' : ''}¥{allTagsStats.totalPnl.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-                <div className="text-xs opacity-60 mt-0.5">全部统计之和</div>
-              </div>
-              <div className="rounded-xl p-2" style={{ backgroundColor: "rgba(255,255,255,0.12)" }}>
+              {/* 价値（第一个） */}
+              <div className="rounded-sm p-2 flex flex-col" style={{ backgroundColor: "rgba(15,23,42,0.45)" }}>
                 {(() => {
                   const totalDividend = Object.values(dividendByTag).reduce((s: number, v: any) => s + Number(v), 0);
                   const value = allTagsStats.diff - totalDividend;
                   return (
                     <>
-                      <div className="text-xs opacity-75 mb-0.5">价値（保证金 + 盈亏 - 分红）</div>
-                      <div className="text-base font-bold">
-                        {value > 0 ? '+' : ''}¥{value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </div>
-                      <div className="text-xs opacity-60 mt-0.5">
-                        已分红 ¥{totalDividend.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      <div className="text-[10px] opacity-75 flex items-center justify-end gap-0.5 mb-1">实时价値 <button onClick={() => setShowAllModeHelp('value')} className="inline-flex items-center justify-center active:opacity-60"><HelpCircle className="w-3 h-3 text-white/60" /></button></div>
+                      <div className="text-sm font-bold leading-tight text-right">
+                        {value > 0 ? '+' : ''}￥{value.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                       </div>
                     </>
                   );
                 })()}
               </div>
-              {/* AI数据库入口 */}
-              <div
-                className="rounded-xl p-2 cursor-pointer active:opacity-70 transition-opacity"
-                style={{ backgroundColor: "rgba(255,255,255,0.12)" }}
-                onClick={() => setLocation(`/ledger/${ledgerId}/ai-database`)}
-              >
-                <div className="text-xs opacity-75 mb-0.5">AI数据库</div>
-                <div className="text-base font-bold">进入 →</div>
-                <div className="text-xs opacity-60 mt-0.5">点击查看</div>
+              {/* 盈亏总计（第二个） */}
+              <div className="rounded-sm p-2 flex flex-col" style={{ backgroundColor: "rgba(15,23,42,0.45)" }}>
+                <div className="text-[10px] opacity-75 flex items-center justify-end gap-1 mb-1">实时波动 <button onClick={() => setShowAllModeHelp('pnl')} className="inline-flex items-center justify-center active:opacity-60"><HelpCircle className="w-3 h-3 text-white/60" /></button></div>
+                <div className="text-sm font-bold leading-tight text-right">
+                  {allTagsStats.totalPnl > 0 ? '+' : ''}￥{allTagsStats.totalPnl.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                </div>
               </div>
+              {/* 保证金（第三个） */}
+              <div className="rounded-sm p-2 flex flex-col" style={{ backgroundColor: "rgba(15,23,42,0.45)" }}>
+                <div className="text-[10px] opacity-75 flex items-center justify-end gap-1 mb-1">历史保证金 <button onClick={() => setShowAllModeHelp('margin')} className="inline-flex items-center justify-center active:opacity-60"><HelpCircle className="w-3 h-3 text-white/60" /></button></div>
+                {allTagsStats.hasCrypto ? (
+                  <div className="text-sm font-bold leading-tight text-right">
+                    {allTagsStats.cryptoDetails.map(d => `${d.amount.toLocaleString('zh-CN', { maximumFractionDigits: 2 })} ${d.coin}`).join(' + ')}
+                  </div>
+                ) : (
+                  <div className="text-sm font-bold leading-tight text-right">
+                    ￥{allTagsStats.totalMargin.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                  </div>
+                )}
+              </div>
+
             </>
           ) : (
             /* ─── 单标签模式：最新余额 + 保证金 + 初始金额 + 累计盈亏 ─── */
@@ -1612,6 +1568,55 @@ export default function LedgerDetailAA({
           )}
         </div>
       </div>
+
+      {/* 标签下拉（白色区域顶部，整行，始终可见） */}
+      {categories && categories.length > 0 && (
+        <div className="px-3 pt-3">
+          <div className="relative w-full">
+            <button
+              onClick={() => setShowTagDropdown(!showTagDropdown)}
+              className="w-full flex items-center justify-center gap-1 h-10 rounded-xl text-sm font-semibold transition-all bg-white shadow-sm"
+              style={{ color: selectedTag ? '#D32F2F' : '#888888', border: '1px solid #E0E0E0' }}
+            >
+              <span>{selectedTagId === null ? '全部' : (selectedTag?.name ?? '全部')}</span>
+              <ChevronDown className="w-3.5 h-3.5 flex-shrink-0" />
+            </button>
+            {showTagDropdown && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowTagDropdown(false)} />
+                <div className="absolute left-0 right-0 top-full mt-1 rounded-xl shadow-lg z-50 bg-white" style={{ border: '1px solid #E0E0E0', maxHeight: 'calc(5 * 41px)', overflowY: 'scroll' }}>
+                  <button onClick={() => { setSelectedTagId(null); setShowTagDropdown(false); }} className="w-full px-4 py-2.5 text-left text-sm hover:bg-[#FFEBEE]" style={{ color: selectedTagId === null ? '#D32F2F' : '#222222', fontWeight: selectedTagId === null ? 600 : 400, borderBottom: '1px solid #F5F5F5' }}>全部</button>
+                  {[...categories].sort((a: any, b: any) => {
+                    const balances = initialBalancesData?.balances ?? {};
+                    const aPaused = !!(balances as any)[`${a.name}__pauseDate`];
+                    const bPaused = !!(balances as any)[`${b.name}__pauseDate`];
+                    if (aPaused && !bPaused) return 1;
+                    if (!aPaused && bPaused) return -1;
+                    return 0;
+                  }).map((cat: any) => {
+                    const catPauseDate = initialBalancesData?.balances ? (initialBalancesData.balances as any)[`${cat.name}__pauseDate`] : null;
+                    const isCatPaused = !!catPauseDate;
+                    let pauseInfo = '';
+                    if (isCatPaused) {
+                      const [, m, d] = catPauseDate.split('-');
+                      const pauseD = new Date(catPauseDate);
+                      const today = new Date();
+                      const diffDays = Math.floor((today.getTime() - pauseD.getTime()) / 86400000);
+                      pauseInfo = `(${Number(m)}月${Number(d)}日暂停，已${diffDays}天)`;
+                    }
+                    return (
+                      <button key={cat.id} onClick={() => { setSelectedTagId(cat.id); setShowTagDropdown(false); }} className="w-full px-4 py-2.5 text-left text-sm hover:bg-[#FFEBEE]" style={{ fontWeight: selectedTagId === cat.id ? 600 : 400, borderBottom: '1px solid #F5F5F5' }}>
+                        <span style={{ color: selectedTagId === cat.id ? '#D32F2F' : '#222222' }}>{cat.name}</span>
+                        {isCatPaused && <span style={{ marginLeft: 4, fontSize: 11, color: '#1565C0' }}>{pauseInfo}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── 可滚动内容区域（全部模式下隐藏） ── */}
       <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch', display: selectedTagId === null ? 'none' : undefined }}>
@@ -2124,12 +2129,29 @@ export default function LedgerDetailAA({
           {/* ── 标签周期年化表格（在滚动容器内） ── */}
           {allTagsChartData.length > 0 && (
           <div className="mx-3 mt-3 rounded-2xl shadow-sm mb-4" style={{ backgroundColor: '#FFFFFF' }}>
-          {/* 表格标题行 */}
-          <div className="px-4 pt-3 pb-2 flex items-center justify-between border-b" style={{ borderColor: '#F5F5F5' }}>
-            <span className="text-sm font-bold" style={{ color: '#1A1A1A' }}>概览</span>
+          {/* 冻结头部：Tab行 + 表头行共用一个 sticky 容器，彻底消除缝隙 */}
+          <div style={{ position: 'sticky', top: 0, backgroundColor: '#fff', zIndex: 20 }}>
+          <div className="flex border-b" style={{ borderColor: '#F5F5F5' }}>
+            {(['overview', 'calendar', 'chart'] as const).map((tab) => {
+              const labels = { overview: '概览', calendar: '日历图', chart: '走势图' };
+              const active = overviewTab === tab;
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setOverviewTab(tab)}
+                  className="flex-1 py-2.5 text-sm font-medium transition-all"
+                  style={{
+                    color: active ? '#D32F2F' : '#9E9E9E',
+                    borderBottom: active ? '2px solid #D32F2F' : '2px solid transparent',
+                    backgroundColor: 'transparent',
+                  }}
+                >{labels[tab]}</button>
+              );
+            })}
           </div>
-          {/* 概览表格 - 用单个 Grid 容器包裹所有行，确保整列宽度一致 */}
-          {(() => {
+          </div>{/* 关闭大sticky容器 */}
+          {/* 概览表格数据行 */}
+          {overviewTab === 'overview' && (() => {
             const visibleTags = allTagsChartData.filter(tag => tag.points.length > 0);
             const validTags = visibleTags.filter(t => t.marginCny > 0);
             // 计算每个 tag 的数据
@@ -2213,8 +2235,8 @@ export default function LedgerDetailAA({
             // 内容宽度：前5列占满屏幕，占比/年化/分红固定宽度溢出
             const overviewInnerWidth = 'calc(100% + 172px)';
             // 表头行高与数据行一致：py-2
-            const cellCls = 'px-1 py-2 font-medium text-center';
-            const dataCellCls = 'px-1 py-2 text-center';
+            const cellCls = 'px-1 py-2 font-medium text-center flex items-center justify-center';
+            const dataCellCls = 'px-1 py-2 text-center flex items-center justify-center';
             const dataCellStyle = { whiteSpace: 'nowrap' as const };
             const dividerStyle = { backgroundColor: '#F0F0F0', width: 1, alignSelf: 'stretch' as const };
             // 排序箭头辅助
@@ -2224,6 +2246,8 @@ export default function LedgerDetailAA({
             };
             const sortHeaderCls = cellCls + ' cursor-pointer select-none';
             return (
+              <>
+              {/* 表头+数据行共用一个横向滚动容器，横向原生同步零延迟 */}
               <div
                 style={{
                   overflowX: 'auto',
@@ -2234,29 +2258,28 @@ export default function LedgerDetailAA({
                 }}
               >
               <div style={{ minWidth: '100%', width: overviewInnerWidth }}>
-              <div style={{ display: 'grid', gridTemplateColumns: gridCols }}>
-                {/* 表头行 */}
+              {/* 表头行 */}
+              <div style={{ display: 'grid', gridTemplateColumns: gridCols, backgroundColor: '#fff' }}>
                 <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E', fontSize: 12 }}>名称</span></div>
+                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }}><span style={{ color: '#9E9E9E' }}>{todayColTitle}</span></div>
+                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('pnl')}><span style={{ color: overviewSort?.col === 'pnl' ? '#1565C0' : '#9E9E9E' }}>回报¥</span><SortArrow col="pnl" /></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
                 <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('days')}><span style={{ color: overviewSort?.col === 'days' ? '#1565C0' : '#9E9E9E' }}>周期</span><SortArrow col="days" /></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
                 <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('amount')}><span style={{ color: overviewSort?.col === 'amount' ? '#1565C0' : '#9E9E9E' }}>金额¥</span><SortArrow col="amount" /></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                {/* 今日变动列标题：显示当天日期，非交易日加灰色标注 */}
-                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }}>
-                  <span style={{ color: '#9E9E9E' }}>{todayColTitle}</span>
-                </div>
-                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('pnl')}><span style={{ color: overviewSort?.col === 'pnl' ? '#1565C0' : '#9E9E9E' }}>回报¥</span><SortArrow col="pnl" /></div>
-                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                {/* 占比列移到回报后面（溢出区域） */}
                 <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('ratio')}><span style={{ color: overviewSort?.col === 'ratio' ? '#1565C0' : '#9E9E9E' }}>占比</span><SortArrow col="ratio" /></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
                 <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('annualized')}><span style={{ color: overviewSort?.col === 'annualized' ? '#1565C0' : '#9E9E9E' }}>年化</span><SortArrow col="annualized" /></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={cellCls + ' cursor-pointer'} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => { handleOverviewSort('dividend'); }}>
-                  <span style={{ color: overviewSort?.col === 'dividend' ? '#1565C0' : '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px' }} onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`); }}>分红¥</span><SortArrow col="dividend" />
+                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('dividend')}>
+                  <span style={{ color: '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px' }} onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`); }}>分红¥</span><SortArrow col="dividend" />
                 </div>
+              </div>
+              {/* 数据行 */}
+              <div style={{ display: 'grid', gridTemplateColumns: gridCols }}>
                 {/* 数据行 */}
                 {sortedTagData.map(({ tag, days, latestPnl, latestDate, todayPnl, prevPnl, latestBalance, prevBalance, annualized, divAmt, isLast, isPaused, firstDate, endDate }) => {
                       // 判断是否需要灰色：北京时间交易日 15:00后且最新数据不是今天
@@ -2284,49 +2307,6 @@ export default function LedgerDetailAA({
                           <div style={{ position: 'absolute', zIndex: 50, background: '#333', color: '#fff', borderRadius: 6, padding: '4px 8px', fontSize: 11, whiteSpace: 'nowrap', transform: 'translateY(-120%)', pointerEvents: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
                             {tag.name}
                           </div>
-                        )}
-                      </div>
-                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
-                      {/* 周期 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap', fontSize: 13 }}>
-                        {isPaused ? (
-                          <span
-                            style={{ display: 'inline-block', backgroundColor: '#1565C0', color: '#FFFFFF', borderRadius: 3, padding: '1px 3px', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                            onClick={() => {
-                              if (!firstDate || !endDate) return;
-                              const fmt = (d: string) => { const [y, m, dd] = d.split('-'); return `${Number(m)}月${Number(dd)}日`; };
-                              alert(`${fmt(firstDate)} ~ ${fmt(endDate)}，共 ${days} 天`);
-                            }}
-                          >{days > 0 ? `${days}天` : '--'}</span>
-                        ) : (
-                          <span
-                            style={{ color: '#424242', whiteSpace: 'nowrap', fontSize: 13, cursor: firstDate ? 'pointer' : 'default', textDecoration: firstDate ? 'underline' : 'none', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
-                            onClick={() => {
-                              if (!firstDate) return;
-                              const fmt = (d: string) => { const [y, m, dd] = d.split('-'); return `${Number(m)}月${Number(dd)}日`; };
-                              alert(`${fmt(firstDate)} ~ ${fmt(endDate)}（今天），共 ${days} 天`);
-                            }}
-                          >{days > 0 ? `${days}天` : '--'}</span>
-                        )}
-                      </div>
-                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
-                      {/* 金额 */}
-                      <div className="px-1 py-2 flex flex-col items-center justify-center" style={{ borderBottom: rowBorder }}>
-                        {tag.marginCny > 0 ? (
-                          <>
-                            <div
-                              onClick={(e) => { e.stopPropagation(); setMarginNoteTag(tag.name); }}
-                              style={{ fontSize: 13, lineHeight: 1, color: '#424242', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
-                            >{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}{(marginNoteCounts[tag.name] ?? 0) > 0 && (<sup style={{ fontSize: 9, color: '#1565C0', marginLeft: 1 }}>{marginNoteCounts[tag.name]}</sup>)}</div>
-                            {tag.marginCoin && CRYPTO_COINS_AA.includes(tag.marginCoin) && tag.marginRaw !== null && (
-                              <div style={{ fontSize: 9, marginTop: 2, lineHeight: 1, color: '#BDBDBD' }}>{tag.marginRaw} {tag.marginCoin}</div>
-                            )}
-                          </>
-                        ) : (
-                          <span
-                            onClick={(e) => { e.stopPropagation(); setMarginNoteTag(tag.name); }}
-                            style={{ fontSize: 13, color: '#424242', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
-                          >0</span>
                         )}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
@@ -2384,6 +2364,49 @@ export default function LedgerDetailAA({
                       {/* 回报 */}
                       <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap', fontSize: 13, color: _isStale ? '#BDBDBD' : latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
                         {latestPnl !== 0 ? `${latestPnl < 0 ? '-' : ''}${Math.abs(latestPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
+                      </div>
+                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
+                      {/* 周期（移到回报后面） */}
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap', fontSize: 13 }}>
+                        {isPaused ? (
+                          <span
+                            style={{ display: 'inline-block', backgroundColor: '#1565C0', color: '#FFFFFF', borderRadius: 3, padding: '1px 3px', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                            onClick={() => {
+                              if (!firstDate || !endDate) return;
+                              const fmt = (d: string) => { const [y, m, dd] = d.split('-'); return `${Number(m)}月${Number(dd)}日`; };
+                              alert(`${fmt(firstDate)} ~ ${fmt(endDate)}，共 ${days} 天`);
+                            }}
+                          >{days > 0 ? `${days}天` : '--'}</span>
+                        ) : (
+                          <span
+                            style={{ color: '#424242', whiteSpace: 'nowrap', fontSize: 13, cursor: firstDate ? 'pointer' : 'default', textDecoration: firstDate ? 'underline' : 'none', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
+                            onClick={() => {
+                              if (!firstDate) return;
+                              const fmt = (d: string) => { const [y, m, dd] = d.split('-'); return `${Number(m)}月${Number(dd)}日`; };
+                              alert(`${fmt(firstDate)} ~ ${fmt(endDate)}（今天），共 ${days} 天`);
+                            }}
+                          >{days > 0 ? `${days}天` : '--'}</span>
+                        )}
+                      </div>
+                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
+                      {/* 金额（周期后面） */}
+                      <div className="px-1 py-2 flex flex-col items-center justify-center" style={{ borderBottom: rowBorder }}>
+                        {tag.marginCny > 0 ? (
+                          <>
+                            <div
+                              onClick={(e) => { e.stopPropagation(); setMarginNoteTag(tag.name); }}
+                              style={{ fontSize: 13, lineHeight: 1, color: '#424242', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
+                            >{tag.marginCny.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}{(marginNoteCounts[tag.name] ?? 0) > 0 && (<sup style={{ fontSize: 9, color: '#1565C0', marginLeft: 1 }}>{marginNoteCounts[tag.name]}</sup>)}</div>
+                            {tag.marginCoin && CRYPTO_COINS_AA.includes(tag.marginCoin) && tag.marginRaw !== null && (
+                              <div style={{ fontSize: 9, marginTop: 2, lineHeight: 1, color: '#BDBDBD' }}>{tag.marginRaw} {tag.marginCoin}</div>
+                            )}
+                          </>
+                        ) : (
+                          <span
+                            onClick={(e) => { e.stopPropagation(); setMarginNoteTag(tag.name); }}
+                            style={{ fontSize: 13, color: '#424242', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
+                          >0</span>
+                        )}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 占比（移到回报后面） */}
@@ -2521,13 +2544,12 @@ export default function LedgerDetailAA({
               </div>
               </div>
               </div>
+              </>
             );
           })()}
-          </div>
-          )}
 
-          {/* ── 汇总日历（概览下方，走势上方）── */}
-          {allTagsChartData.filter(t => t.points.length > 0).length > 0 && (() => {
+          {/* ── 汇总日历（日历图 Tab）── */}
+          {overviewTab === 'calendar' && allTagsChartData.filter(t => t.points.length > 0).length > 0 && (() => {
             // 构建每日汇总数据：按日期聚合所有标签的当日变动（用户视角 = 昨日balance - 今日balance × ratio）
             // 只计入「该日有数据 且 前一日也有数据」的标签
             const summaryDayMap = new Map<string, { total: number; tags: { name: string; val: number }[] }>();
@@ -2560,7 +2582,7 @@ export default function LedgerDetailAA({
             const sGetDateStr = (day: number) => `${sy}-${String(sm + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const sToday = new Date();
             return (
-              <div className="mx-3 mt-2 rounded-2xl overflow-hidden shadow-sm mb-4" style={{ backgroundColor: '#FFFFFF' }}>
+              <div style={{ backgroundColor: '#FFFFFF' }}>
                 <div className="px-3 pt-3 pb-2">
                   {/* 月份导航 */}
                   <div className="flex items-center justify-between mb-2">
@@ -2630,7 +2652,7 @@ export default function LedgerDetailAA({
             );
           })()}
 
-          <div className="mx-3 mt-2 rounded-2xl shadow-sm mb-4" style={{ backgroundColor: '#FFFFFF' }}>
+          {overviewTab === 'chart' && <div style={{ backgroundColor: '#FFFFFF' }}>
             {/* 图表标题行 */}
             <div className="px-4 pt-4 pb-1 flex items-center justify-between">
               <div>
@@ -3043,7 +3065,9 @@ export default function LedgerDetailAA({
                 );
               })}
             </div>
+          </div>}
           </div>
+          )}
         </div>
       )}
 
@@ -3565,6 +3589,138 @@ export default function LedgerDetailAA({
           </div>
         );
       })()}
+
+      {/* ── 全部模式说明弹窗 ── */}
+      {showAllModeHelp && (
+        <div className="fixed inset-0 z-[500] flex items-center justify-center" onClick={() => setShowAllModeHelp(null)}>
+          <div className="absolute inset-0 bg-black/50" />
+          <div className="relative bg-white rounded-2xl w-[88%] max-w-sm max-h-[80vh] overflow-hidden shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #F0F0F0' }}>
+              <div className="text-base font-bold text-gray-800">
+                {showAllModeHelp === 'value' ? '「实时价値」计算说明' : showAllModeHelp === 'pnl' ? '「实时波动」计算说明' : '「历史保证金」说明'}
+              </div>
+              <button onClick={() => setShowAllModeHelp(null)} className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+            <div className="px-5 py-4 overflow-y-auto max-h-[65vh] text-sm text-gray-700 space-y-3">
+              {(() => {
+                const totalDividend = Object.values(dividendByTag).reduce((s: number, v: any) => s + Number(v), 0);
+                const perTag = allTagsStats.perTagDetail ?? [];
+                const fmt = (n: number) => (n >= 0 ? '+' : '') + '￥' + Math.abs(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const fmtAbs = (n: number) => '￥' + Math.abs(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+                if (showAllModeHelp === 'value') {
+                  const value = allTagsStats.diff - totalDividend;
+                  return (
+                    <>
+                      <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">公式：价値 = 保证金总和 + 盈亏总和 − 已分红总金额</div>
+                      <div className="font-semibold text-gray-900">① 保证金总和
+                        <span className="ml-2 font-mono text-red-600">{fmtAbs(allTagsStats.totalMargin)}</span>
+                        <span className="ml-1 text-xs font-normal text-gray-400">(客户投入的本金基数)</span>
+                      </div>
+                      <div className="font-semibold text-gray-900">② 盈亏总和
+                        <span className={`ml-2 font-mono ${allTagsStats.totalPnl >= 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(allTagsStats.totalPnl)}</span>
+                        <span className="ml-1 text-xs font-normal text-gray-400">(全部标签客户盈亏加总)</span>
+                      </div>
+                      <div className="font-semibold text-gray-900">③ 已分红总金额
+                        <span className="ml-2 font-mono text-gray-700">−{fmtAbs(totalDividend)}</span>
+                        <span className="ml-1 text-xs font-normal text-gray-400">(历史已分配给客户的分红，已包含在盈亏中故需扣除)</span>
+                      </div>
+                      <div className="pt-3" style={{ borderTop: '2px solid #F0F0F0' }}>
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-gray-900">价値</span>
+                          <span className={`text-lg font-bold ${value >= 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(value)}</span>
+                        </div>
+                        <div className="text-xs text-gray-400 mt-1">{fmtAbs(allTagsStats.totalMargin)} + ({fmt(allTagsStats.totalPnl)}) − {fmtAbs(totalDividend)} = {fmt(value)}</div>
+                      </div>
+                    </>
+                  );
+                }
+
+                if (showAllModeHelp === 'pnl') {
+                  return (
+                    <>
+                      <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">公式：客户盈亏 = −(最新余额 + 提现 − 实际本金) × 占比，标签赢 = 客户亏</div>
+                      {perTag.map((t, i) => (
+                        <div key={t.tagName} className="bg-gray-50 rounded-lg px-3 py-2 space-y-1">
+                          <div className="font-semibold text-gray-900 text-xs">标签「{t.tagName}」</div>
+                          {!t.hasData ? (
+                            <div className="text-xs text-gray-400">暂无余额记录，跳过</div>
+                          ) : (
+                            <>
+                              <div className="text-xs text-gray-600">
+                                实际本金：{fmtAbs(t.initialBalance)}
+                                {t.capitalChange !== 0 && <span className="text-gray-400"> + 增减本金{fmt(t.capitalChange)}</span>}
+                                {' = '}<span className="font-medium">{fmtAbs(t.effectiveInitial)}</span>
+                                <span className="text-gray-400 ml-1">(初始本金{t.capitalChange !== 0 ? '+中途变动' : ''})</span>
+                              </div>
+                              <div className="text-xs text-gray-600">
+                                最新余额：<span className="font-medium">{fmtAbs(t.latestBalance)}</span>
+                                <span className="text-gray-400 ml-1">({t.latestDate} 登记)</span>
+                              </div>
+                              {t.tagWithdraw > 0 && (
+                                <div className="text-xs text-gray-600">累计提现：<span className="font-medium">{fmtAbs(t.tagWithdraw)}</span><span className="text-gray-400 ml-1">(历史提现总和)</span></div>
+                              )}
+                              <div className="text-xs text-gray-600">
+                                占比：<span className="font-medium">{(t.ratio * 100).toFixed(0)}%</span>
+                                <span className="text-gray-400 ml-1">(客户承担比例)</span>
+                              </div>
+                              <div className="text-xs font-mono text-gray-500">
+                                = −({fmtAbs(t.latestBalance)} + {fmtAbs(t.tagWithdraw)} − {fmtAbs(t.effectiveInitial)}) × {(t.ratio*100).toFixed(0)}%
+                              </div>
+                              <div className={`text-xs font-bold ${t.tagPnl >= 0 ? 'text-red-600' : 'text-green-600'}`}>本标签盈亏 = {fmt(t.tagPnl)}</div>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                      <div className="pt-3" style={{ borderTop: '2px solid #F0F0F0' }}>
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-gray-900">盈亏总和</span>
+                          <span className={`text-lg font-bold ${allTagsStats.totalPnl >= 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(allTagsStats.totalPnl)}</span>
+                        </div>
+                        <div className="text-xs text-gray-400 mt-1">{perTag.filter(t => t.hasData).map(t => fmt(t.tagPnl)).join(' + ')} = {fmt(allTagsStats.totalPnl)}</div>
+                      </div>
+                    </>
+                  );
+                }
+
+                if (showAllModeHelp === 'margin') {
+                  return (
+                    <>
+                      <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">保证金是客户投入的本金，是计算盈亏和收益率的基准。下列为每个标签的保证金明细：</div>
+                      {perTag.map((t) => (
+                        <div key={t.tagName} className="bg-gray-50 rounded-lg px-3 py-2">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-gray-900 text-xs">标签「{t.tagName}」</span>
+                            <span className="font-mono text-sm font-bold text-gray-800">
+                              {t.marginCoin && CRYPTO_COINS_AA.includes(t.marginCoin)
+                                ? `${t.margin} ${t.marginCoin}`
+                                : fmtAbs(t.margin)}
+                            </span>
+                          </div>
+                          {t.marginCoin && CRYPTO_COINS_AA.includes(t.marginCoin) && (
+                            <div className="text-xs text-gray-400 mt-0.5">≈ {fmtAbs(t.marginCny)}（按实时价格折算）</div>
+                          )}
+                          <div className="text-xs text-gray-400 mt-0.5">本金基数：{fmtAbs(t.initialBalance)}{t.capitalChange !== 0 ? `，增减${fmt(t.capitalChange)}，实际${fmtAbs(t.effectiveInitial)}` : ''}</div>
+                        </div>
+                      ))}
+                      <div className="pt-3" style={{ borderTop: '2px solid #F0F0F0' }}>
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-gray-900">保证金总和</span>
+                          <span className="text-lg font-bold text-gray-900">{fmtAbs(allTagsStats.totalMargin)}</span>
+                        </div>
+                        {allTagsStats.hasCrypto && <div className="text-xs text-gray-400 mt-1">数字币已按实时价格折算为人民币加总</div>}
+                      </div>
+                    </>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── 悬浮加号按鈕（仅管理员/创建者可见，且「2026 AA」账本除外；观察非管理员视角时隐藏） ── */}
       {canEdit && !hideFloatingAddButton && (() => {

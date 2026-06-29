@@ -1,7 +1,17 @@
-import { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef } from 'react';
 import { useLocation, useParams } from "wouter";
 import { ArrowLeft, ChevronDown, ChevronRight, DollarSign } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+
+// 持币量格式化：整数位数 + 小数位数 = 5位，不足补0
+function formatQty(val: string | number): string {
+  const n = parseFloat(String(val) || '0');
+  if (isNaN(n)) return '0.0000';
+  const intPart = Math.floor(Math.abs(n)).toString();
+  const intLen = intPart === '0' ? 1 : intPart.length;
+  const decLen = Math.max(0, 5 - intLen);
+  return n.toFixed(decLen);
+}
 
 const now = new Date();
 const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -59,9 +69,20 @@ export default function AfFeeDetail() {
   const ledgerId = params?.id ? parseInt(params.id) : 0;
 
   const [expandedUsers, setExpandedUsers] = useState<Set<string>>(new Set());
-  const [feeFilter, setFeeFilter] = useState<'all' | 'ongoing' | 'settled' | 'byDate' | 'byPerson'>('all');
+  const [feeFilter, setFeeFilter] = useState<'all' | 'ongoing' | 'settled' | 'byDate' | 'byPerson' | 'byCoin'>('all');
+  const [expandedCoins, setExpandedCoins] = useState<Set<string>>(new Set());
+  const toggleCoin = (c: string) => setExpandedCoins(prev => { const n = new Set(prev); n.has(c) ? n.delete(c) : n.add(c); return n; });
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
   const toggleDate = (d: string) => setExpandedDates(prev => { const n = new Set(prev); n.has(d) ? n.delete(d) : n.add(d); return n; });
+  type DateSortKey = 'nickname' | 'id' | 'tier' | 'coin' | 'quantity' | 'amount' | 'dailyFee';
+  const [dateSortConfig, setDateSortConfig] = useState<Record<string, { key: DateSortKey; asc: boolean }>>({});
+  const handleDateSort = (dateKey: string, key: DateSortKey) => {
+    setDateSortConfig(prev => {
+      const cur = prev[dateKey];
+      if (cur && cur.key === key) return { ...prev, [dateKey]: { key, asc: !cur.asc } };
+      return { ...prev, [dateKey]: { key, asc: false } };
+    });
+  };
   const [expandedPersons, setExpandedPersons] = useState<Set<string>>(new Set());
   const togglePerson = (uid: string) => setExpandedPersons(prev => { const n = new Set(prev); n.has(uid) ? n.delete(uid) : n.add(uid); return n; });
   const [aprInfo, setAprInfo] = useState<any | null>(null);
@@ -268,25 +289,31 @@ export default function AfFeeDetail() {
 
       {/* ── 筛选 Tab（仅谷底增筹） ── */}
       {mainTab === 'gujian' && (
-      <div className="bg-white border-b border-gray-100 px-4 py-2.5 flex gap-2 sticky top-0 z-10">
-        {([
-          { key: 'all' as const, label: `全部 ${userGroups.length} 人` },
-          { key: 'ongoing' as const, label: '进行中' },
-          { key: 'settled' as const, label: '已结清' },
-          { key: 'byDate' as const, label: '按日期' },
-          { key: 'byPerson' as const, label: '按人员' },
-        ]).map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setFeeFilter(tab.key)}
-            className="px-3 py-1 rounded-full text-xs font-medium transition-all"
-            style={feeFilter === tab.key
-              ? { background: '#2563eb', color: '#fff' }
-              : { background: '#eff2f9', color: '#6b7280' }}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="bg-white border-b border-gray-100 px-3 py-2 sticky top-0 z-10">
+        <div className="flex gap-2 mb-2">
+          {(['all', 'ongoing', 'settled'] as const).map(key => {
+            const label = key === 'all' ? `全部 ${userGroups.length} 人` : key === 'ongoing' ? '进行中' : '已结清';
+            return (
+              <button key={key} onClick={() => setFeeFilter(key)}
+                className="flex-1 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap"
+                style={feeFilter === key ? { background: '#2563eb', color: '#fff' } : { background: '#eff2f9', color: '#6b7280' }}>
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex gap-2">
+          {(['byDate', 'byPerson', 'byCoin'] as const).map(key => {
+            const label = key === 'byDate' ? '按日期' : key === 'byPerson' ? '按人员' : '按币种';
+            return (
+              <button key={key} onClick={() => setFeeFilter(key)}
+                className="flex-1 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap"
+                style={feeFilter === key ? { background: '#2563eb', color: '#fff' } : { background: '#eff2f9', color: '#6b7280' }}>
+                {label}
+              </button>
+            );
+          })}
+        </div>
       </div>
       )}
 
@@ -334,7 +361,7 @@ export default function AfFeeDetail() {
           return (
             <div className="space-y-2">
               {/* 预测卡片 */}
-              <div className="rounded-2xl shadow-sm px-4 py-3 flex gap-3" style={{background:'linear-gradient(135deg,#eff6ff 0%,#e0f2fe 100%)',border:'1px solid #bfdbfe'}}>
+              <div className="rounded shadow-sm px-4 py-3 flex gap-3" style={{background:'linear-gradient(135deg,#eff6ff 0%,#e0f2fe 100%)',border:'1px solid #bfdbfe'}}>
                 <div className="flex-1 text-center">
                   <p className="text-[10px] text-gray-400 mb-1">每日（当前）</p>
                   <p className="text-sm font-bold text-gray-700">{currentDailyTotal.toFixed(2)} <span className="text-[10px] font-normal text-gray-400">U/天</span></p>
@@ -355,12 +382,27 @@ export default function AfFeeDetail() {
                 const totalFee = items.reduce((s, i) => s + i.dailyFee, 0);
                 const totalOrders = items.length;
                 const isOpen = expandedDates.has(dateKey);
+                const _dsc = dateSortConfig[dateKey] || { key: 'dailyFee' as DateSortKey, asc: false };
+                const _sortKey = _dsc.key;
+                const _sortAsc = _dsc.asc;
+                const sortedItems = [...items].sort((a, b) => {
+                  let av: any, bv: any;
+                  if (_sortKey === 'nickname') { av = (a.nickname || a.username || '').toLowerCase(); bv = (b.nickname || b.username || '').toLowerCase(); return _sortAsc ? av.localeCompare(bv) : bv.localeCompare(av); }
+                  if (_sortKey === 'id') { av = String(a.id).padStart(4,'0').slice(-4); bv = String(b.id).padStart(4,'0').slice(-4); return _sortAsc ? av.localeCompare(bv) : bv.localeCompare(av); }
+                  if (_sortKey === 'tier') { av = (a as any).tierMode === 'linear' ? 'L' : `D${a.equityTier}`; bv = (b as any).tierMode === 'linear' ? 'L' : `D${b.equityTier}`; return _sortAsc ? av.localeCompare(bv) : bv.localeCompare(av); }
+                  if (_sortKey === 'coin') { av = (a.coin||'').toLowerCase(); bv = (b.coin||'').toLowerCase(); return _sortAsc ? av.localeCompare(bv) : bv.localeCompare(av); }
+                  if (_sortKey === 'quantity') { av = parseFloat((a as any).quantity||'0'); bv = parseFloat((b as any).quantity||'0'); }
+                  else if (_sortKey === 'amount') { av = parseFloat(a.amount||'0'); bv = parseFloat(b.amount||'0'); }
+                  else { av = a.dailyFee; bv = b.dailyFee; }
+                  return _sortAsc ? av - bv : bv - av;
+                });
+                const sortIcon = (key: DateSortKey) => _sortKey === key ? (_sortAsc ? ' ↑' : ' ↓') : '';
                 const parts = dateKey.split('-');
                 const shortDate = `${parseInt(parts[1])}月${parseInt(parts[2])}日`;
                 return (
-                  <div key={dateKey} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                  <div key={dateKey} className="bg-white rounded shadow-sm overflow-hidden">
                     <button
-                      onClick={() => toggleDate(dateKey)}
+                      onClick={(e) => { e.stopPropagation(); toggleDate(dateKey); }}
                       className="w-full flex items-center justify-between px-4 py-3"
                     >
                       <div className="flex items-center gap-2">
@@ -378,26 +420,32 @@ export default function AfFeeDetail() {
                         <table className="w-full" style={{ borderCollapse: 'collapse' }}>
                           <thead>
                             <tr className="bg-gray-50">
-                              <th className="text-[9px] font-normal text-gray-400 text-left px-3 py-1 border-r border-b border-gray-200">用户</th>
-                              <th className="text-[9px] font-normal text-gray-400 text-center px-2 py-1 border-r border-b border-gray-200 w-12">币种</th>
-                              <th className="text-[9px] font-normal text-gray-400 text-right px-2 py-1 border-r border-b border-gray-200 w-18">持仓金额</th>
-                              <th className="text-[9px] font-normal text-gray-400 text-right px-3 py-1 border-b border-gray-200 w-20">当日费用(U)</th>
+                              <th onClick={() => handleDateSort(dateKey, 'nickname')} className="text-[9px] font-normal text-gray-400 text-left px-3 py-1 border-r border-b border-gray-200 cursor-pointer select-none">用户{sortIcon('nickname')}</th>
+                              <th onClick={() => handleDateSort(dateKey, 'id')} className="text-[9px] font-normal text-gray-400 text-center px-2 py-1 border-r border-b border-gray-200 w-10 cursor-pointer select-none">尾号{sortIcon('id')}</th>
+                              <th onClick={() => handleDateSort(dateKey, 'tier')} className="text-[9px] font-normal text-gray-400 text-center px-2 py-1 border-r border-b border-gray-200 w-10 cursor-pointer select-none">档位{sortIcon('tier')}</th>
+                              <th onClick={() => handleDateSort(dateKey, 'coin')} className="text-[9px] font-normal text-gray-400 text-center px-2 py-1 border-r border-b border-gray-200 w-12 cursor-pointer select-none">币种{sortIcon('coin')}</th>
+                              <th onClick={() => handleDateSort(dateKey, 'quantity')} className="text-[9px] font-normal text-gray-400 text-right px-2 py-1 border-r border-b border-gray-200 w-14 cursor-pointer select-none">持币量{sortIcon('quantity')}</th>
+                              <th onClick={() => handleDateSort(dateKey, 'amount')} className="text-[9px] font-normal text-gray-400 text-right px-2 py-1 border-r border-b border-gray-200 w-16 cursor-pointer select-none">持仓金额{sortIcon('amount')}</th>
+                              <th onClick={() => handleDateSort(dateKey, 'dailyFee')} className="text-[9px] font-normal text-gray-400 text-right px-3 py-1 border-b border-gray-200 w-18 cursor-pointer select-none">当日费用{sortIcon('dailyFee')}</th>
                             </tr>
                           </thead>
                           <tbody>
-                          {items.sort((a, b) => b.dailyFee - a.dailyFee).map((item, idx) => (
+                          {sortedItems.map((item, idx) => (
                             <tr key={item.id} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
                               <td className="text-[11px] font-medium text-gray-700 truncate px-3 py-1.5 border-r border-gray-200 max-w-0" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.nickname || item.username}</td>
+                              <td className="text-[10px] text-gray-400 text-center px-2 py-1.5 border-r border-gray-200 font-mono">{String(item.id).padStart(4, '0').slice(-4)}</td>
+                              <td className="text-[10px] text-center px-2 py-1.5 border-r border-gray-200 font-semibold" style={{ color: (item as any).tierMode === 'linear' ? '#3B82F6' : '#0d9488' }}>{(item as any).tierMode === 'linear' ? 'L' : `D${item.equityTier}`}</td>
                               <td className="text-[10px] text-gray-400 text-center px-2 py-1.5 border-r border-gray-200">{item.coin}</td>
+                              <td className="text-[10px] text-gray-400 text-right px-2 py-1.5 border-r border-gray-200">{formatQty((item as any).quantity||'0')}</td>
                               <td className="text-[10px] text-gray-400 text-right px-2 py-1.5 border-r border-gray-200">{Math.round(parseFloat(item.amount||'0'))}u</td>
-                              <td className="text-[11px] font-bold text-gray-800 text-right px-3 py-1.5">{item.dailyFee.toFixed(4)}</td>
+                              <td className="text-[11px] font-bold text-gray-800 text-right px-3 py-1.5">{item.dailyFee.toFixed(2)}</td>
                             </tr>
                           ))}
                           </tbody>
                           <tfoot>
                             <tr className="bg-gray-50">
-                              <td className="text-[10px] text-gray-500 font-semibold px-3 py-1.5 border-t border-gray-200" colSpan={3}>当日合计</td>
-                              <td className="text-xs font-bold text-blue-600 text-right px-3 py-1.5 border-t border-gray-200">{totalFee.toFixed(4)}</td>
+                              <td className="text-[10px] text-gray-500 font-semibold px-3 py-1.5 border-t border-gray-200" colSpan={6}>当日合计</td>
+                              <td className="text-xs font-bold text-blue-600 text-right px-3 py-1.5 border-t border-gray-200">{totalFee.toFixed(2)}</td>
                             </tr>
                           </tfoot>
                         </table>
@@ -418,13 +466,14 @@ export default function AfFeeDetail() {
         {isLoading ? (
           <div className="text-center py-16 text-gray-400 text-sm">加载中…</div>
         ) : (() => {
-          const personMap = new Map<string, { nickname: string; userId: number; dailyTotal: number; orders: typeof feeItems }>();
+          const personMap = new Map<string, { nickname: string; username: string; userId: number; dailyTotal: number; orders: typeof feeItems }>();
           for (const item of feeItems) {
             if (item.feeType === 'settled') continue;
             const uid = String(item.userId || item.username || 'unknown');
             const nickname = item.nickname || item.username || uid;
             const numericUserId = parseInt(uid);
-            if (!personMap.has(uid)) personMap.set(uid, { nickname, userId: Number.isFinite(numericUserId) ? numericUserId : 0, dailyTotal: 0, orders: [] });
+            const username = item.username || '';
+            if (!personMap.has(uid)) personMap.set(uid, { nickname, username, userId: Number.isFinite(numericUserId) ? numericUserId : 0, dailyTotal: 0, orders: [] });
             const p = personMap.get(uid)!;
             p.dailyTotal += item.dailyFee;
             p.orders.push(item);
@@ -437,7 +486,7 @@ export default function AfFeeDetail() {
                 const uid = person.nickname;
                 const isOpen = expandedPersons.has(uid);
                 return (
-                  <div key={uid} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                  <div key={uid} className="bg-white rounded shadow-sm overflow-hidden">
                     <button
                       onClick={() => togglePerson(uid)}
                       className="w-full px-4 py-3 text-left"
@@ -445,6 +494,9 @@ export default function AfFeeDetail() {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-bold text-gray-800">{person.nickname}</span>
+                          {person.username && person.username !== person.nickname && (
+                            <span className="text-[10px] text-gray-400">@{person.username}</span>
+                          )}
                           <span className="text-xs text-gray-400">{person.orders.length}单</span>
                         </div>
                         <div className="flex items-center gap-2">
@@ -476,7 +528,7 @@ export default function AfFeeDetail() {
                             {walletBal !== null && (
                               walletBal >= pendingFee
                                 ? <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: '#fee2e2', color: '#dc2626' }}>充足</span>
-                                : <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: '#dcfce7', color: '#15803d' }}>待补 <span style={{color:'#15803d'}}>{(pendingFee - walletBal).toFixed(2)}</span> <span className="text-gray-400 font-normal">u</span></span>
+                                : <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: '#dcfce7', color: '#15803d' }}>补 <span style={{color:'#15803d'}}>{(pendingFee - walletBal).toFixed(2)}</span> <span className="text-gray-400 font-normal">u</span></span>
                             )}
                           </div>
                         );
@@ -543,8 +595,137 @@ export default function AfFeeDetail() {
       </div>
       )}
 
+      {/* ── 谷底增筹：按币种视图 ── */}
+      {mainTab === 'gujian' && feeFilter === 'byCoin' && (
+      <div className="px-3 pt-3 pb-10">
+        {isLoading ? (
+          <div className="text-center py-16 text-gray-400 text-sm">加载中…</div>
+        ) : (() => {
+          // 按币种聚合（只统计进行中订单）
+          type CoinGroup = { coin: string; dailyTotal: number; totalHolding: number; totalQty: number; orderCount: number; userCount: number; orders: ReturnType<typeof calcFeeItem>[] };
+          const coinMap = new Map<string, CoinGroup>();
+          for (const item of feeItems) {
+            if (item.feeType === 'settled') continue;
+            const coin = item.coin || 'OTHER';
+            if (!coinMap.has(coin)) coinMap.set(coin, { coin, dailyTotal: 0, totalHolding: 0, totalQty: 0, orderCount: 0, userCount: 0, orders: [] });
+            const g = coinMap.get(coin)!;
+            g.dailyTotal += item.dailyFee;
+            g.totalHolding += parseFloat(item.amount || '0');
+            g.totalQty += parseFloat((item as any).quantity || '0');
+            g.orderCount += 1;
+            g.orders.push(item);
+          }
+          // 每个币种的独立用户数
+          Array.from(coinMap.values()).forEach(g => {
+            g.userCount = new Set(g.orders.map((o: any) => String(o.userId || o.username))).size;
+          });
+          const coins = Array.from(coinMap.values()).sort((a, b) => b.dailyTotal - a.dailyTotal);
+          if (coins.length === 0) return <div className="text-center py-16 text-gray-400 text-sm">暂无进行中订单</div>;
+          // 全局汇总
+          const grandDaily = coins.reduce((s, c) => s + c.dailyTotal, 0);
+          const grandHolding = coins.reduce((s, c) => s + c.totalHolding, 0);
+          return (
+            <div className="space-y-2">
+              {/* 汇总卡片 */}
+              <div className="rounded shadow-sm px-4 py-3 flex gap-3" style={{background:'linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%)',border:'1px solid #bbf7d0'}}>
+                <div className="flex-1 text-center">
+                  <p className="text-[10px] text-gray-400 mb-1">共{coins.length}种币</p>
+                  <p className="text-[11px] font-bold text-gray-700 leading-snug">{coins.map(c=>c.coin).join('  ')}</p>
+                </div>
+                <div className="w-px bg-gray-100" />
+                <div className="flex-1 text-center">
+                  <p className="text-[10px] text-gray-400 mb-1">每日合计</p>
+                  <p className="text-sm font-bold text-blue-600">{grandDaily.toFixed(2)} <span className="text-[10px] font-normal text-gray-400">U/天</span></p>
+                </div>
+                <div className="w-px bg-gray-100" />
+                <div className="flex-1 text-center">
+                  <p className="text-[10px] text-gray-400 mb-1">持仓总金额</p>
+                  <p className="text-sm font-bold text-emerald-600">{Math.round(grandHolding)} <span className="text-[10px] font-normal text-gray-400">U</span></p>
+                </div>
+              </div>
+              {coins.map(cg => {
+                const isOpen = expandedCoins.has(cg.coin);
+                return (
+                  <div key={cg.coin} className="bg-white rounded shadow-sm overflow-hidden">
+                    <button
+                      onClick={() => toggleCoin(cg.coin)}
+                      className="w-full px-4 py-3 text-left"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-gray-800">{cg.coin}</span>
+                          <span className="text-xs text-gray-400">{cg.orderCount}单 / {cg.userCount}人</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold text-blue-600">{cg.dailyTotal.toFixed(2)}</span>
+                          <span className="text-[10px] text-gray-400">U/天</span>
+                          {isOpen ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                        </div>
+                      </div>
+                      <div className="flex gap-4 mt-1">
+                        <span className="text-[10px] text-gray-400 whitespace-nowrap">持仓金额 <span className="text-orange-500 font-semibold">{Math.round(cg.totalHolding)}</span> u</span>
+                        <span className="text-[10px] text-gray-400 whitespace-nowrap">持币量 <span className="text-purple-500 font-semibold">{formatQty(cg.totalQty)}</span></span>
+                      </div>
+                      <div className="flex gap-4 mt-1">
+                        <span className="text-[10px] text-gray-400 whitespace-nowrap">月化 <span className="text-blue-500 font-semibold">{Math.round(cg.dailyTotal*30)}</span> u</span>
+                        <span className="text-[10px] text-gray-400 whitespace-nowrap">季化 <span className="text-purple-500 font-semibold">{Math.round(cg.dailyTotal*90)}</span> u</span>
+                        <span className="text-[10px] text-gray-400 whitespace-nowrap">年化 <span className="text-emerald-500 font-semibold">{Math.round(cg.dailyTotal*365)}</span> u</span>
+                      </div>
+                    </button>
+                    {isOpen && (
+                      <div className="border-t border-gray-100">
+                        <table className="w-full" style={{ borderCollapse: 'collapse' }}>
+                          <thead>
+                            <tr className="bg-gray-50">
+                              <th className="text-[9px] font-normal text-gray-400 text-left px-3 py-1 border-r border-b border-gray-200">用户</th>
+                              <th className="text-[9px] font-normal text-gray-400 text-center px-2 py-1 border-r border-b border-gray-200 w-10">尾号</th>
+                              <th className="text-[9px] font-normal text-gray-400 text-center px-2 py-1 border-r border-b border-gray-200 w-10">档位</th>
+                              <th className="text-[9px] font-normal text-gray-400 text-right px-2 py-1 border-r border-b border-gray-200 w-14">持币量</th>
+                              <th className="text-[9px] font-normal text-gray-400 text-right px-2 py-1 border-r border-b border-gray-200 w-16">持仓金额</th>
+                              <th className="text-[9px] font-normal text-gray-400 text-right px-2 py-1 border-r border-b border-gray-200 w-14">持仓天</th>
+                              <th className="text-[9px] font-normal text-gray-400 text-right px-3 py-1 border-b border-gray-200 w-18">日费用</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                          {cg.orders.sort((a,b) => b.dailyFee - a.dailyFee).map((item, idx) => (
+                            <tr key={item.id} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
+                              <td className="text-[11px] font-medium text-gray-700 truncate px-3 py-1.5 border-r border-gray-200 max-w-0" style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                                {item.nickname || item.username}
+                                {item.username && item.username !== item.nickname && <span className="text-[9px] text-gray-400 ml-1">@{item.username}</span>}
+                              </td>
+                              <td className="text-[10px] text-gray-400 text-center px-2 py-1.5 border-r border-gray-200 font-mono">{String(item.id).padStart(4,'0').slice(-4)}</td>
+                              <td className="text-[10px] text-center px-2 py-1.5 border-r border-gray-200 font-semibold" style={{ color: (item as any).tierMode === 'linear' ? '#3B82F6' : '#0d9488' }}>{(item as any).tierMode === 'linear' ? 'L' : `D${item.equityTier}`}</td>
+                              <td className="text-[10px] text-gray-400 text-right px-2 py-1.5 border-r border-gray-200">{formatQty((item as any).quantity||'0')}</td>
+                              <td className="text-[10px] text-gray-400 text-right px-2 py-1.5 border-r border-gray-200">{Math.round(parseFloat(item.amount||'0'))}u</td>
+                              <td className="text-[10px] text-gray-400 text-right px-2 py-1.5 border-r border-gray-200">{item.holdDays}天</td>
+                              <td className="text-[11px] font-bold text-gray-800 text-right px-3 py-1.5">{item.dailyFee.toFixed(2)}</td>
+                            </tr>
+                          ))}
+                          </tbody>
+                          <tfoot>
+                            <tr className="bg-gray-50">
+                              <td className="text-[10px] text-gray-500 font-semibold px-3 py-1.5 border-t border-gray-200" colSpan={2}>合计</td>
+                              <td className="text-[10px] text-gray-500 px-2 py-1.5 border-t border-gray-200"></td>
+                              <td className="text-[10px] font-bold text-purple-600 text-right px-2 py-1.5 border-t border-gray-200">{formatQty(cg.totalQty)}</td>
+                              <td className="text-[10px] font-bold text-orange-500 text-right px-2 py-1.5 border-t border-gray-200">{Math.round(cg.totalHolding)}u</td>
+                              <td className="text-[10px] text-gray-500 px-2 py-1.5 border-t border-gray-200"></td>
+                              <td className="text-xs font-bold text-blue-600 text-right px-3 py-1.5 border-t border-gray-200">{cg.dailyTotal.toFixed(2)}</td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
+      </div>
+      )}
+
       {/* ── 谷底增筹：用户列表（表格） ── */}
-      {mainTab === 'gujian' && feeFilter !== 'byDate' && feeFilter !== 'byPerson' && (
+      {mainTab === 'gujian' && feeFilter !== 'byDate' && feeFilter !== 'byPerson' && feeFilter !== 'byCoin' && (
       <div className="px-3 pt-3">
         {isLoading ? (
           <div className="text-center py-16 text-gray-400 text-sm">加载中…</div>
@@ -570,7 +751,7 @@ export default function AfFeeDetail() {
           const renderTable = (rows: any[], title: string) => {
             if (rows.length === 0) return null;
             return (
-            <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+            <div className="bg-white rounded shadow-sm overflow-hidden">
               <div className="px-3 py-2 text-xs font-semibold text-gray-600 border-b border-gray-100">{title}（{rows.length}）</div>
               <div className="overflow-x-auto">
                 <table className="border-collapse text-xs" style={{ width: 'auto', tableLayout: 'auto' }}>
@@ -744,7 +925,7 @@ export default function AfFeeDetail() {
             }, 0);
             const paidSum = rows.reduce((s, o) => s + (finPaidMap[Number(o.id)] != null ? Number(finPaidMap[Number(o.id)]) : 0), 0);
             return (
-              <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+              <div className="bg-white rounded shadow-sm overflow-hidden">
                 <div className="px-3 py-2 text-xs font-semibold text-gray-600 border-b border-gray-100">{title}（{rows.length}）</div>
                 <div className="overflow-x-auto">
                   <table className="border-collapse text-xs" style={{ width: 'auto', tableLayout: 'auto' }}>
