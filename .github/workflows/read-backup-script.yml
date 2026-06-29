@@ -1,0 +1,29 @@
+name: 读取备份脚本和COS配置
+on:
+  workflow_dispatch:
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    steps:
+      - name: setup ssh
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf 'Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n' > ~/.ssh/config
+      - name: 读取备份脚本和COS配置
+        run: |
+          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
+            echo "=== backup-local.sh 内容 ==="
+            cat /root/haoyouji-web/backup-local.sh 2>/dev/null || echo "(文件不存在)"
+            echo ""
+            echo "=== cron.log 最后50行 ==="
+            tail -50 /root/database-backups/cron.log 2>/dev/null || echo "(日志不存在)"
+            echo ""
+            echo "=== .env 中的COS配置 ==="
+            grep -i "COS\|QCLOUD\|SECRET\|BUCKET\|REGION\|cos_" /root/haoyouji-web/.env 2>/dev/null | grep -v "PASSWORD\|PASS\|TOKEN" || echo "(未找到COS配置)"
+            echo ""
+            echo "=== database-backups目录大小 ==="
+            du -sh /root/database-backups/ 2>/dev/null
+            ls -lah /root/database-backups/*.sql* 2>/dev/null | head -30
+          '
