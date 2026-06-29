@@ -2501,6 +2501,39 @@ export const yabanCustomerRouter = router({
       return combined.slice(0, 50);
     }),
 
+  // ============ 仅搜索真实顾客（不含员工），用于随访选择顾客 ============
+  searchCustomerOnly: protectedProcedure
+    .input(z.object({ query: z.string().optional() }))
+    .query(async ({ input, ctx }) => {
+      const conn = await getDbConnection();
+      if (!conn) return [];
+      const TENANT_ID = await resolveTenantId(ctx);
+      const keyword = input?.query?.trim() ? `%${input.query.trim()}%` : null;
+      let rows: any[] = [];
+      if (keyword) {
+        const [r] = (await (conn as any).execute(
+          `SELECT id, name, mobile, nickname FROM yaban_customer
+           WHERE tenant_id = ? AND (name LIKE ? OR mobile LIKE ? OR nickname LIKE ?)
+           ORDER BY updated_at DESC LIMIT 50`,
+          [TENANT_ID, keyword, keyword, keyword]
+        )) as any;
+        rows = r as any[];
+      } else {
+        const [r] = (await (conn as any).execute(
+          `SELECT id, name, mobile, nickname FROM yaban_customer
+           WHERE tenant_id = ? AND name IS NOT NULL AND name != ''
+           ORDER BY updated_at DESC LIMIT 50`,
+          [TENANT_ID]
+        )) as any;
+        rows = r as any[];
+      }
+      return (rows as any[]).map((row: any) => ({
+        id: Number(row.id),
+        name: (row.name || row.nickname || "") as string,
+        mobile: (row.mobile || "") as string,
+      }));
+    }),
+
   // ============ 查询某顾客作为推荐人的所有代数被推荐人数 ============
   getReferralCount: protectedProcedure
     .input(z.object({ customerId: z.number().int().positive() }))

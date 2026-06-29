@@ -47,6 +47,10 @@ interface CommRecord {
   ai_generated: number;
   operator_name: string | null;
   comm_at: string;
+  biz_type?: string | null;
+  followup_date?: string | null;
+  followup_status?: string | null;
+  followup_assignee?: string | null;
 }
 
 type RecordingState = "idle" | "countdown" | "recording" | "paused" | "analyzing";
@@ -736,7 +740,11 @@ function DayCard({
                 <div key={record.id} className={idx > 0 ? "border-t border-gray-100" : ""}>
                   {/* 条目标签行 */}
                   <div className="flex items-center gap-2 px-3 pt-2">
-                    <span className={`inline-flex items-center text-[10px] px-1.5 py-0 rounded flex-shrink-0 ${ch.tagClass}`}>{ch.label}</span>
+                    {record.biz_type === 'followup' ? (
+                      <span className="inline-flex items-center text-[10px] px-1.5 py-0 rounded flex-shrink-0 text-orange-600 bg-orange-50">随访{record.followup_status ? `·${record.followup_status}` : ''}</span>
+                    ) : (
+                      <span className={`inline-flex items-center text-[10px] px-1.5 py-0 rounded flex-shrink-0 ${ch.tagClass}`}>{ch.label}</span>
+                    )}
                     <span className="text-[10px] text-gray-300 ml-auto">
                       {new Date(record.comm_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                     </span>
@@ -991,10 +999,13 @@ function TimelineCard({
             )}
             {/* 副行：小标签 + 时间 */}
             <div className="flex items-center gap-1.5">
-              <span className={`inline-flex items-center text-[10px] px-1.5 py-0 rounded flex-shrink-0 ${ch.tagClass}`}>
-                {ch.label}
-              </span>
-
+              {record.biz_type === 'followup' ? (
+                <span className="inline-flex items-center text-[10px] px-1.5 py-0 rounded flex-shrink-0 text-orange-600 bg-orange-50">随访{record.followup_status ? `·${record.followup_status}` : ''}</span>
+              ) : (
+                <span className={`inline-flex items-center text-[10px] px-1.5 py-0 rounded flex-shrink-0 ${ch.tagClass}`}>
+                  {ch.label}
+                </span>
+              )}
             </div>
           </div>
           <div className="flex-shrink-0 ml-2">

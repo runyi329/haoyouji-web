@@ -7,6 +7,7 @@
  */
 import { useState, useRef, TouchEvent } from "react";
 import { ChevronLeft, ChevronRight, Eye, EyeOff } from "lucide-react";
+import { trpc } from "@/lib/trpc";
 
 // Tab 配置 - 5个独立Tab
 const TABS = [
@@ -17,26 +18,6 @@ const TABS = [
   { id: "xinzeng", label: "新增顾客", unit: "", prefix: "" },
 ];
 
-// 模拟数据生成
-function generateMockData(year: number, month: number, tabId: string): Record<number, number> {
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const data: Record<number, number> = {};
-  for (let d = 1; d <= daysInMonth; d++) {
-    if (tabId === "yuyue") {
-      data[d] = Math.floor(Math.random() * 10);
-    } else if (tabId === "suifang") {
-      data[d] = Math.floor(Math.random() * 15);
-    } else if (tabId === "yishoufei") {
-      data[d] = Math.floor(Math.random() * 6);
-    } else if (tabId === "shishou") {
-      data[d] = Math.floor(Math.random() * 5000);
-    } else {
-      data[d] = Math.floor(Math.random() * 5);
-    }
-  }
-  return data;
-}
-
 export default function YabanCalendar() {
   const today = new Date();
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
@@ -46,7 +27,13 @@ export default function YabanCalendar() {
   const touchStartX = useRef(0);
 
   const tab = TABS[activeTab];
-  const mockData = generateMockData(currentYear, currentMonth, tab.id);
+
+  // 真实月度统计数据（按天聚合5个维度）
+  const { data: stats } = trpc.yabanComm.calendarStats.useQuery(
+    { year: currentYear, month: currentMonth + 1 },
+    { keepPreviousData: true }
+  );
+  const dayData: Record<number, number> = (stats?.[tab.id as keyof typeof stats] as Record<number, number>) || {};
 
   // 月份切换
   const prevMonth = () => {
@@ -107,7 +94,7 @@ export default function YabanCalendar() {
     currentYear === today.getFullYear();
 
   // 月度汇总
-  const monthTotal = Object.values(mockData).reduce((acc, val) => acc + val, 0);
+  const monthTotal = Object.values(dayData).reduce((acc, val) => acc + val, 0);
 
   const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
 
@@ -225,7 +212,7 @@ export default function YabanCalendar() {
           <div key={wi} className="grid grid-cols-7 gap-1 mb-1">
             {week.map((day, di) => {
               if (day === null) return <div key={di} />;
-              const val = mockData[day] || 0;
+              const val = dayData[day] || 0;
               const hasData = val > 0;
               const todayMark = isToday(day);
 

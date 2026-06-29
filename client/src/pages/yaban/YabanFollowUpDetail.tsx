@@ -2,10 +2,13 @@
  * 牙伴 - 随访详情页
  * 路由：/yaban/followup/detail/:id
  * 淡蓝色系风格，顶部状态横幅 + 患者信息卡片 + 详细信息列表 + 底部操作栏
+ * 数据来源：trpc.yabanComm.followupDetail（真实随访记录）
+ * 支持执行随访（更新状态）、查看该客户的售前售后时间线
  */
 import { useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { useYabanClinic } from "./useYabanClinic";
+import { trpc } from "@/lib/trpc";
 import {
   ChevronLeft,
   MoreVertical,
@@ -15,10 +18,17 @@ import {
   Clock,
   UserCheck,
   FileText,
-  Stethoscope,
-  ClipboardList,
+  User as UserIcon,
   MessageSquare,
 } from "lucide-react";
+
+// 中文状态 -> 样式 key
+const STATUS_TO_KEY: Record<string, string> = {
+  "待计划": "pending",
+  "随访完成": "completed",
+  "未成功": "failed",
+  "已取消": "cancelled",
+};
 
 // 状态颜色映射
 const STATUS_CONFIG: Record<string, { bg: string; text: string; label: string; banner: string }> = {
@@ -29,61 +39,65 @@ const STATUS_CONFIG: Record<string, { bg: string; text: string; label: string; b
   overdue: { bg: "bg-red-50", text: "text-red-600", label: "已超时", banner: "bg-gradient-to-r from-red-500 to-red-400" },
 };
 
-// 模拟随访详情数据
-const MOCK_DETAIL = {
-  id: 1,
-  status: "pending",
-  isOverdue: true,
-  patient: {
-    name: "白扬",
-    gender: "male",
-    age: 32,
-    phone: "138****5678",
-    medicalNo: "006821",
-  },
-  visitTime: "2026-05-29 10:30",
-  createTime: "2026-05-20 14:22",
-  creator: "杨文利",
-  followUpType: "术后随访",
-  planTime: "2026-05-29",
-  followUpDoctor: "郑奎",
-  followUpStaff: "杨文利",
-  followUpProject: "洁牙美白",
-  followUpContent: "问下洁牙美白术后，邀约补牙拔除残根，是否矫正？",
-  result: "",
-  remark: "",
-};
-
 export default function YabanFollowUpDetail() {
   const [, navigate] = useLocation();
   const { current } = useYabanClinic();
   const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const params = useParams<{ id: string }>();
+  const id = Number(params.id);
   const [showMenu, setShowMenu] = useState(false);
 
-  const detail = MOCK_DETAIL;
-  const statusKey = detail.isOverdue ? "overdue" : detail.status;
-  const statusConfig = STATUS_CONFIG[statusKey] || STATUS_CONFIG.pending;
+  const { data: detail, isLoading, refetch } = trpc.yabanComm.followupDetail.useQuery(
+    { id },
+    { enabled: !isNaN(id) && id > 0 }
+  );
+  const updateStatus = trpc.yabanComm.updateFollowupStatus.useMutation();
 
   const handleBack = () => {
     navigate("/yaban/followup");
   };
 
-  const handleExecute = () => {
-    // 执行随访操作
+  const handleExecute = async () => {
+    if (!detail) return;
+    try {
+      await updateStatus.mutateAsync({ id: detail.id, status: "随访完成" });
+      await refetch();
+      alert("随访已标记为完成");
+    } catch (e: any) {
+      alert(`操作失败：${e?.message || "请重试"}`);
+    }
   };
 
   const handleReFollowUp = () => {
-    // 再随访操作
     navigate("/yaban/followup/create");
   };
 
-  // 跳转到该患者的沟通记录（售前售后）
-  // 目前随访详情为模拟数据，暂用患者列表页搜索姓名的方式过渡
-  // 待随访接入真实数据后，可直接用 patient_id 跳转
+  // 跳转到该客户的售前售后时间线（真实 customerId）
   const handleViewComm = () => {
-    navigate(`/yaban/patients?keyword=${encodeURIComponent(detail.patient.name)}`);
+    if (detail?.customerId) {
+      navigate(`/yaban/patient/${detail.customerId}/comm`);
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center text-sm text-gray-400">
+        加载中…
+      </div>
+    );
+  }
+
+  if (!detail) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center gap-3">
+        <p className="text-sm text-gray-400">随访记录不存在</p>
+        <button onClick={handleBack} className="text-sky-500 text-sm">返回列表</button>
+      </div>
+    );
+  }
+
+  const statusKey = detail.isOverdue ? "overdue" : (STATUS_TO_KEY[detail.status] || "pending");
+  const statusConfig = STATUS_CONFIG[statusKey] || STATUS_CONFIG.pending;
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -103,11 +117,17 @@ export default function YabanFollowUpDetail() {
             </button>
             {showMenu && (
               <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg py-1 w-32 z-50">
-                <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                  编辑
-                </button>
-                <button className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50">
-                  删除
+                <button
+                  onClick={async () => {
+                    setShowMenu(false);
+                    if (confirm("确定取消该随访？")) {
+                      await updateStatus.mutateAsync({ id: detail.id, status: "已取消" });
+                      await refetch();
+                    }
+                  }}
+                  className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-50"
+                >
+                  取消随访
                 </button>
               </div>
             )}
@@ -125,7 +145,7 @@ export default function YabanFollowUpDetail() {
             )}
           </div>
           <p className="text-white/80 text-sm mt-1">
-            计划时间: {detail.planTime}
+            计划时间: {detail.planTime || "-"}
           </p>
         </div>
       </div>
@@ -139,19 +159,24 @@ export default function YabanFollowUpDetail() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-gray-900">{detail.patient.name}</span>
+                <span className="font-bold text-gray-900">{detail.patientName}</span>
                 <span className="text-xs text-gray-500">
-                  {detail.patient.gender === "male" ? "男" : "女"} . {detail.patient.age}岁
+                  {detail.gender === "male" ? "男" : "女"}
+                  {detail.age != null && ` · ${detail.age}岁`}
                 </span>
               </div>
-              <div className="text-xs text-gray-500 mt-0.5">
-                病历号: {detail.patient.medicalNo}
-              </div>
+              {detail.medicalNo && (
+                <div className="text-xs text-gray-500 mt-0.5">
+                  病历号: {detail.medicalNo}
+                </div>
+              )}
             </div>
           </div>
-          <button className="w-10 h-10 rounded-full bg-sky-50 flex items-center justify-center">
-            <Phone className="w-5 h-5 text-sky-600" />
-          </button>
+          {detail.phone && (
+            <a href={`tel:${detail.phone}`} className="w-10 h-10 rounded-full bg-sky-50 flex items-center justify-center">
+              <Phone className="w-5 h-5 text-sky-600" />
+            </a>
+          )}
         </div>
       </div>
 
@@ -162,46 +187,14 @@ export default function YabanFollowUpDetail() {
         </div>
 
         <div className="divide-y divide-gray-50">
-          <InfoRow
-            icon={<Calendar className="w-4 h-4 text-sky-500" />}
-            label="就诊时间"
-            value={detail.visitTime}
-          />
-          <InfoRow
-            icon={<Clock className="w-4 h-4 text-sky-500" />}
-            label="创建时间"
-            value={detail.createTime}
-          />
-          <InfoRow
-            icon={<UserCheck className="w-4 h-4 text-sky-500" />}
-            label="创建人"
-            value={detail.creator}
-          />
-          <InfoRow
-            icon={<FileText className="w-4 h-4 text-sky-500" />}
-            label="随访类型"
-            value={detail.followUpType}
-          />
-          <InfoRow
-            icon={<Calendar className="w-4 h-4 text-sky-500" />}
-            label="计划时间"
-            value={detail.planTime}
-          />
-          <InfoRow
-            icon={<Stethoscope className="w-4 h-4 text-sky-500" />}
-            label="随访医生"
-            value={detail.followUpDoctor}
-          />
-          <InfoRow
-            icon={<User className="w-4 h-4 text-sky-500" />}
-            label="随访人员"
-            value={detail.followUpStaff}
-          />
-          <InfoRow
-            icon={<ClipboardList className="w-4 h-4 text-sky-500" />}
-            label="随访项目"
-            value={detail.followUpProject}
-          />
+          <InfoRow icon={<Calendar className="w-4 h-4 text-sky-500" />} label="就诊时间" value={detail.visitTime} />
+          <InfoRow icon={<Clock className="w-4 h-4 text-sky-500" />} label="创建时间" value={detail.createTime} />
+          <InfoRow icon={<UserCheck className="w-4 h-4 text-sky-500" />} label="创建人" value={detail.creator} />
+          <InfoRow icon={<Calendar className="w-4 h-4 text-sky-500" />} label="计划时间" value={detail.planTime} />
+          <InfoRow icon={<UserIcon className="w-4 h-4 text-sky-500" />} label="随访人员" value={detail.followUpStaff} />
+          {detail.demand && (
+            <InfoRow icon={<FileText className="w-4 h-4 text-sky-500" />} label="附加信息" value={detail.demand} />
+          )}
         </div>
       </div>
 
@@ -213,19 +206,9 @@ export default function YabanFollowUpDetail() {
         </p>
       </div>
 
-      {/* 随访结果 */}
-      {detail.result && (
-        <div className="bg-white mx-3 mt-3 rounded-xl shadow-sm p-4">
-          <div className="text-sm font-bold text-gray-900 mb-2">随访结果</div>
-          <p className="text-sm text-gray-600 leading-relaxed">
-            {detail.result}
-          </p>
-        </div>
-      )}
-
       {/* 备注 */}
       {detail.remark && (
-        <div className="bg-white mx-3 mt-3 rounded-xl shadow-sm p-4 mb-20">
+        <div className="bg-white mx-3 mt-3 rounded-xl shadow-sm p-4">
           <div className="text-sm font-bold text-gray-900 mb-2">备注</div>
           <p className="text-sm text-gray-600 leading-relaxed">
             {detail.remark}
@@ -256,9 +239,10 @@ export default function YabanFollowUpDetail() {
           </button>
           <button
             onClick={handleExecute}
-            className="flex-1 py-3 rounded-lg bg-gradient-to-r from-sky-500 to-sky-400 text-white font-bold text-sm shadow-sm"
+            disabled={detail.status === "随访完成" || updateStatus.isLoading}
+            className="flex-1 py-3 rounded-lg bg-gradient-to-r from-sky-500 to-sky-400 text-white font-bold text-sm shadow-sm disabled:opacity-50"
           >
-            执行随访
+            {detail.status === "随访完成" ? "已完成" : "执行随访"}
           </button>
         </div>
       </div>

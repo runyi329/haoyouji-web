@@ -39,6 +39,265 @@ const DEFAULT_COMM_PROMPT = `你是一名专业的牙科诊所助理，请根据
 {"demand":"牙齿敏感，询问是否需要检查","hospital":"建议做全口检查，报价200元","keyPoints":"客户对价格较敏感","followup":"约下周三下午3点复诊","remark":""}`;
 
 export const yabanCommRouter = router({
+  /**
+   * 随访列表：查询本门店所有 biz_type='followup' 的随访记录，关联客户姓名。
+   * 支持按状态筛选（all/pending/completed/failed/cancelled），按随访日期倒序。
+   * 随访本质上是一条带 followup_date / followup_status 的沟通记录。
+   */
+  listFollowups: protectedProcedure
+    .input(z.object({
+      status: z.enum(['all', 'pending', 'completed', 'failed', 'cancelled']).default('all'),
+    }))
+    .query(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      const TENANT_ID = await resolveTenantId(ctx);
+      const statusMap: Record<string, string> = {
+        pending: '待计划', completed: '随访完成', failed: '未成功', cancelled: '已取消',
+      };
+      let whereStatus = '';
+      const params: any[] = [TENANT_ID];
+      if (input.status !== 'all') {
+        whereStatus = ' AND r.followup_status = ?';
+        params.push(statusMap[input.status]);
+      }
+      const [rows] = await (conn as any).execute(
+        `SELECT r.id, r.customer_id, c.name AS customer_name,
+                r.summary_followup, r.summary_demand, r.summary_remark, r.raw_text,
+                r.followup_date, r.followup_status, r.followup_assignee,
+                r.operator_name, r.comm_at, r.created_at
+         FROM yaban_comm_record r
+         LEFT JOIN yaban_customer c ON c.id = r.customer_id
+         WHERE r.tenant_id = ? AND r.biz_type = 'followup'${whereStatus}
+         ORDER BY r.followup_date DESC, r.id DESC`,
+        params
+      );
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const list = (rows as any[]).map((r: any) => {
+        const dateStr = r.followup_date instanceof Date
+          ? r.followup_date.toISOString().slice(0, 10)
+          : String(r.followup_date || '').slice(0, 10);
+        // 待计划且日期已过 => 超时
+        let isOverdue = false;
+        if (r.followup_status === '待计划' && dateStr) {
+          const d = new Date(dateStr.replace(/-/g, '/'));
+          isOverdue = d < today;
+        }
+        // 内容优先取跟进事项，其次需求、备注、原始文字
+        const content = (r.summary_followup || r.summary_demand || r.summary_remark || r.raw_text || '').toString().trim();
+        return {
+          id: Number(r.id),
+          customerId: Number(r.customer_id),
+          patientName: (r.customer_name || '未知客户') as string,
+          date: dateStr.replace(/-/g, '/'),
+          content,
+          staff: (r.followup_assignee || r.operator_name || '前台') as string,
+          status: r.followup_status || '待计划',
+          isOverdue,
+        };
+      });
+      return { list };
+    }),
+
+  /**
+   * 创建随访：写入一条 biz_type='followup' 的沟通记录。
+   * 同时落入客户的售前售后时间线，实现数据打通。
+   */
+  createFollowup: protectedProcedure
+    .input(z.object({
+      customerId: z.number().int().positive(),
+      followupDate: z.string().min(1),       // YYYY-MM-DD 计划随访日期
+      followupStatus: z.string().default('待计划'),
+      assignee: z.string().optional(),        // 随访人员
+      doctor: z.string().optional(),          // 随访医生
+      followUpType: z.string().optional(),    // 随访类型
+      project: z.string().optional(),         // 随访项目
+      content: z.string().optional(),         // 随访内容
+      communicationMethod: z.string().optional(),
+      satisfaction: z.string().optional(),
+      result: z.string().optional(),          // 随访结果
+      remark: z.string().optional(),
+      visitTime: z.string().optional(),       // 就诊时间
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      const TENANT_ID = await resolveTenantId(ctx);
+      const operatorName = (ctx.user as any).name || (ctx.user as any).username || '';
+      // 把随访内容归入 summary_followup；类型/项目等附加信息归入 demand/remark，保证在时间线里可读
+      const demandParts: string[] = [];
+      if (input.followUpType) demandParts.push(`类型：${input.followUpType}`);
+      if (input.project) demandParts.push(`项目：${input.project}`);
+      if (input.communicationMethod) demandParts.push(`沟通方式：${input.communicationMethod}`);
+      const remarkParts: string[] = [];
+      if (input.satisfaction) remarkParts.push(`满意度：${input.satisfaction}`);
+      if (input.result) remarkParts.push(`结果：${input.result}`);
+      if (input.remark) remarkParts.push(input.remark);
+      const commAt = input.visitTime ? new Date(input.visitTime.replace(/\//g, '-')) : new Date();
+      const [result] = await (conn as any).execute(
+        `INSERT INTO yaban_comm_record
+          (tenant_id, customer_id, record_type, biz_type, raw_text,
+           summary_demand, summary_followup, summary_remark,
+           ai_generated, operator_id, operator_name,
+           followup_date, followup_status, followup_assignee, comm_at)
+         VALUES (?, ?, 'manual', 'followup', ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)`,
+        [
+          TENANT_ID, input.customerId,
+          input.content || null,
+          demandParts.join('，') || null,
+          input.content || null,
+          remarkParts.join('，') || null,
+          ctx.user.id, operatorName,
+          input.followupDate, input.followupStatus,
+          input.assignee || input.doctor || null,
+          isNaN(commAt.getTime()) ? new Date() : commAt,
+        ]
+      );
+      return { id: (result as any).insertId, success: true };
+    }),
+
+  /** 更新随访状态（待计划/随访完成/未成功/已取消） */
+  updateFollowupStatus: protectedProcedure
+    .input(z.object({
+      id: z.number().int().positive(),
+      status: z.string().min(1),
+      result: z.string().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      const TENANT_ID = await resolveTenantId(ctx);
+      await (conn as any).execute(
+        `UPDATE yaban_comm_record SET followup_status = ?, updated_at = NOW()
+         WHERE id = ? AND tenant_id = ? AND biz_type = 'followup'`,
+        [input.status, input.id, TENANT_ID]
+      );
+      return { success: true };
+    }),
+
+  /** 随访详情：按 id 查询单条随访记录，关联客户信息 */
+  followupDetail: protectedProcedure
+    .input(z.object({ id: z.number().int().positive() }))
+    .query(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      const TENANT_ID = await resolveTenantId(ctx);
+      const [rows] = await (conn as any).execute(
+        `SELECT r.id, r.customer_id, c.name AS customer_name, c.gender, c.age,
+                c.mobile, c.medical_no,
+                r.summary_followup, r.summary_demand, r.summary_remark, r.raw_text,
+                r.followup_date, r.followup_status, r.followup_assignee,
+                r.operator_name, r.comm_at, r.created_at
+         FROM yaban_comm_record r
+         LEFT JOIN yaban_customer c ON c.id = r.customer_id
+         WHERE r.id = ? AND r.tenant_id = ? AND r.biz_type = 'followup'
+         LIMIT 1`,
+        [input.id, TENANT_ID]
+      );
+      const r = (rows as any[])[0];
+      if (!r) throw new TRPCError({ code: 'NOT_FOUND', message: '随访记录不存在' });
+      const fmt = (v: any) => v instanceof Date ? v.toISOString().slice(0, 10) : (v ? String(v).slice(0, 10) : '');
+      const fmtTime = (v: any) => v instanceof Date ? v.toISOString().slice(0, 16).replace('T', ' ') : (v ? String(v).slice(0, 16).replace('T', ' ') : '');
+      const planDate = fmt(r.followup_date);
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      let isOverdue = false;
+      if (r.followup_status === '待计划' && planDate) {
+        isOverdue = new Date(planDate.replace(/-/g, '/')) < today;
+      }
+      const age: number | undefined = (r.age != null && Number(r.age) > 0) ? Number(r.age) : undefined;
+      return {
+        id: Number(r.id),
+        customerId: Number(r.customer_id),
+        patientName: (r.customer_name || '未知客户') as string,
+        gender: (r.gender === '男') ? 'male' : 'female',
+        age,
+        phone: (r.mobile || '') as string,
+        medicalNo: (r.medical_no || '') as string,
+        status: r.followup_status || '待计划',
+        isOverdue,
+        planTime: planDate.replace(/-/g, '/'),
+        visitTime: fmtTime(r.comm_at),
+        createTime: fmtTime(r.created_at),
+        creator: (r.operator_name || '') as string,
+        followUpStaff: (r.followup_assignee || r.operator_name || '前台') as string,
+        followUpContent: (r.summary_followup || r.raw_text || '') as string,
+        demand: (r.summary_demand || '') as string,
+        remark: (r.summary_remark || '') as string,
+      };
+    }),
+
+  /**
+   * 首页日历月度统计：按天聚合5个维度数据
+   * - yuyue 预约数（yaban_appointment.appoint_date 计数）
+   * - suifang 随访数（yaban_comm_record biz_type=followup 的 followup_date 计数）
+   * - yishoufei 已收费笔数（yaban_charge.visit_at 计数）
+   * - shishou 实收业绩金额（yaban_charge.paid 求和）
+   * - xinzeng 新增顾客数（yaban_customer.created_at 计数）
+   * 返回 { yuyue:{day:count}, suifang:{...}, yishoufei:{...}, shishou:{...}, xinzeng:{...} }
+   */
+  calendarStats: protectedProcedure
+    .input(z.object({
+      year: z.number().int(),
+      month: z.number().int().min(1).max(12),
+    }))
+    .query(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      const TENANT_ID = await resolveTenantId(ctx);
+      const ym = `${input.year}-${String(input.month).padStart(2, '0')}`;
+      const start = `${ym}-01`;
+      // 下月第一天作为右开区间
+      const nextMonth = input.month === 12 ? `${input.year + 1}-01-01` : `${input.year}-${String(input.month + 1).padStart(2, '0')}-01`;
+
+      const toMap = (rows: any[], key: string) => {
+        const m: Record<number, number> = {};
+        for (const r of rows as any[]) {
+          const d = Number(r.d);
+          if (d >= 1 && d <= 31) m[d] = Number(r[key]) || 0;
+        }
+        return m;
+      };
+
+      // 预约：按 appoint_date 计数
+      const [yuyueRows] = await (conn as any).execute(
+        `SELECT DAY(appoint_date) AS d, COUNT(*) AS c FROM yaban_appointment
+         WHERE tenant_id = ? AND appoint_date >= ? AND appoint_date < ? GROUP BY DAY(appoint_date)`,
+        [TENANT_ID, start, nextMonth]
+      );
+      // 随访：按 followup_date 计数
+      const [suifangRows] = await (conn as any).execute(
+        `SELECT DAY(followup_date) AS d, COUNT(*) AS c FROM yaban_comm_record
+         WHERE tenant_id = ? AND biz_type = 'followup' AND followup_date >= ? AND followup_date < ? GROUP BY DAY(followup_date)`,
+        [TENANT_ID, start, nextMonth]
+      );
+      // 已收费笔数 + 实收金额：按 visit_at 日期
+      const [chargeRows] = await (conn as any).execute(
+        `SELECT DAY(visit_at) AS d, COUNT(*) AS c, COALESCE(SUM(paid),0) AS amt FROM yaban_charge
+         WHERE tenant_id = ? AND visit_at >= ? AND visit_at < ? GROUP BY DAY(visit_at)`,
+        [TENANT_ID, start, nextMonth]
+      );
+      // 新增顾客：按 created_at 日期
+      const [custRows] = await (conn as any).execute(
+        `SELECT DAY(created_at) AS d, COUNT(*) AS c FROM yaban_customer
+         WHERE tenant_id = ? AND created_at >= ? AND created_at < ? GROUP BY DAY(created_at)`,
+        [TENANT_ID, start, nextMonth]
+      );
+
+      const shishouMap: Record<number, number> = {};
+      for (const r of chargeRows as any[]) {
+        const d = Number(r.d);
+        if (d >= 1 && d <= 31) shishouMap[d] = Math.round(Number(r.amt) || 0);
+      }
+
+      return {
+        yuyue: toMap(yuyueRows as any[], 'c'),
+        suifang: toMap(suifangRows as any[], 'c'),
+        yishoufei: toMap(chargeRows as any[], 'c'),
+        shishou: shishouMap,
+        xinzeng: toMap(custRows as any[], 'c'),
+      };
+    }),
+
   /** 获取某顾客的沟通记录列表（按时间倒序），同时返回该患者的预约记录 */
   list: protectedProcedure
     .input(z.object({
@@ -49,8 +308,9 @@ export const yabanCommRouter = router({
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
       const TENANT_ID = await resolveTenantId(ctx);
       const [rows] = await (conn as any).execute(
-        `SELECT id, customer_id, record_type, raw_text, audio_url,
+        `SELECT id, customer_id, record_type, biz_type, raw_text, audio_url,
                 summary_demand, summary_hospital, summary_key_points, summary_followup, summary_remark,
+                followup_date, followup_status, followup_assignee,
                 ai_generated, operator_id, operator_name, comm_at, created_at
          FROM yaban_comm_record
          WHERE tenant_id = ? AND customer_id = ?

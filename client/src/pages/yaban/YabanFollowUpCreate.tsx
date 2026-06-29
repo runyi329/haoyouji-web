@@ -5,10 +5,11 @@
  * 表单字段：选择患者、就诊时间、随访时间、随访类型、随访医生、随访人员、
  *          随访项目、随访内容（选择+输入）、沟通方式、随访状态、满意度、随访结果（选择+输入）、备注
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { ChevronRight, User } from "lucide-react";
 import { useYabanClinic } from "./useYabanClinic";
+import { trpc } from "@/lib/trpc";
 
 // 选项配置
 const FOLLOW_UP_TYPES = ["术后回访", "定期复查", "治疗提醒", "满意度调查", "其他"];
@@ -75,6 +76,23 @@ export default function YabanFollowUpCreate() {
 
   // 弹出选择器状态
   const [showPicker, setShowPicker] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  // 从客户选择页返回后，读取选中的真实客户
+  useEffect(() => {
+    const raw = sessionStorage.getItem("selectedPatient");
+    if (raw) {
+      try {
+        const p = JSON.parse(raw) as { id: number; name: string };
+        if (p?.id) {
+          setFormData((prev) => ({ ...prev, patientId: p.id, patientName: p.name }));
+        }
+      } catch { /* ignore */ }
+      sessionStorage.removeItem("selectedPatient");
+    }
+  }, []);
+
+  const createFollowup = trpc.yabanComm.createFollowup.useMutation();
 
   const handleBack = () => {
     setLocation("/yaban/followup");
@@ -89,10 +107,42 @@ export default function YabanFollowUpCreate() {
     setShowPicker(null);
   };
 
-  const handleSave = () => {
-    // TODO: 提交到后端
-    alert("保存成功");
-    setLocation("/yaban/followup");
+  const handleSave = async () => {
+    if (!formData.patientId) {
+      alert("请先选择顾客");
+      return;
+    }
+    if (!formData.followUpTime) {
+      alert("请选择随访时间");
+      return;
+    }
+    // 随访内容：优先用手动输入，其次选择项
+    const content = formData.contentText.trim() || formData.contentOption || "";
+    const result = formData.resultText.trim() || formData.resultOption || "";
+    try {
+      setSubmitting(true);
+      await createFollowup.mutateAsync({
+        customerId: formData.patientId,
+        followupDate: formData.followUpTime.replace(/\//g, "-"),
+        followupStatus: formData.status || (isRecord ? "随访完成" : "待计划"),
+        assignee: formData.staff || undefined,
+        doctor: formData.doctor || undefined,
+        followUpType: formData.followUpType || undefined,
+        project: formData.project || undefined,
+        content: content || undefined,
+        communicationMethod: formData.communicationMethod || undefined,
+        satisfaction: formData.satisfaction || undefined,
+        result: result || undefined,
+        remark: formData.remark || undefined,
+        visitTime: formData.visitTime ? formData.visitTime.replace(/\//g, "-") : undefined,
+      });
+      alert("保存成功");
+      setLocation("/yaban/followup");
+    } catch (e: any) {
+      alert(`保存失败：${e?.message || "请重试"}`);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // 获取选项列表
@@ -277,9 +327,10 @@ export default function YabanFollowUpCreate() {
       <div className="px-4 pb-8 mt-auto">
         <button
           onClick={handleSave}
-          className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-400 text-white text-base font-semibold shadow-lg shadow-sky-200/50 active:opacity-80 transition-opacity"
+          disabled={submitting}
+          className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-400 text-white text-base font-semibold shadow-lg shadow-sky-200/50 active:opacity-80 transition-opacity disabled:opacity-50"
         >
-          保存
+          {submitting ? "保存中…" : "保存"}
         </button>
       </div>
 
