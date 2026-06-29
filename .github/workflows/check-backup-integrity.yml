@@ -1,0 +1,53 @@
+name: 检查备份完整性
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: setup ssh
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf 'Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n' > ~/.ssh/config
+      - name: 检查备份完整性
+        run: |
+          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'SSHEOF'
+            echo "=== 1. 数据库所有表列表 ==="
+            mysql -h 124.223.54.69 -u root -pMiao@20190603 crm_db -e "
+              SELECT TABLE_NAME, TABLE_ROWS, 
+                     ROUND((DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024, 2) AS size_mb,
+                     TABLE_COMMENT
+              FROM information_schema.TABLES 
+              WHERE TABLE_SCHEMA = 'crm_db' 
+              ORDER BY (DATA_LENGTH + INDEX_LENGTH) DESC;
+            " 2>/dev/null
+            
+            echo ""
+            echo "=== 2. 数据库总大小 ==="
+            mysql -h 124.223.54.69 -u root -pMiao@20190603 crm_db -e "
+              SELECT 
+                COUNT(*) AS total_tables,
+                ROUND(SUM(DATA_LENGTH + INDEX_LENGTH) / 1024 / 1024, 2) AS total_size_mb
+              FROM information_schema.TABLES 
+              WHERE TABLE_SCHEMA = 'crm_db';
+            " 2>/dev/null
+            
+            echo ""
+            echo "=== 3. 备份文件列表和大小 ==="
+            ls -lah /root/database-backups/haoyouji_backup_*.sql.gz 2>/dev/null | awk '{print $5, $9}' | sort -k2
+            
+            echo ""
+            echo "=== 4. 备份目录总占用 ==="
+            du -sh /root/database-backups/
+            
+            echo ""
+            echo "=== 5. 最新备份文件内包含的表数量（抽查） ==="
+            LATEST=$(ls -t /root/database-backups/haoyouji_backup_*.sql.gz 2>/dev/null | head -1)
+            if [ -n "$LATEST" ]; then
+              echo "最新备份: $LATEST"
+              zcat "$LATEST" | grep "^CREATE TABLE" | wc -l | xargs echo "备份中的表数量:"
+              zcat "$LATEST" | grep "^CREATE TABLE" | sed 's/CREATE TABLE `\([^`]*\)`.*/\1/' | sort
+            fi
+          SSHEOF
