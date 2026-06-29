@@ -1,0 +1,31 @@
+name: 查看服务器crontab
+on:
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: setup ssh
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf 'Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n' > ~/.ssh/config
+      - name: 查看crontab和备份文件
+        run: |
+          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
+            echo "=== root crontab ==="
+            crontab -l 2>/dev/null || echo "(空)"
+            echo "=== /etc/crontab ==="
+            cat /etc/crontab 2>/dev/null
+            echo "=== cron.d ==="
+            ls /etc/cron.d/ 2>/dev/null
+            echo "=== 备份文件 ==="
+            find / -name "*.sql" -o -name "*.sql.gz" 2>/dev/null | grep -v proc | head -20
+            echo "=== /var/backups ==="
+            ls -la /var/backups/ 2>/dev/null
+            echo "=== /root/backups ==="
+            ls -la /root/backups/ 2>/dev/null
+            echo "=== /backup ==="
+            ls -la /backup/ 2>/dev/null
+          '
