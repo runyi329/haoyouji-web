@@ -1668,8 +1668,15 @@ export default function AfOrderManage() {
                           // 只有折后数量与原始数量不同时才显示括号（精度到4位小数比较）
                           const hasDiscount = Math.abs(effNum - qNum) > 0.00005;
                           const effStr = hasDiscount ? fmtCoinQty(c, effNum) : null;
-                          // 折后占原始的百分比（不带小数）
-                          const pctStr = hasDiscount ? `${Math.round((effNum / qNum) * 100)}%` : null;
+                          // 判断该币种是否有线性模式订单（正单或赠单）
+                          const hasLinear = activeOrders.some((o: any) =>
+                            (o.tierMode === 'linear' && o.coin === c && o.sellStatus !== 'sold') ||
+                            ((o.giftOrders as any[] || []).some((g: any) => g.tierMode === 'linear' && g.coin === c && g.sellStatus !== 'sold'))
+                          );
+                          // 线性模式保留两位小数，阶梯模式取整数
+                          const pctStr = hasDiscount
+                            ? (hasLinear ? `${((effNum / qNum) * 100).toFixed(2)}%` : `${Math.round((effNum / qNum) * 100)}%`)
+                            : null;
                           return { short: cfg.short, color: cfg.color, qStr, effStr, pctStr };
                         });
                       return (
