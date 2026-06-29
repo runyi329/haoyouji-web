@@ -453,37 +453,6 @@ export default function AfFeeDetail() {
                           {isOpen ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
                         </div>
                       </div>
-                      {/* 第二行：钱包余额 + 应付管理费 */}
-                      {(() => {
-                        const pendingFee = person.orders.reduce((s, o) => {
-                          const prepaid = parseFloat((o as any).prepaidFee || '0');
-                          return s + Math.max(0, o.totalFee - prepaid);
-                        }, 0);
-                        const walletBal = (person.userId > 0 && memberBalances) ? (memberBalances[person.userId] ?? null) : null;
-                        return (
-                          <div className="flex items-center gap-3 mt-0.5">
-                            {walletBal !== null && (
-                              <div className="flex items-center gap-1">
-                                <span className="text-[10px] text-gray-400">钱包余额</span>
-                                <span className="text-[11px] font-semibold" style={{ color: walletBal >= 0 ? '#d97706' : '#dc2626' }}>
-                                  {walletBal.toFixed(2)} U
-                                </span>
-                              </div>
-                            )}
-                            <div className="flex items-center gap-1">
-                              <span className="text-[10px] text-gray-400">应付管理费</span>
-                              <span className="text-[11px] font-semibold" style={{ color: pendingFee > 0 ? '#ea580c' : '#16a34a' }}>
-                                {pendingFee.toFixed(2)} U
-                              </span>
-                            </div>
-                            {walletBal !== null && (
-                              walletBal >= pendingFee
-                                ? <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: '#dcfce7', color: '#15803d' }}>充足</span>
-                                : <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: '#fee2e2', color: '#dc2626' }}>待补 {(pendingFee - walletBal).toFixed(2)} U</span>
-                            )}
-                          </div>
-                        );
-                      })()}
                       {!isOpen && (
                         <div className="flex gap-3 mt-1">
                           <span className="text-[10px] text-gray-400">月化 <span className="text-blue-500 font-semibold">{Math.round(person.dailyTotal*30)}</span>u</span>
@@ -491,6 +460,27 @@ export default function AfFeeDetail() {
                           <span className="text-[10px] text-gray-400">年化 <span className="text-emerald-500 font-semibold">{Math.round(person.dailyTotal*365)}</span>u</span>
                         </div>
                       )}
+                      {/* 最后一行：钱包余额 + 应付管理费 + 状态 */}
+                      {(() => {
+                        const pendingFee = person.orders.reduce((s, o) => {
+                          const prepaid = parseFloat((o as any).prepaidFee || '0');
+                          return s + Math.max(0, o.totalFee - prepaid);
+                        }, 0);
+                        const walletBal = (person.userId > 0 && memberBalances) ? (memberBalances[person.userId] ?? null) : null;
+                        return (
+                          <div className="flex items-center gap-3 mt-1">
+                            {walletBal !== null && (
+                              <span className="text-[10px] text-gray-400">钱包余额 <span className="font-semibold" style={{ color: walletBal >= 0 ? '#d97706' : '#dc2626' }}>{walletBal.toFixed(2)}</span> <span className="text-gray-400">u</span></span>
+                            )}
+                            <span className="text-[10px] text-gray-400">应付管理费 <span className="font-semibold" style={{ color: pendingFee > 0 ? '#ea580c' : '#16a34a' }}>{pendingFee.toFixed(2)}</span> <span className="text-gray-400">u</span></span>
+                            {walletBal !== null && (
+                              walletBal >= pendingFee
+                                ? <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: '#fee2e2', color: '#dc2626' }}>充足</span>
+                                : <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: '#dcfce7', color: '#15803d' }}>待补 <span style={{color:'#15803d'}}>{(pendingFee - walletBal).toFixed(2)}</span> <span className="text-gray-400 font-normal">u</span></span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </button>
                     {isOpen && (
                       <div className="border-t border-gray-100">
