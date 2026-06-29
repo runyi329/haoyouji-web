@@ -494,8 +494,17 @@ export default function YabanWechatChat() {
 
   return (
     <div
-      className="flex flex-col overflow-hidden select-none"
-      style={{ backgroundColor: "#ebebeb", fontFamily: "-apple-system, 'PingFang SC', sans-serif", height: "100dvh", overflow: "hidden" }}
+      className="flex flex-col select-none"
+      style={{
+        backgroundColor: "#ebebeb",
+        fontFamily: "-apple-system, 'PingFang SC', sans-serif",
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        overflow: "hidden",
+      }}
     >
       {/* ===== 顶部导航栏 ===== */}
       <div
