@@ -26,7 +26,8 @@ jobs:
           
           SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
           BACKUP_DIR="$HOME/database-backups"
-          KEEP_DAYS=60
+          LOCAL_KEEP_DAYS=7
+          COS_KEEP_DAYS=60
           LOG_FILE="$BACKUP_DIR/backup.log"
           ENV_FILE="$SCRIPT_DIR/.env"
           
@@ -96,8 +97,8 @@ jobs:
               exit 1
           fi
           
-          log "清理${KEEP_DAYS}天前的本地备份..."
-          OLD_BACKUPS=$(find "$BACKUP_DIR" -name "haoyouji_backup_*.sql.gz" -mtime +$KEEP_DAYS)
+          log "清理${LOCAL_KEEP_DAYS}天前的本地备份..."
+          OLD_BACKUPS=$(find "$BACKUP_DIR" -name "haoyouji_backup_*.sql.gz" -mtime +$LOCAL_KEEP_DAYS)
           if [ -n "$OLD_BACKUPS" ]; then
               for old_file in $OLD_BACKUPS; do
                   rm -f "$old_file"
@@ -108,12 +109,12 @@ jobs:
           if [ -n "$COS_SECRET_ID" ]; then
               set +e
               if date -v-60d >/dev/null 2>&1; then
-                  CUTOFF_DATE=$(date -v-${KEEP_DAYS}d +"%Y%m%d")
+                  CUTOFF_DATE=$(date -v-${COS_KEEP_DAYS}d +"%Y%m%d")
               else
-                  CUTOFF_DATE=$(date -d "${KEEP_DAYS} days ago" +"%Y%m%d")
+                  CUTOFF_DATE=$(date -d "${COS_KEEP_DAYS} days ago" +"%Y%m%d")
               fi
               
-              log "清理COS上 ${CUTOFF_DATE} 之前的备份..."
+              log "清理COS上 ${CUTOFF_DATE} 之前的备份（保留${COS_KEEP_DAYS}天）..."
               COS_FILES=$($COSCMD_PATH list /database-backups/ 2>/dev/null | grep "haoyouji_backup_" | awk '{print $NF}') || true
               for cos_file in $COS_FILES; do
                   FILE_DATE=$(echo "$cos_file" | grep -o "202[0-9][0-9][0-9][0-9][0-9]")
