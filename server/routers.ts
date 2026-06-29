@@ -13439,9 +13439,10 @@ ${klinesSummary}
                 };
               }
               for (const order of list) {
-                if (scanMap[order.id]) {
-                  order.allTimeLowPrice = scanMap[order.id].price || null;
-                  order.allTimeLowAt = scanMap[order.id].at || null;
+                const oid = Number(order.id);
+                if (scanMap[oid]) {
+                  order.allTimeLowPrice = scanMap[oid].price || null;
+                  order.allTimeLowAt = scanMap[oid].at || null;
                 }
               }
             }
