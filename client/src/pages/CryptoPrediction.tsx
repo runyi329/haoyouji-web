@@ -1773,60 +1773,124 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           )}
 
           {/* 收益权档位表 */}
-          <div className="mb-1.5" style={{ color: '#6B7A9A' }}>收益权档位表</div>
-          {/* 表头 */}
-          <div className="grid grid-cols-4 text-xs mb-1 px-1" style={{ color: '#9CA3AF' }}>
-            <span>跌幅档</span>
-            <span className="text-center">收益权</span>
-            <span className="text-center">触发时间</span>
-            <span className="text-right">触发价格</span>
+          <div className="mb-1.5 flex items-center gap-2" style={{ color: '#6B7A9A' }}>
+            <span>收益权档位表</span>
+            {tierData?.tierMode === 'linear'
+              ? <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#EFF6FF', color: '#3B82F6', border: '1px solid #BFDBFE' }}>线性档位</span>
+              : <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#FFF7ED', color: '#D97706', border: '1px solid #FED7AA' }}>阶梯档位</span>
+            }
           </div>
 
-          {/* 第0档：未触发，收益权100% */}
-          <div className="grid grid-cols-4 items-center py-1 px-1 rounded-lg mb-0.5"
-            style={currentTier === 0
-              ? { backgroundColor: 'rgba(14,165,106,0.1)', border: '1px solid rgba(14,165,106,0.4)' }
-              : { backgroundColor: '#F8FAFF' }}>
-            <span style={{ color: currentTier === 0 ? '#0EA56A' : '#9CA3AF', fontWeight: currentTier === 0 ? 600 : 400 }}>基准</span>
-            <span className="text-center font-semibold" style={{ color: currentTier === 0 ? '#0EA56A' : '#9CA3AF' }}>100%</span>
-            <span className="text-center" style={{ color: '#C0C8D8' }}>--</span>
-            <span className="text-right" style={{ color: '#C0C8D8' }}>{parseFloat(order.limitPrice).toLocaleString()}</span>
-          </div>
-
-          {/* 9档 */}
-          {TIER_LABELS.map(({ tier, drop, ratio, pct }) => {
-            const trigger = (tierData?.triggers || []).find((t: any) => t.tier === tier);
-            const isCurrentTier = currentTier === tier;
-            const isTriggered = triggeredTiers.has(tier);
+          {tierData?.tierMode === 'linear' ? (() => {
+            // ===== 线性模式档位表 =====
+            const buyPrice = parseFloat(order.limitPrice);
+            const allTimeLow = tierData?.allTimeLowPrice ? parseFloat(String(tierData.allTimeLowPrice)) : 0;
+            const currentDropPct = (allTimeLow > 0 && buyPrice > 0) ? (buyPrice - allTimeLow) / buyPrice * 100 : 0;
+            const currentLinearPct = Math.max(0, 1 - currentDropPct / 100);
+            const nodes = Array.from({ length: 20 }, (_, i) => (i + 1) * 5);
             return (
-              <div key={tier} className="grid grid-cols-4 items-center py-1 px-1 rounded-lg mb-0.5"
-                style={isCurrentTier
-                  ? { backgroundColor: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)' }
-                  : isTriggered
-                  ? { backgroundColor: '#EEF2FF' }
-                  : { backgroundColor: '#F8FAFF' }}>
-                <span style={{ color: isCurrentTier ? '#EF4444' : isTriggered ? '#6B7A9A' : '#C0C8D8', fontWeight: isCurrentTier ? 600 : 400 }}>{drop}</span>
-                <span className="text-center font-semibold" style={{ color: isCurrentTier ? '#EF4444' : isTriggered ? '#1A56DB' : '#C0C8D8' }}>{pct}</span>
-                <span className="text-center text-xs" style={{ color: isTriggered ? '#9CA3AF' : '#D0DBFF' }}>
-                  {trigger ? new Date(trigger.triggeredAt).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '--'}
-                </span>
-                <span className="text-right" style={{ color: isTriggered ? '#EF4444' : '#C0C8D8' }}>
-                  {trigger
-                    ? parseFloat(trigger.triggerPrice).toLocaleString()
-                    : parseFloat(order.limitPrice) > 0
-                      ? (parseFloat(order.limitPrice) * (1 - tier * 0.1)).toFixed(2)
-                      : '--'
-                  }
-                </span>
-              </div>
+              <>
+                <div className="grid grid-cols-4 text-xs mb-1 px-1" style={{ color: '#9CA3AF' }}>
+                  <span>跌幅</span>
+                  <span className="text-center">收益权</span>
+                  <span className="text-center">触发时间</span>
+                  <span className="text-right">触发价格</span>
+                </div>
+                {/* 基准行 */}
+                <div className="grid grid-cols-4 items-center py-1 px-1 rounded-lg mb-0.5"
+                  style={currentDropPct < 5
+                    ? { backgroundColor: 'rgba(14,165,106,0.1)', border: '1px solid rgba(14,165,106,0.4)' }
+                    : { backgroundColor: '#F8FAFF' }}>
+                  <span style={{ color: currentDropPct < 5 ? '#0EA56A' : '#9CA3AF', fontWeight: currentDropPct < 5 ? 600 : 400 }}>基准</span>
+                  <span className="text-center font-semibold" style={{ color: currentDropPct < 5 ? '#0EA56A' : '#9CA3AF' }}>100%</span>
+                  <span className="text-center" style={{ color: '#C0C8D8' }}>--</span>
+                  <span className="text-right" style={{ color: '#C0C8D8' }}>{buyPrice > 0 ? buyPrice.toLocaleString() : '--'}</span>
+                </div>
+                {nodes.map((dropPct) => {
+                  const equityPct = Math.max(0, 1 - dropPct / 100);
+                  const triggerPrice = buyPrice > 0 ? buyPrice * (1 - dropPct / 100) : 0;
+                  const isActive = currentDropPct >= dropPct - 5 && currentDropPct < dropPct;
+                  const isTriggered = allTimeLow > 0 && allTimeLow <= triggerPrice + 0.01;
+                  return (
+                    <div key={dropPct} className="grid grid-cols-4 items-center py-1 px-1 rounded-lg mb-0.5"
+                      style={isActive
+                        ? { backgroundColor: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)' }
+                        : isTriggered ? { backgroundColor: '#EEF2FF' } : { backgroundColor: '#F8FAFF' }}>
+                      <span style={{ color: isActive ? '#EF4444' : isTriggered ? '#6B7A9A' : '#C0C8D8', fontWeight: isActive ? 600 : 400 }}>-{dropPct}%</span>
+                      <span className="text-center font-semibold" style={{ color: isActive ? '#EF4444' : isTriggered ? '#1A56DB' : '#C0C8D8' }}>{(equityPct * 100).toFixed(0)}%</span>
+                      <span className="text-center text-xs" style={{ color: '#D0DBFF' }}>--</span>
+                      <span className="text-right" style={{ color: isTriggered ? '#EF4444' : '#C0C8D8' }}>
+                        {triggerPrice > 0 ? triggerPrice.toFixed(2) : '--'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </>
             );
-          })}
+          })() : (
+            <>
+              {/* 表头 */}
+              <div className="grid grid-cols-4 text-xs mb-1 px-1" style={{ color: '#9CA3AF' }}>
+                <span>跌幅档</span>
+                <span className="text-center">收益权</span>
+                <span className="text-center">触发时间</span>
+                <span className="text-right">触发价格</span>
+              </div>
+              {/* 第0档：未触发，收益权100% */}
+              <div className="grid grid-cols-4 items-center py-1 px-1 rounded-lg mb-0.5"
+                style={currentTier === 0
+                  ? { backgroundColor: 'rgba(14,165,106,0.1)', border: '1px solid rgba(14,165,106,0.4)' }
+                  : { backgroundColor: '#F8FAFF' }}>
+                <span style={{ color: currentTier === 0 ? '#0EA56A' : '#9CA3AF', fontWeight: currentTier === 0 ? 600 : 400 }}>基准</span>
+                <span className="text-center font-semibold" style={{ color: currentTier === 0 ? '#0EA56A' : '#9CA3AF' }}>100%</span>
+                <span className="text-center" style={{ color: '#C0C8D8' }}>--</span>
+                <span className="text-right" style={{ color: '#C0C8D8' }}>{parseFloat(order.limitPrice).toLocaleString()}</span>
+              </div>
+              {/* 9档 */}
+              {TIER_LABELS.map(({ tier, drop, ratio, pct }) => {
+                const trigger = (tierData?.triggers || []).find((t: any) => t.tier === tier);
+                const isCurrentTier = currentTier === tier;
+                const isTriggered = triggeredTiers.has(tier);
+                return (
+                  <div key={tier} className="grid grid-cols-4 items-center py-1 px-1 rounded-lg mb-0.5"
+                    style={isCurrentTier
+                      ? { backgroundColor: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)' }
+                      : isTriggered
+                      ? { backgroundColor: '#EEF2FF' }
+                      : { backgroundColor: '#F8FAFF' }}>
+                    <span style={{ color: isCurrentTier ? '#EF4444' : isTriggered ? '#6B7A9A' : '#C0C8D8', fontWeight: isCurrentTier ? 600 : 400 }}>{drop}</span>
+                    <span className="text-center font-semibold" style={{ color: isCurrentTier ? '#EF4444' : isTriggered ? '#1A56DB' : '#C0C8D8' }}>{pct}</span>
+                    <span className="text-center text-xs" style={{ color: isTriggered ? '#9CA3AF' : '#D0DBFF' }}>
+                      {trigger ? new Date(trigger.triggeredAt).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '--'}
+                    </span>
+                    <span className="text-right" style={{ color: isTriggered ? '#EF4444' : '#C0C8D8' }}>
+                      {trigger
+                        ? parseFloat(trigger.triggerPrice).toLocaleString()
+                        : parseFloat(order.limitPrice) > 0
+                          ? (parseFloat(order.limitPrice) * (1 - tier * 0.1)).toFixed(2)
+                          : '--'
+                      }
+                    </span>
+                  </div>
+                );
+              })}
+            </>
+          )}
           {/* 当前收益权摘要 + 市值 + 管理费 */}
           <div className="mt-2 rounded-lg p-3" style={{ backgroundColor: '#EEF2FF' }}>
             {(() => {
               const qty = parseFloat(order.quantity);
-              const pctStr = currentTier === 0 ? '100%' : (TIER_LABELS[currentTier - 1]?.pct || '100%');
-              const pct = parseFloat(pctStr) / 100;
+              let pct: number;
+              let pctStr: string;
+              if (tierData?.tierMode === 'linear') {
+                const buyP = parseFloat(order.limitPrice);
+                const allLow = tierData?.allTimeLowPrice ? parseFloat(String(tierData.allTimeLowPrice)) : 0;
+                pct = (buyP > 0 && allLow > 0) ? Math.max(0, 1 - (buyP - allLow) / buyP) : 1.0;
+                pctStr = (pct * 100).toFixed(2) + '%';
+              } else {
+                pctStr = currentTier === 0 ? '100%' : (TIER_LABELS[currentTier - 1]?.pct || '100%');
+                pct = parseFloat(pctStr) / 100;
+              }
               const remaining = qty * pct;
               const displayRemaining = remaining.toFixed(6).replace(/[.]?0+$/, '');
               const displayQty = qty.toFixed(6).replace(/[.]?0+$/, '');
@@ -1854,9 +1918,11 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
                 <>
                   <div className="flex justify-between items-center text-xs">
                     <span style={labelStyle}>当前收益权</span>
-                    <span className="font-semibold" style={{ color: tierColor }}>
-                      {currentTier === 0 ? '100%' : TIER_LABELS[currentTier - 1]?.pct || '--'}
-                      <span className="font-normal ml-1" style={dimStyle}>({currentTier === 0 ? '1/1' : TIER_LABELS[currentTier - 1]?.ratio || '--'})</span>
+                    <span className="font-semibold" style={{ color: tierData?.tierMode === 'linear' ? (pct < 1 ? '#EF4444' : '#0EA56A') : tierColor }}>
+                      {tierData?.tierMode === 'linear'
+                        ? <>{pctStr}<span className="font-normal ml-1" style={dimStyle}>(线性)</span></>
+                        : <>{currentTier === 0 ? '100%' : TIER_LABELS[currentTier - 1]?.pct || '--'}<span className="font-normal ml-1" style={dimStyle}>({currentTier === 0 ? '1/1' : TIER_LABELS[currentTier - 1]?.ratio || '--'})</span></>
+                      }
                     </span>
                   </div>
                   <div className="my-1.5" style={{ borderTop: '1px solid #D1D9F0' }} />

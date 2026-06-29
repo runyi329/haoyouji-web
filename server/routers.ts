@@ -13184,7 +13184,8 @@ ${klinesSummary}
                      COALESCE(o.source_amount, '') as source_amount,
                      COALESCE(su.username, '') as source_username,
                      o.sell_price, o.sell_quantity, o.sell_at, o.sell_confirmed_at, o.sell_status, o.confirmed_at,
-                     COALESCE(o.prepaid_fee, 0) as prepaid_fee
+                     COALESCE(o.prepaid_fee, 0) as prepaid_fee,
+                     COALESCE(o.tier_mode, 'step') as tier_mode
               FROM af_orders o
               LEFT JOIN users su ON su.id = o.source_user_id
               WHERE o.ledger_id = ${input.ledgerId} AND o.user_id = ${targetUserId}
@@ -13249,6 +13250,8 @@ ${klinesSummary}
           currentTier: tierMap[r.id] ?? 0,
           // 预收管理费
           prepaidFee: parseFloat(r.prepaid_fee || '0'),
+          // 档位计算模式
+          tierMode: (r.tier_mode || 'step') as 'step' | 'linear',
         }));
         return list;
       }),
