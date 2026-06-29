@@ -610,7 +610,15 @@ export default function AfOrderManage() {
                 if (!o.coin) return;
                 const qty = parseFloat(o.quantity) || 0;
                 rawQty[o.coin] = (rawQty[o.coin] || 0) + qty;
-                const rate = EQUITY_DISCOUNT_RATES[o.equityTier || 0] ?? 1.0;
+                let rate: number;
+                if (o.tierMode === 'linear') {
+                  const buyPrice = parseFloat(o.limitPrice) || 0;
+                  const lowPrice = parseFloat(o.allTimeLowPrice) || buyPrice;
+                  const dropPct = buyPrice > 0 ? Math.max(0, (buyPrice - lowPrice) / buyPrice) : 0;
+                  rate = Math.max(0, 1 - dropPct);
+                } else {
+                  rate = EQUITY_DISCOUNT_RATES[o.equityTier || 0] ?? 1.0;
+                }
                 effQty[o.coin] = (effQty[o.coin] || 0) + qty * rate;
                 // 加权均价：使用 limitPrice（买入挂单价）
                 const price = parseFloat(o.limitPrice) || 0;
@@ -1022,8 +1030,15 @@ export default function AfOrderManage() {
                   if (o.sellStatus !== 'sold' && o.coin) {
                     const qty = parseFloat(o.quantity) || 0;
                     personCoinQty[o.coin] = (personCoinQty[o.coin] || 0) + qty;
-                    const tier = o.equityTier || 0;
-                    const rate = EQUITY_DISCOUNT_RATES[tier] ?? 1.0;
+                    let rate: number;
+                    if (o.tierMode === 'linear') {
+                      const buyPrice = parseFloat(o.limitPrice) || 0;
+                      const lowPrice = parseFloat(o.allTimeLowPrice) || buyPrice;
+                      const dropPct = buyPrice > 0 ? Math.max(0, (buyPrice - lowPrice) / buyPrice) : 0;
+                      rate = Math.max(0, 1 - dropPct);
+                    } else {
+                      rate = EQUITY_DISCOUNT_RATES[o.equityTier || 0] ?? 1.0;
+                    }
                     personCoinEff[o.coin] = (personCoinEff[o.coin] || 0) + qty * rate;
                   }
                   const gifts: any[] = (o.giftOrders as any[]) || [];
@@ -1032,8 +1047,15 @@ export default function AfOrderManage() {
                     if (g.coin) {
                       const gQty = parseFloat(g.quantity) || 0;
                       personCoinQty[g.coin] = (personCoinQty[g.coin] || 0) + gQty;
-                      const gTier = g.equityTier || 0;
-                      const gRate = EQUITY_DISCOUNT_RATES[gTier] ?? 1.0;
+                      let gRate: number;
+                      if (g.tierMode === 'linear') {
+                        const gBuyPrice = parseFloat(g.limitPrice) || 0;
+                        const gLowPrice = parseFloat(g.allTimeLowPrice) || gBuyPrice;
+                        const gDropPct = gBuyPrice > 0 ? Math.max(0, (gBuyPrice - gLowPrice) / gBuyPrice) : 0;
+                        gRate = Math.max(0, 1 - gDropPct);
+                      } else {
+                        gRate = EQUITY_DISCOUNT_RATES[g.equityTier || 0] ?? 1.0;
+                      }
                       personCoinEff[g.coin] = (personCoinEff[g.coin] || 0) + gQty * gRate;
                     }
                   });
@@ -1158,7 +1180,15 @@ export default function AfOrderManage() {
                             const qty = parseFloat(order.quantity || 0);
                             const coin = order.coin || order._parentCoin || '';
                             const tier = order.equityTier || 0;
-                            const rate = EQUITY_DISCOUNT_RATES[tier] ?? 1.0;
+                            let rate: number;
+                            if (order.tierMode === 'linear') {
+                              const buyPrice = parseFloat(order.limitPrice) || 0;
+                              const lowPrice = parseFloat(order.allTimeLowPrice) || buyPrice;
+                              const dropPct = buyPrice > 0 ? Math.max(0, (buyPrice - lowPrice) / buyPrice) : 0;
+                              rate = Math.max(0, 1 - dropPct);
+                            } else {
+                              rate = EQUITY_DISCOUNT_RATES[tier] ?? 1.0;
+                            }
                             const effQty = qty * rate;
                             const hasDiscount = Math.abs(effQty - qty) > 0.00005;
                             const amount = parseFloat(order.amount || 0);
@@ -1287,7 +1317,15 @@ export default function AfOrderManage() {
                             const qty = parseFloat(order.quantity || 0);
                             const oCoin = order.coin || order._parentCoin || coin;
                             const tier = order.equityTier || 0;
-                            const rate = EQUITY_DISCOUNT_RATES[tier] ?? 1.0;
+                            let rate: number;
+                            if (order.tierMode === 'linear') {
+                              const buyPrice = parseFloat(order.limitPrice) || 0;
+                              const lowPrice = parseFloat(order.allTimeLowPrice) || buyPrice;
+                              const dropPct = buyPrice > 0 ? Math.max(0, (buyPrice - lowPrice) / buyPrice) : 0;
+                              rate = Math.max(0, 1 - dropPct);
+                            } else {
+                              rate = EQUITY_DISCOUNT_RATES[tier] ?? 1.0;
+                            }
                             const effQty = qty * rate;
                             const hasDiscount = Math.abs(effQty - qty) > 0.00005;
                             const amount = parseFloat(order.amount || 0);
@@ -1362,7 +1400,15 @@ export default function AfOrderManage() {
                   const isGift = o.isGift === true || o.isGift === 1;
                   const qty = parseFloat(o.quantity) || 0;
                   const tier = o.equityTier || 0;
-                  const rate = EQUITY_DISCOUNT_RATES[tier] ?? 1.0;
+                  let rate: number;
+                  if (o.tierMode === 'linear') {
+                    const buyPrice = parseFloat(o.limitPrice) || 0;
+                    const lowPrice = parseFloat(o.allTimeLowPrice) || buyPrice;
+                    const dropPct = buyPrice > 0 ? Math.max(0, (buyPrice - lowPrice) / buyPrice) : 0;
+                    rate = Math.max(0, 1 - dropPct);
+                  } else {
+                    rate = EQUITY_DISCOUNT_RATES[tier] ?? 1.0;
+                  }
                   const effQty = qty * rate;
                   const isCompleted = o.status === 'completed';
                   const isSold = o.sellStatus === 'sold';
@@ -1374,7 +1420,8 @@ export default function AfOrderManage() {
                     if (isCompleted && !isSold) {
                       holdingRawQty += qty;
                       holdingEffQty += effQty;
-                      if (tier > 0 && Math.abs(effQty - qty) > 0.00005) hasDiscount = true;
+                      const isLinearDiscount = o.tierMode === 'linear' && Math.abs(rate - 1) > 0.00005;
+                      if ((tier > 0 || isLinearDiscount) && Math.abs(effQty - qty) > 0.00005) hasDiscount = true;
                     }
                     // 嵌套赠单
                     ((o.giftOrders as any[]) || []).forEach((g: any) => {
@@ -1549,8 +1596,15 @@ export default function AfOrderManage() {
                   if (o.sellStatus !== 'sold' && o.coin) {
                     const qty = parseFloat(o.quantity) || 0;
                     coinQty[o.coin] = (coinQty[o.coin] || 0) + qty;
-                    const tier = o.equityTier || 0;
-                    const rate = EQUITY_DISCOUNT_RATES[tier] ?? 1.0;
+                    let rate: number;
+                    if (o.tierMode === 'linear') {
+                      const buyPrice = parseFloat(o.limitPrice) || 0;
+                      const lowPrice = parseFloat(o.allTimeLowPrice) || buyPrice;
+                      const dropPct = buyPrice > 0 ? Math.max(0, (buyPrice - lowPrice) / buyPrice) : 0;
+                      rate = Math.max(0, 1 - dropPct);
+                    } else {
+                      rate = EQUITY_DISCOUNT_RATES[o.equityTier || 0] ?? 1.0;
+                    }
                     coinQtyEffective[o.coin] = (coinQtyEffective[o.coin] || 0) + qty * rate;
                   }
                   // 嵌套赠与单：无论正单是否已卖出，都遍历赠单（排除已卖出的赠单）
@@ -1560,8 +1614,15 @@ export default function AfOrderManage() {
                     if (g.coin) {
                       const gQty = parseFloat(g.quantity) || 0;
                       coinQty[g.coin] = (coinQty[g.coin] || 0) + gQty;
-                      const gTier = g.equityTier || 0;
-                      const gRate = EQUITY_DISCOUNT_RATES[gTier] ?? 1.0;
+                      let gRate: number;
+                      if (g.tierMode === 'linear') {
+                        const gBuyPrice = parseFloat(g.limitPrice) || 0;
+                        const gLowPrice = parseFloat(g.allTimeLowPrice) || gBuyPrice;
+                        const gDropPct = gBuyPrice > 0 ? Math.max(0, (gBuyPrice - gLowPrice) / gBuyPrice) : 0;
+                        gRate = Math.max(0, 1 - gDropPct);
+                      } else {
+                        gRate = EQUITY_DISCOUNT_RATES[g.equityTier || 0] ?? 1.0;
+                      }
                       coinQtyEffective[g.coin] = (coinQtyEffective[g.coin] || 0) + gQty * gRate;
                     }
                   });
