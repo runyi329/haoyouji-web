@@ -251,18 +251,21 @@ export default function YabanChargeProducts() {
   const [priceHistoryRecords, setPriceHistoryRecords] = useState<any[]>([]);
   const [priceHistoryLoading, setPriceHistoryLoading] = useState(false);
 
-  // 打开调价记录弹层：直接用 utils.fetch 调接口，不经过缓存，秒出
+  // 打开调价记录弹层：先 invalidate 清缓存，再 fetch，确保每次都从服务器拿最新数据
   const openPriceHistory = async (sheet: { type: "product" | "global"; productId?: number; productName?: string }) => {
     setPriceHistorySheet(sheet);
     setPriceHistoryRecords([]);
     setPriceHistoryLoading(true);
     try {
-      const res = await utils.yabanCustomer.listPriceHistory.fetch({
+      const input = {
         productId: sheet.type === "product" ? sheet.productId : undefined,
         limit: 50,
-      });
+      };
+      await utils.yabanCustomer.listPriceHistory.invalidate(input);
+      const res = await utils.yabanCustomer.listPriceHistory.fetch(input);
       setPriceHistoryRecords(res?.records ?? []);
-    } catch (_) {
+    } catch (e) {
+      console.error("[priceHistory] fetch error", e);
       setPriceHistoryRecords([]);
     } finally {
       setPriceHistoryLoading(false);
