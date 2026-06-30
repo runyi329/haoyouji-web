@@ -734,6 +734,8 @@ async function ensurePriceHistory(conn: any) {
       tenant_id INT NOT NULL DEFAULT 1,
       product_id BIGINT UNSIGNED NOT NULL,
       product_name VARCHAR(128) NOT NULL DEFAULT '',
+      cat1_name VARCHAR(128) NOT NULL DEFAULT '',
+      cat2_name VARCHAR(128) NOT NULL DEFAULT '',
       old_price DECIMAL(12,2) NOT NULL DEFAULT 0,
       old_price_max DECIMAL(12,2) NOT NULL DEFAULT 0,
       new_price DECIMAL(12,2) NOT NULL DEFAULT 0,
@@ -746,6 +748,9 @@ async function ensurePriceHistory(conn: any) {
       KEY idx_tenant_time (tenant_id, changed_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+  // 兼容旧表：补加路径字段
+  try { await conn.execute(`ALTER TABLE yaban_charge_price_history ADD COLUMN cat1_name VARCHAR(128) NOT NULL DEFAULT '' AFTER product_name`); } catch (_) {}
+  try { await conn.execute(`ALTER TABLE yaban_charge_price_history ADD COLUMN cat2_name VARCHAR(128) NOT NULL DEFAULT '' AFTER cat1_name`); } catch (_) {}
   priceHistoryReady = true;
 }
 
@@ -2380,10 +2385,22 @@ export const yabanCustomerRouter = router({
           const oldPriceMax = old ? Number(old.price_max) : 0;
           if (old && (oldPrice !== newPrice || oldPriceMax !== newPriceMax)) {
             const operatorName = (ctx as any)?.user?.name || (ctx as any)?.user?.username || '';
+            // 查出路径：如果有 parent_id 就是二级，查一级名；否则自己就是一级
+            let cat1Name = '';
+            let cat2Name = '';
+            try {
+              if (input.parentId) {
+                const [p1] = (await (conn as any).execute(`SELECT name FROM yaban_charge_category WHERE tenant_id = ? AND id = ? LIMIT 1`, [TENANT_ID, Number(input.parentId)])) as any;
+                cat1Name = (p1 as any[])[0]?.name || '';
+                cat2Name = input.name;
+              } else {
+                cat1Name = input.name;
+              }
+            } catch (_) {}
             await (conn as any).execute(
-              `INSERT INTO yaban_charge_price_history (tenant_id, product_id, product_name, old_price, old_price_max, new_price, new_price_max, unit, operator_name)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [TENANT_ID, Number(input.id), input.name, oldPrice, oldPriceMax, newPrice, newPriceMax, input.unit, operatorName]
+              `INSERT INTO yaban_charge_price_history (tenant_id, product_id, product_name, cat1_name, cat2_name, old_price, old_price_max, new_price, new_price_max, unit, operator_name)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [TENANT_ID, Number(input.id), input.name, cat1Name, cat2Name, oldPrice, oldPriceMax, newPrice, newPriceMax, input.unit, operatorName]
             );
           }
         } catch (_) {}
@@ -2511,10 +2528,25 @@ export const yabanCustomerRouter = router({
           const oldPriceMax = old ? Number(old.price_max) : 0;
           if (old && (oldPrice !== newPrice || oldPriceMax !== newPriceMax)) {
             const operatorName = (ctx as any)?.user?.name || (ctx as any)?.user?.username || '';
+            // 查出路径：一级名和二级名
+            let cat1Name = '';
+            let cat2Name = '';
+            try {
+              if (input.subcategoryId) {
+                // 有二级：查二级名和一级名
+                const [subRow] = (await (conn as any).execute(`SELECT c.name as sub_name, p.name as cat_name FROM yaban_charge_category c LEFT JOIN yaban_charge_category p ON c.parent_id = p.id WHERE c.tenant_id = ? AND c.id = ? LIMIT 1`, [TENANT_ID, Number(input.subcategoryId)])) as any;
+                cat1Name = (subRow as any[])[0]?.cat_name || '';
+                cat2Name = (subRow as any[])[0]?.sub_name || '';
+              } else if (input.categoryId) {
+                // 只挂一级：查一级名
+                const [catRow] = (await (conn as any).execute(`SELECT name FROM yaban_charge_category WHERE tenant_id = ? AND id = ? LIMIT 1`, [TENANT_ID, Number(input.categoryId)])) as any;
+                cat1Name = (catRow as any[])[0]?.name || '';
+              }
+            } catch (_) {}
             await (conn as any).execute(
-              `INSERT INTO yaban_charge_price_history (tenant_id, product_id, product_name, old_price, old_price_max, new_price, new_price_max, unit, operator_name)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [TENANT_ID, Number(input.id), input.name, oldPrice, oldPriceMax, newPrice, newPriceMax, input.unit, operatorName]
+              `INSERT INTO yaban_charge_price_history (tenant_id, product_id, product_name, cat1_name, cat2_name, old_price, old_price_max, new_price, new_price_max, unit, operator_name)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [TENANT_ID, Number(input.id), input.name, cat1Name, cat2Name, oldPrice, oldPriceMax, newPrice, newPriceMax, input.unit, operatorName]
             );
           }
         } catch (_) {}
@@ -3861,7 +3893,7 @@ export const yabanCustomerRouter = router({
       if (input.productId) {
         // 项目级：返回该产品的调价历史
         const [rows] = (await (conn as any).execute(
-          `SELECT h.id, h.product_id, h.product_name, h.old_price, h.old_price_max, h.new_price, h.new_price_max,
+          `SELECT h.id, h.product_id, h.product_name, h.cat1_name, h.cat2_name, h.old_price, h.old_price_max, h.new_price, h.new_price_max,
                   h.unit, h.operator_name, h.changed_at
            FROM yaban_charge_price_history h
            WHERE h.tenant_id = ? AND h.product_id = ?
@@ -3873,7 +3905,7 @@ export const yabanCustomerRouter = router({
       } else {
         // 全局级：返回该门诊所有调价历史
         const [rows] = (await (conn as any).execute(
-          `SELECT h.id, h.product_id, h.product_name, h.old_price, h.old_price_max, h.new_price, h.new_price_max,
+          `SELECT h.id, h.product_id, h.product_name, h.cat1_name, h.cat2_name, h.old_price, h.old_price_max, h.new_price, h.new_price_max,
                   h.unit, h.operator_name, h.changed_at
            FROM yaban_charge_price_history h
            WHERE h.tenant_id = ?

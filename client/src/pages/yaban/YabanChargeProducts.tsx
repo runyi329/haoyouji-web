@@ -223,14 +223,31 @@ function PriceHistorySheet({
   onClose: () => void;
 }) {
   const query = trpc.yabanCustomer.listPriceHistory.useQuery(
-    { productId: type === "product" ? productId : undefined, limit: 50 },
+    { productId: type === "product" ? productId : undefined, limit: 100 },
     { refetchOnWindowFocus: false }
   );
   const records: any[] = (query.data as any)?.records ?? [];
 
+  const formatTime = (timeStr: string) => {
+    if (!timeStr) return '';
+    try {
+      const d = new Date(timeStr.replace(' ', 'T') + '+08:00');
+      const now = new Date();
+      const diffMs = now.getTime() - d.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+      if (diffMins < 1) return '刚刚';
+      if (diffMins < 60) return `${diffMins}分钟前`;
+      if (diffHours < 24) return `${diffHours}小时前`;
+      if (diffDays < 7) return `${diffDays}天前`;
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    } catch { return timeStr; }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black/40" onClick={onClose}>
-      <div className="mt-auto bg-white rounded-t-3xl px-4 pt-5 pb-8 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div className="mt-auto bg-white rounded-t-3xl px-4 pt-5 pb-8 max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4 shrink-0">
           <div>
             <span className="text-base font-bold text-gray-800">
@@ -259,43 +276,73 @@ function PriceHistorySheet({
               <p className="text-xs text-gray-300 mt-1">修改项目价格后会自动记录在此</p>
             </div>
           ) : (
-            <div className="space-y-0">
+            <div className="bg-white rounded-lg overflow-hidden">
               {records.map((r: any, idx: number) => {
-                const changedAt = new Date(r.changed_at);
-                const dateStr = `${changedAt.getFullYear()}-${String(changedAt.getMonth()+1).padStart(2,'0')}-${String(changedAt.getDate()).padStart(2,'0')}`;
-                const timeStr = `${String(changedAt.getHours()).padStart(2,'0')}:${String(changedAt.getMinutes()).padStart(2,'0')}`;
                 const oldP = Number(r.old_price);
                 const oldPMax = Number(r.old_price_max);
                 const newP = Number(r.new_price);
                 const newPMax = Number(r.new_price_max);
-                const fmtPrice = (p: number, pMax: number) => pMax > 0 ? `${p}~${pMax}` : `${p}`;
                 const isDown = newP < oldP || (newP === oldP && newPMax < oldPMax);
+                const diff = newP - oldP;
+                const diffPct = oldP > 0 ? ((diff / oldP) * 100).toFixed(1) : null;
+                const fmtPrice = (p: number, pMax: number) => pMax > 0 ? `${p}~${pMax}` : `${p}`;
+                const unitStr = r.unit ? `元/${r.unit}` : '元';
+                // 路径显示
+                const pathParts = [r.cat1_name, r.cat2_name, type === 'global' ? r.product_name : null].filter(Boolean);
+                const pathStr = pathParts.join(' › ');
+                // 操作人首字母
+                const opName = r.operator_name || '未知';
+                const opInitial = opName.charAt(opName.length - 1);
                 return (
-                  <div key={r.id} className={`flex gap-3 py-3 ${idx < records.length - 1 ? 'border-b border-dashed border-gray-100' : ''}`}>
-                    <div className="flex flex-col items-center shrink-0 pt-0.5">
-                      <div className="w-2 h-2 rounded-full mt-1" style={{ backgroundColor: isDown ? '#22c55e' : '#f97316' }} />
-                      {idx < records.length - 1 && <div className="w-px flex-1 bg-gray-100 mt-1" />}
+                  <div
+                    key={r.id}
+                    className={`flex items-start gap-3 px-4 py-3 ${idx < records.length - 1 ? 'border-b border-gray-100' : ''}`}
+                  >
+                    {/* 操作人头像 */}
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-medium shrink-0 mt-0.5"
+                      style={{ backgroundColor: isDown ? '#22c55e' : '#f97316' }}
+                    >
+                      {opInitial}
                     </div>
+                    {/* 内容 */}
                     <div className="flex-1 min-w-0">
-                      {type === "global" && (
-                        <div className="text-xs font-medium text-gray-700 mb-0.5 truncate">{r.product_name}</div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-gray-700 truncate">{opName}</span>
+                        <span className="text-xs text-gray-400 shrink-0">{formatTime(r.changed_at)}</span>
+                      </div>
+                      {/* 路径 */}
+                      {pathStr && (
+                        <p className="text-xs text-gray-400 mt-0.5 truncate">{pathStr}</p>
                       )}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm text-gray-400 line-through">{fmtPrice(oldP, oldPMax)}元/{r.unit}</span>
+                      {/* 价格变化 */}
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                        <span className="text-xs text-gray-400 line-through">{fmtPrice(oldP, oldPMax)}{unitStr}</span>
                         <ChevronRight className="w-3 h-3 text-gray-300 shrink-0" />
                         <span className={`text-sm font-semibold ${isDown ? 'text-green-600' : 'text-orange-500'}`}>
-                          {fmtPrice(newP, newPMax)}元/{r.unit}
+                          {fmtPrice(newP, newPMax)}{unitStr}
                         </span>
+                        {diff !== 0 && (
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${isDown ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-500'}`}>
+                            {isDown ? '' : '+'}{diff.toFixed(2)}{diffPct ? ` (${isDown ? '' : '+'}${diffPct}%)` : ''}
+                          </span>
+                        )}
                       </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs text-gray-400">{dateStr} {timeStr}</span>
-                        {r.operator_name && <span className="text-xs text-gray-300">· {r.operator_name}</span>}
-                      </div>
+                    </div>
+                    {/* 浮动标签 */}
+                    <div
+                      className="shrink-0 text-xs px-1.5 py-0.5 rounded mt-0.5"
+                      style={{ backgroundColor: isDown ? '#22c55e18' : '#f9731618', color: isDown ? '#22c55e' : '#f97316' }}
+                    >
+                      {isDown ? '降价' : '涨价'}
                     </div>
                   </div>
                 );
               })}
             </div>
+          )}
+          {records.length > 0 && (
+            <p className="text-center text-xs text-gray-400 mt-4 pb-2">共 {records.length} 条记录</p>
           )}
         </div>
       </div>
