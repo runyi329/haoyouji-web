@@ -247,12 +247,14 @@ export default function YabanChargeProducts() {
     type: "product" | "global";
     productId?: number;
     productName?: string;
+    _ts?: number; // 时间戳，每次打开弹层时更新，用于破坏 tRPC 缓存 key
   } | null>(null);
 
   const priceHistoryQuery = trpc.yabanCustomer.listPriceHistory.useQuery(
     {
       productId: priceHistorySheet?.type === "product" ? priceHistorySheet.productId : undefined,
       limit: 50,
+      _ts: priceHistorySheet?._ts,
     },
     {
       enabled: !!priceHistorySheet,
@@ -260,13 +262,6 @@ export default function YabanChargeProducts() {
       staleTime: 0,
     }
   );
-  // 每次弹层打开时强制重新请求，避免 tRPC 缓存导致显示旧数据
-  useEffect(() => {
-    if (priceHistorySheet) {
-      priceHistoryQuery.refetch();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [priceHistorySheet?.type, priceHistorySheet?.productId]);
 
   // ===== 复制弹层状态 =====
   // 步骤："select"(选门诊) -> "analyze"(分析中) -> "confirm"(确认冲突) -> "done"(完成)
@@ -1208,7 +1203,7 @@ export default function YabanChargeProducts() {
               <button
                 onClick={() => {
                   setShowManagePicker(false);
-                  setPriceHistorySheet({ type: "global" });
+                  setPriceHistorySheet({ type: "global", _ts: Date.now() });
                 }}
                 className="w-full flex items-center gap-4 px-4 py-3.5 bg-gray-50 rounded-2xl active:bg-blue-50 text-left"
               >
@@ -1286,7 +1281,7 @@ export default function YabanChargeProducts() {
               <button
                 onClick={() => {
                   setCatSheet(null);
-                  setPriceHistorySheet({ type: "product", productId: catSheet.id, productName: catSheet.name });
+                  setPriceHistorySheet({ type: "product", productId: catSheet.id, productName: catSheet.name, _ts: Date.now() });
                 }}
                 className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 rounded-xl text-sm text-gray-500 active:bg-gray-100"
               >
@@ -1382,7 +1377,7 @@ export default function YabanChargeProducts() {
             {prodSheet.id && (
               <button
                 onClick={() => {
-                  setPriceHistorySheet({ type: "product", productId: prodSheet.id, productName: prodSheet.name });
+                  setPriceHistorySheet({ type: "product", productId: prodSheet.id, productName: prodSheet.name, _ts: Date.now() });
                 }}
                 className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 rounded-xl text-sm text-gray-500 active:bg-gray-100"
               >

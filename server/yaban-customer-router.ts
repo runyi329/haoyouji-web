@@ -3850,6 +3850,7 @@ export const yabanCustomerRouter = router({
     .input(z.object({
       productId: z.number().int().positive().optional(), // 项目级：指定产品 id
       limit: z.number().int().min(1).max(200).default(50),
+      _ts: z.number().optional(), // 时间戳，仅用于破坏前端缓存 key，后端忽略
     }))
     .query(async ({ input, ctx }) => {
       const conn = await getDbConnection();
