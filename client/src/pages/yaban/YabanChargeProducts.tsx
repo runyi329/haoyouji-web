@@ -212,6 +212,94 @@ function SortableProdRow({ prod, isSaving }: { prod: ProdItem; isSaving: boolean
   );
 }
 
+// ===== 调价记录弹层（独立子组件，挂载即查询，无缓存问题）=====
+function PriceHistorySheet({
+  type,
+  productId,
+  productName,
+  onClose,
+}: {
+  type: "product" | "global";
+  productId?: number;
+  productName?: string;
+  onClose: () => void;
+}) {
+  const query = trpc.yabanCustomer.listPriceHistory.useQuery(
+    { productId: type === "product" ? productId : undefined, limit: 50 },
+    { refetchOnWindowFocus: false }
+  );
+  const records: any[] = (query.data as any)?.records ?? [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-black/40" onClick={onClose}>
+      <div className="mt-auto bg-white rounded-t-3xl px-4 pt-5 pb-8 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4 shrink-0">
+          <div>
+            <span className="text-base font-bold text-gray-800">
+              {type === "product" ? "调价记录" : "全局调价记录"}
+            </span>
+            {type === "product" && productName && (
+              <span className="ml-2 text-sm text-gray-400">「{productName}」</span>
+            )}
+          </div>
+          <button onClick={onClose} className="text-gray-400"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="overflow-y-auto flex-1">
+          {query.isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-6 h-6 animate-spin text-gray-300" />
+            </div>
+          ) : !records.length ? (
+            <div className="py-12 text-center">
+              <History className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+              <p className="text-sm text-gray-400">暂无调价记录</p>
+              <p className="text-xs text-gray-300 mt-1">修改项目价格后会自动记录在此</p>
+            </div>
+          ) : (
+            <div className="space-y-0">
+              {records.map((r: any, idx: number) => {
+                const changedAt = new Date(r.changed_at);
+                const dateStr = `${changedAt.getFullYear()}-${String(changedAt.getMonth()+1).padStart(2,'0')}-${String(changedAt.getDate()).padStart(2,'0')}`;
+                const timeStr = `${String(changedAt.getHours()).padStart(2,'0')}:${String(changedAt.getMinutes()).padStart(2,'0')}`;
+                const oldP = Number(r.old_price);
+                const oldPMax = Number(r.old_price_max);
+                const newP = Number(r.new_price);
+                const newPMax = Number(r.new_price_max);
+                const fmtPrice = (p: number, pMax: number) => pMax > 0 ? `${p}~${pMax}` : `${p}`;
+                const isDown = newP < oldP || (newP === oldP && newPMax < oldPMax);
+                return (
+                  <div key={r.id} className={`flex gap-3 py-3 ${idx < records.length - 1 ? 'border-b border-dashed border-gray-100' : ''}`}>
+                    <div className="flex flex-col items-center shrink-0 pt-0.5">
+                      <div className="w-2 h-2 rounded-full mt-1" style={{ backgroundColor: isDown ? '#22c55e' : '#f97316' }} />
+                      {idx < records.length - 1 && <div className="w-px flex-1 bg-gray-100 mt-1" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      {type === "global" && (
+                        <div className="text-xs font-medium text-gray-700 mb-0.5 truncate">{r.product_name}</div>
+                      )}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm text-gray-400 line-through">{fmtPrice(oldP, oldPMax)}元/{r.unit}</span>
+                        <ChevronRight className="w-3 h-3 text-gray-300 shrink-0" />
+                        <span className={`text-sm font-semibold ${isDown ? 'text-green-600' : 'text-orange-500'}`}>
+                          {fmtPrice(newP, newPMax)}元/{r.unit}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-gray-400">{dateStr} {timeStr}</span>
+                        {r.operator_name && <span className="text-xs text-gray-300">· {r.operator_name}</span>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function YabanChargeProducts() {
   const goBack = useSmartBack("/yaban/profile");
   const [, navigate] = useLocation();
@@ -242,35 +330,12 @@ export default function YabanChargeProducts() {
   const refresh = () => utils.yabanCustomer.listChargeProducts.invalidate();
 
   // ===== 调价记录弹层状态 =====
-  // type: "product"(项目级) | "global"(全局级)
+  // 用独立子组件 PriceHistorySheet 渲染，挂载即查询，无缓存问题
   const [priceHistorySheet, setPriceHistorySheet] = useState<{
     type: "product" | "global";
     productId?: number;
     productName?: string;
   } | null>(null);
-  const [priceHistoryRecords, setPriceHistoryRecords] = useState<any[]>([]);
-  const [priceHistoryLoading, setPriceHistoryLoading] = useState(false);
-
-  // 打开调价记录弹层：先 invalidate 清缓存，再 fetch，确保每次都从服务器拿最新数据
-  const openPriceHistory = async (sheet: { type: "product" | "global"; productId?: number; productName?: string }) => {
-    setPriceHistorySheet(sheet);
-    setPriceHistoryRecords([]);
-    setPriceHistoryLoading(true);
-    try {
-      const input = {
-        productId: sheet.type === "product" ? sheet.productId : undefined,
-        limit: 50,
-      };
-      await utils.yabanCustomer.listPriceHistory.invalidate(input);
-      const res = await utils.yabanCustomer.listPriceHistory.fetch(input);
-      setPriceHistoryRecords(res?.records ?? []);
-    } catch (e) {
-      console.error("[priceHistory] fetch error", e);
-      setPriceHistoryRecords([]);
-    } finally {
-      setPriceHistoryLoading(false);
-    }
-  };
 
   // ===== 复制弹层状态 =====
   // 步骤："select"(选门诊) -> "analyze"(分析中) -> "confirm"(确认冲突) -> "done"(完成)
@@ -1212,7 +1277,7 @@ export default function YabanChargeProducts() {
               <button
                 onClick={() => {
                   setShowManagePicker(false);
-                  openPriceHistory({ type: "global" });
+                  setPriceHistorySheet({ type: "global" });
                 }}
                 className="w-full flex items-center gap-4 px-4 py-3.5 bg-gray-50 rounded-2xl active:bg-blue-50 text-left"
               >
@@ -1290,7 +1355,7 @@ export default function YabanChargeProducts() {
               <button
                 onClick={() => {
                   setCatSheet(null);
-                  openPriceHistory({ type: "product", productId: catSheet.id, productName: catSheet.name });
+                  setPriceHistorySheet({ type: "product", productId: catSheet.id, productName: catSheet.name });
                 }}
                 className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 rounded-xl text-sm text-gray-500 active:bg-gray-100"
               >
@@ -1386,7 +1451,7 @@ export default function YabanChargeProducts() {
             {prodSheet.id && (
               <button
                 onClick={() => {
-                  openPriceHistory({ type: "product", productId: prodSheet.id, productName: prodSheet.name });
+                  setPriceHistorySheet({ type: "product", productId: prodSheet.id, productName: prodSheet.name });
                 }}
                 className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 rounded-xl text-sm text-gray-500 active:bg-gray-100"
               >
@@ -1654,83 +1719,14 @@ export default function YabanChargeProducts() {
         </div>
       )}
 
-      {/* ===== 调价记录弹层（项目级 + 全局级通用） ===== */}
+      {/* ===== 调价记录弹层（独立子组件，挂载即查询） ===== */}
       {priceHistorySheet && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-black/40" onClick={() => setPriceHistorySheet(null)}>
-          <div className="mt-auto bg-white rounded-t-3xl px-4 pt-5 pb-8 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-            {/* 标题栏 */}
-            <div className="flex items-center justify-between mb-4 shrink-0">
-              <div>
-                <span className="text-base font-bold text-gray-800">
-                  {priceHistorySheet.type === "product" ? `调价记录` : `全局调价记录`}
-                </span>
-                {priceHistorySheet.type === "product" && priceHistorySheet.productName && (
-                  <span className="ml-2 text-sm text-gray-400">「{priceHistorySheet.productName}」</span>
-                )}
-              </div>
-              <button onClick={() => setPriceHistorySheet(null)} className="text-gray-400"><X className="w-5 h-5" /></button>
-            </div>
-
-            {/* 内容区 */}
-            <div className="overflow-y-auto flex-1">
-              {priceHistoryLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="w-6 h-6 animate-spin text-gray-300" />
-                </div>
-              ) : !priceHistoryRecords.length ? (
-                <div className="py-12 text-center">
-                  <History className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-                  <p className="text-sm text-gray-400">暂无调价记录</p>
-                  <p className="text-xs text-gray-300 mt-1">修改项目价格后会自动记录在此</p>
-                </div>
-              ) : (
-                <div className="space-y-0">
-                  {priceHistoryRecords.map((r: any, idx: number) => {
-                    const changedAt = new Date(r.changed_at);
-                    const dateStr = `${changedAt.getFullYear()}-${String(changedAt.getMonth()+1).padStart(2,'0')}-${String(changedAt.getDate()).padStart(2,'0')}`;
-                    const timeStr = `${String(changedAt.getHours()).padStart(2,'0')}:${String(changedAt.getMinutes()).padStart(2,'0')}`;
-                    const oldP = Number(r.old_price);
-                    const oldPMax = Number(r.old_price_max);
-                    const newP = Number(r.new_price);
-                    const newPMax = Number(r.new_price_max);
-                    const fmtPrice = (p: number, pMax: number) => pMax > 0 ? `${p}~${pMax}` : `${p}`;
-                    const isDown = newP < oldP || (newP === oldP && newPMax < oldPMax);
-                    return (
-                      <div key={r.id} className={`flex gap-3 py-3 ${idx < priceHistoryRecords.length - 1 ? 'border-b border-dashed border-gray-100' : ''}`}>
-                        {/* 时间线圆点 */}
-                        <div className="flex flex-col items-center shrink-0 pt-0.5">
-                          <div className="w-2 h-2 rounded-full mt-1" style={{ backgroundColor: isDown ? '#22c55e' : '#f97316' }} />
-                          {idx < priceHistoryRecords.length - 1 && (
-                            <div className="w-px flex-1 bg-gray-100 mt-1" />
-                          )}
-                        </div>
-                        {/* 内容 */}
-                        <div className="flex-1 min-w-0">
-                          {priceHistorySheet.type === "global" && (
-                            <div className="text-xs font-medium text-gray-700 mb-0.5 truncate">{r.product_name}</div>
-                          )}
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm text-gray-400 line-through">{fmtPrice(oldP, oldPMax)}元/{r.unit}</span>
-                            <ChevronRight className="w-3 h-3 text-gray-300 shrink-0" />
-                            <span className={`text-sm font-semibold ${isDown ? 'text-green-600' : 'text-orange-500'}`}>
-                              {fmtPrice(newP, newPMax)}元/{r.unit}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-xs text-gray-400">{dateStr} {timeStr}</span>
-                            {r.operator_name && (
-                              <span className="text-xs text-gray-300">· {r.operator_name}</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <PriceHistorySheet
+          type={priceHistorySheet.type}
+          productId={priceHistorySheet.productId}
+          productName={priceHistorySheet.productName}
+          onClose={() => setPriceHistorySheet(null)}
+        />
       )}
     </div>
   );
