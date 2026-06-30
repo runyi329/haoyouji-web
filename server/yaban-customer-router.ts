@@ -3857,6 +3857,7 @@ export const yabanCustomerRouter = router({
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
       const TENANT_ID = await resolveTenantId(ctx);
       await ensurePriceHistory(conn);
+      const lim = Math.min(200, Math.max(1, Number(input.limit) || 50));
       if (input.productId) {
         // 项目级：返回该产品的调价历史
         const [rows] = (await (conn as any).execute(
@@ -3865,8 +3866,8 @@ export const yabanCustomerRouter = router({
            FROM yaban_charge_price_history h
            WHERE h.tenant_id = ? AND h.product_id = ?
            ORDER BY h.changed_at DESC
-           LIMIT ?`,
-          [TENANT_ID, input.productId, input.limit]
+           LIMIT ${lim}`,
+          [TENANT_ID, input.productId]
         )) as any;
         return { records: rows as any[] };
       } else {
@@ -3877,8 +3878,8 @@ export const yabanCustomerRouter = router({
            FROM yaban_charge_price_history h
            WHERE h.tenant_id = ?
            ORDER BY h.changed_at DESC
-           LIMIT ?`,
-          [TENANT_ID, input.limit]
+           LIMIT ${lim}`,
+          [TENANT_ID]
         )) as any;
         return { records: rows as any[] };
       }
