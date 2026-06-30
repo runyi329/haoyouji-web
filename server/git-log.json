@@ -1,5 +1,1607 @@
 [
   {
+    "hash": "e6cb1daa40b828e7b7077811882cfe25c82c79fd",
+    "author": "Manus Deploy",
+    "date": "2026-06-30T01:12:46+00:00",
+    "message": "fix: Tooltip改为遮罩层+叉号关闭，去掉touchstart和scroll自动关闭",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "Tooltip改为遮罩层+叉号关闭，去掉touchstart和scroll自动关闭"
+  },
+  {
+    "hash": "3a1d2afb86617e36957a4aa9c24f1ce27ff74050",
+    "author": "Manus Deploy",
+    "date": "2026-06-30T00:21:51+00:00",
+    "message": "fix: price-scanner加入SEI和PLUME扫描，修复担保物无法显示实时价格",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "price-scanner加入SEI和PLUME扫描，修复担保物无法显示实时价格"
+  },
+  {
+    "hash": "bcd9ab4f50b92186c1cd9bc59a58020cd1f2c6c0",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T22:15:00+00:00",
+    "message": "feat: 账本详情页优化 - 实时价值/实时波动/历史保证金标题、按币种Tab、概览Tab切换、表格布局优化",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "账本详情页优化 - 实时价值/实时波动/历史保证金标题、按币种Tab、概览Tab切换、表格布局优化"
+  },
+  {
+    "hash": "c295904fabd90a86ed96db6ada874f82aa9c9ead",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T20:15:54+00:00",
+    "message": "feat: 管理费按人员视图-钱包余额行移至最下，调整颜色和字体",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "管理费按人员视图-钱包余额行移至最下，调整颜色和字体"
+  },
+  {
+    "hash": "85ad6aff75f5148611ded390b36635d6c25a371f",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T20:14:26+00:00",
+    "message": "feat: 管理费按人员视图加入应付管理费+充足/待补状态",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "管理费按人员视图加入应付管理费+充足/待补状态"
+  },
+  {
+    "hash": "439c21dc9171ab5160feaed333ebd7ca39545b0a",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T20:00:59+00:00",
+    "message": "feat: 管理费明细按人员视图加入全局智能钱包余额显示",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "管理费明细按人员视图加入全局智能钱包余额显示"
+  },
+  {
+    "hash": "5ae26ebd00a2091ef4a06d1f99f1577d9217f3fd",
+    "author": "github-actions[bot]",
+    "date": "2026-06-29T18:09:04+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "824b0c0f1af3e4968cc8847f7ffdfaa0f38d8036",
+    "author": "github-actions[bot]",
+    "date": "2026-06-29T13:56:46+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "d876721e3b8fbba47e2a7bc8e172f9c443b311c6",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T13:52:25+00:00",
+    "message": "feat: 备注变更写入详细日志（notes类型），扩展change_type枚举和note字段为TEXT",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "备注变更写入详细日志（notes类型），扩展change_type枚举和note字段为TEXT"
+  },
+  {
+    "hash": "847ec54e96abddb58f31257803e9e712210be297",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T13:36:59+00:00",
+    "message": "feat: 备份策略调整-本地保留7天，COS保留60天",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "备份策略调整-本地保留7天，COS保留60天"
+  },
+  {
+    "hash": "449d11e92dfb5b1765551023a4153561db4ebc3b",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T13:30:31+00:00",
+    "message": "chore: 临时workflow-检查备份完整性",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "临时workflow-检查备份完整性"
+  },
+  {
+    "hash": "4558b20ee48a7dc641c610e0aebe5db035e5c1ae",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T13:27:13+00:00",
+    "message": "fix: 关闭set -e防止coscmd list失败导致整个脚本退出",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "关闭set -e防止coscmd list失败导致整个脚本退出"
+  },
+  {
+    "hash": "39e4beb10e79c7b75e899dd088316b094a7d97a8",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T13:25:21+00:00",
+    "message": "fix: 忽略coscmd list错误",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "忽略coscmd list错误"
+  },
+  {
+    "hash": "41007534480b4ec365746d4d941ee8b5cc52d7a3",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T13:22:54+00:00",
+    "message": "fix: 修复pip安装coscmd的PEP 668限制",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复pip安装coscmd的PEP 668限制"
+  },
+  {
+    "hash": "f8defbbc253de75e263456ca7d2899da2d679944",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T13:21:06+00:00",
+    "message": "fix: 修复备份脚本中coscmd找不到的问题",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复备份脚本中coscmd找不到的问题"
+  },
+  {
+    "hash": "1a7e7678b3bb8b8cf07d63e189b0c1d8d4b0b714",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T13:18:41+00:00",
+    "message": "feat: 升级数据库备份脚本，支持COS同步和60天保留",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "升级数据库备份脚本，支持COS同步和60天保留"
+  },
+  {
+    "hash": "d747a300b1a7df83bc82ed80b3787a2f7403820a",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T13:16:46+00:00",
+    "message": "chore: 临时workflow-读取备份脚本和COS配置",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "临时workflow-读取备份脚本和COS配置"
+  },
+  {
+    "hash": "1eb29a5b6df42ed3bcd0ca1b1cc950bc2f7e1a72",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T13:09:35+00:00",
+    "message": "chore: 临时workflow-查看服务器crontab和备份文件",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "临时workflow-查看服务器crontab和备份文件"
+  },
+  {
+    "hash": "65c9be85c34f79b2fb450d039a20f18337d84510",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T13:00:07+00:00",
+    "message": "fix: 去掉自动分配弹窗(range/method/preview步骤)，服务端batchUpsert保留原有notes防止覆盖",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "去掉自动分配弹窗(range/method/preview步骤)，服务端batchUpsert保留原有notes防止覆盖"
+  },
+  {
+    "hash": "29bf2867a57028f83ae9bbaea335a3f9ec4e96b3",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T12:53:24+00:00",
+    "message": "fix: batchSave时携带baseNotes/tacticalNotes，防止调整计划时覆盖已填底仓备注数据",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "batchSave时携带baseNotes/tacticalNotes，防止调整计划时覆盖已填底仓备注数据"
+  },
+  {
+    "hash": "e5357a41bdc44a55d2c538c50614edc99348e553",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T12:39:43+00:00",
+    "message": "fix: 用visualViewport监听键盘高度动态调整容器bottom，顶部导航栏不再被推出视口",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "用visualViewport监听键盘高度动态调整容器bottom，顶部导航栏不再被推出视口"
+  },
+  {
+    "hash": "8b24ac03cd9587118aaf4f57a63d40d1358f813e",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T12:33:16+00:00",
+    "message": "fix: 聊天窗口改为外层fixed+内部flex三段布局，顶底均为flex子元素，彻底解决键盘弹起顶栏消失问题",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "聊天窗口改为外层fixed+内部flex三段布局，顶底均为flex子元素，彻底解决键盘弹起顶栏消失问题"
+  },
+  {
+    "hash": "6ddcc718ebe75c47e3598d2066bd1d8f668bfd08",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T12:22:52+00:00",
+    "message": "fix: 聊天窗口顶部导航栏和底部输入栏均改用fixed定位，消息列表独立滚动，键盘弹起顶栏不消失",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "聊天窗口顶部导航栏和底部输入栏均改用fixed定位，消息列表独立滚动，键盘弹起顶栏不消失"
+  },
+  {
+    "hash": "d4aa352d68163df7c0acf585193f45e4726046d0",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T12:15:45+00:00",
+    "message": "fix: 微信聊天窗口外层容器改用position:fixed锁死，彻底防止点击输入框内容上移",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "微信聊天窗口外层容器改用position:fixed锁死，彻底防止点击输入框内容上移"
+  },
+  {
+    "hash": "74d27c112c452b9cc95ea89323621fee33e50b1f",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T12:06:17+00:00",
+    "message": "fix: 微信聊天窗口改用fixed定位底部输入栏，彻底修复键盘弹起布局问题",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "微信聊天窗口改用fixed定位底部输入栏，彻底修复键盘弹起布局问题"
+  },
+  {
+    "hash": "5acaa6eba20f4bca83a39df2738a4d7778119267",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T11:50:48+00:00",
+    "message": "fix: 修复微信内置聊天窗口键盘弹起后消息区空白问题",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复微信内置聊天窗口键盘弹起后消息区空白问题"
+  },
+  {
+    "hash": "03a19175578bd4d810a3f64428a1f5626744985b",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T11:31:21+00:00",
+    "message": "feat: 新建顾客档案保存后弹出成功弹层（返回首页/马上预约），修复预约页选客户回填",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "新建顾客档案保存后弹出成功弹层（返回首页/马上预约），修复预约页选客户回填"
+  },
+  {
+    "hash": "5ea23f31b5a073b40ea23f5f67da0248a1710671",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T11:17:16+00:00",
+    "message": "feat(yaban): 随访管理接入真实客户档案；首页日历接入真实统计；售前售后时间线与随访双向打通",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "随访管理接入真实客户档案；首页日历接入真实统计；售前售后时间线与随访双向打通"
+  },
+  {
+    "hash": "21d16c2e894362ee87d9cc6ef915d406b72928b3",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T10:37:58+00:00",
+    "message": "fix: AI主模型返回400时自动切换兜底模型，避免错误直接透传给用户",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "AI主模型返回400时自动切换兜底模型，避免错误直接透传给用户"
+  },
+  {
+    "hash": "3a82ca2bd175de8db4a299ab1d49214e40d824d3",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T10:24:47+00:00",
+    "message": "feat: 更新淘汰赛对阵图 - 填入32强所有球队及加拿大首战比分",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "更新淘汰赛对阵图 - 填入32强所有球队及加拿大首战比分"
+  },
+  {
+    "hash": "5cbece33e1958410d2642e14f392998c2710f142",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T10:18:30+00:00",
+    "message": "feat: 更新2026世界杯小组赛第二轮完整比分(6/19-6/24)及修正第三轮J/K组比分",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "更新2026世界杯小组赛第二轮完整比分(6/19-6/24)及修正第三轮J/K组比分"
+  },
+  {
+    "hash": "237da41598d506eb9d689bba505f7a43ca9f50fe",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T10:05:34+00:00",
+    "message": "feat: 更新2026世界杯数据 - 小组赛第三轮比分+32强完整赛程",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "更新2026世界杯数据 - 小组赛第三轮比分+32强完整赛程"
+  },
+  {
+    "hash": "728653cbf9b0d6c852eb5339efcb7c2f77576158",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T09:48:35+00:00",
+    "message": "feat: AI模型配置页面改为查看/编辑两态，保存后回到只读态并显示toast",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "AI模型配置页面改为查看/编辑两态，保存后回到只读态并显示toast"
+  },
+  {
+    "hash": "dc56f914c011c18b47d0cbf4618b25478a95d978",
+    "author": "github-actions[bot]",
+    "date": "2026-06-29T09:00:38+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "c43117b1c4fa29215442b1126de409354289b518",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T07:53:38+00:00",
+    "message": "fix: 修复保证金操作日志查询失败 - users表无nickname字段改为name字段",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复保证金操作日志查询失败 - users表无nickname字段改为name字段"
+  },
+  {
+    "hash": "12f0f26203cf9da4937cb0a4ed88f08d298a6cbc",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T07:22:11+00:00",
+    "message": "feat: 分身对话回复双兜底机制 - 主模型失败切智谱GLM-4-Flash，去掉DeepSeek降级，日志加is_fallback标记，管理端加⚠️降级标签",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "分身对话回复双兜底机制 - 主模型失败切智谱GLM-4-Flash，去掉DeepSeek降级，日志加is_fallback标记，管理端加⚠️降级标签"
+  },
+  {
+    "hash": "6f03dc5f8530a04589c167f85a10bec3d4606ab6",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T06:50:29+00:00",
+    "message": "fix: 线性折扣订单折叠行百分比精确到两位小数",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "线性折扣订单折叠行百分比精确到两位小数"
+  },
+  {
+    "hash": "02b03912b63984e80917c530cd9cffbe66473981",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T06:41:54+00:00",
+    "message": "fix: 修复afAdminGetOrders中allTimeLowPrice因id类型不匹配导致赋值失败的问题",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复afAdminGetOrders中allTimeLowPrice因id类型不匹配导致赋值失败的问题"
+  },
+  {
+    "hash": "2240c9db26d53c5754888fd13a75ac0d10cce026",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T06:27:42+00:00",
+    "message": "fix: 管理员订单管理页所有折后数量计算联动线性档位模式",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "管理员订单管理页所有折后数量计算联动线性档位模式"
+  },
+  {
+    "hash": "009623238fba3bce6fe8c95af5ef36e4e3080346",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T06:18:11+00:00",
+    "message": "fix: 持仓档位详情弹窗线性模式联动折扣率",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "持仓档位详情弹窗线性模式联动折扣率"
+  },
+  {
+    "hash": "fbc2067a2cbe0c8f36a32b0024045a4f44da785c",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T05:48:38+00:00",
+    "message": "feat: 担保物币种新增SUI",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "担保物币种新增SUI"
+  },
+  {
+    "hash": "0e2519882bc9ccb7e89a15b85c6fdf52117ac53d",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T05:13:29+00:00",
+    "message": "feat: 担保物币种新增ASTER",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "担保物币种新增ASTER"
+  },
+  {
+    "hash": "541ef5fa5d5c379100f9034a5d95e425d51dc037",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T05:12:36+00:00",
+    "message": "feat: 担保物币种新增SEI",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "担保物币种新增SEI"
+  },
+  {
+    "hash": "00527f95d24a62e1ecc4509d92d965ad1c0cfefb",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T05:02:08+00:00",
+    "message": "feat: 担保物币种新增PLUME",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "担保物币种新增PLUME"
+  },
+  {
+    "hash": "8a17bbe02276f43c6c1a73226cfda9fd0f35381b",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T04:30:56+00:00",
+    "message": "feat: 线性档位订单所有档位标签统一改为L",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "线性档位订单所有档位标签统一改为L"
+  },
+  {
+    "hash": "8b592a0c657d2dc69b24b09a3bb2a589ed802e0e",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T04:17:53+00:00",
+    "message": "fix: 线性档位表精确到0.01%，只显示已触发节点；修正#357赠单quantity",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "线性档位表精确到0.01%，只显示已触发节点；修正#357赠单quantity"
+  },
+  {
+    "hash": "20e3fbe61f36a599a69809cc3be9cdc40c2b0d20",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T03:51:16+00:00",
+    "message": "fix: 用户端CryptoPrediction订单详情档位表支持线性模式",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "用户端CryptoPrediction订单详情档位表支持线性模式"
+  },
+  {
+    "hash": "5be25ec6c606cbcafa72575389f884d18aca35ed",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T03:37:01+00:00",
+    "message": "fix: 档位模式联动赠单 + 赠单权益显示支持线性模式",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "档位模式联动赠单 + 赠单权益显示支持线性模式"
+  },
+  {
+    "hash": "7490a987f1e791f9c0dc44a360ea54843f09772d",
+    "author": "Manus Deploy",
+    "date": "2026-06-29T03:15:27+00:00",
+    "message": "feat: 谷底增筹订单支持线性档位模式",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "谷底增筹订单支持线性档位模式"
+  },
+  {
+    "hash": "169bb66dfc880ef31f2450339dd3c26f572c736f",
+    "author": "github-actions[bot]",
+    "date": "2026-06-28T17:12:11+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "90fa919a97488ed5773802909c84a8397e7536df",
+    "author": "Manus Dev",
+    "date": "2026-06-28T14:18:51+00:00",
+    "message": "fix: CombinedPnlCanvas 拖动黄线/P&L数字跟随/三色曲线/按钮位置",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "CombinedPnlCanvas 拖动黄线/P&L数字跟随/三色曲线/按钮位置"
+  },
+  {
+    "hash": "614bbb5bbfd050b747f23ee28cbf84bf67879f30",
+    "author": "Manus Dev",
+    "date": "2026-06-28T13:17:58+00:00",
+    "message": "feat: P&L曲线优化 - 对数坐标/价格范围1200-4000/拖动黄线/颜色反转/Y轴10k间距/订单卡片颜色修正",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "P&L曲线优化 - 对数坐标/价格范围1200-4000/拖动黄线/颜色反转/Y轴10k间距/订单卡片颜色修正"
+  },
+  {
+    "hash": "eb12a8bc1d7e1be291be381bfb2964850091d300",
+    "author": "github-actions[bot]",
+    "date": "2026-06-28T11:29:49+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "da908f656d2caf9e607a1a45dac96363fe5d5a90",
+    "author": "haoyouji-dev",
+    "date": "2026-06-28T07:54:45+00:00",
+    "message": "feat: 时间线重构+预约联动+录音异步处理+COS配置+生日动画等优化",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "时间线重构+预约联动+录音异步处理+COS配置+生日动画等优化"
+  },
+  {
+    "hash": "104835d32ceaa52ecb1ebd517d6544042c47e5c8",
+    "author": "github-actions[bot]",
+    "date": "2026-06-28T07:52:56+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "633b58a1b3d5b0fa99810b18f74d0ec4ecae79fe",
+    "author": "haoyouji-dev",
+    "date": "2026-06-28T04:55:54+00:00",
+    "message": "feat(A984): AI语音分析改为内容摘要版 - 逐条短句+每条复制按钮",
+    "type": "feat",
+    "scope": "A984",
+    "cleanMessage": "AI语音分析改为内容摘要版 - 逐条短句+每条复制按钮"
+  },
+  {
+    "hash": "bae01e8442893e4e4ecce32d4b2e0de914b6bd84",
+    "author": "haoyouji-dev",
+    "date": "2026-06-28T04:37:06+00:00",
+    "message": "feat(A984): 微信聊天记录返回箭头、AI秘书UI优化、随访详情加沟通记录入口",
+    "type": "feat",
+    "scope": "A984",
+    "cleanMessage": "微信聊天记录返回箭头、AI秘书UI优化、随访详情加沟通记录入口"
+  },
+  {
+    "hash": "cb7bea6e535203f10972b3999ef72b9efa961149",
+    "author": "haoyouji-dev",
+    "date": "2026-06-28T04:04:03+00:00",
+    "message": "fix(A235): 共享知识库/指令库按service_tenant_id精准匹配，修复显示空白问题",
+    "type": "fix",
+    "scope": "A235",
+    "cleanMessage": "共享知识库/指令库按service_tenant_id精准匹配，修复显示空白问题"
+  },
+  {
+    "hash": "9d6046d3a5e35bf1a4326f7746f1caf3d77b1114",
+    "author": "haoyouji-dev",
+    "date": "2026-06-28T03:45:17+00:00",
+    "message": "fix: 修复A235共享知识库/指令库按渠道授权配置显示，新增channel-grants接口，支持kb_ids多库查询",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复A235共享知识库/指令库按渠道授权配置显示，新增channel-grants接口，支持kb_ids多库查询"
+  },
+  {
+    "hash": "2a46eb73f86c557191834f4535cb06901fbb8206",
+    "author": "haoyouji-dev",
+    "date": "2026-06-28T03:31:47+00:00",
+    "message": "feat(A127): 平台共享-共享指令库多库支持+绑定服务商配置知识库/指令库+齿科知识库365条问答导入",
+    "type": "feat",
+    "scope": "A127",
+    "cleanMessage": "平台共享-共享指令库多库支持+绑定服务商配置知识库/指令库+齿科知识库365条问答导入"
+  },
+  {
+    "hash": "b24c626b64554568f0b94b18c4cf8ba357938cb8",
+    "author": "haoyouji-dev",
+    "date": "2026-06-28T01:36:29+00:00",
+    "message": "删除平台管理页冗余的「专属规则」「知识库」tab，知识库入口统一跳转平台共享",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "删除平台管理页冗余的「专属规则」「知识库」tab，知识库入口统一跳转平台共享"
+  },
+  {
+    "hash": "ea36abf1ea727a02faf024a8b13431e650851ad1",
+    "author": "haoyouji-dev",
+    "date": "2026-06-28T01:17:18+00:00",
+    "message": "fix: 修复聊天记录查询 mysql2 LIMIT/OFFSET 占位符报错（Incorrect arguments），改为内联分页避免被catch吞掉导致误报未绑定",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复聊天记录查询 mysql2 LIMIT/OFFSET 占位符报错（Incorrect arguments），改为内联分页避免被catch吞掉导致误报未绑定"
+  },
+  {
+    "hash": "ac19817264e97d1aea9ed61d7213731f1472da8b",
+    "author": "haoyouji-dev",
+    "date": "2026-06-28T00:50:33+00:00",
+    "message": "fix: 顾客微信聊天记录改为按客户自身tenant_id定位+越权校验，不再依赖前端header",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "顾客微信聊天记录改为按客户自身tenant_id定位+越权校验，不再依赖前端header"
+  },
+  {
+    "hash": "cd7acc7999965bc7ed1821cd7520974cfb535c7d",
+    "author": "haoyouji-dev",
+    "date": "2026-06-28T00:29:35+00:00",
+    "message": "fix: 欢迎语时序修复——等 channel_id 从后端确认后再请求，避免用默认值查不到诊所级配置",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "欢迎语时序修复——等 channel_id 从后端确认后再请求，避免用默认值查不到诊所级配置"
+  },
+  {
+    "hash": "4391586be583f9bf0b197c75cd73e4284e1bcbbb",
+    "author": "haoyouji-dev",
+    "date": "2026-06-28T00:20:04+00:00",
+    "message": "feat: 欢迎语多级开关控制（去掉前端硬编码，后端按诊所>渠道>平台优先级链返回）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "欢迎语多级开关控制（去掉前端硬编码，后端按诊所>渠道>平台优先级链返回）"
+  },
+  {
+    "hash": "6dccda8a0402c58c507e29c3d831b97d3daf78b1",
+    "author": "haoyouji-dev",
+    "date": "2026-06-28T00:03:54+00:00",
+    "message": "feat: 顾客权限控制、推荐人统一、微信聊天修复、服务商共享库配置UI",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "顾客权限控制、推荐人统一、微信聊天修复、服务商共享库配置UI"
+  },
+  {
+    "hash": "baa8120c74953349a1ac1cb877413de3e347c3ac",
+    "author": "github-actions[bot]",
+    "date": "2026-06-27T17:10:33+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "caac5cef3ad67875cd27ab62dbc867b85eb33f5d",
+    "author": "Manus Dev",
+    "date": "2026-06-27T13:52:43+00:00",
+    "message": "feat(yaban): 院长端 AI 配置区整合设置+知识库（方案A抽取独立组件）",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "院长端 AI 配置区整合设置+知识库（方案A抽取独立组件）"
+  },
+  {
+    "hash": "f69537a068614d3db60d8d3e8eb0fb53ed6a0ff1",
+    "author": "Manus Dev",
+    "date": "2026-06-27T13:22:40+00:00",
+    "message": "feat(yaban): 新增/批准医院时自动绑定牙伴在线渠道（channel_id=4）",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "新增/批准医院时自动绑定牙伴在线渠道（channel_id=4）"
+  },
+  {
+    "hash": "8e4b8575b408c5297b844f0c4cdd0ea15ce00fe9",
+    "author": "Manus Dev",
+    "date": "2026-06-27T13:11:58+00:00",
+    "message": "feat(wecom): 绑定服务商改为先选企微客服渠道，再绑定诊所",
+    "type": "feat",
+    "scope": "wecom",
+    "cleanMessage": "绑定服务商改为先选企微客服渠道，再绑定诊所"
+  },
+  {
+    "hash": "615f69e819923d5f8e47a81d18c8f7b754167556",
+    "author": "Manus Dev",
+    "date": "2026-06-27T12:57:52+00:00",
+    "message": "feat(wecom): 合并自建应用与平台管理为「脉动网设计部自建应用平台管理」，11个Tab平铺展示",
+    "type": "feat",
+    "scope": "wecom",
+    "cleanMessage": "合并自建应用与平台管理为「脉动网设计部自建应用平台管理」，11个Tab平铺展示"
+  },
+  {
+    "hash": "e98406ae48a248a898f27daa73f14fb2ecef98bf",
+    "author": "Manus Dev",
+    "date": "2026-06-27T12:38:50+00:00",
+    "message": "feat(wecom): 渠道-服务商绑定体系",
+    "type": "feat",
+    "scope": "wecom",
+    "cleanMessage": "渠道-服务商绑定体系"
+  },
+  {
+    "hash": "ed5accffc2ef2c75ab5edf2363c2537c356a734b",
+    "author": "github-actions[bot]",
+    "date": "2026-06-27T11:17:31+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "c7f9430ef25cb7aca19225f593520b618bda850e",
+    "author": "Manus Dev",
+    "date": "2026-06-27T11:08:57+00:00",
+    "message": "fix(yaban): 聊天页底部输入栏上移+键盘发送按钮",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "聊天页底部输入栏上移+键盘发送按钮"
+  },
+  {
+    "hash": "7578932a804a6256aee563d86705bb10db358aaf",
+    "author": "Manus Dev",
+    "date": "2026-06-27T11:03:18+00:00",
+    "message": "feat(yaban): 微信聊天按钮改为查看AI聊天记录，新增院长端聊天总览页",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "微信聊天按钮改为查看AI聊天记录，新增院长端聊天总览页"
+  },
+  {
+    "hash": "b8483dc366f0739e1546dafa5ad875bd5dc425cc",
+    "author": "Manus Dev",
+    "date": "2026-06-27T10:34:13+00:00",
+    "message": "feat: 牙伴微信聊天UI优化 - 语音气泡秒数显示/Wifi图标/去掉AI占位气泡/用户头像优先脉动网",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "牙伴微信聊天UI优化 - 语音气泡秒数显示/Wifi图标/去掉AI占位气泡/用户头像优先脉动网"
+  },
+  {
+    "hash": "d0d9c8ad54bc43f27636f7a5c31a1541b39346e7",
+    "author": "Manus Dev",
+    "date": "2026-06-27T09:14:55+00:00",
+    "message": "style: 牙伴聊天页顶部仅保留牙伴在线,去掉副标题和箭头",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "牙伴聊天页顶部仅保留牙伴在线,去掉副标题和箭头"
+  },
+  {
+    "hash": "3fe355522e319ba2180121c46335b5dc61cc407f",
+    "author": "Manus Dev",
+    "date": "2026-06-27T09:05:42+00:00",
+    "message": "feat: 渠道详情页AI引擎区联动平台全局配置(混元),不再硬编码DeepSeek",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "渠道详情页AI引擎区联动平台全局配置(混元),不再硬编码DeepSeek"
+  },
+  {
+    "hash": "53720727b5ff262186f2a3a870109a44b1cecafb",
+    "author": "Manus Dev",
+    "date": "2026-06-27T08:43:12+00:00",
+    "message": "feat: 新增牙伴仿微信聊天界面 YabanWechatChat",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "新增牙伴仿微信聊天界面 YabanWechatChat"
+  },
+  {
+    "hash": "80232a5bda5f4383dc8d4f4c64176b96060e8192",
+    "author": "Manus Dev",
+    "date": "2026-06-27T07:44:08+00:00",
+    "message": "fix: 更换微信咨询企业微信客服链接为正确的 kfc 格式",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "更换微信咨询企业微信客服链接为正确的 kfc 格式"
+  },
+  {
+    "hash": "541de5009b25e7ea3b109dfb9aa7bdb9adb89a7e",
+    "author": "Manus Dev",
+    "date": "2026-06-27T07:36:54+00:00",
+    "message": "feat: 重构患者沟通记录页面为智能时间线，新增微信咨询首页入口",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "重构患者沟通记录页面为智能时间线，新增微信咨询首页入口"
+  },
+  {
+    "hash": "138534ed7cfaffc53e235e372a67358dce1a4ded",
+    "author": "github-actions[bot]",
+    "date": "2026-06-27T06:54:16+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "0f83f26575f234aecf2374aa3dc06cac4c6b11f5",
+    "author": "Manus Dev",
+    "date": "2026-06-27T04:42:22+00:00",
+    "message": "fix: 在部署脚本中自动配置 Nginx client_max_body_size=50m，解决大音频文件 HTTP 413 问题",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "在部署脚本中自动配置 Nginx client_max_body_size=50m，解决大音频文件 HTTP 413 问题"
+  },
+  {
+    "hash": "c07a4f2dfb778c6687de3b8eb761593fa8a25d70",
+    "author": "Manus Dev",
+    "date": "2026-06-27T04:29:25+00:00",
+    "message": "fix: 改用 FormData 二进制上传替代 base64，彻底解决 iOS 大录音文件 Load failed 问题",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "改用 FormData 二进制上传替代 base64，彻底解决 iOS 大录音文件 Load failed 问题"
+  },
+  {
+    "hash": "104cd4f0f4b580adcb7bcc9d31038c2c09602236",
+    "author": "Manus Dev",
+    "date": "2026-06-27T04:18:41+00:00",
+    "message": "fix: 用 arrayBuffer+btoa 替代 FileReader，解决 iOS 大 Blob Load failed",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "用 arrayBuffer+btoa 替代 FileReader，解决 iOS 大 Blob Load failed"
+  },
+  {
+    "hash": "d5aa28db219a38c9bf5afc2d9d8347400fc565c7",
+    "author": "Manus Dev",
+    "date": "2026-06-27T04:01:30+00:00",
+    "message": "fix: iOS Load failed - add requestData() + 500ms delay before reading blob",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "iOS Load failed - add requestData() + 500ms delay before reading blob"
+  },
+  {
+    "hash": "41bc68c2560b7a164fd19cfaecf7f5795b9ca987",
+    "author": "Manus Dev",
+    "date": "2026-06-27T03:24:08+00:00",
+    "message": "fix: 前端超时改为120s，后端加base64大小日志，排查长录音失败",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "前端超时改为120s，后端加base64大小日志，排查长录音失败"
+  },
+  {
+    "hash": "afd6d863fe448fa83a1ba58c770f6980a3ef12f1",
+    "author": "Manus Dev",
+    "date": "2026-06-27T03:16:04+00:00",
+    "message": "fix: iOS语音识别修复+录音待处理预览+摘要容错+状态重置+智能钱包+数字分身入口",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "iOS语音识别修复+录音待处理预览+摘要容错+状态重置+智能钱包+数字分身入口"
+  },
+  {
+    "hash": "655c04e04e8f165e0acb8df8b23ead1724997c57",
+    "author": "HaoYouJi Dev",
+    "date": "2026-06-27T02:07:10+00:00",
+    "message": "fix: 售前售后语音转文字改用 callAIVoice，文字分析改用混元",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "售前售后语音转文字改用 callAIVoice，文字分析改用混元"
+  },
+  {
+    "hash": "58811c4bf97e6787638846936d0d74b96845321b",
+    "author": "Manus Dev",
+    "date": "2026-06-27T01:50:16+00:00",
+    "message": "chore: 新增 pre-push Hook，防止沙箱未经授权擅自推送代码",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "新增 pre-push Hook，防止沙箱未经授权擅自推送代码"
+  },
+  {
+    "hash": "b43b45979928dabeb0f197a8fec47cdf404af0b3",
+    "author": "HaoYouJi Dev",
+    "date": "2026-06-27T01:48:03+00:00",
+    "message": "feat: 售前售后沟通记录页面 - AI语音秘书+时间线+设置页AI提示词配置",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "售前售后沟通记录页面 - AI语音秘书+时间线+设置页AI提示词配置"
+  },
+  {
+    "hash": "69016390c24583c84b676c7e6ad807dcd498a8cc",
+    "author": "HaoYouJi Dev",
+    "date": "2026-06-27T00:52:03+00:00",
+    "message": "feat: 发票功能完善 - 新增税号字段、详情页两行展示、复制按钮、空字段自动隐藏、按钮颜色调整",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "发票功能完善 - 新增税号字段、详情页两行展示、复制按钮、空字段自动隐藏、按钮颜色调整"
+  },
+  {
+    "hash": "969eb153a2fc1c9d1ac83810d27f3e7ac874a84e",
+    "author": "Manus Dev",
+    "date": "2026-06-26T23:45:19+00:00",
+    "message": "feat: 新增发票管理模块 - 管理员个人中心入口、抬头CRUD、税号查询API封装、子项目开放控制",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "新增发票管理模块 - 管理员个人中心入口、抬头CRUD、税号查询API封装、子项目开放控制"
+  },
+  {
+    "hash": "15d23b3373a9fd1b93520826f102d9a9c2dd6fad",
+    "author": "Manus Dev",
+    "date": "2026-06-26T23:41:42+00:00",
+    "message": "feat: 期权订单卡片升级 - 新增专属信息行",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "期权订单卡片升级 - 新增专属信息行"
+  },
+  {
+    "hash": "4c87c9342d22609aff258171c0040203ed2da65c",
+    "author": "HaoYouJi Dev",
+    "date": "2026-06-26T23:31:12+00:00",
+    "message": "fix: 修复 InvoicePicker Fast Refresh 报错（EMPTY_INVOICE 移至独立 invoice-types.ts）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复 InvoicePicker Fast Refresh 报错（EMPTY_INVOICE 移至独立 invoice-types.ts）"
+  },
+  {
+    "hash": "1d0d3355d05bf9523db5cc892ba60d6d4b37702b",
+    "author": "Manus Dev",
+    "date": "2026-06-26T23:14:00+00:00",
+    "message": "feat: 新增期权分析总览页面",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "新增期权分析总览页面"
+  },
+  {
+    "hash": "8a3fb8c35959620a51de288535515bea1c8d9032",
+    "author": "HaoYouJi Dev",
+    "date": "2026-06-26T22:50:02+00:00",
+    "message": "feat: 添加发票开票信息字段（最多3条，含公司名称/抬头/邮箱/手机）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "添加发票开票信息字段（最多3条，含公司名称/抬头/邮箱/手机）"
+  },
+  {
+    "hash": "b55647ec3212f401856b70af991d8438415ba46c",
+    "author": "HaoYouJi Dev",
+    "date": "2026-06-26T22:40:28+00:00",
+    "message": "fix: 职业搜索框 placeholder 改为 AI搜索",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "职业搜索框 placeholder 改为 AI搜索"
+  },
+  {
+    "hash": "fcc0d23a638b40f44937e484b1075a8faeeb5af4",
+    "author": "HaoYouJi Dev",
+    "date": "2026-06-26T22:35:16+00:00",
+    "message": "fix: 表单字段调整-职业+顾客编号同行，紧急联系人+关系同行，标签改为紧急联系人电话",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "表单字段调整-职业+顾客编号同行，紧急联系人+关系同行，标签改为紧急联系人电话"
+  },
+  {
+    "hash": "4aee976957eb310e389291743575d3d848062603",
+    "author": "HaoYouJi Dev",
+    "date": "2026-06-26T22:19:29+00:00",
+    "message": "fix: 关联亲友和推荐人下拉列表只显示用户名，去掉姓名和手机号",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "关联亲友和推荐人下拉列表只显示用户名，去掉姓名和手机号"
+  },
+  {
+    "hash": "2769bfebc5c8d6c8dee81f6912b25b1d47794b29",
+    "author": "HaoYouJi Dev",
+    "date": "2026-06-26T22:08:18+00:00",
+    "message": "fix: 推荐人下拉框点击即显示，不需要先输入文字",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "推荐人下拉框点击即显示，不需要先输入文字"
+  },
+  {
+    "hash": "979aa25832cc518ab95df74d6734bf7a552ba87b",
+    "author": "HaoYouJi Dev",
+    "date": "2026-06-26T21:39:55+00:00",
+    "message": "fix: 演示院9999对所有用户开放，resolveTenantId不再拦截非成员访问9999",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "演示院9999对所有用户开放，resolveTenantId不再拦截非成员访问9999"
+  },
+  {
+    "hash": "7ead21a8d32b1cc01628aa8b80f3c6ff866457d5",
+    "author": "HaoYouJi Dev",
+    "date": "2026-06-26T21:27:45+00:00",
+    "message": "fix: 推荐人搜索框点击即显示默认列表，无需先输入文字",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "推荐人搜索框点击即显示默认列表，无需先输入文字"
+  },
+  {
+    "hash": "593de3b94604e3a6ac158e1876c080003d9344a6",
+    "author": "github-actions[bot]",
+    "date": "2026-06-26T17:48:28+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "938ebe33f17528f5fca55fb227acb2705f7c09ba",
+    "author": "HaoYouJi Dev",
+    "date": "2026-06-26T15:49:12+00:00",
+    "message": "fix: 修复推荐人搜索字符集冲突 + 新建顾客时 INSERT users 补充 openId 字段",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复推荐人搜索字符集冲突 + 新建顾客时 INSERT users 补充 openId 字段"
+  },
+  {
+    "hash": "481763fa30cada00302c2fa0808951bdebe852f4",
+    "author": "HaoYouJi Dev",
+    "date": "2026-06-26T14:04:28+00:00",
+    "message": "fix: 修复关联亲友搜索 UNION 字符集冲突，改为分开查询顾客+员工再合并",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复关联亲友搜索 UNION 字符集冲突，改为分开查询顾客+员工再合并"
+  },
+  {
+    "hash": "68f31bcdc378ab6467b68b2f31c3bd5147d57911",
+    "author": "HaoYouJi Dev",
+    "date": "2026-06-26T13:47:44+00:00",
+    "message": "fix: 修复 yaban-customer-router.ts 语法错误（模板字符串转义反引号 + 逗号运算符）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复 yaban-customer-router.ts 语法错误（模板字符串转义反引号 + 逗号运算符）"
+  },
+  {
+    "hash": "528c62c81968c1e35b586677cbc338e471d73ca9",
+    "author": "HaoYouJi Dev",
+    "date": "2026-06-26T13:20:47+00:00",
+    "message": "feat: 新增关联亲友+亲友关系字段，顾客类型/亲友关系设置页开放院长管理，来源设置页加号按钮样式统一",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "新增关联亲友+亲友关系字段，顾客类型/亲友关系设置页开放院长管理，来源设置页加号按钮样式统一"
+  },
+  {
+    "hash": "1f1df3c3814d4c61bf3b0767a188fd0446c76ac6",
+    "author": "HaoYouJi Dev",
+    "date": "2026-06-26T12:07:01+00:00",
+    "message": "feat: 顾客类型+来源两级结构(主标题+副标签)，设置页开放院长编辑，删除网电咨询字段，布局调整，设置页乐观显示",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "顾客类型+来源两级结构(主标题+副标签)，设置页开放院长编辑，删除网电咨询字段，布局调整，设置页乐观显示"
+  },
+  {
+    "hash": "7d6b02ea346baab5d3a995bb33cb0f4ab799e865",
+    "author": "HaoYouJi Dev",
+    "date": "2026-06-26T10:46:00+00:00",
+    "message": "feat: 顾客来源改为主标题+副标签两级结构",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "顾客来源改为主标题+副标签两级结构"
+  },
+  {
+    "hash": "914dcd4f15db496d0546efab9a3c7c2911d24161",
+    "author": "github-actions[bot]",
+    "date": "2026-06-26T12:05:25+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "e237a69f92be057b6714c53a4f0c1c18a6a21cd6",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T09:07:42+00:00",
+    "message": "feat: 网站功能管理/顾客来源设置页面加帽檐医院切换；推荐人改内嵌搜索；删除按钮文字简化；车牌第2/3块另起一行；牙伴账号同名加序号",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "网站功能管理/顾客来源设置页面加帽檐医院切换；推荐人改内嵌搜索；删除按钮文字简化；车牌第2/3块另起一行；牙伴账号同名加序号"
+  },
+  {
+    "hash": "bab4e277a692d9ddfc9ac1c1dde45856ffdfe028",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T08:56:44+00:00",
+    "message": "feat: 网站功能管理-顾客来源设置；多车牌另起一行；推荐人内嵌搜索；删除按钮文字；牙伴账号同名加序号",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "网站功能管理-顾客来源设置；多车牌另起一行；推荐人内嵌搜索；删除按钮文字；牙伴账号同名加序号"
+  },
+  {
+    "hash": "9bf60a1c1bdc6d24f330cca917de9aa8d69f8607",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T08:25:31+00:00",
+    "message": "feat: 推荐人搜索下拉修复/车牌第2-3块另起一行/牙伴账号同名自动加序号",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "推荐人搜索下拉修复/车牌第2-3块另起一行/牙伴账号同名自动加序号"
+  },
+  {
+    "hash": "8ab502593d0c2d9d79a50319809e83f38eb29606",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T08:16:04+00:00",
+    "message": "feat: 牙伴账号/初始密码/推荐人/所属医院/顾客来源到店三选项/AI健康标签多标签/车牌多块(最多3块)/个人信息字段宽度修复",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "牙伴账号/初始密码/推荐人/所属医院/顾客来源到店三选项/AI健康标签多标签/车牌多块(最多3块)/个人信息字段宽度修复"
+  },
+  {
+    "hash": "371ad990f785e4dc25d5266b961458fc3665f687",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T07:37:28+00:00",
+    "message": "feat: 推荐人搜索模糊查询+推荐列表弹窗+已推荐人数点击概览",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "推荐人搜索模糊查询+推荐列表弹窗+已推荐人数点击概览"
+  },
+  {
+    "hash": "39ad5e6bc6426c1091c91c2513ad34b885f1bbd8",
+    "author": "github-actions[bot]",
+    "date": "2026-06-26T07:56:18+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "ceb0879f3f34e0e2154c176d6dd0b44ffeab7571",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T07:40:11+00:00",
+    "message": "Revert \"feat: 推荐人搜索模糊查询+推荐列表弹窗+已推荐人数点击概览\"",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "Revert \"feat: 推荐人搜索模糊查询+推荐列表弹窗+已推荐人数点击概览\""
+  },
+  {
+    "hash": "bcd67f52702cad52f38f22a1e6866a0f190d18e9",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T07:37:28+00:00",
+    "message": "feat: 推荐人搜索模糊查询+推荐列表弹窗+已推荐人数点击概览",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "推荐人搜索模糊查询+推荐列表弹窗+已推荐人数点击概览"
+  },
+  {
+    "hash": "c40f3a40ba89b041e28f2bb9776d769aa36b67a0",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T06:46:46+00:00",
+    "message": "feat(yaban): 顾客来源到店三选项+牙伴账号密码自动生成并展示",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "顾客来源到店三选项+牙伴账号密码自动生成并展示"
+  },
+  {
+    "hash": "a4596f6eb0ef4561294fdb4246cd045db86818eb",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T06:22:08+00:00",
+    "message": "fix(yaban): 详情页职业/车牌等字段固定保留格子，空值占位—，保证边框线完整",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "详情页职业/车牌等字段固定保留格子，空值占位—，保证边框线完整"
+  },
+  {
+    "hash": "4b39c89d262f70c207367e70e15098e6012fb52c",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T06:16:20+00:00",
+    "message": "fix(yaban): 车牌清空连省份一起清空，确认空车牌回传空字符串",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "车牌清空连省份一起清空，确认空车牌回传空字符串"
+  },
+  {
+    "hash": "03878d1a9030843167f76dff9e59f49c51a7a026",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T06:10:15+00:00",
+    "message": "feat(yaban): 车牌弹窗加清空按钮，去掉删除/确认图标，支持清空保存空车牌",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "车牌弹窗加清空按钮，去掉删除/确认图标，支持清空保存空车牌"
+  },
+  {
+    "hash": "2ff3d3dbdafa8c79963093adc60bd8782ff24905",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T06:02:45+00:00",
+    "message": "fix(yaban): 修复后端 mobile/name.trim() 在 undefined 时崩溃的根因（保存报错 trim）",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "修复后端 mobile/name.trim() 在 undefined 时崩溃的根因（保存报错 trim）"
+  },
+  {
+    "hash": "149fbcbb7353b5901599bcd52ba08ca2bd79810f",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T05:56:26+00:00",
+    "message": "fix(yaban): 彻底修复所有 trim undefined 风险，occQuery 全链路加空字符串保护",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "彻底修复所有 trim undefined 风险，occQuery 全链路加空字符串保护"
+  },
+  {
+    "hash": "788389695fd71f4f48443fe0fe0aa4c30f14894f",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T05:49:03+00:00",
+    "message": "fix(yaban): 修复职业搜索 occQuery 初始值 undefined 导致 trim 报错",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "修复职业搜索 occQuery 初始值 undefined 导致 trim 报错"
+  },
+  {
+    "hash": "da85d4b3f0cbf81fee5413f7becead199883a9d7",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T05:43:53+00:00",
+    "message": "fix(yaban): mobile 改为非必填，去掉保存按钮前勾图标",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "mobile 改为非必填，去掉保存按钮前勾图标"
+  },
+  {
+    "hash": "2f3587d3edc68a0a5ca46f6640bfac605e9cd092",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T05:38:55+00:00",
+    "message": "fix(yaban): 姓名为空时保存按钮变灰禁用，去掉乱码错误提示",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "姓名为空时保存按钮变灰禁用，去掉乱码错误提示"
+  },
+  {
+    "hash": "c3b664020d8db1b2155508b83c6ccae0dad7acb0",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T05:30:51+00:00",
+    "message": "feat(yaban): 新建顾客加职业智能搜索+车牌输入组件，详情页联动显示，底部加保存按钮",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "新建顾客加职业智能搜索+车牌输入组件，详情页联动显示，底部加保存按钮"
+  },
+  {
+    "hash": "943063a46450e63627b580bd2c8a4e8a32cdb705",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T04:35:03+00:00",
+    "message": "feat: 连接信息加脉动网绑定账户显示",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "连接信息加脉动网绑定账户显示"
+  },
+  {
+    "hash": "926b4054da8cf6e788370cd0cb843f8cda0cb3f0",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T03:59:29+00:00",
+    "message": "feat: 刘力凡页面改为牙伴蓝白色调（#2196C8）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "刘力凡页面改为牙伴蓝白色调（#2196C8）"
+  },
+  {
+    "hash": "c6634542d2f83844ed3cab7989193bccdf070d4c",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T03:54:39+00:00",
+    "message": "feat: 四个 Tab 组件支持 theme prop，刘力凡粉色/体重教练蓝色全页面统一",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "四个 Tab 组件支持 theme prop，刘力凡粉色/体重教练蓝色全页面统一"
+  },
+  {
+    "hash": "a50a8fe54f8da1cac8c8574a91e1133e4ec73c29",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T03:47:47+00:00",
+    "message": "fix: 渠道列表点击刘力凡(id=8)和体重教练(id=4)跳转到各自专属页面",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "渠道列表点击刘力凡(id=8)和体重教练(id=4)跳转到各自专属页面"
+  },
+  {
+    "hash": "fb9d04a5a3f81bee5b80c78ef9c9b5bc362e7202",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T03:38:38+00:00",
+    "message": "fix: 修复 NutritionClubPage 里 channelId 变量未定义的错误",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复 NutritionClubPage 里 channelId 变量未定义的错误"
+  },
+  {
+    "hash": "6a49083580f2f56dea75ecb212fd895150e4ee4e",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T03:33:45+00:00",
+    "message": "refactor: 四个 Tab 组件支持 channelId/channelType prop，刘力凡和体重教练页面独立数据",
+    "type": "refactor",
+    "scope": "",
+    "cleanMessage": "四个 Tab 组件支持 channelId/channelType prop，刘力凡和体重教练页面独立数据"
+  },
+  {
+    "hash": "87cdff3e8ffd7959d8f1183c507d794d92b092b4",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T03:25:10+00:00",
+    "message": "feat: 新增刘力凡（粉色）和体重管理教练（蓝色）分身页面，路由 /p/proj_liulifan 和 /p/proj_tizong",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "新增刘力凡（粉色）和体重管理教练（蓝色）分身页面，路由 /p/proj_liulifan 和 /p/proj_tizong"
+  },
+  {
+    "hash": "39462176778588fc3ec2f10acb050ac6e3ccabe9",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T02:56:42+00:00",
+    "message": "feat: 渠道列表页新增「同步」按钮，自动从企业微信同步客服账号",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "渠道列表页新增「同步」按钮，自动从企业微信同步客服账号"
+  },
+  {
+    "hash": "aaf2b3427395e2b878d098bacfbbdc5d6451be74",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T02:44:23+00:00",
+    "message": "fix: 奢贝首页微信按钮移至第二行第一个位置",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "奢贝首页微信按钮移至第二行第一个位置"
+  },
+  {
+    "hash": "3087f0a6820d6af039c3f75f3947a19d07d9cafb",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T02:42:42+00:00",
+    "message": "feat: 奢贝首页右上角新增微信联系按钮（刘立凡企业微信客服链接）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "奢贝首页右上角新增微信联系按钮（刘立凡企业微信客服链接）"
+  },
+  {
+    "hash": "9e86cfd932b1a05e9276850e47c940cac49517be",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T02:34:50+00:00",
+    "message": "feat: 谷底增筹委托推送通知功能（新增任务类型、定时扫描、逐人发送、{推送对象}变量）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "谷底增筹委托推送通知功能（新增任务类型、定时扫描、逐人发送、{推送对象}变量）"
+  },
+  {
+    "hash": "61c95243224fdde6890a3b522aa55f30db9809a6",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T00:44:39+00:00",
+    "message": "feat: 新增 {monitor_user_name} 模板变量，可在消息中显示监控对象的用户名",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "新增 {monitor_user_name} 模板变量，可在消息中显示监控对象的用户名"
+  },
+  {
+    "hash": "4ddec302a227aae4136daf0d89c7911ed185fef0",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T00:32:22+00:00",
+    "message": "fix: 测试发送改用配置里的 content 模板替换变量，与实际预警消息完全一致",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "测试发送改用配置里的 content 模板替换变量，与实际预警消息完全一致"
+  },
+  {
+    "hash": "6eb26b4dceb1baa964225ef3e090539a4db66f98",
+    "author": "Manus Deploy",
+    "date": "2026-06-26T00:19:48+00:00",
+    "message": "fix: calcCollateralRatio 按弹窗公式修正，缺口需求=本金亏损+待结利息（非本金+待结利息）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "calcCollateralRatio 按弹窗公式修正，缺口需求=本金亏损+待结利息（非本金+待结利息）"
+  },
+  {
+    "hash": "14b7824c0904a5d17b8863b58e11660b57c80992",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T23:58:29+00:00",
+    "message": "fix: 测试发送支持未保存记录直接传参，彻底解决走旧模板逻辑的问题",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "测试发送支持未保存记录直接传参，彻底解决走旧模板逻辑的问题"
+  },
+  {
+    "hash": "8c445f8c0fbc2a3fc0a3b7e6e1328fbabc13acac",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T23:50:17+00:00",
+    "message": "fix: 编辑已有配置时订单范围区域不显示的问题（兜底用 editingRecord.monitor_user_id）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "编辑已有配置时订单范围区域不显示的问题（兜底用 editingRecord.monitor_user_id）"
+  },
+  {
+    "hash": "2ea890dcb854eeab5a1ab538a49475e14d99b976",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T23:45:44+00:00",
+    "message": "fix: 测试发送改用 rec.notify_key 判断，避免 editingKey 为空时走旧逻辑",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "测试发送改用 rec.notify_key 判断，避免 editingKey 为空时走旧逻辑"
+  },
+  {
+    "hash": "c953b9fc0e88b0bab3aa11057ff41bcd601e561a",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T23:38:47+00:00",
+    "message": "feat: 担保缺口预警自适应调度 + 强制测试发送",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "担保缺口预警自适应调度 + 强制测试发送"
+  },
+  {
+    "hash": "0c47cfca2ea99b94a0ce99af9aaad24ccf69c3c9",
+    "author": "github-actions[bot]",
+    "date": "2026-06-25T18:10:34+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "27b0a9a53894b2d1e80116fe49e20e78a4968346",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T16:10:31+00:00",
+    "message": "fix: 通知平台成员下拉框字段映射修复（u.userid / u.name）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "通知平台成员下拉框字段映射修复（u.userid / u.name）"
+  },
+  {
+    "hash": "d96d79009d1b2f0f33405b53810eef178eaeceab",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T16:03:05+00:00",
+    "message": "feat: 通知平台 Tab - 企微配置预填+成员下拉框+隐藏前端操作按钮",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "通知平台 Tab - 企微配置预填+成员下拉框+隐藏前端操作按钮"
+  },
+  {
+    "hash": "b14f99bd383769f7f70491694261a12a9cba6225",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T15:34:52+00:00",
+    "message": "fix: 隐藏前端所有操作按钮+修复CryptoPrediction语法错误",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "隐藏前端所有操作按钮+修复CryptoPrediction语法错误"
+  },
+  {
+    "hash": "7969cb900f790efda37a4f630ecf2e0094370337",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T15:22:11+00:00",
+    "message": "fix: FinanceOrderCard隐藏编辑/参与方/记录结息按钮（非管理员不显示）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "FinanceOrderCard隐藏编辑/参与方/记录结息按钮（非管理员不显示）"
+  },
+  {
+    "hash": "59e1ff03228e3d81e4ff3c80c8b7a3188d594b1d",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T15:13:47+00:00",
+    "message": "fix: LedgerDetail资金方视图隐藏编辑/参与方/记录结息按钮（isAdmin固定false）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "LedgerDetail资金方视图隐藏编辑/参与方/记录结息按钮（isAdmin固定false）"
+  },
+  {
+    "hash": "1efe31e7fb97f08a39e242c1347ef5ec50e886d4",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T15:06:10+00:00",
+    "message": "fix: 前端融资付息页面对所有人隐藏编辑/参与方/记录结息按钮（isAdmin固定为false）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "前端融资付息页面对所有人隐藏编辑/参与方/记录结息按钮（isAdmin固定为false）"
+  },
+  {
+    "hash": "c6b59c0658aee069ceb6bbc3ada86d5734345d3b",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T15:01:14+00:00",
+    "message": "feat: 用户前端隐藏编辑/参与方/记录结息按钮（isAdmin=false时不显示）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "用户前端隐藏编辑/参与方/记录结息按钮（isAdmin=false时不显示）"
+  },
+  {
+    "hash": "39771d66de8a5b1d60304ba6634b1f728ee231bf",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T14:53:05+00:00",
+    "message": "feat: 融资付息Tab订单按担保类型分5组折叠，标题显示张数",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "融资付息Tab订单按担保类型分5组折叠，标题显示张数"
+  },
+  {
+    "hash": "ac73dae20ff945912f65bfe676e808befa623ddb",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T14:38:24+00:00",
+    "message": "refactor: CryptoPrediction融资付息Tab替换renderMyCard/renderSharedCard为FunderOrderCard，与管理端完全一致",
+    "type": "refactor",
+    "scope": "",
+    "cleanMessage": "CryptoPrediction融资付息Tab替换renderMyCard/renderSharedCard为FunderOrderCard，与管理端完全一致"
+  },
+  {
+    "hash": "46c0effd19dd32c3a5705ef59f78d5959621bea4",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T14:32:47+00:00",
+    "message": "fix: pm2重启加root兜底，修复EACCES导致服务未重启问题",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "pm2重启加root兜底，修复EACCES导致服务未重启问题"
+  },
+  {
+    "hash": "0ca8609177dd6db8292b4fcb2a08bf58f8049b95",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T13:53:10+00:00",
+    "message": "fix: 第③部分风险敞口改为担保物+净缺口合计（正负相加，不再相减）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "第③部分风险敞口改为担保物+净缺口合计（正负相加，不再相减）"
+  },
+  {
+    "hash": "74f0cb42f361623f9c5ec4c2129e99e076111601",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T13:38:02+00:00",
+    "message": "fix: 弹窗担保缺口公式改为 floatPnl-accrued，盈利可抵消缺口，颜色正红负绿",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "弹窗担保缺口公式改为 floatPnl-accrued，盈利可抵消缺口，颜色正红负绿"
+  },
+  {
+    "hash": "ce3a5a8f1f278ccbe615a127e129dc1ca4bbc3c6",
+    "author": "Manus",
+    "date": "2026-06-25T13:08:59+00:00",
+    "message": "fix: 共享担保弹窗重构——实时缺口计算+担保物折算+风险敞口+保证金比例",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "共享担保弹窗重构——实时缺口计算+担保物折算+风险敞口+保证金比例"
+  },
+  {
+    "hash": "d2e7d820940959961f954548c9a5dbb423ca05fe",
+    "author": "github-actions[bot]",
+    "date": "2026-06-25T12:10:24+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "606451c595e2237b25be1593f2d73b054061760b",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T10:35:47+00:00",
+    "message": "refactor: FunderOrderCard自包含，LedgerDetail全部用新版组件",
+    "type": "refactor",
+    "scope": "",
+    "cleanMessage": "FunderOrderCard自包含，LedgerDetail全部用新版组件"
+  },
+  {
+    "hash": "166379221f6bc0dcde657560b8b8f53ab53989e1",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T09:42:53+00:00",
+    "message": "refactor: 抽取FunderOrderCard为独立共享组件，老版重命名为Legacy并标记deprecated",
+    "type": "refactor",
+    "scope": "",
+    "cleanMessage": "抽取FunderOrderCard为独立共享组件，老版重命名为Legacy并标记deprecated"
+  },
+  {
+    "hash": "c46da9b0bbbd95ecf88bfa12328fe5a97bc58c4c",
+    "author": "github-actions[bot]",
+    "date": "2026-06-25T07:47:41+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "e8c583e47b8a5f1dd12c8042b90e1ecb693749bb",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T06:26:21+00:00",
+    "message": "fix: 新浪财经作为美股价格最后兜底（OKX/Yahoo被墙时自动切换）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "新浪财经作为美股价格最后兜底（OKX/Yahoo被墙时自动切换）"
+  },
+  {
+    "hash": "a7fc6c82b4a30b26661237958536bc23ad30c696",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T05:46:53+00:00",
+    "message": "fix: MSTR加入后端coin枚举，修复添加MSTR订单报invalid_value错误",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "MSTR加入后端coin枚举，修复添加MSTR订单报invalid_value错误"
+  },
+  {
+    "hash": "98c414015308a1cac77a1c4ad3d79c7a70cd68fd",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T05:36:58+00:00",
+    "message": "feat: 结清按钮改为页面内自定义弹窗，修复iOS WebView confirm问题；MSTR币种加入两侧订单；预收管理费功能",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "结清按钮改为页面内自定义弹窗，修复iOS WebView confirm问题；MSTR币种加入两侧订单；预收管理费功能"
+  },
+  {
+    "hash": "cb51cec57a372f69be5638ef2a2a653c40c55d94",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T04:54:59+00:00",
+    "message": "fix: 订单列表空白 - 在查询前幂等建prepaid_fee字段和日志表",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "订单列表空白 - 在查询前幂等建prepaid_fee字段和日志表"
+  },
+  {
+    "hash": "3d182788afd768e066a6ff4760a2e1ea1c13a912",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T04:48:12+00:00",
+    "message": "feat: 预收管理费功能 - 数据库字段/日志表/API/A108收费入口/订单详情展开/结算逻辑修改",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "预收管理费功能 - 数据库字段/日志表/API/A108收费入口/订单详情展开/结算逻辑修改"
+  },
+  {
+    "hash": "90fdc006344a55e3a2bfa989e93e15307799d222",
+    "author": "Manus Deploy",
+    "date": "2026-06-25T00:56:30+00:00",
+    "message": "feat: A107/A108 UI improvements - time format, fee layout, byDate/byPerson tabs, forecast cards",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "A107/A108 UI improvements - time format, fee layout, byDate/byPerson tabs, forecast cards"
+  },
+  {
+    "hash": "a053f022f985684bdfe478d21f94960d419c0fd3",
+    "author": "Manus Deploy",
+    "date": "2026-06-24T23:46:59+00:00",
+    "message": "feat: A107订单详情优化 - 开仓时间显示时分秒、最低扫描时间显示时分秒、USDT改为u、实际投入+订单价值同行、管理费合并计费区间",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "A107订单详情优化 - 开仓时间显示时分秒、最低扫描时间显示时分秒、USDT改为u、实际投入+订单价值同行、管理费合并计费区间"
+  },
+  {
+    "hash": "843f617a488215faf76d4345032ba69fc5e26dc7",
+    "author": "Manus Deploy",
+    "date": "2026-06-24T23:05:12+00:00",
+    "message": "feat: 开仓时间显示完整北京时间（YY-MM-DD HH:mm:ss）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "开仓时间显示完整北京时间（YY-MM-DD HH:mm:ss）"
+  },
+  {
+    "hash": "46a912b628236a3657201a1c9ef9c0bb22eb5164",
+    "author": "github-actions[bot]",
+    "date": "2026-06-24T17:54:38+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "7d1c4287cfd6360eaf88f3607f6c33d298759975",
+    "author": "Manus Deploy",
+    "date": "2026-06-24T15:53:41+00:00",
+    "message": "fix: OCR识别成功后自动清除图片预览",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "OCR识别成功后自动清除图片预览"
+  },
+  {
+    "hash": "dd3fc7739c78bdfb7298fb30ba9dda7749f9a447",
+    "author": "Manus Deploy",
+    "date": "2026-06-24T15:03:10+00:00",
+    "message": "fix: 修复OCR接口URL拼接错误（BUILT_IN_FORGE_API_URL已含/v1，不应重复拼接）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复OCR接口URL拼接错误（BUILT_IN_FORGE_API_URL已含/v1，不应重复拼接）"
+  },
+  {
+    "hash": "8a017388af18132198de2dc91f927c9af406a0e9",
+    "author": "Manus Deploy",
+    "date": "2026-06-24T14:57:36+00:00",
+    "message": "fix: OCR接口改为直接调用Forge API，绕过invokeLLM避免参数兼容问题",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "OCR接口改为直接调用Forge API，绕过invokeLLM避免参数兼容问题"
+  },
+  {
+    "hash": "73dddd793b9d02d38c4738a4a1356e57bf64da6f",
+    "author": "Manus Deploy",
+    "date": "2026-06-24T14:37:51+00:00",
+    "message": "fix: add /api/wecom/ocr-image endpoint for AI organize image OCR",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "add /api/wecom/ocr-image endpoint for AI organize image OCR"
+  },
+  {
     "hash": "c42a2c12203ef9e29ff777b2c964c4ca6c2cce4a",
     "author": "haoyouji-deploy",
     "date": "2026-06-24T14:08:37+00:00",

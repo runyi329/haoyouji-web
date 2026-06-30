@@ -15771,6 +15771,7 @@ ${klinesSummary}
         ownerLabel: z.string().optional(),
         tags: z.array(z.string()).optional(),
         collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
+        principalLentOut: z.boolean().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -15788,6 +15789,8 @@ ${klinesSummary}
         if (!targetRole) throw new TRPCError({ code: 'BAD_REQUEST', message: '目标用户不是账本成员' });
         // 根据成员角色自动决定 order_role：funder/owner/admin -> 'funder'，其他 -> 'finance'
         const orderRole = (targetRole === 'funder' || targetRole === 'owner' || targetRole === 'admin') ? 'funder' : 'finance';
+        // 确保 principal_lent_out 字段存在
+        await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS principal_lent_out TINYINT(1) DEFAULT 0`).catch(() => {});
         // 生成唯一订单号（2个大写字母 + 4个数字）
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
         const digits = '0123456789';
@@ -15802,8 +15805,8 @@ ${klinesSummary}
           if (!exists) isUnique = true;
         }
         const insertResult = await db.execute(
-          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, show_profit_share, commission_share, collateral_assets, lent_out_assets, display_config, asset_type, tags, collateral_share_mode, created_by)
-              VALUES (${orderNo}, ${orderRole}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets && input.lentOutAssets.length > 0 ? JSON.stringify(input.lentOutAssets) : null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${ctx.user.id})`
+          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, show_profit_share, commission_share, collateral_assets, lent_out_assets, display_config, asset_type, tags, collateral_share_mode, principal_lent_out, created_by)
+              VALUES (${orderNo}, ${orderRole}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets && input.lentOutAssets.length > 0 ? JSON.stringify(input.lentOutAssets) : null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.principalLentOut ? 1 : 0}, ${ctx.user.id})`
         ) as any;
         // 新订单创建后触发即时扫描
         const newOrderId = insertResult?.insertId || (insertResult?.[0] as any)?.insertId;
@@ -16415,6 +16418,7 @@ ${klinesSummary}
         interestRateCurrency: z.string().optional(),
         tags: z.array(z.string()).optional(),
         collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
+        principalLentOut: z.boolean().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -16445,6 +16449,7 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS tags TEXT DEFAULT NULL`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS amount_currency VARCHAR(20) DEFAULT NULL`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS collateral_share_mode VARCHAR(10) DEFAULT 'none'`).catch(() => {});
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS principal_lent_out TINYINT(1) DEFAULT 0`).catch(() => {});
           await conn.end();
         } catch(e) {}
         // 生成唯一订单号
@@ -16461,8 +16466,8 @@ ${klinesSummary}
           if (!exists) isUnique = true;
         }
         await db.execute(
-          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, amount_currency, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, collateral_assets, lent_out_assets, show_profit_share, commission_share, display_config, asset_type, owner_label, tags, collateral_share_mode, created_by)
-              VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.amountCurrency || null}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets ? JSON.stringify(input.lentOutAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${ctx.user.id})`
+          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, amount_currency, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, collateral_assets, lent_out_assets, show_profit_share, commission_share, display_config, asset_type, owner_label, tags, collateral_share_mode, principal_lent_out, created_by)
+              VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.amountCurrency || null}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets ? JSON.stringify(input.lentOutAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.principalLentOut ? 1 : 0}, ${ctx.user.id})`
         );
         return { success: true };
       }),
@@ -16502,6 +16507,7 @@ ${klinesSummary}
         interestRateCurrency: z.string().optional(),
         tags: z.array(z.string()).optional(),
         collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
+        principalLentOut: z.boolean().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -16510,6 +16516,8 @@ ${klinesSummary}
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        // 确保 principal_lent_out 字段存在
+        await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS principal_lent_out TINYINT(1) DEFAULT 0`).catch(() => {});
         // 动态构建 UPDATE，直接使用 mysql2 连接执行带占位符的原始 SQL
         const updateCols: string[] = [];
         const updateVals: any[] = [];
@@ -16529,6 +16537,7 @@ ${klinesSummary}
         if (input.ownerLabel !== undefined) { updateCols.push('owner_label = ?'); updateVals.push(input.ownerLabel || null); }
         if (input.tags !== undefined) { updateCols.push('tags = ?'); updateVals.push(input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null); }
         if (input.collateralShareMode !== undefined) { updateCols.push('collateral_share_mode = ?'); updateVals.push(input.collateralShareMode || 'none'); }
+        if (input.principalLentOut !== undefined) { updateCols.push('principal_lent_out = ?'); updateVals.push(input.principalLentOut ? 1 : 0); }
         // 特殊处理 collateralAssets（JSON 序列化）
         // 判断是否正在清空担保物（collateralAssets 为空数组）
         const isClearingCollateral = input.collateralAssets !== undefined && input.collateralAssets.length === 0;

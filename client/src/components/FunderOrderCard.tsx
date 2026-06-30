@@ -647,9 +647,10 @@ export function FunderOrderCard({
   const liveP = livePrices[order.coin] ?? null;
   const currentValue = liveP !== null ? liveP * qty : null;
   const floatPnl = currentValue !== null ? currentValue - interestBaseNum : null;
+  const principalLentOut = order.principal_lent_out === 1 || order.principal_lent_out === true;
   const exposure = floatPnl !== null
-    ? collateralValue + floatPnl - accrued + totalPaid
-    : collateralValue - accrued + totalPaid;
+    ? collateralValue + floatPnl - accrued + totalPaid - (principalLentOut ? interestBaseNum : 0)
+    : collateralValue - accrued + totalPaid - (principalLentOut ? interestBaseNum : 0);
   // 共享担保模式下，担保缺口 = 本金浮动亏损（亏了多少）+ 待结利息（没付的利息）
   // 即：每张订单单独计算，不使用共享池 totalGap
   const isSharedMode = orderShareMode === 'self';
@@ -789,6 +790,7 @@ export function FunderOrderCard({
         <div className="flex-1 p-4 pr-3">
           <div className="flex items-center gap-0.5 mb-0.5">
             <span className="text-[10px] font-medium" style={{ color: isInvited ? '#16A34A' : '#3B82F6' }}>{isInvited ? '订单资产' : '持有资产'}</span>
+            {(order.principal_lent_out === 1 || order.principal_lent_out === true) && <span className="text-[10px] text-gray-400">（借出）</span>}
           </div>
           <div className="min-h-9 flex flex-col justify-center">
             <div className="flex items-baseline gap-1 flex-wrap">
@@ -796,6 +798,7 @@ export function FunderOrderCard({
                 {order.asset_type === 'stock' ? (order.amount !== null && order.amount !== undefined && order.amount !== '' ? totalU.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '0') : (order.buy_quantity !== null && order.buy_quantity !== undefined && order.buy_quantity !== '' ? formatCoinQtyFunder(qty, order.coin) : '0')}
               </span>
               <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
+
             </div>
             {order.asset_type === 'stock' ? (
               totalU > 0 && order.coin === 'CNY' && (
@@ -1257,12 +1260,12 @@ export function FunderOrderCard({
                             }
                           </div>
                           <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#FFF1F1' : '#F0FDF4' }}>
-                            <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>③ 风险敎口</div>
-                            <div>担保物 + 浮动盈亏 − 待结利息 + 已结利息（正数充足，负数缺口）</div>
+                            <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{principalLentOut ? '④' : '③'} 风险敞口</div>
+                            <div>担保物 + 浮动盈亏 − 待结利息 + 已结利息{principalLentOut ? ' − 本金（已借出）' : ''}（正数充足，负数缺口）</div>
                             <div className="mt-1 font-mono">
                               {floatPnl !== null
-                                ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accrued.toFixed(2)} + {totalPaid.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
-                                : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {accrued.toFixed(2)} + {totalPaid.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
+                                ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accrued.toFixed(2)} + {totalPaid.toFixed(2)}{principalLentOut ? ` − ${interestBaseNum.toFixed(2)}（本金）` : ''} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
+                                : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {accrued.toFixed(2)} + {totalPaid.toFixed(2)}{principalLentOut ? ` − ${interestBaseNum.toFixed(2)}（本金）` : ''} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
                               }
                             </div>
                             <div className="mt-1.5" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
@@ -1666,7 +1669,9 @@ export function FunderOrderCard({
                   {p.note && <span className="text-gray-400 ml-1 truncate">{p.note}</span>}
                 </div>
                 <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                  <span className="text-gray-400">{p.payment_date}</span>
+                  {(p.pay_date || p.payment_date) && <span className="text-gray-400">{p.pay_date || p.payment_date}</span>}
+                  {(p.operatorName || p.username) && <span className="text-gray-300">·</span>}
+                  {(p.operatorName || p.username) && <span className="text-gray-400">{p.operatorName || p.username}</span>}
                   <button
                     onClick={() => {
                       if (window.confirm('确认删除这条结息记录？')) {

@@ -87,6 +87,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     ownerLabel: '',
     ownerLabelMode: 'member' as 'member' | 'manual',
     tags: [] as string[],
+    principalLentOut: false,
   });
   // 标签输入状态
   const [tagInput, setTagInput] = useState('');
@@ -591,6 +592,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       ownerLabel: '',
       ownerLabelMode: 'member' as 'member' | 'manual',
       tags: [] as string[],
+      principalLentOut: false,
     });
     setTagInput('');
     interestBaseTouchedRef.current = false; // 新建订单：允许融资金额(U)自动带入计息基数
@@ -636,6 +638,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       ownerLabel: order.owner_label || '',
       ownerLabelMode: (order.owner_label ? 'manual' : 'member') as 'member' | 'manual',
       tags: (() => { try { const t = order.tags; return Array.isArray(t) ? t : (typeof t === 'string' ? JSON.parse(t) : []); } catch { return []; } })(),
+      principalLentOut: !!(order.principal_lent_out),
     });
     setTagInput('');
     // 加载担保货币
@@ -771,6 +774,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       ownerLabel: formData.ownerLabel || undefined,
       tags: formData.tags.length > 0 ? formData.tags : undefined,
       collateralShareMode: collateralShareMode !== 'none' ? collateralShareMode : undefined,
+      principalLentOut: formData.principalLentOut,
     };
     if (editingOrder) {
       updateMutation.mutate({ id: editingOrder.id, status: formData.status, ...payload });
@@ -1850,6 +1854,27 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         )}
                       </div>
                     ))}
+                  </div>
+                </div>
+                <div className="mx-4 h-px bg-gray-100 my-2" />
+                {/* 借出本金开关 */}
+                <div className="px-4 pb-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-sm font-medium text-gray-700">借出本金</span>
+                      <p className="text-xs text-gray-400 mt-0.5">开启后担保缺口计算将扣除计息基数（本金）</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(d => ({ ...d, principalLentOut: !d.principalLentOut }))}
+                      className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none ${
+                        formData.principalLentOut ? 'bg-orange-500' : 'bg-gray-200'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                        formData.principalLentOut ? 'translate-x-5' : 'translate-x-1'
+                      }`} />
+                    </button>
                   </div>
                 </div>
                 <div className="mx-4 h-px bg-gray-100 my-2" />

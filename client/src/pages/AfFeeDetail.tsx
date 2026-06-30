@@ -108,6 +108,38 @@ export default function AfFeeDetail() {
   };
 
   // 顶部主 Tab：谷底增筹（当前 af_orders）/ 融资付息（ledger_orders, finance）
+  // 融资付息订单表格排序
+  const [finSortKey, setFinSortKey] = useState<string | null>(null);
+  const [finSortAsc, setFinSortAsc] = useState(true);
+  // 融资付息订单搜索关键词
+  const [finSearch, setFinSearch] = useState('');
+  // 融资付息收费弹窗
+  const [finChargeModal, setFinChargeModal] = useState<{ order: any } | null>(null);
+  // 已付利息记录弹窗
+  const [finPaidDetailOrderId, setFinPaidDetailOrderId] = useState<number | null>(null);
+  const [finChargeAmount, setFinChargeAmount] = useState('');
+  const [finChargeDate, setFinChargeDate] = useState(new Date().toISOString().slice(0, 10));
+  const [finChargeNote, setFinChargeNote] = useState('');
+  const [finChargeLoading, setFinChargeLoading] = useState(false);
+  const addFinPaymentMutation = trpc.ledger.financeAddInterestPayment.useMutation({
+    onSuccess: () => {
+      setFinChargeModal(null);
+      setFinChargeAmount('');
+      setFinChargeNote('');
+      utils.ledger.financeGetInterestPaymentSummary.invalidate();
+      utils.ledger.financeGetInterestPayments.invalidate();
+    },
+    onError: (e: any) => alert('收费失败：' + e.message),
+  });
+  const toggleFinSort = (key: string) => {
+    if (finSortKey === key) {
+      setFinSortAsc(prev => !prev);
+    } else {
+      setFinSortKey(key);
+      setFinSortAsc(true);
+    }
+  };
+
   const [mainTab, setMainTab] = useState<'gujian' | 'finance'>('gujian');
 
   const { data: orders, isLoading } = trpc.ledger.afAdminGetOrders.useQuery(
@@ -138,6 +170,12 @@ export default function AfFeeDetail() {
     { enabled: !!ledgerId && mainTab === 'finance' && finOrderIds.length > 0 }
   );
   const finPaidMap: Record<number, number> = (finPaidSummary as any) || {};
+  // 已付利息记录弹窗查询
+  const { data: finPaidDetailPayments } = trpc.ledger.financeGetInterestPayments.useQuery(
+    { ledgerId, orderId: finPaidDetailOrderId! },
+    { enabled: !!finPaidDetailOrderId && !!ledgerId }
+  );
+  const finPaidDetailList = Array.isArray(finPaidDetailPayments) ? finPaidDetailPayments : [];
 
   const feeItems = ((orders as any[]) ?? [])
     .filter((o: any) => o.side === 'buy' && o.status === 'completed')
@@ -905,10 +943,53 @@ export default function AfFeeDetail() {
         ) : (() => {
           const statusMap: Record<string, string> = { active: '进行中', settled: '已结清', completed: '已结清', cancelled: '已取消' };
           const isFinSettled = (o: any) => o.status === 'settled' || o.status === 'completed';
-          const finOngoing = financeOrders.filter(o => !isFinSettled(o));
-          const finSettled = financeOrders.filter(o => isFinSettled(o));
+          // 搜索过滤
+          const kw = finSearch.trim().toLowerCase();
+          const finFiltered = kw ? financeOrders.filter((o: any) => {
+            const user = (o.username || o.userName || '').toLowerCase();
+            const orderNo = (o.order_no || '').toLowerCase();
+            const start = (o.interest_start_date || o.buy_date || '').toLowerCase();
+            const coin = (o.coin || '').toLowerCase();
+            return user.includes(kw) || orderNo.includes(kw) || start.includes(kw) || coin.includes(kw);
+          }) : financeOrders;
+          const finOngoing = finFiltered.filter((o: any) => !isFinSettled(o));
+          const finSettled = finFiltered.filter((o: any) => isFinSettled(o));
           const renderFinTable = (rows: any[], title: string) => {
             if (rows.length === 0) return null;
+            // 排序处理
+            const sortedRows = [...rows].sort((a, b) => {
+              if (!finSortKey) return 0;
+              let av: any, bv: any;
+              const getBase = (o: any) => o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
+              const getStart = (o: any) => o.interest_start_date || o.buy_date || '';
+              const getDays = (o: any) => {
+                const st = getStart(o);
+                if (!st) return 0;
+                const sd = new Date(st);
+                if (isNaN(sd.getTime())) return 0;
+                const startDay = new Date(sd.getFullYear(), sd.getMonth(), sd.getDate());
+                const now = new Date();
+                const todayDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                return Math.max(1, Math.floor((todayDay.getTime() - startDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+              };
+              const getAccrued = (o: any) => {
+                const b = getBase(o); const r = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
+                const d = getDays(o);
+                return (b && r != null && d) ? b * (r / 100) / 365 * d : 0;
+              };
+              if (finSortKey === 'username') { av = (a.username || a.userName || '').toLowerCase(); bv = (b.username || b.userName || '').toLowerCase(); }
+              else if (finSortKey === 'start') { av = getStart(a); bv = getStart(b); }
+              else if (finSortKey === 'coin') { av = (a.coin || '').toUpperCase(); bv = (b.coin || '').toUpperCase(); }
+              else if (finSortKey === 'days') { av = getDays(a); bv = getDays(b); }
+              else if (finSortKey === 'base') { av = getBase(a); bv = getBase(b); }
+              else if (finSortKey === 'rate') { av = a.interest_rate_annual != null ? Number(a.interest_rate_annual) : 0; bv = b.interest_rate_annual != null ? Number(b.interest_rate_annual) : 0; }
+              else if (finSortKey === 'accrued') { av = getAccrued(a); bv = getAccrued(b); }
+              else if (finSortKey === 'paid') { av = finPaidMap[Number(a.id)] != null ? Number(finPaidMap[Number(a.id)]) : 0; bv = finPaidMap[Number(b.id)] != null ? Number(finPaidMap[Number(b.id)]) : 0; }
+              else return 0;
+              if (av < bv) return finSortAsc ? -1 : 1;
+              if (av > bv) return finSortAsc ? 1 : -1;
+              return 0;
+            });
             const baseSum = rows.reduce((s, o) => s + (o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0)), 0);
             const accruedSum = rows.reduce((s, o) => {
               const b = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
@@ -931,20 +1012,21 @@ export default function AfFeeDetail() {
                   <table className="border-collapse text-xs" style={{ width: 'auto', tableLayout: 'auto' }}>
                     <thead>
                       <tr style={{ background: '#f8faff' }} className="text-gray-500">
-                        <th className="px-2 py-2 text-left font-semibold border border-gray-200 whitespace-nowrap">用户</th>
-                        <th className="px-2 py-2 text-left font-semibold border border-gray-200 whitespace-nowrap">起息日</th>
-                        <th className="px-2 py-2 text-center font-semibold border border-gray-200 whitespace-nowrap" style={{ width: 48, minWidth: 48, maxWidth: 48 }}>币</th>
-                        <th className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap">天数</th>
+                        <th onClick={() => toggleFinSort('username')} className="px-2 py-2 text-left font-semibold border border-gray-200 cursor-pointer select-none" style={{ width: '2em', minWidth: '2em', maxWidth: '2em' }}>用户</th>
+                        <th onClick={() => toggleFinSort('start')} className="px-2 py-2 text-left font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">起息日</th>
+                        <th onClick={() => toggleFinSort('coin')} className="px-2 py-2 text-center font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">币</th>
+                        <th onClick={() => toggleFinSort('days')} className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">天数</th>
                         <th className="px-2 py-2 text-left font-semibold border border-gray-200 whitespace-nowrap">订单</th>
-                        <th className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap">计息本金</th>
-                        <th className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap">年利率</th>
-                        <th className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap">待付利息</th>
-                        <th className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap">已付利息</th>
+                        <th onClick={() => toggleFinSort('base')} className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">计息本金</th>
+                        <th onClick={() => toggleFinSort('rate')} className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">年利率</th>
+                        <th onClick={() => toggleFinSort('accrued')} className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">待付利息</th>
+                        <th onClick={() => toggleFinSort('paid')} className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">已付利息</th>
                         <th className="px-2 py-2 text-center font-semibold border border-gray-200 whitespace-nowrap">状态</th>
+                        <th className="px-2 py-2 text-center font-semibold border border-gray-200 whitespace-nowrap"></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.map((o: any, i: number) => {
+                      {sortedRows.map((o: any, i: number) => {
                         const base = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
                         const rate = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
                         const start = o.interest_start_date || o.buy_date || '';
@@ -968,9 +1050,11 @@ export default function AfFeeDetail() {
                         const paid = finPaidMap[Number(o.id)] != null ? Number(finPaidMap[Number(o.id)]) : 0;
                         return (
                           <tr key={o.id ?? i} className="text-gray-700">
-                            <td className="px-2 py-2 border border-gray-100 whitespace-nowrap">{o.username || o.userName || '-'}</td>
+                            <td className="px-2 py-2 border border-gray-100 overflow-hidden" style={{ width: '2em', minWidth: '2em', maxWidth: '2em' }}>
+                              <div className="overflow-hidden" style={{ width: '2em', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'clip' }}>{o.username || o.userName || '-'}</div>
+                            </td>
                             <td className="px-2 py-2 border border-gray-100 whitespace-nowrap">{start || '-'}</td>
-                            <td className="px-2 py-2 text-center border border-gray-100 whitespace-nowrap" style={{ width: 48, minWidth: 48, maxWidth: 48 }}>
+                            <td className="px-2 py-2 text-center border border-gray-100 whitespace-nowrap">
                               {(() => {
                                 const C: Record<string, { s: string; c: string }> = {
                                   BTC: { s: 'B', c: '#f59e0b' },
@@ -990,8 +1074,23 @@ export default function AfFeeDetail() {
                             <td className="px-2 py-2 text-right border border-gray-100 whitespace-nowrap">{base ? base.toFixed(2) : '-'}</td>
                             <td className="px-2 py-2 text-right border border-gray-100 whitespace-nowrap">{rate != null ? rate + '%' : '-'}</td>
                             <td className="px-2 py-2 text-right border border-gray-100 whitespace-nowrap" style={{ color: '#2563eb' }}>{accrued != null ? accrued.toFixed(2) : '-'}</td>
-                            <td className="px-2 py-2 text-right border border-gray-100 whitespace-nowrap" style={{ color: '#16a34a' }}>{paid.toFixed(2)}</td>
+                            <td className="px-2 py-2 text-right border border-gray-100 whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() => setFinPaidDetailOrderId(Number(o.id))}
+                                className="font-medium underline decoration-dotted underline-offset-2"
+                                style={{ color: '#16a34a' }}
+                              >{paid.toFixed(2)}</button>
+                            </td>
                             <td className="px-2 py-2 text-center border border-gray-100 whitespace-nowrap">{statusMap[o.status] || o.status || '-'}</td>
+                            <td className="px-2 py-2 text-center border border-gray-100 whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() => { setFinChargeModal({ order: o }); setFinChargeAmount(''); setFinChargeDate(new Date().toISOString().slice(0, 10)); setFinChargeNote(''); }}
+                                className="text-xs px-2 py-1 rounded-full font-medium"
+                                style={{ backgroundColor: '#EEF4FF', color: '#1A56DB' }}
+                              >收费</button>
+                            </td>
                           </tr>
                         );
                       })}
@@ -1000,11 +1099,11 @@ export default function AfFeeDetail() {
                         <td className="px-2 py-2 border border-gray-200"></td>
                         <td className="px-2 py-2 border border-gray-200"></td>
                         <td className="px-2 py-2 border border-gray-200"></td>
-                        <td className="px-2 py-2 border border-gray-200"></td>
                         <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap">{baseSum.toFixed(2)}</td>
                         <td className="px-2 py-2 border border-gray-200"></td>
                         <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap" style={{ color: '#2563eb' }}>{accruedSum.toFixed(2)}</td>
                         <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap" style={{ color: '#16a34a' }}>{paidSum.toFixed(2)}</td>
+                        <td className="px-2 py-2 border border-gray-200"></td>
                         <td className="px-2 py-2 border border-gray-200"></td>
                       </tr>
                     </tbody>
@@ -1015,12 +1114,131 @@ export default function AfFeeDetail() {
           };
           return (
             <div className="space-y-4">
+              {/* 搜索框 */}
+              <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 shadow-sm border border-gray-100">
+                <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" /></svg>
+                <input
+                  type="text"
+                  value={finSearch}
+                  onChange={e => setFinSearch(e.target.value)}
+                  placeholder="搜索用户名、订单号、起息日、币种…"
+                  className="flex-1 text-sm outline-none bg-transparent text-gray-700 placeholder-gray-400"
+                />
+                {finSearch && (
+                  <button type="button" onClick={() => setFinSearch('')} className="text-gray-400 hover:text-gray-600 flex-shrink-0">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                )}
+              </div>
+              {kw && finOngoing.length === 0 && finSettled.length === 0 && (
+                <div className="text-center py-8 text-gray-400 text-sm">未找到匹配「{finSearch}」的订单</div>
+              )}
               {renderFinTable(finOngoing, '进行中')}
               {renderFinTable(finSettled, '已结清')}
             </div>
           );
         })()}
       </div>
+      )}
+
+      {/* 已付利息历史记录弹窗 */}
+      {finPaidDetailOrderId && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setFinPaidDetailOrderId(null)}>
+          <div className="bg-white rounded-t-2xl w-full shadow-2xl p-5" style={{ maxWidth: 480, maxHeight: '70vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="font-semibold text-gray-800 text-base">结息记录</div>
+              <button type="button" onClick={() => setFinPaidDetailOrderId(null)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            {finPaidDetailList.length === 0 ? (
+              <div className="text-center py-8 text-gray-400 text-sm">暂无结息记录</div>
+            ) : (
+              <div className="space-y-2">
+                {finPaidDetailList.map((p: any) => (
+                  <div key={p.id} className="bg-gray-50 rounded-xl px-4 py-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-sm" style={{ color: '#16a34a' }}>+{parseFloat(p.amount).toFixed(2)} U</span>
+                      <span className="text-xs text-gray-400">{p.pay_date || p.payment_date || '-'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      {(p.operatorName || p.username) && <span className="text-xs text-gray-400">记录人：{p.operatorName || p.username}</span>}
+                      {p.note && <span className="text-xs text-gray-300">|</span>}
+                      {p.note && <span className="text-xs text-gray-400">{p.note}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 融资付息收费弹窗 */}
+      {finChargeModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setFinChargeModal(null)}>
+          <div className="bg-white rounded-t-2xl w-full shadow-2xl p-5 space-y-4" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-semibold text-gray-800 text-base">记录结息</div>
+                <div className="text-xs text-gray-400 mt-0.5">{finChargeModal.order.username || finChargeModal.order.userName || '-'} · {finChargeModal.order.coin || '-'}</div>
+              </div>
+              <button type="button" onClick={() => setFinChargeModal(null)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 mb-1">结息金额 (U)</label>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={finChargeAmount}
+                  onChange={e => setFinChargeAmount(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="如：500"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 mb-1">结息日期</label>
+                <input
+                  type="date"
+                  value={finChargeDate}
+                  onChange={e => setFinChargeDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">备注（可选）</label>
+              <input
+                type="text"
+                value={finChargeNote}
+                onChange={e => setFinChargeNote(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                placeholder="结息说明"
+              />
+            </div>
+            <button
+              type="button"
+              disabled={addFinPaymentMutation.isPending || !finChargeAmount}
+              onClick={() => {
+                if (!finChargeAmount) return;
+                addFinPaymentMutation.mutate({
+                  orderId: finChargeModal.order.id,
+                  ledgerId,
+                  amount: parseFloat(finChargeAmount),
+                  payDate: finChargeDate,
+                  note: finChargeNote,
+                });
+              }}
+              className="w-full py-3 rounded-xl text-white text-sm font-semibold disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
+            >
+              {addFinPaymentMutation.isPending ? '提交中...' : '确认记录'}
+            </button>
+          </div>
+        </div>
       )}
 
       {/* 年化说明弹窗 */}

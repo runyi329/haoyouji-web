@@ -554,6 +554,33 @@ async function nextChargeNo(conn: any, tenantId: number): Promise<string> {
   return prefix + String(seq).padStart(4, "0");
 }
 
+// 全平台共享行业库（无 tenant_id）
+let chargeGlobalLibReady = false;
+async function ensureChargeGlobalLib(conn: any) {
+  if (chargeGlobalLibReady) return;
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS yaban_charge_lib_category (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      name VARCHAR(64) NOT NULL,
+      use_count INT NOT NULL DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uk_name (name)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS yaban_charge_lib_product (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      name VARCHAR(128) NOT NULL,
+      use_count INT NOT NULL DEFAULT 1,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      UNIQUE KEY uk_name (name)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  chargeGlobalLibReady = true;
+}
+
 // 收费项目库：分类表 + 项目表
 let chargeItemLibStructureReady = false;
 const chargeItemLibSeeded = new Set<number>();
@@ -2267,6 +2294,15 @@ export const yabanCustomerRouter = router({
         `INSERT INTO yaban_charge_category (tenant_id, name, sort, enabled) VALUES (?, ?, ?, ?)`,
         [TENANT_ID, input.name, input.sort, input.enabled ? 1 : 0]
       )) as any;
+      // 自动入全平台行业库
+      try {
+        await ensureChargeGlobalLib(conn);
+        await (conn as any).execute(
+          `INSERT INTO yaban_charge_lib_category (name, use_count) VALUES (?, 1)
+           ON DUPLICATE KEY UPDATE use_count = use_count + 1`,
+          [input.name.trim()]
+        );
+      } catch (_) {}
       return { id: Number((r as any).insertId) };
     }),
 
@@ -2330,6 +2366,15 @@ export const yabanCustomerRouter = router({
            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [TENANT_ID, catId, input.name, input.unit, input.price, input.isCommon ? 1 : 0, input.enabled ? 1 : 0, input.sort]
       )) as any;
+      // 自动入全平台行业库
+      try {
+        await ensureChargeGlobalLib(conn);
+        await (conn as any).execute(
+          `INSERT INTO yaban_charge_lib_product (name, use_count) VALUES (?, 1)
+           ON DUPLICATE KEY UPDATE use_count = use_count + 1`,
+          [input.name.trim()]
+        );
+      } catch (_) {}
       return { id: Number((r as any).insertId) };
     }),
 
@@ -2367,6 +2412,67 @@ export const yabanCustomerRouter = router({
         [input.isCommon ? 1 : 0, TENANT_ID, Number(input.id)]
       );
       return { success: true };
+    }),
+
+  // ============ 行业库搜索（全平台共享分类/项目词条） ============
+  searchChargeLib: protectedProcedure
+    .input(z.object({
+      query: z.string().default(""),
+      type: z.enum(["category", "product"]).default("category"),
+    }))
+    .query(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) return { items: [], total: 0 };
+      try {
+        await ensureChargeGlobalLib(conn);
+        const table = input.type === "category" ? "yaban_charge_lib_category" : "yaban_charge_lib_product";
+        const q = input.query.trim();
+        // 获取总数
+        const [cntRows] = (await (conn as any).execute(`SELECT COUNT(*) AS c FROM ${table}`)) as any;
+        const total = Number((cntRows as any[])[0]?.c || 0);
+        if (!q) {
+          const [rows] = (await (conn as any).execute(
+            `SELECT name FROM ${table} ORDER BY use_count DESC, id ASC LIMIT 20`
+          )) as any;
+          return { items: (rows as any[]).map((r) => r.name as string), total };
+        }
+        const kw = `%${q}%`;
+        const [rows] = (await (conn as any).execute(
+          `SELECT name FROM ${table} WHERE name LIKE ? ORDER BY use_count DESC, id ASC LIMIT 20`,
+          [kw]
+        )) as any;
+        return { items: (rows as any[]).map((r) => r.name as string), total };
+      } catch (_) {
+        return { items: [], total: 0 };
+      }
+    }),
+
+  // 批量将现有门诊数据导入全平台行业库（一次性操作）
+  seedChargeLib: protectedProcedure
+    .mutation(async () => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureChargeGlobalLib(conn);
+      // 导入所有门诊的分类名
+      await (conn as any).execute(`
+        INSERT INTO yaban_charge_lib_category (name, use_count)
+        SELECT name, COUNT(*) AS use_count FROM yaban_charge_category
+        GROUP BY name
+        ON DUPLICATE KEY UPDATE use_count = use_count + VALUES(use_count)
+      `);
+      // 导入所有门诊的项目名
+      await (conn as any).execute(`
+        INSERT INTO yaban_charge_lib_product (name, use_count)
+        SELECT name, COUNT(*) AS use_count FROM yaban_charge_product
+        GROUP BY name
+        ON DUPLICATE KEY UPDATE use_count = use_count + VALUES(use_count)
+      `);
+      const [c1] = (await (conn as any).execute(`SELECT COUNT(*) AS c FROM yaban_charge_lib_category`)) as any;
+      const [c2] = (await (conn as any).execute(`SELECT COUNT(*) AS c FROM yaban_charge_lib_product`)) as any;
+      return {
+        categoryCount: Number((c1 as any[])[0]?.c || 0),
+        productCount: Number((c2 as any[])[0]?.c || 0),
+      };
     }),
 
   // ============ 推荐人搜索（搜索脉动网已有用户） ============

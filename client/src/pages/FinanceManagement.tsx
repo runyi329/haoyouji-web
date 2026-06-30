@@ -369,9 +369,10 @@ function FinanceOrderCard({
   // 将利息统一折算为U（accrued单位跟interest_base一致，totalPaid单位也interest_base一致）
   const accruedInU = baseCur === 'CNY' ? accrued / cnyRate : accrued;
   const totalPaidInU = baseCur === 'CNY' ? totalPaid / cnyRate : totalPaid;
+  const principalLentOut = order.principal_lent_out === 1 || order.principal_lent_out === true;
   const exposure = floatPnl !== null
-    ? collateralValue + floatPnl - accruedInU + totalPaidInU - lentOutValueU
-    : collateralValue - accruedInU + totalPaidInU - lentOutValueU;
+    ? collateralValue + floatPnl - accruedInU + totalPaidInU - lentOutValueU - (principalLentOut ? interestBaseNum : 0)
+    : collateralValue - accruedInU + totalPaidInU - lentOutValueU - (principalLentOut ? interestBaseNum : 0);
   const isSufficient = exposure >= 0;
 
   return (
@@ -515,6 +516,7 @@ function FinanceOrderCard({
           <div className="flex items-center gap-0.5 mb-0.5">
             <span className="text-[10px] font-medium" style={{ color: isGreenOrder ? '#16A34A' : '#3B82F6' }}>{isGreenOrder ? '持有资产' : '融资资产'}</span>
             {!isGreenOrder && <span className="text-[10px] text-gray-400">({order.finance_type === '自负盈亏' ? '自负盈亏 100%部分' : '保本分成 50%部分'})</span>}
+            {(order.principal_lent_out === 1 || order.principal_lent_out === true) && <span className="text-[10px] text-gray-400">（借出）</span>}
           </div>
           {/* 持币量大数字 */}
           <div className="min-h-9 flex flex-col justify-center">
@@ -525,6 +527,7 @@ function FinanceOrderCard({
                   : (order.buy_quantity !== null && order.buy_quantity !== undefined && order.buy_quantity !== '' ? formatCoinQty(qty, order.coin) : '0')}
               </span>
               <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
+
             </div>
             {isGreenOrder && order.asset_type === 'stock' ? (
               totalU > 0 && order.coin === 'CNY' && (
@@ -871,12 +874,12 @@ function FinanceOrderCard({
                         )}
                         {/* ④ 风险敞口 */}
                         <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#FFF1F1' : '#F0FDF4' }}>
-                          <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{lentOutValueU > 0 ? '④' : '③'} 风险敞口</div>
-                          <div>担保物 + 浮动盈亏 − 待付利息 + 已付利息{lentOutValueU > 0 ? ' − 外借资金' : ''}（正数充足，负数缺口）</div>
+                          <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{(lentOutValueU > 0 || principalLentOut) ? '④' : '③'} 风险敞口</div>
+                          <div>担保物 + 浮动盈亏 − 待付利息 + 已付利息{lentOutValueU > 0 ? ' − 外借资金' : ''}{principalLentOut ? ' − 本金（已借出）' : ''}（正数充足，负数缺口）</div>
                           <div className="mt-1 font-mono">
                             {floatPnl !== null
-                              ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accruedInU.toFixed(2)} + {totalPaidInU.toFixed(2)}{lentOutValueU > 0 ? ` − ${lentOutValueU.toFixed(2)}` : ''} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
-                              : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {accruedInU.toFixed(2)} + {totalPaidInU.toFixed(2)}{lentOutValueU > 0 ? ` − ${lentOutValueU.toFixed(2)}` : ''} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
+                              ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accruedInU.toFixed(2)} + {totalPaidInU.toFixed(2)}{lentOutValueU > 0 ? ` − ${lentOutValueU.toFixed(2)}` : ''}{principalLentOut ? ` − ${interestBaseNum.toFixed(2)}（本金）` : ''} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
+                              : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {accruedInU.toFixed(2)} + {totalPaidInU.toFixed(2)}{lentOutValueU > 0 ? ` − ${lentOutValueU.toFixed(2)}` : ''}{principalLentOut ? ` − ${interestBaseNum.toFixed(2)}（本金）` : ''} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
                             }
                           </div>
                           <div className="mt-1.5" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
@@ -1003,7 +1006,9 @@ function FinanceOrderCard({
                   {p.note && <span className="text-gray-400 ml-1 truncate">{p.note}</span>}
                 </div>
                 <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                  <span className="text-gray-400">{p.payment_date}</span>
+                  <span className="text-gray-400">{p.pay_date || p.payment_date}</span>
+                  {(p.operatorName || p.username) && <span className="text-gray-300">·</span>}
+                  {(p.operatorName || p.username) && <span className="text-gray-400">{p.operatorName || p.username}</span>}
                   <button
                     onClick={() => {
                       if (window.confirm('确认删除这条结息记录？')) {
@@ -1278,6 +1283,7 @@ const emptyForm = {
   ownerLabel: '',
   interestRateCurrency: 'USDT' as 'USDT' | 'CNY',
   tags: [] as string[],
+  principalLentOut: false,
 };
 
 // ===== 订单公开备注组件 =====
@@ -1805,6 +1811,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
           return parsed;
         } catch { return order.owner_label ? [order.owner_label] : []; }
       })(),
+      principalLentOut: !!(order.principal_lent_out),
     });
     // 加载字段展示配置
     if (order.display_config) {
@@ -1882,6 +1889,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         interestRateCurrency: formData.interestRateCurrency,
         tags: formData.tags.length > 0 ? formData.tags : [],
         counterparty: formData.counterparty,
+        principalLentOut: formData.principalLentOut,
         displayConfig: {
           ...Object.fromEntries(Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')),
           ...(marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? { marginAlertThreshold: parseFloat(marginAlertThreshold) } : {}),
@@ -1917,6 +1925,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         ownerLabel: undefined,
         interestRateCurrency: formData.interestRateCurrency,
         tags: formData.tags.length > 0 ? formData.tags : undefined,
+        principalLentOut: formData.principalLentOut,
         displayConfig: {
           ...Object.fromEntries(Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')),
           ...(marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? { marginAlertThreshold: parseFloat(marginAlertThreshold) } : {}),
@@ -1942,6 +1951,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     { enabled: !!showPaymentPanel && !!ledgerId }
   );
   const openedPaymentList = Array.isArray(openedPayments) ? openedPayments : [];
+  if (openedPaymentList.length > 0) console.log('[DEBUG] payment record:', JSON.stringify(openedPaymentList[0]));
 
   const getPaymentLabel = (val: string) => INTEREST_PAYMENT_OPTIONS.find(o => o.value === val)?.label || val;
 
@@ -2754,6 +2764,27 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                       {opt.label}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* 借出本金开关 */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-sm font-medium text-gray-600">借出本金</label>
+                    <p className="text-xs text-gray-400 mt-0.5">开启后担保缺口计算将扣除计息基数（本金）</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFormData(d => ({ ...d, principalLentOut: !d.principalLentOut }))}
+                    className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none ${
+                      formData.principalLentOut ? 'bg-orange-500' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                      formData.principalLentOut ? 'translate-x-5' : 'translate-x-1'
+                    }`} />
+                  </button>
                 </div>
               </div>
 

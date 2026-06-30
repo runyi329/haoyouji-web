@@ -15,6 +15,31 @@ body {
   position: relative;
 }
 
+/* 可编辑虹色虚线闪烁动画 */
+@keyframes edit-dash-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.edit-dash-line {
+  position: relative;
+}
+.edit-dash-line::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 0;
+  height: 1px;
+  background: repeating-linear-gradient(
+    90deg,
+    #1E88D6 0px,
+    #1E88D6 4px,
+    transparent 4px,
+    transparent 8px
+  );
+  animation: edit-dash-blink 1.2s ease-in-out infinite;
+}
+
 /* spin 旋转动画 */
 @keyframes spin {
   from { transform: rotate(0deg); }

@@ -9,6 +9,7 @@ import YabanDataManage from "./pages/yaban/YabanDataManage";
 import YabanBindEmail from "./pages/yaban/YabanBindEmail";
 import YabanRoles from "./pages/yaban/YabanRoles";
 import YabanChargeProducts from "./pages/yaban/YabanChargeProducts";
+import YabanChargeAdd from "./pages/yaban/YabanChargeAdd";
 import YabanVerifyRecords from "./pages/yaban/YabanVerifyRecords";
 import YabanHome from "./pages/yaban/YabanHome";
 import YabanPatientCreate from "./pages/yaban/YabanPatientCreate";
@@ -784,6 +785,7 @@ function Router() {
         <Route path="/yaban/settings/data" component={YabanDataManage} />
         <Route path="/yaban/bind-email" component={YabanBindEmail} />
         <Route path="/yaban/settings/charge-products" component={YabanChargeProducts} />
+        <Route path="/yaban/settings/charge-add" component={YabanChargeAdd} />
         <Route path="/yaban/settings/website-features" component={lazy(() => import("./pages/yaban/YabanWebsiteFeatures"))} />
         <Route path="/yaban/settings/customer-source" component={lazy(() => import("./pages/yaban/YabanCustomerSource"))} />
         <Route path="/yaban/settings/patient-type" component={lazy(() => import("./pages/yaban/YabanPatientType"))} />
