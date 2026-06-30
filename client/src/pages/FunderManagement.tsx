@@ -141,6 +141,10 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const [employeeNameFilter, setEmployeeNameFilter] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [confirmSettleId, setConfirmSettleId] = useState<number | null>(null);
+  // 弹窗状态提升：存储当前打开弹窗的 orderId，null 表示关闭（防止子组件因数据刷新重渲染导致弹窗自动关闭）
+  const [collateralInfoOrderId, setCollateralInfoOrderId] = useState<number | null>(null);
+  const [interestTipOrderId, setInterestTipOrderId] = useState<number | null>(null);
+  const [marginInfoOrderId, setMarginInfoOrderId] = useState<number | null>(null);
 
   // 担保价值（在 assetOrdersData 定义后使用）——放到这里是为了先定义类型，实际计算在下方的 derivedCollateral 中
   // 当前登录用户信息（用于备注权限控制）
@@ -155,7 +159,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
 
   const { data: assetOrdersData, isLoading: ordersLoading, refetch: refetchOrders } = trpc.ledger.funderGetAssetOrders.useQuery(
     { ledgerId, ...(selectedUserId ? { userId: selectedUserId } : {}), ...(adminOnly ? { roleFilter: "admin" as const } : {}), ...(financeOnly ? { financeOnly: true } : {}) },
-    { enabled: ledgerId > 0, staleTime: 3000, refetchInterval: 3000 }
+    { enabled: ledgerId > 0, staleTime: 3000, refetchInterval: 3000, placeholderData: (prev: any) => prev }
   );
   // funderGetAssetOrders 返回 { orders, livePrices }，取 orders 数组
   const assetOrders = (assetOrdersData as any)?.orders ?? assetOrdersData ?? [];
@@ -970,6 +974,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     participantsEditMode={participantsEditMode}
                     setParticipantsEditMode={setParticipantsEditMode}
                     onConfirmSettle={setConfirmSettleId}
+                    showCollateralInfo={collateralInfoOrderId === order.id}
+                    setShowCollateralInfo={(v) => setCollateralInfoOrderId(v ? order.id : null)}
+                    showInterestTip={interestTipOrderId === order.id}
+                    setShowInterestTip={(v) => setInterestTipOrderId(v ? order.id : null)}
+                    showMarginInfo={marginInfoOrderId === order.id}
+                    setShowMarginInfo={(v) => setMarginInfoOrderId(v ? order.id : null)}
                   />
                 );
               })}

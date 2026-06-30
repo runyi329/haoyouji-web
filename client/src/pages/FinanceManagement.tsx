@@ -192,6 +192,11 @@ interface FinanceOrderCardProps {
   saveParticipantsMutation: any;
   ROLE_OPTIONS: { value: 'funder' | 'borrower' | 'broker'; label: string; color: string }[];
   activeUserTab: number | 'all';
+  // 弹窗状态（提升到父组件，防止子组件重渲染时 state 被重置）
+  showCollateralInfo: boolean;
+  setShowCollateralInfo: (v: boolean) => void;
+  showMarginInfo: boolean;
+  setShowMarginInfo: (v: boolean) => void;
 }
 
 function FinanceOrderCard({
@@ -231,10 +236,13 @@ function FinanceOrderCard({
   participantsLoading,
   saveParticipantsMutation,
   ROLE_OPTIONS,
+  showCollateralInfo,
+  setShowCollateralInfo,
+  showMarginInfo,
+  setShowMarginInfo,
 }: FinanceOrderCardProps) {
   const [showStatusSheet, setShowStatusSheet] = useState(false);
-  const [showCollateralInfo, setShowCollateralInfo] = useState(false);
-  const [showMarginInfo, setShowMarginInfo] = useState(false);
+  // showCollateralInfo 和 showMarginInfo 已提升到父组件，通过 props 传入
   // 共享订单（参与者视角）用参与者各自的利率/计息基数/起息日；自己的订单用订单本身参数
   const _isGreen = !!(order._fromFunder || order._isParticipant);
   const _accBase = _isGreen ? (order.participantInfo?.commissionBase ?? order.interest_base) : order.interest_base;
@@ -1445,6 +1453,9 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   const [showPaymentDatePicker, setShowPaymentDatePicker] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [confirmSettleId, setConfirmSettleId] = useState<number | null>(null);
+  // 弹窗状态提升：存储当前打开弹窗的 orderId，null 表示关闭（防止子组件因数据刷新重渲染导致弹窗自动关闭）
+  const [collateralInfoOrderId, setCollateralInfoOrderId] = useState<number | null>(null);
+  const [marginInfoOrderId, setMarginInfoOrderId] = useState<number | null>(null);
 
   const trpcUtils = trpc.useUtils();
 
@@ -1540,7 +1551,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   // 查询
   const { data: ordersData, isLoading: ordersLoading, refetch: refetchOrders } = trpc.ledger.financeGetOrders.useQuery(
     { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
-    { enabled: !!ledgerId }
+    { enabled: !!ledgerId, placeholderData: (prev: any) => prev }
   );
   const orders = Array.isArray((ordersData as any)?.orders) ? (ordersData as any).orders : (Array.isArray(ordersData) ? ordersData : []);
   const { data: members } = trpc.ledger.getMembers.useQuery(
@@ -2050,6 +2061,10 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                     participantsLoading={participantsLoading}
                     saveParticipantsMutation={saveParticipantsMutation}
                     ROLE_OPTIONS={ROLE_OPTIONS}
+                    showCollateralInfo={collateralInfoOrderId === order.id}
+                    setShowCollateralInfo={(v) => setCollateralInfoOrderId(v ? order.id : null)}
+                    showMarginInfo={marginInfoOrderId === order.id}
+                    setShowMarginInfo={(v) => setMarginInfoOrderId(v ? order.id : null)}
                   />
                 );
               })}

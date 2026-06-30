@@ -369,6 +369,13 @@ export interface FunderOrderCardProps {
   viewMode?: 'default' | 'large' | 'small';
   onExposureGapChange?: (orderId: number, gap: number) => void;
   sharedGapMap?: Record<number, number>;
+  // 弹窗状态（提升到父组件，防止子组件重渲染时 state 被重置）
+  showCollateralInfo?: boolean;
+  setShowCollateralInfo?: (v: boolean) => void;
+  showInterestTip?: boolean;
+  setShowInterestTip?: (v: boolean) => void;
+  showMarginInfo?: boolean;
+  setShowMarginInfo?: (v: boolean) => void;
 }
 
 export function FunderOrderCard({
@@ -412,6 +419,12 @@ export function FunderOrderCard({
   viewMode = 'default',
   onExposureGapChange,
   sharedGapMap,
+  showCollateralInfo: _propShowCollateralInfo,
+  setShowCollateralInfo: _propSetShowCollateralInfo,
+  showInterestTip: _propShowInterestTip,
+  setShowInterestTip: _propSetShowInterestTip,
+  showMarginInfo: _propShowMarginInfo,
+  setShowMarginInfo: _propSetShowMarginInfo,
 }: FunderOrderCardProps) {
   // ===== 内部 fallback：当父组件未传入对应 props 时，组件自己管理 state 和 mutation =====
   const trpcUtils = trpc.useUtils();
@@ -521,9 +534,17 @@ export function FunderOrderCard({
     { ledgerId, userId: Number(order.user_id) },
     { enabled: ledgerId > 0 && orderShareMode === 'self', staleTime: 0, refetchInterval: 3000 }
   );
-  const [showInterestTip, setShowInterestTip] = useState(false);
-  const [showCollateralInfo, setShowCollateralInfo] = useState(false);
-  const [showMarginInfo, setShowMarginInfo] = useState(false);
+  // 弹窗状态：优先使用父组件传入的 props，否则 fallback 到内部 state
+  // （父组件提升状态可防止数据刷新导致弹窗自动关闭）
+  const [_intShowInterestTip, _intSetShowInterestTip] = useState(false);
+  const [_intShowCollateralInfo, _intSetShowCollateralInfo] = useState(false);
+  const [_intShowMarginInfo, _intSetShowMarginInfo] = useState(false);
+  const showInterestTip = _propShowInterestTip !== undefined ? _propShowInterestTip : _intShowInterestTip;
+  const setShowInterestTip = _propSetShowInterestTip ?? _intSetShowInterestTip;
+  const showCollateralInfo = _propShowCollateralInfo !== undefined ? _propShowCollateralInfo : _intShowCollateralInfo;
+  const setShowCollateralInfo = _propSetShowCollateralInfo ?? _intSetShowCollateralInfo;
+  const showMarginInfo = _propShowMarginInfo !== undefined ? _propShowMarginInfo : _intShowMarginInfo;
+  const setShowMarginInfo = _propSetShowMarginInfo ?? _intSetShowMarginInfo;
   const [showStatusSheet, setShowStatusSheet] = useState(false);
   const tipBtnRef = useRef<HTMLButtonElement>(null);
   const [tipPos, setTipPos] = useState<{ bottom: number; right: number }>({ bottom: 0, right: 0 });
