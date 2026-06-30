@@ -605,27 +605,37 @@ export default function YabanChargeProducts() {
   const filteredCategories = useMemo(() => {
     const kw = searchText.trim().toLowerCase();
     const freq = getSearchFreq();
+    // 智能匹配：项目名、价格、单位、分类名
+    const matchItem = (it: ProdItem) =>
+      it.name.toLowerCase().includes(kw) ||
+      String(it.price).includes(kw) ||
+      (it.priceMax ? String(it.priceMax).includes(kw) : false) ||
+      (it.unit ? it.unit.toLowerCase().includes(kw) : false);
+    const matchCat = (name: string) => name.toLowerCase().includes(kw);
     return sortedCategories
       .map((cat) => {
+        const catMatches = kw ? matchCat(cat.name) : false;
         // 过滤直接挂一级的项目
         let directItems = [...cat.items].sort((a, b) => a.sort - b.sort || a.id - b.id);
         if (!showDisabled) directItems = directItems.filter((it) => it.enabled);
-        if (kw) directItems = directItems.filter((it) => it.name.toLowerCase().includes(kw));
+        if (kw && !catMatches) directItems = directItems.filter((it) => matchItem(it));
 
         // 过滤二级分类及其三级分类
         const subCats = cat.subCategories
           .sort((a, b) => a.sort - b.sort || a.id - b.id)
           .map((sub) => {
+            const subMatches = kw ? matchCat(sub.name) : false;
             let subItems = [...sub.items].sort((a, b) => a.sort - b.sort || a.id - b.id);
             if (!showDisabled) subItems = subItems.filter((it) => it.enabled);
-            if (kw) subItems = subItems.filter((it) => it.name.toLowerCase().includes(kw));
+            // 一级名或二级名匹配时，展示该二级下所有项目；否则按项目匹配过滤
+            if (kw && !catMatches && !subMatches) subItems = subItems.filter((it) => matchItem(it));
             return { ...sub, items: subItems };
           })
-          .filter((sub) => (kw ? sub.items.length > 0 : true));
+          .filter((sub) => (kw && !catMatches ? sub.items.length > 0 || matchCat(sub.name) : true));
 
         return { ...cat, items: directItems, subCategories: subCats };
       })
-      .filter((cat) => (kw ? cat.items.length > 0 || cat.subCategories.length > 0 : true));
+      .filter((cat) => (kw ? cat.items.length > 0 || cat.subCategories.length > 0 || matchCat(cat.name) : true));
   }, [sortedCategories, searchText, showDisabled, getSearchFreq]);
 
   // ===== 分类编辑弹层（一级/二级通用） =====
