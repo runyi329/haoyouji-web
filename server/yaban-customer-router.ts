@@ -724,6 +724,31 @@ async function ensureChargePerf(conn: any) {
   chargePerfReady = true;
 }
 
+// 调价记录表
+let priceHistoryReady = false;
+async function ensurePriceHistory(conn: any) {
+  if (priceHistoryReady) return;
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS yaban_charge_price_history (
+      id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+      tenant_id INT NOT NULL DEFAULT 1,
+      product_id BIGINT UNSIGNED NOT NULL,
+      product_name VARCHAR(128) NOT NULL DEFAULT '',
+      old_price DECIMAL(12,2) NOT NULL DEFAULT 0,
+      old_price_max DECIMAL(12,2) NOT NULL DEFAULT 0,
+      new_price DECIMAL(12,2) NOT NULL DEFAULT 0,
+      new_price_max DECIMAL(12,2) NOT NULL DEFAULT 0,
+      unit VARCHAR(16) NOT NULL DEFAULT '',
+      operator_name VARCHAR(64) NOT NULL DEFAULT '',
+      changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY idx_tenant_product (tenant_id, product_id),
+      KEY idx_tenant_time (tenant_id, changed_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  priceHistoryReady = true;
+}
+
 // 创建顾客输入校验
 const createInput = z.object({
   name: z.string().min(1, "姓名必填").max(64),
@@ -2451,6 +2476,27 @@ export const yabanCustomerRouter = router({
       const catId = input.categoryId ? Number(input.categoryId) : null;
       const subCatId = input.subcategoryId ? Number(input.subcategoryId) : null;
       if (input.id) {
+        // 调价记录：先读旧价格，如有变化则写入历史
+        try {
+          await ensurePriceHistory(conn);
+          const [oldRows] = (await (conn as any).execute(
+            `SELECT price, price_max, unit, name FROM yaban_charge_product WHERE tenant_id = ? AND id = ? LIMIT 1`,
+            [TENANT_ID, Number(input.id)]
+          )) as any;
+          const old = (oldRows as any[])[0];
+          const newPrice = input.price;
+          const newPriceMax = input.priceMax ?? 0;
+          const oldPrice = old ? Number(old.price) : 0;
+          const oldPriceMax = old ? Number(old.price_max) : 0;
+          if (old && (oldPrice !== newPrice || oldPriceMax !== newPriceMax)) {
+            const operatorName = (ctx as any)?.user?.name || (ctx as any)?.user?.username || '';
+            await (conn as any).execute(
+              `INSERT INTO yaban_charge_price_history (tenant_id, product_id, product_name, old_price, old_price_max, new_price, new_price_max, unit, operator_name)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [TENANT_ID, Number(input.id), input.name, oldPrice, oldPriceMax, newPrice, newPriceMax, input.unit, operatorName]
+            );
+          }
+        } catch (_) {}
         await (conn as any).execute(
           `UPDATE yaban_charge_product SET category_id = ?, subcategory_id = ?, name = ?, unit = ?, price = ?, price_max = ?, is_common = ?, enabled = ?, sort = ?
              WHERE tenant_id = ? AND id = ?`,
@@ -3776,5 +3822,43 @@ export const yabanCustomerRouter = router({
       }
 
       return { addedCats, skippedCats, overwrittenCats, addedProds, skippedProds, overwrittenProds };
+    }),
+
+  // ============ 调价记录：查询（项目级 or 全局级） ============
+  listPriceHistory: protectedProcedure
+    .input(z.object({
+      productId: z.number().int().positive().optional(), // 项目级：指定产品 id
+      limit: z.number().int().min(1).max(200).default(50),
+    }))
+    .query(async ({ input, ctx }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const TENANT_ID = await resolveTenantId(ctx);
+      await ensurePriceHistory(conn);
+      if (input.productId) {
+        // 项目级：返回该产品的调价历史
+        const [rows] = (await (conn as any).execute(
+          `SELECT h.id, h.product_id, h.product_name, h.old_price, h.old_price_max, h.new_price, h.new_price_max,
+                  h.unit, h.operator_name, h.changed_at
+           FROM yaban_charge_price_history h
+           WHERE h.tenant_id = ? AND h.product_id = ?
+           ORDER BY h.changed_at DESC
+           LIMIT ?`,
+          [TENANT_ID, input.productId, input.limit]
+        )) as any;
+        return { records: rows as any[] };
+      } else {
+        // 全局级：返回该门诊所有调价历史
+        const [rows] = (await (conn as any).execute(
+          `SELECT h.id, h.product_id, h.product_name, h.old_price, h.old_price_max, h.new_price, h.new_price_max,
+                  h.unit, h.operator_name, h.changed_at
+           FROM yaban_charge_price_history h
+           WHERE h.tenant_id = ?
+           ORDER BY h.changed_at DESC
+           LIMIT ?`,
+          [TENANT_ID, input.limit]
+        )) as any;
+        return { records: rows as any[] };
+      }
     }),
 });

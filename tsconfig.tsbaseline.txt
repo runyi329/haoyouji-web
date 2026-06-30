@@ -5,7 +5,7 @@ client/src/App.tsx :: error TS2322: Type 'LazyExoticComponent<({ homeMode }: { h
 client/src/App.tsx :: error TS2322: Type 'LazyExoticComponent<({ ledgerIdProp, hideHeader }?: FinanceManagementProps) => Element>' is not assignable to type 'ComponentType<RouteComponentProps<StringRouteParams<"/ledger/:id/finance-management">>> | undefined'.
 client/src/App.tsx :: error TS2322: Type 'LazyExoticComponent<({ ledgerIdProp, hideHeader, adminOnly, financeOnly, onRecycleBinRef }?: FunderManagementProps) => Element>' is not assignable to type 'ComponentType<RouteComponentProps<StringRouteParams<"/ledger/:id/funder-management">>> | undefined'.
 client/src/components/AIAssistantDialog.tsx :: error TS2339: Property 'result' does not exist on type '{ answer: string; tokensUsed: number; cost: number; balanceAfter: number; sessionId: number; }'.
-client/src/components/AJOwnerPanel.tsx :: error TS2322: Type '"all" | "week" | "month" | "day" | "year" | "quarter"' is not assignable to type '"all" | "week" | "month" | "day" | "year" | undefined'.
+client/src/components/AJOwnerPanel.tsx :: error TS2322: Type '"all" | "month" | "year" | "day" | "week" | "quarter"' is not assignable to type '"all" | "month" | "year" | "day" | "week" | undefined'.
 client/src/components/AJOwnerPanel.tsx :: error TS2339: Property 'show' does not exist on type 'CenterToastContextValue'.
 client/src/components/AJOwnerPanel.tsx :: error TS2339: Property 'show' does not exist on type 'CenterToastContextValue'.
 client/src/components/AJOwnerPanel.tsx :: error TS2339: Property 'show' does not exist on type 'CenterToastContextValue'.
@@ -35,13 +35,14 @@ client/src/components/DualEngineAccelerator.tsx :: error TS2339: Property 'poten
 client/src/components/DualEngineAccelerator.tsx :: error TS2339: Property 'potential' does not exist on type '{ achievedStandard: number; achievedAdvanced: number; achievedSuper: number; potentialStandard: number; potentialAdvanced: number; potentialSuper: number; }'.
 client/src/components/DualEngineAccelerator.tsx :: error TS2339: Property 'potential' does not exist on type '{ achievedStandard: number; achievedAdvanced: number; achievedSuper: number; potentialStandard: number; potentialAdvanced: number; potentialSuper: number; }'.
 client/src/components/DualEngineAccelerator.tsx :: error TS2339: Property 'potential' does not exist on type '{ achievedStandard: number; achievedAdvanced: number; achievedSuper: number; potentialStandard: number; potentialAdvanced: number; potentialSuper: number; }'.
-client/src/components/FeatureTreeManager.tsx :: error TS2345: Argument of type 'import("/home/ubuntu/haoyouji-web/shared/featureTree").FeatureNode' is not assignable to parameter of type 'FeatureNode'.
-client/src/components/FeatureTreeManager.tsx :: error TS2345: Argument of type 'import("/home/ubuntu/haoyouji-web/shared/featureTree").FeatureNode[]' is not assignable to parameter of type 'FeatureNode[]'.
-client/src/components/FeatureTreeManager.tsx :: error TS2345: Argument of type 'import("/home/ubuntu/haoyouji-web/shared/featureTree").FeatureNode[]' is not assignable to parameter of type 'FeatureNode[]'.
-client/src/components/FeatureTreeManager.tsx :: error TS2345: Argument of type 'import("/home/ubuntu/haoyouji-web/shared/featureTree").FeatureNode[]' is not assignable to parameter of type 'FeatureNode[]'.
-client/src/components/FeatureTreeManager.tsx :: error TS2345: Argument of type 'import("/home/ubuntu/haoyouji-web/shared/featureTree").FeatureNode[]' is not assignable to parameter of type 'FeatureNode[]'.
+client/src/components/FeatureTreeManager.tsx :: error TS2345: Argument of type 'import("/home/ubuntu/haoyouji-web-fresh/shared/featureTree").FeatureNode' is not assignable to parameter of type 'FeatureNode'.
+client/src/components/FeatureTreeManager.tsx :: error TS2345: Argument of type 'import("/home/ubuntu/haoyouji-web-fresh/shared/featureTree").FeatureNode[]' is not assignable to parameter of type 'FeatureNode[]'.
+client/src/components/FeatureTreeManager.tsx :: error TS2345: Argument of type 'import("/home/ubuntu/haoyouji-web-fresh/shared/featureTree").FeatureNode[]' is not assignable to parameter of type 'FeatureNode[]'.
+client/src/components/FeatureTreeManager.tsx :: error TS2345: Argument of type 'import("/home/ubuntu/haoyouji-web-fresh/shared/featureTree").FeatureNode[]' is not assignable to parameter of type 'FeatureNode[]'.
+client/src/components/FeatureTreeManager.tsx :: error TS2345: Argument of type 'import("/home/ubuntu/haoyouji-web-fresh/shared/featureTree").FeatureNode[]' is not assignable to parameter of type 'FeatureNode[]'.
 client/src/components/FunderOrderCard.tsx :: error TS2322: Type '{ userId: number; role: string; sortOrder: number; rate: string | undefined; }[]' is not assignable to type '{ userId: number; role: "funder" | "borrower" | "broker"; sortOrder?: number | undefined; rate?: string | undefined; }[]'.
 client/src/components/FunderOrderCard.tsx :: error TS2345: Argument of type '() => { amount: string; currency: string; exchangeRate: string; payDate: string; note: string; }' is not assignable to parameter of type '((f: any) => any) & SetStateAction<{ amount: string; currency: "CNY" | "U"; exchangeRate: string; payDate: string; note: string; }>'.
+client/src/components/FunderOrderCard.tsx :: error TS2345: Argument of type '(v: any) => boolean' is not assignable to parameter of type 'boolean'.
 client/src/components/FunderOrderCard.tsx :: error TS7006: Parameter '_' implicitly has an 'any' type.
 client/src/components/FunderOrderCard.tsx :: error TS7006: Parameter 'i' implicitly has an 'any' type.
 client/src/components/FunderOrderCard.tsx :: error TS7006: Parameter 'i' implicitly has an 'any' type.
@@ -54,6 +55,7 @@ client/src/components/FunderOrderCard.tsx :: error TS7006: Parameter 'list' impl
 client/src/components/FunderOrderCard.tsx :: error TS7006: Parameter 'list' implicitly has an 'any' type.
 client/src/components/FunderOrderCard.tsx :: error TS7006: Parameter 'list' implicitly has an 'any' type.
 client/src/components/FunderOrderCard.tsx :: error TS7006: Parameter 'list' implicitly has an 'any' type.
+client/src/components/FunderOrderCard.tsx :: error TS7006: Parameter 'v' implicitly has an 'any' type.
 client/src/components/InteractionHistoryDialog.tsx :: error TS2339: Property 'interactions' does not exist on type 'CreateTRPCReactBase<BuiltRouter<{ ctx: TrpcContext; meta: object; errorShape: DefaultErrorShape; transformer: true; }, DecorateCreateRouterOptions<{ workLog: BuiltRouter<{ ctx: TrpcContext; meta: object; errorShape: DefaultErrorShape; transformer: true; }, DecorateCreateRouterOptions<...>>; ... 171 more ...; worldCu...'.
 client/src/components/InteractionHistoryDialog.tsx :: error TS7006: Parameter 'index' implicitly has an 'any' type.
 client/src/components/InteractionHistoryDialog.tsx :: error TS7006: Parameter 'interaction' implicitly has an 'any' type.
@@ -167,15 +169,15 @@ client/src/pages/DemoOpinionBook.tsx :: error TS7006: Parameter 'e' implicitly h
 client/src/pages/DemoOpinionBook.tsx :: error TS7006: Parameter 'e' implicitly has an 'any' type.
 client/src/pages/DemoOpinionBook.tsx :: error TS7006: Parameter 'e' implicitly has an 'any' type.
 client/src/pages/DemoOpinionBook.tsx :: error TS7006: Parameter 'm' implicitly has an 'any' type.
-client/src/pages/DepositManage.tsx :: error TS2322: Type 'number' is not assignable to type '"md" | "sm" | "lg" | undefined'.
+client/src/pages/DepositManage.tsx :: error TS2322: Type 'number' is not assignable to type '"sm" | "lg" | "md" | undefined'.
 client/src/pages/DietConfig.tsx :: error TS2339: Property 'saveConfig' does not exist on type 'DecorateRouterRecord<{ ctx: TrpcContext; meta: object; errorShape: DefaultErrorShape; transformer: true; }, DecorateCreateRouterOptions<{ getMyConfig: QueryProcedure<{ input: { ledgerId: number; }; output: any; meta: object; }>; ... 15 more ...; getStats: QueryProcedure<...>; }>>'.
 client/src/pages/DietConfig.tsx :: error TS2551: Property 'getConfig' does not exist on type 'DecorateRouterRecord<{ ctx: TrpcContext; meta: object; errorShape: DefaultErrorShape; transformer: true; }, DecorateCreateRouterOptions<{ getMyConfig: QueryProcedure<{ input: { ledgerId: number; }; output: any; meta: object; }>; ... 15 more ...; getStats: QueryProcedure<...>; }>>'. Did you mean 'getMyConfig'?
 client/src/pages/DietConfig.tsx :: error TS7006: Parameter 'e' implicitly has an 'any' type.
 client/src/pages/EquityHistoryArchive.tsx :: error TS2769: No overload matches this call.
 client/src/pages/FeedbackPage.tsx :: error TS2339: Property 'ledgerName' does not exist on type '{ book: any; branch: any; tableName: any; }'.
-client/src/pages/FinanceManagement.tsx :: error TS2741: Property 'MSTR' is missing in type '{ BTC: string; ETH: string; SOL: string; AAVE: string; SUI: string; ONDO: string; ASTER: string; LDO: string; ENA: string; ARKM: string; USDT: string; CNY: string; TSLA: string; NVDA: string; AAPL: string; MSFT: string; ... 13 more ...; MU: string; }' but required in type 'Record<"CNY" | "USDT" | "BTC" | "ETH" | "AAPL" | "MSFT" | "GOOGL" | "AMZN" | "NVDA" | "TSLA" | "META" | "SOL" | "AAVE" | "SUI" | "ONDO" | "ASTER" | "LDO" | "ENA" | "ARKM" | "SPY" | "QQQ" | ... 9 more ... | "MSTR", string>'.
+client/src/pages/FinanceManagement.tsx :: error TS2741: Property 'MSTR' is missing in type '{ BTC: string; ETH: string; SOL: string; AAVE: string; SUI: string; ONDO: string; ASTER: string; LDO: string; ENA: string; ARKM: string; USDT: string; CNY: string; TSLA: string; NVDA: string; AAPL: string; MSFT: string; ... 13 more ...; MU: string; }' but required in type 'Record<"CNY" | "USDT" | "BTC" | "ETH" | "SOL" | "MSTR" | "TSLA" | "NVDA" | "AAPL" | "MSFT" | "GOOGL" | "META" | "AMZN" | "SPY" | "QQQ" | "NFLX" | "ORCL" | "TSM" | "AMD" | "CL" | "NG" | "CRCL" | ... 8 more ... | "ARKM", string>'.
 client/src/pages/FunderManagement.tsx :: error TS2304: Cannot find name 'INTEGER_COINS_FUNDER'.
-client/src/pages/FunderManagement.tsx :: error TS2345: Argument of type '{ userId: number; coin: "BTC"; amountCurrency: "USDT"; buyPrice: string; buyQuantity: string; buyDate: string; storageAccount: string; status: string; adminNote: string; publicNote: string; interestRateAnnual: string; ... 14 more ...; tags: string[]; }' is not assignable to parameter of type 'SetStateAction<{ userId: number; coin: "CNY" | "USDT" | "BTC" | "ETH" | "AAPL" | "MSFT" | "GOOGL" | "AMZN" | "NVDA" | "TSLA" | "META" | "SOL" | "SPY" | "QQQ" | "NFLX" | "ORCL" | "TSM" | "AMD" | "CL" | ... 4 more ... | "MSTR"; ... 25 more ...; tags: string[]; }>'.
+client/src/pages/FunderManagement.tsx :: error TS2345: Argument of type '{ userId: number; coin: "BTC"; amountCurrency: "USDT"; buyPrice: string; buyQuantity: string; buyDate: string; storageAccount: string; status: string; adminNote: string; publicNote: string; interestRateAnnual: string; ... 15 more ...; principalLentOut: false; }' is not assignable to parameter of type 'SetStateAction<{ userId: number; coin: "CNY" | "USDT" | "BTC" | "ETH" | "SOL" | "MSTR" | "TSLA" | "NVDA" | "AAPL" | "MSFT" | "GOOGL" | "META" | "AMZN" | "SPY" | "QQQ" | "NFLX" | "ORCL" | "TSM" | "AMD" | ... 8 more ... | "SUI"; ... 26 more ...; principalLentOut: boolean; }>'.
 client/src/pages/Home.tsx :: error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
 client/src/pages/Home.tsx :: error TS2367: This comparison appears to be unintentional because the types '"svg"' and '"img"' have no overlap.
 client/src/pages/Home.tsx :: error TS2769: No overload matches this call.
@@ -219,12 +221,13 @@ client/src/pages/LedgerDetail.tsx :: error TS18048: 'roleOptions' is possibly 'u
 client/src/pages/LedgerDetail.tsx :: error TS2304: Cannot find name 'Pencil'.
 client/src/pages/LedgerDetail.tsx :: error TS2304: Cannot find name 'Pencil'.
 client/src/pages/LedgerDetail.tsx :: error TS2304: Cannot find name 'Trash2'.
+client/src/pages/LedgerDetail.tsx :: error TS2304: Cannot find name 'Users2'.
 client/src/pages/LedgerDetail.tsx :: error TS2304: Cannot find name 'X'.
 client/src/pages/LedgerDetail.tsx :: error TS2304: Cannot find name 'handleExposureGapChange'.
 client/src/pages/LedgerDetail.tsx :: error TS2304: Cannot find name 'sharedGapMap'.
 client/src/pages/LedgerDetail.tsx :: error TS2304: Cannot find name 'toast'.
 client/src/pages/LedgerDetail.tsx :: error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
-client/src/pages/LedgerDetail.tsx :: error TS2322: Type '{ avatar: string | null; username: string | null; isCurrentUser: boolean; id: number; userId: number; role: "owner" | "admin" | "member" | "funder" | "client" | "employee"; nickname: string | null; ... 5 more ...; realName: string | null; }[]' is not assignable to type 'Member[]'.
+client/src/pages/LedgerDetail.tsx :: error TS2322: Type '{ avatar: string | null; username: string | null; isCurrentUser: boolean; id: number; userId: number; role: "admin" | "member" | "owner" | "funder" | "client" | "employee"; nickname: string | null; ... 5 more ...; realName: string | null; }[]' is not assignable to type 'Member[]'.
 client/src/pages/LedgerDetail.tsx :: error TS2322: Type '{ className: string; title: string; }' is not assignable to type 'IntrinsicAttributes & Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>'.
 client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'basePrice' does not exist on type 'never'.
 client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'basePrice' does not exist on type 'never'.
@@ -235,18 +238,17 @@ client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'id' does not exist 
 client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'id' does not exist on type 'never'.
 client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'name' does not exist on type 'never'.
 client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'name' does not exist on type 'never'.
-client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; name: string | null; role: "super_admin" | "parent" | "baby"; points: number; createdAt: string; updatedAt: string; balance: string; avatar: string | null; phone: string | null; ... 25 more ...; versionSwitchScope: string | null; } | { ...; }'.
-client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; name: string | null; role: "super_admin" | "parent" | "baby"; points: number; createdAt: string; updatedAt: string; balance: string; avatar: string | null; phone: string | null; ... 25 more ...; versionSwitchScope: string | null; } | { ...; }'.
-client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; name: string | null; role: "super_admin" | "parent" | "baby"; points: number; createdAt: string; updatedAt: string; balance: string; avatar: string | null; phone: string | null; ... 25 more ...; versionSwitchScope: string | null; } | { ...; }'.
-client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; name: string | null; role: "super_admin" | "parent" | "baby"; points: number; createdAt: string; updatedAt: string; balance: string; avatar: string | null; phone: string | null; ... 25 more ...; versionSwitchScope: string | null; } | { ...; }'.
-client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; name: string | null; role: "super_admin" | "parent" | "baby"; points: number; createdAt: string; updatedAt: string; balance: string; avatar: string | null; phone: string | null; ... 25 more ...; versionSwitchScope: string | null; } | { ...; }'.
-client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; name: string | null; role: "super_admin" | "parent" | "baby"; points: number; createdAt: string; updatedAt: string; balance: string; avatar: string | null; phone: string | null; ... 25 more ...; versionSwitchScope: string | null; } | { ...; }'.
-client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; name: string | null; role: "super_admin" | "parent" | "baby"; points: number; createdAt: string; updatedAt: string; balance: string; avatar: string | null; phone: string | null; ... 25 more ...; versionSwitchScope: string | null; } | { ...; }'.
-client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; name: string | null; role: "super_admin" | "parent" | "baby"; points: number; createdAt: string; updatedAt: string; balance: string; avatar: string | null; phone: string | null; ... 25 more ...; versionSwitchScope: string | null; } | { ...; }'.
+client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; openId: string | null; name: string | null; username: string | null; passwordHash: string | null; email: string | null; loginMethod: string | null; role: "super_admin" | "parent" | "baby"; ... 26 more ...; versionSwitchScope: string | null; } | { ...; }'.
+client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; openId: string | null; name: string | null; username: string | null; passwordHash: string | null; email: string | null; loginMethod: string | null; role: "super_admin" | "parent" | "baby"; ... 26 more ...; versionSwitchScope: string | null; } | { ...; }'.
+client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; openId: string | null; name: string | null; username: string | null; passwordHash: string | null; email: string | null; loginMethod: string | null; role: "super_admin" | "parent" | "baby"; ... 26 more ...; versionSwitchScope: string | null; } | { ...; }'.
+client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; openId: string | null; name: string | null; username: string | null; passwordHash: string | null; email: string | null; loginMethod: string | null; role: "super_admin" | "parent" | "baby"; ... 26 more ...; versionSwitchScope: string | null; } | { ...; }'.
+client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; openId: string | null; name: string | null; username: string | null; passwordHash: string | null; email: string | null; loginMethod: string | null; role: "super_admin" | "parent" | "baby"; ... 26 more ...; versionSwitchScope: string | null; } | { ...; }'.
+client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; openId: string | null; name: string | null; username: string | null; passwordHash: string | null; email: string | null; loginMethod: string | null; role: "super_admin" | "parent" | "baby"; ... 26 more ...; versionSwitchScope: string | null; } | { ...; }'.
+client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; openId: string | null; name: string | null; username: string | null; passwordHash: string | null; email: string | null; loginMethod: string | null; role: "super_admin" | "parent" | "baby"; ... 26 more ...; versionSwitchScope: string | null; } | { ...; }'.
+client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; openId: string | null; name: string | null; username: string | null; passwordHash: string | null; email: string | null; loginMethod: string | null; role: "super_admin" | "parent" | "baby"; ... 26 more ...; versionSwitchScope: string | null; } | { ...; }'.
 client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'originalPrice' does not exist on type 'never'.
 client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'subtitle' does not exist on type 'never'.
 client/src/pages/LedgerDetail.tsx :: error TS2339: Property 'tag' does not exist on type 'never'.
-client/src/pages/LedgerDetail.tsx :: error TS2552: Cannot find name 'Users2'. Did you mean 'Users'?
 client/src/pages/LedgerDetail.tsx :: error TS2802: Type 'Set<string>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
 client/src/pages/LedgerDetail.tsx :: error TS7006: Parameter 'i' implicitly has an 'any' type.
 client/src/pages/LedgerDetail.tsx :: error TS7006: Parameter 'src' implicitly has an 'any' type.
@@ -289,8 +291,9 @@ client/src/pages/OilBusinessPage.tsx :: error TS2322: Type '(options?: RefetchOp
 client/src/pages/OilBusinessPage.tsx :: error TS2802: Type 'MapIterator<number>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
 client/src/pages/OilBusinessPage.tsx :: error TS2802: Type 'Set<number>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
 client/src/pages/OilDetailPage.tsx :: error TS2322: Type 'string | (TextContent | ImageContent | FileContent)[]' is not assignable to type 'ReactNode'.
-client/src/pages/OpinionBookDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; name: string | null; role: "super_admin" | "parent" | "baby"; points: number; createdAt: string; updatedAt: string; balance: string; avatar: string | null; phone: string | null; ... 25 more ...; versionSwitchScope: string | null; } | { ...; }'.
-client/src/pages/OpinionBookDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; name: string | null; role: "super_admin" | "parent" | "baby"; points: number; createdAt: string; updatedAt: string; balance: string; avatar: string | null; phone: string | null; ... 25 more ...; versionSwitchScope: string | null; } | { ...; }'.
+client/src/pages/OpinionBookDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; openId: string | null; name: string | null; username: string | null; passwordHash: string | null; email: string | null; loginMethod: string | null; role: "super_admin" | "parent" | "baby"; ... 26 more ...; versionSwitchScope: string | null; } | { ...; }'.
+client/src/pages/OpinionBookDetail.tsx :: error TS2339: Property 'nickname' does not exist on type '{ id: number; openId: string | null; name: string | null; username: string | null; passwordHash: string | null; email: string | null; loginMethod: string | null; role: "super_admin" | "parent" | "baby"; ... 26 more ...; versionSwitchScope: string | null; } | { ...; }'.
+client/src/pages/OptionAnalysisPage.tsx :: error TS2802: Type 'Set<number>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
 client/src/pages/OptionAnalysisPage.tsx :: error TS2802: Type 'Set<number>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
 client/src/pages/OptionAnalysisPage.tsx :: error TS2802: Type 'Set<string>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
 client/src/pages/PointRulesManagement.tsx :: error TS2353: Object literal may only specify known properties, and 'ruleId' does not exist in type '{ actionType: string; points?: number | undefined; isActive?: boolean | undefined; description?: string | undefined; }'.
@@ -324,7 +327,7 @@ client/src/pages/USStockLifecycle.tsx :: error TS2551: Property 'usStockLifecycl
 client/src/pages/USStockLifecycle.tsx :: error TS7006: Parameter 's' implicitly has an 'any' type.
 client/src/pages/USStockTracker.tsx :: error TS2769: No overload matches this call.
 client/src/pages/USStockTracker.tsx :: error TS2769: No overload matches this call.
-client/src/pages/WaveRatioManage.tsx :: error TS2339: Property 'name' does not exist on type '{ avatar: string | null; username: string | null; isCurrentUser: boolean; id: number; userId: number; role: "owner" | "admin" | "member" | "funder" | "client" | "employee"; nickname: string | null; ... 5 more ...; realName: string | null; }'.
+client/src/pages/WaveRatioManage.tsx :: error TS2339: Property 'name' does not exist on type '{ avatar: string | null; username: string | null; isCurrentUser: boolean; id: number; userId: number; role: "admin" | "member" | "owner" | "funder" | "client" | "employee"; nickname: string | null; ... 5 more ...; realName: string | null; }'.
 client/src/pages/WaveRatioManage.tsx :: error TS2367: This comparison appears to be unintentional because the types 'number' and 'string' have no overlap.
 client/src/pages/WeeklyReportDetail.tsx :: error TS2322: Type 'RefObject<HTMLSpanElement | null>' is not assignable to type 'RefObject<HTMLElement>'.
 client/src/pages/WeeklyReportDetail.tsx :: error TS2322: Type 'RefObject<HTMLSpanElement | null>' is not assignable to type 'RefObject<HTMLElement>'.
@@ -382,7 +385,6 @@ client/src/pages/admin/ProjectLanding.tsx :: error TS2741: Property 'duplicate_c
 client/src/pages/admin/RechargeMonitor.tsx :: error TS18047: 'heartbeatQuery.data.scanCount' is possibly 'null'.
 client/src/pages/admin/RechargeMonitor.tsx :: error TS18047: 'heartbeatQuery.data.scanCount' is possibly 'null'.
 client/src/pages/admin/UserPermissionsManager.tsx :: error TS2322: Type 'number' is not assignable to type 'boolean'.
-client/src/pages/admin/WecomAdmin.tsx :: error TS2367: This comparison appears to be unintentional because the types '"shared" | "overview" | "accounts" | "usage"' and '"ai_model"' have no overlap.
 client/src/pages/admin/WecomAdmin.tsx :: error TS2802: Type 'Set<number>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
 client/src/pages/admin/WecomAdmin.tsx :: error TS2802: Type 'Set<string>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
 client/src/pages/admin/WecomAdmin.tsx :: error TS7006: Parameter 'i' implicitly has an 'any' type.
@@ -437,7 +439,11 @@ client/src/pages/parent/ReferrerLeaderboard.tsx :: error TS2339: Property 'list'
 client/src/pages/wine/products/WineProductFidencio.tsx :: error TS2322: Type '{ merchantCode: string; activeTab: string; }' is not assignable to type 'IntrinsicAttributes & BottomNavProps'.
 client/src/pages/wine/products/WineProductMarthu.tsx :: error TS2322: Type '{ merchantCode: string; activeTab: string; }' is not assignable to type 'IntrinsicAttributes & BottomNavProps'.
 client/src/pages/wine/products/WineProductRomanico.tsx :: error TS2322: Type '{ merchantCode: string; activeTab: string; }' is not assignable to type 'IntrinsicAttributes & BottomNavProps'.
+client/src/pages/yaban/YabanCalendar.tsx :: error TS2769: No overload matches this call.
+client/src/pages/yaban/YabanFollowUp.tsx :: error TS2769: No overload matches this call.
+client/src/pages/yaban/YabanFollowUpDetail.tsx :: error TS2339: Property 'isLoading' does not exist on type 'UseTRPCMutationResult<{ success: boolean; }, TRPCClientErrorLike<{ input: { id: number; status: string; result?: string | undefined; }; output: { success: boolean; }; transformer: true; errorShape: DefaultErrorShape; }>, { ...; }, unknown>'.
 client/src/pages/yaban/YabanPatientCreate.tsx :: error TS2503: Cannot find namespace 'JSX'.
+client/src/pages/yaban/YabanPatientSelect.tsx :: error TS2769: No overload matches this call.
 server/_core/bankAccountParser.ts :: error TS2345: Argument of type 'string | (TextContent | ImageContent | FileContent)[]' is not assignable to parameter of type 'string'.
 server/_core/context.ts :: error TS2322: Type 'Date' is not assignable to type 'string'.
 server/_core/context.ts :: error TS2322: Type 'Date' is not assignable to type 'string'.
@@ -962,7 +968,7 @@ server/equity-router.ts :: error TS2367: This comparison appears to be unintenti
 server/equity-router.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
 server/equity-router.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
 server/gold-tracker-router.ts :: error TS1501: This regular expression flag is only available when targeting 'es2018' or later.
-server/gold-tracker-router.ts :: error TS2339: Property 'db' does not exist on type 'typeof import("/home/ubuntu/haoyouji-web/server/db")'.
+server/gold-tracker-router.ts :: error TS2339: Property 'db' does not exist on type 'typeof import("/home/ubuntu/haoyouji-web-fresh/server/db")'.
 server/invite-api.ts :: error TS18047: 'db' is possibly 'null'.
 server/invite-api.ts :: error TS18047: 'db' is possibly 'null'.
 server/invite-api.ts :: error TS18047: 'db' is possibly 'null'.
@@ -1310,6 +1316,10 @@ server/routers.ts :: error TS18047: 'db' is possibly 'null'.
 server/routers.ts :: error TS18047: 'db' is possibly 'null'.
 server/routers.ts :: error TS18047: 'db' is possibly 'null'.
 server/routers.ts :: error TS18047: 'db' is possibly 'null'.
+server/routers.ts :: error TS18047: 'db' is possibly 'null'.
+server/routers.ts :: error TS18047: 'db' is possibly 'null'.
+server/routers.ts :: error TS18047: 'db' is possibly 'null'.
+server/routers.ts :: error TS18047: 'db' is possibly 'null'.
 server/routers.ts :: error TS18047: 'db2' is possibly 'null'.
 server/routers.ts :: error TS18047: 'dbConn' is possibly 'null'.
 server/routers.ts :: error TS18047: 'dbConn' is possibly 'null'.
@@ -1342,8 +1352,8 @@ server/routers.ts :: error TS2322: Type 'number | null' is not assignable to typ
 server/routers.ts :: error TS2322: Type 'number' is not assignable to type 'string'.
 server/routers.ts :: error TS2322: Type 'number' is not assignable to type 'string'.
 server/routers.ts :: error TS2322: Type 'number' is not assignable to type 'string'.
-server/routers.ts :: error TS2339: Property 'default' does not exist on type 'typeof import("/home/ubuntu/haoyouji-web/server/db")'.
-server/routers.ts :: error TS2339: Property 'execute' does not exist on type 'typeof import("/home/ubuntu/haoyouji-web/server/db")'.
+server/routers.ts :: error TS2339: Property 'default' does not exist on type 'typeof import("/home/ubuntu/haoyouji-web-fresh/server/db")'.
+server/routers.ts :: error TS2339: Property 'execute' does not exist on type 'typeof import("/home/ubuntu/haoyouji-web-fresh/server/db")'.
 server/routers.ts :: error TS2339: Property 'id' does not exist on type 'number'.
 server/routers.ts :: error TS2339: Property 'id' does not exist on type '{ fieldValues: Record<string, any>[]; referrer: { id: number; name: string; title: string | null; } | null; }'.
 server/routers.ts :: error TS2339: Property 'id' does not exist on type '{ fieldValues: Record<string, any>[]; referrer: { id: number; name: string; title: string | null; } | null; }'.
@@ -1359,7 +1369,7 @@ server/routers.ts :: error TS2339: Property 'parentUserId' does not exist on typ
 server/routers.ts :: error TS2339: Property 'parentUserId' does not exist on type '{ fieldValues: Record<string, any>[]; referrer: { id: number; name: string; title: string | null; } | null; }'.
 server/routers.ts :: error TS2339: Property 'parentUserId' does not exist on type '{ fieldValues: Record<string, any>[]; referrer: { id: number; name: string; title: string | null; } | null; }'.
 server/routers.ts :: error TS2339: Property 'query' does not exist on type 'Promise<Connection | null>'.
-server/routers.ts :: error TS2339: Property 'updateBankUsage' does not exist on type 'typeof import("/home/ubuntu/haoyouji-web/server/db-banks")'.
+server/routers.ts :: error TS2339: Property 'updateBankUsage' does not exist on type 'typeof import("/home/ubuntu/haoyouji-web-fresh/server/db-banks")'.
 server/routers.ts :: error TS2345: Argument of type '"admin" | "member" | "client" | "employee"' is not assignable to parameter of type '"admin" | "member" | "funder" | undefined'.
 server/routers.ts :: error TS2345: Argument of type '"admin" | "member" | "observer"' is not assignable to parameter of type '"admin" | "member" | "funder" | undefined'.
 server/routers.ts :: error TS2345: Argument of type '"admin" | "member" | "shareholder" | "observer"' is not assignable to parameter of type '"admin" | "member" | "funder" | undefined'.
@@ -1389,7 +1399,7 @@ server/routers.ts :: error TS2345: Argument of type 'string | null' is not assig
 server/routers.ts :: error TS2345: Argument of type '{ baseQty: number; tacticalQty: number; baseNotes: string | null; tacticalNotes: string | null; price: number; plannedQty: number; actualQty: number; }[]' is not assignable to parameter of type 'EthPositionLevel[]'.
 server/routers.ts :: error TS2345: Argument of type '{ baseQty: number; tacticalQty: number; baseNotes: string | null; tacticalNotes: string | null; price: number; plannedQty: number; actualQty: number; }[]' is not assignable to parameter of type 'EthPositionLevel[]'.
 server/routers.ts :: error TS2345: Argument of type '{ role: string; rules: string; format: string; examples: string; }' is not assignable to parameter of type '{ segment1: string; segment2: string; segment3: string; segment4: string; }'.
-server/routers.ts :: error TS2345: Argument of type '{ userId: number; ledgerId: number; type: "income" | "expense" | "transfer"; amount: number; categoryId: number; transactionDate: string; subcategoryId?: number | undefined; description?: string | undefined; ... 9 more ...; stockCodes?: { ...; }[] | undefined; }' is not assignable to parameter of type '{ ledgerId: number; userId: number; type: "income" | "expense" | "transfer"; amount: number; categoryId: number; subcategoryId?: number | undefined; description?: string | undefined; imageUrl?: string | undefined; ... 9 more ...; stockCodes?: { ...; }[] | undefined; }'.
+server/routers.ts :: error TS2345: Argument of type '{ userId: number; ledgerId: number; type: "transfer" | "income" | "expense"; amount: number; categoryId: number; transactionDate: string; subcategoryId?: number | undefined; description?: string | undefined; ... 9 more ...; stockCodes?: { ...; }[] | undefined; }' is not assignable to parameter of type '{ ledgerId: number; userId: number; type: "transfer" | "income" | "expense"; amount: number; categoryId: number; subcategoryId?: number | undefined; description?: string | undefined; imageUrl?: string | undefined; ... 9 more ...; stockCodes?: { ...; }[] | undefined; }'.
 server/routers.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
 server/routers.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
 server/routers.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
@@ -1811,8 +1821,6 @@ server/wecom-manus-router.ts :: error TS1252: Function declarations are not allo
 server/wecom-manus-router.ts :: error TS1252: Function declarations are not allowed inside blocks in strict mode when targeting 'ES5'. Modules are automatically in strict mode.
 server/wecom-manus-router.ts :: error TS1252: Function declarations are not allowed inside blocks in strict mode when targeting 'ES5'. Modules are automatically in strict mode.
 server/wecom-manus-router.ts :: error TS2322: Type '"chat"' is not assignable to type 'UseCase'.
-server/wecom-manus-router.ts :: error TS2552: Cannot find name 'kfOpenKfId'. Did you mean 'KF_OPEN_KFID'?
-server/wecom-manus-router.ts :: error TS2552: Cannot find name 'kfOpenKfId'. Did you mean 'KF_OPEN_KFID'?
 server/work-groups-router.ts :: error TS2339: Property 'session' does not exist on type 'Request<{ id: string; }, any, any, ParsedQs, Record<string, any>>'.
 server/work-groups-router.ts :: error TS2339: Property 'session' does not exist on type 'Request<{ id: string; }, any, any, ParsedQs, Record<string, any>>'.
 server/work-groups-router.ts :: error TS2339: Property 'session' does not exist on type 'Request<{ id: string; }, any, any, ParsedQs, Record<string, any>>'.

@@ -54,6 +54,8 @@ import {
   Settings2,
   GripVertical,
   Copy,
+  History,
+  TrendingDown,
 } from "lucide-react";
 import { useYabanClinic } from "./useYabanClinic";
 import YabanClinicHeader from "./YabanClinicHeader";
@@ -238,6 +240,25 @@ export default function YabanChargeProducts() {
   const executeCopy = trpc.yabanCustomer.executeChargeCopy.useMutation();
 
   const refresh = () => utils.yabanCustomer.listChargeProducts.invalidate();
+
+  // ===== 调价记录弹层状态 =====
+  // type: "product"(项目级) | "global"(全局级)
+  const [priceHistorySheet, setPriceHistorySheet] = useState<{
+    type: "product" | "global";
+    productId?: number;
+    productName?: string;
+  } | null>(null);
+
+  const priceHistoryQuery = trpc.yabanCustomer.listPriceHistory.useQuery(
+    {
+      productId: priceHistorySheet?.type === "product" ? priceHistorySheet.productId : undefined,
+      limit: 50,
+    },
+    {
+      enabled: !!priceHistorySheet,
+      refetchOnWindowFocus: false,
+    }
+  );
 
   // ===== 复制弹层状态 =====
   // 步骤："select"(选门诊) -> "analyze"(分析中) -> "confirm"(确认冲突) -> "done"(完成)
@@ -1176,6 +1197,21 @@ export default function YabanChargeProducts() {
                   <div className="text-xs text-gray-400 mt-0.5">将本门诊收费项目库复制到名下其他门诊</div>
                 </div>
               </button>
+              <button
+                onClick={() => {
+                  setShowManagePicker(false);
+                  setPriceHistorySheet({ type: "global" });
+                }}
+                className="w-full flex items-center gap-4 px-4 py-3.5 bg-gray-50 rounded-2xl active:bg-blue-50 text-left"
+              >
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "#EBF5FB" }}>
+                  <TrendingDown className="w-4 h-4" style={{ color: ACCENT }} />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-gray-800">调价记录</div>
+                  <div className="text-xs text-gray-400 mt-0.5">查看本门诊所有项目的历史调价记录</div>
+                </div>
+              </button>
             </div>
           </div>
         </div>
@@ -1318,6 +1354,21 @@ export default function YabanChargeProducts() {
                 />
               )}
             </div>
+            {/* 项目级调价记录入口（仅编辑已有项目时显示） */}
+            {prodSheet.id && (
+              <button
+                onClick={() => {
+                  setPriceHistorySheet({ type: "product", productId: prodSheet.id, productName: prodSheet.name });
+                }}
+                className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 rounded-xl text-sm text-gray-500 active:bg-gray-100"
+              >
+                <span className="flex items-center gap-2">
+                  <History className="w-4 h-4" />
+                  查看调价记录
+                </span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
             <button
               onClick={handleSaveProd}
               disabled={saveProd.isPending}
@@ -1571,6 +1622,85 @@ export default function YabanChargeProducts() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ===== 调价记录弹层（项目级 + 全局级通用） ===== */}
+      {priceHistorySheet && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/40" onClick={() => setPriceHistorySheet(null)}>
+          <div className="mt-auto bg-white rounded-t-3xl px-4 pt-5 pb-8 max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            {/* 标题栏 */}
+            <div className="flex items-center justify-between mb-4 shrink-0">
+              <div>
+                <span className="text-base font-bold text-gray-800">
+                  {priceHistorySheet.type === "product" ? `调价记录` : `全局调价记录`}
+                </span>
+                {priceHistorySheet.type === "product" && priceHistorySheet.productName && (
+                  <span className="ml-2 text-sm text-gray-400">「{priceHistorySheet.productName}」</span>
+                )}
+              </div>
+              <button onClick={() => setPriceHistorySheet(null)} className="text-gray-400"><X className="w-5 h-5" /></button>
+            </div>
+
+            {/* 内容区 */}
+            <div className="overflow-y-auto flex-1">
+              {priceHistoryQuery.isLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-gray-300" />
+                </div>
+              ) : !priceHistoryQuery.data?.records?.length ? (
+                <div className="py-12 text-center">
+                  <History className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+                  <p className="text-sm text-gray-400">暂无调价记录</p>
+                  <p className="text-xs text-gray-300 mt-1">修改项目价格后会自动记录在此</p>
+                </div>
+              ) : (
+                <div className="space-y-0">
+                  {(priceHistoryQuery.data.records as any[]).map((r: any, idx: number) => {
+                    const changedAt = new Date(r.changed_at);
+                    const dateStr = `${changedAt.getFullYear()}-${String(changedAt.getMonth()+1).padStart(2,'0')}-${String(changedAt.getDate()).padStart(2,'0')}`;
+                    const timeStr = `${String(changedAt.getHours()).padStart(2,'0')}:${String(changedAt.getMinutes()).padStart(2,'0')}`;
+                    const oldP = Number(r.old_price);
+                    const oldPMax = Number(r.old_price_max);
+                    const newP = Number(r.new_price);
+                    const newPMax = Number(r.new_price_max);
+                    const fmtPrice = (p: number, pMax: number) => pMax > 0 ? `${p}~${pMax}` : `${p}`;
+                    const isDown = newP < oldP || (newP === oldP && newPMax < oldPMax);
+                    return (
+                      <div key={r.id} className={`flex gap-3 py-3 ${idx < priceHistoryQuery.data!.records.length - 1 ? 'border-b border-dashed border-gray-100' : ''}`}>
+                        {/* 时间线圆点 */}
+                        <div className="flex flex-col items-center shrink-0 pt-0.5">
+                          <div className="w-2 h-2 rounded-full mt-1" style={{ backgroundColor: isDown ? '#22c55e' : '#f97316' }} />
+                          {idx < priceHistoryQuery.data!.records.length - 1 && (
+                            <div className="w-px flex-1 bg-gray-100 mt-1" />
+                          )}
+                        </div>
+                        {/* 内容 */}
+                        <div className="flex-1 min-w-0">
+                          {priceHistorySheet.type === "global" && (
+                            <div className="text-xs font-medium text-gray-700 mb-0.5 truncate">{r.product_name}</div>
+                          )}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm text-gray-400 line-through">{fmtPrice(oldP, oldPMax)}元/{r.unit}</span>
+                            <ChevronRight className="w-3 h-3 text-gray-300 shrink-0" />
+                            <span className={`text-sm font-semibold ${isDown ? 'text-green-600' : 'text-orange-500'}`}>
+                              {fmtPrice(newP, newPMax)}元/{r.unit}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-xs text-gray-400">{dateStr} {timeStr}</span>
+                            {r.operator_name && (
+                              <span className="text-xs text-gray-300">· {r.operator_name}</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
