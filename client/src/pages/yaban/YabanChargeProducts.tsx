@@ -249,6 +249,11 @@ function PriceHistorySheet({
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-6 h-6 animate-spin text-gray-300" />
             </div>
+          ) : query.isError ? (
+            <div className="py-12 text-center">
+              <p className="text-sm text-red-400">加载失败</p>
+              <p className="text-xs text-gray-300 mt-1">{query.error?.message}</p>
+            </div>
           ) : !records.length ? (
             <div className="py-12 text-center">
               <History className="w-10 h-10 text-gray-200 mx-auto mb-3" />
