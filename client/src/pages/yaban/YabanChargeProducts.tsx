@@ -247,21 +247,27 @@ export default function YabanChargeProducts() {
     type: "product" | "global";
     productId?: number;
     productName?: string;
-    _ts?: number; // 时间戳，每次打开弹层时更新，用于破坏 tRPC 缓存 key
   } | null>(null);
+  const [priceHistoryRecords, setPriceHistoryRecords] = useState<any[]>([]);
+  const [priceHistoryLoading, setPriceHistoryLoading] = useState(false);
 
-  const priceHistoryQuery = trpc.yabanCustomer.listPriceHistory.useQuery(
-    {
-      productId: priceHistorySheet?.type === "product" ? priceHistorySheet.productId : undefined,
-      limit: 50,
-      _ts: priceHistorySheet?._ts,
-    },
-    {
-      enabled: !!priceHistorySheet,
-      refetchOnWindowFocus: false,
-      staleTime: 0,
+  // 打开调价记录弹层：直接用 utils.fetch 调接口，不经过缓存，秒出
+  const openPriceHistory = async (sheet: { type: "product" | "global"; productId?: number; productName?: string }) => {
+    setPriceHistorySheet(sheet);
+    setPriceHistoryRecords([]);
+    setPriceHistoryLoading(true);
+    try {
+      const res = await utils.yabanCustomer.listPriceHistory.fetch({
+        productId: sheet.type === "product" ? sheet.productId : undefined,
+        limit: 50,
+      });
+      setPriceHistoryRecords(res?.records ?? []);
+    } catch (_) {
+      setPriceHistoryRecords([]);
+    } finally {
+      setPriceHistoryLoading(false);
     }
-  );
+  };
 
   // ===== 复制弹层状态 =====
   // 步骤："select"(选门诊) -> "analyze"(分析中) -> "confirm"(确认冲突) -> "done"(完成)
@@ -1203,7 +1209,7 @@ export default function YabanChargeProducts() {
               <button
                 onClick={() => {
                   setShowManagePicker(false);
-                  setPriceHistorySheet({ type: "global", _ts: Date.now() });
+                  openPriceHistory({ type: "global" });
                 }}
                 className="w-full flex items-center gap-4 px-4 py-3.5 bg-gray-50 rounded-2xl active:bg-blue-50 text-left"
               >
@@ -1281,7 +1287,7 @@ export default function YabanChargeProducts() {
               <button
                 onClick={() => {
                   setCatSheet(null);
-                  setPriceHistorySheet({ type: "product", productId: catSheet.id, productName: catSheet.name, _ts: Date.now() });
+                  openPriceHistory({ type: "product", productId: catSheet.id, productName: catSheet.name });
                 }}
                 className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 rounded-xl text-sm text-gray-500 active:bg-gray-100"
               >
@@ -1377,7 +1383,7 @@ export default function YabanChargeProducts() {
             {prodSheet.id && (
               <button
                 onClick={() => {
-                  setPriceHistorySheet({ type: "product", productId: prodSheet.id, productName: prodSheet.name, _ts: Date.now() });
+                  openPriceHistory({ type: "product", productId: prodSheet.id, productName: prodSheet.name });
                 }}
                 className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 rounded-xl text-sm text-gray-500 active:bg-gray-100"
               >
@@ -1664,11 +1670,11 @@ export default function YabanChargeProducts() {
 
             {/* 内容区 */}
             <div className="overflow-y-auto flex-1">
-              {priceHistoryQuery.isLoading ? (
+              {priceHistoryLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="w-6 h-6 animate-spin text-gray-300" />
                 </div>
-              ) : !priceHistoryQuery.data?.records?.length ? (
+              ) : !priceHistoryRecords.length ? (
                 <div className="py-12 text-center">
                   <History className="w-10 h-10 text-gray-200 mx-auto mb-3" />
                   <p className="text-sm text-gray-400">暂无调价记录</p>
@@ -1676,7 +1682,7 @@ export default function YabanChargeProducts() {
                 </div>
               ) : (
                 <div className="space-y-0">
-                  {(priceHistoryQuery.data.records as any[]).map((r: any, idx: number) => {
+                  {priceHistoryRecords.map((r: any, idx: number) => {
                     const changedAt = new Date(r.changed_at);
                     const dateStr = `${changedAt.getFullYear()}-${String(changedAt.getMonth()+1).padStart(2,'0')}-${String(changedAt.getDate()).padStart(2,'0')}`;
                     const timeStr = `${String(changedAt.getHours()).padStart(2,'0')}:${String(changedAt.getMinutes()).padStart(2,'0')}`;
@@ -1687,11 +1693,11 @@ export default function YabanChargeProducts() {
                     const fmtPrice = (p: number, pMax: number) => pMax > 0 ? `${p}~${pMax}` : `${p}`;
                     const isDown = newP < oldP || (newP === oldP && newPMax < oldPMax);
                     return (
-                      <div key={r.id} className={`flex gap-3 py-3 ${idx < priceHistoryQuery.data!.records.length - 1 ? 'border-b border-dashed border-gray-100' : ''}`}>
+                      <div key={r.id} className={`flex gap-3 py-3 ${idx < priceHistoryRecords.length - 1 ? 'border-b border-dashed border-gray-100' : ''}`}>
                         {/* 时间线圆点 */}
                         <div className="flex flex-col items-center shrink-0 pt-0.5">
                           <div className="w-2 h-2 rounded-full mt-1" style={{ backgroundColor: isDown ? '#22c55e' : '#f97316' }} />
-                          {idx < priceHistoryQuery.data!.records.length - 1 && (
+                          {idx < priceHistoryRecords.length - 1 && (
                             <div className="w-px flex-1 bg-gray-100 mt-1" />
                           )}
                         </div>
