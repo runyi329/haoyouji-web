@@ -107,7 +107,7 @@ function money(n: number): string {
 }
 
 function PriceTag({ price, priceMax, unit }: { price: number; priceMax?: number; unit: string }) {
-  if (!unit && price === 0) return null;
+  if (!unit && price === 0) return <span className="shrink-0 text-sm font-semibold text-orange-400">面议</span>;
   const isRange = priceMax && priceMax > 0 && priceMax !== price;
   return (
     <span className="shrink-0 text-sm font-semibold tabular-nums">
@@ -116,9 +116,7 @@ function PriceTag({ price, priceMax, unit }: { price: number; priceMax?: number;
             {isRange ? `${money(price)}~${money(priceMax!)}` : money(price)}
             <span className="text-xs font-normal text-gray-400"> / {unit || "次"}</span>
           </span>
-        : unit
-          ? <span className="text-orange-400">面议<span className="text-xs font-normal"> / {unit}</span></span>
-          : null
+        : <span className="text-orange-400">面议{unit ? <span className="text-xs font-normal"> / {unit}</span> : null}</span>
       }
     </span>
   );
@@ -779,7 +777,7 @@ export default function YabanChargeProducts() {
   }, [activeDragId, localCats]);
 
   // ===== 渲染单个项目行（三级，靠左无缩进，虚线分隔） =====
-  const renderProdRow = (it: ProdItem, seqLabel: string) => (
+  const renderProdRow = (it: ProdItem, seqLabel: string, pathLabel?: string) => (
     <div
       key={it.id}
       className={`flex items-center gap-2 px-4 py-2.5 border-t border-dashed border-gray-100 ${it.enabled ? "" : "opacity-50"}`}
@@ -796,10 +794,15 @@ export default function YabanChargeProducts() {
     >
       <span className="text-[10px] text-gray-400 w-8 shrink-0 text-left tabular-nums">{seqLabel}</span>
       <span className="flex-1 min-w-0 flex items-center justify-between gap-2">
-        <span className="text-sm text-gray-500 truncate">
-          {it.name}
-          {!it.enabled && <span className="text-[11px] text-gray-400 ml-1">已停用</span>}
-          {it.isCommon && <Star className="inline w-3 h-3 text-yellow-400 ml-1 mb-0.5" />}
+        <span className="flex-1 min-w-0">
+          <span className="text-sm text-gray-500 truncate block">
+            {it.name}
+            {!it.enabled && <span className="text-[11px] text-gray-400 ml-1">已停用</span>}
+            {it.isCommon && <Star className="inline w-3 h-3 text-yellow-400 ml-1 mb-0.5" />}
+          </span>
+          {pathLabel && searchText && (
+            <span className="text-[10px] text-gray-300 truncate block">{pathLabel}</span>
+          )}
         </span>
         <PriceTag price={it.price} priceMax={it.priceMax} unit={it.unit} />
       </span>
@@ -1100,7 +1103,7 @@ export default function YabanChargeProducts() {
                       <span className="text-[11px] font-semibold text-gray-400 w-8 text-left shrink-0">{catIdx + 1}</span>
                       <Layers className="w-4 h-4 text-[#1E88D6] shrink-0" />
                       <span className="text-sm font-bold text-gray-800 ml-1 truncate">{cat.name}</span>
-                      <span className="shrink-0 text-[11px] text-gray-400 font-normal ml-1 mr-1">({level2Count}/{level3Count})</span>
+                      <span className="shrink-0 text-[11px] text-gray-400 font-normal ml-1 mr-1">{level2Count}二级{level3Count > 0 ? ` · ${level3Count}三级` : ""}</span>
                       <span className="flex-1" />
                       {/* 一级本身的价格（可选） */}
                       {(cat.price > 0 || cat.unit) && (
@@ -1135,10 +1138,15 @@ export default function YabanChargeProducts() {
                             }}
                           >
                             <span className="text-[10px] text-gray-400 w-8 shrink-0 text-left tabular-nums">{catIdx + 1}.{itemIdx + 1}</span>
-                            <span className="text-sm text-gray-500 truncate flex-1">
-                              {it.name}
-                              {!it.enabled && <span className="text-[11px] text-gray-400 ml-1">已停用</span>}
-                              {it.isCommon && <Star className="inline w-3 h-3 text-yellow-400 ml-1 mb-0.5" />}
+                            <span className="flex-1 min-w-0">
+                              <span className="text-sm text-gray-500 truncate block">
+                                {it.name}
+                                {!it.enabled && <span className="text-[11px] text-gray-400 ml-1">已停用</span>}
+                                {it.isCommon && <Star className="inline w-3 h-3 text-yellow-400 ml-1 mb-0.5" />}
+                              </span>
+                              {searchText && (
+                                <span className="text-[10px] text-gray-300 truncate block">{cat.name}</span>
+                              )}
                             </span>
                             <PriceTag price={it.price} priceMax={it.priceMax} unit={it.unit} />
                           </div>
@@ -1168,7 +1176,7 @@ export default function YabanChargeProducts() {
                                 {(sub.price > 0 || sub.unit) && (
                                   <PriceTag price={sub.price} priceMax={sub.priceMax} unit={sub.unit} />
                                 )}
-                                <span className="text-[10px] text-gray-400 ml-1">({sub.items.length})</span>
+
                                 {/* 编辑模式：添加三级分类 */}
                                 {mode === "edit" && (
                                   <button
@@ -1181,7 +1189,7 @@ export default function YabanChargeProducts() {
                               </div>
                               {/* 三级分类（靠左平铺） */}
                               {sub.items.map((it, itemIdx) =>
-                                renderProdRow(it, `${subSeq}.${itemIdx + 1}`)
+                                renderProdRow(it, `${subSeq}.${itemIdx + 1}`, `${cat.name} > ${sub.name}`)
                               )}
                               {/* 编辑模式：三级为空提示 */}
                               {mode === "edit" && sub.items.length === 0 && (
