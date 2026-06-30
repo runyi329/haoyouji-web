@@ -11,7 +11,7 @@
  * 每级均有名称 + 价格/单位（可选）
  * 严禁 Emoji，仅用 lucide-react 图标
  */
-import { useMemo, useState, useCallback, useRef } from "react";
+import { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import {
   DndContext,
   closestCenter,
@@ -257,10 +257,16 @@ export default function YabanChargeProducts() {
     {
       enabled: !!priceHistorySheet,
       refetchOnWindowFocus: false,
-      refetchOnMount: "always",
       staleTime: 0,
     }
   );
+  // 每次弹层打开时强制重新请求，避免 tRPC 缓存导致显示旧数据
+  useEffect(() => {
+    if (priceHistorySheet) {
+      priceHistoryQuery.refetch();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [priceHistorySheet?.type, priceHistorySheet?.productId]);
 
   // ===== 复制弹层状态 =====
   // 步骤："select"(选门诊) -> "analyze"(分析中) -> "confirm"(确认冲突) -> "done"(完成)
@@ -1275,6 +1281,22 @@ export default function YabanChargeProducts() {
                 />
               </div>
             </div>
+            {/* 分类级调价记录入口（仅编辑已有分类时显示，且分类有价格字段） */}
+            {catSheet.id && (
+              <button
+                onClick={() => {
+                  setCatSheet(null);
+                  setPriceHistorySheet({ type: "product", productId: catSheet.id, productName: catSheet.name });
+                }}
+                className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 rounded-xl text-sm text-gray-500 active:bg-gray-100"
+              >
+                <span className="flex items-center gap-2">
+                  <History className="w-4 h-4" />
+                  查看调价记录
+                </span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
             <button
               onClick={handleSaveCat}
               disabled={saveCat.isPending}
