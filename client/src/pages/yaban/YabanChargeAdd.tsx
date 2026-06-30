@@ -1,7 +1,10 @@
 /**
- * 牙伴齿科管理 - 添加收费内容
+ * 牙伴齿科管理 - 添加收费内容（三级结构）
  * 路由：/yaban/settings/charge-add
- * 功能：选择「添加新分类」或「向已有分类批量添加项目」
+ * 功能：3个Tab
+ *   - 添加一级分类
+ *   - 添加二级分类（需选择所属一级）
+ *   - 添加三级项目（需选择所属一级 + 二级，或直接挂一级）
  * 分类名/项目名均支持 AI 搜索（全平台行业库）
  */
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
@@ -16,37 +19,49 @@ const ACCENT = "#1E88D6";
 const BLUE_GRAD = "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)";
 const PRESET_UNITS = ["次", "颗", "支", "套", "天", "课", "题", "个", "边", "局", "序"];
 
+interface SubCatGroup {
+  id: number;
+  parentId: number;
+  name: string;
+  sort: number;
+  enabled: boolean;
+}
+
 interface CatGroup {
   id: number;
   name: string;
   sort: number;
   enabled: boolean;
-  items: { id: number; name: string }[];
+  subCategories: SubCatGroup[];
 }
 
 interface ProdRow {
   id: string;
   name: string;
   price: string;
+  priceMax: string;
+  priceMode: "fixed" | "range";
   unit: string;
   unitCustom: boolean;
 }
 
-type TabType = "cat" | "prod";
+type TabType = "cat1" | "cat2" | "cat3";
 
 let rowSeq = 0;
 const newRow = (): ProdRow => ({
   id: `r${++rowSeq}`,
   name: "",
   price: "",
+  priceMax: "",
+  priceMode: "fixed",
   unit: "次",
   unitCustom: false,
 });
 
 // 库总数独立组件，无条件查询
-function useChargeLibTotal(libType: "category" | "product") {
+function useChargeLibTotal() {
   const { data } = trpc.yabanCustomer.searchChargeLib.useQuery(
-    { query: "", type: libType },
+    { query: "", type: "product" },
     { staleTime: 30000 }
   );
   return data?.total ?? 0;
@@ -57,12 +72,10 @@ function AiSearchInput({
   value,
   onChange,
   placeholder,
-  libType,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
-  libType: "category" | "product";
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(value);
@@ -70,10 +83,8 @@ function AiSearchInput({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [debouncedQuery, setDebouncedQuery] = useState("");
 
-  // 同步外部 value
   useEffect(() => { setQuery(value); }, [value]);
 
-  // 防抖搜索
   const handleInput = (v: string) => {
     setQuery(v);
     onChange(v);
@@ -83,14 +94,12 @@ function AiSearchInput({
   };
 
   const { data: libData } = trpc.yabanCustomer.searchChargeLib.useQuery(
-    { query: debouncedQuery, type: libType },
+    { query: debouncedQuery, type: "product" },
     { enabled: open, staleTime: 5000 }
   );
   const suggestions = libData?.items ?? [];
-  // 库总数无条件查询
-  const displayTotal = useChargeLibTotal(libType);
+  const displayTotal = useChargeLibTotal();
 
-  // 点击外部关闭
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -124,7 +133,7 @@ function AiSearchInput({
           </button>
         ) : null}
       </div>
-      {open && (suggestions.length > 0) && (
+      {open && suggestions.length > 0 && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
           <div className="absolute left-0 top-full z-30 mt-1 w-full bg-white rounded-md shadow-lg ring-1 ring-black/5 overflow-hidden max-h-52 overflow-y-auto">
@@ -132,14 +141,8 @@ function AiSearchInput({
               <button
                 key={opt}
                 type="button"
-                onClick={() => {
-                  setQuery(opt);
-                  onChange(opt);
-                  setOpen(false);
-                }}
-                className={`w-full px-4 py-2.5 text-left text-sm active:bg-blue-50 flex items-center gap-2 ${
-                  i > 0 ? "border-t border-gray-50" : ""
-                }`}
+                onClick={() => { setQuery(opt); onChange(opt); setOpen(false); }}
+                className={`w-full px-4 py-2.5 text-left text-sm active:bg-blue-50 flex items-center gap-2 ${i > 0 ? "border-t border-gray-50" : ""}`}
                 style={value === opt ? { color: ACCENT, fontWeight: 600 } : { color: "#374151" }}
               >
                 <Search className="w-3.5 h-3.5 text-gray-300 shrink-0" />
@@ -159,7 +162,7 @@ export default function YabanChargeAdd() {
   const { currentTenantId, current: currentClinic } = useYabanClinic();
   const clinicName = currentClinic?.name || "当前门诊";
 
-  const [tab, setTab] = useState<TabType>("cat");
+  const [tab, setTab] = useState<TabType>("cat1");
 
   const utils = trpc.useUtils();
   const listQuery = trpc.yabanCustomer.listChargeProducts.useQuery(
@@ -175,16 +178,30 @@ export default function YabanChargeAdd() {
   const saveCat = trpc.yabanCustomer.saveChargeCategory.useMutation();
   const saveProd = trpc.yabanCustomer.saveChargeProduct.useMutation();
   const seedLib = trpc.yabanCustomer.seedChargeLib.useMutation();
+  const migrateMut = trpc.yabanCustomer.migrateProductsToSubcategories.useMutation();
+  const [isMigrating, setIsMigrating] = useState(false);
   const refresh = () => utils.yabanCustomer.listChargeProducts.invalidate();
+
+  const handleMigrate = async () => {
+    setIsMigrating(true);
+    try {
+      const res = await migrateMut.mutateAsync();
+      await refresh();
+      toast.success(`迁移完成！${res.migrated} 个项目已转为二级分类`);
+    } catch (e: any) {
+      toast.error(e.message || "迁移失败");
+    } finally {
+      setIsMigrating(false);
+    }
+  };
 
   // 首次加载时自动将现有数据导入行业库
   useEffect(() => {
     const KEY = "yaban_charge_lib_seeded_v1";
     if (!localStorage.getItem(KEY)) {
       seedLib.mutate(undefined, {
-        onSuccess: (res) => {
+        onSuccess: () => {
           localStorage.setItem(KEY, "1");
-          // 静默刷新库缓存
           utils.yabanCustomer.searchChargeLib.invalidate();
         },
       });
@@ -207,51 +224,104 @@ export default function YabanChargeAdd() {
     localStorage.setItem(UNIT_FREQ_KEY, JSON.stringify(freq));
   };
 
-  // ===== 批量添加分类 =====
-  let catRowSeq = 0;
-  const newCatRow = () => ({ id: `c${++catRowSeq}`, name: "" });
-  const [catRows, setCatRows] = useState<{ id: string; name: string }[]>([{ id: "c0", name: "" }]);
-  const [isSavingCat, setIsSavingCat] = useState(false);
+  // ===== Tab1：批量添加一级分类 =====
+  let cat1RowSeq = 0;
+  const newCat1Row = () => ({ id: `c1${++cat1RowSeq}`, name: "", unit: "次", unitCustom: false, price: "", priceMax: "", priceMode: "fixed" as "fixed" | "range" });
+  const [cat1Rows, setCat1Rows] = useState<{ id: string; name: string; unit: string; unitCustom: boolean; price: string; priceMax: string; priceMode: "fixed" | "range" }[]>([{ id: "c10", name: "", unit: "次", unitCustom: false, price: "", priceMax: "", priceMode: "fixed" }]);
+  const [isSavingCat1, setIsSavingCat1] = useState(false);
 
-  const updateCatRow = (id: string, name: string) =>
-    setCatRows((prev) => prev.map((r) => (r.id === id ? { ...r, name } : r)));
-  const addCatRow = () => setCatRows((prev) => [...prev, newCatRow()]);
-  const removeCatRow = (id: string) =>
-    setCatRows((prev) => (prev.length > 1 ? prev.filter((r) => r.id !== id) : prev));
-
-  const handleSaveCat = async () => {
-    const valid = catRows.filter((r) => r.name.trim());
+  const handleSaveCat1 = async () => {
+    const valid = cat1Rows.filter((r) => r.name.trim());
     if (!valid.length) { toast.error("请至少填写一个分类名称"); return; }
-    setIsSavingCat(true);
+    setIsSavingCat1(true);
     try {
       for (const r of valid) {
-        await saveCat.mutateAsync({ name: r.name.trim(), sort: rawCategories.length, enabled: true });
+        await saveCat.mutateAsync({
+          name: r.name.trim(),
+          unit: r.unit.trim(),
+          price: parseFloat(r.price) || 0,
+          priceMax: r.priceMode === "range" ? (parseFloat(r.priceMax) || 0) : 0,
+          sort: rawCategories.length,
+          enabled: true,
+        });
       }
-      toast.success(`《${clinicName}》已添加 ${valid.length} 个分类`);
-      setCatRows([{ id: "c0", name: "" }]);
+      for (const r of valid) { if (r.unit && !r.unitCustom) bumpUnit(r.unit); }
+      toast.success(`《${clinicName}》已添加 ${valid.length} 个一级分类`);
+      setCat1Rows([{ id: "c10", name: "", unit: "次", unitCustom: false, price: "", priceMax: "", priceMode: "fixed" }]);
       refresh();
     } catch (e: any) {
       toast.error(e.message || "保存失败");
     } finally {
-      setIsSavingCat(false);
+      setIsSavingCat1(false);
     }
   };
 
-  // ===== 批量添加项目 =====
-  const [selectedCatId, setSelectedCatId] = useState<number | null>(null);
+  // ===== Tab2：批量添加二级分类 =====
+  const [selectedCat1ForSub, setSelectedCat1ForSub] = useState<number | null>(null);
+  let cat2RowSeq = 0;
+  const newCat2Row = () => ({ id: `c2${++cat2RowSeq}`, name: "", unit: "次", unitCustom: false, price: "", priceMax: "", priceMode: "fixed" as "fixed" | "range" });
+  const [cat2Rows, setCat2Rows] = useState<{ id: string; name: string; unit: string; unitCustom: boolean; price: string; priceMax: string; priceMode: "fixed" | "range" }[]>([{ id: "c20", name: "", unit: "次", unitCustom: false, price: "", priceMax: "", priceMode: "fixed" }]);
+  const [isSavingCat2, setIsSavingCat2] = useState(false);
+
+  const handleSaveCat2 = async () => {
+    if (!selectedCat1ForSub) { toast.error("请选择所属一级分类"); return; }
+    const valid = cat2Rows.filter((r) => r.name.trim());
+    if (!valid.length) { toast.error("请至少填写一个分类名称"); return; }
+    const parentCat = rawCategories.find((c) => c.id === selectedCat1ForSub);
+    const existingSubCount = parentCat?.subCategories.length ?? 0;
+    setIsSavingCat2(true);
+    try {
+      for (let i = 0; i < valid.length; i++) {
+        const r = valid[i];
+        await saveCat.mutateAsync({
+          parentId: selectedCat1ForSub,
+          name: r.name.trim(),
+          unit: r.unit.trim(),
+          price: parseFloat(r.price) || 0,
+          priceMax: r.priceMode === "range" ? (parseFloat(r.priceMax) || 0) : 0,
+          sort: existingSubCount + i,
+          enabled: true,
+        });
+      }
+      for (const r of valid) { if (r.unit && !r.unitCustom) bumpUnit(r.unit); }
+      toast.success(`《${clinicName}》已添加 ${valid.length} 个二级分类`);
+      setCat2Rows([{ id: "c20", name: "", unit: "次", unitCustom: false, price: "", priceMax: "", priceMode: "fixed" }]);
+      refresh();
+    } catch (e: any) {
+      toast.error(e.message || "保存失败");
+    } finally {
+      setIsSavingCat2(false);
+    }
+  };
+
+  // ===== Tab3：批量添加三级项目 =====
+  const [selectedCat1ForProd, setSelectedCat1ForProd] = useState<number | null>(null);
+  const [selectedCat2ForProd, setSelectedCat2ForProd] = useState<number | null>(null);
+
+  // 当一级变化时，重置二级选择
+  const handleCat1ForProdChange = (id: number | null) => {
+    setSelectedCat1ForProd(id);
+    setSelectedCat2ForProd(null);
+  };
+
+  const subCatsForProd = useMemo(() => {
+    if (!selectedCat1ForProd) return [];
+    const cat = sortedCats.find((c) => c.id === selectedCat1ForProd);
+    return (cat?.subCategories ?? []).sort((a, b) => a.sort - b.sort || a.id - b.id);
+  }, [sortedCats, selectedCat1ForProd]);
+
   const [rows, setRows] = useState<ProdRow[]>([newRow()]);
   const [isSaving, setIsSaving] = useState(false);
 
   const updateRow = (id: string, patch: Partial<ProdRow>) =>
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
-
   const addRow = () => setRows((prev) => [...prev, newRow()]);
-
   const removeRow = (id: string) =>
     setRows((prev) => (prev.length > 1 ? prev.filter((r) => r.id !== id) : prev));
 
   const handleSaveAll = async () => {
-    if (!selectedCatId) { toast.error("请选择所属分类"); return; }
+    if (!selectedCat1ForProd) { toast.error("请选择所属一级分类"); return; }
+    if (!selectedCat2ForProd) { toast.error("请选择所属二级分类"); return; }
     const valid = rows.filter((r) => r.name.trim());
     if (!valid.length) { toast.error("请至少填写一个项目名称"); return; }
     setIsSaving(true);
@@ -259,10 +329,12 @@ export default function YabanChargeAdd() {
       for (const r of valid) {
         const unit = r.unitCustom ? r.unit.trim() || "次" : r.unit;
         await saveProd.mutateAsync({
-          categoryId: selectedCatId,
+          categoryId: selectedCat1ForProd,
+          subcategoryId: selectedCat2ForProd ?? null,
           name: r.name.trim(),
           unit,
           price: parseFloat(r.price) || 0,
+          priceMax: r.priceMode === "range" ? (parseFloat(r.priceMax) || 0) : 0,
           isCommon: false,
           enabled: true,
           sort: 0,
@@ -279,6 +351,12 @@ export default function YabanChargeAdd() {
     }
   };
 
+  const TABS: { key: TabType; label: string }[] = [
+    { key: "cat1", label: "添加一级分类" },
+    { key: "cat2", label: "添加二级分类" },
+    { key: "cat3", label: "添加三级项目" },
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* 蓝色头部 */}
@@ -293,91 +371,342 @@ export default function YabanChargeAdd() {
           </div>
         </div>
 
-        {/* Tab 切换 */}
-        <div className="flex px-4 pb-3 gap-2">
-          <button
-            onClick={() => setTab("cat")}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-md text-base font-medium transition-colors ${
-              tab === "cat" ? "bg-white text-[#1E88D6]" : "bg-white/15 text-white/80"
-            }`}
-          >
-            <Layers className="w-5 h-5" />
-            添加新分类
-          </button>
-          <button
-            onClick={() => setTab("prod")}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-3 rounded-md text-base font-medium transition-colors ${
-              tab === "prod" ? "bg-white text-[#1E88D6]" : "bg-white/15 text-white/80"
-            }`}
-          >
-            <Plus className="w-5 h-5" />
-            添加项目
-          </button>
+        {/* 3个Tab */}
+        <div className="flex px-4 pb-3 gap-1.5">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`flex-1 py-2.5 rounded-md text-sm font-medium transition-colors ${
+                tab === t.key ? "bg-white text-[#1E88D6]" : "bg-white/15 text-white/80"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
       </div>
 
       {/* 内容区 */}
       <div className="flex-1 px-4 py-5 space-y-3 pb-32">
-        {tab === "cat" ? (
-          /* ===== 批量添加分类 ===== */
+
+        {/* ===== Tab1：批量添加一级分类 ===== */}
+        {tab === "cat1" && (
           <div className="bg-white rounded-lg shadow-sm p-4 space-y-3">
-            {catRows.map((row, idx) => (
-              <div key={row.id} className="flex items-center gap-2">
-                <div className="flex-1 min-w-0">
-                  <AiSearchInput
-                    value={row.name}
-                    onChange={(v) => updateCatRow(row.id, v)}
-                    libType="category"
-                  />
+            <p className="text-xs text-gray-400">一级分类是最顶层的大类，如「检查诊断」「补牙修复」等。价格/单位可选填。</p>
+            {cat1Rows.map((row, idx) => (
+              <div key={row.id} className="space-y-2 border-b border-gray-50 pb-3 last:border-0 last:pb-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400 shrink-0">分类 {idx + 1}</span>
+                  {cat1Rows.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setCat1Rows((prev) => prev.filter((r) => r.id !== row.id))}
+                      className="ml-auto shrink-0 text-gray-300 active:text-red-400 p-1"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
-                {catRows.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeCatRow(row.id)}
-                    className="shrink-0 text-gray-300 active:text-red-400 p-1"
-                  >
-                    <Trash2 className="w-4 h-4" />
+                <input
+                  value={row.name}
+                  onChange={(e) => setCat1Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, name: e.target.value } : r))}
+                  placeholder="分类名称，如 补牙修复"
+                  className="w-full bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
+                />
+                {/* 价格类型切换 Pill */}
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="text-xs text-gray-400">价格：</span>
+                  <button type="button" onClick={() => setCat1Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, priceMode: "fixed" } : r))}
+                    className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${row.priceMode === "fixed" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500"}`}>
+                    固定
                   </button>
-                )}
+                  <button type="button" onClick={() => setCat1Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, priceMode: "range" } : r))}
+                    className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${row.priceMode === "range" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500"}`}>
+                    范围
+                  </button>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <input
+                      value={row.price}
+                      onChange={(e) => setCat1Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, price: e.target.value } : r))}
+                      inputMode="decimal"
+                      placeholder={row.priceMode === "fixed" ? "价格（0=面议）" : "最低价"}
+                      className="flex-1 min-w-0 bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
+                    />
+                    {row.priceMode === "range" && (
+                      <>
+                        <span className="text-gray-400 text-sm shrink-0">~</span>
+                        <input
+                          value={row.priceMax}
+                          onChange={(e) => setCat1Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, priceMax: e.target.value } : r))}
+                          inputMode="decimal"
+                          placeholder="最高价"
+                          className="flex-1 min-w-0 bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
+                        />
+                      </>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <select
+                      value={row.unitCustom ? "自定义" : row.unit}
+                      onChange={(e) => {
+                        if (e.target.value === "自定义") {
+                          setCat1Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, unitCustom: true, unit: "" } : r));
+                        } else {
+                          setCat1Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, unitCustom: false, unit: e.target.value } : r));
+                        }
+                      }}
+                      className="w-full bg-gray-100 rounded-md pl-3 pr-7 py-2.5 text-sm outline-none appearance-none"
+                    >
+                      {sortedUnits.map((u) => (
+                        <option key={u} value={u}>{u}</option>
+                      ))}
+                      <option value="自定义">自定义…</option>
+                    </select>
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                  </div>
+                  {row.unitCustom && (
+                    <input
+                      value={row.unit}
+                      onChange={(e) => setCat1Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, unit: e.target.value } : r))}
+                      placeholder="输入自定义单位"
+                      className="w-full bg-gray-100 rounded-md px-3 py-2 text-sm outline-none"
+                    />
+                  )}
+                </div>
               </div>
             ))}
             <button
               type="button"
-              onClick={addCatRow}
+              onClick={() => setCat1Rows((prev) => [...prev, newCat1Row()])}
               className="w-full py-2.5 rounded-md border border-dashed border-gray-300 text-sm text-gray-400 flex items-center justify-center gap-1.5 active:bg-gray-50"
             >
               <Plus className="w-4 h-4" />
-              再加一个分类
+              再加一个一级分类
             </button>
             <button
-              onClick={handleSaveCat}
-              disabled={isSavingCat}
+              onClick={handleSaveCat1}
+              disabled={isSavingCat1}
               className="w-full py-3 rounded-md text-white text-sm font-medium flex items-center justify-center gap-1.5 disabled:opacity-50"
               style={{ backgroundColor: ACCENT }}
             >
-              {isSavingCat && <Loader2 className="w-4 h-4 animate-spin" />}
-              保存分类（{catRows.filter(r => r.name.trim()).length} 条）
+              {isSavingCat1 && <Loader2 className="w-4 h-4 animate-spin" />}
+              保存一级分类（{cat1Rows.filter(r => r.name.trim()).length} 条）
             </button>
           </div>
-        ) : (
-          /* ===== 批量添加项目 ===== */
+        )}
+
+        {/* ===== Tab2：批量添加二级分类 ===== */}
+        {tab === "cat2" && (
           <>
-            {/* 选择分类 */}
+            {/* 选择所属一级分类 */}
             <div className="bg-white rounded-lg shadow-sm p-4">
-              <label className="block text-xs text-gray-500 mb-1.5">所属分类（现有分类共 {sortedCats.length} 个）</label>
+              <label className="block text-xs text-gray-500 mb-1.5">所属一级分类（共 {sortedCats.length} 个）</label>
               <div className="relative">
                 <select
-                  value={selectedCatId ?? ""}
-                  onChange={(e) => setSelectedCatId(e.target.value ? Number(e.target.value) : null)}
+                  value={selectedCat1ForSub ?? ""}
+                  onChange={(e) => setSelectedCat1ForSub(e.target.value ? Number(e.target.value) : null)}
                   className="w-full bg-gray-100 rounded-md pl-3 pr-8 py-2.5 text-sm outline-none appearance-none"
                 >
-                  <option value="">请选择分类…</option>
+                  <option value="">请选择一级分类…</option>
                   {sortedCats.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
               </div>
+            </div>
+
+            {/* 二级分类行列表 */}
+            <div className="bg-white rounded-lg shadow-sm p-4 space-y-3">
+              <p className="text-xs text-gray-400">二级分类是一级下的子分类，如「前牙」「后牙」等。价格/单位可选填。</p>
+              {cat2Rows.map((row, idx) => (
+                <div key={row.id} className="space-y-2 border-b border-gray-50 pb-3 last:border-0 last:pb-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400 shrink-0">分类 {idx + 1}</span>
+                    {cat2Rows.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setCat2Rows((prev) => prev.filter((r) => r.id !== row.id))}
+                        className="ml-auto shrink-0 text-gray-300 active:text-red-400 p-1"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    value={row.name}
+                    onChange={(e) => setCat2Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, name: e.target.value } : r))}
+                    placeholder="二级分类名称，如 前牙根管"
+                    className="w-full bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
+                  />
+                  {/* 价格类型切换 Pill */}
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="text-xs text-gray-400">价格：</span>
+                    <button type="button" onClick={() => setCat2Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, priceMode: "fixed" } : r))}
+                      className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${row.priceMode === "fixed" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500"}`}>
+                      固定
+                    </button>
+                    <button type="button" onClick={() => setCat2Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, priceMode: "range" } : r))}
+                      className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${row.priceMode === "range" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500"}`}>
+                      范围
+                    </button>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <input
+                        value={row.price}
+                        onChange={(e) => setCat2Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, price: e.target.value } : r))}
+                        inputMode="decimal"
+                        placeholder={row.priceMode === "fixed" ? "价格（0=面议）" : "最低价"}
+                        className="flex-1 min-w-0 bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
+                      />
+                      {row.priceMode === "range" && (
+                        <>
+                          <span className="text-gray-400 text-sm shrink-0">~</span>
+                          <input
+                            value={row.priceMax}
+                            onChange={(e) => setCat2Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, priceMax: e.target.value } : r))}
+                            inputMode="decimal"
+                            placeholder="最高价"
+                            className="flex-1 min-w-0 bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
+                          />
+                        </>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <select
+                        value={row.unitCustom ? "自定义" : row.unit}
+                        onChange={(e) => {
+                          if (e.target.value === "自定义") {
+                            setCat2Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, unitCustom: true, unit: "" } : r));
+                          } else {
+                            setCat2Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, unitCustom: false, unit: e.target.value } : r));
+                          }
+                        }}
+                        className="w-full bg-gray-100 rounded-md pl-3 pr-7 py-2.5 text-sm outline-none appearance-none"
+                      >
+                        {sortedUnits.map((u) => (
+                          <option key={u} value={u}>{u}</option>
+                        ))}
+                        <option value="自定义">自定义…</option>
+                      </select>
+                      <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                    </div>
+                    {row.unitCustom && (
+                      <input
+                        value={row.unit}
+                        onChange={(e) => setCat2Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, unit: e.target.value } : r))}
+                        placeholder="输入自定义单位"
+                        className="w-full bg-gray-100 rounded-md px-3 py-2 text-sm outline-none"
+                      />
+                    )}
+                  </div>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setCat2Rows((prev) => [...prev, newCat2Row()])}
+                className="w-full py-2.5 rounded-md border border-dashed border-gray-300 text-sm text-gray-400 flex items-center justify-center gap-1.5 active:bg-gray-50"
+              >
+                <Plus className="w-4 h-4" />
+                再加一个二级分类
+              </button>
+              <button
+                onClick={handleSaveCat2}
+                disabled={isSavingCat2 || !selectedCat1ForSub}
+                className="w-full py-3 rounded-md text-white text-sm font-medium flex items-center justify-center gap-1.5 disabled:opacity-50"
+                style={{ backgroundColor: ACCENT }}
+              >
+                {isSavingCat2 && <Loader2 className="w-4 h-4 animate-spin" />}
+                保存二级分类（{cat2Rows.filter(r => r.name.trim()).length} 条）
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ===== Tab3：批量添加三级项目 ===== */}
+        {tab === "cat3" && (
+          <>
+            {/* 选择一级分类 */}
+            <div className="bg-white rounded-lg shadow-sm p-4 space-y-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1.5">所属一级分类（必选）</label>
+                <div className="relative">
+                  <select
+                    value={selectedCat1ForProd ?? ""}
+                    onChange={(e) => handleCat1ForProdChange(e.target.value ? Number(e.target.value) : null)}
+                    className="w-full bg-gray-100 rounded-md pl-3 pr-8 py-2.5 text-sm outline-none appearance-none"
+                  >
+                    <option value="">请选择一级分类…</option>
+                    {sortedCats.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+              {/* 选择二级分类（必选） */}
+              {selectedCat1ForProd && (
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1.5">
+                    所属二级分类（必选）
+                  </label>
+                  {subCatsForProd.length === 0 ? (
+                    <div className="space-y-2">
+                      {/* 如果该一级下有直接挂的项目，提示一键迁移 */}
+                      {(() => {
+                        const cat = sortedCats.find((c) => c.id === selectedCat1ForProd);
+                        const hasDirectItems = (cat as any)?.items?.length > 0;
+                        return hasDirectItems ? (
+                          <div className="bg-blue-50 border border-blue-200 rounded-md px-3 py-3 space-y-2">
+                            <p className="text-xs text-blue-600">
+                              该一级分类下有 {(cat as any).items.length} 个旧项目，可一键迁移为二级分类，迁移后即可选择。
+                            </p>
+                            <button
+                              type="button"
+                              onClick={handleMigrate}
+                              disabled={isMigrating}
+                              className="w-full py-2 rounded-md text-white text-xs font-medium flex items-center justify-center gap-1.5 disabled:opacity-50"
+                              style={{ backgroundColor: ACCENT }}
+                            >
+                              {isMigrating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                              {isMigrating ? "迁移中…" : "一键迁移旧项目为二级分类"}
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-md px-3 py-2.5">
+                            <span className="text-xs text-orange-500 flex-1">该一级分类暂无二级分类，请先去「添加二级分类」Tab 添加</span>
+                            <button
+                              type="button"
+                              onClick={() => setTab("cat2")}
+                              className="shrink-0 text-xs font-medium text-[#1E88D6] active:underline"
+                            >
+                              去添加
+                            </button>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <select
+                        value={selectedCat2ForProd ?? ""}
+                        onChange={(e) => setSelectedCat2ForProd(e.target.value ? Number(e.target.value) : null)}
+                        className="w-full bg-gray-100 rounded-md pl-3 pr-8 py-2.5 text-sm outline-none appearance-none"
+                      >
+                        <option value="">请选择二级分类…</option>
+                        {subCatsForProd.map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* 项目行列表 */}
@@ -398,38 +727,90 @@ export default function YabanChargeAdd() {
                     value={row.name}
                     onChange={(v) => updateRow(row.id, { name: v })}
                     placeholder={`新项目${idx + 1}`}
-                    libType="product"
                   />
 
                   {/* 单价 + 单位 */}
-                  <div className="flex gap-2">
-                    <input
-                      value={row.price}
-                      onChange={(e) => updateRow(row.id, { price: e.target.value })}
-                      inputMode="decimal"
-                      placeholder="单价（0=面议）"
-                      className="flex-1 bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
-                    />
-                    <div className="relative shrink-0">
-                      <select
-                        value={row.unitCustom ? "自定义" : row.unit}
-                        onChange={(e) => {
-                          if (e.target.value === "自定义") {
-                            updateRow(row.id, { unitCustom: true, unit: "" });
-                          } else {
-                            updateRow(row.id, { unitCustom: false, unit: e.target.value });
-                          }
-                        }}
-                        className="w-24 bg-gray-100 rounded-md pl-3 pr-7 py-2.5 text-sm outline-none appearance-none"
-                      >
-                        {sortedUnits.map((u) => (
-                          <option key={u} value={u}>{u}</option>
-                        ))}
-                        <option value="自定义">自定义…</option>
-                      </select>
-                      <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                    </div>
+                  {/* 价格类型切换 Pill */}
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="text-xs text-gray-400">价格：</span>
+                    <button type="button" onClick={() => updateRow(row.id, { priceMode: "fixed" })}
+                      className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${row.priceMode === "fixed" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500"}`}>
+                      固定
+                    </button>
+                    <button type="button" onClick={() => updateRow(row.id, { priceMode: "range" })}
+                      className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${row.priceMode === "range" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500"}`}>
+                      范围
+                    </button>
                   </div>
+                  {row.priceMode === "fixed" ? (
+                    <div className="flex gap-2">
+                      <input
+                        value={row.price}
+                        onChange={(e) => updateRow(row.id, { price: e.target.value })}
+                        inputMode="decimal"
+                        placeholder="单价（0=面议）"
+                        className="flex-1 bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
+                      />
+                      <div className="relative shrink-0">
+                        <select
+                          value={row.unitCustom ? "自定义" : row.unit}
+                          onChange={(e) => {
+                            if (e.target.value === "自定义") {
+                              updateRow(row.id, { unitCustom: true, unit: "" });
+                            } else {
+                              updateRow(row.id, { unitCustom: false, unit: e.target.value });
+                            }
+                          }}
+                          className="w-24 bg-gray-100 rounded-md pl-3 pr-7 py-2.5 text-sm outline-none appearance-none"
+                        >
+                          {sortedUnits.map((u) => (
+                            <option key={u} value={u}>{u}</option>
+                          ))}
+                          <option value="自定义">自定义…</option>
+                        </select>
+                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          value={row.price}
+                          onChange={(e) => updateRow(row.id, { price: e.target.value })}
+                          inputMode="decimal"
+                          placeholder="最低价"
+                          className="flex-1 bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
+                        />
+                        <span className="text-gray-400 text-sm shrink-0">~</span>
+                        <input
+                          value={row.priceMax}
+                          onChange={(e) => updateRow(row.id, { priceMax: e.target.value })}
+                          inputMode="decimal"
+                          placeholder="最高价"
+                          className="flex-1 bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
+                        />
+                      </div>
+                      <div className="relative">
+                        <select
+                          value={row.unitCustom ? "自定义" : row.unit}
+                          onChange={(e) => {
+                            if (e.target.value === "自定义") {
+                              updateRow(row.id, { unitCustom: true, unit: "" });
+                            } else {
+                              updateRow(row.id, { unitCustom: false, unit: e.target.value });
+                            }
+                          }}
+                          className="w-full bg-gray-100 rounded-md pl-3 pr-7 py-2.5 text-sm outline-none appearance-none"
+                        >
+                          {sortedUnits.map((u) => (
+                            <option key={u} value={u}>{u}</option>
+                          ))}
+                          <option value="自定义">自定义…</option>
+                        </select>
+                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                      </div>
+                    </div>
+                  )}
                   {row.unitCustom && (
                     <input
                       value={row.unit}
@@ -454,12 +835,12 @@ export default function YabanChargeAdd() {
         )}
       </div>
 
-      {/* 底部固定保存按钮（仅添加项目 tab） */}
-      {tab === "prod" && (
+      {/* 底部固定保存按钮（仅添加三级项目 tab） */}
+      {tab === "cat3" && (
         <div className="fixed bottom-0 left-0 right-0 px-4 pb-6 pt-3 bg-white/90 backdrop-blur border-t border-gray-100 max-w-[480px] mx-auto">
           <button
             onClick={handleSaveAll}
-            disabled={isSaving || !selectedCatId || !rows.some((r) => r.name.trim())}
+            disabled={isSaving || !selectedCat1ForProd || !selectedCat2ForProd || !rows.some((r) => r.name.trim())}
             className="w-full py-3.5 rounded-md text-white text-sm font-semibold flex items-center justify-center gap-1.5 disabled:opacity-50"
             style={{ backgroundColor: ACCENT }}
           >

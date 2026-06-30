@@ -405,12 +405,12 @@ client/src/pages/beauty/BeautyClients.tsx :: error TS2339: Property 'startDate' 
 client/src/pages/beauty/BeautyServices.tsx :: error TS2339: Property 'originalPrice' does not exist on type '{ id: number; name: string; description: string | null; price: string; duration: number; imageUrl: string | null; category: string | null; isActive: number; createdAt: Date; updatedAt: Date; }'.
 client/src/pages/beauty/BeautyServices.tsx :: error TS2339: Property 'originalPrice' does not exist on type '{ id: number; name: string; description: string | null; price: string; duration: number; imageUrl: string | null; category: string | null; isActive: number; createdAt: Date; updatedAt: Date; }'.
 client/src/pages/beauty/BeautyServices.tsx :: error TS2339: Property 'originalPrice' does not exist on type '{ id: number; name: string; description: string | null; price: string; duration: number; imageUrl: string | null; category: string | null; isActive: number; createdAt: Date; updatedAt: Date; }'.
-client/src/pages/games/Addition20Game.tsx :: error TS7016: Could not find a declaration file for module 'canvas-confetti'. '/home/ubuntu/haoyouji-web/node_modules/.pnpm/canvas-confetti@1.9.4/node_modules/canvas-confetti/src/confetti.js' implicitly has an 'any' type.
+client/src/pages/games/Addition20Game.tsx :: error TS7016: Could not find a declaration file for module 'canvas-confetti'. '/home/ubuntu/haoyouji-web-fresh/node_modules/.pnpm/canvas-confetti@1.9.4/node_modules/canvas-confetti/src/confetti.js' implicitly has an 'any' type.
 client/src/pages/games/ChessGame.tsx :: error TS2769: No overload matches this call.
 client/src/pages/games/GoGame.tsx :: error TS2769: No overload matches this call.
 client/src/pages/games/GomokuGame.tsx :: error TS2769: No overload matches this call.
 client/src/pages/games/GomokuGame.tsx :: error TS2769: No overload matches this call.
-client/src/pages/games/ListeningGame.tsx :: error TS7016: Could not find a declaration file for module 'canvas-confetti'. '/home/ubuntu/haoyouji-web/node_modules/.pnpm/canvas-confetti@1.9.4/node_modules/canvas-confetti/src/confetti.js' implicitly has an 'any' type.
+client/src/pages/games/ListeningGame.tsx :: error TS7016: Could not find a declaration file for module 'canvas-confetti'. '/home/ubuntu/haoyouji-web-fresh/node_modules/.pnpm/canvas-confetti@1.9.4/node_modules/canvas-confetti/src/confetti.js' implicitly has an 'any' type.
 client/src/pages/games/LudoGame.tsx :: error TS2769: No overload matches this call.
 client/src/pages/games/ReadingGame.tsx :: error TS7006: Parameter 'char' implicitly has an 'any' type.
 client/src/pages/hanming/HanmingHome.tsx :: error TS2339: Property 'hanmingDeleteMemberGallery' does not exist on type 'CreateTRPCReactBase<BuiltRouter<{ ctx: TrpcContext; meta: object; errorShape: DefaultErrorShape; transformer: true; }, DecorateCreateRouterOptions<{ workLog: BuiltRouter<{ ctx: TrpcContext; meta: object; errorShape: DefaultErrorShape; transformer: true; }, DecorateCreateRouterOptions<...>>; ... 171 more ...; worldCu...'.
@@ -1804,7 +1804,7 @@ server/wecom-channel-extra.ts :: error TS1252: Function declarations are not all
 server/wecom-channel-extra.ts :: error TS18047: 'conn' is possibly 'null'.
 server/wecom-channel-extra.ts :: error TS18047: 'conn' is possibly 'null'.
 server/wecom-channel-extra.ts :: error TS18047: 'conn' is possibly 'null'.
-server/wecom-channel-extra.ts :: error TS2339: Property 'default' does not exist on type 'typeof import("/home/ubuntu/haoyouji-web/node_modules/.pnpm/pdf-parse@2.4.5/node_modules/pdf-parse/dist/pdf-parse/esm/index")'.
+server/wecom-channel-extra.ts :: error TS2339: Property 'default' does not exist on type 'typeof import("/home/ubuntu/haoyouji-web-fresh/node_modules/.pnpm/pdf-parse@2.4.5/node_modules/pdf-parse/dist/pdf-parse/esm/index")'.
 server/wecom-manus-router.ts :: error TS1252: Function declarations are not allowed inside blocks in strict mode when targeting 'ES5'. Modules are automatically in strict mode.
 server/wecom-manus-router.ts :: error TS1252: Function declarations are not allowed inside blocks in strict mode when targeting 'ES5'. Modules are automatically in strict mode.
 server/wecom-manus-router.ts :: error TS1252: Function declarations are not allowed inside blocks in strict mode when targeting 'ES5'. Modules are automatically in strict mode.
@@ -1820,7 +1820,7 @@ server/work-groups-router.ts :: error TS2339: Property 'session' does not exist 
 server/work-groups-router.ts :: error TS2339: Property 'session' does not exist on type 'Request<{ id: string; }, any, any, ParsedQs, Record<string, any>>'.
 server/work-groups-router.ts :: error TS2339: Property 'session' does not exist on type 'Request<{}, any, any, ParsedQs, Record<string, any>>'.
 server/work-groups-router.ts :: error TS2339: Property 'session' does not exist on type 'Request<{}, any, any, ParsedQs, Record<string, any>>'.
-server/yaban-customer-router.ts :: error TS7016: Could not find a declaration file for module 'bcrypt'. '/home/ubuntu/haoyouji-web/node_modules/.pnpm/bcrypt@6.0.0/node_modules/bcrypt/bcrypt.js' implicitly has an 'any' type.
+server/yaban-customer-router.ts :: error TS7016: Could not find a declaration file for module 'bcrypt'. '/home/ubuntu/haoyouji-web-fresh/node_modules/.pnpm/bcrypt@6.0.0/node_modules/bcrypt/bcrypt.js' implicitly has an 'any' type.
 server/yaban-payment-router.ts :: error TS18047: 'conn' is possibly 'null'.
 server/yaban-payment-router.ts :: error TS18047: 'conn' is possibly 'null'.
 server/yaban-payment-router.ts :: error TS18047: 'conn' is possibly 'null'.

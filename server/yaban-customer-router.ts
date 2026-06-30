@@ -586,28 +586,40 @@ let chargeItemLibStructureReady = false;
 const chargeItemLibSeeded = new Set<number>();
 async function ensureChargeItemLib(conn: any, tenantId: number = DEFAULT_TENANT_ID) {
   if (chargeItemLibStructureReady && chargeItemLibSeeded.has(tenantId)) return;
-  // 项目分类表
+  // 项目分类表（含三级支持：parent_id NULL=一级，有值=二级）
   await conn.execute(`
     CREATE TABLE IF NOT EXISTS yaban_charge_category (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       tenant_id INT NOT NULL DEFAULT 1,
+      parent_id BIGINT UNSIGNED DEFAULT NULL,
       name VARCHAR(64) NOT NULL,
+      unit VARCHAR(16) NOT NULL DEFAULT '',
+      price DECIMAL(12,2) NOT NULL DEFAULT 0,
+      price_max DECIMAL(12,2) NOT NULL DEFAULT 0,
       sort INT NOT NULL DEFAULT 0,
       enabled TINYINT NOT NULL DEFAULT 1,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
-      KEY idx_tenant (tenant_id)
+      KEY idx_tenant (tenant_id),
+      KEY idx_parent (parent_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
-  // 收费项目表
+  // 兼容旧表：补充 parent_id / unit / price / price_max 字段（已存在则忽略）
+  try { await conn.execute(`ALTER TABLE yaban_charge_category ADD COLUMN parent_id BIGINT UNSIGNED DEFAULT NULL`); } catch (_) {}
+  try { await conn.execute(`ALTER TABLE yaban_charge_category ADD COLUMN unit VARCHAR(16) NOT NULL DEFAULT ''`); } catch (_) {}
+  try { await conn.execute(`ALTER TABLE yaban_charge_category ADD COLUMN price DECIMAL(12,2) NOT NULL DEFAULT 0`); } catch (_) {}
+  try { await conn.execute(`ALTER TABLE yaban_charge_category ADD COLUMN price_max DECIMAL(12,2) NOT NULL DEFAULT 0`); } catch (_) {}
+  // 收费项目表（subcategory_id 指向二级分类，NULL 表示直接挂一级）
   await conn.execute(`
     CREATE TABLE IF NOT EXISTS yaban_charge_product (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
       tenant_id INT NOT NULL DEFAULT 1,
       category_id BIGINT UNSIGNED,
+      subcategory_id BIGINT UNSIGNED DEFAULT NULL,
       name VARCHAR(128) NOT NULL,
       unit VARCHAR(16) NOT NULL DEFAULT '次',
       price DECIMAL(12,2) NOT NULL DEFAULT 0,
+      price_max DECIMAL(12,2) NOT NULL DEFAULT 0,
       is_common TINYINT NOT NULL DEFAULT 0,
       enabled TINYINT NOT NULL DEFAULT 1,
       sort INT NOT NULL DEFAULT 0,
@@ -615,9 +627,13 @@ async function ensureChargeItemLib(conn: any, tenantId: number = DEFAULT_TENANT_
       PRIMARY KEY (id),
       KEY idx_tenant (tenant_id),
       KEY idx_category (category_id),
+      KEY idx_subcategory (subcategory_id),
       KEY idx_common (tenant_id, is_common)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+  // 兼容旧表：补充 subcategory_id / price_max 字段
+  try { await conn.execute(`ALTER TABLE yaban_charge_product ADD COLUMN subcategory_id BIGINT UNSIGNED DEFAULT NULL`); } catch (_) {}
+  try { await conn.execute(`ALTER TABLE yaban_charge_product ADD COLUMN price_max DECIMAL(12,2) NOT NULL DEFAULT 0`); } catch (_) {}
   // 首次为空时写入默认分类与常用项目，便于诊所直接使用
   const [catCnt] = (await conn.execute(
     `SELECT COUNT(*) AS c FROM yaban_charge_category WHERE tenant_id = ?`,
@@ -2235,12 +2251,14 @@ export const yabanCustomerRouter = router({
       const TENANT_ID = await resolveTenantId(ctx);
       await ensureChargeItemLib(conn, TENANT_ID);
       const includeDisabled = input?.includeDisabled ?? false;
+      // 所有分类（含 parent_id / unit / price）
       const [catRows] = (await (conn as any).execute(
-        `SELECT id, name, sort, enabled FROM yaban_charge_category WHERE tenant_id = ? ORDER BY sort ASC, id ASC`,
+        `SELECT id, parent_id, name, unit, price, price_max, sort, enabled FROM yaban_charge_category WHERE tenant_id = ? ORDER BY sort ASC, id ASC`,
         [TENANT_ID]
       )) as any;
+      // 所有项目（含 subcategory_id）
       const [prodRows] = (await (conn as any).execute(
-        `SELECT id, category_id, name, unit, price, is_common, enabled, sort
+        `SELECT id, category_id, subcategory_id, name, unit, price, price_max, is_common, enabled, sort
            FROM yaban_charge_product WHERE tenant_id = ?
            ${includeDisabled ? "" : "AND enabled = 1"}
            ORDER BY sort ASC, id ASC`,
@@ -2249,29 +2267,67 @@ export const yabanCustomerRouter = router({
       const prods = (prodRows as any[]).map((p) => ({
         id: Number(p.id),
         categoryId: p.category_id != null ? Number(p.category_id) : null,
+        subcategoryId: p.subcategory_id != null ? Number(p.subcategory_id) : null,
         name: p.name as string,
         unit: p.unit as string,
         price: Number(p.price),
+        priceMax: Number(p.price_max || 0),
         isCommon: !!p.is_common,
         enabled: !!p.enabled,
         sort: Number(p.sort),
       }));
-      const categories = (catRows as any[]).map((c) => ({
-        id: Number(c.id),
-        name: c.name as string,
-        sort: Number(c.sort),
-        enabled: !!c.enabled,
-        items: prods.filter((p) => p.categoryId === Number(c.id)),
-      }));
+      // 一级分类（parent_id IS NULL）
+      const level1 = (catRows as any[]).filter((c: any) => c.parent_id == null);
+      // 二级分类（parent_id 有值）
+      const level2 = (catRows as any[]).filter((c: any) => c.parent_id != null);
+      const categories = level1.map((c: any) => {
+        const catId = Number(c.id);
+        // 该一级下的二级分类
+        const subCats = level2
+          .filter((s: any) => Number(s.parent_id) === catId)
+          .map((s: any) => {
+            const subId = Number(s.id);
+            // 该二级下的项目（subcategory_id 匹配）
+            const subItems = prods.filter((p) => p.subcategoryId === subId);
+            return {
+              id: subId,
+              parentId: catId,
+              name: s.name as string,
+              unit: (s.unit || "") as string,
+              price: Number(s.price || 0),
+              priceMax: Number(s.price_max || 0),
+              sort: Number(s.sort),
+              enabled: !!s.enabled,
+              items: subItems,
+            };
+          });
+        // 直接挂在一级的项目（category_id 匹配且 subcategory_id 为 null）
+        const directItems = prods.filter((p) => p.categoryId === catId && p.subcategoryId == null);
+        return {
+          id: catId,
+          name: c.name as string,
+          unit: (c.unit || "") as string,
+          price: Number(c.price || 0),
+          priceMax: Number(c.price_max || 0),
+          sort: Number(c.sort),
+          enabled: !!c.enabled,
+          subCategories: subCats,
+          items: directItems,
+        };
+      });
       const commons = prods.filter((p) => p.isCommon && p.enabled);
       return { categories, commons };
     }),
 
-  // 新建/编辑分类——需 finance 权限
+  // 新建/编辑分类（支持三级）——需 finance 权限
   saveChargeCategory: protectedProcedure
     .input(z.object({
       id: z.union([z.number(), z.string()]).optional(),
+      parentId: z.union([z.number(), z.string()]).optional().nullable(),
       name: z.string().min(1).max(64),
+      unit: z.string().max(16).default(""),
+      price: z.number().min(0).default(0),
+      priceMax: z.number().min(0).default(0),
       sort: z.number().int().min(0).default(0),
       enabled: z.boolean().default(true),
     }))
@@ -2283,16 +2339,17 @@ export const yabanCustomerRouter = router({
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
       const TENANT_ID = await resolveTenantId(ctx);
       await ensureChargeItemLib(conn, TENANT_ID);
+      const parentId = input.parentId ? Number(input.parentId) : null;
       if (input.id) {
         await (conn as any).execute(
-          `UPDATE yaban_charge_category SET name = ?, sort = ?, enabled = ? WHERE tenant_id = ? AND id = ?`,
-          [input.name, input.sort, input.enabled ? 1 : 0, TENANT_ID, Number(input.id)]
+          `UPDATE yaban_charge_category SET parent_id = ?, name = ?, unit = ?, price = ?, price_max = ?, sort = ?, enabled = ? WHERE tenant_id = ? AND id = ?`,
+          [parentId, input.name, input.unit, input.price, input.priceMax ?? 0, input.sort, input.enabled ? 1 : 0, TENANT_ID, Number(input.id)]
         );
         return { id: Number(input.id) };
       }
       const [r] = (await (conn as any).execute(
-        `INSERT INTO yaban_charge_category (tenant_id, name, sort, enabled) VALUES (?, ?, ?, ?)`,
-        [TENANT_ID, input.name, input.sort, input.enabled ? 1 : 0]
+        `INSERT INTO yaban_charge_category (tenant_id, parent_id, name, unit, price, price_max, sort, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [TENANT_ID, parentId, input.name, input.unit, input.price, input.priceMax ?? 0, input.sort, input.enabled ? 1 : 0]
       )) as any;
       // 自动入全平台行业库
       try {
@@ -2332,14 +2389,53 @@ export const yabanCustomerRouter = router({
       return { success: true };
     }),
 
-  // 新建/编辑项目——需 finance 权限
+  // 数据迁移：把直接挂一级的项目迁移为二级分类（一次性）
+  migrateProductsToSubcategories: protectedProcedure
+    .mutation(async ({ ctx }) => {
+      if (!(await checkYabanPerm(ctx, "finance"))) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无收费权限" });
+      }
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const TENANT_ID = await resolveTenantId(ctx);
+      await ensureChargeItemLib(conn, TENANT_ID);
+      // 查询所有直接挂一级的项目（subcategory_id 为空）
+      const [prodRows] = (await (conn as any).execute(
+        `SELECT id, category_id, name, unit, price, sort, enabled FROM yaban_charge_product
+         WHERE tenant_id = ? AND subcategory_id IS NULL AND category_id IS NOT NULL`,
+        [TENANT_ID]
+      )) as any;
+      const prods = prodRows as any[];
+      if (prods.length === 0) return { migrated: 0 };
+      let migrated = 0;
+      for (const p of prods) {
+        const catId = Number(p.category_id);
+        // 在 category 表插入二级分类
+        const [r] = (await (conn as any).execute(
+          `INSERT INTO yaban_charge_category (tenant_id, parent_id, name, unit, price, sort, enabled)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [TENANT_ID, catId, p.name, p.unit || "", Number(p.price || 0), Number(p.sort || 0), p.enabled ? 1 : 0]
+        )) as any;
+        // 删除原 product 记录
+        await (conn as any).execute(
+          `DELETE FROM yaban_charge_product WHERE tenant_id = ? AND id = ?`,
+          [TENANT_ID, Number(p.id)]
+        );
+        migrated++;
+      }
+      return { migrated };
+    }),
+
+  // 新建/编辑项目（支持三级）——需 finance 权限
   saveChargeProduct: protectedProcedure
     .input(z.object({
       id: z.union([z.number(), z.string()]).optional(),
-      categoryId: z.union([z.number(), z.string()]).optional(),
+      categoryId: z.union([z.number(), z.string()]).optional().nullable(),
+      subcategoryId: z.union([z.number(), z.string()]).optional().nullable(),
       name: z.string().min(1).max(128),
       unit: z.string().min(1).max(16).default("次"),
       price: z.number().min(0).default(0),
+      priceMax: z.number().min(0).default(0),
       isCommon: z.boolean().default(false),
       enabled: z.boolean().default(true),
       sort: z.number().int().min(0).default(0),
@@ -2353,18 +2449,19 @@ export const yabanCustomerRouter = router({
       const TENANT_ID = await resolveTenantId(ctx);
       await ensureChargeItemLib(conn, TENANT_ID);
       const catId = input.categoryId ? Number(input.categoryId) : null;
+      const subCatId = input.subcategoryId ? Number(input.subcategoryId) : null;
       if (input.id) {
         await (conn as any).execute(
-          `UPDATE yaban_charge_product SET category_id = ?, name = ?, unit = ?, price = ?, is_common = ?, enabled = ?, sort = ?
+          `UPDATE yaban_charge_product SET category_id = ?, subcategory_id = ?, name = ?, unit = ?, price = ?, price_max = ?, is_common = ?, enabled = ?, sort = ?
              WHERE tenant_id = ? AND id = ?`,
-          [catId, input.name, input.unit, input.price, input.isCommon ? 1 : 0, input.enabled ? 1 : 0, input.sort, TENANT_ID, Number(input.id)]
+          [catId, subCatId, input.name, input.unit, input.price, input.priceMax ?? 0, input.isCommon ? 1 : 0, input.enabled ? 1 : 0, input.sort, TENANT_ID, Number(input.id)]
         );
         return { id: Number(input.id) };
       }
       const [r] = (await (conn as any).execute(
-        `INSERT INTO yaban_charge_product (tenant_id, category_id, name, unit, price, is_common, enabled, sort)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [TENANT_ID, catId, input.name, input.unit, input.price, input.isCommon ? 1 : 0, input.enabled ? 1 : 0, input.sort]
+        `INSERT INTO yaban_charge_product (tenant_id, category_id, subcategory_id, name, unit, price, price_max, is_common, enabled, sort)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [TENANT_ID, catId, subCatId, input.name, input.unit, input.price, input.priceMax ?? 0, input.isCommon ? 1 : 0, input.enabled ? 1 : 0, input.sort]
       )) as any;
       // 自动入全平台行业库
       try {
@@ -2414,20 +2511,44 @@ export const yabanCustomerRouter = router({
       return { success: true };
     }),
 
-  // ============ 行业库搜索（全平台共享分类/项目词条） ============
+  // ============ 行业库搜索（全平台共享，三级通用） ============
   searchChargeLib: protectedProcedure
     .input(z.object({
       query: z.string().default(""),
-      type: z.enum(["category", "product"]).default("category"),
+      type: z.enum(["category", "product", "all"]).default("all"),
     }))
     .query(async ({ input }) => {
       const conn = await getDbConnection();
       if (!conn) return { items: [], total: 0 };
       try {
         await ensureChargeGlobalLib(conn);
-        const table = input.type === "category" ? "yaban_charge_lib_category" : "yaban_charge_lib_product";
         const q = input.query.trim();
-        // 获取总数
+        // type=all 时合并两个表搜索
+        if (input.type === "all" || input.type === "product") {
+          // 获取总数（两表合并）
+          const [cnt1] = (await (conn as any).execute(`SELECT COUNT(*) AS c FROM yaban_charge_lib_category`)) as any;
+          const [cnt2] = (await (conn as any).execute(`SELECT COUNT(*) AS c FROM yaban_charge_lib_product`)) as any;
+          const total = Number((cnt1 as any[])[0]?.c || 0) + Number((cnt2 as any[])[0]?.c || 0);
+          if (!q) {
+            const [rows] = (await (conn as any).execute(
+              `(SELECT name, use_count FROM yaban_charge_lib_category ORDER BY use_count DESC LIMIT 10)
+               UNION ALL
+               (SELECT name, use_count FROM yaban_charge_lib_product ORDER BY use_count DESC LIMIT 10)
+               ORDER BY use_count DESC LIMIT 20`
+            )) as any;
+            return { items: (rows as any[]).map((r) => r.name as string), total };
+          }
+          const [rows] = (await (conn as any).execute(
+            `(SELECT name, use_count FROM yaban_charge_lib_category WHERE name LIKE ? ORDER BY use_count DESC LIMIT 10)
+             UNION ALL
+             (SELECT name, use_count FROM yaban_charge_lib_product WHERE name LIKE ? ORDER BY use_count DESC LIMIT 10)
+             ORDER BY use_count DESC LIMIT 20`,
+            [`%${q}%`, `%${q}%`]
+          )) as any;
+          return { items: (rows as any[]).map((r) => r.name as string), total };
+        }
+        // type=category 单独搜分类表
+        const table = "yaban_charge_lib_category";
         const [cntRows] = (await (conn as any).execute(`SELECT COUNT(*) AS c FROM ${table}`)) as any;
         const total = Number((cntRows as any[])[0]?.c || 0);
         if (!q) {
@@ -3462,5 +3583,198 @@ export const yabanCustomerRouter = router({
         console.error('[getChatLogs] error:', e);
         return { logs: [], total: 0 };
       }
+    }),
+
+  // ============ 收费项目库：跨门诊复制（差异分析） ============
+  analyzeChargeCopy: protectedProcedure
+    .input(z.object({
+      fromTenantId: z.number().int().positive(),
+      toTenantId: z.number().int().positive(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      // 权限校验：用户必须对两个门诊都有 finance 权限
+      const canFrom = await checkYabanPerm(ctx, "finance", input.fromTenantId);
+      const canTo = await checkYabanPerm(ctx, "finance", input.toTenantId);
+      if (!canFrom || !canTo) throw new TRPCError({ code: "FORBIDDEN", message: "您没有其中一个门诊的收费管理权限" });
+      await ensureChargeItemLib(conn, input.fromTenantId);
+      await ensureChargeItemLib(conn, input.toTenantId);
+
+      // 获取来源门诊的名称
+      const fromName = await getClinicName(input.fromTenantId);
+      const toName = await getClinicName(input.toTenantId);
+
+      // 读取来源门诊的一级分类
+      const [fromCats] = (await (conn as any).execute(
+        `SELECT id, parent_id, name, unit, price, sort, enabled FROM yaban_charge_category WHERE tenant_id = ? ORDER BY sort ASC, id ASC`,
+        [input.fromTenantId]
+      )) as any;
+      // 读取来源门诊的三级项目
+      const [fromProds] = (await (conn as any).execute(
+        `SELECT id, category_id, subcategory_id, name, unit, price, sort, enabled, is_common FROM yaban_charge_product WHERE tenant_id = ? ORDER BY sort ASC, id ASC`,
+        [input.fromTenantId]
+      )) as any;
+
+      // 读取目标门诊的一级分类（用于冲突检测）
+      const [toCats] = (await (conn as any).execute(
+        `SELECT id, parent_id, name FROM yaban_charge_category WHERE tenant_id = ? ORDER BY sort ASC, id ASC`,
+        [input.toTenantId]
+      )) as any;
+      // 读取目标门诊的三级项目（用于冲突检测）
+      const [toProds] = (await (conn as any).execute(
+        `SELECT id, category_id, subcategory_id, name FROM yaban_charge_product WHERE tenant_id = ? ORDER BY sort ASC, id ASC`,
+        [input.toTenantId]
+      )) as any;
+
+      // 构建目标门诊的名称集合（用于冲突检测）
+      const toCatL1Names = new Set<string>((toCats as any[]).filter((r: any) => !r.parent_id).map((r: any) => String(r.name)));
+      const toCatL2Names = new Set<string>((toCats as any[]).filter((r: any) => !!r.parent_id).map((r: any) => String(r.name)));
+      const toProdNames = new Set<string>((toProds as any[]).map((r: any) => String(r.name)));
+
+      // 分析来源门诊的分类
+      const catAnalysis: { id: number; parentId: number | null; name: string; level: 1 | 2; conflict: boolean }[] = [];
+      for (const r of fromCats as any[]) {
+        const level = r.parent_id ? 2 : 1;
+        const nameSet = level === 1 ? toCatL1Names : toCatL2Names;
+        catAnalysis.push({ id: Number(r.id), parentId: r.parent_id ? Number(r.parent_id) : null, name: String(r.name), level, conflict: nameSet.has(String(r.name)) });
+      }
+      // 分析来源门诊的项目
+      const prodAnalysis: { id: number; categoryId: number | null; subcategoryId: number | null; name: string; conflict: boolean }[] = [];
+      for (const r of fromProds as any[]) {
+        prodAnalysis.push({ id: Number(r.id), categoryId: r.category_id ? Number(r.category_id) : null, subcategoryId: r.subcategory_id ? Number(r.subcategory_id) : null, name: String(r.name), conflict: toProdNames.has(String(r.name)) });
+      }
+
+      const newCats = catAnalysis.filter((c) => !c.conflict).length;
+      const conflictCats = catAnalysis.filter((c) => c.conflict).length;
+      const newProds = prodAnalysis.filter((p) => !p.conflict).length;
+      const conflictProds = prodAnalysis.filter((p) => p.conflict).length;
+
+      return { fromName, toName, catAnalysis, prodAnalysis, newCats, conflictCats, newProds, conflictProds };
+    }),
+
+  // ============ 收费项目库：跨门诊复制（执行） ============
+  executeChargeCopy: protectedProcedure
+    .input(z.object({
+      fromTenantId: z.number().int().positive(),
+      toTenantId: z.number().int().positive(),
+      // 冲突分类的处理：key=来源分类id，value="overwrite"|"skip"
+      catConflictActions: z.record(z.string(), z.enum(["overwrite", "skip"])),
+      // 冲突项目的处理：key=来源项目id，value="overwrite"|"skip"
+      prodConflictActions: z.record(z.string(), z.enum(["overwrite", "skip"])),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const canFrom = await checkYabanPerm(ctx, "finance", input.fromTenantId);
+      const canTo = await checkYabanPerm(ctx, "finance", input.toTenantId);
+      if (!canFrom || !canTo) throw new TRPCError({ code: "FORBIDDEN", message: "您没有其中一个门诊的收费管理权限" });
+      await ensureChargeItemLib(conn, input.fromTenantId);
+      await ensureChargeItemLib(conn, input.toTenantId);
+
+      // 读取来源门诊完整数据
+      const [fromCats] = (await (conn as any).execute(
+        `SELECT id, parent_id, name, unit, price, sort, enabled FROM yaban_charge_category WHERE tenant_id = ? ORDER BY sort ASC, id ASC`,
+        [input.fromTenantId]
+      )) as any;
+      const [fromProds] = (await (conn as any).execute(
+        `SELECT id, category_id, subcategory_id, name, unit, price, sort, enabled, is_common FROM yaban_charge_product WHERE tenant_id = ? ORDER BY sort ASC, id ASC`,
+        [input.fromTenantId]
+      )) as any;
+
+      // 读取目标门诊现有分类（用于冲突覆盖 & id 映射）
+      const [toCats] = (await (conn as any).execute(
+        `SELECT id, parent_id, name FROM yaban_charge_category WHERE tenant_id = ? ORDER BY sort ASC, id ASC`,
+        [input.toTenantId]
+      )) as any;
+      const [toProds] = (await (conn as any).execute(
+        `SELECT id, name FROM yaban_charge_product WHERE tenant_id = ?`,
+        [input.toTenantId]
+      )) as any;
+
+      // 目标门诊分类名 -> id 映射
+      const toCatNameToId = new Map<string, number>();
+      for (const r of toCats as any[]) toCatNameToId.set(String(r.name), Number(r.id));
+      const toProdNameToId = new Map<string, number>();
+      for (const r of toProds as any[]) toProdNameToId.set(String(r.name), Number(r.id));
+
+      // 来源门诊分类 id -> 目标门诊分类 id 映射（用于处理子分类的 parent_id）
+      const fromCatIdToToId = new Map<number, number>();
+
+      let addedCats = 0; let skippedCats = 0; let overwrittenCats = 0;
+      let addedProds = 0; let skippedProds = 0; let overwrittenProds = 0;
+
+      // 先处理一级分类（parent_id IS NULL），再处理二级（parent_id 有值）
+      const sortedFromCats = (fromCats as any[]).sort((a: any, b: any) => (a.parent_id ? 1 : 0) - (b.parent_id ? 1 : 0));
+
+      for (const r of sortedFromCats) {
+        const fromId = Number(r.id);
+        const name = String(r.name);
+        const isConflict = toCatNameToId.has(name);
+        const action = isConflict ? (input.catConflictActions[String(fromId)] ?? "skip") : "add";
+
+        // 处理 parent_id 映射
+        let toParentId: number | null = null;
+        if (r.parent_id) {
+          toParentId = fromCatIdToToId.get(Number(r.parent_id)) ?? null;
+          if (!toParentId) { skippedCats++; continue; } // 父级未复制，跳过
+        }
+
+        if (action === "skip") {
+          // 跳过，但仍需记录 id 映射（目标已有同名分类）
+          const existingId = toCatNameToId.get(name);
+          if (existingId) fromCatIdToToId.set(fromId, existingId);
+          skippedCats++;
+        } else if (action === "overwrite") {
+          const existingId = toCatNameToId.get(name)!;
+          await (conn as any).execute(
+            `UPDATE yaban_charge_category SET unit = ?, price = ?, sort = ?, enabled = ? WHERE id = ? AND tenant_id = ?`,
+            [r.unit || "", Number(r.price || 0), Number(r.sort || 0), r.enabled ? 1 : 0, existingId, input.toTenantId]
+          );
+          fromCatIdToToId.set(fromId, existingId);
+          overwrittenCats++;
+        } else {
+          // 新增
+          const [ins] = (await (conn as any).execute(
+            `INSERT INTO yaban_charge_category (tenant_id, parent_id, name, unit, price, sort, enabled) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [input.toTenantId, toParentId, name, r.unit || "", Number(r.price || 0), Number(r.sort || 0), r.enabled ? 1 : 0]
+          )) as any;
+          const newId = Number((ins as any).insertId);
+          fromCatIdToToId.set(fromId, newId);
+          toCatNameToId.set(name, newId);
+          addedCats++;
+        }
+      }
+
+      // 处理项目
+      for (const r of fromProds as any[]) {
+        const fromId = Number(r.id);
+        const name = String(r.name);
+        const isConflict = toProdNameToId.has(name);
+        const action = isConflict ? (input.prodConflictActions[String(fromId)] ?? "skip") : "add";
+
+        // 映射 category_id 和 subcategory_id
+        const toCategoryId = r.category_id ? (fromCatIdToToId.get(Number(r.category_id)) ?? null) : null;
+        const toSubcategoryId = r.subcategory_id ? (fromCatIdToToId.get(Number(r.subcategory_id)) ?? null) : null;
+
+        if (action === "skip") {
+          skippedProds++;
+        } else if (action === "overwrite") {
+          const existingId = toProdNameToId.get(name)!;
+          await (conn as any).execute(
+            `UPDATE yaban_charge_product SET category_id = ?, subcategory_id = ?, unit = ?, price = ?, sort = ?, enabled = ?, is_common = ? WHERE id = ? AND tenant_id = ?`,
+            [toCategoryId, toSubcategoryId, r.unit || "", Number(r.price || 0), Number(r.sort || 0), r.enabled ? 1 : 0, r.is_common ? 1 : 0, existingId, input.toTenantId]
+          );
+          overwrittenProds++;
+        } else {
+          await (conn as any).execute(
+            `INSERT INTO yaban_charge_product (tenant_id, category_id, subcategory_id, name, unit, price, sort, enabled, is_common) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [input.toTenantId, toCategoryId, toSubcategoryId, name, r.unit || "", Number(r.price || 0), Number(r.sort || 0), r.enabled ? 1 : 0, r.is_common ? 1 : 0]
+          );
+          addedProds++;
+        }
+      }
+
+      return { addedCats, skippedCats, overwrittenCats, addedProds, skippedProds, overwrittenProds };
     }),
 });
