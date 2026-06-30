@@ -7986,4 +7986,15 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-06-29T13:52:25Z", type: "feat", cleanMessage: "备注变更写入详细日志（notes类型），扩展change_type枚举和note字段为TEXT" },
     { date: "2026-06-29T13:56:46Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
   ],
+  "2026-06-30": [
+    { date: "2026-06-29T18:09:04Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-06-29T20:00:59Z", type: "feat", cleanMessage: "管理费明细按人员视图加入全局智能钱包余额显示" },
+    { date: "2026-06-29T20:14:26Z", type: "feat", cleanMessage: "管理费按人员视图加入应付管理费+充足/待补状态" },
+    { date: "2026-06-29T20:15:54Z", type: "feat", cleanMessage: "管理费按人员视图-钱包余额行移至最下，调整颜色和字体" },
+    { date: "2026-06-29T22:15:00Z", type: "feat", cleanMessage: "账本详情页优化 - 实时价值/实时波动/历史保证金标题、按币种Tab、概览Tab切换、表格布局优化" },
+    { date: "2026-06-30T00:21:51Z", type: "fix", cleanMessage: "price-scanner加入SEI和PLUME扫描，修复担保物无法显示实时价格" },
+    { date: "2026-06-30T01:12:46Z", type: "fix", cleanMessage: "Tooltip改为遮罩层+叉号关闭，去掉touchstart和scroll自动关闭" },
+    { date: "2026-06-30T01:41:13Z", type: "fix", cleanMessage: "将担保缺口/待结利息/保证金率弹窗状态提升到父组件，防止数据刷新（refetchInterval）导致弹窗自动关闭" },
+    { date: "2026-06-30T05:24:26Z", type: "feat", cleanMessage: "YabanChargeProducts 全面优化 - 三态模式/拖拽排序/双击编辑/牙伴库/批量添加/1.1序号/搜索频率排序等" },
+  ],
 };
