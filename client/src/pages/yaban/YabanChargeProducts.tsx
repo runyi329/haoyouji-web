@@ -257,6 +257,8 @@ export default function YabanChargeProducts() {
     {
       enabled: !!priceHistorySheet,
       refetchOnWindowFocus: false,
+      refetchOnMount: "always",
+      staleTime: 0,
     }
   );
 

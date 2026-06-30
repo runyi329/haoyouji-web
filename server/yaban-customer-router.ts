@@ -2366,6 +2366,27 @@ export const yabanCustomerRouter = router({
       await ensureChargeItemLib(conn, TENANT_ID);
       const parentId = input.parentId ? Number(input.parentId) : null;
       if (input.id) {
+        // 调价记录：分类也有价格字段，同样监听
+        try {
+          await ensurePriceHistory(conn);
+          const [oldRows] = (await (conn as any).execute(
+            `SELECT price, price_max, unit, name FROM yaban_charge_category WHERE tenant_id = ? AND id = ? LIMIT 1`,
+            [TENANT_ID, Number(input.id)]
+          )) as any;
+          const old = (oldRows as any[])[0];
+          const newPrice = input.price;
+          const newPriceMax = input.priceMax ?? 0;
+          const oldPrice = old ? Number(old.price) : 0;
+          const oldPriceMax = old ? Number(old.price_max) : 0;
+          if (old && (oldPrice !== newPrice || oldPriceMax !== newPriceMax)) {
+            const operatorName = (ctx as any)?.user?.name || (ctx as any)?.user?.username || '';
+            await (conn as any).execute(
+              `INSERT INTO yaban_charge_price_history (tenant_id, product_id, product_name, old_price, old_price_max, new_price, new_price_max, unit, operator_name)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [TENANT_ID, Number(input.id), input.name, oldPrice, oldPriceMax, newPrice, newPriceMax, input.unit, operatorName]
+            );
+          }
+        } catch (_) {}
         await (conn as any).execute(
           `UPDATE yaban_charge_category SET parent_id = ?, name = ?, unit = ?, price = ?, price_max = ?, sort = ?, enabled = ? WHERE tenant_id = ? AND id = ?`,
           [parentId, input.name, input.unit, input.price, input.priceMax ?? 0, input.sort, input.enabled ? 1 : 0, TENANT_ID, Number(input.id)]
