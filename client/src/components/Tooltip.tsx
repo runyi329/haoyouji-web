@@ -38,88 +38,63 @@ export default function Tooltip({ content, isOpen, onClose, triggerRef }: Toolti
     const clampedOffset = Math.max(-maxOffset, Math.min(maxOffset, offset));
     setArrowOffset(clampedOffset);
 
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        tooltipRef.current &&
-        !tooltipRef.current.contains(event.target as Node) &&
-        triggerRef.current &&
-        !triggerRef.current.contains(event.target as Node)
-      ) {
-        onClose();
-      }
-    };
-
-    // 滚动时自动关闭浮窗
-    const handleScroll = () => {
-      onClose();
-    };
-
-    // 触摸时自动关闭浮窗
-    const handleTouchStart = () => {
-      onClose();
-    };
-
-    // 延迟添加事件监听，避免立即触发
-    const timer = setTimeout(() => {
-      document.addEventListener('click', handleClickOutside);
-      window.addEventListener('scroll', handleScroll, true); // true表示捕获阶段，可以监听所有滚动事件
-      document.addEventListener('touchstart', handleTouchStart);
-    }, 100);
-
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('click', handleClickOutside);
-      window.removeEventListener('scroll', handleScroll, true);
-      document.removeEventListener('touchstart', handleTouchStart);
-    };
+    // 不再监听全局事件，改为遮罩层点击关闭
   }, [isOpen, onClose, triggerRef]);
 
   if (!isOpen) return null;
 
   return (
-    <div
-      ref={tooltipRef}
-      className={`fixed z-50 left-1/2 transform -translate-x-1/2 w-11/12 bg-white border border-gray-200 rounded-lg shadow-xl p-3 text-xs text-gray-700`}
-      style={{
-        maxWidth: 'calc(100vw - 40px)',
-        [position === 'top' ? 'bottom' : 'top']: 
-          position === 'top' 
-            ? `${window.innerHeight - (triggerRef.current?.getBoundingClientRect().top || 0) + 8}px`
-            : `${(triggerRef.current?.getBoundingClientRect().bottom || 0) + 8}px`
-      }}
-    >
-      {/* 小三角箭头（像微信气泡，动态偏移，指向标题） */}
+    <>
+      {/* 遮罩层：点击遮罩关闭 */}
       <div
-        className={`absolute w-0 h-0 ${
-          position === 'top'
-            ? 'top-full'
-            : 'bottom-full'
-        }`}
-        style={{
-          left: `calc(50% + ${arrowOffset}px)`,
-          transform: 'translateX(-50%)',
-          borderLeft: '8px solid transparent',
-          borderRight: '8px solid transparent',
-          [position === 'top' ? 'borderTop' : 'borderBottom']: '8px solid white',
-        }}
-      ></div>
-      {/* 箭头的边框（与容器边框颜色一致） */}
+        className="fixed inset-0 z-[49]"
+        style={{ background: 'transparent' }}
+        onClick={onClose}
+      />
+      {/* Tooltip 内容 */}
       <div
-        className={`absolute w-0 h-0 ${
-          position === 'top'
-            ? 'top-full'
-            : 'bottom-full'
-        }`}
+        ref={tooltipRef}
+        className={`fixed z-50 left-1/2 transform -translate-x-1/2 w-11/12 bg-white border border-gray-200 rounded-lg shadow-xl p-3 text-xs text-gray-700`}
         style={{
-          left: `calc(50% + ${arrowOffset}px)`,
-          transform: 'translateX(-50%)',
-          borderLeft: '9px solid transparent',
-          borderRight: '9px solid transparent',
-          [position === 'top' ? 'borderTop' : 'borderBottom']: '9px solid #e5e7eb',
-          [position === 'top' ? 'marginTop' : 'marginBottom']: '-1px',
+          maxWidth: 'calc(100vw - 40px)',
+          [position === 'top' ? 'bottom' : 'top']: 
+            position === 'top' 
+              ? `${window.innerHeight - (triggerRef.current?.getBoundingClientRect().top || 0) + 8}px`
+              : `${(triggerRef.current?.getBoundingClientRect().bottom || 0) + 8}px`
         }}
-      ></div>
-      {content}
-    </div>
+        onClick={e => e.stopPropagation()}
+      >
+        {/* 叉号关闭按钮 */}
+        <button
+          onClick={onClose}
+          className="absolute top-2 right-2 w-5 h-5 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 text-base leading-none"
+          style={{ fontSize: '16px', lineHeight: 1 }}
+        >×</button>
+        {/* 小三角箭头（像微信气泡，动态偏移，指向标题） */}
+        <div
+          className={`absolute w-0 h-0 ${position === 'top' ? 'top-full' : 'bottom-full'}`}
+          style={{
+            left: `calc(50% + ${arrowOffset}px)`,
+            transform: 'translateX(-50%)',
+            borderLeft: '8px solid transparent',
+            borderRight: '8px solid transparent',
+            [position === 'top' ? 'borderTop' : 'borderBottom']: '8px solid white',
+          }}
+        />
+        {/* 箭头的边框（与容器边框颜色一致） */}
+        <div
+          className={`absolute w-0 h-0 ${position === 'top' ? 'top-full' : 'bottom-full'}`}
+          style={{
+            left: `calc(50% + ${arrowOffset}px)`,
+            transform: 'translateX(-50%)',
+            borderLeft: '9px solid transparent',
+            borderRight: '9px solid transparent',
+            [position === 'top' ? 'borderTop' : 'borderBottom']: '9px solid #e5e7eb',
+            [position === 'top' ? 'marginTop' : 'marginBottom']: '-1px',
+          }}
+        />
+        {content}
+      </div>
+    </>
   );
 }
