@@ -162,7 +162,7 @@ function SortableSubRow({ sub, isSaving }: { sub: SubCatGroup; isSaving: boolean
   return (
     <div ref={setNodeRef} style={style} className="bg-white rounded-2xl shadow-sm overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-3 select-none">
-        <span className="text-sm text-gray-700 flex-1 truncate">{sub.name}</span>
+        <span className="text-sm font-bold text-gray-800 flex-1 truncate">{sub.name}</span>
         {(sub.price > 0 || sub.unit) && (
           <span className="text-xs text-gray-400 shrink-0">{sub.price > 0 ? `${sub.price}` : "面议"} / {sub.unit || "次"}</span>
         )}
@@ -192,7 +192,7 @@ function SortableProdRow({ prod, isSaving }: { prod: ProdItem; isSaving: boolean
   return (
     <div ref={setNodeRef} style={style} className="bg-white rounded-2xl shadow-sm overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-3 select-none">
-        <span className="text-sm text-gray-700 flex-1 truncate">{prod.name}</span>
+        <span className="text-sm font-bold text-gray-800 flex-1 truncate">{prod.name}</span>
         {(prod.price > 0 || prod.unit) && (
           <span className="text-xs text-gray-400 shrink-0">{prod.price > 0 ? `${prod.price}` : "面议"} / {prod.unit || "次"}</span>
         )}
@@ -837,7 +837,7 @@ export default function YabanChargeProducts() {
   const renderProdRow = (it: ProdItem, seqLabel: string, pathLabel?: string) => (
     <div
       key={it.id}
-      className={`flex items-center gap-2 px-4 py-2.5 border-t border-dashed border-gray-100 ${it.enabled ? "" : "opacity-50"}`}
+      className={`flex items-center gap-2 px-4 py-2.5 border-t border-gray-100 bg-[#F0F7FD] ${it.enabled ? "" : "opacity-50"}`}
       onDoubleClick={() => canManage && openEditProd(it)}
       onTouchEnd={(e) => {
         const now = Date.now();
@@ -850,19 +850,17 @@ export default function YabanChargeProducts() {
       }}
     >
       <span className="text-[10px] text-gray-400 w-8 shrink-0 text-left tabular-nums">{seqLabel}</span>
-      <span className="flex-1 min-w-0 flex items-center justify-between gap-2">
-        <span className="flex-1 min-w-0">
-          <span className="text-sm text-gray-500 truncate block">
-            {it.name}
-            {!it.enabled && <span className="text-[11px] text-gray-400 ml-1">已停用</span>}
-            {it.isCommon && <Star className="inline w-3 h-3 text-yellow-400 ml-1 mb-0.5" />}
-          </span>
-          {pathLabel && searchText && (
-            <span className="text-[10px] text-gray-300 truncate block">{pathLabel}</span>
-          )}
+      <span className="flex-1 min-w-0">
+        <span className="text-sm font-bold text-gray-800 truncate block">
+          {it.name}
+          {!it.enabled && <span className="text-[11px] text-gray-400 ml-1">已停用</span>}
+          {it.isCommon && <Star className="inline w-3 h-3 text-yellow-400 ml-1 mb-0.5" />}
         </span>
-        <PriceTag price={it.price} priceMax={it.priceMax} unit={it.unit} />
       </span>
+      <PriceTag price={it.price} priceMax={it.priceMax} unit={it.unit} />
+      {pathLabel && searchText && (
+        <span className="text-[10px] text-gray-300 truncate block w-full pl-10 -mt-1 mb-0.5">{pathLabel}</span>
+      )}
     </div>
   );
 
@@ -1182,7 +1180,7 @@ export default function YabanChargeProducts() {
                         {cat.items.map((it, itemIdx) => (
                           <div
                             key={it.id}
-                            className={`flex items-center gap-2 px-4 py-2.5 border-t border-dashed border-gray-100 select-none ${it.enabled ? "" : "opacity-50"}`}
+                            className={`flex items-center gap-2 px-4 py-2.5 border-t border-gray-100 bg-[#F0F7FD] select-none ${it.enabled ? "" : "opacity-50"}`}
                             onDoubleClick={() => canManage && openEditProd(it)}
                             onTouchEnd={(e) => {
                               const now = Date.now();
@@ -1196,16 +1194,16 @@ export default function YabanChargeProducts() {
                           >
                             <span className="text-[10px] text-gray-400 w-8 shrink-0 text-left tabular-nums">{catIdx + 1}.{itemIdx + 1}</span>
                             <span className="flex-1 min-w-0">
-                              <span className="text-sm text-gray-500 truncate block">
+                              <span className="text-sm font-bold text-gray-800 truncate block">
                                 {it.name}
                                 {!it.enabled && <span className="text-[11px] text-gray-400 ml-1">已停用</span>}
                                 {it.isCommon && <Star className="inline w-3 h-3 text-yellow-400 ml-1 mb-0.5" />}
                               </span>
-                              {searchText && (
-                                <span className="text-[10px] text-gray-300 truncate block">{cat.name}</span>
-                              )}
                             </span>
                             <PriceTag price={it.price} priceMax={it.priceMax} unit={it.unit} />
+                            {searchText && (
+                              <span className="text-[10px] text-gray-300 truncate block w-full pl-10 -mt-1 mb-0.5">{cat.name}</span>
+                            )}
                           </div>
                         ))}
 
@@ -1216,7 +1214,7 @@ export default function YabanChargeProducts() {
                             <div key={sub.id}>
                               {/* 二级分类行：靠左对齐，虚线分隔，字色与三级相同 */}
                               <div
-                                className="flex items-center gap-2 px-4 py-2.5 border-t border-dashed border-gray-100 select-none"
+                                className="flex items-center gap-2 px-4 py-2.5 border-t border-gray-100 bg-[#EBF4FC] select-none"
                                 onDoubleClick={() => canManage && setCatSheet({ id: sub.id, parentId: cat.id, level: 2, name: sub.name, unit: sub.unit, price: String(sub.price) })}
                                 onTouchEnd={(e) => {
                                   const now = Date.now();
@@ -1229,7 +1227,7 @@ export default function YabanChargeProducts() {
                                 }}
                               >
                                 <span className="text-[10px] text-gray-400 w-8 shrink-0 text-left tabular-nums">{subSeq}</span>
-                                <span className="text-sm text-gray-500 truncate flex-1">{sub.name}</span>
+                                <span className="flex-1 min-w-0 truncate text-sm font-bold text-gray-800">{sub.name}</span>
                                 {(sub.price > 0 || sub.unit) && (
                                   <PriceTag price={sub.price} priceMax={sub.priceMax} unit={sub.unit} />
                                 )}

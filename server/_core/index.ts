@@ -596,6 +596,85 @@ async function startServer() {
     }
   });
 
+  // 公开接口：网格K线数据（不需要登录，从COS读取）
+  app.get('/api/grid-klines', async (req: any, res: any) => {
+    try {
+      const raw = req.query.yearMonths;
+      let yearMonths: string[];
+      if (Array.isArray(raw)) {
+        yearMonths = raw as string[];
+      } else if (typeof raw === 'string') {
+        try { yearMonths = JSON.parse(raw); } catch { yearMonths = [raw]; }
+      } else {
+        yearMonths = ['2025_01'];
+      }
+      // 验证格式
+      yearMonths = yearMonths.filter((m: string) => /^\d{4}_\d{2}$/.test(m)).slice(0, 12);
+      if (!yearMonths.length) yearMonths = ['2025_01'];
+
+      const fs = await import('fs');
+      const pathMod = await import('path');
+      const LOCAL_DIR = '/home/ubuntu/klines';
+      const BUCKET = 'haoyouji-images-1396946788';
+      const REGION = 'ap-shanghai';
+
+      const parseCSVContent = (content: string): any[] => {
+        const lines = content.trim().split('\n');
+        const result: any[] = [];
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(',');
+          if (cols.length < 6) continue;
+          result.push({ t: Number(cols[0]), o: parseFloat(cols[1]), h: parseFloat(cols[2]), l: parseFloat(cols[3]), c: parseFloat(cols[4]) });
+        }
+        return result;
+      };
+
+      // 内存缓存
+      const cacheKey = [...yearMonths].sort().join(',');
+      const gridKlineCache: Map<string, {klines: any[], cachedAt: number}> = (global as any).__gridKlineCache || ((global as any).__gridKlineCache = new Map());
+      const cached = gridKlineCache.get(cacheKey);
+      if (cached && Date.now() - cached.cachedAt < 3600000) {
+        console.log(`[GridKlines] 缓存命中: ${cacheKey}`);
+        return res.json({ klines: cached.klines, yearMonths });
+      }
+
+      const allArrays = await Promise.all(yearMonths.map(async (ym: string) => {
+        const localPath = pathMod.join(LOCAL_DIR, `eth_1m_${ym}.csv`);
+        if (fs.existsSync(localPath)) {
+          // 优先读本地文件（毫秒级）
+          console.log(`[GridKlines] 读本地文件: ${localPath}`);
+          const content = fs.readFileSync(localPath, 'utf8');
+          return parseCSVContent(content);
+        } else {
+          // 本地没有则从COS下载
+          console.log(`[GridKlines] 本地无文件，从COS下载: ${ym}`);
+          const COS = (await import('cos-nodejs-sdk-v5')).default;
+          const https = await import('https');
+          const cos = new COS({ SecretId: process.env.COS_SECRET_ID || '', SecretKey: process.env.COS_SECRET_KEY || '' });
+          return new Promise<any[]>((resolve, reject) => {
+            cos.getObjectUrl({ Bucket: BUCKET, Region: REGION, Key: `klines/eth_1m_${ym}.csv`, Sign: true, Expires: 300 }, (err: any, data: any) => {
+              if (err) { reject(err); return; }
+              https.get(data.Url, (httpRes: any) => {
+                const chunks: Buffer[] = [];
+                httpRes.on('data', (c: Buffer) => chunks.push(c));
+                httpRes.on('end', () => { resolve(parseCSVContent(Buffer.concat(chunks).toString('utf8'))); });
+                httpRes.on('error', reject);
+              }).on('error', reject);
+            });
+          });
+        }
+      }));
+
+      const klines = allArrays.flat();
+      gridKlineCache.set(cacheKey, { klines, cachedAt: Date.now() });
+      console.log(`[GridKlines] 公开接口返回 ${klines.length} 根K线, 月份: ${yearMonths.join(',')}`);
+      return res.json({ klines, yearMonths });
+    } catch (e: any) {
+      console.error('[GridKlines] 公开接口错误:', e.message);
+      return res.status(500).json({ error: e.message });
+    }
+  });
+
   // tRPC API
   app.use(
     "/api/trpc",

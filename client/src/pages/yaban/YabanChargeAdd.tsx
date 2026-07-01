@@ -75,10 +75,12 @@ function AiSearchInput({
   value,
   onChange,
   placeholder,
+  searchType = "product",
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
+  searchType?: "category" | "product" | "all";
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState(value);
@@ -97,7 +99,7 @@ function AiSearchInput({
   };
 
   const { data: libData } = trpc.yabanCustomer.searchChargeLib.useQuery(
-    { query: debouncedQuery, type: "product" },
+    { query: debouncedQuery, type: searchType },
     { enabled: open, staleTime: 5000 }
   );
   const suggestions = libData?.items ?? [];
@@ -610,11 +612,11 @@ export default function YabanChargeAdd() {
                     </button>
                   )}
                 </div>
-                <input
+                <AiSearchInput
                   value={row.name}
-                  onChange={(e) => setCat1Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, name: e.target.value } : r))}
+                  onChange={(v) => setCat1Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, name: v } : r))}
                   placeholder="分类名称，如 补牙修复"
-                  className="w-full bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
+                  searchType="category"
                 />
                 {/* 价格类型切换 Pill */}
                 <div className="flex items-center gap-1.5 mb-1">
@@ -715,11 +717,11 @@ export default function YabanChargeAdd() {
                       </button>
                     )}
                   </div>
-                  <input
+                  <AiSearchInput
                     value={row.name}
-                    onChange={(e) => setCat2Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, name: e.target.value } : r))}
+                    onChange={(v) => setCat2Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, name: v } : r))}
                     placeholder="二级分类名称，如 前牙根管"
-                    className="w-full bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
+                    searchType="category"
                   />
                   {/* 价格类型切换 Pill */}
                   <div className="flex items-center gap-1.5 mb-1">

@@ -97,6 +97,9 @@ export async function setupVite(app: Express, server: Server) {
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
 
+    // /api 路径不走 Vite，交给 Express 路由处理
+    if (url.startsWith('/api')) return next();
+
     try {
       const clientTemplate = path.resolve(
         import.meta.dirname,

@@ -10,7 +10,7 @@
 import { z } from "zod";
 import { pinyin } from "pinyin-pro";
 import bcrypt from "bcrypt";
-import { router, protectedProcedure, adminProcedure } from "./_core/trpc";
+import { router, protectedProcedure, adminProcedure, publicProcedure } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
 import { getDbConnection } from "./db";
 import {
@@ -23,6 +23,61 @@ import {
 } from "./yaban-backup-service";
 import { uploadYabanMedia, deleteYabanMedia, type YabanMediaTier } from "./cos-upload";
 import { checkYabanPerm, ensureRoleTables, isYabanPureFounder } from "./yaban-role-router";
+import COS from 'cos-nodejs-sdk-v5';
+import https from 'https';
+
+// ─── 网格K线 COS 配置 ────────────────────────────────────────────────────────
+const GRID_COS_BUCKET = 'haoyouji-images-1396946788';
+const GRID_COS_REGION = 'ap-shanghai';
+const gridCos = new COS({
+  SecretId: process.env.COS_SECRET_ID || '',
+  SecretKey: process.env.COS_SECRET_KEY || '',
+});
+
+// 内存缓存：key = "YYYY_MM"，1小时有效
+const klineCache = new Map<string, { klines: any[]; cachedAt: number }>();
+const KLINE_CACHE_TTL = 1000 * 60 * 60;
+
+async function fetchKlinesFromCos(yearMonth: string): Promise<any[]> {
+  const now = Date.now();
+  const cached = klineCache.get(yearMonth);
+  if (cached && now - cached.cachedAt < KLINE_CACHE_TTL) {
+    console.log(`[GridKlines] 命中缓存: ${yearMonth}, 共 ${cached.klines.length} 根`);
+    return cached.klines;
+  }
+  const cosKey = `klines/eth_1m_${yearMonth}.csv`;
+  console.log(`[GridKlines] 从COS下载: ${cosKey}`);
+  const signedUrl: string = await new Promise((resolve, reject) => {
+    gridCos.getObjectUrl({
+      Bucket: GRID_COS_BUCKET,
+      Region: GRID_COS_REGION,
+      Key: cosKey,
+      Sign: true,
+      Expires: 300,
+    }, (err: any, data: any) => {
+      if (err) reject(err);
+      else resolve(data.Url);
+    });
+  });
+  const csvText: string = await new Promise((resolve, reject) => {
+    https.get(signedUrl, (res) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (chunk: Buffer) => chunks.push(chunk));
+      res.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+      res.on('error', reject);
+    }).on('error', reject);
+  });
+  const lines = csvText.trim().split('\n');
+  const klines: any[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',');
+    if (cols.length < 6) continue;
+    klines.push({ t: Number(cols[0]), o: parseFloat(cols[1]), h: parseFloat(cols[2]), l: parseFloat(cols[3]), c: parseFloat(cols[4]), v: parseFloat(cols[5]) });
+  }
+  klineCache.set(yearMonth, { klines, cachedAt: now });
+  console.log(`[GridKlines] 下载完成: ${yearMonth}, 共 ${klines.length} 根, 已缓存`);
+  return klines;
+}
 
 // ========= 影像记录：分类 → 高清份处理档位映射 =========
 // 诊断级（无损原图直传）
@@ -3914,6 +3969,25 @@ export const yabanCustomerRouter = router({
           [TENANT_ID]
         )) as any;
         return { records: rows as any[] };
+      }
+    }),
+
+  // 网格交易模拟K线数据查询（从腾讯云COS按月下载，支持多月合并，带内存缓存）
+  getGridKlines: publicProcedure
+    .input(z.object({
+      // 支持单月或多月：['2025_01'] 或 ['2025_01','2025_02','2025_03']
+      yearMonths: z.array(z.string().regex(/^\d{4}_\d{2}$/)).min(1).max(12).default(['2025_01']),
+    }))
+    .query(async ({ input }) => {
+      try {
+        // 按月份顺序并行下载，然后拼接
+        const sorted = [...input.yearMonths].sort();
+        const allArrays = await Promise.all(sorted.map(ym => fetchKlinesFromCos(ym)));
+        const klines = allArrays.flat();
+        return { klines, yearMonths: sorted };
+      } catch (err: any) {
+        console.error('[GridKlines] 获取失败:', err?.message || err);
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `K线数据获取失败: ${err?.message || '未知错误'}` });
       }
     }),
 });

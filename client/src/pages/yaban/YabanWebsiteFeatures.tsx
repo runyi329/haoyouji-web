@@ -3,7 +3,7 @@
  * 路由：/yaban/settings/website-features
  * 权限：院长 + 创始人可见
  * 功能：顾客来源设置（第1项），后续可扩展更多配置项
- * 注意：「聊天功能设置」仅创始人（isPureFounder）可见
+ * 注意：「聊天功能设置」创始人(isPureFounder)、创始股东(isCoFounder)、普通股东(shareholder) 均可见
  */
 import { useLocation } from "wouter";
 import { useSmartBack } from "@/hooks/useSmartBack";
@@ -15,9 +15,13 @@ export default function YabanWebsiteFeatures() {
   const [, navigate] = useLocation();
   const goBack = useSmartBack("/yaban/profile");
 
-  // 获取当前用户是否为创始人
+  // 获取当前用户身份
   const meQuery = trpc.yabanRole.myMembership.useQuery();
   const isPureFounder: boolean = !!(meQuery.data as any)?.isPureFounder;
+  const isCoFounder: boolean = !!(meQuery.data as any)?.isCoFounder;
+  const isShareholder: boolean = !!((meQuery.data as any)?.roleBadges as string[] | undefined)?.includes("shareholder");
+  // 聊天功能设置：创始人 / 创始股东 / 普通股东 均可见
+  const canSeeChatSetting: boolean = isPureFounder || isCoFounder || isShareholder;
 
   const baseItems = [
     {
@@ -50,8 +54,8 @@ export default function YabanWebsiteFeatures() {
     },
   ];
 
-  // 创始人专属入口
-  const founderItems = isPureFounder
+  // 创始人/股东专属入口
+  const founderItems = canSeeChatSetting
     ? [
         {
           key: "chat-overview",

@@ -3457,6 +3457,19 @@ export default function LedgerDetail() {
                   </button>
                 </div>
               )}
+              {/* 网格交易模拟测算入口：仅创建者（isOwner）可见 */}
+              {isCustomAF && isOwner && !viewAsUserId && (
+                <button
+                  onClick={() => setLocation(`/ledger/${ledgerId}/grid-simulator`)}
+                  className="w-full h-9 rounded-full text-sm font-medium flex items-center justify-center gap-2"
+                  style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.3), rgba(139,92,246,0.3))', border: '1px solid rgba(139,92,246,0.5)', color: '#c4b5fd' }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                  </svg>
+                  网格交易模拟测算
+                </button>
+              )}
               {isCustomAH && (isOwner || isAdmin) && (
                 <button
                   onClick={() => setShowAhCreateCompany(v => !v)}

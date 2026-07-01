@@ -25987,6 +25987,103 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         }
       }),
   }),
+
+  // ===== 网格交易模拟日志（服务端持久化）=====
+  getGridSimLogs: publicProcedure
+    .input(z.object({ ledgerId: z.number() }))
+    .query(async ({ input }) => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) return [];
+      try {
+        await dbConn.execute(`CREATE TABLE IF NOT EXISTS grid_sim_logs (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          ledger_id INT NOT NULL,
+          months JSON NOT NULL,
+          params JSON NOT NULL,
+          summary JSON NOT NULL,
+          per_slot_fund DECIMAL(20,2) NOT NULL DEFAULT 0,
+          participants LONGTEXT,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          INDEX grid_sim_logs_ledger_idx (ledger_id),
+          INDEX grid_sim_logs_created_at_idx (created_at)
+        )`);
+        const [rows] = await dbConn.execute(
+          `SELECT id, ledger_id, months, params, summary, per_slot_fund, participants, created_at FROM grid_sim_logs WHERE ledger_id = ? ORDER BY created_at DESC LIMIT 200`,
+          [input.ledgerId]
+        ) as any[];
+        const parseJsonField = (v: any, fallback: any) => {
+          if (v === null || v === undefined) return fallback;
+          if (typeof v === 'object') return v; // mysql2 已自动解析 JSON 列
+          try { return JSON.parse(v); } catch { return fallback; }
+        };
+        return (rows as any[]).map((r: any) => ({
+          id: String(r.id),
+          ledgerId: r.ledger_id,
+          months: parseJsonField(r.months, []),
+          params: parseJsonField(r.params, {}),
+          summary: parseJsonField(r.summary, {}),
+          perSlotFund: parseFloat(r.per_slot_fund || '0'),
+          participants: parseJsonField(r.participants, []),
+          createdAt: new Date(r.created_at).getTime(),
+        }));
+      } catch (e) {
+        console.error('[GridSimLog] getGridSimLogs error:', e);
+        return [];
+      }
+    }),
+
+  saveGridSimLog: publicProcedure
+    .input(z.object({
+      ledgerId: z.number(),
+      months: z.array(z.string()),
+      params: z.any(),
+      summary: z.any(),
+      perSlotFund: z.number(),
+      participants: z.array(z.any()).optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+      try {
+        await dbConn.execute(`CREATE TABLE IF NOT EXISTS grid_sim_logs (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          ledger_id INT NOT NULL,
+          months JSON NOT NULL,
+          params JSON NOT NULL,
+          summary JSON NOT NULL,
+          per_slot_fund DECIMAL(20,2) NOT NULL DEFAULT 0,
+          participants LONGTEXT,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          INDEX grid_sim_logs_ledger_idx (ledger_id),
+          INDEX grid_sim_logs_created_at_idx (created_at)
+        )`);
+        const [result] = await dbConn.execute(
+          `INSERT INTO grid_sim_logs (ledger_id, months, params, summary, per_slot_fund, participants) VALUES (?, ?, ?, ?, ?, ?)`,
+          [
+            input.ledgerId,
+            JSON.stringify(input.months),
+            JSON.stringify(input.params),
+            JSON.stringify(input.summary),
+            input.perSlotFund,
+            JSON.stringify(input.participants || []),
+          ]
+        ) as any[];
+        return { id: String((result as any).insertId) };
+      } catch (e: any) {
+        console.error('[GridSimLog] saveGridSimLog error:', e);
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: e?.message || '保存失败' });
+      }
+    }),
+
+  deleteGridSimLog: publicProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const dbConn = await getDbConnection();
+      if (!dbConn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB unavailable' });
+      await dbConn.execute(`DELETE FROM grid_sim_logs WHERE id = ?`, [input.id]);
+      return { success: true };
+    }),
+
 });
 
 // 管理员容器定义管理（独立 router，仅超级管理员可用）
