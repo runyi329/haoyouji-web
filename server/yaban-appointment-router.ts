@@ -360,9 +360,11 @@ export const yabanAppointmentRouter = router({
       if (!conn) return [];
       const tenantId = input?.tenantId ?? (await resolveTenantId(ctx));
       const [rows] = (await conn.execute(
-        `SELECT m.user_id, u.name, m.role_key
+        `SELECT m.user_id, u.name, m.role_key,
+                COALESCE(t.color, '#1E88D6') AS bar_color
          FROM yaban_clinic_member m
          LEFT JOIN users u ON u.id = m.user_id
+         LEFT JOIN yaban_shift_template t ON t.staff_user_id = m.user_id AND t.tenant_id = m.tenant_id AND t.is_active = 1 AND t.role_key <> '__biz__'
          WHERE m.tenant_id=? AND m.status='active'
          ORDER BY FIELD(m.role_key,'owner','doctor','nurse','assistant','receptionist','finance'), m.id ASC`,
         [tenantId]
@@ -371,6 +373,7 @@ export const yabanAppointmentRouter = router({
         userId: Number(r.user_id),
         name: r.name || "",
         roleKey: r.role_key || "doctor",
+        color: r.bar_color || "#1E88D6",
       }));
     }),
 });

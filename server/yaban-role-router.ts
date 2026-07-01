@@ -243,7 +243,7 @@ export async function ensureRoleTables(conn: any) {
       invited_by INT DEFAULT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      UNIQUE KEY uniq_tenant_user (tenant_id, user_id)
+      UNIQUE KEY uniq_tenant_user_role (tenant_id, user_id, role_key)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='牙伴诊所成员'
   `);
 
@@ -321,6 +321,8 @@ export async function ensureRoleTables(conn: any) {
   await ensureScopeColumn(conn, "yaban_member_perm_switch");
   // 兼容升级：为 yaban_clinic_role 补 tenant_id 列（若不存在），内置角色 tenant_id=0
   await ensureRoleTenantColumn(conn);
+  // 兼容升级：将 yaban_clinic_member 的唯一索引从 (tenant_id, user_id) 改为 (tenant_id, user_id, role_key)，支持一人多角色
+  await ensureMemberMultiRole(conn);
 
   // 同步内置角色定义（tenant_id=0 表示全局内置）
   for (const r of ROLE_DEFS) {
@@ -500,6 +502,25 @@ async function ensureRoleTenantColumn(conn: any) {
   }
 }
 
+// 将 yaban_clinic_member 的唯一索引从 (tenant_id, user_id) 升级为 (tenant_id, user_id, role_key)
+async function ensureMemberMultiRole(conn: any) {
+  try {
+    // 检查旧索引是否仍存在
+    const [idxRows] = (await conn.execute(
+      `SELECT INDEX_NAME FROM INFORMATION_SCHEMA.STATISTICS
+       WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='yaban_clinic_member'
+       AND INDEX_NAME='uniq_tenant_user'`
+    )) as any;
+    if ((idxRows as any[]).length > 0) {
+      // 旧索引存在，需要升级
+      await conn.execute(`ALTER TABLE yaban_clinic_member DROP INDEX uniq_tenant_user`);
+      await conn.execute(`ALTER TABLE yaban_clinic_member ADD UNIQUE KEY uniq_tenant_user_role (tenant_id, user_id, role_key)`);
+    }
+  } catch (e) {
+    // 忽略：可能已是新索引或权限不足
+  }
+}
+
 async function ensureScopeColumn(conn: any, table: string) {
   try {
     const [cols] = (await conn.execute(
@@ -616,26 +637,69 @@ async function getMemberRoles(conn: any, userId: number, tenantId = DEFAULT_TENA
 }
 
 // ==================== 角色解析（内置 + 门店自定义）====================
-// 返回某门店可用的全部角色（内置 tenant_id=0 ∩ 该门店自定义 tenant_id=N）
-// 内置角色排在前，自定义角色按 sort/created 靠后
+// 返回某门店可用的全部角色（内置 tenant_id=0 + 该门店自定义 tenant_id=N）
+// 内置角色的名称/描述/排序优先读取该门店的覆盖记录（yaban_clinic_role_override）
+// 若门店将内置角色标记为 hidden=1，则不返回该角色
 async function listTenantRoles(
   conn: any,
   tenantId = DEFAULT_TENANT_ID
 ): Promise<{ role_key: string; name: string; description: string; sort: number; is_builtin: number }[]> {
-  const [rows] = (await conn.execute(
-    `SELECT role_key, name, description, sort, is_builtin
-       FROM yaban_clinic_role
-      WHERE tenant_id = 0 OR tenant_id = ?
-      ORDER BY is_builtin DESC, sort ASC, id ASC`,
+  // 确保覆盖表存在
+  await conn.execute(`
+    CREATE TABLE IF NOT EXISTS yaban_clinic_role_override (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      tenant_id INT NOT NULL,
+      role_key VARCHAR(32) NOT NULL,
+      name VARCHAR(64),
+      description VARCHAR(255),
+      sort INT DEFAULT NULL,
+      hidden TINYINT DEFAULT 0,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uniq_tenant_role_ov (tenant_id, role_key)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='门店对内置角色的覆盖（改名/排序/隐藏）'
+  `);
+
+  // 读取内置角色
+  const [builtinRows] = (await conn.execute(
+    `SELECT role_key, name, description, sort FROM yaban_clinic_role WHERE tenant_id = 0 ORDER BY sort ASC, id ASC`
+  )) as any;
+  // 读取该门店自定义角色
+  const [customRows] = (await conn.execute(
+    `SELECT role_key, name, description, sort FROM yaban_clinic_role WHERE tenant_id = ? AND is_builtin = 0 ORDER BY sort ASC, id ASC`,
     [tenantId]
   )) as any;
-  return (rows as any[]).map((r) => ({
-    role_key: r.role_key,
-    name: r.name,
-    description: r.description || "",
-    sort: Number(r.sort) || 0,
-    is_builtin: Number(r.is_builtin),
-  }));
+  // 读取该门店对内置角色的覆盖
+  const [overrideRows] = (await conn.execute(
+    `SELECT role_key, name, description, sort, hidden FROM yaban_clinic_role_override WHERE tenant_id = ?`,
+    [tenantId]
+  )) as any;
+  const overrideMap: Record<string, any> = {};
+  for (const ov of overrideRows as any[]) overrideMap[ov.role_key] = ov;
+
+  const result: { role_key: string; name: string; description: string; sort: number; is_builtin: number }[] = [];
+  for (const r of builtinRows as any[]) {
+    const ov = overrideMap[r.role_key];
+    if (ov?.hidden) continue; // 门店隐藏了该内置角色
+    result.push({
+      role_key: r.role_key,
+      name: ov?.name ?? r.name,
+      description: ov?.description ?? (r.description || ""),
+      sort: ov?.sort != null ? Number(ov.sort) : Number(r.sort) || 0,
+      is_builtin: 1,
+    });
+  }
+  for (const r of customRows as any[]) {
+    result.push({
+      role_key: r.role_key,
+      name: r.name,
+      description: r.description || "",
+      sort: Number(r.sort) || 0,
+      is_builtin: 0,
+    });
+  }
+  // 按 sort 统一排序
+  result.sort((a, b) => a.sort - b.sort || a.role_key.localeCompare(b.role_key));
+  return result;
 }
 
 // 校验某 roleKey 在该门店是否可用（内置或该门店自定义）
@@ -1051,6 +1115,158 @@ export const yabanRoleRouter = router({
       return { success: true };
     }),
 
+  // ============ 统一角色管理：新增或编辑角色（内置角色按 tenant 覆盖，自定义角色直接写入） ============
+  upsertRole: protectedProcedure
+    .input(
+      z.object({
+        tenantId: z.number().int().optional(),
+        roleKey: z.string().min(1).max(40).optional(), // 缺省时新建自定义角色
+        name: z.string().min(1).max(20),
+        description: z.string().max(200).optional(),
+        sort: z.number().int().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const tenantId = input.tenantId ?? DEFAULT_TENANT_ID;
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureRoleTables(conn);
+      await assertCanManage(conn, ctx, tenantId);
+      const name = input.name.trim();
+      if (!name) throw new TRPCError({ code: "BAD_REQUEST", message: "请输入角色名称" });
+
+      if (input.roleKey) {
+        // 编辑已有角色
+        const roleKey = input.roleKey;
+        // 判断是内置角色还是自定义角色
+        const [builtinRows] = (await conn.execute(
+          `SELECT id FROM yaban_clinic_role WHERE role_key=? AND tenant_id=0 LIMIT 1`,
+          [roleKey]
+        )) as any;
+        const isBuiltin = !!(builtinRows as any[])[0];
+        if (isBuiltin) {
+          // 内置角色：写入覆盖表
+          const existSort = input.sort;
+          await conn.execute(
+            `INSERT INTO yaban_clinic_role_override (tenant_id, role_key, name, description, sort, hidden)
+             VALUES (?, ?, ?, ?, ?, 0)
+             ON DUPLICATE KEY UPDATE name=VALUES(name), description=VALUES(description),
+               sort=COALESCE(VALUES(sort), sort), hidden=0`,
+            [tenantId, roleKey, name, input.description?.trim() || null, existSort ?? null]
+          );
+        } else {
+          // 自定义角色：直接更新
+          const [cRows] = (await conn.execute(
+            `SELECT id FROM yaban_clinic_role WHERE role_key=? AND tenant_id=? AND is_builtin=0 LIMIT 1`,
+            [roleKey, tenantId]
+          )) as any;
+          if (!(cRows as any[])[0]) throw new TRPCError({ code: "BAD_REQUEST", message: "角色不存在" });
+          await conn.execute(
+            `UPDATE yaban_clinic_role SET name=?, description=? WHERE role_key=? AND tenant_id=? AND is_builtin=0`,
+            [name, input.description?.trim() || null, roleKey, tenantId]
+          );
+        }
+        return { success: true, roleKey, name };
+      } else {
+        // 新建自定义角色
+        const existRoles = await listTenantRoles(conn, tenantId);
+        if (existRoles.some((r) => r.name === name)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "角色名称已存在" });
+        }
+        const roleKey = `custom_${tenantId}_${Date.now().toString(36)}`;
+        const maxSort = existRoles.reduce((m, r) => Math.max(m, r.sort), 0);
+        await conn.execute(
+          `INSERT INTO yaban_clinic_role (tenant_id, role_key, name, description, sort, is_builtin)
+           VALUES (?, ?, ?, ?, ?, 0)`,
+          [tenantId, roleKey, name, input.description?.trim() || null, input.sort ?? maxSort + 1]
+        );
+        return { success: true, roleKey, name };
+      }
+    }),
+
+  // ============ 统一角色管理：删除角色（内置角色按 tenant 隐藏，自定义角色直接删） ============
+  deleteRole: protectedProcedure
+    .input(z.object({ tenantId: z.number().int().optional(), roleKey: z.string().min(1).max(40) }))
+    .mutation(async ({ ctx, input }) => {
+      const tenantId = input.tenantId ?? DEFAULT_TENANT_ID;
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureRoleTables(conn);
+      await assertCanManage(conn, ctx, tenantId);
+      const roleKey = input.roleKey;
+      // 防止删除 owner（院长角色不可删）
+      if (roleKey === "owner") throw new TRPCError({ code: "BAD_REQUEST", message: "院长角色不可删除" });
+      // 检查是否有成员在用
+      const [used] = (await conn.execute(
+        `SELECT COUNT(*) AS cnt FROM yaban_clinic_member WHERE tenant_id=? AND role_key=?`,
+        [tenantId, roleKey]
+      )) as any;
+      if (Number((used as any[])[0]?.cnt || 0) > 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "该角色下还有成员，请先调整成员角色后再删除" });
+      }
+      // 判断是内置角色还是自定义角色
+      const [builtinRows] = (await conn.execute(
+        `SELECT id FROM yaban_clinic_role WHERE role_key=? AND tenant_id=0 LIMIT 1`,
+        [roleKey]
+      )) as any;
+      if ((builtinRows as any[])[0]) {
+        // 内置角色：标记为 hidden（不真删）
+        await conn.execute(
+          `INSERT INTO yaban_clinic_role_override (tenant_id, role_key, name, description, sort, hidden)
+           VALUES (?, ?, NULL, NULL, NULL, 1)
+           ON DUPLICATE KEY UPDATE hidden=1`,
+          [tenantId, roleKey]
+        );
+      } else {
+        // 自定义角色：直接删除
+        await conn.execute(`DELETE FROM yaban_role_perm_switch WHERE tenant_id=? AND role_key=?`, [tenantId, roleKey]);
+        await conn.execute(`DELETE FROM yaban_clinic_role WHERE role_key=? AND tenant_id=? AND is_builtin=0`, [roleKey, tenantId]);
+      }
+      return { success: true };
+    }),
+
+  // ============ 统一角色管理：批量更新排序 ============
+  reorderRoles: protectedProcedure
+    .input(
+      z.object({
+        tenantId: z.number().int().optional(),
+        // 按新顺序传入所有 roleKey 数组
+        roleKeys: z.array(z.string()),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const tenantId = input.tenantId ?? DEFAULT_TENANT_ID;
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureRoleTables(conn);
+      await assertCanManage(conn, ctx, tenantId);
+      for (let i = 0; i < input.roleKeys.length; i++) {
+        const roleKey = input.roleKeys[i];
+        const sort = i + 1;
+        // 判断是内置角色还是自定义角色
+        const [builtinRows] = (await conn.execute(
+          `SELECT id FROM yaban_clinic_role WHERE role_key=? AND tenant_id=0 LIMIT 1`,
+          [roleKey]
+        )) as any;
+        if ((builtinRows as any[])[0]) {
+          // 内置角色：写入覆盖表的 sort
+          await conn.execute(
+            `INSERT INTO yaban_clinic_role_override (tenant_id, role_key, sort, hidden)
+             VALUES (?, ?, ?, 0)
+             ON DUPLICATE KEY UPDATE sort=VALUES(sort)`,
+            [tenantId, roleKey, sort]
+          );
+        } else {
+          // 自定义角色：直接更新
+          await conn.execute(
+            `UPDATE yaban_clinic_role SET sort=? WHERE role_key=? AND tenant_id=? AND is_builtin=0`,
+            [sort, roleKey, tenantId]
+          );
+        }
+      }
+      return { success: true };
+    }),
+
   // ============ 员工权限矩阵（成员 x 权限 -> 当前 scope + 是否个人定制） ============
   getStaffMatrix: protectedProcedure
     .input(z.object({ tenantId: z.number().int().optional() }).optional())
@@ -1070,20 +1286,44 @@ export const yabanRoleRouter = router({
                   ORDER BY FIELD(m.role_key,'owner','shareholder','doctor','nurse','assistant','receptionist','finance') DESC, m.created_at ASC`,
       [tenantId]
     )) as any;
-      const members: any[] = [];
+      // 按 userId 合并多角色（同一人只占一行）
+      const userMap = new Map<number, any>();
       for (const m of memberRows as any[]) {
+        if (!userMap.has(m.user_id)) {
+          userMap.set(m.user_id, {
+            memberId: m.id,
+            userId: m.user_id,
+            roleKey: m.role_key,           // 主角色（排序最高的那个）
+            roleKeys: [m.role_key],         // 全部角色数组
+            memberIds: [m.id],              // 全部角色对应的记录 id
+            username: m.username, name: m.name, phone: m.phone, avatar: m.avatar,
+          });
+        } else {
+          const existing = userMap.get(m.user_id)!;
+          existing.roleKeys.push(m.role_key);
+          existing.memberIds.push(m.id);
+        }
+      }
+      const members: any[] = [];
+      for (const m of Array.from(userMap.values())) {
         // 个人定制记录
         const [ov] = (await conn.execute(
           `SELECT perm_key, enabled, scope FROM yaban_member_perm_switch WHERE tenant_id=? AND user_id=?`,
-          [tenantId, m.user_id]
+          [tenantId, m.userId]
         )) as any;
-        const customized = new Set((ov as any[]).map((r) => r.perm_key));
+        const customized = new Set((ov as any[]).map((r: any) => r.perm_key));
         const scopes: Record<string, Scope> = {};
         for (const p of ALL_STAFF_PERM_KEYS) {
-          scopes[p] = await getStaffEffectiveScope(conn, m.user_id, p, tenantId);
+          scopes[p] = await getStaffEffectiveScope(conn, m.userId, p, tenantId);
         }
         members.push({
-          memberId: m.id, userId: m.user_id, roleKey: m.role_key, roleName: roleNameMap[m.role_key] || m.role_key,
+          memberId: m.memberId,
+          memberIds: m.memberIds,
+          userId: m.userId,
+          roleKey: m.roleKey,
+          roleKeys: m.roleKeys,
+          roleNames: m.roleKeys.map((k: string) => roleNameMap[k] || k),
+          roleName: roleNameMap[m.roleKey] || m.roleKey,
           username: m.username, name: m.name, phone: m.phone, avatar: m.avatar,
           scopes, customized: Array.from(customized),
         });
@@ -1437,18 +1677,30 @@ export const yabanRoleRouter = router({
       if (!targetUser) {
         throw new TRPCError({ code: "NOT_FOUND", message: "未找到该用户，请确认手机号或用户名" });
       }
-      await conn.execute(
-        `INSERT INTO yaban_clinic_member (tenant_id, user_id, role_key, status, invited_by)
-         VALUES (?, ?, ?, 'active', ?)
-         ON DUPLICATE KEY UPDATE role_key = VALUES(role_key), status = 'active', updated_at = CURRENT_TIMESTAMP`,
-        [tenantId, targetUser.id, input.roleKey, ctx.user.id]
-      );
-      // 回查写入结果，确认同一 tenant 下已为 active
+      // 检查该用户在该诊所是否已有该角色
+      const [existRows] = (await conn.execute(
+        `SELECT id FROM yaban_clinic_member WHERE tenant_id=? AND user_id=? AND role_key=? LIMIT 1`,
+        [tenantId, targetUser.id, input.roleKey]
+      )) as any;
+      if ((existRows as any[]).length > 0) {
+        // 已有该角色，确保状态为 active
+        await conn.execute(
+          `UPDATE yaban_clinic_member SET status='active', updated_at=CURRENT_TIMESTAMP WHERE tenant_id=? AND user_id=? AND role_key=?`,
+          [tenantId, targetUser.id, input.roleKey]
+        );
+      } else {
+        // 新增该角色记录
+        await conn.execute(
+          `INSERT INTO yaban_clinic_member (tenant_id, user_id, role_key, status, invited_by)
+           VALUES (?, ?, ?, 'active', ?)`,
+          [tenantId, targetUser.id, input.roleKey, ctx.user.id]
+        );
+      }
       const [chk] = (await conn.execute(
-        `SELECT tenant_id, status, role_key FROM yaban_clinic_member WHERE tenant_id=? AND user_id=? LIMIT 1`,
+        `SELECT tenant_id, status, role_key FROM yaban_clinic_member WHERE tenant_id=? AND user_id=? AND status='active'`,
         [tenantId, targetUser.id]
       )) as any;
-      const saved = (chk as any[])[0] || null;
+      const saved = (chk as any[]) || [];
       return { success: true, userId: targetUser.id, tenantId, saved };
     }),
 

@@ -6,23 +6,30 @@
  * 选中后通过 sessionStorage 传回随访创建页
  */
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { ChevronLeft, Search, User } from "lucide-react";
 import { useYabanClinic } from "./useYabanClinic";
+import YabanClinicHeader from "./YabanClinicHeader";
 import { trpc } from "@/lib/trpc";
 
 export default function YabanPatientSelect() {
   const [, setLocation] = useLocation();
+  const search = useSearch();
+  const params = new URLSearchParams(search);
+  // from=schedule 返回预约创建页；from=followup（默认）返回随访创建页
+  const from = params.get("from") || "followup";
+  const returnRoute = from === "schedule" ? "/yaban/schedule/create" : "/yaban/followup/create";
+
   const { current } = useYabanClinic();
   const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const [searchText, setSearchText] = useState("");
 
   const handleBack = () => {
-    setLocation("/yaban/followup/create");
+    setLocation(returnRoute);
   };
 
   // 真实客户搜索：空关键字返回前50个客户，输入后按姓名/手机号过滤
-  const { data: patients, isLoading } = trpc.yabanCustomer.searchCustomerOnly.useQuery(
+  const { data: patients, isLoading } = trpc.yabanCustomer.searchCustomer.useQuery(
     { query: searchText.trim() },
     { keepPreviousData: true }
   );
@@ -33,22 +40,19 @@ export default function YabanPatientSelect() {
       name: patient.name,
       mobile: patient.mobile || "",
     }));
-    setLocation("/yaban/followup/create");
+    setLocation(returnRoute);
   };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* 顶部导航栏 - 蓝色渐变 */}
       <div className="sticky top-0 z-50 bg-gradient-to-r from-sky-500 to-sky-400 text-white">
-        <div className="flex items-center justify-between px-4 py-3">
-          <button onClick={handleBack} className="p-1">
+        <div className="flex items-center relative px-4 py-3" style={{ minHeight: 44 }}>
+          <button onClick={handleBack} className="p-1 z-10 flex-shrink-0">
             <ChevronLeft className="w-6 h-6" />
           </button>
-          <div className="flex flex-col items-center">
-            <h1 className="text-lg font-semibold leading-tight">选择顾客</h1>
-            {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
-          </div>
-          <div className="w-6" />
+          <h1 className="absolute left-1/2 -translate-x-1/2 text-lg font-semibold leading-tight pointer-events-none whitespace-nowrap">选择顾客</h1>
+          <div className="ml-auto z-10"><YabanClinicHeader compact /></div>
         </div>
       </div>
 

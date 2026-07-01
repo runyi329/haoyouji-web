@@ -7,7 +7,7 @@
  */
 import { useLocation } from "wouter";
 import { useSmartBack } from "@/hooks/useSmartBack";
-import { ChevronLeft, ChevronRight, Tags, Users, Heart, MessageSquare } from "lucide-react";
+import { ChevronLeft, ChevronRight, Tags, Users, Heart, MessageSquare, CalendarClock } from "lucide-react";
 import YabanClinicHeader from "./YabanClinicHeader";
 import { trpc } from "@/lib/trpc";
 
@@ -20,6 +20,13 @@ export default function YabanWebsiteFeatures() {
   const isPureFounder: boolean = !!(meQuery.data as any)?.isPureFounder;
 
   const baseItems = [
+    {
+      key: "appt-config",
+      icon: <CalendarClock className="w-5 h-5 text-[#1E88D6]" />,
+      label: "客户预约设置",
+      hint: "自定义新建预约的步骤数量和每步字段",
+      onClick: () => navigate("/yaban/settings/appt-config"),
+    },
     {
       key: "patient-type",
       icon: <Users className="w-5 h-5 text-[#1E88D6]" />,

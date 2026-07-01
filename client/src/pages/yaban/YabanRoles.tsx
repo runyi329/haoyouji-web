@@ -43,6 +43,10 @@ import {
   Wallet,
   Search,
   Building2,
+  GripVertical,
+  ChevronUp,
+  Pencil,
+  Plus,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useYabanClinic } from "./useYabanClinic";
@@ -304,6 +308,7 @@ function StaffTab({ tenantId, my }: { tenantId: number; my: any }) {
   const [editingMember, setEditingMember] = useState<any | null>(null);
   const [showTemplate, setShowTemplate] = useState(false);
   const [showCustomRoles, setShowCustomRoles] = useState(false);
+  const [showRoleManage, setShowRoleManage] = useState(false);
   const [permMember, setPermMember] = useState<any | null>(null);
 
   const assignableRoles = useMemo(
@@ -373,18 +378,18 @@ function StaffTab({ tenantId, my }: { tenantId: number; my: any }) {
         <ChevronLeft className="w-4 h-4 text-gray-300 rotate-180" />
       </button>
 
-      {/* 自定义角色管理入口 */}
+      {/* 角色管理入口（内置+自定义统一管理） */}
       <button
-        onClick={() => setShowCustomRoles(true)}
+        onClick={() => setShowRoleManage(true)}
         className="w-full bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 active:opacity-80"
       >
         <span className="w-9 h-9 rounded-xl bg-[#EAF4FE] flex items-center justify-center shrink-0">
           <ShieldCheck className="w-4 h-4 text-[#1E88D6]" />
         </span>
         <span className="flex-1 text-left">
-          <span className="block text-sm font-medium text-gray-800">自定义角色</span>
+          <span className="block text-sm font-medium text-gray-800">角色管理</span>
           <span className="block text-xs text-gray-400 mt-0.5">
-            在默认角色之外新建专属角色供成员分配
+            增删改排序所有职级角色，影响预约界面的显示顺序
           </span>
         </span>
         <ChevronLeft className="w-4 h-4 text-gray-300 rotate-180" />
@@ -444,15 +449,20 @@ function StaffTab({ tenantId, my }: { tenantId: number; my: any }) {
                           )}
                         </span>
                         <div className="min-w-0">
-                          <div className="text-xs font-medium text-gray-800 truncate max-w-[72px]">
+                          <div className="text-xs font-medium text-gray-800 truncate max-w-[80px]">
                             {m.name || m.username}
                           </div>
-                          <span
-                            className="inline-flex items-center justify-center text-[10px] font-bold rounded-full px-2 py-0.5"
-                            style={roleBadgeStyle(ROLE_TONE[m.roleKey] ? m.roleKey : "__custom__")}
-                          >
-                            {roles?.find((r: any) => r.role_key === m.roleKey)?.name || m.roleKey}
-                          </span>
+                          <div className="flex flex-wrap gap-0.5 mt-0.5">
+                            {(m.roleKeys || [m.roleKey]).map((rk: string) => (
+                              <span
+                                key={rk}
+                                className="inline-flex items-center justify-center text-[9px] font-bold rounded-full px-1.5 py-0.5"
+                                style={roleBadgeStyle(ROLE_TONE[rk] ? rk : "__custom__")}
+                              >
+                                {roles?.find((r: any) => r.role_key === rk)?.name || rk}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -512,24 +522,38 @@ function StaffTab({ tenantId, my }: { tenantId: number; my: any }) {
         />
       )}
 
-      {/* 改角色弹窗 */}
+      {/* 添加/改角色弹窗 */}
       {editingMember && (
         <RoleSelectModal
-          title={`修改「${editingMember.name || editingMember.username}」的角色`}
+          title={editingMember._addRole
+            ? `为「${editingMember.name || editingMember.username}」添加角色`
+            : `修改「${editingMember.name || editingMember.username}」的角色`
+          }
           roles={assignableRoles}
           roleKey={roleKey}
           setRoleKey={setRoleKey}
-          loading={updateRole.isPending}
+          loading={editingMember._addRole ? addMember.isPending : updateRole.isPending}
           onClose={() => setEditingMember(null)}
-          onConfirm={() => updateRole.mutate({ tenantId, memberId: editingMember.memberId, roleKey })}
+          onConfirm={() => {
+            if (editingMember._addRole) {
+              // 添加新角色
+              addMember.mutate({ tenantId, userId: editingMember.userId, roleKey });
+            } else {
+              updateRole.mutate({ tenantId, memberId: editingMember.memberId, roleKey });
+            }
+            setEditingMember(null);
+          }}
         />
       )}
 
       {/* 角色默认模板 */}
       {showTemplate && <RoleTemplateSheet tenantId={tenantId} onClose={() => setShowTemplate(false)} />}
 
-      {/* 自定义角色管理 */}
+      {/* 自定义角色管理（旧） */}
       {showCustomRoles && <CustomRolesSheet tenantId={tenantId} onClose={() => setShowCustomRoles(false)} />}
+
+      {/* 角色管理（新） */}
+      {showRoleManage && <RoleManageSheet tenantId={tenantId} onClose={() => setShowRoleManage(false)} />}
 
       {/* 个人权限面板 */}
       {permMember && (
@@ -537,13 +561,19 @@ function StaffTab({ tenantId, my }: { tenantId: number; my: any }) {
           tenantId={tenantId}
           member={permMember}
           onChangeRole={() => {
-            setRoleKey(permMember.roleKey);
-            setEditingMember(permMember);
+            // 添加角色：不预填当前角色，让用户选新角色
+            setRoleKey("doctor");
+            setEditingMember({ ...permMember, _addRole: true });
             setPermMember(null);
           }}
           onRemove={() => {
-            if (!window.confirm(`确认将「${permMember.name || permMember.username}」移出门诊？`)) return;
-            removeMember.mutate({ tenantId, memberId: permMember.memberId });
+            if (!window.confirm(`确认将「${permMember.name || permMember.username}」移出门诊（将删除其所有角色）？`)) return;
+            // 移除该用户的所有角色记录
+            Promise.all(
+              (permMember.memberIds || [permMember.memberId]).map((mid: number) =>
+                removeMember.mutateAsync({ tenantId, memberId: mid })
+              )
+            ).then(() => reloadMembers());
             setPermMember(null);
           }}
           onClose={() => setPermMember(null)}
@@ -868,18 +898,22 @@ function MemberPermSheet({
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
       <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 max-h-[88vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-base font-bold text-gray-800 flex items-center gap-2">
-            {member.name || member.username} 的权限
-            <span
-              className="inline-flex items-center justify-center text-[10px] font-bold rounded-full px-2 py-0.5"
-              style={roleBadgeStyle(ROLE_TONE[member.roleKey] ? member.roleKey : "__custom__")}
-            >
-              {member.roleName || member.roleKey}
-            </span>
-          </span>
+          <span className="text-base font-bold text-gray-800">{member.name || member.username} 的权限</span>
           <button onClick={onClose} aria-label="关闭">
             <X className="w-5 h-5 text-gray-400" />
           </button>
+        </div>
+        {/* 全部角色胶囊（支持多角色） */}
+        <div className="flex flex-wrap gap-1 mb-2">
+          {(member.roleKeys || [member.roleKey]).map((rk: string) => (
+            <span
+              key={rk}
+              className="inline-flex items-center justify-center text-[10px] font-bold rounded-full px-2 py-0.5"
+              style={roleBadgeStyle(ROLE_TONE[rk] ? rk : "__custom__")}
+            >
+              {member.roleNames?.[member.roleKeys?.indexOf(rk)] || member.roleName || rk}
+            </span>
+          ))}
         </div>
         <p className="text-xs text-gray-400 mb-3">
           单独为该员工设置，优先级高于角色默认。带「定制」的项已偏离角色默认。
@@ -890,7 +924,7 @@ function MemberPermSheet({
             onClick={onChangeRole}
             className="flex-1 text-xs text-[#1E88D6] border border-[#CFE3F5] rounded-lg py-2 active:bg-[#EAF4FE]"
           >
-            修改角色
+            添加角色
           </button>
           <button
             onClick={onRemove}
@@ -1449,6 +1483,256 @@ function RoleInfoSheet({ onClose }: { onClose: () => void }) {
             取值分三档：全部（可操作全院记录）、仅自己（只能操作本人登记的）、不允许（无此权限）。院长可为每位员工与顾客单独定制。
           </p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ============ 角色管理弹层（统一：内置+自定义，增删改排序） ============
+function RoleManageSheet({ tenantId, onClose }: { tenantId: number; onClose: () => void }) {
+  const utils = trpc.useUtils();
+  const rolesQuery = trpc.yabanRole.listRoles.useQuery({ tenantId });
+  const allRoles: any[] = rolesQuery.data || [];
+
+  // 本地排序状态（拖拽/上下移动）
+  const [localRoles, setLocalRoles] = useState<any[]>([]);
+  useEffect(() => {
+    if (allRoles.length > 0) setLocalRoles(allRoles);
+  }, [rolesQuery.data]);
+
+  // 编辑弹层
+  const [editingRole, setEditingRole] = useState<any | null>(null); // null=关闭
+  const [isCreating, setIsCreating] = useState(false);
+
+  const refresh = async () => {
+    await Promise.all([
+      utils.yabanRole.listRoles.invalidate(),
+      utils.yabanRole.getStaffMatrix.invalidate({ tenantId }),
+      utils.yabanRole.getRoleTemplateMatrix.invalidate({ tenantId }),
+    ]);
+  };
+
+  const upsertRole = trpc.yabanRole.upsertRole.useMutation({
+    onSuccess: async () => { toast.success("已保存"); setEditingRole(null); setIsCreating(false); await refresh(); },
+    onError: (e) => toast.error(e.message || "保存失败"),
+  });
+  const deleteRole = trpc.yabanRole.deleteRole.useMutation({
+    onSuccess: async () => { toast.success("已删除"); await refresh(); },
+    onError: (e) => toast.error(e.message || "删除失败"),
+  });
+  const reorderRoles = trpc.yabanRole.reorderRoles.useMutation({
+    onSuccess: async () => { toast.success("排序已保存"); await refresh(); },
+    onError: (e) => toast.error(e.message || "排序保存失败"),
+  });
+
+  // 上移/下移
+  const moveRole = (idx: number, dir: -1 | 1) => {
+    const next = [...localRoles];
+    const target = idx + dir;
+    if (target < 0 || target >= next.length) return;
+    [next[idx], next[target]] = [next[target], next[idx]];
+    setLocalRoles(next);
+  };
+
+  const saveOrder = () => {
+    reorderRoles.mutate({ tenantId, roleKeys: localRoles.map((r) => r.role_key) });
+  };
+
+  // 编辑/新建表单
+  if (isCreating || editingRole) {
+    const role = editingRole;
+    return (
+      <RoleEditForm
+        tenantId={tenantId}
+        role={role}
+        onClose={() => { setEditingRole(null); setIsCreating(false); }}
+        onSave={(name, description) => {
+          upsertRole.mutate({
+            tenantId,
+            roleKey: role?.role_key,
+            name,
+            description,
+          });
+        }}
+        saving={upsertRole.isPending}
+      />
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
+      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 max-h-[90vh] flex flex-col">
+        {/* 头部 */}
+        <div className="flex items-center justify-between mb-1 shrink-0">
+          <span className="text-base font-bold text-gray-800">角色管理</span>
+          <button onClick={onClose} aria-label="关闭">
+            <X className="w-5 h-5 text-gray-400" />
+          </button>
+        </div>
+        <p className="text-xs text-gray-400 mb-3 shrink-0">
+          上下拖动可调整顺序，顺序影响预约界面的职级排列。内置角色可改名，也可隐藏。
+        </p>
+
+        {/* 角色列表 */}
+        <div className="flex-1 overflow-y-auto space-y-2 mb-3">
+          {rolesQuery.isLoading ? (
+            <div className="py-10 flex justify-center">
+              <Loader2 className="w-6 h-6 text-[#9CC8EC] animate-spin" />
+            </div>
+          ) : localRoles.length === 0 ? (
+            <div className="py-8 text-center text-sm text-gray-400">暂无角色</div>
+          ) : (
+            localRoles.map((r: any, idx: number) => (
+              <div
+                key={r.role_key}
+                className="flex items-center gap-2 border border-gray-100 rounded-xl px-3 py-2.5 bg-white"
+              >
+                {/* 排序按钮 */}
+                <div className="flex flex-col gap-0.5 shrink-0">
+                  <button
+                    onClick={() => moveRole(idx, -1)}
+                    disabled={idx === 0}
+                    className="text-gray-300 disabled:opacity-20 active:text-[#1E88D6] p-0.5"
+                    aria-label="上移"
+                  >
+                    <ChevronUp className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => moveRole(idx, 1)}
+                    disabled={idx === localRoles.length - 1}
+                    className="text-gray-300 disabled:opacity-20 active:text-[#1E88D6] p-0.5"
+                    aria-label="下移"
+                  >
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* 角色铭牌 */}
+                <span
+                  className="inline-flex items-center justify-center text-[11px] font-bold rounded-full px-2.5 py-0.5 shrink-0"
+                  style={roleBadgeStyle(ROLE_TONE[r.role_key] ? r.role_key : "__custom__")}
+                >
+                  {r.name}
+                </span>
+
+                {/* 描述 */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    {r.is_builtin === 1 && (
+                      <span className="text-[9px] text-[#1E88D6] bg-[#EAF4FE] rounded px-1 py-0.5 shrink-0">系统</span>
+                    )}
+                    <span className="text-xs text-gray-400 truncate">{r.description || ""}</span>
+                  </div>
+                </div>
+
+                {/* 编辑/删除 */}
+                <button
+                  onClick={() => setEditingRole(r)}
+                  className="text-gray-400 active:text-[#1E88D6] p-1 shrink-0"
+                  aria-label="编辑"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                {r.role_key !== "owner" && (
+                  <button
+                    onClick={() => {
+                      if (!window.confirm(`确认删除角色「${r.name}」？内置角色将在本院隐藏。`)) return;
+                      deleteRole.mutate({ tenantId, roleKey: r.role_key });
+                    }}
+                    className="text-gray-300 active:text-[#E2553C] p-1 shrink-0"
+                    aria-label="删除"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* 底部操作 */}
+        <div className="shrink-0 flex gap-2">
+          <button
+            onClick={saveOrder}
+            disabled={reorderRoles.isPending}
+            className="flex-1 bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white rounded-xl py-2.5 text-sm font-medium active:opacity-90 disabled:opacity-60 flex items-center justify-center gap-1.5"
+          >
+            {reorderRoles.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+            保存排序
+          </button>
+          <button
+            onClick={() => setIsCreating(true)}
+            className="flex items-center gap-1.5 border border-[#1E88D6] text-[#1E88D6] rounded-xl px-4 py-2.5 text-sm font-medium active:bg-[#EAF4FE]"
+          >
+            <Plus className="w-4 h-4" />
+            新建角色
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============ 角色编辑/新建表单 ============
+function RoleEditForm({
+  tenantId, role, onClose, onSave, saving,
+}: {
+  tenantId: number;
+  role: any | null;
+  onClose: () => void;
+  onSave: (name: string, description: string) => void;
+  saving: boolean;
+}) {
+  const [name, setName] = useState(role?.name || "");
+  const [description, setDescription] = useState(role?.description || "");
+  const isEdit = !!role;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
+      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-base font-bold text-gray-800">
+            {isEdit ? `编辑角色「${role.name}」` : "新建角色"}
+          </span>
+          <button onClick={onClose} aria-label="关闭">
+            <X className="w-5 h-5 text-gray-400" />
+          </button>
+        </div>
+
+        {isEdit && role.is_builtin === 1 && (
+          <div className="mb-3 px-3 py-2 bg-[#EAF4FE] rounded-xl text-xs text-[#1E5C92]">
+            这是系统内置角色，改名后仅在本院生效，不影响其他医院。
+          </div>
+        )}
+
+        <label className="block text-xs text-gray-500 mb-1">角色名称</label>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="例如：医生、护士、咨询师"
+          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#1E88D6] mb-4"
+        />
+
+        <label className="block text-xs text-gray-500 mb-1">描述（选填）</label>
+        <input
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="简单说明该角色的职责"
+          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#1E88D6] mb-5"
+        />
+
+        <button
+          onClick={() => {
+            const nm = name.trim();
+            if (!nm) return toast.error("请输入角色名称");
+            onSave(nm, description.trim());
+          }}
+          disabled={saving}
+          className="w-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white rounded-xl py-3 text-sm font-medium active:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
+        >
+          {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+          {isEdit ? "保存修改" : "创建角色"}
+        </button>
       </div>
     </div>
   );

@@ -16,6 +16,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useYabanClinic } from "./useYabanClinic";
 import YabanClinicHeader from "./YabanClinicHeader";
+import { getRoleColor, deriveColorsFromBar } from "./yabanSharedStyles";
 
 // ── 颜色常量 ──
 // 牙伴标准色卡：主色#1E88D6 / 渐变亮端#3D9FD6 / 浅底#EBF5FB
@@ -28,22 +29,10 @@ const FREE_COLOR = "#A6D2EE";
 const ROLE_LABEL: Record<string, string> = {
   founder: "创始人", co_founder: "创始股东", owner: "院长", shareholder: "股东", doctor: "医生", nurse: "护士", assistant: "助理", receptionist: "前台", finance: "财务",
 };
-// 一套协调色板：色相均匀分布，明度/饱和度统一控制，整排成套和谐
-// fg 主色文字 S50%/L43% · bg 浅底 S55%/L94% · bar 进度条 S58%/L60%
-const ROLE_COLOR: Record<string, { fg: string; bg: string; bar: string }> = {
-  founder: { fg: "#37449A", bg: "#E6E8F6", bar: "#5566C8" },      // 深靖蓝
-  co_founder: { fg: "#3A4FB0", bg: "#E7EAF8", bar: "#6072D8" },   // 靖蓝2
-  owner: { fg: "#3749A4", bg: "#E7EAF8", bar: "#5E72D4" },        // 靖蓝
-  shareholder: { fg: "#5147A4", bg: "#ECE7F8", bar: "#7A5ED4" },  // 蓝紫
-  doctor: { fg: "#3777A4", bg: "#E7F1F8", bar: "#5EA3D4" },       // 蓝
-  nurse: { fg: "#379BA4", bg: "#E7F7F8", bar: "#5ECAD4" },        // 青
-  assistant: { fg: "#37A477", bg: "#E7F8F1", bar: "#5ED4A3" },    // 薄荷绿
-  receptionist: { fg: "#6537A4", bg: "#EEE7F8", bar: "#8F5ED4" }, // 薰衣草紫
-  finance: { fg: "#A47737", bg: "#F8F1E7", bar: "#D4A35E" },      // 暖琅珀
-};
+// 角色颜色从 yabanSharedStyles 共享模块读取，与 A314/A316 完全一致
 const ROLE_ORDER = ["founder", "co_founder", "owner", "shareholder", "doctor", "nurse", "assistant", "receptionist", "finance"];
 function roleLabel(k: string) { return ROLE_LABEL[k] || "员工"; }
-function roleColor(k: string) { return ROLE_COLOR[k] || { fg: "#647386", bg: "#ECEFF3", bar: "#A8CCE8" }; }
+function roleColor(k: string) { return getRoleColor(k); }
 function roleRank(k: string) { const i = ROLE_ORDER.indexOf(k); return i < 0 ? 99 : i; }
 
 // ── 工具函数 ──
@@ -238,7 +227,7 @@ export default function YabanClinicShift() {
   const roster = useMemo(() => {
     const tplMap = new Map<number, any>();
     (templates as any[]).forEach((t) => tplMap.set(t.staffUserId, t));
-    const list: { staffUserId: number; staffName: string; roleKey: string; hasTemplate: boolean }[] = [];
+    const list: { staffUserId: number; staffName: string; roleKey: string; hasTemplate: boolean; color?: string }[] = [];
     const seen = new Set<number>();
     (allMembers as any[]).forEach((m) => {
       seen.add(m.userId);
@@ -248,12 +237,13 @@ export default function YabanClinicShift() {
         staffName: m.name || tpl?.staffName || "",
         roleKey: m.roleKey || tpl?.roleKey || "doctor",
         hasTemplate: !!tpl,
+        color: tpl?.color,  // 自定义进度条颜色
       });
     });
-    // 兜底：有模板但名册查不到的人（历史数据），也纳入
+    // 尺底：有模板但名册查不到的人（历史数据），也纳入
     (templates as any[]).forEach((t) => {
       if (!seen.has(t.staffUserId)) {
-        list.push({ staffUserId: t.staffUserId, staffName: t.staffName, roleKey: t.roleKey || "doctor", hasTemplate: true });
+        list.push({ staffUserId: t.staffUserId, staffName: t.staffName, roleKey: t.roleKey || "doctor", hasTemplate: true, color: t.color });
       }
     });
     list.sort((a, b) => roleRank(a.roleKey) - roleRank(b.roleKey) || a.staffUserId - b.staffUserId);
@@ -495,7 +485,13 @@ export default function YabanClinicShift() {
           const segs = getStaffDaySegs(r.staffUserId, selDate);
           const hasShift = segs.length > 0;
           const isBatchSel = batchSel.has(r.staffUserId);
-          const rc = roleColor(r.roleKey);
+          const rcBase = roleColor(r.roleKey);
+          // 自定义颜色：优先用模板中保存的颜色，头像和标签与进度条保持同一风格：有色底+白字
+          const hasCustomColor = !!(r.color && r.color !== "#1E88D6");
+          const rc = hasCustomColor
+            ? { bar: r.color!, bg: r.color!, fg: "#ffffff" }
+            : rcBase;
+          const barColor = rc.bar;
 
           let subText = "休息";
           if (hasShift) {
@@ -538,7 +534,7 @@ export default function YabanClinicShift() {
                         return (
                           <div key={si} style={{
                             position: "absolute", left: `${L}%`, width: `${Math.max(W, 1)}%`, top: 0, height: "100%",
-                            background: s.isOT ? WARN : rc.bar,
+                            background: s.isOT ? WARN : barColor,
                             display: "flex", alignItems: "center", justifyContent: "center", padding: "0 2px", overflow: "hidden",
                           }}>
                             <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", textShadow: "0 1px 1px rgba(0,0,0,.15)" }}>{s.isOT ? `加班${durTxt}` : durTxt}</span>
@@ -593,7 +589,7 @@ export default function YabanClinicShift() {
           onSaveBiz={(open, close) => saveBizMut.mutate({ open, close, tenantId: currentTenantId ?? undefined })}
           templates={allTemplates}
           onClose={() => setSchDrawer(null)}
-          onSave={(segs, rep, wdays, repEndDate) => {
+          onSave={(segs, rep, wdays, repEndDate, color) => {
             const hasErr = validateSegs(segs, bizOpen, bizClose).some(f => f.bad || f.overlap);
             if (hasErr) { toast.error("时段有误，请调整后保存"); return; }
             const shiftType = segs.length === 0 ? "rest" : "custom";
@@ -625,6 +621,28 @@ export default function YabanClinicShift() {
                 cur.setDate(cur.getDate() + 1);
               }
             }
+            // 将颜色保存到模板（无论是单日覆盖还是模板，颜色始终存在模板中）
+            const tpl = allTemplates.find((t: any) => t.staffUserId === schDrawer.staffUserId);
+            if (tpl) {
+              saveTemplateMut.mutate({
+                id: tpl.id, staffUserId: schDrawer.staffUserId,
+                workStart: tpl.workStart, workEnd: tpl.workEnd,
+                workDays: tpl.workDays,
+                color: color,
+                tenantId: currentTenantId ?? undefined,
+              });
+            } else if (workStart && workEnd) {
+              // 还没有模板时新建一个
+              saveTemplateMut.mutate({
+                staffUserId: schDrawer.staffUserId,
+                staffName: schDrawer.staffName,
+                roleKey: schDrawer.roleKey,
+                workStart, workEnd,
+                workDays: wdays,
+                color: color,
+                tenantId: currentTenantId ?? undefined,
+              });
+            }
             Promise.all(dates.map(d =>
               saveOverrideMut.mutateAsync({
                 staffUserId: schDrawer.staffUserId, overrideDate: d, shiftType,
@@ -644,11 +662,37 @@ export default function YabanClinicShift() {
 }
 
 // ── 排班抽屉（全屏页面式）──
+// 将 HSL 色相（0-360）转为 hex 颜色
+function hueToHex(h: number): string {
+  const s = 0.62, l = 0.58;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * color).toString(16).padStart(2, "0");
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+// 将 hex 颜色近似还原为色相（0-360）
+function hexToHue(hex: string): number {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  if (max === min) return 0;
+  const d = max - min;
+  let h = 0;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  else if (max === g) h = ((b - r) / d + 2) / 6;
+  else h = ((r - g) / d + 4) / 6;
+  return Math.round(h * 360);
+}
+
 function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs, bizOpen, bizClose, onSaveBiz, templates, onClose, onSave }: {
   staffUserId: number; staffName: string; roleKey: string; clinicName: string; date: string; initSegs: Seg[];
   bizOpen: string; bizClose: string; onSaveBiz: (open: string, close: string) => void; templates: any[];
   onClose: () => void;
-  onSave: (segs: Seg[], rep: string, wdays: number[], repEndDate: string) => void;
+  onSave: (segs: Seg[], rep: string, wdays: number[], repEndDate: string, color: string) => void;
 }) {
   const [segs, setSegs] = useState<Seg[]>(initSegs);
   const [rep, setRep] = useState("none");
@@ -656,6 +700,13 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
   const [repEndDate, setRepEndDate] = useState("2026-12-31");
   // 门店营业时间（内置可编辑，改后即存）
   const [bizEditOpen, setBizEditOpen] = useState(false);
+  // 进度条颜色（从模板读取初始值，否则用角色默认色）
+  const initColor = (() => {
+    const tpl = templates.find((t: any) => t.staffUserId === staffUserId);
+    return tpl?.color && tpl.color !== "#1E88D6" ? tpl.color : getRoleColor(roleKey).bar;
+  })();
+  const [barColor, setBarColor] = useState<string>(initColor);
+  const [hue, setHue] = useState<number>(hexToHue(initColor));
 
   const flags = validateSegs(segs, bizOpen, bizClose);
   const hasErr = flags.some(f => f.bad || f.overlap);
@@ -818,6 +869,50 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
             </div>
           </div>
 
+          {/* 进度条颜色 */}
+          <div style={{ background: "#fff", marginTop: 10, padding: "13px 16px 16px" }}>
+            <div style={{ fontSize: 12, color: "#9AA7B5", marginBottom: 10 }}>进度条颜色</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              {/* 预览色块 */}
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: barColor, flexShrink: 0, boxShadow: "0 1px 4px rgba(0,0,0,.15)" }} />
+              {/* 横向色相条 */}
+              <div style={{ flex: 1, position: "relative" }}>
+                <div style={{ height: 22, borderRadius: 11, background: "linear-gradient(to right, #e05555, #e08855, #e0d455, #55e055, #55e0d4, #5588e0, #8855e0, #d455e0, #e05555)", boxShadow: "inset 0 1px 3px rgba(0,0,0,.12)" }} />
+                <input
+                  type="range" min={0} max={360} value={hue}
+                  onChange={e => {
+                    const h = Number(e.target.value);
+                    setHue(h);
+                    setBarColor(hueToHex(h));
+                  }}
+                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "pointer", margin: 0 }}
+                />
+                {/* 滑块指示器 */}
+                <div style={{ position: "absolute", top: "50%", left: `${(hue / 360) * 100}%`, transform: "translate(-50%, -50%)", width: 26, height: 26, borderRadius: "50%", background: barColor, border: "3px solid #fff", boxShadow: "0 1px 5px rgba(0,0,0,.3)", pointerEvents: "none" }} />
+              </div>
+              {/* hex 值显示 */}
+              <span style={{ fontSize: 12, fontWeight: 600, color: "#647386", fontFamily: "monospace", flexShrink: 0 }}>{barColor.toUpperCase()}</span>
+            </div>
+            {/* 最近使用的颜色 */}
+            <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 11, color: "#9AA7B5", flexShrink: 0 }}>最近使用</span>
+              {Array.from({ length: 5 }).map((_, i) => {
+                const recentColors: string[] = (() => { try { return JSON.parse(localStorage.getItem("yaban_recent_colors") || "[]"); } catch { return []; } })();
+                const c = recentColors[i];
+                const isActive = c && barColor === c;
+                return c ? (
+                  <div key={i} onClick={() => { setBarColor(c); setHue(hexToHue(c)); }}
+                    title={c}
+                    style={{ width: 24, height: 24, borderRadius: "50%", background: c, cursor: "pointer", border: isActive ? "3px solid #26303C" : "2px solid #fff", boxShadow: "0 1px 3px rgba(0,0,0,.2)", transition: ".15s", flexShrink: 0 }} />
+                ) : (
+                  <div key={i} style={{ width: 24, height: 24, borderRadius: "50%", background: "#F0F2F5", border: "2px dashed #DBE1E8", flexShrink: 0 }} />
+                );
+              })}
+              <div onClick={() => { const c = getRoleColor(roleKey).bar; setBarColor(c); setHue(hexToHue(c)); }}
+                style={{ marginLeft: "auto", fontSize: 11, color: SKY_D, fontWeight: 600, cursor: "pointer", padding: "4px 8px", borderRadius: 6, background: SKY_L, flexShrink: 0 }}>重置</div>
+            </div>
+          </div>
+
           {/* 重复 */}
           <div style={{ background: "#fff", marginTop: 10 }}>
             <div style={{ fontSize: 12, color: "#9AA7B5", padding: "13px 16px 3px" }}>重复</div>
@@ -845,7 +940,16 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
         {/* 底部保存 */}
         <div style={{ background: "#fff", padding: "12px 16px 20px", borderTop: `1px solid ${LINE}`, flexShrink: 0 }}>
           <div style={{ fontSize: 12, color: saveState === "disabled" ? "#A8463C" : GRAY, textAlign: "center", marginBottom: 10, fontWeight: saveState === "disabled" ? 600 : 400 }}>{summaryText}</div>
-          <div onClick={() => saveState !== "disabled" && onSave(segs, rep, wdays, repEndDate)} style={{
+          <div onClick={() => {
+            if (saveState === "disabled") return;
+            // 将当前颜色写入最近使用列表
+            try {
+              const prev: string[] = JSON.parse(localStorage.getItem("yaban_recent_colors") || "[]");
+              const next = [barColor, ...prev.filter(c => c !== barColor)].slice(0, 5);
+              localStorage.setItem("yaban_recent_colors", JSON.stringify(next));
+            } catch {}
+            onSave(segs, rep, wdays, repEndDate, barColor);
+          }} style={{
             width: "100%", background: saveState === "disabled" ? "#cdd5dd" : saveState === "rest" ? "#9aa7b4" : SKY_D,
             color: "#fff", padding: 13, borderRadius: 10, fontSize: 15, fontWeight: 600, textAlign: "center",
             cursor: saveState === "disabled" ? "not-allowed" : "pointer", transition: ".16s",

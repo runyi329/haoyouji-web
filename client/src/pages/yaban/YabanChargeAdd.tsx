@@ -8,7 +8,7 @@
  * 分类名/项目名均支持 AI 搜索（全平台行业库）
  */
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { ChevronLeft, Layers, Plus, Loader2, ChevronDown, Trash2, Search, X } from "lucide-react";
+import { ChevronLeft, Layers, Plus, Loader2, ChevronDown, Trash2, Search, X, Check, ChevronUp } from "lucide-react";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -17,7 +17,10 @@ import YabanClinicHeader from "./YabanClinicHeader";
 
 const ACCENT = "#1E88D6";
 const BLUE_GRAD = "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)";
-const PRESET_UNITS = ["次", "颗", "支", "套", "天", "课", "题", "个", "边", "局", "序"];
+const PRESET_UNITS = ["次", "颗", "支", "套", "天", "课", "题", "个", "边", "局", "序", "疗程", "张", "片", "节", "期", "口", "牙", "侧", "段"];
+
+// 每行5个，显示4行 = 20个，最后一格留给"更多"按钮
+const VISIBLE_UNIT_COUNT = 19;
 
 interface SubCatGroup {
   id: number;
@@ -156,6 +159,203 @@ function AiSearchInput({
   );
 }
 
+// ===== 单位选择器组件 =====
+interface UnitPickerProps {
+  value: string;
+  onChange: (unit: string) => void;
+  myUnits: string[];          // 我的单位库（全部，按加入顺序）
+  onSaveUnits: (units: string[]) => void;  // 保存单位库
+}
+
+function UnitPicker({ value, onChange, myUnits, onSaveUnits }: UnitPickerProps) {
+  const [showPanel, setShowPanel] = useState(false);
+  const [customInput, setCustomInput] = useState("");
+  // 面板内临时编辑状态（未保存前不影响首页）
+  const [draftUnits, setDraftUnits] = useState<string[]>(myUnits);
+
+  const moveUnit = (index: number, dir: -1 | 1) => {
+    const newIndex = index + dir;
+    if (newIndex < 0 || newIndex >= draftUnits.length) return;
+    setDraftUnits((prev) => {
+      const next = [...prev];
+      [next[index], next[newIndex]] = [next[newIndex], next[index]];
+      return next;
+    });
+  };
+
+  // 打开面板时重置草稿
+  const openPanel = () => {
+    setDraftUnits([...myUnits]);
+    setCustomInput("");
+    setShowPanel(true);
+  };
+
+  const MAX_UNITS = VISIBLE_UNIT_COUNT; // 最多19个
+
+  const handleAddToDraft = () => {
+    const u = customInput.trim();
+    if (!u || draftUnits.includes(u) || draftUnits.length >= MAX_UNITS) return;
+    setDraftUnits((prev) => [...prev, u]);
+    setCustomInput("");
+  };
+
+  const handleRemoveFromDraft = (u: string) => {
+    setDraftUnits((prev) => prev.filter((x) => x !== u));
+  };
+
+  const handleSave = () => {
+    onSaveUnits(draftUnits);
+    // 如果当前选中的单位被删了，清空选中
+    if (value && !draftUnits.includes(value)) onChange("");
+    setShowPanel(false);
+  };
+
+  // 首页最多显示20个，超出的在"更多"面板里选
+  const visibleUnits = myUnits.slice(0, VISIBLE_UNIT_COUNT);
+  const hasMore = myUnits.length > VISIBLE_UNIT_COUNT;
+
+  return (
+    <>
+      <div>
+        <span className="text-xs text-gray-400 block mb-1.5">单位：</span>
+        {/* 4行 × 5列 grid */}
+        <div className="grid grid-cols-5 gap-1.5">
+          {visibleUnits.map((u) => (
+            <button
+              key={u}
+              type="button"
+              onClick={() => onChange(u)}
+              className={`py-2 rounded-md text-xs font-medium transition-colors ${
+                value === u
+                  ? "text-white"
+                  : "bg-gray-100 text-gray-600 active:bg-gray-200"
+              }`}
+              style={value === u ? { backgroundColor: ACCENT } : {}}
+            >
+              {u}
+            </button>
+          ))}
+          {/* 更多按钮：库里超过20个时显示，或者始终显示用于管理 */}
+          <button
+            type="button"
+            onClick={openPanel}
+            className="py-2 rounded-md text-xs font-medium bg-gray-100 text-gray-400 active:bg-gray-200 flex items-center justify-center gap-0.5"
+          >
+            {hasMore ? "更多" : "+"}
+            <ChevronDown className="w-2.5 h-2.5" />
+          </button>
+        </div>
+        {/* 当前选中的单位不在前20个时，显示提示 */}
+        {value && !visibleUnits.includes(value) && (
+          <div className="mt-1.5 flex items-center gap-1">
+            <span className="text-xs text-gray-400">已选：</span>
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: ACCENT }}>{value}</span>
+          </div>
+        )}
+      </div>
+
+      {/* 单位库管理面板（全屏） */}
+      {showPanel && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-white">
+          {/* 顶部导航栏 */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <button type="button" onClick={() => setShowPanel(false)} className="text-gray-400 p-1 -ml-1">
+              <X className="w-6 h-6" />
+            </button>
+            <span className="text-lg font-semibold text-gray-800">单位库管理</span>
+            <div className="w-8" />
+          </div>
+
+          {/* 添加新单位输入框 */}
+          <div className="px-5 py-4 border-b border-gray-100">
+            <div className="flex gap-3">
+              <input
+                value={customInput}
+                onChange={(e) => setCustomInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddToDraft()}
+                placeholder="输入新单位，如：牙弓、疗程"
+                className="flex-1 bg-gray-100 rounded-xl px-4 py-3 text-base outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleAddToDraft}
+                disabled={!customInput.trim() || draftUnits.includes(customInput.trim()) || draftUnits.length >= MAX_UNITS}
+                className="px-5 py-3 rounded-xl text-white text-base font-medium disabled:opacity-40"
+                style={{ backgroundColor: ACCENT }}
+              >
+                添加
+              </button>
+            </div>
+            <p className="text-sm font-medium mt-2" style={{ color: ACCENT }}>点击选择 · 长按拖动排序 · 右上角 × 删除（{draftUnits.length}/{MAX_UNITS}）</p>
+          </div>
+
+          {/* 单位库列表（可拖拽排序 + 删除） */}
+          <div className="flex-1 overflow-y-auto px-5 py-4">
+            {draftUnits.length === 0 && (
+              <p className="text-base text-gray-300 text-center py-12">暂无单位，请在上方添加</p>
+            )}
+            <div className="divide-y divide-gray-100">
+              {draftUnits.map((u, idx) => (
+                <div key={u} className="flex items-center gap-3 py-3">
+                  {/* 单位名称（点击选中，不关闭面板） */}
+                  <button
+                    type="button"
+                    onClick={() => onChange(u)}
+                    className={`flex-1 text-left px-4 py-3 rounded-xl text-base font-medium transition-colors ${
+                      value === u ? "text-white" : "bg-gray-100 text-gray-700"
+                    }`}
+                    style={value === u ? { backgroundColor: ACCENT } : {}}
+                  >
+                    {u}
+                  </button>
+                  {/* 上移 */}
+                  <button
+                    type="button"
+                    onClick={() => moveUnit(idx, -1)}
+                    disabled={idx === 0}
+                    className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center disabled:opacity-30 active:bg-gray-200"
+                  >
+                    <ChevronUp className="w-5 h-5 text-gray-500" />
+                  </button>
+                  {/* 下移 */}
+                  <button
+                    type="button"
+                    onClick={() => moveUnit(idx, 1)}
+                    disabled={idx === draftUnits.length - 1}
+                    className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center disabled:opacity-30 active:bg-gray-200"
+                  >
+                    <ChevronDown className="w-5 h-5 text-gray-500" />
+                  </button>
+                  {/* 删除 */}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveFromDraft(u)}
+                    className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center active:bg-red-100"
+                  >
+                    <X className="w-5 h-5 text-red-400" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 保存按钮 */}
+          <div className="px-5 py-4 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={handleSave}
+              className="w-full py-4 rounded-2xl text-white text-base font-semibold"
+              style={{ backgroundColor: ACCENT }}
+            >
+              保存单位库
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ===== 主页面 =====
 export default function YabanChargeAdd() {
   const goBack = useSmartBack("/yaban/settings/charge-products");
@@ -209,19 +409,20 @@ export default function YabanChargeAdd() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 单位频率记忆
-  const UNIT_FREQ_KEY = `yaban_unit_freq_${currentTenantId}`;
-  const getUnitFreq = useCallback((): Record<string, number> => {
-    try { return JSON.parse(localStorage.getItem(UNIT_FREQ_KEY) || "{}"); } catch { return {}; }
-  }, [UNIT_FREQ_KEY]);
-  const sortedUnits = useMemo(() => {
-    const freq = getUnitFreq();
-    return [...PRESET_UNITS].sort((a, b) => (freq[b] || 0) - (freq[a] || 0));
-  }, [getUnitFreq]);
-  const bumpUnit = (unit: string) => {
-    const freq = getUnitFreq();
-    freq[unit] = (freq[unit] || 0) + 1;
-    localStorage.setItem(UNIT_FREQ_KEY, JSON.stringify(freq));
+  // 单位库管理（localStorage 持久化，支持添加/删除）
+  const UNIT_STORE_KEY = `yaban_my_units_${currentTenantId}`;
+
+  const [myUnits, setMyUnits] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(`yaban_my_units_${currentTenantId}`);
+      if (saved) return JSON.parse(saved);
+    } catch { /* ignore */ }
+    return [...PRESET_UNITS];
+  });
+
+  const handleSaveUnits = (units: string[]) => {
+    setMyUnits(units);
+    localStorage.setItem(UNIT_STORE_KEY, JSON.stringify(units));
   };
 
   // ===== Tab1：批量添加一级分类 =====
@@ -245,7 +446,7 @@ export default function YabanChargeAdd() {
           enabled: true,
         });
       }
-      for (const r of valid) { if (r.unit && !r.unitCustom) bumpUnit(r.unit); }
+      for (const r of valid) { if (r.unit) bumpUnit(r.unit); }
       toast.success(`《${clinicName}》已添加 ${valid.length} 个一级分类`);
       setCat1Rows([{ id: "c10", name: "", unit: "次", unitCustom: false, price: "", priceMax: "", priceMode: "fixed" }]);
       refresh();
@@ -283,7 +484,7 @@ export default function YabanChargeAdd() {
           enabled: true,
         });
       }
-      for (const r of valid) { if (r.unit && !r.unitCustom) bumpUnit(r.unit); }
+      for (const r of valid) { if (r.unit) bumpUnit(r.unit); }
       toast.success(`《${clinicName}》已添加 ${valid.length} 个二级分类`);
       setCat2Rows([{ id: "c20", name: "", unit: "次", unitCustom: false, price: "", priceMax: "", priceMode: "fixed" }]);
       refresh();
@@ -307,7 +508,8 @@ export default function YabanChargeAdd() {
   const subCatsForProd = useMemo(() => {
     if (!selectedCat1ForProd) return [];
     const cat = sortedCats.find((c) => c.id === selectedCat1ForProd);
-    return (cat?.subCategories ?? []).sort((a, b) => a.sort - b.sort || a.id - b.id);
+    if (!cat) return [];
+    return (Array.isArray(cat.subCategories) ? cat.subCategories : []).sort((a, b) => a.sort - b.sort || a.id - b.id);
   }, [sortedCats, selectedCat1ForProd]);
 
   const [rows, setRows] = useState<ProdRow[]>([newRow()]);
@@ -327,7 +529,7 @@ export default function YabanChargeAdd() {
     setIsSaving(true);
     try {
       for (const r of valid) {
-        const unit = r.unitCustom ? r.unit.trim() || "次" : r.unit;
+        const unit = r.unit || "次";
         await saveProd.mutateAsync({
           categoryId: selectedCat1ForProd,
           subcategoryId: selectedCat2ForProd ?? null,
@@ -426,56 +628,33 @@ export default function YabanChargeAdd() {
                     范围
                   </button>
                 </div>
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <input
-                      value={row.price}
-                      onChange={(e) => setCat1Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, price: e.target.value } : r))}
-                      inputMode="decimal"
-                      placeholder={row.priceMode === "fixed" ? "价格（0=面议）" : "最低价"}
-                      className="flex-1 min-w-0 bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
-                    />
-                    {row.priceMode === "range" && (
-                      <>
-                        <span className="text-gray-400 text-sm shrink-0">~</span>
-                        <input
-                          value={row.priceMax}
-                          onChange={(e) => setCat1Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, priceMax: e.target.value } : r))}
-                          inputMode="decimal"
-                          placeholder="最高价"
-                          className="flex-1 min-w-0 bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
-                        />
-                      </>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <select
-                      value={row.unitCustom ? "自定义" : row.unit}
-                      onChange={(e) => {
-                        if (e.target.value === "自定义") {
-                          setCat1Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, unitCustom: true, unit: "" } : r));
-                        } else {
-                          setCat1Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, unitCustom: false, unit: e.target.value } : r));
-                        }
-                      }}
-                      className="w-full bg-gray-100 rounded-md pl-3 pr-7 py-2.5 text-sm outline-none appearance-none"
-                    >
-                      {sortedUnits.map((u) => (
-                        <option key={u} value={u}>{u}</option>
-                      ))}
-                      <option value="自定义">自定义…</option>
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                  </div>
-                  {row.unitCustom && (
-                    <input
-                      value={row.unit}
-                      onChange={(e) => setCat1Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, unit: e.target.value } : r))}
-                      placeholder="输入自定义单位"
-                      className="w-full bg-gray-100 rounded-md px-3 py-2 text-sm outline-none"
-                    />
+                <div className="flex items-center gap-1.5 min-w-0 mb-2">
+                  <input
+                    value={row.price}
+                    onChange={(e) => setCat1Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, price: e.target.value } : r))}
+                    inputMode="decimal"
+                    placeholder={row.priceMode === "fixed" ? "价格（0=面议）" : "最低价"}
+                    className="flex-1 min-w-0 bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
+                  />
+                  {row.priceMode === "range" && (
+                    <>
+                      <span className="text-gray-400 text-sm shrink-0">~</span>
+                      <input
+                        value={row.priceMax}
+                        onChange={(e) => setCat1Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, priceMax: e.target.value } : r))}
+                        inputMode="decimal"
+                        placeholder="最高价"
+                        className="flex-1 min-w-0 bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
+                      />
+                    </>
                   )}
                 </div>
+                <UnitPicker
+                  value={row.unit}
+                  onChange={(u) => setCat1Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, unit: u, unitCustom: false } : r))}
+                  myUnits={myUnits}
+                  onSaveUnits={handleSaveUnits}
+                />
               </div>
             ))}
             <button
@@ -554,56 +733,33 @@ export default function YabanChargeAdd() {
                       范围
                     </button>
                   </div>
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <input
-                        value={row.price}
-                        onChange={(e) => setCat2Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, price: e.target.value } : r))}
-                        inputMode="decimal"
-                        placeholder={row.priceMode === "fixed" ? "价格（0=面议）" : "最低价"}
-                        className="flex-1 min-w-0 bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
-                      />
-                      {row.priceMode === "range" && (
-                        <>
-                          <span className="text-gray-400 text-sm shrink-0">~</span>
-                          <input
-                            value={row.priceMax}
-                            onChange={(e) => setCat2Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, priceMax: e.target.value } : r))}
-                            inputMode="decimal"
-                            placeholder="最高价"
-                            className="flex-1 min-w-0 bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
-                          />
-                        </>
-                      )}
-                    </div>
-                    <div className="relative">
-                      <select
-                        value={row.unitCustom ? "自定义" : row.unit}
-                        onChange={(e) => {
-                          if (e.target.value === "自定义") {
-                            setCat2Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, unitCustom: true, unit: "" } : r));
-                          } else {
-                            setCat2Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, unitCustom: false, unit: e.target.value } : r));
-                          }
-                        }}
-                        className="w-full bg-gray-100 rounded-md pl-3 pr-7 py-2.5 text-sm outline-none appearance-none"
-                      >
-                        {sortedUnits.map((u) => (
-                          <option key={u} value={u}>{u}</option>
-                        ))}
-                        <option value="自定义">自定义…</option>
-                      </select>
-                      <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                    </div>
-                    {row.unitCustom && (
-                      <input
-                        value={row.unit}
-                        onChange={(e) => setCat2Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, unit: e.target.value } : r))}
-                        placeholder="输入自定义单位"
-                        className="w-full bg-gray-100 rounded-md px-3 py-2 text-sm outline-none"
-                      />
+                  <div className="flex items-center gap-1.5 min-w-0 mb-2">
+                    <input
+                      value={row.price}
+                      onChange={(e) => setCat2Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, price: e.target.value } : r))}
+                      inputMode="decimal"
+                      placeholder={row.priceMode === "fixed" ? "价格（0=面议）" : "最低价"}
+                      className="flex-1 min-w-0 bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
+                    />
+                    {row.priceMode === "range" && (
+                      <>
+                        <span className="text-gray-400 text-sm shrink-0">~</span>
+                        <input
+                          value={row.priceMax}
+                          onChange={(e) => setCat2Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, priceMax: e.target.value } : r))}
+                          inputMode="decimal"
+                          placeholder="最高价"
+                          className="flex-1 min-w-0 bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
+                        />
+                      </>
                     )}
                   </div>
+                  <UnitPicker
+                    value={row.unit}
+                    onChange={(u) => setCat2Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, unit: u, unitCustom: false } : r))}
+                    myUnits={myUnits}
+                    onSaveUnits={handleSaveUnits}
+                  />
                 </div>
               ))}
               <button
@@ -656,7 +812,6 @@ export default function YabanChargeAdd() {
                   </label>
                   {subCatsForProd.length === 0 ? (
                     <div className="space-y-2">
-                      {/* 如果该一级下有直接挂的项目，提示一键迁移 */}
                       {(() => {
                         const cat = sortedCats.find((c) => c.id === selectedCat1ForProd);
                         const hasDirectItems = (cat as any)?.items?.length > 0;
@@ -729,7 +884,6 @@ export default function YabanChargeAdd() {
                     placeholder={`新项目${idx + 1}`}
                   />
 
-                  {/* 单价 + 单位 */}
                   {/* 价格类型切换 Pill */}
                   <div className="flex items-center gap-1.5 mb-1">
                     <span className="text-xs text-gray-400">价格：</span>
@@ -742,83 +896,43 @@ export default function YabanChargeAdd() {
                       范围
                     </button>
                   </div>
+
+                  {/* 价格输入 */}
                   {row.priceMode === "fixed" ? (
-                    <div className="flex gap-2">
+                    <input
+                      value={row.price}
+                      onChange={(e) => updateRow(row.id, { price: e.target.value })}
+                      inputMode="decimal"
+                      placeholder="单价（0=面议）"
+                      className="w-full bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
+                    />
+                  ) : (
+                    <div className="flex items-center gap-1.5">
                       <input
                         value={row.price}
                         onChange={(e) => updateRow(row.id, { price: e.target.value })}
                         inputMode="decimal"
-                        placeholder="单价（0=面议）"
+                        placeholder="最低价"
                         className="flex-1 bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
                       />
-                      <div className="relative shrink-0">
-                        <select
-                          value={row.unitCustom ? "自定义" : row.unit}
-                          onChange={(e) => {
-                            if (e.target.value === "自定义") {
-                              updateRow(row.id, { unitCustom: true, unit: "" });
-                            } else {
-                              updateRow(row.id, { unitCustom: false, unit: e.target.value });
-                            }
-                          }}
-                          className="w-24 bg-gray-100 rounded-md pl-3 pr-7 py-2.5 text-sm outline-none appearance-none"
-                        >
-                          {sortedUnits.map((u) => (
-                            <option key={u} value={u}>{u}</option>
-                          ))}
-                          <option value="自定义">自定义…</option>
-                        </select>
-                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          value={row.price}
-                          onChange={(e) => updateRow(row.id, { price: e.target.value })}
-                          inputMode="decimal"
-                          placeholder="最低价"
-                          className="flex-1 bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
-                        />
-                        <span className="text-gray-400 text-sm shrink-0">~</span>
-                        <input
-                          value={row.priceMax}
-                          onChange={(e) => updateRow(row.id, { priceMax: e.target.value })}
-                          inputMode="decimal"
-                          placeholder="最高价"
-                          className="flex-1 bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
-                        />
-                      </div>
-                      <div className="relative">
-                        <select
-                          value={row.unitCustom ? "自定义" : row.unit}
-                          onChange={(e) => {
-                            if (e.target.value === "自定义") {
-                              updateRow(row.id, { unitCustom: true, unit: "" });
-                            } else {
-                              updateRow(row.id, { unitCustom: false, unit: e.target.value });
-                            }
-                          }}
-                          className="w-full bg-gray-100 rounded-md pl-3 pr-7 py-2.5 text-sm outline-none appearance-none"
-                        >
-                          {sortedUnits.map((u) => (
-                            <option key={u} value={u}>{u}</option>
-                          ))}
-                          <option value="自定义">自定义…</option>
-                        </select>
-                        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                      </div>
+                      <span className="text-gray-400 text-sm shrink-0">~</span>
+                      <input
+                        value={row.priceMax}
+                        onChange={(e) => updateRow(row.id, { priceMax: e.target.value })}
+                        inputMode="decimal"
+                        placeholder="最高价"
+                        className="flex-1 bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
+                      />
                     </div>
                   )}
-                  {row.unitCustom && (
-                    <input
-                      value={row.unit}
-                      onChange={(e) => updateRow(row.id, { unit: e.target.value })}
-                      placeholder="输入自定义单位"
-                      className="w-full bg-gray-100 rounded-md px-3 py-2 text-sm outline-none"
-                    />
-                  )}
+
+                  {/* 单位选择器 */}
+                  <UnitPicker
+                    value={row.unit}
+                    onChange={(u) => updateRow(row.id, { unit: u, unitCustom: false })}
+                    myUnits={myUnits}
+                    onSaveUnits={handleSaveUnits}
+                  />
                 </div>
               ))}
             </div>

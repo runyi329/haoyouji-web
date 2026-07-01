@@ -12,54 +12,17 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useYabanClinic } from "./useYabanClinic";
 import YabanClinicHeader from "./YabanClinicHeader";
+import YabanHeatCalendar from "./YabanHeatCalendar";
+import YabanGanttBar, { YabanGanttTimeline } from "./YabanGanttBar";
 
-// 热力图 10 档色阶
-const HEAT = ["#1E88D6","#3D9FD6","#6FB6E2","#A6D2EE","#D2E9F6","#F0E2DD","#E6BDB4","#D89589","#C66E61","#A8463C"];
-function heatColor(r: number) {
-  if (r <= 0) return "#EEF1F4";
-  return HEAT[Math.min(9, Math.max(0, Math.ceil(r * 10) - 1))];
-}
-function heatTextColor(r: number) {
-  const i = Math.ceil(r * 10) - 1;
-  return (i <= 1 || i >= 8) ? "#fff" : "#2a3340";
-}
+// ── 共享样式常量（与 A316 联动，修改 yabanSharedStyles.ts 即可同步） ──
+import {
+  HEAT, heatColor, heatTextColor,
+  STATUS, ROLE_COLOR_MAP, getRoleBarColor,
+  SKY, SKY_D, SKY_L, INK, GRAY, GRAY_L, LINE, BG,
+  WK, toDateStr, isSameDay, hm, timeToMin,
+} from "./yabanSharedStyles";
 
-// 状态配置：依据牙伴标准色卡（蓝调为主，绿/金/红低饱和小面积点缀；禁止亮绿/亮黄/紫）
-const STATUS: Record<string, { label: string; color: string; bg: string }> = {
-  booked:    { label: "已预约", color: "#3D9FD6", bg: "#EBF5FB" },
-  confirmed: { label: "已确认", color: "#1E88D6", bg: "#EBF5FB" },
-  treating:  { label: "治疗中", color: "#1567AE", bg: "#E0EDF7" },
-  done:      { label: "已完成", color: "#3D7A53", bg: "#EAF2EC" },
-  missed:    { label: "失约",   color: "#9A6E1F", bg: "#F5EEDD" },
-  cancelled: { label: "已取消", color: "#A8463C", bg: "#F7E9E7" },
-  consulting:{ label: "咨询中", color: "#1B6FA8", bg: "#E9F1F8" },
-  registered:{ label: "已挂号", color: "#1972B8", bg: "#E0EDF7" },
-  treated:   { label: "治疗完成",color: "#3D7A53", bg: "#EAF2EC" },
-  paid:      { label: "已结账", color: "#3D7A53", bg: "#EAF2EC" },
-  left:      { label: "已离开", color: "#647386", bg: "#EEF1F4" },
-};
-
-const WK = ["日","一","二","三","四","五","六"];
-// 牙伴标准色卡：主色#1E88D6 / 渐变亮端#3D9FD6 / 浅底#EBF5FB；中性冷灰带蓝调
-const SKY = "#3D9FD6", SKY_D = "#1E88D6", SKY_L = "#EBF5FB";
-const INK = "#26303C", GRAY = "#647386", GRAY_L = "#9AA7B5";
-const LINE = "#ECEFF3", BG = "#F6F8FA";
-
-function toDateStr(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-}
-function isSameDay(a: Date, b: Date) {
-  return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
-}
-function hm(minutes: number) {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
-}
-function timeToMin(t: string) {
-  const [h,m] = t.split(":").map(Number);
-  return h * 60 + m;
-}
 // 预约时间格式化为区间：“日期 开始–结束（时长）”。
 // 结束时间优先用 endTime；缺失时由 appointTime + duration(默认30分钟) 推算。
 function fmtApptRange(a: any): string {
@@ -127,7 +90,7 @@ export default function YabanSchedule() {
     month: calMode === "month" ? monthCursor.getMonth() + 1 : selDate.getMonth() + 1,
     tenantId: currentTenantId ?? undefined,
   });
-  const { data: members = [] } = trpc.yabanAppointment.listMembers.useQuery({ tenantId: currentTenantId ?? undefined });
+  const { data: members = [] } = trpc.yabanAppointment.listMembers.useQuery({ tenantId: currentTenantId ?? undefined }, { staleTime: 0 });
 
   // 排班数据：拉取 selDate 所在周的「模板 + 单日覆盖」，用于联动顾客预约页的医生可约时段。
   // 注意：override（单日调班/请假）优先于周期模板，shiftType=rest 当天不可约。
@@ -162,15 +125,15 @@ export default function YabanSchedule() {
   };
   const getEffectiveShift = useMemo(() => {
     const toMin = (t?: string | null) => (t ? timeToMin(t) : null);
-    return (staffName: string, dStr: string): EffShift => {
-      const tpl = shiftTemplates.find((t: any) => t.staffName === staffName);
-      const staffId = tpl ? tpl.staffUserId : undefined;
+    // 用 userId 匹配排班模板（比 staffName 字符串更可靠）
+    return (userId: number, dStr: string): EffShift => {
+      const tpl = shiftTemplates.find((t: any) => t.staffUserId === userId);
       // 1) 单日覆盖优先（按 staffUserId 命中）
-      const ov = staffId != null
-        ? shiftOverrides.find((o: any) => o.staffUserId === staffId && o.overrideDate === dStr)
+      const ov = userId != null
+        ? shiftOverrides.find((o: any) => o.staffUserId === userId && o.overrideDate === dStr)
         : undefined;
       if (ov) {
-        if (ov.shiftType === "rest") return null;       // 请假/休息：当天不可约
+        if (ov.shiftType === "rest" || ov.shiftType === "leave") return null;
         if (ov.workStart && ov.workEnd) return buildShift(timeToMin(ov.workStart), timeToMin(ov.workEnd), toMin(ov.breakStart), toMin(ov.breakEnd));
         // override 无具体时段则继续回退模板
       }
@@ -185,14 +148,20 @@ export default function YabanSchedule() {
     };
   }, [shiftTemplates, shiftOverrides]);
 
-  // 按医生分组（附带当天有效班次 shift）
-  const docMap = new Map<string, { name: string; appts: typeof appointments; shift: EffShift }>();
-  members.forEach(m => { if (!docMap.has(m.name)) docMap.set(m.name, { name: m.name, appts: [], shift: null }); });
-  appointments.forEach(a => {
-    if (!docMap.has(a.doctor)) docMap.set(a.doctor, { name: a.doctor, appts: [], shift: null });
-    docMap.get(a.doctor)!.appts.push(a);
+  // 按成员 userId 分组（附带当天有效班次 shift）
+  // 角色色彩统一使用共享模块 getRoleColor，与员工排班页完全一致
+  const docMap = new Map<number, { userId: number; name: string; roleKey: string; color?: string; appts: typeof appointments; shift: EffShift }>();
+  (members as any[]).forEach((m: any) => {
+    if (!docMap.has(m.userId)) docMap.set(m.userId, { userId: m.userId, name: m.name, roleKey: m.roleKey || "doctor", color: m.color, appts: [], shift: null });
   });
-  docMap.forEach((v, name) => { v.shift = getEffectiveShift(name, dateStr); });
+  appointments.forEach(a => {
+    // 预约记录里只有 doctor 名字，尝试按名字找到对应 userId
+    const matchedMember = (members as any[]).find((m: any) => m.name === a.doctor);
+    const uid = matchedMember?.userId ?? -a.doctor.charCodeAt(0);
+    if (!docMap.has(uid)) docMap.set(uid, { userId: uid, name: a.doctor, roleKey: matchedMember?.roleKey || "doctor", appts: [], shift: null });
+    docMap.get(uid)!.appts.push(a);
+  });
+  docMap.forEach((v) => { v.shift = getEffectiveShift(v.userId, dateStr); });
   const docList = Array.from(docMap.values());
 
   // 时间范围（全院最早~最晚，默认 09:00~18:00）
@@ -305,56 +274,22 @@ export default function YabanSchedule() {
       {/* 顶栏占位：与 fixed 顶栏等高，防止主体被遮挡 */}
       <div style={{ height: headerH }} aria-hidden />
 
-      {/* 周历 / 月历 */}
-      <div style={{ background: "#fff", padding: "10px 16px 2px", borderBottom: `1px solid ${LINE}` }}>
-        {calMode === "month" && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 10 }}>
-            <span style={{ fontSize: 17, fontWeight: 700, color: INK }}>{monthCursor.getFullYear()}年{monthCursor.getMonth() + 1}月</span>
-            <div style={{ display: "flex", gap: 6 }}>
-              <div onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() - 1, 1))} style={{ width: 30, height: 30, borderRadius: 9, background: "#F6F8FA", color: "#647386", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, cursor: "pointer" }}>‹</div>
-              <div onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1))} style={{ width: 30, height: 30, borderRadius: 9, background: "#F6F8FA", color: "#647386", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, cursor: "pointer" }}>›</div>
-            </div>
-          </div>
-        )}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", marginBottom: 2 }}>
-          {headDays.map((w, i) => <span key={i} style={{ textAlign: "center", fontSize: 10, fontWeight: 600, color: "#9AA7B5", padding: "3px 0", letterSpacing: ".5px" }}>{w}</span>)}
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4 }}>
-          {calDates.map((d, i) => {
-            if (!d) return <div key={i} />;
-            const isToday = isSameDay(d as Date, today), isSel = isSameDay(d as Date, selDate);
-            const isPast = ((d as Date).getTime() < today.getTime()) && !isToday;
-            const r = cellLoad(d as Date);
-            const bg = r > 0 ? heatColor(r) : "#F6F8FA";
-            const tc = r > 0 ? heatTextColor(r) : "#26303C";
-            return (
-              <div key={i} onClick={() => setSelDate(d as Date)} style={{
-                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                height: calMode === "month" ? 42 : 48, borderRadius: 10, background: bg, cursor: "pointer",
-                position: "relative", outline: isSel ? `2.5px solid ${SKY_D}` : "none", outlineOffset: 1,
-                transform: isSel ? "scale(1.04)" : "none", opacity: isPast ? 0.72 : 1, transition: "all .18s", zIndex: isSel ? 2 : 1,
-              }}>
-                <span style={{ fontSize: 16, fontWeight: isSel || isToday ? 700 : 600, color: isToday ? SKY_D : tc, fontFamily: "'SF Pro Display','PingFang SC',-apple-system,sans-serif" }}>
-                  {String((d as Date).getDate()).padStart(2, "0")}
-                </span>
-                {isToday && <span style={{ position: "absolute", bottom: 5, width: 5, height: 5, borderRadius: "50%", background: SKY }} />}
-              </div>
-            );
-          })}
-        </div>
-        {/* 热力图图例 */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "9px 0 3px", fontSize: 10, color: "#9AA7B5" }}>
-          <span>空闲</span>
-          <div style={{ display: "flex" }}>
-            {HEAT.map((c, i) => <div key={i} style={{ width: 14, height: 11, background: c, borderRadius: i === 0 ? "3px 0 0 3px" : i === 9 ? "0 3px 3px 0" : 0 }} />)}
-          </div>
-          <span>约满</span>
-        </div>
-        <div onClick={() => { if (calMode === "week") { setCalMode("month"); setMonthCursor(new Date(selDate.getFullYear(), selDate.getMonth(), 1)); } else setCalMode("week"); }}
-          style={{ textAlign: "center", color: "#DBE1E8", fontSize: 16, lineHeight: 1, padding: "4px 0 7px", cursor: "pointer" }}>
-          {calMode === "week" ? "⌄" : "⌃"}
-        </div>
-      </div>
+      {/* 周历 / 月历 — 使用共享组件 YabanHeatCalendar（与 A316 联动） */}
+      <YabanHeatCalendar
+        selDate={selDate}
+        onSelectDate={(d) => setSelDate(d)}
+        getCellLoad={cellLoad}
+        monthCursor={monthCursor}
+        onMonthChange={setMonthCursor}
+        disablePast={false}
+        showToggle={true}
+        calMode={calMode}
+        onToggleMode={() => {
+          if (calMode === "week") { setCalMode("month"); setMonthCursor(new Date(selDate.getFullYear(), selDate.getMonth(), 1)); }
+          else setCalMode("week");
+        }}
+        weekDates={calMode === "week" ? weekDates : undefined}
+      />
 
       {/* 忙闲速览 */}
       <div style={{ background: "#fff", padding: "6px 14px 10px", borderBottom: `8px solid ${BG}` }}>
@@ -374,7 +309,7 @@ export default function YabanSchedule() {
             return (
               <div key={doc.name} onClick={() => setSelectedDocIdx(sel ? null : idx)} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 46, cursor: "pointer", opacity: dimmed ? 0.38 : 1, transform: sel ? "scale(1.05)" : dimmed ? "scale(.88)" : "none", filter: dimmed ? "grayscale(.4)" : "none", transition: ".22s" }}>
                 <div style={{ width: 46, height: 46, borderRadius: "50%", padding: 3, background: ringBg(lv) }}>
-                  <div style={{ width: 40, height: 40, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 600, color: "#fff", background: doc.appts.length > 0 ? "#5aa9dd" : "#DBE1E8" }}>{doc.name.charAt(0)}</div>
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 600, color: "#fff", background: (doc.color && doc.color !== "#1E88D6") ? doc.color : (doc.appts.length > 0 ? "#5aa9dd" : "#DBE1E8") }}>{doc.name.charAt(0)}</div>
                 </div>
                 <div style={{ fontSize: 11, color: sel ? SKY_D : "#647386", marginTop: 5, fontWeight: sel ? 700 : 400 }}>{doc.name}</div>
                 <div style={{ fontSize: 9, color: lv.col, marginTop: 1 }}>{lv.t}</div>
@@ -452,43 +387,45 @@ function BottomSheet({ children, onClose, fullscreen }: { children: React.ReactN
 // ── 按医生进度条视图 ──
 type EffShift = { workStart: number; workEnd: number; segments: [number, number][] } | null;
 function DocRows({ docList, onDocClick, onApptClick, onNewAppt, trkStart, trkEnd, pctM }: {
-  docList: { name: string; appts: any[]; shift?: EffShift }[];
+  docList: { name: string; roleKey?: string; appts: any[]; shift?: EffShift }[];
   onDocClick: (idx: number) => void;
   onApptClick: (id: number) => void;
   onNewAppt: (docName: string, start: number, end: number) => void;
   trkStart: () => number; trkEnd: () => number; pctM: (m: number) => number;
 }) {
-  const a = trkStart(), b = trkEnd(), span = Math.max(1, b - a);
-  const marks = Array.from({ length: 4 }, (_, i) => hm(Math.round(a + span * i / 3)));
+  const a = trkStart(), b = trkEnd();
   return (
     <div>
       <div style={{ background: "#fff", padding: "12px 14px 6px", borderBottom: `1px solid ${LINE}` }}>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: GRAY, paddingLeft: 62 }}>
-          {marks.map((m, i) => <span key={i}>{m}</span>)}
-        </div>
+        <YabanGanttTimeline trackStart={a} trackEnd={b} paddingLeft={62} />
       </div>
       {docList.map((doc, idx) => (
         <div key={doc.name} style={{ background: "#fff", padding: "11px 14px", display: "flex", alignItems: "center", gap: 10, borderBottom: `1px solid ${LINE}` }}>
           {/* 左侧头像/姓名：点击进入该医生放大日程 */}
           <div onClick={() => onDocClick(idx)} style={{ width: 54, flexShrink: 0, textAlign: "center", cursor: "pointer" }}>
-            <div style={{ width: 30, height: 30, borderRadius: "50%", background: SKY_L, color: SKY_D, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, margin: "0 auto 3px" }}>{doc.name.charAt(0)}</div>
+            <div style={{ width: 30, height: 30, borderRadius: "50%", background: (doc.color && doc.color !== "#1E88D6") ? doc.color : SKY_L, color: (doc.color && doc.color !== "#1E88D6") ? "#fff" : SKY_D, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, margin: "0 auto 3px" }}>{doc.name.charAt(0)}</div>
             <div style={{ fontSize: 12, fontWeight: 600, color: "#26303C" }}>{doc.name}</div>
             <div style={{ fontSize: 9, color: GRAY, marginTop: 1 }}>{doc.appts.length > 0 ? `${doc.appts.length}个预约` : "暂无"}</div>
           </div>
           <div style={{ flex: 1 }}>
-            {/* 点击在岗进度条空白处 → 直接新建预约（按位置换算时间，避开午休/已约） */}
-            <div
-              onClick={doc.shift ? (ev) => {
+            {/* 甘特条—共享组件 YabanGanttBar（与 A316 联动） */}
+            <YabanGanttBar
+              shift={doc.shift ?? null}
+              roleKey={doc.roleKey}
+              customColor={doc.color && doc.color !== "#1E88D6" ? doc.color : undefined}
+              appointments={doc.appts}
+              trackStart={a}
+              trackEnd={b}
+              onApptClick={(id) => onApptClick(id)}
+              onBarClick={doc.shift ? (ev) => {
                 const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
                 const ratio = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
-                let mins = trkStart() + ratio * (trkEnd() - trkStart());
+                let mins = a + ratio * (b - a);
                 mins = Math.round(mins / 30) * 30;
                 const segs2 = doc.shift!.segments;
-                // 落点严格卡在在岗分段内：点到灰区（午休/收班后）则吸附到最近的在岗时段，起止都不得越出该段
                 const inSeg = segs2.find(([s0, e0]) => mins >= s0 && mins < e0);
                 let seg = inSeg;
                 if (!seg) {
-                  // 不在任何在岗段内：选择距点击位置最近的在岗段
                   seg = segs2.reduce((best, cur) => {
                     const d = mins < cur[0] ? cur[0] - mins : mins - cur[1];
                     const bd = mins < best[0] ? best[0] - mins : mins - best[1];
@@ -497,50 +434,20 @@ function DocRows({ docList, onDocClick, onApptClick, onNewAppt, trkStart, trkEnd
                 }
                 if (!seg) return;
                 const [segStart, segEnd] = seg;
-                // 起点卡在段内，且预留至少 30 分钟；终点不超过段尾
                 const start = Math.max(segStart, Math.min(mins, segEnd - 30));
                 const end = Math.min(start + 60, segEnd);
                 onNewAppt(doc.name, start, end);
               } : undefined}
-              style={{ position: "relative", height: 36, borderRadius: 10, overflow: "hidden", background: "#E2E8EF", cursor: doc.shift ? "pointer" : "default" }}
-            >
-              {/* 在岗区间：按该医生当天实际班次分段着色（午休空档自然留灰）；休息则标「今日休息」 */}
-              {doc.shift
-                ? doc.shift.segments.map(([s0, e0], si) => (
-                    <div key={si} style={{ position: "absolute", top: 0, bottom: 0, left: `${pctM(s0)}%`, width: `${Math.max(pctM(e0) - pctM(s0), 0)}%`, background: "#A6D2EE" }} />
-                  ))
-                : <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#9AA7B5", background: "#EDF1F5" }}>今日休息</div>}
-              {doc.shift && doc.appts.map((a2, i) => {
-                if (!a2.appointTime) return null;
-                let s = timeToMin(a2.appointTime);
-                let e2 = a2.endTime ? timeToMin(a2.endTime) : s + (a2.duration || 30);
-                // 视觉裁剪：将预约块限制在其所属在岗分段内，绝不越入午休/上下班灰区
-                const segs2 = doc.shift!.segments;
-                const host2 = segs2.find(([s0, e0]) => s < e0 && e2 > s0); // 与之相交的在岗段
-                if (host2) { s = Math.max(s, host2[0]); e2 = Math.min(e2, host2[1]); }
-                else { const ns = segs2.find(([s0]) => s0 >= s) || segs2[segs2.length - 1]; s = ns[0]; e2 = Math.min(s + (a2.duration || 30), ns[1]); }
-                if (e2 <= s) return null;
-                const l = pctM(s), w = Math.max(pctM(e2) - pctM(s), 2);
-                const st = STATUS[a2.status] || STATUS.booked;
-                // 仅当贴整条轨道最左/最右端时该侧圆角（与轨道一致 8px），中间一律直角
-                const rL = l <= 0.5 ? 10 : 0, rR = pctM(e2) >= 99.5 ? 10 : 0;
-                return (
-                  <div key={i} onClick={ev => { ev.stopPropagation(); onApptClick(a2.id); }} style={{ position: "absolute", left: `${l}%`, width: `${w}%`, top: 0, bottom: 0, borderRadius: `${rL}px ${rR}px ${rR}px ${rL}px`, background: st.color, boxShadow: "0 1px 2px rgba(30,90,160,.12)", display: "flex", alignItems: "center", padding: "0 4px", overflow: "hidden", cursor: "pointer" }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden" }}>{a2.patientName.slice(0, 2)}</span>
-                  </div>
-                );
-              })}
-            </div>
-            {/* 进度条下方：该医生当天真实工作时间段文字，按各分段在轨道上的水平位置对齐（与上方色块对齐） */}
+            />
+            {/* 进度条下方：工作时段文字标注 */}
             {doc.shift && doc.shift.segments.length > 0 && (
               <div style={{ position: "relative", marginTop: 4, height: 14 }}>
                 {doc.shift.segments.map(([s0, e0], si) => {
-                  const l = pctM(s0), w = Math.max(pctM(e0) - pctM(s0), 0);
+                  const span2 = Math.max(1, b - a);
+                  const l = Math.max(0, Math.min(100, (s0 - a) / span2 * 100));
+                  const w = Math.max(0, Math.min(100, (e0 - a) / span2 * 100)) - l;
                   return (
-                    <span
-                      key={si}
-                      style={{ position: "absolute", left: `${l}%`, width: `${w}%`, fontSize: 10, color: GRAY, textAlign: "center", whiteSpace: "nowrap", overflow: "visible" }}
-                    >
+                    <span key={si} style={{ position: "absolute", left: `${l}%`, width: `${w}%`, fontSize: 10, color: GRAY, textAlign: "center", whiteSpace: "nowrap", overflow: "visible" }}>
                       {hm(s0)}–{hm(e0)}
                     </span>
                   );
@@ -562,7 +469,7 @@ function DocRows({ docList, onDocClick, onApptClick, onNewAppt, trkStart, trkEnd
 
 // ── 单医生放大日程 ──
 function SoloView({ doc, onBack, onApptClick, onNewAppt, trkStart, trkEnd, pctM, OPEN_START, OPEN_END }: {
-  doc: { name: string; appts: any[]; shift?: EffShift };
+  doc: { name: string; roleKey?: string; appts: any[]; shift?: EffShift };
   onBack: () => void;
   onApptClick: (id: number) => void;
   onNewAppt: (docName: string, start: number, end: number) => void;
@@ -584,7 +491,7 @@ function SoloView({ doc, onBack, onApptClick, onNewAppt, trkStart, trkEnd, pctM,
       <div style={{ background: "#fff" }}>
         <div style={{ padding: "14px 14px 4px", display: "flex", alignItems: "center", gap: 10 }}>
           <div onClick={onBack} style={{ fontSize: 20, color: GRAY, cursor: "pointer", marginRight: 4 }}>‹</div>
-          <div style={{ width: 42, height: 42, borderRadius: "50%", background: SKY_L, color: SKY_D, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 600, flexShrink: 0 }}>{doc.name.charAt(0)}</div>
+          <div style={{ width: 42, height: 42, borderRadius: "50%", background: (doc.color && doc.color !== "#1E88D6") ? doc.color : SKY_L, color: (doc.color && doc.color !== "#1E88D6") ? "#fff" : SKY_D, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 600, flexShrink: 0 }}>{doc.name.charAt(0)}</div>
           <div>
             <div style={{ fontSize: 16, fontWeight: 600, color: "#26303C" }}>{doc.name}</div>
             <div style={{ fontSize: 12, color: GRAY, marginTop: 2 }}>{doc.shift ? `在岗 ${hm(dS)}–${hm(dE)} · 已约 ${doc.appts.length} 个` : `今日休息 · 不可约`}</div>
@@ -608,11 +515,12 @@ function SoloView({ doc, onBack, onApptClick, onNewAppt, trkStart, trkEnd, pctM,
               const segEnd = (inSeg || segs2[0] || [dS, dE])[1];
               onNewAppt(doc.name, start, Math.min(start + 60, segEnd));
             } : undefined}
-            style={{ position: "relative", height: 46, background: "#E6ECF2", borderRadius: 9, overflow: "hidden", cursor: doc.shift ? "pointer" : "default" }}
+            style={{ position: "relative", height: 36, background: "#E2E8EF", borderRadius: 7, overflow: "hidden", cursor: doc.shift ? "pointer" : "default" }}
           >
-            {/* 在岗底色按分段渲染，午休空档保持灰底 */}
-            {(doc.shift ? doc.shift.segments : [[dS, dE]] as [number, number][]).map(([s0, e0], si) => (
-              <div key={si} style={{ position: "absolute", top: 0, bottom: 0, left: `${sp(s0)}%`, width: `${Math.max(sp(e0) - sp(s0), 0)}%`, background: "#A6D2EE" }} />
+            {/* 在岗底色按分段渲染，午休空档保持灰底；休息时用斜线纹底 */}
+            {!doc.shift && <div style={{ position: "absolute", inset: 0, background: "repeating-linear-gradient(45deg,#ECEFF3,#ECEFF3 4px,#F6F8FA 4px,#F6F8FA 8px)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#bcc6d0" }}>今日休息</div>}
+            {(doc.shift ? doc.shift.segments : []).map(([s0, e0], si) => (
+              <div key={si} style={{ position: "absolute", top: 0, bottom: 0, left: `${sp(s0)}%`, width: `${Math.max(sp(e0) - sp(s0), 0)}%`, background: (doc.color && doc.color !== "#1E88D6") ? doc.color : getRoleBarColor(doc.roleKey) }} />
             ))}
             {sorted.map((a, i) => {
               if (!a.appointTime) return null;
