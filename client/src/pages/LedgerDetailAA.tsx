@@ -2336,7 +2336,7 @@ export default function LedgerDetailAA({
                               onClick={() => _canShowTooltip ? setTooltipTodayPnlTag(tooltipTodayPnlTag === tag.name ? null : tag.name) : undefined}
                             >{_todayPnlText}</span>
                             {tooltipTodayPnlTag === tag.name && _canShowTooltip && (
-                              <div style={{ position: 'absolute', top: '100%', right: 0, zIndex: 50, background: '#1A1A1A', color: '#FFF', borderRadius: 6, padding: '5px 8px', whiteSpace: 'nowrap', fontSize: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.25)', marginTop: 4, lineHeight: 1.6 }}>
+                              <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, background: '#1A1A1A', color: '#FFF', borderRadius: 6, padding: '5px 8px', whiteSpace: 'nowrap', fontSize: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.25)', marginTop: 4, lineHeight: 1.6 }}>
                                 <div style={{ color: '#BDBDBD', marginBottom: 2 }}>
                                   {_prevDateLabel ? `${_prevDateLabel} → ${_latestDateLabel}` : _latestDateLabel}
                                 </div>
@@ -2475,7 +2475,7 @@ export default function LedgerDetailAA({
                             {!hasAny ? '--' : (totalTodayPnl !== 0 ? `${totalTodayPnl < 0 ? '-' : ''}${Math.abs(totalTodayPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--')}
                           </span>
                           {showTotalTodayTooltip && hasAny && (
-                            <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', zIndex: 60, background: '#1A1A1A', color: '#FFF', borderRadius: 8, padding: '8px 10px', whiteSpace: 'nowrap', fontSize: 10, boxShadow: '0 2px 12px rgba(0,0,0,0.3)', marginTop: 4, lineHeight: 1.8, minWidth: 140 }}
+                            <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 60, background: '#1A1A1A', color: '#FFF', borderRadius: 8, padding: '8px 10px', whiteSpace: 'nowrap', fontSize: 10, boxShadow: '0 2px 12px rgba(0,0,0,0.3)', marginTop: 4, lineHeight: 1.8, minWidth: 140 }}
                               onClick={() => setShowTotalTodayTooltip(false)}
                             >
                               <div style={{ color: '#BDBDBD', marginBottom: 4, fontSize: 9 }}>点击关闭</div>
