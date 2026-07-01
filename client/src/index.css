@@ -1127,6 +1127,74 @@ input[type="range"].slider::-moz-range-thumb {
   .placeholder-purple-500::placeholder {
     color: var(--color-secondary) !important;
   }
+
+  /* ========== WecomAdmin 颜色作用域覆盖 ==========
+   * 脉动网主题系统将 bg-blue-* / text-blue-* / border-blue-* / purple-* 全部映射为品牌红色。
+   * 以下规则为 WecomAdmin 三个 Tab 恢复各自正确的颜色，不影响其他页面。
+   * ================================================ */
+
+  /* --- AI 对话 Tab：脉动网标准蓝色系 #1976D2 --- */
+  .wecom-blue .bg-blue-50  { background-color: #EFF6FF !important; }
+  .wecom-blue .bg-blue-100 { background-color: #DBEAFE !important; }
+  .wecom-blue .bg-blue-500 { background-color: #3B82F6 !important; }
+  .wecom-blue .bg-blue-600 { background-color: #1976D2 !important; }
+  .wecom-blue .bg-blue-700 { background-color: #1565C0 !important; }
+  .wecom-blue .text-blue-400 { color: #60A5FA !important; }
+  .wecom-blue .text-blue-500 { color: #3B82F6 !important; }
+  .wecom-blue .text-blue-600 { color: #1976D2 !important; }
+  .wecom-blue .text-blue-700 { color: #1565C0 !important; }
+  .wecom-blue .border-blue-100 { border-color: #DBEAFE !important; }
+  .wecom-blue .border-blue-200 { border-color: #BFDBFE !important; }
+  .wecom-blue .border-blue-300 { border-color: #93C5FD !important; }
+  .wecom-blue .border-blue-500 { border-color: #3B82F6 !important; }
+  .wecom-blue .border-blue-600 { border-color: #1976D2 !important; }
+  .wecom-blue .ring-blue-500 { --tw-ring-color: #3B82F6 !important; }
+  .wecom-blue .ring-blue-600 { --tw-ring-color: #1976D2 !important; }
+  .wecom-blue .hover\:bg-blue-700:hover { background-color: #1565C0 !important; }
+  .wecom-blue .focus\:ring-blue-500:focus { --tw-ring-color: #3B82F6 !important; }
+  /* purple 系列（AI辅助 badge 等）恢复为真实紫色 */
+  .wecom-blue .bg-purple-50  { background-color: #F5F3FF !important; }
+  .wecom-blue .bg-purple-100 { background-color: #EDE9FE !important; }
+  .wecom-blue .bg-purple-500 { background-color: #8B5CF6 !important; }
+  .wecom-blue .bg-purple-600 { background-color: #7C3AED !important; }
+  .wecom-blue .text-purple-500 { color: #8B5CF6 !important; }
+  .wecom-blue .text-purple-600 { color: #7C3AED !important; }
+  .wecom-blue .border-purple-200 { border-color: #DDD6FE !important; }
+  .wecom-blue .border-purple-500 { border-color: #8B5CF6 !important; }
+
+  /* --- 消息推送 Tab：红色系 #DC2626 --- */
+  .wecom-red .bg-blue-50  { background-color: #FEF2F2 !important; }
+  .wecom-red .bg-blue-100 { background-color: #FEE2E2 !important; }
+  .wecom-red .bg-blue-500 { background-color: #EF4444 !important; }
+  .wecom-red .bg-blue-600 { background-color: #DC2626 !important; }
+  .wecom-red .bg-blue-700 { background-color: #B91C1C !important; }
+  .wecom-red .text-blue-400 { color: #F87171 !important; }
+  .wecom-red .text-blue-500 { color: #EF4444 !important; }
+  .wecom-red .text-blue-600 { color: #DC2626 !important; }
+  .wecom-red .text-blue-700 { color: #B91C1C !important; }
+  .wecom-red .border-blue-100 { border-color: #FEE2E2 !important; }
+  .wecom-red .border-blue-200 { border-color: #FECACA !important; }
+  .wecom-red .border-blue-300 { border-color: #FCA5A5 !important; }
+  .wecom-red .border-blue-500 { border-color: #EF4444 !important; }
+  .wecom-red .border-blue-600 { border-color: #DC2626 !important; }
+  .wecom-red .hover\:bg-blue-700:hover { background-color: #B91C1C !important; }
+
+  /* --- 微信客服 Tab：绿色系 #16A34A --- */
+  .wecom-green .bg-blue-50  { background-color: #F0FDF4 !important; }
+  .wecom-green .bg-blue-100 { background-color: #DCFCE7 !important; }
+  .wecom-green .bg-blue-500 { background-color: #22C55E !important; }
+  .wecom-green .bg-blue-600 { background-color: #16A34A !important; }
+  .wecom-green .bg-blue-700 { background-color: #15803D !important; }
+  .wecom-green .text-blue-400 { color: #4ADE80 !important; }
+  .wecom-green .text-blue-500 { color: #22C55E !important; }
+  .wecom-green .text-blue-600 { color: #16A34A !important; }
+  .wecom-green .text-blue-700 { color: #15803D !important; }
+  .wecom-green .border-blue-100 { border-color: #DCFCE7 !important; }
+  .wecom-green .border-blue-200 { border-color: #BBF7D0 !important; }
+  .wecom-green .border-blue-300 { border-color: #86EFAC !important; }
+  .wecom-green .border-blue-500 { border-color: #22C55E !important; }
+  .wecom-green .border-blue-600 { border-color: #16A34A !important; }
+  .wecom-green .hover\:bg-blue-700:hover { background-color: #15803D !important; }
 }
 
 /* 确保grid容器和卡片在所有设备上都能正确自适应 */

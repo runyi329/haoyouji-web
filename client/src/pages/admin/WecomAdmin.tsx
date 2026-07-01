@@ -2108,7 +2108,7 @@ function MenuTab() {
   if (loading) return <div className="px-4 py-8 text-center text-xs text-gray-400">加载中...</div>;
 
   return (
-    <div className="px-4 space-y-3">
+    <div className="px-4 space-y-3 wecom-blue">
       <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
         <div className="text-xs font-medium text-amber-800 mb-1">菜单配置</div>
         <div className="text-xs text-amber-700 leading-relaxed">
@@ -4370,7 +4370,7 @@ function ChannelTab() {
 
   // 第一级：应用列表
   return (
-    <div>
+    <div className="wecom-green">
       {/* 帽子 */}
       <div className="sticky top-0 z-10" style={{ background: 'linear-gradient(135deg,#0d2818 0%,#1a5c2e 100%)' }}>
         <div className="flex items-center justify-between px-4" style={{ height: 48 }}>
@@ -5484,7 +5484,7 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 wecom-blue">
       {/* 渠道启用/停用开关 */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
         <div className="flex items-center justify-between">
@@ -9395,7 +9395,7 @@ function NotifyTab() {
   };
 
   return (
-    <div className="space-y-4 pb-8">
+    <div className="space-y-4 pb-8 wecom-red">
       {/* 消息提示 */}
       {msg && (
         <div className={`rounded-xl px-4 py-3 text-sm font-medium ${msg.type === "ok" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
