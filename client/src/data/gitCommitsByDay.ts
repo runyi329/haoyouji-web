@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-01
+// 生成时间：2026-07-02
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8023,5 +8023,10 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-01T09:32:32Z", type: "fix", cleanMessage: "全局关闭tooltip改为冒泡阶段，避免stopPropagation失效" },
     { date: "2026-07-01T09:39:06Z", type: "fix", cleanMessage: "合计行今日变动tooltip改fixed定位，修复被截断无法显示" },
     { date: "2026-07-01T09:52:29Z", type: "fix", cleanMessage: "合计行tooltip改为向上弹出，避免被屏幕底部截断" },
+    { date: "2026-07-01T12:26:15Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+  ],
+  "2026-07-02": [
+    { date: "2026-07-01T16:57:57Z", type: "fix", cleanMessage: "修复三个Tab颜色系统，绕过全局主题映射" },
+    { date: "2026-07-01T17:20:04Z", type: "feat", cleanMessage: "WecomAdmin 13步改造 - 三色Tab/圆形开关/卡片圆角/欢迎语移底部/颜色系统修复" },
   ],
 };
