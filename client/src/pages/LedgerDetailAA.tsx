@@ -2503,7 +2503,7 @@ export default function LedgerDetailAA({
                             {!hasAny ? '--' : (totalTodayPnl !== 0 ? `${totalTodayPnl < 0 ? '-' : ''}${Math.abs(totalTodayPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--')}
                           </span>
                           {showTotalTodayTooltip && hasAny && totalTodayTooltipPos && (
-                            <div style={{ position: 'fixed', left: totalTodayTooltipPos.x + 8, top: totalTodayTooltipPos.y - 8, zIndex: 9999, background: '#1A1A1A', color: '#FFF', borderRadius: 8, padding: '8px 10px', whiteSpace: 'nowrap', fontSize: 10, boxShadow: '0 2px 12px rgba(0,0,0,0.3)', lineHeight: 1.8, minWidth: 140 }}
+                            <div style={{ position: 'fixed', left: Math.min(totalTodayTooltipPos.x + 8, window.innerWidth - 160), bottom: window.innerHeight - totalTodayTooltipPos.y + 12, zIndex: 9999, background: '#1A1A1A', color: '#FFF', borderRadius: 8, padding: '8px 10px', whiteSpace: 'nowrap', fontSize: 10, boxShadow: '0 2px 12px rgba(0,0,0,0.3)', lineHeight: 1.8, minWidth: 140 }}
                               onClick={(e) => { e.stopPropagation(); setShowTotalTodayTooltip(false); setTotalTodayTooltipPos(null); }}
                             >
                               <div style={{ color: '#BDBDBD', marginBottom: 4, fontSize: 9 }}>点击关闭</div>
