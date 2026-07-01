@@ -2208,8 +2208,9 @@ export default function LedgerDetailAA({
             });
             // 汇总行数据
             const totalMargin = validTags.reduce((s, t) => s + t.marginCny, 0);
-            // totalPnl 统计所有有数据的标签（不限于有保证金），与红色区域「全部统计之和」口径一致
-            const totalPnl = visibleTags.reduce((s, t) => s + (t.points[t.points.length - 1]?.pnl ?? 0), 0);
+            // totalPnl = 直接把每行显示的 latestPnl 加总（含灰色，不含灰色均统计）
+            // tagData 在此之前已计算完毕，直接用
+            const totalPnl = tagData.reduce((s, td) => s + td.latestPnl, 0);
             const weightedDenominator = validTags.reduce((s, t) => {
               const configSD = initialBalancesData?.balances ? String(initialBalancesData.balances[`${t.name}__startDate`] ?? '') : '';
               const firstDate = configSD || t.points[0]?.date;
@@ -2470,8 +2471,8 @@ export default function LedgerDetailAA({
                     <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
                     {/* 今日变动合计 */}
                     {(() => {
-                      // 只统计已更新（latestDate === _latestDataDate）的标签
-                      const updatedTagsData = tagData.filter(td => td.latestDate === _latestDataDate && td.todayPnl !== null);
+                      // 只统计有彩色数字的标签：已更新（latestDate === _latestDataDate）且 todayPnl 非零非空
+                      const updatedTagsData = tagData.filter(td => td.latestDate === _latestDataDate && td.todayPnl !== null && td.todayPnl !== 0);
                       const staleTagsData = tagData.filter(td => td.latestDate !== _latestDataDate && td.tag.points.length > 0);
                       const totalTodayPnl = updatedTagsData.reduce((s, td) => s + (td.todayPnl ?? 0), 0);
                       const hasAny = updatedTagsData.length > 0;
