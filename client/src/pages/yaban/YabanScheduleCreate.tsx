@@ -124,15 +124,15 @@ export default function YabanScheduleCreate() {
     [membersData]
   );
 
-  // 角色显示配置（从 localStorage 读取，决定第2步显示哪些角色、顺序）
+  // 角色显示配置：直接用后端 rolesData（已按 sort 排序），不依赖 localStorage
   const allRolesForConfig = useMemo(() => {
     if ((rolesData as any[]).length > 0) return (rolesData as any[]).map((r: any) => ({ role_key: r.role_key, name: r.name }));
     return BUILTIN_ROLE_PRESETS;
   }, [rolesData]);
 
   const roleConfig = useMemo(
-    () => loadApptRoleConfig(currentTenantId ?? null, allRolesForConfig),
-    [currentTenantId, allRolesForConfig]
+    () => ({ roles: allRolesForConfig.map((r) => ({ role_key: r.role_key, name: r.name, visible: true })) }),
+    [allRolesForConfig]
   );
 
   // 按角色分组的成员（必须先于 step2Roles 声明）
