@@ -526,6 +526,22 @@ export default function LedgerDetailAA({
   const [tooltipRatioTag, setTooltipRatioTag] = useState<string | null>(null);
   const [tooltipTodayPnlTag, setTooltipTodayPnlTag] = useState<string | null>(null);
   const [showTotalTodayTooltip, setShowTotalTodayTooltip] = useState(false);
+  // 名称列 tooltip 用 fixed 定位，记录点击坐标
+  const [tooltipTagPos, setTooltipTagPos] = useState<{ x: number; y: number } | null>(null);
+
+  // 全局点击关闭所有 tooltip
+  useEffect(() => {
+    const closeAll = () => {
+      setTooltipTagName(null);
+      setTooltipTagPos(null);
+      setTooltipRatioTag(null);
+      setTooltipTodayPnlTag(null);
+      setShowTotalTodayTooltip(false);
+    };
+    document.addEventListener('click', closeAll, true);
+    return () => document.removeEventListener('click', closeAll, true);
+  }, []);
+
   const [overviewTab, setOverviewTab] = useState<'overview' | 'calendar' | 'chart'>('overview');
   const overviewHeaderInnerRef = useRef<HTMLDivElement>(null); // 表头行内层div，用translateX同步横向位置
   const overviewBodyScrollRef = useRef<HTMLDivElement>(null); // 数据行横向滚动容器
@@ -2302,10 +2318,20 @@ export default function LedgerDetailAA({
                         <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
                         <span
                           style={{ fontSize: 13, fontWeight: 500, color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0, cursor: tag.name.length > 4 ? 'pointer' : 'default', textDecoration: tag.name.length > 4 ? 'underline' : 'none', textDecorationStyle: tag.name.length > 4 ? 'dashed' : undefined, textDecorationColor: tag.name.length > 4 ? '#999' : undefined, textUnderlineOffset: '2px' }}
-                          onClick={() => tag.name.length > 4 ? setTooltipTagName(tooltipTagName === tag.name ? null : tag.name) : undefined}
-                        >{tag.name.length > 4 ? tag.name.slice(0, 4) + '…' : tag.name}</span>
-                        {tooltipTagName === tag.name && (
-                          <div style={{ position: 'absolute', zIndex: 50, background: '#333', color: '#fff', borderRadius: 6, padding: '4px 8px', fontSize: 11, whiteSpace: 'nowrap', transform: 'translateY(-120%)', pointerEvents: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
+                          onClick={(e) => {
+                            if (tag.name.length > 4) {
+                              e.stopPropagation();
+                              if (tooltipTagName === tag.name) {
+                                setTooltipTagName(null); setTooltipTagPos(null);
+                              } else {
+                                setTooltipTagName(tag.name);
+                                setTooltipTagPos({ x: e.clientX, y: e.clientY });
+                              }
+                            }
+                          }}
+                        >{tag.name.length > 4 ? tag.name.slice(0, 4) + '\u2026' : tag.name}</span>
+                        {tooltipTagName === tag.name && tooltipTagPos && (
+                          <div style={{ position: 'fixed', left: tooltipTagPos.x + 8, top: tooltipTagPos.y - 36, zIndex: 9999, background: '#333', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 12, whiteSpace: 'nowrap', pointerEvents: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
                             {tag.name}
                           </div>
                         )}
@@ -2333,7 +2359,7 @@ export default function LedgerDetailAA({
                               style={{ fontSize: 13, color: _todayPnlColor, cursor: _canShowTooltip ? 'pointer' : 'default',
                                 textDecoration: _canShowTooltip ? 'underline' : 'none', textDecorationStyle: 'dashed',
                                 textDecorationColor: _todayPnlColor, textUnderlineOffset: '2px', whiteSpace: 'nowrap' }}
-                              onClick={() => _canShowTooltip ? setTooltipTodayPnlTag(tooltipTodayPnlTag === tag.name ? null : tag.name) : undefined}
+                              onClick={(e) => { if (_canShowTooltip) { e.stopPropagation(); setTooltipTodayPnlTag(tooltipTodayPnlTag === tag.name ? null : tag.name); } }}
                             >{_todayPnlText}</span>
                             {tooltipTodayPnlTag === tag.name && _canShowTooltip && (
                               <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 50, background: '#1A1A1A', color: '#FFF', borderRadius: 6, padding: '5px 8px', whiteSpace: 'nowrap', fontSize: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.25)', marginTop: 4, lineHeight: 1.6 }}>
@@ -2420,7 +2446,7 @@ export default function LedgerDetailAA({
                           <div className={dataCellCls} style={{ borderBottom: rowBorder, position: 'relative' }}>
                             <span
                               style={{ fontSize: 13, color: '#424242', cursor: ratioNum !== null ? 'pointer' : 'default', textDecoration: ratioNum !== null ? 'underline' : 'none', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
-                              onClick={() => ratioNum !== null ? setTooltipRatioTag(tooltipRatioTag === tag.name ? null : tag.name) : undefined}
+                              onClick={(e) => { if (ratioNum !== null) { e.stopPropagation(); setTooltipRatioTag(tooltipRatioTag === tag.name ? null : tag.name); } }}
                             >
                               {ratioNum !== null ? `${ratioNum.toFixed(0)}%` : '0%'}
                             </span>
@@ -2470,7 +2496,7 @@ export default function LedgerDetailAA({
                         <div className="px-1 py-2 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', position: 'relative' }}>
                           <span
                             style={{ fontSize: 13, fontWeight: 600, color: !hasAny ? '#BDBDBD' : totalTodayPnl > 0 ? '#D32F2F' : totalTodayPnl < 0 ? '#388E3C' : '#BDBDBD', cursor: hasAny ? 'pointer' : 'default', textDecoration: hasAny ? 'underline' : 'none', textDecorationStyle: 'dashed', textDecorationColor: totalTodayPnl > 0 ? '#D32F2F' : '#388E3C', textUnderlineOffset: '2px' }}
-                            onClick={() => hasAny ? setShowTotalTodayTooltip(v => !v) : undefined}
+                            onClick={(e) => { if (hasAny) { e.stopPropagation(); setShowTotalTodayTooltip(v => !v); } }}
                           >
                             {!hasAny ? '--' : (totalTodayPnl !== 0 ? `${totalTodayPnl < 0 ? '-' : ''}${Math.abs(totalTodayPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--')}
                           </span>
