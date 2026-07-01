@@ -526,6 +526,7 @@ export default function LedgerDetailAA({
   const [tooltipRatioTag, setTooltipRatioTag] = useState<string | null>(null);
   const [tooltipTodayPnlTag, setTooltipTodayPnlTag] = useState<string | null>(null);
   const [showTotalTodayTooltip, setShowTotalTodayTooltip] = useState(false);
+  const [totalTodayTooltipPos, setTotalTodayTooltipPos] = useState<{ x: number; y: number } | null>(null);
   // 名称列 tooltip 用 fixed 定位，记录点击坐标
   const [tooltipTagPos, setTooltipTagPos] = useState<{ x: number; y: number } | null>(null);
 
@@ -537,6 +538,7 @@ export default function LedgerDetailAA({
       setTooltipRatioTag(null);
       setTooltipTodayPnlTag(null);
       setShowTotalTodayTooltip(false);
+      setTotalTodayTooltipPos(null);
     };
     document.addEventListener('click', closeAll);
     return () => document.removeEventListener('click', closeAll);
@@ -2496,13 +2498,13 @@ export default function LedgerDetailAA({
                         <div className="px-1 py-2 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', position: 'relative' }}>
                           <span
                             style={{ fontSize: 13, fontWeight: 600, color: !hasAny ? '#BDBDBD' : totalTodayPnl > 0 ? '#D32F2F' : totalTodayPnl < 0 ? '#388E3C' : '#BDBDBD', cursor: hasAny ? 'pointer' : 'default', textDecoration: hasAny ? 'underline' : 'none', textDecorationStyle: 'dashed', textDecorationColor: totalTodayPnl > 0 ? '#D32F2F' : '#388E3C', textUnderlineOffset: '2px' }}
-                            onClick={(e) => { if (hasAny) { e.stopPropagation(); setShowTotalTodayTooltip(v => !v); } }}
+                            onClick={(e) => { if (hasAny) { e.stopPropagation(); if (showTotalTodayTooltip) { setShowTotalTodayTooltip(false); setTotalTodayTooltipPos(null); } else { setShowTotalTodayTooltip(true); setTotalTodayTooltipPos({ x: e.clientX, y: e.clientY }); } } }}
                           >
                             {!hasAny ? '--' : (totalTodayPnl !== 0 ? `${totalTodayPnl < 0 ? '-' : ''}${Math.abs(totalTodayPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--')}
                           </span>
-                          {showTotalTodayTooltip && hasAny && (
-                            <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 60, background: '#1A1A1A', color: '#FFF', borderRadius: 8, padding: '8px 10px', whiteSpace: 'nowrap', fontSize: 10, boxShadow: '0 2px 12px rgba(0,0,0,0.3)', marginTop: 4, lineHeight: 1.8, minWidth: 140 }}
-                              onClick={() => setShowTotalTodayTooltip(false)}
+                          {showTotalTodayTooltip && hasAny && totalTodayTooltipPos && (
+                            <div style={{ position: 'fixed', left: totalTodayTooltipPos.x + 8, top: totalTodayTooltipPos.y - 8, zIndex: 9999, background: '#1A1A1A', color: '#FFF', borderRadius: 8, padding: '8px 10px', whiteSpace: 'nowrap', fontSize: 10, boxShadow: '0 2px 12px rgba(0,0,0,0.3)', lineHeight: 1.8, minWidth: 140 }}
+                              onClick={(e) => { e.stopPropagation(); setShowTotalTodayTooltip(false); setTotalTodayTooltipPos(null); }}
                             >
                               <div style={{ color: '#BDBDBD', marginBottom: 4, fontSize: 9 }}>点击关闭</div>
                               {updatedTagsData.length > 0 && (
