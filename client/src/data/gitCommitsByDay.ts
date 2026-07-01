@@ -8014,5 +8014,14 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   ],
   "2026-07-01": [
     { date: "2026-06-30T17:54:11Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-01T08:15:45Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-01T08:18:42Z", type: "feat", cleanMessage: "角色管理重构 - 统一内置/自定义角色，支持增删改排序，排序联动预约界面" },
+    { date: "2026-07-01T08:42:16Z", type: "fix", cleanMessage: "修复回报合计=各行latestPnl之和，当天列合计只统计彩色数字标签" },
+    { date: "2026-07-01T08:59:26Z", type: "fix", cleanMessage: "修复合计行列顺序，回报列正确显示各行pnl之和" },
+    { date: "2026-07-01T09:07:32Z", type: "fix", cleanMessage: "tooltip弹层改为向右展开，避免左边缘截断" },
+    { date: "2026-07-01T09:21:33Z", type: "fix", cleanMessage: "tooltip点击外部关闭+名称列改fixed定位不被截断" },
+    { date: "2026-07-01T09:32:32Z", type: "fix", cleanMessage: "全局关闭tooltip改为冒泡阶段，避免stopPropagation失效" },
+    { date: "2026-07-01T09:39:06Z", type: "fix", cleanMessage: "合计行今日变动tooltip改fixed定位，修复被截断无法显示" },
+    { date: "2026-07-01T09:52:29Z", type: "fix", cleanMessage: "合计行tooltip改为向上弹出，避免被屏幕底部截断" },
   ],
 };
