@@ -538,8 +538,8 @@ export default function LedgerDetailAA({
       setTooltipTodayPnlTag(null);
       setShowTotalTodayTooltip(false);
     };
-    document.addEventListener('click', closeAll, true);
-    return () => document.removeEventListener('click', closeAll, true);
+    document.addEventListener('click', closeAll);
+    return () => document.removeEventListener('click', closeAll);
   }, []);
 
   const [overviewTab, setOverviewTab] = useState<'overview' | 'calendar' | 'chart'>('overview');
