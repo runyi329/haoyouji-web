@@ -922,6 +922,17 @@ export const yabanRoleRouter = router({
   }),
 
   // ============ 角色列表（含默认模板 scope；内置 + 该门店自定义） ============
+  // 轻量版：只返回角色名称和排序，不查权限点，供 A316 等只需角色列表的场景使用
+  listRolesSimple: protectedProcedure
+    .input(z.object({ tenantId: z.number().int().optional() }).optional())
+    .query(async ({ input }) => {
+      const tenantId = input?.tenantId ?? DEFAULT_TENANT_ID;
+      const conn = await getDbConnection();
+      if (!conn) return [];
+      await ensureRoleTables(conn);
+      const roleList = await listTenantRoles(conn, tenantId);
+      return roleList.map(r => ({ role_key: r.role_key, name: r.name, sort: r.sort, is_builtin: r.is_builtin }));
+    }),
   listRoles: protectedProcedure
     .input(z.object({ tenantId: z.number().int().optional() }).optional())
     .query(async ({ input }) => {
