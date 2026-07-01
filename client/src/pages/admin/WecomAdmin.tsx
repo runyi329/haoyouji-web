@@ -118,7 +118,7 @@ function creditsToYuan(credits: number) {
 
 // ─── Tab 按钮 ────────────────────────────────────────────────────────────────
 
-type TabKey = "binding" | "users" | "workflow" | "messages" | "stats" | "menu" | "channel" | "docs" | "notify";
+type TabKey = "stats" | "channel";
 
 // Link2 图标内联引入
 const Link2Icon = () => (
@@ -129,15 +129,8 @@ const Link2Icon = () => (
 );
 
 const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
-  { key: "binding", label: "用户绑定", icon: <Link2Icon /> },
-  { key: "users", label: "客服用户", icon: <User className="w-4 h-4" /> },
-  { key: "workflow", label: "工作流", icon: <Zap className="w-4 h-4" /> },
-  { key: "messages", label: "消息", icon: <MessageSquare className="w-4 h-4" /> },
   { key: "stats", label: "统计", icon: <BarChart2 className="w-4 h-4" /> },
-  { key: "menu", label: "菜单", icon: <Menu className="w-4 h-4" /> },
   { key: "channel", label: "渠道", icon: <Settings className="w-4 h-4" /> },
-  { key: "docs", label: "文档", icon: <FileText className="w-4 h-4" /> },
-  { key: "notify", label: "通知平台", icon: <Bell className="w-4 h-4" /> },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -146,7 +139,7 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
 
 export default function WecomAdmin() {
   const [, navigate] = useLocation();
-  const [activeTab, setActiveTab] = useState<TabKey>("binding");
+  const [activeTab, setActiveTab] = useState<TabKey>("channel");
 
   const currentLabel = TABS.find(t => t.key === activeTab)?.label || "企业微信";
 
@@ -167,15 +160,8 @@ export default function WecomAdmin() {
 
       {/* Tab 内容 */}
       <div className="pt-2">
-        {activeTab === "binding" && <WecomBindingManager />}
-        {activeTab === "users" && <UsersTab />}
-        {activeTab === "workflow" && <WorkflowTab />}
-        {activeTab === "messages" && <MessagesTab />}
         {activeTab === "stats" && <StatsTab />}
-        {activeTab === "menu" && <MenuTab />}
-        {activeTab === "channel" && <ChannelTab />}
-        {activeTab === "docs" && <DocsTab />}
-        {activeTab === "notify" && <NotifyTab />}
+        {activeTab === "channel" && <NewChannelTab />}
       </div>
 
       {/* 底部 Tab 栏 */}
@@ -235,7 +221,7 @@ function SearchSelect({
   return (
     <div className="relative">
       <div
-        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm flex items-center justify-between cursor-pointer bg-white"
+        className="w-full border border-gray-200 rounded-sm px-3 py-2 text-sm flex items-center justify-between cursor-pointer bg-white"
         onClick={() => setOpen(v => !v)}
       >
         <span className={selectedLabel ? "text-gray-900" : "text-gray-400"}>
@@ -244,11 +230,11 @@ function SearchSelect({
         <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${open ? "rotate-90" : ""}`} />
       </div>
       {open && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded shadow-lg overflow-hidden">
           <div className="p-2 border-b border-gray-100">
             <input
               autoFocus
-              className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm"
+              className="w-full border border-gray-200 rounded-sm px-3 py-1.5 text-sm"
               placeholder="搜索..."
               value={search}
               onChange={e => setSearch(e.target.value)}
@@ -417,17 +403,17 @@ function UsersTab() {
     <div className="px-4 space-y-3">
       {/* 统计卡片 */}
       <div className="grid grid-cols-3 gap-2 pt-1">
-        <div className="bg-white rounded-xl p-3 shadow-sm text-center">
+        <div className="bg-white rounded p-3 shadow-sm text-center">
           <div className="text-xl font-bold text-blue-600">{sessions.length}</div>
           <div className="text-xs text-gray-500 mt-0.5">绑定用户</div>
         </div>
-        <div className="bg-white rounded-xl p-3 shadow-sm text-center">
+        <div className="bg-white rounded p-3 shadow-sm text-center">
           <div className="text-xl font-bold text-purple-600">
             {sessions.filter(s => !s.model_pref || s.model_pref === "manus-1.6-max").length}
           </div>
           <div className="text-xs text-gray-500 mt-0.5">Max 用户</div>
         </div>
-        <div className="bg-white rounded-xl p-3 shadow-sm text-center">
+        <div className="bg-white rounded p-3 shadow-sm text-center">
           <div className="text-xl font-bold text-green-600">
             {sessions.filter(s => s.enabled !== 0).length}
           </div>
@@ -439,7 +425,7 @@ function UsersTab() {
       <div className="flex gap-2">
         <button
           onClick={fetchSessions}
-          className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-600"
+          className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 rounded text-sm text-gray-600"
           disabled={loading}
         >
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
@@ -447,7 +433,7 @@ function UsersTab() {
         </button>
         <button
           onClick={() => { setShowAddForm(v => !v); if (!showAddForm) fetchDropdownData(); }}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium"
+          className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-blue-600 text-white rounded text-sm font-medium"
         >
           <Plus className="w-4 h-4" />
           手动绑定用户
@@ -456,7 +442,7 @@ function UsersTab() {
 
       {/* 添加表单 */}
       {showAddForm && (
-        <div className="bg-white rounded-xl p-4 shadow-sm space-y-3 border border-blue-100">
+        <div className="bg-white rounded p-4 shadow-sm space-y-3 border border-blue-100">
           <div className="flex items-center justify-between">
             <div className="text-sm font-medium text-gray-700">手动绑定新用户</div>
             {loadingTasks && <span className="text-xs text-gray-400">加载中...</span>}
@@ -478,7 +464,7 @@ function UsersTab() {
             ) : (
               <div>
                 <input
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                  className="w-full border border-gray-200 rounded-sm px-3 py-2 text-sm"
                   placeholder="输入企业微信 userId，如：HuYongYu"
                   value={addForm.wecom_user_id}
                   onChange={e => setAddForm(f => ({ ...f, wecom_user_id: e.target.value }))}
@@ -505,7 +491,7 @@ function UsersTab() {
               />
             ) : (
               <input
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
+                className="w-full border border-gray-200 rounded-sm px-3 py-2 text-sm font-mono"
                 placeholder="输入任务 ID，如：6iJ9mQRxzykTSqFHtz5KFp"
                 value={addForm.manus_task_id}
                 onChange={e => setAddForm(f => ({ ...f, manus_task_id: e.target.value }))}
@@ -517,7 +503,7 @@ function UsersTab() {
           <div>
             <label className="text-xs text-gray-500 mb-1 block">备注名（可选）</label>
             <input
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              className="w-full border border-gray-200 rounded-sm px-3 py-2 text-sm"
               placeholder="如：胡勇宇"
               value={addForm.nickname}
               onChange={e => setAddForm(f => ({ ...f, nickname: e.target.value }))}
@@ -525,12 +511,12 @@ function UsersTab() {
           </div>
 
           <div className="flex gap-2">
-            <button onClick={handleAdd} className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">
+            <button onClick={handleAdd} className="flex-1 py-2 bg-blue-600 text-white rounded-sm text-sm font-medium">
               确认绑定
             </button>
             <button
               onClick={() => { setShowAddForm(false); setAddForm({ wecom_user_id: "", manus_task_id: "", nickname: "" }); }}
-              className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm"
+              className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-sm text-sm"
             >
               取消
             </button>
@@ -545,7 +531,7 @@ function UsersTab() {
         <div className="text-center py-10 text-gray-400 text-sm">暂无绑定用户</div>
       ) : (
         sessions.map(session => (
-          <div key={session.id} className="bg-white rounded-xl shadow-sm overflow-hidden">
+          <div key={session.id} className="bg-white rounded shadow-sm overflow-hidden">
             {editingId === session.id ? (
               <div className="p-4 space-y-3">
                 <div className="flex items-center gap-2 mb-1">
@@ -555,7 +541,7 @@ function UsersTab() {
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">备注名</label>
                   <input
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                    className="w-full border border-gray-200 rounded-sm px-3 py-2 text-sm"
                     value={editForm.nickname || ""}
                     onChange={e => setEditForm(f => ({ ...f, nickname: e.target.value }))}
                   />
@@ -574,7 +560,7 @@ function UsersTab() {
                     />
                   ) : (
                     <input
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono"
+                      className="w-full border border-gray-200 rounded-sm px-3 py-2 text-sm font-mono"
                       value={editForm.manus_task_id || ""}
                       onChange={e => setEditForm(f => ({ ...f, manus_task_id: e.target.value }))}
                     />
@@ -587,7 +573,7 @@ function UsersTab() {
                       <button
                         key={opt.value}
                         onClick={() => setEditForm(f => ({ ...f, model_pref: opt.value }))}
-                        className={`py-2 rounded-lg text-xs font-medium border transition-colors ${
+                        className={`py-2 rounded-sm text-xs font-medium border transition-colors ${
                           (editForm.model_pref || "manus-1.6-max") === opt.value
                             ? "bg-blue-600 text-white border-blue-600"
                             : "bg-white text-gray-600 border-gray-200"
@@ -601,7 +587,7 @@ function UsersTab() {
                 <div>
                   <label className="text-xs text-gray-500 mb-1 block">系统提示词</label>
                   <textarea
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none"
+                    className="w-full border border-gray-200 rounded-sm px-3 py-2 text-sm resize-none"
                     rows={4}
                     placeholder="设置后，每次用户发消息时会在前面附加这段提示词，用于约束回复格式、范围等。&#10;例如：请用简洁的中文回答，每次回复不超过200字。"
                     value={editForm.system_prompt || ""}
@@ -611,13 +597,13 @@ function UsersTab() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleSaveEdit(session)}
-                    className="flex-1 flex items-center justify-center gap-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium"
+                    className="flex-1 flex items-center justify-center gap-1 py-2 bg-blue-600 text-white rounded-sm text-sm font-medium"
                   >
                     <Check className="w-4 h-4" /> 保存
                   </button>
                   <button
                     onClick={() => setEditingId(null)}
-                    className="flex-1 flex items-center justify-center gap-1 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm"
+                    className="flex-1 flex items-center justify-center gap-1 py-2 bg-gray-100 text-gray-600 rounded-sm text-sm"
                   >
                     <X className="w-4 h-4" /> 取消
                   </button>
@@ -676,7 +662,7 @@ function UsersTab() {
                   任务: {session.manus_task_id}
                 </div>
                 {session.system_prompt && (
-                  <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-2 py-1.5 mb-2 line-clamp-2">
+                  <div className="text-xs text-gray-500 bg-gray-50 rounded-sm px-2 py-1.5 mb-2 line-clamp-2">
                     提示词: {session.system_prompt}
                   </div>
                 )}
@@ -687,13 +673,13 @@ function UsersTab() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => { setEditingId(session.id); setEditForm({ nickname: session.nickname, manus_task_id: session.manus_task_id, model_pref: session.model_pref || "manus-1.6-max", system_prompt: session.system_prompt || "" }); fetchDropdownData(); }}
-                    className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-gray-50 text-gray-600 rounded-lg text-xs border border-gray-200"
+                    className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-gray-50 text-gray-600 rounded-sm text-xs border border-gray-200"
                   >
                     <Edit2 className="w-3 h-3" /> 编辑
                   </button>
                   <button
                     onClick={() => handleToggleEnabled(session)}
-                    className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs border ${
+                    className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-sm text-xs border ${
                       session.enabled === 0
                         ? "bg-green-50 text-green-600 border-green-200"
                         : "bg-orange-50 text-orange-600 border-orange-200"
@@ -705,7 +691,7 @@ function UsersTab() {
                   <button
                     onClick={() => handleArchive(session.id, session.nickname)}
                     title="归档（保留积分记录）"
-                    className="flex items-center justify-center gap-1 px-3 py-1.5 bg-orange-50 text-orange-500 rounded-lg text-xs border border-orange-200"
+                    className="flex items-center justify-center gap-1 px-3 py-1.5 bg-orange-50 text-orange-500 rounded-sm text-xs border border-orange-200"
                   >
                     <Trash2 className="w-3 h-3" />
                   </button>
@@ -810,7 +796,7 @@ function WorkflowTab() {
   return (
     <div className="px-4 space-y-3">
       {/* 说明卡片 */}
-      <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
+      <div className="bg-blue-50 rounded p-3 border border-blue-100">
         <div className="text-xs font-medium text-blue-800 mb-1">工作流规则</div>
         <div className="text-xs text-blue-600 leading-relaxed">
           当用户发送消息时，按规则顺序匹配。可设置关键词触发、定时推送、消息拦截等自动化规则。
@@ -821,14 +807,14 @@ function WorkflowTab() {
       <div className="flex gap-2">
         <button
           onClick={fetchRules}
-          className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-600"
+          className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-200 rounded text-sm text-gray-600"
           disabled={loading}
         >
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
         </button>
         <button
           onClick={() => setShowAdd(!showAdd)}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium"
+          className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-blue-600 text-white rounded text-sm font-medium"
         >
           <Plus className="w-4 h-4" />
           新建规则
@@ -837,12 +823,12 @@ function WorkflowTab() {
 
       {/* 添加表单 */}
       {showAdd && (
-        <div className="bg-white rounded-xl p-4 shadow-sm space-y-3 border border-blue-100">
+        <div className="bg-white rounded p-4 shadow-sm space-y-3 border border-blue-100">
           <div className="text-sm font-medium text-gray-700">新建工作流规则</div>
           <div>
             <label className="text-xs text-gray-500 mb-1 block">规则名称</label>
             <input
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              className="w-full border border-gray-200 rounded-sm px-3 py-2 text-sm"
               placeholder="如：屏蔽广告关键词"
               value={addForm.name}
               onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
@@ -855,7 +841,7 @@ function WorkflowTab() {
                 <button
                   key={t}
                   onClick={() => setAddForm(f => ({ ...f, trigger_type: t }))}
-                  className={`py-2 rounded-lg text-xs font-medium border ${
+                  className={`py-2 rounded-sm text-xs font-medium border ${
                     addForm.trigger_type === t ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200"
                   }`}
                 >
@@ -871,7 +857,7 @@ function WorkflowTab() {
                "触发说明（填写任意内容）"}
             </label>
             <input
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+              className="w-full border border-gray-200 rounded-sm px-3 py-2 text-sm"
               placeholder={addForm.trigger_type === "keyword" ? "广告,推广,优惠" : addForm.trigger_type === "schedule" ? "0 9 * * *" : "所有消息"}
               value={addForm.trigger_value}
               onChange={e => setAddForm(f => ({ ...f, trigger_value: e.target.value }))}
@@ -884,7 +870,7 @@ function WorkflowTab() {
                 <button
                   key={a}
                   onClick={() => setAddForm(f => ({ ...f, action_type: a }))}
-                  className={`py-2 rounded-lg text-xs font-medium border ${
+                  className={`py-2 rounded-sm text-xs font-medium border ${
                     addForm.action_type === a ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200"
                   }`}
                 >
@@ -900,7 +886,7 @@ function WorkflowTab() {
                "拦截提示（发送给用户的提示，留空则不回复）"}
             </label>
             <textarea
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none"
+              className="w-full border border-gray-200 rounded-sm px-3 py-2 text-sm resize-none"
               rows={3}
               placeholder={addForm.action_type === "prompt_override" ? "请用简洁的中文回答..." : addForm.action_type === "fixed_reply" ? "您好，该功能暂不支持..." : "抱歉，该类消息不支持处理"}
               value={addForm.action_value}
@@ -908,10 +894,10 @@ function WorkflowTab() {
             />
           </div>
           <div className="flex gap-2">
-            <button onClick={handleAdd} className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">
+            <button onClick={handleAdd} className="flex-1 py-2 bg-blue-600 text-white rounded-sm text-sm font-medium">
               创建规则
             </button>
-            <button onClick={() => setShowAdd(false)} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm">
+            <button onClick={() => setShowAdd(false)} className="flex-1 py-2 bg-gray-100 text-gray-600 rounded-sm text-sm">
               取消
             </button>
           </div>
@@ -925,7 +911,7 @@ function WorkflowTab() {
         <div className="text-center py-10 text-gray-400 text-sm">暂无工作流规则</div>
       ) : (
         rules.map(rule => (
-          <div key={rule.id} className={`bg-white rounded-xl shadow-sm p-4 ${rule.enabled === 0 ? "opacity-60" : ""}`}>
+          <div key={rule.id} className={`bg-white rounded shadow-sm p-4 ${rule.enabled === 0 ? "opacity-60" : ""}`}>
             <div className="flex items-start justify-between mb-2">
               <div>
                 <div className="text-sm font-medium text-gray-900">{rule.name}</div>
@@ -942,16 +928,16 @@ function WorkflowTab() {
                 {rule.enabled ? "运行中" : "已停用"}
               </div>
             </div>
-            <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-2 py-1.5 mb-2">
+            <div className="text-xs text-gray-500 bg-gray-50 rounded-sm px-2 py-1.5 mb-2">
               <span className="text-gray-400">触发: </span>{rule.trigger_value}
             </div>
-            <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-2 py-1.5 mb-3 line-clamp-2">
+            <div className="text-xs text-gray-500 bg-gray-50 rounded-sm px-2 py-1.5 mb-3 line-clamp-2">
               <span className="text-gray-400">动作: </span>{rule.action_value || "（拦截，不回复）"}
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => handleToggle(rule)}
-                className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs border ${
+                className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-sm text-xs border ${
                   rule.enabled ? "bg-orange-50 text-orange-600 border-orange-200" : "bg-green-50 text-green-600 border-green-200"
                 }`}
               >
@@ -960,7 +946,7 @@ function WorkflowTab() {
               </button>
               <button
                 onClick={() => handleDelete(rule.id)}
-                className="flex items-center justify-center gap-1 px-3 py-1.5 bg-red-50 text-red-500 rounded-lg text-xs border border-red-200"
+                className="flex items-center justify-center gap-1 px-3 py-1.5 bg-red-50 text-red-500 rounded-sm text-xs border border-red-200"
               >
                 <Trash2 className="w-3 h-3" />
               </button>
@@ -1025,7 +1011,7 @@ function MessagesTab() {
           <div className="space-y-2">
             {messages.map((msg: any, i: number) => (
               <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${
+                <div className={`max-w-[85%] rounded px-3 py-2 text-sm ${
                   msg.role === "user"
                     ? "bg-blue-600 text-white"
                     : "bg-white text-gray-800 shadow-sm border border-gray-100"
@@ -1047,7 +1033,7 @@ function MessagesTab() {
 
   return (
     <div className="px-4 space-y-3">
-      <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
+      <div className="bg-gray-50 rounded p-3 border border-gray-200">
         <div className="text-xs text-gray-500">选择用户查看其与 Manus AI 的对话记录</div>
       </div>
 
@@ -1060,7 +1046,7 @@ function MessagesTab() {
           <button
             key={session.id}
             onClick={() => loadMessages(session)}
-            className="w-full bg-white rounded-xl shadow-sm p-4 flex items-center justify-between text-left"
+            className="w-full bg-white rounded shadow-sm p-4 flex items-center justify-between text-left"
           >
             <div className="flex items-center gap-3">
               {session.wecom_avatar ? (
@@ -1155,7 +1141,7 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
     <div className="fixed inset-0 z-50 flex flex-col bg-white">
       {/* 顶栏 */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 bg-white">
-        <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100">
+        <button onClick={onClose} className="p-1.5 rounded-sm hover:bg-gray-100">
           <ArrowLeft className="w-5 h-5 text-gray-600" />
         </button>
         <div className="flex-1">
@@ -1181,7 +1167,7 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
             const taskRecords = records.filter(r => r.task_id === s.manus_task_id);
             const isExpanded = expandedTask === s.manus_task_id;
             return (
-              <div key={s.id} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+              <div key={s.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                 {/* 任务头部 */}
                 <div
                   className="px-4 py-3 flex items-start justify-between cursor-pointer active:bg-gray-50"
@@ -1245,7 +1231,7 @@ function UserDetailModal({ wecomUserId, displayName, onClose }: { wecomUserId: s
                               {isExpMsg && (
                                 <div className="px-4 pb-3 bg-gray-50 space-y-2">
                                   {r.reply_preview && (
-                                    <div className="rounded-lg bg-white border border-gray-100 px-3 py-2">
+                                    <div className="rounded-sm bg-white border border-gray-100 px-3 py-2">
                                       <div className="text-xs text-gray-400 mb-1">AI 回复预览</div>
                                       <div className="text-xs text-gray-700 leading-relaxed">{r.reply_preview}</div>
                                     </div>
@@ -1436,7 +1422,7 @@ function StatsTab() {
   return (
     <div className="px-4 space-y-3">
       {/* 总消耗卡片 */}
-      <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl p-4 text-white">
+      <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded p-4 text-white">
         <div className="flex items-center gap-2 mb-1">
           <Coins className="w-4 h-4 text-blue-200" />
           <span className="text-sm text-blue-100">企微渠道累计费用</span>
@@ -1451,12 +1437,12 @@ function StatsTab() {
 
       {/* Tab 主视角切换 */}
       <div className="flex items-center gap-2">
-        <div className="flex bg-gray-100 rounded-xl p-1 flex-1">
+        <div className="flex bg-gray-100 rounded p-1 flex-1">
           {(['user', 'time', 'ai', 'logs', 'api_usage'] as const).map((mode) => (
             <button
               key={mode}
               onClick={() => setViewMode(mode as any)}
-              className={`flex-1 py-1.5 text-xs font-medium rounded-lg transition-all ${
+              className={`flex-1 py-1.5 text-xs font-medium rounded-sm transition-all ${
                 viewMode === mode ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
               }`}
             >
@@ -1468,7 +1454,7 @@ function StatsTab() {
         {viewMode === 'user' && (
           <button
             onClick={() => setUserSortBy(userSortBy === 'default' ? 'cny' : 'default')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+            className={`px-3 py-1.5 rounded text-xs font-medium border transition-all ${
               userSortBy === 'cny' ? 'bg-green-50 border-green-300 text-green-700' : 'bg-white border-gray-200 text-gray-500'
             }`}
           >
@@ -1483,7 +1469,7 @@ function StatsTab() {
           <div className="relative flex-1">
             <button
               onClick={() => setPlatShowChannelDD(v => !v)}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium border transition-all ${
+              className={`w-full flex items-center justify-between px-3 py-2 rounded text-sm font-medium border transition-all ${
                 platFilterChannel !== 'all' ? 'bg-green-50 border-green-300 text-green-700' : 'bg-white border-gray-200 text-gray-600'
               }`}
             >
@@ -1491,7 +1477,7 @@ function StatsTab() {
               <ChevronRight className={`w-3 h-3 transition-transform ${platShowChannelDD ? 'rotate-90' : ''}`} />
             </button>
             {platShowChannelDD && (
-              <div className="absolute top-10 left-0 z-30 bg-white border border-gray-200 rounded-xl shadow-lg w-44 py-1">
+              <div className="absolute top-10 left-0 z-30 bg-white border border-gray-200 rounded shadow-lg w-44 py-1">
                 <button onClick={() => { setPlatFilterChannel('all'); setPlatShowChannelDD(false); fetchPlatLogs(0, 'all'); }}
                   className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${platFilterChannel === 'all' ? 'text-green-600 font-medium' : 'text-gray-700'}`}>全部渠道</button>
                 {platChannels.map(c => (
@@ -1501,7 +1487,7 @@ function StatsTab() {
               </div>
             )}
           </div>
-          <button onClick={() => fetchPlatLogs(0)} className="p-2 rounded-xl border border-gray-200 bg-white text-gray-500">
+          <button onClick={() => fetchPlatLogs(0)} className="p-2 rounded border border-gray-200 bg-white text-gray-500">
             <RefreshCw className="w-4 h-4" />
           </button>
         </div>
@@ -1513,7 +1499,7 @@ function StatsTab() {
         <div className="relative flex-1">
           <button
             onClick={() => { setShowTimeDropdown(!showTimeDropdown); setShowUserDropdown(false); setShowAiDropdown(false); }}
-            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium border transition-all ${
+            className={`w-full flex items-center justify-between px-3 py-2 rounded text-sm font-medium border transition-all ${
               timeRange !== 'all' ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white border-gray-200 text-gray-600'
             }`}
           >
@@ -1521,7 +1507,7 @@ function StatsTab() {
             <ChevronRight className={`w-3 h-3 transition-transform ${showTimeDropdown ? 'rotate-90' : ''}`} />
           </button>
           {showTimeDropdown && (
-            <div className="absolute top-10 left-0 z-30 bg-white border border-gray-200 rounded-xl shadow-lg w-36 py-1">
+            <div className="absolute top-10 left-0 z-30 bg-white border border-gray-200 rounded shadow-lg w-36 py-1">
               {(['all','today','week','month','custom'] as const).map((v) => {
                 const label = v === 'all' ? '全部' : v === 'today' ? '今天' : v === 'week' ? '本周' : v === 'month' ? '本月' : '自定义…';
                 return (
@@ -1545,7 +1531,7 @@ function StatsTab() {
         <div className="relative flex-1">
           <button
             onClick={() => { setShowUserDropdown(!showUserDropdown); setShowTimeDropdown(false); setShowAiDropdown(false); }}
-            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium border transition-all ${
+            className={`w-full flex items-center justify-between px-3 py-2 rounded text-sm font-medium border transition-all ${
               selectedUsers.length > 0 ? 'bg-blue-50 border-blue-300 text-blue-700' : 'bg-white border-gray-200 text-gray-600'
             }`}
           >
@@ -1553,14 +1539,14 @@ function StatsTab() {
             <ChevronRight className={`w-3 h-3 transition-transform ${showUserDropdown ? 'rotate-90' : ''}`} />
           </button>
           {showUserDropdown && (
-            <div className="absolute top-10 left-0 z-30 bg-white border border-gray-200 rounded-xl shadow-lg w-52">
+            <div className="absolute top-10 left-0 z-30 bg-white border border-gray-200 rounded shadow-lg w-52">
               <div className="px-3 pt-2 pb-1">
                 <input
                   type="text"
                   placeholder="搜索用户名…"
                   value={userSearch}
                   onChange={e => setUserSearch(e.target.value)}
-                  className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 outline-none"
+                  className="w-full text-sm border border-gray-200 rounded-sm px-2 py-1.5 outline-none"
                   autoFocus
                 />
               </div>
@@ -1603,7 +1589,7 @@ function StatsTab() {
         <div className="relative flex-1">
           <button
             onClick={() => { setShowAiDropdown(!showAiDropdown); setShowTimeDropdown(false); setShowUserDropdown(false); }}
-            className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium border transition-all ${
+            className={`w-full flex items-center justify-between px-3 py-2 rounded text-sm font-medium border transition-all ${
               aiModel !== 'all' ? 'bg-purple-50 border-purple-300 text-purple-700' : 'bg-white border-gray-200 text-gray-600'
             }`}
           >
@@ -1611,7 +1597,7 @@ function StatsTab() {
             <ChevronRight className={`w-3 h-3 transition-transform ${showAiDropdown ? 'rotate-90' : ''}`} />
           </button>
           {showAiDropdown && (
-            <div className="absolute top-10 right-0 z-30 bg-white border border-gray-200 rounded-xl shadow-lg w-40 py-1">
+            <div className="absolute top-10 right-0 z-30 bg-white border border-gray-200 rounded shadow-lg w-40 py-1">
               {(['all','manus','deepseek','ds_flash','ds_pro'] as const).map((v) => {
                 const label = v === 'all' ? '全部' : v === 'manus' ? 'Manus' : v === 'deepseek' ? 'DeepSeek' : v === 'ds_flash' ? 'DS Flash' : 'DS Pro';
                 return (
@@ -1629,16 +1615,16 @@ function StatsTab() {
 
       {/* 自定义日期输入 */}
       {showCustomInput && (
-        <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2">
+        <div className="flex items-center gap-2 bg-white border border-gray-200 rounded px-3 py-2">
           <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
-            className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 outline-none" />
+            className="flex-1 text-xs border border-gray-200 rounded-sm px-2 py-1 outline-none" />
           <span className="text-gray-400 text-xs">—</span>
           <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
-            className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1 outline-none" />
+            className="flex-1 text-xs border border-gray-200 rounded-sm px-2 py-1 outline-none" />
           <button
             onClick={() => fetchStats({ range: 'custom', cs: customStart, ce: customEnd })}
             disabled={!customStart || !customEnd}
-            className="px-2 py-1 bg-blue-600 text-white rounded-lg text-xs disabled:opacity-40"
+            className="px-2 py-1 bg-blue-600 text-white rounded-sm text-xs disabled:opacity-40"
           >查询</button>
         </div>
       )}
@@ -1679,7 +1665,7 @@ function StatsTab() {
       ) : stats.length === 0 ? (
         <div className="text-center py-10 text-gray-400 text-sm">暂无使用记录</div>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+        <div className="bg-white rounded shadow-sm border border-gray-100 overflow-x-auto">
 
           {/* 按用户 */}
           {viewMode === 'user' && (
@@ -1774,7 +1760,7 @@ function StatsTab() {
       {viewMode === 'ai' && (
         <div className="space-y-3">
           {/* Manus 卡片 */}
-          <div className="bg-white rounded-xl shadow-sm border border-blue-100 overflow-hidden">
+          <div className="bg-white rounded shadow-sm border border-blue-100 overflow-hidden">
             <div className="flex items-center gap-2 px-4 py-3 bg-blue-50 border-b border-blue-100">
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">Manus</span>
               <span className="text-sm font-medium text-blue-800">{Math.round(stats.reduce((s, r) => s + (r.manus_credits || r.total_cost || 0), 0))} 积分</span>
@@ -1806,7 +1792,7 @@ function StatsTab() {
           </div>
 
           {/* DeepSeek 卡片 */}
-          <div className="bg-white rounded-xl shadow-sm border border-purple-100 overflow-hidden">
+          <div className="bg-white rounded shadow-sm border border-purple-100 overflow-hidden">
             <div className="flex items-center gap-2 px-4 py-3 bg-purple-50 border-b border-purple-100">
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-700">DeepSeek</span>
               <span className="text-sm font-medium text-purple-800">{Math.round(stats.reduce((s, r) => s + (r.ds_total_tokens || 0), 0))} tokens</span>
@@ -1845,7 +1831,7 @@ function StatsTab() {
       {viewMode === 'logs' && (
         <div className="space-y-2">
           {/* 汇总卡片 */}
-          <div className="bg-green-50 border border-green-100 rounded-xl px-4 py-3 flex items-center gap-4">
+          <div className="bg-green-50 border border-green-100 rounded px-4 py-3 flex items-center gap-4">
             <div className="text-center">
               <div className="text-lg font-bold text-green-700">{platLogsTotal}</div>
               <div className="text-xs text-green-600">总条数</div>
@@ -1869,7 +1855,7 @@ function StatsTab() {
                 const chName = log.channel_name || (log.manus_task_id === 'kf-deepseek' ? '营养顾问' : log.channel_type);
                 const dateStr = new Date(log.created_at).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
                 return (
-                  <div key={log.id} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                  <div key={log.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                     <button className="w-full px-3 py-2.5 flex items-start gap-2.5 text-left"
                       onClick={() => setPlatExpandedLog(isExp ? null : log.id)}>
                       <div className="w-7 h-7 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -1921,26 +1907,26 @@ function StatsTab() {
                     {/* 展开详情 */}
                     {isExp && (
                       <div className="px-3 pb-3 space-y-2 border-t border-gray-100">
-                        <div className="text-xs text-gray-600 bg-gray-50 rounded-lg p-2 mt-2">
+                        <div className="text-xs text-gray-600 bg-gray-50 rounded-sm p-2 mt-2">
                           <div className="font-medium text-gray-500 mb-1">用户问</div>
                           <div>{log.user_message}</div>
                         </div>
                         {log.reply_preview && (
-                          <div className="text-xs text-gray-600 bg-green-50 rounded-lg p-2">
+                          <div className="text-xs text-gray-600 bg-green-50 rounded-sm p-2">
                             <div className="font-medium text-green-600 mb-1">AI 回复</div>
                             <div>{log.reply_preview}</div>
                           </div>
                         )}
                         <div className="grid grid-cols-3 gap-1.5 text-[10px] text-center">
-                          <div className="bg-gray-50 rounded-lg py-1.5">
+                          <div className="bg-gray-50 rounded-sm py-1.5">
                             <div className="font-bold text-gray-700">{(log.input_tokens || 0).toLocaleString()}</div>
                             <div className="text-gray-400">输入 tokens</div>
                           </div>
-                          <div className="bg-gray-50 rounded-lg py-1.5">
+                          <div className="bg-gray-50 rounded-sm py-1.5">
                             <div className="font-bold text-gray-700">{(log.output_tokens || 0).toLocaleString()}</div>
                             <div className="text-gray-400">输出 tokens</div>
                           </div>
-                          <div className="bg-gray-50 rounded-lg py-1.5">
+                          <div className="bg-gray-50 rounded-sm py-1.5">
                             <div className="font-bold text-gray-700">{(log.cache_hit_tokens || 0).toLocaleString()}</div>
                             <div className="text-gray-400">缓存命中</div>
                           </div>
@@ -1954,10 +1940,10 @@ function StatsTab() {
               {platLogsTotal > PLAT_PAGE_SIZE && (
                 <div className="flex items-center justify-center gap-3 pt-2">
                   <button disabled={platLogsPage === 0} onClick={() => fetchPlatLogs(platLogsPage - 1)}
-                    className="px-3 py-1.5 rounded-lg text-xs border border-gray-200 disabled:opacity-40">&#8249; 上一页</button>
+                    className="px-3 py-1.5 rounded-sm text-xs border border-gray-200 disabled:opacity-40">&#8249; 上一页</button>
                   <span className="text-xs text-gray-500">{platLogsPage + 1} / {Math.ceil(platLogsTotal / PLAT_PAGE_SIZE)}</span>
                   <button disabled={(platLogsPage + 1) * PLAT_PAGE_SIZE >= platLogsTotal} onClick={() => fetchPlatLogs(platLogsPage + 1)}
-                    className="px-3 py-1.5 rounded-lg text-xs border border-gray-200 disabled:opacity-40">下一页 &#8250;</button>
+                    className="px-3 py-1.5 rounded-sm text-xs border border-gray-200 disabled:opacity-40">下一页 &#8250;</button>
                 </div>
               )}
             </div>
@@ -2012,22 +1998,22 @@ function ApiUsageView() {
     <div className="space-y-3">
       {/* 汇总卡片 */}
       <div className="grid grid-cols-3 gap-2">
-        <div className="bg-blue-50 rounded-xl p-3 text-center">
+        <div className="bg-blue-50 rounded p-3 text-center">
           <div className="text-xl font-bold text-blue-700">{totalCalls.toLocaleString()}</div>
           <div className="text-xs text-blue-400 mt-0.5">总调用次数</div>
         </div>
-        <div className="bg-purple-50 rounded-xl p-3 text-center">
+        <div className="bg-purple-50 rounded p-3 text-center">
           <div className="text-xl font-bold text-purple-700">{totalTokens >= 10000 ? (totalTokens / 10000).toFixed(1) + '万' : totalTokens.toLocaleString()}</div>
           <div className="text-xs text-purple-400 mt-0.5">总 Tokens</div>
         </div>
-        <div className="bg-orange-50 rounded-xl p-3 text-center">
+        <div className="bg-orange-50 rounded p-3 text-center">
           <div className="text-xl font-bold text-orange-700">{totalAudioSec >= 60 ? (totalAudioSec / 60).toFixed(1) + '分' : totalAudioSec + '秒'}</div>
           <div className="text-xs text-orange-400 mt-0.5">语音时长</div>
         </div>
       </div>
 
       {/* 按场景明细 */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-50">
           <div className="text-sm font-bold text-gray-800">各场景用量明细</div>
           <div className="text-xs text-gray-400 mt-0.5">按场景分类统计，可对应管理平台的 AI 模型配置</div>
@@ -2109,7 +2095,7 @@ function MenuTab() {
 
   return (
     <div className="px-4 space-y-3 wecom-blue">
-      <div className="bg-amber-50 rounded-xl p-3 border border-amber-100">
+      <div className="bg-amber-50 rounded p-3 border border-amber-100">
         <div className="text-xs font-medium text-amber-800 mb-1">菜单配置</div>
         <div className="text-xs text-amber-700 leading-relaxed">
           企业微信应用最多3个一级菜单，每个下最多5个子菜单。修改后点击"推送菜单"即可生效。
@@ -2117,7 +2103,7 @@ function MenuTab() {
       </div>
 
       {menu.map((item, i) => (
-        <div key={i} className="bg-white rounded-xl shadow-sm overflow-hidden">
+        <div key={i} className="bg-white rounded shadow-sm overflow-hidden">
           <button
             className="w-full px-4 py-3 flex items-center justify-between"
             onClick={() => setExpandedIdx(expandedIdx === i ? null : i)}
@@ -2137,7 +2123,7 @@ function MenuTab() {
               <div className="pt-3">
                 <label className="text-xs text-gray-500 mb-1 block">一级菜单名称</label>
                 <input
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                  className="w-full border border-gray-200 rounded-sm px-3 py-2 text-sm"
                   value={item.name}
                   onChange={e => handleNameChange(i, null, e.target.value)}
                   maxLength={4}
@@ -2148,11 +2134,11 @@ function MenuTab() {
               <div className="space-y-2">
                 <div className="text-xs font-medium text-gray-600">子菜单</div>
                 {item.sub_button?.map((sub, j) => (
-                  <div key={j} className="bg-gray-50 rounded-lg p-3 space-y-2">
+                  <div key={j} className="bg-gray-50 rounded-sm p-3 space-y-2">
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-400 w-4">{j + 1}.</span>
                       <input
-                        className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white"
+                        className="flex-1 border border-gray-200 rounded-sm px-2 py-1.5 text-xs bg-white"
                         placeholder="菜单名称（最多8字）"
                         value={sub.name}
                         onChange={e => handleNameChange(i, j, e.target.value)}
@@ -2162,7 +2148,7 @@ function MenuTab() {
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-gray-400 w-4"></span>
                       <input
-                        className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white font-mono"
+                        className="flex-1 border border-gray-200 rounded-sm px-2 py-1.5 text-xs bg-white font-mono"
                         placeholder="Key（如：MODEL_MAX）"
                         value={sub.key || ""}
                         onChange={e => handleKeyChange(i, j, e.target.value)}
@@ -2179,7 +2165,7 @@ function MenuTab() {
       <button
         onClick={handleSave}
         disabled={saving}
-        className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-medium disabled:opacity-60"
+        className="w-full py-3 bg-blue-600 text-white rounded text-sm font-medium disabled:opacity-60"
       >
         {saving ? "推送中..." : "推送菜单到企业微信"}
       </button>
@@ -2258,7 +2244,7 @@ function PlatformOverviewTab({ channels }: { channels: Channel[] }) {
   return (
     <div className="space-y-4">
       {/* 顶部总览卡片 */}
-      <div className="bg-gradient-to-br from-[#0d2818] to-[#1a5c2e] rounded-2xl p-5 text-white">
+      <div className="bg-gradient-to-br from-[#0d2818] to-[#1a5c2e] rounded p-5 text-white">
         <div className="flex items-center gap-2 mb-1">
           <div className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
           <span className="text-xs text-green-300 font-medium tracking-wider">AI 数字银行 · 管理员总控台</span>
@@ -2266,12 +2252,12 @@ function PlatformOverviewTab({ channels }: { channels: Channel[] }) {
         <div className="text-2xl font-bold mt-2">{kfChannels.length} 个数字分身</div>
         <div className="text-xs text-green-300 mt-1">{activeCount} 个运行中 · {twinOnCount} 个AI分身已激活</div>
         <div className="grid grid-cols-2 gap-3 mt-4">
-          <div className="bg-white/10 rounded-xl p-3">
+          <div className="bg-white/10 rounded p-3">
             <div className="text-xs text-green-300 mb-1">累计语料</div>
             <div className="text-xl font-bold">{totalCorpus}</div>
             <div className="text-xs text-green-400">条对话记录</div>
           </div>
-          <div className="bg-white/10 rounded-xl p-3">
+          <div className="bg-white/10 rounded p-3">
             <div className="text-xs text-green-300 mb-1">优质语料</div>
             <div className="text-xl font-bold text-[#f5c842]">{totalQuality}</div>
             <div className="text-xs text-green-400">条精选训练集</div>
@@ -2281,9 +2267,9 @@ function PlatformOverviewTab({ channels }: { channels: Channel[] }) {
 
       {/* 共享知识库摘要 */}
       {kbStats && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-sm bg-amber-50 flex items-center justify-center">
               <Shield className="w-4 h-4 text-amber-500" />
             </div>
             <div>
@@ -2318,7 +2304,7 @@ function PlatformOverviewTab({ channels }: { channels: Channel[] }) {
           {kfChannels.map(ch => {
             const ts = twinStats[ch.id];
             return (
-              <div key={ch.id} className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3">
+              <div key={ch.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <div className={`w-2 h-2 rounded-full ${ch.is_enabled ? 'bg-green-400' : 'bg-gray-300'}`} />
@@ -2427,7 +2413,7 @@ function PlatformAccountsTab({ channels, onRefresh }: { channels: Channel[]; onR
       <div className="flex gap-2">
         <button
           onClick={() => setShowAddModal(true)}
-          className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-green-300 text-green-600 text-sm font-medium bg-green-50/50 active:bg-green-100 transition-colors"
+          className="flex-1 flex items-center justify-center gap-2 py-3 rounded border-2 border-dashed border-green-300 text-green-600 text-sm font-medium bg-green-50/50 active:bg-green-100 transition-colors"
         >
           <Plus className="w-4 h-4" />
           开通新分身
@@ -2435,7 +2421,7 @@ function PlatformAccountsTab({ channels, onRefresh }: { channels: Channel[]; onR
         <button
           onClick={handleSyncKfAccounts}
           disabled={syncing}
-          className="flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl border border-blue-200 text-blue-600 text-sm font-medium bg-blue-50 active:bg-blue-100 transition-colors disabled:opacity-50"
+          className="flex items-center justify-center gap-1.5 px-4 py-3 rounded border border-blue-200 text-blue-600 text-sm font-medium bg-blue-50 active:bg-blue-100 transition-colors disabled:opacity-50"
         >
           {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
           同步客服
@@ -2447,9 +2433,9 @@ function PlatformAccountsTab({ channels, onRefresh }: { channels: Channel[]; onR
         <div className="text-center py-12 text-gray-400 text-sm">暂无分身账户，点击上方开通</div>
       )}
       {kfChannels.map(ch => (
-        <div key={ch.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <div key={ch.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+            <div className={`w-10 h-10 rounded flex items-center justify-center flex-shrink-0 ${
               ch.is_enabled ? 'bg-gradient-to-br from-[#1a5c2e] to-[#2d8a47]' : 'bg-gray-100'
             }`}>
               <Bot className={`w-5 h-5 ${ch.is_enabled ? 'text-[#4ade80]' : 'text-gray-400'}`} />
@@ -2461,7 +2447,7 @@ function PlatformAccountsTab({ channels, onRefresh }: { channels: Channel[]; onR
             <button
               onClick={() => handleToggle(ch)}
               disabled={toggling === ch.id}
-              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-sm text-xs font-medium transition-colors ${
                 ch.is_enabled
                   ? 'bg-red-50 text-red-500 active:bg-red-100'
                   : 'bg-green-50 text-green-600 active:bg-green-100'
@@ -2503,7 +2489,7 @@ function PlatformAccountsTab({ channels, onRefresh }: { channels: Channel[]; onR
                   value={addName}
                   onChange={e => setAddName(e.target.value)}
                   placeholder="例：营养顾问小李"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-green-400"
+                  className="w-full border border-gray-200 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-green-400"
                 />
               </div>
               <div>
@@ -2512,7 +2498,7 @@ function PlatformAccountsTab({ channels, onRefresh }: { channels: Channel[]; onR
                   value={addKfId}
                   onChange={e => setAddKfId(e.target.value)}
                   placeholder="例：wkxxxxxxxxxxxxxxxx"
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:border-green-400"
+                  className="w-full border border-gray-200 rounded px-3 py-2.5 text-sm font-mono focus:outline-none focus:border-green-400"
                 />
                 <p className="text-xs text-gray-400 mt-1">在企业微信后台「客服账号」中查看</p>
               </div>
@@ -2520,7 +2506,7 @@ function PlatformAccountsTab({ channels, onRefresh }: { channels: Channel[]; onR
             <button
               onClick={handleAddAccount}
               disabled={saving}
-              className="w-full mt-4 py-3 rounded-xl bg-gradient-to-r from-[#1a5c2e] to-[#2d8a47] text-white text-sm font-semibold flex items-center justify-center gap-2 active:opacity-90"
+              className="w-full mt-4 py-3 rounded bg-gradient-to-r from-[#1a5c2e] to-[#2d8a47] text-white text-sm font-semibold flex items-center justify-center gap-2 active:opacity-90"
             >
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
               确认开通
@@ -2711,7 +2697,7 @@ function PlatformRulesTab() {
   return (
     <div className="space-y-4">
       {/* 顶部绿色卡片 */}
-      <div className="bg-gradient-to-br from-[#0d2818] to-[#1a5c2e] rounded-2xl p-5 text-white">
+      <div className="bg-gradient-to-br from-[#0d2818] to-[#1a5c2e] rounded p-5 text-white">
         <div className="flex items-center gap-2 mb-1">
           <div className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
           <span className="text-xs text-green-300 font-medium tracking-wider">平台指令库 · 所有分身共同继承</span>
@@ -2728,7 +2714,7 @@ function PlatformRulesTab() {
             value={ruleSearch}
             onChange={e => setRuleSearch(e.target.value)}
             placeholder="搜索指令内容..."
-            className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-green-100"
+            className="w-full text-sm border border-gray-200 rounded px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-green-100"
           />
           {ruleSearch && (
             <button onClick={() => setRuleSearch('')} className="absolute right-2 top-2 text-gray-400"><X className="w-4 h-4" /></button>
@@ -2736,7 +2722,7 @@ function PlatformRulesTab() {
         </div>
         <button
           onClick={() => { setAddingRule(true); setNewRule({ layer: 1, category: '角色定义', content: '', remark: '', kb_ids: [] }); }}
-          className="flex items-center gap-1 px-4 py-2 rounded-xl bg-gradient-to-r from-[#1a5c2e] to-[#2d8a47] text-white text-sm font-medium"
+          className="flex items-center gap-1 px-4 py-2 rounded bg-gradient-to-r from-[#1a5c2e] to-[#2d8a47] text-white text-sm font-medium"
         >
           <Plus className="w-4 h-4" />新增
         </button>
@@ -2747,10 +2733,10 @@ function PlatformRulesTab() {
       ) : (
         <>
           {/* 第一层：角色定义 */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-purple-50 flex items-center justify-center">
+                <div className="w-7 h-7 rounded-sm bg-purple-50 flex items-center justify-center">
                   <span className="text-xs font-bold text-purple-600">①</span>
                 </div>
                 <div>
@@ -2761,10 +2747,10 @@ function PlatformRulesTab() {
               <span className="text-xs text-gray-400">{layer1.length} 条</span>
             </div>
             {layer1.length === 0 && (
-              <div className="text-xs text-gray-400 py-3 text-center bg-gray-50 rounded-lg">暂无角色定义，点击「新增」添加</div>
+              <div className="text-xs text-gray-400 py-3 text-center bg-gray-50 rounded-sm">暂无角色定义，点击「新增」添加</div>
             )}
             {layer1.map(rule => (
-              <div key={rule.id} className={`border rounded-lg mb-2 overflow-hidden ${rule.enabled ? 'border-purple-200 bg-purple-50/30' : 'border-gray-200 bg-gray-50 opacity-60'}`}>
+              <div key={rule.id} className={`border rounded-sm mb-2 overflow-hidden ${rule.enabled ? 'border-purple-200 bg-purple-50/30' : 'border-gray-200 bg-gray-50 opacity-60'}`}>
                 {editingRuleId === rule.id ? (
                   <div className="p-3 space-y-2">
                     <textarea value={editRuleDraft.content ?? rule.content} onChange={e => setEditRuleDraft(d => ({...d, content: e.target.value}))} rows={3} className="w-full text-sm border border-blue-300 rounded px-2 py-1.5 resize-none focus:outline-none" />
@@ -2780,7 +2766,9 @@ function PlatformRulesTab() {
                       <p className="text-sm text-gray-800 flex-1 whitespace-pre-wrap">{rule.content}</p>
                       <div className="flex items-center gap-1 shrink-0">
                         <button onClick={() => handleToggleRule(rule)}>
-                          {rule.enabled ? <ToggleRight className="w-6 h-6 text-purple-500" /> : <ToggleLeft className="w-6 h-6 text-gray-400" />}
+                          <div className={`w-9 h-5 rounded-full transition-colors flex items-center px-0.5 ${rule.enabled ? 'bg-purple-500' : 'bg-gray-300'}`}>
+                            <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${rule.enabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                          </div>
                         </button>
                         <button onClick={() => { setEditingRuleId(rule.id); setEditRuleDraft({}); }} className="text-gray-400 hover:text-blue-500"><Edit2 className="w-3.5 h-3.5" /></button>
                         <button onClick={() => handleDeleteRule(rule.id)} className="text-gray-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
@@ -2795,10 +2783,10 @@ function PlatformRulesTab() {
           </div>
 
           {/* 第二层：行为规则 */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+                <div className="w-7 h-7 rounded-sm bg-blue-50 flex items-center justify-center">
                   <span className="text-xs font-bold text-blue-600">②</span>
                 </div>
                 <div>
@@ -2809,10 +2797,10 @@ function PlatformRulesTab() {
               <span className="text-xs text-gray-400">{layer2.length} 条</span>
             </div>
             {layer2.length === 0 && (
-              <div className="text-xs text-gray-400 py-3 text-center bg-gray-50 rounded-lg">暂无行为规则</div>
+              <div className="text-xs text-gray-400 py-3 text-center bg-gray-50 rounded-sm">暂无行为规则</div>
             )}
             {layer2.map(rule => (
-              <div key={rule.id} className={`border rounded-lg mb-2 overflow-hidden ${rule.enabled ? 'border-blue-200 bg-blue-50/20' : 'border-gray-200 bg-gray-50 opacity-60'}`}>
+              <div key={rule.id} className={`border rounded-sm mb-2 overflow-hidden ${rule.enabled ? 'border-blue-200 bg-blue-50/20' : 'border-gray-200 bg-gray-50 opacity-60'}`}>
                 {editingRuleId === rule.id ? (
                   <div className="p-3 space-y-2">
                     <select value={editRuleDraft.category ?? rule.category} onChange={e => setEditRuleDraft(d => ({...d, category: e.target.value}))} className="text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none">
@@ -2840,7 +2828,9 @@ function PlatformRulesTab() {
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <button onClick={() => handleToggleRule(rule)}>
-                          {rule.enabled ? <ToggleRight className="w-6 h-6 text-blue-500" /> : <ToggleLeft className="w-6 h-6 text-gray-400" />}
+                          <div className={`w-9 h-5 rounded-full transition-colors flex items-center px-0.5 ${rule.enabled ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                            <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${rule.enabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                          </div>
                         </button>
                         <button onClick={() => { setEditingRuleId(rule.id); setEditRuleDraft({}); }} className="text-gray-400 hover:text-blue-500"><Edit2 className="w-3.5 h-3.5" /></button>
                         <button onClick={() => handleDeleteRule(rule.id)} className="text-gray-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
@@ -2858,7 +2848,7 @@ function PlatformRulesTab() {
 
       {/* 新增指令弹层（AI辅助录入） */}
       {addingRule && (
-        <div className="border border-green-200 rounded-xl overflow-hidden bg-white shadow-sm">
+        <div className="border border-green-200 rounded overflow-hidden bg-white shadow-sm">
           {/* 弹层标题栏 */}
           <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-[#0d2818] to-[#1a5c2e]">
             <span className="text-sm font-semibold text-white">新增平台指令</span>
@@ -2878,15 +2868,15 @@ function PlatformRulesTab() {
                     onChange={e => setRawInput(e.target.value)}
                     placeholder="直接输入或粘贴您的指令原文，AI 将帮您分析应放在角色定义还是行为规范，并对内容进行润色和补充..."
                     rows={8}
-                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-green-100"
+                    className="w-full text-sm border border-gray-200 rounded-sm px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-green-100"
                   />
                 </div>
                 <div className="flex gap-2 justify-end">
-                  <button onClick={() => { setAddingRule(false); setRawInput(''); }} className="text-xs text-gray-400 px-3 py-1.5 rounded-lg hover:bg-gray-100">取消</button>
+                  <button onClick={() => { setAddingRule(false); setRawInput(''); }} className="text-xs text-gray-400 px-3 py-1.5 rounded-sm hover:bg-gray-100">取消</button>
                   <button
                     onClick={handleAiAnalyze}
                     disabled={analyzing || !rawInput.trim()}
-                    className="flex items-center gap-1.5 text-xs text-white bg-gradient-to-r from-[#1a5c2e] to-[#2d8a47] px-4 py-1.5 rounded-lg disabled:opacity-50"
+                    className="flex items-center gap-1.5 text-xs text-white bg-gradient-to-r from-[#1a5c2e] to-[#2d8a47] px-4 py-1.5 rounded-sm disabled:opacity-50"
                   >
                     {analyzing ? (
                       <><Loader2 className="w-3.5 h-3.5 animate-spin" />AI 分析中...</>
@@ -2902,7 +2892,7 @@ function PlatformRulesTab() {
             {aiResult && (
               <>
                 {/* AI建议分类 */}
-                <div className="flex items-center gap-2 p-2.5 bg-green-50 rounded-lg border border-green-100">
+                <div className="flex items-center gap-2 p-2.5 bg-green-50 rounded-sm border border-green-100">
                   <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#1a5c2e] to-[#2d8a47] flex items-center justify-center flex-shrink-0">
                     <span className="text-[10px] text-white font-bold">✨</span>
                   </div>
@@ -2927,7 +2917,7 @@ function PlatformRulesTab() {
                       <div className="w-2 h-2 rounded-full bg-gray-400" />
                       <span className="text-[11px] font-semibold text-gray-400">原文</span>
                     </div>
-                    <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2 leading-relaxed whitespace-pre-wrap border border-gray-100">{rawInput}</div>
+                    <div className="text-xs text-gray-500 bg-gray-50 rounded-sm px-3 py-2 leading-relaxed whitespace-pre-wrap border border-gray-100">{rawInput}</div>
                   </div>
                   <div className="flex items-center justify-center">
                     <div className="flex items-center gap-1 text-[10px] text-green-600">
@@ -2945,14 +2935,14 @@ function PlatformRulesTab() {
                       value={newRule.content}
                       onChange={e => setNewRule(r => ({...r, content: e.target.value}))}
                       rows={4}
-                      className="w-full text-xs text-gray-800 bg-green-50/50 rounded-lg px-3 py-2 leading-relaxed border border-green-200 resize-none focus:outline-none focus:ring-2 focus:ring-green-100"
+                      className="w-full text-xs text-gray-800 bg-green-50/50 rounded-sm px-3 py-2 leading-relaxed border border-green-200 resize-none focus:outline-none focus:ring-2 focus:ring-green-100"
                     />
                     <p className="text-[10px] text-gray-400 mt-1">可直接编辑上方内容进行调整</p>
                   </div>
                 </div>
 
                 {/* 适用范围 */}
-                <div className="border border-gray-100 rounded-lg p-2.5 bg-gray-50/60">
+                <div className="border border-gray-100 rounded-sm p-2.5 bg-gray-50/60">
                   <p className="text-[11px] font-semibold text-gray-500 mb-1.5">适用范围</p>
                   <div className="flex flex-wrap gap-1.5">
                     <button
@@ -2984,21 +2974,21 @@ function PlatformRulesTab() {
                   value={newRule.remark}
                   onChange={e => setNewRule(r => ({...r, remark: e.target.value}))}
                   placeholder={`备注（可不填）`}
-                  className="w-full text-xs border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none"
+                  className="w-full text-xs border border-gray-200 rounded-sm px-3 py-1.5 focus:outline-none"
                 />
 
                 {/* 确认按鈕区 */}
                 <div className="flex gap-2">
                   <button
                     onClick={handleRejectAi}
-                    className="flex-1 py-2 text-xs text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
+                    className="flex-1 py-2 text-xs text-gray-600 bg-gray-100 rounded-sm hover:bg-gray-200"
                   >
                     返回修改
                   </button>
                   <button
                     onClick={handleAcceptAi}
                     disabled={savingRule || !newRule.content.trim()}
-                    className="flex-1 py-2 text-xs text-white bg-gradient-to-r from-[#1a5c2e] to-[#2d8a47] rounded-lg disabled:opacity-50 font-medium"
+                    className="flex-1 py-2 text-xs text-white bg-gradient-to-r from-[#1a5c2e] to-[#2d8a47] rounded-sm disabled:opacity-50 font-medium"
                   >
                     {savingRule ? '保存中...' : '确认保存'}
                   </button>
@@ -3128,7 +3118,7 @@ function AIModelConfigTab() {
   return (
     <div className="space-y-5">
       {/* 说明卡片 */}
-      <div className="bg-gradient-to-br from-green-900 to-green-800 rounded-2xl p-4 text-white">
+      <div className="bg-gradient-to-br from-green-900 to-green-800 rounded p-4 text-white">
         <div className="text-xs text-green-300 font-medium tracking-wider mb-1">平台管理 · 全局生效</div>
         <div className="text-xl font-bold">AI 模型配置</div>
         <div className="text-xs text-green-200 mt-1">在此配置各功能使用的 AI 模型，保存后全平台所有分身立即生效。</div>
@@ -3148,7 +3138,7 @@ function AIModelConfigTab() {
               const isSaving = saving === cfg.use_case;
               const isEditing = !!editing[cfg.use_case];
               return (
-                <div key={cfg.use_case} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                <div key={cfg.use_case} className="bg-white rounded shadow-sm border border-gray-100 p-4">
                   {/* 场景标题 */}
                   <div className="flex items-start justify-between mb-3">
                     <div>
@@ -3177,12 +3167,12 @@ function AIModelConfigTab() {
                   {/* 只读展示 */}
                   {!isEditing ? (
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2">
+                      <div className="flex items-center justify-between bg-gray-50 rounded px-3 py-2">
                         <span className="text-xs text-gray-500">当前模型</span>
                         <span className="text-xs font-medium text-gray-800">{selectedOpt?.label || cfg.model_name}</span>
                       </div>
                       {cfg.category !== 'embedding' && (
-                        <div className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2">
+                        <div className="flex items-center justify-between bg-gray-50 rounded px-3 py-2">
                           <span className="text-xs text-gray-500">API Key</span>
                           <span className="text-xs font-mono text-gray-400">{cfg.api_key ? '••••••••' + cfg.api_key.slice(-4) : '未配置'}</span>
                         </div>
@@ -3196,7 +3186,7 @@ function AIModelConfigTab() {
                     <select
                       value={e.model_name || cfg.model_name}
                       onChange={ev => updateEdit(cfg.use_case, 'model_name', ev.target.value)}
-                      className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-400"
+                      className="w-full text-sm border border-gray-200 rounded px-3 py-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-400"
                     >
                       {options.map(opt => (
                         <option key={opt.value} value={opt.value}>
@@ -3221,7 +3211,7 @@ function AIModelConfigTab() {
                           value={e.api_key ?? cfg.api_key}
                           onChange={ev => updateEdit(cfg.use_case, 'api_key', ev.target.value)}
                           placeholder="输入 API Key（留空则使用平台默认）"
-                          className="w-full text-xs border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-400 pr-10 font-mono"
+                          className="w-full text-xs border border-gray-200 rounded px-3 py-2 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-green-400 pr-10 font-mono"
                         />
                         <button
                           type="button"
@@ -3234,7 +3224,7 @@ function AIModelConfigTab() {
                     </div>
                   )}
                   {cfg.category === 'embedding' && (
-                    <div className="text-xs text-gray-400 bg-gray-50 rounded-xl px-3 py-2 mb-3">
+                    <div className="text-xs text-gray-400 bg-gray-50 rounded px-3 py-2 mb-3">
                       向量模型 API Key 与「图片识别」共用混元 Key，无需单独配置。
                     </div>
                   )}
@@ -3243,14 +3233,14 @@ function AIModelConfigTab() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => { setEditing(prev => ({ ...prev, [cfg.use_case]: false })); }}
-                      className="flex-1 flex items-center justify-center gap-1 border border-gray-200 text-gray-500 text-sm font-medium py-2 rounded-xl transition-colors hover:bg-gray-50"
+                      className="flex-1 flex items-center justify-center gap-1 border border-gray-200 text-gray-500 text-sm font-medium py-2 rounded transition-colors hover:bg-gray-50"
                     >
                       取消
                     </button>
                     <button
                       onClick={() => saveConfig(cfg.use_case)}
                       disabled={isSaving}
-                      className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white text-sm font-medium py-2 rounded-xl transition-colors"
+                      className="flex-1 flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 text-white text-sm font-medium py-2 rounded transition-colors"
                     >
                       {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                       {isSaving ? '保存中...' : '保存'}
@@ -3285,11 +3275,11 @@ function AIModelConfigTab() {
                         </div>
                         {!fbIsEditing ? (
                           <div className="space-y-1.5">
-                            <div className="flex items-center justify-between bg-orange-50 rounded-xl px-3 py-2">
+                            <div className="flex items-center justify-between bg-orange-50 rounded px-3 py-2">
                               <span className="text-xs text-gray-500">兜底模型</span>
                               <span className="text-xs font-medium text-gray-800">{fbSelectedOpt?.label || fb.model_name}</span>
                             </div>
-                            <div className="flex items-center justify-between bg-orange-50 rounded-xl px-3 py-2">
+                            <div className="flex items-center justify-between bg-orange-50 rounded px-3 py-2">
                               <span className="text-xs text-gray-500">API Key</span>
                               <span className="text-xs font-mono text-gray-400">{fb.api_key ? '••••••••' + fb.api_key.slice(-4) : '未配置'}</span>
                             </div>
@@ -3301,7 +3291,7 @@ function AIModelConfigTab() {
                           <select
                             value={fbEdit.model_name || fb.model_name}
                             onChange={ev => updateEdit(fb.use_case, 'model_name', ev.target.value)}
-                            className="w-full text-sm border border-orange-200 rounded-xl px-3 py-2 bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                            className="w-full text-sm border border-orange-200 rounded px-3 py-2 bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-400"
                           >
                             {fbOptions.map(opt => (
                               <option key={opt.value} value={opt.value}>
@@ -3323,7 +3313,7 @@ function AIModelConfigTab() {
                               value={fbEdit.api_key ?? fb.api_key}
                               onChange={ev => updateEdit(fb.use_case, 'api_key', ev.target.value)}
                               placeholder="输入兜底模型 API Key"
-                              className="w-full text-xs border border-orange-200 rounded-xl px-3 py-2 bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-400 pr-10 font-mono"
+                              className="w-full text-xs border border-orange-200 rounded px-3 py-2 bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-400 pr-10 font-mono"
                             />
                             <button
                               type="button"
@@ -3337,14 +3327,14 @@ function AIModelConfigTab() {
                         <div className="flex gap-2">
                           <button
                             onClick={() => setEditing(prev => ({ ...prev, [fb.use_case]: false }))}
-                            className="flex-1 flex items-center justify-center gap-1 border border-gray-200 text-gray-500 text-sm font-medium py-2 rounded-xl transition-colors hover:bg-gray-50"
+                            className="flex-1 flex items-center justify-center gap-1 border border-gray-200 text-gray-500 text-sm font-medium py-2 rounded transition-colors hover:bg-gray-50"
                           >
                             取消
                           </button>
                           <button
                             onClick={() => saveConfig(fb.use_case)}
                             disabled={fbIsSaving}
-                            className="flex-1 flex items-center justify-center gap-1.5 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white text-sm font-medium py-2 rounded-xl transition-colors"
+                            className="flex-1 flex items-center justify-center gap-1.5 bg-orange-500 hover:bg-orange-600 disabled:bg-gray-300 text-white text-sm font-medium py-2 rounded transition-colors"
                           >
                             {fbIsSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                             {fbIsSaving ? '保存中...' : '保存兜底模型'}
@@ -3457,10 +3447,10 @@ function PlatformAiAssistCard({ sharedKbs, onApplied }: { sharedKbs: SharedKb[];
   const addCount = result ? result.prompt_additions.filter((_, i) => selPrompts[i]).length + result.kb_items.filter((_, i) => selKbs[i]).length : 0;
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
       <button onClick={() => setOpen(v => !v)} className="w-full flex items-center justify-between px-4 py-3.5">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-green-50 flex items-center justify-center">
+          <div className="w-7 h-7 rounded-sm bg-green-50 flex items-center justify-center">
             <Sparkles className="w-4 h-4 text-green-500" />
           </div>
           <div className="text-left">
@@ -3498,11 +3488,11 @@ function PlatformAiAssistCard({ sharedKbs, onApplied }: { sharedKbs: SharedKb[];
           <textarea
             value={input} onChange={e => setInput(e.target.value)} rows={4}
             placeholder="粘贴聊天记录、产品资料或话术，AI 会自动提炼并与现有平台内容查重后归类"
-            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-green-400"
+            className="w-full text-sm border border-gray-200 rounded-sm px-3 py-2 resize-none focus:outline-none focus:border-green-400"
           />
           <button
             onClick={handleAnalyze} disabled={analyzing}
-            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-green-500 text-white text-sm font-medium disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-sm bg-green-500 text-white text-sm font-medium disabled:opacity-50"
           >
             {analyzing ? <><Loader2 className="w-4 h-4 animate-spin" /> AI 分析中...</> : <><Sparkles className="w-4 h-4" /> AI 智能整理</>}
           </button>
@@ -3510,7 +3500,7 @@ function PlatformAiAssistCard({ sharedKbs, onApplied }: { sharedKbs: SharedKb[];
           {result && (
             <div className="space-y-3">
               {(result.summary || result.dup_summary) && (
-                <div className="text-xs text-green-700 bg-green-50 rounded-lg px-3 py-2 space-y-1">
+                <div className="text-xs text-green-700 bg-green-50 rounded-sm px-3 py-2 space-y-1">
                   {result.summary && <div className="flex items-start gap-1.5"><Sparkles className="w-3 h-3 mt-0.5 flex-shrink-0" /><span>{result.summary}</span></div>}
                   {result.dup_summary && <div className="font-medium text-gray-700">{result.dup_summary}</div>}
                   <div className="text-gray-400">已自动归类：✅ 建议加入已默认勾选，⛔ 已去重默认不勾（可手动调整）</div>
@@ -3520,7 +3510,7 @@ function PlatformAiAssistCard({ sharedKbs, onApplied }: { sharedKbs: SharedKb[];
                 <div className="space-y-1.5">
                   <div className="text-xs font-semibold text-gray-600 flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-purple-500" />写入「平台指令库」</div>
                   {result.prompt_additions.map((p, i) => (
-                    <div key={i} className={`rounded-lg border px-3 py-2 flex items-start gap-2 ${selPrompts[i] ? 'border-purple-400 bg-purple-50' : 'border-gray-200 bg-white'}`}>
+                    <div key={i} className={`rounded-sm border px-3 py-2 flex items-start gap-2 ${selPrompts[i] ? 'border-purple-400 bg-purple-50' : 'border-gray-200 bg-white'}`}>
                       <button onClick={() => setSelPrompts(prev => { const n=[...prev]; n[i]=!n[i]; return n; })} className="flex-shrink-0 mt-0.5">
                         <div className={`w-4 h-4 rounded border flex items-center justify-center ${selPrompts[i] ? 'bg-purple-500 border-purple-500' : 'border-gray-300'}`}>{selPrompts[i] && <Check className="w-3 h-3 text-white" />}</div>
                       </button>
@@ -3545,7 +3535,7 @@ function PlatformAiAssistCard({ sharedKbs, onApplied }: { sharedKbs: SharedKb[];
                 <div className="space-y-1.5">
                   <div className="text-xs font-semibold text-gray-600 flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-amber-500" />写入「共享知识库」{targetKbIds.length > 0 ? `（${targetKbIds.length} 个库）` : <span className="text-amber-500 font-normal ml-1">（未选库）</span>}</div>
                   {result.kb_items.map((item, i) => (
-                    <div key={i} className={`rounded-lg border px-3 py-2 flex items-start gap-2 ${selKbs[i] ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-white'}`}>
+                    <div key={i} className={`rounded-sm border px-3 py-2 flex items-start gap-2 ${selKbs[i] ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-white'}`}>
                       <button onClick={() => setSelKbs(prev => { const n=[...prev]; n[i]=!n[i]; return n; })} className="flex-shrink-0 mt-0.5">
                         <div className={`w-4 h-4 rounded border flex items-center justify-center ${selKbs[i] ? 'bg-amber-500 border-amber-500' : 'border-gray-300'}`}>{selKbs[i] && <Check className="w-3 h-3 text-white" />}</div>
                       </button>
@@ -3573,7 +3563,7 @@ function PlatformAiAssistCard({ sharedKbs, onApplied }: { sharedKbs: SharedKb[];
               )}
               {(result.prompt_additions.length > 0 || result.kb_items.length > 0) && (
                 <button onClick={handleApply} disabled={applying || done}
-                  className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg bg-green-600 text-white text-sm font-medium disabled:opacity-50">
+                  className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-sm bg-green-600 text-white text-sm font-medium disabled:opacity-50">
                   {done ? <><Check className="w-4 h-4" /> 已应用</> : applying ? <><Loader2 className="w-4 h-4 animate-spin" /> 写入中...</> : `应用已勾选的 ${addCount} 条`}
                 </button>
               )}
@@ -3757,19 +3747,19 @@ function PlatformSharedTab() {
   return (
     <div className="space-y-4">
       {/* 顶部绿色总览卡片 */}
-      <div className="bg-gradient-to-br from-[#0d2818] to-[#1a5c2e] rounded-2xl p-5 text-white">
+      <div className="bg-gradient-to-br from-[#0d2818] to-[#1a5c2e] rounded p-5 text-white">
         <div className="flex items-center gap-2 mb-1">
           <div className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
           <span className="text-xs text-green-300 font-medium tracking-wider">平台共享 · 所有分身共同继承</span>
         </div>
         <div className="text-2xl font-bold mt-2">平台共享资源</div>
         <div className="grid grid-cols-2 gap-3 mt-4">
-          <div className="bg-white/10 rounded-xl p-3">
+          <div className="bg-white/10 rounded p-3">
             <div className="text-xs text-green-300 mb-1">共享指令库</div>
             <div className="text-xl font-bold text-[#a78bfa]">{ruleLibLoading ? '-' : `${sharedRuleLibs.length} 个`}</div>
             <div className="text-xs text-green-400">共 {sharedRuleLibs.reduce((s, l) => s + (l.rule_count || 0), 0)} 条指令</div>
           </div>
-          <div className="bg-white/10 rounded-xl p-3">
+          <div className="bg-white/10 rounded p-3">
             <div className="text-xs text-green-300 mb-1">共享知识库</div>
             <div className="text-xl font-bold text-[#f5c842]">{kbLoading ? '-' : `${sharedKbs.length} 个`}</div>
             <div className="text-xs text-green-400">共 {totalItems} 条内容</div>
@@ -3781,13 +3771,13 @@ function PlatformSharedTab() {
       <PlatformAiAssistCard sharedKbs={sharedKbs} onApplied={loadSharedKbs} />
 
       {/* 区块1：共享指令库（多库） */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <button
           onClick={() => setRuleLibOpen(v => !v)}
           className="w-full flex items-center justify-between px-4 py-3.5"
         >
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-sm bg-blue-50 flex items-center justify-center">
               <BookOpen className="w-4 h-4 text-blue-500" />
             </div>
             <div className="text-left">
@@ -3821,7 +3811,7 @@ function PlatformSharedTab() {
                   </div>
                   <button
                     onClick={() => setShowAddRuleModal(true)}
-                    className="flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2.5 py-1.5 rounded-lg"
+                    className="flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2.5 py-1.5 rounded-sm"
                   >
                     <Plus className="w-3.5 h-3.5" /> 新增指令
                   </button>
@@ -3833,7 +3823,7 @@ function PlatformSharedTab() {
                 ) : (
                   <div className="space-y-2">
                     {ruleLibRules.map(rule => (
-                      <div key={rule.id} className="bg-gray-50 rounded-xl px-3 py-3 border border-gray-100">
+                      <div key={rule.id} className="bg-gray-50 rounded px-3 py-3 border border-gray-100">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 mb-1">
@@ -3866,12 +3856,12 @@ function PlatformSharedTab() {
                       <div className="text-center py-6 text-gray-400 text-sm">暂无共享指令库，点击下方「新建指令库」创建</div>
                     )}
                     {sharedRuleLibs.map(lib => (
-                      <div key={lib.id} className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-3 border border-gray-100">
+                      <div key={lib.id} className="flex items-center justify-between bg-gray-50 rounded px-3 py-3 border border-gray-100">
                         <button
                           className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
                           onClick={() => { setActiveRuleLib(lib); loadRuleLibRules(lib.id); }}
                         >
-                          <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                          <div className="w-8 h-8 rounded-sm bg-blue-50 flex items-center justify-center shrink-0">
                             <BookOpen className="w-4 h-4 text-blue-500" />
                           </div>
                           <div className="min-w-0">
@@ -3898,7 +3888,7 @@ function PlatformSharedTab() {
                     ))}
                     <button
                       onClick={openCreateRuleLib}
-                      className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-dashed border-blue-300 text-blue-600 text-sm font-medium hover:bg-blue-50"
+                      className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded border border-dashed border-blue-300 text-blue-600 text-sm font-medium hover:bg-blue-50"
                     >
                       <FolderPlus className="w-4 h-4" /> 新建指令库
                     </button>
@@ -3911,13 +3901,13 @@ function PlatformSharedTab() {
       </div>
 
       {/* 区块3：平台公共知识库（多库） */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <button
           onClick={() => setKbOpen(v => !v)}
           className="w-full flex items-center justify-between px-4 py-3.5"
         >
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-sm bg-amber-50 flex items-center justify-center">
               <Library className="w-4 h-4 text-amber-500" />
             </div>
             <div className="text-left">
@@ -3961,9 +3951,9 @@ function PlatformSharedTab() {
                       <div className="text-center py-6 text-gray-400 text-sm">暂无公共库，点击下方「新建公共库」创建</div>
                     )}
                     {sharedKbs.map(kb => (
-                      <div key={kb.id} className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-3 border border-gray-100">
+                      <div key={kb.id} className="flex items-center justify-between bg-gray-50 rounded px-3 py-3 border border-gray-100">
                         <button className="flex items-center gap-2.5 flex-1 min-w-0 text-left" onClick={() => setActiveKb(kb)}>
-                          <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center shrink-0">
+                          <div className="w-8 h-8 rounded-sm bg-amber-50 flex items-center justify-center shrink-0">
                             <Library className="w-4 h-4 text-amber-500" />
                           </div>
                           <div className="min-w-0">
@@ -3986,7 +3976,7 @@ function PlatformSharedTab() {
                     ))}
                     <button
                       onClick={openCreate}
-                      className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-dashed border-green-300 text-green-600 text-sm font-medium hover:bg-green-50"
+                      className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded border border-dashed border-green-300 text-green-600 text-sm font-medium hover:bg-green-50"
                     >
                       <FolderPlus className="w-4 h-4" /> 新建公共库
                     </button>
@@ -4001,23 +3991,23 @@ function PlatformSharedTab() {
       {/* 新建/重命名公共库弹窗 */}
       {showKbModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6" onClick={() => setShowKbModal(false)}>
-          <div className="bg-white rounded-2xl p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
             <p className="text-base font-semibold text-gray-900 mb-3">{editingKb ? '重命名公共库' : '新建公共库'}</p>
             <label className="text-xs text-gray-500">库名</label>
             <input
               value={kbNameDraft} onChange={e => setKbNameDraft(e.target.value)}
               placeholder="如：健康减肥、营养基础"
-              className="w-full mt-1 mb-3 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-green-400"
+              className="w-full mt-1 mb-3 px-3 py-2 rounded-sm border border-gray-200 text-sm focus:outline-none focus:border-green-400"
             />
             <label className="text-xs text-gray-500">描述（可选）</label>
             <input
               value={kbDescDraft} onChange={e => setKbDescDraft(e.target.value)}
               placeholder="一句话描述这个库的用途"
-              className="w-full mt-1 mb-4 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-green-400"
+              className="w-full mt-1 mb-4 px-3 py-2 rounded-sm border border-gray-200 text-sm focus:outline-none focus:border-green-400"
             />
             <div className="flex gap-2">
-              <button onClick={() => setShowKbModal(false)} className="flex-1 py-2 rounded-lg border border-gray-200 text-sm text-gray-600">取消</button>
-              <button onClick={handleSaveKb} disabled={savingKb} className="flex-1 py-2 rounded-lg bg-green-500 text-white text-sm font-medium disabled:opacity-50">
+              <button onClick={() => setShowKbModal(false)} className="flex-1 py-2 rounded-sm border border-gray-200 text-sm text-gray-600">取消</button>
+              <button onClick={handleSaveKb} disabled={savingKb} className="flex-1 py-2 rounded-sm bg-green-500 text-white text-sm font-medium disabled:opacity-50">
                 {savingKb ? '保存中...' : '保存'}
               </button>
             </div>
@@ -4028,12 +4018,12 @@ function PlatformSharedTab() {
       {/* 删除公共知识库确认弹窗 */}
       {deletingKb && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6" onClick={() => setDeletingKb(null)}>
-          <div className="bg-white rounded-2xl p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
             <p className="text-base font-semibold text-gray-900 mb-2">删除公共库？</p>
             <p className="text-sm text-gray-500 mb-4">将删除「{deletingKb.name}」及其内 {deletingKb.item_count} 条内容，并解除所有分身对它的绑定。此操作不可恢复。</p>
             <div className="flex gap-2">
-              <button onClick={() => setDeletingKb(null)} className="flex-1 py-2 rounded-lg border border-gray-200 text-sm text-gray-600">取消</button>
-              <button onClick={handleDeleteKb} className="flex-1 py-2 rounded-lg bg-red-500 text-white text-sm font-medium">确认删除</button>
+              <button onClick={() => setDeletingKb(null)} className="flex-1 py-2 rounded-sm border border-gray-200 text-sm text-gray-600">取消</button>
+              <button onClick={handleDeleteKb} className="flex-1 py-2 rounded-sm bg-red-500 text-white text-sm font-medium">确认删除</button>
             </div>
           </div>
         </div>
@@ -4042,23 +4032,23 @@ function PlatformSharedTab() {
       {/* 新建/重命名共享指令库弹窗 */}
       {showRuleLibModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6" onClick={() => setShowRuleLibModal(false)}>
-          <div className="bg-white rounded-2xl p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
             <p className="text-base font-semibold text-gray-900 mb-3">{editingRuleLib ? '重命名指令库' : '新建指令库'}</p>
             <label className="text-xs text-gray-500">库名</label>
             <input
               value={ruleLibNameDraft} onChange={e => setRuleLibNameDraft(e.target.value)}
               placeholder="如：医美咨询、健康管理"
-              className="w-full mt-1 mb-3 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-blue-400"
+              className="w-full mt-1 mb-3 px-3 py-2 rounded-sm border border-gray-200 text-sm focus:outline-none focus:border-blue-400"
             />
             <label className="text-xs text-gray-500">描述（可选）</label>
             <input
               value={ruleLibDescDraft} onChange={e => setRuleLibDescDraft(e.target.value)}
               placeholder="一句话描述这个库的用途"
-              className="w-full mt-1 mb-4 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-blue-400"
+              className="w-full mt-1 mb-4 px-3 py-2 rounded-sm border border-gray-200 text-sm focus:outline-none focus:border-blue-400"
             />
             <div className="flex gap-2">
-              <button onClick={() => setShowRuleLibModal(false)} className="flex-1 py-2 rounded-lg border border-gray-200 text-sm text-gray-600">取消</button>
-              <button onClick={handleSaveRuleLib} disabled={savingRuleLib} className="flex-1 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium disabled:opacity-50">
+              <button onClick={() => setShowRuleLibModal(false)} className="flex-1 py-2 rounded-sm border border-gray-200 text-sm text-gray-600">取消</button>
+              <button onClick={handleSaveRuleLib} disabled={savingRuleLib} className="flex-1 py-2 rounded-sm bg-blue-500 text-white text-sm font-medium disabled:opacity-50">
                 {savingRuleLib ? '保存中...' : '保存'}
               </button>
             </div>
@@ -4069,12 +4059,12 @@ function PlatformSharedTab() {
       {/* 删除共享指令库确认弹窗 */}
       {deletingRuleLib && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6" onClick={() => setDeletingRuleLib(null)}>
-          <div className="bg-white rounded-2xl p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
             <p className="text-base font-semibold text-gray-900 mb-2">删除指令库？</p>
             <p className="text-sm text-gray-500 mb-4">将删除「{deletingRuleLib.name}」及其内 {deletingRuleLib.rule_count} 条指令。此操作不可恢复。</p>
             <div className="flex gap-2">
-              <button onClick={() => setDeletingRuleLib(null)} className="flex-1 py-2 rounded-lg border border-gray-200 text-sm text-gray-600">取消</button>
-              <button onClick={handleDeleteRuleLib} className="flex-1 py-2 rounded-lg bg-red-500 text-white text-sm font-medium">确认删除</button>
+              <button onClick={() => setDeletingRuleLib(null)} className="flex-1 py-2 rounded-sm border border-gray-200 text-sm text-gray-600">取消</button>
+              <button onClick={handleDeleteRuleLib} className="flex-1 py-2 rounded-sm bg-red-500 text-white text-sm font-medium">确认删除</button>
             </div>
           </div>
         </div>
@@ -4083,13 +4073,13 @@ function PlatformSharedTab() {
       {/* 库内新增指令弹窗 */}
       {showAddRuleModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6" onClick={() => setShowAddRuleModal(false)}>
-          <div className="bg-white rounded-2xl p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
             <p className="text-base font-semibold text-gray-900 mb-3">新增指令</p>
             <label className="text-xs text-gray-500">分类</label>
             <select
               value={newRuleCategory}
               onChange={e => setNewRuleCategory(e.target.value)}
-              className="w-full mt-1 mb-3 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-blue-400"
+              className="w-full mt-1 mb-3 px-3 py-2 rounded-sm border border-gray-200 text-sm focus:outline-none focus:border-blue-400"
             >
               {['角色定义', '知识库规则', '回复格式', '语气风格', '安全边界'].map(c => (
                 <option key={c} value={c}>{c}</option>
@@ -4100,17 +4090,17 @@ function PlatformSharedTab() {
               value={newRuleContent} onChange={e => setNewRuleContent(e.target.value)}
               placeholder="输入指令内容…"
               rows={4}
-              className="w-full mt-1 mb-3 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-blue-400 resize-none"
+              className="w-full mt-1 mb-3 px-3 py-2 rounded-sm border border-gray-200 text-sm focus:outline-none focus:border-blue-400 resize-none"
             />
             <label className="text-xs text-gray-500">备注（可选）</label>
             <input
               value={newRuleRemark} onChange={e => setNewRuleRemark(e.target.value)}
               placeholder="这条指令的用途说明"
-              className="w-full mt-1 mb-4 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:border-blue-400"
+              className="w-full mt-1 mb-4 px-3 py-2 rounded-sm border border-gray-200 text-sm focus:outline-none focus:border-blue-400"
             />
             <div className="flex gap-2">
-              <button onClick={() => setShowAddRuleModal(false)} className="flex-1 py-2 rounded-lg border border-gray-200 text-sm text-gray-600">取消</button>
-              <button onClick={handleAddRuleToLib} disabled={savingNewRule} className="flex-1 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium disabled:opacity-50">
+              <button onClick={() => setShowAddRuleModal(false)} className="flex-1 py-2 rounded-sm border border-gray-200 text-sm text-gray-600">取消</button>
+              <button onClick={handleAddRuleToLib} disabled={savingNewRule} className="flex-1 py-2 rounded-sm bg-blue-500 text-white text-sm font-medium disabled:opacity-50">
                 {savingNewRule ? '添加中...' : '添加'}
               </button>
             </div>
@@ -4121,12 +4111,12 @@ function PlatformSharedTab() {
       {/* 删除库内指令确认弹窗 */}
       {deletingRule && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6" onClick={() => setDeletingRule(null)}>
-          <div className="bg-white rounded-2xl p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded p-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
             <p className="text-base font-semibold text-gray-900 mb-2">删除指令？</p>
             <p className="text-sm text-gray-500 mb-4 line-clamp-3">将删除这条指令：「{deletingRule.content.slice(0, 50)}{deletingRule.content.length > 50 ? '...' : ''}」。此操作不可恢复。</p>
             <div className="flex gap-2">
-              <button onClick={() => setDeletingRule(null)} className="flex-1 py-2 rounded-lg border border-gray-200 text-sm text-gray-600">取消</button>
-              <button onClick={handleDeleteRule} className="flex-1 py-2 rounded-lg bg-red-500 text-white text-sm font-medium">确认删除</button>
+              <button onClick={() => setDeletingRule(null)} className="flex-1 py-2 rounded-sm border border-gray-200 text-sm text-gray-600">取消</button>
+              <button onClick={handleDeleteRule} className="flex-1 py-2 rounded-sm bg-red-500 text-white text-sm font-medium">确认删除</button>
             </div>
           </div>
         </div>
@@ -4140,7 +4130,7 @@ function PlatformUsageTabView() {
   return (
     <div className="space-y-4">
       {/* 顶部绿色卡片 */}
-      <div className="bg-gradient-to-br from-[#0d2818] to-[#1a5c2e] rounded-2xl p-5 text-white">
+      <div className="bg-gradient-to-br from-[#0d2818] to-[#1a5c2e] rounded p-5 text-white">
         <div className="flex items-center gap-2 mb-1">
           <div className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
           <span className="text-xs text-green-300 font-medium tracking-wider">用量统计 · 全平台 AI 费用概览</span>
@@ -4199,12 +4189,12 @@ function PlatformUnifiedView({ appChannelId }: { appChannelId: number | null }) 
   return (
     <div>
       {/* Tab 切换（横向滚动，11个） */}
-      <div className="flex gap-0.5 mb-4 bg-gray-100 rounded-xl p-1 overflow-x-auto">
+      <div className="flex gap-0.5 mb-4 bg-gray-100 rounded p-1 overflow-x-auto">
         {tabs.map(t => (
           <button
             key={t.key}
             onClick={() => setActiveTab(t.key as any)}
-            className={`flex-shrink-0 flex items-center justify-center gap-1 text-xs py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap px-2 ${
+            className={`flex-shrink-0 flex items-center justify-center gap-1 text-xs py-1.5 rounded-sm font-medium transition-colors whitespace-nowrap px-2 ${
               activeTab === t.key
                 ? 'bg-white text-green-700 shadow-sm'
                 : 'text-gray-500'
@@ -4269,12 +4259,12 @@ function PlatformKbView() {
   return (
     <div>
       {/* Tab切换 */}
-      <div className="flex gap-0.5 mb-4 bg-gray-100 rounded-xl p-1 overflow-x-auto">
+      <div className="flex gap-0.5 mb-4 bg-gray-100 rounded p-1 overflow-x-auto">
         {tabs.map(t => (
           <button
             key={t.key}
             onClick={() => setActiveTab(t.key as any)}
-            className={`flex-1 flex items-center justify-center gap-1 text-xs py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap px-1 ${
+            className={`flex-1 flex items-center justify-center gap-1 text-xs py-1.5 rounded-sm font-medium transition-colors whitespace-nowrap px-1 ${
               activeTab === t.key
                 ? 'bg-white text-green-700 shadow-sm'
                 : 'text-gray-500'
@@ -4392,9 +4382,9 @@ function ChannelTab() {
               <button
                 key={app.id}
                 onClick={() => setSelectedApp(app)}
-                className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-4 flex items-center gap-3 active:bg-gray-50 transition-colors"
+                className="w-full text-left bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-4 flex items-center gap-3 active:bg-gray-50 transition-colors"
               >
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#1a5c2e] to-[#2d8a47] flex items-center justify-center flex-shrink-0">
+                <div className="w-10 h-10 rounded bg-gradient-to-br from-[#1a5c2e] to-[#2d8a47] flex items-center justify-center flex-shrink-0">
                   <Bot className="w-5 h-5 text-[#4ade80]" />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -4515,9 +4505,9 @@ function AppChannelList({
                 </div>
                 <button
                   onClick={onShowPlatform}
-                  className="w-full text-left bg-gradient-to-r from-[#0d2818] to-[#1a5c2e] rounded-xl shadow-sm px-4 py-3.5 flex items-center gap-3 active:opacity-90 transition-opacity"
+                  className="w-full text-left bg-gradient-to-r from-[#0d2818] to-[#1a5c2e] rounded shadow-sm px-4 py-3.5 flex items-center gap-3 active:opacity-90 transition-opacity"
                 >
-                  <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
+                  <div className="w-9 h-9 rounded bg-white/10 flex items-center justify-center flex-shrink-0">
                     <Shield className="w-4 h-4 text-[#4ade80]" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -4542,9 +4532,9 @@ function AppChannelList({
                     <button
                       key={ch.id}
                       onClick={() => onSelectChannel(ch)}
-                      className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3.5 flex items-center gap-3 active:bg-gray-50 transition-colors"
+                      className="w-full text-left bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3.5 flex items-center gap-3 active:bg-gray-50 transition-colors"
                     >
-                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#1a5c2e] to-[#2d8a47] flex items-center justify-center flex-shrink-0">
+                      <div className="w-9 h-9 rounded bg-gradient-to-br from-[#1a5c2e] to-[#2d8a47] flex items-center justify-center flex-shrink-0">
                         <MessageSquare className="w-4 h-4 text-[#4ade80]" />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -4678,12 +4668,12 @@ function ChannelDetail({ channel }: { channel: Channel }) {
   return (
     <div>
       {/* 子Tab切换 */}
-      <div className="flex gap-0.5 mb-4 bg-gray-100 rounded-xl p-1 overflow-x-auto">
+      <div className="flex gap-0.5 mb-4 bg-gray-100 rounded p-1 overflow-x-auto">
         {tabs.map(t => (
           <button
             key={t.key}
             onClick={() => setActiveTab(t.key as any)}
-            className={`flex-1 flex items-center justify-center gap-1 text-xs py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap px-1 ${
+            className={`flex-1 flex items-center justify-center gap-1 text-xs py-1.5 rounded-sm font-medium transition-colors whitespace-nowrap px-1 ${
               activeTab === t.key
                 ? "bg-white text-blue-600 shadow-sm"
                 : "text-gray-500"
@@ -4879,7 +4869,7 @@ function AiAssistConfigCard({
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
       {/* 隐藏的文件输入 */}
       <input
         ref={fileInputRef}
@@ -4912,7 +4902,7 @@ function AiAssistConfigCard({
               onChange={e => setInputText(e.target.value)}
               placeholder="例如：客服要有耳心，不要用太官方的语气。我们的产品康宝莱F1单一99元，包含蛋白粉和维生素套餐。如果客户问价格，告诉他们具体套餐内容..."
               rows={5}
-              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 pb-10 resize-none focus:outline-none focus:ring-2 focus:ring-purple-200 text-gray-800 placeholder-gray-400"
+              className="w-full text-sm border border-gray-200 rounded-sm px-3 py-2 pb-10 resize-none focus:outline-none focus:ring-2 focus:ring-purple-200 text-gray-800 placeholder-gray-400"
             />
             {/* 拍照/上传图片按钮，浮在输入框右下角 */}
             <button
@@ -4927,7 +4917,7 @@ function AiAssistConfigCard({
           <button
             onClick={handleAnalyze}
             disabled={analyzing || !inputText.trim()}
-            className="w-full py-2.5 bg-purple-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full py-2.5 bg-purple-600 text-white rounded-sm text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {analyzing ? <><Loader2 className="w-4 h-4 animate-spin" />AI 分析中...</> : <><Sparkles className="w-4 h-4" />AI 分析并建议</>}
           </button>
@@ -4935,7 +4925,7 @@ function AiAssistConfigCard({
           {result && (
             <div className="space-y-3">
               {(result.summary || result.model_used || result.dup_summary) && (
-                <div className="text-xs text-purple-600 bg-purple-50 rounded-lg px-3 py-2 space-y-1">
+                <div className="text-xs text-purple-600 bg-purple-50 rounded-sm px-3 py-2 space-y-1">
                   {result.summary && <div>{result.summary}</div>}
                   {result.dup_summary && <div className="font-medium text-gray-700">{result.dup_summary}</div>}
                   <div className="flex items-center gap-1 text-purple-400">
@@ -4952,7 +4942,7 @@ function AiAssistConfigCard({
                 <div className="space-y-1.5">
                   <div className="text-xs font-semibold text-gray-600">建议写入 AI 指令（勾选后会追加到上方指令框）</div>
                   {result.prompt_additions.map((p, i) => (
-                    <div key={i} className={`rounded-lg border transition-all ${
+                    <div key={i} className={`rounded-sm border transition-all ${
                       selectedPrompts[i] ? 'border-purple-400 bg-purple-50' : 'border-gray-200'
                     }`}>
                       {editingPromptIdx === i ? (
@@ -5022,7 +5012,7 @@ function AiAssistConfigCard({
                     {!kbId && <span className="text-amber-500 ml-1">(请先在下方绑定知识库)</span>}
                   </div>
                   {result.kb_items.map((item, i) => (
-                    <div key={i} className={`rounded-lg border transition-all ${
+                    <div key={i} className={`rounded-sm border transition-all ${
                       selectedKbs[i] ? 'border-blue-400 bg-blue-50' : 'border-gray-200'
                     }`}>
                       {editingKbIdx === i ? (
@@ -5102,7 +5092,7 @@ function AiAssistConfigCard({
                 <button
                   onClick={handleApply}
                   disabled={applying || applyDone}
-                  className={`w-full py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all ${
+                  className={`w-full py-2.5 rounded-sm text-sm font-medium flex items-center justify-center gap-2 transition-all ${
                     applyDone ? 'bg-green-500 text-white' : 'bg-gray-800 text-white disabled:opacity-50'
                   }`}
                 >
@@ -5486,7 +5476,7 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
   return (
     <div className="space-y-4 wecom-blue">
       {/* 渠道启用/停用开关 */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-semibold text-gray-800">渠道状态</div>
@@ -5498,82 +5488,20 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
             className="flex items-center gap-2 disabled:opacity-50"
           >
             {togglingEnabled
-              ? <Loader2 className="w-12 h-12 animate-spin text-gray-400" />
-              : isEnabled
-                ? <ToggleRight className="w-16 h-16 text-green-500" />
-                : <ToggleLeft className="w-16 h-16 text-gray-300" />
+              ? <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+              : (
+                <div className={`w-12 h-7 rounded-full transition-colors flex items-center px-0.5 ${isEnabled ? 'bg-green-500' : 'bg-gray-300'}`}>
+                  <div className={`w-6 h-6 bg-white rounded-full shadow transition-transform ${isEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                </div>
+              )
             }
           </button>
         </div>
       </div>
 
-      {/* 欢迎语 */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-        <div className="flex items-center justify-between mb-1">
-          <label className="text-sm font-medium text-gray-700">欢迎语</label>
-          {!editingWelcome ? (
-            <button onClick={() => { setDraftWelcome(welcomeMsg); setEditingWelcome(true); }}
-              className="text-xs text-blue-500 px-2 py-0.5 rounded hover:bg-blue-50">编辑</button>
-          ) : (
-            <div className="flex gap-2">
-              <button onClick={() => { setWelcomeMsg(draftWelcome); setEditingWelcome(false); }}
-                className="text-xs text-gray-400 px-2 py-0.5 rounded hover:bg-gray-50">取消</button>
-              <button onClick={() => setEditingWelcome(false)}
-                className="text-xs text-blue-500 px-2 py-0.5 rounded hover:bg-blue-50">完成</button>
-            </div>
-          )}
-        </div>
-        <p className="text-xs text-gray-400 mb-2">用户首次发消息时自动回复，留空则不发送</p>
-        {editingWelcome ? (
-          <textarea
-            value={welcomeMsg}
-            onChange={e => setWelcomeMsg(e.target.value)}
-            placeholder="输入欢迎语，支持换行"
-            rows={3}
-            autoFocus
-            className="w-full text-sm border border-blue-300 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-800 placeholder-gray-400"
-          />
-        ) : (
-          <div className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2 min-h-[60px] whitespace-pre-wrap">
-            {welcomeMsg || <span className="text-gray-400">未设置欢迎语</span>}
-          </div>
-        )}
-      </div>
-
-      {/* 等待提示语 */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-        <div className="flex items-center justify-between mb-1">
-          <label className="text-sm font-medium text-gray-700">等待提示语</label>
-          {!editingWaiting ? (
-            <button onClick={() => { setDraftWaiting(waitingMsg); setEditingWaiting(true); }}
-              className="text-xs text-blue-500 px-2 py-0.5 rounded hover:bg-blue-50">编辑</button>
-          ) : (
-            <div className="flex gap-2">
-              <button onClick={() => { setWaitingMsg(draftWaiting); setEditingWaiting(false); }}
-                className="text-xs text-gray-400 px-2 py-0.5 rounded hover:bg-gray-50">取消</button>
-              <button onClick={() => setEditingWaiting(false)}
-                className="text-xs text-blue-500 px-2 py-0.5 rounded hover:bg-blue-50">完成</button>
-            </div>
-          )}
-        </div>
-        <p className="text-xs text-gray-400 mb-2">用户发消息后、AI 回复前显示的提示，避免用户以为没反应</p>
-        {editingWaiting ? (
-          <input
-            value={waitingMsg}
-            onChange={e => setWaitingMsg(e.target.value)}
-            placeholder="例如：收到，AI 正在思考中，请稍候..."
-            autoFocus
-            className="w-full text-sm border border-blue-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
-          />
-        ) : (
-          <div className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2">
-            {waitingMsg || <span className="text-gray-400">未设置等待提示语</span>}
-          </div>
-        )}
-      </div>
-
+      
       {/* 结构化 AI 指令管理 */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         {/* 折叠头部 */}
         <button
           className="w-full flex items-center justify-between px-4 py-3 text-left"
@@ -5599,7 +5527,7 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
                 value={ruleSearch}
                 onChange={e => setRuleSearch(e.target.value)}
                 placeholder="搜索指令内容（查重用）..."
-                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                className="w-full text-sm border border-gray-200 rounded-sm px-3 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-100"
               />
               {ruleSearch && (
                 <button onClick={() => setRuleSearch('')} className="absolute right-2 top-2 text-gray-400"><X className="w-4 h-4" /></button>
@@ -5620,10 +5548,10 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
                 ><Plus className="w-3 h-3" />新增</button>
               </div>
               {promptRules.filter(r => r.layer === 1 && (ruleSearch === '' || r.content.includes(ruleSearch) || r.remark?.includes(ruleSearch))).length === 0 && (
-                <div className="text-xs text-gray-400 py-2 text-center bg-gray-50 rounded-lg">暂无角色定义，建议添加一条</div>
+                <div className="text-xs text-gray-400 py-2 text-center bg-gray-50 rounded-sm">暂无角色定义，建议添加一条</div>
               )}
               {promptRules.filter(r => r.layer === 1 && (ruleSearch === '' || r.content.includes(ruleSearch) || r.remark?.includes(ruleSearch))).map(rule => (
-                <div key={rule.id} className={`border rounded-lg mb-2 overflow-hidden ${rule.enabled ? 'border-purple-200 bg-purple-50/30' : 'border-gray-200 bg-gray-50 opacity-60'}`}>
+                <div key={rule.id} className={`border rounded-sm mb-2 overflow-hidden ${rule.enabled ? 'border-purple-200 bg-purple-50/30' : 'border-gray-200 bg-gray-50 opacity-60'}`}>
                   {editingRuleId === rule.id ? (
                     <div className="p-3 space-y-2">
                       <textarea
@@ -5650,7 +5578,9 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
                         <p className="text-sm text-gray-800 flex-1 whitespace-pre-wrap">{rule.content}</p>
                         <div className="flex items-center gap-1 shrink-0">
                           <button onClick={() => handleToggleRule(rule)}>
-                            {rule.enabled ? <ToggleRight className="w-6 h-6 text-purple-500" /> : <ToggleLeft className="w-6 h-6 text-gray-400" />}
+                            <div className={`w-9 h-5 rounded-full transition-colors flex items-center px-0.5 ${rule.enabled ? 'bg-purple-500' : 'bg-gray-300'}`}>
+                              <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${rule.enabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                            </div>
                           </button>
                           <button onClick={() => { setEditingRuleId(rule.id); setEditRuleDraft({}); }} className="text-gray-400 hover:text-blue-500"><Edit2 className="w-3.5 h-3.5" /></button>
                           <button onClick={() => handleDeleteRule(rule.id)} className="text-gray-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
@@ -5678,10 +5608,10 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
                 ><Plus className="w-3 h-3" />新增</button>
               </div>
               {promptRules.filter(r => r.layer === 2 && (ruleSearch === '' || r.content.includes(ruleSearch) || r.category.includes(ruleSearch) || r.remark?.includes(ruleSearch))).length === 0 && (
-                <div className="text-xs text-gray-400 py-2 text-center bg-gray-50 rounded-lg">暂无行为规则</div>
+                <div className="text-xs text-gray-400 py-2 text-center bg-gray-50 rounded-sm">暂无行为规则</div>
               )}
               {promptRules.filter(r => r.layer === 2 && (ruleSearch === '' || r.content.includes(ruleSearch) || r.category.includes(ruleSearch) || r.remark?.includes(ruleSearch))).map(rule => (
-                <div key={rule.id} className={`border rounded-lg mb-2 overflow-hidden ${rule.enabled ? 'border-blue-200 bg-blue-50/20' : 'border-gray-200 bg-gray-50 opacity-60'}`}>
+                <div key={rule.id} className={`border rounded-sm mb-2 overflow-hidden ${rule.enabled ? 'border-blue-200 bg-blue-50/20' : 'border-gray-200 bg-gray-50 opacity-60'}`}>
                   {editingRuleId === rule.id ? (
                     <div className="p-3 space-y-2">
                       <div className="flex gap-2">
@@ -5726,7 +5656,9 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           <button onClick={() => handleToggleRule(rule)}>
-                            {rule.enabled ? <ToggleRight className="w-6 h-6 text-blue-500" /> : <ToggleLeft className="w-6 h-6 text-gray-400" />}
+                            <div className={`w-9 h-5 rounded-full transition-colors flex items-center px-0.5 ${rule.enabled ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                              <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${rule.enabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                            </div>
                           </button>
                           <button onClick={() => { setEditingRuleId(rule.id); setEditRuleDraft({}); }} className="text-gray-400 hover:text-blue-500"><Edit2 className="w-3.5 h-3.5" /></button>
                           <button onClick={() => handleDeleteRule(rule.id)} className="text-gray-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
@@ -5749,7 +5681,7 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
               </div>
               <button
                 onClick={() => onJumpToKb?.()}
-                className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg border border-green-200 bg-green-50/40 text-sm text-green-700 hover:bg-green-50 transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-sm border border-green-200 bg-green-50/40 text-sm text-green-700 hover:bg-green-50 transition-colors"
               >
                 <div className="flex items-center gap-2">
                   <Shield className="w-4 h-4" />
@@ -5764,7 +5696,7 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
 
             {/* 新增指令弹层 */}
             {addingRule && (
-              <div className="border border-blue-200 rounded-xl p-3 bg-blue-50/30 space-y-2">
+              <div className="border border-blue-200 rounded p-3 bg-blue-50/30 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-blue-700">新增指令</span>
                   <button onClick={() => setAddingRule(false)}><X className="w-4 h-4 text-gray-400" /></button>
@@ -5830,7 +5762,7 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
                 实时预览（发给 AI 的完整指令文本）
               </button>
               {promptPreviewOpen && (
-                <pre className="mt-2 text-xs text-gray-600 bg-gray-50 rounded-lg p-3 whitespace-pre-wrap max-h-48 overflow-y-auto border border-gray-200">{buildPromptPreview()}</pre>
+                <pre className="mt-2 text-xs text-gray-600 bg-gray-50 rounded-sm p-3 whitespace-pre-wrap max-h-48 overflow-y-auto border border-gray-200">{buildPromptPreview()}</pre>
               )}
             </div>
 
@@ -5848,14 +5780,14 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
 
       {/* AI 模型选择（客服账号显示，自建应用用路由） */}
       {!isApp && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <label className="block text-sm font-medium text-gray-700 mb-2">默认 AI 模型</label>
           <div className="grid grid-cols-1 gap-2">
             {CHANNEL_AI_MODELS.map(m => (
               <button
                 key={m.value}
                 onClick={() => setAiModel(m.value)}
-                className={`flex items-center justify-between px-3 py-2.5 rounded-lg border-2 text-sm transition-all ${
+                className={`flex items-center justify-between px-3 py-2.5 rounded-sm border-2 text-sm transition-all ${
                   aiModel === m.value
                     ? "border-blue-400 bg-blue-50 text-blue-700"
                     : "border-gray-200 text-gray-600"
@@ -5871,7 +5803,7 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
 
       {/* 自建应用：AI 智能路由 */}
       {isApp && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <label className="block text-sm font-medium text-gray-700 mb-3">AI 智能路由</label>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -5880,9 +5812,9 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
                 <div className="text-xs text-gray-400">开启后系统自动判断每条消息派给哪个模型</div>
               </div>
               <button onClick={() => setRouteEnabled(!routeEnabled)}>
-                {routeEnabled
-                  ? <ToggleRight className="w-8 h-8 text-blue-500" />
-                  : <ToggleLeft className="w-8 h-8 text-gray-400" />}
+                <div className={`w-11 h-6 rounded-full transition-colors flex items-center px-0.5 ${routeEnabled ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                  <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${routeEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                </div>
               </button>
             </div>
             <div className="flex items-center justify-between pt-2 border-t border-gray-50">
@@ -5924,7 +5856,7 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
       )}
 
       {/* 会话上下文轮数 */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
         <div className="flex items-center justify-between mb-1">
           <label className="text-sm font-medium text-gray-700">会话上下文轮数</label>
           <span className="text-sm font-bold text-blue-600">{contextRounds} 轮</span>
@@ -5946,12 +5878,12 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
 
       {/* 绑定知识库（客服账号） */}
       {!isApp && kbList.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <label className="block text-sm font-medium text-gray-700 mb-2">绑定知识库</label>
           <div className="space-y-2">
             <button
               onClick={() => setKbId(0)}
-              className={`w-full text-left px-3 py-2.5 rounded-lg border-2 text-sm transition-all ${
+              className={`w-full text-left px-3 py-2.5 rounded-sm border-2 text-sm transition-all ${
                 kbId === 0 ? "border-gray-400 bg-gray-50 text-gray-700" : "border-gray-200 text-gray-500"
               }`}
             >
@@ -5961,7 +5893,7 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
               <button
                 key={kb.id}
                 onClick={() => setKbId(kb.id)}
-                className={`w-full text-left px-3 py-2.5 rounded-lg border-2 text-sm transition-all ${
+                className={`w-full text-left px-3 py-2.5 rounded-sm border-2 text-sm transition-all ${
                   kbId === kb.id ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"
                 }`}
               >
@@ -5976,7 +5908,7 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
 
       {/* 调用平台公共库（客服账号·多选） */}
       {!isApp && sharedKbList.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <div className="flex items-center justify-between mb-1">
             <label className="block text-sm font-medium text-gray-700">调用平台公共库</label>
             {savingSharedKb && <Loader2 className="w-3.5 h-3.5 animate-spin text-green-500" />}
@@ -5989,7 +5921,7 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
                 <button
                   key={kb.id}
                   onClick={() => toggleSharedKb(kb.id)}
-                  className={`w-full flex items-center gap-2.5 text-left px-3 py-2.5 rounded-lg border-2 text-sm transition-all ${
+                  className={`w-full flex items-center gap-2.5 text-left px-3 py-2.5 rounded-sm border-2 text-sm transition-all ${
                     checked ? "border-green-400 bg-green-50" : "border-gray-200"
                   }`}
                 >
@@ -6009,16 +5941,16 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
 
       {/* 消息抄送（仅微信客服渠道） */}
       {!isApp && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
           <div className="flex items-center justify-between mb-3">
             <div>
               <div className="text-sm font-semibold text-gray-800">消息抄送通知</div>
               <div className="text-xs text-gray-400 mt-0.5">AI 回复客户后，同步抷送一份给指定成员的企业微信</div>
             </div>
             <button onClick={() => setNotifyEnabled(v => !v)}>
-              {notifyEnabled
-                ? <ToggleRight className="w-8 h-8 text-blue-500" />
-                : <ToggleLeft className="w-8 h-8 text-gray-400" />}
+              <div className={`w-11 h-6 rounded-full transition-colors flex items-center px-0.5 ${notifyEnabled ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${notifyEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+              </div>
             </button>
           </div>
           {notifyEnabled && (
@@ -6038,7 +5970,7 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
                           ? prev.filter(id => id !== m.userid)
                           : [...prev, m.userid]
                       )}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg border text-sm transition-all ${
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-sm border text-sm transition-all ${
                         notifyUserids.includes(m.userid)
                           ? 'border-blue-400 bg-blue-50 text-blue-700'
                           : 'border-gray-200 text-gray-600'
@@ -6051,17 +5983,17 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <div className="text-xs text-amber-500 bg-amber-50 rounded-lg px-3 py-2">成员列表加载失败（IP白名单限制），请手动输入 userid</div>
+                  <div className="text-xs text-amber-500 bg-amber-50 rounded-sm px-3 py-2">成员列表加载失败（IP白名单限制），请手动输入 userid</div>
                   <input
                     value={notifyUserids.join(',')}
                     onChange={e => setNotifyUserids(e.target.value.split(',').map(s=>s.trim()).filter(Boolean))}
                     placeholder="输入 userid，多个用英文逗号分隔，例如：HuXX,ZhangXX"
-                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    className="w-full text-sm border border-gray-200 rounded-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
                   />
                 </div>
               )}
               {notifyUserids.length > 0 && (
-                <div className="text-xs text-green-600 bg-green-50 rounded-lg px-3 py-2 mt-1">
+                <div className="text-xs text-green-600 bg-green-50 rounded-sm px-3 py-2 mt-1">
                   已选 {notifyUserids.length} 人接收抄送：{notifyUserids.join('、')}
                 </div>
               )}
@@ -6078,7 +6010,7 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
             <span className="text-sm font-medium text-gray-800">菜单自动回复模板</span>
           </div>
           {menuKeys.map(item => (
-            <div key={item.key} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+            <div key={item.key} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <div className="text-sm font-medium text-gray-700">{item.name}</div>
@@ -6129,10 +6061,10 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
                   onChange={e => setMenuReplies(prev => ({ ...prev, [item.key]: e.target.value }))}
                   placeholder="输入回复内容，留空使用默认回复"
                   rows={3}
-                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  className="w-full text-sm border border-gray-200 rounded-sm px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-200"
                 />
               ) : (
-                <div className="bg-gray-50 rounded-lg p-2.5 text-xs text-gray-600 whitespace-pre-wrap min-h-[40px]">
+                <div className="bg-gray-50 rounded-sm p-2.5 text-xs text-gray-600 whitespace-pre-wrap min-h-[40px]">
                   {menuReplies[item.key] || "（使用默认回复）"}
                 </div>
               )}
@@ -6140,6 +6072,71 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
           ))}
         </div>
       )}
+
+      {/* 欢迎语 */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-sm font-medium text-gray-700">欢迎语</label>
+          {!editingWelcome ? (
+            <button onClick={() => { setDraftWelcome(welcomeMsg); setEditingWelcome(true); }}
+              className="text-xs text-blue-500 px-2 py-0.5 rounded hover:bg-blue-50">编辑</button>
+          ) : (
+            <div className="flex gap-2">
+              <button onClick={() => { setWelcomeMsg(draftWelcome); setEditingWelcome(false); }}
+                className="text-xs text-gray-400 px-2 py-0.5 rounded hover:bg-gray-50">取消</button>
+              <button onClick={() => setEditingWelcome(false)}
+                className="text-xs text-blue-500 px-2 py-0.5 rounded hover:bg-blue-50">完成</button>
+            </div>
+          )}
+        </div>
+        <p className="text-xs text-gray-400 mb-2">用户首次发消息时自动回复，留空则不发送</p>
+        {editingWelcome ? (
+          <textarea
+            value={welcomeMsg}
+            onChange={e => setWelcomeMsg(e.target.value)}
+            placeholder="输入欢迎语，支持换行"
+            rows={3}
+            autoFocus
+            className="w-full text-sm border border-blue-300 rounded-sm px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-200 text-gray-800 placeholder-gray-400"
+          />
+        ) : (
+          <div className="text-sm text-gray-700 bg-gray-50 rounded-sm px-3 py-2 min-h-[60px] whitespace-pre-wrap">
+            {welcomeMsg || <span className="text-gray-400">未设置欢迎语</span>}
+          </div>
+        )}
+      </div>
+
+      {/* 等待提示语 */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-sm font-medium text-gray-700">等待提示语</label>
+          {!editingWaiting ? (
+            <button onClick={() => { setDraftWaiting(waitingMsg); setEditingWaiting(true); }}
+              className="text-xs text-blue-500 px-2 py-0.5 rounded hover:bg-blue-50">编辑</button>
+          ) : (
+            <div className="flex gap-2">
+              <button onClick={() => { setWaitingMsg(draftWaiting); setEditingWaiting(false); }}
+                className="text-xs text-gray-400 px-2 py-0.5 rounded hover:bg-gray-50">取消</button>
+              <button onClick={() => setEditingWaiting(false)}
+                className="text-xs text-blue-500 px-2 py-0.5 rounded hover:bg-blue-50">完成</button>
+            </div>
+          )}
+        </div>
+        <p className="text-xs text-gray-400 mb-2">用户发消息后、AI 回复前显示的提示，避免用户以为没反应</p>
+        {editingWaiting ? (
+          <input
+            value={waitingMsg}
+            onChange={e => setWaitingMsg(e.target.value)}
+            placeholder="例如：收到，AI 正在思考中，请稍候..."
+            autoFocus
+            className="w-full text-sm border border-blue-300 rounded-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          />
+        ) : (
+          <div className="text-sm text-gray-700 bg-gray-50 rounded-sm px-3 py-2">
+            {waitingMsg || <span className="text-gray-400">未设置等待提示语</span>}
+          </div>
+        )}
+      </div>
 
       {/* 保存按钮：带脏数据检测和正反馈 */}
       {(() => {
@@ -6153,7 +6150,7 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
           <button
             onClick={handleSave}
             disabled={saving || justSaved || (!isApp && !isDirty)}
-            className={`w-full py-3 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all ${
+            className={`w-full py-3 rounded text-sm font-medium flex items-center justify-center gap-2 transition-all ${
               saving ? 'bg-blue-400 text-white opacity-80'
               : justSaved ? 'bg-green-500 text-white'
               : isDirty ? 'bg-blue-600 text-white active:bg-blue-700'
@@ -6307,15 +6304,15 @@ function ChannelCustomRulesTab({ channelType }: { channelType: string }) {
     <div className="space-y-3 pb-6">
       {/* 统计栏 */}
       <div className="grid grid-cols-3 gap-2">
-        <div className="bg-white rounded-xl p-3 text-center border border-gray-100">
+        <div className="bg-white rounded p-3 text-center border border-gray-100">
           <div className="text-lg font-bold text-gray-800">{rules.length}</div>
           <div className="text-xs text-gray-400">规则总数</div>
         </div>
-        <div className="bg-white rounded-xl p-3 text-center border border-gray-100">
+        <div className="bg-white rounded p-3 text-center border border-gray-100">
           <div className="text-lg font-bold text-green-600">{enabledCount}</div>
           <div className="text-xs text-gray-400">已启用</div>
         </div>
-        <div className="bg-white rounded-xl p-3 text-center border border-gray-100">
+        <div className="bg-white rounded p-3 text-center border border-gray-100">
           <div className="text-lg font-bold text-blue-600">{totalTriggers}</div>
           <div className="text-xs text-gray-400">累计命中</div>
         </div>
@@ -6327,9 +6324,9 @@ function ChannelCustomRulesTab({ channelType }: { channelType: string }) {
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="搜索规则名称或意图..."
-          className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-blue-400"
+          className="flex-1 text-sm border border-gray-200 rounded-sm px-3 py-2 outline-none focus:border-blue-400"
         />
-        <button onClick={openCreate} className="flex items-center gap-1 bg-blue-600 text-white text-sm px-3 py-2 rounded-lg">
+        <button onClick={openCreate} className="flex items-center gap-1 bg-blue-600 text-white text-sm px-3 py-2 rounded-sm">
           <Plus className="w-4 h-4" />新建
         </button>
       </div>
@@ -6350,7 +6347,7 @@ function ChannelCustomRulesTab({ channelType }: { channelType: string }) {
             try { userIds = JSON.parse(rule.target_user_ids || "[]"); } catch {}
             const targetUsers = wecomUsers2.filter(u => userIds.includes(u.wecom_user_id));
             return (
-              <div key={rule.id} className={`bg-white rounded-xl border p-3 ${rule.enabled ? "border-gray-100" : "border-gray-100 opacity-60"}`}>
+              <div key={rule.id} className={`bg-white rounded border p-3 ${rule.enabled ? "border-gray-100" : "border-gray-100 opacity-60"}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -6414,7 +6411,7 @@ function ChannelCustomRulesTab({ channelType }: { channelType: string }) {
                   value={form.rule_name}
                   onChange={e => setForm(p => ({ ...p, rule_name: e.target.value }))}
                   placeholder="如：世界杯赔率查询"
-                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-blue-400"
+                  className="w-full text-sm border border-gray-200 rounded-sm px-3 py-2 outline-none focus:border-blue-400"
                 />
               </div>
               <div>
@@ -6432,13 +6429,13 @@ function ChannelCustomRulesTab({ channelType }: { channelType: string }) {
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => setForm(p => ({ ...p, reply_mode: "template" }))}
-                    className={`py-2.5 rounded-xl text-sm font-medium border-2 transition-all ${form.reply_mode === "template" ? "border-orange-400 bg-orange-50 text-orange-700" : "border-gray-200 text-gray-500"}`}
+                    className={`py-2.5 rounded text-sm font-medium border-2 transition-all ${form.reply_mode === "template" ? "border-orange-400 bg-orange-50 text-orange-700" : "border-gray-200 text-gray-500"}`}
                   >
                     固定模板回复
                   </button>
                   <button
                     onClick={() => setForm(p => ({ ...p, reply_mode: "ai" }))}
-                    className={`py-2.5 rounded-xl text-sm font-medium border-2 transition-all ${form.reply_mode === "ai" ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-500"}`}
+                    className={`py-2.5 rounded text-sm font-medium border-2 transition-all ${form.reply_mode === "ai" ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-500"}`}
                   >
                     专属 AI 回复
                   </button>
@@ -6464,7 +6461,7 @@ function ChannelCustomRulesTab({ channelType }: { channelType: string }) {
                         <button
                           key={m.value}
                           onClick={() => setForm(p => ({ ...p, ai_model: m.value }))}
-                          className={`w-full text-left text-sm px-3 py-2 rounded-lg border transition-all ${form.ai_model === m.value ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"}`}
+                          className={`w-full text-left text-sm px-3 py-2 rounded-sm border transition-all ${form.ai_model === m.value ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600"}`}
                         >
                           {m.label}
                         </button>
@@ -6488,13 +6485,13 @@ function ChannelCustomRulesTab({ channelType }: { channelType: string }) {
                 <div className="grid grid-cols-2 gap-2 mb-3">
                   <button
                     onClick={() => setForm(p => ({ ...p, target_type: "selected" }))}
-                    className={`py-2 rounded-xl text-sm font-medium border-2 transition-all ${form.target_type === "selected" ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-500"}`}
+                    className={`py-2 rounded text-sm font-medium border-2 transition-all ${form.target_type === "selected" ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-500"}`}
                   >
                     指定用户
                   </button>
                   <button
                     onClick={() => setForm(p => ({ ...p, target_type: "all" }))}
-                    className={`py-2 rounded-xl text-sm font-medium border-2 transition-all ${form.target_type === "all" ? "border-purple-400 bg-purple-50 text-purple-700" : "border-gray-200 text-gray-500"}`}
+                    className={`py-2 rounded text-sm font-medium border-2 transition-all ${form.target_type === "all" ? "border-purple-400 bg-purple-50 text-purple-700" : "border-gray-200 text-gray-500"}`}
                   >
                     全部用户
                   </button>
@@ -6506,7 +6503,7 @@ function ChannelCustomRulesTab({ channelType }: { channelType: string }) {
                     <button
                       type="button"
                       onClick={() => { setUserDropdownOpen(v => !v); setUserSearch(""); }}
-                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm border-2 transition-all ${
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded text-sm border-2 transition-all ${
                         form.selected_user_ids.length > 0
                           ? "border-blue-400 bg-blue-50 text-blue-700"
                           : "border-gray-200 bg-white text-gray-500"
@@ -6521,7 +6518,7 @@ function ChannelCustomRulesTab({ channelType }: { channelType: string }) {
                     </button>
                     {/* 下拉面板 */}
                     {userDropdownOpen && (
-                      <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg">
+                      <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-white border border-gray-200 rounded shadow-lg">
                         {/* 搜索框 */}
                         <div className="px-3 pt-2.5 pb-1.5">
                           <input
@@ -6529,7 +6526,7 @@ function ChannelCustomRulesTab({ channelType }: { channelType: string }) {
                             placeholder="搜索用户名或 ID…"
                             value={userSearch}
                             onChange={e => setUserSearch(e.target.value)}
-                            className="w-full text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 outline-none focus:border-blue-400"
+                            className="w-full text-sm border border-gray-200 rounded-sm px-2.5 py-1.5 outline-none focus:border-blue-400"
                           />
                         </div>
                         {/* 用户列表 */}
@@ -6591,7 +6588,7 @@ function ChannelCustomRulesTab({ channelType }: { channelType: string }) {
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full py-3 bg-blue-600 text-white rounded text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 {saving ? "保存中..." : "保存规则"}
@@ -6838,7 +6835,7 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <button onClick={() => setViewSource(null)} className="p-1.5 rounded-lg bg-gray-100 text-gray-600">
+          <button onClick={() => setViewSource(null)} className="p-1.5 rounded-sm bg-gray-100 text-gray-600">
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="flex-1 min-w-0">
@@ -6853,7 +6850,7 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
         ) : (
           <div className="space-y-2">
             {sourceItems.map(item => (
-              <div key={item.id} className="bg-white rounded-xl border border-gray-100 p-3">
+              <div key={item.id} className="bg-white rounded border border-gray-100 p-3">
                 <div className="flex items-center gap-2 mb-1">
                   <span className={`text-xs px-1.5 py-0.5 rounded ${item.item_type === "qa" ? "bg-blue-50 text-blue-600" : "bg-green-50 text-green-600"}`}>
                     {item.item_type === "qa" ? "问答" : "段落"}
@@ -6873,7 +6870,7 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
   return (
     <div className="space-y-3">
       {/* 第0步：AI智能整理 */}
-      <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border border-purple-100 overflow-hidden">
+      <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded border border-purple-100 overflow-hidden">
         <button
           onClick={() => setStep0Open(v => !v)}
           className="w-full flex items-center justify-between px-4 py-3"
@@ -6900,14 +6897,14 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
                 onChange={e => setStep0Input(e.target.value)}
                 placeholder="例如：客服要有耕心，不要用太官方的语气。我们的产品康宝莱F1单一99元，包含蛋白粉和维生素套餐。如果客户问价格，告诉他们具体套餐内容..."
                 rows={5}
-                className="w-full text-sm border border-purple-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-purple-200 text-gray-800 placeholder-gray-400 bg-white"
+                className="w-full text-sm border border-purple-200 rounded-sm px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-purple-200 text-gray-800 placeholder-gray-400 bg-white"
               />
             </div>
 
             <button
               onClick={handleStep0Analyze}
               disabled={step0Analyzing || !step0Input.trim()}
-              className="w-full py-2.5 bg-purple-600 text-white rounded-xl text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-2.5 bg-purple-600 text-white rounded text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {step0Analyzing
                 ? <><Loader2 className="w-4 h-4 animate-spin" />分析中...</>
@@ -6917,7 +6914,7 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
             {step0Result && (
               <div className="space-y-3">
                 {(step0Result.summary || step0Result.dup_summary) && (
-                  <div className="text-xs text-purple-700 bg-purple-50 rounded-lg px-3 py-2 space-y-1">
+                  <div className="text-xs text-purple-700 bg-purple-50 rounded-sm px-3 py-2 space-y-1">
                     {step0Result.summary && (
                       <div className="flex items-start gap-1.5"><Sparkles className="w-3 h-3 mt-0.5 flex-shrink-0" /><span>{step0Result.summary}</span></div>
                     )}
@@ -6934,7 +6931,7 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
                       建议写入「角色/行为规则」
                     </div>
                     {step0Result.prompt_additions.map((p, i) => (
-                      <div key={i} className={`rounded-lg border transition-all ${
+                      <div key={i} className={`rounded-sm border transition-all ${
                         step0SelPrompts[i] ? 'border-purple-400 bg-purple-50' : 'border-gray-200 bg-white'
                       }`}>
                         {step0EditPromptIdx === i ? (
@@ -7001,7 +6998,7 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
                       {!step0KbId && <span className="text-amber-500 font-normal ml-1">(请先在「配置」Tab绑定知识库)</span>}
                     </div>
                     {step0Result.kb_items.map((item, i) => (
-                      <div key={i} className={`rounded-lg border transition-all ${
+                      <div key={i} className={`rounded-sm border transition-all ${
                         step0SelKbs[i] ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white'
                       }`}>
                         {step0EditKbIdx === i ? (
@@ -7067,7 +7064,7 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
                   <button
                     onClick={handleStep0Apply}
                     disabled={step0Applying || step0Done}
-                    className={`w-full py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all ${
+                    className={`w-full py-2.5 rounded text-sm font-medium flex items-center justify-center gap-2 transition-all ${
                       step0Done ? 'bg-green-500 text-white' : 'bg-gray-800 text-white disabled:opacity-50'
                     }`}
                   >
@@ -7084,15 +7081,15 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
 
       {/* 数据看板 */}
       <div className="grid grid-cols-3 gap-2">
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm py-3 text-center">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm py-3 text-center">
           <div className="text-lg font-bold text-blue-600">{stats.item_count}</div>
           <div className="text-xs text-gray-400 mt-0.5">知识条数</div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm py-3 text-center">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm py-3 text-center">
           <div className="text-lg font-bold text-green-600">{stats.file_count}</div>
           <div className="text-xs text-gray-400 mt-0.5">来源文件</div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm py-3 text-center">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm py-3 text-center">
           <div className="text-lg font-bold text-purple-600">{fmtChars(stats.char_count)}</div>
           <div className="text-xs text-gray-400 mt-0.5">总字数</div>
         </div>
@@ -7104,21 +7101,21 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
-          className="flex items-center justify-center gap-1 bg-blue-600 text-white text-xs py-2.5 rounded-xl font-medium disabled:opacity-50"
+          className="flex items-center justify-center gap-1 bg-blue-600 text-white text-xs py-2.5 rounded font-medium disabled:opacity-50"
         >
           {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
           {uploading ? "导入中" : "上传文件"}
         </button>
         <button
           onClick={() => setShowAddModal(true)}
-          className="flex items-center justify-center gap-1 bg-white border border-gray-200 text-gray-700 text-xs py-2.5 rounded-xl font-medium"
+          className="flex items-center justify-center gap-1 bg-white border border-gray-200 text-gray-700 text-xs py-2.5 rounded font-medium"
         >
           <Plus className="w-3.5 h-3.5" />手动新增
         </button>
         <button
           onClick={handleExport}
           disabled={exporting}
-          className="flex items-center justify-center gap-1 bg-white border border-gray-200 text-gray-700 text-xs py-2.5 rounded-xl font-medium disabled:opacity-50"
+          className="flex items-center justify-center gap-1 bg-white border border-gray-200 text-gray-700 text-xs py-2.5 rounded font-medium disabled:opacity-50"
         >
           {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowLeft className="w-3.5 h-3.5 rotate-90" />}
           导出
@@ -7144,8 +7141,8 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
         <div className="space-y-2">
           <div className="text-xs text-gray-400 px-1">知识来源（共 {sources.length} 个）</div>
           {sources.map((s, idx) => (
-            <div key={idx} className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${s.item_type === "qa" ? "bg-blue-50" : "bg-green-50"}`}>
+            <div key={idx} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 flex items-center gap-3">
+              <div className={`w-9 h-9 rounded-sm flex items-center justify-center flex-shrink-0 ${s.item_type === "qa" ? "bg-blue-50" : "bg-green-50"}`}>
                 <Shield className={`w-4 h-4 ${s.item_type === "qa" ? "text-blue-500" : "text-green-500"}`} />
               </div>
               <button onClick={() => openSourceDetail(s.source_file)} className="flex-1 min-w-0 text-left">
@@ -7176,7 +7173,7 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
             <div className="px-4 py-4 space-y-4">
               <div>
                 <label className="text-xs font-medium text-gray-600 mb-1 block">问题</label>
-                <input value={addQuestion} onChange={e => setAddQuestion(e.target.value)} placeholder="输入问题（可选）" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-blue-400" />
+                <input value={addQuestion} onChange={e => setAddQuestion(e.target.value)} placeholder="输入问题（可选）" className="w-full text-sm border border-gray-200 rounded-sm px-3 py-2 outline-none focus:border-blue-400" />
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-600 mb-1 block">相似问法 <span className="text-gray-400 font-normal">（可选，多个用换行分隔）</span></label>
@@ -7186,7 +7183,7 @@ function ChannelKnowledgeTab({ channelType, channelId, kbId: explicitKbId }: { c
                 <label className="text-xs font-medium text-gray-600 mb-1 block">答案 <span className="text-red-400">*</span></label>
                 <Textarea value={addAnswer} onChange={e => setAddAnswer(e.target.value)} placeholder="输入答案内容" className="text-sm min-h-[120px] resize-none" />
               </div>
-              <button onClick={handleAddItem} disabled={saving} className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2">
+              <button onClick={handleAddItem} disabled={saving} className="w-full py-3 bg-blue-600 text-white rounded text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 {saving ? "添加中..." : "添加到知识库"}
               </button>
@@ -7240,7 +7237,7 @@ function ChannelUsersTab({ channelType }: { channelType: string }) {
       ) : (
         <div className="space-y-2">
           {users.map(u => (
-            <div key={u.wecom_user_id} className={`bg-white rounded-xl border border-gray-100 shadow-sm p-3 ${u.blocked ? "opacity-60" : ""}`}>
+            <div key={u.wecom_user_id} className={`bg-white rounded-2xl border border-gray-100 shadow-sm p-3 ${u.blocked ? "opacity-60" : ""}`}>
               <div className="flex items-center gap-3">
                 {u.avatar_url ? (
                   <img src={u.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
@@ -7431,46 +7428,46 @@ function ChannelLogsTab({ channelType, channelId }: { channelType: string, chann
       {/* 顶部操作栏 */}
       {!selectMode ? (
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowFilter(v => !v)} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600">
+          <button onClick={() => setShowFilter(v => !v)} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-sm bg-white border border-gray-200 text-gray-600">
             <BarChart2 className="w-3.5 h-3.5" />筛选
           </button>
-          <button onClick={() => setSelectMode(true)} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600">
+          <button onClick={() => setSelectMode(true)} className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-sm bg-white border border-gray-200 text-gray-600">
             <Check className="w-3.5 h-3.5" />多选
           </button>
           <div className="flex-1" />
           <span className="text-xs text-gray-400">共 {total} 条</span>
         </div>
       ) : (
-        <div className="flex items-center gap-2 bg-blue-50 rounded-xl px-3 py-2">
+        <div className="flex items-center gap-2 bg-blue-50 rounded px-3 py-2">
           <span className="text-xs font-medium text-blue-700">已选 {selected.size} 条</span>
           <div className="flex-1" />
-          <button onClick={() => setShowAnalyzeSheet(true)} disabled={selected.size === 0} className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg bg-blue-600 text-white font-medium disabled:opacity-40">
+          <button onClick={() => setShowAnalyzeSheet(true)} disabled={selected.size === 0} className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-sm bg-blue-600 text-white font-medium disabled:opacity-40">
             <Sparkles className="w-3.5 h-3.5" />AI分析
           </button>
-          <button onClick={() => handleExport("csv")} disabled={selected.size === 0} className="text-xs px-2.5 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-40">导出</button>
-          <button onClick={exitSelectMode} className="text-xs px-2.5 py-1.5 rounded-lg text-gray-500">取消</button>
+          <button onClick={() => handleExport("csv")} disabled={selected.size === 0} className="text-xs px-2.5 py-1.5 rounded-sm bg-white border border-gray-200 text-gray-600 disabled:opacity-40">导出</button>
+          <button onClick={exitSelectMode} className="text-xs px-2.5 py-1.5 rounded-sm text-gray-500">取消</button>
         </div>
       )}
 
       {/* 筛选面板 */}
       {showFilter && !selectMode && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 space-y-2">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3 space-y-2">
           <div className="flex gap-2">
-            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:border-blue-400" />
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="flex-1 text-sm border border-gray-200 rounded-sm px-2 py-1.5 outline-none focus:border-blue-400" />
             <span className="text-gray-400 self-center text-sm">至</span>
-            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:border-blue-400" />
+            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="flex-1 text-sm border border-gray-200 rounded-sm px-2 py-1.5 outline-none focus:border-blue-400" />
           </div>
-          <input value={userId} onChange={e => setUserId(e.target.value)} placeholder="用户ID / 昵称" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:border-blue-400" />
-          <input value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="关键词（搜索消息内容）" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:border-blue-400" />
+          <input value={userId} onChange={e => setUserId(e.target.value)} placeholder="用户ID / 昵称" className="w-full text-sm border border-gray-200 rounded-sm px-3 py-1.5 outline-none focus:border-blue-400" />
+          <input value={keyword} onChange={e => setKeyword(e.target.value)} placeholder="关键词（搜索消息内容）" className="w-full text-sm border border-gray-200 rounded-sm px-3 py-1.5 outline-none focus:border-blue-400" />
           <div className="flex gap-2">
-            <select value={model} onChange={e => setModel(e.target.value)} className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:border-blue-400 bg-white">
+            <select value={model} onChange={e => setModel(e.target.value)} className="flex-1 text-sm border border-gray-200 rounded-sm px-2 py-1.5 outline-none focus:border-blue-400 bg-white">
               <option value="">全部模型</option>
               <option value="deepseek-chat">DeepSeek Flash</option>
               <option value="deepseek-reasoner">DeepSeek R1</option>
               <option value="manus-1.6-lite">Manus 轻量</option>
               <option value="manus-1.6">Manus 标准</option>
             </select>
-            <button onClick={() => { fetchLogs(0); setShowFilter(false); }} className="flex-shrink-0 text-sm px-4 py-1.5 rounded-lg bg-blue-600 text-white font-medium">查询</button>
+            <button onClick={() => { fetchLogs(0); setShowFilter(false); }} className="flex-shrink-0 text-sm px-4 py-1.5 rounded-sm bg-blue-600 text-white font-medium">查询</button>
           </div>
         </div>
       )}
@@ -7486,7 +7483,7 @@ function ChannelLogsTab({ channelType, channelId }: { channelType: string, chann
             <div
               key={log.id}
               onClick={() => selectMode && toggleSelect(log.id)}
-              className={`bg-white rounded-xl border shadow-sm p-4 transition-colors ${
+              className={`bg-white rounded border shadow-sm p-4 transition-colors ${
                 selectMode ? "cursor-pointer " + (selected.has(log.id) ? "border-blue-400 bg-blue-50/40" : "border-gray-100") : "border-gray-100"
               }`}
             >
@@ -7531,9 +7528,9 @@ function ChannelLogsTab({ channelType, channelId }: { channelType: string, chann
 
       {!selectMode && totalPages > 1 && (
         <div className="flex items-center justify-center gap-3 py-2">
-          <button onClick={() => fetchLogs(page - 1)} disabled={page === 0 || loading} className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 disabled:opacity-40">上一页</button>
+          <button onClick={() => fetchLogs(page - 1)} disabled={page === 0 || loading} className="text-sm px-3 py-1.5 rounded-sm border border-gray-200 text-gray-600 disabled:opacity-40">上一页</button>
           <span className="text-sm text-gray-500">{page + 1} / {totalPages}</span>
-          <button onClick={() => fetchLogs(page + 1)} disabled={page >= totalPages - 1 || loading} className="text-sm px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 disabled:opacity-40">下一页</button>
+          <button onClick={() => fetchLogs(page + 1)} disabled={page >= totalPages - 1 || loading} className="text-sm px-3 py-1.5 rounded-sm border border-gray-200 text-gray-600 disabled:opacity-40">下一页</button>
         </div>
       )}
 
@@ -7542,15 +7539,15 @@ function ChannelLogsTab({ channelType, channelId }: { channelType: string, chann
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: "rgba(0,0,0,0.4)" }} onClick={() => setShowAnalyzeSheet(false)}>
           <div className="bg-white rounded-t-2xl w-full max-w-lg p-4 space-y-2" onClick={e => e.stopPropagation()}>
             <div className="text-center text-sm font-medium text-gray-800 mb-2">AI 分析（已选 {selected.size} 条）</div>
-            <button onClick={() => runAnalyze("qc")} className="w-full flex items-center gap-3 p-3 rounded-xl bg-blue-50 text-left">
+            <button onClick={() => runAnalyze("qc")} className="w-full flex items-center gap-3 p-3 rounded bg-blue-50 text-left">
               <Shield className="w-5 h-5 text-blue-500" />
               <div><div className="text-sm font-medium text-gray-800">AI质检</div><div className="text-xs text-gray-500">分析对话质量好不好</div></div>
             </button>
-            <button onClick={() => runAnalyze("optimize")} className="w-full flex items-center gap-3 p-3 rounded-xl bg-amber-50 text-left">
+            <button onClick={() => runAnalyze("optimize")} className="w-full flex items-center gap-3 p-3 rounded bg-amber-50 text-left">
               <Zap className="w-5 h-5 text-amber-500" />
               <div><div className="text-sm font-medium text-gray-800">一键优化</div><div className="text-xs text-gray-500">找出问题并给改进建议</div></div>
             </button>
-            <button onClick={() => runAnalyze("kb")} className="w-full flex items-center gap-3 p-3 rounded-xl bg-green-50 text-left">
+            <button onClick={() => runAnalyze("kb")} className="w-full flex items-center gap-3 p-3 rounded bg-green-50 text-left">
               <Plus className="w-5 h-5 text-green-500" />
               <div><div className="text-sm font-medium text-gray-800">知识库推荐</div><div className="text-xs text-gray-500">生成问答对，编辑后一键入库</div></div>
             </button>
@@ -7582,16 +7579,16 @@ function ChannelLogsTab({ channelType, channelId }: { channelType: string, chann
                 ) : (
                   <div className="space-y-4">
                     {kbSuggestions.map((s, idx) => (
-                      <div key={idx} className="border border-gray-100 rounded-xl p-3 space-y-2">
+                      <div key={idx} className="border border-gray-100 rounded p-3 space-y-2">
                         <div>
                           <label className="text-xs font-medium text-gray-500 mb-1 block">问题（可编辑）</label>
-                          <input value={s.question} onChange={e => updateSuggestion(idx, "question", e.target.value)} className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 outline-none focus:border-blue-400" />
+                          <input value={s.question} onChange={e => updateSuggestion(idx, "question", e.target.value)} className="w-full text-sm border border-gray-200 rounded-sm px-3 py-2 outline-none focus:border-blue-400" />
                         </div>
                         <div>
                           <label className="text-xs font-medium text-gray-500 mb-1 block">答案（可编辑）</label>
                           <Textarea value={s.answer} onChange={e => updateSuggestion(idx, "answer", e.target.value)} className="text-sm min-h-[90px] resize-none" />
                         </div>
-                        <button onClick={() => adoptSuggestion(idx)} disabled={adoptingIdx === idx} className="w-full py-2 bg-green-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-1.5">
+                        <button onClick={() => adoptSuggestion(idx)} disabled={adoptingIdx === idx} className="w-full py-2 bg-green-600 text-white rounded-sm text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-1.5">
                           {adoptingIdx === idx ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                           采纳入库
                         </button>
@@ -7830,7 +7827,7 @@ function ChannelServiceBindingsTab({ channels }: { channels: Channel[] }) {
   if (!selectedChannel) {
     return (
       <div className="space-y-3">
-        <div className="bg-blue-50 rounded-xl p-3 border border-blue-100">
+        <div className="bg-blue-50 rounded p-3 border border-blue-100">
           <div className="text-xs text-blue-700 font-medium mb-1">渠道-服务商绑定</div>
           <div className="text-xs text-blue-600 leading-relaxed">
             选择一个企微客服渠道，将其与牙伴诊所绑定。绑定后，该诊所院长端的聊天功能将自动关联此渠道的 AI 配置。
@@ -7845,9 +7842,9 @@ function ChannelServiceBindingsTab({ channels }: { channels: Channel[] }) {
               <button
                 key={ch.id}
                 onClick={() => handleSelectChannel(ch)}
-                className="w-full text-left bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3.5 flex items-center gap-3 active:bg-gray-50 transition-colors"
+                className="w-full text-left bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3.5 flex items-center gap-3 active:bg-gray-50 transition-colors"
               >
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#1a5c2e] to-[#2d8a47] flex items-center justify-center flex-shrink-0">
+                <div className="w-9 h-9 rounded bg-gradient-to-br from-[#1a5c2e] to-[#2d8a47] flex items-center justify-center flex-shrink-0">
                   <MessageSquare className="w-4 h-4 text-[#4ade80]" />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -7879,7 +7876,7 @@ function ChannelServiceBindingsTab({ channels }: { channels: Channel[] }) {
       <div className="flex items-center gap-2">
         <button
           onClick={handleBack}
-          className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0 active:bg-gray-200"
+          className="w-8 h-8 rounded-sm bg-gray-100 flex items-center justify-center flex-shrink-0 active:bg-gray-200"
         >
           <ChevronRight className="w-4 h-4 text-gray-500 rotate-180" />
         </button>
@@ -7897,10 +7894,10 @@ function ChannelServiceBindingsTab({ channels }: { channels: Channel[] }) {
       ) : (
         <div className="space-y-2">
           {bindings.map(b => (
-            <div key={b.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-3">
+            <div key={b.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 rounded-sm bg-blue-100 flex items-center justify-center flex-shrink-0">
                     <Link2Icon />
                   </div>
                   <div>
@@ -7916,7 +7913,7 @@ function ChannelServiceBindingsTab({ channels }: { channels: Channel[] }) {
                 <button
                   onClick={() => handleDelete(b.id)}
                   disabled={deletingId === b.id}
-                  className="text-xs text-red-400 border border-red-100 rounded-lg px-2 py-1 flex items-center gap-1 hover:bg-red-50 transition-colors"
+                  className="text-xs text-red-400 border border-red-100 rounded-sm px-2 py-1 flex items-center gap-1 hover:bg-red-50 transition-colors"
                 >
                   {deletingId === b.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
                   解除
@@ -7934,7 +7931,7 @@ function ChannelServiceBindingsTab({ channels }: { channels: Channel[] }) {
                       loadGrants(b);
                     }
                   }}
-                  className={`text-xs px-2.5 py-1 rounded-lg border flex items-center gap-1 transition-colors ${
+                  className={`text-xs px-2.5 py-1 rounded-sm border flex items-center gap-1 transition-colors ${
                     grantPanel?.binding.id === b.id && grantPanel?.type === 'kb'
                       ? 'bg-amber-500 text-white border-amber-500'
                       : 'text-amber-600 border-amber-200 hover:bg-amber-50'
@@ -7952,7 +7949,7 @@ function ChannelServiceBindingsTab({ channels }: { channels: Channel[] }) {
                       loadGrants(b);
                     }
                   }}
-                  className={`text-xs px-2.5 py-1 rounded-lg border flex items-center gap-1 transition-colors ${
+                  className={`text-xs px-2.5 py-1 rounded-sm border flex items-center gap-1 transition-colors ${
                     grantPanel?.binding.id === b.id && grantPanel?.type === 'rule'
                       ? 'bg-purple-500 text-white border-purple-500'
                       : 'text-purple-600 border-purple-200 hover:bg-purple-50'
@@ -7972,7 +7969,7 @@ function ChannelServiceBindingsTab({ channels }: { channels: Channel[] }) {
                       <div className="text-xs font-semibold text-amber-700 mb-1">已授权知识库</div>
                       {grantKbs.length === 0 && <div className="text-xs text-gray-400 text-center py-2">暂未授权任何知识库</div>}
                       {grantKbs.map(g => (
-                        <div key={g.id} className="flex items-center justify-between bg-amber-50 rounded-lg px-3 py-2">
+                        <div key={g.id} className="flex items-center justify-between bg-amber-50 rounded-sm px-3 py-2">
                           <span className="text-xs text-amber-800 font-medium">{g.shared_kb_name || `库#${g.shared_kb_id}`}</span>
                           <button
                             onClick={() => handleRevokeKb(b, g.id)}
@@ -7992,7 +7989,7 @@ function ChannelServiceBindingsTab({ channels }: { channels: Channel[] }) {
                           key={k.id}
                           onClick={() => handleGrantKb(b, k.id, k.name)}
                           disabled={grantSaving}
-                          className="w-full flex items-center justify-between bg-white border border-dashed border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700 hover:bg-amber-50 transition-colors"
+                          className="w-full flex items-center justify-between bg-white border border-dashed border-amber-200 rounded-sm px-3 py-2 text-xs text-amber-700 hover:bg-amber-50 transition-colors"
                         >
                           <span>{k.name}</span>
                           <Plus className="w-3 h-3" />
@@ -8004,7 +8001,7 @@ function ChannelServiceBindingsTab({ channels }: { channels: Channel[] }) {
                       <div className="text-xs font-semibold text-purple-700 mb-1">已授权指令库</div>
                       {grantRules.length === 0 && <div className="text-xs text-gray-400 text-center py-2">暂未授权任何指令库</div>}
                       {grantRules.map(g => (
-                        <div key={g.id} className="flex items-center justify-between bg-purple-50 rounded-lg px-3 py-2">
+                        <div key={g.id} className="flex items-center justify-between bg-purple-50 rounded-sm px-3 py-2">
                           <span className="text-xs text-purple-800 font-medium">{g.shared_rule_lib_name || `库#${g.shared_rule_lib_id}`}</span>
                           <button
                             onClick={() => handleRevokeRule(b, g.id)}
@@ -8024,7 +8021,7 @@ function ChannelServiceBindingsTab({ channels }: { channels: Channel[] }) {
                           key={r.id}
                           onClick={() => handleGrantRule(b, r.id, r.name)}
                           disabled={grantSaving}
-                          className="w-full flex items-center justify-between bg-white border border-dashed border-purple-200 rounded-lg px-3 py-2 text-xs text-purple-700 hover:bg-purple-50 transition-colors"
+                          className="w-full flex items-center justify-between bg-white border border-dashed border-purple-200 rounded-sm px-3 py-2 text-xs text-purple-700 hover:bg-purple-50 transition-colors"
                         >
                           <span>{r.name}</span>
                           <Plus className="w-3 h-3" />
@@ -8043,13 +8040,13 @@ function ChannelServiceBindingsTab({ channels }: { channels: Channel[] }) {
       {!showAdd ? (
         <button
           onClick={() => setShowAdd(true)}
-          className="w-full py-2.5 rounded-xl border border-dashed border-blue-300 text-blue-600 text-sm font-medium flex items-center justify-center gap-1.5 hover:bg-blue-50 transition-colors"
+          className="w-full py-2.5 rounded border border-dashed border-blue-300 text-blue-600 text-sm font-medium flex items-center justify-center gap-1.5 hover:bg-blue-50 transition-colors"
         >
           <Plus className="w-4 h-4" />
           新增服务商绑定
         </button>
       ) : (
-        <div className="bg-white rounded-xl border border-blue-200 shadow-sm p-4 space-y-3">
+        <div className="bg-white rounded border border-blue-200 shadow-sm p-4 space-y-3">
           <div className="text-sm font-semibold text-gray-800">新增绑定</div>
 
           {/* 服务商类型 */}
@@ -8060,7 +8057,7 @@ function ChannelServiceBindingsTab({ channels }: { channels: Channel[] }) {
                 <button
                   key={key}
                   onClick={() => { setServiceType(key); setSelectedClinic(null); }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                  className={`px-3 py-1.5 rounded-sm text-xs font-medium border transition-colors ${
                     serviceType === key
                       ? "bg-blue-600 text-white border-blue-600"
                       : "bg-white text-gray-600 border-gray-200 hover:border-blue-300"
@@ -8077,7 +8074,7 @@ function ChannelServiceBindingsTab({ channels }: { channels: Channel[] }) {
             <div>
               <div className="text-xs text-gray-500 mb-1.5">选择诊所</div>
               <input
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-2 focus:outline-none focus:border-blue-400"
+                className="w-full border border-gray-200 rounded-sm px-3 py-2 text-sm mb-2 focus:outline-none focus:border-blue-400"
                 placeholder="搜索诊所名称..."
                 value={clinicSearch}
                 onChange={e => setClinicSearch(e.target.value)}
@@ -8085,7 +8082,7 @@ function ChannelServiceBindingsTab({ channels }: { channels: Channel[] }) {
               {clinicsQuery.isLoading ? (
                 <div className="flex justify-center py-3"><Loader2 className="w-4 h-4 animate-spin text-gray-400" /></div>
               ) : (
-                <div className="max-h-40 overflow-y-auto space-y-1 border border-gray-100 rounded-lg p-1">
+                <div className="max-h-40 overflow-y-auto space-y-1 border border-gray-100 rounded-sm p-1">
                   {clinics.length === 0 ? (
                     <div className="text-xs text-gray-400 text-center py-3">无匹配诊所</div>
                   ) : clinics.map((c: any) => {
@@ -8097,7 +8094,7 @@ function ChannelServiceBindingsTab({ channels }: { channels: Channel[] }) {
                         key={c.tenantId}
                         disabled={alreadyBound}
                         onClick={() => !alreadyBound && setSelectedClinic({ tenantId: c.tenantId, name: c.name || c.shortName || `诊所${c.tenantId}` })}
-                        className={`w-full text-left px-2.5 py-2 rounded-lg text-xs transition-colors ${
+                        className={`w-full text-left px-2.5 py-2 rounded-sm text-xs transition-colors ${
                           alreadyBound
                             ? "bg-gray-50 text-gray-400 cursor-not-allowed"
                             : selectedClinic?.tenantId === c.tenantId
@@ -8118,7 +8115,7 @@ function ChannelServiceBindingsTab({ channels }: { channels: Channel[] }) {
 
           {/* 已选提示 */}
           {selectedClinic && (
-            <div className="bg-blue-50 rounded-lg px-3 py-2 text-xs text-blue-700">
+            <div className="bg-blue-50 rounded-sm px-3 py-2 text-xs text-blue-700">
               已选：<span className="font-medium">{selectedClinic.name}</span>（tenant_id: {selectedClinic.tenantId}）
             </div>
           )}
@@ -8127,14 +8124,14 @@ function ChannelServiceBindingsTab({ channels }: { channels: Channel[] }) {
           <div className="flex gap-2">
             <button
               onClick={() => { setShowAdd(false); setSelectedClinic(null); setClinicSearch(""); }}
-              className="flex-1 py-2 rounded-xl border border-gray-200 text-gray-600 text-sm"
+              className="flex-1 py-2 rounded border border-gray-200 text-gray-600 text-sm"
             >
               取消
             </button>
             <button
               onClick={handleAdd}
               disabled={adding || !selectedClinic}
-              className={`flex-1 py-2 rounded-xl text-sm font-medium flex items-center justify-center gap-1.5 transition-colors ${
+              className={`flex-1 py-2 rounded text-sm font-medium flex items-center justify-center gap-1.5 transition-colors ${
                 adding || !selectedClinic
                   ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                   : "bg-blue-600 text-white hover:bg-blue-700"
@@ -8198,7 +8195,7 @@ function DocsTab() {
       title: "① 角色定义 & 行为规则",
       content: (
         <div className="space-y-3 text-sm text-gray-700 leading-relaxed">
-          <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+          <div className="bg-blue-50 rounded-sm p-3 border border-blue-100">
             <div className="font-semibold text-blue-800 mb-1">本质：AI 的基础人设与规则</div>
             <p>决定 AI「我是谁」「我怎么说话」「我必须遵守什么规则」（如不主动报价等）。</p>
           </div>
@@ -8223,7 +8220,7 @@ function DocsTab() {
       title: "② 我的数字分身",
       content: (
         <div className="space-y-3 text-sm text-gray-700 leading-relaxed">
-          <div className="bg-green-50 rounded-lg p-3 border border-green-100">
+          <div className="bg-green-50 rounded-sm p-3 border border-green-100">
             <div className="font-semibold text-green-800 mb-1">本质：客服本人的风格克隆</div>
             <p>通过学习客服历史优质对话，提炼其说话风格和专业积累，让 AI 说话像这个客服本人。</p>
           </div>
@@ -8250,7 +8247,7 @@ function DocsTab() {
       title: "③ 知识库",
       content: (
         <div className="space-y-3 text-sm text-gray-700 leading-relaxed">
-          <div className="bg-yellow-50 rounded-lg p-3 border border-yellow-100">
+          <div className="bg-yellow-50 rounded-sm p-3 border border-yellow-100">
             <div className="font-semibold text-yellow-800 mb-1">本质：标准答案库</div>
             <p>包含平台提供的「共享知识库」和客服上传的「私人知识库」，提供精准的标准答案。</p>
           </div>
@@ -8277,7 +8274,7 @@ function DocsTab() {
       title: "④ 历史对话记忆",
       content: (
         <div className="space-y-3 text-sm text-gray-700 leading-relaxed">
-          <div className="bg-purple-50 rounded-lg p-3 border border-purple-100">
+          <div className="bg-purple-50 rounded-sm p-3 border border-purple-100">
             <div className="font-semibold text-purple-800 mb-1">本质：AI 对「客户是谁」的理解</div>
             <p>包含两个时间维度：本轮对话的短期上下文（临时），以及历史对话提炼的长期偏好记忆（持久化，规划中）。</p>
           </div>
@@ -8307,7 +8304,7 @@ function DocsTab() {
               </tbody>
             </table>
           </div>
-          <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 text-xs text-gray-600">
+          <div className="bg-gray-50 rounded-sm p-3 border border-gray-200 text-xs text-gray-600">
             <span className="font-medium text-gray-700">重要说明：</span>已启用数字分身（第②层）后，AI 可通过长期记忆理解用户偏好，短期上下文轮数的重要性自动降低。两者共同构成 AI 对客户的完整认知。
           </div>
           <div>
@@ -8323,7 +8320,7 @@ function DocsTab() {
       content: (
         <div className="space-y-3 text-sm text-gray-700">
           <p className="text-xs text-gray-500">每次用户发消息时，后端按以下顺序组装 System Prompt 发送给 LLM：</p>
-          <div className="bg-gray-900 rounded-lg p-3 text-xs font-mono text-green-400 space-y-1">
+          <div className="bg-gray-900 rounded-sm p-3 text-xs font-mono text-green-400 space-y-1">
             <div className="text-gray-400">// 第①层：角色定义 & 行为规则（静态）</div>
             <div>systemPrompt = layer1 + "\n\n行为规则：\n" + layer2</div>
             <div className="mt-2 text-gray-400">// 第②层：数字分身风格（若开启，动态检索）</div>
@@ -8333,7 +8330,7 @@ function DocsTab() {
             <div className="mt-2 text-gray-400">// 最终拼装</div>
             <div className="text-yellow-300">fullSystemPrompt = systemPrompt + digitalTwinContext + kbContext</div>
           </div>
-          <div className="text-xs text-gray-500 bg-yellow-50 rounded-lg p-2 border border-yellow-100">
+          <div className="text-xs text-gray-500 bg-yellow-50 rounded-sm p-2 border border-yellow-100">
             注：数字分身（digitalTwinContext）接入后端 Prompt 拼装流程尚在开发中，当前版本仅拼装 systemPrompt + kbContext。
           </div>
         </div>
@@ -8379,7 +8376,7 @@ function DocsTab() {
   return (
     <div className="px-4 py-4 space-y-3 pb-8">
       {/* 标题 */}
-      <div className="bg-gradient-to-r from-blue-600 to-blue-500 rounded-2xl p-4 text-white">
+      <div className="bg-gradient-to-r from-blue-600 to-blue-500 rounded p-4 text-white">
         <div className="flex items-center gap-2 mb-1">
           <Bot className="w-5 h-5" />
           <span className="font-bold text-base">AI 智库系统设计文档</span>
@@ -8395,7 +8392,7 @@ function DocsTab() {
 
       {/* 各章节折叠卡片 */}
       {sections.map(section => (
-        <div key={section.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
+        <div key={section.id} className="bg-white rounded border border-gray-100 overflow-hidden shadow-sm">
           <button
             className="w-full px-4 py-3 flex items-center justify-between"
             onClick={() => setOpenSection(openSection === section.id ? null : section.id)}
@@ -8938,25 +8935,25 @@ function NotifyTab() {
     const normalOrders = filteredOrders.filter(o => o.collateral_share_mode !== "self");
 
     return (
-      <div className="mt-3 bg-blue-50 rounded-xl border border-blue-100 px-4 py-4 space-y-4">
+      <div className="mt-3 bg-blue-50 rounded border border-blue-100 px-4 py-4 space-y-4">
         {/* 所有通知类型：内置多选推送成员（第一步） */}
         <div>
           <p className="text-xs font-semibold text-gray-600 mb-2">第一步：选择推送的企业成员（可多选）</p>
           {/* 下拉选择添加成员 */}
           <div className="relative mb-2">
             <div
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white cursor-pointer flex items-center justify-between"
+              className="w-full border border-gray-200 rounded px-3 py-2.5 text-sm bg-white cursor-pointer flex items-center justify-between"
               onClick={() => setUserDropOpen(v => !v)}
             >
               <span className="text-gray-400">{loadingMembers ? "加载成员中..." : "点击添加成员..."}</span>
               <ChevronDown className="w-4 h-4 text-gray-400" />
             </div>
             {userDropOpen && (
-              <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+              <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded shadow-lg max-h-60 overflow-y-auto">
                 <div className="p-2 border-b border-gray-100">
                   <input
                     autoFocus
-                    className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm"
+                    className="w-full border border-gray-200 rounded-sm px-3 py-1.5 text-sm"
                     placeholder="搜索成员姓名或 userid..."
                     value={userSearch}
                     onChange={e => setUserSearch(e.target.value)}
@@ -8995,18 +8992,18 @@ function NotifyTab() {
                   >×</button>
                   {/* 二次确认弹层 */}
                   {removingRecipientId === r.userid && (
-                    <div className="absolute left-0 top-full mt-1 z-30 bg-white border border-red-200 rounded-xl shadow-lg px-4 py-3 min-w-[160px]">
+                    <div className="absolute left-0 top-full mt-1 z-30 bg-white border border-red-200 rounded shadow-lg px-4 py-3 min-w-[160px]">
                       <p className="text-xs text-gray-700 mb-2">确认移除 <span className="font-semibold text-red-600">{r.name}</span>？</p>
                       <div className="flex gap-2">
                         <button
-                          className="flex-1 text-xs bg-red-500 text-white rounded-lg py-1 hover:bg-red-600"
+                          className="flex-1 text-xs bg-red-500 text-white rounded-sm py-1 hover:bg-red-600"
                           onClick={() => {
                             setSelectedRecipients(prev => prev.filter(x => x.userid !== r.userid));
                             setRemovingRecipientId(null);
                           }}
                         >确认移除</button>
                         <button
-                          className="flex-1 text-xs bg-gray-100 text-gray-600 rounded-lg py-1 hover:bg-gray-200"
+                          className="flex-1 text-xs bg-gray-100 text-gray-600 rounded-sm py-1 hover:bg-gray-200"
                           onClick={() => setRemovingRecipientId(null)}
                         >取消</button>
                       </div>
@@ -9026,7 +9023,7 @@ function NotifyTab() {
           <div>
             <label className="text-xs text-gray-500 mb-1 block">备注名称（可选，方便识别）</label>
             <input
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+              className="w-full border border-gray-200 rounded-sm px-3 py-2 text-sm bg-white"
               placeholder="如：监控大饥江湖的共享担保订单"
               value={editingRecord.label || ""}
               onChange={e => setEditingRecord((p: any) => ({ ...p, label: e.target.value }))}
@@ -9043,7 +9040,7 @@ function NotifyTab() {
 
             {/* 谷底增筹委托：关注对象写死，不需要选择 */}
             {key === "fz_notify_gd_entrust" ? (
-              <div className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm bg-gray-50 text-gray-600">
+              <div className="w-full border border-gray-200 rounded-sm px-3 py-2.5 text-sm bg-gray-50 text-gray-600">
                 52 号账本 · 谷底增筹（全部委托单，赠送单不计入）
               </div>
             ) : null}
@@ -9053,7 +9050,7 @@ function NotifyTab() {
             <div className="relative mb-2">
               <label className="text-xs text-gray-400 mb-1 block">账本 52 号用户（有融资付息订单）</label>
               <div
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white cursor-pointer flex items-center justify-between"
+                className="w-full border border-gray-200 rounded-sm px-3 py-2 text-sm bg-white cursor-pointer flex items-center justify-between"
                 onClick={() => setOrderUserDropOpen(v => !v)}
               >
                 <span className={selectedOrderUser ? "text-gray-800" : "text-gray-400"}>
@@ -9062,11 +9059,11 @@ function NotifyTab() {
                 <ChevronDown className="w-4 h-4 text-gray-400" />
               </div>
               {orderUserDropOpen && (
-                <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+                <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded shadow-lg max-h-52 overflow-y-auto">
                   <div className="p-2 border-b border-gray-100">
                     <input
                       autoFocus
-                      className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm"
+                      className="w-full border border-gray-200 rounded-sm px-3 py-1.5 text-sm"
                       placeholder="搜索用户..."
                       value={orderUserSearch}
                       onChange={e => setOrderUserSearch(e.target.value)}
@@ -9109,7 +9106,7 @@ function NotifyTab() {
                   <div>
                     <div className="mb-2">
                       <input
-                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-white"
+                        className="w-full border border-gray-200 rounded-sm px-3 py-1.5 text-sm bg-white"
                         placeholder="搜索订单..."
                         value={orderSearchText}
                         onChange={e => setOrderSearchText(e.target.value)}
@@ -9126,7 +9123,7 @@ function NotifyTab() {
                           const allSharedIds = sharedOrders.map(o => o.id);
                           const allSelected = allSharedIds.every(id => selectedIds.includes(id));
                           return (
-                            <label className="flex items-center gap-2 px-3 py-2 rounded-lg bg-orange-50 hover:bg-orange-100 cursor-pointer border border-orange-200">
+                            <label className="flex items-center gap-2 px-3 py-2 rounded-sm bg-orange-50 hover:bg-orange-100 cursor-pointer border border-orange-200">
                               <input
                                 type="checkbox"
                                 checked={allSelected}
@@ -9144,11 +9141,11 @@ function NotifyTab() {
                         {/* 独立担保金订单 */}
                         {normalOrders.length > 0 && (
                           <div>
-                            <div className="bg-gray-50 rounded-lg px-3 py-2 mb-1">
+                            <div className="bg-gray-50 rounded-sm px-3 py-2 mb-1">
                               <span className="text-xs font-semibold text-gray-600">独立担保金订单（共 {normalOrders.length} 张）</span>
                             </div>
                             {normalOrders.map(o => (
-                              <label key={o.id} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer ml-2">
+                              <label key={o.id} className="flex items-center gap-2 px-3 py-1.5 rounded-sm hover:bg-gray-50 cursor-pointer ml-2">
                                 <input
                                   type="checkbox"
                                   checked={selectedIds.includes(o.id)}
@@ -9182,7 +9179,7 @@ function NotifyTab() {
             <label className="text-xs text-gray-500 mb-1 block">预警阈值（%）</label>
             <input
               type="number"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+              className="w-full border border-gray-200 rounded-sm px-3 py-2 text-sm bg-white"
               placeholder="如：20（表示担保缺口低于20%时触发）"
               value={editingRecord.threshold || ""}
               onChange={e => setEditingRecord((p: any) => ({ ...p, threshold: e.target.value }))}
@@ -9193,7 +9190,7 @@ function NotifyTab() {
           <div>
             <label className="text-xs text-gray-500 mb-1 block">发送频率</label>
             <select
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+              className="w-full border border-gray-200 rounded-sm px-3 py-2 text-sm bg-white"
               value={editingRecord.alert_mode || "new_low_24h"}
               onChange={e => setEditingRecord((p: any) => ({ ...p, alert_mode: e.target.value }))}
             >
@@ -9213,7 +9210,7 @@ function NotifyTab() {
             <label className="text-xs text-gray-500 mb-1 block">提前提醒天数</label>
             <input
               type="number"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+              className="w-full border border-gray-200 rounded-sm px-3 py-2 text-sm bg-white"
               placeholder="如：3（结息日前3天提醒）"
               value={editingRecord.advance_days || ""}
               onChange={e => setEditingRecord((p: any) => ({ ...p, advance_days: e.target.value }))}
@@ -9272,7 +9269,7 @@ function NotifyTab() {
           )}
           <textarea
             id="notify-content-textarea"
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xl bg-white resize-none"
+            className="w-full border border-gray-200 rounded-sm px-3 py-2 text-xl bg-white resize-none"
             rows={5}
             value={editingRecord.content || ""}
             onChange={e => {
@@ -9337,7 +9334,7 @@ function NotifyTab() {
               return <span key={i}>{part}</span>;
             });
             return (
-              <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+              <div className="mt-2 rounded-sm border border-gray-200 bg-gray-50 px-3 py-2">
                 <div className="text-xs text-gray-400 mb-1">发送预览（红色为变量实际值）</div>
                 <div className="text-sm text-gray-700 whitespace-pre-wrap">{previewNodes}</div>
               </div>
@@ -9351,7 +9348,7 @@ function NotifyTab() {
             <div>
               <label className="text-xs text-gray-500 mb-1 block">卡片标题</label>
               <input
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                className="w-full border border-gray-200 rounded-sm px-3 py-2 text-sm bg-white"
                 value={editingRecord.card_title || ""}
                 onChange={e => setEditingRecord((p: any) => ({ ...p, card_title: e.target.value }))}
               />
@@ -9359,7 +9356,7 @@ function NotifyTab() {
             <div>
               <label className="text-xs text-gray-500 mb-1 block">跳转链接</label>
               <input
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                className="w-full border border-gray-200 rounded-sm px-3 py-2 text-sm bg-white"
                 value={editingRecord.card_url || ""}
                 onChange={e => setEditingRecord((p: any) => ({ ...p, card_url: e.target.value }))}
               />
@@ -9370,21 +9367,21 @@ function NotifyTab() {
         {/* 操作按钮 */}
         <div className="flex gap-2 pt-1">
           <button
-            className="flex-1 bg-blue-600 text-white rounded-lg py-2 text-sm font-medium disabled:opacity-60"
+            className="flex-1 bg-blue-600 text-white rounded-sm py-2 text-sm font-medium disabled:opacity-60"
             disabled={savingId !== null}
             onClick={handleSaveRecord}
           >
             {savingId ? "保存中..." : "保存配置"}
           </button>
           <button
-            className="flex-1 bg-gray-100 text-gray-700 rounded-lg py-2 text-sm font-medium disabled:opacity-60"
+            className="flex-1 bg-gray-100 text-gray-700 rounded-sm py-2 text-sm font-medium disabled:opacity-60"
             disabled={testingId !== null}
             onClick={() => handleTestRecord(editingRecord)}
           >
             {testingId ? "发送中..." : "测试发送"}
           </button>
           <button
-            className="px-3 bg-gray-100 text-gray-500 rounded-lg py-2 text-sm"
+            className="px-3 bg-gray-100 text-gray-500 rounded-sm py-2 text-sm"
             onClick={() => { setEditingRecord(null); setEditingKey(null); }}
           >
             取消
@@ -9398,21 +9395,21 @@ function NotifyTab() {
     <div className="space-y-4 pb-8 wecom-red">
       {/* 消息提示 */}
       {msg && (
-        <div className={`rounded-xl px-4 py-3 text-sm font-medium ${msg.type === "ok" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
+        <div className={`rounded px-4 py-3 text-sm font-medium ${msg.type === "ok" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
           {msg.text}
         </div>
       )}
 
       {/* 双 Tab 切换栏 */}
-      <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
+      <div className="flex bg-gray-100 rounded p-1 gap-1">
         <button
-          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
+          className={`flex-1 py-2 text-sm font-medium rounded-sm transition-colors ${
             notifyTab === "content" ? "bg-white text-gray-800 shadow-sm" : "text-gray-500 hover:text-gray-700"
           }`}
           onClick={() => setNotifyTab("content")}
         >按推送内容</button>
         <button
-          className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
+          className={`flex-1 py-2 text-sm font-medium rounded-sm transition-colors ${
             notifyTab === "member" ? "bg-white text-gray-800 shadow-sm" : "text-gray-500 hover:text-gray-700"
           }`}
           onClick={() => setNotifyTab("member")}
@@ -9431,7 +9428,7 @@ function NotifyTab() {
               const isAddingNew = editingKey === meta.key && editingRecord && !editingRecord.id;
 
               return (
-                <div key={meta.key} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                <div key={meta.key} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                   <button
                     className="w-full flex items-center justify-between px-4 py-3 text-left"
                     onClick={() => {
@@ -9525,7 +9522,7 @@ function NotifyTab() {
                         // 谷底增筹委托是单一任务，展开时已自动进入编辑，不显示新增按钒
                         meta.key !== "fz_notify_gd_entrust" && (
                           <button
-                            className="w-full border border-dashed border-blue-300 text-blue-600 rounded-xl py-2.5 text-sm hover:bg-blue-50 transition-colors"
+                            className="w-full border border-dashed border-blue-300 text-blue-600 rounded py-2.5 text-sm hover:bg-blue-50 transition-colors"
                             onClick={() => handleAddRecord(meta.key)}
                           >+ 新增一个任务</button>
                         )
@@ -9559,11 +9556,11 @@ function NotifyTab() {
         return (
           <>
             {/* 成员下拉选择框 */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-4">
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-4">
               <p className="text-sm font-semibold text-gray-700 mb-2">选择成员</p>
               <div className="relative">
                 <div
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white cursor-pointer flex items-center justify-between"
+                  className="w-full border border-gray-200 rounded px-3 py-2.5 text-sm bg-white cursor-pointer flex items-center justify-between"
                   onClick={() => setMemberTabDropOpen(v => !v)}
                 >
                   <span className={selectedMemberUid ? "text-gray-800 font-medium" : "text-gray-400"}>
@@ -9574,11 +9571,11 @@ function NotifyTab() {
                   <ChevronDown className="w-4 h-4 text-gray-400" />
                 </div>
                 {memberTabDropOpen && (
-                  <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                  <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded shadow-lg max-h-60 overflow-y-auto">
                     <div className="p-2 border-b border-gray-100">
                       <input
                         autoFocus
-                        className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm"
+                        className="w-full border border-gray-200 rounded-sm px-3 py-1.5 text-sm"
                         placeholder="搜索成员姓名或 userid..."
                         value={memberTabSearch}
                         onChange={e => setMemberTabSearch(e.target.value)}
@@ -9617,7 +9614,7 @@ function NotifyTab() {
 
             {/* 未选成员时的提示 */}
             {!selectedMemberUid && (
-              <div className="bg-gray-50 rounded-xl border border-dashed border-gray-200 px-4 py-8 text-center">
+              <div className="bg-gray-50 rounded border border-dashed border-gray-200 px-4 py-8 text-center">
                 <p className="text-sm text-gray-400">请选择一位成员，查看其所有推送任务</p>
               </div>
             )}
@@ -9625,7 +9622,7 @@ function NotifyTab() {
             {/* 已选成员的任务列表 */}
             {selectedMemberUid && (
               selectedMemberTasks ? (
-                <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                   <div className="px-4 py-3 border-b border-gray-50">
                     <p className="text-sm font-semibold text-gray-800">{selectedMemberTasks.name}</p>
                     <p className="text-xs text-gray-400 mt-0.5">{selectedMemberTasks.tasks.length} 个推送任务</p>
@@ -9650,7 +9647,7 @@ function NotifyTab() {
                   </div>
                 </div>
               ) : (
-                <div className="bg-gray-50 rounded-xl border border-dashed border-gray-200 px-4 py-8 text-center">
+                <div className="bg-gray-50 rounded border border-dashed border-gray-200 px-4 py-8 text-center">
                   <p className="text-sm text-gray-400">该成员暂无任何推送任务</p>
                 </div>
               )
@@ -9661,7 +9658,7 @@ function NotifyTab() {
 
 
       {/* 基础配置（折叠，置底） */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <button
           className="w-full flex items-center justify-between px-4 py-3 text-left"
           onClick={() => setShowBaseCfg(v => !v)}
@@ -9680,14 +9677,14 @@ function NotifyTab() {
               <div key={k}>
                 <label className="text-xs text-gray-500 mb-1 block">{k}</label>
                 <input
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
+                  className="w-full border border-gray-200 rounded-sm px-3 py-2 text-sm bg-white"
                   value={baseCfg[k]}
                   onChange={e => setBaseCfg(prev => ({ ...prev, [k]: e.target.value }))}
                 />
               </div>
             ))}
             <button
-              className="w-full bg-gray-800 text-white rounded-xl py-2.5 text-sm font-medium disabled:opacity-60"
+              className="w-full bg-gray-800 text-white rounded py-2.5 text-sm font-medium disabled:opacity-60"
               disabled={savingBase}
               onClick={handleSaveBase}
             >
@@ -9700,3 +9697,271 @@ function NotifyTab() {
   );
 }
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NewChannelTab：三色系渠道页面（AI对话蓝 / 消息推送红 / 微信客服绿）
+// ═══════════════════════════════════════════════════════════════════════════════
+
+type BigTabKey = "ai" | "push" | "kf";
+
+interface ThemeColors {
+  primary: string;
+  light: string;
+  bg: string;
+  border: string;
+  text: string;
+  gradientFrom: string;
+  gradientTo: string;
+}
+
+const BIG_TABS: { key: BigTabKey; label: string; theme: ThemeColors }[] = [
+  {
+    key: "ai",
+    label: "AI 对话",
+    theme: {
+      primary: "#1976D2",
+      light: "#DBEAFE",
+      bg: "#f0f4ff",
+      border: "#1976D2",
+      text: "#1976D2",
+      gradientFrom: "#1A56DB",
+      gradientTo: "#1976D2",
+    },
+  },
+  {
+    key: "push",
+    label: "消息推送",
+    theme: {
+      primary: "#DC2626",
+      light: "#FEE2E2",
+      bg: "#fff5f5",
+      border: "#DC2626",
+      text: "#DC2626",
+      gradientFrom: "#B91C1C",
+      gradientTo: "#DC2626",
+    },
+  },
+  {
+    key: "kf",
+    label: "微信客服",
+    theme: {
+      primary: "#16A34A",
+      light: "#DCFCE7",
+      bg: "#f0fdf4",
+      border: "#16A34A",
+      text: "#16A34A",
+      gradientFrom: "#0d2818",
+      gradientTo: "#1a5c2e",
+    },
+  },
+];
+
+function NewChannelTab() {
+  const [bigTab, setBigTab] = useState<BigTabKey>("ai");
+  const currentTheme = BIG_TABS.find(t => t.key === bigTab)!.theme;
+
+  return (
+    <div>
+      {/* 三色大 Tab 导航栏（下划线风格，白底） */}
+      <div className="bg-white border-b border-gray-100 sticky top-[48px] z-20">
+        <div className="flex">
+          {BIG_TABS.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setBigTab(tab.key)}
+              className="flex-1 py-3 text-sm font-medium transition-all relative"
+              style={{
+                color: bigTab === tab.key ? tab.theme.primary : '#9CA3AF',
+              }}
+            >
+              {tab.label}
+              {bigTab === tab.key && (
+                <span
+                  className="absolute bottom-0 left-0 right-0 h-0.5"
+                  style={{ background: tab.theme.primary }}
+                />
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 内容区背景随 Tab 切换 */}
+      <div style={{ background: currentTheme.bg, minHeight: 'calc(100vh - 96px)' }}>
+        {bigTab === "ai" && <AiDialogSection theme={currentTheme} />}
+        {bigTab === "push" && <PushSection theme={currentTheme} />}
+        {bigTab === "kf" && <KfSection />}
+      </div>
+    </div>
+  );
+}
+
+// ─── AI 对话 Tab ─────────────────────────────────────────────────────────────
+
+type AiSubTab = "config" | "rules" | "kb" | "workflow" | "docs" | "messages" | "logs";
+
+const AI_SUB_TABS: { key: AiSubTab; label: string }[] = [
+  { key: "config", label: "配置" },
+  { key: "rules", label: "专属规则" },
+  { key: "kb", label: "知识库" },
+  { key: "workflow", label: "工作流" },
+  { key: "docs", label: "文档" },
+  { key: "messages", label: "消息" },
+  { key: "logs", label: "日志" },
+];
+
+function AiDialogSection({ theme }: { theme: ThemeColors }) {
+  const [subTab, setSubTab] = useState<AiSubTab>("config");
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/wecom/channels?type=wecom_app")
+      .then(r => r.json())
+      .then(d => {
+        const list: Channel[] = d.channels || [];
+        setChannels(list);
+        if (list.length > 0) setSelectedChannel(list[0]);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  // 统计条（渐变卡片）
+  const statsBar = (
+    <div
+      className="mx-4 mt-3 mb-2 rounded-sm p-3 text-white"
+      style={{ background: `linear-gradient(135deg, ${theme.gradientFrom} 0%, ${theme.gradientTo} 100%)` }}
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-[10px] opacity-70 mb-0.5">AI 对话渠道</div>
+          <div className="text-xl font-bold">{loading ? "—" : channels.length} 个</div>
+        </div>
+        <div className="text-right">
+          <div className="text-[10px] opacity-70 mb-0.5">已启用</div>
+          <div className="text-xl font-bold">
+            {loading ? "—" : channels.filter(c => c.enabled).length} 个
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-[10px] opacity-70 mb-0.5">已绑定用户</div>
+          <div className="text-xl font-bold">—</div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // 渠道选择器
+  const channelSelector = channels.length > 1 ? (
+    <div className="px-4 mb-2">
+      <div className="flex gap-1 overflow-x-auto pb-1">
+        {channels.map(ch => (
+          <button
+            key={ch.id}
+            onClick={() => setSelectedChannel(ch)}
+            className="flex-shrink-0 px-3 py-1 rounded-sm text-xs font-medium border transition-all"
+            style={
+              selectedChannel?.id === ch.id
+                ? { background: theme.primary, color: '#fff', borderColor: theme.primary }
+                : { background: '#fff', color: '#6B7280', borderColor: '#E5E7EB' }
+            }
+          >
+            {ch.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  ) : null;
+
+  // 子 Tab 导航（下划线风格）
+  const subTabNav = (
+    <div className="bg-white border-b border-gray-100 sticky top-[96px] z-10">
+      <div className="flex overflow-x-auto">
+        {AI_SUB_TABS.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setSubTab(t.key)}
+            className="flex-shrink-0 px-3 py-2.5 text-xs font-medium transition-all relative whitespace-nowrap"
+            style={{ color: subTab === t.key ? theme.primary : '#9CA3AF' }}
+          >
+            {t.label}
+            {subTab === t.key && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5" style={{ background: theme.primary }} />
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  if (loading) {
+    return (
+      <div>
+        {statsBar}
+        <div className="flex justify-center py-12">
+          <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!selectedChannel) {
+    return (
+      <div>
+        {statsBar}
+        <div className="px-4 py-8 text-center text-sm text-gray-400">暂无 AI 对话渠道</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="wecom-blue">
+      {statsBar}
+      {channelSelector}
+      {subTabNav}
+      <div className="pb-8">
+        {subTab === "config" && <ChannelConfigTab channel={selectedChannel} onJumpToKb={() => setSubTab("kb")} />}
+        {subTab === "rules" && <ChannelCustomRulesTab channelType={selectedChannel.channel_type} />}
+        {subTab === "kb" && <ChannelKnowledgeTab channelType={selectedChannel.channel_type} channelId={selectedChannel.id} kbId={selectedChannel.kb_id} />}
+        {subTab === "workflow" && <WorkflowTab />}
+        {subTab === "docs" && <DocsTab />}
+        {subTab === "messages" && <MessagesTab />}
+        {subTab === "logs" && <ChannelLogsTab channelType={selectedChannel.channel_type} channelId={selectedChannel.id} />}
+      </div>
+    </div>
+  );
+}
+
+// ─── 消息推送 Tab ─────────────────────────────────────────────────────────────
+
+function PushSection({ theme }: { theme: ThemeColors }) {
+  return (
+    <div className="wecom-red">
+      {/* 统计条 */}
+      <div
+        className="mx-4 mt-3 mb-2 rounded-sm p-3 text-white"
+        style={{ background: `linear-gradient(135deg, ${theme.gradientFrom} 0%, ${theme.gradientTo} 100%)` }}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-[10px] opacity-70 mb-0.5">消息推送</div>
+            <div className="text-xl font-bold">通知平台</div>
+          </div>
+        </div>
+      </div>
+      <NotifyTab />
+    </div>
+  );
+}
+
+// ─── 微信客服 Tab ─────────────────────────────────────────────────────────────
+
+function KfSection() {
+  return (
+    <div className="wecom-green">
+      <PlatformUnifiedView appChannelId={null} />
+    </div>
+  );
+}
