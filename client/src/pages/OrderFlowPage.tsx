@@ -423,6 +423,24 @@ export default function OrderFlowPage() {
     const ethPrice = (cryptoPricesRaw as any)?.prices?.ETH ?? (cryptoPricesRaw as any)?.ETH;
     if (ethPrice && ethPrice > 0) setCurrentPrice(ethPrice);
   }, [cryptoPricesRaw]);
+  // 北京时间实时时钟
+  const [bjTime, setBjTime] = useState('');
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      // 北京时间 = UTC+8
+      const bj = new Date(now.getTime() + 8 * 3600 * 1000);
+      const mo = String(bj.getUTCMonth() + 1).padStart(2, '0');
+      const dd = String(bj.getUTCDate()).padStart(2, '0');
+      const hh = String(bj.getUTCHours()).padStart(2, '0');
+      const mm = String(bj.getUTCMinutes()).padStart(2, '0');
+      const ss = String(bj.getUTCSeconds()).padStart(2, '0');
+      setBjTime(`${mo}/${dd} ${hh}:${mm}:${ss}`);
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, []);
   // 默认止盈价（来自智能仓位管理目标止盈）
   const [takeProfitModified, setTakeProfitModified] = useState(false); // 是否已手动修改止盈价
   const [premiumModified, setPremiumModified] = useState(false); // 是否已手动修改总权利金
@@ -525,7 +543,6 @@ export default function OrderFlowPage() {
   const summary = useMemo(() => {
     let totalCost = 0;      // 总成本（保证金）
     let totalNotional = 0;  // 总名义价值
-    let totalPnl = 0;       // 总浮动盈亏
     let pnlCount = 0;       // 有有效盈亏的订单数
     let spotCount = 0;      // 现货订单数
     let perpCount = 0;      // 合约订单数
@@ -533,24 +550,62 @@ export default function OrderFlowPage() {
     let spotQty = 0;        // 现货ETH数量
     let perpQty = 0;        // 合约ETH数量
     let optionQty = 0;      // 期权ETH数量
+    let spotCostSum = 0;    // 现货加权成本（entry_price × qty 之和）
+    let perpCostSum = 0;    // 合约加权成本
+    let optionCostSum = 0;  // 期权加权成本（用 strike_price）
+    let totalFeeSum = 0;    // 所有订单手续费之和
     for (const order of filteredOrders as any[]) {
       const oPrice = getPriceForSymbol(order.symbol || 'ETHUSDT');
       const calc = calcOrder(order, oPrice, fundingRate);
       totalCost += calc.margin;
       totalNotional += calc.notional;
-      if (calc.pnl != null) {
-        totalPnl += calc.pnl;
-        pnlCount++;
-      }
+      if (calc.pnl != null) pnlCount++;
       const qty = parseFloat(order.quantity) || 0;
+      const ep = parseFloat(order.entry_price) || 0;
+      // 手续费：开仓 + 平仓（简化：2 倍开仓费率）
+      const feeTableType: "spot" | "perp" = order.market_type === "option" ? "spot" : (order.market_type === "spot" ? "spot" : "perp");
+      const feeRate = Math.max(0, getFeeRate(feeTableType, order.vip_level || "普通", order.order_type === "maker" ? "maker" : "taker"));
+      totalFeeSum += ep * qty * feeRate * 2; // 开仓+平仓
       // 按类型统计
-      if (order.market_type === 'spot') { spotCount++; spotQty += qty; }
-      else if (order.market_type === 'option') { optionCount++; optionQty += qty; }
-      else { perpCount++; perpQty += qty; }
+      if (order.market_type === 'spot') { spotCount++; spotQty += qty; spotCostSum += ep * qty; }
+      else if (order.market_type === 'option') {
+        optionCount++; optionQty += qty;
+        // 期权均价用执行价（strike_price）加权
+        const sp = order.strike_price ? parseFloat(order.strike_price) : ep;
+        optionCostSum += sp * qty;
+      }
+      else { perpCount++; perpQty += qty; perpCostSum += ep * qty; }
     }
     const totalQty = spotQty + perpQty + optionQty;
-    const pnlPct = totalCost > 0 ? totalPnl / totalCost : null;
-    return { totalCost, totalNotional, totalPnl, pnlPct, count: filteredOrders.length, pnlCount, spotCount, perpCount, optionCount, spotQty, perpQty, optionQty, totalQty };
+    // 加权均价
+    const perpAvg = perpQty > 0 ? perpCostSum / perpQty : null;
+    const spotAvg = spotQty > 0 ? spotCostSum / spotQty : null;
+    const optionAvg = optionQty > 0 ? optionCostSum / optionQty : null;
+    const totalAvg = totalQty > 0 ? (perpCostSum + spotCostSum + optionCostSum) / totalQty : null;
+    // 浮动盈亏：统一用现货视角（当前价 - 加权均价）× 总持仓量 - 手续费
+    // 各类型分别用各自的当前价和均价计算
+    let totalPnl = 0;
+    for (const order of filteredOrders as any[]) {
+      const oPrice = getPriceForSymbol(order.symbol || 'ETHUSDT');
+      if (!oPrice) continue;
+      const qty = parseFloat(order.quantity) || 0;
+      const ep = parseFloat(order.entry_price) || 0;
+      const feeTableType: "spot" | "perp" = order.market_type === "option" ? "spot" : (order.market_type === "spot" ? "spot" : "perp");
+      const feeRate = Math.max(0, getFeeRate(feeTableType, order.vip_level || "普通", order.order_type === "maker" ? "maker" : "taker"));
+      const fee = ep * qty * feeRate * 2;
+      if (order.market_type === 'option') {
+        // 期权：用执行价作为买入均价
+        const sp = order.strike_price ? parseFloat(order.strike_price) : ep;
+        totalPnl += (oPrice - sp) * qty - fee;
+      } else {
+        // 合约/现货：统一用现货多单视角
+        totalPnl += (oPrice - ep) * qty - fee;
+      }
+    }
+    // 盈亏比例：用买入总价值（均价 × 总持仓量）作分母，直观反映涨跌幅
+    const totalBuyCost = (perpCostSum + spotCostSum + optionCostSum); // 均价×数量之和
+    const pnlPct = totalBuyCost > 0 ? totalPnl / totalBuyCost : null;
+    return { totalCost, totalNotional, totalPnl, pnlPct, count: filteredOrders.length, pnlCount, spotCount, perpCount, optionCount, spotQty, perpQty, optionQty, totalQty, perpAvg, spotAvg, optionAvg, totalAvg };
   }, [filteredOrders, cryptoPricesRaw, fundingRate]);
 
   // 批量获取所有订单的备注数量（页面加载时就显示徽章）
@@ -781,111 +836,150 @@ export default function OrderFlowPage() {
         <div
           className="mx-3 mb-3 rounded-2xl overflow-hidden"
           style={{
-            background: "linear-gradient(135deg, rgba(120,80,0,0.55) 0%, rgba(90,55,0,0.65) 50%, rgba(60,35,0,0.75) 100%)",
-            border: "1.5px solid rgba(240,185,11,0.55)",
-            boxShadow: "0 4px 20px rgba(240,185,11,0.18), 0 1px 4px rgba(0,0,0,0.4)",
+            position: 'relative',
+            borderRadius: '16px',
+            border: '1.5px solid rgba(180,185,195,0.8)',
+            boxShadow: '0 4px 14px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.95), inset 0 -1px 0 rgba(140,145,155,0.5)',
+            background: 'repeating-linear-gradient(0deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 2px), linear-gradient(160deg, #e2e4e8 0%, #c8cace 20%, #d8dadd 40%, #bfc1c6 60%, #d2d4d8 80%, #e0e2e6 100%)',
           }}
         >
+          {/* 四角铆钉 */}
+          {[{top:'5px',left:'6px'},{top:'5px',right:'6px'},{bottom:'5px',left:'6px'},{bottom:'5px',right:'6px'}].map((pos, i) => (
+            <div key={i} style={{ position:'absolute', width:'5px', height:'5px', borderRadius:'50%', zIndex:10, ...pos,
+              background: 'radial-gradient(circle at 35% 35%, #ffffff 0%, #d8dadd 35%, #a0a4aa 65%, #707478 100%)',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.8)' }} />
+          ))}
           {/* 顶部标题行 */}
           <div
             className="flex items-center justify-between px-4 pt-2.5 pb-1"
-            style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}
+            style={{ borderBottom: "1px solid rgba(0,0,0,0.08)" }}
           >
-            <span className="text-xs font-medium" style={{ color: "rgba(240,185,11,0.7)", letterSpacing: "0.05em" }}>持仓汇总</span>
-            <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>{summary.count} 笔订单</span>
+            <span className="text-xs font-semibold" style={{ color: '#222222', letterSpacing: '0.05em' }}>持仓汇总</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {currentPrice && (
+                <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#B8860B', fontVariantNumeric: 'tabular-nums', fontFamily: 'Inter, -apple-system, sans-serif' }}>
+                  ETH {fmt(currentPrice, 1)}
+                </span>
+              )}
+              {bjTime && (
+                <span style={{ fontSize: '0.55rem', color: '#666666', fontVariantNumeric: 'tabular-nums', fontFamily: 'Inter, -apple-system, sans-serif' }}>
+                  {bjTime}
+                </span>
+              )}
+            </div>
           </div>
-          {/* 类型统计行 */}
-          <div className="flex items-center gap-3 px-4 py-1.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-            <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>
-              合约 <span style={{ color: OKX_TEXT_PRI, fontWeight: 600 }}>{summary.perpCount}</span>
-            </span>
-            <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>
-              现货 <span style={{ color: OKX_TEXT_PRI, fontWeight: 600 }}>{summary.spotCount}</span>
-            </span>
-            <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>
-              期权 <span style={{ color: "#a78bfa", fontWeight: 600 }}>{summary.optionCount}</span>
-            </span>
-            <span className="text-xs ml-auto" style={{ color: OKX_TEXT_SEC }}>
-              合计 <span style={{ color: OKX_YELLOW, fontWeight: 600 }}>{summary.count}</span>
-            </span>
-          </div>
-          {/* ETH数量统计行 */}
-          <div className="flex items-center gap-3 px-4 py-1.5" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-            <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>
-              合约 <span style={{ color: OKX_TEXT_PRI, fontWeight: 600 }}>{Math.floor(summary.perpQty)}</span>
-            </span>
-            <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>
-              现货 <span style={{ color: OKX_TEXT_PRI, fontWeight: 600 }}>{Math.floor(summary.spotQty)}</span>
-            </span>
-            <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>
-              期权 <span style={{ color: "#a78bfa", fontWeight: 600 }}>{Math.floor(summary.optionQty)}</span>
-            </span>
-            <span className="text-xs ml-auto" style={{ color: OKX_TEXT_SEC }}>
-              全部 <span style={{ color: OKX_YELLOW, fontWeight: 600 }}>{Math.floor(summary.totalQty)}</span> ETH
-            </span>
+          {/* 类型统计 + ETH数量：表格布局 */}
+          <div style={{ borderBottom: "1px solid rgba(0,0,0,0.08)" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+              <thead>
+                <tr style={{ borderBottom: "1px solid rgba(0,0,0,0.08)" }}>
+                  <th style={{ padding: "5px 12px", textAlign: "center", fontWeight: 600, color: '#333333', borderRight: "1px solid rgba(0,0,0,0.08)", letterSpacing: '0.05em' }}>
+                    合约{summary.perpCount > 0 && <span style={{ color: '#444444', fontSize: '0.6rem', fontWeight: 400, marginLeft: 2 }}>{summary.perpCount}单</span>}
+                  </th>
+                  <th style={{ padding: "5px 12px", textAlign: "center", fontWeight: 600, color: '#333333', borderRight: "1px solid rgba(0,0,0,0.08)", letterSpacing: '0.05em' }}>
+                    现货{summary.spotCount > 0 && <span style={{ color: '#444444', fontSize: '0.6rem', fontWeight: 400, marginLeft: 2 }}>{summary.spotCount}单</span>}
+                  </th>
+                  <th style={{ padding: "5px 12px", textAlign: "center", fontWeight: 600, color: '#333333', borderRight: "1px solid rgba(0,0,0,0.08)", letterSpacing: '0.05em' }}>
+                    期权{summary.optionCount > 0 && <span style={{ color: '#444444', fontSize: '0.6rem', fontWeight: 400, marginLeft: 2 }}>{summary.optionCount}单</span>}
+                  </th>
+                  <th style={{ padding: "5px 12px", textAlign: "center", fontWeight: 600, color: '#333333', letterSpacing: '0.05em' }}>
+                    合计<span style={{ color: '#B8860B', fontSize: '0.6rem', fontWeight: 700, marginLeft: 2 }}>{summary.count}单</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ borderBottom: "1px solid rgba(0,0,0,0.08)" }}>
+                  <td style={{ padding: "5px 12px", textAlign: "center", borderRight: "1px solid rgba(0,0,0,0.08)" }}>
+                    <span style={{ color: '#000000', fontWeight: 700 }}>{Math.floor(summary.perpQty)}</span><span style={{ color: '#444444', fontSize: '0.6rem' }}> ETH</span>
+                  </td>
+                  <td style={{ padding: "5px 12px", textAlign: "center", borderRight: "1px solid rgba(0,0,0,0.08)" }}>
+                    <span style={{ color: '#000000', fontWeight: 700 }}>{Math.floor(summary.spotQty)}</span><span style={{ color: '#444444', fontSize: '0.6rem' }}> ETH</span>
+                  </td>
+                  <td style={{ padding: "5px 12px", textAlign: "center", borderRight: "1px solid rgba(0,0,0,0.08)" }}>
+                    <span style={{ color: '#000000', fontWeight: 700 }}>{Math.floor(summary.optionQty)}</span><span style={{ color: '#444444', fontSize: '0.6rem' }}> ETH</span>
+                  </td>
+                  <td style={{ padding: "5px 12px", textAlign: "center" }}>
+                    <span style={{ color: '#B8860B', fontWeight: 700 }}>{Math.floor(summary.totalQty)}</span><span style={{ color: '#444444', fontSize: '0.6rem' }}> ETH</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style={{ padding: "5px 12px", textAlign: "center", borderRight: "1px solid rgba(0,0,0,0.08)" }}>
+                    {summary.perpAvg != null
+                      ? <><span style={{ color: '#000000', fontWeight: 700 }}>{fmt(summary.perpAvg, 0)}</span><span style={{ color: '#444444', fontSize: '0.6rem' }}> 均价</span></>
+                      : <span style={{ color: '#888888' }}>-</span>}
+                  </td>
+                  <td style={{ padding: "5px 12px", textAlign: "center", borderRight: "1px solid rgba(0,0,0,0.08)" }}>
+                    {summary.spotAvg != null
+                      ? <><span style={{ color: '#000000', fontWeight: 700 }}>{fmt(summary.spotAvg, 0)}</span><span style={{ color: '#444444', fontSize: '0.6rem' }}> 均价</span></>
+                      : <span style={{ color: '#888888' }}>-</span>}
+                  </td>
+                  <td style={{ padding: "5px 12px", textAlign: "center", borderRight: "1px solid rgba(0,0,0,0.08)" }}>
+                    {summary.optionAvg != null
+                      ? <><span style={{ color: '#000000', fontWeight: 700 }}>{fmt(summary.optionAvg, 0)}</span><span style={{ color: '#444444', fontSize: '0.6rem' }}> 均价</span></>
+                      : <span style={{ color: '#888888' }}>-</span>}
+                  </td>
+                  <td style={{ padding: "5px 12px", textAlign: "center" }}>
+                    {summary.totalAvg != null
+                      ? <><span style={{ color: '#B8860B', fontWeight: 700 }}>{fmt(summary.totalAvg, 0)}</span><span style={{ color: '#444444', fontSize: '0.6rem' }}> 均价</span></>
+                      : <span style={{ color: '#888888' }}>-</span>}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
           {/* 主数据行：三列 */}
-          <div className="flex items-stretch px-4 py-3 gap-3">
-            {/* 左：总名义价值 */}
-            <div className="flex-1">
-              <div className="text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>名义价值</div>
+          <div className="flex items-stretch py-3" style={{ paddingLeft: 0, paddingRight: 0 }}>
+            {/* 左：订单价值 */}
+            <div style={{ flex: 1, textAlign: "center", padding: "0 12px", borderRight: "1px solid rgba(0,0,0,0.08)" }}>
+              <div className="text-xs mb-1" style={{ color: '#333333', letterSpacing: '0.05em' }}>订单价值</div>
               <div
                 className="text-base font-bold"
                 style={{
-                  color: "rgba(255,255,255,0.9)",
+                  color: '#000000',
                   fontFamily: "Inter, -apple-system, sans-serif",
                   fontVariantNumeric: "tabular-nums",
                   letterSpacing: "-0.02em",
                 }}
               >
-                {fmt(summary.totalNotional, 0)}
+                {fmt(summary.totalNotional, 0)}<span style={{ fontSize: 10, color: '#444444', fontWeight: 400, marginLeft: 1 }}>U</span>
               </div>
             </div>
-            {/* 分隔线 */}
-            <div style={{ width: 1, background: "rgba(255,255,255,0.07)", flexShrink: 0 }} />
-            {/* 中：总成本 */}
-            <div className="flex-1 text-center">
-              <div className="text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>总成本</div>
-              <div
-                className="text-base font-bold"
-                style={{
-                  color: "rgba(255,255,255,0.9)",
-                  fontFamily: "Inter, -apple-system, sans-serif",
-                  fontVariantNumeric: "tabular-nums",
-                  letterSpacing: "-0.02em",
-                }}
-              >
-                {fmt(summary.totalCost, 0)}
-              </div>
-            </div>
-            {/* 分隔线 */}
-            <div style={{ width: 1, background: "rgba(255,255,255,0.07)", flexShrink: 0 }} />
+
             {/* 右：总浮动盈亏 */}
-            <div className="flex-1 text-right">
-              <div className="text-xs mb-1" style={{ color: OKX_TEXT_SEC }}>浮动盈亏</div>
+            <div style={{ flex: 1, textAlign: "center", padding: "0 12px" }}>
+              <div className="text-xs mb-1 flex items-center justify-center gap-1" style={{ color: '#333333', letterSpacing: '0.05em', whiteSpace: "nowrap", flexWrap: "nowrap" }}>
+                浮动盈亏
+                {summary.pnlPct != null && (
+                  <span
+                    style={{
+                      color: summary.totalPnl >= 0 ? '#A80000' : '#16a34a',
+                      fontFamily: "Inter, -apple-system, sans-serif",
+                      fontVariantNumeric: "tabular-nums",
+                      fontSize: '0.65rem',
+                      fontWeight: 600,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {summary.totalPnl >= 0 ? "+" : ""}{(summary.pnlPct * 100).toFixed(2)}%
+                  </span>
+                )}
+                <span
+                  onClick={() => alert('合约/现货：\n(当前价 - 开仓价) × 数量 - 手续费\n\n期权：\n用执行价作为买入均价，(当前价 - 执行价) × 数量 - 手续费\n\n比例 = 浮动盈亏 ÷ (均价 × 总持仓量)')}
+                  style={{ cursor: "pointer", color: '#999999', fontSize: 13, lineHeight: 1, userSelect: "none" }}
+                >ⓘ</span>
+              </div>
               <div
                 className="text-base font-bold"
                 style={{
-                  color: summary.totalPnl >= 0 ? OKX_RED : OKX_GREEN,
+                  color: summary.totalPnl >= 0 ? '#A80000' : '#16a34a',
                   fontFamily: "Inter, -apple-system, sans-serif",
                   fontVariantNumeric: "tabular-nums",
                   letterSpacing: "-0.02em",
+                  textAlign: "center",
                 }}
               >
-                {summary.totalPnl >= 0 ? "+" : ""}{fmt(summary.totalPnl, 2)}
+                {summary.totalPnl >= 0 ? "+" : ""}{fmt(summary.totalPnl, 2)}<span style={{ fontSize: 10, color: '#555555', fontWeight: 400, marginLeft: 1 }}>U</span>
               </div>
-              {summary.pnlPct != null && (
-                <div
-                  className="text-xs mt-0.5"
-                  style={{
-                    color: summary.totalPnl >= 0 ? "rgba(246,70,93,0.7)" : "rgba(14,203,129,0.7)",
-                    fontFamily: "Inter, -apple-system, sans-serif",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {summary.totalPnl >= 0 ? "+" : ""}{(summary.pnlPct * 100).toFixed(2)}%
-                </div>
-              )}
             </div>
           </div>
         </div>
