@@ -4322,22 +4322,28 @@ export default function LedgerDetail() {
               </div>
               {/* 汇总行 */}
               <div className="px-3 py-3" style={{ borderTop: '1px solid #E5E7EB', background: '#F9FAFB' }}>
-                <div className="grid text-[10px] mb-1" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
-                  <div className="flex flex-col">
-                    <span style={{ color: '#9CA3AF' }}>总数量</span>
-                    <span className="font-mono font-semibold" style={{ color: '#1A2340' }}>{avgCostDetailData.totalQty.toFixed(3)}</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span style={{ color: '#9CA3AF' }}>总成本</span>
-                    <span className="font-mono font-semibold" style={{ color: '#1976D2' }}>{avgCostDetailData.totalCost.toFixed(2)} U</span>
-                  </div>
-                  <div className="flex flex-col items-end">
-                    <span style={{ color: '#9CA3AF' }}>个人均价</span>
-                    <span className="font-mono font-bold" style={{ color: '#DC2626', fontSize: '12px' }}>{avgCostDetailData.avgCost > 0 ? avgCostDetailData.avgCost.toFixed(3) : (avgCostDetailData.totalQty > 0 ? (avgCostDetailData.totalCost / avgCostDetailData.totalQty).toFixed(3) : '-')}</span>
-                  </div>
-                </div>
+                {(() => {
+                  const effTotalQty = avgCostDetailData.orderDetails.reduce((s, d) => s + d.effectiveQty, 0);
+                  const calcAvgCost = effTotalQty > 0 ? avgCostDetailData.totalCost / effTotalQty : 0;
+                  return (
+                    <div className="grid text-[10px] mb-1" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+                      <div className="flex flex-col">
+                        <span style={{ color: '#9CA3AF' }}>折后数量</span>
+                        <span className="font-mono font-semibold" style={{ color: '#1A2340' }}>{effTotalQty.toFixed(3)}</span>
+                      </div>
+                      <div className="flex flex-col items-center">
+                        <span style={{ color: '#9CA3AF' }}>总成本</span>
+                        <span className="font-mono font-semibold" style={{ color: '#1976D2' }}>{avgCostDetailData.totalCost.toFixed(2)} U</span>
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <span style={{ color: '#9CA3AF' }}>个人均价</span>
+                        <span className="font-mono font-bold" style={{ color: '#DC2626', fontSize: '12px' }}>{calcAvgCost > 0 ? calcAvgCost.toFixed(3) : '-'}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div className="text-[9px] mt-1.5 px-2 py-1.5 rounded" style={{ background: '#EFF6FF', color: '#6B7280' }}>
-                  均价 = 总成本 ÷ 总数量，档位折扣只影响收益权，不影响均价。
+                  均价 = 总成本 ÷ 折后总数量，档位折扣影响有效数量，从而影响均价。
                 </div>
               </div>
             </div>
