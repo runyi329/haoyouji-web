@@ -2182,6 +2182,9 @@ export default function LedgerDetail() {
   const [tick, setTick] = useState(0);
   // 权益卡片币种展开状态
   const [expandedCoins, setExpandedCoins] = useState<Record<string, boolean>>({});
+  // 个人均价明细弹窗：记录当前展示哪个币种的明细（null=关闭）
+  const [avgCostDetailCoin, setAvgCostDetailCoin] = useState<string | null>(null);
+  const [avgCostDetailData, setAvgCostDetailData] = useState<{ coin: string; avgCost: number; totalQty: number; totalCost: number; orderDetails: { buyPrice: number; originalQty: number; tier: number; discountRate: number; effectiveQty: number; isGift: boolean }[] } | null>(null);
   // 权益卡片模拟价格滑动条（每个币种独立，localStorage持久化）
   const [sliderPrices, setSliderPrices] = useState<Record<string, number>>(() => {
     try {
@@ -3957,28 +3960,10 @@ export default function LedgerDetail() {
                                   <span
                                     onClick={e => {
                                     e.stopPropagation();
-                                    if (orderDetails.length === 0) {
-                                      alert('暂无持仓订单明细');
-                                      return;
-                                    }
                                     const totalOrigQty = orderDetails.reduce((s, d) => s + d.originalQty, 0);
                                     const totalCost = orderDetails.reduce((s, d) => s + d.buyPrice * d.originalQty, 0);
-                                    const calcAvg = totalOrigQty > 0 ? (totalCost / totalOrigQty).toFixed(3) : '-';
-                                    const lines = orderDetails.map((d, i) => {
-                                      const tierLabel = d.tier === 0 ? '0档(100%)' : `${d.tier}档(${(d.discountRate * 100).toFixed(1)}%)`;
-                                      const giftMark = d.isGift ? '[赠]' : '';
-                                      return `#${i + 1} ${giftMark}买入价 ${d.buyPrice.toFixed(3)} × 数量 ${d.originalQty.toFixed(4)} = ${(d.buyPrice * d.originalQty).toFixed(2)} U  |  ${tierLabel}`;
-                                    });
-                                    alert(
-                                      `个人均价计算明细（共 ${orderDetails.length} 笔持仓订单）\n` +
-                                      '─'.repeat(36) + '\n' +
-                                      lines.join('\n') + '\n' +
-                                      '─'.repeat(36) + '\n' +
-                                      `总数量：${totalOrigQty.toFixed(4)}\n` +
-                                      `总成本：${totalCost.toFixed(2)} U\n` +
-                                      `个人均价 = 总成本 ÷ 总数量 = ${calcAvg} U\n\n` +
-                                      `注：档位折扣影响收益权（权益数量），不影响均价计算。`
-                                    );
+                                    setAvgCostDetailData({ coin, avgCost, totalQty: totalOrigQty, totalCost, orderDetails });
+                                    setAvgCostDetailCoin(coin);
                                   }}
                                     style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '12px', height: '12px', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.3)', color: 'rgba(255,255,255,0.4)', fontSize: '8px', cursor: 'pointer', flexShrink: 0 }}
                                   >?</span>
@@ -4281,6 +4266,79 @@ export default function LedgerDetail() {
                     </div>
                   ) : null;
                 })()}
+              </div>
+            </div>
+          </div>
+        )}
+        {/* 个人均价计算明细弹窗 */}
+        {avgCostDetailCoin && avgCostDetailData && (
+          <div
+            className="fixed inset-0 z-[200] flex items-center justify-center"
+            style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)' }}
+            onClick={() => setAvgCostDetailCoin(null)}
+          >
+            <div
+              className="w-full mx-4 rounded-2xl overflow-hidden"
+              style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.22)', maxWidth: '360px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* 标题栏 */}
+              <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid #E5E7EB' }}>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold" style={{ color: '#1A2340' }}>个人均价计算明细</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded font-mono" style={{ background: '#EFF6FF', color: '#1976D2' }}>{avgCostDetailData.coin}</span>
+                  <span className="text-[10px]" style={{ color: '#9CA3AF' }}>共 {avgCostDetailData.orderDetails.length} 笔持仓</span>
+                </div>
+                <button
+                  onClick={() => setAvgCostDetailCoin(null)}
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-sm"
+                  style={{ background: '#F3F4F6', color: '#6B7280' }}
+                >×</button>
+              </div>
+              {/* 订单明细列表 */}
+              <div className="overflow-y-auto flex-1 px-3 py-2">
+                {/* 表头 */}
+                <div className="grid text-[9px] font-semibold mb-1 px-1" style={{ gridTemplateColumns: '20px 1fr 1fr 1fr 60px', color: '#9CA3AF' }}>
+                  <span>#</span>
+                  <span className="text-right">买入价</span>
+                  <span className="text-right">数量</span>
+                  <span className="text-right">小计(U)</span>
+                  <span className="text-right">档位/折扣</span>
+                </div>
+                {avgCostDetailData.orderDetails.map((d, i) => (
+                  <div key={i} className="grid items-center py-1 px-1 rounded" style={{ gridTemplateColumns: '20px 1fr 1fr 1fr 60px', background: i % 2 === 0 ? '#F9FAFB' : 'transparent' }}>
+                    <span className="text-[9px]" style={{ color: '#9CA3AF' }}>{i + 1}</span>
+                    <span className="text-right text-[10px] font-mono" style={{ color: '#1A2340' }}>
+                      {d.isGift && <span className="text-[8px] mr-0.5" style={{ color: '#F59E0B' }}>赠</span>}
+                      {d.buyPrice.toFixed(3)}
+                    </span>
+                    <span className="text-right text-[10px] font-mono" style={{ color: '#374151' }}>{d.originalQty.toFixed(3)}</span>
+                    <span className="text-right text-[10px] font-mono" style={{ color: '#1976D2' }}>{(d.buyPrice * d.originalQty).toFixed(2)}</span>
+                    <span className="text-right text-[9px]" style={{ color: d.tier === 0 ? '#6B7280' : '#DC2626' }}>
+                      {d.tier === 0 ? '0档' : `${d.tier}档`} {(d.discountRate * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {/* 汇总行 */}
+              <div className="px-3 py-3" style={{ borderTop: '1px solid #E5E7EB', background: '#F9FAFB' }}>
+                <div className="grid text-[10px] mb-1" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+                  <div className="flex flex-col">
+                    <span style={{ color: '#9CA3AF' }}>总数量</span>
+                    <span className="font-mono font-semibold" style={{ color: '#1A2340' }}>{avgCostDetailData.totalQty.toFixed(3)}</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span style={{ color: '#9CA3AF' }}>总成本</span>
+                    <span className="font-mono font-semibold" style={{ color: '#1976D2' }}>{avgCostDetailData.totalCost.toFixed(2)} U</span>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <span style={{ color: '#9CA3AF' }}>个人均价</span>
+                    <span className="font-mono font-bold" style={{ color: '#DC2626', fontSize: '12px' }}>{avgCostDetailData.avgCost > 0 ? avgCostDetailData.avgCost.toFixed(3) : (avgCostDetailData.totalQty > 0 ? (avgCostDetailData.totalCost / avgCostDetailData.totalQty).toFixed(3) : '-')}</span>
+                  </div>
+                </div>
+                <div className="text-[9px] mt-1.5 px-2 py-1.5 rounded" style={{ background: '#EFF6FF', color: '#6B7280' }}>
+                  均价 = 总成本 ÷ 总数量，档位折扣只影响收益权，不影响均价。
+                </div>
               </div>
             </div>
           </div>
