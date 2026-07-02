@@ -5115,10 +5115,7 @@ export default function LedgerDetail() {
         </div>
       )}
 
-      {/* ETH 杠杆产品参数展示（仅管理员/创建者可见，非代看模式） */}
-      {isCustomAF && !effectiveIsFunder && (isOwner || isAdmin) && !viewAsUserId && (
-        <EthLeverageProduct />
-      )}
+      {/* ETH 杠杆产品参数展示已移除 */}
 
       {/* 持仓计算入口已合并到以太坊行右半 */}
       {/* 资金方专属：资产订单列表 */}
