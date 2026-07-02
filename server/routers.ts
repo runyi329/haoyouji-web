@@ -435,25 +435,15 @@ export const appRouter = router({
         }
       }),
 
-    // 获取分钟线分页数据（优先读本地文件，本地不存在时自动从COS下载并缓存）
+    // 获取分钟线分页数据（直接从COS读取内容到内存，按需加载当前页需要的月份，服务器零磁盘占用）
     getMinuteKlines: publicProcedure
       .input(z.object({ symbol: z.string(), page: z.number().default(1), pageSize: z.number().default(100) }))
       .query(async ({ input }) => {
         const { symbol, page, pageSize } = input;
         const coin = symbol.replace('USDT', '').toLowerCase();
-        const fs = await import('fs');
-        const path = await import('path');
-        const readline = await import('readline');
-        const localDir = '/home/ubuntu/klines';
 
-        // 确保本地目录存在
-        if (!fs.existsSync(localDir)) {
-          fs.mkdirSync(localDir, { recursive: true });
-        }
-
-        // 从COS下载文件并保存到本地的辅助函数
-        const ensureLocalFile = async (yr: number, mo: string, fpath: string): Promise<boolean> => {
-          if (fs.existsSync(fpath)) return true;
+        // 从COS读取指定月份的CSV内容（直接返回内存字符串，不写本地文件）
+        const readCosMonth = async (yr: number, mo: string): Promise<string | null> => {
           try {
             const COS = (await import('cos-nodejs-sdk-v5')).default;
             const cos = new COS({
@@ -472,46 +462,44 @@ export const appRouter = router({
               });
             });
             if (result && result.Body) {
-              fs.writeFileSync(fpath, result.Body);
-              console.log(`[klines] 从COS下载并缓存: ${cosKey}`);
-              return true;
+              return result.Body.toString('utf8');
             }
-            return false;
+            return null;
           } catch (e: any) {
-            // 文件不存在于COS或下载失败，静默跳过
             if (e?.statusCode !== 404) {
-              console.warn(`[klines] COS下载失败 ${yr}_${mo}:`, e?.message || e);
+              console.warn(`[klines] COS读取失败 ${yr}_${mo}:`, e?.message || e);
             }
-            return false;
+            return null;
           }
         };
 
-        // 扫描所有文件（倒序），本地不存在时尝试从COS下载
-        const months: string[] = [];
+        // ETH分钟线数据起始时间：2017年8月
+        const DATA_START = { year: 2017, month: 8 };
         const now = new Date();
+        // 构建倒序月份列表（从最新到最旧）
+        const allMonths: { yr: number; mo: string }[] = [];
         for (let i = 0; i < 120; i++) {
           const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
           const yr = d.getFullYear();
           const mo = String(d.getMonth() + 1).padStart(2, '0');
-          const fname = `${coin}_1m_${yr}_${mo}.csv`;
-          const fpath = path.join(localDir, fname);
-          const exists = await ensureLocalFile(yr, mo, fpath);
-          if (exists) months.push(fpath);
+          // 跳过数据起始时间之前的月份
+          if (yr < DATA_START.year || (yr === DATA_START.year && Number(mo) < DATA_START.month)) break;
+          allMonths.push({ yr, mo });
         }
 
-        // 计算 total
-        let total = 0;
-        for (const fp of months) {
-          const content = fs.readFileSync(fp, 'utf8');
-          const lines = content.split('\n').filter(l => /^\d{13}/.test(l.trim()));
-          total += lines.length;
-        }
+        // 第一阶段：快速计算 total（每月大约行数已知，用标准分钟线条数估算）
+        // ETH 1分钟线每月大约 30*24*60 = 43200 条，用实际读取会太慢
+        // 改为：只读当前页需要的月份，总数用月数 × 平均条数估算
+        // 平均每月 43200 条，共 allMonths.length 个月
+        const estimatedTotal = allMonths.length * 43200;
 
+        // 第二阶段：按需加载当前页需要的月份
         const offset = (page - 1) * pageSize;
         const needed = offset + pageSize;
         const allRows: string[] = [];
-        for (const fp of months) {
-          const content = fs.readFileSync(fp, 'utf8');
+        for (const { yr, mo } of allMonths) {
+          const content = await readCosMonth(yr, mo);
+          if (!content) continue;
           const lines = content.split('\n').filter(l => /^\d{13}/.test(l.trim())).reverse();
           allRows.push(...lines);
           if (allRows.length >= needed) break;
@@ -535,10 +523,12 @@ export const appRouter = router({
           return { dateStr, timeStr, open, high, low, close, changePct: parseFloat(changePct.toFixed(4)), amplitude: parseFloat(amplitude.toFixed(4)) };
         }).filter(Boolean);
 
-        return { rows, total, page, pageSize };
+        // 如果实际读到的行数少于预估，说明已到尾部，用实际行数修正总数
+        const realTotal = allRows.length < needed ? offset + allRows.length : estimatedTotal;
+        return { rows, total: realTotal, page, pageSize };
       }),
 
-    // 获取分钟线按年/月/自定义区间统计
+    // 获取分钟线按年/月/自定义区间统计（直接从COS读取内容到内存，服务器零磁盘占用）
     getMinuteStats: publicProcedure
       .input(z.object({
         symbol: z.string(),
@@ -551,18 +541,9 @@ export const appRouter = router({
       .query(async ({ input }) => {
         const { symbol, mode, year, month, startDate, endDate } = input;
         const coin = symbol.replace('USDT', '').toLowerCase();
-        const fs = await import('fs');
-        const path = await import('path');
-        const localDir = '/home/ubuntu/klines';
 
-        // 确保本地目录存在
-        if (!fs.existsSync(localDir)) {
-          fs.mkdirSync(localDir, { recursive: true });
-        }
-
-        // 从COS下载文件并保存到本地的辅助函数
-        const ensureLocalFileStats = async (yr: number | string, mo: string, fpath: string): Promise<boolean> => {
-          if (fs.existsSync(fpath)) return true;
+        // 从COS读取指定月份的CSV内容（直接返回内存字符串，不写本地文件）
+        const readCosMonthStats = async (yr: number | string, mo: string): Promise<string | null> => {
           try {
             const COS = (await import('cos-nodejs-sdk-v5')).default;
             const cos = new COS({
@@ -581,54 +562,40 @@ export const appRouter = router({
               });
             });
             if (result && result.Body) {
-              fs.writeFileSync(fpath, result.Body);
-              console.log(`[klines] 从COS下载并缓存: ${cosKey}`);
-              return true;
+              return result.Body.toString('utf8');
             }
-            return false;
+            return null;
           } catch (e: any) {
             if (e?.statusCode !== 404) {
-              console.warn(`[klines] COS下载失败 ${yr}_${mo}:`, e?.message || e);
+              console.warn(`[klines] COS读取失败 ${yr}_${mo}:`, e?.message || e);
             }
-            return false;
+            return null;
           }
         };
 
-        // 确定需要扫描的文件列表（本地不存在时尝试从COS下载）
-        const files: string[] = [];
+        // 确定需要扫描的月份列表
+        const monthsToRead: { yr: number | string; mo: string }[] = [];
         if (mode === 'year' && year) {
           for (let m = 1; m <= 12; m++) {
-            const mo = String(m).padStart(2,'0');
-            const fname = `${coin}_1m_${year}_${mo}.csv`;
-            const fp = path.join(localDir, fname);
-            const exists = await ensureLocalFileStats(year, mo, fp);
-            if (exists) files.push(fp);
+            monthsToRead.push({ yr: year, mo: String(m).padStart(2,'0') });
           }
         } else if (mode === 'month' && year && month) {
-          const fname = `${coin}_1m_${year}_${month}.csv`;
-          const fp = path.join(localDir, fname);
-          const exists = await ensureLocalFileStats(year, month, fp);
-          if (exists) files.push(fp);
+          monthsToRead.push({ yr: year, mo: month });
         } else if (mode === 'custom' && startDate && endDate) {
-          // 扫描 startDate ~ endDate 覆盖的所有月份
           const s = new Date(startDate);
           const e = new Date(endDate);
           const cur = new Date(s.getFullYear(), s.getMonth(), 1);
           while (cur <= e) {
-            const yr = cur.getFullYear();
-            const mo = String(cur.getMonth() + 1).padStart(2, '0');
-            const fname = `${coin}_1m_${yr}_${mo}.csv`;
-            const fp = path.join(localDir, fname);
-            const exists = await ensureLocalFileStats(yr, mo, fp);
-            if (exists) files.push(fp);
+            monthsToRead.push({ yr: cur.getFullYear(), mo: String(cur.getMonth() + 1).padStart(2, '0') });
             cur.setMonth(cur.getMonth() + 1);
           }
         }
 
-        // 读取所有行
+        // 读取所有行（直接从COS读内容）
         const allRows: { open: number; close: number; high: number; low: number; ts: number }[] = [];
-        for (const fp of files) {
-          const content = fs.readFileSync(fp, 'utf8');
+        for (const { yr, mo } of monthsToRead) {
+          const content = await readCosMonthStats(yr, mo);
+          if (!content) continue;
           const lines = content.split('\n').filter(l => /^\d{13}/.test(l.trim()));
           for (const line of lines) {
             const [ot, o, h, l, c] = line.split(',');
