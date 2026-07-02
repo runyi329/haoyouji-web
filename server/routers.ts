@@ -435,6 +435,164 @@ export const appRouter = router({
         }
       }),
 
+    // 获取分钟线分页数据（优先读本地文件，否则读 COS）
+    getMinuteKlines: publicProcedure
+      .input(z.object({ symbol: z.string(), page: z.number().default(1), pageSize: z.number().default(100) }))
+      .query(async ({ input }) => {
+        const { symbol, page, pageSize } = input;
+        const coin = symbol.replace('USDT', '').toLowerCase();
+        const fs = await import('fs');
+        const path = await import('path');
+        const readline = await import('readline');
+        const localDir = '/home/ubuntu/klines';
+
+        // 扫描所有本地文件（倒序）
+        const months: string[] = [];
+        const now = new Date();
+        for (let i = 0; i < 120; i++) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          const yr = d.getFullYear();
+          const mo = String(d.getMonth() + 1).padStart(2, '0');
+          const fname = `${coin}_1m_${yr}_${mo}.csv`;
+          const fpath = path.join(localDir, fname);
+          if (fs.existsSync(fpath)) months.push(fpath);
+        }
+
+        // 计算 total
+        let total = 0;
+        for (const fp of months) {
+          const content = fs.readFileSync(fp, 'utf8');
+          const lines = content.split('\n').filter(l => /^\d{13}/.test(l.trim()));
+          total += lines.length;
+        }
+
+        const offset = (page - 1) * pageSize;
+        const needed = offset + pageSize;
+        const allRows: string[] = [];
+        for (const fp of months) {
+          const content = fs.readFileSync(fp, 'utf8');
+          const lines = content.split('\n').filter(l => /^\d{13}/.test(l.trim())).reverse();
+          allRows.push(...lines);
+          if (allRows.length >= needed) break;
+        }
+
+        const pageRows = allRows.slice(offset, offset + pageSize);
+        const rows = pageRows.map(line => {
+          const [ot, o, h, l, c] = line.split(',');
+          const openTime = Number(ot);
+          const open = parseFloat(o);
+          const high = parseFloat(h);
+          const low = parseFloat(l);
+          const close = parseFloat(c);
+          if (isNaN(openTime) || isNaN(open) || isNaN(close)) return null;
+          const dt = new Date(openTime);
+          const pad = (n: number) => String(n).padStart(2, '0');
+          const dateStr = `${String(dt.getUTCFullYear()).slice(2)}/${pad(dt.getUTCMonth()+1)}/${pad(dt.getUTCDate())}`;
+          const timeStr = `${pad(dt.getUTCHours())}:${pad(dt.getUTCMinutes())}`;
+          const changePct = ((close - open) / open * 100);
+          const amplitude = ((high - low) / open * 100);
+          return { dateStr, timeStr, open, high, low, close, changePct: parseFloat(changePct.toFixed(4)), amplitude: parseFloat(amplitude.toFixed(4)) };
+        }).filter(Boolean);
+
+        return { rows, total, page, pageSize };
+      }),
+
+    // 获取分钟线按年/月/自定义区间统计
+    getMinuteStats: publicProcedure
+      .input(z.object({
+        symbol: z.string(),
+        mode: z.enum(['year', 'month', 'custom']),
+        year: z.string().optional(),
+        month: z.string().optional(),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+      }))
+      .query(async ({ input }) => {
+        const { symbol, mode, year, month, startDate, endDate } = input;
+        const coin = symbol.replace('USDT', '').toLowerCase();
+        const fs = await import('fs');
+        const path = await import('path');
+        const localDir = '/home/ubuntu/klines';
+
+        // 确定需要扫描的文件列表
+        const files: string[] = [];
+        if (mode === 'year' && year) {
+          for (let m = 1; m <= 12; m++) {
+            const fname = `${coin}_1m_${year}_${String(m).padStart(2,'0')}.csv`;
+            const fp = path.join(localDir, fname);
+            if (fs.existsSync(fp)) files.push(fp);
+          }
+        } else if (mode === 'month' && year && month) {
+          const fname = `${coin}_1m_${year}_${month}.csv`;
+          const fp = path.join(localDir, fname);
+          if (fs.existsSync(fp)) files.push(fp);
+        } else if (mode === 'custom' && startDate && endDate) {
+          // 扫描 startDate ~ endDate 覆盖的所有月份
+          const s = new Date(startDate);
+          const e = new Date(endDate);
+          const cur = new Date(s.getFullYear(), s.getMonth(), 1);
+          while (cur <= e) {
+            const yr = cur.getFullYear();
+            const mo = String(cur.getMonth() + 1).padStart(2, '0');
+            const fname = `${coin}_1m_${yr}_${mo}.csv`;
+            const fp = path.join(localDir, fname);
+            if (fs.existsSync(fp)) files.push(fp);
+            cur.setMonth(cur.getMonth() + 1);
+          }
+        }
+
+        // 读取所有行
+        const allRows: { open: number; close: number; high: number; low: number; ts: number }[] = [];
+        for (const fp of files) {
+          const content = fs.readFileSync(fp, 'utf8');
+          const lines = content.split('\n').filter(l => /^\d{13}/.test(l.trim()));
+          for (const line of lines) {
+            const [ot, o, h, l, c] = line.split(',');
+            const ts = Number(ot);
+            const open = parseFloat(o);
+            const high = parseFloat(h);
+            const low = parseFloat(l);
+            const close = parseFloat(c);
+            if (!isNaN(ts) && !isNaN(open) && !isNaN(close)) {
+              // 自定义模式过滤日期
+              if (mode === 'custom' && startDate && endDate) {
+                const d = new Date(ts);
+                const dStr = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`;
+                if (dStr < startDate || dStr > endDate) continue;
+              }
+              allRows.push({ open, close, high, low, ts });
+            }
+          }
+        }
+
+        if (allRows.length === 0) return null;
+
+        const changePcts = allRows.map(r => (r.close - r.open) / r.open * 100);
+        const amplitudes = allRows.map(r => (r.high - r.low) / r.open * 100);
+        const upCount = changePcts.filter(v => v > 0).length;
+        const downCount = changePcts.filter(v => v < 0).length;
+        const flatCount = changePcts.filter(v => v === 0).length;
+        const total = allRows.length;
+        const avgChange = changePcts.reduce((a, b) => a + b, 0) / total;
+        const maxUp = Math.max(...changePcts);
+        const maxDown = Math.min(...changePcts);
+        const avgAmplitude = amplitudes.reduce((a, b) => a + b, 0) / total;
+        const maxAmplitude = Math.max(...amplitudes);
+        const firstOpen = allRows[0].open;
+        const lastClose = allRows[allRows.length - 1].close;
+        const rangeChange = (lastClose - firstOpen) / firstOpen * 100;
+        const maxHigh = Math.max(...allRows.map(r => r.high));
+        const minLow = Math.min(...allRows.map(r => r.low));
+
+        return {
+          total, upCount, downCount, flatCount,
+          upPct: upCount / total * 100,
+          downPct: downCount / total * 100,
+          avgChange, maxUp, maxDown, avgAmplitude, maxAmplitude,
+          rangeChange, maxHigh, minLow, firstOpen, lastClose,
+        };
+      }),
+
     // AI 分析该股票（调用 LLM 生成简要分析）
     getAIAnalysis: publicProcedure
       .input(z.object({

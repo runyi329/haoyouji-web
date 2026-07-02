@@ -50,6 +50,135 @@ function formatPct(val: number | null): string {
   return (val >= 0 ? "+" : "") + val.toFixed(2) + "%";
 }
 
+// ─── 历史价格筛选：共用类型 & Footer 组件 ───────────────────────────────────
+const PF_ACCENT = '#1a56db';
+const PF_ACCENT_BG = '#eff6ff';
+const PF_BG_SUBTLE = '#f0f2f5';
+const PF_TEXT_SUB = '#6b7280';
+const PF_BORDER = '#e4e7ed';
+
+type PriceFilterProps = {
+  mode: 'all' | 'year' | 'custom';
+  setMode: (m: 'all' | 'year' | 'custom') => void;
+  year: string;
+  setYear: (y: string) => void;
+  monthStart: string | null;
+  setMonthStart: (m: string | null) => void;
+  monthEnd: string | null;
+  setMonthEnd: (m: string | null) => void;
+  rangeAnchor: string | null;
+  setRangeAnchor: (m: string | null) => void;
+  customStart: string;
+  setCustomStart: (s: string) => void;
+  customEnd: string;
+  setCustomEnd: (s: string) => void;
+  availableYears: string[];
+  availableMonths: string[];
+};
+
+function PriceFilterFooter({ fp }: { fp: PriceFilterProps }) {
+  const { mode, setMode, year, setYear, monthStart, setMonthStart, monthEnd, setMonthEnd,
+    rangeAnchor, setRangeAnchor, customStart, setCustomStart, customEnd, setCustomEnd,
+    availableYears, availableMonths } = fp;
+
+  // 月份是否在选中范围内
+  const isMonthSelected = (m: string) => {
+    if (!monthStart) return true; // 无选择 = 全亮
+    if (!monthEnd) return m === monthStart;
+    const lo = monthStart < monthEnd ? monthStart : monthEnd;
+    const hi = monthStart < monthEnd ? monthEnd : monthStart;
+    return m >= lo && m <= hi;
+  };
+
+  // 月份点击逻辑：单击选中，再点取消；范围选择；已有范围后点新月重新开始
+  const handleMonthClick = (m: string) => {
+    if (!monthStart && !monthEnd) {
+      // 全亮状态，点击 = 设为起始
+      setMonthStart(m); setMonthEnd(null); setRangeAnchor(m);
+    } else if (monthStart && !monthEnd) {
+      // 已有起始，无终点
+      if (m === monthStart) {
+        // 再次点同一个 = 取消，回到全亮
+        setMonthStart(null); setMonthEnd(null); setRangeAnchor(null);
+      } else {
+        // 点另一个 = 完成范围
+        setMonthEnd(m); setRangeAnchor(null);
+      }
+    } else {
+      // 已有完整范围，点任意月 = 以该月重新开始
+      setMonthStart(m); setMonthEnd(null); setRangeAnchor(m);
+    }
+  };
+
+  return (
+    <div style={{ borderTop: `1px solid ${PF_BORDER}`, padding: '10px 12px 12px' }}>
+      {/* 三个主Tab */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+        {(['all', 'year', 'custom'] as const).map(m => (
+          <button key={m}
+            onClick={() => { setMode(m); if (m === 'all') { setMonthStart(null); setMonthEnd(null); setRangeAnchor(null); } }}
+            style={{
+              flex: 1, padding: '5px 0', borderRadius: 8, fontSize: 12, fontWeight: 600,
+              background: mode === m ? PF_ACCENT : PF_BG_SUBTLE,
+              color: mode === m ? '#fff' : PF_TEXT_SUB,
+              border: `1.5px solid ${mode === m ? PF_ACCENT : PF_BORDER}`,
+              cursor: 'pointer', transition: 'all 0.15s',
+            }}
+          >{m === 'all' ? '全部' : m === 'year' ? '按年' : '自定义'}</button>
+        ))}
+      </div>
+
+      {/* 按年：年份行 + 月份网格 */}
+      {mode === 'year' && (
+        <>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
+            {availableYears.map(yr => (
+              <button key={yr}
+                onClick={() => { setYear(yr); setMonthStart(null); setMonthEnd(null); setRangeAnchor(null); }}
+                style={{
+                  padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                  background: year === yr ? PF_ACCENT : PF_BG_SUBTLE,
+                  color: year === yr ? '#fff' : PF_TEXT_SUB,
+                  border: `1.5px solid ${year === yr ? PF_ACCENT : PF_BORDER}`,
+                  cursor: 'pointer',
+                }}
+              >{yr}</button>
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 4 }}>
+            {availableMonths.map(m => {
+              const sel = isMonthSelected(m);
+              return (
+                <button key={m}
+                  onClick={() => handleMonthClick(m)}
+                  style={{
+                    padding: '6px 0', borderRadius: 6, fontSize: 11, fontWeight: 700,
+                    background: sel ? PF_ACCENT : PF_BG_SUBTLE,
+                    color: sel ? '#fff' : PF_TEXT_SUB,
+                    border: `2px solid ${sel ? PF_ACCENT : 'transparent'}`,
+                    cursor: 'pointer',
+                  }}
+                >{parseInt(m)}月</button>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* 自定义：日期输入 */}
+      {mode === 'custom' && (
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)}
+            style={{ flex: 1, minWidth: 120, padding: '4px 6px', borderRadius: 6, border: `1px solid ${PF_BORDER}`, fontSize: 11, color: '#374151' }} />
+          <span style={{ fontSize: 11, color: PF_TEXT_SUB }}>至</span>
+          <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)}
+            style={{ flex: 1, minWidth: 120, padding: '4px 6px', borderRadius: 6, border: `1px solid ${PF_BORDER}`, fontSize: 11, color: '#374151' }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // 连涨连跌统计计算函数（与 StockDetail 一致）
 function calcStreakFromItems(data: { changePct: number | null }[]): {
   upStreakMap: Record<number, number>;
@@ -1664,6 +1793,22 @@ export default function BeDataPage() {
     { enabled: isCryptoSymbol && activeTab === 'data' && dataSubTab === 'minute', staleTime: 60 * 1000 }
   );
 
+  // 分钟线分页状态
+  const [minutePage, setMinutePage] = useState(1);
+  const { data: minuteKlines, isLoading: minuteKlinesLoading } = trpc.cryptoData.getMinuteKlines.useQuery(
+    { symbol: activeSymbol, page: minutePage, pageSize: PAGE_SIZE },
+    { enabled: isCryptoSymbol && activeTab === 'data' && dataSubTab === 'minute', keepPreviousData: true } as any
+  );
+
+  // 历史价格筛选状态（共用）
+  const [priceViewMode, setPriceViewMode] = useState<'all' | 'year' | 'custom'>('all');
+  const [priceViewYear, setPriceViewYear] = useState<string>('');
+  const [priceMonthStart, setPriceMonthStart] = useState<string | null>(null);
+  const [priceMonthEnd, setPriceMonthEnd] = useState<string | null>(null);
+  const [priceRangeAnchor, setPriceRangeAnchor] = useState<string | null>(null);
+  const [priceCustomStart, setPriceCustomStart] = useState<string>('');
+  const [priceCustomEnd, setPriceCustomEnd] = useState<string>('');
+
   // 分钟数据实时计数器：每分钟重新计算理论条数（无论是否切到分钟Tab都实时更新）
   useEffect(() => {
     // 切换币种时重置基数
@@ -1824,6 +1969,63 @@ export default function BeDataPage() {
   const downData = stats ? buildConsecData(stats.consecutiveDown, stats.maxConsecDown) : [];
 
   const analysisLoading = statsLoading || changePctsLoading;
+
+  // 历史价格可用年份（从 allChangePcts 提取）
+  const priceAvailableYears = useMemo(() => {
+    if (!allChangePcts || allChangePcts.length === 0) return [];
+    const years = [...new Set(allChangePcts.map(d => d.date.slice(0, 4)))].sort((a, b) => Number(b) - Number(a));
+    if (!priceViewYear && years.length > 0) {
+      // 初始化默认年份（最新年）
+      setTimeout(() => setPriceViewYear(years[0]), 0);
+    }
+    return years;
+  }, [allChangePcts]);
+
+  // 当前选中年份的可用月份
+  const priceAvailableMonths = useMemo(() => {
+    if (!allChangePcts || !priceViewYear) return [];
+    const months = [...new Set(
+      allChangePcts
+        .filter(d => d.date.startsWith(priceViewYear))
+        .map(d => d.date.slice(5, 7))
+    )].sort();
+    return months;
+  }, [allChangePcts, priceViewYear]);
+
+  // 过滤后的 allChangePcts（共用筛选状态）
+  const filteredChangePcts = useMemo(() => {
+    if (!allChangePcts) return [];
+    if (priceViewMode === 'all') return allChangePcts;
+    if (priceViewMode === 'year') {
+      return allChangePcts.filter(d => {
+        if (!d.date.startsWith(priceViewYear)) return false;
+        if (!priceMonthStart) return true;
+        const m = d.date.slice(5, 7);
+        const lo = priceMonthStart < (priceMonthEnd ?? priceMonthStart) ? priceMonthStart : (priceMonthEnd ?? priceMonthStart);
+        const hi = priceMonthStart < (priceMonthEnd ?? priceMonthStart) ? (priceMonthEnd ?? priceMonthStart) : priceMonthStart;
+        return m >= lo && m <= hi;
+      });
+    }
+    if (priceViewMode === 'custom' && priceCustomStart && priceCustomEnd) {
+      const s = priceCustomStart.replace(/-/g, '/');
+      const e = priceCustomEnd.replace(/-/g, '/');
+      return allChangePcts.filter(d => d.date >= s && d.date <= e);
+    }
+    return allChangePcts;
+  }, [allChangePcts, priceViewMode, priceViewYear, priceMonthStart, priceMonthEnd, priceCustomStart, priceCustomEnd]);
+
+  // 共用的 PriceFilterProps 对象
+  const sharedFp: PriceFilterProps = {
+    mode: priceViewMode, setMode: setPriceViewMode,
+    year: priceViewYear, setYear: setPriceViewYear,
+    monthStart: priceMonthStart, setMonthStart: setPriceMonthStart,
+    monthEnd: priceMonthEnd, setMonthEnd: setPriceMonthEnd,
+    rangeAnchor: priceRangeAnchor, setRangeAnchor: setPriceRangeAnchor,
+    customStart: priceCustomStart, setCustomStart: setPriceCustomStart,
+    customEnd: priceCustomEnd, setCustomEnd: setPriceCustomEnd,
+    availableYears: priceAvailableYears,
+    availableMonths: priceAvailableMonths,
+  };
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: hideSymbolTabs ? "#EEF2F8" : "#F5F5F5" }}>
@@ -2457,32 +2659,79 @@ export default function BeDataPage() {
         </div>
       )}
 
-      {/* ===== 分钟数据 Tab（权限锁定） ===== */}
+      {/* ===== 分钟数据 Tab ===== */}
       {activeTab === 'data' && isCryptoSymbol && dataSubTab === 'minute' && (
-        <div className="flex-1 overflow-auto flex flex-col items-center justify-center" style={{ background: '#fff', minHeight: 320 }}>
-          {/* 理论条数展示 */}
-          <div style={{ textAlign: 'center', marginBottom: 24 }}>
-            <div style={{ fontSize: 13, color: '#6B7280', marginBottom: 8 }}>分钟K线理论总量（从上市至今）</div>
-            <div style={{ fontSize: 36, fontWeight: 700, color: '#D32F2F', fontFamily: 'monospace', letterSpacing: 1 }}>
-              {(theoreticalBase + minuteCounter).toLocaleString()}
-            </div>
-            <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 4 }}>条（每分钟实时+1）</div>
-            <div style={{ fontSize: 11, color: '#9CA3AF', marginTop: 6 }}>
-              估算占用存储空间：<span style={{ color: '#D32F2F', fontWeight: 600 }}>{estimateSize(theoreticalBase + minuteCounter)}</span>
-            </div>
+        <div className="flex-1 overflow-auto" style={{ background: '#fff' }}>
+          {/* 顶部信息栏 */}
+          <div style={{ padding: '8px 12px 4px', borderBottom: '1px solid #F3F4F6', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, color: '#6B7280' }}>理论总量：</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#D32F2F', fontFamily: 'monospace' }}>{(theoreticalBase + minuteCounter).toLocaleString()}</span>
+            <span style={{ fontSize: 11, color: '#9CA3AF' }}>条</span>
+            {minuteMeta?.latestDatetime && (
+              <span style={{ fontSize: 11, color: '#9CA3AF', marginLeft: 8 }}>COS最新：{minuteMeta.latestDatetime}</span>
+            )}
           </div>
-          {/* 锁定提示 */}
-          <div style={{
-            background: '#FEF3C7',
-            border: '1px solid #FDE68A',
-            borderRadius: 8,
-            padding: '16px 24px',
-            maxWidth: 280,
-            textAlign: 'center',
-          }}>
-            <div style={{ fontSize: 13, color: '#92400E', fontWeight: 600, marginBottom: 6 }}>需要更高权限</div>
-            <div style={{ fontSize: 12, color: '#B45309', lineHeight: 1.6 }}>查看分钟详细数据需要更高级别的访问权限，请联系管理员开通</div>
-          </div>
+          {/* 分页表格 */}
+          {minuteKlinesLoading ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#9CA3AF', fontSize: 13 }}>加载中...</div>
+          ) : !minuteKlines || minuteKlines.rows.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#9CA3AF', fontSize: 13 }}>暂无分钟数据</div>
+          ) : (
+            <>
+              <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                <colgroup>
+                  <col style={{ width: '20%' }} />
+                  <col style={{ width: '13%' }} />
+                  <col style={{ width: '13%' }} />
+                  <col style={{ width: '13%' }} />
+                  <col style={{ width: '13%' }} />
+                  <col style={{ width: '14%' }} />
+                  <col style={{ width: '14%' }} />
+                </colgroup>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                  <tr style={{ background: '#F3F4F6' }}>
+                    <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 10 }}>时间</th>
+                    <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 10 }}>开盘</th>
+                    <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 10 }}>收盘</th>
+                    <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 10 }}>最高</th>
+                    <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 10 }}>最低</th>
+                    <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 10 }}>涨跌%</th>
+                    <th style={{ border: '1px solid #D1D5DB', padding: '6px 2px', textAlign: 'center', color: '#6B7280', fontWeight: 500, fontSize: 10 }}>振幅%</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {minuteKlines.rows.map((row: any, idx: number) => {
+                    const isUp = row.changePct > 0;
+                    const isDown = row.changePct < 0;
+                    const color = isUp ? '#D32F2F' : isDown ? '#388E3C' : '#6B7280';
+                    const rowBg = idx % 2 === 0 ? '#fff' : '#FAFAFA';
+                    return (
+                      <tr key={idx} style={{ background: rowBg }}>
+                        <td style={{ border: '1px solid #E5E7EB', padding: '3px 0', textAlign: 'center', color: '#6B7280', fontFamily: 'monospace', fontSize: 9, lineHeight: 1.3 }}>
+                          <div style={{ whiteSpace: 'nowrap' }}>{row.dateStr}</div>
+                          <div style={{ whiteSpace: 'nowrap', color: '#9CA3AF' }}>{row.timeStr}</div>
+                        </td>
+                        <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color: '#374151', fontFamily: 'monospace', fontSize: 10 }}>{row.open.toFixed(2)}</td>
+                        <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color, fontFamily: 'monospace', fontSize: 10, fontWeight: 600 }}>{row.close.toFixed(2)}</td>
+                        <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color: '#4B5563', fontFamily: 'monospace', fontSize: 10 }}>{row.high.toFixed(2)}</td>
+                        <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color: '#4B5563', fontFamily: 'monospace', fontSize: 10 }}>{row.low.toFixed(2)}</td>
+                        <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color, fontFamily: 'monospace', fontSize: 10 }}>{(row.changePct >= 0 ? '+' : '') + row.changePct.toFixed(4) + '%'}</td>
+                        <td style={{ border: '1px solid #E5E7EB', padding: '4px 0', textAlign: 'center', color: '#6B7280', fontFamily: 'monospace', fontSize: 10 }}>{row.amplitude.toFixed(4) + '%'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {/* 分页控制 */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '10px 0', borderTop: '1px solid #F3F4F6' }}>
+                <button onClick={() => setMinutePage(p => Math.max(1, p - 1))} disabled={minutePage <= 1}
+                  style={{ padding: '4px 14px', borderRadius: 6, fontSize: 12, background: minutePage <= 1 ? '#F3F4F6' : '#1a56db', color: minutePage <= 1 ? '#9CA3AF' : '#fff', border: 'none', cursor: minutePage <= 1 ? 'default' : 'pointer' }}>上一页</button>
+                <span style={{ fontSize: 11, color: '#6B7280' }}>第 {minutePage} / {Math.ceil((minuteKlines.total || 1) / PAGE_SIZE)} 页 · 共 {minuteKlines.total?.toLocaleString()} 条</span>
+                <button onClick={() => setMinutePage(p => p + 1)} disabled={minutePage >= Math.ceil((minuteKlines.total || 1) / PAGE_SIZE)}
+                  style={{ padding: '4px 14px', borderRadius: 6, fontSize: 12, background: minutePage >= Math.ceil((minuteKlines.total || 1) / PAGE_SIZE) ? '#F3F4F6' : '#1a56db', color: minutePage >= Math.ceil((minuteKlines.total || 1) / PAGE_SIZE) ? '#9CA3AF' : '#fff', border: 'none', cursor: minutePage >= Math.ceil((minuteKlines.total || 1) / PAGE_SIZE) ? 'default' : 'pointer' }}>下一页</button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -2606,7 +2855,7 @@ export default function BeDataPage() {
 
               {/* 历史价格折线图 */}
               {allChangePcts && allChangePcts.length > 0 && (() => {
-                const priceData = [...allChangePcts].filter(d => d.close != null).map(d => ({
+                const priceData = [...filteredChangePcts].filter(d => d.close != null).map(d => ({
                   date: d.date,
                   close: d.close as number,
                 }));
@@ -2645,7 +2894,7 @@ export default function BeDataPage() {
                         {currentStockInfo?.icon && <img src={currentStockInfo.icon} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
                         历史价格
                       </span>
-                      <span className="text-xs text-gray-400">{priceData[0]?.date} ~ {priceData[priceData.length - 1]?.date}</span>
+                      <span className="text-xs text-gray-400">{priceData[0]?.date} ~ {priceData[priceData.length - 1]?.date} &middot; {priceData.length}天</span>
                     </div>
                     <div className="px-2 py-3">
                       <ResponsiveContainer width="100%" height={200}>
@@ -2698,59 +2947,94 @@ export default function BeDataPage() {
                         </ComposedChart>
                       </ResponsiveContainer>
                     </div>
+                    <PriceFilterFooter fp={sharedFp} />
                   </div>
                 );
               })()}
 
               {/* 涨跌天数概览 */}
-              <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
-                <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
-                  <span className="text-sm font-semibold text-gray-700 flex items-center gap-1">
-                    {currentStockInfo?.icon && <img src={currentStockInfo.icon} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
-                    涨跌天数统计
-                  </span>
-                  <span className="text-xs text-gray-400">共 {stats.total} 天</span>
-                </div>
-                <div className="grid grid-cols-3 divide-x divide-gray-100">
-                  <div className="flex flex-col items-center py-4">
-                    <span className="text-2xl font-bold text-red-500">{stats.upDays}</span>
-                    <span className="text-xs text-gray-400 mt-1">上涨天数</span>
-                    <span className="text-xs text-red-400 font-medium mt-0.5">{stats.upPct}%</span>
+              {(() => {
+                const fData = filteredChangePcts.filter(d => d.changePct != null);
+                const fTotal = fData.length;
+                const fUp = fData.filter(d => (d.changePct ?? 0) > 0).length;
+                const fDown = fData.filter(d => (d.changePct ?? 0) < 0).length;
+                const fFlat = fTotal - fUp - fDown;
+                const fUpPct = fTotal > 0 ? (fUp / fTotal * 100).toFixed(2) : '0.00';
+                const fDownPct = fTotal > 0 ? (fDown / fTotal * 100).toFixed(2) : '0.00';
+                const fFlatPct = fTotal > 0 ? (fFlat / fTotal * 100).toFixed(2) : '0.00';
+                const fFirst = fData[0]?.date ?? '-';
+                const fLast = fData[fData.length - 1]?.date ?? '-';
+                return (
+                  <div className="bg-white mx-3 rounded-xl border border-gray-200 overflow-hidden mb-3">
+                    <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+                      <span className="text-sm font-semibold text-gray-700 flex items-center gap-1">
+                        {currentStockInfo?.icon && <img src={currentStockInfo.icon} alt="" style={{ width: 14, height: 14, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />}
+                        涨跌天数统计
+                      </span>
+                      <span className="text-xs text-gray-400">{fFirst} ~ {fLast} &middot; 共 {fTotal} 天</span>
+                    </div>
+                    <div className="grid grid-cols-3 divide-x divide-gray-100">
+                      <div className="flex flex-col items-center py-4">
+                        <span className="text-2xl font-bold text-red-500">{fUp}</span>
+                        <span className="text-xs text-gray-400 mt-1">上涨天数</span>
+                        <span className="text-xs text-red-400 font-medium mt-0.5">{fUpPct}%</span>
+                      </div>
+                      <div className="flex flex-col items-center py-4">
+                        <span className="text-2xl font-bold text-green-600">{fDown}</span>
+                        <span className="text-xs text-gray-400 mt-1">下跌天数</span>
+                        <span className="text-xs text-green-500 font-medium mt-0.5">{fDownPct}%</span>
+                      </div>
+                      <div className="flex flex-col items-center py-4">
+                        <span className="text-2xl font-bold text-gray-400">{fFlat}</span>
+                        <span className="text-xs text-gray-400 mt-1">平盘天数</span>
+                        <span className="text-xs text-gray-400 font-medium mt-0.5">{fFlatPct}%</span>
+                      </div>
+                    </div>
+                    {/* 涨跌比例条 */}
+                    <div className="mx-4 mb-3 h-2 rounded-full overflow-hidden flex">
+                      <div className="bg-red-400" style={{ width: `${fUpPct}%` }} />
+                      <div className="bg-gray-200" style={{ width: `${fFlatPct}%` }} />
+                      <div className="bg-green-500 flex-1" />
+                    </div>
+                    <PriceFilterFooter fp={sharedFp} />
                   </div>
-                  <div className="flex flex-col items-center py-4">
-                    <span className="text-2xl font-bold text-green-600">{stats.downDays}</span>
-                    <span className="text-xs text-gray-400 mt-1">下跌天数</span>
-                    <span className="text-xs text-green-500 font-medium mt-0.5">{stats.downPct}%</span>
-                  </div>
-                  <div className="flex flex-col items-center py-4">
-                    <span className="text-2xl font-bold text-gray-400">{stats.flatDays}</span>
-                    <span className="text-xs text-gray-400 mt-1">平盘天数</span>
-                    <span className="text-xs text-gray-400 font-medium mt-0.5">
-                      {stats.total > 0 ? (stats.flatDays / stats.total * 100).toFixed(2) : 0}%
-                    </span>
-                  </div>
-                </div>
-                {/* 涨跌比例条 */}
-                <div className="mx-4 mb-3 h-2 rounded-full overflow-hidden flex">
-                  <div className="bg-red-400" style={{ width: `${stats.upPct}%` }} />
-                  <div className="bg-gray-200" style={{ width: `${(stats.flatDays / stats.total * 100).toFixed(2)}%` }} />
-                  <div className="bg-green-500 flex-1" />
-                </div>
-              </div>
+                );
+              })()}
 
               {/* 累计涨跌幅 */}
-              <YearlyBreakdown allChangePcts={allChangePcts ?? []} totalUpPct={stats.totalUpPct} totalDownPct={stats.totalDownPct} coinIcon={currentStockInfo?.icon} />
+              {(() => {
+                const fTotalUpPct = filteredChangePcts.length > 0
+                  ? filteredChangePcts.filter(d => (d.changePct ?? 0) > 0).reduce((s, d) => s + (d.changePct ?? 0), 0)
+                  : stats.totalUpPct;
+                const fTotalDownPct = filteredChangePcts.length > 0
+                  ? filteredChangePcts.filter(d => (d.changePct ?? 0) < 0).reduce((s, d) => s + (d.changePct ?? 0), 0)
+                  : stats.totalDownPct;
+                return (
+                  <div style={{ position: 'relative' }}>
+                    <YearlyBreakdown allChangePcts={filteredChangePcts} totalUpPct={fTotalUpPct} totalDownPct={fTotalDownPct} coinIcon={currentStockInfo?.icon} />
+                    <div style={{ marginTop: -12, marginLeft: 12, marginRight: 12, marginBottom: 12, background: '#fff', borderRadius: '0 0 12px 12px', border: '1px solid #e5e7eb', borderTop: 'none' }}>
+                      <PriceFilterFooter fp={sharedFp} />
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* 连涨/连跌统计（已内嵌最长连涨/连跌） */}
               {allChangePcts && allChangePcts.length > 0 && (
                 <div className="bg-white border border-gray-200 mx-3 rounded-xl overflow-hidden mb-3">
-                  <StreakStatsPanel allData={allChangePcts} latestDate={latestDate} coinIcon={currentStockInfo?.icon} />
+                  <StreakStatsPanel allData={filteredChangePcts} latestDate={latestDate} coinIcon={currentStockInfo?.icon} />
+                  <PriceFilterFooter fp={sharedFp} />
                 </div>
               )}
 
               {/* 涨跌幅频率分布图（正态分布直方图） */}
               {allChangePcts && allChangePcts.length > 0 && (
-                <ChangePctDistChart allData={allChangePcts} latestDate={latestDate} coinIcon={currentStockInfo?.icon} />
+                <div style={{ position: 'relative' }}>
+                  <ChangePctDistChart allData={filteredChangePcts} latestDate={latestDate} coinIcon={currentStockInfo?.icon} />
+                  <div style={{ marginTop: -12, marginLeft: 12, marginRight: 12, marginBottom: 12, background: '#fff', borderRadius: '0 0 12px 12px', border: '1px solid #e5e7eb', borderTop: 'none' }}>
+                    <PriceFilterFooter fp={sharedFp} />
+                  </div>
+                </div>
               )}
 
               {/* 资金费率历史走势图（仅数字币模式） */}
@@ -2922,6 +3206,7 @@ export default function BeDataPage() {
                       );
                     })()}
 
+                    <PriceFilterFooter fp={sharedFp} />
                   </div>
                 );
               })()}
