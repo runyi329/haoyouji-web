@@ -58,6 +58,36 @@ const MANUS_API_BASE = "https://api.manus.ai/v2";
 if (!MANUS_API_KEY) {
   console.error("[Manus] ❌ MANUS_API_KEY 未配置！请在 .env 中设置 MANUS_API_KEY，然后重启服务。");
 }
+
+// ─── 多账号支持 ────────────────────────────────────────────────────────────────
+// 账号1: runyimacau@gmail.com
+const MANUS_API_KEY_1 = process.env.MANUS_API_KEY_1 || process.env.MANUS_API_KEY || "";
+// 账号2: 13127919173@qq.com
+const MANUS_API_KEY_2 = process.env.MANUS_API_KEY_2 || "";
+
+// 账号信息（硬编码，用于管理后台展示）
+const MANUS_ACCOUNTS = [
+  { id: 1, email: "runyimacau@gmail.com", label: "账号1", apiKey: MANUS_API_KEY_1 },
+  { id: 2, email: "13127919173@qq.com",  label: "账号2", apiKey: MANUS_API_KEY_2 },
+];
+
+// 根据用户获取对应的 API Key
+async function getManusApiKeyForUser(wecomUserId: string): Promise<string> {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return MANUS_API_KEY_1 || MANUS_API_KEY;
+    const [rows] = await (conn as any).execute(
+      "SELECT manus_account FROM wecom_manus_sessions WHERE wecom_user_id = ? LIMIT 1",
+      [wecomUserId]
+    ) as any;
+    const accountId: number = (rows as any[]).length > 0 ? ((rows as any[])[0].manus_account || 1) : 1;
+    const account = MANUS_ACCOUNTS.find(a => a.id === accountId);
+    return (account?.apiKey) || MANUS_API_KEY_1 || MANUS_API_KEY;
+  } catch {
+    return MANUS_API_KEY_1 || MANUS_API_KEY;
+  }
+}
+// ──────────────────────────────────────────────────────────────────────────────
 // 企微专用 DeepSeek Key，严格只读 WECOM_DEEPSEEK_API_KEY，不回退到通用 Key
 // 其他模块（ai-search/company-reports/db-ai-assistant 等）读取 DEEPSEEK_API_KEY，两者完全隔离
 const DEEPSEEK_API_KEY = process.env.WECOM_DEEPSEEK_API_KEY || "";
@@ -536,6 +566,7 @@ async function ensureSessionTable(): Promise<void> {
     `ALTER TABLE wecom_manus_sessions ADD COLUMN model_pref VARCHAR(50) DEFAULT 'manus-1.6-max' COMMENT '用户默认模型'`,
     `ALTER TABLE wecom_manus_sessions ADD COLUMN system_prompt TEXT DEFAULT NULL COMMENT '系统提示词'`,
     `ALTER TABLE wecom_manus_sessions ADD COLUMN enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用'`,
+    `ALTER TABLE wecom_manus_sessions ADD COLUMN manus_account TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Manus账号编号(1=runyimacau,2=13127919173)'`,
   ]) { try { await (conn as any).execute(sql); } catch (_) {} }
 
   // 创建消息级积分记录表
@@ -908,7 +939,7 @@ async function resolveClinicByUserId(
 // -----------------------------------------------------------
 // 工具函数：获取或创建用户的 Manus task_id
 // -----------------------------------------------------------
-async function getOrCreateManusTask(wecomUserId: string): Promise<string | null> {
+async function getOrCreateManusTask(wecomUserId: string, apiKey?: string): Promise<string | null> {
   const conn = await getDbConnection();
   if (!conn) return null;
 
@@ -925,11 +956,12 @@ async function getOrCreateManusTask(wecomUserId: string): Promise<string | null>
   // 创建新的 Manus 任务
   try {
     console.log(`[Manus] 为用户 ${wecomUserId} 创建新任务...`);
+    const resolvedKey = apiKey || MANUS_API_KEY_1 || MANUS_API_KEY;
     const res = await fetch(`${MANUS_API_BASE}/task.create`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-manus-api-key": MANUS_API_KEY,
+        "x-manus-api-key": resolvedKey,
       },
       body: JSON.stringify({
         message: {
@@ -1228,10 +1260,11 @@ interface ManusReply {
   fileAttachments: Array<{ url: string; filename: string; type: string }>;
 }
 
-async function sendToManusAndGetReply(taskId: string, userMessage: string, agentProfile?: string): Promise<ManusReply> {
+async function sendToManusAndGetReply(taskId: string, userMessage: string, agentProfile?: string, apiKey?: string): Promise<ManusReply> {
   try {
     // 记录发送前的时间戳（Unix 秒），用于过滤旧消息
     const sendTimestamp = Math.floor(Date.now() / 1000);
+    const resolvedKey = apiKey || MANUS_API_KEY_1 || MANUS_API_KEY;
 
     console.log(`[Manus] 向任务 ${taskId} 发送消息 (model=${agentProfile || 'default'}): ${userMessage.substring(0, 50)}`);
     const sendBody: any = {
@@ -1247,7 +1280,7 @@ async function sendToManusAndGetReply(taskId: string, userMessage: string, agent
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-manus-api-key": MANUS_API_KEY,
+        "x-manus-api-key": resolvedKey,
       },
       body: JSON.stringify(sendBody),
     });
@@ -1270,7 +1303,7 @@ async function sendToManusAndGetReply(taskId: string, userMessage: string, agent
 
       const msgsRes = await fetch(
         `${MANUS_API_BASE}/task.listMessages?task_id=${taskId}&order=desc&limit=20`,
-        { headers: { "x-manus-api-key": MANUS_API_KEY } }
+        { headers: { "x-manus-api-key": resolvedKey } }
       );
       const msgsData = await msgsRes.json() as any;
 
@@ -1368,7 +1401,7 @@ async function sendToManusAndGetReply(taskId: string, userMessage: string, agent
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
-                  "x-manus-api-key": MANUS_API_KEY,
+                  "x-manus-api-key": resolvedKey,
                 },
                 body: JSON.stringify({
                   task_id: taskId,
@@ -2490,12 +2523,13 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
                   }
                 } else {
                   // Manus 路径：把专属 System Prompt 拼接到消息前面注入
-                  const taskId = await getOrCreateManusTask(userId);
+                  const userApiKey = await getManusApiKeyForUser(userId);
+                  const taskId = await getOrCreateManusTask(userId, userApiKey);
                   if (taskId) {
                     const manusContent = rulePrompt
                       ? `[系统指令]\n${rulePrompt}\n\n[用户消息]\n${finalContent}`
                       : finalContent;
-                    const reply = await sendToManusAndGetReply(taskId, manusContent, ruleModel);
+                    const reply = await sendToManusAndGetReply(taskId, manusContent, ruleModel, userApiKey);
                     // 如果 Manus 返回空内容（沉默规则），不发任何消息
                     if (reply.text || reply.imageUrls.length > 0 || reply.fileAttachments.length > 0) {
                       const chunks = reply.text.match(/[\s\S]{1,2000}/g) || [reply.text];
@@ -2628,7 +2662,8 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
       // ===== Manus 路径 =====
       await sendWeComMessage(userId, waitingMsg);
 
-      const taskId = await getOrCreateManusTask(userId);
+      const userApiKey = await getManusApiKeyForUser(userId);
+      const taskId = await getOrCreateManusTask(userId, userApiKey);
       if (!taskId) {
         await sendWeComMessage(userId, "系统初始化失败，请联系管理员。");
         return;
@@ -2666,12 +2701,12 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
         }
       } catch (_) {}
 
-      const reply = await sendToManusAndGetReply(taskId, manusContent, userModelProfile);
+      const reply = await sendToManusAndGetReply(taskId, manusContent, userModelProfile, userApiKey);
 
       // 回复后计算差值并写入数据库
       try {
         const afterRes = await fetch(`${MANUS_API_BASE}/task.detail?task_id=${taskId}`, {
-          headers: { "x-manus-api-key": MANUS_API_KEY },
+          headers: { "x-manus-api-key": userApiKey },
         });
         const afterData = await afterRes.json() as any;
         const creditsAfter = (afterData.ok && afterData.task) ? (afterData.task.credit_usage || 0) : creditsBefore;
@@ -2724,7 +2759,7 @@ router.post("/api/wecom/callback", xmlBodyParser, async (req: Request, res: Resp
       // 发送积分消耗统计
       try {
         const afterRes2 = await fetch(`${MANUS_API_BASE}/task.detail?task_id=${taskId}`, {
-          headers: { "x-manus-api-key": MANUS_API_KEY },
+          headers: { "x-manus-api-key": userApiKey },
         });
         const afterData2 = await afterRes2.json() as any;
         const creditsAfterFinal = (afterData2.ok && afterData2.task) ? (afterData2.task.credit_usage || 0) : creditsBefore;
@@ -2763,7 +2798,7 @@ router.get("/api/wecom/sessions", async (req: Request, res: Response) => {
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ error: "数据库连接失败" });
     const [rows] = await (conn as any).execute(
-      "SELECT id, wecom_user_id, manus_task_id, nickname, model_pref, system_prompt, enabled, status, created_at, updated_at FROM wecom_manus_sessions ORDER BY updated_at DESC"
+      "SELECT id, wecom_user_id, manus_task_id, nickname, model_pref, system_prompt, enabled, status, manus_account, created_at, updated_at FROM wecom_manus_sessions ORDER BY updated_at DESC"
     ) as any;
     const sessions = rows as any[];
 
@@ -2783,7 +2818,7 @@ router.get("/api/wecom/sessions", async (req: Request, res: Response) => {
         const [manusRes, wecomRes] = await Promise.allSettled([
           // 1. Manus 任务标题
           fetch(`${MANUS_API_BASE}/task.detail?task_id=${s.manus_task_id}`, {
-            headers: { "x-manus-api-key": MANUS_API_KEY }
+            headers: { "x-manus-api-key": (MANUS_ACCOUNTS.find(a => a.id === (s.manus_account || 1))?.apiKey) || MANUS_API_KEY }
           }).then(r => r.json()) as Promise<any>,
           // 2. 企微成员信息（姓名 + 头像）
           wecomToken
@@ -2818,12 +2853,23 @@ router.get("/api/wecom/sessions", async (req: Request, res: Response) => {
 router.post("/api/wecom/sessions", async (req: Request, res: Response) => {
   try {
     await ensureSessionTable();
-    const { wecom_user_id, manus_task_id, nickname, model_pref, system_prompt, enabled } = req.body || {};
+    const { wecom_user_id, manus_task_id, nickname, model_pref, system_prompt, enabled, manus_account } = req.body || {};
     if (!wecom_user_id || !manus_task_id) {
       return res.status(400).json({ error: "wecom_user_id 和 manus_task_id 为必填" });
     }
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+
+    // 获取全局默认账号（新用户使用）
+    let defaultAccount = 1;
+    try {
+      const [cfgRows] = await (conn as any).execute(
+        "SELECT config_val FROM wecom_route_config WHERE config_key = 'manus_default_account' LIMIT 1"
+      ) as any;
+      if ((cfgRows as any[]).length > 0) defaultAccount = parseInt((cfgRows as any[])[0].config_val) || 1;
+    } catch (_) {}
+    const accountToUse = (manus_account !== undefined && [1,2].includes(manus_account)) ? manus_account : defaultAccount;
+
     // 如果是新绑定，先把该用户旧的 active 记录改为 archived
     await (conn as any).execute(
       "UPDATE wecom_manus_sessions SET status = 'archived' WHERE wecom_user_id = ? AND status = 'active' AND manus_task_id != ?",
@@ -2832,10 +2878,10 @@ router.post("/api/wecom/sessions", async (req: Request, res: Response) => {
 
     // 插入新记录或更新现有记录，同时强制设为 active
     await (conn as any).execute(
-      `INSERT INTO wecom_manus_sessions (wecom_user_id, manus_task_id, nickname, model_pref, system_prompt, enabled, status) 
-       VALUES (?, ?, ?, ?, ?, ?, 'active') 
-       ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), model_pref = VALUES(model_pref), system_prompt = VALUES(system_prompt), enabled = VALUES(enabled), status = 'active'`,
-      [wecom_user_id, manus_task_id, nickname || "", model_pref || "manus-1.6-max", system_prompt || null, enabled !== undefined ? enabled : 1]
+      `INSERT INTO wecom_manus_sessions (wecom_user_id, manus_task_id, nickname, model_pref, system_prompt, enabled, status, manus_account) 
+       VALUES (?, ?, ?, ?, ?, ?, 'active', ?) 
+       ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), model_pref = VALUES(model_pref), system_prompt = VALUES(system_prompt), enabled = VALUES(enabled), status = 'active', manus_account = VALUES(manus_account)`,
+      [wecom_user_id, manus_task_id, nickname || "", model_pref || "manus-1.6-max", system_prompt || null, enabled !== undefined ? enabled : 1, accountToUse]
     );
     res.json({ ok: true, message: "绑定成功" });
   } catch (e) {
@@ -2866,7 +2912,7 @@ router.post("/api/wecom/sessions/:id/archive", async (req: Request, res: Respons
 router.patch("/api/wecom/sessions/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { nickname, manus_task_id, model_pref, system_prompt, enabled } = req.body || {};
+    const { nickname, manus_task_id, model_pref, system_prompt, enabled, manus_account } = req.body || {};
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ error: "数据库连接失败" });
 
@@ -2878,6 +2924,7 @@ router.patch("/api/wecom/sessions/:id", async (req: Request, res: Response) => {
     if (model_pref !== undefined) { fields.push("model_pref = ?"); values.push(model_pref); }
     if (system_prompt !== undefined) { fields.push("system_prompt = ?"); values.push(system_prompt); }
     if (enabled !== undefined) { fields.push("enabled = ?"); values.push(enabled); }
+    if (manus_account !== undefined) { fields.push("manus_account = ?"); values.push(manus_account); }
 
     if (fields.length === 0) return res.status(400).json({ error: "无可更新字段" });
 
@@ -2890,6 +2937,90 @@ router.patch("/api/wecom/sessions/:id", async (req: Request, res: Response) => {
   } catch (e) {
     console.error("[WeCom] 更新用户设置失败:", e);
     res.status(500).json({ error: "保存失败" });
+  }
+});
+
+// -----------------------------------------------------------
+// 管理API：Manus 账号信息
+// -----------------------------------------------------------
+router.get("/api/wecom/manus-accounts", async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+
+    // 获取全局默认账号
+    const [cfgRows] = await (conn as any).execute(
+      "SELECT config_val FROM wecom_route_config WHERE config_key = 'manus_default_account' LIMIT 1"
+    ) as any;
+    const defaultAccount = (cfgRows as any[]).length > 0 ? parseInt((cfgRows as any[])[0].config_val) || 1 : 1;
+
+    // 获取各账号绑定用户数
+    const [countRows] = await (conn as any).execute(
+      "SELECT manus_account, COUNT(*) as cnt FROM wecom_manus_sessions GROUP BY manus_account"
+    ) as any;
+    const countMap: Record<number, number> = {};
+    for (const r of (countRows as any[])) {
+      countMap[r.manus_account || 1] = r.cnt;
+    }
+
+    const accounts = MANUS_ACCOUNTS.map(a => ({
+      id: a.id,
+      email: a.email,
+      label: a.label,
+      hasKey: !!a.apiKey,
+      isDefault: a.id === defaultAccount,
+      userCount: countMap[a.id] || 0,
+    }));
+
+    res.json({ ok: true, accounts, defaultAccount });
+  } catch (e) {
+    console.error("[WeCom] 查询账号信息失败:", e);
+    res.status(500).json({ error: "查询失败" });
+  }
+});
+
+// -----------------------------------------------------------
+// 管理API：设置全局默认账号（仅影响新用户）
+// -----------------------------------------------------------
+router.post("/api/wecom/manus-accounts/set-default", async (req: Request, res: Response) => {
+  try {
+    const { account_id } = req.body || {};
+    if (![1, 2].includes(account_id)) return res.status(400).json({ error: "account_id 必须为 1 或 2" });
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    await (conn as any).execute(
+      "INSERT INTO wecom_route_config (config_key, config_val) VALUES ('manus_default_account', ?) ON DUPLICATE KEY UPDATE config_val = ?",
+      [String(account_id), String(account_id)]
+    );
+    res.json({ ok: true, message: `已将账号${account_id}设为默认（仅影响新用户）` });
+  } catch (e) {
+    console.error("[WeCom] 设置默认账号失败:", e);
+    res.status(500).json({ error: "设置失败" });
+  }
+});
+
+// -----------------------------------------------------------
+// 管理API：全局切换所有用户到指定账号
+// -----------------------------------------------------------
+router.post("/api/wecom/manus-accounts/switch-all", async (req: Request, res: Response) => {
+  try {
+    const { account_id } = req.body || {};
+    if (![1, 2].includes(account_id)) return res.status(400).json({ error: "account_id 必须为 1 或 2" });
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    await (conn as any).execute(
+      "UPDATE wecom_manus_sessions SET manus_account = ?",
+      [account_id]
+    );
+    // 同时更新默认账号
+    await (conn as any).execute(
+      "INSERT INTO wecom_route_config (config_key, config_val) VALUES ('manus_default_account', ?) ON DUPLICATE KEY UPDATE config_val = ?",
+      [String(account_id), String(account_id)]
+    );
+    res.json({ ok: true, message: `已将所有用户切换到账号${account_id}` });
+  } catch (e) {
+    console.error("[WeCom] 全局切换账号失败:", e);
+    res.status(500).json({ error: "切换失败" });
   }
 });
 

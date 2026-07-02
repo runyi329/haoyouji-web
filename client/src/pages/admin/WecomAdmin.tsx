@@ -29,8 +29,18 @@ interface WecomSession {
   wecom_name?: string;
   wecom_avatar?: string;
   wecom_alias?: string;
+  manus_account?: number;  // 1=runyimacau, 2=13127919173
   created_at: string;
   updated_at: string;
+}
+
+interface ManusAccount {
+  id: number;
+  email: string;
+  label: string;
+  hasKey: boolean;
+  isDefault: boolean;
+  userCount: number;
 }
 
 interface WorkflowRule {
@@ -332,11 +342,13 @@ function UsersTab() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Partial<WecomSession>>({});
   const [showAddForm, setShowAddForm] = useState(false);
-  const [addForm, setAddForm] = useState({ wecom_user_id: "", manus_task_id: "", nickname: "" });
+  const [addForm, setAddForm] = useState({ wecom_user_id: "", manus_task_id: "", nickname: "", manus_account: 1 });
   const [manusTasks, setManusTasks] = useState<ManusTask[]>([]);
   const [wecomUsers, setWecomUsers] = useState<WecomUser[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [wecomUsersError, setWecomUsersError] = useState("");
+  const [accounts, setAccounts] = useState<ManusAccount[]>([]);
+  const [switchingAccount, setSwitchingAccount] = useState<string | null>(null);
 
   const fetchSessions = useCallback(async () => {
     setLoading(true);
@@ -352,8 +364,17 @@ function UsersTab() {
     }
   }, []);
 
+  const fetchAccounts = useCallback(async () => {
+    try {
+      const res = await fetch("/api/wecom/manus-accounts");
+      const data = await res.json();
+      if (data.ok) setAccounts(data.accounts || []);
+    } catch {}
+  }, []);
+
   useEffect(() => {
     fetchSessions();
+    fetchAccounts();
     // 每 30 秒静默轮询，同步企微端模型切换
     const timer = setInterval(async () => {
       try {
@@ -363,7 +384,7 @@ function UsersTab() {
       } catch {}
     }, 30000);
     return () => clearInterval(timer);
-  }, [fetchSessions]);
+  }, [fetchSessions, fetchAccounts]);
 
   const fetchDropdownData = useCallback(async () => {
     setLoadingTasks(true);
@@ -399,6 +420,58 @@ function UsersTab() {
     } catch { toast.error("网络错误，请重试"); }
   };
 
+  // 全局切换所有用户到指定账号
+  const handleSwitchAll = async (accountId: number) => {
+    const account = accounts.find(a => a.id === accountId);
+    if (!confirm(`确认将所有用户切换到${account?.email || `账号${accountId}`}？
+
+此操作会更新所有已绑定用户的账号，下次发消息时生效。`)) return;
+    setSwitchingAccount(`all-${accountId}`);
+    try {
+      const res = await fetch("/api/wecom/manus-accounts/switch-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ account_id: accountId }),
+      });
+      const data = await res.json();
+      if (data.ok) { toast.success(data.message); fetchSessions(); fetchAccounts(); }
+      else toast.error("切换失败：" + (data.error || "未知错误"));
+    } catch { toast.error("网络错误"); }
+    finally { setSwitchingAccount(null); }
+  };
+
+  // 设置全局默认账号（仅影响新用户）
+  const handleSetDefault = async (accountId: number) => {
+    setSwitchingAccount(`default-${accountId}`);
+    try {
+      const res = await fetch("/api/wecom/manus-accounts/set-default", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ account_id: accountId }),
+      });
+      const data = await res.json();
+      if (data.ok) { toast.success(data.message); fetchAccounts(); }
+      else toast.error("设置失败：" + (data.error || "未知错误"));
+    } catch { toast.error("网络错误"); }
+    finally { setSwitchingAccount(null); }
+  };
+
+  // 切换单个用户的账号
+  const handleSwitchUserAccount = async (session: WecomSession, accountId: number) => {
+    setSwitchingAccount(`user-${session.id}-${accountId}`);
+    try {
+      const res = await fetch(`/api/wecom/sessions/${session.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ manus_account: accountId }),
+      });
+      const data = await res.json();
+      if (data.ok) { toast.success(`已切换到账号${accountId}`); fetchSessions(); }
+      else toast.error("切换失败：" + (data.error || "未知错误"));
+    } catch { toast.error("网络错误"); }
+    finally { setSwitchingAccount(null); }
+  };
+
   const handleToggleEnabled = async (session: WecomSession) => {
     try {
       const res = await fetch("/api/wecom/sessions", {
@@ -411,6 +484,7 @@ function UsersTab() {
           model_pref: session.model_pref,
           system_prompt: session.system_prompt,
           enabled: session.enabled ? 0 : 1,
+          manus_account: session.manus_account ?? 1,
         }),
       });
       const data = await res.json();
@@ -431,6 +505,7 @@ function UsersTab() {
           model_pref: editForm.model_pref || "manus-1.6-max",
           system_prompt: editForm.system_prompt || "",
           enabled: session.enabled ?? 1,
+          manus_account: editForm.manus_account ?? session.manus_account ?? 1,
         }),
       });
       const data = await res.json();
@@ -481,6 +556,47 @@ function UsersTab() {
           <div className="text-xs text-gray-500 mt-0.5">已启用</div>
         </div>
       </div>
+
+      {/* Manus 账号管理面板 */}
+      {accounts.length > 0 && (
+        <div className="bg-white rounded shadow-sm p-3 space-y-2">
+          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Manus 账号</div>
+          {accounts.map(acc => (
+            <div key={acc.id} className={`flex items-center justify-between p-2 rounded border ${acc.isDefault ? "border-blue-200 bg-blue-50" : "border-gray-100 bg-gray-50"}`}>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className={`text-xs font-medium ${acc.isDefault ? "text-blue-700" : "text-gray-700"}`}>{acc.label}</span>
+                  {acc.isDefault && <span className="text-xs bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full">默认</span>}
+                  {!acc.hasKey && <span className="text-xs bg-red-100 text-red-500 px-1.5 py-0.5 rounded-full">未配置Key</span>}
+                </div>
+                <div className="text-xs text-gray-400 truncate">{acc.email}</div>
+                <div className="text-xs text-gray-400">{acc.userCount} 个用户</div>
+              </div>
+              <div className="flex flex-col gap-1 ml-2">
+                {!acc.isDefault && (
+                  <button
+                    onClick={() => handleSetDefault(acc.id)}
+                    disabled={switchingAccount === `default-${acc.id}`}
+                    className="text-xs px-2 py-1 bg-white border border-blue-200 text-blue-600 rounded whitespace-nowrap"
+                  >
+                    设为默认
+                  </button>
+                )}
+                <button
+                  onClick={() => handleSwitchAll(acc.id)}
+                  disabled={switchingAccount === `all-${acc.id}`}
+                  className="text-xs px-2 py-1 bg-white border border-orange-200 text-orange-600 rounded whitespace-nowrap"
+                >
+                  {switchingAccount === `all-${acc.id}` ? "切换中..." : "全切换"}
+                </button>
+              </div>
+            </div>
+          ))}
+          <div className="text-xs text-gray-400 pt-0.5">
+            · <b>设为默认</b>：仅影响新绑定用户 &nbsp;·&nbsp; <b>全切换</b>：将所有用户切换到该账号
+          </div>
+        </div>
+      )}
 
       {/* 刷新 + 添加 */}
       <div className="flex gap-2">
@@ -646,6 +762,25 @@ function UsersTab() {
                   </div>
                 </div>
                 <div>
+                  <label className="text-xs text-gray-500 mb-1 block">Manus 账号</label>
+                  <div className="flex gap-2">
+                    {[1, 2].map(id => (
+                      <button
+                        key={id}
+                        onClick={() => setEditForm(f => ({ ...f, manus_account: id }))}
+                        className={`flex-1 py-2 rounded-sm text-xs font-medium border transition-colors ${
+                          (editForm.manus_account ?? 1) === id
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "bg-white text-gray-600 border-gray-200"
+                        }`}
+                      >
+                        账号{id}<br/>
+                        <span className="font-normal opacity-75">{id === 1 ? "runyimacau" : "13127919173"}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
                   <label className="text-xs text-gray-500 mb-1 block">系统提示词</label>
                   <textarea
                     className="w-full border border-gray-200 rounded-sm px-3 py-2 text-sm resize-none"
@@ -731,9 +866,35 @@ function UsersTab() {
                   绑定于 {formatDate(session.created_at)}
                 </div>
 
+                {/* 账号标签 + 快速切换 */}
+                <div className="flex items-center gap-1.5 mb-2">
+                  <span className="text-xs text-gray-400">账号：</span>
+                  <button
+                    onClick={() => handleSwitchUserAccount(session, 1)}
+                    disabled={switchingAccount === `user-${session.id}-1`}
+                    className={`text-xs px-2 py-0.5 rounded border transition-colors ${
+                      (session.manus_account ?? 1) === 1
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-gray-500 border-gray-200"
+                    }`}
+                  >
+                    账号1
+                  </button>
+                  <button
+                    onClick={() => handleSwitchUserAccount(session, 2)}
+                    disabled={switchingAccount === `user-${session.id}-2`}
+                    className={`text-xs px-2 py-0.5 rounded border transition-colors ${
+                      (session.manus_account ?? 1) === 2
+                        ? "bg-blue-600 text-white border-blue-600"
+                        : "bg-white text-gray-500 border-gray-200"
+                    }`}
+                  >
+                    账号2
+                  </button>
+                </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => { setEditingId(session.id); setEditForm({ nickname: session.nickname, manus_task_id: session.manus_task_id, model_pref: session.model_pref || "manus-1.6-max", system_prompt: session.system_prompt || "" }); fetchDropdownData(); }}
+                    onClick={() => { setEditingId(session.id); setEditForm({ nickname: session.nickname, manus_task_id: session.manus_task_id, model_pref: session.model_pref || "manus-1.6-max", system_prompt: session.system_prompt || "", manus_account: session.manus_account ?? 1 }); fetchDropdownData(); }}
                     className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-gray-50 text-gray-600 rounded-sm text-xs border border-gray-200"
                   >
                     <Edit2 className="w-3 h-3" /> 编辑
@@ -4696,6 +4857,75 @@ interface ChatLog {
   channel_type?: string;
 }
 
+
+// ─── 全屏模型选择器组件 ────────────────────────────────────────────────────────
+const ALL_MODELS_FOR_PICKER = [
+  { value: "zhipu-glm4", label: "智谱 GLM-4", price: "收费", desc: "智谱AI旗舰模型，中文理解优秀" },
+  { value: "zhipu-glm4-flash", label: "智谱 GLM-4 Flash", price: "免费", desc: "智谱AI轻量版，速度快" },
+  { value: "hunyuan-turbo", label: "混元 Turbo", price: "收费", desc: "腾讯混元旗舰，综合能力强" },
+  { value: "hunyuan-lite", label: "混元 Lite", price: "免费", desc: "腾讯混元轻量版，免费使用" },
+  { value: "deepseek-chat", label: "DeepSeek Flash", price: "收费", desc: "高性价比，速度快，日常首选" },
+  { value: "deepseek-v4-pro", label: "DeepSeek Pro", price: "收费", desc: "DeepSeek旗舰，复杂任务" },
+  { value: "deepseek-reasoner", label: "DeepSeek R1", price: "收费", desc: "深度推理，逻辑分析" },
+  { value: "manus-1.6-lite", label: "Manus 轻量", price: "收费", desc: "快速响应，省积分" },
+  { value: "manus-1.6", label: "Manus 标准", price: "收费", desc: "平衡性能与能力" },
+  { value: "manus-1.6-max", label: "Manus Max", price: "收费", desc: "最强能力，复杂任务" },
+  { value: "manus-1.6-search", label: "Manus 搜索版", price: "收费", desc: "联网搜索，实时信息" },
+];
+
+function FullScreenModelPicker({
+  value,
+  onChange,
+  onClose,
+  title,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onClose: () => void;
+  title: string;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 bg-white flex flex-col">
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100">
+        <button onClick={onClose} className="text-gray-500 p-1">
+          <X className="w-5 h-5" />
+        </button>
+        <span className="text-base font-medium text-gray-800">{title}</span>
+      </div>
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
+        {ALL_MODELS_FOR_PICKER.map(m => (
+          <button
+            key={m.value}
+            onClick={() => { onChange(m.value); onClose(); }}
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-colors ${
+              value === m.value
+                ? "bg-blue-50 border-blue-300"
+                : "bg-white border-gray-100"
+            }`}
+          >
+            <div className="text-left">
+              <div className={`text-sm font-medium ${value === m.value ? "text-blue-700" : "text-gray-800"}`}>
+                {m.label}
+              </div>
+              <div className="text-xs text-gray-400 mt-0.5">{m.desc}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                m.price === "免费"
+                  ? "bg-green-50 text-green-600 border border-green-200"
+                  : "bg-orange-50 text-orange-600 border border-orange-200"
+              }`}>
+                {m.price}
+              </span>
+              {value === m.value && <div className="w-2 h-2 rounded-full bg-blue-500" />}
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const RULE_MODELS = [
   { value: 'deepseek-chat', label: 'DeepSeek Flash（快速、省费）' },
   { value: 'deepseek-reasoner', label: 'DeepSeek R1（深度推理）' },
@@ -5244,6 +5474,8 @@ function ChannelConfigTab({ channel, onJumpToKb, onSelectChannel }: { channel: C
   const [routeEnabled, setRouteEnabled] = useState(false);
   const [classifierModel, setClassifierModel] = useState("deepseek-chat");
   const [fallbackModel, setFallbackModel] = useState("deepseek-chat");
+  const [showClassifierPicker, setShowClassifierPicker] = useState(false);
+  const [showFallbackPicker, setShowFallbackPicker] = useState(false);
 
   // 消息抄送（仅微信客服渠道）
   const [notifyEnabled, setNotifyEnabled] = useState(false);
@@ -5609,34 +5841,46 @@ function ChannelConfigTab({ channel, onJumpToKb, onSelectChannel }: { channel: C
                 <div className="text-sm text-gray-700">前置分类模型</div>
                 <div className="text-xs text-gray-400">判断消息应派给谁，建议轻量级</div>
               </div>
-              <select
-                value={classifierModel}
-                onChange={e => setClassifierModel(e.target.value)}
-                className="text-xs border border-gray-200 rounded px-2 py-1 bg-white"
-              >
-                <option value="deepseek-chat">DeepSeek Flash（推荐）</option>
-                <option value="deepseek-v4-pro">DeepSeek Pro</option>
-                <option value="manus-1.6-lite">Manus 轻量（推荐）</option>
-                <option value="manus-1.6">Manus 标准</option>
-                <option value="manus-1.6-max">Manus Max</option>
-              </select>
+              <>
+                <button
+                  onClick={() => setShowClassifierPicker(true)}
+                  className="text-xs border border-gray-200 rounded px-3 py-1.5 bg-white text-gray-700 flex items-center gap-1.5"
+                >
+                  {ALL_MODELS_FOR_PICKER.find(m => m.value === classifierModel)?.label || classifierModel}
+                  <ChevronRight className="w-3 h-3 text-gray-400" />
+                </button>
+                {showClassifierPicker && (
+                  <FullScreenModelPicker
+                    value={classifierModel}
+                    onChange={setClassifierModel}
+                    onClose={() => setShowClassifierPicker(false)}
+                    title="选择前置分类模型"
+                  />
+                )}
+              </>
             </div>
             <div className="flex items-center justify-between pt-2 border-t border-gray-50">
               <div>
                 <div className="text-sm text-gray-700">兜底模型</div>
                 <div className="text-xs text-gray-400">分类失败时使用</div>
               </div>
-              <select
-                value={fallbackModel}
-                onChange={e => setFallbackModel(e.target.value)}
-                className="text-xs border border-gray-200 rounded px-2 py-1 bg-white"
-              >
-                <option value="deepseek-chat">DeepSeek Flash</option>
-                <option value="deepseek-v4-pro">DeepSeek Pro</option>
-                <option value="manus-1.6-lite">Manus 轻量</option>
-                <option value="manus-1.6">Manus 标准</option>
-                <option value="manus-1.6-max">Manus Max</option>
-              </select>
+              <>
+                <button
+                  onClick={() => setShowFallbackPicker(true)}
+                  className="text-xs border border-gray-200 rounded px-3 py-1.5 bg-white text-gray-700 flex items-center gap-1.5"
+                >
+                  {ALL_MODELS_FOR_PICKER.find(m => m.value === fallbackModel)?.label || fallbackModel}
+                  <ChevronRight className="w-3 h-3 text-gray-400" />
+                </button>
+                {showFallbackPicker && (
+                  <FullScreenModelPicker
+                    value={fallbackModel}
+                    onChange={setFallbackModel}
+                    onClose={() => setShowFallbackPicker(false)}
+                    title="选择兜底模型"
+                  />
+                )}
+              </>
             </div>
           </div>
           <div className="flex justify-end mt-3 pt-3 border-t border-gray-50">
@@ -9882,7 +10126,7 @@ function NewChannelTab() {
 
 // ─── AI 对话 Tab ─────────────────────────────────────────────────────────────
 
-type AiSubTab = "config" | "rules" | "kb" | "workflow" | "docs" | "messages" | "logs";
+type AiSubTab = "config" | "rules" | "kb" | "workflow" | "docs" | "messages" | "logs" | "manus";
 
 const AI_SUB_TABS: { key: AiSubTab; label: string }[] = [
   { key: "config", label: "配置" },
@@ -9892,6 +10136,7 @@ const AI_SUB_TABS: { key: AiSubTab; label: string }[] = [
   { key: "docs", label: "文档" },
   { key: "messages", label: "消息" },
   { key: "logs", label: "日志" },
+  { key: "manus", label: "Manus" },
 ];
 
 function AiDialogSection({ theme }: { theme: ThemeColors }) {
@@ -10039,6 +10284,7 @@ function AiDialogSection({ theme }: { theme: ThemeColors }) {
         {subTab === "docs" && <DocsTab />}
         {subTab === "messages" && <MessagesTab />}
         {subTab === "logs" && <ChannelLogsTab channelType={selectedChannel.channel_type} channelId={selectedChannel.id} />}
+        {subTab === "manus" && <UsersTab />}
       </div>
     </div>
   );

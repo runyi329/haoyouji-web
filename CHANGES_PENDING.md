@@ -79,3 +79,51 @@
 
 ---
 **当前未推送：10步**（步骤1~10）⚠️ 已达10步，建议立即推送！
+
+## 第11步：去掉模型选项"推荐"字样
+**文件：** `client/src/pages/admin/WecomAdmin.tsx`
+`MODEL_OPTIONS` 数组中所有模型标签去掉"（推荐）"字样，保持简洁。
+
+---
+
+## 第12步：模型全屏选择页
+**文件：** `client/src/pages/admin/WecomAdmin.tsx`
+编辑用户时，点击"默认模型"区域弹出全屏模型选择页，展示所有11个模型（Manus 1.6 Max/Standard/Mini、DeepSeek V4、智谱GLM系列、腾讯混元系列等），选择后返回编辑表单。
+
+---
+
+## 第13步：Manus Tab 移至 AI 对话子 Tab
+**文件：** `client/src/pages/admin/WecomAdmin.tsx`
+- 撤销顶层"Manus" Tab（底部导航栏恢复为"统计"和"渠道"两项）
+- 在 AI 对话子 Tab 末尾新增"Manus" Tab，与"配置/专属规则/知识库/工作流/文档/消息/日志"同级，排在最后
+- 进入路径：渠道 → AI 对话 → 横向滑动子 Tab 到最右边 → "Manus"
+
+---
+
+## 第14步：Manus 多账号管理
+**文件：** `server/wecom-manus-router.ts`、`client/src/pages/admin/WecomAdmin.tsx`
+
+### 后端
+- 新增账号常量：`MANUS_API_KEY_1`（runyimacau@gmail.com）、`MANUS_API_KEY_2`（13127919173@qq.com）
+- 新增 `getManusApiKeyForUser(userId)` 函数，根据用户 `manus_account` 字段返回对应 Key
+- 数据库迁移：`wecom_manus_sessions` 新增 `manus_account TINYINT DEFAULT 1`
+- 所有 Manus API 调用改为动态获取用户对应 Key（task.create/sendMessage/listMessages/confirmAction/task.detail）
+- `POST /api/wecom/sessions` 支持 `manus_account`，新用户使用全局默认账号
+- `PATCH /api/wecom/sessions/:id` 支持 `manus_account`
+- 新增接口：`GET /api/wecom/manus-accounts`、`POST /api/wecom/manus-accounts/set-default`、`POST /api/wecom/manus-accounts/switch-all`
+
+### 前端
+- `WecomSession` 类型新增 `manus_account` 字段，新增 `ManusAccount` 接口
+- `UsersTab` 新增账号管理面板（统计卡片下方）：显示两账号邮箱/绑定用户数/默认状态，支持"设为默认"和"全切换"
+- 每个用户卡片显示当前账号标签，支持一键快速切换账号1/账号2
+- 编辑表单新增"Manus 账号"选择
+
+### ⚠️ 生产服务器需配置（推送后重启前）
+在 `/root/haoyouji-web/.env` 中新增：
+```
+MANUS_API_KEY_1=sk-uD_lfUWOH6OM5XYFu7b7PjQ81fg5FUpe9A32p0zHHQQyvj2LokgA8KhmEmWskunrEAEPwrMU0NCHZp-YWxu8HEyf25Q9
+MANUS_API_KEY_2=sk-CR8TOKZLGtXfij6m_2UNN8XQcjq75tcEYTtYv6Y9mWm3-bGLAxU54FiOK4IESdLl_Xcr1FVbceWQJD4XaNv4lNYnsxqw
+```
+
+---
+**当前未推送：14步**（步骤1~14）⚠️ 已超10步，强烈建议立即推送！
