@@ -404,26 +404,26 @@ const schedule: DaySchedule[] = [
     date: "2026-06-29",
     dateLabel: "6月29日 周一",
     matches: [
-      { home: "巴西", homeCode: "br", away: "日本", awayCode: "jp", time: "17:00", venue: "休斯顿", stage: "32强" },
-      { home: "德国", homeCode: "de", away: "巴拉圭", awayCode: "py", time: "20:30", venue: "福克斯伯勒", stage: "32强" },
+      { home: "巴西", homeCode: "br", away: "日本", awayCode: "jp", time: "17:00", venue: "休斯顿", stage: "32强", homeScore: 2, awayScore: 1 },
+      { home: "德国", homeCode: "de", away: "巴拉圭", awayCode: "py", time: "20:30", venue: "福克斯伯勒", stage: "32强", homeScore: 1, awayScore: 1 },
     ],
   },
   {
     date: "2026-06-30",
     dateLabel: "6月30日 周二",
     matches: [
-      { home: "荷兰", homeCode: "nl", away: "摩洛哥", awayCode: "ma", time: "01:00", venue: "蒙特雷", stage: "32强" },
-      { home: "科特迪瓦", homeCode: "ci", away: "挪威", awayCode: "no", time: "17:00", venue: "阿灵顿", stage: "32强" },
-      { home: "法国", homeCode: "fr", away: "瑞典", awayCode: "se", time: "21:00", venue: "东卢瑟福", stage: "32强" },
+      { home: "荷兰", homeCode: "nl", away: "摩洛哥", awayCode: "ma", time: "01:00", venue: "蒙特雷", stage: "32强", homeScore: 1, awayScore: 1 },
+      { home: "科特迪瓦", homeCode: "ci", away: "挪威", awayCode: "no", time: "17:00", venue: "阿灵顿", stage: "32强", homeScore: 1, awayScore: 2 },
+      { home: "法国", homeCode: "fr", away: "瑞典", awayCode: "se", time: "21:00", venue: "东卢瑟福", stage: "32强", homeScore: 3, awayScore: 0 },
     ],
   },
   {
     date: "2026-07-01",
     dateLabel: "7月1日 周三",
     matches: [
-      { home: "墨西哥", homeCode: "mx", away: "厄瓜多尔", awayCode: "ec", time: "01:00", venue: "墨西哥城", stage: "32强" },
-      { home: "英格兰", homeCode: "gb-eng", away: "刚果（金）", awayCode: "cd", time: "16:00", venue: "亚特兰大", stage: "32强" },
-      { home: "比利时", homeCode: "be", away: "塞内加尔", awayCode: "sn", time: "20:00", venue: "西雅图", stage: "32强" },
+      { home: "墨西哥", homeCode: "mx", away: "厄瓜多尔", awayCode: "ec", time: "01:00", venue: "墨西哥城", stage: "32强", homeScore: 2, awayScore: 0 },
+      { home: "英格兰", homeCode: "gb-eng", away: "刚果（金）", awayCode: "cd", time: "16:00", venue: "亚特兰大", stage: "32强", homeScore: 2, awayScore: 1 },
+      { home: "比利时", homeCode: "be", away: "塞内加尔", awayCode: "sn", time: "20:00", venue: "西雅图", stage: "32强", homeScore: 3, awayScore: 2 },
     ],
   },
   {
@@ -456,32 +456,32 @@ const schedule: DaySchedule[] = [
     date: "2026-07-04",
     dateLabel: "7月4日 周六",
     matches: [
-      { home: "32强胜者", homeCode: "un", away: "32强胜者", awayCode: "un", time: "待定", venue: "休斯顿", stage: "16强" },
-      { home: "32强胜者", homeCode: "un", away: "32强胜者", awayCode: "un", time: "待定", venue: "费城", stage: "16强" },
+      { home: "加拿大", homeCode: "ca", away: "摩洛哥", awayCode: "ma", time: "01:00", venue: "休斯顿", stage: "16强" },
+      { home: "法国", homeCode: "fr", away: "巴拉圭", awayCode: "py", time: "05:00", venue: "费城", stage: "16强" },
     ],
   },
   {
     date: "2026-07-05",
     dateLabel: "7月5日 周日",
     matches: [
-      { home: "32强胜者", homeCode: "un", away: "32强胜者", awayCode: "un", time: "待定", venue: "东卢瑟福", stage: "16强" },
-      { home: "32强胜者", homeCode: "un", away: "32强胜者", awayCode: "un", time: "待定", venue: "墨西哥城", stage: "16强" },
+      { home: "巴西", homeCode: "br", away: "挪威", awayCode: "no", time: "04:00", venue: "东卢瑟福", stage: "16强" },
+      { home: "墨西哥", homeCode: "mx", away: "英格兰", awayCode: "gb-eng", time: "08:00", venue: "墨西哥城", stage: "16强" },
     ],
   },
   {
     date: "2026-07-06",
     dateLabel: "7月6日 周一",
     matches: [
-      { home: "32强胜者", homeCode: "un", away: "32强胜者", awayCode: "un", time: "待定", venue: "阿灵顿", stage: "16强" },
-      { home: "32强胜者", homeCode: "un", away: "32强胜者", awayCode: "un", time: "待定", venue: "西雅图", stage: "16强" },
+      { home: "16强胜者", homeCode: "un", away: "16强胜者", awayCode: "un", time: "待定", venue: "阿灵顿", stage: "16强" },
+      { home: "比利时", homeCode: "be", away: "美国/波黑", awayCode: "un", time: "待定", venue: "西雅图", stage: "16强" },
     ],
   },
   {
     date: "2026-07-07",
     dateLabel: "7月7日 周二",
     matches: [
-      { home: "32强胜者", homeCode: "un", away: "32强胜者", awayCode: "un", time: "待定", venue: "亚特兰大", stage: "16强" },
-      { home: "32强胜者", homeCode: "un", away: "32强胜者", awayCode: "un", time: "待定", venue: "温哥华", stage: "16强" },
+      { home: "16强胜者", homeCode: "un", away: "16强胜者", awayCode: "un", time: "待定", venue: "亚特兰大", stage: "16强" },
+      { home: "16强胜者", homeCode: "un", away: "16强胜者", awayCode: "un", time: "待定", venue: "温哥华", stage: "16强" },
     ],
   },
   // ===== 四分之一决赛（8强）：7月9日 - 7月11日 =====
