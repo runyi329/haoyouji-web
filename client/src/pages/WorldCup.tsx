@@ -790,15 +790,23 @@ const knockoutMatches: KnockoutMatch[] = [
   { homeCode: "au", homeName: "澳大利亚", awayCode: "eg", awayName: "埃及", homeScore: null, awayScore: null, stage: "32强", id: "R32-14" },
   { homeCode: "ar", homeName: "阿根廷", awayCode: "cv", awayName: "佛得角", homeScore: null, awayScore: null, stage: "32强", id: "R32-15" },
   { homeCode: "co", homeName: "哥伦比亚", awayCode: "gh", awayName: "加纳", homeScore: null, awayScore: null, stage: "32强", id: "R32-16" },
-  // 16强：已确认晰级的匹配
-  { homeCode: "ca", homeName: "加拿大", awayCode: "ma", awayName: "摩洛哥", homeScore: null, awayScore: null, stage: "16强", id: "R16-1" },
-  { homeCode: "fr", homeName: "法国", awayCode: "py", awayName: "巴拉圭", homeScore: null, awayScore: null, stage: "16强", id: "R16-2" },
-  { homeCode: "br", homeName: "巴西", awayCode: "no", awayName: "挪威", homeScore: null, awayScore: null, stage: "16强", id: "R16-3" },
+  // 16强：左半区 R16-1~4 对应 R32-1~8胜者两两配对，右半区 R16-5~8 对应 R32-9~16胜者
+  // 左半区：加拿大(R32-1胜) vs 巴西(R32-2胜)
+  { homeCode: "ca", homeName: "加拿大", awayCode: "br", awayName: "巴西", homeScore: null, awayScore: null, stage: "16强", id: "R16-1" },
+  // 左半区：巴拉圭(R32-3胜) vs 摩洛哥(R32-4胜)
+  { homeCode: "py", homeName: "巴拉圭", awayCode: "ma", awayName: "摩洛哥", homeScore: null, awayScore: null, stage: "16强", id: "R16-2" },
+  // 左半区：挪威(R32-5胜) vs 法国(R32-6胜)
+  { homeCode: "no", homeName: "挪威", awayCode: "fr", awayName: "法国", homeScore: null, awayScore: null, stage: "16强", id: "R16-3" },
+  // 左半区：墨西哥(R32-7胜) vs 英格兰(R32-8胜)
   { homeCode: "mx", homeName: "墨西哥", awayCode: "gb-eng", awayName: "英格兰", homeScore: null, awayScore: null, stage: "16强", id: "R16-4" },
-  { homeCode: "un", homeName: "32强胜者", awayCode: "un", awayName: "32强胜者", homeScore: null, awayScore: null, stage: "16强", id: "R16-5" },
-  { homeCode: "be", homeName: "比利时", awayCode: "un", awayName: "美国/波黑", homeScore: null, awayScore: null, stage: "16强", id: "R16-6" },
-  { homeCode: "un", homeName: "32强胜者", awayCode: "un", awayName: "32强胜者", homeScore: null, awayScore: null, stage: "16强", id: "R16-7" },
-  { homeCode: "un", homeName: "32强胜者", awayCode: "un", awayName: "32强胜者", homeScore: null, awayScore: null, stage: "16强", id: "R16-8" },
+  // 右半区：比利时(R32-9胜) vs 美国/波黑(R32-10胜)
+  { homeCode: "be", homeName: "比利时", awayCode: "un", awayName: "美国/波黑", homeScore: null, awayScore: null, stage: "16强", id: "R16-5" },
+  // 右半区：西班牙/奥地利(R32-11胜) vs 葡萄牙/克罗地亚(R32-12胜)
+  { homeCode: "un", homeName: "西班牙/奥地利", awayCode: "un", awayName: "葡萄牙/克罗地亚", homeScore: null, awayScore: null, stage: "16强", id: "R16-6" },
+  // 右半区：瑞士/阿尔及利亚(R32-13胜) vs 澳大利亚/埃及(R32-14胜)
+  { homeCode: "un", homeName: "瑞士/阿尔及利亚", awayCode: "un", awayName: "澳大利亚/埃及", homeScore: null, awayScore: null, stage: "16强", id: "R16-7" },
+  // 右半区：阿根廷/佛得角(R32-15胜) vs 哥伦比亚/加纳(R32-16胜)
+  { homeCode: "un", homeName: "阿根廷/佛得角", awayCode: "un", awayName: "哥伦比亚/加纳", homeScore: null, awayScore: null, stage: "16强", id: "R16-8" },
   ...Array.from({ length: 4 }, (_, i) => ({
     homeCode: "un", homeName: "16强胜者", awayCode: "un", awayName: "16强胜者",
     homeScore: null, awayScore: null, stage: "8强", id: `QF-${i + 1}`,
