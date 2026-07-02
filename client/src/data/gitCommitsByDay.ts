@@ -8049,5 +8049,8 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-02T06:12:31Z", type: "feat", cleanMessage: "诊所本地切换+项目智能搜索+全局圆角收紧+ChargeProductPicker多选高亮+时间轮盘对齐修复" },
     { date: "2026-07-02T06:33:51Z", type: "feat", cleanMessage: "售前售后预约记录卡片 + 日历预约点击跳转 + listByPatient 接口" },
     { date: "2026-07-02T06:56:27Z", type: "feat", cleanMessage: "多账号管理+Manus子Tab+全屏模型选择+去推荐字样（步骤11-14）" },
+    { date: "2026-07-02T07:34:47Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-02T07:47:14Z", type: "fix", cleanMessage: "概览合计行始终显示（不依赖marginCny>0）" },
+    { date: "2026-07-02T08:41:39Z", type: "feat", cleanMessage: "邀请二维码按钮、顾客头像修复、预约联动沟通记录" },
   ],
 };
