@@ -3884,10 +3884,10 @@ export default function LedgerDetail() {
                   const avgCost = coinData?.avgCost ?? 0;
                   const breakevenPrice = (coinData as any)?.teamBreakevenPrice ?? 0;
                   const livePrice = equityLivePrices[coin] || 0;
-                  // 浮盈用团队均价（含管理费）作为成本基准，更真实
-                  const costBase = breakevenPrice > 0 ? breakevenPrice : avgCost;
-                  const unrealizedPnl = qty > 0 && livePrice > 0 && costBase > 0
-                    ? qty * (livePrice - costBase)
+                  const orderDetails: { buyPrice: number; originalQty: number; tier: number; discountRate: number; effectiveQty: number; isGift: boolean }[] = (coinData as any)?.orderDetails ?? [];
+                  // 浮盈用个人均价（avgCost）作为成本基准，与显示的均价保持一致
+                  const unrealizedPnl = qty > 0 && livePrice > 0 && avgCost > 0
+                    ? qty * (livePrice - avgCost)
                     : 0;
                   const pnlSign = unrealizedPnl >= 0 ? '+' : '';
                   const fmtNum = (v: number) => {
@@ -3955,7 +3955,31 @@ export default function LedgerDetail() {
                                 <span className="flex items-center gap-0.5 text-[9px] text-white/50">
                                   个人均价
                                   <span
-                                    onClick={e => { e.stopPropagation(); alert('个人均价：根据您所有持仓订单的买入价，减去已累计的实时管理费后，折算得出的实际持仓成本均价。'); }}
+                                    onClick={e => {
+                                    e.stopPropagation();
+                                    if (orderDetails.length === 0) {
+                                      alert('暂无持仓订单明细');
+                                      return;
+                                    }
+                                    const totalOrigQty = orderDetails.reduce((s, d) => s + d.originalQty, 0);
+                                    const totalCost = orderDetails.reduce((s, d) => s + d.buyPrice * d.originalQty, 0);
+                                    const calcAvg = totalOrigQty > 0 ? (totalCost / totalOrigQty).toFixed(3) : '-';
+                                    const lines = orderDetails.map((d, i) => {
+                                      const tierLabel = d.tier === 0 ? '0档(100%)' : `${d.tier}档(${(d.discountRate * 100).toFixed(1)}%)`;
+                                      const giftMark = d.isGift ? '[赠]' : '';
+                                      return `#${i + 1} ${giftMark}买入价 ${d.buyPrice.toFixed(3)} × 数量 ${d.originalQty.toFixed(4)} = ${(d.buyPrice * d.originalQty).toFixed(2)} U  |  ${tierLabel}`;
+                                    });
+                                    alert(
+                                      `个人均价计算明细（共 ${orderDetails.length} 笔持仓订单）\n` +
+                                      '─'.repeat(36) + '\n' +
+                                      lines.join('\n') + '\n' +
+                                      '─'.repeat(36) + '\n' +
+                                      `总数量：${totalOrigQty.toFixed(4)}\n` +
+                                      `总成本：${totalCost.toFixed(2)} U\n` +
+                                      `个人均价 = 总成本 ÷ 总数量 = ${calcAvg} U\n\n` +
+                                      `注：档位折扣影响收益权（权益数量），不影响均价计算。`
+                                    );
+                                  }}
                                     style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '12px', height: '12px', borderRadius: '50%', border: '1px solid rgba(255,255,255,0.3)', color: 'rgba(255,255,255,0.4)', fontSize: '8px', cursor: 'pointer', flexShrink: 0 }}
                                   >?</span>
                                 </span>

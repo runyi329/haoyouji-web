@@ -14536,10 +14536,10 @@ ${klinesSummary}
           if (p) prices[coin] = p;
         }
         // 按币种分组计算盈亏
-        const coinPnl: Record<string, { pnl: number; orderCount: number; holdingCount: number; soldCount: number; pendingCount: number; giftCount: number; totalCost: number; totalQty: number; effTotalCost: number; effTotalQty: number; totalMgmtFee: number }> = {};
+        const coinPnl: Record<string, { pnl: number; orderCount: number; holdingCount: number; soldCount: number; pendingCount: number; giftCount: number; totalCost: number; totalQty: number; effTotalCost: number; effTotalQty: number; totalMgmtFee: number; orderDetails: { buyPrice: number; originalQty: number; tier: number; discountRate: number; effectiveQty: number; isGift: boolean }[] }> = {};
         for (const order of orders) {
           const coin = order.coin;
-          if (!coinPnl[coin]) coinPnl[coin] = { pnl: 0, orderCount: 0, holdingCount: 0, soldCount: 0, pendingCount: 0, giftCount: 0, totalCost: 0, totalQty: 0, effTotalCost: 0, effTotalQty: 0, totalMgmtFee: 0 };
+          if (!coinPnl[coin]) coinPnl[coin] = { pnl: 0, orderCount: 0, holdingCount: 0, soldCount: 0, pendingCount: 0, giftCount: 0, totalCost: 0, totalQty: 0, effTotalCost: 0, effTotalQty: 0, totalMgmtFee: 0, orderDetails: [] };
           coinPnl[coin].orderCount++;
           if (parseInt(order.is_gift || '0') === 1) coinPnl[coin].giftCount++;
           const buyPrice = parseFloat(order.limit_price || '0');
@@ -14563,6 +14563,8 @@ ${klinesSummary}
             // 含费均价：用折后数量和买入价计算折后持仓成本
             coinPnl[coin].effTotalCost += buyPrice * effectiveQty;
             coinPnl[coin].effTotalQty += effectiveQty;
+            // 记录订单明细（用于前端展示均价计算过程）
+            coinPnl[coin].orderDetails.push({ buyPrice, originalQty, tier: maxTier, discountRate, effectiveQty, isGift: parseInt(order.is_gift || '0') === 1 });
             // 累计管理费（仅持仓中订单）
             const principal2 = parseFloat(order.amount || '0');
             const isGift2 = parseInt(order.is_gift || '0') === 1;
@@ -14597,18 +14599,21 @@ ${klinesSummary}
             }
             coinPnl[coin].soldCount++;
           } else {
-            // 持仓中/委卖中：用实时价格计算浮动盈亏
-            const currentPrice = prices[coin];
-            if (currentPrice && buyPrice > 0) {
-              coinPnl[coin].pnl += effectiveQty * (currentPrice - buyPrice);
-            }
+            // 持仓中/委卖中：只统计订单数，浮盈在汇总时统一用 avgCost 基准计算
             coinPnl[coin].holdingCount++;
           }
         }
-        // 汇总（负盈亏显示为0，只记正收益）
-        const coins = Object.entries(coinPnl).map(([coin, data]) => ({
+        // 汇总：浮盈用 avgCost 基准统一计算（totalQty × (livePrice - avgCost)），负盈亏显示为0
+        const coins = Object.entries(coinPnl).map(([coin, data]) => {
+          const avgCostVal = data.totalQty > 0 ? data.totalCost / data.totalQty : 0;
+          const liveP = prices[coin] || 0;
+          const unrealizedPnl = data.totalQty > 0 && liveP > 0 && avgCostVal > 0
+            ? data.totalQty * (liveP - avgCostVal)
+            : 0;
+          const totalPnl = data.pnl + unrealizedPnl; // 已实现(pnl) + 浮动
+          return ({
           coin,
-          pnl: parseFloat(Math.max(0, data.pnl).toFixed(4)),
+          pnl: parseFloat(Math.max(0, totalPnl).toFixed(4)),
           orderCount: data.orderCount,
           holdingCount: data.holdingCount,
           soldCount: data.soldCount,
@@ -14618,7 +14623,8 @@ ${klinesSummary}
           // 含管理费盈亏平衡价 = (折后持仓成本 + 累计管理费) / 折后持仓数量
           breakevenPrice: data.effTotalQty > 0 ? parseFloat(((data.effTotalCost + data.totalMgmtFee) / data.effTotalQty).toFixed(2)) : 0,
           totalMgmtFee: parseFloat(data.totalMgmtFee.toFixed(4)),
-        }));
+          orderDetails: data.orderDetails,
+        });});
         // 按 BTC > ETH > SOL 顺序排列
         const coinOrder = ['BTC', 'ETH', 'SOL'];
         coins.sort((a, b) => coinOrder.indexOf(a.coin) - coinOrder.indexOf(b.coin));
