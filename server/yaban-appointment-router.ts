@@ -281,7 +281,63 @@ export const yabanAppointmentRouter = router({
           ctx.user.id,
         ]
       )) as any;
-      return { success: true, id: Number(res.insertId) };
+      const apptId = Number(res.insertId);
+
+      // 联动：向该顺客的沟通动态插入一条系统记录
+      // 若未传 patientId，尝试按姓名 + tenantId 查找匹配的顺客 ID
+      try {
+        let resolvedPatientId: number | null = input.patientId ?? null;
+        if (!resolvedPatientId && input.patientName) {
+          const [matchRows] = await conn.execute(
+            `SELECT id FROM yaban_customer WHERE tenant_id = ? AND name = ? LIMIT 1`,
+            [tenantId, input.patientName]
+          ) as any;
+          if ((matchRows as any[]).length > 0) {
+            resolvedPatientId = Number((matchRows as any[])[0].id);
+            // 回填 patient_id 到预约表
+            await conn.execute(
+              `UPDATE yaban_appointment SET patient_id = ? WHERE id = ?`,
+              [resolvedPatientId, apptId]
+            );
+          }
+        }
+        if (resolvedPatientId) {
+          const operatorName = (ctx.user as any).name || (ctx.user as any).username || '';
+          const timeLabel = input.endTime
+            ? `${input.appointTime}-${input.endTime}`
+            : input.appointTime;
+          const parts: string[] = [];
+          if (input.project) parts.push(`项目：${input.project}`);
+          if (input.doctor) parts.push(`医生：${input.doctor}`);
+          if (input.consultant) parts.push(`咨询师：${input.consultant}`);
+          if (input.room) parts.push(`诊室：${input.room}`);
+          if (input.visitType) parts.push(`类型：${input.visitType}`);
+          if (input.remark) parts.push(`备注：${input.remark}`);
+          const rawText = `新建预约：${input.appointDate} ${timeLabel}${parts.length ? '，' + parts.join('，') : ''}`;
+          const summaryDemand = `预约日期：${input.appointDate} ${timeLabel}`;
+          await conn.execute(
+            `INSERT INTO yaban_comm_record
+              (tenant_id, customer_id, record_type, biz_type, raw_text,
+               summary_demand, summary_remark,
+               ai_generated, operator_id, operator_name, comm_at)
+             VALUES (?, ?, 'system', 'appointment', ?, ?, ?, 0, ?, ?, NOW())`,
+            [
+              tenantId,
+              resolvedPatientId,
+              rawText,
+              summaryDemand,
+              parts.length ? parts.join('，') : null,
+              ctx.user.id,
+              operatorName,
+            ]
+          );
+        }
+      } catch (e) {
+        // 联动写入失败不影响预约创建本身
+        console.error('[appt->comm] 联动写入失败', e);
+      }
+
+      return { success: true, id: apptId };
     }),
 
   // 更新预约状态（带 tenant 校验，禁止跨医院操作）

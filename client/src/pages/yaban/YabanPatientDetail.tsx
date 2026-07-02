@@ -159,12 +159,12 @@ export default function YabanPatientDetail() {
             {/* 照片：作为表内单元格，跨这两行高度，四边有线 */}
             <div
               className="w-[72px] self-stretch border-r border-b border-gray-200 overflow-hidden flex-shrink-0 flex items-center justify-center"
-              style={{ background: `linear-gradient(135deg, ${avatarBg(patient.avatarKey)} 0%, ${avatarBg(patient.avatarKey)}99 100%)` }}
+              style={{ background: "#fff" }}
             >
               <img
                 src={avatarSrc(patient.avatarKey)}
                 alt={patient.name}
-                className="w-[52px] h-[52px] rounded-md object-cover bg-white/30"
+                className="w-[56px] h-[56px] rounded-full object-cover"
               />
             </div>
           </div>

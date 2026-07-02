@@ -3,7 +3,7 @@
  * 路由：/yaban/profile
  * 风格：蓝色系，沿用牙伴整体清爽蓝白风
  */
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import {
@@ -23,7 +23,12 @@ import {
   LayoutDashboard,
   ShieldCheck,
   Globe,
+  QrCode,
+  Copy,
+  Check,
+  X,
 } from "lucide-react";
+import QRCodeLib from "qrcode";
 import YabanTabBar from "./YabanTabBar";
 import { trpc } from "@/lib/trpc";
 import { useYabanClinic } from "./useYabanClinic";
@@ -37,8 +42,64 @@ type RowItem = {
   onClick: () => void;
 };
 
+// ─── 邀请二维码弹窗 ─────────────────────────────────────────────────────────
+function InviteQrModal({ inviteCode, onClose }: { inviteCode: string; onClose: () => void }) {
+  const inviteLink = inviteCode ? `https://jiangyuchen.cn/login?invite=${inviteCode}` : "";
+  const [qrUrl, setQrUrl] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!inviteLink) return;
+    QRCodeLib.toDataURL(inviteLink, { width: 260, margin: 2, color: { dark: "#1a1a1a", light: "#ffffff" } })
+      .then(setQrUrl).catch(() => {});
+  }, [inviteLink]);
+
+  const handleCopy = async () => {
+    if (!inviteLink) return;
+    try { await navigator.clipboard.writeText(inviteLink); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch {}
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50" onClick={onClose}>
+      <div className="w-full rounded-t-2xl pb-8" style={{ maxWidth: 480, backgroundColor: "#fff" }} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 pt-4 pb-3" style={{ borderBottom: "1px solid #ECEFF3" }}>
+          <span className="text-[16px] font-extrabold" style={{ color: "#26303C" }}>邀请好友注册</span>
+          <button onClick={onClose} className="p-1 rounded-full" style={{ color: "#9AA7B5" }}><X size={20} /></button>
+        </div>
+        <div className="flex flex-col items-center px-6 pt-5 pb-2">
+          <div className="rounded-2xl p-4 mb-3" style={{ backgroundColor: "#F6F8FA" }}>
+            {qrUrl ? (
+              <img src={qrUrl} alt="邀请二维码" className="rounded-xl" style={{ width: 220, height: 220 }} />
+            ) : (
+              <div className="rounded-xl flex items-center justify-center" style={{ width: 220, height: 220, backgroundColor: "#ECEFF3" }}>
+                <span className="text-[13px]" style={{ color: "#9AA7B5" }}>{inviteCode ? "生成中..." : "加载中..."}</span>
+              </div>
+            )}
+          </div>
+          {inviteCode && (
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-[12px]" style={{ color: "#647386" }}>专属邀请码</span>
+              <span className="text-[16px] font-extrabold tracking-widest" style={{ color: "#1E88D6" }}>{inviteCode}</span>
+            </div>
+          )}
+          <p className="text-[12px] text-center mb-4" style={{ color: "#9AA7B5" }}>扫描二维码，对方将自动填入邀请码完成注册</p>
+          <button
+            onClick={handleCopy}
+            disabled={!inviteLink}
+            className="w-full h-11 rounded-xl text-[14px] font-bold text-white flex items-center justify-center gap-2 transition-opacity disabled:opacity-40"
+            style={{ background: "linear-gradient(135deg,#2196C8 0%,#4DB8E8 100%)" }}
+          >
+            {copied ? <><Check size={16} />已复制链接</> : <><Copy size={16} />复制邀请链接</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function YabanProfile() {
   const [, navigate] = useLocation();
+  const [showQr, setShowQr] = useState(false);
   const utils = trpc.useUtils();
   const { data: user } = trpc.auth.me.useQuery();
   const { currentTenantId } = useYabanClinic();
@@ -114,6 +175,7 @@ export default function YabanProfile() {
   const displayName = (user as any)?.name || (user as any)?.username || "牙伴用户";
   const phone = (user as any)?.phone as string | undefined;
   const avatar = (user as any)?.avatar as string | undefined;
+  const inviteCode: string = (user as any)?.inviteCode || "";
 
   const wip = (name: string) => toast.info(`${name}功能开发中，敬请期待`);
 
@@ -269,6 +331,16 @@ export default function YabanProfile() {
                 ))}
               </div>
             </div>
+            {/* 二维码图标按鈕，与头像同行垂直居中，方形圆角风格 */}
+            <button
+              onClick={() => setShowQr(true)}
+              className="flex flex-col items-center justify-center gap-1 shrink-0 active:bg-white/30 transition-colors"
+              style={{ backgroundColor: "rgba(255,255,255,0.18)", borderRadius: 8, width: 44, height: 44 }}
+              title="邀请好友"
+            >
+              <QrCode size={18} strokeWidth={1.8} className="text-white" />
+              <span className="text-[9px] text-white/80 leading-none">邀请</span>
+            </button>
           </div>
         </div>
       </div>
@@ -356,6 +428,9 @@ export default function YabanProfile() {
       </div>
 
       <YabanTabBar />
+
+      {/* 邀请二维码弹窗 */}
+      {showQr && <InviteQrModal inviteCode={inviteCode} onClose={() => setShowQr(false)} />}
     </div>
   );
 }

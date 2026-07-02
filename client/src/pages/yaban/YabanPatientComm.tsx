@@ -903,6 +903,8 @@ function DayCard({
                   <div className="flex items-center gap-2 px-3 pt-2">
                     {record.biz_type === 'followup' ? (
                       <span className="inline-flex items-center text-[10px] px-1.5 py-0 rounded flex-shrink-0 text-orange-600 bg-orange-50">随访{record.followup_status ? `·${record.followup_status}` : ''}</span>
+                    ) : record.biz_type === 'appointment' ? (
+                      <span className="inline-flex items-center text-[10px] px-1.5 py-0 rounded flex-shrink-0 text-blue-600 bg-blue-50">预约</span>
                     ) : (
                       <span className={`inline-flex items-center text-[10px] px-1.5 py-0 rounded flex-shrink-0 ${ch.tagClass}`}>{ch.label}</span>
                     )}
@@ -1162,6 +1164,8 @@ function TimelineCard({
             <div className="flex items-center gap-1.5">
               {record.biz_type === 'followup' ? (
                 <span className="inline-flex items-center text-[10px] px-1.5 py-0 rounded flex-shrink-0 text-orange-600 bg-orange-50">随访{record.followup_status ? `·${record.followup_status}` : ''}</span>
+              ) : record.biz_type === 'appointment' ? (
+                <span className="inline-flex items-center text-[10px] px-1.5 py-0 rounded flex-shrink-0 text-blue-600 bg-blue-50">预约</span>
               ) : (
                 <span className={`inline-flex items-center text-[10px] px-1.5 py-0 rounded flex-shrink-0 ${ch.tagClass}`}>
                   {ch.label}
