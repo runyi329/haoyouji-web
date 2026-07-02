@@ -2479,7 +2479,7 @@ export default function LedgerDetailAA({
                   );
                 })}
                 {/* 汇总行 */}
-                {validTags.length > 0 && (
+                {visibleTags.length > 0 && (
                   <>
                     {/* 合计-名称 */}
                     <div className="px-1 py-2 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 0 16px' }}>
