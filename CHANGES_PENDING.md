@@ -125,5 +125,10 @@ MANUS_API_KEY_1=sk-uD_lfUWOH6OM5XYFu7b7PjQ81fg5FUpe9A32p0zHHQQyvj2LokgA8KhmEmWsk
 MANUS_API_KEY_2=sk-CR8TOKZLGtXfij6m_2UNN8XQcjq75tcEYTtYv6Y9mWm3-bGLAxU54FiOK4IESdLl_Xcr1FVbceWQJD4XaNv4lNYnsxqw
 ```
 
+## 第15步：持仓汇总容器改为深金色/琥珀色背景
+**文件：** `client/src/pages/OrderFlowPage.tsx`
+
+将订单流管理页面顶部的持仓汇总容器背景从淡金色渐变改为深金色/琥珀色渐变（`rgba(120,80,0,0.55)` 到 `rgba(60,35,0,0.75)`），边框加粗加亮（`1.5px solid rgba(240,185,11,0.55)`），增加金色外发光阴影，使其与下方深灰色订单卡片形成明显视觉区分。
+
 ---
-**当前未推送：14步**（步骤1~14）⚠️ 已超10步，强烈建议立即推送！
+**当前未推送：15步**（步骤1~15）⚠️ 已超10步，强烈建议立即推送！

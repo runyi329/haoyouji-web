@@ -781,9 +781,9 @@ export default function OrderFlowPage() {
         <div
           className="mx-3 mb-3 rounded-2xl overflow-hidden"
           style={{
-            background: "linear-gradient(135deg, rgba(240,185,11,0.08) 0%, rgba(255,255,255,0.03) 60%, rgba(0,0,0,0.2) 100%)",
-            border: "1px solid rgba(240,185,11,0.18)",
-            boxShadow: "0 2px 16px rgba(240,185,11,0.06)",
+            background: "linear-gradient(135deg, rgba(120,80,0,0.55) 0%, rgba(90,55,0,0.65) 50%, rgba(60,35,0,0.75) 100%)",
+            border: "1.5px solid rgba(240,185,11,0.55)",
+            boxShadow: "0 4px 20px rgba(240,185,11,0.18), 0 1px 4px rgba(0,0,0,0.4)",
           }}
         >
           {/* 顶部标题行 */}
