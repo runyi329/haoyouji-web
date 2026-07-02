@@ -42,9 +42,12 @@ function fmtApptRange(a: any): string {
 export default function YabanSchedule() {
   const [, setLocation] = useLocation();
   const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
-  // 优先读排班页回传的选中日期（两页日期保持一致）
+  // 优先读 URL ?date= 参数，其次读排班页回传的选中日期（两页日期保持一致）
   const initSelDate = useMemo(() => {
     try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlDate = urlParams.get("date");
+      if (urlDate) { const [y, m, dd] = urlDate.split("-").map(Number); if (y && m && dd) { const d = new Date(y, m - 1, dd); d.setHours(0, 0, 0, 0); return d; } }
       const s = sessionStorage.getItem("yaban_sched_date");
       if (s) { const [y, m, dd] = s.split("-").map(Number); if (y && m && dd) { const d = new Date(y, m - 1, dd); d.setHours(0, 0, 0, 0); return d; } }
     } catch {}

@@ -363,6 +363,50 @@ export const yabanAppointmentRouter = router({
       };
     }),
 
+  // 按患者ID查询该患者的全部预约记录
+  listByPatient: protectedProcedure
+    .input(z.object({
+      patientId: z.number().int().positive(),
+      tenantId: z.number().int().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) return [];
+      const tenantId = input.tenantId ?? (await resolveTenantId(ctx));
+      const [rows] = (await conn.execute(
+        `SELECT id, patient_id, patient_name, doctor, consultant, assistant,
+                room, department, project, source, visit_type,
+                appoint_date, appoint_time, end_time, duration,
+                status, remark, created_at
+         FROM yaban_appointment
+         WHERE tenant_id = ? AND patient_id = ?
+         ORDER BY appoint_date DESC, appoint_time DESC`,
+        [tenantId, input.patientId]
+      )) as any;
+      return (rows as any[]).map((r) => ({
+        id: Number(r.id),
+        patientId: r.patient_id ? Number(r.patient_id) : null,
+        patientName: r.patient_name || "",
+        doctor: r.doctor || "",
+        consultant: r.consultant || "",
+        assistant: r.assistant || "",
+        room: r.room || "",
+        department: r.department || "",
+        project: r.project || "",
+        source: r.source || "",
+        visitType: r.visit_type || "",
+        appointDate: r.appoint_date instanceof Date
+          ? r.appoint_date.toISOString().slice(0, 10)
+          : String(r.appoint_date || ""),
+        appointTime: r.appoint_time || "",
+        endTime: r.end_time || "",
+        duration: r.duration ? Number(r.duration) : 30,
+        status: r.status || "booked",
+        remark: r.remark || "",
+        createdAt: r.created_at ? String(r.created_at) : "",
+      }));
+    }),
+
   // 获取门店员工列表
   listMembers: protectedProcedure
     .input(z.object({ tenantId: z.number().int().optional() }).optional())

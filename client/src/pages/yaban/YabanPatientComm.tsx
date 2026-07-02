@@ -60,8 +60,13 @@ interface Appointment {
   id: number;
   patientId: number;
   doctor: string;
+  consultant?: string;
+  assistant?: string;
   room: string;
+  department?: string;
   project: string;
+  source?: string;
+  visitType?: string;
   appointDate: string; // YYYY-MM-DD
   appointTime: string;
   endTime: string;
@@ -486,7 +491,7 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   missed:    { label: "未到诊", color: "bg-orange-100 text-orange-400" },
 };
 
-function AppointmentCard({ appointment }: { appointment: Appointment }) {
+function AppointmentCard({ appointment, onNavigate }: { appointment: Appointment; onNavigate?: (id: number) => void }) {
   const [open, setOpen] = useState(false);
   const status = STATUS_MAP[appointment.status] || { label: appointment.status, color: "bg-gray-100 text-gray-500" };
   const d = new Date(appointment.appointDate + "T00:00:00");
@@ -563,6 +568,162 @@ function AppointmentCard({ appointment }: { appointment: Appointment }) {
             <div className="flex items-start gap-2">
               <span className="text-[10px] text-gray-400 w-10 flex-shrink-0 pt-0.5">时间</span>
               <span className="text-[10px] text-gray-300">{appointment.appointDate} {appointment.appointTime}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---- 患者预约记录独立区块（售前售后页面顶部） ----
+function PatientApptSection({ patientId, onNavigate }: { patientId: number; onNavigate: (id: number) => void }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const { data: appts, isLoading } = trpc.yabanAppointment.listByPatient.useQuery(
+    { patientId },
+    { enabled: patientId > 0, refetchOnWindowFocus: false }
+  );
+
+  const list = (appts || []) as Appointment[];
+  if (!isLoading && list.length === 0) return null;
+
+  return (
+    <div className="mb-4">
+      {/* 区块标题栏 */}
+      <button
+        className="w-full flex items-center justify-between px-1 pb-2"
+        onClick={() => setCollapsed(!collapsed)}
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-semibold text-purple-600">预约记录</span>
+          {list.length > 0 && (
+            <span className="text-[10px] bg-purple-100 text-purple-500 px-1.5 py-0 rounded">{list.length}条</span>
+          )}
+        </div>
+        {collapsed
+          ? <ChevronDown size={13} className="text-purple-300" />
+          : <ChevronUp size={13} className="text-purple-300" />}
+      </button>
+
+      {!collapsed && (
+        isLoading ? (
+          <div className="flex justify-center py-4">
+            <Loader2 size={18} className="text-purple-400 animate-spin" />
+          </div>
+        ) : (
+          <div>
+            {list.map((appt) => (
+              <PatientApptCard key={appt.id} appointment={appt} onNavigate={onNavigate} />
+            ))}
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
+// ---- 患者预约记录卡片（独立区块专用，样式与 DayCard 一致） ----
+function PatientApptCard({ appointment, onNavigate }: { appointment: Appointment; onNavigate: (id: number) => void }) {
+  const [open, setOpen] = useState(false);
+  const status = STATUS_MAP[appointment.status] || { label: appointment.status, color: "bg-gray-100 text-gray-500" };
+  const d = new Date(appointment.appointDate + "T00:00:00");
+  const mo = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  const weekDay = ["日","一","二","三","四","五","六"][d.getDay()];
+
+  return (
+    <div className="flex gap-3 mb-3">
+      {/* 左侧日期列 */}
+      <div className="flex flex-col items-center flex-shrink-0" style={{ minWidth: 28 }}>
+        <div
+          className="flex flex-col items-center justify-center rounded py-1 cursor-pointer"
+          style={{ minWidth: 28, height: 56 }}
+          onClick={() => setOpen(!open)}
+        >
+          <span className="text-[10px] text-gray-400 leading-none">{mo}月</span>
+          <span className="text-base font-bold leading-none text-purple-500">{day}</span>
+          <span className="text-[10px] text-gray-400 leading-none">{d.getFullYear()}</span>
+          <span className="text-[10px] text-gray-400 leading-none">周{weekDay}</span>
+        </div>
+      </div>
+      {/* 右侧卡片 */}
+      <div className="flex-1 min-w-0 bg-purple-50 rounded border border-purple-100 shadow-sm overflow-hidden">
+        {/* 卡片头部 */}
+        <div
+          className="flex items-center justify-between px-3 pt-2.5 pb-2 cursor-pointer"
+          onClick={() => setOpen(!open)}
+        >
+          <div className="flex flex-col flex-1 min-w-0 gap-0.5">
+            <span className="text-sm font-medium text-purple-700 truncate leading-snug">
+              {appointment.project || "预约就诊"}
+            </span>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className={`inline-flex items-center text-[10px] px-1.5 py-0 rounded flex-shrink-0 ${status.color}`}>
+                {status.label}
+              </span>
+              {appointment.visitType && (
+                <span className="text-[10px] text-gray-400 flex-shrink-0">{appointment.visitType}</span>
+              )}
+              {appointment.appointTime && (
+                <span className="text-[10px] text-gray-400">
+                  {appointment.appointTime}{appointment.endTime ? ` ~ ${appointment.endTime}` : ""}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+            {/* 跳转详情按钮 */}
+            <button
+              className="text-[10px] text-purple-400 border border-purple-200 rounded px-1.5 py-0.5 active:bg-purple-100"
+              onClick={(e) => { e.stopPropagation(); onNavigate(appointment.id); }}
+            >
+              详情
+            </button>
+            {open ? <ChevronUp size={14} className="text-purple-300" /> : <ChevronDown size={14} className="text-purple-300" />}
+          </div>
+        </div>
+        {/* 展开详情 */}
+        {open && (
+          <div className="border-t border-purple-100 px-3 pt-2 pb-3 space-y-1.5">
+            {appointment.doctor && (
+              <div className="flex items-start gap-2">
+                <span className="text-[10px] text-gray-400 w-10 flex-shrink-0 pt-0.5">医生</span>
+                <span className="text-xs text-gray-700">{appointment.doctor}</span>
+              </div>
+            )}
+            {appointment.consultant && (
+              <div className="flex items-start gap-2">
+                <span className="text-[10px] text-gray-400 w-10 flex-shrink-0 pt-0.5">咨询师</span>
+                <span className="text-xs text-gray-700">{appointment.consultant}</span>
+              </div>
+            )}
+            {appointment.room && (
+              <div className="flex items-start gap-2">
+                <span className="text-[10px] text-gray-400 w-10 flex-shrink-0 pt-0.5">诊室</span>
+                <span className="text-xs text-gray-700">{appointment.room}</span>
+              </div>
+            )}
+            {appointment.department && (
+              <div className="flex items-start gap-2">
+                <span className="text-[10px] text-gray-400 w-10 flex-shrink-0 pt-0.5">科室</span>
+                <span className="text-xs text-gray-700">{appointment.department}</span>
+              </div>
+            )}
+            {appointment.source && (
+              <div className="flex items-start gap-2">
+                <span className="text-[10px] text-gray-400 w-10 flex-shrink-0 pt-0.5">来源</span>
+                <span className="text-xs text-gray-700">{appointment.source}</span>
+              </div>
+            )}
+            {appointment.remark && (
+              <div className="flex items-start gap-2">
+                <span className="text-[10px] text-gray-400 w-10 flex-shrink-0 pt-0.5">备注</span>
+                <span className="text-xs text-gray-500">{appointment.remark}</span>
+              </div>
+            )}
+            <div className="flex items-start gap-2">
+              <span className="text-[10px] text-gray-400 w-10 flex-shrink-0 pt-0.5">日期</span>
+              <span className="text-[10px] text-gray-400">{appointment.appointDate}</span>
             </div>
           </div>
         )}
@@ -1690,6 +1851,19 @@ export default function YabanPatientComm() {
             </div>
           </div>
         )}
+
+        {/* 预约记录独立区块 */}
+        <PatientApptSection
+          patientId={patientId}
+          onNavigate={(id) => navigate(`/yaban/schedule/detail/${id}`)}
+        />
+
+        {/* 分隔线 */}
+        <div className="flex items-center gap-2 mb-4">
+          <div className="flex-1 h-px bg-gray-100" />
+          <span className="text-[10px] text-gray-300 flex-shrink-0">沟通动态</span>
+          <div className="flex-1 h-px bg-gray-100" />
+        </div>
 
         {/* 时间线 */}
         {isLoading ? (

@@ -8,6 +8,7 @@
 import { useState, useRef, TouchEvent } from "react";
 import { ChevronLeft, ChevronRight, Eye, EyeOff } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useLocation } from "wouter";
 
 // Tab 配置 - 5个独立Tab
 const TABS = [
@@ -25,6 +26,15 @@ export default function YabanCalendar() {
   const [activeTab, setActiveTab] = useState(0);
   const [showRevenue, setShowRevenue] = useState(true);
   const touchStartX = useRef(0);
+  const [, navigate] = useLocation();
+
+  // 点击日期格子跳转：预约 Tab 跳转预约管理页，其他 Tab 暂不跳转
+  const handleDayClick = (day: number) => {
+    if (activeTab !== 0) return; // 只有预约 Tab 支持点击跳转
+    const mm = String(currentMonth + 1).padStart(2, "0");
+    const dd = String(day).padStart(2, "0");
+    navigate(`/yaban/schedule?date=${currentYear}-${mm}-${dd}`);
+  };
 
   const tab = TABS[activeTab];
 
@@ -219,7 +229,7 @@ export default function YabanCalendar() {
               return (
                 <div
                   key={di}
-                  className="relative rounded overflow-hidden flex flex-col items-center"
+                  className={`relative rounded overflow-hidden flex flex-col items-center${activeTab === 0 && hasData ? " cursor-pointer active:opacity-70" : ""}`}
                   style={{
                     height: "48px",
                     background: todayMark
@@ -230,6 +240,7 @@ export default function YabanCalendar() {
                       : "2px 2px 4px rgba(0,0,0,0.04), -1px -1px 3px rgba(255,255,255,0.8)",
                     border: todayMark ? "1.5px solid #4DB8E8" : "1px solid rgba(0,0,0,0.03)",
                   }}
+                  onClick={() => hasData && handleDayClick(day)}
                 >
                   {/* 小帽檐 - 只占约1/6高度(8px) */}
                   <div
@@ -251,13 +262,17 @@ export default function YabanCalendar() {
                   </div>
 
                   {/* 中间大数字 - 占据剩余空间 */}
-                  <div className="flex-1 flex items-center justify-center">
+                  <div className="flex-1 flex flex-col items-center justify-center gap-0.5">
                     {hasData ? (
-                      <span className="text-[16px] font-bold text-gray-900 leading-none">
+                      <span className={`text-[16px] font-bold leading-none ${activeTab === 0 ? "text-sky-600" : "text-gray-900"}`}>
                         {formatValue(val)}
                       </span>
                     ) : (
                       <span className="text-[11px] text-gray-300">-</span>
+                    )}
+                    {/* 预约 Tab 有数据时显示小点，提示可点击 */}
+                    {activeTab === 0 && hasData && (
+                      <span className="w-1 h-1 rounded-full bg-sky-400 flex-shrink-0" />
                     )}
                   </div>
                 </div>
