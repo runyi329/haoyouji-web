@@ -132,14 +132,14 @@ function SortableCatRow({ cat, isSaving }: { cat: CatGroup; isSaving: boolean })
     opacity: isDragging ? 0.4 : 1,
   };
   return (
-    <div ref={setNodeRef} style={style} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+    <div ref={setNodeRef} style={style} className="bg-white rounded shadow-sm overflow-hidden">
       <div className="flex items-center gap-1 px-4 py-3 select-none">
         <Layers className="w-4 h-4 text-[#1E88D6] shrink-0" />
         <span className="text-sm font-bold text-gray-800 flex-1 ml-1 truncate">{cat.name}</span>
         <button
           {...attributes}
           {...listeners}
-          className={`p-2 rounded-lg touch-none ${isSaving ? "text-gray-200" : "text-gray-400 active:text-[#1E88D6] active:bg-blue-50"}`}
+          className={`p-2 rounded touch-none ${isSaving ? "text-gray-200" : "text-gray-400 active:text-[#1E88D6] active:bg-blue-50"}`}
           aria-label="拖拽排序"
           style={{ touchAction: "none" }}
         >
@@ -160,7 +160,7 @@ function SortableSubRow({ sub, isSaving }: { sub: SubCatGroup; isSaving: boolean
     opacity: isDragging ? 0.4 : 1,
   };
   return (
-    <div ref={setNodeRef} style={style} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+    <div ref={setNodeRef} style={style} className="bg-white rounded shadow-sm overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-3 select-none">
         <span className="text-sm font-bold text-gray-800 flex-1 truncate">{sub.name}</span>
         {(sub.price > 0 || sub.unit) && (
@@ -169,7 +169,7 @@ function SortableSubRow({ sub, isSaving }: { sub: SubCatGroup; isSaving: boolean
         <button
           {...attributes}
           {...listeners}
-          className={`p-2 rounded-lg touch-none ${isSaving ? "text-gray-200" : "text-gray-400 active:text-[#1E88D6] active:bg-blue-50"}`}
+          className={`p-2 rounded touch-none ${isSaving ? "text-gray-200" : "text-gray-400 active:text-[#1E88D6] active:bg-blue-50"}`}
           aria-label="拖拽排序"
           style={{ touchAction: "none" }}
         >
@@ -190,7 +190,7 @@ function SortableProdRow({ prod, isSaving }: { prod: ProdItem; isSaving: boolean
     opacity: isDragging ? 0.4 : 1,
   };
   return (
-    <div ref={setNodeRef} style={style} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+    <div ref={setNodeRef} style={style} className="bg-white rounded shadow-sm overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-3 select-none">
         <span className="text-sm font-bold text-gray-800 flex-1 truncate">{prod.name}</span>
         {(prod.price > 0 || prod.unit) && (
@@ -199,7 +199,7 @@ function SortableProdRow({ prod, isSaving }: { prod: ProdItem; isSaving: boolean
         <button
           {...attributes}
           {...listeners}
-          className={`p-2 rounded-lg touch-none ${isSaving ? "text-gray-200" : "text-gray-400 active:text-[#1E88D6] active:bg-blue-50"}`}
+          className={`p-2 rounded touch-none ${isSaving ? "text-gray-200" : "text-gray-400 active:text-[#1E88D6] active:bg-blue-50"}`}
           aria-label="拖拽排序"
           style={{ touchAction: "none" }}
         >
@@ -276,7 +276,7 @@ function PriceHistorySheet({
               <p className="text-xs text-gray-300 mt-1">修改项目价格后会自动记录在此</p>
             </div>
           ) : (
-            <div className="bg-white rounded-lg overflow-hidden">
+            <div className="bg-white rounded overflow-hidden">
               {records.map((r: any, idx: number) => {
                 const oldP = Number(r.old_price);
                 const oldPMax = Number(r.old_price_max);
@@ -300,7 +300,7 @@ function PriceHistorySheet({
                   >
                     {/* 操作人头像 */}
                     <div
-                      className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-medium shrink-0 mt-0.5"
+                      className="w-7 h-7 rounded-md flex items-center justify-center text-white text-xs font-medium shrink-0 mt-0.5"
                       style={{ backgroundColor: isDown ? '#22c55e' : '#f97316' }}
                     >
                       {opInitial}
@@ -883,10 +883,10 @@ export default function YabanChargeProducts() {
           {canManage && (
             <button
               onClick={() => navigate("/yaban/settings/charge-add")}
-              className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center overflow-hidden active:scale-95 transition shrink-0"
+              className="w-8 h-8 rounded-md bg-white shadow-sm flex items-center justify-center overflow-hidden active:scale-95 transition shrink-0"
               aria-label="添加"
             >
-              <img src="/icon-add.webp" alt="" className="w-8 h-8 object-cover rounded-full" />
+              <img src="/icon-add.webp" alt="" className="w-8 h-8 object-cover rounded-md" />
             </button>
           )}
         </div>
@@ -920,7 +920,7 @@ export default function YabanChargeProducts() {
         <div className="flex items-center gap-2">
           {/* 搜索框（排序模式下隐藏） */}
           {mode !== "sort-cat" && mode !== "sort-sub" && mode !== "sort-prod" && (
-            <div className="flex-1 flex items-center gap-2 bg-white rounded-2xl shadow-sm px-3 h-10">
+            <div className="flex-1 flex items-center gap-2 bg-white rounded shadow-sm px-3 h-10">
               <Search className="w-4 h-4 text-gray-400 shrink-0" />
               <input
                 value={searchText}
@@ -955,7 +955,7 @@ export default function YabanChargeProducts() {
                 const allCollapsed = allIds.every((id) => collapsedCats.has(id));
                 setCollapsedCats(allCollapsed ? new Set() : new Set(allIds));
               }}
-              className="shrink-0 bg-white rounded-xl shadow-sm px-3 h-10 text-xs text-gray-500 flex items-center gap-1 active:bg-gray-50"
+              className="shrink-0 bg-white rounded-md shadow-sm px-3 h-10 text-xs text-gray-500 flex items-center gap-1 active:bg-gray-50"
             >
               {filteredCategories.every((c) => collapsedCats.has(c.id))
                 ? <><ChevronDown className="w-3.5 h-3.5" />全展开</>
@@ -969,7 +969,7 @@ export default function YabanChargeProducts() {
                 if (mode === "preview" || mode === "edit") setShowManagePicker(true);
                 else exitMode();
               }}
-              className="shrink-0 bg-white rounded-xl shadow-sm px-3 h-10 text-xs text-gray-600 flex items-center gap-1 active:bg-gray-50"
+              className="shrink-0 bg-white rounded-md shadow-sm px-3 h-10 text-xs text-gray-600 flex items-center gap-1 active:bg-gray-50"
             >
               {mode === "preview" || mode === "edit" ? (
                 <><Settings2 className="w-3.5 h-3.5" />管理</>
@@ -1000,7 +1000,7 @@ export default function YabanChargeProducts() {
           /* ===== 排序模式：级别 Tab + 内容 ===== */
           <>
             {/* 级别选择 Tab */}
-            <div className="flex bg-white rounded-2xl shadow-sm overflow-hidden">
+            <div className="flex bg-white rounded shadow-sm overflow-hidden">
               {(["sort-cat", "sort-sub", "sort-prod"] as const).map((m, i) => {
                 const labels = ["一级分类", "二级分类", "三级分类"];
                 return (
@@ -1029,7 +1029,7 @@ export default function YabanChargeProducts() {
                 </SortableContext>
                 <DragOverlay>
                   {activeDragId && (
-                    <div className="bg-white rounded-xl shadow-xl px-4 py-3 flex items-center gap-2 border border-blue-200">
+                    <div className="bg-white rounded-md shadow-xl px-4 py-3 flex items-center gap-2 border border-blue-200">
                       <GripVertical className="w-4 h-4 text-[#1E88D6]" />
                       <span className="text-sm font-medium text-gray-800">{activeDragLabel}</span>
                     </div>
@@ -1042,12 +1042,12 @@ export default function YabanChargeProducts() {
             {mode === "sort-sub" && (
               <>
                 {/* 一个下拉框选一级分类 */}
-                <div className="bg-white rounded-2xl shadow-sm px-4 py-3">
+                <div className="bg-white rounded shadow-sm px-4 py-3">
                   <div className="text-xs text-gray-400 mb-2">选择一级分类，再拖动排序内部的二级分类</div>
                   <select
                     value={sortParentCatId ?? ""}
                     onChange={(e) => selectSortCat(e.target.value ? Number(e.target.value) : null)}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 bg-gray-50 outline-none"
+                    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-700 bg-gray-50 outline-none"
                   >
                     <option value=""></option>
                     {sortedCategories.map((cat) => (
@@ -1063,7 +1063,7 @@ export default function YabanChargeProducts() {
                       <SortableContext items={localSubCats.map((s) => `sub-${s.id}`)} strategy={verticalListSortingStrategy}>
                         {localSubCats.map((sub) => <SortableSubRow key={sub.id} sub={sub} isSaving={isSavingSort} />)}
                       </SortableContext>
-                      <DragOverlay>{activeDragId && <div className="bg-white rounded-xl shadow-xl px-4 py-3 flex items-center gap-2 border border-blue-200"><GripVertical className="w-4 h-4 text-[#1E88D6]" /><span className="text-sm font-medium text-gray-800">{activeDragLabel}</span></div>}</DragOverlay>
+                      <DragOverlay>{activeDragId && <div className="bg-white rounded-md shadow-xl px-4 py-3 flex items-center gap-2 border border-blue-200"><GripVertical className="w-4 h-4 text-[#1E88D6]" /><span className="text-sm font-medium text-gray-800">{activeDragLabel}</span></div>}</DragOverlay>
                     </DndContext>
                   )
                 )}
@@ -1074,14 +1074,14 @@ export default function YabanChargeProducts() {
             {mode === "sort-prod" && (
               <>
                 {/* 两个下拉框：一级 + 二级，同时显示 */}
-                <div className="bg-white rounded-2xl shadow-sm px-4 py-3 space-y-3">
+                <div className="bg-white rounded shadow-sm px-4 py-3 space-y-3">
                   <div className="text-xs text-gray-400">选择一级分类和二级分类，再拖动排序内部的三级分类</div>
                   <div>
                     <div className="text-xs text-gray-400 mb-1.5">第一步：选择一级分类</div>
                     <select
                       value={sortParentCatId ?? ""}
                       onChange={(e) => selectSortCat(e.target.value ? Number(e.target.value) : null)}
-                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 bg-gray-50 outline-none"
+                      className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-700 bg-gray-50 outline-none"
                     >
                       <option value=""></option>
                       {sortedCategories.map((cat) => (
@@ -1095,7 +1095,7 @@ export default function YabanChargeProducts() {
                       value={sortParentSubId ?? ""}
                       onChange={(e) => selectSortSub(e.target.value ? Number(e.target.value) : null)}
                       disabled={!sortParentCatId}
-                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-700 bg-gray-50 outline-none disabled:opacity-40"
+                      className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-700 bg-gray-50 outline-none disabled:opacity-40"
                     >
                       <option value=""></option>
                       {sortParentCatId && (() => {
@@ -1115,7 +1115,7 @@ export default function YabanChargeProducts() {
                       <SortableContext items={localProds.map((p) => `prod-${p.id}`)} strategy={verticalListSortingStrategy}>
                         {localProds.map((prod) => <SortableProdRow key={prod.id} prod={prod} isSaving={isSavingSort} />)}
                       </SortableContext>
-                      <DragOverlay>{activeDragId && <div className="bg-white rounded-xl shadow-xl px-4 py-3 flex items-center gap-2 border border-blue-200"><GripVertical className="w-4 h-4 text-[#1E88D6]" /><span className="text-sm font-medium text-gray-800">{activeDragLabel}</span></div>}</DragOverlay>
+                      <DragOverlay>{activeDragId && <div className="bg-white rounded-md shadow-xl px-4 py-3 flex items-center gap-2 border border-blue-200"><GripVertical className="w-4 h-4 text-[#1E88D6]" /><span className="text-sm font-medium text-gray-800">{activeDragLabel}</span></div>}</DragOverlay>
                     </DndContext>
                   )
                 )}
@@ -1139,7 +1139,7 @@ export default function YabanChargeProducts() {
                 const level3Count = cat.subCategories.reduce((s, sub) => s + sub.items.length, 0);
                 const totalItems = level2Count + level3Count;
                 return (
-                  <div key={cat.id} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+                  <div key={cat.id} className="bg-white rounded shadow-sm overflow-hidden">
                     {/* 一级分类头 */}
                     <div
                       className="flex items-center gap-1 px-4 py-3 border-b border-gray-50 select-none cursor-pointer active:bg-gray-50"
@@ -1259,14 +1259,14 @@ export default function YabanChargeProducts() {
                           <div className="flex gap-2 px-4 py-2.5 border-t border-gray-50">
                             <button
                               onClick={() => openNewProd(cat.id, null)}
-                              className="flex-1 flex items-center justify-center gap-1 py-2 text-xs text-[#1E88D6] active:bg-[#F0F7FD] rounded-lg"
+                              className="flex-1 flex items-center justify-center gap-1 py-2 text-xs text-[#1E88D6] active:bg-[#F0F7FD] rounded"
                             >
                               <Plus className="w-3.5 h-3.5" />
                               添加项目（挂一级）
                             </button>
                             <button
                               onClick={() => setCatSheet({ parentId: cat.id, level: 2, name: "", unit: "", price: "" })}
-                              className="flex-1 flex items-center justify-center gap-1 py-2 text-xs text-gray-500 active:bg-gray-50 rounded-lg"
+                              className="flex-1 flex items-center justify-center gap-1 py-2 text-xs text-gray-500 active:bg-gray-50 rounded"
                             >
                               <Plus className="w-3.5 h-3.5" />
                               添加二级分类
@@ -1284,7 +1284,7 @@ export default function YabanChargeProducts() {
             {mode === "edit" && !listQuery.isLoading && !searchText && (
               <button
                 onClick={() => setCatSheet({ parentId: null, level: 1, name: "", unit: "", price: "" })}
-                className="w-full flex items-center justify-center gap-1 py-3 rounded-2xl bg-white text-sm font-medium text-[#1E88D6] shadow-sm active:bg-[#F0F7FD]"
+                className="w-full flex items-center justify-center gap-1 py-3 rounded bg-white text-sm font-medium text-[#1E88D6] shadow-sm active:bg-[#F0F7FD]"
               >
                 <Plus className="w-4 h-4" />
                 新增一级分类
@@ -1305,9 +1305,9 @@ export default function YabanChargeProducts() {
             <div className="space-y-2">
               <button
                 onClick={() => { setShowManagePicker(false); enterMode("sort-cat"); }}
-                className="w-full flex items-center gap-4 px-4 py-3.5 bg-gray-50 rounded-2xl active:bg-blue-50 text-left"
+                className="w-full flex items-center gap-4 px-4 py-3.5 bg-gray-50 rounded active:bg-blue-50 text-left"
               >
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "#EBF5FB" }}>
+                <div className="w-9 h-9 rounded-md flex items-center justify-center shrink-0" style={{ backgroundColor: "#EBF5FB" }}>
                   <ArrowUpDown className="w-4 h-4" style={{ color: ACCENT }} />
                 </div>
                 <div>
@@ -1317,9 +1317,9 @@ export default function YabanChargeProducts() {
               </button>
               <button
                 onClick={() => { setShowManagePicker(false); enterMode("edit"); }}
-                className="w-full flex items-center gap-4 px-4 py-3.5 bg-gray-50 rounded-2xl active:bg-blue-50 text-left"
+                className="w-full flex items-center gap-4 px-4 py-3.5 bg-gray-50 rounded active:bg-blue-50 text-left"
               >
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "#EBF5FB" }}>
+                <div className="w-9 h-9 rounded-md flex items-center justify-center shrink-0" style={{ backgroundColor: "#EBF5FB" }}>
                   <Pencil className="w-4 h-4" style={{ color: ACCENT }} />
                 </div>
                 <div>
@@ -1332,9 +1332,9 @@ export default function YabanChargeProducts() {
                   setShowManagePicker(false);
                   setCopySheet({ step: "select", fromTenantId: currentTenantId, toTenantId: null, analysis: null, catActions: {}, prodActions: {}, result: null });
                 }}
-                className="w-full flex items-center gap-4 px-4 py-3.5 bg-gray-50 rounded-2xl active:bg-blue-50 text-left"
+                className="w-full flex items-center gap-4 px-4 py-3.5 bg-gray-50 rounded active:bg-blue-50 text-left"
               >
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "#EBF5FB" }}>
+                <div className="w-9 h-9 rounded-md flex items-center justify-center shrink-0" style={{ backgroundColor: "#EBF5FB" }}>
                   <Copy className="w-4 h-4" style={{ color: ACCENT }} />
                 </div>
                 <div>
@@ -1347,9 +1347,9 @@ export default function YabanChargeProducts() {
                   setShowManagePicker(false);
                   setPriceHistorySheet({ type: "global" });
                 }}
-                className="w-full flex items-center gap-4 px-4 py-3.5 bg-gray-50 rounded-2xl active:bg-blue-50 text-left"
+                className="w-full flex items-center gap-4 px-4 py-3.5 bg-gray-50 rounded active:bg-blue-50 text-left"
               >
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: "#EBF5FB" }}>
+                <div className="w-9 h-9 rounded-md flex items-center justify-center shrink-0" style={{ backgroundColor: "#EBF5FB" }}>
                   <TrendingDown className="w-4 h-4" style={{ color: ACCENT }} />
                 </div>
                 <div>
@@ -1393,7 +1393,7 @@ export default function YabanChargeProducts() {
                 value={catSheet.name}
                 onChange={(e) => setCatSheet({ ...catSheet, name: e.target.value })}
                 placeholder={catSheet.level === 1 ? "如 检查诊断" : "如 X 光检查"}
-                className="w-full bg-gray-100 rounded-xl px-3 py-2.5 text-sm outline-none"
+                className="w-full bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
                 autoFocus
               />
             </div>
@@ -1405,7 +1405,7 @@ export default function YabanChargeProducts() {
                   onChange={(e) => setCatSheet({ ...catSheet, price: e.target.value })}
                   inputMode="decimal"
                   placeholder="0"
-                  className="w-full bg-gray-100 rounded-xl px-3 py-2.5 text-sm outline-none"
+                  className="w-full bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
                 />
               </div>
               <div className="w-24">
@@ -1414,7 +1414,7 @@ export default function YabanChargeProducts() {
                   value={catSheet.unit}
                   onChange={(e) => setCatSheet({ ...catSheet, unit: e.target.value })}
                   placeholder="次"
-                  className="w-full bg-gray-100 rounded-xl px-3 py-2.5 text-sm outline-none"
+                  className="w-full bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
                 />
               </div>
             </div>
@@ -1425,7 +1425,7 @@ export default function YabanChargeProducts() {
                   setCatSheet(null);
                   setPriceHistorySheet({ type: "product", productId: catSheet.id, productName: catSheet.name });
                 }}
-                className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 rounded-xl text-sm text-gray-500 active:bg-gray-100"
+                className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 rounded-md text-sm text-gray-500 active:bg-gray-100"
               >
                 <span className="flex items-center gap-2">
                   <History className="w-4 h-4" />
@@ -1437,7 +1437,7 @@ export default function YabanChargeProducts() {
             <button
               onClick={handleSaveCat}
               disabled={saveCat.isPending}
-              className="w-full py-3 rounded-xl text-white text-sm font-medium flex items-center justify-center gap-1 disabled:opacity-60"
+              className="w-full py-3 rounded-md text-white text-sm font-medium flex items-center justify-center gap-1 disabled:opacity-60"
               style={{ backgroundColor: ACCENT }}
             >
               {saveCat.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -1471,7 +1471,7 @@ export default function YabanChargeProducts() {
                 value={prodSheet.name}
                 onChange={(e) => setProdSheet({ ...prodSheet, name: e.target.value })}
                 placeholder="如 树脂补牙"
-                className="w-full bg-gray-100 rounded-xl px-3 py-2.5 text-sm outline-none"
+                className="w-full bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
                 autoFocus
               />
             </div>
@@ -1483,7 +1483,7 @@ export default function YabanChargeProducts() {
                   onChange={(e) => setProdSheet({ ...prodSheet, price: e.target.value })}
                   inputMode="decimal"
                   placeholder="0"
-                  className="flex-1 bg-gray-100 rounded-xl px-3 py-2.5 text-sm outline-none"
+                  className="flex-1 bg-gray-100 rounded-md px-3 py-2.5 text-sm outline-none"
                 />
                 <div className="relative shrink-0">
                   <select
@@ -1495,7 +1495,7 @@ export default function YabanChargeProducts() {
                         setProdSheet({ ...prodSheet, unit: e.target.value, _unitCustom: false } as any);
                       }
                     }}
-                    className="w-24 bg-gray-100 rounded-xl pl-3 pr-7 py-2.5 text-sm outline-none appearance-none"
+                    className="w-24 bg-gray-100 rounded-md pl-3 pr-7 py-2.5 text-sm outline-none appearance-none"
                   >
                     {PRESET_UNITS.map((u) => (
                       <option key={u} value={u}>{u}</option>
@@ -1510,7 +1510,7 @@ export default function YabanChargeProducts() {
                   value={prodSheet.unit}
                   onChange={(e) => setProdSheet({ ...prodSheet, unit: e.target.value })}
                   placeholder="输入自定义单位"
-                  className="mt-2 w-full bg-gray-100 rounded-xl px-3 py-2 text-sm outline-none"
+                  className="mt-2 w-full bg-gray-100 rounded-md px-3 py-2 text-sm outline-none"
                   autoFocus
                 />
               )}
@@ -1521,7 +1521,7 @@ export default function YabanChargeProducts() {
                 onClick={() => {
                   setPriceHistorySheet({ type: "product", productId: prodSheet.id, productName: prodSheet.name });
                 }}
-                className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 rounded-xl text-sm text-gray-500 active:bg-gray-100"
+                className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 rounded-md text-sm text-gray-500 active:bg-gray-100"
               >
                 <span className="flex items-center gap-2">
                   <History className="w-4 h-4" />
@@ -1533,7 +1533,7 @@ export default function YabanChargeProducts() {
             <button
               onClick={handleSaveProd}
               disabled={saveProd.isPending}
-              className="w-full py-3 rounded-xl text-white text-sm font-medium flex items-center justify-center gap-1 disabled:opacity-60"
+              className="w-full py-3 rounded-md text-white text-sm font-medium flex items-center justify-center gap-1 disabled:opacity-60"
               style={{ backgroundColor: ACCENT }}
             >
               {saveProd.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -1559,13 +1559,13 @@ export default function YabanChargeProducts() {
             <div className="flex gap-3">
               <button
                 onClick={() => setDeleteConfirm(null)}
-                className="flex-1 py-3 rounded-xl bg-gray-100 text-sm font-medium text-gray-600 active:bg-gray-200"
+                className="flex-1 py-3 rounded-md bg-gray-100 text-sm font-medium text-gray-600 active:bg-gray-200"
               >
                 取消
               </button>
               <button
                 onClick={deleteConfirm.type === "prod" ? handleDelProdConfirm : handleDelCatConfirm}
-                className="flex-1 py-3 rounded-xl bg-red-500 text-sm font-medium text-white active:bg-red-600"
+                className="flex-1 py-3 rounded-md bg-red-500 text-sm font-medium text-white active:bg-red-600"
               >
                 确认删除
               </button>
@@ -1605,7 +1605,7 @@ export default function YabanChargeProducts() {
                         <button
                           key={c.tenantId}
                           onClick={() => setCopySheet((prev) => prev ? { ...prev, fromTenantId: c.tenantId } : prev)}
-                          className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm ${
+                          className={`w-full flex items-center justify-between px-4 py-3 rounded-md text-sm ${
                             copySheet.fromTenantId === c.tenantId
                               ? "bg-blue-50 text-blue-700 font-semibold"
                               : "bg-gray-50 text-gray-700"
@@ -1628,7 +1628,7 @@ export default function YabanChargeProducts() {
                         <button
                           key={c.tenantId}
                           onClick={() => setCopySheet((prev) => prev ? { ...prev, toTenantId: c.tenantId } : prev)}
-                          className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm ${
+                          className={`w-full flex items-center justify-between px-4 py-3 rounded-md text-sm ${
                             copySheet.toTenantId === c.tenantId
                               ? "bg-blue-50 text-blue-700 font-semibold"
                               : "bg-gray-50 text-gray-700"
@@ -1647,7 +1647,7 @@ export default function YabanChargeProducts() {
                 <button
                   disabled={!copySheet.fromTenantId || !copySheet.toTenantId}
                   onClick={() => setCopySheet((prev) => prev ? { ...prev, step: "analyze" } : prev)}
-                  className="w-full py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
+                  className="w-full py-3 rounded-md text-sm font-semibold text-white disabled:opacity-40"
                   style={{ backgroundColor: ACCENT }}
                 >
                   下一步：分析差异
@@ -1667,7 +1667,7 @@ export default function YabanChargeProducts() {
             {copySheet.step === "confirm" && copySheet.analysis && (
               <div className="flex flex-col flex-1 min-h-0">
                 {/* 源目标提示 */}
-                <div className="bg-blue-50 rounded-xl px-4 py-3 mb-3 shrink-0">
+                <div className="bg-blue-50 rounded-md px-4 py-3 mb-3 shrink-0">
                   <p className="text-xs text-blue-600 font-medium">
                     从《{copySheet.analysis.fromName}》复制到《{copySheet.analysis.toName}》
                   </p>
@@ -1682,20 +1682,20 @@ export default function YabanChargeProducts() {
                   <div className="overflow-y-auto flex-1 space-y-2 mb-3">
                     <p className="text-xs text-gray-500 font-medium shrink-0">以下项目在目标门诊已存在，请选择处理方式：</p>
                     {copySheet.analysis.catAnalysis.filter((c: any) => c.conflict).map((c: any) => (
-                      <div key={`cat-${c.id}`} className="flex items-center justify-between bg-amber-50 rounded-xl px-3 py-2.5">
+                      <div key={`cat-${c.id}`} className="flex items-center justify-between bg-amber-50 rounded-md px-3 py-2.5">
                         <div>
                           <span className="text-xs text-amber-700 font-medium">[{c.level === 1 ? "一级" : "二级"}分类] {c.name}</span>
                         </div>
                         <div className="flex gap-1.5">
                           <button
                             onClick={() => setCopySheet((prev) => prev ? { ...prev, catActions: { ...prev.catActions, [String(c.id)]: "skip" } } : prev)}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-medium ${
+                            className={`px-2.5 py-1 rounded text-xs font-medium ${
                               copySheet.catActions[String(c.id)] === "skip" ? "bg-gray-600 text-white" : "bg-gray-100 text-gray-500"
                             }`}
                           >跳过</button>
                           <button
                             onClick={() => setCopySheet((prev) => prev ? { ...prev, catActions: { ...prev.catActions, [String(c.id)]: "overwrite" } } : prev)}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-medium ${
+                            className={`px-2.5 py-1 rounded text-xs font-medium ${
                               copySheet.catActions[String(c.id)] === "overwrite" ? "bg-orange-500 text-white" : "bg-gray-100 text-gray-500"
                             }`}
                           >覆盖</button>
@@ -1703,20 +1703,20 @@ export default function YabanChargeProducts() {
                       </div>
                     ))}
                     {copySheet.analysis.prodAnalysis.filter((p: any) => p.conflict).map((p: any) => (
-                      <div key={`prod-${p.id}`} className="flex items-center justify-between bg-amber-50 rounded-xl px-3 py-2.5">
+                      <div key={`prod-${p.id}`} className="flex items-center justify-between bg-amber-50 rounded-md px-3 py-2.5">
                         <div>
                           <span className="text-xs text-amber-700 font-medium">[项目] {p.name}</span>
                         </div>
                         <div className="flex gap-1.5">
                           <button
                             onClick={() => setCopySheet((prev) => prev ? { ...prev, prodActions: { ...prev.prodActions, [String(p.id)]: "skip" } } : prev)}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-medium ${
+                            className={`px-2.5 py-1 rounded text-xs font-medium ${
                               copySheet.prodActions[String(p.id)] === "skip" ? "bg-gray-600 text-white" : "bg-gray-100 text-gray-500"
                             }`}
                           >跳过</button>
                           <button
                             onClick={() => setCopySheet((prev) => prev ? { ...prev, prodActions: { ...prev.prodActions, [String(p.id)]: "overwrite" } } : prev)}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-medium ${
+                            className={`px-2.5 py-1 rounded text-xs font-medium ${
                               copySheet.prodActions[String(p.id)] === "overwrite" ? "bg-orange-500 text-white" : "bg-gray-100 text-gray-500"
                             }`}
                           >覆盖</button>
@@ -1733,7 +1733,7 @@ export default function YabanChargeProducts() {
                 <button
                   disabled={isCopying}
                   onClick={handleExecuteCopy}
-                  className="w-full py-3 rounded-xl text-sm font-semibold text-white shrink-0 flex items-center justify-center gap-2"
+                  className="w-full py-3 rounded-md text-sm font-semibold text-white shrink-0 flex items-center justify-center gap-2"
                   style={{ backgroundColor: ACCENT }}
                 >
                   {isCopying ? <><Loader2 className="w-4 h-4 animate-spin" />复制中...</> : "确认复制"}
@@ -1744,7 +1744,7 @@ export default function YabanChargeProducts() {
             {/* 步骤4：完成 */}
             {copySheet.step === "done" && copySheet.result && (
               <div className="space-y-4">
-                <div className="bg-green-50 rounded-xl px-4 py-4">
+                <div className="bg-green-50 rounded-md px-4 py-4">
                   <p className="text-sm font-semibold text-green-700 mb-3">复制完成</p>
                   <div className="space-y-1.5 text-xs text-green-600">
                     <div className="flex justify-between">
@@ -1776,7 +1776,7 @@ export default function YabanChargeProducts() {
                 </div>
                 <button
                   onClick={() => setCopySheet(null)}
-                  className="w-full py-3 rounded-xl text-sm font-semibold text-white"
+                  className="w-full py-3 rounded-md text-sm font-semibold text-white"
                   style={{ backgroundColor: ACCENT }}
                 >
                   完成

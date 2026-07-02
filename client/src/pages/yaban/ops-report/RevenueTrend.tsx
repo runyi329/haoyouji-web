@@ -62,7 +62,7 @@ export default function RevenueTrend() {
             style={{
               flexShrink: 0,
               padding: "6px 14px",
-              borderRadius: 8,
+              borderRadius: 4,
               border: "none",
               fontSize: 12,
               fontWeight: activeTab === tab.id ? 700 : 400,

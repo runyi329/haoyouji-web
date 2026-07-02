@@ -10,7 +10,7 @@ export default function ConsultantConversion() {
     <OpsCard title="咨询师转化" subtitle="方案接受率与贡献">
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         {data.map((c, i) => (
-          <div key={i} style={{ background: "#F8FAFC", borderRadius: 10, padding: "10px 12px" }}>
+          <div key={i} style={{ background: "#F8FAFC", borderRadius: 5, padding: "10px 12px" }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: "#1F2937", marginBottom: 4 }}>{c.name}</div>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
               <span style={{ fontSize: 10, color: "#9CA3AF" }}>转化率</span>

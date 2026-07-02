@@ -55,7 +55,7 @@ export default function YabanClinicHeader({
       <button
         type="button"
         onClick={() => hasMultiple && setOpen((v) => !v)}
-        className={`flex items-center gap-1.5 rounded-full border border-white/30 bg-white/15 px-3 py-1 text-white backdrop-blur-sm transition active:scale-[0.97] ${
+        className={`flex items-center gap-1.5 rounded-md border border-white/30 bg-white/15 px-3 py-1 text-white backdrop-blur-sm transition active:scale-[0.97] ${
           hasMultiple ? "cursor-pointer hover:bg-white/25" : "cursor-default"
         } ${compact ? "text-xs" : "text-sm"}`}
         style={{ transitionTimingFunction: "cubic-bezier(0.23, 1, 0.32, 1)", transitionDuration: "160ms" }}
@@ -77,7 +77,7 @@ export default function YabanClinicHeader({
 
       {open && hasMultiple && (
         <div
-          className="absolute left-0 z-50 mt-1.5 w-72 origin-top-left overflow-hidden rounded-xl border border-gray-100 bg-white shadow-lg"
+          className="absolute left-0 z-50 mt-1.5 w-72 origin-top-left overflow-hidden rounded-md border border-gray-100 bg-white shadow-lg"
           style={{ animation: "ybClinicIn 150ms cubic-bezier(0.23, 1, 0.32, 1)" }}
         >
           <div className="border-b border-gray-50 px-3 py-2 text-xs font-medium text-gray-400">

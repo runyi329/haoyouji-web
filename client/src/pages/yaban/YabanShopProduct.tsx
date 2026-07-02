@@ -127,7 +127,7 @@ export default function YabanShopProduct() {
             >
               <ShoppingCart className="w-5 h-5" />
               {count > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-[#FF5A5A] text-white text-[10px] rounded-full flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-[#FF5A5A] text-white text-[10px] rounded-md flex items-center justify-center">
                   {count}
                 </span>
               )}
@@ -168,7 +168,7 @@ export default function YabanShopProduct() {
 
         {/* 诊疗项目提示 */}
         {isService && (
-          <div className="mx-3 mt-2 bg-gradient-to-r from-[#E8F4FD] to-[#D6EEFB] rounded-lg px-3 py-2.5">
+          <div className="mx-3 mt-2 bg-gradient-to-r from-[#E8F4FD] to-[#D6EEFB] rounded px-3 py-2.5">
             <p className="text-[12px] text-[#1A6E96] leading-relaxed">
               诊疗项目需到院面诊，线上支付为预约定金或诊疗预约，具体方案与余款以到院为准。
             </p>
@@ -181,7 +181,7 @@ export default function YabanShopProduct() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setQty((q) => Math.max(1, q - 1))}
-              className="w-7 h-7 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 active:bg-gray-50"
+              className="w-7 h-7 rounded-md border border-gray-200 flex items-center justify-center text-gray-500 active:bg-gray-50"
               aria-label="减少"
             >
               <Minus className="w-4 h-4" />
@@ -189,7 +189,7 @@ export default function YabanShopProduct() {
             <span className="text-sm font-medium text-gray-800 w-6 text-center">{qty}</span>
             <button
               onClick={() => setQty((q) => q + 1)}
-              className="w-7 h-7 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 active:bg-gray-50"
+              className="w-7 h-7 rounded-md border border-gray-200 flex items-center justify-center text-gray-500 active:bg-gray-50"
               aria-label="增加"
             >
               <Plus className="w-4 h-4" />
@@ -234,12 +234,12 @@ export default function YabanShopProduct() {
                   {rv.images.length > 0 && (
                     <div className="flex gap-2 mt-2 flex-wrap">
                       {rv.images.map((img, i) => (
-                        <img key={i} src={img} alt="晒单" className="w-16 h-16 rounded-lg object-cover" />
+                        <img key={i} src={img} alt="晒单" className="w-16 h-16 rounded object-cover" />
                       ))}
                     </div>
                   )}
                   {rv.reply && (
-                    <div className="mt-2 bg-[#F5F7FA] rounded-lg px-3 py-2">
+                    <div className="mt-2 bg-[#F5F7FA] rounded px-3 py-2">
                       <p className="text-[12px] text-gray-500 leading-relaxed">
                         <span className="text-[#2196C8] font-medium">商家回复：</span>{rv.reply}
                       </p>
@@ -265,13 +265,13 @@ export default function YabanShopProduct() {
             </div>
             <div className="p-4 space-y-3" style={{ paddingBottom: "calc(24px + env(safe-area-inset-bottom, 0px))" }}>
               <p className="text-xs text-gray-500">复制以下链接，发送给好友或发到朋友圈：</p>
-              <div className="flex items-center gap-2 bg-[#F5F7FA] rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 bg-[#F5F7FA] rounded px-3 py-2">
                 <span className="flex-1 text-xs text-gray-600 truncate">{shareUrl}</span>
                 <button onClick={copyLink} className="flex items-center gap-1 text-[#2196C8] text-xs shrink-0">
                   <Copy className="w-3.5 h-3.5" /> 复制
                 </button>
               </div>
-              <button onClick={copyLink} className="w-full py-3 rounded-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-medium">
+              <button onClick={copyLink} className="w-full py-3 rounded-md bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-medium">
                 复制分享链接
               </button>
             </div>
@@ -284,13 +284,13 @@ export default function YabanShopProduct() {
         <div className="max-w-lg mx-auto px-3 py-2.5 flex items-center gap-2">
           <button
             onClick={handleAddCart}
-            className="flex-1 py-2.5 rounded-full border border-[#2196C8] text-[#2196C8] text-sm font-medium active:bg-[#EAF6FC]"
+            className="flex-1 py-2.5 rounded-md border border-[#2196C8] text-[#2196C8] text-sm font-medium active:bg-[#EAF6FC]"
           >
             加入购物车
           </button>
           <button
             onClick={handleBuyNow}
-            className="flex-1 py-2.5 rounded-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-medium active:opacity-90"
+            className="flex-1 py-2.5 rounded-md bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-medium active:opacity-90"
           >
             立即购买
           </button>

@@ -92,7 +92,7 @@ export default function YabanPatientDetail() {
   if (detailQuery.isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-sky-200 border-t-sky-500 rounded-md animate-spin" />
       </div>
     );
   }
@@ -164,7 +164,7 @@ export default function YabanPatientDetail() {
               <img
                 src={avatarSrc(patient.avatarKey)}
                 alt={patient.name}
-                className="w-[52px] h-[52px] rounded-full object-cover bg-white/30"
+                className="w-[52px] h-[52px] rounded-md object-cover bg-white/30"
               />
             </div>
           </div>
@@ -287,7 +287,7 @@ export default function YabanPatientDetail() {
                   navigate(feat.route);
                 }
               }}
-              className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-4 active:bg-gray-100"
+              className="flex items-center gap-3 rounded-md border border-gray-100 bg-gray-50 px-4 py-4 active:bg-gray-100"
             >
               <img src={feat.icon} alt={feat.label} className="w-10 h-10 object-contain flex-shrink-0" />
               <span className="text-[15px] font-medium text-gray-800">{feat.label}</span>

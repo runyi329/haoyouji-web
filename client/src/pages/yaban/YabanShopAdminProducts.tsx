@@ -160,7 +160,7 @@ export default function YabanShopAdminProducts() {
         </div>
         {/* 搜索 */}
         <div className="max-w-lg mx-auto px-3 pb-3">
-          <div className="flex items-center bg-white/95 rounded-full px-3 py-1.5">
+          <div className="flex items-center bg-white/95 rounded-md px-3 py-1.5">
             <Search className="w-4 h-4 text-gray-400 shrink-0" />
             <input
               value={keyword}
@@ -182,7 +182,7 @@ export default function YabanShopAdminProducts() {
               <button
                 key={f.key}
                 onClick={() => setFilter(f.key)}
-                className={`px-3 py-1.5 rounded-full text-[13px] transition-colors ${
+                className={`px-3 py-1.5 rounded-md text-[13px] transition-colors ${
                   active
                     ? "bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white"
                     : "bg-white text-gray-500"
@@ -195,7 +195,7 @@ export default function YabanShopAdminProducts() {
           })}
           <button
             onClick={() => setCatManagerOpen(true)}
-            className="ml-auto flex items-center gap-1 px-3 py-1.5 rounded-full text-[13px] bg-white text-[#2196C8] border border-[#2196C8]"
+            className="ml-auto flex items-center gap-1 px-3 py-1.5 rounded-md text-[13px] bg-white text-[#2196C8] border border-[#2196C8]"
           >
             <Tags className="w-3.5 h-3.5" /> 分类管理
           </button>
@@ -212,8 +212,8 @@ export default function YabanShopAdminProducts() {
           <div className="text-center text-sm text-gray-400 pt-20">暂无商品</div>
         ) : (
           list.map((p: any) => (
-            <div key={p.dbId} className="bg-white rounded-xl p-3 flex gap-3">
-              <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-[#EAF6FC] to-[#D6EEFB] shrink-0 overflow-hidden flex items-center justify-center">
+            <div key={p.dbId} className="bg-white rounded-md p-3 flex gap-3">
+              <div className="w-16 h-16 rounded bg-gradient-to-br from-[#EAF6FC] to-[#D6EEFB] shrink-0 overflow-hidden flex items-center justify-center">
                 {p.image ? (
                   <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
                 ) : (
@@ -239,13 +239,13 @@ export default function YabanShopAdminProducts() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => toggleStatus.mutate({ id: p.dbId, status: p.isActive ? 0 : 1 })}
-                      className="text-[12px] px-2.5 py-1 rounded-full border border-[#2196C8] text-[#2196C8] active:bg-[#EAF6FC]"
+                      className="text-[12px] px-2.5 py-1 rounded-md border border-[#2196C8] text-[#2196C8] active:bg-[#EAF6FC]"
                     >
                       {p.isActive ? "下架" : "上架"}
                     </button>
                     <button
                       onClick={() => openEdit(p)}
-                      className="text-[12px] px-2.5 py-1 rounded-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white"
+                      className="text-[12px] px-2.5 py-1 rounded-md bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white"
                     >
                       编辑
                     </button>
@@ -394,7 +394,7 @@ function CategoryManager({
             <button
               onClick={handleAdd}
               disabled={busy}
-              className="shrink-0 flex items-center gap-1 px-3 py-2 rounded-lg bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm disabled:opacity-60"
+              className="shrink-0 flex items-center gap-1 px-3 py-2 rounded bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm disabled:opacity-60"
             >
               <Plus className="w-4 h-4" /> 添加
             </button>
@@ -410,7 +410,7 @@ function CategoryManager({
             <div className="text-center text-sm text-gray-400 pt-10">暂无分类，先添加一个吧</div>
           ) : (
             list.map((c: any, i: number) => (
-              <div key={c.id} className="bg-white rounded-xl px-3 py-2.5 flex items-center gap-2">
+              <div key={c.id} className="bg-white rounded-md px-3 py-2.5 flex items-center gap-2">
                 {editId === c.id ? (
                   <>
                     <input
@@ -423,14 +423,14 @@ function CategoryManager({
                     <button
                       onClick={() => handleRename(c.id)}
                       disabled={busy}
-                      className="shrink-0 p-2 rounded-lg bg-[#2196C8] text-white disabled:opacity-60"
+                      className="shrink-0 p-2 rounded bg-[#2196C8] text-white disabled:opacity-60"
                       aria-label="保存"
                     >
                       <Check className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => { setEditId(null); setEditName(""); }}
-                      className="shrink-0 p-2 rounded-lg bg-gray-100 text-gray-500"
+                      className="shrink-0 p-2 rounded bg-gray-100 text-gray-500"
                       aria-label="取消"
                     >
                       <X className="w-4 h-4" />
@@ -443,7 +443,7 @@ function CategoryManager({
                       <button
                         onClick={() => handleMove(i, -1)}
                         disabled={busy || i === 0}
-                        className="p-1.5 rounded-lg text-gray-400 disabled:opacity-30 active:bg-gray-100"
+                        className="p-1.5 rounded text-gray-400 disabled:opacity-30 active:bg-gray-100"
                         aria-label="上移"
                       >
                         <ArrowUp className="w-4 h-4" />
@@ -451,14 +451,14 @@ function CategoryManager({
                       <button
                         onClick={() => handleMove(i, 1)}
                         disabled={busy || i === list.length - 1}
-                        className="p-1.5 rounded-lg text-gray-400 disabled:opacity-30 active:bg-gray-100"
+                        className="p-1.5 rounded text-gray-400 disabled:opacity-30 active:bg-gray-100"
                         aria-label="下移"
                       >
                         <ArrowDown className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => { setEditId(c.id); setEditName(c.name); }}
-                        className="p-1.5 rounded-lg text-[#2196C8] active:bg-[#EAF6FC]"
+                        className="p-1.5 rounded text-[#2196C8] active:bg-[#EAF6FC]"
                         aria-label="重命名"
                       >
                         <Pencil className="w-4 h-4" />
@@ -466,7 +466,7 @@ function CategoryManager({
                       <button
                         onClick={() => handleDelete(c.id, c.name)}
                         disabled={busy}
-                        className="p-1.5 rounded-lg text-[#FF5A5A] active:bg-red-50 disabled:opacity-60"
+                        className="p-1.5 rounded text-[#FF5A5A] active:bg-red-50 disabled:opacity-60"
                         aria-label="删除"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -590,10 +590,10 @@ function ProductEditor({
         {/* 表单 */}
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
           {/* 主图 */}
-          <div className="bg-white rounded-xl p-3">
+          <div className="bg-white rounded-md p-3">
             <p className="text-sm text-gray-700 mb-2">商品主图</p>
             <div className="flex items-center gap-3">
-              <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-[#EAF6FC] to-[#D6EEFB] overflow-hidden flex items-center justify-center shrink-0">
+              <div className="w-20 h-20 rounded bg-gradient-to-br from-[#EAF6FC] to-[#D6EEFB] overflow-hidden flex items-center justify-center shrink-0">
                 {form.image ? (
                   <img src={form.image} alt="主图" className="w-full h-full object-cover" />
                 ) : (
@@ -603,7 +603,7 @@ function ProductEditor({
               <button
                 onClick={() => fileRef.current?.click()}
                 disabled={uploading}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-[#2196C8] text-[#2196C8] text-sm disabled:opacity-60"
+                className="flex items-center gap-1.5 px-3 py-2 rounded border border-[#2196C8] text-[#2196C8] text-sm disabled:opacity-60"
               >
                 {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
                 {uploading ? "上传中" : "上传图片"}
@@ -666,7 +666,7 @@ function ProductEditor({
           {form.id && (
             <button
               onClick={() => setSkuOpen(true)}
-              className="w-full bg-white rounded-xl px-3 py-3 flex items-center gap-2 active:bg-gray-50"
+              className="w-full bg-white rounded-md px-3 py-3 flex items-center gap-2 active:bg-gray-50"
             >
               <Layers className="w-4 h-4 text-[#2196C8]" />
               <span className="text-sm text-gray-700 flex-1 text-left">多规格管理（如不同型号/套餐）</span>
@@ -682,18 +682,18 @@ function ProductEditor({
           </Field>
 
           {/* 上架开关 */}
-          <div className="bg-white rounded-xl px-3 py-3 flex items-center justify-between">
+          <div className="bg-white rounded-md px-3 py-3 flex items-center justify-between">
             <span className="text-sm text-gray-700">立即上架</span>
             <button
               onClick={() => set("status", form.status === 1 ? 0 : 1)}
-              className={`w-11 h-6 rounded-full transition-colors relative ${form.status === 1 ? "bg-[#2196C8]" : "bg-gray-300"}`}
+              className={`w-11 h-6 rounded-md transition-colors relative ${form.status === 1 ? "bg-[#2196C8]" : "bg-gray-300"}`}
             >
-              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all ${form.status === 1 ? "left-[22px]" : "left-0.5"}`} />
+              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-md transition-all ${form.status === 1 ? "left-[22px]" : "left-0.5"}`} />
             </button>
           </div>
 
           {onDelete && (
-            <button onClick={onDelete} className="w-full py-2.5 rounded-xl text-[#FF5A5A] text-sm flex items-center justify-center gap-1.5">
+            <button onClick={onDelete} className="w-full py-2.5 rounded-md text-[#FF5A5A] text-sm flex items-center justify-center gap-1.5">
               <Trash2 className="w-4 h-4" /> 删除该商品
             </button>
           )}
@@ -704,7 +704,7 @@ function ProductEditor({
           <button
             onClick={handleSave}
             disabled={saving || uploading}
-            className="w-full py-2.5 rounded-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-medium flex items-center justify-center gap-1.5 disabled:opacity-60"
+            className="w-full py-2.5 rounded-md bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-medium flex items-center justify-center gap-1.5 disabled:opacity-60"
           >
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
             {saving ? "保存中" : "保存"}
@@ -766,7 +766,7 @@ function SkuManager({ productId, onClose }: { productId: number; onClose: () => 
           <div className="flex items-center gap-2">
             <input className={inputCls} type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="价格（元）" />
             <input className={inputCls} type="number" value={stock} onChange={(e) => setStock(e.target.value)} placeholder="库存" />
-            <button onClick={handleAdd} disabled={saveMut.isPending} className="shrink-0 flex items-center gap-1 px-3 py-2 rounded-lg bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm disabled:opacity-60">
+            <button onClick={handleAdd} disabled={saveMut.isPending} className="shrink-0 flex items-center gap-1 px-3 py-2 rounded bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm disabled:opacity-60">
               <Plus className="w-4 h-4" /> 添加
             </button>
           </div>
@@ -778,12 +778,12 @@ function SkuManager({ productId, onClose }: { productId: number; onClose: () => 
             <p className="text-center text-sm text-gray-400 pt-8">暂无规格，添加后客人可选择不同型号</p>
           ) : (
             (skus ?? []).map((s: any) => (
-              <div key={s.id} className="bg-white rounded-xl px-3 py-2.5 flex items-center gap-2">
+              <div key={s.id} className="bg-white rounded-md px-3 py-2.5 flex items-center gap-2">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-gray-800 truncate">{s.spec_text}</p>
                   <p className="text-[11px] text-gray-400 mt-0.5">¥{Number(s.price).toFixed(2)} · 库存 {s.stock}</p>
                 </div>
-                <button onClick={() => handleDel(s.id)} className="p-1.5 rounded-lg text-[#FF5A5A] active:bg-red-50" aria-label="删除"><Trash2 className="w-4 h-4" /></button>
+                <button onClick={() => handleDel(s.id)} className="p-1.5 rounded text-[#FF5A5A] active:bg-red-50" aria-label="删除"><Trash2 className="w-4 h-4" /></button>
               </div>
             ))
           )}
@@ -794,11 +794,11 @@ function SkuManager({ productId, onClose }: { productId: number; onClose: () => 
 }
 
 const inputCls =
-  "w-full bg-[#F5F7FA] rounded-lg px-3 py-2 text-sm text-gray-700 outline-none placeholder:text-gray-400 border border-transparent focus:border-[#2196C8]";
+  "w-full bg-[#F5F7FA] rounded px-3 py-2 text-sm text-gray-700 outline-none placeholder:text-gray-400 border border-transparent focus:border-[#2196C8]";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-xl px-3 py-2.5">
+    <div className="bg-white rounded-md px-3 py-2.5">
       <p className="text-[12px] text-gray-500 mb-1.5">{label}</p>
       {children}
     </div>

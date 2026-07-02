@@ -201,7 +201,7 @@ export default function YabanApptConfig() {
 
       <div style={{ padding: "14px 14px 0" }}>
         {/* 说明卡片 */}
-        <div style={{ background: SKY_L, borderRadius: 12, padding: "12px 14px", marginBottom: 16, borderLeft: `3px solid ${SKY_D}` }}>
+        <div style={{ background: SKY_L, borderRadius: 6, padding: "12px 14px", marginBottom: 16, borderLeft: `3px solid ${SKY_D}` }}>
           <p style={{ fontSize: 13, color: SKY_D, margin: 0, lineHeight: 1.6 }}>
             新建预约第2步「选择角色成员」中，将按下方顺序展示各角色供选择。
             可调整显示顺序、隐藏不需要的角色。
@@ -220,7 +220,7 @@ export default function YabanApptConfig() {
 
         {/* 角色列表为空时引导 */}
         {!isLoading && config.roles.length === 0 && (
-          <div style={{ background: "#fff", borderRadius: 14, padding: "32px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(38,48,60,.05)" }}>
+          <div style={{ background: "#fff", borderRadius: 7, padding: "32px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(38,48,60,.05)" }}>
             <UserCog size={40} color={GRAY_L} style={{ marginBottom: 12 }} />
             <p style={{ fontSize: 15, color: INK, fontWeight: 600, marginBottom: 6 }}>暂无角色</p>
             <p style={{ fontSize: 13, color: GRAY_L, marginBottom: 20 }}>
@@ -228,7 +228,7 @@ export default function YabanApptConfig() {
             </p>
             <button
               onClick={() => navigate("/yaban/settings/roles")}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 20px", background: `linear-gradient(90deg,${SKY_D},${SKY})`, color: "#fff", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer" }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "10px 20px", background: `linear-gradient(90deg,${SKY_D},${SKY})`, color: "#fff", border: "none", borderRadius: 5, fontSize: 14, fontWeight: 600, cursor: "pointer" }}
             >
               <UserCog size={16} />
               前往角色管理
@@ -253,7 +253,7 @@ export default function YabanApptConfig() {
               </button>
             </div>
 
-            <div style={{ background: "#fff", borderRadius: 14, overflow: "hidden", boxShadow: "0 1px 3px rgba(38,48,60,.05)" }}>
+            <div style={{ background: "#fff", borderRadius: 7, overflow: "hidden", boxShadow: "0 1px 3px rgba(38,48,60,.05)" }}>
               {config.roles.map((role, idx) => (
                 <div
                   key={role.role_key}
@@ -339,7 +339,7 @@ export default function YabanApptConfig() {
             width: "100%", padding: "13px 0", textAlign: "center", fontSize: 15,
             color: "#fff", fontWeight: 600,
             background: dirty ? `linear-gradient(90deg, ${SKY_D}, ${SKY})` : GRAY_L,
-            border: "none", borderRadius: 12,
+            border: "none", borderRadius: 6,
             cursor: dirty ? "pointer" : "default",
             boxShadow: dirty ? `0 4px 12px rgba(30,136,214,.28)` : "none",
           }}

@@ -350,7 +350,7 @@ export default function YabanDataManage() {
   const StepHead = ({ n, title, extra }: { n: number; title: string; extra?: React.ReactNode }) => (
     <div className="flex items-center justify-between mb-3">
       <span className="text-sm font-bold text-gray-800 flex items-center gap-2">
-        <span className="w-5 h-5 rounded-full bg-[#1E88D6] text-white text-[11px] flex items-center justify-center shrink-0">{n}</span>
+        <span className="w-5 h-5 rounded-md bg-[#1E88D6] text-white text-[11px] flex items-center justify-center shrink-0">{n}</span>
         {title}
       </span>
       {extra}
@@ -377,14 +377,14 @@ export default function YabanDataManage() {
             className={`flex-1 py-2.5 text-sm font-medium relative ${tab === "export" ? "text-white" : "text-white/60"}`}
           >
             数据导出备份
-            {tab === "export" && <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-16 h-0.5 bg-white rounded-full" />}
+            {tab === "export" && <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-16 h-0.5 bg-white rounded-md" />}
           </button>
           <button
             onClick={() => setTab("import")}
             className={`flex-1 py-2.5 text-sm font-medium relative ${tab === "import" ? "text-white" : "text-white/60"}`}
           >
             数据导入存档
-            {tab === "import" && <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-16 h-0.5 bg-white rounded-full" />}
+            {tab === "import" && <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-16 h-0.5 bg-white rounded-md" />}
           </button>
         </div>
       </div>
@@ -392,8 +392,8 @@ export default function YabanDataManage() {
       <div role="tabpanel" className="max-w-lg mx-auto px-4 pt-4 space-y-3">
         {/* 无医院身份：得体提示，隐藏所有导出操作 */}
         {hasNoClinic ? (
-          <div className="bg-white rounded-2xl shadow-sm p-6 text-center">
-            <div className="w-14 h-14 rounded-full bg-[#EAF4FE] flex items-center justify-center mx-auto mb-4">
+          <div className="bg-white rounded shadow-sm p-6 text-center">
+            <div className="w-14 h-14 rounded-md bg-[#EAF4FE] flex items-center justify-center mx-auto mb-4">
               <Building2 className="w-7 h-7 text-[#1E88D6]" />
             </div>
             <p className="text-base font-bold text-gray-800 mb-2">暂无可导出资料的医院</p>
@@ -404,21 +404,21 @@ export default function YabanDataManage() {
             </p>
           </div>
         ) : clinicsLoading ? (
-          <div className="bg-white rounded-2xl shadow-sm p-6 flex items-center justify-center">
+          <div className="bg-white rounded shadow-sm p-6 flex items-center justify-center">
             <Loader2 className="w-5 h-5 animate-spin text-[#1E88D6]" />
           </div>
         ) : tab === "export" ? (
           <>
             {/* 步骤一：选择医院 */}
-            <div className="bg-white rounded-2xl shadow-sm p-4">
+            <div className="bg-white rounded shadow-sm p-4">
               <StepHead n={1} title="选择医院" />
               <button
                 onClick={() => clinics && clinics.length > 1 && setClinicPickerOpen((v) => !v)}
-                className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl border border-[#1E88D6] bg-[#F0F7FD] ${
+                className={`w-full flex items-center gap-3 px-3 py-3 rounded-md border border-[#1E88D6] bg-[#F0F7FD] ${
                   clinics && clinics.length > 1 ? "active:opacity-80" : ""
                 }`}
               >
-                <span className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shrink-0">
+                <span className="w-8 h-8 rounded bg-white flex items-center justify-center shrink-0">
                   <Building2 className="w-4 h-4 text-[#1E88D6]" />
                 </span>
                 <span className="flex-1 text-left">
@@ -437,7 +437,7 @@ export default function YabanDataManage() {
                     <button
                       key={c.tenantId}
                       onClick={() => { setTenantId(c.tenantId); setClinicPickerOpen(false); }}
-                      className={`w-full text-left px-3 py-2.5 rounded-lg text-sm border transition-colors ${
+                      className={`w-full text-left px-3 py-2.5 rounded text-sm border transition-colors ${
                         c.tenantId === tenantId
                           ? "border-[#1E88D6] bg-[#F0F7FD] text-[#1E88D6] font-medium"
                           : "border-gray-100 bg-gray-50 text-gray-700"
@@ -451,7 +451,7 @@ export default function YabanDataManage() {
             </div>
 
             {/* 步骤二：选择资料分类（折叠下拉） */}
-            <div className="bg-white rounded-2xl shadow-sm p-4">
+            <div className="bg-white rounded shadow-sm p-4">
               <StepHead n={2} title="选择资料分类" />
 
               {/* 收起时的摘要行：点击展开/收起 */}
@@ -465,11 +465,11 @@ export default function YabanDataManage() {
                 return (
                   <button
                     onClick={() => setCatOpen((v) => !v)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors ${
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md border transition-colors ${
                       catOpen ? "border-[#1E88D6] bg-[#F0F7FD]" : "border-gray-100 bg-gray-50"
                     } active:bg-[#EAF4FE]`}
                   >
-                    <span className="w-8 h-8 rounded-lg bg-[#EAF4FE] flex items-center justify-center shrink-0">
+                    <span className="w-8 h-8 rounded bg-[#EAF4FE] flex items-center justify-center shrink-0">
                       <Layers className="w-4 h-4 text-[#1E88D6]" />
                     </span>
                     <span className="flex-1 text-left">
@@ -504,16 +504,16 @@ export default function YabanDataManage() {
                     return (
                       <div
                         key={c.key}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-dashed border-gray-200 bg-gray-50/60 cursor-not-allowed select-none"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md border border-dashed border-gray-200 bg-gray-50/60 cursor-not-allowed select-none"
                       >
                         <Square className="w-5 h-5 text-gray-200 shrink-0" />
-                        <span className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center shrink-0">
+                        <span className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center shrink-0">
                           <Icon className="w-4 h-4 text-gray-300" />
                         </span>
                         <span className="flex-1 text-left">
                           <span className="block text-sm font-medium text-gray-400">{c.title}</span>
                         </span>
-                        <span className="text-[11px] text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">即将开放</span>
+                        <span className="text-[11px] text-gray-400 bg-gray-100 rounded-md px-2 py-0.5">即将开放</span>
                       </div>
                     );
                   }
@@ -521,7 +521,7 @@ export default function YabanDataManage() {
                     <button
                       key={c.key}
                       onClick={() => toggleCategory(c.key)}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors ${
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md border transition-colors ${
                         checked ? "border-[#1E88D6] bg-[#F0F7FD]" : "border-gray-100 bg-gray-50"
                       } active:bg-[#EAF4FE]`}
                     >
@@ -530,7 +530,7 @@ export default function YabanDataManage() {
                       ) : (
                         <Square className="w-5 h-5 text-gray-300 shrink-0" />
                       )}
-                      <span className="w-8 h-8 rounded-lg bg-[#EAF4FE] flex items-center justify-center shrink-0">
+                      <span className="w-8 h-8 rounded bg-[#EAF4FE] flex items-center justify-center shrink-0">
                         <Icon className="w-4 h-4 text-[#1E88D6]" />
                       </span>
                       <span className="flex-1 text-left">
@@ -545,13 +545,13 @@ export default function YabanDataManage() {
             </div>
 
             {/* 步骤三：选择文件格式 */}
-            <div className="bg-white rounded-2xl shadow-sm p-4">
+            <div className="bg-white rounded shadow-sm p-4">
               <StepHead n={3} title="选择文件格式" />
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <button
                     onClick={() => toggleFormat("excel")}
-                    className={`w-full flex items-center gap-2 px-3 py-3 rounded-xl border transition-colors ${
+                    className={`w-full flex items-center gap-2 px-3 py-3 rounded-md border transition-colors ${
                       formats.includes("excel") ? "border-[#1E88D6] bg-[#F0F7FD]" : "border-gray-100 bg-gray-50"
                     }`}
                   >
@@ -568,7 +568,7 @@ export default function YabanDataManage() {
                 <div className="space-y-1">
                   <button
                     onClick={() => toggleFormat("json")}
-                    className={`w-full flex items-center gap-2 px-3 py-3 rounded-xl border transition-colors ${
+                    className={`w-full flex items-center gap-2 px-3 py-3 rounded-md border transition-colors ${
                       formats.includes("json") ? "border-[#1E88D6] bg-[#F0F7FD]" : "border-gray-100 bg-gray-50"
                     }`}
                   >
@@ -586,16 +586,16 @@ export default function YabanDataManage() {
             </div>
 
             {/* 步骤四：选择导出方式 */}
-            <div className="bg-white rounded-2xl shadow-sm p-4">
+            <div className="bg-white rounded shadow-sm p-4">
               <StepHead n={4} title="选择导出方式" />
 
               {/* 方式一：下载到本机 */}
               <button
                 onClick={onDownload}
                 disabled={exportData.isPending}
-                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl border border-gray-100 bg-gray-50 active:bg-[#EAF4FE] transition-colors disabled:opacity-60"
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-md border border-gray-100 bg-gray-50 active:bg-[#EAF4FE] transition-colors disabled:opacity-60"
               >
-                <span className="w-8 h-8 rounded-lg bg-[#EAF4FE] flex items-center justify-center shrink-0">
+                <span className="w-8 h-8 rounded bg-[#EAF4FE] flex items-center justify-center shrink-0">
                   {exportData.isPending ? <Loader2 className="w-4 h-4 animate-spin text-[#1E88D6]" /> : <Download className="w-4 h-4 text-[#1E88D6]" />}
                 </span>
                 <span className="flex-1 text-left">
@@ -605,9 +605,9 @@ export default function YabanDataManage() {
               </button>
 
               {/* 方式二：发送到邮箱 */}
-              <div className="mt-3 px-3 py-3 rounded-xl border border-gray-100 bg-gray-50">
+              <div className="mt-3 px-3 py-3 rounded-md border border-gray-100 bg-gray-50">
                 <div className="flex items-center gap-3">
-                  <span className="w-8 h-8 rounded-lg bg-[#EAF4FE] flex items-center justify-center shrink-0">
+                  <span className="w-8 h-8 rounded bg-[#EAF4FE] flex items-center justify-center shrink-0">
                     <Mail className="w-4 h-4 text-[#1E88D6]" />
                   </span>
                   <span className="flex-1">
@@ -621,13 +621,13 @@ export default function YabanDataManage() {
                   {hasBoundEmail ? (
                     <button onClick={goBindEmail} className="text-xs text-[#1E88D6] active:opacity-70 shrink-0">修改</button>
                   ) : (
-                    <button onClick={goBindEmail} className="text-xs px-2.5 py-1.5 rounded-lg bg-[#1E88D6] text-white active:opacity-80 shrink-0">绑定邮箱</button>
+                    <button onClick={goBindEmail} className="text-xs px-2.5 py-1.5 rounded bg-[#1E88D6] text-white active:opacity-80 shrink-0">绑定邮箱</button>
                   )}
                 </div>
                 <button
                   onClick={onSendEmail}
                   disabled={sendBackupNow.isPending || !hasBoundEmail}
-                  className="mt-3 w-full flex items-center justify-center gap-2 bg-[#EAF4FE] text-[#1E88D6] rounded-xl py-2.5 text-sm font-medium active:opacity-80 disabled:opacity-50"
+                  className="mt-3 w-full flex items-center justify-center gap-2 bg-[#EAF4FE] text-[#1E88D6] rounded-md py-2.5 text-sm font-medium active:opacity-80 disabled:opacity-50"
                 >
                   {sendBackupNow.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
                   立即发送到邮箱
@@ -636,16 +636,16 @@ export default function YabanDataManage() {
             </div>
 
             {/* 步骤五：AI 智能备份 */}
-            <div className="bg-white rounded-2xl shadow-sm p-4">
+            <div className="bg-white rounded shadow-sm p-4">
               <StepHead
                 n={5}
                 title="AI 智能备份"
                 extra={
                   <button
                     onClick={() => setAutoEnabled((v) => !v)}
-                    className={`relative w-11 h-6 rounded-full transition-colors ${autoEnabled ? "bg-[#1E88D6]" : "bg-gray-300"}`}
+                    className={`relative w-11 h-6 rounded-md transition-colors ${autoEnabled ? "bg-[#1E88D6]" : "bg-gray-300"}`}
                   >
-                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${autoEnabled ? "translate-x-5" : ""}`} />
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-md transition-transform ${autoEnabled ? "translate-x-5" : ""}`} />
                   </button>
                 }
               />
@@ -656,7 +656,7 @@ export default function YabanDataManage() {
                       <button
                         key={f.key}
                         onClick={() => setAutoFreq(f.key)}
-                        className={`py-2 text-xs rounded-lg border transition-colors ${
+                        className={`py-2 text-xs rounded border transition-colors ${
                           autoFreq === f.key ? "border-[#1E88D6] bg-[#F0F7FD] text-[#1E88D6] font-medium" : "border-gray-100 bg-gray-50 text-gray-600"
                         }`}
                       >
@@ -680,7 +680,7 @@ export default function YabanDataManage() {
                   <button
                     onClick={onSaveAuto}
                     disabled={saveSettings.isPending}
-                    className="mt-3 w-full flex items-center justify-center gap-2 border border-[#1E88D6] text-[#1E88D6] rounded-xl py-2.5 text-sm font-medium active:bg-[#F0F7FD] disabled:opacity-60"
+                    className="mt-3 w-full flex items-center justify-center gap-2 border border-[#1E88D6] text-[#1E88D6] rounded-md py-2.5 text-sm font-medium active:bg-[#F0F7FD] disabled:opacity-60"
                   >
                     {saveSettings.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
                     保存智能备份设置
@@ -692,38 +692,38 @@ export default function YabanDataManage() {
         ) : (
           <>
             {/* 导入存档 */}
-            <div className="bg-white rounded-2xl shadow-sm p-4">
+            <div className="bg-white rounded shadow-sm p-4">
               <span className="text-sm font-bold text-gray-800 block mb-2">导入存档（JSON / Excel）</span>
               <p className="text-xs text-gray-400 leading-relaxed mb-3">
                 支持两种文件：本系统导出的 JSON 存档（精确还原），或按模板整理的 Excel 表格（从其他系统迁移顾客）。模板已覆盖基础信息、咨询师与健康档案（就诊主诉、健康标签）。已存在的顾客（同手机号或同原编号）会自动跳过，导入的顾客将按本店规则重新分配顾客编号，原编号保留备查。
               </p>
               <button
                 onClick={onDownloadTemplate}
-                className="w-full flex items-center justify-center gap-2 border border-[#1E88D6] text-[#1E88D6] rounded-xl py-2.5 text-sm font-medium active:bg-[#F0F7FD] mb-3"
+                className="w-full flex items-center justify-center gap-2 border border-[#1E88D6] text-[#1E88D6] rounded-md py-2.5 text-sm font-medium active:bg-[#F0F7FD] mb-3"
               >
                 <FileSpreadsheet className="w-4 h-4" /> 下载 Excel 导入模板
               </button>
-              <label className="w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-[#9CC8EC] rounded-2xl py-8 cursor-pointer active:bg-[#F0F7FD]">
+              <label className="w-full flex flex-col items-center justify-center gap-2 border-2 border-dashed border-[#9CC8EC] rounded py-8 cursor-pointer active:bg-[#F0F7FD]">
                 <Upload className="w-7 h-7 text-[#1E88D6]" />
                 <span className="text-sm text-[#1E88D6] font-medium">点击选择 JSON 或 Excel 文件</span>
                 <span className="text-xs text-gray-400">支持 .json / .xlsx / .xls</span>
                 <input type="file" accept=".json,application/json,.xlsx,.xls" className="hidden" onChange={onPickFile} />
               </label>
               {importPreview && (
-                <div className="mt-3 px-3 py-3 rounded-xl bg-[#F0F7FD] text-sm text-gray-700">
+                <div className="mt-3 px-3 py-3 rounded-md bg-[#F0F7FD] text-sm text-gray-700">
                   已读取文件，包含 <span className="font-bold text-[#1E88D6]">{importPreview.count}</span> 条顾客记录，确认后点击下方导入。
                 </div>
               )}
               <button
                 onClick={onImport}
                 disabled={importData.isPending || !importPreview}
-                className="mt-3 w-full flex items-center justify-center gap-2 bg-[#1E88D6] text-white rounded-xl py-3 text-sm font-medium active:opacity-80 disabled:opacity-50"
+                className="mt-3 w-full flex items-center justify-center gap-2 bg-[#1E88D6] text-white rounded-md py-3 text-sm font-medium active:opacity-80 disabled:opacity-50"
               >
                 {importData.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 rotate-180" />}
                 开始导入
               </button>
             </div>
-            <div className="bg-white rounded-2xl shadow-sm p-4">
+            <div className="bg-white rounded shadow-sm p-4">
               <p className="text-xs text-gray-400 leading-relaxed">
                 提示：Excel 导入请务必使用上方模板的表头（姓名、手机号为必填）。如数据量大或字段复杂，也可把原始表发我协助批量导入。
               </p>

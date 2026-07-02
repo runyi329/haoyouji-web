@@ -113,7 +113,7 @@ export default function YabanPatientProfile() {
   if (detailQuery.isLoading) {
     return (
       <div className="min-h-screen bg-[#F0F4F8] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-sky-200 border-t-sky-500 rounded-md animate-spin" />
       </div>
     );
   }
@@ -162,7 +162,7 @@ export default function YabanPatientProfile() {
 
       {/* 头部摘要（头像与列表/详情页一致：按性别+年龄的卡通头像） */}
       <div className="bg-white px-4 py-4 flex items-center gap-3">
-        <div className="w-14 h-14 rounded-full bg-[#F0F7FA] flex items-center justify-center overflow-hidden shrink-0">
+        <div className="w-14 h-14 rounded-md bg-[#F0F7FA] flex items-center justify-center overflow-hidden shrink-0">
           <img
             src={avatarSrc(((r.avatar as AvatarKey) || (`${r.gender === "女" ? "female" : "male"}_${ageToBucket(r.age ? Number(r.age) : 0)}` as AvatarKey)))}
             alt={r.name || "顾客"}
@@ -173,7 +173,7 @@ export default function YabanPatientProfile() {
           <div className="flex items-center gap-2">
             <span className="text-lg font-bold text-gray-900 truncate">{r.name}</span>
             {r.age != null && r.age !== "" && <span className="text-gray-500 text-sm">{r.age}岁</span>}
-            <span className={`w-5 h-5 rounded-full ${genderColor} flex items-center justify-center`}>
+            <span className={`w-5 h-5 rounded-md ${genderColor} flex items-center justify-center`}>
               <span className="text-white text-[10px]">{genderText}</span>
             </span>
           </div>
@@ -190,7 +190,7 @@ export default function YabanPatientProfile() {
 
       {/* 单一档案容器：所有分组都在这一个卡片内，字段以细虚线分隔、流式自适应排布 */}
       <div className="px-3 pt-3">
-        <div className="bg-white rounded-2xl overflow-hidden">
+        <div className="bg-white rounded overflow-hidden">
           {/* 借助底部/右侧虚线 + 容器裁切，形成档案表格栏效果 */}
           <div className="flex flex-wrap">
             <GroupTitle text="个人信息" />
@@ -266,7 +266,7 @@ export default function YabanPatientProfile() {
         {/* 编辑入口 */}
         <button
           onClick={() => navigate(`/yaban/patient/${id}/edit`)}
-          className="w-full flex items-center justify-center gap-1.5 bg-sky-500 text-white rounded-full py-3 font-medium mt-3"
+          className="w-full flex items-center justify-center gap-1.5 bg-sky-500 text-white rounded-md py-3 font-medium mt-3"
         >
           <Edit className="w-5 h-5" /> 编辑资料
         </button>

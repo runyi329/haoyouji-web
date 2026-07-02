@@ -156,7 +156,7 @@ export default function YabanRoles() {
           </div>
           <button
             onClick={() => setShowRoleInfo(true)}
-            className="text-xs bg-white/20 rounded-full px-3 py-1 active:opacity-80"
+            className="text-xs bg-white/20 rounded-md px-3 py-1 active:opacity-80"
           >
             角色说明
           </button>
@@ -167,7 +167,7 @@ export default function YabanRoles() {
           <div className="px-4 pb-2">
             <button
               onClick={() => clinics.length > 1 && setShowClinicPicker(true)}
-              className={`flex items-center gap-1.5 rounded-full border border-white/30 bg-white/15 px-3 py-1 text-white text-sm backdrop-blur-sm transition active:scale-[0.97] ${
+              className={`flex items-center gap-1.5 rounded-md border border-white/30 bg-white/15 px-3 py-1 text-white text-sm backdrop-blur-sm transition active:scale-[0.97] ${
                 clinics.length > 1 ? "cursor-pointer hover:bg-white/25" : "cursor-default"
               }`}
               style={{ transitionTimingFunction: "cubic-bezier(0.23, 1, 0.32, 1)", transitionDuration: "160ms" }}
@@ -197,7 +197,7 @@ export default function YabanRoles() {
               >
                 {t.label}
                 {tab === t.key && (
-                  <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-white rounded-full" />
+                  <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-white rounded-md" />
                 )}
               </button>
             ))}
@@ -209,7 +209,7 @@ export default function YabanRoles() {
         {!canManage ? (
           <>
             <MyRoleCard my={my} />
-            <div className="bg-white rounded-2xl shadow-sm p-6 text-center">
+            <div className="bg-white rounded shadow-sm p-6 text-center">
               <Lock className="w-8 h-8 text-[#9CC8EC] mx-auto mb-2" />
               <p className="text-sm text-gray-500">仅门诊院长可管理员工与权限</p>
             </div>
@@ -229,7 +229,7 @@ export default function YabanRoles() {
       {showClinicPicker && (
         <div className="fixed inset-0 z-50" onClick={() => setShowClinicPicker(false)}>
           <div
-            className="absolute top-[88px] left-4 w-72 origin-top-left overflow-hidden rounded-xl border border-gray-100 bg-white shadow-lg"
+            className="absolute top-[88px] left-4 w-72 origin-top-left overflow-hidden rounded-md border border-gray-100 bg-white shadow-lg"
             style={{ animation: "ybClinicIn 150ms cubic-bezier(0.23, 1, 0.32, 1)" }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -285,7 +285,7 @@ function MyRoleCard({ my }: { my: any }) {
     doctor: "医生", nurse: "护士", assistant: "助理", receptionist: "前台", finance: "财务",
   };
   return (
-    <div className="bg-white rounded-2xl shadow-sm p-4">
+    <div className="bg-white rounded shadow-sm p-4">
       <div className="flex items-center gap-2 mb-2">
         <ShieldCheck className="w-4 h-4 text-[#1E88D6]" />
         <span className="text-sm font-bold text-gray-800">我的角色</span>
@@ -298,11 +298,11 @@ function MyRoleCard({ my }: { my: any }) {
           ).map((it: { key: string; label: string; builtin: boolean }) => (
             <span
               key={it.key}
-              className="relative inline-flex items-center justify-center gap-1.5 h-[24px] px-3 rounded-full text-xs font-bold"
+              className="relative inline-flex items-center justify-center gap-1.5 h-[24px] px-3 rounded-md text-xs font-bold"
               style={roleBadgeStyle(it.builtin ? it.key : "__custom__")}
             >
               <span
-                className="w-[5px] h-[5px] rounded-full shrink-0"
+                className="w-[5px] h-[5px] rounded-md shrink-0"
                 style={{ background: roleDotColor(it.builtin ? it.key : "__custom__"), boxShadow: "0 0 2px rgba(255,255,255,.8)" }}
               />
               {it.label}
@@ -384,9 +384,9 @@ function StaffTab({ tenantId, my }: { tenantId: number; my: any }) {
       {/* 角色默认模板入口 */}
       <button
         onClick={() => setShowTemplate(true)}
-        className="w-full bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 active:opacity-80"
+        className="w-full bg-white rounded shadow-sm p-4 flex items-center gap-3 active:opacity-80"
       >
-        <span className="w-9 h-9 rounded-xl bg-[#EAF4FE] flex items-center justify-center shrink-0">
+        <span className="w-9 h-9 rounded-md bg-[#EAF4FE] flex items-center justify-center shrink-0">
           <SlidersHorizontal className="w-4 h-4 text-[#1E88D6]" />
         </span>
         <span className="flex-1 text-left">
@@ -401,9 +401,9 @@ function StaffTab({ tenantId, my }: { tenantId: number; my: any }) {
       {/* 角色管理入口（内置+自定义统一管理） */}
       <button
         onClick={() => setShowRoleManage(true)}
-        className="w-full bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 active:opacity-80"
+        className="w-full bg-white rounded shadow-sm p-4 flex items-center gap-3 active:opacity-80"
       >
-        <span className="w-9 h-9 rounded-xl bg-[#EAF4FE] flex items-center justify-center shrink-0">
+        <span className="w-9 h-9 rounded-md bg-[#EAF4FE] flex items-center justify-center shrink-0">
           <ShieldCheck className="w-4 h-4 text-[#1E88D6]" />
         </span>
         <span className="flex-1 text-left">
@@ -416,7 +416,7 @@ function StaffTab({ tenantId, my }: { tenantId: number; my: any }) {
       </button>
 
       {/* 成员表格 */}
-      <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-white rounded shadow-sm overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4 text-[#1E88D6]" />
@@ -424,7 +424,7 @@ function StaffTab({ tenantId, my }: { tenantId: number; my: any }) {
           </div>
           <button
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-1 text-xs font-medium text-white bg-[#1E88D6] rounded-full px-3 py-1.5 active:opacity-80"
+            className="flex items-center gap-1 text-xs font-medium text-white bg-[#1E88D6] rounded-md px-3 py-1.5 active:opacity-80"
           >
             <UserPlus className="w-3.5 h-3.5" />
             添加成员
@@ -459,7 +459,7 @@ function StaffTab({ tenantId, my }: { tenantId: number; my: any }) {
                   <tr key={m.userId} className="border-t border-gray-50">
                     <td className="sticky left-0 bg-white px-3 py-2.5 z-10">
                       <div className="flex items-center gap-2 min-w-[100px]">
-                        <span className="w-8 h-8 rounded-full bg-[#EAF4FE] overflow-hidden flex items-center justify-center shrink-0">
+                        <span className="w-8 h-8 rounded-md bg-[#EAF4FE] overflow-hidden flex items-center justify-center shrink-0">
                           {m.avatar ? (
                             <img src={m.avatar} alt="" className="w-full h-full object-cover" />
                           ) : (
@@ -476,7 +476,7 @@ function StaffTab({ tenantId, my }: { tenantId: number; my: any }) {
                             {(m.roleKeys || [m.roleKey]).map((rk: string) => (
                               <span
                                 key={rk}
-                                className="inline-flex items-center justify-center text-[9px] font-bold rounded-full px-1.5 py-0.5"
+                                className="inline-flex items-center justify-center text-[9px] font-bold rounded-md px-1.5 py-0.5"
                                 style={roleBadgeStyle(ROLE_TONE[rk] ? rk : "__custom__")}
                               >
                                 {roles?.find((r: any) => r.role_key === rk)?.name || rk}
@@ -633,7 +633,7 @@ function RoleSelectModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5">
+      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded p-5">
         <div className="flex items-center justify-between mb-4">
           <span className="text-base font-bold text-gray-800">{title}</span>
           <button onClick={onClose} aria-label="关闭">
@@ -644,11 +644,11 @@ function RoleSelectModal({
           <>
             <label className="block text-xs text-gray-500 mb-1">成员手机号或用户名</label>
             {picked ? (
-              <div className="flex items-center gap-3 border border-[#1E88D6] bg-[#EAF4FE] rounded-xl px-3 py-2.5 mb-4">
+              <div className="flex items-center gap-3 border border-[#1E88D6] bg-[#EAF4FE] rounded-md px-3 py-2.5 mb-4">
                 {picked.avatar ? (
-                  <img src={picked.avatar} alt="" className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+                  <img src={picked.avatar} alt="" className="w-9 h-9 rounded-md object-cover flex-shrink-0" />
                 ) : (
-                  <div className="w-9 h-9 rounded-full bg-[#1E88D6] text-white flex items-center justify-center flex-shrink-0">
+                  <div className="w-9 h-9 rounded-md bg-[#1E88D6] text-white flex items-center justify-center flex-shrink-0">
                     <UserCircle className="w-5 h-5" />
                   </div>
                 )}
@@ -667,7 +667,7 @@ function RoleSelectModal({
               </div>
             ) : (
               <div className="relative mb-4">
-                <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2.5 focus-within:border-[#1E88D6]">
+                <div className="flex items-center gap-2 border border-gray-200 rounded-md px-3 py-2.5 focus-within:border-[#1E88D6]">
                   <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
                   <input
                     value={identifier}
@@ -678,7 +678,7 @@ function RoleSelectModal({
                   {searchQuery.isFetching && <Loader2 className="w-4 h-4 text-gray-300 animate-spin flex-shrink-0" />}
                 </div>
                 {debounced.length >= 1 && (
-                  <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-lg max-h-60 overflow-y-auto z-10">
+                  <div className="absolute left-0 right-0 mt-1 bg-white border border-gray-100 rounded-md shadow-lg max-h-60 overflow-y-auto z-10">
                     {searchQuery.isFetching && results.length === 0 && (
                       <div className="px-3 py-3 text-xs text-gray-400 text-center">搜索中…</div>
                     )}
@@ -695,9 +695,9 @@ function RoleSelectModal({
                         className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 text-left"
                       >
                         {u.avatar ? (
-                          <img src={u.avatar} alt="" className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+                          <img src={u.avatar} alt="" className="w-9 h-9 rounded-md object-cover flex-shrink-0" />
                         ) : (
-                          <div className="w-9 h-9 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center flex-shrink-0">
+                          <div className="w-9 h-9 rounded-md bg-gray-200 text-gray-500 flex items-center justify-center flex-shrink-0">
                             <UserCircle className="w-5 h-5" />
                           </div>
                         )}
@@ -721,7 +721,7 @@ function RoleSelectModal({
             <button
               key={r.role_key}
               onClick={() => setRoleKey(r.role_key)}
-              className={`text-sm rounded-xl py-2.5 border transition-colors ${
+              className={`text-sm rounded-md py-2.5 border transition-colors ${
                 roleKey === r.role_key
                   ? "border-[#1E88D6] bg-[#EAF4FE] text-[#1E88D6] font-medium"
                   : "border-gray-200 text-gray-600"
@@ -734,7 +734,7 @@ function RoleSelectModal({
         <button
           onClick={() => onConfirm(picked || undefined)}
           disabled={loading}
-          className="w-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white rounded-xl py-3 text-sm font-medium active:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
+          className="w-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white rounded-md py-3 text-sm font-medium active:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
         >
           {loading && <Loader2 className="w-4 h-4 animate-spin" />}
           确认
@@ -763,12 +763,12 @@ function ScopeControl({
         aria-label="切换"
       >
         <span
-          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+          className={`relative inline-flex h-5 w-9 items-center rounded-md transition-colors ${
             on ? "bg-[#1E88D6]" : "bg-gray-200"
           }`}
         >
           <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+            className={`inline-block h-4 w-4 transform rounded-md bg-white transition-transform ${
               on ? "translate-x-4" : "translate-x-0.5"
             }`}
           />
@@ -779,7 +779,7 @@ function ScopeControl({
   // scope 三档：分段控件
   const opts: Scope[] = ["all", "self", "none"];
   return (
-    <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden">
+    <div className="inline-flex rounded border border-gray-200 overflow-hidden">
       {opts.map((o) => (
         <button
           key={o}
@@ -817,7 +817,7 @@ function RoleTemplateSheet({ tenantId, onClose }: { tenantId: number; onClose: (
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-      <div className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl p-5 max-h-[88vh] overflow-y-auto">
+      <div className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded p-5 max-h-[88vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-1">
           <span className="text-base font-bold text-gray-800">角色默认权限模板</span>
           <button onClick={onClose} aria-label="关闭">
@@ -834,10 +834,10 @@ function RoleTemplateSheet({ tenantId, onClose }: { tenantId: number; onClose: (
         ) : data ? (
           <div className="space-y-4">
             {data.roles.map((r: any) => (
-              <div key={r.role_key} className="border border-gray-100 rounded-xl overflow-hidden">
+              <div key={r.role_key} className="border border-gray-100 rounded-md overflow-hidden">
                 <div className="px-3 py-2 bg-[#F6FAFE] flex items-center gap-2">
                   <span
-                    className="inline-flex items-center justify-center text-[11px] font-bold rounded-full px-2.5 py-0.5"
+                    className="inline-flex items-center justify-center text-[11px] font-bold rounded-md px-2.5 py-0.5"
                     style={roleBadgeStyle(ROLE_TONE[r.role_key] ? r.role_key : "__custom__")}
                   >
                     {r.name}
@@ -916,7 +916,7 @@ function MemberPermSheet({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 max-h-[88vh] overflow-y-auto">
+      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded p-5 max-h-[88vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-1">
           <span className="text-base font-bold text-gray-800">{member.name || member.username} 的权限</span>
           <button onClick={onClose} aria-label="关闭">
@@ -928,7 +928,7 @@ function MemberPermSheet({
           {(member.roleKeys || [member.roleKey]).map((rk: string) => (
             <span
               key={rk}
-              className="inline-flex items-center justify-center text-[10px] font-bold rounded-full px-2 py-0.5"
+              className="inline-flex items-center justify-center text-[10px] font-bold rounded-md px-2 py-0.5"
               style={roleBadgeStyle(ROLE_TONE[rk] ? rk : "__custom__")}
             >
               {member.roleNames?.[member.roleKeys?.indexOf(rk)] || member.roleName || rk}
@@ -942,13 +942,13 @@ function MemberPermSheet({
         <div className="flex gap-2 mb-4">
           <button
             onClick={onChangeRole}
-            className="flex-1 text-xs text-[#1E88D6] border border-[#CFE3F5] rounded-lg py-2 active:bg-[#EAF4FE]"
+            className="flex-1 text-xs text-[#1E88D6] border border-[#CFE3F5] rounded py-2 active:bg-[#EAF4FE]"
           >
             添加角色
           </button>
           <button
             onClick={onRemove}
-            className="flex-1 text-xs text-[#E2553C] border border-[#F3D2CB] rounded-lg py-2 active:bg-[#FCEEEB]"
+            className="flex-1 text-xs text-[#E2553C] border border-[#F3D2CB] rounded py-2 active:bg-[#FCEEEB]"
           >
             移出门诊
           </button>
@@ -961,7 +961,7 @@ function MemberPermSheet({
         ) : data ? (
           <div className="space-y-4">
             {Object.entries(grouped).map(([group, perms]) => (
-              <div key={group} className="border border-gray-100 rounded-xl overflow-hidden">
+              <div key={group} className="border border-gray-100 rounded-md overflow-hidden">
                 <div className="px-3 py-2 bg-[#F6FAFE] text-xs font-medium text-gray-600">{group}</div>
                 <div>
                   {perms.map((p: any) => {
@@ -1067,7 +1067,7 @@ function CustomRolesSheet({ tenantId, onClose }: { tenantId: number; onClose: ()
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 max-h-[88vh] overflow-y-auto">
+      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded p-5 max-h-[88vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-1">
           <span className="text-base font-bold text-gray-800">自定义角色</span>
           <button onClick={onClose} aria-label="关闭">
@@ -1090,9 +1090,9 @@ function CustomRolesSheet({ tenantId, onClose }: { tenantId: number; onClose: ()
               customRoles.map((r: any) => (
                 <div
                   key={r.role_key}
-                  className="flex items-center gap-2 border border-gray-100 rounded-xl px-3 py-3"
+                  className="flex items-center gap-2 border border-gray-100 rounded-md px-3 py-3"
                 >
-                  <span className="w-8 h-8 rounded-lg bg-[#EAF4FE] flex items-center justify-center shrink-0">
+                  <span className="w-8 h-8 rounded bg-[#EAF4FE] flex items-center justify-center shrink-0">
                     <ShieldCheck className="w-4 h-4 text-[#1E88D6]" />
                   </span>
                   <div className="flex-1 min-w-0">
@@ -1123,7 +1123,7 @@ function CustomRolesSheet({ tenantId, onClose }: { tenantId: number; onClose: ()
 
         <button
           onClick={() => setCreating(true)}
-          className="w-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white rounded-xl py-3 text-sm font-medium active:opacity-90 flex items-center justify-center gap-2"
+          className="w-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white rounded-md py-3 text-sm font-medium active:opacity-90 flex items-center justify-center gap-2"
         >
           <UserPlus className="w-4 h-4" />
           新建自定义角色
@@ -1213,7 +1213,7 @@ function CustomRoleEditor({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded p-5 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <span className="text-base font-bold text-gray-800">{isEdit ? "编辑自定义角色" : "新建自定义角色"}</span>
           <button onClick={onClose} aria-label="关闭">
@@ -1227,7 +1227,7 @@ function CustomRoleEditor({
           onChange={(e) => setName(e.target.value)}
           placeholder="例如：咨询师、店长助理"
           maxLength={20}
-          className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 mb-3 outline-none focus:border-[#1E88D6]"
+          className="w-full text-sm border border-gray-200 rounded-md px-3 py-2.5 mb-3 outline-none focus:border-[#1E88D6]"
         />
         <label className="block text-xs text-gray-500 mb-1">角色描述（选填）</label>
         <input
@@ -1235,13 +1235,13 @@ function CustomRoleEditor({
           onChange={(e) => setDescription(e.target.value)}
           placeholder="简要说明该角色职责"
           maxLength={100}
-          className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2.5 mb-4 outline-none focus:border-[#1E88D6]"
+          className="w-full text-sm border border-gray-200 rounded-md px-3 py-2.5 mb-4 outline-none focus:border-[#1E88D6]"
         />
 
         <label className="block text-xs text-gray-500 mb-2">权限设置</label>
         <div className="space-y-4 mb-5">
           {Object.entries(grouped).map(([group, ps]) => (
-            <div key={group} className="border border-gray-100 rounded-xl overflow-hidden">
+            <div key={group} className="border border-gray-100 rounded-md overflow-hidden">
               <div className="px-3 py-2 bg-[#F6FAFE] text-xs font-medium text-gray-600">{group}</div>
               <div>
                 {ps.map((p: any) => (
@@ -1268,7 +1268,7 @@ function CustomRoleEditor({
         <button
           onClick={handleSave}
           disabled={saving}
-          className="w-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white rounded-xl py-3 text-sm font-medium active:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
+          className="w-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white rounded-md py-3 text-sm font-medium active:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
         >
           {saving && <Loader2 className="w-4 h-4 animate-spin" />}
           {isEdit ? "保存" : "创建角色"}
@@ -1293,8 +1293,8 @@ function CustomerTab({ tenantId }: { tenantId: number }) {
 
   return (
     <>
-      <div className="bg-white rounded-2xl shadow-sm p-3">
-        <div className="flex items-center gap-2 bg-[#F6FAFE] rounded-xl px-3 py-2">
+      <div className="bg-white rounded shadow-sm p-3">
+        <div className="flex items-center gap-2 bg-[#F6FAFE] rounded-md px-3 py-2">
           <Search className="w-4 h-4 text-gray-400" />
           <input
             value={keyword}
@@ -1312,7 +1312,7 @@ function CustomerTab({ tenantId }: { tenantId: number }) {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-white rounded shadow-sm overflow-hidden">
         <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
           <UserCircle className="w-4 h-4 text-[#1E88D6]" />
           <span className="text-sm font-bold text-gray-800">顾客（{customers.length}）</span>
@@ -1332,7 +1332,7 @@ function CustomerTab({ tenantId }: { tenantId: number }) {
                   key={c.userId}
                   className="flex items-center gap-3 px-4 py-3 border-b border-gray-50 last:border-0"
                 >
-                  <span className="w-10 h-10 rounded-full bg-[#EAF4FE] overflow-hidden flex items-center justify-center shrink-0">
+                  <span className="w-10 h-10 rounded-md bg-[#EAF4FE] overflow-hidden flex items-center justify-center shrink-0">
                     {c.avatar ? (
                       <img src={c.avatar} alt="" className="w-full h-full object-cover" />
                     ) : (
@@ -1397,7 +1397,7 @@ function CustomerPermSheet({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 max-h-[88vh] overflow-y-auto">
+      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded p-5 max-h-[88vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-1">
           <span className="text-base font-bold text-gray-800">{customer.name || "顾客"} 的权限</span>
           <button onClick={onClose} aria-label="关闭">
@@ -1407,7 +1407,7 @@ function CustomerPermSheet({
         <p className="text-xs text-gray-400 mb-4">为该顾客单独开通或关闭可见功能，仅影响本门诊。</p>
         <div className="space-y-4">
           {Object.entries(grouped).map(([group, gperms]) => (
-            <div key={group} className="border border-gray-100 rounded-xl overflow-hidden">
+            <div key={group} className="border border-gray-100 rounded-md overflow-hidden">
               <div className="px-3 py-2 bg-[#F6FAFE] text-xs font-medium text-gray-600">{group}</div>
               <div>
                 {gperms.map((p: any) => {
@@ -1429,12 +1429,12 @@ function CustomerPermSheet({
                         className="disabled:opacity-60"
                       >
                         <span
-                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                          className={`relative inline-flex h-5 w-9 items-center rounded-md transition-colors ${
                             on ? "bg-[#1E88D6]" : "bg-gray-200"
                           }`}
                         >
                           <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            className={`inline-block h-4 w-4 transform rounded-md bg-white transition-transform ${
                               on ? "translate-x-4" : "translate-x-0.5"
                             }`}
                           />
@@ -1456,7 +1456,7 @@ function CustomerPermSheet({
 function RoleInfoSheet({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 max-h-[85vh] overflow-y-auto">
+      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded p-5 max-h-[85vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <span className="text-base font-bold text-gray-800">角色说明</span>
           <button onClick={onClose} aria-label="关闭">
@@ -1465,11 +1465,11 @@ function RoleInfoSheet({ onClose }: { onClose: () => void }) {
         </div>
         <div className="flex flex-col items-center">
           <div className="flex items-center gap-3">
-            <div className="w-32 rounded-2xl bg-gradient-to-b from-[#1E88D6] to-[#0E5A9E] text-white shadow-sm px-4 py-3 flex flex-col items-center">
+            <div className="w-32 rounded bg-gradient-to-b from-[#1E88D6] to-[#0E5A9E] text-white shadow-sm px-4 py-3 flex flex-col items-center">
               <Crown className="w-6 h-6 mb-1" />
               <span className="text-base font-bold tracking-wide">院长</span>
             </div>
-            <div className="w-32 rounded-2xl bg-gradient-to-b from-[#E0A030] to-[#C77700] text-white shadow-sm px-4 py-3 flex flex-col items-center">
+            <div className="w-32 rounded bg-gradient-to-b from-[#E0A030] to-[#C77700] text-white shadow-sm px-4 py-3 flex flex-col items-center">
               <Crown className="w-6 h-6 mb-1" />
               <span className="text-base font-bold tracking-wide">股东</span>
             </div>
@@ -1488,14 +1488,14 @@ function RoleInfoSheet({ onClose }: { onClose: () => void }) {
           ].map(({ key, name, Icon }) => (
             <div
               key={key}
-              className="rounded-2xl bg-[#EAF4FE] border border-[#DCEBFB] px-3 py-4 flex flex-col items-center"
+              className="rounded bg-[#EAF4FE] border border-[#DCEBFB] px-3 py-4 flex flex-col items-center"
             >
               <Icon className="w-6 h-6 text-[#1E88D6] mb-1.5" />
               <span className="text-sm font-medium text-[#1E5C92]">{name}</span>
             </div>
           ))}
         </div>
-        <div className="mt-5 rounded-xl bg-[#F6F9FC] border border-[#E6EEF6] p-3.5 space-y-2">
+        <div className="mt-5 rounded-md bg-[#F6F9FC] border border-[#E6EEF6] p-3.5 space-y-2">
           <p className="text-xs text-gray-600 leading-relaxed">
             角色决定了一个人进来时的默认权限，并作为身份标识显示。真正能做什么，以「权限管理」里逐人逐项的设置为准。
           </p>
@@ -1581,7 +1581,7 @@ function RoleManageSheet({ tenantId, onClose }: { tenantId: number; onClose: () 
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 max-h-[90vh] flex flex-col">
+      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded p-5 max-h-[90vh] flex flex-col">
         {/* 头部 */}
         <div className="flex items-center justify-between mb-1 shrink-0">
           <span className="text-base font-bold text-gray-800">角色管理</span>
@@ -1605,7 +1605,7 @@ function RoleManageSheet({ tenantId, onClose }: { tenantId: number; onClose: () 
             localRoles.map((r: any, idx: number) => (
               <div
                 key={r.role_key}
-                className="flex items-center gap-2 border border-gray-100 rounded-xl px-3 py-2.5 bg-white"
+                className="flex items-center gap-2 border border-gray-100 rounded-md px-3 py-2.5 bg-white"
               >
                 {/* 排序按钮 */}
                 <div className="flex flex-col gap-0.5 shrink-0">
@@ -1629,7 +1629,7 @@ function RoleManageSheet({ tenantId, onClose }: { tenantId: number; onClose: () 
 
                 {/* 角色铭牌 */}
                 <span
-                  className="inline-flex items-center justify-center text-[11px] font-bold rounded-full px-2.5 py-0.5 shrink-0"
+                  className="inline-flex items-center justify-center text-[11px] font-bold rounded-md px-2.5 py-0.5 shrink-0"
                   style={roleBadgeStyle(ROLE_TONE[r.role_key] ? r.role_key : "__custom__")}
                 >
                   {r.name}
@@ -1675,14 +1675,14 @@ function RoleManageSheet({ tenantId, onClose }: { tenantId: number; onClose: () 
           <button
             onClick={saveOrder}
             disabled={reorderRoles.isPending}
-            className="flex-1 bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white rounded-xl py-2.5 text-sm font-medium active:opacity-90 disabled:opacity-60 flex items-center justify-center gap-1.5"
+            className="flex-1 bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white rounded-md py-2.5 text-sm font-medium active:opacity-90 disabled:opacity-60 flex items-center justify-center gap-1.5"
           >
             {reorderRoles.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
             保存排序
           </button>
           <button
             onClick={() => setIsCreating(true)}
-            className="flex items-center gap-1.5 border border-[#1E88D6] text-[#1E88D6] rounded-xl px-4 py-2.5 text-sm font-medium active:bg-[#EAF4FE]"
+            className="flex items-center gap-1.5 border border-[#1E88D6] text-[#1E88D6] rounded-md px-4 py-2.5 text-sm font-medium active:bg-[#EAF4FE]"
           >
             <Plus className="w-4 h-4" />
             新建角色
@@ -1709,7 +1709,7 @@ function RoleEditForm({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
-      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5">
+      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded p-5">
         <div className="flex items-center justify-between mb-4">
           <span className="text-base font-bold text-gray-800">
             {isEdit ? `编辑角色「${role.name}」` : "新建角色"}
@@ -1720,7 +1720,7 @@ function RoleEditForm({
         </div>
 
         {isEdit && role.is_builtin === 1 && (
-          <div className="mb-3 px-3 py-2 bg-[#EAF4FE] rounded-xl text-xs text-[#1E5C92]">
+          <div className="mb-3 px-3 py-2 bg-[#EAF4FE] rounded-md text-xs text-[#1E5C92]">
             这是系统内置角色，改名后仅在本院生效，不影响其他医院。
           </div>
         )}
@@ -1730,7 +1730,7 @@ function RoleEditForm({
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="例如：医生、护士、咨询师"
-          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#1E88D6] mb-4"
+          className="w-full border border-gray-200 rounded-md px-3 py-2.5 text-sm outline-none focus:border-[#1E88D6] mb-4"
         />
 
         <label className="block text-xs text-gray-500 mb-1">描述（选填）</label>
@@ -1738,7 +1738,7 @@ function RoleEditForm({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="简单说明该角色的职责"
-          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#1E88D6] mb-5"
+          className="w-full border border-gray-200 rounded-md px-3 py-2.5 text-sm outline-none focus:border-[#1E88D6] mb-5"
         />
 
         <button
@@ -1748,7 +1748,7 @@ function RoleEditForm({
             onSave(nm, description.trim());
           }}
           disabled={saving}
-          className="w-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white rounded-xl py-3 text-sm font-medium active:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
+          className="w-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white rounded-md py-3 text-sm font-medium active:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
         >
           {saving && <Loader2 className="w-4 h-4 animate-spin" />}
           {isEdit ? "保存修改" : "创建角色"}

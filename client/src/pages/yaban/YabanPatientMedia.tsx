@@ -257,7 +257,7 @@ export default function YabanPatientMedia() {
           <div className="flex items-center gap-2 w-max">
             <button
               onClick={() => setActiveCategory(null)}
-              className={`px-3 py-1 rounded-full text-[13px] whitespace-nowrap ${
+              className={`px-3 py-1 rounded-md text-[13px] whitespace-nowrap ${
                 activeCategory === null ? "bg-sky-500 text-white" : "bg-gray-100 text-gray-600"
               }`}
             >
@@ -267,7 +267,7 @@ export default function YabanPatientMedia() {
               <button
                 key={c}
                 onClick={() => setActiveCategory(c)}
-                className={`px-3 py-1 rounded-full text-[13px] whitespace-nowrap ${
+                className={`px-3 py-1 rounded-md text-[13px] whitespace-nowrap ${
                   activeCategory === c ? "bg-sky-500 text-white" : "bg-gray-100 text-gray-600"
                 }`}
               >
@@ -291,7 +291,7 @@ export default function YabanPatientMedia() {
             {canUpload && (
               <button
                 onClick={() => setShowUploadMenu(true)}
-                className="mt-4 px-4 py-2 rounded-full bg-sky-500 text-white text-sm flex items-center gap-1"
+                className="mt-4 px-4 py-2 rounded-md bg-sky-500 text-white text-sm flex items-center gap-1"
               >
                 <Plus className="w-4 h-4" />
                 上传影像
@@ -333,7 +333,7 @@ export default function YabanPatientMedia() {
                           {m.category}
                         </span>
                         {m.remark && (
-                          <span className="absolute right-1 top-1 w-2 h-2 rounded-full bg-amber-400" />
+                          <span className="absolute right-1 top-1 w-2 h-2 rounded-md bg-amber-400" />
                         )}
                       </button>
                     );
@@ -403,7 +403,7 @@ export default function YabanPatientMedia() {
                 <button
                   key={c}
                   onClick={() => setPendingCategory(c)}
-                  className={`px-2 py-2 rounded-lg text-[13px] ${
+                  className={`px-2 py-2 rounded text-[13px] ${
                     pendingCategory === c
                       ? "bg-sky-500 text-white"
                       : "bg-gray-100 text-gray-600"
@@ -416,7 +416,7 @@ export default function YabanPatientMedia() {
             <div className="px-4 pb-4">
               <button
                 onClick={confirmCategoryAndOpen}
-                className="w-full py-3 rounded-full bg-sky-500 text-white text-[15px]"
+                className="w-full py-3 rounded-md bg-sky-500 text-white text-[15px]"
               >
                 确定并选择文件
               </button>
@@ -462,7 +462,7 @@ export default function YabanPatientMedia() {
       {/* 上传中遮罩 */}
       {uploading && (
         <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center">
-          <div className="bg-white rounded-2xl px-6 py-5 flex flex-col items-center">
+          <div className="bg-white rounded px-6 py-5 flex flex-col items-center">
             <Loader2 className="w-7 h-7 animate-spin text-sky-500" />
             <span className="mt-2 text-sm text-gray-600">上传中…</span>
           </div>
@@ -506,7 +506,7 @@ export default function YabanPatientMedia() {
                   href={viewerItem.fullUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-4 px-4 py-2 rounded-full bg-sky-500 text-white text-sm"
+                  className="mt-4 px-4 py-2 rounded-md bg-sky-500 text-white text-sm"
                 >
                   下载/查看原文件
                 </a>
@@ -523,7 +523,7 @@ export default function YabanPatientMedia() {
             {viewerIndex > 0 && (
               <button
                 onClick={() => setViewerIndex(viewerIndex - 1)}
-                className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-white/20 rounded-full text-white"
+                className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-white/20 rounded-md text-white"
               >
                 <ArrowLeft className="w-6 h-6" />
               </button>
@@ -531,7 +531,7 @@ export default function YabanPatientMedia() {
             {viewerIndex < filtered.length - 1 && (
               <button
                 onClick={() => setViewerIndex(viewerIndex + 1)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white/20 rounded-full text-white"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-white/20 rounded-md text-white"
               >
                 <ArrowRight className="w-6 h-6" />
               </button>
@@ -602,7 +602,7 @@ function EditMediaSheet({
                 <button
                   key={c}
                   onClick={() => setCategory(c)}
-                  className={`px-2.5 py-1 rounded-full text-[13px] ${
+                  className={`px-2.5 py-1 rounded-md text-[13px] ${
                     category === c ? "bg-sky-500 text-white" : "bg-gray-100 text-gray-600"
                   }`}
                 >
@@ -617,7 +617,7 @@ function EditMediaSheet({
               type="date"
               value={takenAt}
               onChange={(e) => setTakenAt(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-[14px]"
+              className="w-full px-3 py-2 rounded border border-gray-200 text-[14px]"
             />
           </div>
           <div>
@@ -628,13 +628,13 @@ function EditMediaSheet({
               rows={3}
               maxLength={500}
               placeholder="补充影像说明，如部位、诊断要点等"
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-[14px] resize-none"
+              className="w-full px-3 py-2 rounded border border-gray-200 text-[14px] resize-none"
             />
           </div>
           <button
             onClick={() => onSave(remark, category, takenAt)}
             disabled={saving}
-            className="w-full py-3 rounded-full bg-sky-500 text-white text-[15px] disabled:opacity-60 flex items-center justify-center gap-2"
+            className="w-full py-3 rounded-md bg-sky-500 text-white text-[15px] disabled:opacity-60 flex items-center justify-center gap-2"
           >
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
             保存

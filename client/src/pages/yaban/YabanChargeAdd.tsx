@@ -251,7 +251,7 @@ function UnitPicker({ value, onChange, myUnits, onSaveUnits }: UnitPickerProps) 
         {value && !visibleUnits.includes(value) && (
           <div className="mt-1.5 flex items-center gap-1">
             <span className="text-xs text-gray-400">已选：</span>
-            <span className="text-xs font-medium px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: ACCENT }}>{value}</span>
+            <span className="text-xs font-medium px-2 py-0.5 rounded-md text-white" style={{ backgroundColor: ACCENT }}>{value}</span>
           </div>
         )}
       </div>
@@ -276,13 +276,13 @@ function UnitPicker({ value, onChange, myUnits, onSaveUnits }: UnitPickerProps) 
                 onChange={(e) => setCustomInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAddToDraft()}
                 placeholder="输入新单位，如：牙弓、疗程"
-                className="flex-1 bg-gray-100 rounded-xl px-4 py-3 text-base outline-none"
+                className="flex-1 bg-gray-100 rounded-md px-4 py-3 text-base outline-none"
               />
               <button
                 type="button"
                 onClick={handleAddToDraft}
                 disabled={!customInput.trim() || draftUnits.includes(customInput.trim()) || draftUnits.length >= MAX_UNITS}
-                className="px-5 py-3 rounded-xl text-white text-base font-medium disabled:opacity-40"
+                className="px-5 py-3 rounded-md text-white text-base font-medium disabled:opacity-40"
                 style={{ backgroundColor: ACCENT }}
               >
                 添加
@@ -303,7 +303,7 @@ function UnitPicker({ value, onChange, myUnits, onSaveUnits }: UnitPickerProps) 
                   <button
                     type="button"
                     onClick={() => onChange(u)}
-                    className={`flex-1 text-left px-4 py-3 rounded-xl text-base font-medium transition-colors ${
+                    className={`flex-1 text-left px-4 py-3 rounded-md text-base font-medium transition-colors ${
                       value === u ? "text-white" : "bg-gray-100 text-gray-700"
                     }`}
                     style={value === u ? { backgroundColor: ACCENT } : {}}
@@ -315,7 +315,7 @@ function UnitPicker({ value, onChange, myUnits, onSaveUnits }: UnitPickerProps) 
                     type="button"
                     onClick={() => moveUnit(idx, -1)}
                     disabled={idx === 0}
-                    className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center disabled:opacity-30 active:bg-gray-200"
+                    className="w-10 h-10 rounded-md bg-gray-100 flex items-center justify-center disabled:opacity-30 active:bg-gray-200"
                   >
                     <ChevronUp className="w-5 h-5 text-gray-500" />
                   </button>
@@ -324,7 +324,7 @@ function UnitPicker({ value, onChange, myUnits, onSaveUnits }: UnitPickerProps) 
                     type="button"
                     onClick={() => moveUnit(idx, 1)}
                     disabled={idx === draftUnits.length - 1}
-                    className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center disabled:opacity-30 active:bg-gray-200"
+                    className="w-10 h-10 rounded-md bg-gray-100 flex items-center justify-center disabled:opacity-30 active:bg-gray-200"
                   >
                     <ChevronDown className="w-5 h-5 text-gray-500" />
                   </button>
@@ -332,7 +332,7 @@ function UnitPicker({ value, onChange, myUnits, onSaveUnits }: UnitPickerProps) 
                   <button
                     type="button"
                     onClick={() => handleRemoveFromDraft(u)}
-                    className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center active:bg-red-100"
+                    className="w-10 h-10 rounded-md bg-red-50 flex items-center justify-center active:bg-red-100"
                   >
                     <X className="w-5 h-5 text-red-400" />
                   </button>
@@ -346,7 +346,7 @@ function UnitPicker({ value, onChange, myUnits, onSaveUnits }: UnitPickerProps) 
             <button
               type="button"
               onClick={handleSave}
-              className="w-full py-4 rounded-2xl text-white text-base font-semibold"
+              className="w-full py-4 rounded text-white text-base font-semibold"
               style={{ backgroundColor: ACCENT }}
             >
               保存单位库
@@ -596,7 +596,7 @@ export default function YabanChargeAdd() {
 
         {/* ===== Tab1：批量添加一级分类 ===== */}
         {tab === "cat1" && (
-          <div className="bg-white rounded-lg shadow-sm p-4 space-y-3">
+          <div className="bg-white rounded shadow-sm p-4 space-y-3">
             <p className="text-xs text-gray-400">一级分类是最顶层的大类，如「检查诊断」「补牙修复」等。价格/单位可选填。</p>
             {cat1Rows.map((row, idx) => (
               <div key={row.id} className="space-y-2 border-b border-gray-50 pb-3 last:border-0 last:pb-0">
@@ -622,11 +622,11 @@ export default function YabanChargeAdd() {
                 <div className="flex items-center gap-1.5 mb-1">
                   <span className="text-xs text-gray-400">价格：</span>
                   <button type="button" onClick={() => setCat1Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, priceMode: "fixed" } : r))}
-                    className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${row.priceMode === "fixed" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500"}`}>
+                    className={`px-2.5 py-0.5 rounded-md text-xs font-medium transition-colors ${row.priceMode === "fixed" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500"}`}>
                     固定
                   </button>
                   <button type="button" onClick={() => setCat1Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, priceMode: "range" } : r))}
-                    className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${row.priceMode === "range" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500"}`}>
+                    className={`px-2.5 py-0.5 rounded-md text-xs font-medium transition-colors ${row.priceMode === "range" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500"}`}>
                     范围
                   </button>
                 </div>
@@ -683,7 +683,7 @@ export default function YabanChargeAdd() {
         {tab === "cat2" && (
           <>
             {/* 选择所属一级分类 */}
-            <div className="bg-white rounded-lg shadow-sm p-4">
+            <div className="bg-white rounded shadow-sm p-4">
               <label className="block text-xs text-gray-500 mb-1.5">所属一级分类（共 {sortedCats.length} 个）</label>
               <div className="relative">
                 <select
@@ -701,7 +701,7 @@ export default function YabanChargeAdd() {
             </div>
 
             {/* 二级分类行列表 */}
-            <div className="bg-white rounded-lg shadow-sm p-4 space-y-3">
+            <div className="bg-white rounded shadow-sm p-4 space-y-3">
               <p className="text-xs text-gray-400">二级分类是一级下的子分类，如「前牙」「后牙」等。价格/单位可选填。</p>
               {cat2Rows.map((row, idx) => (
                 <div key={row.id} className="space-y-2 border-b border-gray-50 pb-3 last:border-0 last:pb-0">
@@ -727,11 +727,11 @@ export default function YabanChargeAdd() {
                   <div className="flex items-center gap-1.5 mb-1">
                     <span className="text-xs text-gray-400">价格：</span>
                     <button type="button" onClick={() => setCat2Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, priceMode: "fixed" } : r))}
-                      className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${row.priceMode === "fixed" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500"}`}>
+                      className={`px-2.5 py-0.5 rounded-md text-xs font-medium transition-colors ${row.priceMode === "fixed" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500"}`}>
                       固定
                     </button>
                     <button type="button" onClick={() => setCat2Rows((prev) => prev.map((r) => r.id === row.id ? { ...r, priceMode: "range" } : r))}
-                      className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${row.priceMode === "range" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500"}`}>
+                      className={`px-2.5 py-0.5 rounded-md text-xs font-medium transition-colors ${row.priceMode === "range" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500"}`}>
                       范围
                     </button>
                   </div>
@@ -789,7 +789,7 @@ export default function YabanChargeAdd() {
         {tab === "cat3" && (
           <>
             {/* 选择一级分类 */}
-            <div className="bg-white rounded-lg shadow-sm p-4 space-y-3">
+            <div className="bg-white rounded shadow-sm p-4 space-y-3">
               <div>
                 <label className="block text-xs text-gray-500 mb-1.5">所属一级分类（必选）</label>
                 <div className="relative">
@@ -869,7 +869,7 @@ export default function YabanChargeAdd() {
             {/* 项目行列表 */}
             <div className="space-y-2">
               {rows.map((row, idx) => (
-                <div key={row.id} className="bg-white rounded-lg shadow-sm p-4 space-y-3">
+                <div key={row.id} className="bg-white rounded shadow-sm p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-gray-400">项目 {idx + 1}</span>
                     {rows.length > 1 && (
@@ -890,11 +890,11 @@ export default function YabanChargeAdd() {
                   <div className="flex items-center gap-1.5 mb-1">
                     <span className="text-xs text-gray-400">价格：</span>
                     <button type="button" onClick={() => updateRow(row.id, { priceMode: "fixed" })}
-                      className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${row.priceMode === "fixed" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500"}`}>
+                      className={`px-2.5 py-0.5 rounded-md text-xs font-medium transition-colors ${row.priceMode === "fixed" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500"}`}>
                       固定
                     </button>
                     <button type="button" onClick={() => updateRow(row.id, { priceMode: "range" })}
-                      className={`px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${row.priceMode === "range" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500"}`}>
+                      className={`px-2.5 py-0.5 rounded-md text-xs font-medium transition-colors ${row.priceMode === "range" ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500"}`}>
                       范围
                     </button>
                   </div>
@@ -942,7 +942,7 @@ export default function YabanChargeAdd() {
             {/* 再加一项 */}
             <button
               onClick={addRow}
-              className="w-full py-3 rounded-lg border-2 border-dashed border-gray-200 text-sm text-gray-400 flex items-center justify-center gap-1.5 active:bg-gray-50"
+              className="w-full py-3 rounded border-2 border-dashed border-gray-200 text-sm text-gray-400 flex items-center justify-center gap-1.5 active:bg-gray-50"
             >
               <Plus className="w-4 h-4" />
               再加一项

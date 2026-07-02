@@ -12,8 +12,8 @@ export default function AnnualProgress() {
           <span style={{ fontSize:12, color:"#6B7280" }}>已完成 <strong style={{ color:"#1F2937" }}>{actualTotal.toFixed(1)}万</strong></span>
           <span style={{ fontSize:12, color:"#6B7280" }}>目标 <strong style={{ color:"#1F2937" }}>{ANNUAL_TARGET}万</strong></span>
         </div>
-        <div style={{ height:8, background:"#F3F4F6", borderRadius:4, overflow:"hidden" }}>
-          <div style={{ height:"100%", width:`${pct}%`, background:"linear-gradient(90deg,#1E88D6,#3BA9E0)", borderRadius:4 }} />
+        <div style={{ height:8, background:"#F3F4F6", borderRadius: 4, overflow:"hidden" }}>
+          <div style={{ height:"100%", width:`${pct}%`, background:"linear-gradient(90deg,#1E88D6,#3BA9E0)", borderRadius: 4 }} />
         </div>
         <div style={{ fontSize:11, color:"#1E88D6", fontWeight:600, marginTop:4, textAlign:"right" }}>{pct}%</div>
       </div>

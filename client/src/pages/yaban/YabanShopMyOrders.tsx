@@ -91,7 +91,7 @@ export default function YabanShopMyOrders() {
             <button
               key={f.key}
               onClick={() => setFilter(f.key)}
-              className={`shrink-0 px-3 py-1 rounded-full text-xs transition-colors ${
+              className={`shrink-0 px-3 py-1 rounded-md text-xs transition-colors ${
                 filter === f.key ? "bg-white text-[#2196C8] font-semibold" : "bg-white/20 text-white"
               }`}
             >
@@ -112,7 +112,7 @@ export default function YabanShopMyOrders() {
             <p className="text-sm">暂无订单</p>
             <button
               onClick={() => navigate("/yaban/shop")}
-              className="mt-4 px-5 py-2 rounded-full bg-[#2196C8] text-white text-sm"
+              className="mt-4 px-5 py-2 rounded-md bg-[#2196C8] text-white text-sm"
             >
               去逛逛
             </button>
@@ -124,12 +124,12 @@ export default function YabanShopMyOrders() {
               <button
                 key={o.id}
                 onClick={() => setDetailId(o.id)}
-                className="w-full text-left bg-white rounded-2xl p-4 active:scale-[0.99] transition-transform"
+                className="w-full text-left bg-white rounded p-4 active:scale-[0.99] transition-transform"
               >
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-400">订单号 {o.order_no}</span>
                   <span
-                    className="text-xs px-2 py-0.5 rounded-full font-medium"
+                    className="text-xs px-2 py-0.5 rounded-md font-medium"
                     style={{ color: sm.color, backgroundColor: sm.bg }}
                   >
                     {sm.text}
@@ -240,14 +240,14 @@ function OrderDetailDrawer({
           <div className="px-4 py-4 space-y-4" style={{ paddingBottom: "calc(24px + env(safe-area-inset-bottom, 0px))" }}>
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-500">订单状态</span>
-              <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ color: sm.color, backgroundColor: sm.bg }}>
+              <span className="text-xs px-2 py-0.5 rounded-md font-medium" style={{ color: sm.color, backgroundColor: sm.bg }}>
                 {sm.text}
               </span>
             </div>
 
             {/* 到店核销码（服务订单 + 已付款 + 未核销） */}
             {isService && paid && order.verify_status === "unused" && order.verify_code && (
-              <div className="bg-[#F5F0FF] rounded-xl p-4 text-center">
+              <div className="bg-[#F5F0FF] rounded-md p-4 text-center">
                 <div className="flex items-center justify-center gap-1 text-[#7C3AED] text-sm font-medium mb-2">
                   <QrCode className="w-4 h-4" /> 到店核销码
                 </div>
@@ -258,14 +258,14 @@ function OrderDetailDrawer({
               </div>
             )}
             {isService && order.verify_status === "used" && (
-              <div className="bg-[#D1FAE5] rounded-xl p-3 text-center text-sm text-[#059669] font-medium">
+              <div className="bg-[#D1FAE5] rounded-md p-3 text-center text-sm text-[#059669] font-medium">
                 已到店核销 {order.verified_at ? `· ${fmtTime(order.verified_at)}` : ""}
               </div>
             )}
 
             {/* 物流信息（已发货） */}
             {order.ship_no && (
-              <div className="bg-[#F0FBFF] rounded-xl p-3 text-sm">
+              <div className="bg-[#F0FBFF] rounded-md p-3 text-sm">
                 <div className="flex items-center gap-1 text-[#0891B2] font-medium mb-1">
                   <Truck className="w-4 h-4" /> 物流信息
                 </div>
@@ -275,7 +275,7 @@ function OrderDetailDrawer({
 
             {/* 收货信息（实物订单） */}
             {!isService && (
-              <div className="bg-[#F7F9FB] rounded-xl p-3 text-sm">
+              <div className="bg-[#F7F9FB] rounded-md p-3 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-gray-500">收货信息</span>
                   {order.order_status === "confirmed" && (
@@ -301,13 +301,13 @@ function OrderDetailDrawer({
             )}
 
             {/* 商品明细 */}
-            <div className="bg-[#F7F9FB] rounded-xl p-3 space-y-3">
+            <div className="bg-[#F7F9FB] rounded-md p-3 space-y-3">
               {items.map((it) => (
                 <div key={it.id} className="flex items-center gap-3">
                   {it.product_image ? (
-                    <img src={it.product_image} alt={it.product_name} className="w-12 h-12 rounded-lg object-cover bg-white shrink-0" />
+                    <img src={it.product_image} alt={it.product_name} className="w-12 h-12 rounded object-cover bg-white shrink-0" />
                   ) : (
-                    <div className="w-12 h-12 rounded-lg bg-gray-100 shrink-0" />
+                    <div className="w-12 h-12 rounded bg-gray-100 shrink-0" />
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-800 truncate">{it.product_name}</p>
@@ -340,14 +340,14 @@ function OrderDetailDrawer({
 
             {/* 状态时间线 */}
             {(timeline.data?.length ?? 0) > 0 && (
-              <div className="bg-[#F7F9FB] rounded-xl p-3">
+              <div className="bg-[#F7F9FB] rounded-md p-3">
                 <div className="flex items-center gap-1 text-gray-500 text-sm mb-2">
                   <Clock className="w-4 h-4" /> 订单进度
                 </div>
                 <div className="space-y-2">
                   {(timeline.data as any[]).map((l, i) => (
                     <div key={i} className="flex items-start gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-[#2196C8] mt-1.5 shrink-0" />
+                      <div className="w-1.5 h-1.5 rounded-md bg-[#2196C8] mt-1.5 shrink-0" />
                       <div className="flex-1 flex items-center justify-between">
                         <span className="text-sm text-gray-700">
                           {ACTION_TEXT[l.action] || l.action}
@@ -363,7 +363,7 @@ function OrderDetailDrawer({
 
             {/* 评价入口（已完成订单） */}
             {order.order_status === "completed" && (
-              <div className="bg-[#FFFBF0] rounded-xl p-3">
+              <div className="bg-[#FFFBF0] rounded-md p-3">
                 <p className="text-sm font-medium text-gray-700 mb-2">商品评价</p>
                 <div className="space-y-2">
                   {items.map((it) => (
@@ -372,7 +372,7 @@ function OrderDetailDrawer({
                       {canReview(it) ? (
                         <button
                           onClick={() => setReviewItem(it)}
-                          className="shrink-0 ml-2 px-3 py-1 rounded-full bg-[#FFB400] text-white text-xs font-medium flex items-center gap-1"
+                          className="shrink-0 ml-2 px-3 py-1 rounded-md bg-[#FFB400] text-white text-xs font-medium flex items-center gap-1"
                         >
                           <Star className="w-3 h-3" /> 去评价
                         </button>
@@ -390,7 +390,7 @@ function OrderDetailDrawer({
               {order.pay_status === "unpaid" && order.order_status === "pending" && (
                 <button
                   onClick={() => navigate(`/yaban/shop/cashier?orderNo=${order.order_no}&amount=${order.total_amount}`)}
-                  className="flex-1 min-w-[120px] py-2.5 rounded-full bg-[#E2452F] text-white text-sm font-semibold"
+                  className="flex-1 min-w-[120px] py-2.5 rounded-md bg-[#E2452F] text-white text-sm font-semibold"
                 >
                   去支付
                 </button>
@@ -399,7 +399,7 @@ function OrderDetailDrawer({
                 <button
                   onClick={() => confirmReceipt.mutate({ orderNo })}
                   disabled={confirmReceipt.isPending}
-                  className="flex-1 min-w-[120px] py-2.5 rounded-full bg-[#059669] text-white text-sm font-semibold flex items-center justify-center gap-1"
+                  className="flex-1 min-w-[120px] py-2.5 rounded-md bg-[#059669] text-white text-sm font-semibold flex items-center justify-center gap-1"
                 >
                   <CheckCircle2 className="w-4 h-4" /> 确认收货
                 </button>
@@ -407,7 +407,7 @@ function OrderDetailDrawer({
               {paid && ["confirmed", "shipped", "completed"].includes(order.order_status) && (
                 <button
                   onClick={() => setShowRefund(true)}
-                  className="flex-1 min-w-[120px] py-2.5 rounded-full border border-gray-300 text-gray-600 text-sm flex items-center justify-center gap-1"
+                  className="flex-1 min-w-[120px] py-2.5 rounded-md border border-gray-300 text-gray-600 text-sm flex items-center justify-center gap-1"
                 >
                   <RotateCcw className="w-4 h-4" /> 申请退款
                 </button>
@@ -416,20 +416,20 @@ function OrderDetailDrawer({
 
             {/* 收货信息表单 */}
             {showReceiver && (
-              <div className="border border-gray-200 rounded-xl p-3 space-y-2">
+              <div className="border border-gray-200 rounded-md p-3 space-y-2">
                 <p className="text-sm font-medium text-gray-700">填写收货信息</p>
                 <input value={rName} onChange={(e) => setRName(e.target.value)} placeholder="收货人姓名"
-                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+                  className="w-full px-3 py-2 rounded border border-gray-200 text-sm" />
                 <input value={rPhone} onChange={(e) => setRPhone(e.target.value)} placeholder="联系电话"
-                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+                  className="w-full px-3 py-2 rounded border border-gray-200 text-sm" />
                 <textarea value={rAddr} onChange={(e) => setRAddr(e.target.value)} placeholder="详细地址" rows={2}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+                  className="w-full px-3 py-2 rounded border border-gray-200 text-sm" />
                 <div className="flex gap-2">
-                  <button onClick={() => setShowReceiver(false)} className="flex-1 py-2 rounded-full bg-gray-100 text-gray-600 text-sm">取消</button>
+                  <button onClick={() => setShowReceiver(false)} className="flex-1 py-2 rounded-md bg-gray-100 text-gray-600 text-sm">取消</button>
                   <button
                     onClick={() => setReceiver.mutate({ orderNo, name: rName, phone: rPhone, addr: rAddr })}
                     disabled={setReceiver.isPending || !rName || !rPhone || !rAddr}
-                    className="flex-1 py-2 rounded-full bg-[#2196C8] text-white text-sm disabled:opacity-50"
+                    className="flex-1 py-2 rounded-md bg-[#2196C8] text-white text-sm disabled:opacity-50"
                   >保存</button>
                 </div>
               </div>
@@ -437,16 +437,16 @@ function OrderDetailDrawer({
 
             {/* 退款表单 */}
             {showRefund && (
-              <div className="border border-gray-200 rounded-xl p-3 space-y-2">
+              <div className="border border-gray-200 rounded-md p-3 space-y-2">
                 <p className="text-sm font-medium text-gray-700">申请退款</p>
                 <textarea value={refundReason} onChange={(e) => setRefundReason(e.target.value)} placeholder="请填写退款原因" rows={2}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+                  className="w-full px-3 py-2 rounded border border-gray-200 text-sm" />
                 <div className="flex gap-2">
-                  <button onClick={() => setShowRefund(false)} className="flex-1 py-2 rounded-full bg-gray-100 text-gray-600 text-sm">取消</button>
+                  <button onClick={() => setShowRefund(false)} className="flex-1 py-2 rounded-md bg-gray-100 text-gray-600 text-sm">取消</button>
                   <button
                     onClick={() => applyRefund.mutate({ orderNo, reason: refundReason })}
                     disabled={applyRefund.isPending || !refundReason.trim()}
-                    className="flex-1 py-2 rounded-full bg-[#DB2777] text-white text-sm disabled:opacity-50"
+                    className="flex-1 py-2 rounded-md bg-[#DB2777] text-white text-sm disabled:opacity-50"
                   >提交申请</button>
                 </div>
               </div>
@@ -531,21 +531,21 @@ function ReviewModal({
             placeholder="分享你的真实体验（选填）"
             rows={3}
             maxLength={500}
-            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
+            className="w-full px-3 py-2 rounded border border-gray-200 text-sm"
           />
           <div className="flex gap-2 flex-wrap">
             {images.map((img, i) => (
               <div key={i} className="relative">
-                <img src={img} alt="晒单" className="w-16 h-16 rounded-lg object-cover" />
+                <img src={img} alt="晒单" className="w-16 h-16 rounded object-cover" />
                 <button
                   onClick={() => setImages((arr) => arr.filter((_, idx) => idx !== i))}
-                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center"
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-md bg-black/60 text-white flex items-center justify-center"
                   aria-label="删除"
                 ><X className="w-3 h-3" /></button>
               </div>
             ))}
             {images.length < 6 && (
-              <label className="w-16 h-16 rounded-lg border border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 cursor-pointer">
+              <label className="w-16 h-16 rounded border border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400 cursor-pointer">
                 {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImagePlus className="w-5 h-5" />}
                 <input type="file" accept="image/*" className="hidden" onChange={handleFile} disabled={uploading} />
               </label>
@@ -561,7 +561,7 @@ function ReviewModal({
               images,
             })}
             disabled={submit.isPending}
-            className="w-full py-3 rounded-full bg-gradient-to-r from-[#FFB400] to-[#FF9500] text-white text-sm font-semibold disabled:opacity-50"
+            className="w-full py-3 rounded-md bg-gradient-to-r from-[#FFB400] to-[#FF9500] text-white text-sm font-semibold disabled:opacity-50"
           >
             {submit.isPending ? "提交中..." : "提交评价"}
           </button>

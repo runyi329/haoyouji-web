@@ -161,7 +161,7 @@ export default function AddressPicker({
       {/* 详细门牌号输入（置于列表上方，靠上展示，字体正常大小） */}
       <div className="px-4 py-3 border-b border-gray-100 shrink-0">
         <div className="text-sm text-gray-500 mb-2">详细门牌号（街道、楼栋、门牌号等）</div>
-        <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-200 focus-within:border-[#1E88D6] focus-within:bg-white">
+        <div className="flex items-center gap-2 bg-gray-50 rounded px-3 py-2.5 border border-gray-200 focus-within:border-[#1E88D6] focus-within:bg-white">
           <input
             value={detail}
             onChange={(e) => setDetail(e.target.value)}

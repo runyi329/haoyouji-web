@@ -103,17 +103,17 @@ export default function YabanAdmin() {
 
   const StatusTag = ({ status }: { status: string }) => {
     if (status === "active")
-      return <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-[#E6F7EE] text-[#16A34A]"><CheckCircle2 className="w-3 h-3" />已开通</span>;
+      return <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-[#E6F7EE] text-[#16A34A]"><CheckCircle2 className="w-3 h-3" />已开通</span>;
     if (status === "pending")
-      return <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-[#FEF6E6] text-[#D97706]"><Clock className="w-3 h-3" />待审批</span>;
-    return <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-[#FDECEC] text-[#DC2626]"><XCircle className="w-3 h-3" />已驳回</span>;
+      return <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-[#FEF6E6] text-[#D97706]"><Clock className="w-3 h-3" />待审批</span>;
+    return <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-[#FDECEC] text-[#DC2626]"><XCircle className="w-3 h-3" />已驳回</span>;
   };
 
   const ClinicCard = ({ c, showActions }: { c: any; showActions?: boolean }) => (
-    <div className="bg-white rounded-2xl shadow-sm p-4">
+    <div className="bg-white rounded shadow-sm p-4">
       <div className="flex items-start justify-between gap-2">
         <button onClick={() => setDetailId(c.id)} className="flex items-start gap-2 flex-1 min-w-0 text-left">
-          <span className="w-9 h-9 rounded-xl bg-[#EAF4FE] flex items-center justify-center shrink-0">
+          <span className="w-9 h-9 rounded-md bg-[#EAF4FE] flex items-center justify-center shrink-0">
             <Building2 className="w-5 h-5 text-[#1E88D6]" />
           </span>
           <span className="min-w-0">
@@ -137,7 +137,7 @@ export default function YabanAdmin() {
       {/* 各角色人数 */}
       <div className="mt-3 grid grid-cols-5 gap-1">
         {ROLE_META.map((r) => (
-          <div key={r.key} className="flex flex-col items-center justify-center bg-[#F7FAFD] rounded-lg py-1.5">
+          <div key={r.key} className="flex flex-col items-center justify-center bg-[#F7FAFD] rounded py-1.5">
             <span className="flex items-center justify-center mb-0.5">{r.icon}</span>
             <span className="text-sm font-bold text-gray-800 leading-none">{c[r.key] ?? 0}</span>
             <span className="text-[10px] text-gray-400 mt-0.5 scale-90 whitespace-nowrap">{r.label}</span>
@@ -153,7 +153,7 @@ export default function YabanAdmin() {
       </div>
 
       {c.status === "rejected" && c.rejectReason && (
-        <div className="mt-2 text-[11px] text-[#DC2626] bg-[#FDECEC] rounded-lg px-2 py-1">驳回原因：{c.rejectReason}</div>
+        <div className="mt-2 text-[11px] text-[#DC2626] bg-[#FDECEC] rounded px-2 py-1">驳回原因：{c.rejectReason}</div>
       )}
 
       {showActions && c.status === "pending" && canApproveClinic && (
@@ -161,14 +161,14 @@ export default function YabanAdmin() {
           <button
             onClick={() => onApprove(c)}
             disabled={approve.isPending}
-            className="flex-1 py-2 rounded-xl bg-[#2196C8] text-white text-sm font-medium active:bg-[#1B7FB0] disabled:opacity-60"
+            className="flex-1 py-2 rounded-md bg-[#2196C8] text-white text-sm font-medium active:bg-[#1B7FB0] disabled:opacity-60"
           >
             确认开通
           </button>
           <button
             onClick={() => onReject(c)}
             disabled={reject.isPending}
-            className="flex-1 py-2 rounded-xl bg-gray-100 text-gray-600 text-sm font-medium active:bg-gray-200 disabled:opacity-60"
+            className="flex-1 py-2 rounded-md bg-gray-100 text-gray-600 text-sm font-medium active:bg-gray-200 disabled:opacity-60"
           >
             驳回
           </button>
@@ -178,7 +178,7 @@ export default function YabanAdmin() {
   );
 
   const StatCard = ({ label, value, icon, accent }: { label: string; value: React.ReactNode; icon: React.ReactNode; accent?: string }) => (
-    <div className="bg-white rounded-2xl shadow-sm p-3 flex flex-col gap-1">
+    <div className="bg-white rounded shadow-sm p-3 flex flex-col gap-1">
       <span className="flex items-center gap-1.5 text-xs text-gray-500">{icon}{label}</span>
       <span className={`text-xl font-bold ${accent || "text-[#0E5A9E]"}`}>{value}</span>
     </div>
@@ -202,7 +202,7 @@ export default function YabanAdmin() {
             {isPureFounder && (
               <button
                 onClick={() => setFounderTeamOpen(true)}
-                className="shrink-0 flex items-center gap-1.5 rounded-xl bg-white/15 hover:bg-white/25 active:bg-white/30 px-3 py-2 text-left leading-tight transition-colors"
+                className="shrink-0 flex items-center gap-1.5 rounded-md bg-white/15 hover:bg-white/25 active:bg-white/30 px-3 py-2 text-left leading-tight transition-colors"
               >
                 <Crown className="w-4 h-4 text-[#FFD876] shrink-0" />
                 <span className="text-[12px] font-semibold">牙伴平台<br/>创始团队</span>
@@ -215,7 +215,7 @@ export default function YabanAdmin() {
       {/* 总览统计 */}
       <div className="max-w-lg mx-auto px-4 -mt-4">
         {overview.isLoading ? (
-          <div className="bg-white rounded-2xl shadow-sm p-8 flex justify-center"><Loader2 className="w-6 h-6 text-[#2196C8] animate-spin" /></div>
+          <div className="bg-white rounded shadow-sm p-8 flex justify-center"><Loader2 className="w-6 h-6 text-[#2196C8] animate-spin" /></div>
         ) : (
           <div className="grid grid-cols-2 gap-2.5">
             <StatCard label="医院总数" value={ov?.clinicTotal ?? 0} icon={<Building2 className="w-3.5 h-3.5 text-[#1E88D6]" />} />
@@ -230,7 +230,7 @@ export default function YabanAdmin() {
 
       {/* 搜索 */}
       <div className="max-w-lg mx-auto px-4 mt-4">
-        <div className="bg-white rounded-xl shadow-sm flex items-center px-3 py-2 gap-2">
+        <div className="bg-white rounded-md shadow-sm flex items-center px-3 py-2 gap-2">
           <Search className="w-4 h-4 text-gray-400" />
           <input
             value={keyword}
@@ -265,16 +265,16 @@ export default function YabanAdmin() {
           {canApproveClinic && (
             <button
               onClick={() => setShowCreate(true)}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#2196C8] text-white text-xs font-medium active:bg-[#1B7FB0]"
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md bg-[#2196C8] text-white text-xs font-medium active:bg-[#1B7FB0]"
             >
               <Plus className="w-3.5 h-3.5" /> 新建医院
             </button>
           )}
         </div>
         {list.isLoading ? (
-          <div className="bg-white rounded-2xl shadow-sm p-8 flex justify-center"><Loader2 className="w-6 h-6 text-[#2196C8] animate-spin" /></div>
+          <div className="bg-white rounded shadow-sm p-8 flex justify-center"><Loader2 className="w-6 h-6 text-[#2196C8] animate-spin" /></div>
         ) : activeClinics.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-sm p-8 text-center text-sm text-gray-400">暂无医院数据</div>
+          <div className="bg-white rounded shadow-sm p-8 text-center text-sm text-gray-400">暂无医院数据</div>
         ) : (
           <div className="space-y-3">
             {activeClinics.map((c: any) => <ClinicCard key={c.id} c={c} />)}
@@ -325,10 +325,10 @@ function ClinicCreateSheet({ onClose }: { onClose: () => void }) {
       <div className="w-full max-w-lg bg-[#F0F4F8] rounded-t-3xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="sticky top-0 bg-white px-4 py-3 flex items-center justify-between border-b border-gray-100 rounded-t-3xl">
           <span className="text-base font-bold text-gray-800">新建医院</span>
-          <button onClick={onClose} className="p-1 active:bg-gray-100 rounded-full"><X className="w-5 h-5 text-gray-500" /></button>
+          <button onClick={onClose} className="p-1 active:bg-gray-100 rounded-md"><X className="w-5 h-5 text-gray-500" /></button>
         </div>
         <div className="p-4 space-y-3">
-          <div className="bg-white rounded-2xl p-4">
+          <div className="bg-white rounded p-4">
             <ClinicForm value={form} onChange={setForm} showRemark />
             <div className="mt-3">
               <label className="block text-xs text-gray-500 mb-1">指定租户ID（选填，留空自动分配）</label>
@@ -336,14 +336,14 @@ function ClinicCreateSheet({ onClose }: { onClose: () => void }) {
                 value={tenantId}
                 onChange={(e) => setTenantId(e.target.value)}
                 placeholder="留空则自动分配新租户"
-                className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[#2196C8] bg-white"
+                className="w-full px-3 py-2 rounded-md border border-gray-200 text-sm focus:outline-none focus:border-[#2196C8] bg-white"
               />
             </div>
           </div>
           <button
             onClick={onSubmit}
             disabled={create.isPending}
-            className="w-full py-3 rounded-2xl bg-[#2196C8] text-white text-sm font-semibold active:bg-[#1B7FB0] disabled:opacity-60 flex items-center justify-center gap-1"
+            className="w-full py-3 rounded bg-[#2196C8] text-white text-sm font-semibold active:bg-[#1B7FB0] disabled:opacity-60 flex items-center justify-center gap-1"
           >
             {create.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} 创建医院
           </button>
@@ -428,7 +428,7 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
         {/* 头部 */}
         <div className="sticky top-0 bg-white px-4 py-3 flex items-center justify-between border-b border-gray-100 rounded-t-3xl">
           <span className="text-base font-bold text-gray-800 truncate pr-2">{d?.clinic?.name || "医院详情"}</span>
-          <button onClick={onClose} className="p-1 active:bg-gray-100 rounded-full"><X className="w-5 h-5 text-gray-500" /></button>
+          <button onClick={onClose} className="p-1 active:bg-gray-100 rounded-md"><X className="w-5 h-5 text-gray-500" /></button>
         </div>
 
         {detail.isLoading ? (
@@ -437,15 +437,15 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
           <div className="p-4 space-y-4">
             {/* 概览 */}
             <div className="grid grid-cols-3 gap-2">
-              <div className="bg-white rounded-xl p-3 text-center">
+              <div className="bg-white rounded-md p-3 text-center">
                 <div className="text-lg font-bold text-[#0E5A9E]">{members.length}</div>
                 <div className="text-[11px] text-gray-400 mt-0.5">员工</div>
               </div>
-              <div className="bg-white rounded-xl p-3 text-center">
+              <div className="bg-white rounded-md p-3 text-center">
                 <div className="text-lg font-bold text-[#2196C8]">{d?.customerCount ?? 0}</div>
                 <div className="text-[11px] text-gray-400 mt-0.5">顾客</div>
               </div>
-              <div className="bg-white rounded-xl p-3 text-center">
+              <div className="bg-white rounded-md p-3 text-center">
                 <div className="text-base font-bold text-[#16A34A]">{fmtMoney(d?.revenue ?? 0)}</div>
                 <div className="text-[11px] text-gray-400 mt-0.5">营业额</div>
               </div>
@@ -455,7 +455,7 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
             {d?.clinic?.tenantId && canManagePermMatrix ? (
               <button
                 onClick={() => navigate(`/yaban/settings/roles?tenant=${d?.clinic?.tenantId}`)}
-                className="w-full bg-white rounded-2xl p-4 flex items-center justify-between active:bg-gray-50"
+                className="w-full bg-white rounded p-4 flex items-center justify-between active:bg-gray-50"
               >
                 <span className="text-sm font-bold text-gray-700 flex items-center gap-1.5">
                   <UserCog className="w-4 h-4 text-[#1E88D6]" /> 权限管理（成员 × 权限矩阵）
@@ -465,7 +465,7 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
             ) : null}
 
             {/* 医院详细信息（创始人可命名/编辑） */}
-            <div className="bg-white rounded-2xl p-4">
+            <div className="bg-white rounded p-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-sm font-bold text-gray-700 flex items-center gap-1">
                   <Building2 className="w-4 h-4 text-[#1E88D6]" /> 医院详细信息
@@ -515,7 +515,7 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
                       update.mutate({ clinicId, ...form });
                     }}
                     disabled={update.isPending}
-                    className="mt-3 w-full py-2.5 rounded-2xl bg-[#2196C8] text-white text-sm font-semibold active:bg-[#1B7FB0] disabled:opacity-60 flex items-center justify-center gap-1"
+                    className="mt-3 w-full py-2.5 rounded bg-[#2196C8] text-white text-sm font-semibold active:bg-[#1B7FB0] disabled:opacity-60 flex items-center justify-center gap-1"
                   >
                     {update.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} 保存医院信息
                   </button>
@@ -525,7 +525,7 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
 
             {/* 任命院长/股东（仅医院管理权限者可见） */}
             {canManageClinic && (
-            <div className="bg-white rounded-2xl p-4">
+            <div className="bg-white rounded p-4">
               <div className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1">
                 <UserPlus className="w-4 h-4 text-[#1E88D6]" /> 任命院长/股东
               </div>
@@ -534,11 +534,11 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
                   value={userKw}
                   onChange={(e) => setUserKw(e.target.value)}
                   placeholder="输入用户名 / 姓名 / 手机号"
-                  className="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[#2196C8]"
+                  className="flex-1 px-3 py-2 rounded-md border border-gray-200 text-sm focus:outline-none focus:border-[#2196C8]"
                 />
                 <button
                   onClick={() => setSearching(true)}
-                  className="px-4 py-2 rounded-xl bg-[#2196C8] text-white text-sm active:bg-[#1B7FB0]"
+                  className="px-4 py-2 rounded-md bg-[#2196C8] text-white text-sm active:bg-[#1B7FB0]"
                 >
                   搜索
                 </button>
@@ -552,7 +552,7 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
                   ) : (
                     (searchUser.data || []).map((u: any) => (
                       <div key={u.id} className="flex items-center gap-2 py-1.5">
-                        <div className="w-8 h-8 rounded-full bg-[#EAF4FE] overflow-hidden flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 rounded-md bg-[#EAF4FE] overflow-hidden flex items-center justify-center shrink-0">
                           {u.avatar ? <img src={u.avatar} className="w-full h-full object-cover" /> : <span className="text-xs text-[#1E88D6]">{(u.name || u.username || "?").slice(0, 1)}</span>}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -562,7 +562,7 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
                         <button
                           onClick={() => appoint.mutate({ clinicId, userId: u.id })}
                           disabled={appoint.isPending}
-                          className="px-3 py-1.5 rounded-lg bg-[#EAF4FE] text-[#1E88D6] text-xs font-medium active:bg-[#d6ebfb] disabled:opacity-60"
+                          className="px-3 py-1.5 rounded bg-[#EAF4FE] text-[#1E88D6] text-xs font-medium active:bg-[#d6ebfb] disabled:opacity-60"
                         >
                           任命
                         </button>
@@ -575,7 +575,7 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
             )}
 
             {/* 成员名册 */}
-            <div className="bg-white rounded-2xl p-4">
+            <div className="bg-white rounded p-4">
               <div className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-1">
                 <Users className="w-4 h-4 text-[#1E88D6]" /> 成员名册（{members.length}）
               </div>
@@ -585,14 +585,14 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
                 <div className="space-y-2">
                   {members.map((m) => (
                     <div key={m.user_id} className="flex items-center gap-2">
-                      <div className="w-9 h-9 rounded-full bg-[#EAF4FE] overflow-hidden flex items-center justify-center shrink-0">
+                      <div className="w-9 h-9 rounded-md bg-[#EAF4FE] overflow-hidden flex items-center justify-center shrink-0">
                         {m.avatar ? <img src={m.avatar} className="w-full h-full object-cover" /> : <span className="text-xs text-[#1E88D6]">{(m.name || m.username || "?").slice(0, 1)}</span>}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm text-gray-800 truncate">{m.name || m.username}</div>
                         <div className="text-[11px] text-gray-400 truncate">{m.username}{m.phone ? ` · ${m.phone}` : ""}</div>
                       </div>
-                      <span className={`text-[11px] px-2 py-0.5 rounded-full ${m.role_key === "owner" ? "bg-[#FEF6E6] text-[#D97706]" : "bg-[#EAF4FE] text-[#1E88D6]"}`}>
+                      <span className={`text-[11px] px-2 py-0.5 rounded-md ${m.role_key === "owner" ? "bg-[#FEF6E6] text-[#D97706]" : "bg-[#EAF4FE] text-[#1E88D6]"}`}>
                         {roleLabel(m.role_key)}
                       </span>
                       {m.role_key === "owner" && owners.length > 0 && (
@@ -680,12 +680,12 @@ function FounderTeamPanel({ open, onClose }: { open: boolean; onClose: () => voi
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[85vh] overflow-y-auto p-4">
+      <div className="relative w-full max-w-lg bg-white rounded-t-2xl sm:rounded shadow-xl max-h-[85vh] overflow-y-auto p-4">
         <div className="flex items-center justify-between mb-3">
           <span className="text-base font-bold text-gray-800 flex items-center gap-1.5">
             <Crown className="w-5 h-5 text-[#D97706]" /> 牙伴平台创始团队（{list.length}）
           </span>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 active:bg-gray-200">
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-gray-100 active:bg-gray-200">
             <X className="w-5 h-5 text-gray-400" />
           </button>
         </div>
@@ -700,21 +700,21 @@ function FounderTeamPanel({ open, onClose }: { open: boolean; onClose: () => voi
             <div className="space-y-2">
               {list.map((f: any) => (
                 <div key={f.id} className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-[#FEF6E6] flex items-center justify-center shrink-0">
+                  <div className="w-8 h-8 rounded-md bg-[#FEF6E6] flex items-center justify-center shrink-0">
                     <Crown className="w-4 h-4 text-[#D97706]" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm text-gray-800 truncate">{f.name || f.username}</div>
                     <div className="text-[11px] text-gray-400 truncate">{f.username}{f.phone ? ` · ${f.phone}` : ""}</div>
                   </div>
-                  <span className={`text-[11px] px-2 py-0.5 rounded-full ${f.role_key === "founder" ? "bg-[#FFF1CC] text-[#9A6A00]" : "bg-[#FFF6DD] text-[#9A6A00]"}`}>
+                  <span className={`text-[11px] px-2 py-0.5 rounded-md ${f.role_key === "founder" ? "bg-[#FFF1CC] text-[#9A6A00]" : "bg-[#FFF6DD] text-[#9A6A00]"}`}>
                     {titleLabel(f.role_key)}
                   </span>
                   {f.role_key === "co_founder" && (
                     <>
                       <button
                         onClick={() => setPermTarget({ userId: f.user_id, name: f.name || f.username })}
-                        className="text-[11px] px-2 py-0.5 rounded-full bg-[#EAF4FE] text-[#1E88D6] active:opacity-60 inline-flex items-center gap-0.5"
+                        className="text-[11px] px-2 py-0.5 rounded-md bg-[#EAF4FE] text-[#1E88D6] active:opacity-60 inline-flex items-center gap-0.5"
                       >
                         <UserCog className="w-3 h-3" /> 权限设置
                       </button>
@@ -743,13 +743,13 @@ function FounderTeamPanel({ open, onClose }: { open: boolean; onClose: () => voi
                 value={kw}
                 onChange={(e) => setKw(e.target.value)}
                 placeholder="输入关键字即时搜索全平台用户"
-                className="w-full pl-9 pr-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[#2196C8]"
+                className="w-full pl-9 pr-3 py-2 rounded-md border border-gray-200 text-sm focus:outline-none focus:border-[#2196C8]"
               />
             </div>
 
             {/* 候选用户列表 */}
             {debouncedKw.length > 0 && (
-              <div className="mt-2 border border-gray-100 rounded-xl overflow-hidden">
+              <div className="mt-2 border border-gray-100 rounded-md overflow-hidden">
                 {searchRes.isLoading ? (
                   <div className="py-4 flex justify-center"><Loader2 className="w-4 h-4 text-[#2196C8] animate-spin" /></div>
                 ) : candidates.length === 0 ? (
@@ -761,7 +761,7 @@ function FounderTeamPanel({ open, onClose }: { open: boolean; onClose: () => voi
                       const isCoFounder = u.founderRole === "co_founder";
                       return (
                         <div key={u.id} className="flex items-center gap-2 px-3 py-2">
-                          <div className="w-8 h-8 rounded-full bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
+                          <div className="w-8 h-8 rounded-md bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
                             {u.avatar ? (
                               <img src={u.avatar} alt="" className="w-full h-full object-cover" />
                             ) : (
@@ -773,14 +773,14 @@ function FounderTeamPanel({ open, onClose }: { open: boolean; onClose: () => voi
                             <div className="text-[11px] text-gray-400 truncate">{u.username}{u.phone ? ` · ${u.phone}` : ""}</div>
                           </div>
                           {isFounderRole ? (
-                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#FFF1CC] text-[#9A6A00]">创始人</span>
+                            <span className="text-[11px] px-2 py-0.5 rounded-md bg-[#FFF1CC] text-[#9A6A00]">创始人</span>
                           ) : isCoFounder ? (
-                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#FFF6DD] text-[#9A6A00]">已是创始股东</span>
+                            <span className="text-[11px] px-2 py-0.5 rounded-md bg-[#FFF6DD] text-[#9A6A00]">已是创始股东</span>
                           ) : (
                             <button
                               onClick={() => grant.mutate({ userId: u.id, title: "co_founder" })}
                               disabled={grant.isPending}
-                              className="px-3 py-1 rounded-full bg-[#2196C8] text-white text-[11px] active:bg-[#1B7FB0] disabled:opacity-60 flex items-center gap-1 shrink-0"
+                              className="px-3 py-1 rounded-md bg-[#2196C8] text-white text-[11px] active:bg-[#1B7FB0] disabled:opacity-60 flex items-center gap-1 shrink-0"
                             >
                               {grant.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <UserPlus className="w-3 h-3" />} 任命
                             </button>
@@ -831,12 +831,12 @@ function PlatformPermSheet({ userId, name, onClose }: { userId: number; name: st
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-white rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[85vh] overflow-y-auto p-4">
+      <div className="relative w-full max-w-lg bg-white rounded-t-2xl sm:rounded shadow-xl max-h-[85vh] overflow-y-auto p-4">
         <div className="flex items-center justify-between mb-1">
           <span className="text-base font-bold text-gray-800 flex items-center gap-1.5">
             <UserCog className="w-5 h-5 text-[#1E88D6]" /> 平台权限设置
           </span>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 active:bg-gray-200">
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-gray-100 active:bg-gray-200">
             <X className="w-5 h-5 text-gray-400" />
           </button>
         </div>
@@ -859,10 +859,10 @@ function PlatformPermSheet({ userId, name, onClose }: { userId: number; name: st
                       <button
                         onClick={() => setPerm.mutate({ userId, permKey: it.key, enabled: !it.enabled })}
                         disabled={setPerm.isPending}
-                        className={`relative w-11 h-6 rounded-full transition-colors shrink-0 disabled:opacity-60 ${it.enabled ? "bg-[#2196C8]" : "bg-gray-200"}`}
+                        className={`relative w-11 h-6 rounded-md transition-colors shrink-0 disabled:opacity-60 ${it.enabled ? "bg-[#2196C8]" : "bg-gray-200"}`}
                         aria-label={it.name}
                       >
-                        <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${it.enabled ? "translate-x-5" : ""}`} />
+                        <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-md bg-white shadow transition-transform ${it.enabled ? "translate-x-5" : ""}`} />
                       </button>
                     </div>
                   ))}

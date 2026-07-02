@@ -114,9 +114,9 @@ const WheelPickerMemo = memo(function WheelPicker({ options, selectedMin, onSele
   return (
     <div style={{ flex: 1 }}>
       <div style={{ textAlign: "center", fontSize: 11, color: GRAY_L, marginBottom: 4, fontWeight: 600, letterSpacing: 1 }}>{label}</div>
-      <div style={{ position: "relative", height: itemH * 5, overflow: "hidden", borderRadius: 12, border: `1px solid ${LINE}`, background: "#F8FAFC" }}>
+      <div style={{ position: "relative", height: itemH * 5, overflow: "hidden", borderRadius: 6, border: `1px solid ${LINE}`, background: "#F8FAFC" }}>
         {/* 蓝框在中间第3行 */}
-        <div style={{ position: "absolute", top: itemH * 2, left: 4, right: 4, height: itemH, background: "rgba(30,136,214,.08)", border: `2px solid ${SKY_D}`, borderRadius: 8, pointerEvents: "none", zIndex: 2 }} />
+        <div style={{ position: "absolute", top: itemH * 2, left: 4, right: 4, height: itemH, background: "rgba(30,136,214,.08)", border: `2px solid ${SKY_D}`, borderRadius: 4, pointerEvents: "none", zIndex: 2 }} />
         {/* 上下渐变遮罩 */}
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: itemH * 2, background: "linear-gradient(to bottom, rgba(248,250,252,1), rgba(248,250,252,0))", pointerEvents: "none", zIndex: 3 }} />
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: itemH * 2, background: "linear-gradient(to top, rgba(248,250,252,1), rgba(248,250,252,0))", pointerEvents: "none", zIndex: 3 }} />
@@ -206,8 +206,18 @@ export default function YabanScheduleCreate() {
     pendingEndRef.current = lbl;
   }, []);
 
-  const { currentTenantId, current } = useYabanClinic();
-  const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
+  const { currentTenantId, current, clinics, selectClinic, hasMultiple } = useYabanClinic();
+  const [showClinicPicker, setShowClinicPicker] = useState(false);
+  // 这张预约单的归属诊所（仅影响当前订单，不改全局状态）
+  const [apptTenantId, setApptTenantId] = useState<number | null>(null);
+  // currentTenantId 加载完成后初始化 apptTenantId
+  useEffect(() => {
+    if (currentTenantId != null && apptTenantId === null) {
+      setApptTenantId(currentTenantId);
+    }
+  }, [currentTenantId]);
+  const apptClinic = clinics.find(c => c.tenantId === apptTenantId) || current;
+  const clinicName = apptClinic?.name?.trim() || apptClinic?.shortName?.trim() || "";
   const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
 
   const [form, setForm] = useState<FormData>({
@@ -248,19 +258,19 @@ export default function YabanScheduleCreate() {
   // ── API 数据 ──
   // 成员列表（含 roleKey）
   const { data: membersData = [] } = trpc.yabanAppointment.listMembers.useQuery(
-    { tenantId: currentTenantId ?? undefined }
+    { tenantId: apptTenantId ?? undefined }
   );
   // 角色列表（含自定义角色名）
   const { data: rolesData = [] } = trpc.yabanRole.listRolesSimple.useQuery(
-    { tenantId: currentTenantId ?? undefined }
+    { tenantId: apptTenantId ?? undefined }
   );
   // 诊室列表
   const { data: roomsData = [] } = trpc.yabanRoom.list.useQuery(
-    { tenantId: currentTenantId ?? undefined }
+    { tenantId: apptTenantId ?? undefined }
   );
   // 科室列表
   const { data: deptsData = [] } = trpc.yabanDept.list.useQuery(
-    { tenantId: currentTenantId ?? undefined }
+    { tenantId: apptTenantId ?? undefined }
   );
   // 顾客来源列表
   const { data: sourcesData = [] } = trpc.yabanCustomer.listCustomerSources.useQuery(
@@ -268,6 +278,33 @@ export default function YabanScheduleCreate() {
   );
   // 收费项目列表
   const [showProjectPicker, setShowProjectPicker] = useState(false);
+  const [projectKw, setProjectKw] = useState("");
+  const { data: chargeProductsData } = trpc.yabanCustomer.listChargeProducts.useQuery(
+    { includeDisabled: false },
+    { refetchOnWindowFocus: false }
+  );
+  // 扁平化所有收费项目
+  const allChargeItems = useMemo(() => {
+    const cats = (chargeProductsData?.categories as any[]) || [];
+    const result: string[] = [];
+    for (const cat of cats) {
+      // directItems 直挂在一级分类下的项目
+      for (const it of (cat.directItems || [])) result.push(it.name);
+      // subCategories 本身就是项目（有 name 和 price）
+      for (const sub of (cat.subCategories || [])) {
+        if (sub.name) result.push(sub.name);
+        // 如果 sub 下还有三级 items
+        for (const it of (sub.items || [])) if (it.name) result.push(it.name);
+      }
+    }
+    return result;
+  }, [chargeProductsData]);
+  // 搜索过滤结果
+  const projectSearchResults = useMemo(() => {
+    const k = projectKw.trim().toLowerCase();
+    if (!k) return allChargeItems.slice(0, 20);
+    return allChargeItems.filter(n => n.toLowerCase().includes(k)).slice(0, 30);
+  }, [projectKw, allChargeItems]);
 
   // 医生列表（role_key = doctor）
   const DOCTORS = useMemo(() =>
@@ -609,7 +646,7 @@ export default function YabanScheduleCreate() {
   const monthCells = getMonthCells();
 
   // 样式工具
-  const cardStyle: React.CSSProperties = { background: "#fff", margin: "0 10px", borderRadius: 14, overflow: "hidden", boxShadow: "0 1px 3px rgba(38,48,60,.04)" };
+  const cardStyle: React.CSSProperties = { background: "#fff", margin: "0 10px", borderRadius: 7, overflow: "hidden", boxShadow: "0 1px 3px rgba(38,48,60,.04)" };
   const SelectRow = ({ label, value, placeholder, required, onClick }: {
     label: string; value: string; placeholder: string; required?: boolean; onClick: () => void;
   }) => (
@@ -686,7 +723,7 @@ export default function YabanScheduleCreate() {
                     </div>
                     {/* 姓名年龄行（含虚拟头像） */}
                     <div style={{ display: "flex", alignItems: "center", borderBottom: `1px dashed ${LINE}`, padding: "8px 12px", gap: 10 }}>
-                      <div style={{ width: 44, height: 44, borderRadius: 8, overflow: "hidden", flexShrink: 0, background: avatarBg[avatarKey] || SKY_L }}>
+                      <div style={{ width: 44, height: 44, borderRadius: 4, overflow: "hidden", flexShrink: 0, background: avatarBg[avatarKey] || SKY_L }}>
                         <img src={avatarSrc(avatarKey)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                       </div>
                       <div>
@@ -711,7 +748,7 @@ export default function YabanScheduleCreate() {
               /* 未选顾客：整个卡片就是搜索框，直接可输入 */
               <div style={{ position: "relative" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "0 14px", minHeight: 75 }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 10, background: SKY_L, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 5, background: SKY_L, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <User size={19} color={SKY_D} />
                   </div>
                   <input
@@ -793,7 +830,7 @@ export default function YabanScheduleCreate() {
                   style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", minHeight: 75, background: "none", border: "none", cursor: "pointer", textAlign: "left", borderBottom: showPicker === "doctor" ? `1px solid ${LINE}` : "none" }}
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ width: 38, height: 38, borderRadius: 10, background: "#FFF7ED", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 5, background: "#FFF7ED", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       <Users size={19} color="#EA580C" />
                     </div>
                     <div style={{ textAlign: "left" }}>
@@ -877,7 +914,7 @@ export default function YabanScheduleCreate() {
                     >重选</button>
                   </div>
                   <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 14 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: 10, background: "#F0FDF4", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 5, background: "#F0FDF4", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       <Clock size={22} color="#16A34A" />
                     </div>
                     <div>
@@ -894,7 +931,7 @@ export default function YabanScheduleCreate() {
                 {/* 标题行 */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", minHeight: 52, borderBottom: `1px solid ${LINE}` }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 38, height: 38, borderRadius: 10, background: "#F0FDF4", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 5, background: "#F0FDF4", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       <Clock size={19} color="#16A34A" />
                     </div>
                     <div>
@@ -925,7 +962,7 @@ export default function YabanScheduleCreate() {
                           display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
                           background: isSel ? SKY_D : (hasShift ? "#F0FDF4" : "#F5F7FA"),
                           border: isSel ? `2px solid ${SKY_D}` : `1px solid ${hasShift ? "#BBF7D0" : LINE}`,
-                          borderRadius: 10, cursor: "pointer",
+                          borderRadius: 5, cursor: "pointer",
                           scrollSnapAlign: "center",
                         } as React.CSSProperties}
                       >
@@ -1029,7 +1066,7 @@ export default function YabanScheduleCreate() {
                             marginTop: 12, width: "100%", padding: "11px 0",
                             background: `linear-gradient(90deg,${SKY_D},${SKY})`,
                             color: "#fff", fontWeight: 700, fontSize: 15,
-                            border: "none", borderRadius: 10, cursor: "pointer",
+                            border: "none", borderRadius: 5, cursor: "pointer",
                             boxShadow: `0 3px 10px rgba(30,136,214,.25)`,
                           }}
                         >
@@ -1060,7 +1097,7 @@ export default function YabanScheduleCreate() {
               style={{
                 width: "100%", padding: "13px 0", textAlign: "center", fontSize: 15, color: "#fff", fontWeight: 600,
                 background: (form.patientName && form.doctor) ? `linear-gradient(90deg,${SKY_D},${SKY})` : GRAY_L,
-                border: "none", borderRadius: 12, cursor: "pointer",
+                border: "none", borderRadius: 6, cursor: "pointer",
                 boxShadow: (form.patientName && form.doctor) ? `0 4px 12px rgba(30,136,214,.28)` : "none",
               }}
             >
@@ -1096,9 +1133,15 @@ export default function YabanScheduleCreate() {
 
           <GroupTitle icon={<Stethoscope size={14} color={SKY_D} />} text="诊疗信息" />
           <div style={cardStyle}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", minHeight: 46, borderBottom: `1px solid ${LINE}` }}>
+            <div
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", minHeight: 46, borderBottom: `1px solid ${LINE}`, cursor: "pointer" }}
+              onClick={() => setShowClinicPicker(true)}
+            >
               <span style={{ fontSize: 15, fontWeight: 600, color: LABEL }}>诊所</span>
-              <span style={{ fontSize: 15, color: INK, fontWeight: 600 }}>{clinicName || "当前所属医院"}</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 15, color: INK, fontWeight: 600 }}>
+                {clinicName || "加载中..."}
+                <span style={{ fontSize: 13, color: GRAY_L }}>›</span>
+              </span>
             </div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", minHeight: 46, borderBottom: `1px solid ${LINE}` }}>
               <span style={{ fontSize: 15, fontWeight: 600, color: LABEL }}>医生</span>
@@ -1118,29 +1161,62 @@ export default function YabanScheduleCreate() {
               <div style={{ display: "flex", gap: 8 }}>
                 {["初诊", "复诊"].map(t => (
                   <button key={t} onClick={() => setForm(prev => ({ ...prev, visitType: t }))}
-                    style={{ padding: "5px 16px", borderRadius: 20, fontSize: 14, fontWeight: form.visitType === t ? 700 : 400, border: `1.5px solid ${form.visitType === t ? SKY_D : BORDER}`, background: form.visitType === t ? SKY_L : "#fff", color: form.visitType === t ? SKY_D : GRAY, cursor: "pointer" }}>
+                    style={{ padding: "5px 16px", borderRadius: 10, fontSize: 14, fontWeight: form.visitType === t ? 700 : 400, border: `1.5px solid ${form.visitType === t ? SKY_D : BORDER}`, background: form.visitType === t ? SKY_L : "#fff", color: form.visitType === t ? SKY_D : GRAY, cursor: "pointer" }}>
                     {t}
                   </button>
                 ))}
               </div>
             </div>
-            {/* 项目（多选） */}
+            {/* 项目（智能搜索多选） */}
             <div style={{ padding: "10px 14px", borderBottom: `1px solid ${LINE}` }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: form.selectedProjects.length > 0 ? 8 : 0 }}>
-                <span style={{ fontSize: 15, fontWeight: 600, color: LABEL }}>项目<span style={{ color: REQ, marginLeft: 2 }}>*</span></span>
-                <button onClick={() => setShowProjectPicker(true)} style={{ fontSize: 13, color: SKY_D, background: "none", border: `1px solid ${SKY_D}`, borderRadius: 14, padding: "3px 12px", cursor: "pointer" }}>添加项目</button>
+              <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: 15, fontWeight: 600, color: LABEL, flexShrink: 0, marginRight: 10 }}>项目<span style={{ color: REQ, marginLeft: 2 }}>*</span></span>
+                <div style={{ flex: 1, display: "flex", alignItems: "center", background: "#F3F4F6", borderRadius: 10, padding: "5px 12px", gap: 6 }}>
+                  <Search size={14} color={GRAY_L} />
+                  <input
+                    value={projectKw}
+                    onChange={e => setProjectKw(e.target.value)}
+                    placeholder="搜索诊疗项目…"
+                    style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontSize: 14, color: INK }}
+                  />
+                  {projectKw && <button onClick={() => setProjectKw("")} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: GRAY_L, fontSize: 16, lineHeight: 1 }}>×</button>}
+                </div>
               </div>
-              {form.selectedProjects.length === 0 && (
-                <span style={{ fontSize: 14, color: GRAY_L }}>请添加项目</span>
+              {/* 已选项目标签 */}
+              {form.selectedProjects.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                  {form.selectedProjects.map((p, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", background: SKY_L, borderRadius: 8, fontSize: 13, color: SKY_D, fontWeight: 600 }}>
+                      <span>{p}</span>
+                      <button onClick={() => setForm(prev => ({ ...prev, selectedProjects: prev.selectedProjects.filter((_, j) => j !== i) }))} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1, color: SKY_D, fontSize: 16 }}>×</button>
+                    </div>
+                  ))}
+                </div>
               )}
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {form.selectedProjects.map((p, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", background: SKY_L, borderRadius: 16, fontSize: 13, color: SKY_D, fontWeight: 600 }}>
-                    <span>{p}</span>
-                    <button onClick={() => setForm(prev => ({ ...prev, selectedProjects: prev.selectedProjects.filter((_, j) => j !== i) }))} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1, color: SKY_D, fontSize: 14 }}>×</button>
-                  </div>
-                ))}
-              </div>
+              {/* 搜索结果列表 */}
+              {projectSearchResults.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {projectSearchResults.map(name => {
+                    const selected = form.selectedProjects.includes(name);
+                    return (
+                      <button key={name}
+                        onClick={() => setForm(prev => ({
+                          ...prev,
+                          selectedProjects: selected
+                            ? prev.selectedProjects.filter(p => p !== name)
+                            : [...prev.selectedProjects, name],
+                        }))}
+                        style={{ padding: "5px 12px", borderRadius: 8, fontSize: 13, fontWeight: selected ? 700 : 400, border: `1.5px solid ${selected ? SKY_D : BORDER}`, background: selected ? SKY_L : "#fff", color: selected ? SKY_D : INK, cursor: "pointer" }}
+                      >
+                        {selected && <span style={{ marginRight: 4 }}>✓</span>}{name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {allChargeItems.length === 0 && (
+                <span style={{ fontSize: 13, color: GRAY_L }}>请先在后台配置收费项目</span>
+              )}
             </div>
             {/* 诊室 */}
             <SelectRow label="诊室" value={form.room} placeholder="请选择诊室" onClick={() => setShowPicker("room")} />
@@ -1169,7 +1245,7 @@ export default function YabanScheduleCreate() {
           <button
             onClick={handleSave}
             disabled={submitting}
-            style={{ width: "100%", padding: "13px 0", textAlign: "center", fontSize: 15, color: "#fff", fontWeight: 600, background: submitting ? GRAY_L : `linear-gradient(90deg,${SKY_D},${SKY})`, border: "none", borderRadius: 12, cursor: submitting ? "default" : "pointer", boxShadow: `0 4px 12px rgba(30,136,214,.28)` }}
+            style={{ width: "100%", padding: "13px 0", textAlign: "center", fontSize: 15, color: "#fff", fontWeight: 600, background: submitting ? GRAY_L : `linear-gradient(90deg,${SKY_D},${SKY})`, border: "none", borderRadius: 6, cursor: submitting ? "default" : "pointer", boxShadow: `0 4px 12px rgba(30,136,214,.28)` }}
           >
             {submitting ? "保存中..." : "保存预约"}
           </button>
@@ -1180,6 +1256,7 @@ export default function YabanScheduleCreate() {
       <ChargeProductPicker
         open={showProjectPicker}
         onClose={() => setShowProjectPicker(false)}
+        selectedNames={form.selectedProjects}
         onPick={(item) => {
           setForm(prev => ({
             ...prev,
@@ -1192,10 +1269,44 @@ export default function YabanScheduleCreate() {
       />
 
       {/* Picker 弹窗 */}
+      {/* 诊所选择弹窗 */}
+      {showClinicPicker && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", flexDirection: "column", justifyContent: "flex-end", background: "rgba(0,0,0,0.35)" }}
+          onClick={() => setShowClinicPicker(false)}>
+          <div style={{ background: "#fff", borderRadius: "10px 10px 0 0", paddingBottom: 24 }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px 10px", borderBottom: `1px solid ${LINE}` }}>
+              <span style={{ fontSize: 16, fontWeight: 700, color: INK }}>选择诊所</span>
+              <button onClick={() => setShowClinicPicker(false)} style={{ background: "none", border: "none", fontSize: 22, color: GRAY_L, cursor: "pointer", lineHeight: 1 }}>×</button>
+            </div>
+            {(() => {
+              // clinics 可能因权限/加载时序为空，兜底显示 current
+              const displayList = clinics.length > 0
+                ? clinics
+                : current ? [current] : [];
+              if (displayList.length === 0) {
+                return <div style={{ padding: "20px 16px", color: GRAY_L, fontSize: 14, textAlign: "center" }}>加载中...</div>;
+              }
+              return displayList.map(c => (
+                <div key={c.tenantId}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", borderBottom: `1px solid ${LINE}`, cursor: "pointer", background: c.tenantId === apptTenantId ? "#f0f7ff" : "#fff" }}
+                  onClick={() => { setApptTenantId(c.tenantId); setShowClinicPicker(false); }}
+                >
+                  <span style={{ fontSize: 15, color: INK, fontWeight: c.tenantId === apptTenantId ? 700 : 400 }}>
+                    {c.name || c.shortName}
+                  </span>
+                  {c.tenantId === apptTenantId && <span style={{ fontSize: 14, color: SKY_D }}>&#10003;</span>}
+                </div>
+              ));
+            })()}
+          </div>
+        </div>
+      )}
+
       {showPicker && (
         <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
           <div style={{ flex: 1, background: "rgba(38,48,60,.35)" }} onClick={() => { setShowPicker(null); setDocSearch(""); }} />
-          <div style={{ background: "#fff", borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "64vh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+          <div style={{ background: "#fff", borderTopLeftRadius: 10, borderTopRightRadius: 10, maxHeight: "64vh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
             <div style={{ padding: "14px 16px", borderBottom: `1px solid ${LINE}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <button style={{ fontSize: 14, color: GRAY_L, background: "transparent", border: "none", cursor: "pointer" }} onClick={() => { setShowPicker(null); setDocSearch(""); }}>取消</button>
               <span style={{ fontSize: 15, fontWeight: 600, color: INK }}>{getPickerTitle()}</span>

@@ -107,9 +107,9 @@ export default function YabanShopAdmin() {
             <button
               key={e.key}
               onClick={() => navigate(e.path)}
-              className="w-full flex items-center gap-3 bg-white rounded-xl p-3 shadow-sm active:scale-[0.98] transition-transform"
+              className="w-full flex items-center gap-3 bg-white rounded-md p-3 shadow-sm active:scale-[0.98] transition-transform"
             >
-              <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#2196C8] to-[#3BA9E0] flex items-center justify-center shrink-0">
+              <span className="w-10 h-10 rounded-md bg-gradient-to-br from-[#2196C8] to-[#3BA9E0] flex items-center justify-center shrink-0">
                 <Icon className="w-5 h-5 text-white" />
               </span>
               <div className="flex-1 text-left">

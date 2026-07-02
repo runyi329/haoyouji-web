@@ -131,10 +131,10 @@ export default function YabanShopAdminOrders() {
             {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={handleExport} disabled={exportMut.isFetching} className="flex items-center gap-1 text-xs bg-white/20 px-2.5 py-1 rounded-full disabled:opacity-60">
+            <button onClick={handleExport} disabled={exportMut.isFetching} className="flex items-center gap-1 text-xs bg-white/20 px-2.5 py-1 rounded-md disabled:opacity-60">
               {exportMut.isFetching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />} 导出
             </button>
-            <button onClick={() => navigate("/yaban/shop/admin/fulfill")} className="text-xs bg-white/20 px-2.5 py-1 rounded-full">核销/售后</button>
+            <button onClick={() => navigate("/yaban/shop/admin/fulfill")} className="text-xs bg-white/20 px-2.5 py-1 rounded-md">核销/售后</button>
           </div>
         </div>
       </div>
@@ -146,7 +146,7 @@ export default function YabanShopAdminOrders() {
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
             placeholder="搜索订单号 / 姓名 / 电话"
-            className="w-full bg-white rounded-full px-4 py-2 text-sm text-gray-700 outline-none placeholder:text-gray-400 border border-gray-100"
+            className="w-full bg-white rounded-md px-4 py-2 text-sm text-gray-700 outline-none placeholder:text-gray-400 border border-gray-100"
           />
         </div>
 
@@ -159,7 +159,7 @@ export default function YabanShopAdminOrders() {
               <button
                 key={f.key}
                 onClick={() => setFilter(f.key)}
-                className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                className={`shrink-0 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                   active
                     ? "bg-[#2196C8] text-white"
                     : "bg-white text-gray-500 border border-gray-100"
@@ -190,12 +190,12 @@ export default function YabanShopAdminOrders() {
                 <button
                   key={o.id}
                   onClick={() => setDetailId(o.id)}
-                  className="w-full bg-white rounded-xl p-3 text-left active:scale-[0.99] transition-transform"
+                  className="w-full bg-white rounded-md p-3 text-left active:scale-[0.99] transition-transform"
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] text-gray-400">{o.order_no}</span>
                     <span
-                      className="text-[11px] px-2 py-0.5 rounded-full font-medium"
+                      className="text-[11px] px-2 py-0.5 rounded-md font-medium"
                       style={{ color: meta.color, backgroundColor: meta.bg }}
                     >
                       {meta.text}
@@ -302,12 +302,12 @@ function OrderDetail({
         ) : (
           <div className="px-4 py-3 space-y-3">
             {/* 状态与基础信息 */}
-            <div className="bg-white rounded-xl p-3">
+            <div className="bg-white rounded-md p-3">
               <div className="flex items-center justify-between">
                 <span className="text-[12px] text-gray-400">{order.order_no}</span>
                 {meta && (
                   <span
-                    className="text-[11px] px-2 py-0.5 rounded-full font-medium"
+                    className="text-[11px] px-2 py-0.5 rounded-md font-medium"
                     style={{ color: meta.color, backgroundColor: meta.bg }}
                   >
                     {meta.text}
@@ -346,10 +346,10 @@ function OrderDetail({
             </div>
 
             {/* 商品明细 */}
-            <div className="bg-white rounded-xl p-3 space-y-3">
+            <div className="bg-white rounded-md p-3 space-y-3">
               {items.map((it: any) => (
                 <div key={it.id} className="flex gap-3">
-                  <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-[#EAF6FC] to-[#D6EEFB] shrink-0 overflow-hidden flex items-center justify-center">
+                  <div className="w-14 h-14 rounded bg-gradient-to-br from-[#EAF6FC] to-[#D6EEFB] shrink-0 overflow-hidden flex items-center justify-center">
                     {it.product_image ? (
                       <img src={it.product_image} alt={it.product_name} className="w-full h-full object-cover" />
                     ) : (
@@ -372,19 +372,19 @@ function OrderDetail({
             </div>
 
             {/* 管理员备注 */}
-            <div className="bg-white rounded-xl p-3">
+            <div className="bg-white rounded-md p-3">
               <p className="text-sm text-gray-700 mb-2">管理员备注</p>
               <textarea
                 value={adminRemark}
                 onChange={(e) => setAdminRemark(e.target.value)}
                 placeholder="选填，仅管理员可见"
                 rows={2}
-                className="w-full bg-[#F5F7FA] rounded-lg px-3 py-2 text-sm text-gray-700 outline-none placeholder:text-gray-400 resize-none"
+                className="w-full bg-[#F5F7FA] rounded px-3 py-2 text-sm text-gray-700 outline-none placeholder:text-gray-400 resize-none"
               />
               <button
                 onClick={() => onUpdate(order.id, { adminRemark })}
                 disabled={updating}
-                className="mt-2 w-full py-2 rounded-lg border border-[#2196C8] text-[#2196C8] text-sm disabled:opacity-60"
+                className="mt-2 w-full py-2 rounded border border-[#2196C8] text-[#2196C8] text-sm disabled:opacity-60"
               >
                 保存备注
               </button>
@@ -392,7 +392,7 @@ function OrderDetail({
 
             {/* 收货信息（实物订单） */}
             {Number(order.has_service) !== 1 && (order.receiver_name || order.order_status === "confirmed") && (
-              <div className="bg-white rounded-xl p-3">
+              <div className="bg-white rounded-md p-3">
                 <p className="text-sm text-gray-700 mb-2 flex items-center gap-1"><Truck className="w-4 h-4 text-[#0891B2]" /> 收货信息</p>
                 {order.receiver_name ? (
                   <div className="text-[13px] text-gray-700 space-y-0.5">
@@ -405,13 +405,13 @@ function OrderDetail({
                 {order.pay_status === "paid" && order.order_status === "confirmed" && order.receiver_name && (
                   <div className="mt-3 space-y-2">
                     <input value={shipCompany} onChange={(e) => setShipCompany(e.target.value)} placeholder="物流公司（如顺丰）"
-                      className="w-full bg-[#F5F7FA] rounded-lg px-3 py-2 text-sm outline-none" />
+                      className="w-full bg-[#F5F7FA] rounded px-3 py-2 text-sm outline-none" />
                     <input value={shipNo} onChange={(e) => setShipNo(e.target.value)} placeholder="物流单号"
-                      className="w-full bg-[#F5F7FA] rounded-lg px-3 py-2 text-sm outline-none" />
+                      className="w-full bg-[#F5F7FA] rounded px-3 py-2 text-sm outline-none" />
                     <button
                       onClick={() => ship.mutate({ orderId: order.id, shipCompany: shipCompany || undefined, shipNo: shipNo || undefined })}
                       disabled={ship.isPending}
-                      className="w-full py-2 rounded-lg bg-[#0891B2] text-white text-sm disabled:opacity-60"
+                      className="w-full py-2 rounded bg-[#0891B2] text-white text-sm disabled:opacity-60"
                     >确认发货</button>
                   </div>
                 )}
@@ -420,7 +420,7 @@ function OrderDetail({
 
             {/* 核销信息（服务订单） */}
             {Number(order.has_service) === 1 && order.pay_status === "paid" && (
-              <div className="bg-white rounded-xl p-3">
+              <div className="bg-white rounded-md p-3">
                 <p className="text-sm text-gray-700 mb-2 flex items-center gap-1"><QrCode className="w-4 h-4 text-[#7C3AED]" /> 到店核销</p>
                 {order.verify_status === "used" ? (
                   <p className="text-sm text-[#059669]">已核销 {order.verified_at ? `· ${fmtTime(order.verified_at)}` : ""}</p>
@@ -434,7 +434,7 @@ function OrderDetail({
             )}
 
             {/* 状态流转 */}
-            <div className="bg-white rounded-xl p-3">
+            <div className="bg-white rounded-md p-3">
               <p className="text-sm text-gray-700 mb-2">更新状态</p>
               <div className="grid grid-cols-2 gap-2">
                 {statusActions.map((s) => {
@@ -444,7 +444,7 @@ function OrderDetail({
                       key={s.key}
                       onClick={() => !active && onUpdate(order.id, { orderStatus: s.key })}
                       disabled={updating || active}
-                      className={`py-2 rounded-lg text-sm transition-colors ${
+                      className={`py-2 rounded text-sm transition-colors ${
                         active
                           ? "bg-[#2196C8] text-white"
                           : "bg-[#F5F7FA] text-gray-600 active:bg-gray-100"

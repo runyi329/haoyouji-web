@@ -15,7 +15,7 @@ export default function OperationEfficiency() {
     <OpsCard title="运营效率" subtitle="本月平均指标">
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
         {items.map((item, i) => (
-          <div key={i} style={{ background: item.bg, borderRadius: 10, padding: "10px 10px" }}>
+          <div key={i} style={{ background: item.bg, borderRadius: 5, padding: "10px 10px" }}>
             <div style={{ fontSize: 9, color: "#9CA3AF", marginBottom: 4, lineHeight: 1.3 }}>{item.label}</div>
             <div style={{ fontSize: 15, fontWeight: 700, color: item.color }}>{item.value}</div>
           </div>

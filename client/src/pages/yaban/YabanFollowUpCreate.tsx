@@ -181,7 +181,7 @@ export default function YabanFollowUpCreate() {
           className="w-full flex items-center justify-between px-4 py-4"
         >
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-sky-50 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-md bg-sky-50 flex items-center justify-center">
               <User className="w-6 h-6 text-sky-400" />
             </div>
             {formData.patientName ? (
@@ -328,7 +328,7 @@ export default function YabanFollowUpCreate() {
         <button
           onClick={handleSave}
           disabled={submitting}
-          className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-400 to-sky-400 text-white text-base font-semibold shadow-lg shadow-sky-200/50 active:opacity-80 transition-opacity disabled:opacity-50"
+          className="w-full py-3.5 rounded-md bg-gradient-to-r from-cyan-400 to-sky-400 text-white text-base font-semibold shadow-lg shadow-sky-200/50 active:opacity-80 transition-opacity disabled:opacity-50"
         >
           {submitting ? "保存中…" : "保存"}
         </button>

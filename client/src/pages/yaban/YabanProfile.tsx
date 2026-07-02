@@ -206,7 +206,7 @@ export default function YabanProfile() {
   const systemRows: RowItem[] = [];
 
   const renderGroup = (rows: RowItem[]) => (
-    <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
+    <div className="bg-white rounded overflow-hidden shadow-sm">
       {rows.map((row, idx) => (
         <button
           key={row.key}
@@ -215,7 +215,7 @@ export default function YabanProfile() {
             idx !== rows.length - 1 ? "border-b border-gray-100" : ""
           }`}
         >
-          <span className="w-9 h-9 rounded-xl bg-[#EAF4FE] flex items-center justify-center shrink-0">
+          <span className="w-9 h-9 rounded-md bg-[#EAF4FE] flex items-center justify-center shrink-0">
             {row.icon}
           </span>
           <span className="flex-1 text-left">
@@ -237,7 +237,7 @@ export default function YabanProfile() {
           <div className="flex items-center gap-3">
             {/* 头像仅展示；更换头像统一在「账号资料管理」中操作,故移除相机角标与点击上传 */}
             <div className="relative w-16 h-16 shrink-0">
-              <span className="absolute inset-0 rounded-full bg-white/20 ring-2 ring-white/40 overflow-hidden flex items-center justify-center">
+              <span className="absolute inset-0 rounded-md bg-white/20 ring-2 ring-white/40 overflow-hidden flex items-center justify-center">
                 {avatar ? (
                   <img src={avatar} alt="头像" className="w-full h-full object-cover" />
                 ) : (
@@ -252,7 +252,7 @@ export default function YabanProfile() {
                 {badges.map((b, i) => (
                   <span
                     key={i}
-                    className="relative inline-flex items-center justify-center gap-1.5 h-[22px] px-3 rounded-full text-[12px] font-bold leading-none text-white"
+                    className="relative inline-flex items-center justify-center gap-1.5 h-[22px] px-3 rounded-md text-[12px] font-bold leading-none text-white"
                     style={{
                       background: `linear-gradient(165deg, ${b.tone.c1}, ${b.tone.c2})`,
                       boxShadow:
@@ -261,7 +261,7 @@ export default function YabanProfile() {
                     }}
                   >
                     <span
-                      className="w-[5px] h-[5px] rounded-full shrink-0"
+                      className="w-[5px] h-[5px] rounded-md shrink-0"
                       style={{ background: b.tone.dot, boxShadow: "0 0 2px rgba(255,255,255,.8)" }}
                     />
                     {b.label}
@@ -275,7 +275,7 @@ export default function YabanProfile() {
 
       {/* 资产卡片（上移与头部重叠） */}
       <div className="max-w-lg mx-auto px-4 -mt-4">
-        <div className="bg-white rounded-2xl shadow-sm flex divide-x divide-gray-100">
+        <div className="bg-white rounded shadow-sm flex divide-x divide-gray-100">
           {assets.map((a) => (
             <button
               key={a.label}
@@ -300,12 +300,12 @@ export default function YabanProfile() {
         {isCustomer && (
           <div className="space-y-2">
             <div className="px-1 text-xs font-semibold text-gray-400">我的服务</div>
-            <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
+            <div className="bg-white rounded overflow-hidden shadow-sm">
               <button
                 onClick={() => navigate("/yaban/wechat-chat")}
                 className="w-full flex items-center gap-3 px-4 py-3.5 active:bg-[#F0F7FD] transition-colors border-b border-gray-100"
               >
-                <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: "linear-gradient(135deg, #1AAD19, #2DC12C)" }}>
+                <span className="w-9 h-9 rounded-md flex items-center justify-center shrink-0" style={{ background: "linear-gradient(135deg, #1AAD19, #2DC12C)" }}>
                   <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
                 </span>
                 <span className="flex-1 text-left">
@@ -318,7 +318,7 @@ export default function YabanProfile() {
                 onClick={() => navigate("/yaban/account")}
                 className="w-full flex items-center gap-3 px-4 py-3.5 active:bg-[#F0F7FD] transition-colors"
               >
-                <span className="w-9 h-9 rounded-xl bg-[#EAF4FE] flex items-center justify-center shrink-0">
+                <span className="w-9 h-9 rounded-md bg-[#EAF4FE] flex items-center justify-center shrink-0">
                   <Settings className="w-5 h-5 text-[#1E88D6]" />
                 </span>
                 <span className="flex-1 text-left">

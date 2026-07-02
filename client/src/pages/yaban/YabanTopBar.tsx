@@ -90,7 +90,7 @@ export function YabanTopBar({ title, back, onBack, clinicName, right }: YabanTop
                     fontWeight: 500,
                     color: "#fff",
                     background: "rgba(255,255,255,.18)",
-                    borderRadius: 20,
+                    borderRadius: 10,
                     padding: "4px 10px",
                     maxWidth: 120,
                     overflow: "hidden",

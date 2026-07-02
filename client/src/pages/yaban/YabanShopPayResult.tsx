@@ -85,13 +85,13 @@ export default function YabanShopPayResult() {
             <div className="w-full max-w-xs space-y-2">
               <button
                 onClick={() => navigate("/yaban/shop/my-orders")}
-                className="w-full py-2.5 rounded-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-medium"
+                className="w-full py-2.5 rounded-md bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-medium"
               >
                 查看订单
               </button>
               <button
                 onClick={() => navigate("/yaban/shop")}
-                className="w-full py-2.5 rounded-full border border-gray-200 text-gray-500 text-sm"
+                className="w-full py-2.5 rounded-md border border-gray-200 text-gray-500 text-sm"
               >
                 继续逛商城
               </button>
@@ -111,13 +111,13 @@ export default function YabanShopPayResult() {
                 onClick={() =>
                   navigate(`/yaban/shop/cashier?orderNo=${orderNo}&amount=${amount || ""}`)
                 }
-                className="w-full py-2.5 rounded-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-medium"
+                className="w-full py-2.5 rounded-md bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-medium"
               >
                 重新支付
               </button>
               <button
                 onClick={() => navigate("/yaban/shop/my-orders")}
-                className="w-full py-2.5 rounded-full border border-gray-200 text-gray-500 text-sm"
+                className="w-full py-2.5 rounded-md border border-gray-200 text-gray-500 text-sm"
               >
                 查看订单
               </button>

@@ -483,7 +483,7 @@ export default function YabanPatientCreate() {
               onClick={() => setAvatarOpen(true)}
               className="relative z-10 w-20 h-20 active:opacity-80"
             >
-              <span className="block w-full h-full rounded-full overflow-hidden bg-gray-100">
+              <span className="block w-full h-full rounded-md overflow-hidden bg-gray-100">
                 {effectiveAvatar ? (
                   <img
                     src={avatarSrc(effectiveAvatar)}
@@ -498,7 +498,7 @@ export default function YabanPatientCreate() {
               </span>
               {/* 相机角标：小尺寸，压在圆圈右下边缘，一半在圈内、一半在圈外 */}
               <span
-                className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full flex items-center justify-center ring-2 ring-white shadow-md"
+                className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-md flex items-center justify-center ring-2 ring-white shadow-md"
                 style={{ backgroundColor: ACCENT }}
               >
                 <Camera className="w-3.5 h-3.5 text-white" strokeWidth={2.2} />
@@ -545,7 +545,7 @@ export default function YabanPatientCreate() {
                             {hasValue ? (
                               /* 有内容：两行展示框（抬头 + 税号） */
                               <div
-                                className="w-full px-3 py-2 rounded-lg bg-gray-50 border border-[#D6E6F5] flex items-center gap-1 text-sm"
+                                className="w-full px-3 py-2 rounded bg-gray-50 border border-[#D6E6F5] flex items-center gap-1 text-sm"
                                 style={{ minHeight: 44 }}
                               >
                                 <button
@@ -583,7 +583,7 @@ export default function YabanPatientCreate() {
                               </div>
                             ) : (
                               /* 无内容：单行占位框 */
-                              <div className="w-full h-10 px-3 rounded-lg bg-gray-50 border border-[#D6E6F5] flex items-center text-sm transition-colors">
+                              <div className="w-full h-10 px-3 rounded bg-gray-50 border border-[#D6E6F5] flex items-center text-sm transition-colors">
                                 <button
                                   type="button"
                                   className="flex-1 min-w-0 text-left truncate active:opacity-70"
@@ -698,7 +698,7 @@ export default function YabanPatientCreate() {
                         <div className="flex-1 min-w-0">
                           {/* 已选中状态：显示账号名 + 清除按鈕 */}
                           {form.referrerUsername && !referrerPickerOpen ? (
-                            <div className="flex items-center bg-gray-50 rounded-lg border border-[#D6E6F5] h-10 px-3 gap-2">
+                            <div className="flex items-center bg-gray-50 rounded border border-[#D6E6F5] h-10 px-3 gap-2">
                               <span className="flex-1 text-sm text-gray-800 truncate">{form.referrerUsername}</span>
                               <button
                                 type="button"
@@ -712,7 +712,7 @@ export default function YabanPatientCreate() {
                             /* 未选中状态：点击展开搜索 */
                             <button
                               type="button"
-                              className="w-full flex items-center justify-between bg-gray-50 rounded-lg border border-[#D6E6F5] h-10 px-3 gap-2 active:bg-gray-100"
+                              className="w-full flex items-center justify-between bg-gray-50 rounded border border-[#D6E6F5] h-10 px-3 gap-2 active:bg-gray-100"
                               onClick={() => { setReferrerSearch(""); setReferrerPickerOpen(true); }}
                             >
                               <span className="text-sm text-gray-300">AI搜索</span>
@@ -721,7 +721,7 @@ export default function YabanPatientCreate() {
                           ) : (
                             /* 展开状态：内嵌搜索框 + 候选列表（浮层，不占文档流） */
                             <div className="relative">
-                              <div className="flex items-center bg-white rounded-lg border-2 border-[#1E88D6] h-10 px-3 gap-2">
+                              <div className="flex items-center bg-white rounded border-2 border-[#1E88D6] h-10 px-3 gap-2">
                                 <input
                                   type="text"
                                   autoFocus
@@ -736,7 +736,7 @@ export default function YabanPatientCreate() {
                               </div>
                               {/* 候选列表：绝对定位浮层，不占位置 */}
                               {referrerPickerOpen && (
-                                <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border border-gray-100 bg-white shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                                <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-md border border-gray-100 bg-white shadow-lg overflow-hidden max-h-48 overflow-y-auto">
                                   {referrerQuery.isLoading ? (
                                     <div className="text-center text-gray-400 text-sm py-4">搜索中...</div>
                                   ) : !referrerQuery.data?.length ? (
@@ -775,7 +775,7 @@ export default function YabanPatientCreate() {
                         <div className="flex-1 min-w-0">
                           <button
                             type="button"
-                            className="w-full flex items-center justify-between bg-gray-50 rounded-lg border border-[#D6E6F5] h-10 px-3 gap-1 active:bg-gray-100"
+                            className="w-full flex items-center justify-between bg-gray-50 rounded border border-[#D6E6F5] h-10 px-3 gap-1 active:bg-gray-100"
                             onClick={() => totalCount > 0 && setReferralListOpen(true)}
                           >
                             <span className="text-sm" style={{ color: totalCount > 0 ? "#1E88D6" : undefined }}>
@@ -791,7 +791,7 @@ export default function YabanPatientCreate() {
                       <div key="_clinic" style={{ flex: "1 1 100%", minWidth: 0 }} className="py-1.5 flex items-center gap-2">
                         <label className="text-gray-700 text-base shrink-0" style={{ minWidth: "4em", display: "inline-block" }}>所属医院</label>
                         <div className="flex-1 min-w-0">
-                          <div className="w-full h-10 px-3 rounded-lg bg-gray-50 border border-[#D6E6F5] flex items-center text-sm">
+                          <div className="w-full h-10 px-3 rounded bg-gray-50 border border-[#D6E6F5] flex items-center text-sm">
                             <span style={{ color: clinicName ? "#1E88D6" : "#9ca3af" }}>
                               {clinicName || "—"}
                             </span>
@@ -820,14 +820,14 @@ export default function YabanPatientCreate() {
                         <button
                           type="button"
                           onClick={() => { setSelectedSourceId(null); setSourcePickerOpen(true); }}
-                          className="w-full flex items-center justify-between bg-gray-50 rounded-lg border border-[#D6E6F5] h-10 px-3 gap-2 active:bg-gray-100"
+                          className="w-full flex items-center justify-between bg-gray-50 rounded border border-[#D6E6F5] h-10 px-3 gap-2 active:bg-gray-100"
                         >
                           {srcLabel ? (
                             <span className="flex items-center gap-1.5 flex-1 min-w-0">
                               <span className="text-sm text-gray-800 truncate">{srcLabel}</span>
                               {tagObj && (
                                 <span
-                                  className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium text-white flex-shrink-0"
+                                  className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium text-white flex-shrink-0"
                                   style={{ backgroundColor: tagObj.color || "#9E9E9E" }}
                                 >
                                   {tagLabel}
@@ -862,21 +862,21 @@ export default function YabanPatientCreate() {
                         <label className="text-gray-700 text-base shrink-0 mt-2.5" style={{ minWidth: "4em", display: "inline-block" }}>关联亲友</label>
                         <div className="flex-1 min-w-0 relative">
                           {relativeSelected && !relativePickerOpen ? (
-                            <div className="flex items-center bg-gray-50 rounded-lg border border-[#D6E6F5] h-10 px-3 gap-2">
+                            <div className="flex items-center bg-gray-50 rounded border border-[#D6E6F5] h-10 px-3 gap-2">
                               <span className="flex-1 text-sm text-gray-800 truncate">{relativeSelected.name}{relativeSelected.mobile ? ` (${relativeSelected.mobile.slice(-4)})` : ""}</span>
                               <button type="button" className="text-gray-300 flex-shrink-0" onClick={() => { setRelativeSelected(null); setRelativeSearch(""); }}>
                                 <XCircle size={15} />
                               </button>
                             </div>
                           ) : !relativePickerOpen ? (
-                            <button type="button" onClick={() => setRelativePickerOpen(true)} className="w-full flex items-center bg-gray-50 rounded-lg border border-[#D6E6F5] h-10 px-3">
+                            <button type="button" onClick={() => setRelativePickerOpen(true)} className="w-full flex items-center bg-gray-50 rounded border border-[#D6E6F5] h-10 px-3">
                               <span className="text-sm text-gray-300">AI 搜索</span>
                             </button>
                           ) : (
                             <div className="relative">
                               <input
                                 autoFocus
-                                className="w-full h-10 px-3 rounded-lg border border-[#1E88D6] bg-white text-sm outline-none"
+                                className="w-full h-10 px-3 rounded border border-[#1E88D6] bg-white text-sm outline-none"
                                 placeholder="AI 搜索..."
                                 value={relativeSearch}
                                 onChange={(e) => setRelativeSearch(e.target.value)}
@@ -884,7 +884,7 @@ export default function YabanPatientCreate() {
                               <button type="button" onClick={() => { setRelativePickerOpen(false); setRelativeSearch(""); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300">
                                 <XCircle size={15} />
                               </button>
-                              <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border border-gray-100 bg-white shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                              <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-md border border-gray-100 bg-white shadow-lg overflow-hidden max-h-48 overflow-y-auto">
                                   {relativeQuery.isLoading ? (
                                     <div className="text-center text-gray-400 text-sm py-4">搜索中...</div>
                                   ) : !relativeQuery.data?.length ? (
@@ -921,7 +921,7 @@ export default function YabanPatientCreate() {
                           <button
                             type="button"
                             onClick={() => setRelationPickerOpen(!relationPickerOpen)}
-                            className="w-full flex items-center justify-between bg-gray-50 rounded-lg border border-[#D6E6F5] h-10 px-3 gap-2 active:bg-gray-100"
+                            className="w-full flex items-center justify-between bg-gray-50 rounded border border-[#D6E6F5] h-10 px-3 gap-2 active:bg-gray-100"
                           >
                             <span className={`text-sm ${form.relativeRelation ? 'text-gray-800' : 'text-gray-300'}`}>
                               {form.relativeRelation || ""}
@@ -929,7 +929,7 @@ export default function YabanPatientCreate() {
                             <ChevronDown className="w-4 h-4 text-gray-300 shrink-0" />
                           </button>
                           {relationPickerOpen && (
-                            <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl border border-gray-100 bg-white shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                            <div className="absolute left-0 right-0 top-full mt-1 z-50 rounded-md border border-gray-100 bg-white shadow-lg overflow-hidden max-h-48 overflow-y-auto">
                               {/* 空选项，可取消已选关系 */}
                               <button
                                 type="button"
@@ -1011,7 +1011,7 @@ export default function YabanPatientCreate() {
                     if (!window.confirm("删除后不可恢复，请再次确认！")) return;
                     deleteMutation.mutate({ id: editId });
                   }}
-                  className="flex-shrink-0 h-12 px-5 rounded-xl text-base font-semibold text-white flex items-center justify-center transition-all active:scale-95"
+                  className="flex-shrink-0 h-12 px-5 rounded-md text-base font-semibold text-white flex items-center justify-center transition-all active:scale-95"
                   style={{
                     background: isDeleting ? "#C0C0C0" : "#E53E3E",
                     boxShadow: isDeleting ? "none" : "0 3px 12px rgba(229,62,62,0.35)",
@@ -1026,7 +1026,7 @@ export default function YabanPatientCreate() {
                 type="button"
                 onClick={handleSave}
                 disabled={isDisabled}
-                className="flex-1 h-12 rounded-xl text-base font-semibold text-white flex items-center justify-center gap-2 transition-all active:scale-95"
+                className="flex-1 h-12 rounded-md text-base font-semibold text-white flex items-center justify-center gap-2 transition-all active:scale-95"
                 style={{
                   background: isDisabled ? "#C0C0C0" : ACCENT,
                   boxShadow: isDisabled ? "none" : `0 3px 12px ${ACCENT}55`,
@@ -1129,11 +1129,11 @@ export default function YabanPatientCreate() {
               const cnt = referralCountQuery.data;
               return (
                 <div className="flex gap-3 mb-4 flex-shrink-0">
-                  <div className="flex-1 bg-blue-50 rounded-xl px-4 py-2.5 text-center">
+                  <div className="flex-1 bg-blue-50 rounded-md px-4 py-2.5 text-center">
                     <div className="text-lg font-bold" style={{ color: "#1E88D6" }}>{cnt?.direct ?? 0}</div>
                     <div className="text-xs text-gray-400 mt-0.5">直接推荐</div>
                   </div>
-                  <div className="flex-1 bg-blue-50 rounded-xl px-4 py-2.5 text-center">
+                  <div className="flex-1 bg-blue-50 rounded-md px-4 py-2.5 text-center">
                     <div className="text-lg font-bold" style={{ color: "#1E88D6" }}>{cnt?.total ?? 0}</div>
                     <div className="text-xs text-gray-400 mt-0.5">全部代数</div>
                   </div>
@@ -1149,7 +1149,7 @@ export default function YabanPatientCreate() {
               ) : (
                 <div className="space-y-1">
                   {referralListQuery.data.map((item: any) => (
-                    <div key={item.userId} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-gray-50">
+                    <div key={item.userId} className="flex items-center gap-3 px-3 py-2.5 rounded-md bg-gray-50">
                       <span className="text-xs px-1.5 py-0.5 rounded" style={{ background: "#E3F0FB", color: "#1E88D6", minWidth: 28, textAlign: "center" }}>第{item.level}代</span>
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium text-gray-800 truncate">{item.name || item.username}</div>
@@ -1187,7 +1187,7 @@ export default function YabanPatientCreate() {
                     setSourcePickerOpen(false);
                   }
                 }}
-                className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100"
+                className="w-8 h-8 flex items-center justify-center rounded-md bg-gray-100"
               >
                 {selectedSourceId != null ? <ChevronLeft className="w-4 h-4 text-gray-500" /> : <X className="w-4 h-4 text-gray-500" />}
               </button>
@@ -1216,14 +1216,14 @@ export default function YabanPatientCreate() {
                             setSelectedSourceId(src.id);
                           }
                         }}
-                        className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gray-50 active:bg-blue-50"
+                        className="w-full flex items-center justify-between px-4 py-3 rounded-md bg-gray-50 active:bg-blue-50"
                       >
                         <span className="text-sm font-medium text-gray-800">{src.label}</span>
                         <div className="flex items-center gap-2">
                           {src.tags.slice(0, 3).map((t) => (
                             <span
                               key={t.id}
-                              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium text-white"
+                              className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium text-white"
                               style={{ backgroundColor: t.color || "#9E9E9E" }}
                             >
                               {t.label}
@@ -1268,7 +1268,7 @@ export default function YabanPatientCreate() {
                           setSourcePickerOpen(false);
                           setSelectedSourceId(null);
                         }}
-                        className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gray-50 active:bg-blue-50 border-2 border-dashed border-gray-200"
+                        className="w-full flex items-center justify-between px-4 py-3 rounded-md bg-gray-50 active:bg-blue-50 border-2 border-dashed border-gray-200"
                       >
                         <span className="text-sm text-gray-500">仅选「{srcObj.label}」，不选副标签</span>
                       </button>
@@ -1283,10 +1283,10 @@ export default function YabanPatientCreate() {
                             setSourcePickerOpen(false);
                             setSelectedSourceId(null);
                           }}
-                          className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-gray-50 active:bg-blue-50"
+                          className="w-full flex items-center gap-3 px-4 py-3 rounded-md bg-gray-50 active:bg-blue-50"
                         >
                           <span
-                            className="inline-flex items-center px-2.5 py-1 rounded-full text-sm font-medium text-white"
+                            className="inline-flex items-center px-2.5 py-1 rounded-md text-sm font-medium text-white"
                             style={{ backgroundColor: tag.color || "#9E9E9E" }}
                           >
                             {tag.label}
@@ -1329,12 +1329,12 @@ export default function YabanPatientCreate() {
               </div>
 
               {/* 当前内容展示 + 复制 */}
-              <div className="flex items-center gap-2 bg-blue-50 rounded-xl px-4 py-3 mb-4">
+              <div className="flex items-center gap-2 bg-blue-50 rounded-md px-4 py-3 mb-4">
                 <span className="flex-1 text-sm font-semibold" style={{ color: ACCENT }}>{copyValue || "—"}</span>
                 {copyValue && (
                   <button
                     type="button"
-                    className="flex items-center gap-1 text-xs text-white px-3 py-1.5 rounded-lg active:opacity-70"
+                    className="flex items-center gap-1 text-xs text-white px-3 py-1.5 rounded active:opacity-70"
                     style={{ background: ACCENT }}
                     onClick={() => {
                       navigator.clipboard.writeText(copyValue);
@@ -1383,7 +1383,7 @@ export default function YabanPatientCreate() {
           <div
             style={{
               background: "#fff",
-              borderRadius: 20,
+              borderRadius: 10,
               padding: "36px 24px 28px",
               width: "100%",
               maxWidth: 360,
@@ -1426,7 +1426,7 @@ export default function YabanPatientCreate() {
                   color: ACCENT,
                   background: "#EBF5FF",
                   border: "none",
-                  borderRadius: 12,
+                  borderRadius: 6,
                   cursor: "pointer",
                 }}
               >
@@ -1451,7 +1451,7 @@ export default function YabanPatientCreate() {
                   color: "#fff",
                   background: "linear-gradient(90deg, #1E88D6, #42A5F5)",
                   border: "none",
-                  borderRadius: 12,
+                  borderRadius: 6,
                   cursor: "pointer",
                   boxShadow: "0 4px 12px rgba(30,136,214,0.28)",
                 }}
@@ -1517,7 +1517,7 @@ function FieldCell({
 
   // 统一的控件外框样式（浅灰底，聚焦时蓝边）
   const boxCls =
-    "w-full h-10 px-3 rounded-lg bg-gray-50 border border-[#D6E6F5] flex items-center text-sm transition-colors focus-within:bg-white focus-within:border-[#1E88D6]";
+    "w-full h-10 px-3 rounded bg-gray-50 border border-[#D6E6F5] flex items-center text-sm transition-colors focus-within:bg-white focus-within:border-[#1E88D6]";
 
   let control: JSX.Element;
 
@@ -1590,7 +1590,7 @@ function FieldCell({
         {occOpen && occSuggestions.length > 0 && (
           <>
             <div className="fixed inset-0 z-20" onClick={() => setOccOpen(false)} />
-            <div className="absolute left-0 top-full z-30 mt-1 w-full max-w-[240px] bg-white rounded-lg shadow-lg ring-1 ring-black/5 overflow-hidden max-h-52 overflow-y-auto">
+            <div className="absolute left-0 top-full z-30 mt-1 w-full max-w-[240px] bg-white rounded shadow-lg ring-1 ring-black/5 overflow-hidden max-h-52 overflow-y-auto">
               {occSuggestions.map((opt, i) => (
                 <button
                   key={opt}
@@ -1685,13 +1685,13 @@ function FieldCell({
           {tags.map((tag) => (
             <span
               key={tag}
-              className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-medium"
+              className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-xs font-medium"
               style={{ background: "#E3F0FB", color: ACCENT, border: `1px solid #BBD9F2` }}
             >
               {tag}
               <button
                 type="button"
-                className="ml-0.5 flex items-center justify-center rounded-full hover:bg-blue-200 active:bg-blue-300"
+                className="ml-0.5 flex items-center justify-center rounded-md hover:bg-blue-200 active:bg-blue-300"
                 style={{ width: 14, height: 14 }}
                 onClick={() => onRemoveHistoryTag?.(tag)}
               >
@@ -1702,7 +1702,7 @@ function FieldCell({
           <button
             type="button"
             onClick={onOpenHistory}
-            className="inline-flex items-center justify-center rounded-full border border-dashed border-[#1E88D6] text-[#1E88D6] active:bg-blue-50"
+            className="inline-flex items-center justify-center rounded-md border border-dashed border-[#1E88D6] text-[#1E88D6] active:bg-blue-50"
             style={{ width: 28, height: 28, flexShrink: 0 }}
           >
             <span style={{ fontSize: 18, lineHeight: 1, marginTop: -1 }}>+</span>
@@ -1751,7 +1751,7 @@ function FieldCell({
         {open && (
           <>
             <div className="fixed inset-0 z-20" onClick={onToggle} />
-            <div className="absolute left-0 top-full z-30 mt-1 min-w-full max-w-[240px] bg-white rounded-lg shadow-lg ring-1 ring-black/5 overflow-hidden">
+            <div className="absolute left-0 top-full z-30 mt-1 min-w-full max-w-[240px] bg-white rounded shadow-lg ring-1 ring-black/5 overflow-hidden">
               {(field.options || []).map((opt, i) => {
                 const selected = value === opt;
                 return (
@@ -1779,7 +1779,7 @@ function FieldCell({
         onChange={(e) => onInput(e.target.value)}
         placeholder={field.placeholder}
         rows={2}
-        className="w-full px-3 py-2 rounded-lg bg-gray-50 border border-[#D6E6F5] text-sm text-gray-800 placeholder-gray-300 outline-none resize-none transition-colors focus:bg-white focus:border-[#1E88D6]"
+        className="w-full px-3 py-2 rounded bg-gray-50 border border-[#D6E6F5] text-sm text-gray-800 placeholder-gray-300 outline-none resize-none transition-colors focus:bg-white focus:border-[#1E88D6]"
       />
     );
   } else if (field.inputType === "date") {

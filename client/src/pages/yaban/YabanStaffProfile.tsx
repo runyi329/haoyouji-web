@@ -51,7 +51,7 @@ export default function YabanStaffProfile() {
 
       <div className="max-w-lg mx-auto pb-20">
         <div className="px-3 pt-3">
-          <div className="flex items-center gap-2 bg-white rounded-xl px-3 py-2 shadow-sm">
+          <div className="flex items-center gap-2 bg-white rounded-md px-3 py-2 shadow-sm">
             <Search className="w-4 h-4 text-gray-400" />
             <input
               value={keyword}
@@ -66,7 +66,7 @@ export default function YabanStaffProfile() {
           共 {members.length} 名在职员工
         </div>
 
-        <div className="bg-white mx-3 mt-2 rounded-xl divide-y divide-gray-100">
+        <div className="bg-white mx-3 mt-2 rounded-md divide-y divide-gray-100">
           {membersQuery.isLoading && (
             <div className="py-10 text-center text-sm text-gray-400">加载中…</div>
           )}
@@ -76,7 +76,7 @@ export default function YabanStaffProfile() {
           {members.map((m) => (
             <div key={m.userId} className="flex items-center gap-3 px-4 py-3">
               <div
-                className="w-10 h-10 rounded-full flex items-center justify-center text-white flex-shrink-0"
+                className="w-10 h-10 rounded-md flex items-center justify-center text-white flex-shrink-0"
                 style={{ background: ROLE_COLORS[m.roleKey] || "#2196C8" }}
               >
                 <User className="w-5 h-5" />
@@ -86,7 +86,7 @@ export default function YabanStaffProfile() {
                 <div className="text-xs text-gray-400 truncate">{m.roleName || m.roleKey}</div>
               </div>
               <span
-                className="text-[11px] px-2 py-0.5 rounded-full"
+                className="text-[11px] px-2 py-0.5 rounded-md"
                 style={{
                   background: (ROLE_COLORS[m.roleKey] || "#2196C8") + "1A",
                   color: ROLE_COLORS[m.roleKey] || "#2196C8",

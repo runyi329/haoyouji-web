@@ -89,7 +89,7 @@ const Field = ({
 );
 
 const inputCls =
-  "w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-[#2196C8] bg-white";
+  "w-full px-3 py-2 rounded-md border border-gray-200 text-sm focus:outline-none focus:border-[#2196C8] bg-white";
 
 export default function ClinicForm({
   value,

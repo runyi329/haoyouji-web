@@ -142,7 +142,7 @@ function mapRow(row: any): CustomerView {
 function PatientAvatar({ avatarKey, size = 48 }: { avatarKey: AvatarKey; size?: number }) {
   return (
     <div
-      className="rounded-full bg-[#F0F7FA] flex-shrink-0 overflow-hidden"
+      className="rounded-md bg-[#F0F7FA] flex-shrink-0 overflow-hidden"
       style={{ width: size, height: size }}
     >
       <img
@@ -159,7 +159,7 @@ function PatientAvatar({ avatarKey, size = 48 }: { avatarKey: AvatarKey; size?: 
 function SkeletonCard() {
   return (
     <div className="bg-white px-4 py-3 flex gap-3 animate-pulse">
-      <div className="w-[48px] h-[48px] rounded-full bg-gray-100 flex-shrink-0" />
+      <div className="w-[48px] h-[48px] rounded-md bg-gray-100 flex-shrink-0" />
       <div className="flex-1 min-w-0 space-y-2 py-1">
         <div className="h-3.5 bg-gray-100 rounded w-1/3" />
         <div className="h-3 bg-gray-100 rounded w-1/2" />
@@ -849,7 +849,7 @@ export default function YabanPatientList() {
               <button
                 key={s.label}
                 onClick={() => setQuickFilter(s.filter)}
-                className="flex-1 bg-gray-50 rounded-lg py-2 flex flex-col items-center justify-center active:bg-gray-100"
+                className="flex-1 bg-gray-50 rounded py-2 flex flex-col items-center justify-center active:bg-gray-100"
               >
                 <span className="text-[18px] font-bold text-gray-900 leading-tight">
                   {statsQuery.isLoading ? "\u2014" : (s.value ?? 0)}
@@ -875,7 +875,7 @@ export default function YabanPatientList() {
                 onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
                 onKeyDown={(e) => { if (e.key === "Enter") handleSearchEnter(); }}
                 onChange={(e) => setSearchInput(e.target.value)}
-                className="w-full pl-9 pr-9 py-2 bg-gray-50 rounded-lg text-sm text-gray-700 placeholder-gray-400 outline-none border border-gray-200 focus:border-sky-300 focus:ring-1 focus:ring-sky-100"
+                className="w-full pl-9 pr-9 py-2 bg-gray-50 rounded text-sm text-gray-700 placeholder-gray-400 outline-none border border-gray-200 focus:border-sky-300 focus:ring-1 focus:ring-sky-100"
               />
               {searchInput && (
                 <button
@@ -888,11 +888,11 @@ export default function YabanPatientList() {
             </div>
             <button
               onClick={openAdvDrawer}
-              className="relative flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg bg-gray-50 border border-gray-200"
+              className="relative flex-shrink-0 w-9 h-9 flex items-center justify-center rounded bg-gray-50 border border-gray-200"
             >
               <SlidersHorizontal className={`w-4 h-4 ${advCount > 0 ? "text-sky-500" : "text-gray-500"}`} />
               {advCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 rounded-full bg-sky-500 text-white text-[10px] font-bold flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 rounded-md bg-sky-500 text-white text-[10px] font-bold flex items-center justify-center">
                   {advCount}
                 </span>
               )}
@@ -901,7 +901,7 @@ export default function YabanPatientList() {
 
           {/* 搜索历史下拉 */}
           {searchFocused && history.length > 0 && (
-            <div className="absolute left-4 right-4 mt-1 bg-white rounded-lg shadow-lg border border-gray-100 py-2 z-50">
+            <div className="absolute left-4 right-4 mt-1 bg-white rounded shadow-lg border border-gray-100 py-2 z-50">
               <div className="flex items-center justify-between px-3 pb-1.5">
                 <span className="text-[12px] text-gray-400 flex items-center gap-1">
                   <Clock className="w-3 h-3" />
@@ -917,7 +917,7 @@ export default function YabanPatientList() {
                     key={h}
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => applyHistory(h)}
-                    className="px-2.5 py-1 bg-gray-100 rounded-full text-[12px] text-gray-600"
+                    className="px-2.5 py-1 bg-gray-100 rounded-md text-[12px] text-gray-600"
                   >
                     {h}
                   </button>
@@ -935,7 +935,7 @@ export default function YabanPatientList() {
                   <button
                     key={f.id}
                     onClick={() => setQuickFilter(f.id)}
-                    className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[13px] whitespace-nowrap transition-colors ${
+                    className={`flex-shrink-0 px-3 py-1.5 rounded-md text-[13px] whitespace-nowrap transition-colors ${
                       active ? "bg-sky-500 text-white font-medium" : "bg-gray-100 text-gray-600"
                     }`}
                   >
@@ -956,7 +956,7 @@ export default function YabanPatientList() {
               {showSortMenu && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowSortMenu(false)} />
-                  <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg border border-gray-100 py-1 min-w-[120px] z-50">
+                  <div className="absolute right-0 top-full mt-1 bg-white rounded shadow-lg border border-gray-100 py-1 min-w-[120px] z-50">
                     {SORT_OPTIONS.map((option) => (
                       <button
                         key={option.id}
@@ -1009,13 +1009,13 @@ export default function YabanPatientList() {
           </div>
         ) : isError ? (
           <div className="flex flex-col items-center justify-center py-32 px-8">
-            <div className="w-20 h-20 rounded-full bg-red-50 flex items-center justify-center mb-3">
+            <div className="w-20 h-20 rounded-md bg-red-50 flex items-center justify-center mb-3">
               <X className="w-8 h-8 text-red-300" />
             </div>
             <p className="text-gray-500 text-sm mb-4">{"\u52A0\u8F7D\u5931\u8D25\uFF0C\u8BF7\u91CD\u8BD5"}</p>
             <button
               onClick={() => listQuery.refetch()}
-              className="flex items-center gap-1.5 px-4 py-2 bg-sky-500 text-white rounded-lg text-sm"
+              className="flex items-center gap-1.5 px-4 py-2 bg-sky-500 text-white rounded text-sm"
             >
               <RotateCw className="w-4 h-4" />
               {"\u91CD\u65B0\u52A0\u8F7D"}
@@ -1023,7 +1023,7 @@ export default function YabanPatientList() {
           </div>
         ) : customers.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-32 px-8">
-            <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+            <div className="w-20 h-20 rounded-md bg-gray-100 flex items-center justify-center mb-3">
               {keyword || quickFilter !== "all" || advCount > 0 ? (
                 <Search className="w-8 h-8 text-gray-300" />
               ) : (
@@ -1042,14 +1042,14 @@ export default function YabanPatientList() {
                   setQuickFilter("all");
                   setAdv(EMPTY_ADV);
                 }}
-                className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm"
+                className="px-4 py-2 bg-gray-100 text-gray-600 rounded text-sm"
               >
                 {"\u6E05\u9664\u7B5B\u9009\u6761\u4EF6"}
               </button>
             ) : (
               <button
                 onClick={handleCreate}
-                className="flex items-center gap-1.5 px-4 py-2 bg-sky-500 text-white rounded-lg text-sm"
+                className="flex items-center gap-1.5 px-4 py-2 bg-sky-500 text-white rounded text-sm"
               >
                 <Plus className="w-4 h-4" />
                 {"\u65B0\u5EFA\u987E\u5BA2"}
@@ -1062,7 +1062,7 @@ export default function YabanPatientList() {
             <div ref={sentinelRef} className="py-4 flex items-center justify-center">
               {listQuery.isFetching && page > 1 ? (
                 <div className="flex items-center gap-2 text-gray-400 text-[13px]">
-                  <div className="w-4 h-4 border-2 border-sky-200 border-t-sky-500 rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-sky-200 border-t-sky-500 rounded-md animate-spin" />
                   {"\u52A0\u8F7D\u4E2D"}
                 </div>
               ) : !hasMore ? (
@@ -1107,14 +1107,14 @@ export default function YabanPatientList() {
               if (selectedIds.size === 0) { toast.error("\u8BF7\u5148\u9009\u62E9\u987E\u5BA2"); return; }
               setShowBulkTag(true);
             }}
-            className="flex-1 py-2.5 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium flex items-center justify-center gap-1.5"
+            className="flex-1 py-2.5 rounded bg-gray-100 text-gray-700 text-sm font-medium flex items-center justify-center gap-1.5"
           >
             <TagIcon className="w-4 h-4" />
             {"\u6279\u91CF\u6253\u6807\u7B7E"}
           </button>
           <button
             onClick={handleBulkFollowUp}
-            className="flex-1 py-2.5 rounded-lg bg-sky-500 text-white text-sm font-medium flex items-center justify-center gap-1.5"
+            className="flex-1 py-2.5 rounded bg-sky-500 text-white text-sm font-medium flex items-center justify-center gap-1.5"
           >
             <ClipboardList className="w-4 h-4" />
             {"\u6279\u91CF\u968F\u8BBF"}
@@ -1152,7 +1152,7 @@ export default function YabanPatientList() {
                       key={t.id}
                       disabled={bulkAddTagMutation.isPending}
                       onClick={() => handleBulkTag(t.id)}
-                      className="px-3 py-2 rounded-lg text-[13px] font-medium border"
+                      className="px-3 py-2 rounded text-[13px] font-medium border"
                       style={{ backgroundColor: `${t.color}1A`, color: t.color, borderColor: `${t.color}40` }}
                     >
                       {t.name}
@@ -1187,7 +1187,7 @@ export default function YabanPatientList() {
                       <button
                         key={t.id}
                         onClick={() => setAdvDraft((d) => ({ ...d, tagId: d.tagId === t.id ? null : t.id }))}
-                        className="px-3 py-1.5 rounded-full text-[13px] font-medium border transition-colors"
+                        className="px-3 py-1.5 rounded-md text-[13px] font-medium border transition-colors"
                         style={
                           active
                             ? { backgroundColor: t.color, color: "#FFFFFF", borderColor: t.color }
@@ -1286,13 +1286,13 @@ export default function YabanPatientList() {
             <div className="flex items-center gap-3 px-4 py-3 border-t border-gray-100">
               <button
                 onClick={resetAdv}
-                className="flex-1 py-2.5 rounded-lg bg-gray-100 text-gray-600 text-sm font-medium"
+                className="flex-1 py-2.5 rounded bg-gray-100 text-gray-600 text-sm font-medium"
               >
                 {"\u91CD\u7F6E"}
               </button>
               <button
                 onClick={applyAdv}
-                className="flex-[2] py-2.5 rounded-lg bg-sky-500 text-white text-sm font-medium"
+                className="flex-[2] py-2.5 rounded bg-sky-500 text-white text-sm font-medium"
               >
                 {"\u67E5\u770B\u7ED3\u679C"}
               </button>
@@ -1328,7 +1328,7 @@ function FilterChip({
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-1.5 rounded-full text-[13px] transition-colors ${
+      className={`px-3 py-1.5 rounded-md text-[13px] transition-colors ${
         active ? "bg-sky-500 text-white font-medium" : "bg-gray-100 text-gray-600"
       }`}
     >

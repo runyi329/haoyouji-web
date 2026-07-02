@@ -288,17 +288,17 @@ export default function YabanPatientCharge() {
       {/* 统计卡 */}
       <div className="px-4 pt-4">
         <div className="grid grid-cols-3 gap-3">
-          <div className="bg-white rounded-2xl shadow-sm p-3 flex flex-col items-center">
+          <div className="bg-white rounded shadow-sm p-3 flex flex-col items-center">
             <CircleDollarSign className="w-5 h-5 text-sky-500 mb-1" />
             <span className="text-[11px] text-gray-400">消费总额</span>
             <span className="text-base font-bold text-gray-800 mt-0.5">{money(stats.totalReceivable)}</span>
           </div>
-          <div className="bg-white rounded-2xl shadow-sm p-3 flex flex-col items-center">
+          <div className="bg-white rounded shadow-sm p-3 flex flex-col items-center">
             <Wallet className="w-5 h-5 text-green-500 mb-1" />
             <span className="text-[11px] text-gray-400">已收</span>
             <span className="text-base font-bold text-green-600 mt-0.5">{money(stats.totalPaid)}</span>
           </div>
-          <div className="bg-white rounded-2xl shadow-sm p-3 flex flex-col items-center">
+          <div className="bg-white rounded shadow-sm p-3 flex flex-col items-center">
             <AlertTriangle className="w-5 h-5 text-orange-500 mb-1" />
             <span className="text-[11px] text-gray-400">欠费</span>
             <span className={`text-base font-bold mt-0.5 ${stats.totalOwed > 0 ? "text-orange-600" : "text-gray-800"}`}>
@@ -321,7 +321,7 @@ export default function YabanPatientCharge() {
             {canCharge && (
               <button
                 onClick={() => setShowCreate(true)}
-                className="mt-4 px-5 py-2 bg-sky-500 text-white rounded-full text-sm font-medium"
+                className="mt-4 px-5 py-2 bg-sky-500 text-white rounded-md text-sm font-medium"
               >
                 去开单
               </button>
@@ -335,11 +335,11 @@ export default function YabanPatientCharge() {
                 <button
                   key={c.id}
                   onClick={() => setDetailId(c.id)}
-                  className="w-full text-left bg-white rounded-2xl shadow-sm p-4"
+                  className="w-full text-left bg-white rounded shadow-sm p-4"
                 >
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-xs text-gray-400">{c.visitAt || c.createdAt}</span>
-                    <span className={`text-[11px] px-2 py-0.5 rounded-full ${st.cls}`}>{st.label}</span>
+                    <span className={`text-[11px] px-2 py-0.5 rounded-md ${st.cls}`}>{st.label}</span>
                   </div>
                   <div className={`text-sm font-medium mb-2 line-clamp-1 ${c.status === "void" ? "text-gray-400 line-through" : "text-gray-800"}`}>
                     {c.summary || "收费单"}
@@ -365,7 +365,7 @@ export default function YabanPatientCharge() {
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 py-3 z-20">
           <button
             onClick={() => setShowCreate(true)}
-            className="w-full flex items-center justify-center gap-1.5 bg-sky-500 text-white rounded-full py-3 font-medium"
+            className="w-full flex items-center justify-center gap-1.5 bg-sky-500 text-white rounded-md py-3 font-medium"
           >
             <Plus className="w-5 h-5" />
             快速收费
@@ -386,7 +386,7 @@ export default function YabanPatientCharge() {
 
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
               {/* 收费项目 */}
-              <div className="bg-white rounded-2xl p-3">
+              <div className="bg-white rounded p-3">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-gray-700">收费项目</span>
                   <button
@@ -398,17 +398,17 @@ export default function YabanPatientCharge() {
                 </div>
                 <div className="space-y-3">
                   {items.map((it, idx) => (
-                    <div key={idx} className="border border-gray-100 rounded-xl p-2.5 bg-[#FAFCFE]">
+                    <div key={idx} className="border border-gray-100 rounded-md p-2.5 bg-[#FAFCFE]">
                       <div className="flex items-center gap-2 mb-2">
                         <input
                           value={it.name}
                           onChange={(e) => setItems((prev) => prev.map((p, i) => (i === idx ? { ...p, name: e.target.value } : p)))}
                           placeholder="项目名称，如 树脂补牙"
-                          className="flex-1 min-w-0 text-sm px-2 py-1.5 rounded-lg border border-gray-200 bg-white"
+                          className="flex-1 min-w-0 text-sm px-2 py-1.5 rounded border border-gray-200 bg-white"
                         />
                         <button
                           onClick={() => setProdPickerIdx(idx)}
-                          className="shrink-0 flex items-center gap-0.5 text-xs text-sky-600 border border-sky-200 rounded-lg px-2 py-1.5 bg-sky-50 active:bg-sky-100"
+                          className="shrink-0 flex items-center gap-0.5 text-xs text-sky-600 border border-sky-200 rounded px-2 py-1.5 bg-sky-50 active:bg-sky-100"
                         >
                           <Search className="w-3.5 h-3.5" /> 项目库
                         </button>
@@ -426,7 +426,7 @@ export default function YabanPatientCharge() {
                           <label className="text-[10px] text-gray-400">牙位</label>
                           <button
                             onClick={() => setToothPickerIdx(idx)}
-                            className={`w-full text-sm px-1.5 py-1 rounded-lg border border-gray-200 bg-white text-left truncate ${it.tooth ? "text-gray-700" : "text-gray-300"}`}
+                            className={`w-full text-sm px-1.5 py-1 rounded border border-gray-200 bg-white text-left truncate ${it.tooth ? "text-gray-700" : "text-gray-300"}`}
                           >
                             {it.tooth || "选牙位"}
                           </button>
@@ -438,7 +438,7 @@ export default function YabanPatientCharge() {
                             onChange={(e) => setItems((prev) => prev.map((p, i) => (i === idx ? { ...p, unitPrice: e.target.value } : p)))}
                             inputMode="decimal"
                             placeholder="0"
-                            className="w-full text-sm px-1.5 py-1 rounded-lg border border-gray-200 bg-white"
+                            className="w-full text-sm px-1.5 py-1 rounded border border-gray-200 bg-white"
                           />
                         </div>
                         <div>
@@ -448,7 +448,7 @@ export default function YabanPatientCharge() {
                             onChange={(e) => setItems((prev) => prev.map((p, i) => (i === idx ? { ...p, quantity: e.target.value } : p)))}
                             inputMode="decimal"
                             placeholder="1"
-                            className="w-full text-sm px-1.5 py-1 rounded-lg border border-gray-200 bg-white"
+                            className="w-full text-sm px-1.5 py-1 rounded border border-gray-200 bg-white"
                           />
                         </div>
                         <div>
@@ -458,7 +458,7 @@ export default function YabanPatientCharge() {
                             onChange={(e) => setItems((prev) => prev.map((p, i) => (i === idx ? { ...p, discount: e.target.value } : p)))}
                             inputMode="decimal"
                             placeholder="100"
-                            className="w-full text-sm px-1.5 py-1 rounded-lg border border-gray-200 bg-white"
+                            className="w-full text-sm px-1.5 py-1 rounded border border-gray-200 bg-white"
                           />
                         </div>
                       </div>
@@ -471,7 +471,7 @@ export default function YabanPatientCharge() {
               </div>
 
               {/* 整单立减 */}
-              <div className="bg-white rounded-2xl p-3 flex items-center justify-between">
+              <div className="bg-white rounded p-3 flex items-center justify-between">
                 <span className="text-sm text-gray-700">整单立减</span>
                 <div className="flex items-center gap-1">
                   <span className="text-gray-400 text-sm">¥</span>
@@ -480,13 +480,13 @@ export default function YabanPatientCharge() {
                     onChange={(e) => setOrderDiscount(e.target.value)}
                     inputMode="decimal"
                     placeholder="0"
-                    className="w-24 text-sm px-2 py-1.5 rounded-lg border border-gray-200 text-right"
+                    className="w-24 text-sm px-2 py-1.5 rounded border border-gray-200 text-right"
                   />
                 </div>
               </div>
 
               {/* 支付方式（组合支付） */}
-              <div className="bg-white rounded-2xl p-3">
+              <div className="bg-white rounded p-3">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-gray-700">收款方式</span>
                   <button
@@ -502,13 +502,13 @@ export default function YabanPatientCharge() {
                       <select
                         value={p.method}
                         onChange={(e) => setPayments((prev) => prev.map((x, i) => (i === idx ? { ...x, method: e.target.value } : x)))}
-                        className="text-sm px-2 py-1.5 rounded-lg border border-gray-200 bg-white"
+                        className="text-sm px-2 py-1.5 rounded border border-gray-200 bg-white"
                       >
                         {PAY_METHODS.map((m) => (
                           <option key={m} value={m}>{m}</option>
                         ))}
                       </select>
-                      <div className="flex-1 flex items-center gap-1 border border-gray-200 rounded-lg px-2 bg-white">
+                      <div className="flex-1 flex items-center gap-1 border border-gray-200 rounded px-2 bg-white">
                         <span className="text-gray-400 text-sm">¥</span>
                         <input
                           value={p.amount}
@@ -535,14 +535,14 @@ export default function YabanPatientCharge() {
               </div>
 
               {/* 主治医生 / 备注 */}
-              <div className="bg-white rounded-2xl p-3 space-y-3">
+              <div className="bg-white rounded p-3 space-y-3">
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-700 w-16 shrink-0">主治医生</span>
                   <input
                     value={doctor}
                     onChange={(e) => setDoctor(e.target.value)}
                     placeholder="选填"
-                    className="flex-1 min-w-0 text-sm px-2 py-1.5 rounded-lg border border-gray-200"
+                    className="flex-1 min-w-0 text-sm px-2 py-1.5 rounded border border-gray-200"
                   />
                 </div>
                 <div className="flex items-start gap-2">
@@ -552,13 +552,13 @@ export default function YabanPatientCharge() {
                     onChange={(e) => setRemark(e.target.value)}
                     placeholder="选填"
                     rows={2}
-                    className="flex-1 min-w-0 text-sm px-2 py-1.5 rounded-lg border border-gray-200 resize-none"
+                    className="flex-1 min-w-0 text-sm px-2 py-1.5 rounded border border-gray-200 resize-none"
                   />
                 </div>
               </div>
 
               {/* 业绩分配 */}
-              <div className="bg-white rounded-2xl p-3">
+              <div className="bg-white rounded p-3">
                 <div className="flex items-center justify-between mb-2">
                   <span className="flex items-center gap-1 text-sm font-medium text-gray-700">
                     <Award className="w-4 h-4 text-sky-500" /> 业绩分配
@@ -581,7 +581,7 @@ export default function YabanPatientCharge() {
                         ? Math.round(calc.receivable * ((parseFloat(pf.shareValue) || 0) / 100) * 100) / 100
                         : Math.round((parseFloat(pf.shareValue) || 0) * 100) / 100;
                       return (
-                        <div key={idx} className="border border-gray-100 rounded-xl p-2.5 bg-[#FAFCFE]">
+                        <div key={idx} className="border border-gray-100 rounded-md p-2.5 bg-[#FAFCFE]">
                           <div className="flex items-center gap-2 mb-2">
                             <Users className="w-4 h-4 text-gray-300 shrink-0" />
                             <select
@@ -596,7 +596,7 @@ export default function YabanPatientCharge() {
                                   return p;
                                 }));
                               }}
-                              className="flex-1 min-w-0 text-sm px-2 py-1.5 rounded-lg border border-gray-200 bg-white"
+                              className="flex-1 min-w-0 text-sm px-2 py-1.5 rounded border border-gray-200 bg-white"
                             >
                               <option value="">选择员工</option>
                               {members.map((m) => (
@@ -613,7 +613,7 @@ export default function YabanPatientCharge() {
                             </button>
                           </div>
                           <div className="flex items-center gap-2">
-                            <div className="flex bg-gray-100 rounded-lg p-0.5">
+                            <div className="flex bg-gray-100 rounded p-0.5">
                               {(["percent", "amount"] as const).map((t) => (
                                 <button
                                   key={t}
@@ -624,7 +624,7 @@ export default function YabanPatientCharge() {
                                 </button>
                               ))}
                             </div>
-                            <div className="flex-1 flex items-center gap-1 border border-gray-200 rounded-lg px-2 bg-white">
+                            <div className="flex-1 flex items-center gap-1 border border-gray-200 rounded px-2 bg-white">
                               <input
                                 value={pf.shareValue}
                                 onChange={(e) => setPerfs((prev) => prev.map((p, i) => (i === idx ? { ...p, shareValue: e.target.value } : p)))}
@@ -660,7 +660,7 @@ export default function YabanPatientCharge() {
               <button
                 onClick={handleSubmit}
                 disabled={submitting}
-                className="w-full flex items-center justify-center gap-1.5 bg-sky-500 text-white rounded-full py-3 font-medium disabled:opacity-60"
+                className="w-full flex items-center justify-center gap-1.5 bg-sky-500 text-white rounded-md py-3 font-medium disabled:opacity-60"
               >
                 {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
                 确认收费
@@ -688,10 +688,10 @@ export default function YabanPatientCharge() {
                 </div>
               ) : (
                 <>
-                  <div className="bg-white rounded-2xl p-4">
+                  <div className="bg-white rounded p-4">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs text-gray-400">单号 {detail.chargeNo}</span>
-                      <span className={`text-[11px] px-2 py-0.5 rounded-full ${(STATUS_MAP[detail.status] || STATUS_MAP.unpaid).cls}`}>
+                      <span className={`text-[11px] px-2 py-0.5 rounded-md ${(STATUS_MAP[detail.status] || STATUS_MAP.unpaid).cls}`}>
                         {(STATUS_MAP[detail.status] || STATUS_MAP.unpaid).label}
                       </span>
                     </div>
@@ -729,7 +729,7 @@ export default function YabanPatientCharge() {
 
                   {/* 支付明细 */}
                   {detail.payments.length > 0 && (
-                    <div className="bg-white rounded-2xl p-4">
+                    <div className="bg-white rounded p-4">
                       <span className="text-sm font-medium text-gray-700">收款明细</span>
                       <div className="mt-2 space-y-1.5">
                         {detail.payments.map((p: any) => (
@@ -745,7 +745,7 @@ export default function YabanPatientCharge() {
 
                   {/* 业绩分配明细 */}
                   {detail.performances && detail.performances.length > 0 && (
-                    <div className="bg-white rounded-2xl p-4">
+                    <div className="bg-white rounded p-4">
                       <span className="flex items-center gap-1 text-sm font-medium text-gray-700">
                         <Award className="w-4 h-4 text-sky-500" /> 业绩分配
                       </span>
@@ -765,7 +765,7 @@ export default function YabanPatientCharge() {
 
                   {/* 医生/备注 */}
                   {(detail.doctor || detail.cashierName || detail.remark) && (
-                    <div className="bg-white rounded-2xl p-4 text-sm space-y-1.5">
+                    <div className="bg-white rounded p-4 text-sm space-y-1.5">
                       {detail.doctor && <div className="flex gap-2"><span className="text-gray-400 w-16 shrink-0">主治医生</span><span className="text-gray-700">{detail.doctor}</span></div>}
                       {detail.cashierName && <div className="flex gap-2"><span className="text-gray-400 w-16 shrink-0">收费人</span><span className="text-gray-700">{detail.cashierName}</span></div>}
                       {detail.remark && <div className="flex gap-2"><span className="text-gray-400 w-16 shrink-0">备注</span><span className="text-gray-700">{detail.remark}</span></div>}
@@ -780,14 +780,14 @@ export default function YabanPatientCharge() {
               <div className="bg-white border-t border-gray-100 px-4 py-3 flex gap-3">
                 <button
                   onClick={handleVoid}
-                  className="flex items-center justify-center gap-1 px-4 py-2.5 rounded-full border border-gray-200 text-gray-500 text-sm"
+                  className="flex items-center justify-center gap-1 px-4 py-2.5 rounded-md border border-gray-200 text-gray-500 text-sm"
                 >
                   <Ban className="w-4 h-4" /> 作废
                 </button>
                 {detail.owed > 0 && (
                   <button
                     onClick={() => { setSettleAmount(String(detail.owed)); setSettleMethod("现金"); setSettleOpen(true); }}
-                    className="flex-1 flex items-center justify-center gap-1 bg-sky-500 text-white rounded-full py-2.5 text-sm font-medium"
+                    className="flex-1 flex items-center justify-center gap-1 bg-sky-500 text-white rounded-md py-2.5 text-sm font-medium"
                   >
                     <Wallet className="w-4 h-4" /> 补收欠款 ¥{money(detail.owed)}
                   </button>
@@ -801,7 +801,7 @@ export default function YabanPatientCharge() {
       {/* ============ 补收弹层 ============ */}
       {settleOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-6">
-          <div className="bg-white rounded-2xl w-full max-w-sm p-4">
+          <div className="bg-white rounded w-full max-w-sm p-4">
             <div className="flex items-center justify-between mb-3">
               <span className="text-base font-bold text-gray-800">补收欠款</span>
               <button onClick={() => setSettleOpen(false)} className="p-1"><X className="w-5 h-5 text-gray-500" /></button>
@@ -812,14 +812,14 @@ export default function YabanPatientCharge() {
                 <select
                   value={settleMethod}
                   onChange={(e) => setSettleMethod(e.target.value)}
-                  className="w-full mt-1 text-sm px-2 py-2 rounded-lg border border-gray-200 bg-white"
+                  className="w-full mt-1 text-sm px-2 py-2 rounded border border-gray-200 bg-white"
                 >
                   {PAY_METHODS.map((m) => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
               <div>
                 <label className="text-xs text-gray-400">收款金额</label>
-                <div className="flex items-center gap-1 border border-gray-200 rounded-lg px-2 mt-1">
+                <div className="flex items-center gap-1 border border-gray-200 rounded px-2 mt-1">
                   <span className="text-gray-400 text-sm">¥</span>
                   <input
                     value={settleAmount}
@@ -832,7 +832,7 @@ export default function YabanPatientCharge() {
             </div>
             <button
               onClick={handleSettle}
-              className="w-full mt-4 bg-sky-500 text-white rounded-full py-2.5 text-sm font-medium"
+              className="w-full mt-4 bg-sky-500 text-white rounded-md py-2.5 text-sm font-medium"
             >
               确认补收
             </button>

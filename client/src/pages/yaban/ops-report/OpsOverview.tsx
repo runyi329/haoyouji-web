@@ -13,7 +13,7 @@ export default function OpsOverview() {
     <div
       style={{
         background: "white",
-        borderRadius: 14,
+        borderRadius: 7,
         boxShadow: "0 4px 16px rgba(15,23,42,0.10), 0 1px 4px rgba(15,23,42,0.06)",
         padding: "16px 16px 14px",
       }}

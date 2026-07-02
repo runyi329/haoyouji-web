@@ -48,13 +48,13 @@ export default function YabanShopAdminFulfill() {
         <div className="max-w-lg mx-auto px-3 flex gap-2 pb-3">
           <button
             onClick={() => setTab("verify")}
-            className={`flex-1 py-2 rounded-full text-sm font-medium flex items-center justify-center gap-1 ${tab === "verify" ? "bg-white text-[#2196C8]" : "bg-white/20 text-white"}`}
+            className={`flex-1 py-2 rounded-md text-sm font-medium flex items-center justify-center gap-1 ${tab === "verify" ? "bg-white text-[#2196C8]" : "bg-white/20 text-white"}`}
           >
             <QrCode className="w-4 h-4" /> 到店核销
           </button>
           <button
             onClick={() => setTab("refund")}
-            className={`flex-1 py-2 rounded-full text-sm font-medium flex items-center justify-center gap-1 ${tab === "refund" ? "bg-white text-[#2196C8]" : "bg-white/20 text-white"}`}
+            className={`flex-1 py-2 rounded-md text-sm font-medium flex items-center justify-center gap-1 ${tab === "refund" ? "bg-white text-[#2196C8]" : "bg-white/20 text-white"}`}
           >
             <RotateCcw className="w-4 h-4" /> 退款审核
           </button>
@@ -77,25 +77,25 @@ function VerifyPanel() {
   });
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-2xl p-5">
+      <div className="bg-white rounded p-5">
         <p className="text-sm text-gray-700 mb-3">输入客人出示的 8 位核销码</p>
         <input
           value={code}
           onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
           placeholder="核销码"
           inputMode="numeric"
-          className="w-full text-center text-2xl tracking-widest font-bold bg-[#F5F7FA] rounded-xl px-3 py-4 outline-none"
+          className="w-full text-center text-2xl tracking-widest font-bold bg-[#F5F7FA] rounded-md px-3 py-4 outline-none"
         />
         <button
           onClick={() => verify.mutate({ verifyCode: code })}
           disabled={verify.isPending || code.length < 4}
-          className="mt-4 w-full py-3 rounded-full bg-[#7C3AED] text-white font-semibold disabled:opacity-50 flex items-center justify-center gap-1"
+          className="mt-4 w-full py-3 rounded-md bg-[#7C3AED] text-white font-semibold disabled:opacity-50 flex items-center justify-center gap-1"
         >
           {verify.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
           确认核销
         </button>
         {result && (
-          <div className="mt-4 bg-[#D1FAE5] text-[#059669] rounded-xl p-3 text-sm text-center">{result}</div>
+          <div className="mt-4 bg-[#D1FAE5] text-[#059669] rounded-md p-3 text-sm text-center">{result}</div>
         )}
       </div>
       <p className="text-xs text-gray-400 text-center">服务类订单付款后会生成核销码，客人到店出示即可核销完成。</p>
@@ -132,7 +132,7 @@ function RefundPanel() {
           <button
             key={f.k}
             onClick={() => setStatus(f.k)}
-            className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium ${status === f.k ? "bg-[#2196C8] text-white" : "bg-white text-gray-500 border border-gray-100"}`}
+            className={`shrink-0 px-3 py-1.5 rounded-md text-xs font-medium ${status === f.k ? "bg-[#2196C8] text-white" : "bg-white text-gray-500 border border-gray-100"}`}
           >
             {f.label}{typeof (counts as any)[f.k] === "number" && (counts as any)[f.k] > 0 ? `(${(counts as any)[f.k]})` : ""}
           </button>
@@ -147,10 +147,10 @@ function RefundPanel() {
         list.map((r) => {
           const sm = REFUND_STATUS[r.status] ?? REFUND_STATUS.pending;
           return (
-            <div key={r.id} className="bg-white rounded-xl p-3">
+            <div key={r.id} className="bg-white rounded-md p-3">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] text-gray-400">{r.refund_no}</span>
-                <span className="text-[11px] px-2 py-0.5 rounded-full font-medium" style={{ color: sm.color, backgroundColor: sm.bg }}>{sm.text}</span>
+                <span className="text-[11px] px-2 py-0.5 rounded-md font-medium" style={{ color: sm.color, backgroundColor: sm.bg }}>{sm.text}</span>
               </div>
               <div className="mt-2 text-[13px] text-gray-700 space-y-0.5">
                 <p>订单：{r.order_no}</p>
@@ -165,12 +165,12 @@ function RefundPanel() {
                   <button
                     onClick={() => audit.mutate({ refundNo: r.refund_no, approve: false, adminNote: "驳回" })}
                     disabled={audit.isPending}
-                    className="flex-1 py-2 rounded-full border border-gray-300 text-gray-600 text-sm"
+                    className="flex-1 py-2 rounded-md border border-gray-300 text-gray-600 text-sm"
                   >驳回</button>
                   <button
                     onClick={() => { if (confirm(`确认退款 ¥${Number(r.amount).toFixed(2)} 给客人？`)) audit.mutate({ refundNo: r.refund_no, approve: true, adminNote: "同意退款" }); }}
                     disabled={audit.isPending}
-                    className="flex-1 py-2 rounded-full bg-[#059669] text-white text-sm"
+                    className="flex-1 py-2 rounded-md bg-[#059669] text-white text-sm"
                   >同意退款</button>
                 </div>
               )}

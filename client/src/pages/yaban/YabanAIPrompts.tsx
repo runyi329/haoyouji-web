@@ -138,7 +138,7 @@ export default function YabanAIPrompts() {
 
       <div className="max-w-lg mx-auto px-4 pt-4 space-y-3">
         {/* 说明卡片 */}
-        <div className="bg-blue-50 rounded-2xl px-4 py-3 border border-blue-100">
+        <div className="bg-blue-50 rounded px-4 py-3 border border-blue-100">
           <p className="text-xs text-blue-700 leading-relaxed">
             AI 提示词决定了 AI 秘书分析沟通内容时的行为方式。院长可根据诊所实际情况自行调整，修改后点击"保存"即可生效。
           </p>
@@ -151,7 +151,7 @@ export default function YabanAIPrompts() {
           </div>
         ) : (
           items.map((item) => (
-            <div key={item.key} className="bg-white rounded-2xl shadow-sm overflow-hidden">
+            <div key={item.key} className="bg-white rounded shadow-sm overflow-hidden">
               {/* 标题行 */}
               <button
                 className="w-full flex items-center justify-between px-4 py-3.5"
@@ -161,7 +161,7 @@ export default function YabanAIPrompts() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-gray-900">{item.label}</span>
                     {item.dirty && (
-                      <span className="text-xs text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full">
+                      <span className="text-xs text-orange-500 bg-orange-50 px-2 py-0.5 rounded-md">
                         未保存
                       </span>
                     )}
@@ -179,7 +179,7 @@ export default function YabanAIPrompts() {
               {item.expanded && (
                 <div className="border-t border-gray-100 px-4 pb-4 pt-3 space-y-3">
                   <textarea
-                    className="w-full text-sm text-gray-800 bg-gray-50 rounded-xl px-3 py-2.5 border-0 outline-none resize-none min-h-[200px] font-mono leading-relaxed"
+                    className="w-full text-sm text-gray-800 bg-gray-50 rounded-md px-3 py-2.5 border-0 outline-none resize-none min-h-[200px] font-mono leading-relaxed"
                     value={item.currentContent}
                     onChange={(e) => handleChange(item.key, e.target.value)}
                     placeholder="请输入提示词..."
@@ -187,7 +187,7 @@ export default function YabanAIPrompts() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleReset(item.key)}
-                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 text-gray-500 text-xs"
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-md border border-gray-200 text-gray-500 text-xs"
                     >
                       <RotateCcw size={12} />
                       恢复默认
@@ -195,7 +195,7 @@ export default function YabanAIPrompts() {
                     <button
                       onClick={() => handleSave(item.key)}
                       disabled={savingKey === item.key || !item.dirty}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-blue-600 text-white text-sm font-medium disabled:opacity-50"
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium disabled:opacity-50"
                     >
                       {savingKey === item.key ? (
                         <Loader2 size={14} className="animate-spin" />

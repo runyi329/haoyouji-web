@@ -106,7 +106,7 @@ export default function YabanRelationType() {
             onClick={() => { setIsAdding(true); setEditingId(null); }}
             aria-label="新增"
           >
-            <img src="/icon-add.webp" alt="" className="w-8 h-8 object-cover rounded-full" />
+            <img src="/icon-add.webp" alt="" className="w-8 h-8 object-cover rounded-md" />
           </button>
         </div>
         <div className="px-4 pb-3">
@@ -120,7 +120,7 @@ export default function YabanRelationType() {
         </p>
 
         {/* 关系列表 */}
-        <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
+        <div className="bg-white rounded overflow-hidden shadow-sm">
           {isLoading ? (
             <div className="flex items-center justify-center py-10">
               <Loader2 className="w-5 h-5 animate-spin text-[#1E88D6]" />
@@ -153,7 +153,7 @@ export default function YabanRelationType() {
                   <div className="flex-1 flex items-center gap-2">
                     <input
                       autoFocus
-                      className="flex-1 text-sm border border-[#1E88D6] rounded-lg px-3 h-9 outline-none bg-white"
+                      className="flex-1 text-sm border border-[#1E88D6] rounded px-3 h-9 outline-none bg-white"
                       value={editingName}
                       onChange={(e) => setEditingName(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleUpdate(r.id)}
@@ -161,13 +161,13 @@ export default function YabanRelationType() {
                     <button
                       onClick={() => handleUpdate(r.id)}
                       disabled={updateMutation.isPending}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg bg-[#1E88D6] text-white flex-shrink-0"
+                      className="w-8 h-8 flex items-center justify-center rounded bg-[#1E88D6] text-white flex-shrink-0"
                     >
                       {updateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                     </button>
                     <button
                       onClick={() => setEditingId(null)}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 text-gray-500 flex-shrink-0"
+                      className="w-8 h-8 flex items-center justify-center rounded bg-gray-100 text-gray-500 flex-shrink-0"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -177,14 +177,14 @@ export default function YabanRelationType() {
                     <span className="flex-1 text-sm text-gray-800">{r.name}</span>
                     <button
                       onClick={() => { setEditingId(r.id); setEditingName(r.name); setIsAdding(false); }}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 active:text-[#1E88D6] active:bg-blue-50"
+                      className="w-8 h-8 flex items-center justify-center rounded text-gray-400 active:text-[#1E88D6] active:bg-blue-50"
                     >
                       <Pencil className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleDelete(r.id, r.name)}
                       disabled={deleteMutation.isPending}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 active:text-red-500 active:bg-red-50"
+                      className="w-8 h-8 flex items-center justify-center rounded text-gray-300 active:text-red-500 active:bg-red-50"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -197,10 +197,10 @@ export default function YabanRelationType() {
 
         {/* 新增输入框（仅 isAdding 时显示） */}
         {isAdding && (
-          <div className="bg-white rounded-2xl px-4 py-3 shadow-sm flex items-center gap-2">
+          <div className="bg-white rounded px-4 py-3 shadow-sm flex items-center gap-2">
             <input
               autoFocus
-              className="flex-1 text-sm border border-[#1E88D6] rounded-lg px-3 h-9 outline-none bg-white"
+              className="flex-1 text-sm border border-[#1E88D6] rounded px-3 h-9 outline-none bg-white"
               placeholder="输入关系名称，如：同事"
               value={addingName}
               onChange={(e) => setAddingName(e.target.value)}
@@ -209,13 +209,13 @@ export default function YabanRelationType() {
             <button
               onClick={handleAdd}
               disabled={addMutation.isPending}
-              className="w-8 h-8 flex items-center justify-center rounded-lg bg-[#1E88D6] text-white flex-shrink-0"
+              className="w-8 h-8 flex items-center justify-center rounded bg-[#1E88D6] text-white flex-shrink-0"
             >
               {addMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
             </button>
             <button
               onClick={() => { setIsAdding(false); setAddingName(""); }}
-              className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 text-gray-500 flex-shrink-0"
+              className="w-8 h-8 flex items-center justify-center rounded bg-gray-100 text-gray-500 flex-shrink-0"
             >
               <X className="w-4 h-4" />
             </button>

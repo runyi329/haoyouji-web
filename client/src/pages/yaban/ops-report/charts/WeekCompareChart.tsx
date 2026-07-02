@@ -29,7 +29,7 @@ export default function WeekCompareChart() {
             onClick={() => setForecast(w)}
             style={{
               padding: "4px 12px",
-              borderRadius: 14,
+              borderRadius: 7,
               border: `1px solid ${forecast === w ? "#1E88D6" : "#E5E7EB"}`,
               fontSize: 11,
               color: forecast === w ? "white" : "#6B7280",

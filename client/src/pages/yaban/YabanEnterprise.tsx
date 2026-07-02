@@ -46,18 +46,18 @@ export default function YabanEnterprise() {
     if (!status) return null;
     if (status === "active")
       return (
-        <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-[#E6F7EE] text-[#16A34A]">
+        <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-[#E6F7EE] text-[#16A34A]">
           <CheckCircle2 className="w-3.5 h-3.5" /> 已开通
         </span>
       );
     if (status === "pending")
       return (
-        <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-[#FEF6E6] text-[#D97706]">
+        <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-[#FEF6E6] text-[#D97706]">
           <Clock className="w-3.5 h-3.5" /> 审核中
         </span>
       );
     return (
-      <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-[#FDECEC] text-[#DC2626]">
+      <span className="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-md bg-[#FDECEC] text-[#DC2626]">
         <XCircle className="w-3.5 h-3.5" /> 已驳回
       </span>
     );
@@ -81,33 +81,33 @@ export default function YabanEnterprise() {
 
       <div className="max-w-lg mx-auto px-4 -mt-4 space-y-3">
         {isLoading ? (
-          <div className="bg-white rounded-2xl shadow-sm p-8 flex justify-center">
+          <div className="bg-white rounded shadow-sm p-8 flex justify-center">
             <Loader2 className="w-6 h-6 text-[#2196C8] animate-spin" />
           </div>
         ) : (
           <>
             {/* 状态卡 */}
             {status && (
-              <div className="bg-white rounded-2xl shadow-sm p-4 flex items-center justify-between">
+              <div className="bg-white rounded shadow-sm p-4 flex items-center justify-between">
                 <span className="text-sm text-gray-600">当前状态</span>
                 <StatusBadge />
               </div>
             )}
             {status === "rejected" && clinic?.rejectReason && (
-              <div className="bg-[#FDECEC] rounded-2xl p-3 text-xs text-[#DC2626]">
+              <div className="bg-[#FDECEC] rounded p-3 text-xs text-[#DC2626]">
                 驳回原因：{clinic.rejectReason}
               </div>
             )}
 
             {/* 详情表单 */}
-            <div className="bg-white rounded-2xl shadow-sm p-4">
+            <div className="bg-white rounded shadow-sm p-4">
               <ClinicForm value={form} onChange={setForm} />
             </div>
 
             <button
               onClick={submit}
               disabled={apply.isPending}
-              className="w-full py-3 rounded-2xl bg-[#2196C8] text-white text-sm font-semibold active:bg-[#1B7FB0] disabled:opacity-60 flex items-center justify-center gap-2"
+              className="w-full py-3 rounded bg-[#2196C8] text-white text-sm font-semibold active:bg-[#1B7FB0] disabled:opacity-60 flex items-center justify-center gap-2"
             >
               {apply.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               {isActive ? "保存企业信息" : status === "rejected" ? "重新提交申请" : status === "pending" ? "更新申请信息" : "提交开通申请"}

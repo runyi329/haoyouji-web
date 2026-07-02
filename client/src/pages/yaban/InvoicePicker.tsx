@@ -89,10 +89,10 @@ export default function InvoicePicker({ open, index, value, customerMobile, onCl
   const canConfirm = form.title.trim();
 
   const inputCls =
-    "w-full h-14 px-4 rounded-xl bg-white border border-[#D6E6F5] text-lg text-gray-800 outline-none placeholder:text-gray-300 focus:border-[#1E88D6] focus:shadow-[0_0_0_3px_rgba(30,136,214,0.12)] transition-all";
+    "w-full h-14 px-4 rounded-md bg-white border border-[#D6E6F5] text-lg text-gray-800 outline-none placeholder:text-gray-300 focus:border-[#1E88D6] focus:shadow-[0_0_0_3px_rgba(30,136,214,0.12)] transition-all";
 
   const inputSmCls =
-    "w-full h-8 px-3 rounded-lg bg-white border border-[#D6E6F5] text-sm text-gray-800 outline-none placeholder:text-gray-300 focus:border-[#1E88D6] focus:shadow-[0_0_0_2px_rgba(30,136,214,0.10)] transition-all";
+    "w-full h-8 px-3 rounded bg-white border border-[#D6E6F5] text-sm text-gray-800 outline-none placeholder:text-gray-300 focus:border-[#1E88D6] focus:shadow-[0_0_0_2px_rgba(30,136,214,0.10)] transition-all";
 
   return (
     <div
@@ -135,7 +135,7 @@ export default function InvoicePicker({ open, index, value, customerMobile, onCl
       <div className="flex-1 overflow-y-auto px-4 pt-4" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 24px)" }}>
 
         {/* 必填区块 */}
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden mb-4">
+        <div className="bg-white rounded shadow-sm overflow-hidden mb-4">
           <div
             className="px-4 py-2.5 flex items-center gap-2"
             style={{ background: ACCENT_LIGHT, borderBottom: `1px solid ${ACCENT_BORDER}` }}
@@ -176,7 +176,7 @@ export default function InvoicePicker({ open, index, value, customerMobile, onCl
         </div>
 
         {/* 选填区块 */}
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white rounded shadow-sm overflow-hidden">
           <div
             className="px-4 py-2.5 flex items-center gap-2"
             style={{ background: "#F9FAFB", borderBottom: "1px solid #F0F0F0" }}
@@ -204,7 +204,7 @@ export default function InvoicePicker({ open, index, value, customerMobile, onCl
                 style={{
                   position: "absolute", left: 16, right: 16, top: "100%", marginTop: 4,
                   background: "#fff", border: `1px solid ${ACCENT_BORDER}`,
-                  borderRadius: 14, boxShadow: "0 4px 20px rgba(30,136,214,0.12)",
+                  borderRadius: 7, boxShadow: "0 4px 20px rgba(30,136,214,0.12)",
                   zIndex: 10, overflow: "hidden",
                 }}
               >
@@ -250,7 +250,7 @@ export default function InvoicePicker({ open, index, value, customerMobile, onCl
             type="button"
             onClick={() => setForm((prev) => ({ ...prev, title: prev.title.slice(0, -1) }))}
             disabled={isEmpty}
-            className="flex-1 h-12 rounded-xl text-sm font-medium flex items-center justify-center transition-all active:scale-95"
+            className="flex-1 h-12 rounded-md text-sm font-medium flex items-center justify-center transition-all active:scale-95"
             style={{
               background: isEmpty ? "#F3F4F6" : "#EF4444",
               color: isEmpty ? "#D1D5DB" : "#fff",
@@ -262,7 +262,7 @@ export default function InvoicePicker({ open, index, value, customerMobile, onCl
             type="button"
             onClick={() => setForm(EMPTY_INVOICE)}
             disabled={isEmpty}
-            className="flex-1 h-12 rounded-xl text-sm font-medium flex items-center justify-center transition-all active:scale-95"
+            className="flex-1 h-12 rounded-md text-sm font-medium flex items-center justify-center transition-all active:scale-95"
             style={{
               background: "#F3F4F6",
               color: isEmpty ? "#D1D5DB" : "#374151",
@@ -274,7 +274,7 @@ export default function InvoicePicker({ open, index, value, customerMobile, onCl
             type="button"
             onClick={() => { if (canConfirm) onConfirm(form); }}
             disabled={!canConfirm}
-            className="flex-[2] h-12 rounded-xl text-sm font-semibold flex items-center justify-center transition-all active:scale-95"
+            className="flex-[2] h-12 rounded-md text-sm font-semibold flex items-center justify-center transition-all active:scale-95"
             style={{
               background: canConfirm ? ACCENT : "#E5E7EB",
               color: canConfirm ? "#fff" : "#9CA3AF",

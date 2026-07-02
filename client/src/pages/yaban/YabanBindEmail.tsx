@@ -62,9 +62,9 @@ export default function YabanBindEmail() {
 
       <div className="px-4 py-5 space-y-4">
         {/* 说明卡 */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
+        <div className="bg-white rounded p-4 shadow-sm">
           <div className="flex items-center gap-2 mb-1.5">
-            <div className="w-8 h-8 rounded-xl bg-[#E8F4FB] flex items-center justify-center">
+            <div className="w-8 h-8 rounded-md bg-[#E8F4FB] flex items-center justify-center">
               <Mail className="w-4.5 h-4.5 text-[#1E88D6]" />
             </div>
             <span className="text-sm font-medium text-gray-800">接收备份的邮箱</span>
@@ -75,14 +75,14 @@ export default function YabanBindEmail() {
         </div>
 
         {/* 输入卡 */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
+        <div className="bg-white rounded p-4 shadow-sm">
           <label className="block text-xs text-gray-400 mb-1.5">邮箱地址</label>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="请输入邮箱地址"
-            className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-800 focus:outline-none focus:border-[#1E88D6] focus:ring-1 focus:ring-[#1E88D6]"
+            className="w-full px-3.5 py-2.5 rounded-md border border-gray-200 text-sm text-gray-800 focus:outline-none focus:border-[#1E88D6] focus:ring-1 focus:ring-[#1E88D6]"
           />
           {email.trim() && !emailValid && (
             <p className="text-xs text-amber-500 mt-2 flex items-center gap-1">
@@ -95,10 +95,10 @@ export default function YabanBindEmail() {
         <button
           onClick={handleSave}
           disabled={save.isPending}
-          className="w-full bg-[#1E88D6] text-white py-3 rounded-2xl font-medium text-sm active:opacity-80 disabled:opacity-60 flex items-center justify-center gap-2"
+          className="w-full bg-[#1E88D6] text-white py-3 rounded font-medium text-sm active:opacity-80 disabled:opacity-60 flex items-center justify-center gap-2"
         >
           {save.isPending ? (
-            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-md animate-spin" />
           ) : (
             <Check className="w-4 h-4" />
           )}

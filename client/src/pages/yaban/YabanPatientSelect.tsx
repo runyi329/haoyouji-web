@@ -58,7 +58,7 @@ export default function YabanPatientSelect() {
 
       {/* 搜索栏 */}
       <div className="bg-white px-4 py-3 border-b border-gray-100">
-        <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2">
+        <div className="flex items-center gap-2 bg-gray-100 rounded px-3 py-2">
           <Search className="w-4 h-4 text-gray-400" />
           <input
             type="text"
@@ -87,7 +87,7 @@ export default function YabanPatientSelect() {
                 className="w-full bg-white px-4 py-4 flex items-center gap-3 active:bg-gray-50 transition-colors text-left"
               >
                 {/* 头像 */}
-                <div className="w-11 h-11 rounded-full bg-sky-50 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                <div className="w-11 h-11 rounded-md bg-sky-50 flex items-center justify-center flex-shrink-0 overflow-hidden">
                   <User className="w-6 h-6 text-sky-300" />
                 </div>
                 {/* 信息 */}

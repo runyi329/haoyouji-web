@@ -44,7 +44,7 @@ export default function YabanShopCart() {
             <p className="text-sm text-gray-400 mb-4">购物车还是空的</p>
             <button
               onClick={() => navigate("/yaban/shop")}
-              className="px-5 py-2 rounded-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm"
+              className="px-5 py-2 rounded-md bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm"
             >
               去逛逛
             </button>
@@ -52,8 +52,8 @@ export default function YabanShopCart() {
         ) : (
           <div className="space-y-2">
             {rows.map(({ item, product }) => (
-              <div key={item.id} className="bg-white rounded-xl p-3 flex gap-3">
-                <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-[#EAF6FC] to-[#D6EEFB] shrink-0 overflow-hidden flex items-center justify-center">
+              <div key={item.id} className="bg-white rounded-md p-3 flex gap-3">
+                <div className="w-20 h-20 rounded bg-gradient-to-br from-[#EAF6FC] to-[#D6EEFB] shrink-0 overflow-hidden flex items-center justify-center">
                   {product!.image ? (
                     <img src={product!.image} alt={product!.name} className="w-full h-full object-cover" />
                   ) : (
@@ -68,7 +68,7 @@ export default function YabanShopCart() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setQty(item.id, item.qty - 1)}
-                        className="w-6 h-6 rounded-full border border-gray-200 flex items-center justify-center text-gray-500"
+                        className="w-6 h-6 rounded-md border border-gray-200 flex items-center justify-center text-gray-500"
                         aria-label="减少"
                       >
                         <Minus className="w-3.5 h-3.5" />
@@ -76,7 +76,7 @@ export default function YabanShopCart() {
                       <span className="text-sm text-gray-800 w-5 text-center">{item.qty}</span>
                       <button
                         onClick={() => setQty(item.id, item.qty + 1)}
-                        className="w-6 h-6 rounded-full border border-gray-200 flex items-center justify-center text-gray-500"
+                        className="w-6 h-6 rounded-md border border-gray-200 flex items-center justify-center text-gray-500"
                         aria-label="增加"
                       >
                         <Plus className="w-3.5 h-3.5" />
@@ -106,7 +106,7 @@ export default function YabanShopCart() {
             </div>
             <button
               onClick={() => navigate("/yaban/shop/checkout")}
-              className="px-6 py-2.5 rounded-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-medium"
+              className="px-6 py-2.5 rounded-md bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-medium"
             >
               去结算
             </button>

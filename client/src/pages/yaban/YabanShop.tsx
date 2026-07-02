@@ -33,7 +33,7 @@ function BannerCarousel({ navigate }: { navigate: (to: string) => void }) {
   // 无后台配置时回退静态默认图
   if (banners.length === 0) {
     return (
-      <div className="rounded-2xl overflow-hidden shadow-sm">
+      <div className="rounded overflow-hidden shadow-sm">
         <img src={SHOP_BANNER} alt="齿科商城" className="w-full h-auto block" />
       </div>
     );
@@ -41,7 +41,7 @@ function BannerCarousel({ navigate }: { navigate: (to: string) => void }) {
 
   const cur = banners[idx];
   return (
-    <div className="rounded-2xl overflow-hidden shadow-sm relative">
+    <div className="rounded overflow-hidden shadow-sm relative">
       <button onClick={() => onClick(cur)} className="block w-full">
         <img src={cur.image} alt={cur.title || "商城活动"} className="w-full aspect-[2/1] object-cover block" />
       </button>
@@ -50,7 +50,7 @@ function BannerCarousel({ navigate }: { navigate: (to: string) => void }) {
           {banners.map((_, i) => (
             <span
               key={i}
-              className={`h-1.5 rounded-full transition-all ${i === idx ? "w-4 bg-white" : "w-1.5 bg-white/50"}`}
+              className={`h-1.5 rounded-md transition-all ${i === idx ? "w-4 bg-white" : "w-1.5 bg-white/50"}`}
             />
           ))}
         </div>
@@ -103,7 +103,7 @@ export default function YabanShop() {
               >
                 <ShoppingCart className="w-5 h-5" />
                 {count > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-[#FF5A5A] text-white text-[10px] rounded-full flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-[#FF5A5A] text-white text-[10px] rounded-md flex items-center justify-center">
                     {count}
                   </span>
                 )}
@@ -111,7 +111,7 @@ export default function YabanShop() {
             </div>
           </div>
           {/* 搜索框 */}
-          <div className="flex items-center bg-white/95 rounded-full px-3 py-1.5">
+          <div className="flex items-center bg-white/95 rounded-md px-3 py-1.5">
             <Search className="w-4 h-4 text-gray-400 shrink-0" />
             <input
               value={keyword}
@@ -132,7 +132,7 @@ export default function YabanShop() {
       <div className="max-w-lg mx-auto px-2 pt-2">
         <button
           onClick={() => navigate("/yaban/shop/coupons")}
-          className="w-full flex items-center gap-2 bg-gradient-to-r from-[#EAF4FE] to-[#D6EAFB] rounded-xl px-3 py-2.5 active:scale-[0.99] transition-transform"
+          className="w-full flex items-center gap-2 bg-gradient-to-r from-[#EAF4FE] to-[#D6EAFB] rounded-md px-3 py-2.5 active:scale-[0.99] transition-transform"
         >
           <Ticket className="w-5 h-5 text-[#1E88D6] shrink-0" />
           <span className="text-sm font-medium text-[#0E5A9E] flex-1 text-left">领券中心·领券下单更优惠</span>
@@ -153,7 +153,7 @@ export default function YabanShop() {
                   className="shrink-0 flex flex-col items-center gap-1 w-14"
                 >
                   <div
-                    className={`w-12 h-12 rounded-2xl flex items-center justify-center overflow-hidden transition-all ${
+                    className={`w-12 h-12 rounded flex items-center justify-center overflow-hidden transition-all ${
                       active
                         ? "bg-gradient-to-br from-[#E8F4FD] to-[#D6EEFB] ring-2 ring-[#2196C8]"
                         : "bg-white shadow-sm"
@@ -197,7 +197,7 @@ function ProductCard({ product, onClick }: { product: ShopProduct; onClick: () =
   return (
     <div
       onClick={onClick}
-      className="bg-white rounded-xl overflow-hidden shadow-sm active:scale-[0.98] transition-transform"
+      className="bg-white rounded-md overflow-hidden shadow-sm active:scale-[0.98] transition-transform"
     >
       {/* 图片区 */}
       <div className="relative w-full aspect-square bg-gradient-to-br from-[#EAF6FC] to-[#D6EEFB] flex items-center justify-center">

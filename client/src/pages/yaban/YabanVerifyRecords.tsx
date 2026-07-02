@@ -23,14 +23,14 @@ export default function YabanVerifyRecords() {
       </div>
 
       <div className="max-w-lg mx-auto px-4 pt-24 flex flex-col items-center justify-center">
-        <div className="w-16 h-16 rounded-full bg-[#EAF4FE] flex items-center justify-center mb-4">
+        <div className="w-16 h-16 rounded-md bg-[#EAF4FE] flex items-center justify-center mb-4">
           <Ticket className="w-8 h-8 text-[#9CC8EC]" />
         </div>
         <p className="text-sm text-gray-500">暂无核销记录</p>
         <p className="text-xs text-gray-400 mt-1">到店核销的服务订单将显示在这里</p>
         <button
           onClick={() => navigate("/yaban/shop/my-orders")}
-          className="mt-6 px-5 py-2 rounded-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-medium active:scale-[0.98] transition-transform"
+          className="mt-6 px-5 py-2 rounded-md bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-medium active:scale-[0.98] transition-transform"
         >
           查看我的订单
         </button>

@@ -39,8 +39,8 @@ export default function YabanPartnerProfile() {
       </div>
 
       <div className="max-w-lg mx-auto pb-20">
-        <div className="bg-white mx-3 mt-3 rounded-xl p-4 flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center bg-[#2196C8]/10">
+        <div className="bg-white mx-3 mt-3 rounded-md p-4 flex items-center gap-3">
+          <div className="w-11 h-11 rounded-md flex items-center justify-center bg-[#2196C8]/10">
             <Briefcase className="w-6 h-6 text-[#2196C8]" />
           </div>
           <div className="flex-1">
@@ -53,7 +53,7 @@ export default function YabanPartnerProfile() {
           共 {partners.length} 名合伙人
         </div>
 
-        <div className="bg-white mx-3 mt-2 rounded-xl divide-y divide-gray-100">
+        <div className="bg-white mx-3 mt-2 rounded-md divide-y divide-gray-100">
           {membersQuery.isLoading && (
             <div className="py-10 text-center text-sm text-gray-400">加载中…</div>
           )}
@@ -62,14 +62,14 @@ export default function YabanPartnerProfile() {
           )}
           {partners.map((m) => (
             <div key={m.userId} className="flex items-center gap-3 px-4 py-3">
-              <div className="w-10 h-10 rounded-full flex items-center justify-center text-white flex-shrink-0 bg-[#E8973A]">
+              <div className="w-10 h-10 rounded-md flex items-center justify-center text-white flex-shrink-0 bg-[#E8973A]">
                 <User className="w-5 h-5" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-gray-800 truncate">{m.name}</div>
                 <div className="text-xs text-gray-400 truncate">合伙人 / {m.roleName || "股东"}</div>
               </div>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#E8973A]/10 text-[#E8973A]">
+              <span className="text-[11px] px-2 py-0.5 rounded-md bg-[#E8973A]/10 text-[#E8973A]">
                 合伙人
               </span>
             </div>

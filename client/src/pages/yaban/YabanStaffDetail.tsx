@@ -144,7 +144,7 @@ function SectionCard({ title, icon: Icon, children, rightSlot }: {
   title: string; icon?: React.ElementType; children: React.ReactNode; rightSlot?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: C.white, boxShadow: `0 1px 3px rgba(20,40,60,.06)` }}>
+    <div className="rounded overflow-hidden" style={{ backgroundColor: C.white, boxShadow: `0 1px 3px rgba(20,40,60,.06)` }}>
       <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${C.line100}` }}>
         <div className="flex items-center gap-2">
           {Icon && <Icon size={15} strokeWidth={1.5} style={{ color: C.brand }} />}
@@ -169,7 +169,7 @@ function StatusBadge({ status }: { status: string }) {
   };
   const s = map[status] ?? { label: status, bg: C.line100, fg: C.textSub };
   return (
-    <span className="inline-flex items-center rounded-full px-2 py-[2px] text-[11px] font-bold" style={{ backgroundColor: s.bg, color: s.fg }}>
+    <span className="inline-flex items-center rounded-md px-2 py-[2px] text-[11px] font-bold" style={{ backgroundColor: s.bg, color: s.fg }}>
       {s.label}
     </span>
   );
@@ -199,7 +199,7 @@ function TabBasic({ data }: { data: typeof MOCK_DETAIL }) {
 
       <SectionCard title="证照资质" icon={Shield}
         rightSlot={
-          <button className="flex items-center gap-1 px-3 py-1 rounded-full text-[12px] font-bold" style={{ backgroundColor: C.infoBg, color: C.infoFg }}>
+          <button className="flex items-center gap-1 px-3 py-1 rounded-md text-[12px] font-bold" style={{ backgroundColor: C.infoBg, color: C.infoFg }}>
             <Plus size={12} strokeWidth={2} /> 上传
           </button>
         }
@@ -224,7 +224,7 @@ function TabContract({ data, onInitiateSign }: { data: typeof MOCK_DETAIL; onIni
     <div className="flex flex-col gap-3 py-3">
       {/* 在线签约入口 */}
       <div
-        className="rounded-2xl p-4 flex items-center justify-between"
+        className="rounded p-4 flex items-center justify-between"
         style={{ background: C.brandGrad }}
       >
         <div>
@@ -233,7 +233,7 @@ function TabContract({ data, onInitiateSign }: { data: typeof MOCK_DETAIL; onIni
         </div>
         <button
           onClick={onInitiateSign}
-          className="px-4 py-2 rounded-full text-[12px] font-bold transition-all duration-150 active:scale-[0.97]"
+          className="px-4 py-2 rounded-md text-[12px] font-bold transition-all duration-150 active:scale-[0.97]"
           style={{ backgroundColor: "#fff", color: C.brand, boxShadow: `0 4px 14px rgba(30,136,214,.32)` }}
         >
           发起签约
@@ -263,7 +263,7 @@ function TabContract({ data, onInitiateSign }: { data: typeof MOCK_DETAIL; onIni
 
       <SectionCard title="合同影像" icon={Upload}
         rightSlot={
-          <button className="flex items-center gap-1 px-3 py-1 rounded-full text-[12px] font-bold" style={{ backgroundColor: C.infoBg, color: C.infoFg }}>
+          <button className="flex items-center gap-1 px-3 py-1 rounded-md text-[12px] font-bold" style={{ backgroundColor: C.infoBg, color: C.infoFg }}>
             <Plus size={12} strokeWidth={2} /> 上传
           </button>
         }
@@ -293,7 +293,7 @@ function TabWorkLog({ data }: { data: typeof MOCK_DETAIL }) {
           <div key={i} className="flex gap-3 py-3" style={{ borderBottom: i < data.workLogs.length - 1 ? `1px solid ${C.line100}` : "none" }}>
             <div className="flex flex-col items-center gap-1 flex-shrink-0">
               <div
-                className="w-2 h-2 rounded-full mt-1"
+                className="w-2 h-2 rounded-md mt-1"
                 style={{ backgroundColor: typeColor[log.type]?.fg ?? C.brand }}
               />
               {i < data.workLogs.length - 1 && <div className="flex-1 w-px" style={{ backgroundColor: C.line100 }} />}
@@ -301,7 +301,7 @@ function TabWorkLog({ data }: { data: typeof MOCK_DETAIL }) {
             <div className="flex-1 pb-1">
               <div className="flex items-center gap-2">
                 <span
-                  className="inline-flex items-center rounded-full px-2 py-[1px] text-[11px] font-bold"
+                  className="inline-flex items-center rounded-md px-2 py-[1px] text-[11px] font-bold"
                   style={{ backgroundColor: typeColor[log.type]?.bg ?? C.infoBg, color: typeColor[log.type]?.fg ?? C.infoFg }}
                 >
                   {log.type}
@@ -317,7 +317,7 @@ function TabWorkLog({ data }: { data: typeof MOCK_DETAIL }) {
 
       <SectionCard title="奖惩记录" icon={Award}
         rightSlot={
-          <button className="flex items-center gap-1 px-3 py-1 rounded-full text-[12px] font-bold" style={{ backgroundColor: C.infoBg, color: C.infoFg }}>
+          <button className="flex items-center gap-1 px-3 py-1 rounded-md text-[12px] font-bold" style={{ backgroundColor: C.infoBg, color: C.infoFg }}>
             <Plus size={12} strokeWidth={2} /> 新增
           </button>
         }
@@ -329,7 +329,7 @@ function TabWorkLog({ data }: { data: typeof MOCK_DETAIL }) {
               <div className="text-[11px] mt-0.5" style={{ color: C.textSub }}>{r.date}</div>
             </div>
             <span
-              className="inline-flex items-center rounded-full px-2 py-[2px] text-[11px] font-bold"
+              className="inline-flex items-center rounded-md px-2 py-[2px] text-[11px] font-bold"
               style={{ backgroundColor: C.okBg, color: C.okFg }}
             >
               {r.type}
@@ -340,7 +340,7 @@ function TabWorkLog({ data }: { data: typeof MOCK_DETAIL }) {
 
       <SectionCard title="培训成长" icon={BookOpen}
         rightSlot={
-          <button className="flex items-center gap-1 px-3 py-1 rounded-full text-[12px] font-bold" style={{ backgroundColor: C.infoBg, color: C.infoFg }}>
+          <button className="flex items-center gap-1 px-3 py-1 rounded-md text-[12px] font-bold" style={{ backgroundColor: C.infoBg, color: C.infoFg }}>
             <Plus size={12} strokeWidth={2} /> 新增
           </button>
         }
@@ -357,7 +357,7 @@ function TabWorkLog({ data }: { data: typeof MOCK_DETAIL }) {
             <div className="flex items-center justify-between">
               <span className="text-[13px] font-bold" style={{ color: C.textMain }}>{t.name}</span>
               {t.cert && (
-                <span className="inline-flex items-center rounded-full px-2 py-[1px] text-[10px] font-bold" style={{ backgroundColor: C.okBg, color: C.okFg }}>
+                <span className="inline-flex items-center rounded-md px-2 py-[1px] text-[10px] font-bold" style={{ backgroundColor: C.okBg, color: C.okFg }}>
                   有证书
                 </span>
               )}
@@ -382,10 +382,10 @@ function TabPortrait({ data }: { data: typeof MOCK_DETAIL }) {
 
   return (
     <div className="flex flex-col gap-3 py-3">
-      <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: C.white, boxShadow: `0 1px 3px rgba(20,40,60,.06)` }}>
+      <div className="rounded overflow-hidden" style={{ backgroundColor: C.white, boxShadow: `0 1px 3px rgba(20,40,60,.06)` }}>
         <div className="p-4 flex items-center gap-4" style={{ borderBottom: `1px solid ${C.line100}` }}>
           <div
-            className="w-16 h-16 rounded-full flex items-center justify-center text-[28px] font-extrabold flex-shrink-0"
+            className="w-16 h-16 rounded-md flex items-center justify-center text-[28px] font-extrabold flex-shrink-0"
             style={{ background: C.brandGrad, color: "#fff" }}
           >
             {data.portrait.aiScore}
@@ -396,7 +396,7 @@ function TabPortrait({ data }: { data: typeof MOCK_DETAIL }) {
               <img src={`${AI_LOGO_BASE}/deepseek.png`} alt="AI" className="w-4 h-4 rounded" style={{ objectFit: "contain" }} />
             </div>
             <div className="text-[12px] mt-0.5" style={{ color: C.textSub }}>AI 综合评估 · 基于多维度数据</div>
-            <span className="inline-flex items-center rounded-full px-2 py-[1px] text-[11px] font-bold mt-1" style={{ backgroundColor: C.okBg, color: C.okFg }}>
+            <span className="inline-flex items-center rounded-md px-2 py-[1px] text-[11px] font-bold mt-1" style={{ backgroundColor: C.okBg, color: C.okFg }}>
               优秀
             </span>
           </div>
@@ -405,9 +405,9 @@ function TabPortrait({ data }: { data: typeof MOCK_DETAIL }) {
           {data.portrait.dimensions.map((d, i) => (
             <div key={i} className="flex items-center gap-3">
               <span className="w-20 text-[12px] flex-shrink-0" style={{ color: C.textSub }}>{d.name}</span>
-              <div className="flex-1 h-1.5 rounded-full" style={{ backgroundColor: C.line100 }}>
+              <div className="flex-1 h-1.5 rounded-md" style={{ backgroundColor: C.line100 }}>
                 <div
-                  className="h-1.5 rounded-full transition-all duration-500"
+                  className="h-1.5 rounded-md transition-all duration-500"
                   style={{ width: `${d.score}%`, background: C.brandGrad }}
                 />
               </div>
@@ -419,7 +419,7 @@ function TabPortrait({ data }: { data: typeof MOCK_DETAIL }) {
 
       <SectionCard title="绩效考核" icon={Star}
         rightSlot={
-          <button className="flex items-center gap-1 px-3 py-1 rounded-full text-[12px] font-bold" style={{ backgroundColor: C.infoBg, color: C.infoFg }}>
+          <button className="flex items-center gap-1 px-3 py-1 rounded-md text-[12px] font-bold" style={{ backgroundColor: C.infoBg, color: C.infoFg }}>
             <Plus size={12} strokeWidth={2} /> 新增
           </button>
         }
@@ -430,7 +430,7 @@ function TabPortrait({ data }: { data: typeof MOCK_DETAIL }) {
               <span className="text-[13px] font-bold" style={{ color: C.textMain }}>{a.period}</span>
               <div className="flex items-center gap-2">
                 <span className="text-[15px] font-extrabold" style={{ color: C.brand }}>{a.score}</span>
-                <span className="inline-flex items-center rounded-full px-2 py-[1px] text-[11px] font-bold" style={{ backgroundColor: C.okBg, color: C.okFg }}>
+                <span className="inline-flex items-center rounded-md px-2 py-[1px] text-[11px] font-bold" style={{ backgroundColor: C.okBg, color: C.okFg }}>
                   {a.level}
                 </span>
               </div>
@@ -448,7 +448,7 @@ function TabSalary({ data }: { data: typeof MOCK_DETAIL }) {
   const { salary } = data;
   return (
     <div className="flex flex-col gap-3 py-3">
-      <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: C.white, boxShadow: `0 1px 3px rgba(20,40,60,.06)` }}>
+      <div className="rounded overflow-hidden" style={{ backgroundColor: C.white, boxShadow: `0 1px 3px rgba(20,40,60,.06)` }}>
         <div className="px-4 py-3" style={{ borderBottom: `1px solid ${C.line100}` }}>
           <div className="text-[11px]" style={{ color: C.textSub }}>当前月薪</div>
           <div className="flex items-end gap-1 mt-1">
@@ -477,8 +477,8 @@ function TabSalary({ data }: { data: typeof MOCK_DETAIL }) {
         ].map((l, i) => (
           <div key={i} className="py-2.5 flex items-center gap-3" style={{ borderBottom: i < 2 ? `1px solid ${C.line100}` : "none" }}>
             <span className="w-12 text-[12px]" style={{ color: C.textSub }}>{l.label}</span>
-            <div className="flex-1 h-1.5 rounded-full" style={{ backgroundColor: C.line100 }}>
-              <div className="h-1.5 rounded-full" style={{ width: `${(l.used / l.total) * 100}%`, backgroundColor: C.brand }} />
+            <div className="flex-1 h-1.5 rounded-md" style={{ backgroundColor: C.line100 }}>
+              <div className="h-1.5 rounded-md" style={{ width: `${(l.used / l.total) * 100}%`, backgroundColor: C.brand }} />
             </div>
             <span className="text-[12px] font-bold" style={{ color: C.textMain }}>
               剩余 {l.total - l.used}/{l.total} 天
@@ -516,9 +516,9 @@ function TabHRFlow({ data }: { data: typeof MOCK_DETAIL }) {
     <div className="flex flex-col gap-3 py-3">
       <SectionCard title="入职办理" icon={CheckCircle}>
         <div className="py-2.5 flex items-center gap-3" style={{ borderBottom: `1px solid ${C.line100}` }}>
-          <div className="flex-1 h-2 rounded-full" style={{ backgroundColor: C.line100 }}>
+          <div className="flex-1 h-2 rounded-md" style={{ backgroundColor: C.line100 }}>
             <div
-              className="h-2 rounded-full transition-all duration-500"
+              className="h-2 rounded-md transition-all duration-500"
               style={{ width: `${(doneCount / hrFlow.onboarding.length) * 100}%`, background: C.brandGrad }}
             />
           </div>
@@ -527,12 +527,12 @@ function TabHRFlow({ data }: { data: typeof MOCK_DETAIL }) {
         {hrFlow.onboarding.map((item, i) => (
           <div key={i} className="py-2.5 flex items-center gap-3" style={{ borderBottom: i < hrFlow.onboarding.length - 1 ? `1px solid ${C.line100}` : "none" }}>
             <div
-              className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+              className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0"
               style={{ backgroundColor: item.done ? C.okBg : C.line100 }}
             >
               {item.done
                 ? <CheckCircle size={12} strokeWidth={2} style={{ color: C.okFg }} />
-                : <div className="w-2 h-2 rounded-full" style={{ backgroundColor: C.textWeak }} />
+                : <div className="w-2 h-2 rounded-md" style={{ backgroundColor: C.textWeak }} />
               }
             </div>
             <span className="text-[13px]" style={{ color: item.done ? C.textMain : C.textWeak }}>{item.item}</span>
@@ -545,7 +545,7 @@ function TabHRFlow({ data }: { data: typeof MOCK_DETAIL }) {
         <div className="py-3">
           <div className="flex items-center justify-between">
             <span className="text-[13px] font-bold" style={{ color: C.textMain }}>试用期</span>
-            <span className="inline-flex items-center rounded-full px-2 py-[2px] text-[11px] font-bold" style={{ backgroundColor: C.okBg, color: C.okFg }}>
+            <span className="inline-flex items-center rounded-md px-2 py-[2px] text-[11px] font-bold" style={{ backgroundColor: C.okBg, color: C.okFg }}>
               {hrFlow.probation.result}
             </span>
           </div>
@@ -611,7 +611,7 @@ function SignContractModal({ onClose, staffName }: { onClose: () => void; staffN
                 <button
                   key={t}
                   onClick={() => setContractType(t)}
-                  className="px-3 py-1.5 rounded-full text-[12px] font-bold transition-all duration-150"
+                  className="px-3 py-1.5 rounded-md text-[12px] font-bold transition-all duration-150"
                   style={{
                     backgroundColor: contractType === t ? C.brand : C.bg,
                     color: contractType === t ? "#fff" : C.textSub,
@@ -651,7 +651,7 @@ function SignContractModal({ onClose, staffName }: { onClose: () => void; staffN
               // TODO: trpc.yabanStaff.initiateSign.mutate({ staffId, contractType, startDate, endDate, remark })
               onClose();
             }}
-            className="w-full h-11 rounded-full text-[14px] font-extrabold text-white transition-all duration-150 active:scale-[0.97]"
+            className="w-full h-11 rounded-md text-[14px] font-extrabold text-white transition-all duration-150 active:scale-[0.97]"
             style={{ background: C.brandGrad, boxShadow: `0 4px 14px rgba(30,136,214,.32)` }}
           >
             发起签约
@@ -703,7 +703,7 @@ export default function YabanStaffDetail() {
         {/* 员工头像卡 */}
         <div className="px-4 pb-4 flex items-center gap-3">
           <div
-            className="w-14 h-14 rounded-2xl flex items-center justify-center text-[22px] font-extrabold flex-shrink-0"
+            className="w-14 h-14 rounded flex items-center justify-center text-[22px] font-extrabold flex-shrink-0"
             style={{ backgroundColor: "rgba(255,255,255,0.25)", color: "#fff" }}
           >
             {data.name[0]}
@@ -712,7 +712,7 @@ export default function YabanStaffDetail() {
             <div className="flex items-center gap-2">
               <span className="text-[18px] font-extrabold text-white">{data.name}</span>
               <span
-                className="inline-flex items-center rounded-full px-2 py-[2px] text-[11px] font-bold"
+                className="inline-flex items-center rounded-md px-2 py-[2px] text-[11px] font-bold"
                 style={{ backgroundColor: "rgba(255,255,255,0.25)", color: "#fff" }}
               >
                 {data.role}

@@ -117,7 +117,7 @@ export default function YabanShopAdminMerchantConfig() {
       ) : (
         <div className="max-w-lg mx-auto px-3 pt-3 space-y-3">
           {/* 说明 */}
-          <div className="bg-gradient-to-r from-[#E8F4FD] to-[#D6EEFB] rounded-xl px-3 py-2.5 flex items-start gap-2">
+          <div className="bg-gradient-to-r from-[#E8F4FD] to-[#D6EEFB] rounded-md px-3 py-2.5 flex items-start gap-2">
             <ShieldCheck className="w-4 h-4 text-[#1A6E96] mt-0.5 shrink-0" />
             <p className="text-[12px] text-[#1A6E96] leading-relaxed">
               本店收款资金直接进入下方配置的微信/支付宝商户号，平台不经手资金。密钥提交后将加密存储，页面不会回显明文。密钥框留空表示不修改原值。
@@ -217,7 +217,7 @@ export default function YabanShopAdminMerchantConfig() {
           <button
             onClick={handleSave}
             disabled={save.isPending}
-            className="w-full py-3 rounded-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-60"
+            className="w-full py-3 rounded-md bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-60"
           >
             {save.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
             {save.isPending ? "保存中" : "保存设置"}
@@ -245,7 +245,7 @@ export default function YabanShopAdminMerchantConfig() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-xl px-3 py-3 space-y-3">
+    <div className="bg-white rounded-md px-3 py-3 space-y-3">
       <p className="text-sm font-bold text-gray-800">{title}</p>
       {children}
     </div>
@@ -273,7 +273,7 @@ function ModeBtn({
   return (
     <button
       onClick={onClick}
-      className={`flex-1 py-2 rounded-lg text-sm font-medium border ${
+      className={`flex-1 py-2 rounded text-sm font-medium border ${
         active
           ? "bg-[#2196C8] border-[#2196C8] text-white"
           : "bg-white border-gray-200 text-gray-500"
@@ -298,13 +298,13 @@ function SwitchRow({
       <span className="text-sm text-gray-700">{label}</span>
       <button
         onClick={() => onChange(!checked)}
-        className={`w-11 h-6 rounded-full relative transition-colors ${
+        className={`w-11 h-6 rounded-md relative transition-colors ${
           checked ? "bg-[#2196C8]" : "bg-gray-300"
         }`}
         aria-label={label}
       >
         <span
-          className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${
+          className={`absolute top-0.5 w-5 h-5 rounded-md bg-white transition-all ${
             checked ? "left-[22px]" : "left-0.5"
           }`}
         />

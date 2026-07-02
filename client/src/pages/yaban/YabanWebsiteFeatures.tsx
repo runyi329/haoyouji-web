@@ -93,7 +93,7 @@ export default function YabanWebsiteFeatures() {
       </div>
 
       <div className="px-4 pt-5">
-        <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
+        <div className="bg-white rounded overflow-hidden shadow-sm">
           {items.map((item, idx) => (
             <button
               key={item.key}
@@ -102,7 +102,7 @@ export default function YabanWebsiteFeatures() {
                 idx < items.length - 1 ? "border-b border-gray-100" : ""
               }`}
             >
-              <div className="w-9 h-9 rounded-xl bg-[#EBF4FC] flex items-center justify-center flex-shrink-0">
+              <div className="w-9 h-9 rounded-md bg-[#EBF4FC] flex items-center justify-center flex-shrink-0">
                 {item.icon}
               </div>
               <div className="flex-1 min-w-0">

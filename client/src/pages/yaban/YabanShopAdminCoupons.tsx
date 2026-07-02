@@ -76,7 +76,7 @@ export default function YabanShopAdminCoupons() {
             <span className="text-base font-bold leading-tight">优惠券管理</span>
             {clinicName && <span className="text-[11px] font-normal text-white/80 leading-tight mt-0.5">所属：{clinicName}</span>}
           </div>
-          <button onClick={() => { setForm(emptyForm); setShowForm(true); }} className="flex items-center gap-1 text-xs bg-white/20 px-2.5 py-1 rounded-full">
+          <button onClick={() => { setForm(emptyForm); setShowForm(true); }} className="flex items-center gap-1 text-xs bg-white/20 px-2.5 py-1 rounded-md">
             <Plus className="w-3.5 h-3.5" /> 新建
           </button>
         </div>
@@ -89,10 +89,10 @@ export default function YabanShopAdminCoupons() {
           <div className="text-center py-16 text-gray-400 text-sm">暂无优惠券，点击右上角新建</div>
         ) : (
           list.map((c) => (
-            <div key={c.id} className="bg-white rounded-xl p-3">
+            <div key={c.id} className="bg-white rounded-md p-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-800">{c.name}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${c.status ? "bg-[#D1FAE5] text-[#059669]" : "bg-gray-100 text-gray-400"}`}>
+                <span className={`text-xs px-2 py-0.5 rounded-md ${c.status ? "bg-[#D1FAE5] text-[#059669]" : "bg-gray-100 text-gray-400"}`}>
                   {c.status ? "已上架" : "已下架"}
                 </span>
               </div>
@@ -107,11 +107,11 @@ export default function YabanShopAdminCoupons() {
                     amount: String(c.amount), discount: String(c.discount ?? "0.9"),
                     totalQty: String(c.total_qty), perUserLimit: String(c.per_user_limit), validDays: String(c.valid_days),
                   }); setShowForm(true); }}
-                  className="flex-1 py-1.5 rounded-full border border-gray-200 text-gray-600 text-xs"
+                  className="flex-1 py-1.5 rounded-md border border-gray-200 text-gray-600 text-xs"
                 >编辑</button>
                 <button
                   onClick={() => toggle.mutate({ id: c.id, status: c.status ? 0 : 1 })}
-                  className="flex-1 py-1.5 rounded-full border border-gray-200 text-gray-600 text-xs"
+                  className="flex-1 py-1.5 rounded-md border border-gray-200 text-gray-600 text-xs"
                 >{c.status ? "下架" : "上架"}</button>
               </div>
             </div>
@@ -134,9 +134,9 @@ export default function YabanShopAdminCoupons() {
               <Field label="券类型">
                 <div className="flex gap-2">
                   <button onClick={() => setForm({ ...form, type: "full_reduce" })}
-                    className={`flex-1 py-2 rounded-lg text-sm ${form.type === "full_reduce" ? "bg-[#2196C8] text-white" : "bg-[#F5F7FA] text-gray-600"}`}>满减券</button>
+                    className={`flex-1 py-2 rounded text-sm ${form.type === "full_reduce" ? "bg-[#2196C8] text-white" : "bg-[#F5F7FA] text-gray-600"}`}>满减券</button>
                   <button onClick={() => setForm({ ...form, type: "discount" })}
-                    className={`flex-1 py-2 rounded-lg text-sm ${form.type === "discount" ? "bg-[#2196C8] text-white" : "bg-[#F5F7FA] text-gray-600"}`}>折扣券</button>
+                    className={`flex-1 py-2 rounded text-sm ${form.type === "discount" ? "bg-[#2196C8] text-white" : "bg-[#F5F7FA] text-gray-600"}`}>折扣券</button>
                 </div>
               </Field>
               <Field label="使用门槛（满多少元可用，0为无门槛）">
@@ -166,7 +166,7 @@ export default function YabanShopAdminCoupons() {
                 </Field>
               </div>
               <button onClick={submit} disabled={save.isPending}
-                className="w-full py-3 rounded-full bg-[#2196C8] text-white font-semibold disabled:opacity-60">
+                className="w-full py-3 rounded-md bg-[#2196C8] text-white font-semibold disabled:opacity-60">
                 {save.isPending ? "保存中..." : "保存"}
               </button>
             </div>

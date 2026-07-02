@@ -196,7 +196,7 @@ function SignModal({ contract, onClose, onSign, onReject }: {
               <div className="rounded-[14px] p-4 mb-4" style={{ backgroundColor: C.bg }}>
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-[15px] font-extrabold" style={{ color: C.textMain }}>{contract.type}</span>
-                  <span className="inline-flex items-center rounded-full px-2 py-[2px] text-[11px] font-bold" style={{ backgroundColor: C.warnBg, color: C.warnFg }}>
+                  <span className="inline-flex items-center rounded-md px-2 py-[2px] text-[11px] font-bold" style={{ backgroundColor: C.warnBg, color: C.warnFg }}>
                     待签署
                   </span>
                 </div>
@@ -226,14 +226,14 @@ function SignModal({ contract, onClose, onSign, onReject }: {
               <div className="flex gap-3">
                 <button
                   onClick={() => onReject(contract.id)}
-                  className="flex-1 h-11 rounded-full text-[13px] font-bold transition-all duration-150 active:scale-[0.97]"
+                  className="flex-1 h-11 rounded-md text-[13px] font-bold transition-all duration-150 active:scale-[0.97]"
                   style={{ backgroundColor: C.dangerBg, color: C.dangerFg, border: `1px solid ${C.dangerFg}20` }}
                 >
                   拒签
                 </button>
                 <button
                   onClick={() => setStep("sign")}
-                  className="flex-[2] h-11 rounded-full text-[14px] font-extrabold text-white transition-all duration-150 active:scale-[0.97]"
+                  className="flex-[2] h-11 rounded-md text-[14px] font-extrabold text-white transition-all duration-150 active:scale-[0.97]"
                   style={{ background: C.brandGrad, boxShadow: `0 4px 14px rgba(30,136,214,.32)` }}
                 >
                   同意并签署
@@ -254,7 +254,7 @@ function SignModal({ contract, onClose, onSign, onReject }: {
               <div className="mt-4 flex gap-3">
                 <button
                   onClick={() => setStep("review")}
-                  className="flex-1 h-11 rounded-full text-[13px] font-bold transition-all duration-150 active:scale-[0.97]"
+                  className="flex-1 h-11 rounded-md text-[13px] font-bold transition-all duration-150 active:scale-[0.97]"
                   style={{ backgroundColor: C.bg, color: C.textSub, border: `1px solid ${C.line200}` }}
                 >
                   返回
@@ -262,7 +262,7 @@ function SignModal({ contract, onClose, onSign, onReject }: {
                 <button
                   disabled={!signatureUrl}
                   onClick={() => onSign(contract.id, signatureUrl)}
-                  className="flex-[2] h-11 rounded-full text-[14px] font-extrabold text-white transition-all duration-150 active:scale-[0.97] disabled:opacity-40"
+                  className="flex-[2] h-11 rounded-md text-[14px] font-extrabold text-white transition-all duration-150 active:scale-[0.97] disabled:opacity-40"
                   style={{ background: C.brandGrad, boxShadow: signatureUrl ? `0 4px 14px rgba(30,136,214,.32)` : "none" }}
                 >
                   确认签署
@@ -325,7 +325,7 @@ export default function YabanMyPage() {
         {/* 个人信息卡 */}
         <div className="px-4 pb-5 flex items-center gap-3">
           <div
-            className="w-14 h-14 rounded-2xl flex items-center justify-center text-[22px] font-extrabold flex-shrink-0"
+            className="w-14 h-14 rounded flex items-center justify-center text-[22px] font-extrabold flex-shrink-0"
             style={{ backgroundColor: "rgba(255,255,255,0.25)", color: "#fff" }}
           >
             {MOCK_STAFF.name[0]}
@@ -343,7 +343,7 @@ export default function YabanMyPage() {
       <div className="px-4 py-3 flex flex-col gap-3">
 
         {/* 待签约 */}
-        <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: C.white, boxShadow: `0 1px 3px rgba(20,40,60,.06)` }}>
+        <div className="rounded overflow-hidden" style={{ backgroundColor: C.white, boxShadow: `0 1px 3px rgba(20,40,60,.06)` }}>
           <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${C.line100}` }}>
             <div className="flex items-center gap-2">
               <Clock size={15} strokeWidth={1.5} style={{ color: C.brand }} />
@@ -351,7 +351,7 @@ export default function YabanMyPage() {
             </div>
             {pending.length > 0 && (
               <span
-                className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-extrabold text-white"
+                className="inline-flex items-center justify-center w-5 h-5 rounded-md text-[11px] font-extrabold text-white"
                 style={{ backgroundColor: C.dangerFg }}
               >
                 {pending.length}
@@ -373,7 +373,7 @@ export default function YabanMyPage() {
                   style={{ borderBottom: i < pending.length - 1 ? `1px solid ${C.line100}` : "none" }}
                 >
                   <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                    className="w-10 h-10 rounded-md flex items-center justify-center flex-shrink-0"
                     style={{ backgroundColor: C.warnBg }}
                   >
                     <FileText size={18} strokeWidth={1.5} style={{ color: C.warnFg }} />
@@ -386,7 +386,7 @@ export default function YabanMyPage() {
                   </div>
                   <button
                     onClick={() => setActiveContract(c)}
-                    className="px-3 py-1.5 rounded-full text-[12px] font-bold transition-all duration-150 active:scale-[0.97]"
+                    className="px-3 py-1.5 rounded-md text-[12px] font-bold transition-all duration-150 active:scale-[0.97]"
                     style={{ background: C.brandGrad, color: "#fff", boxShadow: `0 2px 8px rgba(30,136,214,.28)` }}
                   >
                     签署
@@ -398,7 +398,7 @@ export default function YabanMyPage() {
         </div>
 
         {/* 签约历史 */}
-        <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: C.white, boxShadow: `0 1px 3px rgba(20,40,60,.06)` }}>
+        <div className="rounded overflow-hidden" style={{ backgroundColor: C.white, boxShadow: `0 1px 3px rgba(20,40,60,.06)` }}>
           <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: `1px solid ${C.line100}` }}>
             <CheckCircle size={15} strokeWidth={1.5} style={{ color: C.brand }} />
             <span className="text-[15px] font-extrabold" style={{ color: C.textMain }}>签约历史</span>
@@ -414,7 +414,7 @@ export default function YabanMyPage() {
                   style={{ borderBottom: i < history.length - 1 ? `1px solid ${C.line100}` : "none" }}
                 >
                   <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                    className="w-10 h-10 rounded-md flex items-center justify-center flex-shrink-0"
                     style={{ backgroundColor: C.okBg }}
                   >
                     <FileText size={18} strokeWidth={1.5} style={{ color: C.okFg }} />
@@ -425,7 +425,7 @@ export default function YabanMyPage() {
                       {c.startDate} 至 {c.endDate}
                     </div>
                   </div>
-                  <span className="inline-flex items-center rounded-full px-2 py-[2px] text-[11px] font-bold" style={{ backgroundColor: C.okBg, color: C.okFg }}>
+                  <span className="inline-flex items-center rounded-md px-2 py-[2px] text-[11px] font-bold" style={{ backgroundColor: C.okBg, color: C.okFg }}>
                     已签署
                   </span>
                 </div>
@@ -448,7 +448,7 @@ export default function YabanMyPage() {
       {/* ── Toast ── */}
       {toast && (
         <div
-          className="fixed bottom-8 left-1/2 -translate-x-1/2 px-5 py-2.5 rounded-full text-[13px] font-bold text-white shadow-lg transition-all duration-300"
+          className="fixed bottom-8 left-1/2 -translate-x-1/2 px-5 py-2.5 rounded-md text-[13px] font-bold text-white shadow-lg transition-all duration-300"
           style={{
             backgroundColor: toast.type === "ok" ? C.okFg : C.warnFg,
             maxWidth: 320,

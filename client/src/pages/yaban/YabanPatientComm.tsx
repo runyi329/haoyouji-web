@@ -200,7 +200,7 @@ function AnalysisConfirmModal({
                 <span className="text-sky-400 font-medium">本次内容记录了 {result.rawText.replace(/\s/g, '').length} 字</span>
               </button>
               {showRaw && (
-                <div className="text-sm text-gray-600 bg-gray-50 rounded-xl p-3 leading-relaxed max-h-40 overflow-y-auto">
+                <div className="text-sm text-gray-600 bg-gray-50 rounded-md p-3 leading-relaxed max-h-40 overflow-y-auto">
                   {result.rawText}
                 </div>
               )}
@@ -223,7 +223,7 @@ function AnalysisConfirmModal({
             {items.length > 0 ? (
               <div className="space-y-2">
                 {items.map((item, idx) => (
-                  <div key={idx} className="flex items-start gap-2 bg-gray-50 rounded-xl px-3 py-2">
+                  <div key={idx} className="flex items-start gap-2 bg-gray-50 rounded-md px-3 py-2">
                     <span className="text-xs text-sky-400 font-bold flex-shrink-0 mt-0.5">{idx + 1}.</span>
                     <input
                       className="flex-1 text-sm text-gray-900 bg-transparent outline-none"
@@ -251,13 +251,13 @@ function AnalysisConfirmModal({
         <div className="px-4 py-3 border-t border-gray-100 flex gap-3">
           <button
             onClick={onCancel}
-            className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium"
+            className="flex-1 py-3 rounded-md border border-gray-200 text-gray-600 text-sm font-medium"
           >
             取消
           </button>
           <button
             onClick={() => onConfirm({ ...result, summaryItems: items })}
-            className="flex-1 py-3 rounded-xl bg-sky-500 text-white text-sm font-medium"
+            className="flex-1 py-3 rounded-md bg-sky-500 text-white text-sm font-medium"
           >
             保存记录
           </button>
@@ -305,7 +305,7 @@ function ManualInputModal({
             <div key={key}>
               <label className="block text-xs text-sky-500 font-medium mb-1">{label}</label>
               <textarea
-                className="w-full text-sm text-gray-900 bg-gray-50 rounded-xl px-3 py-2 border border-gray-100 outline-none focus:border-sky-300 resize-none min-h-[56px]"
+                className="w-full text-sm text-gray-900 bg-gray-50 rounded-md px-3 py-2 border border-gray-100 outline-none focus:border-sky-300 resize-none min-h-[56px]"
                 value={data[key]}
                 onChange={(e) => setData({ ...data, [key]: e.target.value })}
                 placeholder={placeholder}
@@ -314,10 +314,10 @@ function ManualInputModal({
           ))}
         </div>
         <div className="px-4 py-3 border-t border-gray-100 flex gap-3">
-          <button onClick={onCancel} className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium">取消</button>
+          <button onClick={onCancel} className="flex-1 py-3 rounded-md border border-gray-200 text-gray-600 text-sm font-medium">取消</button>
           <button
             onClick={() => onConfirm({ ...data, rawText: "", summaryItems: [] })}
-            className="flex-1 py-3 rounded-xl bg-sky-500 text-white text-sm font-medium"
+            className="flex-1 py-3 rounded-md bg-sky-500 text-white text-sm font-medium"
           >
             保存
           </button>
@@ -393,13 +393,13 @@ function CustomerChatViewModal({
           <>
             {/* 总条数提示 */}
             <div className="text-center">
-              <span className="text-xs text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
+              <span className="text-xs text-gray-400 bg-gray-100 px-3 py-1 rounded-md">
                 共 {total} 条对话记录
               </span>
             </div>
             {/* 对话卡片列表 */}
             {messages.map((msg: any) => (
-              <div key={msg.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div key={msg.id} className="bg-white rounded border border-gray-100 shadow-sm overflow-hidden">
                 {/* 时间 */}
                 <div className="px-3 pt-2.5 pb-1">
                   <span className="text-[10px] text-gray-400">{formatMsgTime(msg.created_at)}</span>
@@ -407,10 +407,10 @@ function CustomerChatViewModal({
                 {/* 用户气泡 */}
                 <div className="px-3 pb-2">
                   <div className="flex items-start gap-1.5">
-                    <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                    <div className="w-6 h-6 rounded-md bg-green-100 flex items-center justify-center flex-shrink-0">
                       <span className="text-green-600" style={{ fontSize: '10px', fontWeight: 700 }}>客</span>
                     </div>
-                    <div className="rounded-2xl rounded-tl-none px-2.5 py-1.5 flex-1 min-w-0 bg-gray-100">
+                    <div className="rounded rounded-tl-none px-2.5 py-1.5 flex-1 min-w-0 bg-gray-100">
                       <p className="text-sm text-gray-900 leading-snug">{msg.user_message || '(无内容)'}</p>
                     </div>
                   </div>
@@ -419,10 +419,10 @@ function CustomerChatViewModal({
                 {msg.reply_preview && (
                   <div className="px-3 pb-2.5">
                     <div className="flex items-start gap-1.5 flex-row-reverse">
-                      <div className="w-6 h-6 rounded-full bg-green-600 flex items-center justify-center flex-shrink-0">
+                      <div className="w-6 h-6 rounded-md bg-green-600 flex items-center justify-center flex-shrink-0">
                         <span className="text-white" style={{ fontSize: '9px', fontWeight: 700 }}>AI</span>
                       </div>
-                      <div className="rounded-2xl rounded-tr-none px-2.5 py-1.5 flex-1 min-w-0 bg-green-600">
+                      <div className="rounded rounded-tr-none px-2.5 py-1.5 flex-1 min-w-0 bg-green-600">
                         <p className="text-sm text-white leading-snug">{msg.reply_preview}</p>
                       </div>
                     </div>
@@ -431,7 +431,7 @@ function CustomerChatViewModal({
                 {/* 底部：模型标签 */}
                 {msg.model_used && (
                   <div className="px-3 pb-2.5 border-t border-gray-50 pt-1.5">
-                    <span className="text-[10px] text-green-600 bg-green-50 px-2 py-0.5 rounded-full">{msg.model_used}</span>
+                    <span className="text-[10px] text-green-600 bg-green-50 px-2 py-0.5 rounded-md">{msg.model_used}</span>
                   </div>
                 )}
               </div>
@@ -499,7 +499,7 @@ function AppointmentCard({ appointment }: { appointment: Appointment }) {
       {/* 左侧日期列 */}
       <div className="flex flex-col items-center flex-shrink-0" style={{ minWidth: 28 }}>
         <button
-          className="flex flex-col items-center justify-center rounded-lg py-1"
+          className="flex flex-col items-center justify-center rounded py-1"
           style={{ minWidth: 28, height: 56 }}
           onClick={() => setOpen(!open)}
         >
@@ -510,7 +510,7 @@ function AppointmentCard({ appointment }: { appointment: Appointment }) {
         </button>
       </div>
       {/* 右侧卡片 */}
-      <div className="flex-1 min-w-0 bg-purple-50 rounded-2xl border border-purple-100 shadow-sm overflow-hidden mb-0">
+      <div className="flex-1 min-w-0 bg-purple-50 rounded border border-purple-100 shadow-sm overflow-hidden mb-0">
         <button
           className="w-full flex items-center justify-between px-3 pt-2.5 pb-2 text-left"
           onClick={() => setOpen(!open)}
@@ -659,13 +659,13 @@ function DayCard({
           {showDateTip && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowDateTip(false)} />
-              <div className="absolute left-9 top-0 z-50 bg-white border border-gray-200 rounded-xl shadow-lg px-4 py-3 w-40" onClick={(e) => e.stopPropagation()}>
+              <div className="absolute left-9 top-0 z-50 bg-white border border-gray-200 rounded-md shadow-lg px-4 py-3 w-40" onClick={(e) => e.stopPropagation()}>
                 <p className="text-xs text-gray-500 mb-2 font-medium">日期颜色说明</p>
                 <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-sky-500 flex-shrink-0" /><span className="text-xs text-gray-600">工作日</span></div>
-                  <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-orange-400 flex-shrink-0" /><span className="text-xs text-gray-600">双休日</span></div>
-                  <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0" /><span className="text-xs text-gray-600">法定节假日</span></div>
-                  <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: 'linear-gradient(135deg,#f472b6,#fb923c,#facc15,#4ade80,#60a5fa,#c084fc)' }} /><span className="text-xs text-gray-600">患者生日</span></div>
+                  <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-md bg-sky-500 flex-shrink-0" /><span className="text-xs text-gray-600">工作日</span></div>
+                  <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-md bg-orange-400 flex-shrink-0" /><span className="text-xs text-gray-600">双休日</span></div>
+                  <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-md bg-red-500 flex-shrink-0" /><span className="text-xs text-gray-600">法定节假日</span></div>
+                  <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-md flex-shrink-0" style={{ background: 'linear-gradient(135deg,#f472b6,#fb923c,#facc15,#4ade80,#60a5fa,#c084fc)' }} /><span className="text-xs text-gray-600">患者生日</span></div>
                 </div>
               </div>
             </>
@@ -950,25 +950,25 @@ function TimelineCard({
                 onClick={() => setShowDateTip(false)}
               />
               <div
-                className="absolute left-9 top-0 z-50 bg-white border border-gray-200 rounded-xl shadow-lg px-4 py-3 w-40"
+                className="absolute left-9 top-0 z-50 bg-white border border-gray-200 rounded-md shadow-lg px-4 py-3 w-40"
                 onClick={(e) => e.stopPropagation()}
               >
                 <p className="text-xs text-gray-500 mb-2 font-medium">日期颜色说明</p>
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-sky-500 flex-shrink-0" />
+                    <span className="w-2.5 h-2.5 rounded-md bg-sky-500 flex-shrink-0" />
                     <span className="text-xs text-gray-600">工作日</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-orange-400 flex-shrink-0" />
+                    <span className="w-2.5 h-2.5 rounded-md bg-orange-400 flex-shrink-0" />
                     <span className="text-xs text-gray-600">双休日</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0" />
+                    <span className="w-2.5 h-2.5 rounded-md bg-red-500 flex-shrink-0" />
                     <span className="text-xs text-gray-600">法定节假日</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: 'linear-gradient(135deg,#f472b6,#fb923c,#facc15,#4ade80,#60a5fa,#c084fc)' }} />
+                    <span className="w-2.5 h-2.5 rounded-md flex-shrink-0" style={{ background: 'linear-gradient(135deg,#f472b6,#fb923c,#facc15,#4ade80,#60a5fa,#c084fc)' }} />
                     <span className="text-xs text-gray-600">患者生日</span>
                   </div>
                 </div>
@@ -1479,15 +1479,15 @@ export default function YabanPatientComm() {
   const renderVoiceControls = () => {
     if (recordingState === "analyzing") {
       return (
-        <div className="bg-sky-50 rounded-2xl px-4 py-4 flex flex-col items-center gap-2">
+        <div className="bg-sky-50 rounded px-4 py-4 flex flex-col items-center gap-2">
           <div className="flex items-center gap-2">
             <Loader2 size={16} className="text-sky-500 animate-spin flex-shrink-0" />
             <p className="text-sm text-sky-500 font-medium">AI 秘书正在转写并提取要点</p>
           </div>
           <div className="flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-            <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-            <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+            <span className="w-1.5 h-1.5 rounded-md bg-sky-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="w-1.5 h-1.5 rounded-md bg-sky-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+            <span className="w-1.5 h-1.5 rounded-md bg-sky-400 animate-bounce" style={{ animationDelay: '300ms' }} />
           </div>
           <p className="text-xs text-gray-400">AI 秘书处理中，请稍候...</p>
         </div>
@@ -1498,7 +1498,7 @@ export default function YabanPatientComm() {
     // 倒计时界面
     if (recordingState === "countdown") {
       return (
-        <div className="bg-sky-50 rounded-2xl p-6 flex flex-col items-center gap-3">
+        <div className="bg-sky-50 rounded p-6 flex flex-col items-center gap-3">
           <p className="text-sm text-sky-500 font-medium">AI 秘书召唤中...</p>
           <span className="text-7xl font-bold text-sky-500 tabular-nums" style={{ lineHeight: 1 }}>{countdown}</span>
           <button onClick={cancelRecording} className="mt-2 text-xs text-gray-400 underline">取消</button>
@@ -1507,11 +1507,11 @@ export default function YabanPatientComm() {
     }
 
     return (
-      <div className="bg-sky-50 rounded-2xl p-4 space-y-3">
+      <div className="bg-sky-50 rounded p-4 space-y-3">
         <div className="flex items-center justify-center gap-3">
           {recordingState === "recording" ? (
             <span className="flex items-center gap-2 text-sky-600 font-semibold text-base">
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              <span className="w-2 h-2 rounded-md bg-red-500 animate-pulse" />
               AI秘书记录中
             </span>
           ) : (
@@ -1523,19 +1523,19 @@ export default function YabanPatientComm() {
           <span className="text-sm font-mono text-gray-400 tabular-nums">{formatDuration(duration)}</span>
         </div>
         <div className="flex gap-2">
-          <button onClick={cancelRecording} className="flex items-center justify-center gap-1 px-3 py-2.5 rounded-xl border border-gray-200 text-gray-500 text-sm">
+          <button onClick={cancelRecording} className="flex items-center justify-center gap-1 px-3 py-2.5 rounded-md border border-gray-200 text-gray-500 text-sm">
             <X size={13} />取消
           </button>
           {recordingState === "recording" ? (
-            <button onClick={pauseRecording} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white border border-sky-200 text-sky-600 text-sm font-medium">
+            <button onClick={pauseRecording} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-md bg-white border border-sky-200 text-sky-600 text-sm font-medium">
               <Pause size={13} />暂停
             </button>
           ) : (
-            <button onClick={resumeRecording} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white border border-sky-200 text-sky-600 text-sm font-medium">
+            <button onClick={resumeRecording} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-md bg-white border border-sky-200 text-sky-600 text-sm font-medium">
               <Play size={13} />继续
             </button>
           )}
-          <button onClick={stopAndAnalyze} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-sky-500 text-white text-sm font-medium">
+          <button onClick={stopAndAnalyze} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-md bg-sky-500 text-white text-sm font-medium">
             <Check size={13} />结束并整理
           </button>
         </div>
@@ -1561,7 +1561,7 @@ export default function YabanPatientComm() {
         <div className="px-4 pb-3 flex gap-2">
           <button
             onClick={() => setShowArchive(true)}
-            className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 rounded-xl px-3 py-2 text-white text-xs font-medium transition-colors"
+            className="flex items-center gap-1.5 bg-white/20 hover:bg-white/30 rounded-md px-3 py-2 text-white text-xs font-medium transition-colors"
           >
             <FileText size={13} />
             档案全览
@@ -1572,7 +1572,7 @@ export default function YabanPatientComm() {
       {/* 搜索框 + 筛选按鈕 */}
       <div className="bg-gray-50 px-4 py-2.5">
         <div className="flex items-center gap-2">
-          <div className="flex-1 flex items-center gap-2 bg-white rounded-xl px-3 py-2.5 border border-gray-200 shadow-sm">
+          <div className="flex-1 flex items-center gap-2 bg-white rounded-md px-3 py-2.5 border border-gray-200 shadow-sm">
             <Search size={15} className="text-sky-400 flex-shrink-0" />
             <input
               type="text"
@@ -1590,7 +1590,7 @@ export default function YabanPatientComm() {
           {/* 时间筛选按鈕 */}
           <button
             onClick={() => setShowTimeFilter(!showTimeFilter)}
-            className={`flex items-center gap-1 px-3 py-2.5 rounded-xl border shadow-sm text-xs font-medium flex-shrink-0 transition-colors ${
+            className={`flex items-center gap-1 px-3 py-2.5 rounded-md border shadow-sm text-xs font-medium flex-shrink-0 transition-colors ${
               timeFilter !== "all"
                 ? "bg-sky-500 text-white border-sky-500"
                 : "bg-white text-gray-500 border-gray-200"
@@ -1611,7 +1611,7 @@ export default function YabanPatientComm() {
           };
           const visibleKeys = (["all", "today", "week", "month", "quarter", "year"] as const).filter(k => countFor(k) > 0);
           return (
-            <div className="mt-2 bg-white rounded-xl border border-gray-200 shadow-md overflow-hidden">
+            <div className="mt-2 bg-white rounded-md border border-gray-200 shadow-md overflow-hidden">
               {/* 有数据的时间段卡片 */}
               {visibleKeys.length > 0 && (
                 <div className="grid grid-cols-3 gap-2 p-3">
@@ -1619,7 +1619,7 @@ export default function YabanPatientComm() {
                     <button
                       key={key}
                       onClick={() => { setTimeFilter(key); setShowTimeFilter(false); }}
-                      className={`flex flex-col items-center px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
+                      className={`flex flex-col items-center px-3 py-2 rounded border text-xs font-medium transition-colors ${
                         timeFilter === key
                           ? "bg-sky-500 text-white border-sky-500"
                           : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-sky-50 hover:border-sky-300"
@@ -1643,13 +1643,13 @@ export default function YabanPatientComm() {
                 </div>
                 <div className="flex items-center gap-2">
                   <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)}
-                    className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:border-sky-400" />
+                    className="flex-1 text-xs border border-gray-200 rounded px-2 py-1.5 outline-none focus:border-sky-400" />
                   <span className="text-xs text-gray-400">至</span>
                   <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)}
-                    className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:border-sky-400" />
+                    className="flex-1 text-xs border border-gray-200 rounded px-2 py-1.5 outline-none focus:border-sky-400" />
                   <button
                     onClick={() => { if (customStart && customEnd) { setTimeFilter("custom"); setShowTimeFilter(false); } }}
-                    className="px-3 py-1.5 bg-sky-500 text-white text-xs rounded-lg disabled:opacity-40"
+                    className="px-3 py-1.5 bg-sky-500 text-white text-xs rounded disabled:opacity-40"
                     disabled={!customStart || !customEnd}
                   >确定</button>
                 </div>
@@ -1671,9 +1671,9 @@ export default function YabanPatientComm() {
 
         {/* 待处理录音卡片 */}
         {pendingBlob && recordingState === "idle" && (
-          <div className="bg-white border border-sky-100 rounded-2xl p-4 space-y-3 mb-4 shadow-sm">
+          <div className="bg-white border border-sky-100 rounded p-4 space-y-3 mb-4 shadow-sm">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse flex-shrink-0" />
+              <span className="w-2 h-2 rounded-md bg-sky-400 animate-pulse flex-shrink-0" />
               <span className="text-sm font-medium text-sky-700">待处理语音笔记</span>
               <span className="ml-auto text-xs text-gray-400">
                 {formatDuration(pendingDuration)} · {formatFileSize(pendingBlob.size)}
@@ -1683,8 +1683,8 @@ export default function YabanPatientComm() {
               <audio controls src={pendingBlobUrl} className="w-full" style={{ height: "36px" }} />
             )}
             <div className="flex gap-2">
-              <button onClick={clearPending} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-500 text-sm">丢弃</button>
-              <button onClick={reanalyzeBlob} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-sky-500 text-white text-sm font-medium">
+              <button onClick={clearPending} className="flex-1 py-2.5 rounded-md border border-gray-200 text-gray-500 text-sm">丢弃</button>
+              <button onClick={reanalyzeBlob} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-md bg-sky-500 text-white text-sm font-medium">
                 <RefreshCw size={13} />重新分析
               </button>
             </div>
@@ -1718,7 +1718,7 @@ export default function YabanPatientComm() {
             {/* 时间线底部 */}
             <div className="flex gap-3 mt-1">
               <div className="flex flex-col items-center flex-shrink-0 pt-1">
-                <div className="w-2.5 h-2.5 rounded-full bg-gray-200 flex-shrink-0" />
+                <div className="w-2.5 h-2.5 rounded-md bg-gray-200 flex-shrink-0" />
               </div>
               <p className="text-xs text-gray-300 pb-2">
                 {searchQuery ? `找到 ${filteredRecords.length} 条` : `共 ${records.length} 条记录`}
@@ -1761,7 +1761,7 @@ export default function YabanPatientComm() {
                 <div className="space-y-3">
                   <button
                     onClick={() => { setShowArchive(false); startRecording(); }}
-                    className="w-full flex items-center gap-2 py-3 px-4 rounded-xl bg-sky-500 text-white text-sm font-medium"
+                    className="w-full flex items-center gap-2 py-3 px-4 rounded-md bg-sky-500 text-white text-sm font-medium"
                   >
                     <Mic size={16} />
                     <span>开始语音录入</span>
@@ -1789,7 +1789,7 @@ export default function YabanPatientComm() {
                             <div
                               key={r.id}
                               id={`archive-record-${r.id}`}
-                              className="rounded-xl border border-gray-100 bg-white shadow-sm overflow-hidden"
+                              className="rounded-md border border-gray-100 bg-white shadow-sm overflow-hidden"
                             >
                               {/* 播放器 */}
                               {r.audio_url && (
@@ -1802,7 +1802,7 @@ export default function YabanPatientComm() {
                                 <div className="px-3 pt-2 pb-2 space-y-1">
                                   {summaryLines.map((line, idx) => (
                                     <div key={idx} className="flex items-start gap-1.5">
-                                      <span className="mt-1 w-1 h-1 rounded-full bg-sky-400 flex-shrink-0" />
+                                      <span className="mt-1 w-1 h-1 rounded-md bg-sky-400 flex-shrink-0" />
                                       <span className="text-xs text-gray-700 leading-relaxed">{line}</span>
                                     </div>
                                   ))}
@@ -1841,7 +1841,7 @@ export default function YabanPatientComm() {
                 <div className="space-y-2">
                   <button
                     onClick={() => { setShowArchive(false); setInputMode("manual"); }}
-                    className="w-full flex items-center gap-2 py-3 px-4 rounded-xl bg-gray-100 text-gray-700 text-sm font-medium"
+                    className="w-full flex items-center gap-2 py-3 px-4 rounded-md bg-gray-100 text-gray-700 text-sm font-medium"
                   >
                     <Pencil size={16} />
                     <span>新增文字记录</span>
@@ -1870,7 +1870,7 @@ export default function YabanPatientComm() {
                 <div className="space-y-2">
                   <button
                     onClick={(e) => { e.stopPropagation(); setShowArchive(false); setTimeout(() => setInputMode("wechat_view"), 50); }}
-                    className="w-full flex items-center gap-2 py-3 px-4 rounded-xl bg-green-50 text-green-700 text-sm font-medium"
+                    className="w-full flex items-center gap-2 py-3 px-4 rounded-md bg-green-50 text-green-700 text-sm font-medium"
                   >
                     <MessageSquare size={16} />
                     <span>查看微信聊天记录</span>
@@ -1906,21 +1906,21 @@ export default function YabanPatientComm() {
           <div className="flex gap-2">
             <button
               onClick={startRecording}
-              className="flex-1 flex flex-col items-center gap-1 py-3 rounded-2xl bg-sky-500 text-white"
+              className="flex-1 flex flex-col items-center gap-1 py-3 rounded bg-sky-500 text-white"
             >
               <Mic size={20} />
               <span className="text-xs font-medium">语音录入</span>
             </button>
             <button
               onClick={() => setInputMode("manual")}
-              className="flex-1 flex flex-col items-center gap-1 py-3 rounded-2xl bg-gray-100 text-gray-600"
+              className="flex-1 flex flex-col items-center gap-1 py-3 rounded bg-gray-100 text-gray-600"
             >
               <Pencil size={20} />
               <span className="text-xs font-medium">手动录入</span>
             </button>
             <button
               onClick={() => setInputMode("wechat_view")}
-              className="flex-1 flex flex-col items-center gap-1 py-3 rounded-2xl bg-green-50 text-green-700"
+              className="flex-1 flex flex-col items-center gap-1 py-3 rounded bg-green-50 text-green-700"
             >
               <MessageSquare size={20} />
               <span className="text-xs font-medium">微信聊天</span>

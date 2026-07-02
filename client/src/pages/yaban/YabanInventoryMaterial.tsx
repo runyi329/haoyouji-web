@@ -66,7 +66,7 @@ export default function YabanInventoryMaterial() {
         <>
           {/* 概览卡 */}
           <div className="px-4 pt-4">
-            <div className="bg-white rounded-2xl shadow-sm p-4">
+            <div className="bg-white rounded shadow-sm p-4">
               <div className="flex items-start justify-between">
                 <div className="min-w-0">
                   <div className="text-lg font-bold text-gray-800">{d.name}</div>
@@ -88,10 +88,10 @@ export default function YabanInventoryMaterial() {
 
           {/* 快捷出入库 */}
           <div className="px-4 pt-3 grid grid-cols-2 gap-3">
-            <button onClick={() => navigate("/yaban/inventory/inbound")} className="bg-white rounded-2xl shadow-sm py-3 flex items-center justify-center gap-2 text-green-600">
+            <button onClick={() => navigate("/yaban/inventory/inbound")} className="bg-white rounded shadow-sm py-3 flex items-center justify-center gap-2 text-green-600">
               <ArrowDownToLine className="w-5 h-5" /><span className="text-sm font-medium">入库</span>
             </button>
-            <button onClick={() => navigate("/yaban/inventory/outbound")} className="bg-white rounded-2xl shadow-sm py-3 flex items-center justify-center gap-2 text-orange-600">
+            <button onClick={() => navigate("/yaban/inventory/outbound")} className="bg-white rounded shadow-sm py-3 flex items-center justify-center gap-2 text-orange-600">
               <ArrowUpFromLine className="w-5 h-5" /><span className="text-sm font-medium">出库</span>
             </button>
           </div>
@@ -100,13 +100,13 @@ export default function YabanInventoryMaterial() {
           <div className="px-4 pt-4">
             <div className="text-sm font-bold text-gray-700 mb-2 px-1 flex items-center gap-1.5"><Layers className="w-4 h-4 text-sky-500" />批次明细</div>
             {d.batches.length === 0 ? (
-              <div className="bg-white rounded-2xl shadow-sm py-10 text-center text-sm text-gray-400">暂无库存批次</div>
+              <div className="bg-white rounded shadow-sm py-10 text-center text-sm text-gray-400">暂无库存批次</div>
             ) : (
               <div className="space-y-2.5">
                 {d.batches.map((b) => {
                   const tag = EXP_TAG[b.expiryState];
                   return (
-                    <div key={b.id} className="bg-white rounded-2xl shadow-sm p-3.5 flex items-center justify-between">
+                    <div key={b.id} className="bg-white rounded shadow-sm p-3.5 flex items-center justify-between">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-gray-800">批号 {b.batchNo || "无"}</span>
@@ -130,7 +130,7 @@ export default function YabanInventoryMaterial() {
           {/* 删除 */}
           <div className="px-4 pt-6">
             <button onClick={() => { if (confirm("确认删除该物品？历史流水将保留。")) del.mutate({ id }); }}
-              className="w-full py-3 rounded-xl bg-white text-red-500 text-sm font-medium flex items-center justify-center gap-1.5 shadow-sm">
+              className="w-full py-3 rounded-md bg-white text-red-500 text-sm font-medium flex items-center justify-center gap-1.5 shadow-sm">
               <Trash2 className="w-4 h-4" />删除物品
             </button>
           </div>
@@ -192,7 +192,7 @@ function EditMaterial({
             <div className="flex flex-wrap gap-2">
               {categories.map((c) => (
                 <button key={c.id} onClick={() => setCategoryId(c.id)}
-                  className={`px-3 py-1.5 rounded-full text-xs ${categoryId === c.id ? "bg-sky-500 text-white" : "bg-gray-100 text-gray-500"}`}>{c.name}</button>
+                  className={`px-3 py-1.5 rounded-md text-xs ${categoryId === c.id ? "bg-sky-500 text-white" : "bg-gray-100 text-gray-500"}`}>{c.name}</button>
               ))}
             </div>
           </div>
@@ -207,7 +207,7 @@ function EditMaterial({
           <div><div className="text-xs text-gray-500 mb-1.5">条码 / UDI</div><input value={barcode} onChange={(e) => setBarcode(e.target.value)} className="eInp" /></div>
         </div>
         <div className="sticky bottom-0 bg-white px-5 py-3 border-t border-gray-100">
-          <button onClick={submit} disabled={save.isPending} className="w-full py-3 rounded-xl text-white font-medium flex items-center justify-center" style={{ background: BLUE_GRAD }}>
+          <button onClick={submit} disabled={save.isPending} className="w-full py-3 rounded-md text-white font-medium flex items-center justify-center" style={{ background: BLUE_GRAD }}>
             {save.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : "保存"}
           </button>
         </div>

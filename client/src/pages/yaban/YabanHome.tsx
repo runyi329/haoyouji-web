@@ -58,11 +58,11 @@ function CustomerHomeView() {
       {/* 欢迎卡片 */}
       <div className="max-w-lg mx-auto px-4 mt-6">
         <div
-          className="rounded-2xl p-5 text-white shadow-lg"
+          className="rounded p-5 text-white shadow-lg"
           style={{ background: "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)" }}
         >
           <div className="flex items-center gap-3">
-            <div className="w-14 h-14 rounded-full bg-white/20 ring-2 ring-white/40 overflow-hidden flex items-center justify-center shrink-0">
+            <div className="w-14 h-14 rounded-md bg-white/20 ring-2 ring-white/40 overflow-hidden flex items-center justify-center shrink-0">
               {avatar ? (
                 <img src={avatar} alt="头像" className="w-full h-full object-cover" />
               ) : (
@@ -80,11 +80,11 @@ function CustomerHomeView() {
       {/* 微信咨询大按钮 */}
       <div className="max-w-lg mx-auto px-4 mt-5">
         <button
-          className="w-full rounded-2xl p-5 flex items-center gap-4 shadow-md active:scale-[0.98] transition-transform"
+          className="w-full rounded p-5 flex items-center gap-4 shadow-md active:scale-[0.98] transition-transform"
           style={{ background: "linear-gradient(135deg, #1AAD19 0%, #2DC12C 100%)" }}
           onClick={() => setLocation("/yaban/wechat-chat")}
         >
-          <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+          <div className="w-12 h-12 rounded-md bg-white/20 flex items-center justify-center shrink-0">
             <MessageCircle className="w-7 h-7 text-white" strokeWidth={1.8} />
           </div>
           <div className="text-left flex-1">
@@ -97,7 +97,7 @@ function CustomerHomeView() {
 
       {/* 快捷入口 */}
       <div className="max-w-lg mx-auto px-4 mt-4">
-        <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div className="bg-white rounded shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100">
             <span className="text-xs font-semibold text-gray-400">我的服务</span>
           </div>
@@ -253,7 +253,7 @@ export default function YabanHome() {
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
           {/* 左侧：诊所名称 + 下拉（与 YabanClinicHeader 胶囊样式统一） */}
           <button
-            className={`flex items-center gap-1.5 rounded-full border border-white/30 bg-white/15 px-3 py-1 text-white backdrop-blur-sm transition active:scale-[0.97] ${
+            className={`flex items-center gap-1.5 rounded-md border border-white/30 bg-white/15 px-3 py-1 text-white backdrop-blur-sm transition active:scale-[0.97] ${
               clinics.length > 1 ? "cursor-pointer hover:bg-white/25" : "cursor-default"
             }`}
             style={{ transitionTimingFunction: "cubic-bezier(0.23, 1, 0.32, 1)", transitionDuration: "160ms" }}
@@ -274,24 +274,24 @@ export default function YabanHome() {
             <VersionSwitcher variant="inline" />
             <button
               onClick={() => { window.location.reload(); }}
-              className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center overflow-hidden active:scale-95 transition"
+              className="w-8 h-8 rounded-md bg-white shadow-sm flex items-center justify-center overflow-hidden active:scale-95 transition"
               aria-label="刷新"
             >
-              <img src="/icon-refresh.webp" alt="" className="w-8 h-8 object-cover rounded-full" />
+              <img src="/icon-refresh.webp" alt="" className="w-8 h-8 object-cover rounded-md" />
             </button>
             <button
               onClick={() => toast.info("搜索功能开发中")}
-              className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center overflow-hidden active:scale-95 transition"
+              className="w-8 h-8 rounded-md bg-white shadow-sm flex items-center justify-center overflow-hidden active:scale-95 transition"
               aria-label="搜索"
             >
-              <img src="/icon-search.webp" alt="" className="w-8 h-8 object-cover rounded-full" />
+              <img src="/icon-search.webp" alt="" className="w-8 h-8 object-cover rounded-md" />
             </button>
             <button
               onClick={() => setShowCreateMenu(!showCreateMenu)}
-              className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center overflow-hidden active:scale-95 transition"
+              className="w-8 h-8 rounded-md bg-white shadow-sm flex items-center justify-center overflow-hidden active:scale-95 transition"
               aria-label="新增"
             >
-              <img src="/icon-add.webp" alt="" className="w-8 h-8 object-cover rounded-full" />
+              <img src="/icon-add.webp" alt="" className="w-8 h-8 object-cover rounded-md" />
             </button>
           </div>
         </div>
@@ -301,7 +301,7 @@ export default function YabanHome() {
       {showCreateMenu && (
         <div className="fixed inset-0 z-50" onClick={() => setShowCreateMenu(false)}>
           <div
-            className="absolute top-[52px] right-3 max-w-[200px] rounded-xl overflow-hidden shadow-2xl"
+            className="absolute top-[52px] right-3 max-w-[200px] rounded-md overflow-hidden shadow-2xl"
             style={{ backgroundColor: "#2C3038" }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -326,7 +326,7 @@ export default function YabanHome() {
       {showClinicPicker && (
         <div className="fixed inset-0 z-50" onClick={() => setShowClinicPicker(false)}>
           <div
-            className="absolute top-[56px] left-4 w-72 origin-top-left overflow-hidden rounded-xl border border-gray-100 bg-white shadow-lg"
+            className="absolute top-[56px] left-4 w-72 origin-top-left overflow-hidden rounded-md border border-gray-100 bg-white shadow-lg"
             style={{ animation: "ybClinicIn 150ms cubic-bezier(0.23, 1, 0.32, 1)" }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -377,7 +377,7 @@ export default function YabanHome() {
       {/* 主内容区 */}
       <div className="max-w-lg mx-auto pb-20">
         {/* 上半部分：功能网格（2行×4列，末位为「更多」） */}
-        <div className="bg-white mx-3 mt-3 rounded-xl p-4">
+        <div className="bg-white mx-3 mt-3 rounded-md p-4">
           <div className="grid grid-cols-4 gap-x-2 gap-y-4">
             {homeFeatures.map((feat, idx) => (
               <button
@@ -401,7 +401,7 @@ export default function YabanHome() {
               className="flex flex-col items-center gap-1.5 active:scale-95 transition-transform"
               onClick={() => setLocation("/yaban/features")}
             >
-              <div className="w-14 h-14 flex items-center justify-center rounded-2xl bg-gray-50">
+              <div className="w-14 h-14 flex items-center justify-center rounded bg-gray-50">
                 <Grip className="w-7 h-7 text-[#2196C8]" strokeWidth={1.8} />
               </div>
               <span className="text-[11px] text-gray-600 text-center leading-tight">更多</span>

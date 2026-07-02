@@ -51,7 +51,7 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (v: string)
           key={c.value}
           type="button"
           onClick={() => onChange(c.value)}
-          className="w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all"
+          className="w-7 h-7 rounded-md flex items-center justify-center border-2 transition-all"
           style={{
             backgroundColor: c.value,
             borderColor: value === c.value ? "#1E88D6" : "transparent",
@@ -68,7 +68,7 @@ function ColorPicker({ value, onChange }: { value: string; onChange: (v: string)
 function TagPill({ label, color, onDelete }: { label: string; color: string | null; onDelete?: () => void }) {
   return (
     <span
-      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium text-white"
+      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-medium text-white"
       style={{ backgroundColor: color || "#9E9E9E" }}
     >
       {label}
@@ -162,7 +162,7 @@ function SourceSettingDrawer({
         {/* 弹窗头部 */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100">
           <span className="text-base font-bold text-gray-800">设置来源</span>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100">
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-md bg-gray-100">
             <X className="w-4 h-4 text-gray-500" />
           </button>
         </div>
@@ -173,7 +173,7 @@ function SourceSettingDrawer({
             <p className="text-xs text-gray-400 mb-1.5">来源标题</p>
             <div className="flex gap-2">
               <input
-                className="flex-1 text-sm border border-gray-200 rounded-xl px-3 h-10 outline-none focus:border-[#1E88D6] bg-white"
+                className="flex-1 text-sm border border-gray-200 rounded-md px-3 h-10 outline-none focus:border-[#1E88D6] bg-white"
                 value={editingLabel}
                 onChange={(e) => setEditingLabel(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSaveLabel()}
@@ -181,7 +181,7 @@ function SourceSettingDrawer({
               <button
                 onClick={handleSaveLabel}
                 disabled={updateSource.isPending}
-                className="px-4 h-10 rounded-xl bg-[#1E88D6] text-white text-sm font-medium flex items-center gap-1 disabled:opacity-60"
+                className="px-4 h-10 rounded-md bg-[#1E88D6] text-white text-sm font-medium flex items-center gap-1 disabled:opacity-60"
               >
                 {updateSource.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                 保存
@@ -202,12 +202,12 @@ function SourceSettingDrawer({
 
             <div className="space-y-2">
               {(source.tags ?? []).map((tag) => (
-                <div key={tag.id} className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5">
+                <div key={tag.id} className="rounded-md border border-gray-100 bg-gray-50 px-3 py-2.5">
                   {editingTagId === tag.id ? (
                     <div className="space-y-2">
                       <input
                         autoFocus
-                        className="w-full text-sm border border-[#1E88D6] rounded-lg px-3 h-9 outline-none bg-white"
+                        className="w-full text-sm border border-[#1E88D6] rounded px-3 h-9 outline-none bg-white"
                         value={editingTagLabel}
                         onChange={(e) => setEditingTagLabel(e.target.value)}
                       />
@@ -216,13 +216,13 @@ function SourceSettingDrawer({
                         <button
                           onClick={() => handleSaveTag(tag)}
                           disabled={updateTag.isPending}
-                          className="flex-1 h-9 rounded-xl bg-[#1E88D6] text-white text-sm font-medium"
+                          className="flex-1 h-9 rounded-md bg-[#1E88D6] text-white text-sm font-medium"
                         >
                           {updateTag.isPending ? "保存中…" : "保存"}
                         </button>
                         <button
                           onClick={() => setEditingTagId(null)}
-                          className="h-9 px-4 rounded-xl bg-gray-100 text-gray-500 text-sm"
+                          className="h-9 px-4 rounded-md bg-gray-100 text-gray-500 text-sm"
                         >
                           取消
                         </button>
@@ -245,7 +245,7 @@ function SourceSettingDrawer({
                       <button
                         onClick={() => handleDeleteTag(tag)}
                         disabled={deleteTag.isPending}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-red-50 text-red-400"
+                        className="w-7 h-7 flex items-center justify-center rounded bg-red-50 text-red-400"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -256,10 +256,10 @@ function SourceSettingDrawer({
 
               {/* 新增副标签表单 */}
               {addingTag ? (
-                <div className="rounded-xl border border-[#1E88D6] bg-blue-50/30 px-3 py-3 space-y-2">
+                <div className="rounded-md border border-[#1E88D6] bg-blue-50/30 px-3 py-3 space-y-2">
                   <input
                     autoFocus
-                    className="w-full text-sm border border-gray-200 rounded-lg px-3 h-9 outline-none focus:border-[#1E88D6] bg-white"
+                    className="w-full text-sm border border-gray-200 rounded px-3 h-9 outline-none focus:border-[#1E88D6] bg-white"
                     placeholder="副标签名称，如：路过"
                     value={newTagLabel}
                     onChange={(e) => setNewTagLabel(e.target.value)}
@@ -270,13 +270,13 @@ function SourceSettingDrawer({
                     <button
                       onClick={handleAddTag}
                       disabled={addTag.isPending}
-                      className="flex-1 h-9 rounded-xl bg-[#1E88D6] text-white text-sm font-medium"
+                      className="flex-1 h-9 rounded-md bg-[#1E88D6] text-white text-sm font-medium"
                     >
                       {addTag.isPending ? "添加中…" : "添加"}
                     </button>
                     <button
                       onClick={() => { setAddingTag(false); setNewTagLabel(""); }}
-                      className="h-9 px-4 rounded-xl bg-gray-100 text-gray-500 text-sm"
+                      className="h-9 px-4 rounded-md bg-gray-100 text-gray-500 text-sm"
                     >
                       取消
                     </button>
@@ -285,7 +285,7 @@ function SourceSettingDrawer({
               ) : (
                 <button
                   onClick={() => setAddingTag(true)}
-                  className="w-full flex items-center justify-center gap-1.5 h-9 rounded-xl border border-dashed border-gray-300 text-gray-400 text-sm hover:border-[#1E88D6] hover:text-[#1E88D6] transition-colors"
+                  className="w-full flex items-center justify-center gap-1.5 h-9 rounded-md border border-dashed border-gray-300 text-gray-400 text-sm hover:border-[#1E88D6] hover:text-[#1E88D6] transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   添加副标签
@@ -373,7 +373,7 @@ export default function YabanCustomerSource() {
           </button>
           <span className="text-base font-bold flex-1">顾客来源设置</span>
           <button onClick={() => setIsAdding(true)} aria-label="新增">
-            <img src="/icon-add.webp" alt="" className="w-8 h-8 object-cover rounded-full" />
+            <img src="/icon-add.webp" alt="" className="w-8 h-8 object-cover rounded-md" />
           </button>
         </div>
         <div className="px-4 pb-3">
@@ -387,7 +387,7 @@ export default function YabanCustomerSource() {
         </p>
 
         {/* 来源列表 */}
-        <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
+        <div className="bg-white rounded overflow-hidden shadow-sm">
           {isLoading ? (
             <div className="flex justify-center py-10">
               <Loader2 className="w-5 h-5 text-[#1E88D6] animate-spin" />
@@ -437,7 +437,7 @@ export default function YabanCustomerSource() {
                   {/* 设置按钮 */}
                   <button
                     onClick={() => setSettingSource(src)}
-                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-50 text-gray-400 flex-shrink-0"
+                    className="w-8 h-8 flex items-center justify-center rounded bg-gray-50 text-gray-400 flex-shrink-0"
                   >
                     <Settings className="w-3.5 h-3.5" />
                   </button>
@@ -446,7 +446,7 @@ export default function YabanCustomerSource() {
                   <button
                     onClick={() => handleDelete(src)}
                     disabled={deleteMutation.isPending}
-                    className="w-8 h-8 flex items-center justify-center rounded-lg bg-red-50 text-red-400 flex-shrink-0"
+                    className="w-8 h-8 flex items-center justify-center rounded bg-red-50 text-red-400 flex-shrink-0"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -458,10 +458,10 @@ export default function YabanCustomerSource() {
 
         {/* 新增输入框（仅 isAdding 时显示） */}
         {isAdding && (
-          <div className="bg-white rounded-2xl px-4 py-3 shadow-sm flex items-center gap-2">
+          <div className="bg-white rounded px-4 py-3 shadow-sm flex items-center gap-2">
             <input
               autoFocus
-              className="flex-1 text-sm border border-[#1E88D6] rounded-lg px-3 h-9 outline-none bg-white"
+              className="flex-1 text-sm border border-[#1E88D6] rounded px-3 h-9 outline-none bg-white"
               placeholder="输入来源名称，如：朋友介绍"
               value={addingLabel}
               onChange={(e) => setAddingLabel(e.target.value)}
@@ -470,13 +470,13 @@ export default function YabanCustomerSource() {
             <button
               onClick={handleAdd}
               disabled={addMutation.isPending}
-              className="w-8 h-8 flex items-center justify-center rounded-lg bg-[#1E88D6] text-white flex-shrink-0"
+              className="w-8 h-8 flex items-center justify-center rounded bg-[#1E88D6] text-white flex-shrink-0"
             >
               {addMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
             </button>
             <button
               onClick={() => { setIsAdding(false); setAddingLabel(""); }}
-              className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 text-gray-500 flex-shrink-0"
+              className="w-8 h-8 flex items-center justify-center rounded bg-gray-100 text-gray-500 flex-shrink-0"
             >
               <X className="w-4 h-4" />
             </button>

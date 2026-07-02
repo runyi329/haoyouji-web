@@ -71,27 +71,27 @@ export default function YabanInventory() {
         <div className="grid grid-cols-3 gap-3">
           <button
             onClick={() => navigate("/yaban/inventory/inbound?scan=1")}
-            className="bg-white rounded-2xl shadow-sm py-4 flex flex-col items-center active:scale-95 transition"
+            className="bg-white rounded shadow-sm py-4 flex flex-col items-center active:scale-95 transition"
           >
-            <div className="w-11 h-11 rounded-full flex items-center justify-center mb-2" style={{ background: BLUE_GRAD }}>
+            <div className="w-11 h-11 rounded-md flex items-center justify-center mb-2" style={{ background: BLUE_GRAD }}>
               <ScanLine className="w-6 h-6 text-white" />
             </div>
             <span className="text-[13px] font-medium text-gray-700">扫码入库</span>
           </button>
           <button
             onClick={() => navigate("/yaban/inventory/inbound")}
-            className="bg-white rounded-2xl shadow-sm py-4 flex flex-col items-center active:scale-95 transition"
+            className="bg-white rounded shadow-sm py-4 flex flex-col items-center active:scale-95 transition"
           >
-            <div className="w-11 h-11 rounded-full bg-green-50 flex items-center justify-center mb-2">
+            <div className="w-11 h-11 rounded-md bg-green-50 flex items-center justify-center mb-2">
               <ArrowDownToLine className="w-6 h-6 text-green-500" />
             </div>
             <span className="text-[13px] font-medium text-gray-700">入库</span>
           </button>
           <button
             onClick={() => navigate("/yaban/inventory/outbound")}
-            className="bg-white rounded-2xl shadow-sm py-4 flex flex-col items-center active:scale-95 transition"
+            className="bg-white rounded shadow-sm py-4 flex flex-col items-center active:scale-95 transition"
           >
-            <div className="w-11 h-11 rounded-full bg-orange-50 flex items-center justify-center mb-2">
+            <div className="w-11 h-11 rounded-md bg-orange-50 flex items-center justify-center mb-2">
               <ArrowUpFromLine className="w-6 h-6 text-orange-500" />
             </div>
             <span className="text-[13px] font-medium text-gray-700">领用出库</span>
@@ -103,10 +103,10 @@ export default function YabanInventory() {
       <div className="px-4 pt-3">
         <button
           onClick={() => navigate("/yaban/inventory/list")}
-          className="w-full bg-white rounded-2xl shadow-sm p-4 flex items-center justify-between active:scale-[0.99] transition"
+          className="w-full bg-white rounded shadow-sm p-4 flex items-center justify-between active:scale-[0.99] transition"
         >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-sky-50 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-md bg-sky-50 flex items-center justify-center">
               <Boxes className="w-6 h-6 text-sky-500" />
             </div>
             <div className="text-left">
@@ -129,7 +129,7 @@ export default function YabanInventory() {
           <div className="grid grid-cols-3 gap-3">
             <button
               onClick={() => navigate("/yaban/inventory/list?filter=low")}
-              className="bg-white rounded-2xl shadow-sm py-4 flex flex-col items-center"
+              className="bg-white rounded shadow-sm py-4 flex flex-col items-center"
             >
               <AlertTriangle className={`w-6 h-6 mb-1.5 ${lowCount ? "text-amber-500" : "text-gray-300"}`} />
               <span className={`text-xl font-bold ${lowCount ? "text-amber-600" : "text-gray-300"}`}>{lowCount}</span>
@@ -137,7 +137,7 @@ export default function YabanInventory() {
             </button>
             <button
               onClick={() => navigate("/yaban/inventory/list?filter=near")}
-              className="bg-white rounded-2xl shadow-sm py-4 flex flex-col items-center"
+              className="bg-white rounded shadow-sm py-4 flex flex-col items-center"
             >
               <Clock className={`w-6 h-6 mb-1.5 ${nearCount ? "text-orange-500" : "text-gray-300"}`} />
               <span className={`text-xl font-bold ${nearCount ? "text-orange-600" : "text-gray-300"}`}>{nearCount}</span>
@@ -145,7 +145,7 @@ export default function YabanInventory() {
             </button>
             <button
               onClick={() => navigate("/yaban/inventory/list?filter=expired")}
-              className="bg-white rounded-2xl shadow-sm py-4 flex flex-col items-center"
+              className="bg-white rounded shadow-sm py-4 flex flex-col items-center"
             >
               <CircleAlert className={`w-6 h-6 mb-1.5 ${expiredCount ? "text-red-500" : "text-gray-300"}`} />
               <span className={`text-xl font-bold ${expiredCount ? "text-red-600" : "text-gray-300"}`}>{expiredCount}</span>
@@ -158,7 +158,7 @@ export default function YabanInventory() {
       {/* 近效期/过期明细清单 */}
       {!dash.isLoading && (nearCount > 0 || expiredCount > 0) && (
         <div className="px-4 pt-4">
-          <div className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+          <div className="bg-white rounded shadow-sm p-4 space-y-3">
             {(d?.expired || []).slice(0, 5).map((it: any) => (
               <div key={`e${it.batchId}`} className="flex items-center justify-between">
                 <div className="flex items-center gap-2 min-w-0">
@@ -184,7 +184,7 @@ export default function YabanInventory() {
       {/* 库存充足时的低库存清单 */}
       {!dash.isLoading && lowCount > 0 && (
         <div className="px-4 pt-3">
-          <div className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+          <div className="bg-white rounded shadow-sm p-4 space-y-3">
             <div className="text-xs font-bold text-gray-500">需补货</div>
             {(d?.lowStock || []).slice(0, 6).map((it: any) => (
               <div key={`l${it.id}`} className="flex items-center justify-between">

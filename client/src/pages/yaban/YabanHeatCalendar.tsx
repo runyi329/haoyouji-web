@@ -71,11 +71,11 @@ export default function YabanHeatCalendar({
           <div style={{ display: "flex", gap: 6 }}>
             <div
               onClick={() => onMonthChange(new Date(monthCursor.getFullYear(), monthCursor.getMonth() - 1, 1))}
-              style={{ width: 28, height: 28, borderRadius: 8, background: "#F6F8FA", color: "#647386", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, cursor: "pointer" }}
+              style={{ width: 28, height: 28, borderRadius: 4, background: "#F6F8FA", color: "#647386", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, cursor: "pointer" }}
             >‹</div>
             <div
               onClick={() => onMonthChange(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1))}
-              style={{ width: 28, height: 28, borderRadius: 8, background: "#F6F8FA", color: "#647386", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, cursor: "pointer" }}
+              style={{ width: 28, height: 28, borderRadius: 4, background: "#F6F8FA", color: "#647386", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, cursor: "pointer" }}
             >›</div>
           </div>
         </div>
@@ -105,7 +105,7 @@ export default function YabanHeatCalendar({
               onClick={() => clickable && onSelectDate(d)}
               style={{
                 display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                height: cellH, borderRadius: 10, background: bg,
+                height: cellH, borderRadius: 5, background: bg,
                 cursor: clickable ? "pointer" : "default",
                 position: "relative",
                 border: isSel ? `2px solid ${SKY_D}` : "2px solid transparent",

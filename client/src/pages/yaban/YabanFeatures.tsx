@@ -53,7 +53,7 @@ export default function YabanFeatures() {
           <span className="text-base font-bold">全部功能</span>
           <button
             onClick={() => setLocation("/yaban/features/customize")}
-            className="flex items-center gap-1 text-xs bg-white/15 rounded-full px-2.5 py-1 active:opacity-80"
+            className="flex items-center gap-1 text-xs bg-white/15 rounded-md px-2.5 py-1 active:opacity-80"
           >
             <Settings2 className="w-3.5 h-3.5" />
             编辑首页
@@ -63,7 +63,7 @@ export default function YabanFeatures() {
 
       {/* 内容区：不分组，统一平铺 */}
       <div className="max-w-lg mx-auto pb-20">
-        <div className="bg-white mx-3 mt-3 rounded-xl p-4">
+        <div className="bg-white mx-3 mt-3 rounded-md p-4">
           {features.length === 0 ? (
             <div className="py-8 text-center text-xs text-gray-400">全部功能都已加到首页</div>
           ) : (

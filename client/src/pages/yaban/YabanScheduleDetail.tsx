@@ -110,16 +110,16 @@ export default function YabanScheduleDetail() {
 
       {/* 状态标签 */}
       <div className="bg-white px-4 py-3 border-b border-gray-100">
-        <span className="inline-block px-3 py-1 rounded-full text-xs font-medium" style={{ background: statusInfo.bg, color: statusInfo.color }}>
+        <span className="inline-block px-3 py-1 rounded-md text-xs font-medium" style={{ background: statusInfo.bg, color: statusInfo.color }}>
           {statusInfo.label}
         </span>
       </div>
 
       {/* 患者信息卡片 */}
-      <div className="bg-white mx-4 mt-3 rounded-lg p-4 shadow-sm border border-gray-50">
+      <div className="bg-white mx-4 mt-3 rounded p-4 shadow-sm border border-gray-50">
         <div className="flex items-center gap-3">
           {/* 头像 */}
-          <div className="w-12 h-12 rounded-full bg-sky-100 flex items-center justify-center">
+          <div className="w-12 h-12 rounded-md bg-sky-100 flex items-center justify-center">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1E88D6" strokeWidth="1.5">
               <circle cx="12" cy="8" r="4" />
               <path d="M4 20c0-4 4-7 8-7s8 3 8 7" />
@@ -148,11 +148,11 @@ export default function YabanScheduleDetail() {
       </div>
 
       {/* 快捷操作 */}
-      <div className="bg-white mx-4 mt-3 rounded-lg p-4 shadow-sm border border-gray-50">
+      <div className="bg-white mx-4 mt-3 rounded p-4 shadow-sm border border-gray-50">
         <div className="grid grid-cols-4 gap-3">
           {quickActions.map((action, i) => (
             <button key={i} className="flex flex-col items-center gap-1.5">
-              <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-md bg-gray-50 flex items-center justify-center">
                 <action.icon size={18} className={action.color} />
               </div>
               <span className="text-[11px] text-gray-600">{action.label}</span>
@@ -162,7 +162,7 @@ export default function YabanScheduleDetail() {
       </div>
 
       {/* 详细信息 */}
-      <div className="bg-white mx-4 mt-3 rounded-lg shadow-sm border border-gray-50 overflow-hidden">
+      <div className="bg-white mx-4 mt-3 rounded shadow-sm border border-gray-50 overflow-hidden">
         {detailFields.map((field, i) => (
           <div
             key={i}
@@ -180,11 +180,11 @@ export default function YabanScheduleDetail() {
 
       {/* 底部操作 */}
       <div className="mt-4 px-4 pb-8 space-y-3">
-        <button className="w-full py-2.5 text-center text-sm text-sky-600 bg-white rounded-lg border border-sky-200">
+        <button className="w-full py-2.5 text-center text-sm text-sky-600 bg-white rounded border border-sky-200">
           查看变更记录
         </button>
         <button
-          className="w-full py-2.5 text-center text-sm text-white bg-gradient-to-r from-sky-500 to-sky-400 rounded-lg shadow-sm"
+          className="w-full py-2.5 text-center text-sm text-white bg-gradient-to-r from-sky-500 to-sky-400 rounded shadow-sm"
           onClick={() => setLocation("/yaban/schedule/create")}
         >
           再次预约

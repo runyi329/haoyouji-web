@@ -147,14 +147,14 @@ export default function YabanShopCashier() {
 
       <div className="max-w-lg mx-auto w-full px-3 pt-4 space-y-3 flex-1">
         {/* 金额区 */}
-        <div className="bg-white rounded-xl px-4 py-6 text-center">
+        <div className="bg-white rounded-md px-4 py-6 text-center">
           <p className="text-xs text-gray-400 mb-1">订单号 {orderNo}</p>
           <p className="text-sm text-gray-500 mb-2">支付金额</p>
           <p className="text-[#FF5A5A] text-3xl font-bold">¥{amount}</p>
         </div>
 
         {/* 支付方式 */}
-        <div className="bg-white rounded-xl px-3 py-1">
+        <div className="bg-white rounded-md px-3 py-1">
           <p className="text-sm text-gray-700 px-1 pt-3 pb-1">选择支付方式</p>
 
           {canWechat && (
@@ -186,7 +186,7 @@ export default function YabanShopCashier() {
 
         {/* 模式提示 */}
         {mode === "sandbox" && (
-          <div className="bg-gradient-to-r from-[#E8F4FD] to-[#D6EEFB] rounded-xl px-3 py-2.5 flex items-start gap-2">
+          <div className="bg-gradient-to-r from-[#E8F4FD] to-[#D6EEFB] rounded-md px-3 py-2.5 flex items-start gap-2">
             <ShieldCheck className="w-4 h-4 text-[#1A6E96] mt-0.5 shrink-0" />
             <p className="text-[12px] text-[#1A6E96] leading-relaxed">
               当前为模拟支付模式（测试用），点击支付将直接完成订单，不会真实扣款。门店配置真实商户参数后自动切换为正式收款。
@@ -201,7 +201,7 @@ export default function YabanShopCashier() {
           <button
             onClick={handlePay}
             disabled={paying || (!canWechat && !canAlipay)}
-            className="w-full py-3 rounded-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-60"
+            className="w-full py-3 rounded-md bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-60"
           >
             {paying && <Loader2 className="w-4 h-4 animate-spin" />}
             {paying
@@ -232,7 +232,7 @@ function ChannelOption({
   return (
     <button onClick={onClick} className="w-full flex items-center gap-3 px-1 py-3">
       <span
-        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+        className="w-8 h-8 rounded flex items-center justify-center shrink-0"
         style={{ backgroundColor: color + "1A" }}
       >
         <span className="w-3.5 h-3.5 rounded-sm" style={{ backgroundColor: color }} />
@@ -242,11 +242,11 @@ function ChannelOption({
         <p className="text-[11px] text-gray-400">{desc}</p>
       </div>
       <span
-        className={`w-5 h-5 rounded-full border flex items-center justify-center ${
+        className={`w-5 h-5 rounded-md border flex items-center justify-center ${
           active ? "bg-[#2196C8] border-[#2196C8]" : "border-gray-300"
         }`}
       >
-        {active && <span className="w-2.5 h-2.5 rounded-full bg-white" />}
+        {active && <span className="w-2.5 h-2.5 rounded-md bg-white" />}
       </span>
     </button>
   );

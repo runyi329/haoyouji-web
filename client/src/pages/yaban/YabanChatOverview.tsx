@@ -61,7 +61,7 @@ function WxAvatar({ src, gradient, label }: { src?: string; gradient?: boolean; 
     <div
       className="flex-shrink-0 flex items-center justify-center"
       style={{
-        width: 36, height: 36, borderRadius: 6, overflow: 'hidden',
+        width: 36, height: 36, borderRadius: 4, overflow: 'hidden',
         background: gradient
           ? 'linear-gradient(135deg, #4facfe 0%, #00c6fb 50%, #1a78c2 100%)'
           : '#f0f0f0',
@@ -126,9 +126,9 @@ function AiConfigSection({ tenantId, expanded, onClose }: { tenantId: number | n
             <Loader2 className="w-6 h-6 animate-spin" style={{ color: BRAND }} />
           </div>
         ) : !channelId ? (
-          <div className="bg-white rounded-2xl shadow-sm p-4">
+          <div className="bg-white rounded shadow-sm p-4">
             <div
-              className="rounded-xl p-3 text-xs leading-relaxed"
+              className="rounded-md p-3 text-xs leading-relaxed"
               style={{ backgroundColor: BRAND_LIGHT, color: BRAND }}
             >
               当前诊所尚未绑定企微渠道，请联系管理员在「渠道管理 - 绑定服务商」中完成绑定后，即可在此编辑 AI 配置。
@@ -218,7 +218,7 @@ export default function YabanChatOverview() {
           <button
             onClick={() => setAiConfigOpen(true)}
             aria-label="AI 配置"
-            className="w-8 h-8 rounded-xl flex items-center justify-center active:opacity-70"
+            className="w-8 h-8 rounded-md flex items-center justify-center active:opacity-70"
             style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
           >
             <Settings2 className="w-4 h-4 text-white" />
@@ -233,11 +233,11 @@ export default function YabanChatOverview() {
           {statCards.map((s) => (
             <div
               key={s.label}
-              className="rounded-2xl px-4 py-3 flex items-center gap-3"
+              className="rounded px-4 py-3 flex items-center gap-3"
               style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
             >
               <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                className="w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0"
                 style={{ backgroundColor: 'rgba(255,255,255,0.25)' }}
               >
                 {/* 图标改为白色 */}
@@ -261,7 +261,7 @@ export default function YabanChatOverview() {
       <div className="px-4 pt-4 space-y-3">
 
         {/* ===== 搜索框 ===== */}
-        <div className="bg-white rounded-2xl shadow-sm flex items-center gap-2 px-3 py-2.5">
+        <div className="bg-white rounded shadow-sm flex items-center gap-2 px-3 py-2.5">
           <Search className="w-4 h-4 text-gray-300 flex-shrink-0" />
           <input
             type="text"
@@ -281,7 +281,7 @@ export default function YabanChatOverview() {
           )}
           <button
             onClick={handleSearch}
-            className="text-xs font-medium px-2.5 py-1 rounded-lg"
+            className="text-xs font-medium px-2.5 py-1 rounded"
             style={{ backgroundColor: BRAND_LIGHT, color: BRAND }}
           >
             搜索
@@ -302,14 +302,14 @@ export default function YabanChatOverview() {
             {logs.map((log) => (
               <div
                 key={log.id}
-                className="bg-white rounded-2xl shadow-sm overflow-hidden"
+                className="bg-white rounded shadow-sm overflow-hidden"
               >
                 {/* 头部：昵称 + 时间 */}
                 <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-50">
                   <div className="flex items-center gap-2">
                     <div
                       className="flex-shrink-0 flex items-center justify-center text-white text-xs font-bold"
-                      style={{ width: 28, height: 28, borderRadius: 6, backgroundColor: '#576B95' }}
+                      style={{ width: 28, height: 28, borderRadius: 4, backgroundColor: '#576B95' }}
                     >
                       {(log.nickname || "匿名").charAt(0)}
                     </div>
@@ -362,7 +362,7 @@ export default function YabanChatOverview() {
                 {log.model_used && (
                   <div className="px-4 pb-2.5 pt-1.5 border-t border-gray-50 flex items-center gap-2">
                     <span
-                      className="text-[10px] font-medium px-2 py-0.5 rounded-full"
+                      className="text-[10px] font-medium px-2 py-0.5 rounded-md"
                       style={{ color: BRAND, backgroundColor: BRAND_LIGHT }}
                     >
                       {log.model_used}
@@ -385,7 +385,7 @@ export default function YabanChatOverview() {
             <button
               disabled={page === 0}
               onClick={() => setPage(page - 1)}
-              className="px-4 py-2 rounded-xl text-sm border border-gray-200 text-gray-600 disabled:opacity-40 active:bg-gray-50"
+              className="px-4 py-2 rounded-md text-sm border border-gray-200 text-gray-600 disabled:opacity-40 active:bg-gray-50"
             >
               上一页
             </button>
@@ -395,7 +395,7 @@ export default function YabanChatOverview() {
             <button
               disabled={(page + 1) * PAGE_SIZE >= total}
               onClick={() => setPage(page + 1)}
-              className="px-4 py-2 rounded-xl text-sm border border-gray-200 text-gray-600 disabled:opacity-40 active:bg-gray-50"
+              className="px-4 py-2 rounded-md text-sm border border-gray-200 text-gray-600 disabled:opacity-40 active:bg-gray-50"
             >
               下一页
             </button>

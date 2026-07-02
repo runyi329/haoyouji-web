@@ -76,13 +76,13 @@ function BottomSheet({ title, onClose, children }: {
         style={{ maxHeight: "90vh", overflowY: "auto" }}
       >
         <div className="flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1 rounded-full" style={{ background: "#D7E6F4" }} />
+          <div className="w-10 h-1 rounded-md" style={{ background: "#D7E6F4" }} />
         </div>
         <div className="flex items-center justify-between px-5 py-3" style={{ borderBottom: `1px solid ${Y.divider}` }}>
           <span className="text-base font-semibold" style={{ color: Y.blueDeep }}>{title}</span>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-lg"
+            className="w-8 h-8 rounded-md flex items-center justify-center text-lg"
             style={{ background: Y.blueFaint, color: Y.blueDim }}
           >×</button>
         </div>
@@ -101,7 +101,7 @@ function BlueInput({ label, value, onChange, placeholder, type = "text" }: {
     <div>
       <div className="text-xs mb-1.5" style={{ color: Y.whiteDim }}>{label}</div>
       <div
-        className="flex items-center rounded-xl px-4 py-3"
+        className="flex items-center rounded-md px-4 py-3"
         style={{ background: "#F5F8FB", border: `1px solid ${Y.cardBorder}` }}
       >
         {type === "number" && (
@@ -132,7 +132,7 @@ function BlueBtn({ children, onClick, disabled }: {
     <button
       onClick={onClick}
       disabled={disabled}
-      className="w-full py-3.5 rounded-xl text-sm font-bold text-white active:scale-[0.98] transition-transform disabled:opacity-50"
+      className="w-full py-3.5 rounded-md text-sm font-bold text-white active:scale-[0.98] transition-transform disabled:opacity-50"
       style={{
         background: `linear-gradient(135deg, ${Y.blue} 0%, ${Y.blueLight} 100%)`,
         boxShadow: "0 4px 16px rgba(30,136,214,0.3)",
@@ -145,14 +145,14 @@ function BlueBtn({ children, onClick, disabled }: {
 function SuccessState({ msg, sub, onClose }: { msg: string; sub: string; onClose: () => void }) {
   return (
     <div className="px-5 py-10 flex flex-col items-center space-y-4">
-      <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: "rgba(22,163,74,0.1)" }}>
+      <div className="w-16 h-16 rounded-md flex items-center justify-center" style={{ background: "rgba(22,163,74,0.1)" }}>
         <CheckCircle2 className="w-9 h-9" style={{ color: Y.green }} />
       </div>
       <div className="text-base font-semibold" style={{ color: Y.white }}>{msg}</div>
       <div className="text-sm text-center" style={{ color: Y.whiteDim }}>{sub}</div>
       <button
         onClick={onClose}
-        className="w-full py-3 rounded-xl text-sm font-medium"
+        className="w-full py-3 rounded-md text-sm font-medium"
         style={{ background: Y.blueFaint, color: Y.blueDim }}
       >关闭</button>
     </div>
@@ -169,7 +169,7 @@ function CnyRechargeContent({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="px-5 pb-8 pt-4 space-y-4">
-      <div className="rounded-2xl p-4 space-y-2.5" style={{ background: Y.blueFaint, border: `1px solid ${Y.cardBorder}` }}>
+      <div className="rounded p-4 space-y-2.5" style={{ background: Y.blueFaint, border: `1px solid ${Y.cardBorder}` }}>
         <div className="text-xs font-semibold mb-1" style={{ color: Y.blueDim }}>收款信息</div>
         {[
           { label: "收款账户", value: "招商银行 6214 **** **** 8888" },
@@ -205,7 +205,7 @@ function CnyWithdrawContent({ cnyBalance, onClose }: { cnyBalance: number; onClo
   return (
     <div className="px-5 pb-8 pt-4 space-y-4">
       <div
-        className="rounded-xl px-4 py-3 flex items-center justify-between"
+        className="rounded-md px-4 py-3 flex items-center justify-between"
         style={{ background: Y.blueFaint, border: `1px solid ${Y.cardBorder}` }}
       >
         <span className="text-sm" style={{ color: Y.whiteDim }}>可用余额</span>
@@ -215,7 +215,7 @@ function CnyWithdrawContent({ cnyBalance, onClose }: { cnyBalance: number; onClo
       <div>
         <div className="text-xs mb-1.5" style={{ color: Y.whiteDim }}>提现金额（元）</div>
         <div
-          className="flex items-center rounded-xl px-4 py-3"
+          className="flex items-center rounded-md px-4 py-3"
           style={{ background: "#F5F8FB", border: `1px solid ${Y.cardBorder}` }}
         >
           <span className="text-lg font-bold mr-2" style={{ color: Y.blueDim }}>¥</span>
@@ -229,7 +229,7 @@ function CnyWithdrawContent({ cnyBalance, onClose }: { cnyBalance: number; onClo
           />
           <button
             onClick={() => setAmount(cnyBalance.toFixed(2))}
-            className="text-xs px-2.5 py-1 rounded-lg ml-2 font-medium"
+            className="text-xs px-2.5 py-1 rounded ml-2 font-medium"
             style={{ background: Y.blueFaint, color: Y.blue }}
           >全部</button>
         </div>
@@ -242,7 +242,7 @@ function CnyWithdrawContent({ cnyBalance, onClose }: { cnyBalance: number; onClo
           onChange={(e) => setBankInfo(e.target.value)}
           placeholder="请填写银行卡号、开户行、户名等信息"
           rows={3}
-          className="w-full rounded-xl px-4 py-3 text-sm outline-none resize-none"
+          className="w-full rounded-md px-4 py-3 text-sm outline-none resize-none"
           style={{ background: "#F5F8FB", border: `1px solid ${Y.cardBorder}`, color: Y.white }}
         />
       </div>
@@ -334,7 +334,7 @@ export default function YabanWallet() {
     onRecharge: () => void; onWithdraw: () => void; txList: React.ReactNode;
   }) => (
     <div
-      className="rounded-2xl overflow-hidden bg-white"
+      className="rounded overflow-hidden bg-white"
       style={{ border: `1px solid ${Y.cardBorder}`, boxShadow: "0 4px 20px rgba(30,136,214,0.08)" }}
     >
       {/* 顶部蓝色渐变条 */}
@@ -347,7 +347,7 @@ export default function YabanWallet() {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-2.5">
             <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white"
+              className="w-8 h-8 rounded-md flex items-center justify-center text-sm font-bold text-white"
               style={{ background: `linear-gradient(135deg, ${Y.blue} 0%, ${Y.blueLight} 100%)` }}
             >{icon}</div>
             <span className="text-sm font-semibold tracking-wide" style={{ color: Y.white }}>{label}</span>
@@ -363,14 +363,14 @@ export default function YabanWallet() {
           </div>
           {/* 切换胶囊 */}
           <div
-            className="flex items-center rounded-full p-0.5"
+            className="flex items-center rounded-md p-0.5"
             style={{ background: Y.blueFaint }}
           >
             {(["usdt", "cny"] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className="px-3 h-6 rounded-full text-xs font-bold transition-all"
+                className="px-3 h-6 rounded-md text-xs font-bold transition-all"
                 style={{
                   background: activeTab === tab
                     ? `linear-gradient(135deg, ${Y.blue} 0%, ${Y.blueLight} 100%)`
@@ -400,7 +400,7 @@ export default function YabanWallet() {
         <div className="grid grid-cols-2 gap-2.5 mb-1">
           <button
             onClick={onRecharge}
-            className="flex items-center justify-center space-x-1.5 py-2.5 rounded-xl text-sm font-bold text-white active:scale-[0.97] transition-transform"
+            className="flex items-center justify-center space-x-1.5 py-2.5 rounded-md text-sm font-bold text-white active:scale-[0.97] transition-transform"
             style={{
               background: `linear-gradient(135deg, ${Y.blue} 0%, ${Y.blueLight} 100%)`,
               boxShadow: "0 4px 14px rgba(30,136,214,0.28)",
@@ -411,7 +411,7 @@ export default function YabanWallet() {
           </button>
           <button
             onClick={onWithdraw}
-            className="flex items-center justify-center space-x-1.5 py-2.5 rounded-xl text-sm font-bold active:scale-[0.97] transition-transform"
+            className="flex items-center justify-center space-x-1.5 py-2.5 rounded-md text-sm font-bold active:scale-[0.97] transition-transform"
             style={{ background: "transparent", border: `1px solid ${Y.blue}`, color: Y.blue }}
           >
             <ArrowUpCircle className="w-4 h-4" />
@@ -441,7 +441,7 @@ export default function YabanWallet() {
           {/* 返回 → 回到「我的」 */}
           <button
             onClick={() => setLocation("/yaban/profile")}
-            className="w-8 h-8 rounded-full flex items-center justify-center"
+            className="w-8 h-8 rounded-md flex items-center justify-center"
             style={{ background: "rgba(255,255,255,0.2)" }}
           >
             <ArrowLeft className="w-4 h-4 text-white" />
@@ -452,7 +452,7 @@ export default function YabanWallet() {
           {/* 右侧：明细 */}
           <button
             onClick={() => setLocation(activeTab === "usdt" ? "/wallet/transactions?from=yaban" : "/wallet/cny-transactions?from=yaban")}
-            className="px-2.5 h-7 rounded-full text-xs font-medium text-white"
+            className="px-2.5 h-7 rounded-md text-xs font-medium text-white"
             style={{ background: "rgba(255,255,255,0.2)" }}
           >
             明细
@@ -490,7 +490,7 @@ export default function YabanWallet() {
                         <img
                           src={`/flags/${(tx as any).wcCode}.png`}
                           alt={(tx as any).wcCode}
-                          className="w-7 h-7 rounded-full object-cover flex-shrink-0"
+                          className="w-7 h-7 rounded-md object-cover flex-shrink-0"
                         />
                       ) : null}
                       <div>
@@ -549,7 +549,7 @@ export default function YabanWallet() {
                         <img
                           src={`/flags/${(tx as any).wcCode}.png`}
                           alt={(tx as any).wcCode}
-                          className="w-7 h-7 rounded-full object-cover flex-shrink-0"
+                          className="w-7 h-7 rounded-md object-cover flex-shrink-0"
                         />
                       ) : null}
                       <div>

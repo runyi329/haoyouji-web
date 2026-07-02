@@ -190,7 +190,7 @@ export default function YabanCustomerRegister() {
         <button
           onClick={handleSubmit}
           disabled={submitting}
-          className="w-full py-3 rounded-xl text-white text-[16px] font-semibold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-60"
+          className="w-full py-3 rounded-md text-white text-[16px] font-semibold flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-60"
           style={{ background: `linear-gradient(135deg, ${SKY} 0%, ${SKY_D} 100%)` }}
         >
           <Check className="w-5 h-5" />
@@ -215,7 +215,7 @@ export default function YabanCustomerRegister() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+    <div className="bg-white rounded-md border border-gray-100 overflow-hidden">
       <div className="px-4 pt-3 pb-1 text-[13px] font-semibold" style={{ color: SKY }}>
         {title}
       </div>
@@ -261,7 +261,7 @@ function Pills({
         <button
           key={opt}
           onClick={() => onChange(opt)}
-          className="px-3.5 py-1.5 rounded-full text-[14px] transition-colors"
+          className="px-3.5 py-1.5 rounded-md text-[14px] transition-colors"
           style={
             value === opt
               ? { background: SKY, color: "#fff" }

@@ -109,7 +109,7 @@ export default function YabanFollowUp() {
             >
               {tab.label}
               {activeTab === tab.id && (
-                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-sky-500 rounded-full" />
+                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-sky-500 rounded-md" />
               )}
             </button>
           ))}
@@ -123,7 +123,7 @@ export default function YabanFollowUp() {
         ) : list.length === 0 ? (
           /* 空状态 */
           <div className="flex flex-col items-center justify-center py-32">
-            <div className="w-24 h-24 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+            <div className="w-24 h-24 rounded-md bg-gray-100 flex items-center justify-center mb-4">
               <FileText className="w-10 h-10 text-gray-300" />
             </div>
             <p className="text-gray-400 text-sm">暂无随访</p>

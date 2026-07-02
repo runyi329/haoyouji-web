@@ -153,7 +153,7 @@ export default function ToothPicker({
 
       {/* 恒牙 / 乳牙切换 */}
       <div className="px-4 py-3 shrink-0">
-        <div className="flex bg-gray-100 rounded-lg p-1">
+        <div className="flex bg-gray-100 rounded p-1">
           {[
             { key: "perm" as Dentition, label: "恒牙（成人）" },
             { key: "primary" as Dentition, label: "乳牙（儿童）" },
@@ -209,7 +209,7 @@ export default function ToothPicker({
             {sortedSelected.map((code) => (
               <span
                 key={code}
-                className="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-full text-xs"
+                className="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-md text-xs"
                 style={{ backgroundColor: "#E8F2FB", color: ACCENT }}
               >
                 {code}

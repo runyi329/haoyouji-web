@@ -66,11 +66,11 @@ export default function YabanShopCoupons() {
         </div>
         <div className="flex gap-2 px-3 pb-3">
           <button onClick={() => setTab("claim")}
-            className={`flex-1 py-2 rounded-full text-sm font-medium ${tab === "claim" ? "bg-white text-[#2196C8]" : "bg-white/20 text-white"}`}>
+            className={`flex-1 py-2 rounded-md text-sm font-medium ${tab === "claim" ? "bg-white text-[#2196C8]" : "bg-white/20 text-white"}`}>
             领券中心
           </button>
           <button onClick={() => setTab("mine")}
-            className={`flex-1 py-2 rounded-full text-sm font-medium ${tab === "mine" ? "bg-white text-[#2196C8]" : "bg-white/20 text-white"}`}>
+            className={`flex-1 py-2 rounded-md text-sm font-medium ${tab === "mine" ? "bg-white text-[#2196C8]" : "bg-white/20 text-white"}`}>
             我的优惠券
           </button>
         </div>
@@ -84,7 +84,7 @@ export default function YabanShopCoupons() {
             <Empty text="暂无可领取的优惠券" />
           ) : (
             (claimable.data as any[]).map((c) => (
-              <div key={c.id} className="bg-white rounded-2xl overflow-hidden flex">
+              <div key={c.id} className="bg-white rounded overflow-hidden flex">
                 <div className="w-24 bg-gradient-to-br from-[#2196C8] to-[#3BA9E0] flex flex-col items-center justify-center py-4">
                   {renderAmount(c)}
                 </div>
@@ -97,7 +97,7 @@ export default function YabanShopCoupons() {
                   <button
                     onClick={() => claim.mutate({ couponId: c.id })}
                     disabled={claim.isPending}
-                    className="px-4 py-1.5 rounded-full bg-[#E2452F] text-white text-sm shrink-0"
+                    className="px-4 py-1.5 rounded-md bg-[#E2452F] text-white text-sm shrink-0"
                   >领取</button>
                 </div>
               </div>
@@ -111,7 +111,7 @@ export default function YabanShopCoupons() {
           (mine.data as any[]).map((c) => {
             const used = c.status !== "unused";
             return (
-              <div key={c.uc_id} className={`bg-white rounded-2xl overflow-hidden flex ${used ? "opacity-60" : ""}`}>
+              <div key={c.uc_id} className={`bg-white rounded overflow-hidden flex ${used ? "opacity-60" : ""}`}>
                 <div className={`w-24 flex flex-col items-center justify-center py-4 ${used ? "bg-gray-300" : "bg-gradient-to-br from-[#2196C8] to-[#3BA9E0]"}`}>
                   {renderAmount(c)}
                 </div>

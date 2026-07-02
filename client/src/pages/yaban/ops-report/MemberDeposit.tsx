@@ -13,7 +13,7 @@ export default function MemberDeposit() {
           { label:"本月新增", value:d.newMembersThisMonth, unit:"人", color:"#F59E0B", bg:"#FFFBEB" },
           { label:"人均储值", value:`¥${d.avgDepositPerMember.toLocaleString()}`, unit:"", color:"#9C27B0", bg:"#FDF4FF" },
         ].map((item, i) => (
-          <div key={i} style={{ background:item.bg, borderRadius:10, padding:"10px 12px" }}>
+          <div key={i} style={{ background:item.bg, borderRadius: 5, padding:"10px 12px" }}>
             <div style={{ fontSize:10, color:"#9CA3AF", marginBottom:4 }}>{item.label}</div>
             <div style={{ fontSize:17, fontWeight:700, color:item.color }}>{item.value}<span style={{ fontSize:11, fontWeight:400 }}>{item.unit}</span></div>
           </div>
@@ -24,8 +24,8 @@ export default function MemberDeposit() {
           <span style={{ fontSize:11, color:"#6B7280" }}>储值消耗 <strong style={{ color:"#1F2937" }}>{d.usedDeposit.toFixed(1)}万</strong></span>
           <span style={{ fontSize:11, color:"#6B7280" }}>总储值 <strong style={{ color:"#1F2937" }}>{d.totalDeposit.toFixed(1)}万</strong></span>
         </div>
-        <div style={{ height:8, background:"#F3F4F6", borderRadius:4, overflow:"hidden" }}>
-          <div style={{ height:"100%", width:`${usedPct}%`, background:"linear-gradient(90deg,#1E88D6,#3BA9E0)", borderRadius:4 }} />
+        <div style={{ height:8, background:"#F3F4F6", borderRadius: 4, overflow:"hidden" }}>
+          <div style={{ height:"100%", width:`${usedPct}%`, background:"linear-gradient(90deg,#1E88D6,#3BA9E0)", borderRadius: 4 }} />
         </div>
         <div style={{ fontSize:11, color:"#1E88D6", fontWeight:600, marginTop:4 }}>已消耗 {usedPct}%</div>
       </div>

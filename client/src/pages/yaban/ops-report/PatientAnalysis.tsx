@@ -13,7 +13,7 @@ export default function PatientAnalysis() {
           { label: "复诊率", value: `${d.returnRate}%`, color: "#F59E0B" },
           { label: "平均年龄", value: `${d.avgAge}岁`, color: "#9C27B0" },
         ].map((item, i) => (
-          <div key={i} style={{ background: "#F8FAFC", borderRadius: 10, padding: "10px 12px" }}>
+          <div key={i} style={{ background: "#F8FAFC", borderRadius: 5, padding: "10px 12px" }}>
             <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 4 }}>{item.label}</div>
             <div style={{ fontSize: 18, fontWeight: 700, color: item.color }}>{item.value}</div>
           </div>
@@ -30,11 +30,11 @@ export default function PatientAnalysis() {
         </div>
       ))}
       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        <div style={{ flex: 1, background: "#EAF4FE", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
+        <div style={{ flex: 1, background: "#EAF4FE", borderRadius: 4, padding: "8px 10px", textAlign: "center" }}>
           <div style={{ fontSize: 10, color: "#6B7280" }}>男</div>
           <div style={{ fontSize: 16, fontWeight: 700, color: "#1E88D6" }}>{d.genderMale}%</div>
         </div>
-        <div style={{ flex: 1, background: "#FDF2F8", borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
+        <div style={{ flex: 1, background: "#FDF2F8", borderRadius: 4, padding: "8px 10px", textAlign: "center" }}>
           <div style={{ fontSize: 10, color: "#6B7280" }}>女</div>
           <div style={{ fontSize: 16, fontWeight: 700, color: "#EC4899" }}>{d.genderFemale}%</div>
         </div>

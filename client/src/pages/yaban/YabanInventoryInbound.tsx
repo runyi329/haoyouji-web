@@ -124,14 +124,14 @@ export default function YabanInventoryInbound() {
 
       {/* 搜索添加物品 */}
       <div className="px-4 pt-4">
-        <div className="flex items-center bg-white rounded-full px-3 py-2 shadow-sm">
+        <div className="flex items-center bg-white rounded-md px-3 py-2 shadow-sm">
           <Search className="w-4 h-4 text-gray-400" />
           <input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="搜索要入库的物品"
             className="flex-1 bg-transparent outline-none text-sm text-gray-700 px-2" />
           {keyword && <X className="w-4 h-4 text-gray-400" onClick={() => setKeyword("")} />}
         </div>
         {keyword.trim() && (
-          <div className="mt-2 bg-white rounded-2xl shadow-sm overflow-hidden">
+          <div className="mt-2 bg-white rounded shadow-sm overflow-hidden">
             {listQuery.isLoading ? (
               <div className="py-6 flex justify-center text-gray-400"><Loader2 className="w-5 h-5 animate-spin" /></div>
             ) : (listQuery.data?.items || []).length === 0 ? (
@@ -156,14 +156,14 @@ export default function YabanInventoryInbound() {
       <div className="px-4 pt-4">
         <div className="text-sm font-bold text-gray-700 mb-2 px-1">入库清单 ({lines.length})</div>
         {lines.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-gray-400 bg-white rounded-2xl shadow-sm">
+          <div className="flex flex-col items-center justify-center py-12 text-gray-400 bg-white rounded shadow-sm">
             <PackagePlus className="w-10 h-10 mb-2" />
             <p className="text-sm">扫码或搜索添加物品</p>
           </div>
         ) : (
           <div className="space-y-2.5">
             {lines.map((l, idx) => (
-              <div key={idx} className="bg-white rounded-2xl shadow-sm p-3.5">
+              <div key={idx} className="bg-white rounded shadow-sm p-3.5">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-sm font-medium text-gray-800">{l.name}</span>
                   <Trash2 className="w-4 h-4 text-gray-300" onClick={() => setLines((p) => p.filter((_, i) => i !== idx))} />
@@ -184,16 +184,16 @@ export default function YabanInventoryInbound() {
       {lines.length > 0 && (
         <div className="px-4 pt-4 space-y-3">
           <input value={supplier} onChange={(e) => setSupplier(e.target.value)} placeholder="供应商（选填）"
-            className="w-full bg-white rounded-xl px-4 py-3 text-sm outline-none shadow-sm" />
+            className="w-full bg-white rounded-md px-4 py-3 text-sm outline-none shadow-sm" />
           <input value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="备注（选填）"
-            className="w-full bg-white rounded-xl px-4 py-3 text-sm outline-none shadow-sm" />
+            className="w-full bg-white rounded-md px-4 py-3 text-sm outline-none shadow-sm" />
         </div>
       )}
 
       {/* 底部提交 */}
       <div className="fixed bottom-0 inset-x-0 bg-white px-4 py-3 border-t border-gray-100 z-30">
         <button onClick={submit} disabled={inbound.isPending || lines.length === 0}
-          className="w-full py-3 rounded-xl text-white font-medium flex items-center justify-center disabled:opacity-50" style={{ background: BLUE_GRAD }}>
+          className="w-full py-3 rounded-md text-white font-medium flex items-center justify-center disabled:opacity-50" style={{ background: BLUE_GRAD }}>
           {inbound.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : <><CheckCircle2 className="w-5 h-5 mr-1.5" />确认入库 ({lines.length})</>}
         </button>
       </div>
@@ -210,8 +210,8 @@ export default function YabanInventoryInbound() {
               <input autoFocus value={scanVal} onChange={(e) => setScanVal(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") doScan(); }}
                 placeholder="对准条码 / 手动输入后回车"
-                className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none" />
-              <button onClick={doScan} className="px-5 rounded-xl text-white font-medium" style={{ background: BLUE_GRAD }}>查找</button>
+                className="flex-1 border border-gray-200 rounded-md px-4 py-3 text-sm outline-none" />
+              <button onClick={doScan} className="px-5 rounded-md text-white font-medium" style={{ background: BLUE_GRAD }}>查找</button>
             </div>
             <p className="text-xs text-gray-400 mt-3">支持外接扫码枪，扫描后自动带出物品；未绑定条码请先到库存一览编辑物品。</p>
           </div>
@@ -256,27 +256,27 @@ function BatchEditor({
           <div>
             <div className="text-xs text-gray-500 mb-1.5">入库数量（{item.unit}）<span className="text-red-400">*</span></div>
             <input value={qty} onChange={(e) => setQty(e.target.value)} inputMode="decimal"
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none" />
+              className="w-full border border-gray-200 rounded-md px-4 py-3 text-sm outline-none" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <div className="text-xs text-gray-500 mb-1.5">批号</div>
               <input value={batchNo} onChange={(e) => setBatchNo(e.target.value)} placeholder="选填"
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none" />
+                className="w-full border border-gray-200 rounded-md px-4 py-3 text-sm outline-none" />
             </div>
             <div>
               <div className="text-xs text-gray-500 mb-1.5">有效期至</div>
               <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)}
-                className="w-full border border-gray-200 rounded-xl px-3 py-3 text-sm outline-none" />
+                className="w-full border border-gray-200 rounded-md px-3 py-3 text-sm outline-none" />
             </div>
           </div>
           <div>
             <div className="text-xs text-gray-500 mb-1.5">采购单价（元）</div>
             <input value={costPrice} onChange={(e) => setCostPrice(e.target.value)} inputMode="decimal" placeholder="选填"
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none" />
+              className="w-full border border-gray-200 rounded-md px-4 py-3 text-sm outline-none" />
           </div>
         </div>
-        <button onClick={confirm} className="w-full mt-5 py-3 rounded-xl text-white font-medium" style={{ background: BLUE_GRAD }}>
+        <button onClick={confirm} className="w-full mt-5 py-3 rounded-md text-white font-medium" style={{ background: BLUE_GRAD }}>
           加入清单
         </button>
       </div>

@@ -107,7 +107,7 @@ function Avatar({ src, alt, fallback, gradient }: { src: string; alt: string; fa
       style={{
         width: 40,
         height: 40,
-        borderRadius: 8,
+        borderRadius: 4,
         overflow: "hidden",
         background: gradient
           ? "linear-gradient(135deg, #4facfe 0%, #00c6fb 50%, #1a78c2 100%)"
@@ -166,9 +166,9 @@ function AiMessageBubble({
             <span className="text-red-500">发送失败，请重试</span>
           ) : msg.sending ? (
             <span className="flex items-center gap-1 text-gray-400">
-              <span className="inline-block w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-              <span className="inline-block w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-              <span className="inline-block w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+              <span className="inline-block w-1.5 h-1.5 bg-gray-400 rounded-md animate-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="inline-block w-1.5 h-1.5 bg-gray-400 rounded-md animate-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="inline-block w-1.5 h-1.5 bg-gray-400 rounded-md animate-bounce" style={{ animationDelay: "300ms" }} />
             </span>
           ) : (
             text
@@ -709,7 +709,7 @@ export default function YabanWechatChat() {
             ].map((item) => (
               <div key={item.label} className="flex flex-col items-center gap-1">
                 <div
-                  className="w-14 h-14 rounded-xl flex items-center justify-center text-2xl active:opacity-60"
+                  className="w-14 h-14 rounded-md flex items-center justify-center text-2xl active:opacity-60"
                   style={{ backgroundColor: "#fff" }}
                 >
                   {item.icon}
@@ -745,7 +745,7 @@ export default function YabanWechatChat() {
                 width: 200,
                 height: 64,
                 backgroundColor: "#C8F069",
-                borderRadius: 12,
+                borderRadius: 6,
               }}
             >
               <SoundWave />
@@ -754,7 +754,7 @@ export default function YabanWechatChat() {
             {/* 取消 / 转文字 两个区域 */}
             <div className="flex px-4 gap-3 mb-3">
               <div
-                className="flex-1 flex items-center justify-center rounded-2xl"
+                className="flex-1 flex items-center justify-center rounded"
                 style={{
                   height: 56,
                   backgroundColor: recordState === "cancel" ? "#aaa" : "#d8d8d8",
@@ -768,7 +768,7 @@ export default function YabanWechatChat() {
                 </span>
               </div>
               <div
-                className="flex-1 flex items-center justify-center rounded-2xl"
+                className="flex-1 flex items-center justify-center rounded"
                 style={{
                   height: 56,
                   backgroundColor: recordState === "toText" ? "#aaa" : "#d8d8d8",

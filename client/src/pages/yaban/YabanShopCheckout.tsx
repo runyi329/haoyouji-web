@@ -105,10 +105,10 @@ export default function YabanShopCheckout() {
 
       <div className="max-w-lg mx-auto px-3 pt-3 space-y-2">
         {/* 商品清单 */}
-        <div className="bg-white rounded-xl p-3 space-y-3">
+        <div className="bg-white rounded-md p-3 space-y-3">
           {rows.map(({ item, product }) => (
             <div key={item.id} className="flex gap-3">
-              <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-[#EAF6FC] to-[#D6EEFB] shrink-0 overflow-hidden flex items-center justify-center">
+              <div className="w-16 h-16 rounded bg-gradient-to-br from-[#EAF6FC] to-[#D6EEFB] shrink-0 overflow-hidden flex items-center justify-center">
                 {product!.image ? (
                   <img src={product!.image} alt={product!.name} className="w-full h-full object-cover" />
                 ) : (
@@ -129,7 +129,7 @@ export default function YabanShopCheckout() {
 
         {/* 诊疗项目提示 */}
         {hasService && (
-          <div className="bg-gradient-to-r from-[#E8F4FD] to-[#D6EEFB] rounded-xl px-3 py-2.5">
+          <div className="bg-gradient-to-r from-[#E8F4FD] to-[#D6EEFB] rounded-md px-3 py-2.5">
             <p className="text-[12px] text-[#1A6E96] leading-relaxed">
               订单含诊疗项目，线上支付为预约定金或诊疗预约，余款及方案以到院面诊为准。
             </p>
@@ -139,7 +139,7 @@ export default function YabanShopCheckout() {
         {/* 优惠券 */}
         <button
           onClick={() => setShowCoupon(true)}
-          className="w-full bg-white rounded-xl px-3 py-3 flex items-center justify-between"
+          className="w-full bg-white rounded-md px-3 py-3 flex items-center justify-between"
         >
           <span className="text-sm text-gray-700">优惠券</span>
           <span className="text-sm">
@@ -155,18 +155,18 @@ export default function YabanShopCheckout() {
         </button>
 
         {/* 备注 */}
-        <div className="bg-white rounded-xl px-3 py-3">
+        <div className="bg-white rounded-md px-3 py-3">
           <p className="text-sm text-gray-700 mb-2">订单备注</p>
           <input
             value={remark}
             onChange={(e) => setRemark(e.target.value)}
             placeholder="选填，如到院时间、联系方式等"
-            className="w-full bg-[#F5F7FA] rounded-lg px-3 py-2 text-sm text-gray-700 outline-none placeholder:text-gray-400"
+            className="w-full bg-[#F5F7FA] rounded px-3 py-2 text-sm text-gray-700 outline-none placeholder:text-gray-400"
           />
         </div>
 
         {/* 支付方式（提交后进入收银台可再次确认） */}
-        <div className="bg-white rounded-xl px-3 py-1">
+        <div className="bg-white rounded-md px-3 py-1">
           <p className="text-sm text-gray-700 px-1 pt-2 pb-1">支付方式</p>
           <PayOption
             label="微信支付"
@@ -198,7 +198,7 @@ export default function YabanShopCheckout() {
           <button
             onClick={handleSubmit}
             disabled={createOrder.isPending}
-            className="px-6 py-2.5 rounded-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-medium flex items-center gap-1.5 disabled:opacity-60"
+            className="px-6 py-2.5 rounded-md bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white text-sm font-medium flex items-center gap-1.5 disabled:opacity-60"
           >
             {createOrder.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
             {createOrder.isPending ? "提交中" : "提交订单"}
@@ -217,7 +217,7 @@ export default function YabanShopCheckout() {
             <div className="p-3 space-y-2">
               <button
                 onClick={() => { setCouponId(null); setShowCoupon(false); }}
-                className={`w-full text-left bg-white rounded-xl px-3 py-3 text-sm ${couponId === null ? "ring-2 ring-[#2196C8]" : ""}`}
+                className={`w-full text-left bg-white rounded-md px-3 py-3 text-sm ${couponId === null ? "ring-2 ring-[#2196C8]" : ""}`}
               >不使用优惠券</button>
               {coupons.length === 0 && (
                 <p className="text-center text-gray-400 text-sm py-8">暂无可用优惠券</p>
@@ -227,7 +227,7 @@ export default function YabanShopCheckout() {
                   key={c.uc_id}
                   disabled={!c.eligible}
                   onClick={() => { setCouponId(c.uc_id); setShowCoupon(false); }}
-                  className={`w-full text-left bg-white rounded-xl px-3 py-3 flex items-center justify-between ${couponId === c.uc_id ? "ring-2 ring-[#2196C8]" : ""} ${!c.eligible ? "opacity-50" : ""}`}
+                  className={`w-full text-left bg-white rounded-md px-3 py-3 flex items-center justify-between ${couponId === c.uc_id ? "ring-2 ring-[#2196C8]" : ""} ${!c.eligible ? "opacity-50" : ""}`}
                 >
                   <div>
                     <p className="text-sm font-medium text-gray-800">{c.name}</p>
@@ -265,7 +265,7 @@ function PayOption({
   return (
     <button onClick={onClick} className="w-full flex items-center gap-3 px-1 py-3">
       <span
-        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+        className="w-8 h-8 rounded flex items-center justify-center shrink-0"
         style={{ backgroundColor: color + "1A" }}
       >
         <span className="w-3.5 h-3.5 rounded-sm" style={{ backgroundColor: color }} />
@@ -275,7 +275,7 @@ function PayOption({
         <p className="text-[11px] text-gray-400">{desc}</p>
       </div>
       <span
-        className={`w-5 h-5 rounded-full border flex items-center justify-center ${
+        className={`w-5 h-5 rounded-md border flex items-center justify-center ${
           active ? "bg-[#2196C8] border-[#2196C8]" : "border-gray-300"
         }`}
       >

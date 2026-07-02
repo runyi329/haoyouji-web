@@ -54,7 +54,7 @@ export default function YabanShopAdminDashboard() {
           </div>
 
           {/* 近7天成交趋势 */}
-          <div className="bg-white rounded-xl p-4">
+          <div className="bg-white rounded-md p-4">
             <p className="text-sm font-bold text-gray-800 mb-3">近 7 天成交趋势</p>
             {(data?.recentDays ?? []).length === 0 ? (
               <p className="text-xs text-gray-400 py-6 text-center">暂无成交数据</p>
@@ -73,14 +73,14 @@ export default function YabanShopAdminDashboard() {
           </div>
 
           {/* 订单状态分布 */}
-          <div className="bg-white rounded-xl p-4">
+          <div className="bg-white rounded-md p-4">
             <p className="text-sm font-bold text-gray-800 mb-3">订单状态分布</p>
             {(data?.statusDist ?? []).length === 0 ? (
               <p className="text-xs text-gray-400 py-4 text-center">暂无订单</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {(data?.statusDist ?? []).map((s) => (
-                  <div key={s.status} className="px-3 py-1.5 rounded-lg bg-[#F5F7FA] text-xs text-gray-600">
+                  <div key={s.status} className="px-3 py-1.5 rounded bg-[#F5F7FA] text-xs text-gray-600">
                     {STATUS_LABEL[s.status] || s.status} <span className="font-bold text-[#2196C8]">{s.count}</span>
                   </div>
                 ))}
@@ -89,7 +89,7 @@ export default function YabanShopAdminDashboard() {
           </div>
 
           {/* 热销 Top */}
-          <div className="bg-white rounded-xl p-4">
+          <div className="bg-white rounded-md p-4">
             <p className="text-sm font-bold text-gray-800 mb-3">热销商品 Top10</p>
             {(data?.topProducts ?? []).length === 0 ? (
               <p className="text-xs text-gray-400 py-4 text-center">暂无销售数据</p>
@@ -114,9 +114,9 @@ export default function YabanShopAdminDashboard() {
 
 function MetricCard({ icon, label, value, accent }: { icon: React.ReactNode; label: string; value: string; accent: string }) {
   return (
-    <div className="bg-white rounded-xl p-3">
+    <div className="bg-white rounded-md p-3">
       <div className="flex items-center gap-2 mb-2" style={{ color: accent }}>
-        <span className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: accent + "1A" }}>{icon}</span>
+        <span className="w-8 h-8 rounded flex items-center justify-center" style={{ backgroundColor: accent + "1A" }}>{icon}</span>
       </div>
       <p className="text-[11px] text-gray-400">{label}</p>
       <p className="text-base font-bold text-gray-800 mt-0.5">{value}</p>

@@ -121,7 +121,7 @@ export default function YabanCalendar() {
 
   return (
     <div
-      className="bg-white mx-3 mt-2 rounded-2xl overflow-hidden"
+      className="bg-white mx-3 mt-2 rounded overflow-hidden"
       style={{
         boxShadow: "0 8px 32px rgba(0, 140, 210, 0.06), 0 2px 8px rgba(0,0,0,0.04)",
       }}
@@ -137,7 +137,7 @@ export default function YabanCalendar() {
         <div className="flex items-center gap-2">
           <button
             onClick={prevMonth}
-            className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-transform"
+            className="w-7 h-7 rounded-md flex items-center justify-center active:scale-90 transition-transform"
             style={{
               background: "linear-gradient(145deg, #FFFFFF, #F0F4F8)",
               boxShadow: "2px 2px 4px rgba(0,0,0,0.05), -1px -1px 3px rgba(255,255,255,0.9)",
@@ -147,7 +147,7 @@ export default function YabanCalendar() {
           </button>
 
           <div
-            className="px-3 py-1.5 rounded-full text-center"
+            className="px-3 py-1.5 rounded-md text-center"
             style={{
               background: "linear-gradient(145deg, #4DB8E8, #2196C8)",
               boxShadow: "0 3px 8px rgba(33, 150, 200, 0.25), inset 0 1px 2px rgba(255,255,255,0.3)",
@@ -160,7 +160,7 @@ export default function YabanCalendar() {
 
           <button
             onClick={nextMonth}
-            className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-transform"
+            className="w-7 h-7 rounded-md flex items-center justify-center active:scale-90 transition-transform"
             style={{
               background: "linear-gradient(145deg, #FFFFFF, #F0F4F8)",
               boxShadow: "2px 2px 4px rgba(0,0,0,0.05), -1px -1px 3px rgba(255,255,255,0.9)",
@@ -219,7 +219,7 @@ export default function YabanCalendar() {
               return (
                 <div
                   key={di}
-                  className="relative rounded-lg overflow-hidden flex flex-col items-center"
+                  className="relative rounded overflow-hidden flex flex-col items-center"
                   style={{
                     height: "48px",
                     background: todayMark
@@ -270,7 +270,7 @@ export default function YabanCalendar() {
       {/* 5个Tab切换栏 - 淡蓝色3D胶囊 */}
       <div className="px-3 pb-3 pt-1">
         <div
-          className="flex rounded-full p-1"
+          className="flex rounded-md p-1"
           style={{
             background: "linear-gradient(145deg, #EDF2F7, #E2E8F0)",
             boxShadow: "inset 2px 2px 4px rgba(0,0,0,0.05), inset -1px -1px 3px rgba(255,255,255,0.7)",
@@ -279,7 +279,7 @@ export default function YabanCalendar() {
           {TABS.map((t, i) => (
             <button
               key={t.id}
-              className={`flex-1 py-2 rounded-full text-[10px] font-bold transition-all duration-200 ${
+              className={`flex-1 py-2 rounded-md text-[10px] font-bold transition-all duration-200 ${
                 activeTab === i ? "text-white" : "text-gray-500"
               }`}
               style={

@@ -14,8 +14,8 @@ export default function AppointmentFunnel() {
               <span style={{ fontSize:10, color:"#9CA3AF", marginLeft:6 }}>{step.pct}%</span>
             </div>
           </div>
-          <div style={{ height:8, background:"#F3F4F6", borderRadius:4, overflow:"hidden" }}>
-            <div style={{ height:"100%", width:`${step.pct}%`, background:`rgba(30,136,214,${0.4 + i*0.12})`, borderRadius:4 }} />
+          <div style={{ height:8, background:"#F3F4F6", borderRadius: 4, overflow:"hidden" }}>
+            <div style={{ height:"100%", width:`${step.pct}%`, background:`rgba(30,136,214,${0.4 + i*0.12})`, borderRadius: 4 }} />
           </div>
           {i < data.length-1 && (
             <div style={{ fontSize:10, color:"#9CA3AF", textAlign:"right", marginTop:2 }}>

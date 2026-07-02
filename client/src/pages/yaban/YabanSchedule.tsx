@@ -251,9 +251,9 @@ export default function YabanSchedule() {
           <div style={{ flex: 1, display: "flex", justifyContent: "flex-start" }}>
             <div style={{ fontSize: 22, width: 28, cursor: "pointer" }} onClick={() => setLocation("/yaban")}>‹</div>
           </div>
-          <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,.18)", borderRadius: 12, padding: 4, flexShrink: 0 }}>
-            <div style={{ padding: "7px 14px", borderRadius: 9, fontSize: 14, fontWeight: 600, background: "#fff", color: SKY_D, boxShadow: "0 1px 3px rgba(0,0,0,.1)", whiteSpace: "nowrap" }}>顾客预约</div>
-            <div onClick={() => { try { sessionStorage.setItem("yaban_shift_date", toDateStr(selDate)); } catch {} setLocation("/yaban/clinic-shift"); }} style={{ padding: "7px 14px", borderRadius: 9, fontSize: 14, fontWeight: 600, color: "#EBF5FB", whiteSpace: "nowrap", cursor: "pointer" }}>员工排班</div>
+          <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,.18)", borderRadius: 6, padding: 4, flexShrink: 0 }}>
+            <div style={{ padding: "7px 14px", borderRadius: 4, fontSize: 14, fontWeight: 600, background: "#fff", color: SKY_D, boxShadow: "0 1px 3px rgba(0,0,0,.1)", whiteSpace: "nowrap" }}>顾客预约</div>
+            <div onClick={() => { try { sessionStorage.setItem("yaban_shift_date", toDateStr(selDate)); } catch {} setLocation("/yaban/clinic-shift"); }} style={{ padding: "7px 14px", borderRadius: 4, fontSize: 14, fontWeight: 600, color: "#EBF5FB", whiteSpace: "nowrap", cursor: "pointer" }}>员工排班</div>
           </div>
           <div style={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
             <button onClick={() => gotoCreate()} aria-label="新建预约" style={{ width: 32, height: 32, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.12)", border: "none", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", cursor: "pointer" }}>
@@ -322,7 +322,7 @@ export default function YabanSchedule() {
       {/* 视图切换 */}
       <div style={{ background: "#fff", padding: "8px 14px", display: "flex", gap: 8, alignItems: "center", borderBottom: `1px solid ${LINE}` }}>
         {(["doc","time"] as const).map(v => (
-          <div key={v} onClick={() => setApptView(v)} style={{ fontSize: 12, padding: "5px 12px", borderRadius: 20, fontWeight: 500, cursor: "pointer", background: apptView === v ? SKY : "#F6F8FA", color: apptView === v ? "#fff" : "#647386" }}>
+          <div key={v} onClick={() => setApptView(v)} style={{ fontSize: 12, padding: "5px 12px", borderRadius: 10, fontWeight: 500, cursor: "pointer", background: apptView === v ? SKY : "#F6F8FA", color: apptView === v ? "#fff" : "#647386" }}>
             {v === "doc" ? "按医生" : "按时段"}
           </div>
         ))}
@@ -361,9 +361,9 @@ export default function YabanSchedule() {
             </div>
           ))}
           <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
-            <div onClick={() => deleteApptMut.mutate({ id: detailAppt.id, tenantId: currentTenantId ?? undefined })} style={{ flex: "0 0 auto", padding: "13px 20px", borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: "pointer", background: "#FDECEC", color: "#D64545", textAlign: "center" }}>删除</div>
-            <div onClick={() => setDetailModal({ open: false })} style={{ flex: 1, padding: 13, borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: "pointer", background: "#F6F8FA", color: "#5b6675", textAlign: "center" }}>关闭</div>
-            <div onClick={() => { const id = detailAppt.id; setDetailModal({ open: false }); setLocation(`/yaban/schedule/create?id=${id}`); }} style={{ flex: 1, padding: 13, borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: "pointer", background: SKY, color: "#fff", textAlign: "center" }}>编辑预约</div>
+            <div onClick={() => deleteApptMut.mutate({ id: detailAppt.id, tenantId: currentTenantId ?? undefined })} style={{ flex: "0 0 auto", padding: "13px 20px", borderRadius: 6, fontSize: 15, fontWeight: 600, cursor: "pointer", background: "#FDECEC", color: "#D64545", textAlign: "center" }}>删除</div>
+            <div onClick={() => setDetailModal({ open: false })} style={{ flex: 1, padding: 13, borderRadius: 6, fontSize: 15, fontWeight: 600, cursor: "pointer", background: "#F6F8FA", color: "#5b6675", textAlign: "center" }}>关闭</div>
+            <div onClick={() => { const id = detailAppt.id; setDetailModal({ open: false }); setLocation(`/yaban/schedule/create?id=${id}`); }} style={{ flex: 1, padding: 13, borderRadius: 6, fontSize: 15, fontWeight: 600, cursor: "pointer", background: SKY, color: "#fff", textAlign: "center" }}>编辑预约</div>
           </div>
         </BottomSheet>
       )}
@@ -515,7 +515,7 @@ function SoloView({ doc, onBack, onApptClick, onNewAppt, trkStart, trkEnd, pctM,
               const segEnd = (inSeg || segs2[0] || [dS, dE])[1];
               onNewAppt(doc.name, start, Math.min(start + 60, segEnd));
             } : undefined}
-            style={{ position: "relative", height: 36, background: "#E2E8EF", borderRadius: 7, overflow: "hidden", cursor: doc.shift ? "pointer" : "default" }}
+            style={{ position: "relative", height: 36, background: "#E2E8EF", borderRadius: 4, overflow: "hidden", cursor: doc.shift ? "pointer" : "default" }}
           >
             {/* 在岗底色按分段渲染，午休空档保持灰底；休息时用斜线纹底 */}
             {!doc.shift && <div style={{ position: "absolute", inset: 0, background: "repeating-linear-gradient(45deg,#ECEFF3,#ECEFF3 4px,#F6F8FA 4px,#F6F8FA 8px)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#bcc6d0" }}>今日休息</div>}
@@ -564,7 +564,7 @@ function SoloView({ doc, onBack, onApptClick, onNewAppt, trkStart, trkEnd, pctM,
                 <div style={{ fontSize: 15, fontWeight: 600, color: "#26303C" }}>{a.patientName}</div>
                 <div style={{ fontSize: 12, color: "#647386", marginTop: 2 }}>{a.project}{a.remark ? " · " + a.remark : ""}</div>
               </div>
-              <span style={{ fontSize: 10, padding: "3px 9px", borderRadius: 20, color: st.color, background: st.bg, flexShrink: 0 }}>{st.label}</span>
+              <span style={{ fontSize: 10, padding: "3px 9px", borderRadius: 10, color: st.color, background: st.bg, flexShrink: 0 }}>{st.label}</span>
             </div>
           );
         })}
@@ -604,7 +604,7 @@ function TimeView({ docList, onApptClick, onNewAppt, trkStart, trkEnd }: {
                     <div style={{ fontSize: 14, fontWeight: 600, color: "#26303C" }}>{ap.patientName}</div>
                     <div style={{ fontSize: 11, color: "#647386", marginTop: 2 }}>{ap.appointTime}–{ap.endTime || "—"} · {ap.project}</div>
                   </div>
-                  <span style={{ marginLeft: "auto", fontSize: 10, padding: "3px 8px", borderRadius: 20, color: st.color, background: st.bg, flexShrink: 0 }}>{st.label}</span>
+                  <span style={{ marginLeft: "auto", fontSize: 10, padding: "3px 8px", borderRadius: 10, color: st.color, background: st.bg, flexShrink: 0 }}>{st.label}</span>
                 </div>
               </div>
             );

@@ -75,7 +75,7 @@ function ContractBadge({ status }: { status: string }) {
   const s = map[status] ?? { label: status, bg: C.line100, fg: C.textSub };
   return (
     <span
-      className="inline-flex items-center rounded-full px-2 py-[2px] text-[11px] font-bold"
+      className="inline-flex items-center rounded-md px-2 py-[2px] text-[11px] font-bold"
       style={{ backgroundColor: s.bg, color: s.fg }}
     >
       {s.label}
@@ -106,14 +106,14 @@ function WarningItem({
       style={{ borderBottom: `1px solid ${C.line100}` }}
     >
       <div
-        className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
+        className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
         style={{ backgroundColor: colors.bg }}
       >
         <Icon size={15} strokeWidth={1.5} style={{ color: colors.fg }} />
       </div>
       <span className="flex-1 text-[13px]" style={{ color: C.textMain }}>{label}</span>
       <span
-        className="text-[12px] font-bold rounded-full px-2 py-[2px]"
+        className="text-[12px] font-bold rounded-md px-2 py-[2px]"
         style={{ backgroundColor: colors.bg, color: colors.fg }}
       >
         {count} 人
@@ -133,13 +133,13 @@ function StatCard({
 }) {
   return (
     <div
-      className="flex-1 rounded-2xl p-3 flex flex-col gap-1"
+      className="flex-1 rounded p-3 flex flex-col gap-1"
       style={{ backgroundColor: C.white, boxShadow: `0 1px 3px rgba(20,40,60,.06)` }}
     >
       <div className="flex items-center justify-between">
         <span className="text-[11px]" style={{ color: C.textSub }}>{label}</span>
         <div
-          className="w-6 h-6 rounded-full flex items-center justify-center"
+          className="w-6 h-6 rounded-md flex items-center justify-center"
           style={{ backgroundColor: color + "18" }}
         >
           <Icon size={13} strokeWidth={1.5} style={{ color }} />
@@ -223,7 +223,7 @@ function AiIndicatorCard({
 }) {
   return (
     <div
-      className="flex-1 rounded-2xl p-3 flex flex-col gap-1 min-w-[calc(50%-6px)]"
+      className="flex-1 rounded p-3 flex flex-col gap-1 min-w-[calc(50%-6px)]"
       style={{ backgroundColor: C.white, boxShadow: `0 1px 3px rgba(20,40,60,.06)` }}
     >
       <div className="flex items-center gap-1 flex-wrap">
@@ -236,7 +236,7 @@ function AiIndicatorCard({
         />
         {badge && (
           <span
-            className="ml-auto inline-flex items-center rounded-full px-2 py-[1px] text-[10px] font-bold"
+            className="ml-auto inline-flex items-center rounded-md px-2 py-[1px] text-[10px] font-bold"
             style={{ backgroundColor: badgeBg, color: badgeFg }}
           >
             {badge}
@@ -267,7 +267,7 @@ function RiskItem({
   return (
     <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: `1px solid ${C.line100}` }}>
       <div
-        className="w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-bold flex-shrink-0"
+        className="w-8 h-8 rounded-md flex items-center justify-center text-[13px] font-bold flex-shrink-0"
         style={{ background: C.brandGrad, color: "#fff" }}
       >
         {name[0]}
@@ -278,9 +278,9 @@ function RiskItem({
           <span className="text-[11px]" style={{ color: C.textSub }}>{role} · {clinic}</span>
         </div>
         <div className="mt-1 flex items-center gap-2">
-          <div className="flex-1 h-1.5 rounded-full" style={{ backgroundColor: C.line100 }}>
+          <div className="flex-1 h-1.5 rounded-md" style={{ backgroundColor: C.line100 }}>
             <div
-              className="h-1.5 rounded-full transition-all duration-500"
+              className="h-1.5 rounded-md transition-all duration-500"
               style={{ width: `${riskScore}%`, backgroundColor: levelMap.barColor }}
             />
           </div>
@@ -288,7 +288,7 @@ function RiskItem({
         </div>
       </div>
       <span
-        className="inline-flex items-center rounded-full px-2 py-[2px] text-[11px] font-bold flex-shrink-0"
+        className="inline-flex items-center rounded-md px-2 py-[2px] text-[11px] font-bold flex-shrink-0"
         style={{ backgroundColor: levelMap.bg, color: levelMap.fg }}
       >
         {levelMap.label}
@@ -306,7 +306,7 @@ function StaffRow({ staff, onPress }: { staff: typeof MOCK_STAFF[0]; onPress: ()
       style={{ borderBottom: `1px solid ${C.line100}` }}
     >
       <div
-        className="w-9 h-9 rounded-full flex items-center justify-center text-[14px] font-bold flex-shrink-0"
+        className="w-9 h-9 rounded-md flex items-center justify-center text-[14px] font-bold flex-shrink-0"
         style={{ background: C.brandGrad, color: "#fff" }}
       >
         {staff.name[0]}
@@ -315,7 +315,7 @@ function StaffRow({ staff, onPress }: { staff: typeof MOCK_STAFF[0]; onPress: ()
         <div className="flex items-center gap-2">
           <span className="text-[13px] font-bold" style={{ color: C.textMain }}>{staff.name}</span>
           <span
-            className="inline-flex items-center rounded-full px-2 py-[1px] text-[11px] font-bold"
+            className="inline-flex items-center rounded-md px-2 py-[1px] text-[11px] font-bold"
             style={{ backgroundColor: C.infoBg, color: C.infoFg }}
           >
             {staff.role}
@@ -413,13 +413,13 @@ export default function YabanStaffDashboard() {
           <div>
             <div className="flex items-center gap-2">
               <div className="text-[18px] font-extrabold text-white">人事驾驶舱</div>
-              <span className="text-[10px] font-semibold text-white px-2 py-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.22)" }}>数据对接中</span>
+              <span className="text-[10px] font-semibold text-white px-2 py-0.5 rounded-md" style={{ background: "rgba(255,255,255,0.22)" }}>数据对接中</span>
             </div>
             <div className="text-[11px] text-white/70 mt-0.5">员工档案与人事管理</div>
           </div>
           {/* TODO: 替换为 <YabanClinicHeader asBar /> */}
           <div
-            className="flex items-center gap-1 px-3 py-1.5 rounded-full text-[12px] font-bold"
+            className="flex items-center gap-1 px-3 py-1.5 rounded-md text-[12px] font-bold"
             style={{ backgroundColor: "rgba(255,255,255,0.18)", color: "#fff" }}
           >
             <Building2 size={13} strokeWidth={1.5} />
@@ -433,7 +433,7 @@ export default function YabanStaffDashboard() {
             <button
               key={c}
               onClick={() => setSelectedClinic(c)}
-              className="flex-shrink-0 px-3 py-1 rounded-full text-[12px] font-bold transition-all duration-150"
+              className="flex-shrink-0 px-3 py-1 rounded-md text-[12px] font-bold transition-all duration-150"
               style={{
                 backgroundColor: selectedClinic === c ? "#fff" : "rgba(255,255,255,0.18)",
                 color: selectedClinic === c ? C.brand : "#fff",
@@ -476,7 +476,7 @@ export default function YabanStaffDashboard() {
           </div>
 
           {/* 预警中心 */}
-          <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: C.white, boxShadow: `0 1px 3px rgba(20,40,60,.06)` }}>
+          <div className="rounded overflow-hidden" style={{ backgroundColor: C.white, boxShadow: `0 1px 3px rgba(20,40,60,.06)` }}>
             <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${C.line100}` }}>
               <span className="text-[15px] font-extrabold" style={{ color: C.textMain }}>预警中心</span>
               <span className="text-[11px]" style={{ color: C.textWeak }}>点击跳转处理</span>
@@ -495,7 +495,7 @@ export default function YabanStaffDashboard() {
           </div>
 
           {/* 门店人员结构 + AI 智能追踪 */}
-          <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: C.white, boxShadow: `0 1px 3px rgba(20,40,60,.06)` }}>
+          <div className="rounded overflow-hidden" style={{ backgroundColor: C.white, boxShadow: `0 1px 3px rgba(20,40,60,.06)` }}>
             <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: `1px solid ${C.line100}` }}>
               <BarChart2 size={16} strokeWidth={1.5} style={{ color: C.brand }} />
               <span className="text-[15px] font-extrabold" style={{ color: C.textMain }}>门店人员结构</span>
@@ -553,12 +553,12 @@ export default function YabanStaffDashboard() {
 
           {/* 离职风险预警 */}
           {riskList.length > 0 && (
-            <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: C.white, boxShadow: `0 1px 3px rgba(20,40,60,.06)` }}>
+            <div className="rounded overflow-hidden" style={{ backgroundColor: C.white, boxShadow: `0 1px 3px rgba(20,40,60,.06)` }}>
               <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: `1px solid ${C.line100}` }}>
                 <Activity size={16} strokeWidth={1.5} style={{ color: C.dangerFg }} />
                 <span className="text-[15px] font-extrabold" style={{ color: C.textMain }}>离职风险预警</span>
                 <span
-                  className="ml-auto inline-flex items-center rounded-full px-2 py-[2px] text-[11px] font-bold"
+                  className="ml-auto inline-flex items-center rounded-md px-2 py-[2px] text-[11px] font-bold"
                   style={{ backgroundColor: C.dangerBg, color: C.dangerFg }}
                 >
                   AI 评估
@@ -625,7 +625,7 @@ export default function YabanStaffDashboard() {
                     <Building2 size={13} strokeWidth={1.5} />
                     {clinic}
                     <span
-                      className="ml-auto inline-flex items-center rounded-full px-2 py-[1px] text-[10px] font-bold"
+                      className="ml-auto inline-flex items-center rounded-md px-2 py-[1px] text-[10px] font-bold"
                       style={{ backgroundColor: C.infoBg, color: C.infoFg }}
                     >
                       {members.length} 人

@@ -109,7 +109,7 @@ export default function YabanPatientType() {
             onClick={() => { setIsAdding(true); setEditingId(null); }}
             aria-label="新增"
           >
-            <img src="/icon-add.webp" alt="" className="w-8 h-8 object-cover rounded-full" />
+            <img src="/icon-add.webp" alt="" className="w-8 h-8 object-cover rounded-md" />
           </button>
         </div>
         <div className="px-4 pb-3">
@@ -123,7 +123,7 @@ export default function YabanPatientType() {
         </p>
 
         {/* 类型列表 */}
-        <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
+        <div className="bg-white rounded overflow-hidden shadow-sm">
           {isLoading ? (
             <div className="flex items-center justify-center py-10">
               <Loader2 className="w-5 h-5 animate-spin text-[#1E88D6]" />
@@ -156,7 +156,7 @@ export default function YabanPatientType() {
                   <div className="flex-1 flex items-center gap-2">
                     <input
                       autoFocus
-                      className="flex-1 text-sm border border-[#1E88D6] rounded-lg px-3 h-9 outline-none bg-white"
+                      className="flex-1 text-sm border border-[#1E88D6] rounded px-3 h-9 outline-none bg-white"
                       value={editingLabel}
                       onChange={(e) => setEditingLabel(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && handleUpdate(t.id)}
@@ -164,13 +164,13 @@ export default function YabanPatientType() {
                     <button
                       onClick={() => handleUpdate(t.id)}
                       disabled={updateMutation.isPending}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg bg-[#1E88D6] text-white flex-shrink-0"
+                      className="w-8 h-8 flex items-center justify-center rounded bg-[#1E88D6] text-white flex-shrink-0"
                     >
                       {updateMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                     </button>
                     <button
                       onClick={() => setEditingId(null)}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 text-gray-500 flex-shrink-0"
+                      className="w-8 h-8 flex items-center justify-center rounded bg-gray-100 text-gray-500 flex-shrink-0"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -180,14 +180,14 @@ export default function YabanPatientType() {
                     <span className="flex-1 text-sm text-gray-800">{t.label}</span>
                     <button
                       onClick={() => { setEditingId(t.id); setEditingLabel(t.label); setIsAdding(false); }}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 active:text-[#1E88D6] active:bg-blue-50"
+                      className="w-8 h-8 flex items-center justify-center rounded text-gray-400 active:text-[#1E88D6] active:bg-blue-50"
                     >
                       <Pencil className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleDelete(t.id, t.label)}
                       disabled={deleteMutation.isPending}
-                      className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-300 active:text-red-500 active:bg-red-50"
+                      className="w-8 h-8 flex items-center justify-center rounded text-gray-300 active:text-red-500 active:bg-red-50"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -200,10 +200,10 @@ export default function YabanPatientType() {
 
         {/* 新增输入框（仅 isAdding 时显示） */}
         {isAdding && (
-          <div className="bg-white rounded-2xl px-4 py-3 shadow-sm flex items-center gap-2">
+          <div className="bg-white rounded px-4 py-3 shadow-sm flex items-center gap-2">
             <input
               autoFocus
-              className="flex-1 text-sm border border-[#1E88D6] rounded-lg px-3 h-9 outline-none bg-white"
+              className="flex-1 text-sm border border-[#1E88D6] rounded px-3 h-9 outline-none bg-white"
               placeholder="输入类型名称，如：VIP"
               value={addingLabel}
               onChange={(e) => setAddingLabel(e.target.value)}
@@ -212,13 +212,13 @@ export default function YabanPatientType() {
             <button
               onClick={handleAdd}
               disabled={addMutation.isPending}
-              className="w-8 h-8 flex items-center justify-center rounded-lg bg-[#1E88D6] text-white flex-shrink-0"
+              className="w-8 h-8 flex items-center justify-center rounded bg-[#1E88D6] text-white flex-shrink-0"
             >
               {addMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
             </button>
             <button
               onClick={() => { setIsAdding(false); setAddingLabel(""); }}
-              className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 text-gray-500 flex-shrink-0"
+              className="w-8 h-8 flex items-center justify-center rounded bg-gray-100 text-gray-500 flex-shrink-0"
             >
               <X className="w-4 h-4" />
             </button>

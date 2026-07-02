@@ -77,10 +77,12 @@ export default function ChargeProductPicker({
   open,
   onClose,
   onPick,
+  selectedNames = [],
 }: {
   open: boolean;
   onClose: () => void;
   onPick: (item: ChargeProductPick) => void;
+  selectedNames?: string[];
 }) {
   const [kw, setKw] = useState("");
   const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
@@ -139,40 +141,45 @@ export default function ChargeProductPicker({
   };
 
   // 项目行
-  const ProdRow = ({ it, path }: { it: ProdItem; path?: string }) => (
-    <button
-      onClick={() => handlePick(it)}
-      className="flex items-center justify-between w-full px-3 py-2.5 rounded-lg bg-gray-50 active:bg-gray-100 text-left"
-    >
-      <div className="flex flex-col min-w-0">
-        {path && (
-          <span className="text-[10px] text-gray-400 mb-0.5 truncate">{path}</span>
-        )}
-        <span className="text-sm font-medium text-gray-700">{it.name}</span>
-      </div>
-      <span
-        className="text-sm font-semibold shrink-0 ml-2"
-        style={{ color: isPriceNegotiated(it.price, it.priceMax) ? "#9CA3AF" : ACCENT }}
+  const ProdRow = ({ it, path }: { it: ProdItem; path?: string }) => {
+    const isSelected = selectedNames.includes(it.name);
+    return (
+      <button
+        onClick={() => handlePick(it)}
+        className="flex items-center justify-between w-full px-3 py-2.5 rounded text-left"
+        style={{ background: isSelected ? "#EFF6FF" : "#F9FAFB" }}
       >
-        {priceLabel(it.price, it.priceMax, it.unit)}
-      </span>
-    </button>
-  );
+        <div className="flex flex-col min-w-0 flex-1">
+          {path && (
+            <span className="text-[10px] text-gray-400 mb-0.5 truncate">{path}</span>
+          )}
+          <span className="text-sm font-medium" style={{ color: isSelected ? ACCENT : "#374151" }}>{it.name}</span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0 ml-2">
+          {isSelected && (
+            <span style={{ color: ACCENT, fontSize: 16, fontWeight: 700 }}>✓</span>
+          )}
+        </div>
+      </button>
+    );
+  };
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-white">
       {/* 顶部栏 */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 shrink-0">
-        <button onClick={onClose} className="text-base font-medium" style={{ color: ACCENT }}>
+        <button onClick={onClose} className="text-base font-medium" style={{ color: "#9CA3AF" }}>
           取消
         </button>
         <h2 className="text-base font-semibold text-gray-900">选择收费项目</h2>
-        <span className="w-8" />
+        <button onClick={onClose} className="text-base font-semibold" style={{ color: ACCENT }}>
+          完成{selectedNames.length > 0 ? `(${selectedNames.length})` : ""}
+        </button>
       </div>
 
       {/* 搜索框 */}
       <div className="px-4 py-2.5 border-b border-gray-100 shrink-0">
-        <div className="flex items-center gap-2 bg-gray-100 rounded-full px-3 py-2">
+        <div className="flex items-center gap-2 bg-gray-100 rounded-md px-3 py-2">
           <Search className="w-4 h-4 text-gray-400 shrink-0" />
           <input
             value={kw}
@@ -260,7 +267,7 @@ export default function ChargeProductPicker({
                                       enabled: sub.enabled,
                                       sort: sub.sort,
                                     })}
-                                    className="text-xs font-semibold shrink-0 ml-2 px-2 py-0.5 rounded-full bg-blue-50 active:bg-blue-100"
+                                    className="text-xs font-semibold shrink-0 ml-2 px-2 py-0.5 rounded-md bg-blue-50 active:bg-blue-100"
                                     style={{ color: ACCENT }}
                                   >
                                     {priceLabel(sub.price, sub.priceMax, sub.unit)}

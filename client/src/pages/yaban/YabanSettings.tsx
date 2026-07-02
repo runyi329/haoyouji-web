@@ -103,14 +103,14 @@ export default function YabanSettings() {
 
       <div className="max-w-lg mx-auto px-4 pt-4 space-y-3">
         {/* 账号资料卡片 */}
-        <div className="bg-white rounded-2xl shadow-sm p-4">
+        <div className="bg-white rounded shadow-sm p-4">
           <div className="flex items-center justify-between mb-4">
             <span className="text-sm font-bold text-gray-800">账号资料</span>
             {editing ? (
               <button
                 onClick={onSave}
                 disabled={updateProfile.isPending}
-                className="text-xs font-medium text-white bg-[#1E88D6] rounded-full px-3 py-1 active:opacity-80 disabled:opacity-60 flex items-center gap-1"
+                className="text-xs font-medium text-white bg-[#1E88D6] rounded-md px-3 py-1 active:opacity-80 disabled:opacity-60 flex items-center gap-1"
               >
                 {updateProfile.isPending && <Loader2 className="w-3 h-3 animate-spin" />}
                 保存
@@ -128,14 +128,14 @@ export default function YabanSettings() {
           {/* 头像 */}
           <div className="flex items-center gap-3 pb-4 border-b border-gray-100">
             <label className="relative w-16 h-16 shrink-0 cursor-pointer">
-              <span className="block w-16 h-16 rounded-full bg-[#EAF4FE] ring-1 ring-gray-100 overflow-hidden flex items-center justify-center">
+              <span className="block w-16 h-16 rounded-md bg-[#EAF4FE] ring-1 ring-gray-100 overflow-hidden flex items-center justify-center">
                 {avatar ? (
                   <img src={avatar} alt="头像" className="w-full h-full object-cover" />
                 ) : (
                   <User className="w-8 h-8 text-[#9CC8EC]" />
                 )}
               </span>
-              <span className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-full bg-[#1E88D6] flex items-center justify-center ring-2 ring-white shadow-md">
+              <span className="absolute -bottom-0.5 -right-0.5 w-6 h-6 rounded-md bg-[#1E88D6] flex items-center justify-center ring-2 ring-white shadow-md">
                 {uploadAvatar.isPending ? (
                   <Loader2 className="w-3.5 h-3.5 text-white animate-spin" />
                 ) : (
@@ -181,12 +181,12 @@ export default function YabanSettings() {
         </div>
 
         {/* AI 提示词配置 */}
-        <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
+        <div className="bg-white rounded overflow-hidden shadow-sm">
           <button
             onClick={() => navigate("/yaban/settings/ai-prompts")}
             className="w-full flex items-center gap-3 px-4 py-3.5 active:bg-[#F0F7FD] transition-colors"
           >
-            <span className="w-9 h-9 rounded-xl bg-[#EAF4FE] flex items-center justify-center shrink-0">
+            <span className="w-9 h-9 rounded-md bg-[#EAF4FE] flex items-center justify-center shrink-0">
               <Bot className="w-5 h-5 text-[#1E88D6]" />
             </span>
             <span className="flex-1 text-left text-sm font-medium text-gray-800">AI 提示词配置</span>
@@ -195,12 +195,12 @@ export default function YabanSettings() {
         </div>
 
         {/* 关于 */}
-        <div className="bg-white rounded-2xl overflow-hidden shadow-sm">
+        <div className="bg-white rounded overflow-hidden shadow-sm">
           <button
             onClick={() => toast.info("牙伴齿科管理系统")}
             className="w-full flex items-center gap-3 px-4 py-3.5 active:bg-[#F0F7FD] transition-colors"
           >
-            <span className="w-9 h-9 rounded-xl bg-[#EAF4FE] flex items-center justify-center shrink-0">
+            <span className="w-9 h-9 rounded-md bg-[#EAF4FE] flex items-center justify-center shrink-0">
               <Info className="w-5 h-5 text-[#1E88D6]" />
             </span>
             <span className="flex-1 text-left text-sm font-medium text-gray-800">关于牙伴</span>
@@ -211,7 +211,7 @@ export default function YabanSettings() {
         {/* 退出登录 */}
         <button
           onClick={onLogout}
-          className="w-full flex items-center justify-center gap-2 bg-white rounded-2xl shadow-sm py-3.5 text-sm font-medium text-[#E2553C] active:bg-red-50 transition-colors"
+          className="w-full flex items-center justify-center gap-2 bg-white rounded shadow-sm py-3.5 text-sm font-medium text-[#E2553C] active:bg-red-50 transition-colors"
         >
           <LogOut className="w-5 h-5" />
           退出登录

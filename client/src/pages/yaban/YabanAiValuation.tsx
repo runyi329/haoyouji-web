@@ -8,7 +8,7 @@
  *   配色：yb-blue #1E88D6 / blue-deep #0E5A9E / blue-light #3BA9E0 / blue-faint #EAF4FE
  *         green #16A34A / orange #D97706 / purple #7C5CFC / red #DC2626
  *   渐变：header 135deg #1B6FA8->#2196C8 ; card 135deg #0E5A9E->#2196C8->#3BA9E0 ; btn #1E88D6->#3BA9E0
- *   圆角：卡片 rounded-2xl(16px) 子块 rounded-xl(12px) 标签 rounded-full
+ *   圆角：卡片 rounded(16px) 子块 rounded-md(12px) 标签 rounded-md
  *   动画：fadeUp 进场、barGrow 条形增长、pulse-glow 核心卡呼吸光
  *   图表：趋势折线 + 环形饼图，均用 canvas 绘制（配色见原型规格）
  * 严禁 Emoji，仅用内联 SVG 图标。
@@ -331,7 +331,7 @@ function EditModal({
                           setSingle((s) => ({ ...s, [g.label]: v }));
                         }
                       }}
-                      className="inline-block px-3.5 py-1.5 rounded-full text-[13px] cursor-pointer transition-all border"
+                      className="inline-block px-3.5 py-1.5 rounded-md text-[13px] cursor-pointer transition-all border"
                       style={
                         active
                           ? isMulti
@@ -352,7 +352,7 @@ function EditModal({
           <button
             onClick={handleSave}
             disabled={saveMutation.isPending}
-            className="w-full py-3 rounded-xl text-white text-sm font-bold active:scale-[0.98] transition-transform disabled:opacity-60"
+            className="w-full py-3 rounded-md text-white text-sm font-bold active:scale-[0.98] transition-transform disabled:opacity-60"
             style={{ background: `linear-gradient(135deg, ${YB.blue} 0%, ${YB.blueLight} 100%)` }}
           >
             {saveMutation.isPending ? "保存中..." : "保存修改"}
@@ -442,15 +442,15 @@ export default function YabanAiValuation() {
       <div className="max-w-lg mx-auto pb-24">
         {/* 核心估值卡 */}
         <div
-          className="mx-3 mt-3 rounded-2xl p-5 text-white relative overflow-hidden yb-fade yb-fade-1"
+          className="mx-3 mt-3 rounded p-5 text-white relative overflow-hidden yb-fade yb-fade-1"
           style={{ background: cardGrad, animation: "ybPulseGlow 3s infinite, ybFadeUp 0.5s ease-out forwards" }}
         >
-          <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white opacity-10" />
-          <div className="absolute -bottom-6 -left-6 w-24 h-24 rounded-full bg-white opacity-10" />
+          <div className="absolute -top-10 -right-10 w-40 h-40 rounded-md bg-white opacity-10" />
+          <div className="absolute -bottom-6 -left-6 w-24 h-24 rounded-md bg-white opacity-10" />
           <div className="flex items-center gap-2 mb-3 relative">
             <IcBuilding className="w-4 h-4 opacity-80" />
             <span className="text-sm opacity-90 font-medium">{c.name}</span>
-            <span className="ml-auto text-xs opacity-60 bg-white/15 px-2 py-0.5 rounded-full">
+            <span className="ml-auto text-xs opacity-60 bg-white/15 px-2 py-0.5 rounded-md">
               {c.area}
             </span>
           </div>
@@ -461,7 +461,7 @@ export default function YabanAiValuation() {
             </div>
             <div className="mt-1.5 flex items-end gap-3">
               <span className="text-[32px] font-bold tracking-tight leading-none">¥{c.valuation}</span>
-              <span className="text-sm font-medium flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-white/20">
+              <span className="text-sm font-medium flex items-center gap-0.5 px-2 py-0.5 rounded-md bg-white/20">
                 <IcArrowUp className="w-3.5 h-3.5" />
                 <span>{c.change}</span>
               </span>
@@ -475,11 +475,11 @@ export default function YabanAiValuation() {
             </div>
           </div>
           <div className="mt-3 pt-3 border-t border-white/20 grid grid-cols-2 gap-3">
-            <div className="bg-white/10 rounded-lg px-3 py-2">
+            <div className="bg-white/10 rounded px-3 py-2">
               <div className="text-[10px] opacity-60">基础估值（静态资产）</div>
               <div className="text-base font-bold mt-0.5">¥{c.baseValuation}</div>
             </div>
-            <div className="bg-white/10 rounded-lg px-3 py-2">
+            <div className="bg-white/10 rounded px-3 py-2">
               <div className="text-[10px] opacity-60">动态溢价（经营表现）</div>
               <div className="text-base font-bold mt-0.5">+¥{c.dynamicPremium}</div>
             </div>
@@ -493,13 +493,13 @@ export default function YabanAiValuation() {
         {/* 估值趋势图 */}
         <div className="px-3 mt-4 yb-fade yb-fade-2">
           <SectionTitle icon={<IcTrend className="w-4 h-4" />} title="估值趋势" hint="近6个月" />
-          <div className="bg-white rounded-2xl shadow-sm p-4">
+          <div className="bg-white rounded shadow-sm p-4">
             <TrendChart data={c.trendData} labels={c.trendLabels} />
             <div className="mt-3 space-y-1.5">
               {c.trendEvents.map((e) => (
                 <div key={e.text} className="flex items-center gap-2 text-[11px]">
                   <span
-                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                    className="w-1.5 h-1.5 rounded-md flex-shrink-0"
                     style={{ background: e.color }}
                   />
                   <span className="text-gray-500">{e.text}</span>
@@ -512,7 +512,7 @@ export default function YabanAiValuation() {
         {/* 项目结构（饼图） */}
         <div className="px-3 mt-4 yb-fade yb-fade-2">
           <SectionTitle icon={<PieIcon className="w-4 h-4" />} title="项目结构" hint="营收来源占比" />
-          <div className="bg-white rounded-2xl shadow-sm p-4">
+          <div className="bg-white rounded shadow-sm p-4">
             <div className="flex items-center gap-4">
               <PieChart data={c.pieData} />
               <div className="flex-1 space-y-2">
@@ -525,7 +525,7 @@ export default function YabanAiValuation() {
                 ].map((it) => (
                   <div key={it.label} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: it.color }} />
+                      <span className="w-2.5 h-2.5 rounded-md" style={{ background: it.color }} />
                       <span className="text-xs text-gray-600">{it.label}</span>
                     </div>
                     <span className="text-xs font-bold text-gray-800">{it.value}</span>
@@ -546,31 +546,31 @@ export default function YabanAiValuation() {
         {/* 客户价值 */}
         <div className="px-3 mt-4 yb-fade yb-fade-2">
           <SectionTitle icon={<IcUsers className="w-4 h-4" />} title="客户价值" hint="核心资产指标" />
-          <div className="bg-white rounded-2xl shadow-sm p-4">
+          <div className="bg-white rounded shadow-sm p-4">
             <div className="grid grid-cols-3 gap-3">
-              <div className="text-center rounded-xl py-3 px-2" style={{ background: YB.blueFaint }}>
+              <div className="text-center rounded-md py-3 px-2" style={{ background: YB.blueFaint }}>
                 <div className="text-[11px]" style={{ color: YB.blue }}>客户LTV</div>
                 <div className="text-base font-bold mt-1" style={{ color: YB.blueDeep }}>¥{c.ltvValue}</div>
                 <div className="text-[10px] text-gray-400 mt-0.5">年均消费</div>
               </div>
-              <div className="text-center rounded-xl py-3 px-2" style={{ background: YB.greenFaint }}>
+              <div className="text-center rounded-md py-3 px-2" style={{ background: YB.greenFaint }}>
                 <div className="text-[11px]" style={{ color: YB.green }}>获客成本</div>
                 <div className="text-base font-bold mt-1" style={{ color: YB.green }}>¥{c.cacValue}</div>
                 <div className="text-[10px] text-gray-400 mt-0.5">CAC</div>
               </div>
-              <div className="text-center rounded-xl py-3 px-2" style={{ background: YB.purpleFaint }}>
+              <div className="text-center rounded-md py-3 px-2" style={{ background: YB.purpleFaint }}>
                 <div className="text-[11px]" style={{ color: YB.purple }}>LTV/CAC</div>
                 <div className="text-base font-bold mt-1" style={{ color: YB.purple }}>{c.ltvCacRatio}</div>
                 <div className="text-[10px] text-gray-400 mt-0.5">极优</div>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 mt-3">
-              <div className="bg-gray-50 rounded-xl p-3">
+              <div className="bg-gray-50 rounded-md p-3">
                 <div className="text-[11px] text-gray-500">转介绍率</div>
                 <div className="text-sm font-bold text-gray-800 mt-0.5">{c.referralRate}</div>
                 <div className="text-[10px] mt-0.5" style={{ color: YB.green }}>高于行业均值15%</div>
               </div>
-              <div className="bg-gray-50 rounded-xl p-3">
+              <div className="bg-gray-50 rounded-md p-3">
                 <div className="text-[11px] text-gray-500">高净值客户占比</div>
                 <div className="text-sm font-bold text-gray-800 mt-0.5">{c.highValuePct}</div>
                 <div className="text-[10px] text-gray-400 mt-0.5">年消费&gt;1.5万</div>
@@ -591,7 +591,7 @@ export default function YabanAiValuation() {
               { label: "椅位利用率", value: c.chairRate, change: c.chairRateChange, down: c.chairRateChange.startsWith("-") },
               { label: "客单价", value: c.avgPrice, change: c.avgPriceChange, down: c.avgPriceChange.startsWith("-") },
             ].map((m) => (
-              <div key={m.label} className="bg-white rounded-xl p-3 shadow-sm">
+              <div key={m.label} className="bg-white rounded-md p-3 shadow-sm">
                 <div className="text-[11px] text-gray-400">{m.label}</div>
                 <div className="text-base font-bold text-gray-800 mt-1">{m.value}</div>
                 <ChangePill text={m.change} down={m.down} />
@@ -608,7 +608,7 @@ export default function YabanAiValuation() {
             action={
               <button
                 onClick={() => setEdit({ open: true, type: "asset" })}
-                className="ml-auto flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full"
+                className="ml-auto flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md"
                 style={{ color: YB.blue, background: YB.blueFaint }}
               >
                 <IcPencil className="w-3 h-3" />
@@ -616,12 +616,12 @@ export default function YabanAiValuation() {
               </button>
             }
           />
-          <div className="bg-white rounded-2xl shadow-sm p-4 space-y-4">
+          <div className="bg-white rounded shadow-sm p-4 space-y-4">
             {/* 固定资产 */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: YB.blue }} />
+                  <span className="w-1.5 h-1.5 rounded-md" style={{ background: YB.blue }} />
                   <span className="text-sm font-medium text-gray-700">固定资产</span>
                 </div>
                 <span className="text-sm font-bold" style={{ color: YB.blue }}>{c.assetFixed}</span>
@@ -633,7 +633,7 @@ export default function YabanAiValuation() {
                   { k: "消毒灭菌", v: c.assetSterilize },
                   { k: "装修净值", v: c.assetDecor },
                 ].map((it) => (
-                  <div key={it.k} className="bg-gray-50 rounded-lg px-3 py-2">
+                  <div key={it.k} className="bg-gray-50 rounded px-3 py-2">
                     <div className="text-[10px] text-gray-400">{it.k}</div>
                     <div className="text-xs font-medium text-gray-700 mt-0.5">{it.v}</div>
                   </div>
@@ -644,7 +644,7 @@ export default function YabanAiValuation() {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: YB.purple }} />
+                  <span className="w-1.5 h-1.5 rounded-md" style={{ background: YB.purple }} />
                   <span className="text-sm font-medium text-gray-700">软资产（团队资质）</span>
                 </div>
                 <span className="text-xs font-bold" style={{ color: YB.purple }}>{c.assetSoft}</span>
@@ -655,7 +655,7 @@ export default function YabanAiValuation() {
                   { v: c.assetDoctorMid, k: "执业医师" },
                   { v: c.assetDoctorExp, k: "平均从业" },
                 ].map((it) => (
-                  <div key={it.k} className="text-center rounded-lg py-2" style={{ background: YB.purpleFaint }}>
+                  <div key={it.k} className="text-center rounded py-2" style={{ background: YB.purpleFaint }}>
                     <div className="text-base font-bold" style={{ color: YB.purple }}>{it.v}</div>
                     <div className="text-[10px] text-gray-400">{it.k}</div>
                   </div>
@@ -665,7 +665,7 @@ export default function YabanAiValuation() {
                 {[c.assetCert1, c.assetCert2, c.assetCert3].map((cert) => (
                   <span
                     key={cert}
-                    className="text-[11px] px-2 py-0.5 rounded-full border"
+                    className="text-[11px] px-2 py-0.5 rounded-md border"
                     style={{ color: YB.purple, background: YB.purpleFaint, borderColor: "rgba(124,92,252,0.3)" }}
                   >
                     {cert}
@@ -677,7 +677,7 @@ export default function YabanAiValuation() {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: YB.orange }} />
+                  <span className="w-1.5 h-1.5 rounded-md" style={{ background: YB.orange }} />
                   <span className="text-sm font-medium text-gray-700">区位资产</span>
                 </div>
                 <span className="text-xs font-bold" style={{ color: YB.orange }}>{c.assetLocation}</span>
@@ -688,7 +688,7 @@ export default function YabanAiValuation() {
                   { v: c.assetPopulation, k: "人口密度" },
                   { v: c.assetCompetition, k: "500m内同类" },
                 ].map((it) => (
-                  <div key={it.k} className="text-center rounded-lg py-2" style={{ background: YB.orangeFaint }}>
+                  <div key={it.k} className="text-center rounded py-2" style={{ background: YB.orangeFaint }}>
                     <div className="text-sm font-bold" style={{ color: YB.orange }}>{it.v}</div>
                     <div className="text-[10px] text-gray-400">{it.k}</div>
                   </div>
@@ -707,7 +707,7 @@ export default function YabanAiValuation() {
             action={
               <button
                 onClick={() => setEdit({ open: true, type: "cost" })}
-                className="ml-auto flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full"
+                className="ml-auto flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md"
                 style={{ color: YB.blue, background: YB.blueFaint }}
               >
                 <IcPencil className="w-3 h-3" />
@@ -715,7 +715,7 @@ export default function YabanAiValuation() {
               </button>
             }
           />
-          <div className="bg-white rounded-2xl shadow-sm p-4">
+          <div className="bg-white rounded shadow-sm p-4">
             <div className="flex items-center justify-between mb-3">
               <div>
                 <div className="text-[11px] text-gray-400">月均总支出</div>
@@ -735,10 +735,10 @@ export default function YabanAiValuation() {
                 { k: "水电/其他", v: c.costUtil, bar: c.costUtilBar, color: "#d1d5db" },
               ].map((it) => (
                 <div key={it.k} className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: it.color }} />
+                  <span className="w-1.5 h-1.5 rounded-md flex-shrink-0" style={{ background: it.color }} />
                   <span className="text-sm text-gray-600 w-20">{it.k}</span>
-                  <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                    <div className="h-full rounded-full yb-bar" style={{ width: it.bar, background: it.color }} />
+                  <div className="flex-1 h-1.5 rounded-md bg-gray-100 overflow-hidden">
+                    <div className="h-full rounded-md yb-bar" style={{ width: it.bar, background: it.color }} />
                   </div>
                   <span className="text-sm font-medium text-gray-700 w-14 text-right">{it.v}</span>
                 </div>
@@ -754,7 +754,7 @@ export default function YabanAiValuation() {
         {/* 风险提示 */}
         <div className="px-3 mt-4 yb-fade yb-fade-3">
           <SectionTitle icon={<IcWarn className="w-4 h-4" />} title="风险提示" hint="估值折损因子" color={YB.orange} />
-          <div className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+          <div className="bg-white rounded shadow-sm p-4 space-y-3">
             {[
               { k: "租约稳定性", level: c.riskLease, detail: c.riskLeaseDetail },
               { k: "医生绑定度", level: c.riskDoctor, detail: c.riskDoctorDetail },
@@ -768,7 +768,7 @@ export default function YabanAiValuation() {
               return (
                 <div key={r.k} className="flex items-center gap-3">
                   <div
-                    className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                    className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0"
                     style={{ background: tone.bg }}
                   >
                     {mid ? (
@@ -781,7 +781,7 @@ export default function YabanAiValuation() {
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-gray-700">{r.k}</span>
                       <span
-                        className="text-[11px] px-2 py-0.5 rounded-full font-medium"
+                        className="text-[11px] px-2 py-0.5 rounded-md font-medium"
                         style={{ background: tone.bg, color: tone.fg }}
                       >
                         {r.level}
@@ -802,7 +802,7 @@ export default function YabanAiValuation() {
         {/* 估值构成 */}
         <div className="px-3 mt-4 yb-fade yb-fade-3">
           <SectionTitle icon={<PieIcon className="w-4 h-4" />} title="估值构成" />
-          <div className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+          <div className="bg-white rounded shadow-sm p-4 space-y-3">
             {[
               { k: "客户资产", pct: "35%", color: YB.blue, desc: "存量客户数、增速、复诊粘性" },
               { k: "营收能力", pct: "28%", color: YB.green, desc: "月营收、客单价、回款率" },
@@ -814,8 +814,8 @@ export default function YabanAiValuation() {
                   <span className="text-sm font-medium text-gray-700">{it.k}</span>
                   <span className="text-sm font-bold" style={{ color: it.color }}>{it.pct}</span>
                 </div>
-                <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                  <div className="h-full rounded-full yb-bar" style={{ width: it.pct, background: it.color }} />
+                <div className="h-2 rounded-md bg-gray-100 overflow-hidden">
+                  <div className="h-full rounded-md yb-bar" style={{ width: it.pct, background: it.color }} />
                 </div>
                 <div className="text-[11px] text-gray-400 mt-0.5">{it.desc}</div>
               </div>
@@ -827,7 +827,7 @@ export default function YabanAiValuation() {
         <div className="px-3 mt-4 yb-fade yb-fade-4">
           <SectionTitle icon={<IcSparkle className="w-4 h-4" />} title="AI 分析摘要" />
           <div
-            className="bg-white rounded-2xl shadow-sm p-4 relative overflow-hidden"
+            className="bg-white rounded shadow-sm p-4 relative overflow-hidden"
             style={{ borderLeft: `3px solid ${YB.blue}` }}
           >
             <p className="text-sm text-gray-600 leading-relaxed">{c.aiSummary}</p>
@@ -841,21 +841,21 @@ export default function YabanAiValuation() {
         {/* 股份信息 */}
         <div className="px-3 mt-4 yb-fade yb-fade-5">
           <SectionTitle icon={<IcShare className="w-4 h-4" />} title="股份信息" />
-          <div className="bg-white rounded-2xl shadow-sm p-4">
+          <div className="bg-white rounded shadow-sm p-4">
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl p-3" style={{ background: YB.blueFaint }}>
+              <div className="rounded-md p-3" style={{ background: YB.blueFaint }}>
                 <div className="text-[11px]" style={{ color: YB.blue }}>每股价格</div>
                 <div className="text-lg font-bold mt-0.5" style={{ color: YB.blueDeep }}>¥{c.sharePrice}</div>
               </div>
-              <div className="rounded-xl p-3" style={{ background: YB.greenFaint }}>
+              <div className="rounded-md p-3" style={{ background: YB.greenFaint }}>
                 <div className="text-[11px]" style={{ color: YB.green }}>预期年分红率</div>
                 <div className="text-lg font-bold mt-0.5" style={{ color: YB.green }}>{c.dividendRate}</div>
               </div>
-              <div className="rounded-xl p-3" style={{ background: YB.purpleFaint }}>
+              <div className="rounded-md p-3" style={{ background: YB.purpleFaint }}>
                 <div className="text-[11px]" style={{ color: YB.purple }}>总份额</div>
                 <div className="text-lg font-bold mt-0.5" style={{ color: YB.purple }}>{c.totalShares} 股</div>
               </div>
-              <div className="rounded-xl p-3" style={{ background: YB.orangeFaint }}>
+              <div className="rounded-md p-3" style={{ background: YB.orangeFaint }}>
                 <div className="text-[11px]" style={{ color: YB.orange }}>已售份额</div>
                 <div className="text-lg font-bold mt-0.5" style={{ color: YB.orange }}>{c.soldShares} 股</div>
                 <div className="text-[10px] text-gray-400 mt-0.5">剩余 {c.remainShares} 股可售</div>
@@ -866,8 +866,8 @@ export default function YabanAiValuation() {
                 <span>已售出 {c.soldShares}/{c.totalShares}</span>
                 <span>{c.soldPercent}</span>
               </div>
-              <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                <div className="h-full rounded-full yb-bar" style={{ width: c.soldPercent, background: btnGrad }} />
+              <div className="h-2 rounded-md bg-gray-100 overflow-hidden">
+                <div className="h-full rounded-md yb-bar" style={{ width: c.soldPercent, background: btnGrad }} />
               </div>
             </div>
           </div>
@@ -876,7 +876,7 @@ export default function YabanAiValuation() {
         {/* 底部行动按钮 */}
         <div className="px-3 mt-5">
           <button
-            className="w-full py-3.5 rounded-2xl text-white text-sm font-bold active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
+            className="w-full py-3.5 rounded text-white text-sm font-bold active:scale-[0.98] transition-transform flex items-center justify-center gap-2"
             style={{ background: btnGrad, boxShadow: "0 4px 16px rgba(30,136,214,0.3)" }}
             onClick={() => setLocation("/yaban/partner-profile")}
           >
@@ -887,7 +887,7 @@ export default function YabanAiValuation() {
 
         {/* 估值说明 */}
         <div className="px-3 mt-4 mb-4">
-          <div className="bg-white rounded-2xl shadow-sm p-4">
+          <div className="bg-white rounded shadow-sm p-4">
             <div className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1.5">
               <IcInfo className="w-4 h-4 text-gray-400" />
               估值模型说明

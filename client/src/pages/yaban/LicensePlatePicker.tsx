@@ -166,7 +166,7 @@ export default function LicensePlatePicker({ open, value, onClose, onConfirm }: 
               height: PLATE_H,
               background: plateBg,
               border: `3px solid ${borderColor}`,
-              borderRadius: 6,
+              borderRadius: 4,
               padding: "0 14px",
               boxShadow: `0 0 0 2px ${plateText === BLUE_TEXT ? "rgba(255,255,255,0.25)" : "rgba(0,0,0,0.18)"} inset, 0 6px 24px rgba(0,0,0,0.45)`,
               transition: "background 0.3s, border-color 0.3s",
@@ -301,7 +301,7 @@ export default function LicensePlatePicker({ open, value, onClose, onConfirm }: 
                   key={p}
                   type="button"
                   onClick={() => handleSelectProvince(p)}
-                  className="h-14 rounded-xl text-xl font-bold transition-all active:scale-95"
+                  className="h-14 rounded-md text-xl font-bold transition-all active:scale-95"
                   style={province === p
                     ? { background: ACCENT, color: "#fff", boxShadow: `0 2px 6px ${ACCENT}55` }
                     : { background: ACCENT_LIGHT, color: "#1E3A5F", border: `1px solid ${ACCENT_BORDER}` }}
@@ -327,7 +327,7 @@ export default function LicensePlatePicker({ open, value, onClose, onConfirm }: 
                   key={k}
                   type="button"
                   onClick={() => handleKey(k)}
-                  className="h-14 rounded-xl text-xl font-bold transition-all active:scale-95"
+                  className="h-14 rounded-md text-xl font-bold transition-all active:scale-95"
                   style={plateChars[focusIdx] === k
                     ? { background: ACCENT, color: "#fff" }
                     : { background: ACCENT_LIGHT, color: "#1E3A5F", border: `1px solid ${ACCENT_BORDER}` }}
@@ -343,7 +343,7 @@ export default function LicensePlatePicker({ open, value, onClose, onConfirm }: 
                 type="button"
                 onClick={handleDelete}
                 disabled={plateChars.length === 0}
-                className="flex-1 h-12 rounded-xl text-sm font-medium flex items-center justify-center transition-all active:scale-95"
+                className="flex-1 h-12 rounded-md text-sm font-medium flex items-center justify-center transition-all active:scale-95"
                 style={{
                   background: "#F3F4F6",
                   color: plateChars.length === 0 ? "#D1D5DB" : "#374151",
@@ -355,7 +355,7 @@ export default function LicensePlatePicker({ open, value, onClose, onConfirm }: 
                 type="button"
                 onClick={handleClear}
                 disabled={isEmptyPlate}
-                className="flex-1 h-12 rounded-xl text-sm font-medium flex items-center justify-center transition-all active:scale-95"
+                className="flex-1 h-12 rounded-md text-sm font-medium flex items-center justify-center transition-all active:scale-95"
                 style={{
                   background: "#FFF1E8",
                   color: isEmptyPlate ? "#E8CBB6" : "#E07B39",
@@ -367,7 +367,7 @@ export default function LicensePlatePicker({ open, value, onClose, onConfirm }: 
                 type="button"
                 onClick={() => canConfirm && onConfirm(isEmptyPlate ? "" : fullPlate)}
                 disabled={!canConfirm}
-                className="flex-[2] h-12 rounded-xl text-sm font-semibold flex items-center justify-center transition-all active:scale-95"
+                className="flex-[2] h-12 rounded-md text-sm font-semibold flex items-center justify-center transition-all active:scale-95"
                 style={{
                   background: canConfirm ? (isGreen ? "#1a8a45" : ACCENT) : "#E5E7EB",
                   color: canConfirm ? "#fff" : "#9CA3AF",

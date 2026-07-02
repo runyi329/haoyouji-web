@@ -118,7 +118,7 @@ export default function MedicalHistoryPicker({
     return (
       <button
         onClick={() => toggle(it.name)}
-        className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+        className={`px-3 py-2 rounded text-sm font-medium transition-all ${
           checked ? "text-white shadow-sm" : "bg-gray-100 text-gray-600"
         }`}
         style={checked ? { backgroundColor: ACCENT } : undefined}
@@ -147,7 +147,7 @@ export default function MedicalHistoryPicker({
 
       {/* 搜索框 */}
       <div className="px-4 py-2.5 border-b border-gray-100 shrink-0">
-        <div className="flex items-center gap-2 bg-gray-100 rounded-full px-3 py-2">
+        <div className="flex items-center gap-2 bg-gray-100 rounded-md px-3 py-2">
           <Search className="w-4 h-4 text-gray-400 shrink-0" />
           <input
             value={kw}
@@ -170,7 +170,7 @@ export default function MedicalHistoryPicker({
             {selected.map((name) => (
               <span
                 key={name}
-                className="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-full text-xs"
+                className="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-md text-xs"
                 style={{ backgroundColor: "#E8F2FB", color: ACCENT }}
               >
                 {name}
@@ -250,7 +250,7 @@ export default function MedicalHistoryPicker({
           onChange={(e) => setLocalRemark(e.target.value)}
           rows={2}
           placeholder="如：空腹血糖 7mmol/L、四年前做过心脏支架等"
-          className="w-full text-sm text-gray-700 placeholder:text-gray-300 outline-none resize-none bg-gray-50 rounded-lg px-3 py-2"
+          className="w-full text-sm text-gray-700 placeholder:text-gray-300 outline-none resize-none bg-gray-50 rounded px-3 py-2"
         />
       </div>
     </div>

@@ -116,7 +116,7 @@ export default function YabanFollowUpDetail() {
               <MoreVertical className="w-6 h-6" />
             </button>
             {showMenu && (
-              <div className="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-lg py-1 w-32 z-50">
+              <div className="absolute right-0 top-full mt-1 bg-white rounded shadow-lg py-1 w-32 z-50">
                 <button
                   onClick={async () => {
                     setShowMenu(false);
@@ -151,10 +151,10 @@ export default function YabanFollowUpDetail() {
       </div>
 
       {/* 患者信息卡片 */}
-      <div className="bg-white mx-3 -mt-2 rounded-xl shadow-sm p-4">
+      <div className="bg-white mx-3 -mt-2 rounded-md shadow-sm p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-sky-100 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-md bg-sky-100 flex items-center justify-center">
               <User className="w-6 h-6 text-sky-600" />
             </div>
             <div>
@@ -173,7 +173,7 @@ export default function YabanFollowUpDetail() {
             </div>
           </div>
           {detail.phone && (
-            <a href={`tel:${detail.phone}`} className="w-10 h-10 rounded-full bg-sky-50 flex items-center justify-center">
+            <a href={`tel:${detail.phone}`} className="w-10 h-10 rounded-md bg-sky-50 flex items-center justify-center">
               <Phone className="w-5 h-5 text-sky-600" />
             </a>
           )}
@@ -181,7 +181,7 @@ export default function YabanFollowUpDetail() {
       </div>
 
       {/* 详细信息列表 */}
-      <div className="bg-white mx-3 mt-3 rounded-xl shadow-sm">
+      <div className="bg-white mx-3 mt-3 rounded-md shadow-sm">
         <div className="px-4 py-3 border-b border-gray-50">
           <span className="text-sm font-bold text-gray-900">随访信息</span>
         </div>
@@ -199,7 +199,7 @@ export default function YabanFollowUpDetail() {
       </div>
 
       {/* 随访内容 */}
-      <div className="bg-white mx-3 mt-3 rounded-xl shadow-sm p-4">
+      <div className="bg-white mx-3 mt-3 rounded-md shadow-sm p-4">
         <div className="text-sm font-bold text-gray-900 mb-2">随访内容</div>
         <p className="text-sm text-gray-600 leading-relaxed">
           {detail.followUpContent || "暂无内容"}
@@ -208,7 +208,7 @@ export default function YabanFollowUpDetail() {
 
       {/* 备注 */}
       {detail.remark && (
-        <div className="bg-white mx-3 mt-3 rounded-xl shadow-sm p-4">
+        <div className="bg-white mx-3 mt-3 rounded-md shadow-sm p-4">
           <div className="text-sm font-bold text-gray-900 mb-2">备注</div>
           <p className="text-sm text-gray-600 leading-relaxed">
             {detail.remark}
@@ -224,7 +224,7 @@ export default function YabanFollowUpDetail() {
         {/* 查看沟通记录 - 快捷入口 */}
         <button
           onClick={handleViewComm}
-          className="w-full py-2.5 rounded-lg bg-sky-50 border border-sky-200 text-sky-600 font-medium text-sm flex items-center justify-center gap-2"
+          className="w-full py-2.5 rounded bg-sky-50 border border-sky-200 text-sky-600 font-medium text-sm flex items-center justify-center gap-2"
         >
           <MessageSquare size={15} />
           查看沟通记录（售前售后）
@@ -233,14 +233,14 @@ export default function YabanFollowUpDetail() {
         <div className="flex gap-3">
           <button
             onClick={handleReFollowUp}
-            className="flex-1 py-3 rounded-lg border border-sky-500 text-sky-600 font-bold text-sm"
+            className="flex-1 py-3 rounded border border-sky-500 text-sky-600 font-bold text-sm"
           >
             再随访
           </button>
           <button
             onClick={handleExecute}
             disabled={detail.status === "随访完成" || updateStatus.isLoading}
-            className="flex-1 py-3 rounded-lg bg-gradient-to-r from-sky-500 to-sky-400 text-white font-bold text-sm shadow-sm disabled:opacity-50"
+            className="flex-1 py-3 rounded bg-gradient-to-r from-sky-500 to-sky-400 text-white font-bold text-sm shadow-sm disabled:opacity-50"
           >
             {detail.status === "随访完成" ? "已完成" : "执行随访"}
           </button>

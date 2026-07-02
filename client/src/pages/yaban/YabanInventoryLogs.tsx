@@ -47,7 +47,7 @@ export default function YabanInventoryLogs() {
         <div className="px-4 pb-3 flex gap-2">
           {TABS.map((t) => (
             <button key={t.key} onClick={() => setDir(t.key)}
-              className={`px-4 py-1.5 rounded-full text-xs font-medium ${dir === t.key ? "bg-white text-sky-600" : "bg-white/20 text-white"}`}>{t.label}</button>
+              className={`px-4 py-1.5 rounded-md text-xs font-medium ${dir === t.key ? "bg-white text-sky-600" : "bg-white/20 text-white"}`}>{t.label}</button>
           ))}
         </div>
       </div>
@@ -64,8 +64,8 @@ export default function YabanInventoryLogs() {
             {items.map((l) => {
               const isIn = l.direction === "in";
               return (
-                <div key={l.id} className="bg-white rounded-2xl shadow-sm p-3.5 flex items-center gap-3">
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${isIn ? "bg-green-50" : "bg-orange-50"}`}>
+                <div key={l.id} className="bg-white rounded shadow-sm p-3.5 flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-md flex items-center justify-center shrink-0 ${isIn ? "bg-green-50" : "bg-orange-50"}`}>
                     {isIn ? <ArrowDownToLine className="w-5 h-5 text-green-500" /> : <ArrowUpFromLine className="w-5 h-5 text-orange-500" />}
                   </div>
                   <div className="flex-1 min-w-0">

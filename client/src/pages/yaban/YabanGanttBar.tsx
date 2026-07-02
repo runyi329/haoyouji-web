@@ -67,7 +67,7 @@ export default function YabanGanttBar({
   if (!shift) {
     return (
       <div style={{
-        position: "relative", height, borderRadius: 8, overflow: "hidden",
+        position: "relative", height, borderRadius: 4, overflow: "hidden",
         background: "repeating-linear-gradient(45deg,#ECEFF3,#ECEFF3 4px,#F6F8FA 4px,#F6F8FA 8px)",
         display: "flex", alignItems: "center", justifyContent: "center",
       }}>
@@ -79,7 +79,7 @@ export default function YabanGanttBar({
   return (
     <div
       onClick={onBarClick}
-      style={{ position: "relative", height, borderRadius: 8, overflow: "hidden", background: "#E2E8EF", cursor: onBarClick ? "pointer" : "default" }}
+      style={{ position: "relative", height, borderRadius: 4, overflow: "hidden", background: "#E2E8EF", cursor: onBarClick ? "pointer" : "default" }}
     >
       {/* 工作时段底色（按角色着色） */}
       {shift.segments.map(([s, e], si) => (

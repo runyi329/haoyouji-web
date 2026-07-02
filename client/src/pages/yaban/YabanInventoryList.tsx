@@ -70,7 +70,7 @@ export default function YabanInventoryList() {
         </div>
         {/* 搜索框 */}
         <div className="px-4 pb-3">
-          <div className="flex items-center bg-white/95 rounded-full px-3 py-2">
+          <div className="flex items-center bg-white/95 rounded-md px-3 py-2">
             <Search className="w-4 h-4 text-gray-400" />
             <input
               value={keyword}
@@ -89,7 +89,7 @@ export default function YabanInventoryList() {
           <button
             key={f.key}
             onClick={() => setFilter(f.key)}
-            className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium ${
+            className={`shrink-0 px-3 py-1.5 rounded-md text-xs font-medium ${
               filter === f.key ? "text-white" : "bg-white text-gray-500"
             }`}
             style={filter === f.key ? { background: BLUE_GRAD } : undefined}
@@ -103,7 +103,7 @@ export default function YabanInventoryList() {
       <div className="px-4 pt-2 flex gap-2 overflow-x-auto no-scrollbar">
         <button
           onClick={() => setCategoryId(undefined)}
-          className={`shrink-0 px-3 py-1 rounded-full text-xs ${categoryId === undefined ? "bg-sky-100 text-sky-600 font-medium" : "bg-white text-gray-400"}`}
+          className={`shrink-0 px-3 py-1 rounded-md text-xs ${categoryId === undefined ? "bg-sky-100 text-sky-600 font-medium" : "bg-white text-gray-400"}`}
         >
           全部分类
         </button>
@@ -111,7 +111,7 @@ export default function YabanInventoryList() {
           <button
             key={c.id}
             onClick={() => setCategoryId(c.id)}
-            className={`shrink-0 px-3 py-1 rounded-full text-xs ${categoryId === c.id ? "bg-sky-100 text-sky-600 font-medium" : "bg-white text-gray-400"}`}
+            className={`shrink-0 px-3 py-1 rounded-md text-xs ${categoryId === c.id ? "bg-sky-100 text-sky-600 font-medium" : "bg-white text-gray-400"}`}
           >
             {c.name}
           </button>
@@ -126,7 +126,7 @@ export default function YabanInventoryList() {
           <div className="flex flex-col items-center justify-center py-20 text-gray-400">
             <PackageX className="w-12 h-12 mb-3" />
             <p className="text-sm">暂无符合条件的物品</p>
-            <button onClick={() => setShowCreate(true)} className="mt-4 px-5 py-2 text-white rounded-full text-sm font-medium" style={{ background: BLUE_GRAD }}>
+            <button onClick={() => setShowCreate(true)} className="mt-4 px-5 py-2 text-white rounded-md text-sm font-medium" style={{ background: BLUE_GRAD }}>
               新增物品
             </button>
           </div>
@@ -136,9 +136,9 @@ export default function YabanInventoryList() {
               <button
                 key={it.id}
                 onClick={() => navigate(`/yaban/inventory/material/${it.id}`)}
-                className="w-full text-left bg-white rounded-2xl shadow-sm p-3.5 flex items-center gap-3 active:scale-[0.99] transition"
+                className="w-full text-left bg-white rounded shadow-sm p-3.5 flex items-center gap-3 active:scale-[0.99] transition"
               >
-                <div className="w-12 h-12 rounded-xl bg-sky-50 flex items-center justify-center shrink-0">
+                <div className="w-12 h-12 rounded-md bg-sky-50 flex items-center justify-center shrink-0">
                   <Boxes className="w-6 h-6 text-sky-400" />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -166,7 +166,7 @@ export default function YabanInventoryList() {
       {/* 悬浮新增按钮 */}
       <button
         onClick={() => setShowCreate(true)}
-        className="fixed right-5 bottom-6 w-14 h-14 rounded-full text-white shadow-lg flex items-center justify-center z-30"
+        className="fixed right-5 bottom-6 w-14 h-14 rounded-md text-white shadow-lg flex items-center justify-center z-30"
         style={{ background: BLUE_GRAD }}
       >
         <Plus className="w-7 h-7" />
@@ -234,7 +234,7 @@ function MaterialEditor({
             <div className="flex flex-wrap gap-2">
               {categories.map((c) => (
                 <button key={c.id} onClick={() => setCategoryId(c.id)}
-                  className={`px-3 py-1.5 rounded-full text-xs ${categoryId === c.id ? "bg-sky-500 text-white" : "bg-gray-100 text-gray-500"}`}>
+                  className={`px-3 py-1.5 rounded-md text-xs ${categoryId === c.id ? "bg-sky-500 text-white" : "bg-gray-100 text-gray-500"}`}>
                   {c.name}
                 </button>
               ))}
@@ -254,14 +254,14 @@ function MaterialEditor({
           <div className="flex items-center justify-between">
             <span className="text-sm text-gray-600">跟踪保质期（按批次管理效期）</span>
             <button onClick={() => setTrackExpiry((v) => !v)}
-              className={`w-12 h-6 rounded-full transition relative ${trackExpiry ? "bg-sky-500" : "bg-gray-300"}`}>
-              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition ${trackExpiry ? "left-6.5 translate-x-px" : "left-0.5"}`} style={{ left: trackExpiry ? "26px" : "2px" }} />
+              className={`w-12 h-6 rounded-md transition relative ${trackExpiry ? "bg-sky-500" : "bg-gray-300"}`}>
+              <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-md transition ${trackExpiry ? "left-6.5 translate-x-px" : "left-0.5"}`} style={{ left: trackExpiry ? "26px" : "2px" }} />
             </button>
           </div>
         </div>
         <div className="sticky bottom-0 bg-white px-5 py-3 border-t border-gray-100">
           <button onClick={submit} disabled={save.isPending}
-            className="w-full py-3 rounded-xl text-white font-medium flex items-center justify-center" style={{ background: BLUE_GRAD }}>
+            className="w-full py-3 rounded-md text-white font-medium flex items-center justify-center" style={{ background: BLUE_GRAD }}>
             {save.isPending ? <Loader2 className="w-5 h-5 animate-spin" /> : "保存"}
           </button>
         </div>

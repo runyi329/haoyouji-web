@@ -100,7 +100,7 @@ export default function YabanFeaturesCustomize() {
           <span className="text-base font-bold">编辑首页功能</span>
           <button
             onClick={resetDefault}
-            className="flex items-center gap-1 text-xs bg-white/15 rounded-full px-2.5 py-1 active:opacity-80"
+            className="flex items-center gap-1 text-xs bg-white/15 rounded-md px-2.5 py-1 active:opacity-80"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             恢复默认
@@ -110,7 +110,7 @@ export default function YabanFeaturesCustomize() {
 
       <div className="max-w-lg mx-auto px-3 pt-3 space-y-3">
         {/* 首页快捷区 */}
-        <div className="bg-white rounded-xl p-4">
+        <div className="bg-white rounded-md p-4">
           <div className="flex items-center justify-between mb-3">
             <span className="text-sm font-bold text-gray-800">首页快捷</span>
             <span className="text-xs text-gray-400">{homeKeys.length}/{HOME_MAX}（末位固定「更多」）</span>
@@ -122,7 +122,7 @@ export default function YabanFeaturesCustomize() {
               {homeFeatures.map((feat, idx) => (
                 <div
                   key={feat.key}
-                  className="flex items-center gap-3 border border-gray-100 rounded-xl px-3 py-2"
+                  className="flex items-center gap-3 border border-gray-100 rounded-md px-3 py-2"
                 >
                   <span className="text-xs text-gray-300 w-4 text-center flex-shrink-0">{idx + 1}</span>
                   <img src={feat.icon} alt="" className="w-9 h-9 object-contain flex-shrink-0" />
@@ -130,7 +130,7 @@ export default function YabanFeaturesCustomize() {
                   <button
                     onClick={() => move(idx, -1)}
                     disabled={idx === 0}
-                    className="w-7 h-7 rounded-lg bg-gray-50 flex items-center justify-center text-gray-500 disabled:opacity-30 active:scale-95"
+                    className="w-7 h-7 rounded bg-gray-50 flex items-center justify-center text-gray-500 disabled:opacity-30 active:scale-95"
                     aria-label="上移"
                   >
                     <ArrowUp className="w-4 h-4" />
@@ -138,14 +138,14 @@ export default function YabanFeaturesCustomize() {
                   <button
                     onClick={() => move(idx, 1)}
                     disabled={idx === homeFeatures.length - 1}
-                    className="w-7 h-7 rounded-lg bg-gray-50 flex items-center justify-center text-gray-500 disabled:opacity-30 active:scale-95"
+                    className="w-7 h-7 rounded bg-gray-50 flex items-center justify-center text-gray-500 disabled:opacity-30 active:scale-95"
                     aria-label="下移"
                   >
                     <ArrowDown className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => removeFromHome(feat.key)}
-                    className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center text-red-500 active:scale-95"
+                    className="w-7 h-7 rounded bg-red-50 flex items-center justify-center text-red-500 active:scale-95"
                     aria-label="移除"
                   >
                     <Minus className="w-4 h-4" />
@@ -157,7 +157,7 @@ export default function YabanFeaturesCustomize() {
         </div>
 
         {/* 更多功能区 */}
-        <div className="bg-white rounded-xl p-4">
+        <div className="bg-white rounded-md p-4">
           <span className="text-sm font-bold text-gray-800">更多功能</span>
           {restFeatures.length === 0 ? (
             <div className="py-6 text-center text-xs text-gray-400">全部功能都已加到首页</div>
@@ -171,7 +171,7 @@ export default function YabanFeaturesCustomize() {
                 >
                   <div className="w-14 h-14 flex items-center justify-center relative">
                     <img src={feat.icon} alt={feat.name} className="w-14 h-14 object-contain" />
-                    <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-[#2196C8] text-white flex items-center justify-center shadow">
+                    <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-md bg-[#2196C8] text-white flex items-center justify-center shadow">
                       <Plus className="w-3.5 h-3.5" />
                     </span>
                   </div>
@@ -188,7 +188,7 @@ export default function YabanFeaturesCustomize() {
         <div className="max-w-lg mx-auto px-4 py-3">
           <button
             onClick={save}
-            className="w-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white rounded-xl py-3 text-sm font-bold active:opacity-90"
+            className="w-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white rounded-md py-3 text-sm font-bold active:opacity-90"
           >
             保存并应用到首页
           </button>

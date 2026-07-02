@@ -6,7 +6,7 @@ export default function PaymentMethod() {
   const total = data.reduce((s, d) => s + d.amount, 0);
   return (
     <OpsCard title="收费方式" subtitle="本月支付渠道分布">
-      <div style={{ display: "flex", height: 12, borderRadius: 6, overflow: "hidden", marginBottom: 12 }}>
+      <div style={{ display: "flex", height: 12, borderRadius: 4, overflow: "hidden", marginBottom: 12 }}>
         {data.map((item, i) => (
           <div key={i} style={{ width: `${item.pct}%`, background: item.color }} title={`${item.method} ${item.pct}%`} />
         ))}
