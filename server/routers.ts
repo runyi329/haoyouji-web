@@ -435,7 +435,7 @@ export const appRouter = router({
         }
       }),
 
-    // 获取分钟线分页数据（优先读本地文件，否则读 COS）
+    // 获取分钟线分页数据（优先读本地文件，本地不存在时自动从COS下载并缓存）
     getMinuteKlines: publicProcedure
       .input(z.object({ symbol: z.string(), page: z.number().default(1), pageSize: z.number().default(100) }))
       .query(async ({ input }) => {
@@ -446,7 +446,47 @@ export const appRouter = router({
         const readline = await import('readline');
         const localDir = '/home/ubuntu/klines';
 
-        // 扫描所有本地文件（倒序）
+        // 确保本地目录存在
+        if (!fs.existsSync(localDir)) {
+          fs.mkdirSync(localDir, { recursive: true });
+        }
+
+        // 从COS下载文件并保存到本地的辅助函数
+        const ensureLocalFile = async (yr: number, mo: string, fpath: string): Promise<boolean> => {
+          if (fs.existsSync(fpath)) return true;
+          try {
+            const COS = (await import('cos-nodejs-sdk-v5')).default;
+            const cos = new COS({
+              SecretId: process.env.COS_SECRET_ID!,
+              SecretKey: process.env.COS_SECRET_KEY!,
+            });
+            const cosKey = `klines/${coin}_1m_${yr}_${mo}.csv`;
+            const result: any = await new Promise((resolve, reject) => {
+              cos.getObject({
+                Bucket: 'haoyouji-images-1396946788',
+                Region: 'ap-guangzhou',
+                Key: cosKey,
+              }, (err: any, data: any) => {
+                if (err) reject(err);
+                else resolve(data);
+              });
+            });
+            if (result && result.Body) {
+              fs.writeFileSync(fpath, result.Body);
+              console.log(`[klines] 从COS下载并缓存: ${cosKey}`);
+              return true;
+            }
+            return false;
+          } catch (e: any) {
+            // 文件不存在于COS或下载失败，静默跳过
+            if (e?.statusCode !== 404) {
+              console.warn(`[klines] COS下载失败 ${yr}_${mo}:`, e?.message || e);
+            }
+            return false;
+          }
+        };
+
+        // 扫描所有文件（倒序），本地不存在时尝试从COS下载
         const months: string[] = [];
         const now = new Date();
         for (let i = 0; i < 120; i++) {
@@ -455,7 +495,8 @@ export const appRouter = router({
           const mo = String(d.getMonth() + 1).padStart(2, '0');
           const fname = `${coin}_1m_${yr}_${mo}.csv`;
           const fpath = path.join(localDir, fname);
-          if (fs.existsSync(fpath)) months.push(fpath);
+          const exists = await ensureLocalFile(yr, mo, fpath);
+          if (exists) months.push(fpath);
         }
 
         // 计算 total
@@ -514,18 +555,60 @@ export const appRouter = router({
         const path = await import('path');
         const localDir = '/home/ubuntu/klines';
 
-        // 确定需要扫描的文件列表
+        // 确保本地目录存在
+        if (!fs.existsSync(localDir)) {
+          fs.mkdirSync(localDir, { recursive: true });
+        }
+
+        // 从COS下载文件并保存到本地的辅助函数
+        const ensureLocalFileStats = async (yr: number | string, mo: string, fpath: string): Promise<boolean> => {
+          if (fs.existsSync(fpath)) return true;
+          try {
+            const COS = (await import('cos-nodejs-sdk-v5')).default;
+            const cos = new COS({
+              SecretId: process.env.COS_SECRET_ID!,
+              SecretKey: process.env.COS_SECRET_KEY!,
+            });
+            const cosKey = `klines/${coin}_1m_${yr}_${mo}.csv`;
+            const result: any = await new Promise((resolve, reject) => {
+              cos.getObject({
+                Bucket: 'haoyouji-images-1396946788',
+                Region: 'ap-guangzhou',
+                Key: cosKey,
+              }, (err: any, data: any) => {
+                if (err) reject(err);
+                else resolve(data);
+              });
+            });
+            if (result && result.Body) {
+              fs.writeFileSync(fpath, result.Body);
+              console.log(`[klines] 从COS下载并缓存: ${cosKey}`);
+              return true;
+            }
+            return false;
+          } catch (e: any) {
+            if (e?.statusCode !== 404) {
+              console.warn(`[klines] COS下载失败 ${yr}_${mo}:`, e?.message || e);
+            }
+            return false;
+          }
+        };
+
+        // 确定需要扫描的文件列表（本地不存在时尝试从COS下载）
         const files: string[] = [];
         if (mode === 'year' && year) {
           for (let m = 1; m <= 12; m++) {
-            const fname = `${coin}_1m_${year}_${String(m).padStart(2,'0')}.csv`;
+            const mo = String(m).padStart(2,'0');
+            const fname = `${coin}_1m_${year}_${mo}.csv`;
             const fp = path.join(localDir, fname);
-            if (fs.existsSync(fp)) files.push(fp);
+            const exists = await ensureLocalFileStats(year, mo, fp);
+            if (exists) files.push(fp);
           }
         } else if (mode === 'month' && year && month) {
           const fname = `${coin}_1m_${year}_${month}.csv`;
           const fp = path.join(localDir, fname);
-          if (fs.existsSync(fp)) files.push(fp);
+          const exists = await ensureLocalFileStats(year, month, fp);
+          if (exists) files.push(fp);
         } else if (mode === 'custom' && startDate && endDate) {
           // 扫描 startDate ~ endDate 覆盖的所有月份
           const s = new Date(startDate);
@@ -536,7 +619,8 @@ export const appRouter = router({
             const mo = String(cur.getMonth() + 1).padStart(2, '0');
             const fname = `${coin}_1m_${yr}_${mo}.csv`;
             const fp = path.join(localDir, fname);
-            if (fs.existsSync(fp)) files.push(fp);
+            const exists = await ensureLocalFileStats(yr, mo, fp);
+            if (exists) files.push(fp);
             cur.setMonth(cur.getMonth() + 1);
           }
         }
