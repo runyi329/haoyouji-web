@@ -7,7 +7,7 @@
  */
 import { useLocation } from "wouter";
 import { useSmartBack } from "@/hooks/useSmartBack";
-import { ChevronLeft, ChevronRight, Tags, Users, Heart, MessageSquare, CalendarClock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Tags, Users, Heart, MessageSquare, CalendarClock, LayoutGrid } from "lucide-react";
 import YabanClinicHeader from "./YabanClinicHeader";
 import { trpc } from "@/lib/trpc";
 
@@ -51,6 +51,13 @@ export default function YabanWebsiteFeatures() {
       label: "亲友关系设置",
       hint: "自定义新建顾客时的亲友关系类型选项",
       onClick: () => navigate("/yaban/settings/relation-type"),
+    },
+    {
+      key: "room-dept",
+      icon: <LayoutGrid className="w-5 h-5 text-[#1E88D6]" />,
+      label: "诊室科室设置",
+      hint: "自定义诊室和科室名称，用于新建预约时选择",
+      onClick: () => navigate("/yaban/settings/room-dept"),
     },
   ];
 

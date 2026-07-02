@@ -7,7 +7,7 @@
  *   第2步：选角色成员（按角色分组，来自 yabanRole.listRoles + yabanAppointment.listMembers）
  *   第3步：诊疗信息（项目、来源、备注等）
  */
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback, memo } from "react";
 import { useLocation } from "wouter";
 import {
   ChevronRight, ChevronLeft, User, Stethoscope, FileText,
@@ -20,6 +20,7 @@ import YabanClinicHeader from "./YabanClinicHeader";
 import { loadApptRoleConfig, BUILTIN_ROLE_PRESETS } from "./YabanApptConfig";
 import YabanHeatCalendar from "./YabanHeatCalendar";
 import YabanGanttBar from "./YabanGanttBar";
+import ChargeProductPicker from "./ChargeProductPicker";
 
 // ── 共享样式常量（与 A314 联动，修改 yabanSharedStyles.ts 即可同步） ──
 import {
@@ -29,11 +30,11 @@ import {
   WK, toDateStr as toDateStr_, timeToMin as timeToMin_, hm as hm_,
 } from "./yabanSharedStyles";
 
-// 静态选项
-const ROOMS     = ["1号诊室", "2号诊室", "3号诊室", "VIP诊室"];
-const DEPARTMENTS = ["口腔综合科", "正畸科", "种植科", "牙周科"];
-const SOURCES   = ["电话预约", "微信预约", "到店预约", "转介绍", "网络预约"];
-const PROJECTS  = ["洁牙", "补牙", "拔牙", "种植", "正畸", "根管治疗", "美白", "贴面", "牙冠"];
+// 静态选项（已替换为动态加载，保留空数组兜底）
+const ROOMS: string[] = [];
+const DEPARTMENTS: string[] = [];
+const SOURCES: string[] = [];
+const PROJECTS: string[] = [];
 // 两步配置（选时段+选成员 合并为第1步）
 const STEPS = [
   { key: "datetime", title: "选时段" },
@@ -62,7 +63,106 @@ interface FormData {
   // 角色成员选中的时段（key = role_key, value = 开始时间如 "09:00"）
   roleSlots: Record<string, string>;
   project: string; room: string; department: string; source: string; remark: string;
+  consultant: string; assistant: string; visitType: string;
+  selectedProjects: string[]; // 多选项目
 }
+
+// ── 独立轮盘组件（memo 隔离，RAF 节流，避免父组件重渲染导致卡顿）──
+interface WheelPickerProps {
+  options: { min: number; label: string; occupied?: boolean }[];
+  selectedMin: number;
+  onSelect: (min: number, lbl: string) => void;
+  label: string;
+  itemH: number;
+}
+const WheelPickerMemo = memo(function WheelPicker({ options, selectedMin, onSelect, label, itemH }: WheelPickerProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const rafRef = useRef<number | null>(null);
+  // 初始定位：仅在 options 或 selectedMin 变化时执行一次
+  const prevSelectedRef = useRef<number>(-1);
+  // 原理：
+  // - 容器高度 5*itemH，蓝框在中间第3行 top:itemH*2
+  // - 前占位 2 行 + 后占位 2 行（让首尾项能滚到中间）
+  // - scrollSnapAlign: start → snap 后该项顶部对齐容器顶部
+  // - 前占位高度 2*itemH，所以内容项顶部对齐容器顶部时，实际显示在第3行
+  // - scrollTop = idx*itemH 时第 idx 项在中间（前占位已被滚动到容器外）
+  // - handleScroll: idx = round(scrollTop/itemH)
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const idx = options.findIndex(o => o.min === selectedMin);
+    if (idx >= 0 && prevSelectedRef.current !== selectedMin) {
+      // scrollTop = idx*itemH 时，前占位(2*itemH)已在容器上方，第 idx 项在第3行
+      el.scrollTop = idx * itemH;
+      prevSelectedRef.current = selectedMin;
+    }
+  }, [options, selectedMin, itemH]);
+
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const scrollTop = e.currentTarget.scrollTop;
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      const idx = Math.round(scrollTop / itemH);
+      if (idx >= 0 && idx < options.length) {
+        const opt = options[idx];
+        if (opt) onSelect(opt.min, opt.label);
+      }
+      rafRef.current = null;
+    });
+  }, [options, onSelect, itemH]);
+
+  return (
+    <div style={{ flex: 1 }}>
+      <div style={{ textAlign: "center", fontSize: 11, color: GRAY_L, marginBottom: 4, fontWeight: 600, letterSpacing: 1 }}>{label}</div>
+      <div style={{ position: "relative", height: itemH * 5, overflow: "hidden", borderRadius: 12, border: `1px solid ${LINE}`, background: "#F8FAFC" }}>
+        {/* 蓝框在中间第3行 */}
+        <div style={{ position: "absolute", top: itemH * 2, left: 4, right: 4, height: itemH, background: "rgba(30,136,214,.08)", border: `2px solid ${SKY_D}`, borderRadius: 8, pointerEvents: "none", zIndex: 2 }} />
+        {/* 上下渐变遮罩 */}
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: itemH * 2, background: "linear-gradient(to bottom, rgba(248,250,252,1), rgba(248,250,252,0))", pointerEvents: "none", zIndex: 3 }} />
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: itemH * 2, background: "linear-gradient(to top, rgba(248,250,252,1), rgba(248,250,252,0))", pointerEvents: "none", zIndex: 3 }} />
+        <div
+          ref={scrollRef}
+          style={{
+            overflowY: "scroll",
+            height: "100%",
+            scrollSnapType: "y mandatory",
+            WebkitOverflowScrolling: "touch",
+          } as React.CSSProperties}
+          onScroll={handleScroll}
+        >
+          {/* 前占位 2 行：让第一项能滚到中间蓝框 */}
+          <div style={{ height: itemH * 2, flexShrink: 0 }} />
+          {options.map((opt) => (
+            <div
+              key={opt.min}
+              style={{
+                height: itemH,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                scrollSnapAlign: "center",
+                fontSize: selectedMin === opt.min ? 20 : 14,
+                fontWeight: selectedMin === opt.min ? 800 : 500,
+                letterSpacing: selectedMin === opt.min ? "0.04em" : "0.02em",
+                fontFamily: "'Oswald', 'Anton', 'Impact', 'Arial Black', sans-serif",
+                fontVariantNumeric: "tabular-nums",
+                transform: selectedMin === opt.min ? "scaleY(0.88)" : "scaleY(0.82)",
+                color: opt.occupied ? "#CBD5E1" : (selectedMin === opt.min ? SKY_D : "#374151"),
+                textDecoration: opt.occupied ? "line-through" : "none",
+                cursor: "pointer",
+                transition: "font-size .15s ease, color .15s ease, font-weight .15s ease",
+                flexShrink: 0,
+              } as React.CSSProperties}
+              onClick={() => { onSelect(opt.min, opt.label); }}
+            >
+              {opt.label}{opt.occupied ? " 已占" : ""}
+            </div>
+          ))}
+          {/* 后占位 2 行：让最后一项能滚到中间蓝框 */}
+          <div style={{ height: itemH * 2, flexShrink: 0 }} />
+        </div>
+      </div>
+    </div>
+  );
+});
 
 export default function YabanScheduleCreate() {
   const [, setLocation] = useLocation();
@@ -81,6 +181,30 @@ export default function YabanScheduleCreate() {
   const [step1Open, setStep1Open] = useState<'patient' | 'date' | 'doctor' | null>(null);
   // 兼容旧逻辑：step1Mode 指向同一状态
   const step1Mode = step1Open;
+  // 日期条翻页偏移（0=今天起，7=下一周，14=再下一周……）
+  const [dateOffset, setDateOffset] = useState(0);
+  const [timePickerOpen, setTimePickerOpen] = useState(true);
+  // 时间轮盘临时选中（未点确定前不写入 form）
+  const [pendingStart, setPendingStart] = useState("");
+  const [pendingEnd, setPendingEnd] = useState("");
+  // 轮盘回调（useCallback 稳定引用，防止 memo 失效）
+  // 保留上次设定的时长（pendingEnd - pendingStart），如果无效则默认 30min
+  const pendingStartRef = useRef("");
+  const pendingEndRef = useRef("");
+  const handleStartSelect = useCallback((min: number, lbl: string) => {
+    const prevStart = pendingStartRef.current ? timeToMin(pendingStartRef.current) : -1;
+    const prevEnd = pendingEndRef.current ? timeToMin(pendingEndRef.current) : -1;
+    const duration = (prevStart > 0 && prevEnd > prevStart) ? (prevEnd - prevStart) : 30;
+    const newEnd = hm(Math.min(min + duration, 18 * 60)); // 防止超过 workEnd，粗略用 18:00
+    setPendingStart(lbl);
+    setPendingEnd(newEnd);
+    pendingStartRef.current = lbl;
+    pendingEndRef.current = newEnd;
+  }, []);
+  const handleEndSelect = useCallback((_min: number, lbl: string) => {
+    setPendingEnd(lbl);
+    pendingEndRef.current = lbl;
+  }, []);
 
   const { currentTenantId, current } = useYabanClinic();
   const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
@@ -95,6 +219,8 @@ export default function YabanScheduleCreate() {
     roleSelections: {},
     roleSlots: {},
     project: "", room: "", department: "", source: "", remark: "",
+    consultant: "", assistant: "", visitType: "复诊",
+    selectedProjects: [],
   });
 
   // 日历选中日期
@@ -128,10 +254,24 @@ export default function YabanScheduleCreate() {
   const { data: rolesData = [] } = trpc.yabanRole.listRolesSimple.useQuery(
     { tenantId: currentTenantId ?? undefined }
   );
+  // 诊室列表
+  const { data: roomsData = [] } = trpc.yabanRoom.list.useQuery(
+    { tenantId: currentTenantId ?? undefined }
+  );
+  // 科室列表
+  const { data: deptsData = [] } = trpc.yabanDept.list.useQuery(
+    { tenantId: currentTenantId ?? undefined }
+  );
+  // 顾客来源列表
+  const { data: sourcesData = [] } = trpc.yabanCustomer.listCustomerSources.useQuery(
+    undefined, { refetchOnWindowFocus: false }
+  );
+  // 收费项目列表
+  const [showProjectPicker, setShowProjectPicker] = useState(false);
 
   // 医生列表（role_key = doctor）
   const DOCTORS = useMemo(() =>
-    (membersData as any[]).filter((m: any) => m.roleKey === "doctor").map((m: any) => ({ userId: m.userId, name: m.name })).filter((m: any) => m.name),
+    (membersData as any[]).filter((m: any) => m.roleKey === "doctor").map((m: any) => ({ userId: m.userId, name: m.name, color: m.color, avatar: m.avatar, phone: m.phone, roleName: m.roleName })).filter((m: any) => m.name),
     [membersData]
   );
 
@@ -387,7 +527,8 @@ export default function YabanScheduleCreate() {
   const handleSave = () => {
     if (!form.patientName) { alert("请选择顾客"); return; }
     if (!form.doctor) { alert("请在第1步选择医生时段"); return; }
-    if (!form.project) { alert("请选择项目"); return; }
+    if (form.selectedProjects.length === 0 && !form.project) { alert("请选择项目"); return; }
+    if (!form.visitType) { alert("请选择就诊类型"); return; }
     if (submitting) return;
     setSubmitting(true);
     createAppointment.mutate({
@@ -397,8 +538,13 @@ export default function YabanScheduleCreate() {
       appointTime: form.startTime,
       endTime: form.endTime,
       doctor: form.doctor,
-      project: form.project,
+      project: form.selectedProjects.length > 0 ? form.selectedProjects.join("、") : (form.project || undefined),
       room: form.room || undefined,
+      department: form.department || undefined,
+      source: form.source || undefined,
+      consultant: form.consultant || undefined,
+      assistant: form.assistant || undefined,
+      visitType: form.visitType || undefined,
       remark: [
         form.remark,
         ...Object.entries(form.roleSelections)
@@ -416,26 +562,45 @@ export default function YabanScheduleCreate() {
     setShowPicker(null); setDocSearch("");
   };
 
+  // 动态选项（诊室/科室/来源 均来自后端）
+  const DYNAMIC_ROOMS = useMemo(() => (roomsData as any[]).map((r: any) => r.name), [roomsData]);
+  const DYNAMIC_DEPTS = useMemo(() => (deptsData as any[]).map((d: any) => d.name), [deptsData]);
+  const DYNAMIC_SOURCES = useMemo(() => {
+    const list: string[] = [];
+    for (const s of (sourcesData as any[])) {
+      if (s.label) list.push(s.label);
+      if (s.children) for (const c of s.children) { if (c.label) list.push(c.label); }
+    }
+    return list;
+  }, [sourcesData]);
+  // 咨询师和助理列表
+  const CONSULTANTS = useMemo(() => (membersData as any[]).filter((m: any) => m.roleKey === "consultant").map((m: any) => m.name).filter(Boolean), [membersData]);
+  const ASSISTANTS = useMemo(() => (membersData as any[]).filter((m: any) => m.roleKey === "assistant").map((m: any) => m.name).filter(Boolean), [membersData]);
+
   // Picker 选项
   const getPickerOptions = (): string[] => {
     switch (showPicker) {
-      case "room": return ROOMS;
-      case "department": return DEPARTMENTS;
-      case "source": return SOURCES;
-      case "project": return PROJECTS;
+      case "doctor": return DOCTORS.map((m: any) => m.name);
+      case "room": return DYNAMIC_ROOMS;
+      case "department": return DYNAMIC_DEPTS;
+      case "source": return DYNAMIC_SOURCES;
+      case "consultant": return CONSULTANTS;
+      case "assistant": return ASSISTANTS;
       default: return [];
     }
   };
   const getPickerTitle = (): string => {
     switch (showPicker) {
+      case "doctor": return "选择主治医生";
       case "room": return "选择诊室";
       case "department": return "选择科室";
       case "source": return "选择预约来源";
-      case "project": return "选择项目";
+      case "consultant": return "选择咨询师";
+      case "assistant": return "选择助理";
       default: return "";
     }
   };
-  const pickerOptions = useMemo(() => getPickerOptions(), [showPicker]);
+  const pickerOptions = useMemo(() => getPickerOptions(), [showPicker, DOCTORS, DYNAMIC_ROOMS, DYNAMIC_DEPTS, DYNAMIC_SOURCES, CONSULTANTS, ASSISTANTS]);
 
   // 甘特条工具
   const TRACK_START = 9 * 60, TRACK_END = 18 * 60, TRACK_MIN = TRACK_END - TRACK_START;
@@ -480,28 +645,7 @@ export default function YabanScheduleCreate() {
           </span>
           <div style={{ marginLeft: "auto", zIndex: 1 }}><YabanClinicHeader compact /></div>
         </div>
-        {/* 步骤指示器 */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, paddingTop: 8 }}>
-          {STEPS.map((s, i) => (
-            <button
-              key={s.key}
-              onClick={() => i < currentStep && setCurrentStep(0)}
-              style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", cursor: i < currentStep ? "pointer" : "default", opacity: i > currentStep ? 0.45 : 1 }}
-            >
-              <div style={{
-                width: 20, height: 20, borderRadius: "50%",
-                background: i < currentStep ? "rgba(255,255,255,0.9)" : i === currentStep ? "#fff" : "rgba(255,255,255,0.35)",
-                color: i <= currentStep ? SKY_D : "#fff",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 11, fontWeight: 700, flexShrink: 0,
-              }}>
-                {i < currentStep ? <Check size={11} color={SKY_D} /> : i + 1}
-              </div>
-              <span style={{ fontSize: 11, color: i === currentStep ? "#fff" : "rgba(255,255,255,0.7)", fontWeight: i === currentStep ? 700 : 400, whiteSpace: "nowrap" }}>{s.title}</span>
-              {i < STEPS.length - 1 && <div style={{ width: 14, height: 1, background: "rgba(255,255,255,0.4)", marginLeft: 2 }} />}
-            </button>
-          ))}
-        </div>
+
       </div>
 
       {/* ══════════════════════════════════════════
@@ -511,312 +655,399 @@ export default function YabanScheduleCreate() {
         <>
           {/* ── 1. 选顾客 ── */}
           <div style={{ ...cardStyle, marginTop: 10, overflow: "visible", position: "relative" }}>
-            <button
-              onClick={() => setStep1Open(step1Open === 'patient' ? null : 'patient')}
-              style={{
-                width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "0 14px", minHeight: 50,
-                background: "none", border: "none", cursor: "pointer", textAlign: "left",
-                borderBottom: step1Open === 'patient' ? `1px solid ${LINE}` : "none",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: SKY_L, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <User size={16} color={SKY_D} />
-                </div>
-                <div style={{ textAlign: "left" }}>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: LABEL }}>选顾客</div>
-                  {form.patientName
-                    ? <div style={{ fontSize: 12, color: SKY_D, marginTop: 1 }}>{form.patientName}</div>
-                    : <div style={{ fontSize: 12, color: GRAY_L, marginTop: 1 }}>点击搜索顾客</div>
-                  }
-                </div>
-              </div>
-              <ChevronRight size={16} color={GRAY_L} style={{ transform: step1Open === 'patient' ? "rotate(90deg)" : "none", transition: "transform .2s" }} />
-            </button>
-            {step1Open === 'patient' && (
-              form.patientName ? (
-                (() => {
-                  const r = patientDetail as any;
-                  const age = r?.age ? Number(r.age) : 0;
-                  const genderKey = r?.gender === "女" ? "female" : "male";
-                  const avatarKey = (r?.avatar as AvatarKey) || (`${genderKey}_${ageToBucket(age)}` as AvatarKey);
-                  function GF({ label, value, full }: { label: string; value?: string | null; full?: boolean }) {
-                    if (!value) return null;
-                    return (
-                      <div style={{ gridColumn: full ? "1 / -1" : undefined, borderBottom: `1px dashed ${LINE}`, borderRight: `1px dashed ${LINE}`, padding: "5px 10px", display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ fontSize: 10, color: GRAY_L, flexShrink: 0, whiteSpace: "nowrap" }}>{label}</span>
-                        <span style={{ fontSize: 12.5, color: INK, wordBreak: "break-all" }}>{value}</span>
-                      </div>
-                    );
-                  }
+            {form.patientName ? (
+              /* 已选顾客：整个卡片显示档案，右上角“更换”按鈕 */
+              (() => {
+                const r = patientDetail as any;
+                const age = r?.age ? Number(r.age) : 0;
+                const genderKey = r?.gender === "女" ? "female" : "male";
+                const avatarKey = (r?.avatar as AvatarKey) || (`${genderKey}_${ageToBucket(age)}` as AvatarKey);
+                function GF({ label, value, full }: { label: string; value?: string | null; full?: boolean }) {
+                  if (!value) return null;
                   return (
-                    <div>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#EFF6FF", borderBottom: `1px solid ${LINE}`, padding: "6px 12px" }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: INK }}>顾客档案</span>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          {r?.medical_no && <span style={{ fontSize: 11, color: GRAY_L }}>编号：{r.medical_no}</span>}
-                          <button onClick={handleClearPatient} style={{ fontSize: 11, color: "#fff", background: SKY, border: "none", borderRadius: 4, padding: "3px 10px", cursor: "pointer", fontWeight: 600 }}>更换</button>
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", borderBottom: `1px dashed ${LINE}` }}>
-                        <div style={{ width: 48, height: 48, flexShrink: 0, borderRight: `1px dashed ${LINE}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <img src={avatarSrc(avatarKey)} alt={form.patientName} style={{ width: 36, height: 36, objectFit: "cover", borderRadius: 5 }} />
-                        </div>
-                        <div style={{ flex: 1, padding: "0 10px", display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontSize: 14, fontWeight: 700, color: INK }}>{form.patientName}</span>
-                          {age > 0 && <span style={{ fontSize: 12, color: GRAY_L }}>{age}岁</span>}
-                        </div>
-                      </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
-                        <GF label="手机" value={r?.mobile || form.patientMobile} />
-                        <GF label="来源" value={r?.source} />
-                        <GF label="咨询师" value={r?.consultant || r?.net_consultant} />
-                        <GF label="主治医生" value={r?.last_doctor} />
-                        <GF label="上次就诊" value={r?.last_visit} full />
-                        {r?.address && <GF label="地址" value={r.address} full />}
-                        {r?.remark && <GF label="备注" value={r.remark} full />}
-                      </div>
+                    <div style={{ gridColumn: full ? "1 / -1" : undefined, borderBottom: `1px dashed ${LINE}`, borderRight: `1px dashed ${LINE}`, padding: "5px 10px", display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 10, color: GRAY_L, flexShrink: 0, whiteSpace: "nowrap" }}>{label}</span>
+                      <span style={{ fontSize: 12.5, color: INK, wordBreak: "break-all" }}>{value}</span>
                     </div>
                   );
-                })()
-              ) : (
-                <div style={{ position: "relative" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px" }}>
-                    <input
-                      ref={patientSearchRef}
-                      value={patientSearch}
-                      onChange={e => setPatientSearch(e.target.value)}
-                      onFocus={() => setPatientSearchFocus(true)}
-                      onBlur={() => setTimeout(() => setPatientSearchFocus(false), 180)}
-                      placeholder="搜索顾客姓名 / 手机号"
-                      autoFocus
-                      style={{ flex: 1, fontSize: 15, color: INK, background: "transparent", border: "none", outline: "none", padding: 0 }}
-                    />
-                    <Search size={18} color={GRAY_L} strokeWidth={2} style={{ flexShrink: 0 }} />
-                  </div>
-                  {patientSearchFocus && (
-                    <div style={{ position: "absolute", left: 0, right: 0, top: "100%", zIndex: 200, background: "#fff", borderRadius: "0 0 14px 14px", boxShadow: "0 8px 24px rgba(38,48,60,.13)", maxHeight: 240, overflowY: "auto", borderTop: `1px solid ${LINE}` }}>
-                      {(patientResults as any[]).length === 0 ? (
-                        <div style={{ padding: "18px 16px", textAlign: "center", color: GRAY_L, fontSize: 13 }}>
-                          {patientSearch ? "未找到匹配顾客" : "输入姓名或手机号搜索"}
-                        </div>
-                      ) : (
-                        (patientResults as any[]).map((p: any) => (
-                          <button key={p.id} onMouseDown={() => handleSelectPatientInline(p)}
-                            style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "none", border: "none", borderBottom: `1px solid ${LINE}`, cursor: "pointer", textAlign: "left" }}>
-                            <div style={{ width: 34, height: 34, borderRadius: "50%", background: SKY_L, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 14, fontWeight: 700, color: SKY_D }}>
-                              {p.name?.charAt(0) || "?"}
-                            </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 15, fontWeight: 600, color: INK }}>{p.name}</div>
-                              {p.mobile && <div style={{ fontSize: 12, color: GRAY_L, marginTop: 1 }}>{p.mobile}</div>}
-                            </div>
-                          </button>
-                        ))
-                      )}
+                }
+                return (
+                  <div>
+                    {/* 档案标题条：左侧标题，右上角更换按鈕 */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: `linear-gradient(90deg,${SKY_D},${SKY})`, padding: "8px 12px", borderRadius: "14px 14px 0 0" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "#fff", letterSpacing: 1 }}>顾客档案</span>
+                        {r?.medical_no && <span style={{ fontSize: 11, color: "rgba(255,255,255,.75)" }}>编号：{r.medical_no}</span>}
+                      </div>
+                      <button
+                        onClick={handleClearPatient}
+                        style={{ fontSize: 12, fontWeight: 700, color: "#fff", background: SKY_D, border: "none", borderRadius: 4, padding: "3px 10px", cursor: "pointer" }}
+                      >更换</button>
                     </div>
-                  )}
+                    {/* 姓名年龄行（含虚拟头像） */}
+                    <div style={{ display: "flex", alignItems: "center", borderBottom: `1px dashed ${LINE}`, padding: "8px 12px", gap: 10 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: 8, overflow: "hidden", flexShrink: 0, background: avatarBg[avatarKey] || SKY_L }}>
+                        <img src={avatarSrc(avatarKey)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: INK }}>{form.patientName}</div>
+                        {age > 0 && <div style={{ fontSize: 12, color: GRAY_L, marginTop: 2 }}>{age}岁</div>}
+                      </div>
+                    </div>
+                    {/* 字段网格 */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr" }}>
+                      <GF label="手机" value={r?.mobile || form.patientMobile} />
+                      <GF label="来源" value={r?.source} />
+                      <GF label="咨询师" value={r?.consultant || r?.net_consultant} />
+                      <GF label="主治医生" value={r?.last_doctor} />
+                      <GF label="上次就诊" value={r?.last_visit} full />
+                      {r?.address && <GF label="地址" value={r.address} full />}
+                      {r?.remark && <GF label="备注" value={r.remark} full />}
+                    </div>
+                  </div>
+                );
+              })()
+            ) : (
+              /* 未选顾客：整个卡片就是搜索框，直接可输入 */
+              <div style={{ position: "relative" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "0 14px", minHeight: 75 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: SKY_L, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <User size={19} color={SKY_D} />
+                  </div>
+                  <input
+                    ref={patientSearchRef}
+                    value={patientSearch}
+                    onChange={e => setPatientSearch(e.target.value)}
+                    onFocus={() => setPatientSearchFocus(true)}
+                    onBlur={() => setTimeout(() => setPatientSearchFocus(false), 180)}
+                    placeholder="搜索顾客姓名 / 手机号"
+                    style={{ flex: 1, fontSize: 16, color: INK, background: "transparent", border: "none", outline: "none", padding: 0 }}
+                  />
+                  <Search size={19} color={GRAY_L} strokeWidth={2} style={{ flexShrink: 0 }} />
                 </div>
-              )
-            )}
-          </div>
-
-          {/* ── 2. 选时间 ── */}
-          <div style={{ ...cardStyle, marginTop: 8 }}>
-            <button
-              onClick={() => setStep1Open(step1Open === 'date' ? null : 'date')}
-              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", minHeight: 50, background: "none", border: "none", cursor: "pointer", textAlign: "left", borderBottom: step1Open === 'date' ? `1px solid ${LINE}` : "none" }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: "#F0FDF4", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <Clock size={16} color="#16A34A" />
-                </div>
-                <div style={{ textAlign: "left" }}>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: LABEL }}>选时间</div>
-                  {form.date
-                    ? <div style={{ fontSize: 12, color: "#16A34A", marginTop: 1 }}>{form.date}{form.startTime ? ` · ${form.startTime}` : ""}</div>
-                    : <div style={{ fontSize: 12, color: GRAY_L, marginTop: 1 }}>点击选择预约日期</div>
-                  }
-                </div>
-              </div>
-              <ChevronRight size={16} color={GRAY_L} style={{ transform: step1Open === 'date' ? "rotate(90deg)" : "none", transition: "transform .2s" }} />
-            </button>
-            {step1Open === 'date' && (
-              <YabanHeatCalendar
-                selDate={calSelDate}
-                onSelectDate={(d) => { handleSelectDate(d); }}
-                getCellLoad={(d) => { const dStr = toDateStr(d); return freeRateRaw(dStr); }}
-                monthCursor={monthCursor}
-                onMonthChange={setMonthCursor}
-                disablePast={true}
-                showToggle={false}
-              />
-            )}
-          </div>
-
-          {/* ── 3. 选医生 ── */}
-          <div style={{ ...cardStyle, marginTop: 8, overflow: "visible" }}>
-            <div ref={shiftSectionRef} />
-            <button
-              onClick={() => setStep1Open(step1Open === 'doctor' ? null : 'doctor')}
-              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", minHeight: 50, background: "none", border: "none", cursor: "pointer", textAlign: "left", borderBottom: step1Open === 'doctor' ? `1px solid ${LINE}` : "none" }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: "#FFF7ED", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <Users size={16} color="#EA580C" />
-                </div>
-                <div style={{ textAlign: "left" }}>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: LABEL }}>选医生</div>
-                  {form.doctor
-                    ? <div style={{ fontSize: 12, color: "#EA580C", marginTop: 1 }}>{form.doctor}{form.startTime ? ` · ${form.startTime}` : ""}</div>
-                    : <div style={{ fontSize: 12, color: GRAY_L, marginTop: 1 }}>点击选择医生及时段</div>
-                  }
-                </div>
-              </div>
-              <ChevronRight size={16} color={GRAY_L} style={{ transform: step1Open === 'doctor' ? "rotate(90deg)" : "none", transition: "transform .2s" }} />
-            </button>
-            {step1Open === 'doctor' && (
-              <div>
-              <div style={{ display: "flex", borderBottom: `1px solid ${LINE}`, background: "#FAFBFC", overflowX: "auto" }}>
-                            {memberTabs.map(role => {
-                              const isActive = memberTab === role.role_key;
-                              const badge = role.role_key === "doctor"
-                                ? (form.doctor || "")
-                                : (form.roleSelections[role.role_key] || "");
-                              return (
-                                <button
-                                  key={role.role_key}
-                                  onClick={() => setMemberTab(role.role_key)}
-                                  style={{
-                                    flexShrink: 0, padding: "10px 16px", fontSize: 13,
-                                    fontWeight: isActive ? 700 : 500,
-                                    color: isActive ? SKY_D : GRAY,
-                                    background: "none", border: "none",
-                                    borderBottom: isActive ? `2px solid ${SKY_D}` : "2px solid transparent",
-                                    cursor: "pointer", whiteSpace: "nowrap", transition: "all .15s",
-                                  }}
-                                >
-                                  {role.name}
-                                  {badge && (
-                                    <span style={{ marginLeft: 4, fontSize: 10, color: "#fff", background: SKY_D, borderRadius: 8, padding: "1px 5px" }}>
-                                      {role.role_key === "doctor" ? badge.charAt(0) : badge}
-                                    </span>
-                                  )}
-                                </button>
-                              );
-                            })}
+                {patientSearchFocus && (
+                  <div style={{ position: "absolute", left: 0, right: 0, top: "100%", zIndex: 200, background: "#fff", borderRadius: "0 0 14px 14px", boxShadow: "0 8px 24px rgba(38,48,60,.13)", maxHeight: 240, overflowY: "auto", borderTop: `1px solid ${LINE}` }}>
+                    {(patientResults as any[]).length === 0 ? (
+                      <div style={{ padding: "18px 16px", textAlign: "center", color: GRAY_L, fontSize: 13 }}>
+                        {patientSearch ? "未找到匹配顾客" : "输入姓名或手机号搜索"}
+                      </div>
+                    ) : (
+                      (patientResults as any[]).map((p: any) => (
+                        <button key={p.id} onMouseDown={() => handleSelectPatientInline(p)}
+                          style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: "none", border: "none", borderBottom: `1px solid ${LINE}`, cursor: "pointer", textAlign: "left" }}>
+                          <div style={{ width: 34, height: 34, borderRadius: "50%", background: SKY_L, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 14, fontWeight: 700, color: SKY_D }}>
+                            {p.name?.charAt(0) || "?"}
                           </div>
-
-                          {(() => {
-                            const role = memberTabs.find(r => r.role_key === memberTab);
-                            if (!role) return null;
-                            const isDoctor = role.role_key === "doctor";
-                            const members = isDoctor ? DOCTORS : (membersByRole[role.role_key] || []);
-                            const selectedName = isDoctor ? form.doctor : (form.roleSelections[role.role_key] || "");
-
-                            if (members.length === 0) {
-                              return <div style={{ padding: "20px 0", textAlign: "center", color: GRAY_L, fontSize: 13 }}>暂无排班数据</div>;
-                            }
-
-                            return (
-                              <div>
-                                {members.map((member: any, idx: number) => {
-                                  const shift = getEffectiveShift(member.userId, dateStr);
-                                  const isSelected = selectedName === member.name;
-                                  // 医生 Tab：还需要显示当天预约占用情况
-                                  const memberAppts = isDoctor
-                                    ? (dayAppointments as any[]).filter((a: any) => a.doctor === member.name)
-                                    : [];
-
-                                  return (
-                                    <div key={member.userId}
-                                      style={{ borderBottom: idx < members.length - 1 ? `1px solid ${LINE}` : "none", padding: "10px 14px",
-                                        background: isSelected ? SKY_L : "transparent",
-                                        transition: "background .15s",
-                                      }}
-                                    >
-                                      {/* 成员头部信息 */}
-                                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: shift ? 8 : 0 }}>
-                                        <div style={{
-                                          width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
-                                          background: (member.color && member.color !== "#1E88D6") ? member.color : (isSelected ? SKY_D : SKY_L),
-                                          display: "flex", alignItems: "center", justifyContent: "center",
-                                          fontSize: 13, fontWeight: 700,
-                                          color: (member.color && member.color !== "#1E88D6") ? "#fff" : (isSelected ? "#fff" : SKY_D),
-                                        }}>
-                                          {member.name.charAt(0)}
-                                        </div>
-                                        <span style={{ fontSize: 14, fontWeight: 600, color: isSelected ? SKY_D : INK }}>{member.name}</span>
-                                        {isSelected && <span style={{ fontSize: 11, color: SKY_D, background: "#D0EAFB", borderRadius: 6, padding: "2px 7px", fontWeight: 600 }}>已选</span>}
-                                        {!shift && <span style={{ fontSize: 11, color: GRAY_L, background: "#F0F2F5", borderRadius: 6, padding: "2px 7px" }}>今日休息</span>}
-                                        {shift && <span style={{ fontSize: 11, color: GRAY, marginLeft: "auto" }}>{hm(shift.workStart)}–{hm(shift.workEnd)}</span>}
-                                      </div>
-
-                                      {/* 甘特条 — 共享组件 YabanGanttBar（与 A314 联动） */}
-                                      <YabanGanttBar
-                                        shift={shift}
-                                        roleKey={role.role_key}
-                                        customColor={member.color && member.color !== "#1E88D6" ? member.color : undefined}
-                                        appointments={memberAppts}
-                                        isSelected={isSelected}
-                                        showSlots={true}
-                                        slotDuration={30}
-                                        selectedSlot={isDoctor
-                                          ? (form.doctor === member.name && form.startTime ? [timeToMin(form.startTime), timeToMin(form.startTime) + 30] as [number,number] : null)
-                                          : (form.roleSelections[role.role_key] === member.name && form.roleSlots?.[role.role_key] ? [timeToMin(form.roleSlots[role.role_key]), timeToMin(form.roleSlots[role.role_key]) + 30] as [number,number] : null)
-                                        }
-                                        onSlotClick={(t, slotEnd) => {
-                                          if (isDoctor) {
-                                            handleSelectSlot(member.name, t, slotEnd);
-                                          } else {
-                                            const curSel = form.roleSelections[role.role_key] === member.name && form.roleSlots?.[role.role_key] === hm(t);
-                                            handleSelectRoleMember(role.role_key, curSel ? "" : member.name);
-                                            setForm(prev => ({ ...prev, roleSlots: { ...(prev.roleSlots||{}), [role.role_key]: curSel ? "" : hm(t) } }));
-                                          }
-                                        }}
-                                      />
-                                      {shift && <div style={{ height: 14 }} />}
-                                    </div>
-                                  );
-                                })}
-
-                                {/* 医生 Tab：已选时段摘要条 */}
-                                {isDoctor && form.doctor && (
-                                  <div style={{ padding: "10px 14px", background: SKY_L, borderTop: `1px solid ${LINE}` }}>
-                                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                      <Check size={15} color={SKY_D} />
-                                      <span style={{ fontSize: 13, color: SKY_D, fontWeight: 600 }}>
-                                        已选：{form.doctor} · {form.startTime}–{form.endTime}
-                                      </span>
-                                      <button onClick={() => setForm(prev => ({ ...prev, doctor: "", startTime: "09:00", endTime: "09:30" }))}
-                                        style={{ marginLeft: "auto", fontSize: 11, color: GRAY_L, background: "none", border: "none", cursor: "pointer" }}>清除</button>
-                                    </div>
-                                  </div>
-                                )}
-                                {/* 非医生 Tab：显示暂不选按鈕 */}
-                                {!isDoctor && (
-                                  <div style={{ padding: "8px 14px", borderTop: `1px solid ${LINE}` }}>
-                                    <button
-                                      onClick={() => handleSelectRoleMember(role.role_key, "")}
-                                      style={{
-                                        padding: "5px 14px", borderRadius: 16, fontSize: 12, cursor: "pointer",
-                                        background: !selectedName ? SKY_D : "#F0F4F8",
-                                        color: !selectedName ? "#fff" : GRAY,
-                                        border: !selectedName ? "none" : `1px solid ${BORDER}`,
-                                        fontWeight: 500,
-                                      }}
-                                    >
-                                      暂不选
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })()}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 15, fontWeight: 600, color: INK }}>{p.name}</div>
+                            {p.mobile && <div style={{ fontSize: 12, color: GRAY_L, marginTop: 1 }}>{p.mobile}</div>}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
+
+          {/* ── 2. 选医生 ── */}
+          {(() => {
+            const selectedDoc = DOCTORS.find((m: any) => m.name === form.doctor);
+            if (selectedDoc) {
+              // 已选医生：显示医生信息卡
+              const avatarBgColor = selectedDoc.color || SKY_D;
+              return (
+                <div style={{ ...cardStyle, marginTop: 8 }}>
+                  {/* 标题条 */}
+                  <div style={{ background: `linear-gradient(90deg,${SKY_D},${SKY})`, padding: "8px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: "14px 14px 0 0" }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "#fff", letterSpacing: 1 }}>主治医生</span>
+                    <button
+                      onClick={() => setForm(prev => ({ ...prev, doctor: "" }))}
+                      style={{ fontSize: 12, fontWeight: 700, color: "#fff", background: SKY_D, border: "none", borderRadius: 4, padding: "3px 10px", cursor: "pointer" }}
+                    >更换</button>
+                  </div>
+                  {/* 医生信息 */}
+                  <div style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
+                    {selectedDoc.avatar
+                      ? <img src={selectedDoc.avatar} alt={selectedDoc.name} style={{ width: 48, height: 48, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                      : (
+                        <div style={{ width: 48, height: 48, borderRadius: "50%", flexShrink: 0, background: avatarBgColor, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, color: "#fff" }}>
+                          {selectedDoc.name.charAt(0)}
+                        </div>
+                      )
+                    }
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 17, fontWeight: 700, color: INK }}>{selectedDoc.name}</div>
+                      <div style={{ fontSize: 12, color: GRAY_L, marginTop: 2 }}>{selectedDoc.roleName || "医生"}{selectedDoc.phone ? 　` · ${selectedDoc.phone}` : ""}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+            // 未选医生：显示选择行 + 内联下拉
+            return (
+              <div style={{ ...cardStyle, marginTop: 8, overflow: "visible", position: "relative" }}>
+                <button
+                  onClick={() => setShowPicker(showPicker === "doctor" ? null : "doctor")}
+                  style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", minHeight: 75, background: "none", border: "none", cursor: "pointer", textAlign: "left", borderBottom: showPicker === "doctor" ? `1px solid ${LINE}` : "none" }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 10, background: "#FFF7ED", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <Users size={19} color="#EA580C" />
+                    </div>
+                    <div style={{ textAlign: "left" }}>
+                      <div style={{ fontSize: 16, fontWeight: 600, color: LABEL }}>选医生</div>
+                      <div style={{ fontSize: 12, color: GRAY_L, marginTop: 1 }}>点击选择主治医生</div>
+                    </div>
+                  </div>
+                  <ChevronRight size={16} color={GRAY_L} style={{ transform: showPicker === "doctor" ? "rotate(90deg)" : "none", transition: "transform .2s" }} />
+                </button>
+                {showPicker === "doctor" && (
+                  <div style={{ position: "absolute", left: 0, right: 0, top: "100%", zIndex: 200, background: "#fff", borderRadius: "0 0 14px 14px", boxShadow: "0 8px 24px rgba(38,48,60,.13)", overflow: "hidden" }}>
+                    {DOCTORS.length === 0 && (
+                      <div style={{ padding: "20px 0", textAlign: "center", color: GRAY_L, fontSize: 13 }}>暂无医生数据</div>
+                    )}
+                    {DOCTORS.map((member: any, idx: number) => (
+                      <button
+                        key={member.userId}
+                        onClick={() => { setForm(prev => ({ ...prev, doctor: member.name })); setShowPicker(null); }}
+                        style={{ width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "#fff", border: "none", borderBottom: idx < DOCTORS.length - 1 ? `1px solid ${LINE}` : "none", cursor: "pointer", textAlign: "left" }}
+                      >
+                        {member.avatar
+                          ? <img src={member.avatar} alt={member.name} style={{ width: 38, height: 38, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
+                          : (
+                            <div style={{ width: 38, height: 38, borderRadius: "50%", flexShrink: 0, background: member.color || SKY_L, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700, color: member.color ? "#fff" : SKY_D }}>
+                              {member.name.charAt(0)}
+                            </div>
+                          )
+                        }
+                        <span style={{ fontSize: 15, fontWeight: 600, color: INK, flex: 1 }}>{member.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* ── 3. 选时间 —— 7天日期条 + 时段格子 ── */}
+          {(() => {
+            const selDoc = DOCTORS.find((m: any) => m.name === form.doctor);
+            // 28天日期数组（今天起，可左右滑动）
+            const next28: Date[] = Array.from({ length: 28 }, (_, i) => {
+              const d = new Date(today); d.setDate(today.getDate() + i); return d;
+            });
+            const DOW_CN = ['日', '一', '二', '三', '四', '五', '六'];
+            // 当前选中日期
+            const selDateStr = form.date || toDateStr(today);
+            // 计算某天某医生的可用时段
+            function getDaySlots(dStr: string): { start: number; end: number; occupied: boolean }[] {
+              if (!selDoc) return [];
+              const shift = getEffectiveShift(selDoc.userId, dStr);
+              if (!shift) return [];
+              const slots: { start: number; end: number; occupied: boolean }[] = [];
+              for (const [segStart, segEnd] of shift.segments) {
+                for (let t = segStart; t < segEnd; t += 30) {
+                  const slotEnd = Math.min(t + 30, segEnd);
+                  const occupied = (dayAppointments as any[]).some((a: any) => {
+                    if (!a.appointTime) return false;
+                    const as_ = timeToMin(a.appointTime);
+                    const ae = a.endTime ? timeToMin(a.endTime) : as_ + (a.duration || 30);
+                    return as_ < slotEnd && ae > t;
+                  });
+                  slots.push({ start: t, end: slotEnd, occupied });
+                }
+              }
+              return slots;
+            }
+            const selDaySlots = getDaySlots(selDateStr);
+            const hasTimeSelected = !!(form.date && form.startTime);
+
+            // 已确定时间且轮盘已收起：显示蓝色标题栏 + 摘要行（与主治医生卡片一致）
+            if (hasTimeSelected && !timePickerOpen) {
+              const durMin = timeToMin(form.endTime) - timeToMin(form.startTime);
+              return (
+                <div style={{ ...cardStyle, marginTop: 8 }}>
+                  <div style={{ background: `linear-gradient(90deg,${SKY_D},${SKY})`, padding: "8px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", borderRadius: "14px 14px 0 0" }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "#fff", letterSpacing: 1 }}>预约时段</span>
+                    <button
+                      onClick={() => setTimePickerOpen(true)}
+                      style={{ fontSize: 12, fontWeight: 700, color: "#fff", background: SKY_D, border: "none", borderRadius: 4, padding: "3px 10px", cursor: "pointer" }}
+                    >重选</button>
+                  </div>
+                  <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 14 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: 10, background: "#F0FDF4", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <Clock size={22} color="#16A34A" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 17, fontWeight: 700, color: INK }}>{form.startTime} – {form.endTime}</div>
+                      <div style={{ fontSize: 12, color: GRAY_L, marginTop: 3 }}>{form.date} &nbsp;·&nbsp; 共 {durMin} 分钟</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div style={{ ...cardStyle, marginTop: 8 }}>
+                {/* 标题行 */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", minHeight: 52, borderBottom: `1px solid ${LINE}` }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 10, background: "#F0FDF4", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <Clock size={19} color="#16A34A" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 16, fontWeight: 600, color: LABEL }}>选时间</div>
+                      <div style={{ fontSize: 12, color: GRAY_L, marginTop: 1 }}>{selDoc ? "选择日期和时段" : "请先选医生"}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 28天日期条（scroll-snap 吸附，嘎嗒嘎嗒） */}
+                <div style={{ display: "flex", overflowX: "auto", padding: "10px 10px 6px", gap: 6, borderBottom: `1px solid ${LINE}`, scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" } as React.CSSProperties}>
+                  {next28.map((d) => {
+                    const dStr = toDateStr(d);
+                    const isToday = dStr === toDateStr(today);
+                    const isSel = dStr === selDateStr;
+                    const docShift = selDoc ? getEffectiveShift(selDoc.userId, dStr) : null;
+                    const hasShift = !!docShift;
+                    return (
+                      <button
+                        key={dStr}
+                        onClick={() => {
+                          setCalSelDate(d);
+                          setForm(prev => ({ ...prev, date: dStr, startTime: "", endTime: "" }));
+                          setTimePickerOpen(true);
+                        }}
+                        style={{
+                          flexShrink: 0, width: 46, padding: "6px 0",
+                          display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+                          background: isSel ? SKY_D : (hasShift ? "#F0FDF4" : "#F5F7FA"),
+                          border: isSel ? `2px solid ${SKY_D}` : `1px solid ${hasShift ? "#BBF7D0" : LINE}`,
+                          borderRadius: 10, cursor: "pointer",
+                          scrollSnapAlign: "center",
+                        } as React.CSSProperties}
+                      >
+                        <span style={{ fontSize: 10, color: isSel ? "#fff" : (isToday ? SKY_D : GRAY_L), fontWeight: isToday ? 700 : 400 }}>
+                          {isToday ? "今" : DOW_CN[d.getDay()]}
+                        </span>
+                        <span style={{ fontSize: 15, fontWeight: 700, color: isSel ? "#fff" : (hasShift ? "#16A34A" : GRAY_L) }}>
+                          {d.getDate()}
+                        </span>
+                        <span style={{ fontSize: 9, color: isSel ? "rgba(255,255,255,.8)" : (hasShift ? "#16A34A" : GRAY_L) }}>
+                          {hasShift ? "可约" : (selDoc ? "休" : "–")}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div style={{ padding: "10px 12px" }}>
+                  {!selDoc && (
+                    <div style={{ textAlign: "center", color: GRAY_L, fontSize: 13, padding: "12px 0" }}>请先选择医生</div>
+                  )}
+                  {selDoc && selDaySlots.length === 0 && (
+                    <div style={{ textAlign: "center", color: GRAY_L, fontSize: 13, padding: "12px 0" }}>{selDoc.name}当日休息，请选其他日期</div>
+                  )}
+                  {selDoc && selDaySlots.length > 0 && (() => {
+                    const shift = getEffectiveShift(selDoc.userId, selDateStr);
+                    const workStart = shift ? shift.segments[0][0] : selDaySlots[0].start;
+                    const workEnd = shift ? shift.segments[shift.segments.length - 1][1] : selDaySlots[selDaySlots.length - 1].end;
+
+                    // 开始时间选项：5分钟精度
+                    const startOptions: { min: number; label: string; occupied: boolean }[] = [];
+                    for (let t = workStart; t < workEnd; t += 5) {
+                      const occupied = (dayAppointments as any[]).some((a: any) => {
+                        if (!a.appointTime) return false;
+                        const as_ = timeToMin(a.appointTime);
+                        const ae = a.endTime ? timeToMin(a.endTime) : as_ + (a.duration || 30);
+                        return as_ <= t && ae > t;
+                      });
+                      startOptions.push({ min: t, label: hm(t), occupied });
+                    }
+
+                    // 当前轮盘选中值
+                    const curStartMin = pendingStart ? timeToMin(pendingStart) : (form.startTime ? timeToMin(form.startTime) : workStart);
+                    const curPendStart = pendingStart || form.startTime || hm(workStart);
+                    const selStartMin = timeToMin(curPendStart);
+
+                    // 结束时间选项：严格大于开始时间，至 workEnd，5分钟精度
+                    const endOptions: { min: number; label: string }[] = [];
+                    for (let t = curStartMin + 5; t <= workEnd; t += 5) {
+                      endOptions.push({ min: t, label: hm(t) });
+                    }
+
+                    // 结束时间选中值：若当前 pendingEnd/form.endTime <= 开始时间，自动顺延 +30min
+                    const rawEndMin = pendingEnd ? timeToMin(pendingEnd) : (form.endTime ? timeToMin(form.endTime) : curStartMin + 30);
+                    const safeEndMin = rawEndMin > curStartMin ? rawEndMin : curStartMin + 30;
+                    // 确保不超过 workEnd
+                    const clampedEndMin = Math.min(safeEndMin, workEnd);
+                    const selEndMin = endOptions.find(o => o.min === clampedEndMin) ? clampedEndMin : (endOptions[0]?.min ?? clampedEndMin);
+
+                    const ITEM_H = 38;
+
+                    // 是否已确定（form 中有有效时间）
+                    const isConfirmed = !!(form.startTime && form.endTime && form.date === selDateStr);
+
+                    return (
+                      <div>
+                        <div style={{ fontSize: 12, color: GRAY_L, marginBottom: 8 }}>
+                          工作时间：{hm(workStart)} – {hm(workEnd)}，滚动选择开始和结束时间
+                        </div>
+                        {/* 双轮盘 */}
+                        <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                          <WheelPickerMemo
+                            label="开始时间"
+                            options={startOptions}
+                            selectedMin={selStartMin}
+                            itemH={ITEM_H}
+                            onSelect={handleStartSelect}
+                          />
+                          {/* 中间分隔符 */}
+                          <div style={{ display: "flex", alignItems: "center", paddingTop: ITEM_H * 2.5 + 20, fontSize: 18, color: GRAY_L, fontWeight: 300 }}>–</div>
+                          <WheelPickerMemo
+                            label="结束时间"
+                            options={endOptions}
+                            selectedMin={selEndMin}
+                            itemH={ITEM_H}
+                            onSelect={handleEndSelect}
+                          />
+                        </div>
+                        {/* 确定按钮 */}
+                        <button
+                          onClick={() => {
+                            const s = hm(selStartMin);
+                            const e = hm(selEndMin);
+                            setForm(prev => ({ ...prev, date: selDateStr, startTime: s, endTime: e }));
+                            setPendingStart(s);
+                            setPendingEnd(e);
+                            setTimePickerOpen(false); // 确定后收起轮盘
+                            setStep1Open(null);
+                          }}
+                          style={{
+                            marginTop: 12, width: "100%", padding: "11px 0",
+                            background: `linear-gradient(90deg,${SKY_D},${SKY})`,
+                            color: "#fff", fontWeight: 700, fontSize: 15,
+                            border: "none", borderRadius: 10, cursor: "pointer",
+                            boxShadow: `0 3px 10px rgba(30,136,214,.25)`,
+                          }}
+                        >
+                          确定时间：{hm(selStartMin)} – {hm(selEndMin)}
+                          <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 500, opacity: 0.85 }}>共{selEndMin - selStartMin}分钟</span>
+                        </button>
+                        {isConfirmed && (
+                          <div style={{ marginTop: 6, textAlign: "center", fontSize: 12, color: "#16A34A" }}>
+                            ✓ 已选：{form.startTime} – {form.endTime}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* 第1步底部：下一步按钮 */}
           <div style={{ margin: "16px 10px 0" }}>
@@ -877,9 +1108,45 @@ export default function YabanScheduleCreate() {
               <span style={{ fontSize: 15, fontWeight: 600, color: LABEL }}>预约时段</span>
               <span style={{ fontSize: 15, color: INK, fontWeight: 600 }}>{form.date} {form.startTime}–{form.endTime}</span>
             </div>
-            <SelectRow label="项目" value={form.project} placeholder="请选择项目" required onClick={() => setShowPicker("project")} />
+            {/* 咨询师 */}
+            <SelectRow label="咨询师" value={form.consultant} placeholder="请选择咨询师" onClick={() => setShowPicker("consultant")} />
+            {/* 助理 */}
+            <SelectRow label="助理" value={form.assistant} placeholder="请选择助理" onClick={() => setShowPicker("assistant")} />
+            {/* 就诊类型 */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", minHeight: 46, borderBottom: `1px solid ${LINE}` }}>
+              <span style={{ fontSize: 15, fontWeight: 600, color: LABEL }}>就诊类型<span style={{ color: REQ, marginLeft: 2 }}>*</span></span>
+              <div style={{ display: "flex", gap: 8 }}>
+                {["初诊", "复诊"].map(t => (
+                  <button key={t} onClick={() => setForm(prev => ({ ...prev, visitType: t }))}
+                    style={{ padding: "5px 16px", borderRadius: 20, fontSize: 14, fontWeight: form.visitType === t ? 700 : 400, border: `1.5px solid ${form.visitType === t ? SKY_D : BORDER}`, background: form.visitType === t ? SKY_L : "#fff", color: form.visitType === t ? SKY_D : GRAY, cursor: "pointer" }}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* 项目（多选） */}
+            <div style={{ padding: "10px 14px", borderBottom: `1px solid ${LINE}` }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: form.selectedProjects.length > 0 ? 8 : 0 }}>
+                <span style={{ fontSize: 15, fontWeight: 600, color: LABEL }}>项目<span style={{ color: REQ, marginLeft: 2 }}>*</span></span>
+                <button onClick={() => setShowProjectPicker(true)} style={{ fontSize: 13, color: SKY_D, background: "none", border: `1px solid ${SKY_D}`, borderRadius: 14, padding: "3px 12px", cursor: "pointer" }}>添加项目</button>
+              </div>
+              {form.selectedProjects.length === 0 && (
+                <span style={{ fontSize: 14, color: GRAY_L }}>请添加项目</span>
+              )}
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {form.selectedProjects.map((p, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", background: SKY_L, borderRadius: 16, fontSize: 13, color: SKY_D, fontWeight: 600 }}>
+                    <span>{p}</span>
+                    <button onClick={() => setForm(prev => ({ ...prev, selectedProjects: prev.selectedProjects.filter((_, j) => j !== i) }))} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1, color: SKY_D, fontSize: 14 }}>×</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* 诊室 */}
             <SelectRow label="诊室" value={form.room} placeholder="请选择诊室" onClick={() => setShowPicker("room")} />
+            {/* 科室 */}
             <SelectRow label="科室" value={form.department} placeholder="请选择科室" onClick={() => setShowPicker("department")} />
+            {/* 预约来源 */}
             <SelectRow label="预约来源" value={form.source} placeholder="请选择来源" onClick={() => setShowPicker("source")} />
           </div>
 
@@ -908,6 +1175,21 @@ export default function YabanScheduleCreate() {
           </button>
         </div>
       )}
+
+      {/* 项目多选弹窗 */}
+      <ChargeProductPicker
+        open={showProjectPicker}
+        onClose={() => setShowProjectPicker(false)}
+        onPick={(item) => {
+          setForm(prev => ({
+            ...prev,
+            selectedProjects: prev.selectedProjects.includes(item.name)
+              ? prev.selectedProjects
+              : [...prev.selectedProjects, item.name],
+          }));
+          // 不关闭，允许继续添加
+        }}
+      />
 
       {/* Picker 弹窗 */}
       {showPicker && (

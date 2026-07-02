@@ -47,6 +47,7 @@ import {
   ChevronUp,
   Pencil,
   Plus,
+  Check,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useYabanClinic } from "./useYabanClinic";
@@ -161,16 +162,21 @@ export default function YabanRoles() {
           </button>
         </div>
 
-        {/* 多店切换 */}
+        {/* 多店切换（与 YabanClinicHeader 胶囊样式统一） */}
         {canManage && clinics.length > 0 && (
           <div className="px-4 pb-2">
             <button
               onClick={() => clinics.length > 1 && setShowClinicPicker(true)}
-              className="inline-flex items-center gap-1.5 bg-white/15 rounded-full px-3 py-1.5 text-xs active:opacity-80"
+              className={`flex items-center gap-1.5 rounded-full border border-white/30 bg-white/15 px-3 py-1 text-white text-sm backdrop-blur-sm transition active:scale-[0.97] ${
+                clinics.length > 1 ? "cursor-pointer hover:bg-white/25" : "cursor-default"
+              }`}
+              style={{ transitionTimingFunction: "cubic-bezier(0.23, 1, 0.32, 1)", transitionDuration: "160ms" }}
             >
-              <Building2 className="w-3.5 h-3.5" />
-              <span className="font-medium">{currentClinic?.name || "选择医院"}</span>
-              {clinics.length > 1 && <ChevronDown className="w-3.5 h-3.5" />}
+              <Building2 size={15} className="shrink-0 opacity-90" />
+              <span className="max-w-[8rem] truncate font-medium">
+                {(currentClinic?.shortName?.trim() || currentClinic?.name?.trim()) || "选择医院"}
+              </span>
+              {clinics.length > 1 && <ChevronDown size={15} className="shrink-0" />}
             </button>
           </div>
         )}
@@ -219,37 +225,51 @@ export default function YabanRoles() {
         )}
       </div>
 
-      {/* 医院选择 */}
+      {/* 医院选择（与 YabanClinicHeader 样式统一） */}
       {showClinicPicker && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center" onClick={() => setShowClinicPicker(false)}>
-          <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-base font-bold text-gray-800">选择医院</span>
-              <button onClick={() => setShowClinicPicker(false)} aria-label="关闭">
-                <X className="w-5 h-5 text-gray-400" />
-              </button>
+        <div className="fixed inset-0 z-50" onClick={() => setShowClinicPicker(false)}>
+          <div
+            className="absolute top-[88px] left-4 w-72 origin-top-left overflow-hidden rounded-xl border border-gray-100 bg-white shadow-lg"
+            style={{ animation: "ybClinicIn 150ms cubic-bezier(0.23, 1, 0.32, 1)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-gray-50 px-3 py-2 text-xs font-medium text-gray-400">
+              切换所属医院
             </div>
-            <ul className="space-y-2">
-              {clinics.map((c: any) => (
-                <li key={c.tenantId}>
+            <div className="max-h-72 overflow-y-auto py-1">
+              {clinics.map((c: any) => {
+                const active = c.tenantId === tenantId;
+                const isModel = c.tenantId === 9999;
+                const label = c.name?.trim() || c.shortName?.trim() || `门店 ${c.tenantId}`;
+                return (
                   <button
-                    onClick={() => {
-                      setTenantId(c.tenantId);
-                      setShowClinicPicker(false);
-                    }}
-                    className={`w-full flex items-center gap-2 rounded-xl px-3 py-3 border ${
-                      c.tenantId === tenantId
-                        ? "border-[#1E88D6] bg-[#EAF4FE]"
-                        : "border-gray-200"
+                    key={c.tenantId}
+                    type="button"
+                    onClick={() => { setTenantId(c.tenantId); setShowClinicPicker(false); }}
+                    className={`flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm transition-colors ${
+                      active ? "bg-cyan-50 text-cyan-900" : "text-gray-700 hover:bg-gray-50"
                     }`}
                   >
-                    <Building2 className="w-4 h-4 text-[#1E88D6]" />
-                    <span className="text-sm font-medium text-gray-800">{c.name}</span>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="truncate">{label}</span>
+                      {isModel && (
+                        <span className="shrink-0 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-700">
+                          演示
+                        </span>
+                      )}
+                    </span>
+                    {active && <Check size={15} className="shrink-0 text-cyan-600" />}
                   </button>
-                </li>
-              ))}
-            </ul>
+                );
+              })}
+            </div>
           </div>
+          <style>{`
+            @keyframes ybClinicIn {
+              from { opacity: 0; transform: scale(0.96) translateY(-4px); }
+              to { opacity: 1; transform: scale(1) translateY(0); }
+            }
+          `}</style>
         </div>
       )}
 

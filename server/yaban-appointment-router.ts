@@ -215,6 +215,11 @@ export const yabanAppointmentRouter = router({
       doctor: z.string().max(64).optional(),
       room: z.string().max(64).optional(),
       project: z.string().max(128).optional(),
+      consultant: z.string().max(64).optional(),
+      assistant: z.string().max(64).optional(),
+      department: z.string().max(64).optional(),
+      source: z.string().max(64).optional(),
+      visitType: z.string().max(16).optional(),
       appointDate: z.string(),   // YYYY-MM-DD
       appointTime: z.string(),   // HH:MM
       endTime: z.string().optional(),
@@ -248,9 +253,10 @@ export const yabanAppointmentRouter = router({
       const [res] = (await conn.execute(
         `INSERT INTO yaban_appointment
            (tenant_id, patient_id, patient_name, patient_mobile, patient_gender, patient_age,
-            doctor, room, project, appoint_date, appoint_time, end_time, duration,
+            doctor, room, project, consultant, assistant, department, source, visit_type,
+            appoint_date, appoint_time, end_time, duration,
             status, remark, created_by)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           tenantId,
           input.patientId ?? null,
@@ -261,6 +267,11 @@ export const yabanAppointmentRouter = router({
           input.doctor ?? null,
           input.room ?? null,
           input.project ?? null,
+          input.consultant ?? null,
+          input.assistant ?? null,
+          input.department ?? null,
+          input.source ?? null,
+          input.visitType ?? "复诊",
           input.appointDate,
           input.appointTime,
           input.endTime ?? null,

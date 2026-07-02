@@ -6,7 +6,7 @@
  */
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { ChevronDown, ChevronUp, ScanLine, UserPlus, CalendarPlus, PhoneCall, ArrowDownToLine, ArrowUpFromLine, Grip, MessageCircle, User, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronUp, ScanLine, UserPlus, CalendarPlus, PhoneCall, ArrowDownToLine, ArrowUpFromLine, Grip, MessageCircle, User, Loader2, Building2, Check } from "lucide-react";
 import YabanCalendar from "./YabanCalendar";
 import YabanTabBar from "./YabanTabBar";
 import VersionSwitcher from "@/components/VersionSwitcher";
@@ -178,9 +178,9 @@ export default function YabanHome() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clinics]);
 
+  const currentClinicObj = clinics.find((c) => c.tenantId === currentTenantId) || clinics[0] || null;
   const currentClinic =
-    clinics.find((c) => c.tenantId === currentTenantId)?.name ||
-    (clinics.length > 0 ? clinics[0].name : "暂无门店");
+    currentClinicObj?.shortName?.trim() || currentClinicObj?.name?.trim() || "暂无门店";
   // 门店名过长时按中点均衡折成上下两行（避免"司"字单独掉行），<=8 字不处理
   const clinicNameLines = (() => {
     const name = currentClinic || "";
@@ -251,23 +251,22 @@ export default function YabanHome() {
         style={{ background: "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)" }}
       >
         <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
-          {/* 左侧：诊所名称 + 下拉 */}
+          {/* 左侧：诊所名称 + 下拉（与 YabanClinicHeader 胶囊样式统一） */}
           <button
-            className="flex items-center gap-1.5"
-            onClick={() => setShowClinicPicker(!showClinicPicker)}
+            className={`flex items-center gap-1.5 rounded-full border border-white/30 bg-white/15 px-3 py-1 text-white backdrop-blur-sm transition active:scale-[0.97] ${
+              clinics.length > 1 ? "cursor-pointer hover:bg-white/25" : "cursor-default"
+            }`}
+            style={{ transitionTimingFunction: "cubic-bezier(0.23, 1, 0.32, 1)", transitionDuration: "160ms" }}
+            onClick={() => clinics.length > 1 && setShowClinicPicker(!showClinicPicker)}
           >
-            <div className="w-6 h-6 rounded bg-white/20 flex items-center justify-center">
-              <span className="text-[10px] font-bold">企</span>
-            </div>
-            <span className="text-sm font-bold text-left leading-tight">
-              {clinicNameLines.map((line, i) => (
-                <span key={i} className="block">{line}</span>
-              ))}
-            </span>
-            {showClinicPicker ? (
-              <ChevronUp className="w-4 h-4" />
-            ) : (
-              <ChevronDown className="w-4 h-4" />
+            <Building2 size={15} className="shrink-0 opacity-90" />
+            <span className="max-w-[8rem] truncate text-sm font-medium">{currentClinic}</span>
+            {clinics.length > 1 && (
+              showClinicPicker ? (
+                <ChevronUp size={15} className="shrink-0 transition-transform duration-200" />
+              ) : (
+                <ChevronDown size={15} className="shrink-0 transition-transform duration-200" />
+              )
             )}
           </button>
           {/* 右侧：版本切换 + 刷新 + 搜索 + 新增（统一3D圆形图标，切换在最左）*/}
@@ -323,57 +322,55 @@ export default function YabanHome() {
         </div>
       )}
 
-      {/* 门店选择下拉面板 - 平铺列表，来自用户实际加入的门店 */}
+      {/* 门店选择下拉面板（与 YabanClinicHeader 样式统一） */}
       {showClinicPicker && (
-        <div className="fixed inset-0 z-50 bg-black/20" onClick={() => setShowClinicPicker(false)}>
+        <div className="fixed inset-0 z-50" onClick={() => setShowClinicPicker(false)}>
           <div
-            className="absolute top-[56px] left-3 right-3 bg-white max-w-lg mx-auto rounded-xl shadow-2xl overflow-hidden"
+            className="absolute top-[56px] left-4 w-72 origin-top-left overflow-hidden rounded-xl border border-gray-100 bg-white shadow-lg"
+            style={{ animation: "ybClinicIn 150ms cubic-bezier(0.23, 1, 0.32, 1)" }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* 标题条 */}
-            <div
-              className="px-4 py-3 border-b border-gray-100"
-              style={{ background: "linear-gradient(135deg, #E8F4FD 0%, #D6EEFB 100%)" }}
-            >
-              <div className="flex items-center gap-2.5">
-                <div
-                  className="w-6 h-6 rounded flex items-center justify-center"
-                  style={{ background: "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)" }}
-                >
-                  <span className="text-[9px] font-bold text-white">企</span>
-                </div>
-                <span className="text-[13px] font-bold text-[#1976D2]">我的门店</span>
-              </div>
+            <div className="border-b border-gray-50 px-3 py-2 text-xs font-medium text-gray-400">
+              切换所属医院
             </div>
-            {/* 门店列表 */}
-            {clinics.length === 0 ? (
-              <div className="px-5 py-6 text-center text-[13px] text-gray-400">暂未加入任何门店</div>
-            ) : (
-              clinics.map((clinic) => {
-                const active = clinic.tenantId === currentTenantId;
-                return (
-                  <button
-                    key={clinic.tenantId}
-                    className="w-full flex items-center justify-between px-5 py-3.5 border-b border-gray-100 last:border-b-0"
-                    style={active ? { background: "linear-gradient(135deg, #E8F4FD 0%, #D6EEFB 100%)" } : undefined}
-                    onClick={() => selectClinic(clinic.tenantId)}
-                  >
-                    <span className={`text-[13px] ${active ? "font-bold text-[#1976D2]" : "text-gray-700"}`}>
-                      {clinic.name}
-                    </span>
-                    {active && (
-                      <span
-                        className="text-[11px] text-white px-2.5 py-1 rounded-md font-medium"
-                        style={{ background: "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)" }}
-                      >
-                        当前
+            <div className="max-h-72 overflow-y-auto py-1">
+              {clinics.length === 0 ? (
+                <div className="px-3 py-4 text-center text-xs text-gray-400">暂未加入任何门店</div>
+              ) : (
+                clinics.map((clinic) => {
+                  const active = clinic.tenantId === currentTenantId;
+                  const isModel = clinic.tenantId === 9999;
+                  const label = clinic.name?.trim() || clinic.shortName?.trim() || `门店 ${clinic.tenantId}`;
+                  return (
+                    <button
+                      key={clinic.tenantId}
+                      type="button"
+                      onClick={() => { selectClinic(clinic.tenantId); setShowClinicPicker(false); }}
+                      className={`flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left text-sm transition-colors ${
+                        active ? "bg-cyan-50 text-cyan-900" : "text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="truncate">{label}</span>
+                        {isModel && (
+                          <span className="shrink-0 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-700">
+                            演示
+                          </span>
+                        )}
                       </span>
-                    )}
-                  </button>
-                );
-              })
-            )}
+                      {active && <Check size={15} className="shrink-0 text-cyan-600" />}
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </div>
+          <style>{`
+            @keyframes ybClinicIn {
+              from { opacity: 0; transform: scale(0.96) translateY(-4px); }
+              to { opacity: 1; transform: scale(1) translateY(0); }
+            }
+          `}</style>
         </div>
       )}
 

@@ -77,7 +77,7 @@ export default function YabanClinicHeader({
 
       {open && hasMultiple && (
         <div
-          className="absolute left-0 z-50 mt-1.5 w-56 origin-top-left overflow-hidden rounded-xl border border-gray-100 bg-white shadow-lg"
+          className="absolute left-0 z-50 mt-1.5 w-72 origin-top-left overflow-hidden rounded-xl border border-gray-100 bg-white shadow-lg"
           style={{ animation: "ybClinicIn 150ms cubic-bezier(0.23, 1, 0.32, 1)" }}
         >
           <div className="border-b border-gray-50 px-3 py-2 text-xs font-medium text-gray-400">

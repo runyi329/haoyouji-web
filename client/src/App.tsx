@@ -794,6 +794,7 @@ function Router() {
         <Route path="/yaban/settings/customer-source" component={lazy(() => import("./pages/yaban/YabanCustomerSource"))} />
         <Route path="/yaban/settings/patient-type" component={lazy(() => import("./pages/yaban/YabanPatientType"))} />
         <Route path="/yaban/settings/relation-type" component={lazy(() => import("./pages/yaban/YabanRelationType"))} />
+        <Route path="/yaban/settings/room-dept" component={lazy(() => import("./pages/yaban/YabanRoomDeptSettings"))} />
         <Route path="/yaban/settings/chat-overview" component={lazy(() => import("./pages/yaban/YabanChatOverview"))} />
         <Route path="/yaban/settings/ai-prompts" component={lazy(() => import("./pages/yaban/YabanAIPrompts"))} />
         <Route path="/yaban/followup" component={lazy(() => import("./pages/yaban/YabanFollowUp"))} />
