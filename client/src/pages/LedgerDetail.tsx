@@ -3466,19 +3466,7 @@ export default function LedgerDetail() {
                   </button>
                 </div>
               )}
-              {/* 网格交易模拟测算入口：仅创建者（isOwner）可见 */}
-              {isCustomAF && isOwner && !viewAsUserId && (
-                <button
-                  onClick={() => setLocation(`/ledger/${ledgerId}/grid-simulator`)}
-                  className="w-full h-9 rounded-full text-sm font-medium flex items-center justify-center gap-2"
-                  style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.3), rgba(139,92,246,0.3))', border: '1px solid rgba(139,92,246,0.5)', color: '#c4b5fd' }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                  </svg>
-                  网格交易模拟测算
-                </button>
-              )}
+              {/* 网格交易模拟测算入口已移至 GTO 策略下方 */}
               {isCustomAH && (isOwner || isAdmin) && (
                 <button
                   onClick={() => setShowAhCreateCompany(v => !v)}
@@ -5100,6 +5088,24 @@ export default function LedgerDetail() {
                 <div className="text-left flex-1">
                   <div className="font-semibold text-base text-white">GTO 策略</div>
                   <div className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>起手牌范围 · 赔率计算 · 策略笔记</div>
+                </div>
+                <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)' }}>
+                  <ChevronRight className="w-4 h-4 text-white" />
+                </div>
+              </button>}
+
+              {/* 网格交易模拟测算入口 - 仅创建者可见，视角查看时隐藏 */}
+              {isCustomAF && isOwner && !viewAsUserId && <button
+                onClick={() => setLocation(`/ledger/${ledgerId}/grid-simulator`)}
+                className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
+                style={{ background: 'linear-gradient(135deg, #0a1a3d 0%, #1a2e5c 50%, #0d1f4a 100%)', border: '1px solid #2d4a7a', boxShadow: '0 2px 12px rgba(0,20,80,0.18)' }}
+              >
+                <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 text-2xl" style={{ background: 'rgba(255,255,255,0.12)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+                  📊
+                </div>
+                <div className="text-left flex-1">
+                  <div className="font-semibold text-base text-white">网格交易模拟测算</div>
+                  <div className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>参数设置 · 收益模拟 · 策略测算</div>
                 </div>
                 <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)' }}>
                   <ChevronRight className="w-4 h-4 text-white" />
