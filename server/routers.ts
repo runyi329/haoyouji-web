@@ -454,7 +454,7 @@ export const appRouter = router({
             const result: any = await new Promise((resolve, reject) => {
               cos.getObject({
                 Bucket: 'haoyouji-images-1396946788',
-                Region: 'ap-guangzhou',
+                Region: 'ap-shanghai',
                 Key: cosKey,
               }, (err: any, data: any) => {
                 if (err) reject(err);
@@ -554,7 +554,7 @@ export const appRouter = router({
             const result: any = await new Promise((resolve, reject) => {
               cos.getObject({
                 Bucket: 'haoyouji-images-1396946788',
-                Region: 'ap-guangzhou',
+                Region: 'ap-shanghai',
                 Key: cosKey,
               }, (err: any, data: any) => {
                 if (err) reject(err);
