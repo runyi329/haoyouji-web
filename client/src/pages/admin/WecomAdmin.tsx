@@ -140,6 +140,43 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
 export default function WecomAdmin() {
   const [, navigate] = useLocation();
   const [activeTab, setActiveTab] = useState<TabKey>("channel");
+  const [aiEnabled, setAiEnabled] = useState(true);
+  const [togglingAi, setTogglingAi] = useState(false);
+
+  // 初始化时读取全局 AI 开关状态
+  useEffect(() => {
+    fetch("/api/wecom/channels?type=wecom_app")
+      .then(r => r.json())
+      .then(d => {
+        const list: any[] = d.channels || [];
+        // 只要有一个渠道是开的，就认为 AI 已开启
+        setAiEnabled(list.some(ch => ch.is_enabled !== 0));
+      })
+      .catch(() => {});
+  }, []);
+
+  async function handleToggleAi() {
+    setTogglingAi(true);
+    try {
+      const newVal = !aiEnabled;
+      const res = await fetch("/api/wecom/global-ai-switch", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: newVal }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        setAiEnabled(newVal);
+        toast.success(newVal ? "AI 已全局开启" : "AI 已全局关闭");
+      } else {
+        toast.error(d.error || "操作失败");
+      }
+    } catch {
+      toast.error("网络错误");
+    } finally {
+      setTogglingAi(false);
+    }
+  }
 
   const currentLabel = TABS.find(t => t.key === activeTab)?.label || "企业微信";
 
@@ -155,6 +192,30 @@ export default function WecomAdmin() {
             <div className="text-sm font-bold text-white leading-tight">{currentLabel}</div>
             <div className="text-[10px] text-green-300">个人中心 » 企业微信</div>
           </div>
+            {/* 全局 AI 开关 */}
+          <button
+            onClick={handleToggleAi}
+            disabled={togglingAi}
+            className="shrink-0 flex items-center gap-1.5 disabled:opacity-50"
+            title={aiEnabled ? 'AI 已开启，点击关闭' : 'AI 已关闭，点击开启'}
+          >
+            {togglingAi
+              ? <Loader2 className="w-5 h-5 animate-spin text-white/70" />
+              : (
+                <div className={`w-14 h-7 rounded-full transition-colors flex items-center px-0.5 ${
+                  aiEnabled ? 'bg-green-400' : 'bg-white/30'
+                }`}>
+                  <div className={`w-6 h-6 bg-white rounded-full shadow transition-transform flex items-center justify-center ${
+                    aiEnabled ? 'translate-x-7' : 'translate-x-0'
+                  }`}>
+                    <span className={`text-[9px] font-bold leading-none ${
+                      aiEnabled ? 'text-green-600' : 'text-gray-400'
+                    }`}>AI</span>
+                  </div>
+                </div>
+              )
+            }
+          </button>
         </div>
       </div>
 
@@ -4655,6 +4716,37 @@ const CHANNEL_AI_MODELS = [
 
 function ChannelDetail({ channel }: { channel: Channel }) {
   const [activeTab, setActiveTab] = useState<"config" | "rules" | "kb" | "users" | "logs" | "bindings">("config");
+  const [isEnabled, setIsEnabled] = useState(channel.is_enabled !== 0);
+  const [togglingEnabled, setTogglingEnabled] = useState(false);
+
+  async function handleToggleEnabled() {
+    setTogglingEnabled(true);
+    try {
+      const newVal = isEnabled ? 0 : 1;
+      const res = await fetch(`/api/wecom/channels/${channel.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: channel.name,
+          channel_type: channel.channel_type,
+          project_key: channel.project_key,
+          kf_id: channel.kf_id,
+          is_enabled: newVal,
+        }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        setIsEnabled(newVal === 1);
+        toast.success(newVal === 1 ? "渠道已启用" : "渠道已停用");
+      } else {
+        toast.error(d.error || "操作失败");
+      }
+    } catch {
+      toast.error("网络错误");
+    } finally {
+      setTogglingEnabled(false);
+    }
+  }
 
   const tabs = [
     { key: "config", label: "配置", icon: <Settings className="w-3.5 h-3.5" /> },
@@ -4667,22 +4759,43 @@ function ChannelDetail({ channel }: { channel: Channel }) {
 
   return (
     <div>
-      {/* 子Tab切换 */}
-      <div className="flex gap-0.5 mb-4 bg-gray-100 rounded p-1 overflow-x-auto">
-        {tabs.map(t => (
-          <button
-            key={t.key}
-            onClick={() => setActiveTab(t.key as any)}
-            className={`flex-1 flex items-center justify-center gap-1 text-xs py-1.5 rounded-sm font-medium transition-colors whitespace-nowrap px-1 ${
-              activeTab === t.key
-                ? "bg-white text-blue-600 shadow-sm"
-                : "text-gray-500"
-            }`}
-          >
-            {t.icon}
-            {t.label}
-          </button>
-        ))}
+      {/* 子Tab切换 + 渠道开关 */}
+      <div className="flex items-center gap-2 mb-4">
+        <div className="flex-1 flex gap-0.5 bg-gray-100 rounded p-1 overflow-x-auto">
+          {tabs.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key as any)}
+              className={`flex-1 flex items-center justify-center gap-1 text-xs py-1.5 rounded-sm font-medium transition-colors whitespace-nowrap px-1 ${
+                activeTab === t.key
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-gray-500"
+              }`}
+            >
+              {t.icon}
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={handleToggleEnabled}
+          disabled={togglingEnabled}
+          className="shrink-0 flex items-center gap-1.5 disabled:opacity-50"
+          title={isEnabled ? "点击停用渠道" : "点击启用渠道"}
+        >
+          {togglingEnabled
+            ? <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+            : (
+              <div className={`w-11 h-6 rounded-full transition-colors flex items-center px-0.5 ${
+                isEnabled ? 'bg-green-500' : 'bg-gray-300'
+              }`}>
+                <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                  isEnabled ? 'translate-x-5' : 'translate-x-0'
+                }`} />
+              </div>
+            )
+          }
+        </button>
       </div>
 
       {activeTab === "config" && <ChannelConfigTab channel={channel} onJumpToKb={() => setActiveTab("kb")} />}
@@ -5111,7 +5224,7 @@ function AiAssistConfigCard({
 
 // ─── 配置Tab ──────────────────────────────────────────────────────────────────
 
-function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToKb?: () => void }) {
+function ChannelConfigTab({ channel, onJumpToKb, onSelectChannel }: { channel: Channel; onJumpToKb?: () => void; onSelectChannel?: () => void }) {
   const isApp = channel.channel_type === "app";
 
   // 通用配置
@@ -5475,29 +5588,68 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
 
   return (
     <div className="space-y-4 wecom-blue">
-      {/* 渠道启用/停用开关 */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-semibold text-gray-800">渠道状态</div>
-            <div className="text-xs text-gray-400 mt-0.5">{isEnabled ? "已启用，AI 正在接收消息" : "已停用，AI 不会回复消息"}</div>
-          </div>
-          <button
-            onClick={handleToggleEnabled}
-            disabled={togglingEnabled}
-            className="flex items-center gap-2 disabled:opacity-50"
-          >
-            {togglingEnabled
-              ? <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-              : (
-                <div className={`w-12 h-7 rounded-full transition-colors flex items-center px-0.5 ${isEnabled ? 'bg-green-500' : 'bg-gray-300'}`}>
-                  <div className={`w-6 h-6 bg-white rounded-full shadow transition-transform ${isEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+      {/* 自建应用：AI 智能路由 */}
+      {isApp && (
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
+          <label className="block text-sm font-medium text-gray-700 mb-3">AI 智能路由</label>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-gray-700">智能路由开关</div>
+                <div className="text-xs text-gray-400">开启后系统自动判断每条消息派给哪个模型</div>
+              </div>
+              <button onClick={() => setRouteEnabled(!routeEnabled)}>
+                <div className={`w-11 h-6 rounded-full transition-colors flex items-center px-0.5 ${routeEnabled ? 'bg-blue-500' : 'bg-gray-300'}`}>
+                  <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${routeEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
                 </div>
-              )
-            }
-          </button>
+              </button>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-gray-50">
+              <div>
+                <div className="text-sm text-gray-700">前置分类模型</div>
+                <div className="text-xs text-gray-400">判断消息应派给谁，建议轻量级</div>
+              </div>
+              <select
+                value={classifierModel}
+                onChange={e => setClassifierModel(e.target.value)}
+                className="text-xs border border-gray-200 rounded px-2 py-1 bg-white"
+              >
+                <option value="deepseek-chat">DeepSeek Flash（推荐）</option>
+                <option value="deepseek-v4-pro">DeepSeek Pro</option>
+                <option value="manus-1.6-lite">Manus 轻量（推荐）</option>
+                <option value="manus-1.6">Manus 标准</option>
+                <option value="manus-1.6-max">Manus Max</option>
+              </select>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-gray-50">
+              <div>
+                <div className="text-sm text-gray-700">兜底模型</div>
+                <div className="text-xs text-gray-400">分类失败时使用</div>
+              </div>
+              <select
+                value={fallbackModel}
+                onChange={e => setFallbackModel(e.target.value)}
+                className="text-xs border border-gray-200 rounded px-2 py-1 bg-white"
+              >
+                <option value="deepseek-chat">DeepSeek Flash</option>
+                <option value="deepseek-v4-pro">DeepSeek Pro</option>
+                <option value="manus-1.6-lite">Manus 轻量</option>
+                <option value="manus-1.6">Manus 标准</option>
+                <option value="manus-1.6-max">Manus Max</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end mt-3 pt-3 border-t border-gray-50">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="text-xs text-white bg-blue-500 px-3 py-1.5 rounded hover:bg-blue-600 disabled:opacity-50 flex items-center gap-1"
+            >
+              {saving ? <><Loader2 className="w-3 h-3 animate-spin" />保存中...</> : '保存'}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       
       {/* 结构化 AI 指令管理 */}
@@ -5801,60 +5953,6 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
         </div>
       )}
 
-      {/* 自建应用：AI 智能路由 */}
-      {isApp && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
-          <label className="block text-sm font-medium text-gray-700 mb-3">AI 智能路由</label>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm text-gray-700">智能路由开关</div>
-                <div className="text-xs text-gray-400">开启后系统自动判断每条消息派给哪个模型</div>
-              </div>
-              <button onClick={() => setRouteEnabled(!routeEnabled)}>
-                <div className={`w-11 h-6 rounded-full transition-colors flex items-center px-0.5 ${routeEnabled ? 'bg-blue-500' : 'bg-gray-300'}`}>
-                  <div className={`w-5 h-5 bg-white rounded-full shadow transition-transform ${routeEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
-                </div>
-              </button>
-            </div>
-            <div className="flex items-center justify-between pt-2 border-t border-gray-50">
-              <div>
-                <div className="text-sm text-gray-700">前置分类模型</div>
-                <div className="text-xs text-gray-400">判断消息应派给谁，建议轻量级</div>
-              </div>
-              <select
-                value={classifierModel}
-                onChange={e => setClassifierModel(e.target.value)}
-                className="text-xs border border-gray-200 rounded px-2 py-1 bg-white"
-              >
-                <option value="deepseek-chat">DeepSeek Flash（推荐）</option>
-                <option value="deepseek-v4-pro">DeepSeek Pro</option>
-                <option value="manus-1.6-lite">Manus 轻量（推荐）</option>
-                <option value="manus-1.6">Manus 标准</option>
-                <option value="manus-1.6-max">Manus Max</option>
-              </select>
-            </div>
-            <div className="flex items-center justify-between pt-2 border-t border-gray-50">
-              <div>
-                <div className="text-sm text-gray-700">兜底模型</div>
-                <div className="text-xs text-gray-400">分类失败时使用</div>
-              </div>
-              <select
-                value={fallbackModel}
-                onChange={e => setFallbackModel(e.target.value)}
-                className="text-xs border border-gray-200 rounded px-2 py-1 bg-white"
-              >
-                <option value="deepseek-chat">DeepSeek Flash</option>
-                <option value="deepseek-v4-pro">DeepSeek Pro</option>
-                <option value="manus-1.6-lite">Manus 轻量</option>
-                <option value="manus-1.6">Manus 标准</option>
-                <option value="manus-1.6-max">Manus Max</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* 会话上下文轮数 */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4">
         <div className="flex items-center justify-between mb-1">
@@ -5873,6 +5971,15 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
         <div className="flex justify-between text-xs text-gray-300 mt-1">
           <span>1轮（省积分）</span>
           <span>50轮（强记忆）</span>
+        </div>
+        <div className="flex justify-end mt-3">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="text-xs text-white bg-blue-500 px-3 py-1.5 rounded hover:bg-blue-600 disabled:opacity-50 flex items-center gap-1"
+          >
+            {saving ? <><Loader2 className="w-3 h-3 animate-spin" />保存中...</> : '保存'}
+          </button>
         </div>
       </div>
 
@@ -6084,8 +6191,11 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
             <div className="flex gap-2">
               <button onClick={() => { setWelcomeMsg(draftWelcome); setEditingWelcome(false); }}
                 className="text-xs text-gray-400 px-2 py-0.5 rounded hover:bg-gray-50">取消</button>
-              <button onClick={() => setEditingWelcome(false)}
-                className="text-xs text-blue-500 px-2 py-0.5 rounded hover:bg-blue-50">完成</button>
+              <button onClick={() => { setEditingWelcome(false); handleSave(); }}
+                disabled={saving}
+                className="text-xs text-white bg-blue-500 px-2 py-0.5 rounded hover:bg-blue-600 disabled:opacity-50">
+                {saving ? '保存中...' : '保存'}
+              </button>
             </div>
           )}
         </div>
@@ -6117,8 +6227,11 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
             <div className="flex gap-2">
               <button onClick={() => { setWaitingMsg(draftWaiting); setEditingWaiting(false); }}
                 className="text-xs text-gray-400 px-2 py-0.5 rounded hover:bg-gray-50">取消</button>
-              <button onClick={() => setEditingWaiting(false)}
-                className="text-xs text-blue-500 px-2 py-0.5 rounded hover:bg-blue-50">完成</button>
+              <button onClick={() => { setEditingWaiting(false); handleSave(); }}
+                disabled={saving}
+                className="text-xs text-white bg-blue-500 px-2 py-0.5 rounded hover:bg-blue-600 disabled:opacity-50">
+                {saving ? '保存中...' : '保存'}
+              </button>
             </div>
           )}
         </div>
@@ -6138,35 +6251,6 @@ function ChannelConfigTab({ channel, onJumpToKb }: { channel: Channel; onJumpToK
         )}
       </div>
 
-      {/* 保存按钮：带脏数据检测和正反馈 */}
-      {(() => {
-        const currentSnap = !isApp ? JSON.stringify({
-          wm: welcomeMsg, wt: waitingMsg, sp: systemPrompt,
-          am: aiModel, ki: kbId, cr: contextRounds,
-          ne: notifyEnabled, nu: notifyUserids
-        }) : null;
-        const isDirty = isApp || (savedSnapshot === "" || currentSnap !== savedSnapshot);
-        return (
-          <button
-            onClick={handleSave}
-            disabled={saving || justSaved || (!isApp && !isDirty)}
-            className={`w-full py-3 rounded text-sm font-medium flex items-center justify-center gap-2 transition-all ${
-              saving ? 'bg-blue-400 text-white opacity-80'
-              : justSaved ? 'bg-green-500 text-white'
-              : isDirty ? 'bg-blue-600 text-white active:bg-blue-700'
-              : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-            }`}
-          >
-            {saving ? (
-              <><Loader2 className="w-4 h-4 animate-spin" />保存中...</>
-            ) : justSaved ? (
-              <><Check className="w-4 h-4" />已保存</>
-            ) : (
-              <><Save className="w-4 h-4" />{isDirty ? '保存配置' : '配置未更改'}</>
-            )}
-          </button>
-        );
-      })()}
     </div>
   );
 }
@@ -9815,6 +9899,45 @@ function AiDialogSection({ theme }: { theme: ThemeColors }) {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showChannelPicker, setShowChannelPicker] = useState(false);
+  const [showChannelList, setShowChannelList] = useState(false);
+  const [isEnabled, setIsEnabled] = useState(true);
+  const [togglingEnabled, setTogglingEnabled] = useState(false);
+
+  // 当 selectedChannel 变化时同步 isEnabled
+  useEffect(() => {
+    if (selectedChannel) setIsEnabled(selectedChannel.is_enabled !== 0);
+  }, [selectedChannel?.id]);
+
+  async function handleToggleEnabled() {
+    if (!selectedChannel) return;
+    setTogglingEnabled(true);
+    try {
+      const newVal = isEnabled ? 0 : 1;
+      const res = await fetch(`/api/wecom/channels/${selectedChannel.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: selectedChannel.name,
+          channel_type: selectedChannel.channel_type,
+          project_key: selectedChannel.project_key,
+          kf_id: selectedChannel.kf_id,
+          is_enabled: newVal,
+        }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        setIsEnabled(newVal === 1);
+        toast.success(newVal === 1 ? '渠道已启用' : '渠道已停用');
+      } else {
+        toast.error(d.error || '操作失败');
+      }
+    } catch {
+      toast.error('网络错误');
+    } finally {
+      setTogglingEnabled(false);
+    }
+  }
 
   useEffect(() => {
     fetch("/api/wecom/channels?type=wecom_app")
@@ -9828,57 +9951,57 @@ function AiDialogSection({ theme }: { theme: ThemeColors }) {
       .finally(() => setLoading(false));
   }, []);
 
-  // 统计条（渐变卡片）
-  const statsBar = (
-    <div
-      className="mx-4 mt-3 mb-2 rounded-sm p-3 text-white"
-      style={{ background: `linear-gradient(135deg, ${theme.gradientFrom} 0%, ${theme.gradientTo} 100%)` }}
-    >
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-[10px] opacity-70 mb-0.5">AI 对话渠道</div>
-          <div className="text-xl font-bold">{loading ? "—" : channels.length} 个</div>
-        </div>
-        <div className="text-right">
-          <div className="text-[10px] opacity-70 mb-0.5">已启用</div>
-          <div className="text-xl font-bold">
-            {loading ? "—" : channels.filter(c => c.enabled).length} 个
-          </div>
-        </div>
-        <div className="text-right">
-          <div className="text-[10px] opacity-70 mb-0.5">已绑定用户</div>
-          <div className="text-xl font-bold">—</div>
-        </div>
+  // loading 和无渠道时的展示
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
       </div>
-    </div>
-  );
+    );
+  }
 
-  // 渠道选择器
-  const channelSelector = channels.length > 1 ? (
-    <div className="px-4 mb-2">
-      <div className="flex gap-1 overflow-x-auto pb-1">
-        {channels.map(ch => (
-          <button
-            key={ch.id}
-            onClick={() => setSelectedChannel(ch)}
-            className="flex-shrink-0 px-3 py-1 rounded-sm text-xs font-medium border transition-all"
-            style={
-              selectedChannel?.id === ch.id
-                ? { background: theme.primary, color: '#fff', borderColor: theme.primary }
-                : { background: '#fff', color: '#6B7280', borderColor: '#E5E7EB' }
-            }
-          >
-            {ch.name}
+  if (!selectedChannel) {
+    return (
+      <div className="px-4 py-8 text-center text-sm text-gray-400">暂无 AI 对话渠道</div>
+    );
+  }
+
+  // 渠道列表页（新页面模式）
+  if (showChannelList) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3">
+          <button onClick={() => setShowChannelList(false)} className="p-1 -ml-1">
+            <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
           </button>
-        ))}
+          <span className="text-sm font-semibold text-gray-800">选择渠道</span>
+        </div>
+        <div className="px-4 pt-3 pb-8 space-y-2">
+          {channels.map(ch => (
+            <button
+              key={ch.id}
+              onClick={() => { setSelectedChannel(ch); setShowChannelList(false); }}
+              className="w-full bg-white rounded-xl border px-4 py-3.5 flex items-center justify-between shadow-sm"
+              style={{ borderColor: selectedChannel?.id === ch.id ? theme.primary : '#F3F4F6' }}
+            >
+              <div className="text-left">
+                <div className="text-sm font-medium text-gray-800">{ch.name}</div>
+                <div className="text-xs text-gray-400 mt-0.5">{ch.enabled ? '已启用' : '已停用'}</div>
+              </div>
+              {selectedChannel?.id === ch.id && (
+                <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" style={{ color: theme.primary }}><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
-  ) : null;
+    );
+  }
 
   // 子 Tab 导航（下划线风格）
   const subTabNav = (
-    <div className="bg-white border-b border-gray-100 sticky top-[96px] z-10">
-      <div className="flex overflow-x-auto">
+    <div className="bg-white border-b border-gray-100 sticky top-[96px] z-10 flex items-center">
+      <div className="flex-1 flex overflow-x-auto">
         {AI_SUB_TABS.map(t => (
           <button
             key={t.key}
@@ -9892,37 +10015,24 @@ function AiDialogSection({ theme }: { theme: ThemeColors }) {
             )}
           </button>
         ))}
+        {channels.length > 1 && (
+          <button
+            onClick={() => setShowChannelList(true)}
+            className="flex-shrink-0 px-3 py-2.5 text-xs font-medium transition-all relative whitespace-nowrap"
+            style={{ color: '#9CA3AF' }}
+          >
+            渠道
+          </button>
+        )}
       </div>
     </div>
   );
 
-  if (loading) {
-    return (
-      <div>
-        {statsBar}
-        <div className="flex justify-center py-12">
-          <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
-        </div>
-      </div>
-    );
-  }
-
-  if (!selectedChannel) {
-    return (
-      <div>
-        {statsBar}
-        <div className="px-4 py-8 text-center text-sm text-gray-400">暂无 AI 对话渠道</div>
-      </div>
-    );
-  }
-
   return (
     <div className="wecom-blue">
-      {statsBar}
-      {channelSelector}
       {subTabNav}
-      <div className="pb-8">
-        {subTab === "config" && <ChannelConfigTab channel={selectedChannel} onJumpToKb={() => setSubTab("kb")} />}
+      <div className="pb-8 px-4 pt-4">
+        {subTab === "config" && <ChannelConfigTab channel={selectedChannel} onJumpToKb={() => setSubTab("kb")} onSelectChannel={channels.length > 1 ? () => setShowChannelList(true) : undefined} />}
         {subTab === "rules" && <ChannelCustomRulesTab channelType={selectedChannel.channel_type} />}
         {subTab === "kb" && <ChannelKnowledgeTab channelType={selectedChannel.channel_type} channelId={selectedChannel.id} kbId={selectedChannel.kb_id} />}
         {subTab === "workflow" && <WorkflowTab />}

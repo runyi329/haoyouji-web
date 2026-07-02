@@ -1811,11 +1811,16 @@ async function handleKfMsgOrEvent(callbackToken: string, callbackOpenKfId: strin
       try {
         // 按 open_kfid 查找渠道
         const [chRows] = await (dbConn as any).execute(
-          "SELECT id FROM wecom_channels WHERE channel_type = 'kf' AND kf_id = ? LIMIT 1",
+          "SELECT id, is_enabled FROM wecom_channels WHERE channel_type = 'kf' AND kf_id = ? LIMIT 1",
           [KF_OPEN_KFID]
         );
         if ((chRows as any[]).length > 0) {
-          kfChannelId = (chRows as any[])[0].id;
+          const chRow = (chRows as any[])[0];
+          if (!chRow.is_enabled) {
+            console.log(`[KF] 渠道 id=${chRow.id} is_enabled=0，跳过处理`);
+            return;
+          }
+          kfChannelId = chRow.id;
         } else {
           // 自动注册新渠道
           const [insertRes] = await (dbConn as any).execute(
@@ -4107,6 +4112,21 @@ router.delete("/api/wecom/channels/:id", async (req: Request, res: Response) => 
   } catch (e) {
     console.error("[渠道] 删除失败:", e);
     res.status(500).json({ error: "删除失败" });
+  }
+});
+
+// 全局 AI 开关（批量启用/停用所有渠道）
+router.put("/api/wecom/global-ai-switch", async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ error: "数据库连接失败" });
+    const { enabled } = req.body;
+    const val = enabled ? 1 : 0;
+    await (conn as any).execute(`UPDATE wecom_channels SET is_enabled = ?`, [val]);
+    res.json({ ok: true, enabled: val });
+  } catch (e) {
+    console.error("[全局AI开关] 失败:", e);
+    res.status(500).json({ error: "操作失败" });
   }
 });
 

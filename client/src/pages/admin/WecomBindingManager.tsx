@@ -82,7 +82,7 @@ function StatsBar({ stats, loading }: { stats: Stats | null; loading: boolean })
     return (
       <div className="px-4 py-3 mb-2 flex gap-3">
         {[1, 2, 3].map(i => (
-          <div key={i} className="flex-1 h-14 bg-gray-100 rounded-xl animate-pulse" />
+          <div key={i} className="flex-1 h-14 bg-gray-100 rounded animate-pulse" />
         ))}
       </div>
     );
@@ -95,7 +95,7 @@ function StatsBar({ stats, loading }: { stats: Stats | null; loading: boolean })
   return (
     <div className="px-4 py-3 mb-2 flex gap-3">
       {items.map(item => (
-        <div key={item.label} className="flex-1 bg-white rounded-xl shadow-sm px-3 py-2.5 text-center">
+        <div key={item.label} className="flex-1 bg-white rounded shadow-sm px-3 py-2.5 text-center">
           <div className={`text-xl font-bold ${item.color}`}>{item.value}</div>
           <div className="text-xs text-gray-400 mt-0.5">{item.label}</div>
         </div>
@@ -183,7 +183,7 @@ function BindDialog({
           <button onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
         </div>
 
-        <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+        <div className="text-xs text-gray-500 bg-gray-50 rounded-sm px-3 py-2">
           企微用户：<span className="font-medium text-gray-700">{wecomUserId}</span>
         </div>
 
@@ -192,7 +192,7 @@ function BindDialog({
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
-              className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:border-blue-400"
+              className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded text-sm outline-none focus:border-blue-400"
               placeholder="输入用户名、姓名或手机号..."
               value={keyword}
               onChange={e => { setKeyword(e.target.value); setSelectedUser(null); }}
@@ -201,7 +201,7 @@ function BindDialog({
           </div>
 
           {searchResults.length > 0 && !selectedUser && (
-            <div className="mt-1 border border-gray-100 rounded-xl overflow-hidden shadow-sm">
+            <div className="mt-1 border border-gray-100 rounded overflow-hidden shadow-sm">
               {searchResults.map(u => (
                 <button
                   key={u.id}
@@ -222,7 +222,7 @@ function BindDialog({
           )}
 
           {selectedUser && (
-            <div className="mt-2 flex items-center gap-3 bg-blue-50 rounded-xl px-3 py-2.5">
+            <div className="mt-2 flex items-center gap-3 bg-blue-50 rounded px-3 py-2.5">
               <div className="w-8 h-8 rounded-full bg-blue-200 flex items-center justify-center flex-shrink-0">
                 <User className="w-4 h-4 text-blue-600" />
               </div>
@@ -240,7 +240,7 @@ function BindDialog({
         <div>
           <label className="text-xs font-medium text-gray-600 mb-1.5 block">备注（可选）</label>
           <input
-            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm outline-none focus:border-blue-400"
+            className="w-full px-3 py-2.5 border border-gray-200 rounded text-sm outline-none focus:border-blue-400"
             placeholder="如：VIP客户、内部测试..."
             value={note}
             onChange={e => setNote(e.target.value)}
@@ -250,7 +250,7 @@ function BindDialog({
         <button
           onClick={handleSave}
           disabled={saving || (!selectedUser && !currentBinding?.site_username)}
-          className="w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+          className="w-full py-3 bg-blue-600 text-white rounded text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           确认绑定
@@ -284,7 +284,7 @@ function UserCard({
   }, [menuOpen]);
 
   return (
-    <div className="bg-white mx-4 mb-3 rounded-2xl shadow-sm overflow-hidden">
+    <div className="bg-white mx-4 mb-3 rounded shadow-sm overflow-hidden">
       <div className="px-4 pt-4 pb-3 flex items-start gap-3">
         <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center flex-shrink-0 text-white font-bold text-sm">
           {(record.nickname || record.wecom_user_id).charAt(0).toUpperCase()}
@@ -309,12 +309,12 @@ function UserCard({
             <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setMenuOpen(v => !v)}
-                className="p-1 rounded-lg text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+                className="p-1 rounded-sm text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
               >
                 <Pencil className="w-3.5 h-3.5" />
               </button>
               {menuOpen && (
-                <div className="absolute right-0 top-7 z-20 bg-white rounded-lg shadow-md border border-gray-200 py-1 min-w-[90px]">
+                <div className="absolute right-0 top-7 z-20 bg-white rounded-sm shadow-md border border-gray-200 py-1 min-w-[90px]">
                   <button
                     onClick={() => { setMenuOpen(false); onBind(record); }}
                     className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
@@ -355,7 +355,7 @@ function UserCard({
       <div className="px-4 py-3 space-y-2">
         {/* 脉动网钉包绑定（核心） */}
         <div className="flex items-center gap-3">
-          <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${isBound ? "bg-green-100" : "bg-gray-100"}`}>
+          <div className={`w-7 h-7 rounded-sm flex items-center justify-center flex-shrink-0 ${isBound ? "bg-green-100" : "bg-gray-100"}`}>
             <Wallet className={`w-3.5 h-3.5 ${isBound ? "text-green-600" : "text-gray-400"}`} />
           </div>
           <div className="flex-1 min-w-0">
@@ -373,7 +373,7 @@ function UserCard({
 
         {/* Manus 绑定（辅助提示） */}
         <div className="flex items-center gap-3">
-          <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${hasManus ? "bg-purple-100" : "bg-gray-100"}`}>
+          <div className={`w-7 h-7 rounded-sm flex items-center justify-center flex-shrink-0 ${hasManus ? "bg-purple-100" : "bg-gray-100"}`}>
             <Bot className={`w-3.5 h-3.5 ${hasManus ? "text-purple-600" : "text-gray-400"}`} />
           </div>
           <div className="flex-1 min-w-0">
@@ -477,7 +477,7 @@ export default function WecomBindingManager() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
-            className="w-full pl-9 pr-4 py-2.5 bg-white rounded-xl text-sm shadow-sm border-0 outline-none focus:ring-2 focus:ring-blue-200"
+            className="w-full pl-9 pr-4 py-2.5 bg-white rounded text-sm shadow-sm border-0 outline-none focus:ring-2 focus:ring-blue-200"
             placeholder="搜索企微ID、昵称、用户名、手机号..."
             value={keyword}
             onChange={e => setKeyword(e.target.value)}
@@ -485,7 +485,7 @@ export default function WecomBindingManager() {
         </div>
         <button
           onClick={() => { fetchStats(); fetchUsers(keyword, page); }}
-          className="p-2.5 bg-white rounded-xl shadow-sm text-gray-500 hover:text-blue-500 transition-colors"
+          className="p-2.5 bg-white rounded shadow-sm text-gray-500 hover:text-blue-500 transition-colors"
         >
           <RefreshCw className="w-4 h-4" />
         </button>
@@ -521,7 +521,7 @@ export default function WecomBindingManager() {
               <button
                 disabled={page <= 1}
                 onClick={() => setPage(p => p - 1)}
-                className="px-4 py-2 rounded-lg bg-white shadow-sm text-sm text-gray-600 disabled:opacity-40"
+                className="px-4 py-2 rounded-sm bg-white shadow-sm text-sm text-gray-600 disabled:opacity-40"
               >
                 上一页
               </button>
@@ -529,7 +529,7 @@ export default function WecomBindingManager() {
               <button
                 disabled={page >= totalPages}
                 onClick={() => setPage(p => p + 1)}
-                className="px-4 py-2 rounded-lg bg-white shadow-sm text-sm text-gray-600 disabled:opacity-40"
+                className="px-4 py-2 rounded-sm bg-white shadow-sm text-sm text-gray-600 disabled:opacity-40"
               >
                 下一页
               </button>

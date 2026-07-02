@@ -771,12 +771,52 @@ export function ChannelConfigTab({
 
   return (
     <div className="space-y-4">
+      {/* 自建应用：AI 智能路由（yabanMode 下隐藏） */}
+      {isApp && !yabanMode && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+          <label className="block text-sm font-medium text-gray-700 mb-3">AI 智能路由</label>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-gray-700">智能路由开关</div>
+                <div className="text-xs text-gray-400">开启后系统自动判断每条消息派给哪个模型</div>
+              </div>
+              <button onClick={() => setRouteEnabled(!routeEnabled)}>
+                {routeEnabled ? <ToggleRight className="w-8 h-8 text-blue-500" /> : <ToggleLeft className="w-8 h-8 text-gray-400" />}
+              </button>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-gray-50">
+              <div>
+                <div className="text-sm text-gray-700">前置分类模型</div>
+                <div className="text-xs text-gray-400">判断消息应派给谁，建议轻量级</div>
+              </div>
+              <select value={classifierModel} onChange={e => setClassifierModel(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1 bg-white">
+                <option value="deepseek-chat">DeepSeek Flash（推荐）</option>
+                <option value="manus-1.6-lite">Manus 轻量（推荐）</option>
+                <option value="manus-1.6">Manus 标准</option>
+              </select>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-gray-50">
+              <div>
+                <div className="text-sm text-gray-700">兜底模型</div>
+                <div className="text-xs text-gray-400">分类失败时使用</div>
+              </div>
+              <select value={fallbackModel} onChange={e => setFallbackModel(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1 bg-white">
+                <option value="deepseek-chat">DeepSeek Flash</option>
+                <option value="manus-1.6-lite">Manus 轻量</option>
+                <option value="manus-1.6">Manus 标准</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 渠道启用/停用开关（yabanMode 下隐藏） */}
       {!yabanMode && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm font-semibold text-gray-800">渠道状态</div>
+              <div className="text-sm font-semibold text-blue-600">渠道状态</div>
               <div className="text-xs text-gray-400 mt-0.5">{isEnabled ? "已启用，AI 正在接收消息" : "已停用，AI 不会回复消息"}</div>
             </div>
             <button onClick={handleToggleEnabled} disabled={togglingEnabled} className="flex items-center gap-2 disabled:opacity-50">
@@ -1049,46 +1089,6 @@ export function ChannelConfigTab({
                 <span className="text-xs text-gray-400">{m.desc}</span>
               </button>
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* 自建应用：AI 智能路由（yabanMode 下隐藏） */}
-      {isApp && !yabanMode && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-          <label className="block text-sm font-medium text-gray-700 mb-3">AI 智能路由</label>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm text-gray-700">智能路由开关</div>
-                <div className="text-xs text-gray-400">开启后系统自动判断每条消息派给哪个模型</div>
-              </div>
-              <button onClick={() => setRouteEnabled(!routeEnabled)}>
-                {routeEnabled ? <ToggleRight className="w-8 h-8 text-blue-500" /> : <ToggleLeft className="w-8 h-8 text-gray-400" />}
-              </button>
-            </div>
-            <div className="flex items-center justify-between pt-2 border-t border-gray-50">
-              <div>
-                <div className="text-sm text-gray-700">前置分类模型</div>
-                <div className="text-xs text-gray-400">判断消息应派给谁，建议轻量级</div>
-              </div>
-              <select value={classifierModel} onChange={e => setClassifierModel(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1 bg-white">
-                <option value="deepseek-chat">DeepSeek Flash（推荐）</option>
-                <option value="manus-1.6-lite">Manus 轻量（推荐）</option>
-                <option value="manus-1.6">Manus 标准</option>
-              </select>
-            </div>
-            <div className="flex items-center justify-between pt-2 border-t border-gray-50">
-              <div>
-                <div className="text-sm text-gray-700">兜底模型</div>
-                <div className="text-xs text-gray-400">分类失败时使用</div>
-              </div>
-              <select value={fallbackModel} onChange={e => setFallbackModel(e.target.value)} className="text-xs border border-gray-200 rounded px-2 py-1 bg-white">
-                <option value="deepseek-chat">DeepSeek Flash</option>
-                <option value="manus-1.6-lite">Manus 轻量</option>
-                <option value="manus-1.6">Manus 标准</option>
-              </select>
-            </div>
           </div>
         </div>
       )}
