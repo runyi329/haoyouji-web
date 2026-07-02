@@ -4298,53 +4298,58 @@ export default function LedgerDetail() {
               {/* 订单明细列表 */}
               <div className="overflow-y-auto flex-1 px-3 py-2">
                 {/* 表头 */}
-                <div className="grid text-[9px] font-semibold mb-1 px-1" style={{ gridTemplateColumns: '20px 1fr 1fr 1fr 60px', color: '#9CA3AF' }}>
+                <div className="grid text-[9px] font-semibold mb-1 px-1" style={{ gridTemplateColumns: '20px 1fr 1fr 1fr 1fr', color: '#9CA3AF' }}>
                   <span>#</span>
                   <span className="text-right">买入价</span>
-                  <span className="text-right">数量</span>
+                  <span className="text-right">实际数量</span>
+                  <span className="text-right">折后数量</span>
                   <span className="text-right">小计(U)</span>
-                  <span className="text-right">档位/折扣</span>
                 </div>
                 {avgCostDetailData.orderDetails.map((d, i) => (
-                  <div key={i} className="grid items-center py-1 px-1 rounded" style={{ gridTemplateColumns: '20px 1fr 1fr 1fr 60px', background: i % 2 === 0 ? '#F9FAFB' : 'transparent' }}>
+                  <div key={i} className="grid items-center py-1 px-1 rounded" style={{ gridTemplateColumns: '20px 1fr 1fr 1fr 1fr', background: i % 2 === 0 ? '#F9FAFB' : 'transparent' }}>
                     <span className="text-[9px]" style={{ color: '#9CA3AF' }}>{i + 1}</span>
                     <span className="text-right text-[10px] font-mono" style={{ color: '#1A2340' }}>
                       {d.isGift && <span className="text-[8px] mr-0.5" style={{ color: '#F59E0B' }}>赠</span>}
                       {d.buyPrice.toFixed(3)}
                     </span>
                     <span className="text-right text-[10px] font-mono" style={{ color: '#374151' }}>{d.originalQty.toFixed(3)}</span>
+                    <span className="text-right text-[10px] font-mono" style={{ color: d.tier === 0 ? '#6B7280' : '#DC2626' }}>{d.effectiveQty.toFixed(3)}</span>
                     <span className="text-right text-[10px] font-mono" style={{ color: '#1976D2' }}>{(d.buyPrice * d.originalQty).toFixed(2)}</span>
-                    <span className="text-right text-[9px]" style={{ color: d.tier === 0 ? '#6B7280' : '#DC2626' }}>
-                      {d.tier === 0 ? '0档' : `${d.tier}档`} {(d.discountRate * 100).toFixed(0)}%
-                    </span>
                   </div>
                 ))}
               </div>
               {/* 汇总行 */}
               <div className="px-3 py-3" style={{ borderTop: '1px solid #E5E7EB', background: '#F9FAFB' }}>
                 {(() => {
+                  const origTotalQty = avgCostDetailData.orderDetails.reduce((s, d) => s + d.originalQty, 0);
                   const effTotalQty = avgCostDetailData.orderDetails.reduce((s, d) => s + d.effectiveQty, 0);
-                  const calcAvgCost = effTotalQty > 0 ? avgCostDetailData.totalCost / effTotalQty : 0;
+                  const calcAvgCost = origTotalQty > 0 ? avgCostDetailData.totalCost / origTotalQty : 0;
                   return (
-                    <div className="grid text-[10px] mb-1" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
-                      <div className="flex flex-col">
-                        <span style={{ color: '#9CA3AF' }}>折后数量</span>
-                        <span className="font-mono font-semibold" style={{ color: '#1A2340' }}>{effTotalQty.toFixed(3)}</span>
+                    <>
+                      <div className="grid text-[10px] mb-1" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
+                        <div className="flex flex-col">
+                          <span style={{ color: '#9CA3AF' }}>实际数量</span>
+                          <span className="font-mono font-semibold" style={{ color: '#1A2340' }}>{origTotalQty.toFixed(3)}</span>
+                        </div>
+                        <div className="flex flex-col items-center">
+                          <span style={{ color: '#9CA3AF' }}>折后数量</span>
+                          <span className="font-mono font-semibold" style={{ color: '#DC2626' }}>{effTotalQty.toFixed(3)}</span>
+                        </div>
+                        <div className="flex flex-col items-center">
+                          <span style={{ color: '#9CA3AF' }}>总成本</span>
+                          <span className="font-mono font-semibold" style={{ color: '#1976D2' }}>{avgCostDetailData.totalCost.toFixed(2)}</span>
+                        </div>
+                        <div className="flex flex-col items-end">
+                          <span style={{ color: '#9CA3AF' }}>个人均价</span>
+                          <span className="font-mono font-bold" style={{ color: '#DC2626', fontSize: '12px' }}>{calcAvgCost > 0 ? calcAvgCost.toFixed(3) : '-'}</span>
+                        </div>
                       </div>
-                      <div className="flex flex-col items-center">
-                        <span style={{ color: '#9CA3AF' }}>总成本</span>
-                        <span className="font-mono font-semibold" style={{ color: '#1976D2' }}>{avgCostDetailData.totalCost.toFixed(2)} U</span>
+                      <div className="text-[9px] mt-1.5 px-2 py-1.5 rounded" style={{ background: '#EFF6FF', color: '#6B7280' }}>
+                        均价 = 总成本 ÷ 实际数量；折后数量为档位折扣后的收益权数量
                       </div>
-                      <div className="flex flex-col items-end">
-                        <span style={{ color: '#9CA3AF' }}>个人均价</span>
-                        <span className="font-mono font-bold" style={{ color: '#DC2626', fontSize: '12px' }}>{calcAvgCost > 0 ? calcAvgCost.toFixed(3) : '-'}</span>
-                      </div>
-                    </div>
+                    </>
                   );
                 })()}
-                <div className="text-[9px] mt-1.5 px-2 py-1.5 rounded" style={{ background: '#EFF6FF', color: '#6B7280' }}>
-                  均价 = 总成本 ÷ 折后总数量，档位折扣影响有效数量，从而影响均价。
-                </div>
               </div>
             </div>
           </div>

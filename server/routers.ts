@@ -14603,12 +14603,14 @@ ${klinesSummary}
             coinPnl[coin].holdingCount++;
           }
         }
-        // 汇总：均价用折后数量作分母（档位折扣影响有效数量，从而影响均价）
-        // avgCost = 总成本 ÷ 折后总数量；浮盈 = 折后总数量 × (现价 - avgCost)
+        // 汇总：均价用原始数量作分母（均价 = 总成本 ÷ 实际数量）；浮盈用折后数量计算
+        // avgCost = 总成本 ÷ 原始总数量；浮盈 = 折后总数量 × (现价 - avgCost)
         const coins = Object.entries(coinPnl).map(([coin, data]) => {
-          // 优先用折后数量（effTotalQty）作分母；若无折扣数据则退化为原始数量
-          const effQty = data.effTotalQty > 0 ? data.effTotalQty : data.totalQty;
-          const avgCostVal = effQty > 0 ? data.totalCost / effQty : 0;
+          // 均价用原始数量作分母
+          const origQty = data.totalQty > 0 ? data.totalQty : 0;
+          const avgCostVal = origQty > 0 ? data.totalCost / origQty : 0;
+          // 浮盈用折后数量（收益权数量）计算
+          const effQty = data.effTotalQty > 0 ? data.effTotalQty : origQty;
           const liveP = prices[coin] || 0;
           const unrealizedPnl = effQty > 0 && liveP > 0 && avgCostVal > 0
             ? effQty * (liveP - avgCostVal)
@@ -14622,7 +14624,7 @@ ${klinesSummary}
           soldCount: data.soldCount,
           pendingCount: data.pendingCount,
           giftCount: data.giftCount,
-          avgCost: effQty > 0 ? parseFloat((data.totalCost / effQty).toFixed(2)) : 0,
+          avgCost: origQty > 0 ? parseFloat((data.totalCost / origQty).toFixed(2)) : 0,
           // 含管理费盈亏平衡价 = (折后持仓成本 + 累计管理费) / 折后持仓数量
           breakevenPrice: data.effTotalQty > 0 ? parseFloat(((data.effTotalCost + data.totalMgmtFee) / data.effTotalQty).toFixed(2)) : 0,
           totalMgmtFee: parseFloat(data.totalMgmtFee.toFixed(4)),
