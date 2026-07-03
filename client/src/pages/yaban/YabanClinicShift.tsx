@@ -956,7 +956,16 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
           <div style={{ background: "#fff", marginTop: 10, padding: "14px 16px 18px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: INK }}>长期周模板</div>
-              <div style={{ fontSize: 12, color: "#9AA7B5" }}>点击格子设置时段 · 左右滑动可选周六日</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {(hasSavedWork || tplEditing) && (
+                  <span onClick={() => setShowClearTplConfirm(true)}
+                    style={{ fontSize: 12, color: "#B0BEC5", cursor: "pointer", padding: "4px 8px", border: "1px solid #DBE1E8", borderRadius: 14, background: "#F6F8FA", display: "flex", alignItems: "center", gap: 3 }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#B0BEC5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                    清空模板
+                  </span>
+                )}
+                <div style={{ fontSize: 12, color: "#9AA7B5" }}>点格子设时段 · 滑动可选周六日</div>
+              </div>
             </div>
 
             {/* 横排星期格子：周一~周五铺满可见区，周六周日溢出到右侧需滑动 */}
@@ -1043,13 +1052,6 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
                 <div style={{ marginTop: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: INK }}>周{DOW_LABELS[activeDow]} 时间设置</span>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    {(hasSavedWork || tplEditing) && (
-                      <span onClick={() => setShowClearTplConfirm(true)}
-                        style={{ fontSize: 12, color: "#B0BEC5", cursor: "pointer", padding: "4px 8px", border: "1px solid #DBE1E8", borderRadius: 14, background: "#F6F8FA", display: "flex", alignItems: "center", gap: 3 }}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#B0BEC5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                        清空模板
-                      </span>
-                    )}
                     {curDay && curDay.status !== 'rest' ? (
                       <span onClick={() => setCurDay({ isRest: true, status: 'rest' })} style={{ fontSize: 13, color: "#9AA7B5", cursor: "pointer", padding: "4px 10px", border: "1px solid #DBE1E8", borderRadius: 14, background: "#F6F8FA" }}>休息日</span>
                     ) : (
