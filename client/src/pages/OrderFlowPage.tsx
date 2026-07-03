@@ -34,7 +34,7 @@ function fmt(n: number | null | undefined, decimals = 2): string {
 function fmtPct(n: number | null | undefined): string {
   if (n == null || isNaN(n)) return "--";
   const sign = n >= 0 ? "+" : "";
-  return sign + (n * 100).toFixed(3) + "%";
+  return sign + (n * 100).toFixed(2) + "%";
 }
 function todayStr(): string {
   return new Date().toISOString().slice(0, 10);
@@ -399,12 +399,128 @@ function OrderNotesSection({
   );
 }
 
+// ===== 管理员用户搜索选择器 =====
+function AdminUserPicker({
+  value, onChange, defaultUsers
+}: {
+  value: number;
+  onChange: (v: number, name?: string) => void;
+  defaultUsers: { user_id: number; username: string; nickname: string; order_count?: number }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [selectedName, setSelectedName] = useState('全部用户');
+
+  // 实时搜索全平台用户
+  const { data: searchResults = [], isFetching } = trpc.orderFlow.adminSearchUsers.useQuery(
+    { keyword: search },
+    { enabled: search.trim().length >= 1 }
+  );
+
+  // 搜索时显示搜索结果，未搜索时显示默认用户列表（按订单数降序前10个）
+  const showList = search.trim().length >= 1 ? searchResults : defaultUsers;
+
+  return (
+    <div style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        onClick={() => { setOpen(o => !o); setSearch(''); }}
+        style={{
+          fontSize: '0.6rem', color: '#333333', background: 'rgba(255,255,255,0.7)',
+          border: '1px solid rgba(0,0,0,0.2)', borderRadius: 6, padding: '2px 6px',
+          outline: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3,
+          maxWidth: 90, whiteSpace: 'nowrap',
+        }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 70 }}>{selectedName}</span>
+        <span style={{ fontSize: '0.5rem', opacity: 0.6 }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, zIndex: 999,
+          background: '#fff', border: '1px solid rgba(0,0,0,0.15)',
+          borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+          minWidth: 160, maxHeight: 240, overflow: 'hidden',
+          display: 'flex', flexDirection: 'column',
+        }}>
+          <div style={{ padding: '6px 8px', borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+            <input
+              autoFocus
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="搜索用户名/昵称..."
+              style={{
+                width: '100%', fontSize: '0.65rem', border: '1px solid rgba(0,0,0,0.15)',
+                borderRadius: 4, padding: '3px 6px', outline: 'none', boxSizing: 'border-box',
+              }}
+            />
+          </div>
+          <div style={{ overflowY: 'auto', maxHeight: 180 }}>
+            {/* 全部用户选项始终显示 */}
+            <div
+              onClick={() => { onChange(0); setSelectedName('全部用户'); setOpen(false); }}
+              style={{
+                padding: '6px 10px', fontSize: '0.65rem', cursor: 'pointer',
+                background: value === 0 ? 'rgba(184,134,11,0.1)' : 'transparent',
+                color: value === 0 ? '#B8860B' : '#333',
+                fontWeight: value === 0 ? 600 : 400,
+                borderBottom: '1px solid rgba(0,0,0,0.06)',
+              }}
+            >
+              全部用户
+            </div>
+            {search.trim().length >= 1 && isFetching ? (
+              <div style={{ padding: '10px', fontSize: '0.6rem', color: '#999', textAlign: 'center' }}>搜索中...</div>
+            ) : showList.length === 0 ? (
+              <div style={{ padding: '10px', fontSize: '0.6rem', color: '#999', textAlign: 'center' }}>无匹配用户</div>
+            ) : showList.map(u => (
+              <div
+                key={u.user_id}
+                onClick={() => {
+                  onChange(u.user_id);
+                  setSelectedName(u.nickname || u.username);
+                  setOpen(false);
+                }}
+                style={{
+                  padding: '6px 10px', fontSize: '0.65rem', cursor: 'pointer',
+                  background: u.user_id === value ? 'rgba(184,134,11,0.1)' : 'transparent',
+                  color: u.user_id === value ? '#B8860B' : '#333',
+                  fontWeight: u.user_id === value ? 600 : 400,
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                }}
+              >
+                <div>
+                  <span>{u.nickname || u.username}</span>
+                  {u.nickname && u.username !== u.nickname && (
+                    <span style={{ fontSize: '0.55rem', color: '#999', marginLeft: 4 }}>@{u.username}</span>
+                  )}
+                </div>
+                {'order_count' in u && u.order_count !== undefined && (
+                  <span style={{ fontSize: '0.55rem', color: '#aaa', marginLeft: 6 }}>{u.order_count}单</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {open && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 998 }}
+          onClick={() => setOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
 // ===== 主页面 =====
 export default function OrderFlowPage() {
   const [, params] = useRoute("/ledger/:id/order-flow");
   const [, setLocation] = useLocation();
   const ledgerId = params ? parseInt(params.id) : 0;
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const isAdmin = user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'parent';
+  // 管理员选中的目标用户（0=全部）
+  const [adminTargetUserId, setAdminTargetUserId] = useState<number>(0); // 0=全部, >0=指定用户
 
     // 实时价格（3秒刷新）
   const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
@@ -465,10 +581,23 @@ export default function OrderFlowPage() {
   const [fundingRate, setFundingRate] = useState<number | null>(null);
   // 订单列表
   const utils = trpc.useUtils();
-  const { data: orders = [], isLoading } = trpc.orderFlow.getOrders.useQuery(
+  // 普通用户：只看自己的订单
+  const { data: normalOrders = [], isLoading: normalLoading } = trpc.orderFlow.getOrders.useQuery(
     { ledgerId, status: "all" },
-    { enabled: isAuthenticated && ledgerId > 0 }
+    { enabled: isAuthenticated && ledgerId > 0 && !isAdmin }
   );
+  // 管理员专用：获取账本内所有用户列表
+  const { data: adminUsers = [] } = trpc.orderFlow.adminGetUsers.useQuery(
+    { ledgerId },
+    { enabled: isAuthenticated && ledgerId > 0 && isAdmin }
+  );
+  // 管理员：默认看全部（targetUserId=0），可切换到任意用户
+  const { data: adminOrders = [], isLoading: adminLoading } = trpc.orderFlow.adminGetOrders.useQuery(
+    { ledgerId, targetUserId: adminTargetUserId, status: 'all' },
+    { enabled: isAuthenticated && ledgerId > 0 && isAdmin }
+  );
+  const orders = isAdmin ? adminOrders : normalOrders;
+  const isLoading = isAdmin ? adminLoading : normalLoading;
 
   const [formError, setFormError] = useState<string | null>(null);
   const addOrderMutation = trpc.orderFlow.addOrder.useMutation({
@@ -752,7 +881,7 @@ export default function OrderFlowPage() {
           <ChevronLeft className="w-5 h-5 text-white" />
         </button>
 
-        <div className="flex-1 min-w-0 relative">
+        <div className="flex-1 min-w-0 relative flex items-center gap-2">
           <button
             onClick={() => setShowPageMenu((v: boolean) => !v)}
             className="flex items-center gap-1 font-semibold text-base"
@@ -770,6 +899,13 @@ export default function OrderFlowPage() {
             <span>订单流管理</span>
             <ChevronDown className="w-3.5 h-3.5 opacity-60" style={{ color: OKX_TEXT_SEC }} />
           </button>
+          {isAdmin && (
+            <AdminUserPicker
+              value={adminTargetUserId}
+              onChange={setAdminTargetUserId}
+              defaultUsers={adminUsers}
+            />
+          )}
           {showPageMenu && (
             <div
               className="absolute top-full left-0 mt-1 rounded-xl overflow-hidden z-50"
@@ -866,7 +1002,23 @@ export default function OrderFlowPage() {
             className="flex items-center justify-between px-4 pt-2.5 pb-1"
             style={{ borderBottom: "1px solid rgba(0,0,0,0.08)" }}
           >
-            <span className="text-xs font-semibold" style={{ color: '#222222', letterSpacing: '0.05em' }}>持仓汇总</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span className="text-xs font-semibold" style={{ color: '#222222', letterSpacing: '0.05em' }}>持仓汇总</span>
+              {/* 显示当前查看的用户名 */}
+              {isAdmin && adminTargetUserId === 0 ? (
+                <span style={{ fontSize: '0.55rem', color: '#B8860B', fontWeight: 600, background: 'rgba(184,134,11,0.1)', borderRadius: 4, padding: '1px 5px' }}>全部用户</span>
+              ) : isAdmin && adminTargetUserId > 0 ? (
+                <span style={{ fontSize: '0.55rem', color: '#555', fontWeight: 600, background: 'rgba(0,0,0,0.06)', borderRadius: 4, padding: '1px 5px' }}>
+                  {adminUsers.find((u: any) => u.user_id === adminTargetUserId)?.nickname ||
+                   adminUsers.find((u: any) => u.user_id === adminTargetUserId)?.username ||
+                   `UID:${adminTargetUserId}`}
+                </span>
+              ) : (
+                <span style={{ fontSize: '0.55rem', color: '#555', fontWeight: 600, background: 'rgba(0,0,0,0.06)', borderRadius: 4, padding: '1px 5px' }}>
+                  {user?.name || user?.username || ''}
+                </span>
+              )}
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               {currentPrice && (
                 <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#B8860B', fontVariantNumeric: 'tabular-nums', fontFamily: 'Inter, -apple-system, sans-serif' }}>
@@ -1123,15 +1275,22 @@ export default function OrderFlowPage() {
                     {expiryDaysLeft > 0 ? `${expiryDaysLeft}天到期` : "已到期"}
                   </span>
                 )}
-                {/* 开仓日期（持仓中）或开仓+平仓日期（已平仓） */}
-                {isOpen ? (
-                  <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>{order.entry_date}</span>
-                ) : (
-                  <div className="flex flex-col leading-tight">
-                    <span className="text-xs" style={{ color: OKX_TEXT_SEC, fontSize: "0.65rem" }}>{order.entry_date}</span>
-                    {order.exit_date && <span className="text-xs" style={{ color: OKX_TEXT_SEC, fontSize: "0.65rem" }}>{order.exit_date}</span>}
-                  </div>
-                )}
+                {/* 开仓日期 + 订单编号 */}
+                <div className="flex flex-col leading-tight">
+                  {isOpen ? (
+                    <span style={{ color: OKX_TEXT_SEC, fontSize: '0.6rem' }}>{order.entry_date}</span>
+                  ) : (
+                    <>
+                      <span style={{ color: OKX_TEXT_SEC, fontSize: '0.6rem' }}>{order.entry_date}</span>
+                      {order.exit_date && <span style={{ color: OKX_TEXT_SEC, fontSize: '0.6rem' }}>{order.exit_date}</span>}
+                    </>
+                  )}
+                  {(order as any).order_no && (
+                    <span style={{ color: '#aaaaaa', fontSize: '0.55rem', fontFamily: 'monospace', letterSpacing: '0.05em' }}>
+                      {(order as any).order_no}
+                    </span>
+                  )}
+                </div>
 
                 <span
                   className="text-xs px-1.5 py-0.5 rounded ml-auto"
@@ -1184,9 +1343,9 @@ export default function OrderFlowPage() {
               {/* 行3：次要数据 - 数量 / 保证金 / 名义价值 */}
               <div className="grid grid-cols-3 gap-0 px-3 py-2" style={{ borderTop: `1px solid ${OKX_BORDER}` }}>
                 <div>
-                  <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>数量</div>
+                  <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>ETH数量</div>
                   <div className="text-sm" style={{ color: OKX_TEXT_PRI, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                    {fmt(parseFloat(order.quantity), 4)} ETH
+                    {fmt(parseFloat(order.quantity), 2)}
                   </div>
                 </div>
                 <div className="text-center">
@@ -1194,13 +1353,13 @@ export default function OrderFlowPage() {
                   <div className="text-sm" style={{ color: OKX_TEXT_PRI, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
                     {isOption && order.premium
                       ? `${Math.round(parseFloat(order.premium)).toLocaleString("zh-CN")} U`
-                      : fmt(calc.margin, 2)}
+                      : <>{fmt(calc.margin, 2)}<span style={{ fontSize: '0.6rem', color: OKX_TEXT_SEC, marginLeft: 1 }}>U</span></>}
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>名义价値</div>
+                  <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>订单价値</div>
                   <div className="text-sm" style={{ color: OKX_TEXT_PRI, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                    {fmt(calc.notional, 0)}
+                    {fmt(calc.notional, 0)}<span style={{ fontSize: '0.6rem', color: OKX_TEXT_SEC, marginLeft: 1 }}>U</span>
                   </div>
                 </div>
               </div>
@@ -1308,12 +1467,9 @@ export default function OrderFlowPage() {
                 const tpPrice = order.take_profit ? parseFloat(order.take_profit) : null;
                 const slPrice = order.stop_loss ? parseFloat(order.stop_loss) : null;
                 const calcNetPnl = (targetPrice: number) => {
+                  // 止盈利润 = 毛利润，不扣手续费和资金费
                   const rawPnl = isLongDir ? (targetPrice - entry) * qty : (entry - targetPrice) * qty;
-                  const openFee = entry * qty * feeRate;
-                  const closeFee = targetPrice * qty * feeRate;
-                  // 资金费估算：当前已累计（已有数据）+ 未来估算（用当前费率估算）
-                  const fundingEst = calc.fundingCost != null ? Math.abs(calc.fundingCost) : 0;
-                  return rawPnl - openFee - closeFee - fundingEst;
+                  return rawPnl;
                 };
                 return (
                   <div className="px-3 py-1.5 space-y-1" style={{ borderTop: `1px solid ${OKX_BORDER}` }}>
@@ -1337,7 +1493,7 @@ export default function OrderFlowPage() {
                             )}
                           </div>
                           <span className="text-xs font-medium" style={{ color: net >= 0 ? OKX_GREEN : OKX_RED, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                            预计净利润 {net >= 0 ? "+" : ""}{fmt(net, 2)}
+                            止盈利润 {net >= 0 ? "+" : ""}{fmt(net, 2)}
                           </span>
                         </div>
                       );
@@ -1365,17 +1521,26 @@ export default function OrderFlowPage() {
                 className="flex flex-col gap-y-1 px-3 py-2"
                 style={{ borderTop: `1px solid ${OKX_BORDER}`, background: "rgba(0,0,0,0.25)" }}
               >
-                {/* 盈亏平衡 + 手续费 + 资金费累计 全在一行 */}
+                {/* 盈亏平衡 + ℹ️明细弹窗 */}
                 <div className="flex items-center justify-between">
                   <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>盈亏平衡 {fmt(calc.breakEven, 2)}</span>
-                  <div className="flex items-center gap-2">
-                    {isPerp && calc.fundingCost != null && (
-                      <span className="text-xs" style={{ color: calc.fundingCost >= 0 ? OKX_RED : OKX_GREEN, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                        {calc.fundingCost >= 0 ? "-" : "+"}{fmt(Math.abs(calc.fundingCost), 4)}
-                      </span>
-                    )}
-                    <span className="text-xs" style={{ color: OKX_TEXT_SEC, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>-{fmt(calc.totalFee, 4)}</span>
-                  </div>
+                  <button
+                    onClick={() => {
+                      const rawPnl = calc.pnl != null ? (calc.pnl + calc.totalFee + (calc.fundingCost ?? 0)) : null;
+                      const lines = [
+                        `持仓盈亏：${rawPnl != null ? (rawPnl >= 0 ? '+' : '') + fmt(rawPnl, 2) + ' U' : '--'}`,
+                        `开仓手续费：-${fmt(calc.openFee, 2)} U`,
+                        `平仓手续费（预估）：-${fmt(calc.closeFee, 2)} U`,
+                        isPerp && calc.fundingCost != null ? `资金费累计：${calc.fundingCost >= 0 ? '-' : '+'}${fmt(Math.abs(calc.fundingCost), 2)} U` : null,
+                        `──────────`,
+                        `止盈利润：${rawPnl != null ? (rawPnl >= 0 ? '+' : '') + fmt(rawPnl, 2) + ' U' : '--'}`,
+                      ].filter(Boolean).join('\n');
+                      alert(lines);
+                    }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', color: OKX_TEXT_SEC, fontSize: '0.7rem', lineHeight: 1 }}
+                  >
+                    ⓘ
+                  </button>
                 </div>
               </div>
 
@@ -1635,7 +1800,7 @@ export default function OrderFlowPage() {
               </div>
             ))}
             {/* 止盈价（带默认值跟踪，期权不显示） */}
-            {form.marketType !== "option" && <div className="mb-3">
+            <div className="mb-3">
               <div className="flex items-center justify-between mb-1">
                 <label className="text-xs" style={{ color: OKX_TEXT_SEC }}>止盈价 (可选)</label>
                 <button
@@ -1686,7 +1851,7 @@ export default function OrderFlowPage() {
                   maxWidth: "100%",
                 }}
               />
-            </div>}
+            </div>
 
             {/* 开仓日期 */}
             <div className="mb-3">

@@ -25848,12 +25848,17 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
         await db.execute(
           sql`INSERT INTO order_flow_trades
-              (ledger_id, user_id, symbol, direction, market_type, order_type, vip_level, entry_price, quantity, leverage, take_profit, stop_loss, entry_date, expiry_date, option_type, strike_price, premium, note, created_by)
+              (ledger_id, user_id, symbol, direction, market_type, order_type, vip_level, entry_price, quantity, leverage, take_profit, stop_loss, entry_date, expiry_date, option_type, strike_price, premium, note, created_by, order_no)
               VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.symbol}, ${input.direction},
                       ${input.marketType}, ${input.orderType}, ${input.vipLevel},
                       ${input.entryPrice}, ${input.quantity}, ${input.leverage},
                       ${input.takeProfit ?? null}, ${input.stopLoss ?? null},
-                      ${input.entryDate}, ${input.expiryDate ?? null}, ${input.optionType ?? null}, ${input.strikePrice ?? null}, ${input.premium ?? null}, ${input.note ?? null}, ${ctx.user.id})`
+                      ${input.entryDate}, ${input.expiryDate ?? null}, ${input.optionType ?? null}, ${input.strikePrice ?? null}, ${input.premium ?? null}, ${input.note ?? null}, ${ctx.user.id},
+                      CONCAT(
+                        CHAR(FLOOR(65 + RAND() * 26)),
+                        CHAR(FLOOR(65 + RAND() * 26)),
+                        LPAD(FLOOR(RAND() * 10000), 4, '0')
+                      ))`
         );
         return { success: true };
       }),
@@ -26076,6 +26081,68 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         const profitUsdt = cnyRate > 0 ? targetProfitCny / cnyRate : 0;
         const targetExitPrice = Math.round(targetAvgPrice + profitUsdt / targetQty);
         return { targetExitPrice, targetProfitCny, cnyRate };
+      }),
+    // ===== 管理员专用接口 =====
+    // 获取该账本下所有有订单的用户列表（仅 super_admin/admin 可用）
+    adminGetUsers: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const allowedRoles = ['super_admin', 'admin', 'parent'];
+        if (!allowedRoles.includes(ctx.user.role)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        }
+        const db = await getLedgerDb();
+        if (!db) return [];
+        const rows = await db.execute(
+          sql`SELECT t.user_id, u.username, u.name as nickname, COUNT(t.id) as order_count
+              FROM order_flow_trades t
+              LEFT JOIN crm_db.users u ON u.id = t.user_id
+              WHERE t.ledger_id = ${input.ledgerId}
+              GROUP BY t.user_id, u.username, u.name
+              ORDER BY order_count DESC
+              LIMIT 10`
+        );
+        return (rows as any)[0] as { user_id: number; username: string; nickname: string; order_count: number }[];
+      }),
+    // 管理员搜索全平台用户（关键字模糊搜索）
+    adminSearchUsers: protectedProcedure
+      .input(z.object({ keyword: z.string().min(1).max(50) }))
+      .query(async ({ ctx, input }) => {
+        const allowedRoles = ['super_admin', 'admin', 'parent'];
+        if (!allowedRoles.includes(ctx.user.role)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        }
+        const conn = await getDbConnection();
+        if (!conn) return [];
+        const kw = `%${input.keyword}%`;
+        const [rows] = await (conn as any).execute(
+          'SELECT id as user_id, username, name as nickname FROM users WHERE username LIKE ? OR name LIKE ? ORDER BY username ASC LIMIT 20',
+          [kw, kw]
+        );
+        return rows as { user_id: number; username: string; nickname: string }[];
+      }),
+    // 管理员按 userId 查询订单（userId=0 时返回所有人）
+    adminGetOrders: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        targetUserId: z.number(),
+        status: z.enum(['open', 'closed', 'all']).default('all'),
+      }))
+      .query(async ({ ctx, input }) => {
+        const allowedRoles = ['super_admin', 'admin', 'parent'];
+        if (!allowedRoles.includes(ctx.user.role)) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        }
+        const db = await getLedgerDb();
+        if (!db) return [];
+        const rows = await db.execute(
+          sql`SELECT * FROM order_flow_trades
+              WHERE ledger_id = ${input.ledgerId}
+              ${input.targetUserId > 0 ? sql`AND user_id = ${input.targetUserId}` : sql``}
+              ${input.status !== 'all' ? sql`AND status = ${input.status}` : sql``}
+              ORDER BY created_at DESC`
+        );
+        return (rows as any)[0] as any[];
       }),
         // 获取最新资金费率（从数据库）
     getLatestFundingRate: publicProcedure
