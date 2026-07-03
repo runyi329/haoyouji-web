@@ -146,7 +146,9 @@ export default function YabanSchedule() {
         if (ov.workStart && ov.workEnd) return buildShift(timeToMin(ov.workStart), timeToMin(ov.workEnd), toMin(ov.breakStart), toMin(ov.breakEnd));
       }
       // 2) 优先用新的 daySegs（每天独立时段）
-      const dow = (new Date(dStr).getDay() + 6) % 7; // 0=周一...6=周日
+      // 注意：new Date("YYYY-MM-DD") 会解析为 UTC，UTC+8 下会少一天，必须用本地时间解析
+      const [_y, _m, _d] = dStr.split("-").map(Number);
+      const dow = (new Date(_y, _m - 1, _d).getDay() + 6) % 7; // 0=周一...6=周日
       const dsEntry = shiftDaySegs.find((s: any) => s.staffUserId === userId);
       if (dsEntry) {
         const daySeg = dsEntry.dows[dow] ?? dsEntry.dows[String(dow)]; // JSON key 可能是字符串
