@@ -615,6 +615,7 @@ export const yabanShiftRouter = router({
         staffUserId: Number(uid),
         segs,
       }));
+      console.log('[weekSchedule] tenantId=', tenantId, 'daySegs=', JSON.stringify(daySegs));
       return { templates, overrides, daySegs };
     }),
 
