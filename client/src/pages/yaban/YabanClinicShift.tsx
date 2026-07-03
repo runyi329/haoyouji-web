@@ -1066,6 +1066,7 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
               }}>编辑长期模板</div>
             ) : (
               <div onClick={() => {
+                if (selDows.length === 0) { toast.error("请至少设置一天工作日"); return; }
                 if (isTimeErr) { toast.error("请先修正时间错误"); return; }
                 try {
                   const prev: string[] = JSON.parse(localStorage.getItem("yaban_recent_colors") || "[]");
@@ -1083,9 +1084,11 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
                 onSaveDaySegs(allDays, barColor);
                 setTplEditing(false);
               }} style={{
-                width: "100%", background: isTimeErr ? "#ccc" : SKY_D,
-                color: "#fff", padding: 13, borderRadius: 5, fontSize: 15, fontWeight: 600, textAlign: "center",
-                cursor: isTimeErr ? "not-allowed" : "pointer",
+                width: "100%",
+                background: selDows.length === 0 ? "#D8DDE4" : isTimeErr ? "#ccc" : SKY_D,
+                color: selDows.length === 0 ? "#9AA7B5" : "#fff",
+                padding: 13, borderRadius: 5, fontSize: 15, fontWeight: 600, textAlign: "center",
+                cursor: selDows.length === 0 ? "not-allowed" : isTimeErr ? "not-allowed" : "pointer",
               }}>保存为长期周模板</div>
             )}
           </div>
@@ -1105,7 +1108,7 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
 
                 {/* 进度条颜色 */}
                 <div style={{ display: "flex", alignItems: "center", padding: "14px 16px", borderBottom: `1px solid ${LINE}`, gap: 10 }}>
-                  <div style={{ flexShrink: 0, width: 52 }}>
+                  <div style={{ flexShrink: 0, width: 56 }}>
                     <div style={{ fontSize: 11, color: GRAY }}>颜色</div>
                   </div>
                   <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10 }}>
@@ -1126,7 +1129,7 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
 
                 {/* 节假日处理 */}
                 <div style={{ display: "flex", alignItems: "center", padding: "14px 16px", borderBottom: `1px solid ${LINE}`, gap: 10 }}>
-                  <div style={{ flexShrink: 0, width: 52 }}>
+                  <div style={{ flexShrink: 0, width: 56 }}>
                     <div style={{ fontSize: 11, color: GRAY }}>节假日</div>
                   </div>
                   <div style={{ flex: 1, display: "flex", gap: 8, pointerEvents: personalEditing ? "auto" : "none", opacity: personalEditing ? 1 : 0.7 }}>
@@ -1143,7 +1146,7 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
 
                 {/* 门店营业时间 */}
                 <div style={{ display: "flex", alignItems: "center", padding: "14px 16px", borderBottom: `1px solid ${LINE}`, gap: 10 }}>
-                  <div style={{ flexShrink: 0, width: 52 }}>
+                  <div style={{ flexShrink: 0, width: 56 }}>
                     <div style={{ fontSize: 11, color: GRAY }}>营业时间</div>
                   </div>
                   <div style={{ flex: 1, display: "flex", gap: 0, opacity: personalEditing ? 1 : 0.7,

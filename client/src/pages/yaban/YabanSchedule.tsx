@@ -480,7 +480,7 @@ function DocRows({ docList, onDocClick, onApptClick, onNewAppt, trkStart, trkEnd
   return (
     <div>
       <div style={{ background: "#fff", padding: "12px 14px 6px", borderBottom: `1px solid ${LINE}` }}>
-        <YabanGanttTimeline trackStart={a} trackEnd={b} paddingLeft={62} />
+        <YabanGanttTimeline trackStart={a} trackEnd={b} paddingLeft={66} />
       </div>
       {docList.map((doc, idx) => (
         <div key={doc.name} style={{ background: "#fff", padding: "11px 14px", display: "flex", alignItems: "center", gap: 10, borderBottom: `1px solid ${LINE}` }}>
@@ -494,7 +494,7 @@ function DocRows({ docList, onDocClick, onApptClick, onNewAppt, trkStart, trkEnd
               e.currentTarget.addEventListener("touchend", cancel, { once: true });
               e.currentTarget.addEventListener("touchmove", cancel, { once: true });
             }}
-            style={{ width: 54, flexShrink: 0, textAlign: "center", cursor: "pointer" }}>
+            style={{ minWidth: 56, maxWidth: 72, flexShrink: 0, textAlign: "center", cursor: "pointer", overflow: "hidden" }}>
             <div style={{ width: 30, height: 30, borderRadius: "50%", background: (doc.color && doc.color !== "#1E88D6") ? doc.color : SKY_L, color: (doc.color && doc.color !== "#1E88D6") ? "#fff" : SKY_D, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, margin: "0 auto 3px" }}>{doc.name.charAt(0)}</div>
             <div style={{ fontSize: 12, fontWeight: 600, color: "#26303C" }}>{doc.name}</div>
             <div style={{ fontSize: 9, color: GRAY, marginTop: 1 }}>{doc.appts.length > 0 ? `${doc.appts.length}个预约` : "暂无"}</div>
