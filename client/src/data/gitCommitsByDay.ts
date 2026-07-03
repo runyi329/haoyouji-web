@@ -8062,5 +8062,9 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-02T23:37:56Z", type: "feat", cleanMessage: "持仓汇总铭牌升级——银色拉丝+四角铆钉+统一字色+标题行显示ETH实时价和北京时间" },
     { date: "2026-07-03T00:13:38Z", type: "feat", cleanMessage: "持仓汇总——止盈价格加距止盈涨跌点数/百分比，到期盈利加人民币折算+实时汇率，数字统一整数显示" },
     { date: "2026-07-03T01:54:52Z", type: "feat", cleanMessage: "止盈利润改为毛利润，订单编号、持仓汇总银色铭牌、管理员用户切换等优化" },
+    { date: "2026-07-03T07:23:02Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-03T08:10:17Z", type: "feat", cleanMessage: "订单卡片UI优化——四列主行(数量/开仓价/最新价/浮动盈亏)、涨跌点数、去掉盈亏平衡行、筛选栏合并一行、标签改回中文" },
+    { date: "2026-07-03T08:55:28Z", type: "fix", cleanMessage: "去掉display_config联动同步逻辑，每张订单独立保存自己的字段显示配置" },
+    { date: "2026-07-03T11:55:28Z", type: "feat", cleanMessage: "排班抽屉深度重构 - 每天独立时段/AM-PM格子/上下午两行/保存两态/个性设置行式布局" },
   ],
 };
