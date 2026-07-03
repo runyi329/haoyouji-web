@@ -624,7 +624,7 @@ export default function YabanClinicShift() {
               staffUserId: schDrawer.staffUserId,
               tenantId: currentTenantId ?? undefined,
             });
-            setSchDrawer(null);
+            // 清空后留在编辑页面，不关闭抽屉
           }}
           onClose={() => setSchDrawer(null)}
           onClear={(fromDate, toDate) => {
@@ -926,11 +926,19 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
         {showClearTplConfirm && (
           <div onClick={() => setShowClearTplConfirm(false)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300 }}>
             <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, padding: "22px 20px 18px", width: "88%", maxWidth: 340 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: INK, marginBottom: 6 }}>清空周模板</div>
-              <div style={{ fontSize: 13, color: GRAY, marginBottom: 20 }}>将删除 {staffName} 的长期周模板设置，所有格子将重置为待设置状态，不可恢复。</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: INK, marginBottom: 6 }}>清空当前编辑内容</div>
+              <div style={{ fontSize: 13, color: GRAY, marginBottom: 20 }}>将清空当前页面所有格子的编辑内容，方便重新设置。已保存的模板数据不受影响，如需删除已保存数据请使用下方「清空排班」功能。</div>
               <div style={{ display: "flex", gap: 10 }}>
                 <div onClick={() => setShowClearTplConfirm(false)} style={{ flex: 1, textAlign: "center", padding: "11px 0", borderRadius: 6, border: `1px solid ${LINE}`, fontSize: 14, color: GRAY, cursor: "pointer" }}>取消</div>
-                <div onClick={() => { onClearDaySegs(); setShowClearTplConfirm(false); }}
+                <div onClick={() => {
+                  // 仅重置页面格子为待设置状态，不操作数据库
+                  const r: Record<number, any> = {};
+                  for (let i = 0; i < 7; i++) r[i] = defaultDay();
+                  setDaySettings(r);
+                  setActiveDow(null);
+                  setTplEditing(true);
+                  setShowClearTplConfirm(false);
+                }}
                   style={{ flex: 1, textAlign: "center", padding: "11px 0", borderRadius: 6, background: "#E53935", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer" }}>确认清空</div>
               </div>
             </div>
