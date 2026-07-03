@@ -534,7 +534,7 @@ export const yabanShiftRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const conn = await getDbConnection();
-      if (!conn) return { templates: [], overrides: [] };
+      if (!conn) return { templates: [], overrides: [], daySegs: [] };
       const tenantId = input.tenantId ?? (await resolveTenantId(ctx));
       // 模板
       const [tplRows] = (await conn.execute(
@@ -587,7 +587,33 @@ export const yabanShiftRouter = router({
         overtimeEnd: r.overtime_end || null,
         note: r.note || "",
       }));
-      return { templates, overrides };
+      // 每员工每天独立时段（新周模板）
+      const [dsRows] = (await conn.execute(
+        `SELECT staff_user_id, dow, work_start, work_end, break_start, break_end, is_rest
+         FROM yaban_shift_day_segs
+         WHERE tenant_id = ?`,
+        [tenantId]
+      )) as any;
+      // 按 staffUserId 分组：{ staffUserId -> { dow -> { workStart, workEnd, breakStart, breakEnd, isRest } } }
+      const daySegsMap: Record<number, Record<number, any>> = {};
+      for (const r of (dsRows as any[])) {
+        const uid = Number(r.staff_user_id);
+        const dow = Number(r.dow);
+        if (!daySegsMap[uid]) daySegsMap[uid] = {};
+        daySegsMap[uid][dow] = {
+          workStart: r.work_start || "09:00",
+          workEnd: r.work_end || "18:00",
+          breakStart: r.break_start || null,
+          breakEnd: r.break_end || null,
+          isRest: Number(r.is_rest) === 1,
+        };
+      }
+      // 转为数组格式返回
+      const daySegs = Object.entries(daySegsMap).map(([uid, dows]) => ({
+        staffUserId: Number(uid),
+        dows,
+      }));
+      return { templates, overrides, daySegs };
     }),
 
   // 保存/更新班次模板

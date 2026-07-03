@@ -118,6 +118,7 @@ export default function YabanSchedule() {
   );
   const shiftTemplates = weekSched?.templates ?? [];
   const shiftOverrides = weekSched?.overrides ?? [];
+  const shiftDaySegs = weekSched?.daySegs ?? [];  // 每员工每天独立时段（新周模板）
 
   // 计算某员工在指定日期的「有效班次」：override 优先，回退周期模板。
   // 返回 null 表示当天不可约（请假/休息，或模板未排该工作日，或全无排班）。
@@ -135,28 +136,34 @@ export default function YabanSchedule() {
   };
   const getEffectiveShift = useMemo(() => {
     const toMin = (t?: string | null) => (t ? timeToMin(t) : null);
-    // 用 userId 匹配排班模板（比 staffName 字符串更可靠）
     return (userId: number, dStr: string): EffShift => {
-      const tpl = shiftTemplates.find((t: any) => t.staffUserId === userId);
-      // 1) 单日覆盖优先（按 staffUserId 命中）
+      // 1) 单日覆盖优先
       const ov = userId != null
         ? shiftOverrides.find((o: any) => o.staffUserId === userId && o.overrideDate === dStr)
         : undefined;
       if (ov) {
         if (ov.shiftType === "rest" || ov.shiftType === "leave") return null;
         if (ov.workStart && ov.workEnd) return buildShift(timeToMin(ov.workStart), timeToMin(ov.workEnd), toMin(ov.breakStart), toMin(ov.breakEnd));
-        // override 无具体时段则继续回退模板
       }
-      // 2) 回退周期模板（需当天星期在 workDays 内）
+      // 2) 优先用新的 daySegs（每天独立时段）
+      const dow = (new Date(dStr).getDay() + 6) % 7; // 0=周一...6=周日
+      const dsEntry = shiftDaySegs.find((s: any) => s.staffUserId === userId);
+      if (dsEntry) {
+        const daySeg = dsEntry.dows[dow];
+        if (!daySeg) return null;          // 该天无记录，不排班
+        if (daySeg.isRest) return null;    // 该天是休息日
+        return buildShift(timeToMin(daySeg.workStart), timeToMin(daySeg.workEnd), toMin(daySeg.breakStart), toMin(daySeg.breakEnd));
+      }
+      // 3) 回退旧的 yaban_shift_template（尚未迁移到新接口的员工）
+      const tpl = shiftTemplates.find((t: any) => t.staffUserId === userId);
       if (tpl) {
-        const dow = (new Date(dStr).getDay() + 6) % 7;  // 转换为 0=周一...6=周日，与存储一致
         const days: number[] = tpl.workDays || [];
-        if (days.length > 0 && !days.includes(dow)) return null; // 模板当天不排班
+        if (days.length > 0 && !days.includes(dow)) return null;
         if (tpl.workStart && tpl.workEnd) return buildShift(timeToMin(tpl.workStart), timeToMin(tpl.workEnd), toMin(tpl.breakStart), toMin(tpl.breakEnd));
       }
       return null;
     };
-  }, [shiftTemplates, shiftOverrides]);
+  }, [shiftTemplates, shiftOverrides, shiftDaySegs]);
 
   // 按成员 userId 分组（附带当天有效班次 shift）
   // 角色色彩统一使用共享模块 getRoleColor，与员工排班页完全一致
