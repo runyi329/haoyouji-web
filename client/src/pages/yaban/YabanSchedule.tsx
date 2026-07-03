@@ -59,6 +59,13 @@ export default function YabanSchedule() {
   const [apptView, setApptView] = useState<"doc"|"time">("doc");
   const [selectedDocIdx, setSelectedDocIdx] = useState<number|null>(null);
   const [detailModal, setDetailModal] = useState<{ open: boolean; apptId?: number }>({ open: false });
+  // 单日覆盖编辑
+  const [overrideModal, setOverrideModal] = useState<{ open: boolean; userId: number; name: string; color?: string } | null>(null);
+  const [ovAmStart, setOvAmStart] = useState("09:00");
+  const [ovAmEnd, setOvAmEnd] = useState("12:00");
+  const [ovPmStart, setOvPmStart] = useState("13:00");
+  const [ovPmEnd, setOvPmEnd] = useState("18:00");
+  const [ovIsRest, setOvIsRest] = useState(false);
   const dateStr = toDateStr(selDate);
 
   // 新建预约统一跳转整页 P323（/yaban/schedule/create），支持带医生+时段预填
@@ -105,7 +112,7 @@ export default function YabanSchedule() {
     d.setHours(0, 0, 0, 0);
     return toDateStr(d);
   }, [selDate]);
-  const { data: weekSched } = trpc.yabanShift.weekSchedule.useQuery(
+  const { data: weekSched, refetch: refetchWeekSched } = trpc.yabanShift.weekSchedule.useQuery(
     { weekStart, tenantId: currentTenantId ?? undefined },
     { enabled: !!weekStart }
   );
@@ -234,6 +241,30 @@ export default function YabanSchedule() {
     return Math.max(0, Math.min(1, r));
   }
 
+  // 单日覆盖保存
+  const saveOverrideMut = trpc.yabanShift.saveOverride.useMutation({
+    onSuccess: () => { refetchWeekSched(); setOverrideModal(null); toast.success("当日排班已更新"); },
+    onError: (e) => toast.error(e.message),
+  });
+
+  function openOverride(userId: number, name: string, color?: string) {
+    // 预填当前有效班次时间
+    const eff = getEffectiveShift(userId, dateStr);
+    if (eff) {
+      const segs = eff.segments;
+      setOvAmStart(hm(segs[0]?.[0] ?? 9 * 60));
+      setOvAmEnd(hm(segs[0]?.[1] ?? 12 * 60));
+      setOvPmStart(hm(segs[1]?.[0] ?? 13 * 60));
+      setOvPmEnd(hm(segs[1]?.[1] ?? 18 * 60));
+      setOvIsRest(false);
+    } else {
+      setOvAmStart("09:00"); setOvAmEnd("12:00");
+      setOvPmStart("13:00"); setOvPmEnd("18:00");
+      setOvIsRest(true);
+    }
+    setOverrideModal({ open: true, userId, name, color });
+  }
+
   // 详情预约
   const detailAppt = appointments.find(a => a.id === detailModal.apptId);
   const deleteApptMut = trpc.yabanAppointment.delete.useMutation({
@@ -337,11 +368,59 @@ export default function YabanSchedule() {
         {apptView === "doc" ? (
           selectedDocIdx !== null && docList[selectedDocIdx]
             ? <SoloView doc={docList[selectedDocIdx]} onBack={() => setSelectedDocIdx(null)} onApptClick={id => setDetailModal({ open: true, apptId: id })} onNewAppt={(docName, start, end) => gotoCreate({ docName, start, end })} trkStart={trkStart} trkEnd={trkEnd} pctM={pctM} OPEN_START={OPEN_START} OPEN_END={OPEN_END} />
-            : <DocRows docList={docList} onDocClick={idx => setSelectedDocIdx(idx)} onApptClick={id => setDetailModal({ open: true, apptId: id })} onNewAppt={(docName, start, end) => gotoCreate({ docName, start, end })} trkStart={trkStart} trkEnd={trkEnd} pctM={pctM} />
+            : <DocRows docList={docList} onDocClick={idx => setSelectedDocIdx(idx)} onApptClick={id => setDetailModal({ open: true, apptId: id })} onNewAppt={(docName, start, end) => gotoCreate({ docName, start, end })} trkStart={trkStart} trkEnd={trkEnd} pctM={pctM} onEditShift={(userId, name, color) => openOverride(userId, name, color)} />
         ) : (
           <TimeView docList={selectedDocIdx !== null && docList[selectedDocIdx] ? [docList[selectedDocIdx]] : docList} onApptClick={id => setDetailModal({ open: true, apptId: id })} onNewAppt={(docName, start, end) => gotoCreate({ docName, start, end })} trkStart={trkStart} trkEnd={trkEnd} />
         )}
       </div>
+
+      {/* 单日覆盖编辑弹层 */}
+      {overrideModal?.open && (
+        <BottomSheet onClose={() => setOverrideModal(null)}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 34, height: 34, borderRadius: "50%", background: overrideModal.color || "#1E88D6", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700 }}>{overrideModal.name.charAt(0)}</div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: "#26303C" }}>{overrideModal.name}</div>
+                <div style={{ fontSize: 11, color: "#9AA7B5", marginTop: 1 }}>{dateStr} 当日排班</div>
+              </div>
+            </div>
+            <div onClick={() => { setOvIsRest(!ovIsRest); }} style={{ fontSize: 12, padding: "5px 12px", borderRadius: 16, border: `1.5px solid ${ovIsRest ? "#9AA7B5" : "#1E88D6"}`, color: ovIsRest ? "#9AA7B5" : "#1E88D6", cursor: "pointer", fontWeight: 600 }}>
+              {ovIsRest ? "设为上班" : "休息日"}
+            </div>
+          </div>
+          {!ovIsRest ? (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                <OvTimeBox val={ovAmStart} onChange={setOvAmStart} min="06:00" max="12:00" />
+                <span style={{ color: "#DBE1E8", fontSize: 18, flexShrink: 0 }}>—</span>
+                <OvTimeBox val={ovAmEnd} onChange={setOvAmEnd} min="06:00" max="13:00" />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+                <OvTimeBox val={ovPmStart} onChange={setOvPmStart} min={ovAmEnd} max="18:00" />
+                <span style={{ color: "#DBE1E8", fontSize: 18, flexShrink: 0 }}>—</span>
+                <OvTimeBox val={ovPmEnd} onChange={setOvPmEnd} min={ovPmStart} max="18:00" />
+              </div>
+            </>
+          ) : (
+            <div style={{ padding: "18px 0", textAlign: "center", color: "#9AA7B5", fontSize: 13, background: "#F6F8FA", borderRadius: 8, marginBottom: 18 }}>休息日 · 当日不可预约</div>
+          )}
+          <div onClick={() => {
+            saveOverrideMut.mutate({
+              staffUserId: overrideModal.userId,
+              overrideDate: dateStr,
+              shiftType: ovIsRest ? "rest" : "custom",
+              workStart: ovIsRest ? undefined : ovAmStart,
+              workEnd: ovIsRest ? undefined : ovPmEnd,
+              breakStart: ovIsRest ? undefined : ovAmEnd,
+              breakEnd: ovIsRest ? undefined : ovPmStart,
+              tenantId: currentTenantId ?? undefined,
+            });
+          }} style={{ width: "100%", background: "#1E88D6", color: "#fff", padding: 13, borderRadius: 6, fontSize: 15, fontWeight: 600, textAlign: "center", cursor: "pointer" }}>
+            保存当日排班
+          </div>
+        </BottomSheet>
+      )}
 
       {/* 预约详情弹窗 */}
       {detailModal.open && detailAppt && (
@@ -389,12 +468,13 @@ function BottomSheet({ children, onClose, fullscreen }: { children: React.ReactN
 
 // ── 按医生进度条视图 ──
 type EffShift = { workStart: number; workEnd: number; segments: [number, number][] } | null;
-function DocRows({ docList, onDocClick, onApptClick, onNewAppt, trkStart, trkEnd, pctM }: {
-  docList: { name: string; roleKey?: string; appts: any[]; shift?: EffShift }[];
+function DocRows({ docList, onDocClick, onApptClick, onNewAppt, trkStart, trkEnd, pctM, onEditShift }: {
+  docList: { name: string; roleKey?: string; appts: any[]; shift?: EffShift; userId?: number; color?: string }[];
   onDocClick: (idx: number) => void;
   onApptClick: (id: number) => void;
   onNewAppt: (docName: string, start: number, end: number) => void;
   trkStart: () => number; trkEnd: () => number; pctM: (m: number) => number;
+  onEditShift?: (userId: number, name: string, color?: string) => void;
 }) {
   const a = trkStart(), b = trkEnd();
   return (
@@ -404,8 +484,17 @@ function DocRows({ docList, onDocClick, onApptClick, onNewAppt, trkStart, trkEnd
       </div>
       {docList.map((doc, idx) => (
         <div key={doc.name} style={{ background: "#fff", padding: "11px 14px", display: "flex", alignItems: "center", gap: 10, borderBottom: `1px solid ${LINE}` }}>
-          {/* 左侧头像/姓名：点击进入该医生放大日程 */}
-          <div onClick={() => onDocClick(idx)} style={{ width: 54, flexShrink: 0, textAlign: "center", cursor: "pointer" }}>
+          {/* 左侧头像/姓名：点击进入该医生放大日程；长按弹出当日排班编辑 */}
+          <div
+            onClick={() => onDocClick(idx)}
+            onContextMenu={e => { e.preventDefault(); if (onEditShift && doc.userId != null) onEditShift(doc.userId, doc.name, doc.color); }}
+            onTouchStart={e => {
+              const t = setTimeout(() => { if (onEditShift && doc.userId != null) onEditShift(doc.userId, doc.name, doc.color); }, 600);
+              const cancel = () => clearTimeout(t);
+              e.currentTarget.addEventListener("touchend", cancel, { once: true });
+              e.currentTarget.addEventListener("touchmove", cancel, { once: true });
+            }}
+            style={{ width: 54, flexShrink: 0, textAlign: "center", cursor: "pointer" }}>
             <div style={{ width: 30, height: 30, borderRadius: "50%", background: (doc.color && doc.color !== "#1E88D6") ? doc.color : SKY_L, color: (doc.color && doc.color !== "#1E88D6") ? "#fff" : SKY_D, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, margin: "0 auto 3px" }}>{doc.name.charAt(0)}</div>
             <div style={{ fontSize: 12, fontWeight: 600, color: "#26303C" }}>{doc.name}</div>
             <div style={{ fontSize: 9, color: GRAY, marginTop: 1 }}>{doc.appts.length > 0 ? `${doc.appts.length}个预约` : "暂无"}</div>
@@ -633,3 +722,20 @@ function TimeView({ docList, onApptClick, onNewAppt, trkStart, trkEnd }: {
   );
 }
 
+
+// ── 单日覆盖时间选择框 ──
+function OvTimeBox({ val, onChange, min, max }: { val: string; onChange: (v: string) => void; min?: string; max?: string }) {
+  const [h, m] = val.split(":").map(Number);
+  const h12 = h % 12 || 12;
+  const ap = h < 12 ? "AM" : "PM";
+  return (
+    <label style={{ flex: 1, minWidth: 0, position: "relative", display: "flex", alignItems: "center", justifyContent: "center", gap: 3, border: "1px solid #DBE1E8", borderRadius: 6, padding: "10px 6px", background: "#F6F8FA", cursor: "pointer" }}>
+      <span style={{ fontSize: 20, fontWeight: 900, color: "#26303C", fontFamily: "system-ui,-apple-system,sans-serif", letterSpacing: 0.5 }}>
+        {h12}:{String(m).padStart(2, "0")}
+      </span>
+      <span style={{ fontSize: 12, fontWeight: 700, color: "#1E88D6" }}>{ap}</span>
+      <input type="time" value={val} step={300} min={min} max={max} onChange={e => onChange(e.target.value)}
+        style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", cursor: "pointer" }} />
+    </label>
+  );
+}
