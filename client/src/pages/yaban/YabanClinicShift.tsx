@@ -888,7 +888,7 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
               </span>
             )}
           </div>
-          <span onClick={() => setShowClearConfirm(true)} style={{ flex: 1, textAlign: "right", fontSize: 14, color: "#FFCDD2", cursor: "pointer", fontWeight: 500 }}>清空</span>
+          <span style={{ flex: 1 }} />
         </div>
 
         {/* 清空确认弹窗 */}
@@ -925,7 +925,10 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
 
           {/* ── 上半区：通用周模板 ── */}
           <div style={{ background: "#fff", marginTop: 10, padding: "14px 16px 18px" }}>
-            <div style={{ fontSize: 12, color: "#9AA7B5", marginBottom: 12 }}>点击格子设置时段 · 左右滑动可选周六日</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: INK }}>长期周模板</div>
+              <div style={{ fontSize: 12, color: "#9AA7B5" }}>点击格子设置时段 · 左右滑动可选周六日</div>
+            </div>
 
             {/* 横排星期格子：周一~周五铺满可见区，周六周日溢出到右侧需滑动 */}
             <div style={{ overflowX: "auto", margin: "0 -16px", padding: "0 16px 4px", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none" }}>
@@ -1084,7 +1087,7 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
               style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", cursor: "pointer" }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: INK }}>其他个性设置</div>
-                <div style={{ fontSize: 11, color: GRAY, marginTop: 2 }}>特殊加班、门店营业时间等</div>
+                <div style={{ fontSize: 11, color: GRAY, marginTop: 2 }}>进度条颜色、节假日、营业时间</div>
               </div>
               <span style={{ fontSize: 13, color: "#9AA7B5" }}>{showPersonal ? "▲" : "▼"}</span>
             </div>
@@ -1145,6 +1148,20 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
                       style={{ flex: 1, fontSize: 13, fontWeight: 700, color: "#26303C", border: "none", padding: "9px 0",
                         background: "transparent", fontFamily: "inherit", textAlign: "center", outline: "none",
                         cursor: personalEditing ? "pointer" : "default" }} />
+                  </div>
+                </div>
+
+                {/* 清空排班 */}
+                <div style={{ display: "flex", alignItems: "center", padding: "14px 16px", borderBottom: `1px solid ${LINE}`, gap: 10 }}>
+                  <div style={{ flexShrink: 0, width: 56 }}>
+                    <div style={{ fontSize: 11, color: GRAY }}>清空排班</div>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div onClick={() => setShowClearConfirm(true)}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 13, fontWeight: 600, color: "#B0BEC5", cursor: "pointer", padding: "8px 14px", borderRadius: 8, border: "1.5px solid #DBE1E8", background: "#F6F8FA" }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#B0BEC5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                      清空该员工排班
+                    </div>
                   </div>
                 </div>
 
