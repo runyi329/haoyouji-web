@@ -233,6 +233,12 @@ export default function YabanClinicShift() {
 
   const templates = schedData?.templates ?? [];
   const overrides = schedData?.overrides ?? [];
+  const shiftDaySegs = schedData?.daySegs ?? [];  // 每员工每天独立时段（新周模板）
+
+  // dow 计算：本地时间，0=周一...6=周日（与数据库存储一致，避免 UTC 偏移）
+  function dateToDow(date: Date): number {
+    return (date.getDay() + 6) % 7;
+  }
 
   // 全员排班清单：以门店全体在职成员为准，合并已有模板（未建模板者也可排班）
   // 行结构 { staffUserId, staffName, roleKey, hasTemplate }
@@ -292,10 +298,20 @@ export default function YabanClinicShift() {
         return segs;
       }
     }
+    // 2) 新 daySegs（与 YabanSchedule getEffectiveShift 口径一致）
+    const dow = dateToDow(date); // 0=周一...6=周日
+    const dsEntry = shiftDaySegs.find((s: any) => Number(s.staffUserId) === staffUserId);
+    if (dsEntry && Array.isArray(dsEntry.segs)) {
+      const seg = dsEntry.segs.find((x: any) => Number(x.dow) === dow);
+      if (!seg) return [];       // 该天无记录
+      if (seg.isRest) return []; // 休息日
+      return templateToSegs({ workStart: seg.workStart, workEnd: seg.workEnd, breakStart: seg.breakStart, breakEnd: seg.breakEnd });
+    }
+    // 3) 回退旧 template（兼容未迁移员工，workDays 强制转 Number）
     const tpl = templates.find((t: any) => t.staffUserId === staffUserId);
     if (!tpl) return [];
-    const dow = date.getDay();
-    if (!tpl.workDays.includes(dow)) return [];
+    const days: number[] = (tpl.workDays || []).map(Number);
+    if (days.length > 0 && !days.includes(dow)) return [];
     return templateToSegs(tpl);
   }
 
