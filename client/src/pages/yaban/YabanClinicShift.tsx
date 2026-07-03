@@ -1052,6 +1052,10 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
                 <div style={{ marginTop: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: INK }}>周{DOW_LABELS[activeDow]} 时间设置</span>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {(!hasSavedWork || tplEditing) && (
+                      <span onClick={() => setShowClearTplConfirm(true)}
+                        style={{ fontSize: 12, color: "#B0BEC5", cursor: "pointer", padding: "4px 10px", border: "1px solid #DBE1E8", borderRadius: 14, background: "#F6F8FA" }}>清空模板</span>
+                    )}
                     {curDay && curDay.status !== 'rest' ? (
                       <span onClick={() => setCurDay({ isRest: true, status: 'rest' })} style={{ fontSize: 13, color: "#9AA7B5", cursor: "pointer", padding: "4px 10px", border: "1px solid #DBE1E8", borderRadius: 14, background: "#F6F8FA" }}>休息日</span>
                     ) : (
