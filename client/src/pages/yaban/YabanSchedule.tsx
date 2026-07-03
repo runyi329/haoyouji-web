@@ -12,15 +12,13 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { useYabanClinic } from "./useYabanClinic";
 import YabanClinicHeader from "./YabanClinicHeader";
-import YabanHeatCalendar from "./YabanHeatCalendar";
 import YabanGanttBar, { YabanGanttTimeline } from "./YabanGanttBar";
 
 // ── 共享样式常量（与 A316 联动，修改 yabanSharedStyles.ts 即可同步） ──
 import {
-  HEAT, heatColor, heatTextColor,
   STATUS, ROLE_COLOR_MAP, getRoleBarColor,
   SKY, SKY_D, SKY_L, INK, GRAY, GRAY_L, LINE, BG,
-  WK, toDateStr, isSameDay, hm, timeToMin,
+  toDateStr, isSameDay, hm, timeToMin,
 } from "./yabanSharedStyles";
 
 // 预约时间格式化为区间：“日期 开始–结束（时长）”。
@@ -54,9 +52,9 @@ export default function YabanSchedule() {
     return today;
   }, [today]);
   const [selDate, setSelDate] = useState(initSelDate);
-  const [calMode, setCalMode] = useState<"week"|"month">("week");
-  const [monthCursor, setMonthCursor] = useState(new Date(today.getFullYear(), today.getMonth(), 1));
   const [apptView, setApptView] = useState<"doc"|"time">("doc");
+  // 周偏移：0=本周，-1=上周，1=下周
+  const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDocIdx, setSelectedDocIdx] = useState<number|null>(null);
   const [detailModal, setDetailModal] = useState<{ open: boolean; apptId?: number }>({ open: false });
   // 单日覆盖编辑
@@ -96,22 +94,30 @@ export default function YabanSchedule() {
 
   const { data: appointments = [], refetch: refetchAppts } = trpc.yabanAppointment.listByDate.useQuery({ date: dateStr, tenantId: currentTenantId ?? undefined });
   const { data: monthStats = {} } = trpc.yabanAppointment.monthStats.useQuery({
-    year: calMode === "month" ? monthCursor.getFullYear() : selDate.getFullYear(),
-    month: calMode === "month" ? monthCursor.getMonth() + 1 : selDate.getMonth() + 1,
+    year: selDate.getFullYear(),
+    month: selDate.getMonth() + 1,
     tenantId: currentTenantId ?? undefined,
   });
   const { data: members = [] } = trpc.yabanAppointment.listMembers.useQuery({ tenantId: currentTenantId ?? undefined }, { staleTime: 0 });
 
   // 排班数据：拉取 selDate 所在周的「模板 + 单日覆盖」，用于联动顾客预约页的医生可约时段。
   // 注意：override（单日调班/请假）优先于周期模板，shiftType=rest 当天不可约。
-  const weekStart = useMemo(() => {
-    const d = new Date(selDate);
-    const dow = d.getDay();           // 0=周日
-    const diff = dow === 0 ? -6 : 1 - dow; // 回退到本周周一
-    d.setDate(d.getDate() + diff);
-    d.setHours(0, 0, 0, 0);
-    return toDateStr(d);
-  }, [selDate]);
+  // 当前周的周一（本地时间，避免 UTC 偏移）
+  const weekMonday = useMemo(() => {
+    const now = new Date();
+    const day = now.getDay(); // 0=周日
+    const diff = day === 0 ? -6 : 1 - day;
+    const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff + weekOffset * 7);
+    mon.setHours(0, 0, 0, 0);
+    return mon;
+  }, [weekOffset]);
+  // 当前周的 7 天（本地时间）
+  const weekDates = useMemo(() => Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekMonday);
+    d.setDate(weekMonday.getDate() + i);
+    return d;
+  }), [weekMonday]);
+  const weekStart = useMemo(() => toDateStr(weekMonday), [weekMonday]);
   const { data: weekSched, refetch: refetchWeekSched } = trpc.yabanShift.weekSchedule.useQuery(
     { weekStart, tenantId: currentTenantId ?? undefined },
     { enabled: !!weekStart }
@@ -120,49 +126,44 @@ export default function YabanSchedule() {
   const shiftOverrides = weekSched?.overrides ?? [];
   const shiftDaySegs = weekSched?.daySegs ?? [];  // 每员工每天独立时段（新周模板）
 
-  // 计算某员工在指定日期的「有效班次」：override 优先，回退周期模板。
-  // 返回 null 表示当天不可约（请假/休息，或模板未排该工作日，或全无排班）。
-  // 一个有效班次：整体范围 workStart~workEnd，叠加「在岗分段 segments」。
-  // 若含午休（break）且落在区间内，则拆为两段，午休时段不可约。
+  // ── 极简重写 getEffectiveShift（彻底避免 key 类型/时区问题）──
   type EffShift = { workStart: number; workEnd: number; segments: [number, number][] } | null;
-  const buildShift = (ws: number, we: number, bs?: number | null, be?: number | null): EffShift => {
+  function buildShift(ws: number, we: number, bs?: number | null, be?: number | null): EffShift {
     if (we <= ws) return null;
     let segments: [number, number][] = [[ws, we]];
-    // 午休落在在岗区间内，才拆分（容错：仅当区间有效时）
-    if (bs != null && be != null && be > bs && bs > ws && be < we) {
-      segments = [[ws, bs], [be, we]];
-    }
+    if (bs != null && be != null && be > bs && bs > ws && be < we) segments = [[ws, bs], [be, we]];
     return { workStart: ws, workEnd: we, segments };
-  };
+  }
+  // dow 计算：用本地时间构造，避免 new Date("YYYY-MM-DD") UTC 偏移
+  function dateToDow(dStr: string): number {
+    const [y, m, d] = dStr.split("-").map(Number);
+    return (new Date(y, m - 1, d).getDay() + 6) % 7; // 0=周一...6=周日
+  }
   const getEffectiveShift = useMemo(() => {
-    const toMin = (t?: string | null) => (t ? timeToMin(t) : null);
+    const toMin2 = (t?: string | null) => (t ? timeToMin(t) : null);
     return (userId: number, dStr: string): EffShift => {
+      const uid = Number(userId);
       // 1) 单日覆盖优先
-      const ov = userId != null
-        ? shiftOverrides.find((o: any) => o.staffUserId === userId && o.overrideDate === dStr)
-        : undefined;
+      const ov = shiftOverrides.find((o: any) => Number(o.staffUserId) === uid && o.overrideDate === dStr);
       if (ov) {
         if (ov.shiftType === "rest" || ov.shiftType === "leave") return null;
-        if (ov.workStart && ov.workEnd) return buildShift(timeToMin(ov.workStart), timeToMin(ov.workEnd), toMin(ov.breakStart), toMin(ov.breakEnd));
+        if (ov.workStart && ov.workEnd) return buildShift(timeToMin(ov.workStart), timeToMin(ov.workEnd), toMin2(ov.breakStart), toMin2(ov.breakEnd));
       }
-      // 2) 优先用新的 daySegs（每天独立时段）
-      // 注意：new Date("YYYY-MM-DD") 会解析为 UTC，UTC+8 下会少一天，必须用本地时间解析
-      const [_y, _m, _d] = dStr.split("-").map(Number);
-      const dow = (new Date(_y, _m - 1, _d).getDay() + 6) % 7; // 0=周一...6=周日
-      const dsEntry = shiftDaySegs.find((s: any) => s.staffUserId === userId);
-      if (dsEntry) {
-        // segs 是数组格式 [{dow, workStart, workEnd, isRest, ...}]，用 find 查找避免 key 类型问题
-        const daySeg = (dsEntry.segs as any[]).find((x: any) => x.dow === dow);
-        if (!daySeg) return null;          // 该天无记录，不排班
-        if (daySeg.isRest) return null;    // 该天是休息日
-        return buildShift(timeToMin(daySeg.workStart), timeToMin(daySeg.workEnd), toMin(daySeg.breakStart), toMin(daySeg.breakEnd));
+      // 2) 新 daySegs（segs 数组格式，Number 强制转换确保类型一致）
+      const dow = dateToDow(dStr);
+      const dsEntry = shiftDaySegs.find((s: any) => Number(s.staffUserId) === uid);
+      if (dsEntry && Array.isArray(dsEntry.segs)) {
+        const seg = dsEntry.segs.find((x: any) => Number(x.dow) === dow);
+        if (!seg) return null;       // 该天无记录，不排班
+        if (seg.isRest) return null; // 休息日
+        return buildShift(timeToMin(seg.workStart), timeToMin(seg.workEnd), toMin2(seg.breakStart), toMin2(seg.breakEnd));
       }
-      // 3) 回退旧的 yaban_shift_template（尚未迁移到新接口的员工）
-      const tpl = shiftTemplates.find((t: any) => t.staffUserId === userId);
+      // 3) 回退旧 template（兼容未迁移员工，workDays 也强制转 Number）
+      const tpl = shiftTemplates.find((t: any) => Number(t.staffUserId) === uid);
       if (tpl) {
-        const days: number[] = tpl.workDays || [];
+        const days: number[] = (tpl.workDays || []).map(Number);
         if (days.length > 0 && !days.includes(dow)) return null;
-        if (tpl.workStart && tpl.workEnd) return buildShift(timeToMin(tpl.workStart), timeToMin(tpl.workEnd), toMin(tpl.breakStart), toMin(tpl.breakEnd));
+        if (tpl.workStart && tpl.workEnd) return buildShift(timeToMin(tpl.workStart), timeToMin(tpl.workEnd), toMin2(tpl.breakStart), toMin2(tpl.breakEnd));
       }
       return null;
     };
@@ -214,22 +215,7 @@ export default function YabanSchedule() {
     return `conic-gradient(${lv.col} ${deg}deg, #ECEFF3 ${deg}deg 360deg)`;
   }
 
-  // 日历
-  function getWeekDates(): Date[] {
-    const day = today.getDay();
-    const mon = new Date(today);
-    mon.setDate(today.getDate() - (day === 0 ? 6 : day - 1));
-    return Array.from({ length: 7 }, (_, i) => { const d = new Date(mon); d.setDate(mon.getDate() + i); return d; });
-  }
-  function getMonthDates(): (Date | null)[] {
-    const y = monthCursor.getFullYear(), m = monthCursor.getMonth();
-    const first = new Date(y, m, 1), last = new Date(y, m + 1, 0);
-    const lead = first.getDay();
-    const cells: (Date | null)[] = Array(lead).fill(null);
-    for (let d = 1; d <= last.getDate(); d++) cells.push(new Date(y, m, d));
-    return cells;
-  }
-  const weekDates = getWeekDates();
+  // weekDates 已由上方 useMemo 提前计算
 
   // 热力图负荷：真实占用率，与医生进度环口径完全统一。
   // 占用率 = 当天全院总预约时长 ÷ 当天全院可排总时长（医生数 × 营业时长）。
@@ -283,8 +269,6 @@ export default function YabanSchedule() {
   });
 
   // ── 渲染 ──
-  const calDates = calMode === "week" ? weekDates : getMonthDates();
-  const headDays = calMode === "week" ? weekDates.map(d => WK[d.getDay()]) : ["日","一","二","三","四","五","六"];
 
   return (
     <div style={{ minHeight: "100vh", background: BG, fontFamily: "-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif", color: INK }}>
@@ -318,22 +302,54 @@ export default function YabanSchedule() {
       {/* 顶栏占位：与 fixed 顶栏等高，防止主体被遮挡 */}
       <div style={{ height: headerH }} aria-hidden />
 
-      {/* 周历 / 月历 — 使用共享组件 YabanHeatCalendar（与 A316 联动） */}
-      <YabanHeatCalendar
-        selDate={selDate}
-        onSelectDate={(d) => setSelDate(d)}
-        getCellLoad={cellLoad}
-        monthCursor={monthCursor}
-        onMonthChange={setMonthCursor}
-        disablePast={false}
-        showToggle={true}
-        calMode={calMode}
-        onToggleMode={() => {
-          if (calMode === "week") { setCalMode("month"); setMonthCursor(new Date(selDate.getFullYear(), selDate.getMonth(), 1)); }
-          else setCalMode("week");
-        }}
-        weekDates={calMode === "week" ? weekDates : undefined}
-      />
+      {/* 格子日期选择器：参照排班设置页，周一~周五铺满，周六日右侧可滑动 */}
+      <div style={{ background: "#fff", padding: "10px 16px 12px", borderBottom: `8px solid ${BG}` }}>
+        {/* 周导航 */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <div onClick={() => setWeekOffset(w => w - 1)} style={{ width: 30, height: 30, borderRadius: 4, background: "#F6F8FA", color: GRAY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, cursor: "pointer" }}>‹</div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>
+              {weekDates[0].getMonth() + 1}月{weekDates[0].getDate()}日 – {weekDates[6].getMonth() + 1}月{weekDates[6].getDate()}日
+            </div>
+            <div style={{ fontSize: 11, color: weekOffset === 0 ? SKY_D : GRAY, marginTop: 2, fontWeight: weekOffset === 0 ? 600 : 400 }}>
+              {weekOffset === 0 ? "本周" : weekOffset < 0 ? `前${-weekOffset}周` : `后${weekOffset}周`}
+            </div>
+          </div>
+          <div onClick={() => setWeekOffset(w => w + 1)} style={{ width: 30, height: 30, borderRadius: 4, background: "#F6F8FA", color: GRAY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, cursor: "pointer" }}>›</div>
+        </div>
+        {/* 格子行：周一~周五铺满，周六日右侧可滑动 */}
+        <div style={{ overflowX: "auto", margin: "0 -16px", padding: "0 16px 2px", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none" }}>
+          <div style={{ display: "flex", gap: 3 }}>
+            {["一","二","三","四","五","六","日"].map((label, i) => {
+              const d = weekDates[i];
+              const dStr2 = toDateStr(d);
+              const isSelected = isSameDay(d, selDate);
+              const isToday = isSameDay(d, today);
+              const isWeekend = i >= 5;
+              const cellW = isWeekend ? 52 : "calc((100vw - 44px) / 5)";
+              const apptCount = (monthStats as any)[dStr2]?.cnt ?? 0;
+              const bg = isSelected ? SKY_D : isToday ? SKY_L : "#F6F8FA";
+              const bd = isSelected ? SKY_D : isToday ? SKY : LINE;
+              const tc = isSelected ? "#fff" : INK;
+              const gc = isSelected ? "rgba(255,255,255,.75)" : GRAY;
+              return (
+                <div key={i}
+                  onClick={() => { setSelDate(d); }}
+                  style={{ width: cellW, flexShrink: 0, marginLeft: i === 5 ? 10 : 0,
+                    height: 72, borderRadius: 10, display: "flex", flexDirection: "column",
+                    alignItems: "center", justifyContent: "center", gap: 2,
+                    cursor: "pointer", transition: "all .18s",
+                    background: bg, border: `2px solid ${bd}`,
+                    boxShadow: isSelected ? "0 2px 8px rgba(30,136,214,.25)" : "none" }}>
+                  <span style={{ fontSize: 11, color: gc, fontWeight: 500 }}>周{label}</span>
+                  <span style={{ fontSize: 20, fontWeight: 700, color: tc, lineHeight: 1.1 }}>{d.getDate()}</span>
+                  <span style={{ fontSize: 10, color: isSelected ? "rgba(255,255,255,.8)" : (apptCount > 0 ? SKY_D : "transparent"), fontWeight: 600, lineHeight: 1 }}>{apptCount > 0 ? `${apptCount}约` : "·"}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
 
       {/* 忙闲速览 */}
       <div style={{ background: "#fff", padding: "6px 14px 10px", borderBottom: `8px solid ${BG}` }}>
