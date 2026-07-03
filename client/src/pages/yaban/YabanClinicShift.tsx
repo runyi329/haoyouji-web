@@ -969,15 +969,13 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
                       {configured ? (
                         // 已设时间：左右两列 AM/PM
                         <div style={{ display: "flex", gap: 0, alignItems: "stretch", width: "100%", height: 56, overflow: "hidden", padding: "0 1px" }}>
-                          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between", padding: "2px 2px 2px 0" }}>
-                            <span style={{ fontSize: 7, color: tc2, fontWeight: 700 }}>AM</span>
+                          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-evenly", padding: "2px 2px 2px 0" }}>
                             <span style={{ fontSize: 8, fontWeight: 800, color: tc, lineHeight: 1, fontFamily: "system-ui,-apple-system,sans-serif", whiteSpace: "nowrap" }}>{am1}</span>
                             <span style={{ fontSize: 7, color: tc2, lineHeight: 1 }}>–</span>
                             <span style={{ fontSize: 8, fontWeight: 800, color: tc, lineHeight: 1, fontFamily: "system-ui,-apple-system,sans-serif", whiteSpace: "nowrap" }}>{am2}</span>
                           </div>
                           <div style={{ width: 1, background: isActive ? "rgba(255,255,255,.25)" : "#C5D8EA", flexShrink: 0, margin: "4px 0" }} />
-                          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between", padding: "2px 0 2px 2px" }}>
-                            <span style={{ fontSize: 7, color: tc2, fontWeight: 700 }}>PM</span>
+                          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-evenly", padding: "2px 0 2px 2px" }}>
                             <span style={{ fontSize: 8, fontWeight: 800, color: tc, lineHeight: 1, fontFamily: "system-ui,-apple-system,sans-serif", whiteSpace: "nowrap" }}>{pm1}</span>
                             <span style={{ fontSize: 7, color: tc2, lineHeight: 1 }}>–</span>
                             <span style={{ fontSize: 8, fontWeight: 800, color: tc, lineHeight: 1, fontFamily: "system-ui,-apple-system,sans-serif", whiteSpace: "nowrap" }}>{pm2}</span>
