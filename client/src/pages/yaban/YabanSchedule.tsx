@@ -149,7 +149,7 @@ export default function YabanSchedule() {
       const dow = (new Date(dStr).getDay() + 6) % 7; // 0=周一...6=周日
       const dsEntry = shiftDaySegs.find((s: any) => s.staffUserId === userId);
       if (dsEntry) {
-        const daySeg = dsEntry.dows[dow];
+        const daySeg = dsEntry.dows[dow] ?? dsEntry.dows[String(dow)]; // JSON key 可能是字符串
         if (!daySeg) return null;          // 该天无记录，不排班
         if (daySeg.isRest) return null;    // 该天是休息日
         return buildShift(timeToMin(daySeg.workStart), timeToMin(daySeg.workEnd), toMin(daySeg.breakStart), toMin(daySeg.breakEnd));
