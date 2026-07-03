@@ -722,6 +722,121 @@ export const yabanShiftRouter = router({
       return { success: true };
     }),
 
+  // 获取某员工的按天时段模板（周一~周日各自的时段）
+  getDaySegs: protectedProcedure
+    .input(z.object({
+      staffUserId: z.number().int(),
+      tenantId: z.number().int().optional(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) return [];
+      const tenantId = input.tenantId ?? (await resolveTenantId(ctx));
+      const [rows] = (await conn.execute(
+        `SELECT dow, work_start, work_end, break_start, break_end,
+                overtime_start, overtime_end, is_rest
+         FROM yaban_shift_day_segs
+         WHERE tenant_id = ? AND staff_user_id = ?
+         ORDER BY dow ASC`,
+        [tenantId, input.staffUserId]
+      )) as any;
+      return (rows as any[]).map((r: any) => ({
+        dow: Number(r.dow),
+        workStart: r.work_start || "09:00",
+        workEnd: r.work_end || "18:00",
+        breakStart: r.break_start || null,
+        breakEnd: r.break_end || null,
+        overtimeStart: r.overtime_start || null,
+        overtimeEnd: r.overtime_end || null,
+        isRest: Number(r.is_rest) === 1,
+      }));
+    }),
+
+  // 保存某员工的按天时段模板（批量 upsert，一次传 7 天）
+  saveDaySegs: protectedProcedure
+    .input(z.object({
+      staffUserId: z.number().int(),
+      tenantId: z.number().int().optional(),
+      days: z.array(z.object({
+        dow: z.number().int().min(0).max(6),
+        workStart: z.string().max(8),
+        workEnd: z.string().max(8),
+        breakStart: z.string().max(8).nullable().optional(),
+        breakEnd: z.string().max(8).nullable().optional(),
+        overtimeStart: z.string().max(8).nullable().optional(),
+        overtimeEnd: z.string().max(8).nullable().optional(),
+        isRest: z.boolean(),
+      })),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = input.tenantId ?? (await resolveTenantId(ctx));
+      for (const d of input.days) {
+        await conn.execute(
+          `INSERT INTO yaban_shift_day_segs
+             (tenant_id, staff_user_id, dow, work_start, work_end,
+              break_start, break_end, overtime_start, overtime_end, is_rest)
+           VALUES (?,?,?,?,?,?,?,?,?,?)
+           ON DUPLICATE KEY UPDATE
+             work_start=VALUES(work_start), work_end=VALUES(work_end),
+             break_start=VALUES(break_start), break_end=VALUES(break_end),
+             overtime_start=VALUES(overtime_start), overtime_end=VALUES(overtime_end),
+             is_rest=VALUES(is_rest)`,
+          [
+            tenantId, input.staffUserId, d.dow,
+            d.workStart, d.workEnd,
+            d.breakStart ?? null, d.breakEnd ?? null,
+            d.overtimeStart ?? null, d.overtimeEnd ?? null,
+            d.isRest ? 1 : 0,
+          ]
+        );
+      }
+      // 同步更新 yaban_shift_template 的 workDays（有时段且非休息的天）
+      const workDays = input.days.filter(d => !d.isRest).map(d => d.dow);
+      if (workDays.length > 0) {
+        const firstWork = input.days.find(d => !d.isRest);
+        await conn.execute(
+          `INSERT INTO yaban_shift_template
+             (tenant_id, staff_user_id, staff_name, role_key,
+              work_start, work_end, break_start, break_end, work_days)
+           VALUES (?,?,?,?,?,?,?,?,?)
+           ON DUPLICATE KEY UPDATE
+             work_start=VALUES(work_start), work_end=VALUES(work_end),
+             break_start=VALUES(break_start), break_end=VALUES(break_end),
+             work_days=VALUES(work_days), is_active=1`,
+          [
+            tenantId, input.staffUserId, "", "doctor",
+            firstWork?.workStart ?? "09:00", firstWork?.workEnd ?? "18:00",
+            firstWork?.breakStart ?? null, firstWork?.breakEnd ?? null,
+            workDays.join(","),
+          ]
+        );
+      }
+      return { success: true };
+    }),
+
+  // 清空某员工从指定日期起到结束日期的所有 override 记录
+  clearOverrides: protectedProcedure
+    .input(z.object({
+      staffUserId: z.number().int(),
+      tenantId: z.number().int().optional(),
+      fromDate: z.string(), // YYYY-MM-DD，从这天起清空
+      toDate: z.string(),   // YYYY-MM-DD，清空到这天
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = input.tenantId ?? (await resolveTenantId(ctx));
+      await conn.execute(
+        `DELETE FROM yaban_shift_override
+         WHERE tenant_id = ? AND staff_user_id = ?
+           AND override_date >= ? AND override_date <= ?`,
+        [tenantId, input.staffUserId, input.fromDate, input.toDate]
+      );
+      return { success: true };
+    }),
+
   // 单日覆盖（调班/请假）
   saveOverride: protectedProcedure
     .input(z.object({

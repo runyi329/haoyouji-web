@@ -205,6 +205,14 @@ export default function YabanClinicShift() {
     onSuccess: () => { refetchTpl(); refetch(); toast.success("模板已更新"); },
     onError: (e) => toast.error(e.message),
   });
+  const clearOverridesMut = trpc.yabanShift.clearOverrides.useMutation({
+    onSuccess: () => { refetch(); toast.success("排班已清空"); },
+    onError: (e) => toast.error(e.message),
+  });
+  const saveDaySegsMut = trpc.yabanShift.saveDaySegs.useMutation({
+    onSuccess: () => { refetchTpl(); refetch(); toast.success("周模板已保存"); },
+    onError: (e) => toast.error(e.message),
+  });
 
   // 门店营业时间（后端持久化，按医院隔离）
   const { data: bizHours, refetch: refetchBiz } = trpc.yabanShift.getBusinessHours.useQuery(
@@ -215,7 +223,7 @@ export default function YabanClinicShift() {
     if (bizHours) { setBizOpen(bizHours.open); setBizClose(bizHours.close); }
   }, [bizHours]);
   const saveBizMut = trpc.yabanShift.saveBusinessHours.useMutation({
-    onSuccess: () => { refetchBiz(); toast.success("营业时间已保存"); },
+    onSuccess: () => { refetchBiz(); },
     onError: (e) => toast.error(e.message),
   });
 
@@ -588,7 +596,35 @@ export default function YabanClinicShift() {
           bizClose={bizClose}
           onSaveBiz={(open, close) => saveBizMut.mutate({ open, close, tenantId: currentTenantId ?? undefined })}
           templates={allTemplates}
+          tenantId={currentTenantId ?? undefined}
+          onSaveDaySegs={(days, color) => {
+            saveDaySegsMut.mutate({
+              staffUserId: schDrawer.staffUserId,
+              tenantId: currentTenantId ?? undefined,
+              days,
+            });
+            // 同步保存颜色到模板
+            const tpl = allTemplates.find((t: any) => t.staffUserId === schDrawer.staffUserId);
+            if (tpl) {
+              saveTemplateMut.mutate({
+                id: tpl.id, staffUserId: schDrawer.staffUserId,
+                workStart: tpl.workStart, workEnd: tpl.workEnd,
+                workDays: tpl.workDays, color,
+                tenantId: currentTenantId ?? undefined,
+              });
+            }
+            setSchDrawer(null);
+          }}
           onClose={() => setSchDrawer(null)}
+          onClear={(fromDate, toDate) => {
+            clearOverridesMut.mutate({
+              staffUserId: schDrawer.staffUserId,
+              fromDate,
+              toDate,
+              tenantId: currentTenantId ?? undefined,
+            });
+            setSchDrawer(null);
+          }}
           onSave={(segs, rep, wdays, repEndDate, color) => {
             const hasErr = validateSegs(segs, bizOpen, bizClose).some(f => f.bad || f.overlap);
             if (hasErr) { toast.error("时段有误，请调整后保存"); return; }
@@ -612,7 +648,20 @@ export default function YabanClinicShift() {
               dates.push(schDrawer.date);
             } else {
               const end = new Date(repEndDate);
-              const cur = new Date(schDrawer.date);
+              // 修复 Bug：每周固定模式下，从当天所在周的周一开始循环，确保所有选中的星期几都能被包含
+              // 而不是从点击的那天开始（那天可能不在选中的星期几里）
+              let startDate: Date;
+              if (rep === "weekly") {
+                // 找到当天所在周的周一（不跨周）
+                const clickedDate = new Date(schDrawer.date);
+                const clickedDow = clickedDate.getDay(); // 0=周日
+                const daysToMon = clickedDow === 0 ? 6 : clickedDow - 1;
+                startDate = new Date(clickedDate);
+                startDate.setDate(clickedDate.getDate() - daysToMon);
+              } else {
+                startDate = new Date(schDrawer.date);
+              }
+              const cur = new Date(startDate);
               while (cur <= end) {
                 const dow = cur.getDay();
                 if (rep === "daily") dates.push(toDateStr(cur));
@@ -688,83 +737,146 @@ function hexToHue(hex: string): number {
   return Math.round(h * 360);
 }
 
-function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs, bizOpen, bizClose, onSaveBiz, templates, onClose, onSave }: {
+// 周模板天数据类型
+type DayTpl = {
+  dow: number; // 0=周一 ... 6=周日
+  isRest: boolean;
+  workStart: string;
+  workEnd: string;
+  breakStart: string | null;
+  breakEnd: string | null;
+};
+
+const DOW_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
+
+function defaultDayTpl(dow: number, bizOpen: string, bizClose: string): DayTpl {
+  return { dow, isRest: dow >= 5, workStart: bizOpen, workEnd: bizClose, breakStart: "12:00", breakEnd: "13:00" };
+}
+
+function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs, bizOpen, bizClose, onSaveBiz, templates, tenantId, onClose, onSave, onSaveDaySegs, onClear }: {
   staffUserId: number; staffName: string; roleKey: string; clinicName: string; date: string; initSegs: Seg[];
   bizOpen: string; bizClose: string; onSaveBiz: (open: string, close: string) => void; templates: any[];
+  tenantId?: number;
   onClose: () => void;
   onSave: (segs: Seg[], rep: string, wdays: number[], repEndDate: string, color: string) => void;
+  onSaveDaySegs: (days: { dow: number; workStart: string; workEnd: string; breakStart?: string | null; breakEnd?: string | null; isRest: boolean }[], color: string) => void;
+  onClear: (fromDate: string, toDate: string) => void;
 }) {
-  const [segs, setSegs] = useState<Seg[]>(initSegs);
-  const [rep, setRep] = useState("none");
-  const [wdays, setWdays] = useState<number[]>([new Date(date).getDay()]);
-  const [repEndDate, setRepEndDate] = useState("2026-12-31");
-  // 门店营业时间（内置可编辑，改后即存）
+  // 每天独立时间段：key=dow(0=周一..6=周日)
+  // status: 'pending'=待设置 | 'rest'=休息日 | 'work'=已设时间
+  type DaySetting = { workStart: string; workEnd: string; breakStart: string | null; breakEnd: string | null; isRest: boolean; status: 'pending' | 'rest' | 'work' };
+  const defaultDay = (): DaySetting => ({ workStart: bizOpen || "09:00", workEnd: bizClose || "18:00", breakStart: "12:00", breakEnd: "13:00", isRest: false, status: 'pending' });
+  const [daySettings, setDaySettings] = useState<Record<number, DaySetting>>(() => {
+    const r: Record<number, DaySetting> = {};
+    for (let i = 0; i < 7; i++) r[i] = defaultDay();
+    return r;
+  });
+  // 当前选中查看的天（null=未选）
+  const [activeDow, setActiveDow] = useState<number | null>(null);
+  // 选中的工作日（status=work 的天）
+  const selDows = Object.entries(daySettings).filter(([, v]) => v.status === 'work').map(([k]) => Number(k));
+
+  // 当前天的时间设置（快捷访问）
+  const curDay = activeDow !== null ? daySettings[activeDow] : null;
+  function setCurDay(patch: Partial<DaySetting>) {
+    if (activeDow === null) return;
+    setDaySettings(prev => ({ ...prev, [activeDow]: { ...prev[activeDow], ...patch } }));
+  }
+
+  // 从后端加载已有周模板
+  const { data: savedDaySegs } = trpc.yabanShift.getDaySegs.useQuery(
+    { staffUserId, tenantId },
+    { enabled: !!staffUserId }
+  );
+  useEffect(() => {
+    if (savedDaySegs && savedDaySegs.length > 0) {
+      const newSettings: Record<number, DaySetting> = {};
+      for (let i = 0; i < 7; i++) {
+        const saved = savedDaySegs.find((r: any) => r.dow === i);
+        // 只加载明确是工作日的记录，其余保持 pending 状态
+        if (saved && !saved.isRest) {
+          newSettings[i] = { workStart: saved.workStart, workEnd: saved.workEnd, breakStart: saved.breakStart || null, breakEnd: saved.breakEnd || null, isRest: false, status: 'work' };
+        } else if (saved && saved.isRest) {
+          // 后端存的休息日也显示为待设置，让用户重新确认
+          newSettings[i] = defaultDay();
+        } else {
+          newSettings[i] = defaultDay();
+        }
+      }
+      setDaySettings(newSettings);
+      // 默认选中第一个已设置工作日
+      const firstWork = Object.entries(newSettings).find(([, v]) => v.status === 'work');
+      if (firstWork) setActiveDow(Number(firstWork[0]));
+    }
+  }, [savedDaySegs]);
+
+  // 周模板编辑模式：有已保存数据时默认只读
+  const hasSavedWork = savedDaySegs && savedDaySegs.some((r: any) => !r.isRest);
+  const [tplEditing, setTplEditing] = useState(false);
+  // 清空确认弹窗
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [clearEndDate, setClearEndDate] = useState("2026-12-31");
+  // 门店营业时间编辑
   const [bizEditOpen, setBizEditOpen] = useState(false);
-  // 进度条颜色（从模板读取初始值，否则用角色默认色）
+  // 进度条颜色
   const initColor = (() => {
     const tpl = templates.find((t: any) => t.staffUserId === staffUserId);
     return tpl?.color && tpl.color !== "#1E88D6" ? tpl.color : getRoleColor(roleKey).bar;
   })();
   const [barColor, setBarColor] = useState<string>(initColor);
   const [hue, setHue] = useState<number>(hexToHue(initColor));
+  // 节假日处理方式：true=跳过节假日, false=不管
+  const [skipHoliday, setSkipHoliday] = useState(true);
+  // 其他个性设置展开
+  const [showPersonal, setShowPersonal] = useState(false);
+  // 个性设置编辑模式
+  const [personalEditing, setPersonalEditing] = useState(false);
 
-  const flags = validateSegs(segs, bizOpen, bizClose);
-  const hasErr = flags.some(f => f.bad || f.overlap);
-
-  const quickShifts = useMemo(() => {
-    const tpl = templates.find((t: any) => t.staffUserId === staffUserId);
-    if (!tpl) return [
-      { label: "全天班", segs: [{ start: bizOpen, end: bizClose, isOT: false }] },
-      { label: "上午班", segs: [{ start: bizOpen, end: "13:00", isOT: false }] },
-      { label: "下午班", segs: [{ start: "13:00", end: bizClose, isOT: false }] },
-    ];
-    return [
-      { label: "常规班", segs: templateToSegs(tpl) },
-      { label: "上午班", segs: [{ start: tpl.workStart, end: "13:00", isOT: false }] },
-      { label: "下午班", segs: [{ start: "13:00", end: tpl.workEnd, isOT: false }] },
-    ];
-  }, [templates, staffUserId, bizOpen, bizClose]);
-
-  function addSeg(isOT: boolean) {
-    const last = segs[segs.length - 1];
-    const start = last ? last.end : bizOpen;
-    const endT = isOT ? addMin(start, 150) : bizClose;
-    setSegs([...segs, { start, end: toMin(endT) > toMin(start) ? endT : addMin(start, 180), isOT }]);
-  }
-  function delSeg(i: number) { setSegs(segs.filter((_, j) => j !== i)); }
-  function setSeg(i: number, field: "start" | "end", v: string) {
-    setSegs(segs.map((s, j) => j === i ? { ...s, [field]: v } : s));
-  }
-
-  let summaryText = "";
-  let saveState: "normal" | "rest" | "disabled" = "normal";
-  if (!segs.length) { summaryText = "今日休息"; saveState = "rest"; }
-  else if (hasErr) {
-    const m = flags.find(f => f.msg && (f.bad || f.overlap));
-    summaryText = "时段有误：" + (m?.msg || "请检查") + "，请调整后保存";
-    saveState = "disabled";
-  } else {
-    const tot = segs.reduce((a, s) => a + toMin(s.end) - toMin(s.start), 0);
-    const otSegs = segs.filter(s => s.isOT);
-    summaryText = `共 ${(tot / 60).toFixed(1)}h`;
-    if (otSegs.length) summaryText += ` · 含加班 ${otSegs.length}段`;
-    const overCnt = flags.filter(f => f.over).length;
-    if (overCnt) summaryText += ` · ${overCnt}段超营业时间`;
-    if (rep === "weekly") {
-      const ds = [...wdays].sort().map(d => "周" + WK_FULL[d]).join("、");
-      summaryText += ` · ${ds || "未选"}重复`;
-    } else if (rep !== "none") {
-      summaryText += ` · ${REPS.find(r => r.k === rep)?.t}`;
+  function toggleDow(d: number) {
+    setActiveDow(d);
+    // 待设置状态点击后直接设为工作日
+    if (daySettings[d].status === 'pending') {
+      // 找最近一个已设好时间的工作日，复制其时间作为默认值
+      const lastWork = Object.entries(daySettings)
+        .filter(([k, v]) => Number(k) < d && v.status === 'work')
+        .sort((a, b) => Number(b[0]) - Number(a[0]))[0];
+      const base = lastWork ? lastWork[1] : daySettings[d];
+      setDaySettings(prev => ({
+        ...prev,
+        [d]: { ...prev[d], status: 'work', isRest: false, workStart: base.workStart, workEnd: base.workEnd, breakStart: base.breakStart, breakEnd: base.breakEnd }
+      }));
     }
   }
 
-  const dateObj = new Date(date);
-  const dateLabel = `${dateObj.getFullYear()}年${dateObj.getMonth() + 1}月${dateObj.getDate()}日 周${WK_FULL[dateObj.getDay()]}`;
+  // 时间框展示组件
+  function TimeBox({ val, onChange, isErr, min, max }: { val: string; onChange: (v: string) => void; isErr?: boolean; min?: string; max?: string }) {
+    const [h, m] = val.split(":").map(Number);
+    const h12 = h % 12 || 12;
+    const ap = h < 12 ? "AM" : "PM";
+    return (
+      <label style={{ flex: 1, minWidth: 0, position: "relative", display: "flex", alignItems: "center", justifyContent: "center", gap: 3, border: `1px solid ${isErr ? "#E6BDB4" : LINE}`, borderRadius: 6, padding: "10px 6px", background: isErr ? "#F7E9E7" : "#F6F8FA", cursor: "pointer" }}>
+        <span style={{ fontSize: 20, fontWeight: 900, color: isErr ? "#A8463C" : "#26303C", fontFamily: "system-ui,-apple-system,sans-serif", letterSpacing: 0.5 }}>
+          {h12}:{String(m).padStart(2, "0")}
+        </span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: isErr ? "#A8463C" : SKY_D }}>{ap}</span>
+        <input type="time" value={val} step={300} min={min} max={max} onChange={e => onChange(e.target.value)}
+          style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", cursor: "pointer" }} />
+      </label>
+    );
+  }
+
+  const isTimeErr = curDay && !curDay.isRest ? (
+    toMin(curDay.breakStart || "12:00") <= toMin(curDay.workStart) ||
+    toMin(curDay.breakEnd || "13:00") < toMin(curDay.breakStart || "12:00") ||
+    toMin(curDay.workEnd) <= toMin(curDay.breakEnd || "13:00")
+  ) : false;
 
   return (
     <div onClick={(e) => { e.stopPropagation(); onClose(); }} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.45)", display: "flex", alignItems: "stretch", justifyContent: "center", zIndex: 200 }}>
       <style>{`@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}`}</style>
       <div onClick={(e) => e.stopPropagation()} style={{ background: BG, width: "100%", maxWidth: 420, display: "flex", flexDirection: "column", animation: "slideUp .25s" }}>
+
+        {/* 顶栏 */}
         <div style={{ background: `linear-gradient(90deg,${SKY},#3D9FD6)`, color: "#fff", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
           <span onClick={onClose} style={{ fontSize: 14, color: "#EBF5FB", cursor: "pointer", flex: 1 }}>取消</span>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", lineHeight: 1.25 }}>
@@ -776,193 +888,298 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
               </span>
             )}
           </div>
-          <span style={{ flex: 1 }} />
+          <span onClick={() => setShowClearConfirm(true)} style={{ flex: 1, textAlign: "right", fontSize: 14, color: "#FFCDD2", cursor: "pointer", fontWeight: 500 }}>清空</span>
         </div>
-        <div style={{ overflowY: "auto", flex: 1, paddingBottom: 20 }}>
+
+        {/* 清空确认弹窗 */}
+        {showClearConfirm && (
+          <div onClick={() => setShowClearConfirm(false)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300 }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, padding: "22px 20px 18px", width: "88%", maxWidth: 340 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: INK, marginBottom: 6 }}>清空 {staffName} 的排班</div>
+              <div style={{ fontSize: 13, color: GRAY, marginBottom: 16 }}>将删除从今天到以下日期的所有排班记录，不可恢复。</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 18 }}>
+                <span style={{ fontSize: 13, color: "#26303C", flexShrink: 0 }}>清空到</span>
+                <input type="date" value={clearEndDate} onChange={e => setClearEndDate(e.target.value)}
+                  style={{ flex: 1, fontSize: 14, fontWeight: 600, color: SKY_D, border: `1px solid ${LINE}`, borderRadius: 6, padding: "8px 10px", fontFamily: "inherit" }} />
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <div onClick={() => setShowClearConfirm(false)} style={{ flex: 1, textAlign: "center", padding: "11px 0", borderRadius: 6, border: `1px solid ${LINE}`, fontSize: 14, color: GRAY, cursor: "pointer" }}>取消</div>
+                <div onClick={() => { onClear(toDateStr(new Date()), clearEndDate); setShowClearConfirm(false); }}
+                  style={{ flex: 1, textAlign: "center", padding: "11px 0", borderRadius: 6, background: "#E53935", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer" }}>确认清空</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 主体滚动区 */}
+        <div style={{ overflowY: "auto", flex: 1 }}>
+
           {/* 成员信息 */}
-          <div style={{ background: "#fff", marginTop: 10, padding: "15px 16px", display: "flex", alignItems: "center", gap: 12 }}>
-            <div style={{ width: 42, height: 42, borderRadius: "50%", background: roleColor(roleKey).bg, color: roleColor(roleKey).fg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 600 }}>{staffName.charAt(0)}</div>
+          <div style={{ background: "#fff", marginTop: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 40, height: 40, borderRadius: "50%", background: roleColor(roleKey).bg, color: roleColor(roleKey).fg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700, flexShrink: 0 }}>{staffName.charAt(0)}</div>
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                <span style={{ fontSize: 15, fontWeight: 600, color: "#26303C" }}>{staffName}</span>
-                <span style={{ fontSize: 11, fontWeight: 600, padding: "1px 7px", borderRadius: 5, background: roleColor(roleKey).bg, color: roleColor(roleKey).fg }}>{roleLabel(roleKey)}</span>
-              </div>
-              <div style={{ fontSize: 12, color: GRAY, marginTop: 2 }}>{dateLabel}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: INK }}>{staffName}</div>
+              <div style={{ fontSize: 12, color: GRAY, marginTop: 2 }}>{roleLabel(roleKey)}</div>
             </div>
           </div>
 
-          {/* 门店营业时间（内置可编辑，作为时间轴/快捷班次基准） */}
-          <div style={{ background: "#fff", marginTop: 10, padding: "13px 16px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "#26303C" }}>门店营业时间</span>
-                <span style={{ fontSize: 11, color: GRAY, marginTop: 2 }}>时间轴与全天/上下午班的基准 · 当前 {bizOpen}–{bizClose}</span>
-              </div>
-              {!bizEditOpen && (
-                <span onClick={() => setBizEditOpen(true)} style={{ fontSize: 13, color: SKY, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>调整</span>
-              )}
-            </div>
-            {bizEditOpen && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 11, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 13, color: "#647386" }}>开门</span>
-                <input type="time" defaultValue={bizOpen} step={300} id="biz-open-input" style={{ width: 92, fontSize: 14, fontWeight: 600, color: "#26303C", border: `1px solid ${LINE}`, borderRadius: 4, padding: "6px 8px", background: "#F6F8FA", fontFamily: "inherit", textAlign: "center" }} />
-                <span style={{ color: "#DBE1E8" }}>–</span>
-                <span style={{ fontSize: 13, color: "#647386" }}>闭店</span>
-                <input type="time" defaultValue={bizClose} step={300} id="biz-close-input" style={{ width: 92, fontSize: 14, fontWeight: 600, color: "#26303C", border: `1px solid ${LINE}`, borderRadius: 4, padding: "6px 8px", background: "#F6F8FA", fontFamily: "inherit", textAlign: "center" }} />
-                <span
-                  onClick={() => {
-                    const o = (document.getElementById("biz-open-input") as HTMLInputElement)?.value || bizOpen;
-                    const c = (document.getElementById("biz-close-input") as HTMLInputElement)?.value || bizClose;
-                    if (toMin(c) <= toMin(o)) { toast.error("闭店时间须晚于开门时间"); return; }
-                    onSaveBiz(o, c);
-                    setBizEditOpen(false);
-                  }}
-                  style={{ fontSize: 13, color: "#fff", fontWeight: 600, cursor: "pointer", background: SKY, borderRadius: 4, padding: "6px 14px", marginLeft: "auto" }}
-                >保存</span>
-              </div>
-            )}
-          </div>
+          {/* ── 上半区：通用周模板 ── */}
+          <div style={{ background: "#fff", marginTop: 10, padding: "14px 16px 18px" }}>
+            <div style={{ fontSize: 12, color: "#9AA7B5", marginBottom: 12 }}>点击格子设置时段 · 左右滑动可选周六日</div>
 
-          {/* 快捷班次 */}
-          <div style={{ background: "#fff", marginTop: 10 }}>
-            <div style={{ fontSize: 12, color: "#9AA7B5", padding: "13px 16px 3px" }}>快捷班次</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "10px 16px 15px" }}>
-              {quickShifts.map((qs, i) => {
-                const on = JSON.stringify(segs) === JSON.stringify(qs.segs);
-                return (
-                  <div key={i} onClick={() => setSegs(qs.segs)} style={{ fontSize: 13, padding: "8px 15px", borderRadius: 4, fontWeight: on ? 600 : 500, cursor: "pointer", background: on ? SKY_L : "#F6F8FA", color: on ? SKY_D : "#647386", border: `1px solid ${on ? SKY : "#ECEFF3"}` }}>
-                    {qs.label} <span style={{ fontSize: 11, opacity: .7 }}>{qs.segs[0]?.start}–{qs.segs[qs.segs.length - 1]?.end}</span>
-                  </div>
-                );
-              })}
-              <div onClick={() => setSegs([])} style={{ fontSize: 13, padding: "8px 15px", borderRadius: 4, fontWeight: !segs.length ? 600 : 500, cursor: "pointer", background: !segs.length ? "#eef1f4" : "#F6F8FA", color: !segs.length ? "#647386" : "#647386", border: `1px solid ${!segs.length ? "#DBE1E8" : "#ECEFF3"}` }}>休息</div>
-            </div>
-          </div>
+            {/* 横排星期格子：周一~周五铺满可见区，周六周日溢出到右侧需滑动 */}
+            <div style={{ overflowX: "auto", margin: "0 -16px", padding: "0 16px 4px", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none" }}>
+              <div style={{ display: "flex", gap: 3 }}>
+                {DOW_LABELS.map((label, i) => {
+                  const ds = daySettings[i];
+                  const configured = ds.status === 'work'; // 已设时间才显示 AM/PM
+                  const isRest = ds.status === 'rest';
+                  const isActive = activeDow === i;
+                  const isWeekend = i >= 5;
+                  const cellW = isWeekend ? 52 : "calc((100vw - 44px) / 5)";
+                  const bg = isActive ? SKY_D : configured ? "#EBF5FF" : isRest ? "#EEF2F6" : "#F0F4F8";
+                  const bd = isActive ? SKY_D : configured ? "#90CAF9" : isRest ? "#C5CDD8" : LINE;
+                  const tc = isActive ? "#fff" : "#1565C0"; // 时间文字颜色
+                  const tc2 = isActive ? "rgba(255,255,255,.55)" : "#90CAF9"; // 分隔符颜色
+                  const hd = isActive ? "rgba(255,255,255,.7)" : configured ? "#5BA4CF" : "#9AA7B5";
 
-          {/* 工作时段 */}
-          <div style={{ background: "#fff", marginTop: 10 }}>
-            <div style={{ fontSize: 12, color: "#9AA7B5", padding: "13px 16px 3px" }}>工作时段 · 可精确到分钟，支持多段 / 加班</div>
-            {segs.length === 0 && <div style={{ fontSize: 13, color: "#9AA7B5", padding: "14px 16px" }}>今日休息，未排班</div>}
-            {segs.map((s, i) => {
-              const f = flags[i] || { bad: false, overlap: false, over: false, msg: "" };
-              const isErr = f.bad || f.overlap;
-              return (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 16px", borderBottom: `1px solid #F6F8FA`, flexWrap: "wrap" }}>
-                  <div style={{ fontSize: 14, color: "#26303C", flexShrink: 0, display: "flex", alignItems: "center", gap: 7 }}>
-                    {s.isOT ? "加班时段" : "工作时段"}
-                    {s.isOT && <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, background: WARN_L, color: WARN, fontWeight: 700 }}>加班</span>}
-                    {!s.isOT && f.over && <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, background: WARN_L, color: WARN, fontWeight: 700 }}>超时</span>}
-                  </div>
-                  <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                    <input type="time" value={s.start} step={300} onChange={e => setSeg(i, "start", e.target.value)} style={{ width: 84, fontSize: 14, fontWeight: 600, color: isErr ? "#A8463C" : "#26303C", border: `1px solid ${isErr ? "#E6BDB4" : LINE}`, borderRadius: 4, padding: "6px 8px", background: isErr ? "#F7E9E7" : "#F6F8FA", fontFamily: "inherit", textAlign: "center" }} />
-                    <span style={{ color: "#DBE1E8" }}>–</span>
-                    <input type="time" value={s.end} step={300} onChange={e => setSeg(i, "end", e.target.value)} style={{ width: 84, fontSize: 14, fontWeight: 600, color: isErr ? "#A8463C" : "#26303C", border: `1px solid ${isErr ? "#E6BDB4" : LINE}`, borderRadius: 4, padding: "6px 8px", background: isErr ? "#F7E9E7" : "#F6F8FA", fontFamily: "inherit", textAlign: "center" }} />
-                    <span onClick={() => delSeg(i)} style={{ color: "#DBE1E8", fontSize: 18, paddingLeft: 4, cursor: "pointer" }}>×</span>
-                  </div>
-                  {f.msg && <div style={{ width: "100%", fontSize: 11, color: "#A8463C", marginTop: 6 }}>{f.msg}</div>}
+                  // 展示时间的辅助函数：去掉前导零
+                  const fmt = (t: string) => t.replace(/^0/, "");
+                  const am1 = fmt(ds.workStart); const am2 = fmt(ds.breakStart || "12:00");
+                  const pm1 = fmt(ds.breakEnd || "13:00"); const pm2 = fmt(ds.workEnd);
+
+                  return (
+                    <div onClick={() => { if (!hasSavedWork || tplEditing) toggleDow(i); }}
+                      style={{ width: cellW, flexShrink: 0, marginLeft: i === 5 ? 10 : 0,
+                        minHeight: (configured || isRest) ? 100 : 72,
+                        borderRadius: 10, display: "flex",
+                        flexDirection: "column", alignItems: "center", justifyContent: "center",
+                        gap: 0, cursor: "pointer", transition: "all .2s", padding: "8px 3px",
+                        background: bg, border: `2px solid ${bd}`,
+                        boxShadow: isActive ? "0 2px 8px rgba(30,136,214,.25)" : "none" }}>
+
+                      {/* 周X 标题：始终大字加粗 */}
+                      <span style={{ fontSize: 15, fontWeight: 700, color: hd, lineHeight: 1, marginBottom: 5, fontFamily: "system-ui,-apple-system,sans-serif" }}>周{label}</span>
+
+                      {configured ? (
+                        // 已设时间：左右两列 AM/PM
+                        <div style={{ display: "flex", gap: 0, alignItems: "stretch", width: "100%", height: 56, overflow: "hidden", padding: "0 1px" }}>
+                          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between", padding: "2px 2px 2px 0" }}>
+                            <span style={{ fontSize: 7, color: tc2, fontWeight: 700 }}>AM</span>
+                            <span style={{ fontSize: 8, fontWeight: 800, color: tc, lineHeight: 1, fontFamily: "system-ui,-apple-system,sans-serif", whiteSpace: "nowrap" }}>{am1}</span>
+                            <span style={{ fontSize: 7, color: tc2, lineHeight: 1 }}>–</span>
+                            <span style={{ fontSize: 8, fontWeight: 800, color: tc, lineHeight: 1, fontFamily: "system-ui,-apple-system,sans-serif", whiteSpace: "nowrap" }}>{am2}</span>
+                          </div>
+                          <div style={{ width: 1, background: isActive ? "rgba(255,255,255,.25)" : "#C5D8EA", flexShrink: 0, margin: "4px 0" }} />
+                          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-between", padding: "2px 0 2px 2px" }}>
+                            <span style={{ fontSize: 7, color: tc2, fontWeight: 700 }}>PM</span>
+                            <span style={{ fontSize: 8, fontWeight: 800, color: tc, lineHeight: 1, fontFamily: "system-ui,-apple-system,sans-serif", whiteSpace: "nowrap" }}>{pm1}</span>
+                            <span style={{ fontSize: 7, color: tc2, lineHeight: 1 }}>–</span>
+                            <span style={{ fontSize: 8, fontWeight: 800, color: tc, lineHeight: 1, fontFamily: "system-ui,-apple-system,sans-serif", whiteSpace: "nowrap" }}>{pm2}</span>
+                          </div>
+                        </div>
+                      ) : isRest ? (
+                        // 休息日
+                        <span style={{ fontSize: isWeekend ? 9 : 10, color: isActive ? "rgba(255,255,255,.8)" : "#B0BEC5", marginTop: 2, textAlign: "center", lineHeight: 1.3 }}>休息日</span>
+                      ) : (
+                        // 待设置
+                        <span style={{ fontSize: isWeekend ? 9 : 10, color: isActive ? "rgba(255,255,255,.8)" : "#B0BEC5", marginTop: 2, textAlign: "center", lineHeight: 1.3, whiteSpace: "pre" }}>
+                          {isWeekend ? "待\n设置" : "待设置"}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 时间设置区：选中某天后显示 */}
+            {activeDow === null ? (
+              <div style={{ marginTop: 18, padding: "20px 0", textAlign: "center", color: "#9AA7B5", fontSize: 13 }}>
+                点击上方星期格子设置该天时间
+              </div>
+            ) : (
+              <>
+                {/* 当前选中天标题 */}
+                <div style={{ marginTop: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: INK }}>周{DOW_LABELS[activeDow]} 时间设置</span>
+                  {curDay && curDay.status !== 'rest' ? (
+                    <span onClick={() => setCurDay({ isRest: true, status: 'rest' })} style={{ fontSize: 13, color: "#9AA7B5", cursor: "pointer", padding: "4px 10px", border: "1px solid #DBE1E8", borderRadius: 14, background: "#F6F8FA" }}>休息日</span>
+                  ) : (
+                    <span onClick={() => setCurDay({ isRest: false, status: 'work' })} style={{ fontSize: 13, color: SKY_D, fontWeight: 600, cursor: "pointer", padding: "4px 10px", border: `1px solid ${SKY_D}`, borderRadius: 14 }}>上班</span>
+                  )}
                 </div>
-              );
-            })}
-            <div style={{ display: "flex", gap: 10, padding: "12px 16px" }}>
-              <div onClick={() => addSeg(false)} style={{ flex: 1, textAlign: "center", fontSize: 13, fontWeight: 500, padding: 10, borderRadius: 4, border: "1px dashed #cdd7e0", color: SKY_D, background: "#F6F8FA", cursor: "pointer" }}>添加时段</div>
-              <div onClick={() => addSeg(true)} style={{ flex: 1, textAlign: "center", fontSize: 13, fontWeight: 500, padding: 10, borderRadius: 4, border: `1px dashed ${WARN_LINE}`, color: WARN, background: WARN_L, cursor: "pointer" }}>添加加班</div>
-            </div>
+
+                {curDay && curDay.status === 'rest' ? (
+                  <div style={{ marginTop: 12, padding: "16px 0", textAlign: "center", color: "#9AA7B5", fontSize: 13, background: "#F6F8FA", borderRadius: 8 }}>
+                    休息日 · 点击「上班」开启该天
+                  </div>
+                ) : curDay && (curDay.status === 'work' || curDay.status === 'pending') ? (
+                  <>
+                    {/* 上午时段：06:00 开始，到中午结束 */}
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <TimeBox val={curDay!.workStart} onChange={v => setCurDay({ workStart: v, status: 'work', isRest: false })} isErr={isTimeErr} min="06:00" max="12:00" />
+                        <span style={{ color: "#DBE1E8", fontSize: 18, flexShrink: 0 }}>—</span>
+                        <TimeBox val={curDay!.breakStart || "12:00"} onChange={v => setCurDay({ breakStart: v, status: 'work', isRest: false })} min="06:00" max="13:00" />
+                      </div>
+                      {isTimeErr && <div style={{ fontSize: 11, color: "#E53935", marginTop: 4 }}>上午结束时间须晚于开始时间</div>}
+                    </div>
+
+                    {/* 下午时段：中午开始，18:00 结束 */}
+                    <div style={{ marginTop: 10 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <TimeBox val={curDay!.breakEnd || "13:00"} onChange={v => setCurDay({ breakEnd: v, status: 'work', isRest: false })} min={curDay!.breakStart || "12:00"} max="18:00" />
+                        <span style={{ color: "#DBE1E8", fontSize: 18, flexShrink: 0 }}>—</span>
+                        <TimeBox val={curDay!.workEnd} onChange={v => setCurDay({ workEnd: v, status: 'work', isRest: false })} min={curDay!.breakEnd || "13:00"} max="18:00" />
+                      </div>
+                    </div>
+                  </>
+                ) : null}
+              </>
+            )}
+
           </div>
 
-          {/* 进度条颜色 */}
-          <div style={{ background: "#fff", marginTop: 10, padding: "13px 16px 16px" }}>
-            <div style={{ fontSize: 12, color: "#9AA7B5", marginBottom: 10 }}>进度条颜色</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              {/* 预览色块 */}
-              <div style={{ width: 36, height: 36, borderRadius: 5, background: barColor, flexShrink: 0, boxShadow: "0 1px 4px rgba(0,0,0,.15)" }} />
-              {/* 横向色相条 */}
-              <div style={{ flex: 1, position: "relative" }}>
-                <div style={{ height: 22, borderRadius: 4, background: "linear-gradient(to right, #e05555, #e08855, #e0d455, #55e055, #55e0d4, #5588e0, #8855e0, #d455e0, #e05555)", boxShadow: "inset 0 1px 3px rgba(0,0,0,.12)" }} />
-                <input
-                  type="range" min={0} max={360} value={hue}
-                  onChange={e => {
-                    const h = Number(e.target.value);
-                    setHue(h);
-                    setBarColor(hueToHex(h));
-                  }}
-                  style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: "pointer", margin: 0 }}
-                />
-                {/* 滑块指示器 */}
-                <div style={{ position: "absolute", top: "50%", left: `${(hue / 360) * 100}%`, transform: "translate(-50%, -50%)", width: 26, height: 26, borderRadius: "50%", background: barColor, border: "3px solid #fff", boxShadow: "0 1px 5px rgba(0,0,0,.3)", pointerEvents: "none" }} />
-              </div>
-              {/* hex 值显示 */}
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#647386", fontFamily: "monospace", flexShrink: 0 }}>{barColor.toUpperCase()}</span>
+          {/* 保存按钮 */}
+          <div style={{ background: "#fff", padding: "12px 16px 16px", marginTop: 10 }}>
+            <div style={{ fontSize: 12, color: GRAY, textAlign: "center", marginBottom: 10 }}>
+              共 {selDows.length} 天工作日 · 每周自动重复
             </div>
-            {/* 最近使用的颜色 */}
-            <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 11, color: "#9AA7B5", flexShrink: 0 }}>最近使用</span>
-              {Array.from({ length: 5 }).map((_, i) => {
-                const recentColors: string[] = (() => { try { return JSON.parse(localStorage.getItem("yaban_recent_colors") || "[]"); } catch { return []; } })();
-                const c = recentColors[i];
-                const isActive = c && barColor === c;
-                return c ? (
-                  <div key={i} onClick={() => { setBarColor(c); setHue(hexToHue(c)); }}
-                    title={c}
-                    style={{ width: 24, height: 24, borderRadius: "50%", background: c, cursor: "pointer", border: isActive ? "3px solid #26303C" : "2px solid #fff", boxShadow: "0 1px 3px rgba(0,0,0,.2)", transition: ".15s", flexShrink: 0 }} />
-                ) : (
-                  <div key={i} style={{ width: 24, height: 24, borderRadius: "50%", background: "#F0F2F5", border: "2px dashed #DBE1E8", flexShrink: 0 }} />
-                );
-              })}
-              <div onClick={() => { const c = getRoleColor(roleKey).bar; setBarColor(c); setHue(hexToHue(c)); }}
-                style={{ marginLeft: "auto", fontSize: 11, color: SKY_D, fontWeight: 600, cursor: "pointer", padding: "4px 8px", borderRadius: 4, background: SKY_L, flexShrink: 0 }}>重置</div>
-            </div>
+            {hasSavedWork && !tplEditing ? (
+              <div onClick={() => setTplEditing(true)} style={{
+                width: "100%", background: "#F0F4F8", color: INK,
+                padding: 13, borderRadius: 5, fontSize: 15, fontWeight: 600, textAlign: "center",
+                cursor: "pointer", border: `1.5px solid ${LINE}`,
+              }}>编辑长期模板</div>
+            ) : (
+              <div onClick={() => {
+                if (isTimeErr) { toast.error("请先修正时间错误"); return; }
+                try {
+                  const prev: string[] = JSON.parse(localStorage.getItem("yaban_recent_colors") || "[]");
+                  const next = [barColor, ...prev.filter(c => c !== barColor)].slice(0, 5);
+                  localStorage.setItem("yaban_recent_colors", JSON.stringify(next));
+                } catch {}
+                const allDays = Array.from({ length: 7 }, (_, i) => ({
+                  dow: i,
+                  workStart: daySettings[i].workStart,
+                  workEnd: daySettings[i].workEnd,
+                  breakStart: daySettings[i].breakStart || null,
+                  breakEnd: daySettings[i].breakEnd || null,
+                  isRest: daySettings[i].status !== 'work',
+                }));
+                onSaveDaySegs(allDays, barColor);
+                setTplEditing(false);
+              }} style={{
+                width: "100%", background: isTimeErr ? "#ccc" : SKY_D,
+                color: "#fff", padding: 13, borderRadius: 5, fontSize: 15, fontWeight: 600, textAlign: "center",
+                cursor: isTimeErr ? "not-allowed" : "pointer",
+              }}>保存为长期周模板</div>
+            )}
           </div>
 
-          {/* 重复 */}
+          {/* ── 下半区：其他个性设置 ── */}
           <div style={{ background: "#fff", marginTop: 10 }}>
-            <div style={{ fontSize: 12, color: "#9AA7B5", padding: "13px 16px 3px" }}>重复</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "10px 16px 14px" }}>
-              {REPS.map(r => (
-                <div key={r.k} onClick={() => setRep(r.k)} style={{ fontSize: 13, padding: "8px 15px", borderRadius: 4, fontWeight: rep === r.k ? 600 : 500, cursor: "pointer", background: rep === r.k ? SKY_L : "#F6F8FA", color: rep === r.k ? SKY_D : "#647386", border: `1px solid ${rep === r.k ? SKY : "#ECEFF3"}` }}>{r.t}</div>
-              ))}
-            </div>
-            {rep === "weekly" && (
-              <div style={{ display: "flex", gap: 7, padding: "0 16px 14px" }}>
-                {[1, 2, 3, 4, 5, 6, 0].map(d => (
-                  <div key={d} onClick={() => { const next = wdays.includes(d) ? wdays.filter(x => x !== d) : [...wdays, d]; setWdays(next); }} style={{ flex: 1, textAlign: "center", fontSize: 13, fontWeight: 500, padding: "9px 0", borderRadius: 4, cursor: "pointer", background: wdays.includes(d) ? SKY : "#F6F8FA", color: wdays.includes(d) ? "#fff" : "#6b7686", border: `1px solid ${wdays.includes(d) ? SKY : "#ECEFF3"}` }}>{WK_FULL[d]}</div>
-                ))}
+            <div onClick={() => setShowPersonal(v => !v)}
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", cursor: "pointer" }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: INK }}>其他个性设置</div>
+                <div style={{ fontSize: 11, color: GRAY, marginTop: 2 }}>特殊加班、门店营业时间等</div>
               </div>
-            )}
-            {rep !== "none" && (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 16px", borderTop: `1px solid #F6F8FA`, fontSize: 14, color: "#26303C" }}>
-                <span>结束于</span>
-                <input type="date" value={repEndDate} onChange={e => setRepEndDate(e.target.value)} style={{ fontSize: 14, border: "none", background: "transparent", fontFamily: "inherit", color: SKY_D, fontWeight: 600, textAlign: "right" }} />
+              <span style={{ fontSize: 13, color: "#9AA7B5" }}>{showPersonal ? "▲" : "▼"}</span>
+            </div>
+            {showPersonal && (
+              <div style={{ borderTop: `1px solid ${LINE}` }}>
+
+                {/* 进度条颜色 */}
+                <div style={{ display: "flex", alignItems: "center", padding: "14px 16px", borderBottom: `1px solid ${LINE}`, gap: 10 }}>
+                  <div style={{ flexShrink: 0, width: 52 }}>
+                    <div style={{ fontSize: 11, color: GRAY }}>颜色</div>
+                  </div>
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 8, background: barColor, flexShrink: 0, boxShadow: "0 1px 4px rgba(0,0,0,.15)" }} />
+                    <div style={{ flex: 1, position: "relative", pointerEvents: personalEditing ? "auto" : "none", opacity: personalEditing ? 1 : 0.5 }}>
+                      <div style={{ height: 22, borderRadius: 6, background: "linear-gradient(to right, #e05555, #e08855, #e0d455, #55e055, #55e0d4, #5588e0, #8855e0, #d455e0, #e05555)" }} />
+                      <input type="range" min={0} max={360} value={hue}
+                        onChange={e => { const h = Number(e.target.value); setHue(h); setBarColor(hueToHex(h)); }}
+                        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0, cursor: personalEditing ? "pointer" : "default", margin: 0 }} />
+                      <div style={{ position: "absolute", top: "50%", left: `${(hue / 360) * 100}%`, transform: "translate(-50%, -50%)", width: 24, height: 24, borderRadius: "50%", background: barColor, border: "3px solid #fff", boxShadow: "0 1px 5px rgba(0,0,0,.3)", pointerEvents: "none" }} />
+                    </div>
+                    {personalEditing && (
+                      <span onClick={() => { const c = getRoleColor(roleKey).bar; setBarColor(c); setHue(hexToHue(c)); }}
+                        style={{ fontSize: 11, color: SKY_D, fontWeight: 600, cursor: "pointer", padding: "4px 8px", borderRadius: 6, background: SKY_L, flexShrink: 0 }}>重置</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* 节假日处理 */}
+                <div style={{ display: "flex", alignItems: "center", padding: "14px 16px", borderBottom: `1px solid ${LINE}`, gap: 10 }}>
+                  <div style={{ flexShrink: 0, width: 52 }}>
+                    <div style={{ fontSize: 11, color: GRAY }}>节假日</div>
+                  </div>
+                  <div style={{ flex: 1, display: "flex", gap: 8, pointerEvents: personalEditing ? "auto" : "none", opacity: personalEditing ? 1 : 0.7 }}>
+                    <div onClick={() => personalEditing && setSkipHoliday(true)}
+                      style={{ flex: 1, padding: "9px 0", borderRadius: 8, cursor: personalEditing ? "pointer" : "default", fontSize: 13, fontWeight: skipHoliday ? 700 : 400,
+                        textAlign: "center", background: skipHoliday ? SKY_D : "#F0F4F8", color: skipHoliday ? "#fff" : "#647386",
+                        border: `1.5px solid ${skipHoliday ? SKY_D : LINE}`, transition: "all .15s" }}>节假日自动休息</div>
+                    <div onClick={() => personalEditing && setSkipHoliday(false)}
+                      style={{ flex: 1, padding: "9px 0", borderRadius: 8, cursor: personalEditing ? "pointer" : "default", fontSize: 13, fontWeight: !skipHoliday ? 700 : 400,
+                        textAlign: "center", background: !skipHoliday ? SKY_D : "#F0F4F8", color: !skipHoliday ? "#fff" : "#647386",
+                        border: `1.5px solid ${!skipHoliday ? SKY_D : LINE}`, transition: "all .15s" }}>节假日仍然排班</div>
+                  </div>
+                </div>
+
+                {/* 门店营业时间 */}
+                <div style={{ display: "flex", alignItems: "center", padding: "14px 16px", borderBottom: `1px solid ${LINE}`, gap: 10 }}>
+                  <div style={{ flexShrink: 0, width: 52 }}>
+                    <div style={{ fontSize: 11, color: GRAY }}>营业时间</div>
+                  </div>
+                  <div style={{ flex: 1, display: "flex", gap: 0, opacity: personalEditing ? 1 : 0.7,
+                    border: `1.5px solid ${LINE}`, borderRadius: 8, overflow: "hidden", background: "#F0F4F8" }}>
+                    <input type="time" defaultValue={bizOpen} step={300} id="biz-open-input" disabled={!personalEditing}
+                      style={{ flex: 1, fontSize: 13, fontWeight: 700, color: "#26303C", border: "none", padding: "9px 0",
+                        background: "transparent", fontFamily: "inherit", textAlign: "center", outline: "none",
+                        cursor: personalEditing ? "pointer" : "default" }} />
+                    <div style={{ width: 1, background: LINE, flexShrink: 0, margin: "6px 0" }} />
+                    <input type="time" defaultValue={bizClose} step={300} id="biz-close-input" disabled={!personalEditing}
+                      style={{ flex: 1, fontSize: 13, fontWeight: 700, color: "#26303C", border: "none", padding: "9px 0",
+                        background: "transparent", fontFamily: "inherit", textAlign: "center", outline: "none",
+                        cursor: personalEditing ? "pointer" : "default" }} />
+                  </div>
+                </div>
+
+                {/* 底部按钮：查看模式显示「编辑个性设置」，编辑模式显示「保存个性设置」 */}
+                <div style={{ padding: "14px 16px" }}>
+                  {!personalEditing ? (
+                    <div onClick={() => setPersonalEditing(true)}
+                      style={{ width: "100%", padding: 13, borderRadius: 5, fontSize: 15, fontWeight: 600, textAlign: "center",
+                        background: "#F0F4F8", color: INK, cursor: "pointer", border: `1.5px solid ${LINE}` }}>编辑个性设置</div>
+                  ) : (
+                    <div onClick={() => {
+                      const o = (document.getElementById("biz-open-input") as HTMLInputElement)?.value || bizOpen;
+                      const c = (document.getElementById("biz-close-input") as HTMLInputElement)?.value || bizClose;
+                      if (toMin(c) <= toMin(o)) { toast.error("闭店时间须晚于开门时间"); return; }
+                      onSaveBiz(o, c);
+                      setPersonalEditing(false);
+                      toast.success("个性设置已保存");
+                    }}
+                      style={{ width: "100%", padding: 13, borderRadius: 5, fontSize: 15, fontWeight: 600, textAlign: "center",
+                        background: SKY_D, color: "#fff", cursor: "pointer" }}>保存个性设置</div>
+                  )}
+                </div>
+
               </div>
             )}
           </div>
+
+          <div style={{ height: 20 }} />
         </div>
 
-        {/* 底部保存 */}
-        <div style={{ background: "#fff", padding: "12px 16px 20px", borderTop: `1px solid ${LINE}`, flexShrink: 0 }}>
-          <div style={{ fontSize: 12, color: saveState === "disabled" ? "#A8463C" : GRAY, textAlign: "center", marginBottom: 10, fontWeight: saveState === "disabled" ? 600 : 400 }}>{summaryText}</div>
-          <div onClick={() => {
-            if (saveState === "disabled") return;
-            // 将当前颜色写入最近使用列表
-            try {
-              const prev: string[] = JSON.parse(localStorage.getItem("yaban_recent_colors") || "[]");
-              const next = [barColor, ...prev.filter(c => c !== barColor)].slice(0, 5);
-              localStorage.setItem("yaban_recent_colors", JSON.stringify(next));
-            } catch {}
-            onSave(segs, rep, wdays, repEndDate, barColor);
-          }} style={{
-            width: "100%", background: saveState === "disabled" ? "#cdd5dd" : saveState === "rest" ? "#9aa7b4" : SKY_D,
-            color: "#fff", padding: 13, borderRadius: 5, fontSize: 15, fontWeight: 600, textAlign: "center",
-            cursor: saveState === "disabled" ? "not-allowed" : "pointer", transition: ".16s",
-          }}>
-            {saveState === "rest" ? "保存为休息" : "保存排班"}
-          </div>
-        </div>
       </div>
     </div>
   );
 }
 
-// ── 班次模板弹窗 ──
 function TplModal({ bizOpen, bizClose, templates, onClose, onSave, saveTemplateMut, tenantId }: {
   bizOpen: string; bizClose: string; templates: any[];
   onClose: () => void;
