@@ -865,14 +865,11 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
   // 时间框展示组件
   function TimeBox({ val, onChange, isErr, min, max }: { val: string; onChange: (v: string) => void; isErr?: boolean; min?: string; max?: string }) {
     const [h, m] = val.split(":").map(Number);
-    const h12 = h % 12 || 12;
-    const ap = h < 12 ? "AM" : "PM";
     return (
       <label style={{ flex: 1, minWidth: 0, position: "relative", display: "flex", alignItems: "center", justifyContent: "center", gap: 3, border: `1px solid ${isErr ? "#E6BDB4" : LINE}`, borderRadius: 6, padding: "10px 6px", background: isErr ? "#F7E9E7" : "#F6F8FA", cursor: "pointer" }}>
         <span style={{ fontSize: 20, fontWeight: 900, color: isErr ? "#A8463C" : "#26303C", fontFamily: "system-ui,-apple-system,sans-serif", letterSpacing: 0.5 }}>
-          {h12}:{String(m).padStart(2, "0")}
+          {String(h).padStart(2, "0")}:{String(m).padStart(2, "0")}
         </span>
-        <span style={{ fontSize: 12, fontWeight: 700, color: isErr ? "#A8463C" : SKY_D }}>{ap}</span>
         <input type="time" value={val} step={300} min={min} max={max} onChange={e => onChange(e.target.value)}
           style={{ position: "absolute", inset: 0, opacity: 0, width: "100%", height: "100%", cursor: "pointer" }} />
       </label>
