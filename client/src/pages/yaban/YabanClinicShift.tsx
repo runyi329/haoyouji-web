@@ -352,6 +352,15 @@ export default function YabanClinicShift() {
     return { onCnt, totMin, otMin };
   }, [filteredRoster, overrides, selDate]);
 
+  // 本周每天在岗人数（用于格子底部小标签）
+  const weekDayOnCnt = useMemo(() => {
+    return weekDates.map((d) => {
+      let cnt = 0;
+      filteredRoster.forEach((r) => { if (getStaffDaySegs(r.staffUserId, d).length > 0) cnt++; });
+      return cnt;
+    });
+  }, [filteredRoster, overrides, weekDates]);
+
   // 打开排班抽屉
   function openSch(staffUserId: number, staffName: string, date: Date) {
     const segs = getStaffDaySegs(staffUserId, date);
@@ -427,36 +436,52 @@ export default function YabanClinicShift() {
       {/* 等高占位，避免被固定顶栏遮挡 */}
       <div style={{ height: headerH }} aria-hidden />
 
-      {/* 周导航 */}
-      <div style={{ background: "#fff", padding: "10px 16px 8px", borderBottom: `1px solid ${LINE}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div onClick={() => setWeekOffset(w => w - 1)} style={{ width: 30, height: 30, borderRadius: 4, background: "#F6F8FA", color: "#647386", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, cursor: "pointer" }}>‹</div>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: INK }}>
-            {weekDates[0].getMonth() + 1}月{weekDates[0].getDate()}日 – {weekDates[6].getMonth() + 1}月{weekDates[6].getDate()}日
+      {/* 格子日历：与顧客预约页完全一致 */}
+      <div style={{ background: "#fff", padding: "10px 16px 12px", borderBottom: `8px solid ${BG}` }}>
+        {/* 周导航 */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <div onClick={() => setWeekOffset(w => w - 1)} style={{ width: 30, height: 30, borderRadius: 4, background: "#F6F8FA", color: GRAY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, cursor: "pointer" }}>‹</div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>
+              {weekDates[0].getMonth() + 1}月{weekDates[0].getDate()}日 – {weekDates[6].getMonth() + 1}月{weekDates[6].getDate()}日
+            </div>
+            <div style={{ fontSize: 11, color: weekOffset === 0 ? SKY_D : GRAY, marginTop: 2, fontWeight: weekOffset === 0 ? 600 : 400 }}>
+              {weekOffset === 0 ? "本周" : weekOffset < 0 ? `前${-weekOffset}周` : `后${weekOffset}周`}
+            </div>
           </div>
-          <div style={{ fontSize: 11, color: weekOffset === 0 ? SKY_D : GRAY, marginTop: 2, fontWeight: weekOffset === 0 ? 600 : 400 }}>
-            {weekOffset === 0 ? "本周" : weekOffset < 0 ? `前${-weekOffset}周` : `后${weekOffset}周`}
+          <div onClick={() => setWeekOffset(w => w + 1)} style={{ width: 30, height: 30, borderRadius: 4, background: "#F6F8FA", color: GRAY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, cursor: "pointer" }}>›</div>
+        </div>
+        {/* 格子行：周一~周五铺满，周六日右侧可滑动 */}
+        <div style={{ overflowX: "auto", margin: "0 -16px", padding: "0 16px 2px", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none" }}>
+          <div style={{ display: "flex", gap: 3 }}>
+            {["一","二","三","四","五","六","日"].map((label, i) => {
+              const d = weekDates[i];
+              const isSelected = toDateStr(d) === toDateStr(selDate);
+              const isToday = toDateStr(d) === toDateStr(today);
+              const isWeekend = i >= 5;
+              const cellW = isWeekend ? 44 : "calc((100vw - 143px) / 5)";
+              const onCnt = weekDayOnCnt[i] ?? 0;
+              const bg = isSelected ? SKY_D : isToday ? SKY_L : "#F6F8FA";
+              const bd = isSelected ? SKY_D : isToday ? SKY : LINE;
+              const tc = isSelected ? "#fff" : INK;
+              const gc = isSelected ? "rgba(255,255,255,.75)" : GRAY;
+              return (
+                <div key={i}
+                  onClick={() => setSelDate(d)}
+                  style={{ width: cellW, flexShrink: 0, marginLeft: i === 5 ? 8 : 0,
+                    height: 72, borderRadius: 10, display: "flex", flexDirection: "column",
+                    alignItems: "center", justifyContent: "center", gap: 2,
+                    cursor: "pointer", transition: "all .18s",
+                    background: bg, border: `2px solid ${bd}`,
+                    boxShadow: isSelected ? "0 2px 8px rgba(30,136,214,.25)" : "none" }}>
+                  <span style={{ fontSize: isWeekend ? 10 : 11, color: gc, fontWeight: 500 }}>周{label}</span>
+                  <span style={{ fontSize: isWeekend ? 15 : 20, fontWeight: 700, color: tc, lineHeight: 1.1 }}>{d.getDate()}</span>
+                  <span style={{ fontSize: 10, color: isSelected ? "rgba(255,255,255,.8)" : (onCnt > 0 ? SKY_D : "transparent"), fontWeight: 600, lineHeight: 1 }}>{onCnt > 0 ? `${onCnt}人` : "·"}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
-        <div onClick={() => setWeekOffset(w => w + 1)} style={{ width: 30, height: 30, borderRadius: 4, background: "#F6F8FA", color: "#647386", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, cursor: "pointer" }}>›</div>
-      </div>
-
-      {/* 日期选择条 */}
-      <div style={{ background: "#fff", padding: "8px 16px 10px", borderBottom: `8px solid ${BG}`, display: "flex", gap: 4 }}>
-        {weekDates.map((d, i) => {
-          const isToday = toDateStr(d) === toDateStr(today);
-          const isSel = toDateStr(d) === toDateStr(selDate);
-          return (
-            <div key={i} onClick={() => setSelDate(d)} style={{
-              flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: "6px 0", borderRadius: 4, cursor: "pointer",
-              background: isSel ? SKY_D : "transparent", transition: "all .15s",
-            }}>
-              <span style={{ fontSize: 10, color: isSel ? "rgba(255,255,255,.8)" : "#9AA7B5", fontWeight: 600, marginBottom: 2 }}>{WK_SHORT[i]}</span>
-              <span style={{ fontSize: 15, fontWeight: 700, color: isSel ? "#fff" : isToday ? SKY_D : INK }}>{d.getDate()}</span>
-              {isToday && !isSel && <span style={{ width: 4, height: 4, borderRadius: "50%", background: SKY_D, marginTop: 2 }} />}
-            </div>
-          );
-        })}
       </div>
 
       {/* 操作条 */}
