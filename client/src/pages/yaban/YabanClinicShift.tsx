@@ -982,7 +982,8 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
                   const isRest = ds.status === 'rest';
                   const isActive = activeDow === i;
                   const isWeekend = i >= 5;
-                  const cellW = isWeekend ? 52 : "calc((100vw - 44px) / 5)";
+                  // 工作日：(100vw - 32px内边距 - 4*3px工作日间距 - 10px工作日周末间距 - 3px周末间距 - 2*44px周末宽) / 5 = (100vw - 145px) / 5
+                  const cellW = isWeekend ? 44 : "calc((100vw - 145px) / 5)";
                   const bg = isActive ? SKY_D : configured ? "#EBF5FF" : isRest ? "#EEF2F6" : "#F0F4F8";
                   const bd = isActive ? SKY_D : configured ? "#90CAF9" : isRest ? "#C5CDD8" : LINE;
                   const tc = isActive ? "#fff" : "#1565C0"; // 时间文字颜色
@@ -996,7 +997,7 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
 
                   return (
                     <div onClick={() => { if (!hasSavedWork || tplEditing) toggleDow(i); }}
-                      style={{ width: cellW, flexShrink: 0, marginLeft: i === 5 ? 10 : 0,
+                      style={{ width: cellW, flexShrink: 0, marginLeft: i === 5 ? 8 : 0,
                         height: 100,
                         borderRadius: 10, display: "flex",
                         flexDirection: "column", alignItems: "center", justifyContent: "center",
@@ -1006,8 +1007,8 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
                         boxShadow: isActive ? "0 2px 8px rgba(30,136,214,.25)" : "none",
                         overflow: "hidden", position: "relative" }}>
 
-                      {/* 周X 标题：始终大字加粗 */}
-                      <span style={{ fontSize: 15, fontWeight: 700, color: isRest ? "#5A6878" : hd, lineHeight: 1, marginBottom: 5, fontFamily: "system-ui,-apple-system,sans-serif" }}>周{label}</span>
+                      {/* 周X 标题：工作日大字加粗，周末稍小 */}
+                      <span style={{ fontSize: isWeekend ? 12 : 15, fontWeight: 700, color: isRest ? "#5A6878" : hd, lineHeight: 1, marginBottom: 5, fontFamily: "system-ui,-apple-system,sans-serif" }}>周{label}</span>
 
                       {configured ? (
                         // 已设时间：左右两列 AM/PM

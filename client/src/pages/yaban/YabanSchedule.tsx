@@ -319,6 +319,7 @@ export default function YabanSchedule() {
         </div>
         {/* 格子行：周一~周五铺满，周六日右侧可滑动 */}
         <div style={{ overflowX: "auto", margin: "0 -16px", padding: "0 16px 2px", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none" }}>
+          {/* 工作日宽度：(100vw - 32px内边距 - 4*3px工作日间距 - 8px工作日周末间距 - 3px周末间距 - 2*44px周末宽) / 5 = (100vw - 143px) / 5 */}
           <div style={{ display: "flex", gap: 3 }}>
             {["一","二","三","四","五","六","日"].map((label, i) => {
               const d = weekDates[i];
@@ -326,7 +327,8 @@ export default function YabanSchedule() {
               const isSelected = isSameDay(d, selDate);
               const isToday = isSameDay(d, today);
               const isWeekend = i >= 5;
-              const cellW = isWeekend ? 52 : "calc((100vw - 44px) / 5)";
+              // 工作日：精确 calc 宽度铺满5格；周末：固定44px缩小在右侧
+              const cellW = isWeekend ? 44 : "calc((100vw - 143px) / 5)";
               const apptCount = (monthStats as any)[dStr2]?.cnt ?? 0;
               const bg = isSelected ? SKY_D : isToday ? SKY_L : "#F6F8FA";
               const bd = isSelected ? SKY_D : isToday ? SKY : LINE;
@@ -335,14 +337,14 @@ export default function YabanSchedule() {
               return (
                 <div key={i}
                   onClick={() => { setSelDate(d); }}
-                  style={{ width: cellW, flexShrink: 0, marginLeft: i === 5 ? 10 : 0,
+                  style={{ width: cellW, flexShrink: 0, marginLeft: i === 5 ? 8 : 0,
                     height: 72, borderRadius: 10, display: "flex", flexDirection: "column",
                     alignItems: "center", justifyContent: "center", gap: 2,
                     cursor: "pointer", transition: "all .18s",
                     background: bg, border: `2px solid ${bd}`,
                     boxShadow: isSelected ? "0 2px 8px rgba(30,136,214,.25)" : "none" }}>
-                  <span style={{ fontSize: 11, color: gc, fontWeight: 500 }}>周{label}</span>
-                  <span style={{ fontSize: 20, fontWeight: 700, color: tc, lineHeight: 1.1 }}>{d.getDate()}</span>
+                  <span style={{ fontSize: isWeekend ? 10 : 11, color: gc, fontWeight: 500 }}>周{label}</span>
+                  <span style={{ fontSize: isWeekend ? 15 : 20, fontWeight: 700, color: tc, lineHeight: 1.1 }}>{d.getDate()}</span>
                   <span style={{ fontSize: 10, color: isSelected ? "rgba(255,255,255,.8)" : (apptCount > 0 ? SKY_D : "transparent"), fontWeight: 600, lineHeight: 1 }}>{apptCount > 0 ? `${apptCount}约` : "·"}</span>
                 </div>
               );
