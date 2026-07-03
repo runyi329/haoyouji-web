@@ -67,7 +67,7 @@ async function getDoctorSegments(conn: any, tenantId: number, doctor: string, da
   }
   // 回退周期模板
   if (tpl) {
-    const dow = new Date(dateStr).getDay();
+    const dow = (new Date(dateStr).getDay() + 6) % 7; // 转换为 0=周一...6=周日，与存储一致
     const days: number[] = (tpl.work_days || "1,2,3,4,5").split(",").map(Number);
     if (days.length > 0 && !days.includes(dow)) return null;
     if (tpl.work_start && tpl.work_end) return _buildSegs(_t2m(tpl.work_start), _t2m(tpl.work_end), toMin(tpl.break_start), toMin(tpl.break_end));

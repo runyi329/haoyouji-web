@@ -149,7 +149,7 @@ export default function YabanSchedule() {
       }
       // 2) 回退周期模板（需当天星期在 workDays 内）
       if (tpl) {
-        const dow = new Date(dStr).getDay();            // 0=周日 ... 6=周六
+        const dow = (new Date(dStr).getDay() + 6) % 7;  // 转换为 0=周一...6=周日，与存储一致
         const days: number[] = tpl.workDays || [];
         if (days.length > 0 && !days.includes(dow)) return null; // 模板当天不排班
         if (tpl.workStart && tpl.workEnd) return buildShift(timeToMin(tpl.workStart), timeToMin(tpl.workEnd), toMin(tpl.breakStart), toMin(tpl.breakEnd));
