@@ -837,6 +837,27 @@ export const yabanShiftRouter = router({
       return { success: true };
     }),
 
+  // 清空员工长期周模板（yaban_shift_day_segs + yaban_shift_template）
+  clearDaySegs: protectedProcedure
+    .input(z.object({
+      staffUserId: z.number().int(),
+      tenantId: z.number().int().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const tenantId = input.tenantId ?? (await resolveTenantId(ctx));
+      await conn.execute(
+        `DELETE FROM yaban_shift_day_segs WHERE tenant_id = ? AND staff_user_id = ?`,
+        [tenantId, input.staffUserId]
+      );
+      await conn.execute(
+        `DELETE FROM yaban_shift_template WHERE tenant_id = ? AND staff_user_id = ?`,
+        [tenantId, input.staffUserId]
+      );
+      return { success: true };
+    }),
+
   // 单日覆盖（调班/请假）
   saveOverride: protectedProcedure
     .input(z.object({

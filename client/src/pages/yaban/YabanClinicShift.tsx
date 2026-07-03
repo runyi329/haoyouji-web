@@ -213,6 +213,10 @@ export default function YabanClinicShift() {
     onSuccess: () => { refetchTpl(); refetch(); toast.success("周模板已保存"); },
     onError: (e) => toast.error(e.message),
   });
+  const clearDaySegsMut = trpc.yabanShift.clearDaySegs.useMutation({
+    onSuccess: () => { refetchTpl(); refetch(); toast.success("周模板已清空"); },
+    onError: (e) => toast.error(e.message),
+  });
 
   // 门店营业时间（后端持久化，按医院隔离）
   const { data: bizHours, refetch: refetchBiz } = trpc.yabanShift.getBusinessHours.useQuery(
@@ -615,6 +619,13 @@ export default function YabanClinicShift() {
             }
             setSchDrawer(null);
           }}
+          onClearDaySegs={() => {
+            clearDaySegsMut.mutate({
+              staffUserId: schDrawer.staffUserId,
+              tenantId: currentTenantId ?? undefined,
+            });
+            setSchDrawer(null);
+          }}
           onClose={() => setSchDrawer(null)}
           onClear={(fromDate, toDate) => {
             clearOverridesMut.mutate({
@@ -753,13 +764,14 @@ function defaultDayTpl(dow: number, bizOpen: string, bizClose: string): DayTpl {
   return { dow, isRest: dow >= 5, workStart: bizOpen, workEnd: bizClose, breakStart: "12:00", breakEnd: "13:00" };
 }
 
-function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs, bizOpen, bizClose, onSaveBiz, templates, tenantId, onClose, onSave, onSaveDaySegs, onClear }: {
+function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs, bizOpen, bizClose, onSaveBiz, templates, tenantId, onClose, onSave, onSaveDaySegs, onClearDaySegs, onClear }: {
   staffUserId: number; staffName: string; roleKey: string; clinicName: string; date: string; initSegs: Seg[];
   bizOpen: string; bizClose: string; onSaveBiz: (open: string, close: string) => void; templates: any[];
   tenantId?: number;
   onClose: () => void;
   onSave: (segs: Seg[], rep: string, wdays: number[], repEndDate: string, color: string) => void;
   onSaveDaySegs: (days: { dow: number; workStart: string; workEnd: string; breakStart?: string | null; breakEnd?: string | null; isRest: boolean }[], color: string) => void;
+  onClearDaySegs: () => void;
   onClear: (fromDate: string, toDate: string) => void;
 }) {
   // 每天独立时间段：key=dow(0=周一..6=周日)
@@ -813,7 +825,9 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
   // 周模板编辑模式：有已保存数据时默认只读
   const hasSavedWork = savedDaySegs && savedDaySegs.some((r: any) => !r.isRest);
   const [tplEditing, setTplEditing] = useState(false);
-  // 清空确认弹窗
+  // 清空周模板确认弹窗
+  const [showClearTplConfirm, setShowClearTplConfirm] = useState(false);
+  // 清空 override 确认弹窗
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [clearEndDate, setClearEndDate] = useState("2026-12-31");
   // 门店营业时间编辑
@@ -905,6 +919,21 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
               <div style={{ display: "flex", gap: 10 }}>
                 <div onClick={() => setShowClearConfirm(false)} style={{ flex: 1, textAlign: "center", padding: "11px 0", borderRadius: 6, border: `1px solid ${LINE}`, fontSize: 14, color: GRAY, cursor: "pointer" }}>取消</div>
                 <div onClick={() => { onClear(toDateStr(new Date()), clearEndDate); setShowClearConfirm(false); }}
+                  style={{ flex: 1, textAlign: "center", padding: "11px 0", borderRadius: 6, background: "#E53935", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer" }}>确认清空</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 清空周模板确认弹窗 */}
+        {showClearTplConfirm && (
+          <div onClick={() => setShowClearTplConfirm(false)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300 }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, padding: "22px 20px 18px", width: "88%", maxWidth: 340 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: INK, marginBottom: 6 }}>清空周模板</div>
+              <div style={{ fontSize: 13, color: GRAY, marginBottom: 20 }}>将删除 {staffName} 的长期周模板设置，所有格子将重置为待设置状态，不可恢复。</div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <div onClick={() => setShowClearTplConfirm(false)} style={{ flex: 1, textAlign: "center", padding: "11px 0", borderRadius: 6, border: `1px solid ${LINE}`, fontSize: 14, color: GRAY, cursor: "pointer" }}>取消</div>
+                <div onClick={() => { onClearDaySegs(); setShowClearTplConfirm(false); }}
                   style={{ flex: 1, textAlign: "center", padding: "11px 0", borderRadius: 6, background: "#E53935", fontSize: 14, fontWeight: 600, color: "#fff", cursor: "pointer" }}>确认清空</div>
               </div>
             </div>
@@ -1013,11 +1042,20 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
                 {/* 当前选中天标题 */}
                 <div style={{ marginTop: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: INK }}>周{DOW_LABELS[activeDow]} 时间设置</span>
-                  {curDay && curDay.status !== 'rest' ? (
-                    <span onClick={() => setCurDay({ isRest: true, status: 'rest' })} style={{ fontSize: 13, color: "#9AA7B5", cursor: "pointer", padding: "4px 10px", border: "1px solid #DBE1E8", borderRadius: 14, background: "#F6F8FA" }}>休息日</span>
-                  ) : (
-                    <span onClick={() => setCurDay({ isRest: false, status: 'work' })} style={{ fontSize: 13, color: SKY_D, fontWeight: 600, cursor: "pointer", padding: "4px 10px", border: `1px solid ${SKY_D}`, borderRadius: 14 }}>上班</span>
-                  )}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    {(hasSavedWork || tplEditing) && (
+                      <span onClick={() => setShowClearTplConfirm(true)}
+                        style={{ fontSize: 12, color: "#B0BEC5", cursor: "pointer", padding: "4px 8px", border: "1px solid #DBE1E8", borderRadius: 14, background: "#F6F8FA", display: "flex", alignItems: "center", gap: 3 }}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#B0BEC5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                        清空模板
+                      </span>
+                    )}
+                    {curDay && curDay.status !== 'rest' ? (
+                      <span onClick={() => setCurDay({ isRest: true, status: 'rest' })} style={{ fontSize: 13, color: "#9AA7B5", cursor: "pointer", padding: "4px 10px", border: "1px solid #DBE1E8", borderRadius: 14, background: "#F6F8FA" }}>休息日</span>
+                    ) : (
+                      <span onClick={() => setCurDay({ isRest: false, status: 'work' })} style={{ fontSize: 13, color: SKY_D, fontWeight: 600, cursor: "pointer", padding: "4px 10px", border: `1px solid ${SKY_D}`, borderRadius: 14 }}>上班</span>
+                    )}
+                  </div>
                 </div>
 
                 {curDay && curDay.status === 'rest' ? (
