@@ -595,24 +595,25 @@ export const yabanShiftRouter = router({
          WHERE tenant_id = ?`,
         [tenantId]
       )) as any;
-      // 按 staffUserId 分组：{ staffUserId -> { dow -> { workStart, workEnd, breakStart, breakEnd, isRest } } }
-      const daySegsMap: Record<number, Record<number, any>> = {};
+      // 按 staffUserId 分组：数组格式，避免 superjson 对象 key 类型问题
+      const daySegsMap: Record<number, { dow: number; workStart: string; workEnd: string; breakStart: string | null; breakEnd: string | null; isRest: boolean }[]> = {};
       for (const r of (dsRows as any[])) {
         const uid = Number(r.staff_user_id);
         const dow = Number(r.dow);
-        if (!daySegsMap[uid]) daySegsMap[uid] = {};
-        daySegsMap[uid][dow] = {
+        if (!daySegsMap[uid]) daySegsMap[uid] = [];
+        daySegsMap[uid].push({
+          dow,
           workStart: r.work_start || "09:00",
           workEnd: r.work_end || "18:00",
           breakStart: r.break_start || null,
           breakEnd: r.break_end || null,
           isRest: Number(r.is_rest) === 1,
-        };
+        });
       }
       // 转为数组格式返回
-      const daySegs = Object.entries(daySegsMap).map(([uid, dows]) => ({
+      const daySegs = Object.entries(daySegsMap).map(([uid, segs]) => ({
         staffUserId: Number(uid),
-        dows,
+        segs,
       }));
       return { templates, overrides, daySegs };
     }),
