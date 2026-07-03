@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { useYabanClinic } from "./useYabanClinic";
 import YabanClinicHeader from "./YabanClinicHeader";
 import { getRoleColor, deriveColorsFromBar } from "./yabanSharedStyles";
+import YabanHeatCalendar from "./YabanHeatCalendar";
 
 // ── 颜色常量 ──
 // 牙伴标准色卡：主色#1E88D6 / 渐变亮端#3D9FD6 / 浅底#EBF5FB
@@ -127,6 +128,13 @@ function templateToSegs(tpl: {
 export default function YabanClinicShift() {
   const [, setLocation] = useLocation();
   const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
+  // 北京时间判断今天是否周末：周六或周日显示7天，周一到周五只显示5天
+  const todayIsWeekend = useMemo(() => {
+    const bjDateStr = new Date().toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).replace(/\//g, "-");
+    const [y, m, d] = bjDateStr.split("-").map(Number);
+    const bjDay = new Date(y, m - 1, d).getDay();
+    return bjDay === 0 || bjDay === 6;
+  }, []);
   // 从顾客预约页带过来的选中日期（sessionStorage），否则默认今天
   const initDate = useMemo(() => {
     try {
@@ -142,6 +150,9 @@ export default function YabanClinicShift() {
   }, [initDate]);
   const [weekOffset, setWeekOffset] = useState(initWeekOffset);
   const [selDate, setSelDate] = useState(initDate);
+  // 周/月视图切换
+  const [calMode, setCalMode] = useState<"week"|"month">("week");
+  const [monthCursor, setMonthCursor] = useState(() => new Date(initDate.getFullYear(), initDate.getMonth(), 1));
   // 顶栏固定吸顶：实测高度给主体留等高占位
   const headerRef = useRef<HTMLDivElement>(null);
   const [headerH, setHeaderH] = useState(96);
@@ -217,6 +228,13 @@ export default function YabanClinicShift() {
     onSuccess: () => { refetchTpl(); refetch(); toast.success("周模板已清空"); },
     onError: (e) => toast.error(e.message),
   });
+
+  // 月统计数据（用于月视图热力日历）
+  const { data: monthStats = {} } = trpc.yabanAppointment.monthStats.useQuery({
+    year: calMode === "month" ? monthCursor.getFullYear() : selDate.getFullYear(),
+    month: calMode === "month" ? monthCursor.getMonth() + 1 : selDate.getMonth() + 1,
+    tenantId: currentTenantId ?? undefined,
+  }, { enabled: currentTenantId != null });
 
   // 门店营业时间（后端持久化，按医院隔离）
   const { data: bizHours, refetch: refetchBiz } = trpc.yabanShift.getBusinessHours.useQuery(
@@ -361,6 +379,17 @@ export default function YabanClinicShift() {
     });
   }, [filteredRoster, overrides, weekDates]);
 
+  // 月视图热力占用率：当天在岗人数 / 全员人数
+  const memberCount = filteredRoster.length || 1;
+  function cellLoad(d: Date): number {
+    const stat = (monthStats as Record<string, { cnt: number; minutes: number; doctors: number }>)[toDateStr(d)];
+    if (!stat || stat.minutes <= 0) return 0;
+    const OPEN_MIN = 9 * 60; // 默认营业时长 540 分钟
+    const docs = Math.max(memberCount, stat.doctors || 0, 1);
+    const raw = stat.minutes / (docs * OPEN_MIN);
+    return Math.pow(Math.max(0, Math.min(1, raw)), 0.5);
+  }
+
   // 打开排班抽屉
   function openSch(staffUserId: number, staffName: string, date: Date) {
     const segs = getStaffDaySegs(staffUserId, date);
@@ -436,53 +465,76 @@ export default function YabanClinicShift() {
       {/* 等高占位，避免被固定顶栏遮挡 */}
       <div style={{ height: headerH }} aria-hidden />
 
-      {/* 格子日历：与顧客预约页完全一致 */}
-      <div style={{ background: "#fff", padding: "10px 16px 12px", borderBottom: `8px solid ${BG}` }}>
-        {/* 周导航 */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-          <div onClick={() => setWeekOffset(w => w - 1)} style={{ width: 30, height: 30, borderRadius: 4, background: "#F6F8FA", color: GRAY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, cursor: "pointer" }}>‹</div>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>
-              {weekDates[0].getMonth() + 1}月{weekDates[0].getDate()}日 – {weekDates[6].getMonth() + 1}月{weekDates[6].getDate()}日
+      {/* 周/月日历：周视图为自定义格子，月视图为 YabanHeatCalendar 热力日历 */}
+      {calMode === "week" ? (
+        <div style={{ background: "#fff", padding: "10px 16px 0", borderBottom: `1px solid ${LINE}` }}>
+          {/* 周导航 */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            <div onClick={() => setWeekOffset(w => w - 1)} style={{ width: 30, height: 30, borderRadius: 4, background: "#F6F8FA", color: GRAY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, cursor: "pointer" }}>‹</div>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>
+                {weekDates[0].getMonth() + 1}月{weekDates[0].getDate()}日 – {weekDates[6].getMonth() + 1}月{weekDates[6].getDate()}日
+              </div>
+              <div style={{ fontSize: 11, color: weekOffset === 0 ? SKY_D : GRAY, marginTop: 2, fontWeight: weekOffset === 0 ? 600 : 400 }}>
+                {weekOffset === 0 ? "本周" : weekOffset < 0 ? `前${-weekOffset}周` : `后${weekOffset}周`}
+              </div>
             </div>
-            <div style={{ fontSize: 11, color: weekOffset === 0 ? SKY_D : GRAY, marginTop: 2, fontWeight: weekOffset === 0 ? 600 : 400 }}>
-              {weekOffset === 0 ? "本周" : weekOffset < 0 ? `前${-weekOffset}周` : `后${weekOffset}周`}
+            <div onClick={() => setWeekOffset(w => w + 1)} style={{ width: 30, height: 30, borderRadius: 4, background: "#F6F8FA", color: GRAY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, cursor: "pointer" }}>›</div>
+          </div>
+          {/* 格子行：周末显示7天铺满，周一到周五只显示5天（周六日隐藏在屏幕外） */}
+          <div style={todayIsWeekend
+            ? { overflowX: "auto", margin: "0 -16px", padding: "0 16px 2px", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none" }
+            : { overflow: "hidden", margin: "0 -16px", padding: "0 16px 2px" }}>
+            <div style={{ display: "flex", gap: 3 }}>
+              {["一","二","三","四","五","六","日"].map((label, i) => {
+                const d = weekDates[i];
+                const isSelected = toDateStr(d) === toDateStr(selDate);
+                const isToday = toDateStr(d) === toDateStr(today);
+                const isWeekend = i >= 5;
+                const cellW = todayIsWeekend ? "calc((100vw - 50px) / 7)" : "calc((100vw - 44px) / 5)";
+                const onCnt = weekDayOnCnt[i] ?? 0;
+                const bg = isSelected ? SKY_D : isToday ? SKY_L : "#F6F8FA";
+                const bd = isSelected ? SKY_D : isToday ? SKY : LINE;
+                const tc = isSelected ? "#fff" : INK;
+                const gc = isSelected ? "rgba(255,255,255,.75)" : GRAY;
+                return (
+                  <div key={i}
+                    onClick={() => setSelDate(d)}
+                    style={{ width: cellW, flexShrink: 0,
+                      marginLeft: (!todayIsWeekend && i === 5) ? 16 : 0,
+                      height: 72, borderRadius: 10, display: "flex", flexDirection: "column",
+                      alignItems: "center", justifyContent: "center", gap: 2,
+                      cursor: "pointer", transition: "all .18s",
+                      background: bg, border: `2px solid ${bd}`,
+                      boxShadow: isSelected ? "0 2px 8px rgba(30,136,214,.25)" : "none" }}>
+                    <span style={{ fontSize: todayIsWeekend ? 10 : 11, color: gc, fontWeight: 500 }}>周{label}</span>
+                    <span style={{ fontSize: todayIsWeekend ? 16 : 20, fontWeight: 700, color: tc, lineHeight: 1.1 }}>{d.getDate()}</span>
+                    <span style={{ fontSize: 10, color: isSelected ? "rgba(255,255,255,.8)" : (onCnt > 0 ? SKY_D : "transparent"), fontWeight: 600, lineHeight: 1 }}>{onCnt > 0 ? `${onCnt}人` : "·"}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
-          <div onClick={() => setWeekOffset(w => w + 1)} style={{ width: 30, height: 30, borderRadius: 4, background: "#F6F8FA", color: GRAY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, cursor: "pointer" }}>›</div>
+          {/* 展开按鈕：点击切换到月视图 */}
+          <div
+            onClick={() => { setCalMode("month"); setMonthCursor(new Date(selDate.getFullYear(), selDate.getMonth(), 1)); }}
+            style={{ textAlign: "center", color: "#DBE1E8", fontSize: 18, lineHeight: 1, padding: "5px 0 8px", cursor: "pointer" }}
+          >⌄</div>
         </div>
-        {/* 格子行：周一~周五铺满，周六日右侧可滑动 */}
-        <div style={{ overflowX: "auto", margin: "0 -16px", padding: "0 16px 2px", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none" }}>
-          <div style={{ display: "flex", gap: 3 }}>
-            {["一","二","三","四","五","六","日"].map((label, i) => {
-              const d = weekDates[i];
-              const isSelected = toDateStr(d) === toDateStr(selDate);
-              const isToday = toDateStr(d) === toDateStr(today);
-              const isWeekend = i >= 5;
-              const cellW = isWeekend ? 44 : "calc((100vw - 143px) / 5)";
-              const onCnt = weekDayOnCnt[i] ?? 0;
-              const bg = isSelected ? SKY_D : isToday ? SKY_L : "#F6F8FA";
-              const bd = isSelected ? SKY_D : isToday ? SKY : LINE;
-              const tc = isSelected ? "#fff" : INK;
-              const gc = isSelected ? "rgba(255,255,255,.75)" : GRAY;
-              return (
-                <div key={i}
-                  onClick={() => setSelDate(d)}
-                  style={{ width: cellW, flexShrink: 0, marginLeft: i === 5 ? 8 : 0,
-                    height: 72, borderRadius: 10, display: "flex", flexDirection: "column",
-                    alignItems: "center", justifyContent: "center", gap: 2,
-                    cursor: "pointer", transition: "all .18s",
-                    background: bg, border: `2px solid ${bd}`,
-                    boxShadow: isSelected ? "0 2px 8px rgba(30,136,214,.25)" : "none" }}>
-                  <span style={{ fontSize: isWeekend ? 10 : 11, color: gc, fontWeight: 500 }}>周{label}</span>
-                  <span style={{ fontSize: isWeekend ? 15 : 20, fontWeight: 700, color: tc, lineHeight: 1.1 }}>{d.getDate()}</span>
-                  <span style={{ fontSize: 10, color: isSelected ? "rgba(255,255,255,.8)" : (onCnt > 0 ? SKY_D : "transparent"), fontWeight: 600, lineHeight: 1 }}>{onCnt > 0 ? `${onCnt}人` : "·"}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      ) : (
+        <YabanHeatCalendar
+          selDate={selDate}
+          onSelectDate={(d) => { setSelDate(d); setWeekOffset(Math.round((d.getTime() - today.getTime()) / (7 * 86400000))); }}
+          getCellLoad={cellLoad}
+          monthCursor={monthCursor}
+          onMonthChange={setMonthCursor}
+          disablePast={false}
+          showToggle={true}
+          calMode="month"
+          onToggleMode={() => setCalMode("week")}
+          weekDates={weekDates}
+        />
+      )}
 
       {/* 操作条 */}
       <div style={{ background: "#fff", padding: "8px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${LINE}` }}>
