@@ -954,12 +954,14 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
                   return (
                     <div onClick={() => { if (!hasSavedWork || tplEditing) toggleDow(i); }}
                       style={{ width: cellW, flexShrink: 0, marginLeft: i === 5 ? 10 : 0,
-                        minHeight: (configured || isRest) ? 100 : 72,
+                        height: 100,
                         borderRadius: 10, display: "flex",
                         flexDirection: "column", alignItems: "center", justifyContent: "center",
                         gap: 0, cursor: "pointer", transition: "all .2s", padding: "8px 3px",
-                        background: bg, border: `2px solid ${bd}`,
-                        boxShadow: isActive ? "0 2px 8px rgba(30,136,214,.25)" : "none" }}>
+                        background: isRest ? "repeating-linear-gradient(45deg,#ECEFF3,#ECEFF3 3px,#F6F8FA 3px,#F6F8FA 7px)" : bg,
+                        border: `2px solid ${bd}`,
+                        boxShadow: isActive ? "0 2px 8px rgba(30,136,214,.25)" : "none",
+                        overflow: "hidden", position: "relative" }}>
 
                       {/* 周X 标题：始终大字加粗 */}
                       <span style={{ fontSize: 15, fontWeight: 700, color: hd, lineHeight: 1, marginBottom: 5, fontFamily: "system-ui,-apple-system,sans-serif" }}>周{label}</span>
@@ -982,13 +984,20 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
                           </div>
                         </div>
                       ) : isRest ? (
-                        // 休息日
-                        <span style={{ fontSize: isWeekend ? 9 : 10, color: isActive ? "rgba(255,255,255,.8)" : "#B0BEC5", marginTop: 2, textAlign: "center", lineHeight: 1.3 }}>休息日</span>
+                        // 休息日：斜纹底纹 + 文字
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, marginTop: 2 }}>
+                          <span style={{ fontSize: 16, color: "#C5CDD8" }}>✕</span>
+                          <span style={{ fontSize: isWeekend ? 9 : 10, color: "#B0BEC5", textAlign: "center", lineHeight: 1.3 }}>休息</span>
+                        </div>
                       ) : (
-                        // 待设置
-                        <span style={{ fontSize: isWeekend ? 9 : 10, color: isActive ? "rgba(255,255,255,.8)" : "#B0BEC5", marginTop: 2, textAlign: "center", lineHeight: 1.3, whiteSpace: "pre" }}>
-                          {isWeekend ? "待\n设置" : "待设置"}
-                        </span>
+                        // 待设置：虚线框 + 加号图标
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, marginTop: 2,
+                          border: "1.5px dashed #C5D0DB", borderRadius: 6, padding: "5px 8px", width: "70%" }}>
+                          <span style={{ fontSize: 14, color: "#C5D0DB", lineHeight: 1 }}>+</span>
+                          <span style={{ fontSize: isWeekend ? 8 : 9, color: "#C5D0DB", textAlign: "center", lineHeight: 1.2, whiteSpace: "pre" }}>
+                            {isWeekend ? "待\n设置" : "待设置"}
+                          </span>
+                        </div>
                       )}
                     </div>
                   );
@@ -1021,19 +1030,21 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
                   <>
                     {/* 上午时段：06:00 开始，到中午结束 */}
                     <div style={{ marginTop: 12 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 9, color: "#9AA7B5", flexShrink: 0, width: 18, textAlign: "right" }}>上午</span>
                         <TimeBox val={curDay!.workStart} onChange={v => setCurDay({ workStart: v, status: 'work', isRest: false })} isErr={isTimeErr} min="06:00" max="12:00" />
-                        <span style={{ color: "#DBE1E8", fontSize: 18, flexShrink: 0 }}>—</span>
+                        <span style={{ color: "#9AA7B5", fontSize: 18, flexShrink: 0 }}>—</span>
                         <TimeBox val={curDay!.breakStart || "12:00"} onChange={v => setCurDay({ breakStart: v, status: 'work', isRest: false })} min="06:00" max="13:00" />
                       </div>
-                      {isTimeErr && <div style={{ fontSize: 11, color: "#E53935", marginTop: 4 }}>上午结束时间须晚于开始时间</div>}
+                      {isTimeErr && <div style={{ fontSize: 12, color: "#E53935", marginTop: 5, display: "flex", alignItems: "center", gap: 4 }}><span>⚠</span>上午结束时间须晚于开始时间</div>}
                     </div>
 
                     {/* 下午时段：中午开始，18:00 结束 */}
                     <div style={{ marginTop: 10 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 9, color: "#9AA7B5", flexShrink: 0, width: 18, textAlign: "right" }}>下午</span>
                         <TimeBox val={curDay!.breakEnd || "13:00"} onChange={v => setCurDay({ breakEnd: v, status: 'work', isRest: false })} min={curDay!.breakStart || "12:00"} max="18:00" />
-                        <span style={{ color: "#DBE1E8", fontSize: 18, flexShrink: 0 }}>—</span>
+                        <span style={{ color: "#9AA7B5", fontSize: 18, flexShrink: 0 }}>—</span>
                         <TimeBox val={curDay!.workEnd} onChange={v => setCurDay({ workEnd: v, status: 'work', isRest: false })} min={curDay!.breakEnd || "13:00"} max="18:00" />
                       </div>
                     </div>
