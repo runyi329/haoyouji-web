@@ -16831,20 +16831,7 @@ ${klinesSummary}
           await conn.end();
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '保存失败: ' + (e?.message || '未知错误') });
         }
-        // display_config 联动：同步到同账本所有订单（含跨角色订单）
-        if (input.displayConfig !== undefined) {
-          const dcJson = input.displayConfig ? JSON.stringify(input.displayConfig) : null;
-          // 先获取当前订单的 order_role，以便同步到同角色的其他订单
-          const [curRoleRows] = await conn.execute(
-            `SELECT order_role FROM ledger_orders WHERE id = ? AND ledger_id = ? LIMIT 1`,
-            [input.id, input.ledgerId]
-          ) as any[];
-          const curOrderRole = (curRoleRows as any[])?.[0]?.order_role || 'finance';
-          await conn.execute(
-            `UPDATE ledger_orders SET display_config = ? WHERE ledger_id = ? AND order_role = ? AND id != ?`,
-            [dcJson, input.ledgerId, curOrderRole, input.id]
-          );
-        }
+        // display_config 不再联动同步到其他订单，每张订单独立保存自己的配置
         await conn.end();
         return { success: true };
       }),
