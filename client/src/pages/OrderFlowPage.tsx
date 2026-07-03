@@ -423,6 +423,18 @@ export default function OrderFlowPage() {
     const ethPrice = (cryptoPricesRaw as any)?.prices?.ETH ?? (cryptoPricesRaw as any)?.ETH;
     if (ethPrice && ethPrice > 0) setCurrentPrice(ethPrice);
   }, [cryptoPricesRaw]);
+  // USDT/CNY 实时汇率
+  const [cnyRate, setCnyRate] = useState<number>(7.28);
+  const { data: rateData } = trpc.exchange.getRate.useQuery(
+    { fromcoin: 'USD', tocoin: 'CNY', money: 1 },
+    { staleTime: 1000, refetchInterval: 3000 }
+  );
+  useEffect(() => {
+    if (rateData?.success && rateData.money) {
+      const r = parseFloat(rateData.money);
+      if (!isNaN(r) && r > 0) setCnyRate(r);
+    }
+  }, [rateData]);
   // 北京时间实时时钟
   const [bjTime, setBjTime] = useState('');
   useEffect(() => {
@@ -978,10 +990,70 @@ export default function OrderFlowPage() {
                   textAlign: "center",
                 }}
               >
-                {summary.totalPnl >= 0 ? "+" : ""}{fmt(summary.totalPnl, 2)}<span style={{ fontSize: 10, color: '#555555', fontWeight: 400, marginLeft: 1 }}>U</span>
+                {summary.totalPnl >= 0 ? "+" : ""}{fmt(summary.totalPnl, 0)}<span style={{ fontSize: 10, color: '#555555', fontWeight: 400, marginLeft: 1 }}>U</span>
               </div>
             </div>
           </div>
+          {/* 止盈价格 + 到期盈利行 */}
+          {(() => {
+            const tp = defaultTakeProfit ?? null;
+            const tpPnl = tp != null && summary.totalAvg != null && summary.totalQty > 0
+              ? (tp - summary.totalAvg) * summary.totalQty
+              : null;
+            const tpPct = tpPnl != null && summary.totalAvg != null && summary.totalQty > 0
+              ? tpPnl / (summary.totalAvg * summary.totalQty)
+              : null;
+            return (
+              <div
+                className="flex items-stretch py-2"
+                style={{ borderTop: "1px solid rgba(0,0,0,0.08)", paddingLeft: 0, paddingRight: 0 }}
+              >
+                {/* 左：止盈价格 */}
+                <div style={{ flex: 1, textAlign: "center", padding: "0 12px", borderRight: "1px solid rgba(0,0,0,0.08)" }}>
+                  <div className="text-xs mb-0.5" style={{ color: '#333333', letterSpacing: '0.05em' }}>止盈价格</div>
+                  <div style={{ fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
+                    {tp != null
+                      ? <span style={{ color: '#B8860B', fontWeight: 700, fontSize: '0.95rem' }}>{fmt(tp, 0)}<span style={{ fontSize: 10, color: '#444444', fontWeight: 400, marginLeft: 1 }}>U</span></span>
+                      : <span style={{ color: '#888888', fontSize: '0.85rem' }}>-</span>}
+                  </div>
+                  {tp != null && currentPrice != null && (() => {
+                    const diff = tp - currentPrice;
+                    const pct = diff / currentPrice * 100;
+                    const isUp = diff >= 0;
+                    return (
+                      <div style={{ fontSize: '0.6rem', color: '#222222', marginTop: 2, fontVariantNumeric: 'tabular-nums', fontFamily: 'Inter, -apple-system, sans-serif' }}>
+                        还需{isUp ? '涨' : '跌'} {isUp ? '+' : ''}{fmt(diff, 0)}点 {isUp ? '+' : ''}{pct.toFixed(1)}%
+                      </div>
+                    );
+                  })()}
+                </div>
+                {/* 右：到期盈利 */}
+                <div style={{ flex: 1, textAlign: "center", padding: "0 12px" }}>
+                  <div className="text-xs mb-0.5 flex items-center justify-center gap-1" style={{ color: '#333333', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+                    到期盈利
+                    {tpPct != null && (
+                      <span style={{ color: tpPnl! >= 0 ? '#A80000' : '#16a34a', fontSize: '0.65rem', fontWeight: 600 }}>
+                        {tpPnl! >= 0 ? '+' : ''}{(tpPct * 100).toFixed(2)}%
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
+                    {tpPnl != null
+                      ? <span style={{ color: tpPnl >= 0 ? '#A80000' : '#16a34a', fontWeight: 700, fontSize: '0.95rem' }}>
+                          {tpPnl >= 0 ? '+' : ''}{fmt(tpPnl, 0)}<span style={{ fontSize: 10, color: '#444444', fontWeight: 400, marginLeft: 1 }}>U</span>
+                        </span>
+                      : <span style={{ color: '#888888', fontSize: '0.85rem' }}>-</span>}
+                  </div>
+                  {tpPnl != null && (
+                    <div style={{ fontSize: '0.6rem', color: '#222222', marginTop: 2, fontVariantNumeric: 'tabular-nums', fontFamily: 'Inter, -apple-system, sans-serif' }}>
+                      ≈¥{Math.round(tpPnl * cnyRate).toLocaleString('zh-CN')}元
+                      <span style={{ color: '#888888', marginLeft: 3 }}>实时汇率 {cnyRate.toFixed(4)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
