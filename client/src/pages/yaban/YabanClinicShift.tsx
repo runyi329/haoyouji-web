@@ -958,13 +958,13 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
                         borderRadius: 10, display: "flex",
                         flexDirection: "column", alignItems: "center", justifyContent: "center",
                         gap: 0, cursor: "pointer", transition: "all .2s", padding: "8px 3px",
-                        background: isRest ? "repeating-linear-gradient(45deg,#ECEFF3,#ECEFF3 3px,#F6F8FA 3px,#F6F8FA 7px)" : bg,
+                        background: isRest ? "repeating-linear-gradient(45deg,#D8DDE4,#D8DDE4 3px,#EEF1F5 3px,#EEF1F5 7px)" : bg,
                         border: `2px solid ${bd}`,
                         boxShadow: isActive ? "0 2px 8px rgba(30,136,214,.25)" : "none",
                         overflow: "hidden", position: "relative" }}>
 
                       {/* 周X 标题：始终大字加粗 */}
-                      <span style={{ fontSize: 15, fontWeight: 700, color: hd, lineHeight: 1, marginBottom: 5, fontFamily: "system-ui,-apple-system,sans-serif" }}>周{label}</span>
+                      <span style={{ fontSize: 15, fontWeight: 700, color: isRest ? "#5A6878" : hd, lineHeight: 1, marginBottom: 5, fontFamily: "system-ui,-apple-system,sans-serif" }}>周{label}</span>
 
                       {configured ? (
                         // 已设时间：左右两列 AM/PM
@@ -986,8 +986,8 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
                       ) : isRest ? (
                         // 休息日：斜纹底纹 + 文字
                         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, marginTop: 2 }}>
-                          <span style={{ fontSize: 16, color: "#C5CDD8" }}>✕</span>
-                          <span style={{ fontSize: isWeekend ? 9 : 10, color: "#B0BEC5", textAlign: "center", lineHeight: 1.3 }}>休息</span>
+                          <span style={{ fontSize: 16, color: "#7A8898", fontWeight: 700 }}>✕</span>
+                          <span style={{ fontSize: isWeekend ? 9 : 10, color: "#5A6878", fontWeight: 600, textAlign: "center", lineHeight: 1.3 }}>休息</span>
                         </div>
                       ) : (
                         // 待设置：虚线框 + 加号图标
