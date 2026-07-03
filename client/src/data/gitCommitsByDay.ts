@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-03
+// 生成时间：2026-07-04
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8066,5 +8066,25 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-03T08:10:17Z", type: "feat", cleanMessage: "订单卡片UI优化——四列主行(数量/开仓价/最新价/浮动盈亏)、涨跌点数、去掉盈亏平衡行、筛选栏合并一行、标签改回中文" },
     { date: "2026-07-03T08:55:28Z", type: "fix", cleanMessage: "去掉display_config联动同步逻辑，每张订单独立保存自己的字段显示配置" },
     { date: "2026-07-03T11:55:28Z", type: "feat", cleanMessage: "排班抽屉深度重构 - 每天独立时段/AM-PM格子/上下午两行/保存两态/个性设置行式布局" },
+    { date: "2026-07-03T11:58:07Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-03T12:45:20Z", type: "feat", cleanMessage: "单日覆盖 - 长按员工头像弹出当天时间编辑面板，保存写入 shift_override" },
+    { date: "2026-07-03T12:55:09Z", type: "feat", cleanMessage: "清空按钮移至个性设置区，顶栏层级优化，周模板区块标题强化" },
+    { date: "2026-07-03T12:59:19Z", type: "feat", cleanMessage: "格子统一高度100px，待设置虚线框+加号，休息日斜纹+X，时间框加上午/下午标签，连接符加深，错误提示加大" },
+    { date: "2026-07-03T13:02:53Z", type: "fix", cleanMessage: "休息日格子斜纹加深，周X文字改深灰，X和休息文字加深，提升对比度" },
+    { date: "2026-07-03T13:03:18Z", type: "fix", cleanMessage: "休息日斜纹加深提升对比度，去掉格子AM/PM标签只保留时间数字" },
+    { date: "2026-07-03T13:12:22Z", type: "feat", cleanMessage: "0天工作日禁用保存按钮，个性设置标签宽度统一对齐，甘特图名字列宽自适应" },
+    { date: "2026-07-03T13:18:45Z", type: "feat", cleanMessage: "上半区加清空周模板按钮，后端新增 clearDaySegs 接口" },
+    { date: "2026-07-03T13:24:33Z", type: "fix", cleanMessage: "清空模板按钮移到长期周模板标题行，不依赖格子选中状态" },
+    { date: "2026-07-03T13:31:49Z", type: "fix", cleanMessage: "清空模板按钮在编辑状态下始终显示（含未保存过的情况）" },
+    { date: "2026-07-03T13:36:34Z", type: "fix", cleanMessage: "时间设置框去掉AM/PM标签，改为24小时制显示" },
+    { date: "2026-07-03T13:44:53Z", type: "fix", cleanMessage: "清空模板只清页面内容不动数据库，更新弹窗提示文字" },
+    { date: "2026-07-03T13:51:00Z", type: "fix", cleanMessage: "修复日历图 dow 错位 bug，getDay() 统一转换为 0=周一 与存储一致" },
+    { date: "2026-07-03T14:00:02Z", type: "fix", cleanMessage: "日历图优先用 daySegs 判断每天班次，修复 workDays 错位 bug" },
+    { date: "2026-07-03T14:05:43Z", type: "fix", cleanMessage: "修复 daySegs dows key 类型问题，兼容数字和字符串 key" },
+    { date: "2026-07-03T14:16:41Z", type: "fix", cleanMessage: "修复 UTC 时区偏移导致 dow 计算错一天的 bug，改用本地时间解析日期" },
+    { date: "2026-07-03T14:39:07Z", type: "fix", cleanMessage: "daySegs 改为数组格式避免 superjson key 类型问题，彻底修复排班日历错位 bug" },
+    { date: "2026-07-03T15:04:44Z", type: "feat", cleanMessage: "员工排班日历改为格子布局，彻底重写 getEffectiveShift 逻辑" },
+    { date: "2026-07-03T15:21:04Z", type: "other", cleanMessage: "debug: 在 weekSchedule 接口加 console.log 调试日志" },
+    { date: "2026-07-03T15:26:06Z", type: "fix", cleanMessage: "格子布局改为5天铺满+周六日缩小在右侧，精确 calc 宽度计算" },
   ],
 };
