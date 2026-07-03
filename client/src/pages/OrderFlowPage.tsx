@@ -1251,16 +1251,13 @@ export default function OrderFlowPage() {
                 boxShadow: isOpen ? "0 0 20px rgba(59,130,246,0.06)" : "none",
               }}
             >
-              {/* 行1：方向 + 币种 + 杠杆 + 类型标签 + 状态 + 操作 */}
-              <div className="flex items-center gap-1.5 px-3 pt-2.5 pb-1.5 flex-wrap">
+              {/* 行1：标签行 - 方向 + 杠杆 + 类型 + 到期 + 日期 + 状态 + 操作 */}
+              <div className="flex items-center gap-1.5 px-3 pt-2 pb-1.5 flex-wrap">
                 <span
                   className="text-xs font-bold px-1.5 py-0.5 rounded"
                   style={{ backgroundColor: isLong ? "rgba(246,70,93,0.15)" : "rgba(14,203,129,0.15)", color: dirColor }}
                 >
                   {isLong ? "多" : "空"}
-                </span>
-                <span className="text-sm font-semibold" style={{ color: OKX_TEXT_PRI }}>
-                  {order.symbol?.replace("USDT", "")} / USDT
                 </span>
                 {isPerp && (
                   <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(240,185,11,0.12)", color: OKX_YELLOW }}>
@@ -1275,30 +1272,17 @@ export default function OrderFlowPage() {
                     {expiryDaysLeft > 0 ? `${expiryDaysLeft}天到期` : "已到期"}
                   </span>
                 )}
-                {/* 开仓日期 + 订单编号 */}
                 <div className="flex flex-col leading-tight">
-                  {isOpen ? (
-                    <span style={{ color: OKX_TEXT_SEC, fontSize: '0.6rem' }}>{order.entry_date}</span>
-                  ) : (
-                    <>
-                      <span style={{ color: OKX_TEXT_SEC, fontSize: '0.6rem' }}>{order.entry_date}</span>
-                      {order.exit_date && <span style={{ color: OKX_TEXT_SEC, fontSize: '0.6rem' }}>{order.exit_date}</span>}
-                    </>
-                  )}
+                  <span style={{ color: OKX_TEXT_SEC, fontSize: '0.6rem' }}>{order.entry_date}</span>
                   {(order as any).order_no && (
                     <span style={{ color: '#aaaaaa', fontSize: '0.55rem', fontFamily: 'monospace', letterSpacing: '0.05em' }}>
                       {(order as any).order_no}
                     </span>
                   )}
                 </div>
-
                 <span
                   className="text-xs px-1.5 py-0.5 rounded ml-auto"
-                  style={
-                    isOpen
-                      ? { backgroundColor: "rgba(240,185,11,0.12)", color: OKX_YELLOW }
-                      : { backgroundColor: "rgba(255,255,255,0.05)", color: OKX_TEXT_SEC }
-                  }
+                  style={isOpen ? { backgroundColor: "rgba(240,185,11,0.12)", color: OKX_YELLOW } : { backgroundColor: "rgba(255,255,255,0.05)", color: OKX_TEXT_SEC }}
                 >
                   {isOpen ? "持仓" : "已平"}
                 </span>
@@ -1307,59 +1291,84 @@ export default function OrderFlowPage() {
                 </button>
               </div>
 
-              {/* 行2：主要数据 - 开仓价 / 最新价 / 盈亏 */}
-              <div className="grid grid-cols-3 gap-0 px-3 py-2" style={{ borderTop: `1px solid ${OKX_BORDER}` }}>
+              {/* 行2：币种 + 开仓价 + 最新价 + 浮动盈亏 —— 四列主行 */}
+              <div className="grid grid-cols-4 gap-0 px-3 py-2.5" style={{ borderTop: `1px solid ${OKX_BORDER}` }}>
+                {/* ETH数量 */}
                 <div>
-                  <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>开仓价</div>
-                  <div className="text-base font-bold" style={{ color: OKX_TEXT_PRI, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                    {fmt(parseFloat(order.entry_price), 1)}
+                  <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>ETH数量</div>
+                  <div style={{ fontSize: '1rem', fontWeight: 800, color: OKX_TEXT_PRI, fontFamily: "'Inter', -apple-system, sans-serif", fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em', lineHeight: 1 }}>
+                    {fmt(parseFloat(order.quantity), 2)}
                   </div>
                 </div>
+                {/* 开仓价 */}
+                <div className="text-center">
+                  <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>开仓价</div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 700, color: OKX_TEXT_PRI, fontFamily: "'Inter', -apple-system, sans-serif", fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', lineHeight: 1 }}>
+                    {fmt(parseFloat(order.entry_price), 2)}
+                  </div>
+                </div>
+                {/* 最新价 */}
                 <div className="text-center">
                   <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>
                     {isOpen ? "最新价" : "平仓价"}
                   </div>
-                  <div className="text-base font-bold" style={{ color: isOpen ? OKX_YELLOW : OKX_TEXT_SEC, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 700, color: isOpen ? OKX_YELLOW : OKX_TEXT_SEC, fontFamily: "'Inter', -apple-system, sans-serif", fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', lineHeight: 1 }}>
                     {isOpen
-                      ? orderPrice ? fmt(orderPrice, 1) : "--"
-                      : order.exit_price ? fmt(parseFloat(order.exit_price), 1) : "--"}
+                      ? orderPrice ? fmt(orderPrice, 2) : "--"
+                      : order.exit_price ? fmt(parseFloat(order.exit_price), 2) : "--"}
                   </div>
+                  {/* 相对开仓价的涨跌 */}
+                  {(() => {
+                    const curPrice = isOpen ? orderPrice : (order.exit_price ? parseFloat(order.exit_price) : null);
+                    const entryPrice = parseFloat(order.entry_price);
+                    if (curPrice == null || isNaN(entryPrice)) return null;
+                    const diff = curPrice - entryPrice;
+                    const pct = diff / entryPrice * 100;
+                    const isUp = diff >= 0;
+                    const color = isLong ? (isUp ? "#F6465D" : "#0ECB81") : (isUp ? "#0ECB81" : "#F6465D");
+                    return (
+                      <div className="text-xs" style={{ fontWeight: 600, color, fontFamily: "'Inter', -apple-system, sans-serif", fontVariantNumeric: 'tabular-nums', marginTop: 2, lineHeight: 1 }}>
+                        {isUp ? '涨' : '跌'}{isUp ? '+' : ''}{fmt(diff, 2)}
+                      </div>
+                    );
+                  })()}
                 </div>
+                {/* 浮动盈亏 */}
                 <div className="text-right">
                   <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>
                     {isOpen ? "浮动盈亏" : "实现盈亏"}
                   </div>
-                  <div className="text-base font-bold" style={{ color: pnlColor, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: pnlColor, fontFamily: "'Inter', -apple-system, sans-serif", fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em', lineHeight: 1 }}>
                     {calc.pnl != null ? `${calc.pnl >= 0 ? "+" : "-"}${fmt(Math.abs(calc.pnl), 2)}` : "--"}
                   </div>
                   {calc.pnlPct != null && (
-                    <div className="text-xs" style={{ color: pnlColor, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
+                    <div className="text-xs" style={{ color: pnlColor, fontFamily: "'Inter', -apple-system, sans-serif", fontVariantNumeric: 'tabular-nums' }}>
                       {fmtPct(calc.pnlPct)}
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* 行3：次要数据 - 数量 / 保证金 / 名义价值 */}
-              <div className="grid grid-cols-3 gap-0 px-3 py-2" style={{ borderTop: `1px solid ${OKX_BORDER}` }}>
+              {/* 行3：次要数据 - 数量 / 保证金 / 订单价値 */}
+              <div className="grid grid-cols-3 gap-0 px-3 py-2" style={{ borderTop: `1px solid ${OKX_BORDER}`, background: 'rgba(0,0,0,0.12)' }}>
                 <div>
-                  <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>ETH数量</div>
-                  <div className="text-sm" style={{ color: OKX_TEXT_PRI, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                    {fmt(parseFloat(order.quantity), 2)}
+                  <div className="text-xs mb-0.5" style={{ color: '#666' }}>ETH数量</div>
+                  <div className="text-sm" style={{ color: OKX_TEXT_PRI, fontFamily: "'Inter', -apple-system, sans-serif", fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em' }}>
+                    {fmt(parseFloat(order.quantity), 2)}<span style={{ fontSize: '0.6rem', color: '#666', marginLeft: 1 }}>ETH</span>
                   </div>
                 </div>
                 <div className="text-center">
-                  <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>{isPerp ? "保证金" : isOption ? "权利金" : "成本"}</div>
-                  <div className="text-sm" style={{ color: OKX_TEXT_PRI, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
+                  <div className="text-xs mb-0.5" style={{ color: '#666' }}>{isPerp ? "保证金" : isOption ? "权利金" : "成本"}</div>
+                  <div className="text-sm" style={{ color: OKX_TEXT_PRI, fontFamily: "'Inter', -apple-system, sans-serif", fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em' }}>
                     {isOption && order.premium
-                      ? `${Math.round(parseFloat(order.premium)).toLocaleString("zh-CN")} U`
-                      : <>{fmt(calc.margin, 2)}<span style={{ fontSize: '0.6rem', color: OKX_TEXT_SEC, marginLeft: 1 }}>U</span></>}
+                      ? <>{Math.round(parseFloat(order.premium)).toLocaleString("zh-CN")}<span style={{ fontSize: '0.6rem', color: '#666', marginLeft: 1 }}>U</span></>
+                      : <>{fmt(calc.margin, 0)}<span style={{ fontSize: '0.6rem', color: '#666', marginLeft: 1 }}>U</span></>}
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>订单价値</div>
-                  <div className="text-sm" style={{ color: OKX_TEXT_PRI, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                    {fmt(calc.notional, 0)}<span style={{ fontSize: '0.6rem', color: OKX_TEXT_SEC, marginLeft: 1 }}>U</span>
+                  <div className="text-xs mb-0.5" style={{ color: '#666' }}>订单价値</div>
+                  <div className="text-sm" style={{ color: OKX_TEXT_PRI, fontFamily: "'Inter', -apple-system, sans-serif", fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em' }}>
+                    {fmt(calc.notional, 0)}<span style={{ fontSize: '0.6rem', color: '#666', marginLeft: 1 }}>U</span>
                   </div>
                 </div>
               </div>
@@ -1428,14 +1437,8 @@ export default function OrderFlowPage() {
                     }
 
                     return (
-                      <div className="grid grid-cols-3 gap-0">
+                      <div className="grid grid-cols-2 gap-0">
                         <div>
-                          <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>盈亏平衡</div>
-                          <div className="text-sm" style={{ color: OKX_TEXT_PRI, fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
-                            {breakeven != null ? `$${breakeven.toLocaleString("zh-CN", { minimumFractionDigits: 0, maximumFractionDigits: 1 })}` : "--"}
-                          </div>
-                        </div>
-                        <div className="text-center">
                           <div className="text-xs mb-0.5" style={{ color: OKX_TEXT_SEC }}>最大亏损</div>
                           <div className="text-sm" style={{ color: "#F6465D", fontFamily: "Inter, -apple-system, sans-serif", fontVariantNumeric: "tabular-nums" }}>
                             {isLongDir
@@ -1516,33 +1519,7 @@ export default function OrderFlowPage() {
                 );
               })()}
 
-              {/* 行5：辅助数据 */}
-              <div
-                className="flex flex-col gap-y-1 px-3 py-2"
-                style={{ borderTop: `1px solid ${OKX_BORDER}`, background: "rgba(0,0,0,0.25)" }}
-              >
-                {/* 盈亏平衡 + ℹ️明细弹窗 */}
-                <div className="flex items-center justify-between">
-                  <span className="text-xs" style={{ color: OKX_TEXT_SEC }}>盈亏平衡 {fmt(calc.breakEven, 2)}</span>
-                  <button
-                    onClick={() => {
-                      const rawPnl = calc.pnl != null ? (calc.pnl + calc.totalFee + (calc.fundingCost ?? 0)) : null;
-                      const lines = [
-                        `持仓盈亏：${rawPnl != null ? (rawPnl >= 0 ? '+' : '') + fmt(rawPnl, 2) + ' U' : '--'}`,
-                        `开仓手续费：-${fmt(calc.openFee, 2)} U`,
-                        `平仓手续费（预估）：-${fmt(calc.closeFee, 2)} U`,
-                        isPerp && calc.fundingCost != null ? `资金费累计：${calc.fundingCost >= 0 ? '-' : '+'}${fmt(Math.abs(calc.fundingCost), 2)} U` : null,
-                        `──────────`,
-                        `止盈利润：${rawPnl != null ? (rawPnl >= 0 ? '+' : '') + fmt(rawPnl, 2) + ' U' : '--'}`,
-                      ].filter(Boolean).join('\n');
-                      alert(lines);
-                    }}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', color: OKX_TEXT_SEC, fontSize: '0.7rem', lineHeight: 1 }}
-                  >
-                    ⓘ
-                  </button>
-                </div>
-              </div>
+
 
               {/* 行6：多条备注区域（可折叠） */}
               <OrderNotesSection
