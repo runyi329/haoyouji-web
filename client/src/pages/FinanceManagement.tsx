@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
+import { FunderOrderCard } from "@/components/FunderOrderCard";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight } from "lucide-react";
 import { toast } from "sonner";
@@ -2979,299 +2980,72 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                 </div>
               )}
 
-              {/* 实时预览卡片 - 两栏大数字样式（与前端订单卡片一致） */}
-              {showForm && (
-                <div>
-                  <div className="text-xs font-medium text-gray-400 mb-2">实时预览</div>
-                  <div className="rounded-xl border overflow-hidden" style={{ borderColor: '#E8EFFF', background: '#FFFFFF' }}>
-                  {/* 顶部色条 */}
-                  <div className="h-1" style={{ background: `linear-gradient(90deg, ${COIN_COLORS[formData.coin] || '#3B82F6'}, ${(COIN_COLORS[formData.coin] || '#3B82F6')}55)` }} />
-                  {/* 帽檐区域：始终显示 */}
-                  <div className="flex items-center gap-1.5 px-4 py-1.5 flex-wrap" style={{ borderBottom: '1px solid #F3F4F6', minHeight: '28px', backgroundColor: '#FAFBFF' }}>
-                    {displayConfig.assetType && formData.assetType && (
-                      <span className="text-[10px] px-1.5 py-0.5 font-medium" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}>
-                        {formData.assetType === 'stock' ? '股票' : formData.assetType === 'crypto' ? '数字币' : formData.assetType}
-                      </span>
-                    )}
-                    {formData.tags.map((tag, idx) => (
-                      <span key={idx} className="text-[10px] px-1.5 py-0.5 font-medium" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}>
-                        {tag}
-                      </span>
-                    ))}
+              {/* 实时预览卡片 - 复用 FunderOrderCard，与订单列表完全一致 */}
+              {showForm && (() => {
+                const ownerLabel = (() => {
+                  if (selectedUserId) {
+                    const m = (realMembers as any[])?.find((mm: any) => mm.userId === selectedUserId);
+                    return m?.username || m?.nickname || m?.name || editingOrder?.userName || null;
+                  }
+                  return editingOrder?.userName || null;
+                })();
+                const previewOrder: any = {
+                  id: editingOrder?.id ?? -1,
+                  order_no: editingOrder?.order_no ?? null,
+                  user_id: selectedUserId,
+                  owner_label: ownerLabel,
+                  coin: formData.coin,
+                  asset_type: formData.assetType || null,
+                  buy_price: formData.buyPrice || null,
+                  buy_quantity: formData.assetType === 'stock' ? null : (formData.buyQuantity || null),
+                  amount: formData.assetType === 'stock' ? (formData.amount || null) : null,
+                  buy_date: formData.buyDate || null,
+                  status: formData.status || 'active',
+                  storage_account: formData.storageAccount || null,
+                  broker_name: (formData as any).brokerName || null,
+                  broker_account: (formData as any).brokerAccount || null,
+                  interest_rate_annual: formData.interestRateAnnual
+                    ? ((formData as any).interestRateSign === '-' ? '-' : '') + formData.interestRateAnnual
+                    : null,
+                  interest_payment_type: formData.interestPaymentType || null,
+                  interest_base: formData.interestBase || null,
+                  interest_base_currency: formData.interestBaseCurrency || 'USDT',
+                  interest_rate_currency: formData.interestRateCurrency || 'USDT',
+                  interest_start_date: formData.interestStartDate || null,
+                  show_profit_share: formData.showProfitShare ? 1 : 0,
+                  commission_share: formData.commissionShare || null,
+                  profit_share_ratio: null,
+                  profit_share_type: 'interest',
+                  principal_lent_out: 0,
+                  collateral_assets: formData.collateralAssets && formData.collateralAssets.length > 0 ? JSON.stringify(formData.collateralAssets) : null,
+                  collateral_share_mode: 'none',
+                  display_config: JSON.stringify({ ...displayConfig }),
+                  tags: formData.tags && formData.tags.length > 0 ? JSON.stringify(formData.tags) : null,
+                  public_note: null,
+                  admin_note: null,
+                  settled_at: null,
+                  participantCount: 0,
+                  participantInfo: null,
+                  paidTotal: null,
+                };
+                return (
+                  <div>
+                    <div className="text-xs font-medium text-gray-400 mb-2">实时预览</div>
+                    <FunderOrderCard
+                      order={previewOrder}
+                      livePrices={formLivePrices}
+                      priceDirection={{}}
+                      currentUser={currentUser}
+                      isAdmin={isAdminUser}
+                      membersData={realMembers as any[]}
+                      ledgerId={ledgerId}
+                      previewMode={true}
+                    />
                   </div>
-                   {/* 两栏主体 */}
-                   <div className="flex">
-                    {/* 左栏：融资资产 */}
-                    <div className="flex-1 p-4 pr-3">
-                      <div className="flex items-center gap-0.5 mb-0.5">
-                        <span className="text-[10px] font-medium" style={{ color: '#3B82F6' }}>融资资产</span>
-                        <span className="text-[10px] text-gray-400">({formData.financeType === '自负盈亏' ? '自负盈亏 100%部分' : '保本分成 50%部分'})</span>
-                        {displayConfig.aiIcon && <span className="text-[10px] px-1 rounded" style={{ backgroundColor: '#EEF2FF', color: '#6366F1' }}>AI</span>}
-                      </div>
-                      <div className="min-h-7 flex flex-col justify-center mt-0.5">
-                        <div className="flex items-baseline gap-1 flex-wrap">
-                          <span className="text-xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
-                            {formData.buyQuantity !== '' && formData.buyQuantity !== undefined ? parseFloat(parseFloat(formData.buyQuantity).toFixed(6)).toString() : '0'}
-                          </span>
-                          <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{formData.coin}</span>
-                        </div>
-                        {formLivePrices[formData.coin] && formData.buyQuantity && (
-                          <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>
-                            ≈{(formLivePrices[formData.coin] * parseFloat(formData.buyQuantity)).toLocaleString(undefined, { maximumFractionDigits: 2 })} U
-                          </div>
-                        )}
-                      </div>
-                      <div className="space-y-0.5 text-xs mt-1">
-                        {displayConfig.buyPrice && formData.buyPrice && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-gray-400 shrink-0">买入币价</span>
-                            <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(formData.buyPrice).toLocaleString()} U</span>
-                          </div>
-                        )}
-                        {displayConfig.buyValue && formData.buyPrice && formData.buyQuantity && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-gray-400 shrink-0">买入价值</span>
-                            <span className="font-medium" style={{ color: '#4B5563' }}>{(parseFloat(formData.buyPrice) * parseFloat(formData.buyQuantity)).toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
-                          </div>
-                        )}
-                        {displayConfig.interestBase && formData.interestBase && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-gray-400 shrink-0">计息基数</span>
-                            <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(formData.interestBase).toLocaleString(undefined, { maximumFractionDigits: 2 })} {formData.interestBaseCurrency === 'CNY' ? '元' : 'U'}</span>
-                          </div>
-                        )}
-                        {displayConfig.todayPrice && formData.coin !== 'CNY' && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-gray-400 shrink-0">当前币价</span>
-                          <span className="font-medium" style={{ color: (() => { const lp = formLivePrices[formData.coin]; const bp = formData.buyPrice ? parseFloat(formData.buyPrice) : null; if (lp && bp) { return lp > bp ? '#DC2626' : lp < bp ? '#16A34A' : '#4B5563'; } return '#4B5563'; })() }}>
-                            {formLivePrices[formData.coin] ? formLivePrices[formData.coin].toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' U' : '获取中...'}
-                          </span>
-                        </div>
-                        )}
-                        {displayConfig.buyDate && formData.buyDate && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-gray-400 shrink-0">开仓时间</span>
-                            <span className="font-medium" style={{ color: '#4B5563' }}>{formData.buyDate}</span>
-                          </div>
-                        )}
+                );
+              })()}
 
-                        {displayConfig.orderNo && editingOrder?.order_no && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-gray-400 shrink-0">订单编号</span>
-                            <span className="font-medium" style={{ color: '#4B5563' }}>{editingOrder.order_no}</span>
-                          </div>
-                        )}
-                        {displayConfig.interestPaymentType && formData.interestPaymentType && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-gray-400 shrink-0">付息方式</span>
-                            <span className="font-medium" style={{ color: '#4B5563' }}>{formData.interestPaymentType === 'monthly_prepaid' ? '月付先付' : formData.interestPaymentType === 'monthly_postpaid' ? '月付后付' : formData.interestPaymentType === 'end_postpaid' ? '结束后付' : formData.interestPaymentType === 'quarterly' ? '季付' : formData.interestPaymentType === 'maturity' ? '到期付' : formData.interestPaymentType}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    {/* 中间分隔线 */}
-                    <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
-                     {/* 右栏：待结利息 */}
-                     <div className="p-4 pl-3 flex flex-col shrink-0" style={{ width: 'auto', minWidth: '160px', maxWidth: '200px' }}>
-                      {(() => {
-                        const hasInterestData = formData.interestRateAnnual && formData.interestBase && formData.interestStartDate;
-                        const hasCollateralData = formData.collateralAssets.filter(a => a.coin && a.qty !== '').length > 0;
-                        const hasAnyRightContent = (displayConfig.accruedInterest && hasInterestData) || (displayConfig.collateralCoin && hasCollateralData) || (displayConfig.collateralValue && hasCollateralData) || (displayConfig.profitShare && formData.showProfitShare);
-                        if (!hasAnyRightContent) {
-                          return (
-                            <div className="flex items-center justify-center h-full">
-                              <span className="text-gray-300 text-xs">填写利息信息后显示</span>
-                            </div>
-                          );
-                        }
-                        return (
-                          <div>
-                            {displayConfig.accruedInterest && hasInterestData && (
-                              <>
-                                <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
-                                  <span className="text-[10px]" style={{ color: '#3B82F6' }}>
-                                    {parseFloat(formData.interestRateAnnual) < 0 ? '待收利息' : '待付利息'}
-                                  </span>
-                                  <span className="text-[10px] text-gray-400">(年化 {Math.abs(parseFloat(formData.interestRateAnnual)).toFixed(0)}%)</span>
-                                </div>
-                                <div className="min-h-7 flex flex-col justify-center mt-0.5">
-                                  <div className="flex items-baseline gap-0.5 flex-wrap">
-                                    <span className="text-xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                                      {(() => {
-                                        const base = parseFloat(formData.interestBase);
-                                        const rate = Math.abs(parseFloat(formData.interestRateAnnual)) / 100;
-                                        const start = new Date(formData.interestStartDate + 'T00:00:00');
-                                        const elapsed = Math.max(0, (Date.now() - start.getTime()) / 1000);
-                                        const interest = base * rate / (365 * 24 * 3600) * elapsed;
-                                        return (interest > 0 ? '-' : '') + interest.toLocaleString(undefined, { maximumFractionDigits: 2 });
-                                      })()}
-                                    </span>
-                                    <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>USDT</span>
-                                  </div>
-                                </div>
-                              </>
-                            )}
-                            <div className="space-y-0.5 text-xs mt-1">
-                            {displayConfig.paidInterest && hasInterestData && (() => {
-                              const totalPaid = editingOrder ? ((interestPaymentSummary as any)?.[editingOrder.id] ?? 0) : 0;
-                              return (
-                                <div className="flex items-center justify-between">
-                                  <span className="text-gray-400 shrink-0">已付利息</span>
-                                  <span className="font-medium" style={{ color: '#4B5563' }}>{totalPaid.toLocaleString(undefined, { maximumFractionDigits: 2 })} USDT</span>
-                                </div>
-                              );
-                            })()}
-                            {displayConfig.interestStartDate && formData.interestStartDate && (
-                              <div className="flex items-center justify-between">
-                                <span className="text-gray-400 shrink-0">计息日期</span>
-                                <span className="font-medium" style={{ color: '#4B5563' }}>
-                                  {formData.interestStartDate.replace(/^\d{4}-(\d{2})-(\d{2})$/, (_: string, m: string, d: string) => `${parseInt(m)}月${parseInt(d)}日`)}
-                                </span>
-                              </div>
-                            )}
-                            {displayConfig.holdDuration && formData.buyDate && (
-                              <div className="flex items-center justify-between mt-0.5">
-                                <span className="text-gray-400 shrink-0">持有时长</span>
-                                <span className="font-medium" style={{ color: '#4B5563' }}>
-                                  {(() => {
-                                    const elapsed = Date.now() - new Date(formData.buyDate + 'T00:00:00').getTime();
-                                    if (elapsed < 0) return '---';
-                                    const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
-                                    const days = Math.floor(totalHours / 24);
-                                    const hours = totalHours % 24;
-                                    return days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
-                                  })()}
-                                </span>
-                              </div>
-                            )}
-                            {displayConfig.collateralCoin && (() => {
-                              const validAssets = formData.collateralAssets.filter(a => a.coin && a.qty !== '');
-                              if (validAssets.length === 0) return null;
-                              return (
-                                <>
-                                  {validAssets.map((a, i) => {
-                                    const qty = parseFloat(a.qty || '0');
-                                    const price = formLivePrices[a.coin] || 0;
-                                    const value = qty * price;
-                                    return (
-                                      <div key={i}>
-                                        <div className="flex items-center justify-between mt-0.5">
-                                          <span className="text-gray-400 shrink-0">{validAssets.length > 1 ? `担保物${i+1}` : '担保物'}</span>
-                                          <span className="font-medium" style={{ color: '#4B5563' }}>
-                                            {qty % 1 === 0 ? qty.toFixed(0) : qty} {a.coin}
-                                          </span>
-                                        </div>
-                                        {price > 0 && (
-                                          <div className="flex items-center justify-between">
-                                            <span></span>
-                                            <span className="font-medium" style={{ color: '#4B5563' }}>
-                                              ≈ {value.toLocaleString(undefined, { maximumFractionDigits: 0 })} U
-                                            </span>
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </>
-                              );
-                            })()}
-                            {displayConfig.collateralValue && formComputedCollateralValue !== null && formData.collateralAssets.filter(a => a.coin && a.qty !== '').length > 0 && (
-                              <div className="flex items-center justify-between mt-0.5">
-                                <span className="text-gray-400 shrink-0">担保价值{formData.collateralAssets.filter(a => a.coin && a.qty !== '').length > 1 ? '(合计)' : ''}</span>
-                                <span className="font-medium" style={{ color: '#4B5563' }}>{formComputedCollateralValue.toLocaleString(undefined, { maximumFractionDigits: 0 })} U</span>
-                              </div>
-                            )}
-                            {displayConfig.collateral && formComputedCollateralValue !== null && formComputedAmount && formComputedAmount > 0 && hasInterestData && (() => {
-                              const base = parseFloat(formData.interestBase);
-                              const rate = Math.abs(parseFloat(formData.interestRateAnnual)) / 100;
-                              const start = new Date(formData.interestStartDate + 'T00:00:00');
-                              const elapsed = Math.max(0, (Date.now() - start.getTime()) / 1000);
-                              const unpaidInterest = base * rate / (365 * 24 * 3600) * elapsed;
-                              const totalPaid = editingOrder ? ((interestPaymentSummary as any)?.[editingOrder.id] ?? 0) : 0;
-                              const buyValue = parseFloat(formData.amount || '0');
-                              const coinQty = parseFloat(formData.buyQuantity || '0');
-                              const coinPrice = formLivePrices[formData.coin] || 0;
-                              const marketValue = coinQty * coinPrice;
-                              let gap: number | null = null;
-                              if (formData.coin === 'USDT') {
-                                gap = formComputedCollateralValue - buyValue - unpaidInterest + totalPaid - formComputedLentOutValue;
-                              } else if (coinPrice > 0) {
-                                gap = marketValue + formComputedCollateralValue - buyValue - unpaidInterest + totalPaid - formComputedLentOutValue;
-                              }
-                              return gap !== null ? (
-                                <div className="flex items-center justify-between mt-0.5">
-                                  <span className="text-gray-400 shrink-0">担保缺口</span>
-                                  <span className="font-medium" style={{ color: gap >= 0 ? '#4B5563' : '#EF4444' }}>
-                                    {gap >= 0 ? '超过100%' : `${gap.toLocaleString(undefined, { maximumFractionDigits: 0 })} U`}
-                                  </span>
-                                </div>
-                              ) : null;
-                            })()}
-                            {/* 保证金率：担保物当前价値 ÷ 计息基数 x 100% */}
-                            {displayConfig.marginRate && formComputedCollateralValue !== null && formComputedCollateralValue > 0 && formData.interestBase && parseFloat(formData.interestBase) > 0 && (() => {
-                              const base = parseFloat(formData.interestBase);
-                              const previewRate = Math.abs(parseFloat(formData.interestRateAnnual)) / 100;
-                              const previewStart = new Date(formData.interestStartDate + 'T00:00:00');
-                              const previewElapsed = Math.max(0, (Date.now() - previewStart.getTime()) / 1000);
-                              const previewAccrued = base * previewRate / (365 * 24 * 3600) * previewElapsed;
-                              const previewTotalPaid = editingOrder ? ((interestPaymentSummary as any)?.[editingOrder.id] ?? 0) : 0;
-                              const previewCoinQty = parseFloat(formData.buyQuantity || '0');
-                              const previewCoinPrice = formLivePrices[formData.coin] || 0;
-                              const previewMarketValue = previewCoinQty * previewCoinPrice;
-                              const previewBuyPrice = parseFloat(formData.buyPrice || '0');
-                              const previewBuyValue = previewCoinQty > 0 && previewBuyPrice > 0
-                                ? previewCoinQty * previewBuyPrice
-                                : parseFloat(formData.amount || '0');
-                              const previewFloatPnl = formData.coin === 'USDT' ? 0 : (previewCoinPrice > 0 ? previewMarketValue - previewBuyValue : null);
-                              const previewEffective = previewFloatPnl !== null
-                                ? formComputedCollateralValue + previewFloatPnl - previewAccrued + previewTotalPaid - formComputedLentOutValue
-                                : formComputedCollateralValue - previewAccrued + previewTotalPaid - formComputedLentOutValue;
-                              const marginRatio = previewEffective / base;
-                              const marginColor = marginRatio >= 1 ? '#16A34A' : marginRatio >= 0.5 ? '#D97706' : '#DC2626';
-                              const previewAlertThreshold = marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? parseFloat(marginAlertThreshold) : null;
-                              const previewIsAlerting = previewAlertThreshold !== null && (marginRatio * 100) < previewAlertThreshold;
-                              return (
-                                <div className="flex items-center justify-between mt-0.5">
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-gray-400 shrink-0">保证金率</span>
-                                    {previewIsAlerting && (
-                                      <span className="inline-flex items-center justify-center w-3 h-3 rounded-full text-white text-[7px] font-bold flex-shrink-0" style={{ background: '#EF4444', lineHeight: 1 }}>❗</span>
-                                    )}
-                                  </div>
-                                  <span className="font-bold" style={{ color: previewIsAlerting ? '#EF4444' : marginColor }}>{(marginRatio * 100).toFixed(1)}%{previewIsAlerting ? ' ⚠' : ''}</span>
-                                </div>
-                              );
-                            })()}
-                          {/* 收益分成区（右栏下半） */}
-                          {displayConfig.profitShare && formData.showProfitShare && (
-                            <>
-                              <div className="border-t mt-1 pt-1" style={{ borderColor: '#E8EFFF' }}>
-                                <div className="h-4 flex items-center" style={{ color: '#3B82F6' }}>
-                                  <span className="text-xs font-medium">收益分成</span>
-                                </div>
-                                {displayConfig.commissionShare && formData.commissionShare && (
-                                  <div className="flex items-center justify-between mt-0.5">
-                                    <span className="text-gray-400 shrink-0">佣金分成</span>
-                                    <span className="font-medium" style={{ color: '#4B5563' }}>{formData.commissionShare}</span>
-                                  </div>
-                                )}
-                              </div>
-                            </>
-                          )}
-                          </div>
-                        </div>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            </>)}
-            </div>
-
-            <div className="sticky bottom-0 bg-white px-5 py-4 border-t border-gray-100">
+                        <div className="sticky bottom-0 bg-white px-5 py-4 border-t border-gray-100">
               <button
                 onClick={handleSubmit}
                 disabled={createMutation.isPending || updateMutation.isPending || updateParticipantConfigMutation.isPending}
@@ -3344,3 +3118,4 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     </div>
   );
 }
+

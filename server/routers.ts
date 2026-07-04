@@ -15989,7 +15989,7 @@ ${klinesSummary}
         commissionShare: z.string().optional(),
         collateralAssets: z.array(z.object({ coin: z.string(), qty: z.string(), note: z.string().optional() })).optional(),
         lentOutAssets: z.array(z.object({ coin: z.string(), qty: z.string() })).optional(),
-        displayConfig: z.record(z.string(), z.union([z.boolean(), z.number()])).optional(),
+        displayConfig: z.record(z.string(), z.union([z.boolean(), z.number(), z.string()])).optional(),
         assetType: z.enum(['stock', 'crypto', '']).optional(),
         ownerLabel: z.string().optional(),
         tags: z.array(z.string()).optional(),
@@ -16204,6 +16204,8 @@ ${klinesSummary}
         exchangeRate: z.number().positive().default(7.0),
         payDate: z.string(), // YYYY-MM-DD
         note: z.string().optional(),
+        periodStart: z.string().optional(), // YYYY-MM-DD 结算起始日
+        periodEnd: z.string().optional(),   // YYYY-MM-DD 结算截止日
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -16225,7 +16227,7 @@ ${klinesSummary}
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
         // 检查并补充新字段（先查字段存在再决定是否ALTER）
         const addColCheck = await db.execute(
-          sql`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='ledger_order_payments' AND COLUMN_NAME IN ('currency','exchange_rate') AND TABLE_SCHEMA=DATABASE()`
+          sql`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='ledger_order_payments' AND COLUMN_NAME IN ('currency','exchange_rate','period_start','period_end') AND TABLE_SCHEMA=DATABASE()`
         ) as any;
         const addExistingCols = ((addColCheck[0] || addColCheck) as any[]).map((r: any) => r.COLUMN_NAME || r.column_name);
         if (!addExistingCols.includes('currency')) {
@@ -16234,14 +16236,20 @@ ${klinesSummary}
         if (!addExistingCols.includes('exchange_rate')) {
           await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN exchange_rate decimal(10,4) NOT NULL DEFAULT 7.0`);
         }
+        if (!addExistingCols.includes('period_start')) {
+          await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN period_start date NULL`);
+        }
+        if (!addExistingCols.includes('period_end')) {
+          await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN period_end date NULL`);
+        }
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         await db.execute(
-          sql`INSERT INTO ledger_order_payments (order_id, ledger_id, amount, currency, exchange_rate, pay_date, note, created_by)
-              VALUES (${input.orderId}, ${input.ledgerId}, ${input.amount}, ${input.currency || 'U'}, ${input.exchangeRate || 7.0}, ${input.payDate}, ${input.note || ''}, ${ctx.user.id})`
+          sql`INSERT INTO ledger_order_payments (order_id, ledger_id, amount, currency, exchange_rate, pay_date, note, period_start, period_end, created_by)
+              VALUES (${input.orderId}, ${input.ledgerId}, ${input.amount}, ${input.currency || 'U'}, ${input.exchangeRate || 7.0}, ${input.payDate}, ${input.note || ''}, ${input.periodStart || null}, ${input.periodEnd || null}, ${ctx.user.id})`
         );
         return { success: true };
       }),
@@ -16265,11 +16273,20 @@ ${klinesSummary}
           INDEX fip_ledger_id_idx (ledger_id),
           INDEX fip_pay_date_idx (pay_date)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+        // 补充新字段（幂等）
+        try {
+          const colCheck = await db.execute(sql`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='ledger_order_payments' AND COLUMN_NAME IN ('currency','exchange_rate','period_start','period_end') AND TABLE_SCHEMA=DATABASE()`) as any;
+          const existingCols = ((colCheck[0] || colCheck) as any[]).map((r: any) => (r.COLUMN_NAME || r.column_name || '').toLowerCase());
+          if (!existingCols.includes('currency')) await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN currency varchar(10) NOT NULL DEFAULT 'U'`);
+          if (!existingCols.includes('exchange_rate')) await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN exchange_rate decimal(10,4) NOT NULL DEFAULT 7.0`);
+          if (!existingCols.includes('period_start')) await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN period_start date NULL`);
+          if (!existingCols.includes('period_end')) await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN period_end date NULL`);
+        } catch(e) {}
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
-        if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
+        if (role !== 'owner' && role !== 'admin' && role !== 'funder') throw new TRPCError({ code: 'FORBIDDEN', message: '无权限查看' });
         const rows = await db.execute(
           sql`SELECT p.*, u.username, u.name as operatorName
               FROM ledger_order_payments p
@@ -16324,39 +16341,63 @@ ${klinesSummary}
       .input(z.object({
         ledgerId: z.number(),
         paymentId: z.number(),
+        orderId: z.number(),
         amount: z.number().positive(),
         currency: z.enum(['CNY', 'U']),
         exchangeRate: z.number().positive(),
         payDate: z.string(),
         note: z.string().optional(),
+        periodStart: z.string().optional(),
+        periodEnd: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
-        // 检查并补充新字段（先查字段存在再决定是否ALTER）
+        // 检查并补充新字段
         const colCheck = await db.execute(
-          sql`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='ledger_order_payments' AND COLUMN_NAME IN ('currency','exchange_rate') AND TABLE_SCHEMA=DATABASE()`
+          sql`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='ledger_order_payments' AND COLUMN_NAME IN ('currency','exchange_rate','period_start','period_end') AND TABLE_SCHEMA=DATABASE()`
         ) as any;
         const existingCols = ((colCheck[0] || colCheck) as any[]).map((r: any) => r.COLUMN_NAME || r.column_name);
-        if (!existingCols.includes('currency')) {
-          await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN currency varchar(10) NOT NULL DEFAULT 'U'`);
-        }
-        if (!existingCols.includes('exchange_rate')) {
-          await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN exchange_rate decimal(10,4) NOT NULL DEFAULT 7.0`);
-        }
+        if (!existingCols.includes('currency')) await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN currency varchar(10) NOT NULL DEFAULT 'U'`);
+        if (!existingCols.includes('exchange_rate')) await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN exchange_rate decimal(10,4) NOT NULL DEFAULT 7.0`);
+        if (!existingCols.includes('period_start')) await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN period_start date NULL`);
+        if (!existingCols.includes('period_end')) await db.execute(sql`ALTER TABLE ledger_order_payments ADD COLUMN period_end date NULL`);
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        // 取旧値用于日志
+        const oldRows = await db.execute(sql`SELECT * FROM ledger_order_payments WHERE id=${input.paymentId} AND ledger_id=${input.ledgerId} LIMIT 1`) as any;
+        const oldRec = (oldRows[0]?.[0] ?? oldRows[0]) as any;
         await db.execute(
-          sql`UPDATE ledger_order_payments SET amount=${input.amount}, currency=${input.currency}, exchange_rate=${input.exchangeRate}, pay_date=${input.payDate}, note=${input.note || ''} WHERE id=${input.paymentId} AND ledger_id=${input.ledgerId}`
+          sql`UPDATE ledger_order_payments SET amount=${input.amount}, currency=${input.currency}, exchange_rate=${input.exchangeRate}, pay_date=${input.payDate}, note=${input.note || ''}, period_start=${input.periodStart || null}, period_end=${input.periodEnd || null} WHERE id=${input.paymentId} AND ledger_id=${input.ledgerId}`
         );
+        // 写入操作日志
+        try {
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS ledger_order_logs (
+            id int AUTO_INCREMENT NOT NULL PRIMARY KEY,
+            order_id int NOT NULL,
+            ledger_id int NOT NULL,
+            action_type varchar(50) NOT NULL,
+            operator_id int NOT NULL,
+            before_data text,
+            after_data text,
+            summary text,
+            created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            INDEX lol_order_id_idx (order_id),
+            INDEX lol_ledger_id_idx (ledger_id)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+          const beforeStr = oldRec ? `${oldRec.pay_date} 结息 ${oldRec.amount} ${oldRec.currency === 'CNY' ? '元' : 'u'}` : '';
+          const afterStr = `${input.payDate} 结息 ${input.amount} ${input.currency === 'CNY' ? '元' : 'u'}${input.periodStart ? ` (区间${input.periodStart}→${input.periodEnd || ''})` : ''}`;
+          const summaryUpdate = `编辑结息: ${beforeStr} → ${afterStr}`;
+          await db.execute(sql`INSERT INTO ledger_order_logs (order_id, ledger_id, action_type, operator_id, before_data, after_data, summary) VALUES (${input.orderId}, ${input.ledgerId}, 'interest_update', ${ctx.user.id}, ${beforeStr}, ${afterStr}, ${summaryUpdate})`);
+        } catch(e) {}
         return { success: true };
       }),
 
     // 删除一笔结息记录
     funderDeleteInterestPayment: protectedProcedure
-      .input(z.object({ ledgerId: z.number(), paymentId: z.number() }))
+      .input(z.object({ ledgerId: z.number(), paymentId: z.number(), orderId: z.number() }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
         const roleRows = await db.execute(
@@ -16364,9 +16405,31 @@ ${klinesSummary}
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
+        // 取旧値用于日志
+        const oldRows2 = await db.execute(sql`SELECT * FROM ledger_order_payments WHERE id=${input.paymentId} AND ledger_id=${input.ledgerId} LIMIT 1`) as any;
+        const oldRec2 = (oldRows2[0]?.[0] ?? oldRows2[0]) as any;
         await db.execute(
           sql`DELETE FROM ledger_order_payments WHERE id=${input.paymentId} AND ledger_id=${input.ledgerId}`
         );
+        // 写入操作日志
+        try {
+          await db.execute(sql`CREATE TABLE IF NOT EXISTS ledger_order_logs (
+            id int AUTO_INCREMENT NOT NULL PRIMARY KEY,
+            order_id int NOT NULL,
+            ledger_id int NOT NULL,
+            action_type varchar(50) NOT NULL,
+            operator_id int NOT NULL,
+            before_data text,
+            after_data text,
+            summary text,
+            created_at timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            INDEX lol_order_id_idx (order_id),
+            INDEX lol_ledger_id_idx (ledger_id)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+          const delStr = oldRec2 ? `${oldRec2.pay_date} 结息 ${oldRec2.amount} ${oldRec2.currency === 'CNY' ? '元' : 'u'}` : `ID=${input.paymentId}`;
+          const summaryDelete = `删除结息: ${delStr}`;
+          await db.execute(sql`INSERT INTO ledger_order_logs (order_id, ledger_id, action_type, operator_id, before_data, after_data, summary) VALUES (${input.orderId}, ${input.ledgerId}, 'interest_delete', ${ctx.user.id}, ${delStr}, '', ${summaryDelete})`);
+        } catch(e) {}
         return { success: true };
       }),
 
@@ -16635,13 +16698,15 @@ ${klinesSummary}
         financeType: z.enum(['保本分成', '自负盈亏']).optional(),
         showProfitShare: z.boolean().optional(),
         commissionShare: z.string().optional(),
-        displayConfig: z.record(z.string(), z.union([z.boolean(), z.number()])).optional(),
+        displayConfig: z.record(z.string(), z.union([z.boolean(), z.number(), z.string()])).optional(),
         assetType: z.string().optional(),
         ownerLabel: z.string().optional(),
         interestRateCurrency: z.string().optional(),
         tags: z.array(z.string()).optional(),
         collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
         principalLentOut: z.boolean().optional(),
+        brokerName: z.string().optional(),
+        brokerAccount: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -16673,6 +16738,8 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS amount_currency VARCHAR(20) DEFAULT NULL`);
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS collateral_share_mode VARCHAR(10) DEFAULT 'none'`).catch(() => {});
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS principal_lent_out TINYINT(1) DEFAULT 0`).catch(() => {});
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS broker_name VARCHAR(100) DEFAULT NULL`).catch(() => {});
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS broker_account VARCHAR(100) DEFAULT NULL`).catch(() => {});
           await conn.end();
         } catch(e) {}
         // 生成唯一订单号
@@ -16689,8 +16756,8 @@ ${klinesSummary}
           if (!exists) isUnique = true;
         }
         await db.execute(
-          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, amount_currency, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, collateral_assets, lent_out_assets, show_profit_share, commission_share, display_config, asset_type, owner_label, tags, collateral_share_mode, principal_lent_out, created_by)
-              VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.amountCurrency || null}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets ? JSON.stringify(input.lentOutAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.principalLentOut ? 1 : 0}, ${ctx.user.id})`
+          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, amount_currency, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, collateral_assets, lent_out_assets, show_profit_share, commission_share, display_config, asset_type, owner_label, tags, collateral_share_mode, principal_lent_out, broker_name, broker_account, created_by)
+              VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.amountCurrency || null}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets ? JSON.stringify(input.lentOutAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.principalLentOut ? 1 : 0}, ${input.brokerName || null}, ${input.brokerAccount || null}, ${ctx.user.id})`
         );
         return { success: true };
       }),
@@ -16724,13 +16791,15 @@ ${klinesSummary}
         financeType: z.enum(['保本分成', '自负盈亏']).optional(),
         showProfitShare: z.boolean().optional(),
         commissionShare: z.string().optional(),
-        displayConfig: z.record(z.string(), z.union([z.boolean(), z.number()])).optional(),
+        displayConfig: z.record(z.string(), z.any()).optional(),
         assetType: z.string().optional(),
         ownerLabel: z.string().optional(),
         interestRateCurrency: z.string().optional(),
         tags: z.array(z.string()).optional(),
         collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
         principalLentOut: z.boolean().optional(),
+        brokerName: z.string().optional(),
+        brokerAccount: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -16751,6 +16820,7 @@ ${klinesSummary}
           interestPaymentType: 'interest_payment_type', interestBase: 'interest_base', interestBaseCurrency: 'interest_base_currency', interestStartDate: 'interest_start_date',
           collateralCoin: 'collateral_coin', collateralQty: 'collateral_qty',
           financeType: 'finance_type', interestRateCurrency: 'interest_rate_currency',
+          brokerName: 'broker_name', brokerAccount: 'broker_account',
         };
         // 特殊处理 showProfitShare
         if (input.showProfitShare !== undefined) { updateCols.push('show_profit_share = ?'); updateVals.push(input.showProfitShare ? 1 : 0); }
@@ -16832,8 +16902,113 @@ ${klinesSummary}
           throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '保存失败: ' + (e?.message || '未知错误') });
         }
         // display_config 不再联动同步到其他订单，每张订单独立保存自己的配置
+        // 如果有担保物变更，写入操作日志
+        if (input.collateralAssets !== undefined) {
+          try {
+            await conn.execute(`CREATE TABLE IF NOT EXISTS ledger_order_logs (
+              id INT AUTO_INCREMENT PRIMARY KEY,
+              ledger_id INT NOT NULL,
+              order_id INT NOT NULL,
+              operator_id INT NOT NULL,
+              action VARCHAR(50) NOT NULL,
+              before_data TEXT DEFAULT NULL,
+              after_data TEXT DEFAULT NULL,
+              note TEXT DEFAULT NULL,
+              created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              INDEX idx_order_id (order_id),
+              INDEX idx_ledger_id (ledger_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+            // 读取变更前的担保物数据
+            const [beforeRows] = await conn.execute(`SELECT collateral_assets FROM ledger_orders WHERE id = ? LIMIT 1`, [input.id]) as any;
+            const beforeData = beforeRows?.[0]?.collateral_assets ?? null;
+            const afterData = input.collateralAssets.length > 0 ? JSON.stringify(input.collateralAssets) : null;
+            // 生成可读的变更摘要
+            let beforeArr: any[] = [];
+            let afterArr = input.collateralAssets;
+            try { beforeArr = beforeData ? JSON.parse(beforeData) : []; } catch {}
+            const beforeSummary = beforeArr.length > 0 ? beforeArr.map((a: any) => `${a.qty} ${a.coin}`).join(', ') : '无';
+            const afterSummary = afterArr.length > 0 ? afterArr.map((a: any) => `${a.qty} ${a.coin}`).join(', ') : '已清空';
+            const noteSummary = `担保: ${beforeSummary} → ${afterSummary}`;
+            await conn.execute(
+              `INSERT INTO ledger_order_logs (ledger_id, order_id, operator_id, action, before_data, after_data, note) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+              [input.ledgerId, input.id, ctx.user.id, 'collateral_update', beforeData, afterData, noteSummary]
+            );
+          } catch(e) { console.error('[OrderLog] 写入日志失败:', e); }
+        }
         await conn.end();
         return { success: true };
+      }),
+    // 查询融资订单操作日志
+    financeGetOrderLogs: protectedProcedure
+      .input(z.object({ orderId: z.number(), ledgerId: z.number(), actionTypes: z.array(z.string()).optional() }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
+        const mysql = await import('mysql2/promise');
+        const dbUrl = process.env.ORIGINAL_DATABASE_URL || process.env.DATABASE_URL || 'mysql://root:Miao@20190603@124.223.54.69:3306/crm_db';
+        const parsedUrl = new URL(dbUrl.replace(/^mysql:\/\//, 'http://'));
+        const conn = await mysql.createConnection({
+          host: parsedUrl.hostname,
+          port: parseInt(parsedUrl.port) || 3306,
+          user: decodeURIComponent(parsedUrl.username),
+          password: decodeURIComponent(parsedUrl.password),
+          database: parsedUrl.pathname.replace(/^\//, ''),
+        });
+        try {
+          // 确保表存在
+          await conn.execute(`CREATE TABLE IF NOT EXISTS ledger_order_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            ledger_id INT NOT NULL,
+            order_id INT NOT NULL,
+            operator_id INT NOT NULL,
+            action VARCHAR(50) NOT NULL,
+            before_data TEXT DEFAULT NULL,
+            after_data TEXT DEFAULT NULL,
+            note TEXT DEFAULT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_order_id (order_id),
+            INDEX idx_ledger_id (ledger_id)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+          // 检查实际字段名（兼容两种表结构）
+          const [colRows] = await conn.execute(`SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='ledger_order_logs' AND TABLE_SCHEMA=DATABASE()`) as any;
+          const cols = (colRows as any[]).map((r: any) => (r.COLUMN_NAME || r.column_name || '').toLowerCase());
+          const actionCol = cols.includes('action_type') ? 'action_type' : 'action';
+          const summaryCol = cols.includes('summary') ? 'summary' : 'note';
+          const operatorCol = cols.includes('operator_id') ? 'operator_id' : 'created_by';
+          let whereExtra = '';
+          const params: any[] = [input.orderId, input.ledgerId];
+          if (input.actionTypes && input.actionTypes.length > 0) {
+            whereExtra = ` AND l.${actionCol} IN (${input.actionTypes.map(() => '?').join(',')})`;
+            params.push(...input.actionTypes);
+          }
+          const [rows] = await conn.execute(
+            `SELECT l.id, l.${operatorCol} as op_id, l.${actionCol} as action_type, l.before_data, l.after_data, l.${summaryCol} as summary, l.created_at,
+                    u.name as operator_name, u.username as operator_username
+             FROM ledger_order_logs l
+             LEFT JOIN users u ON u.id = l.${operatorCol}
+             WHERE l.order_id = ? AND l.ledger_id = ?${whereExtra}
+             ORDER BY l.created_at DESC LIMIT 100`,
+            params
+          ) as any;
+          await conn.end();
+          return { logs: (rows as any[]).map(r => ({
+            id: r.id,
+            operatorId: r.op_id,
+            operatorName: r.operator_name || r.operator_username || `用户#${r.op_id}`,
+            action: r.action_type,
+            beforeData: r.before_data,
+            afterData: r.after_data,
+            summary: r.summary,
+            createdAt: r.created_at,
+          })) };
+        } catch(e) {
+          await conn.end();
+          return { logs: [] };
+        }
       }),
     // 任意可见用户更新融资订单公开备注
     financeUpdatePublicNote: protectedProcedure

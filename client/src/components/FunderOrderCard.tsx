@@ -70,6 +70,15 @@ export function getBeijingToday(): string {
   return `${y}-${m}-${d}`;
 }
 
+// 日期格式化：YYYY-MM-DD → YY.MM.DD（如 2026-07-06 → 26.07.06）
+export function fmtDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return '--';
+  const s = String(dateStr).slice(0, 10); // 取 YYYY-MM-DD 部分
+  const parts = s.split('-');
+  if (parts.length !== 3) return s;
+  return `${parts[0].slice(2)}.${parts[1]}.${parts[2]}`;
+}
+
 // 简单日历选择器组件
 export function DatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   // 初始视图月份：优先跟随已选值，否则定位北京时间当月
@@ -376,6 +385,8 @@ export interface FunderOrderCardProps {
   setShowInterestTip?: (v: boolean) => void;
   showMarginInfo?: boolean;
   setShowMarginInfo?: (v: boolean) => void;
+  /** 预览模式：隐藏底部操作栏、公开备注区、状态操作弹窗 */
+  previewMode?: boolean;
 }
 
 export function FunderOrderCard({
@@ -425,6 +436,7 @@ export function FunderOrderCard({
   setShowInterestTip: _propSetShowInterestTip,
   showMarginInfo: _propShowMarginInfo,
   setShowMarginInfo: _propSetShowMarginInfo,
+  previewMode = false,
 }: FunderOrderCardProps) {
   // ===== 内部 fallback：当父组件未传入对应 props 时，组件自己管理 state 和 mutation =====
   const trpcUtils = trpc.useUtils();
@@ -433,6 +445,8 @@ export function FunderOrderCard({
   const [_intPaymentForm, _intSetPaymentForm] = useState({ amount: '', currency: 'U' as 'CNY' | 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' });
   const [_intEditingPaymentId, _intSetEditingPaymentId] = useState<number | null>(null);
   const [_intShowPaymentDatePicker, _intSetShowPaymentDatePicker] = useState(false);
+  const [showPeriodStartPicker, setShowPeriodStartPicker] = useState(false);
+  const [showPeriodEndPicker, setShowPeriodEndPicker] = useState(false);
   // 参与方面板
   const [_intShowParticipants, _intSetShowParticipants] = useState<number | null>(null);
   const [_intParticipantsList, _intSetParticipantsList] = useState<{ userId: number; displayName: string; role: string; sortOrder: number; rate: string }[]>([]);
@@ -441,6 +455,18 @@ export function FunderOrderCard({
   const [_intParticipantsEditMode, _intSetParticipantsEditMode] = useState(false);
   // 结清确认
   const [_intConfirmSettleId, _intSetConfirmSettleId] = useState<number | null>(null);
+  // 结息面板：利息约等于快捷配置
+  const [interestApproxConfig, setInterestApproxConfig] = useState<{ approxInterest: string; approxPaid: string }>({ approxInterest: 'U', approxPaid: 'U' });
+  const _intSaveInterestApproxMutation = trpc.ledger.financeUpdateOrder.useMutation({
+    onSuccess: () => { toast.success('显示设置已保存'); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
+    onError: (err) => toast.error(err.message),
+  });
+  // 已结利息历史浮层
+  const [showInterestHistory, setShowInterestHistory] = useState(false);
+  const interestHistoryQuery = trpc.ledger.funderGetInterestPayments.useQuery(
+    { ledgerId, orderId: order.id as number },
+    { enabled: showInterestHistory, staleTime: 0 }
+  );
   // 内部 mutations
   const _intUpdateMutation = trpc.ledger.financeUpdateOrder.useMutation({
     onSuccess: () => { toast.success('更新成功'); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
@@ -468,6 +494,22 @@ export function FunderOrderCard({
     onSuccess: () => { toast.success('结息记录已删除'); _intRefetchPayments(); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
     onError: (err) => toast.error(err.message),
   });
+  const _intUpdatePaymentMutation = trpc.ledger.funderUpdateInterestPayment.useMutation({
+    onSuccess: () => { toast.success('结息记录已更新'); setEditPaymentId(null); _intRefetchPayments(); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
+    onError: (err) => toast.error(err.message),
+  });
+  // 编辑结息记录的内联表单状态
+  const [editPaymentId, setEditPaymentId] = useState<number | null>(null);
+  const [editPaymentForm, setEditPaymentForm] = useState<{ amount: string; currency: 'CNY' | 'U'; exchangeRate: string; payDate: string; note: string; periodStart: string; periodEnd: string }>({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: '', note: '', periodStart: '', periodEnd: '' });
+  const [showEditStartPicker, setShowEditStartPicker] = useState(false);
+  const [showEditEndPicker, setShowEditEndPicker] = useState(false);
+  const [showEditDatePicker, setShowEditDatePicker] = useState(false);
+  // 结息操作日志
+  const [showInterestLog, setShowInterestLog] = useState(false);
+  const interestLogQuery = trpc.ledger.financeGetOrderLogs.useQuery(
+    { ledgerId, orderId: order.id, actionTypes: ['interest_update', 'interest_delete', 'interest_add'] },
+    { enabled: showInterestLog }
+  );
   // 内部 handleOpenParticipants
   const _intHandleOpenParticipants = async (orderId: number, _orderInterestBase: string) => {
     if (_intShowParticipants === orderId) { _intSetShowParticipants(null); return; }
@@ -545,6 +587,62 @@ export function FunderOrderCard({
   const setShowCollateralInfo = _propSetShowCollateralInfo ?? _intSetShowCollateralInfo;
   const showMarginInfo = _propShowMarginInfo !== undefined ? _propShowMarginInfo : _intShowMarginInfo;
   const setShowMarginInfo = _propSetShowMarginInfo ?? _intSetShowMarginInfo;
+  // ===== 担保物快捷编辑面板 =====
+  const [showCollateralPanel, setShowCollateralPanel] = useState(false);
+  const [collateralEditItems, setCollateralEditItems] = useState<{ coin: string; qty: string; note?: string }[]>([]);
+  // 每条担保物独立的约等于显示配置：{ "0": "U", "1": "hidden", ... }
+  const [collateralItemApprox, setCollateralItemApprox] = useState<Record<string, string>>({});
+  // 担保价值约等于显示配置
+  const [collateralValueApprox, setCollateralValueApprox] = useState<string>('U');
+  const _intSaveCollateralMutation = trpc.ledger.financeUpdateOrder.useMutation({
+    onSuccess: () => { toast.success('担保已保存'); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
+    onError: (err) => toast.error(err.message),
+  });
+  const handleOpenCollateralPanel = () => {
+    if (showCollateralPanel) { setShowCollateralPanel(false); return; }
+    // 初始化：从当前订单数据加载担保物列表
+    let items: { coin: string; qty: string; note?: string }[] = [];
+    try {
+      const raw = order.collateral_assets;
+      if (raw) {
+        const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (Array.isArray(parsed)) items = parsed.map((a: any) => ({ coin: a.coin || 'BTC', qty: String(a.qty ?? ''), note: a.note || '' }));
+      }
+    } catch {}
+    setCollateralEditItems(items.length > 0 ? items : []);
+    // 初始化担保物约等于配置（从 display_config 加载）
+    try {
+      const rawDC = order.display_config;
+      const parsedDC = rawDC ? (typeof rawDC === 'string' ? JSON.parse(rawDC) : rawDC) : {};
+      // approxCollateralItem 支持对象格式（每条独立）和字符串格式（全局）
+      const aci = parsedDC.approxCollateralItem;
+      if (aci && typeof aci === 'object' && !Array.isArray(aci)) {
+        setCollateralItemApprox(aci);
+      } else if (typeof aci === 'string') {
+        // 将旧的全局字符串格式转换为每条独立
+        const initMap: Record<string, string> = {};
+        items.forEach((_, i) => { initMap[String(i)] = aci; });
+        setCollateralItemApprox(initMap);
+      } else {
+        setCollateralItemApprox({});
+      }
+      setCollateralValueApprox(parsedDC.approxCollateralValue ?? 'U');
+    } catch { setCollateralItemApprox({}); setCollateralValueApprox('U'); }
+    setShowCollateralPanel(true);
+  };
+  const handleSaveCollateral = () => {
+    const valid = collateralEditItems.filter(a => a.coin && a.qty !== '' && !isNaN(parseFloat(a.qty)));
+    // 构建新的 display_config：在现有基础上只更新担保相关字段
+    let newDC: Record<string, any> = {};
+    try {
+      const rawDC = order.display_config;
+      newDC = rawDC ? (typeof rawDC === 'string' ? JSON.parse(rawDC) : { ...rawDC }) : {};
+    } catch {}
+    newDC.approxCollateralItem = collateralItemApprox;
+    newDC.approxCollateralValue = collateralValueApprox;
+    _intSaveCollateralMutation.mutate({ id: Number(order.id), ledgerId, collateralAssets: valid, displayConfig: newDC });
+  };
+  // ===== END 担保物快捷编辑面板 =====
   const [showStatusSheet, setShowStatusSheet] = useState(false);
   const tipBtnRef = useRef<HTMLButtonElement>(null);
   const [tipPos, setTipPos] = useState<{ bottom: number; right: number }>({ bottom: 0, right: 0 });
@@ -567,12 +665,16 @@ export function FunderOrderCard({
   // 左栏数值
   const qty = parseFloat(order.buy_quantity || '0');
   const price = parseFloat(order.buy_price || '0');
-  const totalU = qty > 0 && price > 0 ? qty * price : parseFloat(order.amount || '0');
+  // 股票类型：大数字直接用 amount（融资金额，单位 CNY），不走 qty×price 折算
+  const isStockOrder = order.asset_type === 'stock';
+  const totalU = isStockOrder
+    ? parseFloat(order.amount || '0')
+    : (qty > 0 && price > 0 ? qty * price : parseFloat(order.amount || '0'));
   // 利息货币逻辑与 LedgerDetail FunderOrderCardRight 完全一致
   const baseCur = order.interest_base_currency || 'USDT'; // 计息基数货币
   const rateCur = order.interest_rate_currency || 'USDT'; // 约定利息货币（决定主显示单位）
-  const interestUnit = rateCur === 'CNY' ? '元' : 'U';
-  const altUnit = rateCur === 'CNY' ? 'U' : '元';
+  const interestUnit = rateCur === 'CNY' ? '元' : 'u';
+  const altUnit = rateCur === 'CNY' ? 'u' : '元';
   // 折算：计息基数和利息货币不一致时按实时汇率折算
   const convertAccrued = (val: number): number => {
     if (baseCur === rateCur) return val;
@@ -690,34 +792,28 @@ export function FunderOrderCard({
       )}
 
       {/* 帽子：标签行 + 操作按钮 */}
-      <div className="flex items-center justify-between px-4 py-2.5" style={{ borderBottom: '1px solid #F3F4F6', backgroundColor: isInvited ? '#F0FDF4' : '#FAFBFF' }}>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ backgroundColor: coinColor }}>
-            {order.coin}
-          </span>
-          {order.asset_type && show('assetType') && (
-            <span className="text-xs px-1.5 py-0.5 font-medium" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}>
-              {order.asset_type === 'stock' ? '股票' : '数字币'}
-            </span>
-          )}
-          {isAdmin ? (
+      <div className="flex items-center gap-2 px-4 py-2" style={{ borderBottom: '1px solid #F0F0F5', backgroundColor: isInvited ? '#F0FDF4' : '#F7F8FC' }}>
+
+        {/* 状态：仅非持有中时显示（圆点 + 文字） */}
+        {order.status !== 'active' && (
+          isAdmin ? (
             <button
               onClick={() => setShowStatusSheet(true)}
-              className="text-xs px-1.5 py-0.5 rounded-full font-medium transition-opacity hover:opacity-70"
-              style={{ backgroundColor: `${statusColor}15`, color: statusColor }}
+              className="flex items-center gap-1 transition-opacity hover:opacity-60 shrink-0"
             >
-              {statusLabel}
+              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: statusColor }} />
+              <span className="text-[11px] font-medium" style={{ color: statusColor }}>{statusLabel}</span>
             </button>
           ) : (
-            <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: `${statusColor}15`, color: statusColor }}>
-              {statusLabel}
+            <span className="flex items-center gap-1 shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: statusColor }} />
+              <span className="text-[11px] font-medium" style={{ color: statusColor }}>{statusLabel}</span>
             </span>
-          )}
-          {isInvited && (
-            <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#ECFDF5', color: '#059669', border: '1px solid #A7F3D0' }}>
-              受邀
-            </span>
-          )}
+          )
+        )}
+        {/* 标签区：所有者第一，其余依次排列 */}
+        <div className="flex items-center gap-1 flex-wrap flex-1 min-w-0">
+          {/* 所有者：第一位 */}
           {show('showOwnerName') && (() => {
             const label = (order as any).owner_label || (() => {
               const m = (membersData as any[])?.find((m: any) => m.userId === order.user_id);
@@ -725,61 +821,32 @@ export function FunderOrderCard({
             })();
             if (!label) return null;
             return (
-              <span className="text-xs font-medium px-1.5 py-0.5" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}>
+              <span className="text-[11px] font-medium px-1.5 py-0.5 rounded truncate max-w-[80px]" style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}>
                 {label}
               </span>
             );
           })()}
+          {order.asset_type && show('assetType') && (
+            <span className="text-[11px] font-medium px-1.5 py-0.5 rounded" style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}>
+              {order.asset_type === 'stock' ? '股票' : '数字币'}
+            </span>
+          )}
+          {isInvited && (
+            <span className="text-[11px] font-medium px-1.5 py-0.5 rounded" style={{ backgroundColor: '#D1FAE5', color: '#059669' }}>
+              受邀
+            </span>
+          )}
           {(() => {
             try {
               const t = (order as any).tags;
               const tags: string[] = Array.isArray(t) ? t : (typeof t === 'string' && t ? JSON.parse(t) : []);
               return tags.map((tag, i) => (
-                <span key={i} className="text-xs font-medium px-1.5 py-0.5" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A' }}>
+                <span key={i} className="text-[11px] font-medium px-1.5 py-0.5 rounded" style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}>
                   {tag}
                 </span>
               ));
             } catch { return null; }
           })()}
-        </div>
-        <div className="flex items-center gap-0.5">
-          {!isInvited && isAdmin && (
-            <button
-              onClick={() => $handleOpenParticipants(order.id, order.interest_base || '')}
-              className="px-2 py-1 text-xs rounded-lg font-medium transition-colors"
-              style={{ backgroundColor: $showParticipantsPanel === order.id ? '#059669' : '#ECFDF5', color: $showParticipantsPanel === order.id ? '#fff' : '#059669' }}
-            >
-              参与方{order.participantCount > 0 ? ` ${order.participantCount}` : ''}
-            </button>
-          )}
-          {!isInvited && isAdmin && (
-            <button onClick={() => $handleOpenEdit(order)} className="p-1.5 ml-1 text-gray-300 hover:text-blue-500 rounded-lg hover:bg-blue-50 transition-colors">
-              <Pencil className="w-3.5 h-3.5" />
-            </button>
-          )}
-          {!isInvited && isAdmin && !isSettled && (
-            <button
-              onClick={() => $onConfirmSettle?.(order.id)}
-              className="px-2 py-1 text-xs rounded-lg font-medium transition-colors"
-              style={{ backgroundColor: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }}
-              title="标记为已结清"
-            >
-              结清
-            </button>
-          )}
-          {!isInvited && isAdmin && (
-            <button
-              onClick={() => {
-                if (!window.confirm('确认删除这张订单？')) return;
-                if (!window.confirm('再次确认：订单将移入回收站，可随时恢复。确定删除？')) return;
-                $handleDelete(order.id);
-              }}
-              className="p-1.5 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
-              title="删除订单（移入回收站）"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          )}
         </div>
       </div>
 
@@ -787,7 +854,7 @@ export function FunderOrderCard({
       <div className="flex">
 
         {/* 左栏：持有资产 */}
-        <div className="flex-1 p-4 pr-3">
+        <div className="w-1/2 p-4 pr-3">
           <div className="flex items-center gap-0.5 mb-0.5">
             <span className="text-[10px] font-medium" style={{ color: isInvited ? '#16A34A' : '#3B82F6' }}>{isInvited ? '订单资产' : '持有资产'}</span>
             {(order.principal_lent_out === 1 || order.principal_lent_out === true) && <span className="text-[10px] text-gray-400">（借出）</span>}
@@ -797,47 +864,44 @@ export function FunderOrderCard({
               <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
                 {order.asset_type === 'stock' ? (order.amount !== null && order.amount !== undefined && order.amount !== '' ? totalU.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '0') : (order.buy_quantity !== null && order.buy_quantity !== undefined && order.buy_quantity !== '' ? formatCoinQtyFunder(qty, order.coin) : '0')}
               </span>
-              <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{order.coin}</span>
-
+              <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{order.coin === 'CNY' ? '元' : order.coin}</span>
+{(() => {
+                const approxHolding = dc?.approxHolding ?? 'U';
+                if (approxHolding === 'hidden') return null;
+                if (order.asset_type === 'stock') {
+                  if (!(totalU > 0 && order.coin === 'CNY')) return null;
+                  if (approxHolding === 'U') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(totalU / 7).toLocaleString(undefined, { maximumFractionDigits: 0 })} u</span>;
+                  return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{totalU.toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>;
+                } else {
+                  if (!liveP || !(qty > 0)) return null;
+                  const valU = qty * liveP;
+                  if (approxHolding === 'U') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{valU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>;
+                  return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(valU * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>;
+                }
+              })()}
             </div>
-            {order.asset_type === 'stock' ? (
-              totalU > 0 && order.coin === 'CNY' && (
-                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(totalU / 7).toLocaleString(undefined, { maximumFractionDigits: 0 })} U</div>
-              )
-            ) : (
-              liveP && qty > 0 && (
-                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(qty * liveP).toLocaleString(undefined, { maximumFractionDigits: 2 })} U</div>
-              )
-            )}
           </div>
           <div className="space-y-0.5 text-xs">
-            {show('buyPrice') && price > 0 && (
+            {show('buyPrice') && price > 0 && !isStockOrder && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">买入币价</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>{price.toLocaleString()} U</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{price.toLocaleString()} u</span>
               </div>
             )}
-            {show('buyValue') && totalU > 0 && (
+            {show('buyValue') && totalU > 0 && !isStockOrder && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">买入价值</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>{totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{totalU.toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>
               </div>
             )}
-            {show('interestBase') && order.interest_base && parseFloat(order.interest_base) > 0 && (
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400 shrink-0">{isInvited ? '计佣基数' : '计息基数'}</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>
-                  {parseFloat(order.interest_base).toLocaleString(undefined, { maximumFractionDigits: 2 })} {interestUnit}
-                </span>
-              </div>
-            )}
-            {show('openPrice') && order.buy_price && parseFloat(order.buy_price) > 0 && order.coin !== 'CNY' && order.coin !== 'USDT' && (
+            {/* 计息基数已移至右侧（已结利息与计息日期之间） */}
+            {show('openPrice') && order.buy_price && parseFloat(order.buy_price) > 0 && order.coin !== 'CNY' && order.coin !== 'USDT' && !isStockOrder && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">开仓币价</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(order.buy_price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(order.buy_price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} u</span>
               </div>
             )}
-            {show('todayPrice') && order.coin !== 'CNY' && order.coin !== 'USDT' && (
+            {show('todayPrice') && order.coin !== 'CNY' && order.coin !== 'USDT' && !isStockOrder && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">当前币价</span>
                 {(() => {
@@ -852,7 +916,7 @@ export function FunderOrderCard({
                     <span className="font-medium flex items-center gap-0.5" style={{ color: priceColor }}>
                       {dir === 'up' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#DC2626', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
                       {dir === 'down' && <span className="text-[10px] inline-flex items-center self-center" style={{ color: '#16A34A', animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
-                      {liveP != null ? liveP.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' U' : '---'}
+                      {liveP != null ? liveP.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' u' : '---'}
                     </span>
                   );
                 })()}
@@ -861,7 +925,7 @@ export function FunderOrderCard({
             {show('buyDate') && order.buy_date && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">开仓时间</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>{order.buy_date}</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{fmtDate(order.buy_date)}</span>
               </div>
             )}
             {show('holdDuration') && holdDurationLabel && (
@@ -876,16 +940,23 @@ export function FunderOrderCard({
                 <span className="font-mono" style={{ color: '#9CA3AF', letterSpacing: '0.05em' }}>{order.order_no}</span>
               </div>
             )}
-            {order.interest_payment_type && show('interestPaymentType') && (
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400 shrink-0">付息方式</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>{$getPaymentLabel(order.interest_payment_type)}</span>
-              </div>
-            )}
+            {/* 付息方式已移至右侧（计息时长下面） */}
             {order.storage_account && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">存放账号</span>
                 <span className="font-medium truncate ml-2" style={{ color: '#4B5563' }}>{order.storage_account}</span>
+              </div>
+            )}
+            {order.asset_type === 'stock' && show('brokerName') && order.broker_name && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400 shrink-0">证券公司</span>
+                <span className="font-medium truncate ml-2" style={{ color: '#4B5563' }}>{order.broker_name}</span>
+              </div>
+            )}
+            {order.asset_type === 'stock' && show('brokerAccount') && order.broker_account && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400 shrink-0">证券账号</span>
+                <span className="font-mono truncate ml-2" style={{ color: '#4B5563' }}>{order.broker_account}</span>
               </div>
             )}
           </div>
@@ -895,7 +966,7 @@ export function FunderOrderCard({
         <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
 
         {/* 右栏：待结利息 */}
-        <div className="p-4 pl-3 flex flex-col shrink-0" style={{ width: 'auto', minWidth: '160px', maxWidth: '200px' }}>
+        <div className="w-1/2 p-4 pl-3 flex flex-col">
           <div className="flex items-center gap-1 mb-0.5 relative" style={{ height: '16px' }}>
             <span className="text-[10px]" style={{ color: '#3B82F6' }}>{isInvited ? '待结佣金' : '待结利息'}</span>
             {rateAbs && <span className="text-[10px] text-gray-400">(年化 {rateAbs}%)</span>}
@@ -912,6 +983,68 @@ export function FunderOrderCard({
               className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold leading-none flex-shrink-0"
               style={{ backgroundColor: '#E5E7EB', color: '#6B7280' }}
             >?</button>
+            {/* 已结利息历史浮层 */}
+            {showInterestHistory && (
+              <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowInterestHistory(false)}>
+                <div className="rounded-2xl p-5 mx-4 w-full max-w-xs" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-bold" style={{ color: '#1A2340' }}>已结利息记录</span>
+                    <button onClick={() => setShowInterestHistory(false)} className="text-gray-400 text-lg leading-none">×</button>
+                  </div>
+                  {interestHistoryQuery.isLoading && <div className="text-xs text-gray-400 text-center py-4">加载中…</div>}
+                  {interestHistoryQuery.data && (interestHistoryQuery.data as any[]).length === 0 && (
+                    <div className="text-xs text-gray-400 text-center py-4">暂无结息记录</div>
+                  )}
+                  {interestHistoryQuery.data && (interestHistoryQuery.data as any[]).length > 0 && (
+                    <div>
+                      {(interestHistoryQuery.data as any[]).map((p: any, i: number) => {
+                        const cur = (p.currency || 'U') === 'CNY' ? '元' : 'u';
+                        const fmtD = (s: string) => { const d = s ? String(s).slice(0, 10) : ''; return d ? `${d.slice(2,4)}.${d.slice(5,7)}.${d.slice(8,10)}` : ''; };
+                        const payDateFmt = fmtD(p.pay_date);
+                        const ps = p.period_start ? fmtD(p.period_start) : '';
+                        const pe = p.period_end ? fmtD(p.period_end) : '';
+                        const periodLabel = ps && pe ? `${ps} → ${pe}` : ps ? `${ps} 起` : pe ? `至 ${pe}` : '';
+                        const amtStr = `${parseFloat(p.amount || '0').toLocaleString(undefined, { maximumFractionDigits: 4 })} ${cur}`;
+                        // 尝试一行：结算周期 + 金额；若无周期则结息日期 + 金额
+                        const mainLeft = periodLabel ? `结算周期 ${periodLabel}` : `${payDateFmt} 结息`;
+                        // 是否需要第二行（有周期时还需显示结息日期，或有备注）
+                        const needSecondLine = !!(periodLabel && payDateFmt) || !!p.note;
+                        return (
+                          <div key={p.id || i} className="py-2.5" style={{ borderBottom: '1px solid #F0F0F5' }}>
+                            {/* 第一行：左侧主信息 + 右侧金额 */}
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs" style={{ color: '#4B5563' }}>{mainLeft}</span>
+                              <span className="text-xs font-semibold shrink-0" style={{ color: '#1A2340' }}>{amtStr}</span>
+                            </div>
+                            {/* 第二行（如有）：结息日期 + 备注 */}
+                            {needSecondLine && (
+                              <div className="flex items-center gap-2 mt-0.5">
+                                {periodLabel && payDateFmt && <span className="text-[11px]" style={{ color: '#9CA3AF' }}>{payDateFmt} 结息</span>}
+                                {p.note && <span className="text-[11px] text-gray-400 truncate">{p.note}</span>}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      <div className="pt-2 flex items-center justify-between">
+                        <span className="text-xs text-gray-400">共结息 {(interestHistoryQuery.data as any[]).length} 笔</span>
+                        <span className="text-xs font-bold" style={{ color: '#3B82F6' }}>
+                          {(() => {
+                            const rows = interestHistoryQuery.data as any[];
+                            const uTotal = rows.filter(r => (r.currency || 'U') !== 'CNY').reduce((s, r) => s + parseFloat(r.amount || '0'), 0);
+                            const cnyTotal = rows.filter(r => (r.currency || 'U') === 'CNY').reduce((s, r) => s + parseFloat(r.amount || '0'), 0);
+                            const parts = [];
+                            if (uTotal > 0) parts.push(`${uTotal.toLocaleString(undefined, { maximumFractionDigits: 4 })} u`);
+                            if (cnyTotal > 0) parts.push(`${cnyTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`);
+                            return parts.join(' + ') || '0 u';
+                          })()}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             {showInterestTip && (() => {
               const startDate = (isInvited ? order.participantInfo?.commissionStartDate : order.interest_start_date) ? String(isInvited ? order.participantInfo.commissionStartDate : order.interest_start_date).slice(0, 10) : null;
               // 当前日期（北京时间 YYYY-MM-DD）
@@ -927,7 +1060,7 @@ export function FunderOrderCard({
               const base = order.interest_base ? parseFloat(order.interest_base) : 0;
               const rate = order.interest_rate_annual ? Math.abs(parseFloat(order.interest_rate_annual)) : 0;
               const altAccruedTip = convertAlt(displayAccrued);
-              const baseCurLabel = baseCur === 'CNY' ? '元' : 'U';
+              const baseCurLabel = baseCur === 'CNY' ? '元' : 'u';
               return (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowInterestTip(false)}>
                   <div className="rounded-2xl p-5 mx-4 w-full max-w-xs" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
@@ -939,8 +1072,8 @@ export function FunderOrderCard({
                       <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
                         <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 计息时间</div>
                         <div className="space-y-1">
-                          <div className="flex justify-between"><span>开始日期</span><span className="font-mono font-medium">{startDate || '--'}</span></div>
-                          <div className="flex justify-between"><span>当前日期</span><span className="font-mono font-medium">{todayStr}</span></div>
+                          <div className="flex justify-between"><span>开始日期</span><span className="font-mono font-medium">{fmtDate(startDate)}</span></div>
+                          <div className="flex justify-between"><span>当前日期</span><span className="font-mono font-medium">{fmtDate(todayStr)}</span></div>
                           <div className="flex justify-between"><span>已过时间</span><span className="font-mono font-medium">{elapsedLabel}</span></div>
                         </div>
                       </div>
@@ -965,35 +1098,69 @@ export function FunderOrderCard({
             })()}
           </div>
           <div className="min-h-9 flex flex-col justify-center">
-            <div className="flex items-baseline gap-0.5">
+            <div className="flex items-baseline gap-0.5 flex-wrap">
               <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: isInvited ? '#1A2340' : (displayAccrued === 0 ? '#1A2340' : (isNegRate ? '#059669' : '#DC2626')), fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
                 {isInvited ? '' : (displayAccrued === 0 ? '' : (isNegRate ? '-' : '+'))}{displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
               <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
+{(() => {
+                const approxInterest = dc?.approxInterest ?? 'U';
+                if (approxInterest === 'hidden') return null;
+                const showU = approxInterest === 'U';
+                const val = showU ? (rateCur === 'CNY' ? displayAccrued / cnyRate : displayAccrued) : (rateCur === 'CNY' ? displayAccrued : displayAccrued * cnyRate);
+                const unit = showU ? 'u' : '元';
+                return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {unit}</span>;
+              })()}
             </div>
-            <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{altAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</div>
           </div>
           <div className="space-y-0.5 text-xs">
             {show('paidInterest') && (
             <>
             <div className="flex items-center justify-between">
-              <span className="text-gray-400 whitespace-nowrap">{isInvited ? '已结佣金' : '已结利息'}</span>
+              <span className="flex items-center gap-1">
+                <span className="text-gray-400 whitespace-nowrap">{isInvited ? '已结佣金' : '已结利息'}</span>
+                <button
+                  type="button"
+                  onClick={() => setShowInterestHistory(v => !v)}
+                  className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold leading-none flex-shrink-0"
+                  style={{ backgroundColor: showInterestHistory ? '#3B82F6' : '#DBEAFE', color: showInterestHistory ? '#fff' : '#3B82F6' }}
+                  title="已结利息记录"
+                >!</button>
+              </span>
               <span className="font-medium" style={{ color: '#4B5563' }}>
                 {displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
               </span>
             </div>
-            {displayPaid > 0 && (
-              <div className="flex justify-end">
-                <span className="text-gray-400">≈{altPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</span>
-              </div>
-            )}
+            {displayPaid > 0 && (() => {
+              const approxPaid = (dc as any)?.approxPaid ?? 'U';
+              if (approxPaid === 'hidden') return null;
+              const showU = approxPaid === 'U';
+              const approxPaidVal = showU
+                ? (interestUnit === 'u' ? null : (displayPaid / cnyRate))
+                : (interestUnit === 'u' ? (displayPaid * cnyRate) : null);
+              const approxPaidUnit = showU ? 'u' : '元';
+              if (approxPaidVal === null) return null;
+              return (
+                <div className="flex justify-end">
+                  <span className="text-gray-400">≈{approxPaidVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {approxPaidUnit}</span>
+                </div>
+              );
+            })()}
             </>
+            )}
+            {show('interestBase') && order.interest_base && parseFloat(order.interest_base) > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400 whitespace-nowrap">{isInvited ? '计佣基数' : '计息基数'}</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>
+                  {parseFloat(order.interest_base).toLocaleString(undefined, { maximumFractionDigits: 2 })} {interestUnit}
+                </span>
+              </div>
             )}
             {show('interestStartDate') && (isInvited ? order.participantInfo?.commissionStartDate : order.interest_start_date) && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400">{isInvited ? '计佣日期' : '计息日期'}</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>
-                  {String(isInvited ? order.participantInfo.commissionStartDate : order.interest_start_date).slice(0, 10)}
+                  {fmtDate(String(isInvited ? order.participantInfo.commissionStartDate : order.interest_start_date))}
                 </span>
               </div>
             )}
@@ -1012,6 +1179,12 @@ export function FunderOrderCard({
                 </div>
               );
             })()}
+            {order.interest_payment_type && show('interestPaymentType') && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400 whitespace-nowrap">付息方式</span>
+                <span className="font-medium" style={{ color: '#4B5563' }}>{$getPaymentLabel(order.interest_payment_type)}</span>
+              </div>
+            )}
             {/* 担保货币（与 LedgerDetail 前端完全一致：受 display_config 开关控制） */}
             {show('collateralCoin') && (
               orderShareMode === 'self'
@@ -1028,14 +1201,19 @@ export function FunderOrderCard({
                       <div key={idx}>
                         <div className="flex items-center justify-between mt-0.5">
                           <span className="font-semibold" style={{ color: '#DC2626' }}>{collateralAssets.length > 1 ? `共享担保${idx + 1}` : '共享担保'}</span>
-                          <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(a.qty).toLocaleString()} {a.coin}</span>
+                          <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(a.qty).toLocaleString()} {a.coin === 'CNY' ? '元' : a.coin}</span>
                         </div>
-                        {collateralItemValues[idx] !== null && collateralItemValues[idx] !== undefined && (
-                          <div className="flex items-center justify-between mt-0.5">
-                            <span></span>
-                            <span className="font-medium" style={{ color: '#4B5563' }}>≈ {(collateralItemValues[idx] as number).toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
-                          </div>
-                        )}
+                        {collateralItemValues[idx] !== null && collateralItemValues[idx] !== undefined && (() => {
+                          // 支持对象格式（每条独立）和字符串格式（全局兼容）
+                          const aciRaw = dc?.approxCollateralItem;
+                          const approxCI = aciRaw && typeof aciRaw === 'object' && !Array.isArray(aciRaw)
+                            ? ((aciRaw as Record<string,string>)[String(idx)] ?? 'U')
+                            : (typeof aciRaw === 'string' ? aciRaw : 'U');
+                          if (approxCI === 'hidden') return null;
+                          const ciVal = collateralItemValues[idx] as number;
+                          const ciDisplay = approxCI === 'U' ? `${ciVal.toLocaleString(undefined, { maximumFractionDigits: 2 })} u` : `${(ciVal * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`;
+                          return <div className="flex items-center justify-between mt-0.5"><span></span><span className="font-medium" style={{ color: '#4B5563' }}>≈ {ciDisplay}</span></div>;
+                        })()}
                       </div>
                     ))
                 )
@@ -1052,24 +1230,34 @@ export function FunderOrderCard({
                       <div key={idx}>
                         <div className="flex items-center justify-between mt-0.5">
                           <span className="text-gray-400">{collateralAssets.length > 1 ? `担保货币${idx + 1}` : '担保货币'}</span>
-                          <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(a.qty).toLocaleString()} {a.coin}</span>
+                          <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(a.qty).toLocaleString()} {a.coin === 'CNY' ? '元' : a.coin}</span>
                         </div>
-                        {collateralItemValues[idx] !== null && collateralItemValues[idx] !== undefined && (
-                          <div className="flex items-center justify-between mt-0.5">
-                            <span></span>
-                            <span className="font-medium" style={{ color: '#4B5563' }}>≈ {(collateralItemValues[idx] as number).toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
-                          </div>
-                        )}
+                        {collateralItemValues[idx] !== null && collateralItemValues[idx] !== undefined && (() => {
+                          const aciRaw = dc?.approxCollateralItem;
+                          const approxCI = aciRaw && typeof aciRaw === 'object' && !Array.isArray(aciRaw)
+                            ? ((aciRaw as Record<string,string>)[String(idx)] ?? 'U')
+                            : (typeof aciRaw === 'string' ? aciRaw : 'U');
+                          if (approxCI === 'hidden') return null;
+                          const ciVal = collateralItemValues[idx] as number;
+                          const ciDisplay = approxCI === 'U' ? `${ciVal.toLocaleString(undefined, { maximumFractionDigits: 2 })} u` : `${(ciVal * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`;
+                          return <div className="flex items-center justify-between mt-0.5"><span></span><span className="font-medium" style={{ color: '#4B5563' }}>≈ {ciDisplay}</span></div>;
+                        })()}
                       </div>
                     ))
                 )
             )}
-            {show('collateralValue') && (
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400">{collateralAssets.length > 1 ? '担保总值' : '担保价值'}</span>
-                <span className="font-medium" style={{ color: '#4B5563' }}>{collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
-              </div>
-            )}
+            {show('collateralValue') && (() => {
+              const approxCV = dc?.approxCollateralValue ?? 'U';
+              const cvDisplay = approxCV === 'hidden' ? null
+                : approxCV === 'U' ? `${collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`
+                : `${(collateralValue * cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} 元`;
+              return (
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">{collateralAssets.length > 1 ? '担保总値' : '担保价値'}</span>
+                  <span className="font-medium" style={{ color: '#4B5563' }}>{cvDisplay ?? '---'}</span>
+                </div>
+              );
+            })()}
             {show('collateral') && (
               <>
               {showCollateralInfo && (
@@ -1110,7 +1298,7 @@ export function FunderOrderCard({
                                         </div>
                                         <div className="text-right">
                                           {gap !== null
-                                            ? <span className="font-mono font-semibold" style={{ color: gap >= 0 ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} U</span>
+                                            ? <span className="font-mono font-semibold" style={{ color: gap >= 0 ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} u</span>
                                             : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
                                         </div>
                                       </div>
@@ -1135,7 +1323,7 @@ export function FunderOrderCard({
                                     <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
                                       <span style={{ color: '#374151' }}>合计缺口需求</span>
                                       {allKnown
-                                        ? <span className="font-mono" style={{ color: totalGapLive >= 0 ? '#DC2626' : '#16A34A' }}>{totalGapLive >= 0 ? '+' : ''}{totalGapLive.toFixed(2)} U</span>
+                                        ? <span className="font-mono" style={{ color: totalGapLive >= 0 ? '#DC2626' : '#16A34A' }}>{totalGapLive >= 0 ? '+' : ''}{totalGapLive.toFixed(2)} u</span>
                                         : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
                                     </div>
                                   );
@@ -1163,7 +1351,7 @@ export function FunderOrderCard({
                                         <div className="flex justify-between items-center">
                                           <span className="font-mono" style={{ color: '#374151' }}>{o.orderNo}</span>
                                           <span className="font-mono font-semibold" style={{ color: '#DC2626' }}>
-                                            {o.collateralValue > 0 ? `+${o.collateralValue.toFixed(2)} U` : '+--- U'}
+                                            {o.collateralValue > 0 ? `+${o.collateralValue.toFixed(2)} u` : '+--- u'}
                                           </span>
                                         </div>
                                       )}
@@ -1172,7 +1360,7 @@ export function FunderOrderCard({
                                 </div>
                                 <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
                                   <span style={{ color: '#374151' }}>合计担保物价值</span>
-                                  <span className="font-mono" style={{ color: '#DC2626' }}>+{((sharedPoolInfo as any).totalCollateralValue ?? 0).toFixed(2)} U</span>
+                                  <span className="font-mono" style={{ color: '#DC2626' }}>+{((sharedPoolInfo as any).totalCollateralValue ?? 0).toFixed(2)} u</span>
                                 </div>
                               </>
                             ) : (
@@ -1209,19 +1397,19 @@ export function FunderOrderCard({
                                   <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>担保物合计 + 净缺口合计</div>
                                   <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
                                     {allHaveGap
-                                      ? <>{totalColl.toFixed(2)} + ({totalRequired >= 0 ? '+' : ''}{totalRequired.toFixed(2)}) = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} U</span></>
+                                      ? <>{totalColl.toFixed(2)} + ({totalRequired >= 0 ? '+' : ''}{totalRequired.toFixed(2)}) = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} u</span></>
                                       : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
                                   </div>
                                 </div>
                                 <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
                                   <div className="font-semibold mb-1" style={{ color: '#374151' }}>④ 保证金比例</div>
-                                  <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>风险敞口 ÷ 总订单买入价値</div>
+                                  <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>风险敞口 ÷ 总订单买入价值</div>
                                   <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
                                     {allHaveGap
                                       ? <>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} ÷ {totalBuyValue.toFixed(2)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '--'}</span></>
                                       : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
                                   </div>
-                                  <div className="text-xs" style={{ color: '#9CA3AF' }}>总买入价値 {totalBuyValue.toFixed(2)} U（各订单买入价 × 数量之和，不随币价变动）</div>
+                                  <div className="text-xs" style={{ color: '#9CA3AF' }}>总买入价值 {totalBuyValue.toFixed(2)} u（各订单买入价 × 数量之和，不随币价变动）</div>
                                 </div>
                               </>
                             );
@@ -1235,7 +1423,7 @@ export function FunderOrderCard({
                             <div>= 当前市值 - 计息基数（正数为浮盈，负数为亏损）</div>
                             <div className="mt-1 font-mono">
                               {floatPnl !== null
-                                ? <><span style={{ color: '#3B82F6' }}>= {currentValue!.toFixed(2)} - {interestBaseNum.toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} U{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>
+                                ? <><span style={{ color: '#3B82F6' }}>= {currentValue!.toFixed(2)} - {interestBaseNum.toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} u{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>
                                 : <span className="text-gray-400">当前市值暂无实时价格，暂无法计算浮动盈亏</span>
                               }
                             </div>
@@ -1243,7 +1431,7 @@ export function FunderOrderCard({
                           <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
                             <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 担保价值</div>
                             {collateralAssets.length === 0
-                              ? <div className="font-mono mt-1" style={{ color: '#9CA3AF' }}>0.00 U（无担保物）</div>
+                              ? <div className="font-mono mt-1" style={{ color: '#9CA3AF' }}>0.00 u（无担保物）</div>
                               : <>
                                   {collateralAssets.map((a: any, idx: number) => {
                                     const itemVal = collateralItemValues[idx];
@@ -1251,7 +1439,7 @@ export function FunderOrderCard({
                                       <div key={idx} className="mt-1 flex justify-between">
                                         <span className="font-mono" style={{ color: '#6B7280' }}>{a.qty} {a.coin}</span>
                                         {itemVal !== null
-                                          ? <span className="font-mono font-semibold" style={{ color: '#3B82F6' }}>{itemVal.toFixed(2)} U</span>
+                                          ? <span className="font-mono font-semibold" style={{ color: '#3B82F6' }}>{itemVal.toFixed(2)} u</span>
                                           : <span className="font-mono" style={{ color: '#D1D5DB' }}>暂无实时价</span>
                                         }
                                       </div>
@@ -1259,7 +1447,7 @@ export function FunderOrderCard({
                                   })}
                                   {collateralAssets.length > 1 && (
                                     <div className="font-mono mt-1 pt-1 font-semibold" style={{ borderTop: '1px solid #D1D5DB', color: '#1A2340' }}>
-                                      合计 {collateralValue.toFixed(2)} U
+                                      合计 {collateralValue.toFixed(2)} u
                                     </div>
                                   )}
                                 </>
@@ -1270,14 +1458,14 @@ export function FunderOrderCard({
                             <div>担保物 + 浮动盈亏 − 待结利息 + 已结利息{principalLentOut ? ' − 本金（已借出）' : ''}（正数充足，负数缺口）</div>
                             <div className="mt-1 font-mono">
                               {floatPnl !== null
-                                ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accrued.toFixed(2)} + {totalPaid.toFixed(2)}{principalLentOut ? ` − ${interestBaseNum.toFixed(2)}（本金）` : ''} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
-                                : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {accrued.toFixed(2)} + {totalPaid.toFixed(2)}{principalLentOut ? ` − ${interestBaseNum.toFixed(2)}（本金）` : ''} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} U</strong></span>
+                                ? <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accrued.toFixed(2)} + {totalPaid.toFixed(2)}{principalLentOut ? ` − ${interestBaseNum.toFixed(2)}（本金）` : ''} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>
+                                : <span style={{ color: '#3B82F6' }}>= {collateralValue.toFixed(2)} + ---（暂无实时价） − {accrued.toFixed(2)} + {totalPaid.toFixed(2)}{principalLentOut ? ` − ${interestBaseNum.toFixed(2)}（本金）` : ''} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong></span>
                               }
                             </div>
                             <div className="mt-1.5" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
                               {isSufficient
-                                ? `担保物充足，还有 ${exposure.toFixed(2)} U 的余量空间`
-                                : `担保物不足，还需补充 ${Math.abs(exposure).toFixed(2)} U 才能覆盖风险`
+                                ? `担保物充足，还有 ${exposure.toFixed(2)} u 的余量空间`
+                                : `担保物不足，还需补充 ${Math.abs(exposure).toFixed(2)} u 才能覆盖风险`
                               }
                             </div>
                           </div>
@@ -1299,7 +1487,7 @@ export function FunderOrderCard({
                 {showExposureLoading
                   ? <span className="text-xs" style={{ color: '#9CA3AF' }}>计算中...</span>
                   : <span className="font-medium" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
-                      {isSufficient ? `+${effectiveExposure.toLocaleString(undefined, { maximumFractionDigits: 2 })} U` : `-${(Math.abs(effectiveExposure)).toLocaleString(undefined, { maximumFractionDigits: 2 })} U`}
+                      {isSufficient ? `+${effectiveExposure.toLocaleString(undefined, { maximumFractionDigits: 2 })} u` : `-${(Math.abs(effectiveExposure)).toLocaleString(undefined, { maximumFractionDigits: 2 })} u`}
                     </span>
                 }
               </div>
@@ -1352,7 +1540,7 @@ export function FunderOrderCard({
                                   <div key={idx} className="mt-1 flex justify-between">
                                     <span className="font-mono" style={{ color: '#6B7280' }}>{a.qty} {a.coin}</span>
                                     {itemVal !== null
-                                      ? <span className="font-mono font-semibold" style={{ color: '#3B82F6' }}>{(itemVal as number).toFixed(2)} U</span>
+                                      ? <span className="font-mono font-semibold" style={{ color: '#3B82F6' }}>{(itemVal as number).toFixed(2)} u</span>
                                       : <span className="font-mono" style={{ color: '#D1D5DB' }}>暂无实时价</span>
                                     }
                                   </div>
@@ -1360,7 +1548,7 @@ export function FunderOrderCard({
                               })}
                               {collateralAssets.length > 1 && (
                                 <div className="font-mono mt-1 pt-1 font-semibold" style={{ borderTop: '1px solid #D1D5DB', color: '#1A2340' }}>
-                                  合计 {collateralValue.toFixed(2)} U
+                                  合计 {collateralValue.toFixed(2)} u
                                 </div>
                               )}
                             </div>
@@ -1416,7 +1604,7 @@ export function FunderOrderCard({
                   </div>
                   <div className="flex items-center justify-between mt-0.5">
                     <span className="text-gray-400 shrink-0">待分金额</span>
-                    <span className="font-medium" style={{ color: '#4B5563' }}>{shareAmt != null ? `≈ ${shareAmt.toLocaleString(undefined, { maximumFractionDigits: 2 })} U` : '---'}</span>
+                    <span className="font-medium" style={{ color: '#4B5563' }}>{shareAmt != null ? `≈ ${shareAmt.toLocaleString(undefined, { maximumFractionDigits: 2 })} u` : '---'}</span>
                   </div>
                 </div>
               );
@@ -1429,6 +1617,166 @@ export function FunderOrderCard({
       {order.admin_note && (
         <div className="px-4 pb-2 text-xs text-gray-400 border-t border-gray-100 pt-2">
           内部备注：{order.admin_note}
+        </div>
+      )}
+
+      {/* 底部操作栏：仅管理员可见 */}
+      {!previewMode && !isInvited && isAdmin && (
+        <div className="flex items-center gap-1.5 px-4 py-2.5 border-t overflow-x-auto" style={{ borderColor: '#F3F4F6', backgroundColor: '#FAFBFF', flexWrap: 'nowrap' }}>
+          <button
+            onClick={() => $handleOpenParticipants(order.id, order.interest_base || '')}
+            className="px-2.5 py-1.5 text-xs rounded-lg font-medium transition-colors whitespace-nowrap shrink-0"
+            style={{ backgroundColor: $showParticipantsPanel === order.id ? '#1A2340' : '#EDEEF5', color: $showParticipantsPanel === order.id ? '#fff' : '#4B5563' }}
+          >
+            参与方{order.participantCount > 0 ? ` ${order.participantCount}` : ''}
+          </button>
+          <button
+            onClick={() => {
+              const isOpening = $showPaymentPanel !== order.id;
+              $setShowPaymentPanel(isOpening ? order.id : null);
+              $setPaymentForm(() => ({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' }));
+              if (isOpening) {
+                // 初始化利息约等于配置
+                try {
+                  const rawDC = order.display_config;
+                  const parsedDC = rawDC ? (typeof rawDC === 'string' ? JSON.parse(rawDC) : rawDC) : {};
+                  setInterestApproxConfig({ approxInterest: parsedDC.approxInterest ?? 'U', approxPaid: parsedDC.approxPaid ?? 'U' });
+                } catch { setInterestApproxConfig({ approxInterest: 'U', approxPaid: 'U' }); }
+              }
+            }}
+            className="px-2.5 py-1.5 text-xs rounded-lg font-medium transition-colors whitespace-nowrap shrink-0"
+            style={{ backgroundColor: $showPaymentPanel === order.id ? '#1A2340' : '#EDEEF5', color: $showPaymentPanel === order.id ? '#fff' : '#4B5563' }}
+          >
+            {$showPaymentPanel === order.id ? '收起' : '记录结息'}
+          </button>
+          <button
+            onClick={handleOpenCollateralPanel}
+            className="px-2.5 py-1.5 text-xs rounded-lg font-medium transition-colors whitespace-nowrap shrink-0"
+            style={{ backgroundColor: showCollateralPanel ? '#1A2340' : '#EDEEF5', color: showCollateralPanel ? '#fff' : '#4B5563' }}
+          >
+            {showCollateralPanel ? '收起' : '担保'}
+          </button>
+          <div className="flex-1" />
+          <button
+            onClick={() => $handleOpenEdit(order)}
+            className="px-2.5 py-1.5 text-xs rounded-lg font-medium transition-colors whitespace-nowrap shrink-0"
+            style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}
+          >
+            编辑
+          </button>
+          {!isSettled && (
+            <button
+              onClick={() => $onConfirmSettle?.(order.id)}
+              className="px-2.5 py-1.5 text-xs rounded-lg font-medium transition-colors whitespace-nowrap shrink-0"
+              style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}
+            >
+              结清
+            </button>
+          )}
+          <button
+            onClick={() => {
+              if (!window.confirm('确认删除这张订单？')) return;
+              if (!window.confirm('再次确认：订单将移入回收站，可随时恢复。确定删除？')) return;
+              $handleDelete(order.id);
+            }}
+            className="px-2.5 py-1.5 text-xs rounded-lg font-medium transition-colors whitespace-nowrap shrink-0"
+            style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}
+          >
+            删除
+          </button>
+        </div>
+      )}
+
+      {/* 担保物快捷编辑面板 */}
+      {!previewMode && !isInvited && isAdmin && showCollateralPanel && (
+        <div className="px-4 pt-3 pb-4 border-t space-y-2" style={{ borderColor: '#E5E7EB', backgroundColor: '#FAFBFF' }}>
+          <div className="text-xs font-medium mb-1" style={{ color: '#1A2340' }}>担保编辑</div>
+          {collateralEditItems.map((item, idx) => (
+            <div key={idx} className="rounded-xl border border-gray-200 bg-white p-2.5 space-y-1.5">
+              <div className="flex gap-2 items-center">
+                <select
+                  value={item.coin}
+                  onChange={e => setCollateralEditItems(prev => prev.map((a, i) => i === idx ? { ...a, coin: e.target.value } : a))}
+                  className="px-2 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-blue-200 appearance-none"
+                  style={{ width: '44%', backgroundColor: '#fff', color: (COIN_COLORS as any)[item.coin] || '#1A2340' }}
+                >
+                  {['CNY', ...COIN_OPTIONS.filter(c => c !== 'CNY')].map(c => (
+                    <option key={c} value={c}>{c === 'CNY' ? '元(CNY)' : c}</option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={item.qty}
+                  onChange={e => setCollateralEditItems(prev => prev.map((a, i) => i === idx ? { ...a, qty: e.target.value } : a))}
+                  className="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-blue-200"
+                  placeholder="数量"
+                />
+                <button
+                  type="button"
+                  onClick={() => setCollateralEditItems(prev => prev.filter((_, i) => i !== idx))}
+                  className="w-6 h-6 flex items-center justify-center rounded-full bg-red-50 text-red-400 text-sm shrink-0"
+                >×</button>
+              </div>
+              <input
+                type="text"
+                value={item.note || ''}
+                onChange={e => setCollateralEditItems(prev => prev.map((a, i) => i === idx ? { ...a, note: e.target.value } : a))}
+                className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-blue-200"
+                placeholder="备注（选填）"
+              />
+              {/* 每条担保独立的约等于显示控制 */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-gray-400 shrink-0">约等于：</span>
+                {(['hidden', 'U', 'CNY'] as const).map(opt => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => setCollateralItemApprox(prev => ({ ...prev, [String(idx)]: opt }))}
+                    className="flex-1 py-1 text-xs rounded-lg border transition-colors"
+                    style={{
+                      backgroundColor: (collateralItemApprox[String(idx)] ?? 'U') === opt ? '#3B82F6' : '#fff',
+                      color: (collateralItemApprox[String(idx)] ?? 'U') === opt ? '#fff' : '#6B7280',
+                      borderColor: (collateralItemApprox[String(idx)] ?? 'U') === opt ? '#3B82F6' : '#E5E7EB'
+                    }}
+                  >{opt === 'hidden' ? '不显示' : opt === 'U' ? '≈ u' : '≈ 元'}</button>
+                ))}
+              </div>
+            </div>
+          ))}
+          {/* 担保价值约等于全局控制 */}
+          <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 space-y-1.5">
+            <div className="text-xs text-gray-500">担保价值约等于</div>
+            <div className="flex gap-2">
+              {(['hidden', 'U', 'CNY'] as const).map(opt => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setCollateralValueApprox(opt)}
+                  className="flex-1 py-1 text-xs rounded-lg border transition-colors"
+                  style={{
+                    backgroundColor: collateralValueApprox === opt ? '#3B82F6' : '#fff',
+                    color: collateralValueApprox === opt ? '#fff' : '#6B7280',
+                    borderColor: collateralValueApprox === opt ? '#3B82F6' : '#E5E7EB'
+                  }}
+                >{opt === 'hidden' ? '不显示' : opt === 'U' ? '≈ u' : '≈ 元'}</button>
+              ))}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCollateralEditItems(prev => [...prev, { coin: 'BTC', qty: '', note: '' }])}
+            className="w-full py-2 rounded-xl border border-dashed border-blue-300 text-xs text-blue-500 font-medium flex items-center justify-center gap-1"
+          ><span className="text-sm leading-none">+</span> 添加担保</button>
+          <button
+            type="button"
+            onClick={handleSaveCollateral}
+            disabled={_intSaveCollateralMutation.isPending}
+            className="w-full py-2 rounded-xl text-xs font-semibold text-white transition-all disabled:opacity-60"
+            style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
+          >{_intSaveCollateralMutation.isPending ? '保存中…' : '保存担保'}</button>
+          {/* 操作日志区 */}
+          <CollateralLogSection orderId={Number(order.id)} ledgerId={ledgerId} refreshKey={_intSaveCollateralMutation.isSuccess} />
         </div>
       )}
 
@@ -1591,20 +1939,6 @@ export function FunderOrderCard({
 
       {/* 结息面板 + 备注区 */}
       <div className="px-4 pt-3 pb-3 border-t border-blue-100">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium" style={{ color: '#1A2340' }}>
-            {isInvited ? '已结佣金' : '已结利息'}：<span style={{ color: '#16A34A' }}>{displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}</span>
-          </span>
-          {isAdmin && (
-          <button
-            onClick={() => { $setShowPaymentPanel($showPaymentPanel === order.id ? null : order.id); $setPaymentForm(() => ({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' })); }}
-            className="text-xs px-3 py-1 rounded-full font-medium"
-            style={{ backgroundColor: '#EEF4FF', color: '#1A56DB' }}
-          >
-            {$showPaymentPanel === order.id ? '收起' : '+ 记录结息'}
-          </button>
-          )}
-        </div>
 
         {$showPaymentPanel === order.id && (
           <div className="bg-blue-50 rounded-xl p-3 mb-3 space-y-2">
@@ -1641,6 +1975,47 @@ export function FunderOrderCard({
                 </div>
               </div>
             </div>
+            {/* 结算起止日期 */}
+            <div className="flex gap-2">
+              <div className="flex-1 min-w-0">
+                <label className="block text-xs text-gray-500 mb-1">起算日（可选）</label>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowPeriodStartPicker(v => !v)}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-left focus:outline-none"
+                    style={{ backgroundColor: '#fff', color: ($paymentForm as any).periodStart ? '#1A2340' : '#9CA3AF', display: 'block', boxSizing: 'border-box' }}
+                  >
+                    {($paymentForm as any).periodStart || '起算日'}
+                  </button>
+                  {showPeriodStartPicker && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }} onClick={() => setShowPeriodStartPicker(false)}>
+                      <div className="bg-white rounded-xl shadow-2xl mx-4 w-full" style={{ maxWidth: 320 }} onClick={e => e.stopPropagation()}>
+                        <DatePicker value={($paymentForm as any).periodStart || ''} onChange={v => { $setPaymentForm((f: any) => ({ ...f, periodStart: v })); setShowPeriodStartPicker(false); }} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <label className="block text-xs text-gray-500 mb-1">截止日（可选）</label>
+                <div className="relative">
+                  <button
+                    onClick={() => setShowPeriodEndPicker(v => !v)}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm text-left focus:outline-none"
+                    style={{ backgroundColor: '#fff', color: ($paymentForm as any).periodEnd ? '#1A2340' : '#9CA3AF', display: 'block', boxSizing: 'border-box' }}
+                  >
+                    {($paymentForm as any).periodEnd || '截止日'}
+                  </button>
+                  {showPeriodEndPicker && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }} onClick={() => setShowPeriodEndPicker(false)}>
+                      <div className="bg-white rounded-xl shadow-2xl mx-4 w-full" style={{ maxWidth: 320 }} onClick={e => e.stopPropagation()}>
+                        <DatePicker value={($paymentForm as any).periodEnd || ''} onChange={v => { $setPaymentForm((f: any) => ({ ...f, periodEnd: v })); setShowPeriodEndPicker(false); }} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
             <div>
               <label className="block text-xs text-gray-500 mb-1">备注（可选）</label>
               <input
@@ -1655,7 +2030,7 @@ export function FunderOrderCard({
             <button
               onClick={() => {
                 if (!$paymentForm.amount || parseFloat($paymentForm.amount) <= 0) { toast.error('请填写结息金额'); return; }
-                $addPaymentMutation.mutate({ ledgerId, orderId: order.id, amount: parseFloat($paymentForm.amount), currency: $paymentForm.currency || 'U', exchangeRate: parseFloat($paymentForm.exchangeRate || '7.0'), payDate: $paymentForm.payDate || new Date().toISOString().slice(0, 10), note: $paymentForm.note || undefined });
+                $addPaymentMutation.mutate({ ledgerId, orderId: order.id, amount: parseFloat($paymentForm.amount), currency: $paymentForm.currency || 'U', exchangeRate: parseFloat($paymentForm.exchangeRate || '7.0'), payDate: $paymentForm.payDate || new Date().toISOString().slice(0, 10), note: $paymentForm.note || undefined, periodStart: ($paymentForm as any).periodStart || undefined, periodEnd: ($paymentForm as any).periodEnd || undefined });
               }}
               disabled={$addPaymentMutation.isPending}
               className="w-full py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50"
@@ -1666,37 +2041,188 @@ export function FunderOrderCard({
           </div>
         )}
 
+        {/* 利息约等于快捷配置（结息面板展开时显示） */}
+        {$showPaymentPanel === order.id && (
+          <div className="mt-2 mb-2 rounded-xl p-3 space-y-2" style={{ background: '#F0F4FF' }}>
+            <div className="text-xs font-medium mb-1" style={{ color: '#3B82F6' }}>利息约等于显示</div>
+            {([
+              { key: 'approxInterest' as const, label: '待结利息约等于' },
+              { key: 'approxPaid' as const, label: '已结利息约等于' },
+            ]).map(({ key, label }) => (
+              <div key={key}>
+                <div className="text-xs text-gray-500 mb-1">{label}</div>
+                <div className="flex gap-1.5">
+                  {(['hidden', 'U', 'CNY'] as const).map(opt => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setInterestApproxConfig(c => ({ ...c, [key]: opt }))}
+                      className="flex-1 py-1 text-xs rounded-lg border transition-colors"
+                      style={{
+                        background: interestApproxConfig[key] === opt ? '#3B82F6' : '#fff',
+                        color: interestApproxConfig[key] === opt ? '#fff' : '#6B7280',
+                        borderColor: interestApproxConfig[key] === opt ? '#3B82F6' : '#E5E7EB',
+                      }}
+                    >
+                      {opt === 'hidden' ? '不显示' : opt === 'U' ? '≈ u' : '≈ 元'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => {
+                let newDC: Record<string, any> = {};
+                try { const rawDC = order.display_config; newDC = rawDC ? (typeof rawDC === 'string' ? JSON.parse(rawDC) : { ...rawDC }) : {}; } catch {}
+                newDC.approxInterest = interestApproxConfig.approxInterest;
+                newDC.approxPaid = interestApproxConfig.approxPaid;
+                _intSaveInterestApproxMutation.mutate({ id: Number(order.id), ledgerId, displayConfig: newDC });
+              }}
+              disabled={_intSaveInterestApproxMutation.isPending}
+              className="w-full py-1.5 rounded-lg text-white text-xs font-medium disabled:opacity-50"
+              style={{ background: '#3B82F6' }}
+            >
+              {_intSaveInterestApproxMutation.isPending ? '保存中...' : '保存显示设置'}
+            </button>
+          </div>
+        )}
+
         {$showPaymentPanel === order.id && Array.isArray($interestPayments) && $interestPayments.length > 0 && (
           <div className="space-y-1.5">
             {$interestPayments.map((p: any) => (
-              <div key={p.id} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
-                <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                  <span className="font-medium" style={{ color: '#16A34A' }}>+{parseFloat(p.amount).toFixed(2)} {interestUnit}</span>
-                  {p.note && <span className="text-gray-400 ml-1 truncate">{p.note}</span>}
-                </div>
-                <div className="flex items-center gap-2 ml-2 flex-shrink-0">
-                  {(p.pay_date || p.payment_date) && <span className="text-gray-400">{p.pay_date || p.payment_date}</span>}
-                  {(p.operatorName || p.username) && <span className="text-gray-300">·</span>}
-                  {(p.operatorName || p.username) && <span className="text-gray-400">{p.operatorName || p.username}</span>}
-                  <button
-                    onClick={() => {
-                      if (window.confirm('确认删除这条结息记录？')) {
-                        $deletePaymentMutation.mutate({ ledgerId, paymentId: p.id });
-                      }
-                    }}
-                    className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors"
-                    title="删除"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                  </button>
-                </div>
+              <div key={p.id}>
+                {editPaymentId === p.id ? (
+                  /* 内联编辑表单 */
+                  <div className="bg-blue-50 rounded-xl p-3 space-y-2 border border-blue-100">
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 mb-1">金额</label>
+                        <input type="number" value={editPaymentForm.amount} onChange={e => setEditPaymentForm(f => ({ ...f, amount: e.target.value }))} className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none" style={{ boxSizing: 'border-box' }} />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs text-gray-500 mb-1">币种</label>
+                        <select value={editPaymentForm.currency} onChange={e => setEditPaymentForm(f => ({ ...f, currency: e.target.value as 'CNY'|'U' }))} className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none" style={{ boxSizing: 'border-box' }}>
+                          <option value="U">u (USDT)</option>
+                          <option value="CNY">元 (CNY)</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="flex-1 min-w-0">
+                        <label className="block text-xs text-gray-500 mb-1">结息日期</label>
+                        <div className="relative">
+                          <button onClick={() => setShowEditDatePicker(v => !v)} className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm text-left focus:outline-none" style={{ backgroundColor: '#fff', color: editPaymentForm.payDate ? '#1A2340' : '#9CA3AF', boxSizing: 'border-box' }}>{editPaymentForm.payDate || '选择日期'}</button>
+                          {showEditDatePicker && (<div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }} onClick={() => setShowEditDatePicker(false)}><div className="bg-white rounded-xl shadow-2xl mx-4 w-full" style={{ maxWidth: 320 }} onClick={e => e.stopPropagation()}><DatePicker value={editPaymentForm.payDate} onChange={v => { setEditPaymentForm(f => ({ ...f, payDate: v })); setShowEditDatePicker(false); }} /></div></div>)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="flex-1 min-w-0">
+                        <label className="block text-xs text-gray-500 mb-1">起算日</label>
+                        <div className="relative">
+                          <button onClick={() => setShowEditStartPicker(v => !v)} className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm text-left focus:outline-none" style={{ backgroundColor: '#fff', color: editPaymentForm.periodStart ? '#1A2340' : '#9CA3AF', boxSizing: 'border-box' }}>{editPaymentForm.periodStart || '起算日'}</button>
+                          {showEditStartPicker && (<div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }} onClick={() => setShowEditStartPicker(false)}><div className="bg-white rounded-xl shadow-2xl mx-4 w-full" style={{ maxWidth: 320 }} onClick={e => e.stopPropagation()}><DatePicker value={editPaymentForm.periodStart} onChange={v => { setEditPaymentForm(f => ({ ...f, periodStart: v })); setShowEditStartPicker(false); }} /></div></div>)}
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <label className="block text-xs text-gray-500 mb-1">截止日</label>
+                        <div className="relative">
+                          <button onClick={() => setShowEditEndPicker(v => !v)} className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm text-left focus:outline-none" style={{ backgroundColor: '#fff', color: editPaymentForm.periodEnd ? '#1A2340' : '#9CA3AF', boxSizing: 'border-box' }}>{editPaymentForm.periodEnd || '截止日'}</button>
+                          {showEditEndPicker && (<div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }} onClick={() => setShowEditEndPicker(false)}><div className="bg-white rounded-xl shadow-2xl mx-4 w-full" style={{ maxWidth: 320 }} onClick={e => e.stopPropagation()}><DatePicker value={editPaymentForm.periodEnd} onChange={v => { setEditPaymentForm(f => ({ ...f, periodEnd: v })); setShowEditEndPicker(false); }} /></div></div>)}
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">备注</label>
+                      <input type="text" value={editPaymentForm.note} onChange={e => setEditPaymentForm(f => ({ ...f, note: e.target.value }))} className="w-full px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none" placeholder="结息说明" style={{ boxSizing: 'border-box' }} />
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => setEditPaymentId(null)} className="flex-1 py-1.5 rounded-lg border border-gray-200 text-xs text-gray-500">取消</button>
+                      <button
+                        onClick={() => {
+                          if (!editPaymentForm.amount || parseFloat(editPaymentForm.amount) <= 0) { toast.error('请填写金额'); return; }
+                          _intUpdatePaymentMutation.mutate({ ledgerId, paymentId: p.id, orderId: order.id, amount: parseFloat(editPaymentForm.amount), currency: editPaymentForm.currency, exchangeRate: parseFloat(editPaymentForm.exchangeRate || '7.0'), payDate: editPaymentForm.payDate, note: editPaymentForm.note || undefined, periodStart: editPaymentForm.periodStart || undefined, periodEnd: editPaymentForm.periodEnd || undefined });
+                        }}
+                        disabled={_intUpdatePaymentMutation.isPending}
+                        className="flex-1 py-1.5 rounded-lg text-white text-xs font-medium disabled:opacity-50"
+                        style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
+                      >{_intUpdatePaymentMutation.isPending ? '保存中...' : '保存'}</button>
+                    </div>
+                  </div>
+                ) : (
+                  /* 展示行 */
+                  <div className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-medium" style={{ color: '#16A34A' }}>+{parseFloat(p.amount).toFixed(2)} {(p.currency || 'U') === 'CNY' ? '元' : 'u'}</span>
+                        {(p.pay_date || p.payment_date) && <span className="text-gray-400">{fmtDate(p.pay_date || p.payment_date)}</span>}
+                      </div>
+                      {(p.period_start || p.period_end) && <div className="text-[10px] text-gray-400 mt-0.5">{p.period_start ? fmtDate(p.period_start) : ''}{p.period_start && p.period_end ? ' → ' : ''}{p.period_end ? fmtDate(p.period_end) : ''}</div>}
+                      {p.note && <div className="text-[10px] text-gray-400 mt-0.5 truncate">{p.note}</div>}
+                    </div>
+                    <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                      <button
+                        onClick={() => { setEditPaymentId(p.id); setEditPaymentForm({ amount: String(p.amount), currency: (p.currency || 'U') as 'CNY'|'U', exchangeRate: String(p.exchange_rate || 7.0), payDate: p.pay_date ? String(p.pay_date).slice(0,10) : '', note: p.note || '', periodStart: p.period_start ? String(p.period_start).slice(0,10) : '', periodEnd: p.period_end ? String(p.period_end).slice(0,10) : '' }); }}
+                        className="p-1 rounded hover:bg-blue-50 text-blue-400 hover:text-blue-600 transition-colors"
+                        title="编辑"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </button>
+                      <button
+                        onClick={() => { if (window.confirm('确认删除这条结息记录？')) { $deletePaymentMutation.mutate({ ledgerId, paymentId: p.id, orderId: order.id }); } }}
+                        className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors"
+                        title="删除"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         )}
 
+        {/* 结息操作日志 */}
+        {$showPaymentPanel === order.id && isAdmin && (
+          <div className="mt-1">
+            <button
+              onClick={() => { setShowInterestLog(v => !v); }}
+              className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors py-1"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              操作日志
+              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: showInterestLog ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            {showInterestLog && (
+              <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-1.5">
+                {interestLogQuery.isLoading && <div className="text-xs text-gray-400 text-center py-2">加载中...</div>}
+                {!interestLogQuery.isLoading && (!interestLogQuery.data?.logs || interestLogQuery.data.logs.length === 0) && (
+                  <div className="text-xs text-gray-400 text-center py-2">暂无操作记录</div>
+                )}
+                {interestLogQuery.data?.logs?.map((log: any) => {
+                  const actionLabel: Record<string, string> = { interest_add: '新增结息', interest_update: '编辑结息', interest_delete: '删除结息', collateral_update: '编辑担保' };
+                  const dt = log.createdAt ? new Date(log.createdAt) : null;
+                  const dtStr = dt ? `${String(dt.getFullYear()).slice(2)}.${String(dt.getMonth()+1).padStart(2,'0')}.${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}` : '';
+                  return (
+                    <div key={log.id} className="text-xs border-b border-gray-100 last:border-0 pb-1.5 last:pb-0">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium" style={{ color: '#1A2340' }}>{actionLabel[log.action] || log.action}</span>
+                        <span className="text-gray-400">{dtStr}</span>
+                      </div>
+                      {log.summary && <div className="text-gray-500 mt-0.5 leading-relaxed">{log.summary}</div>}
+                      {log.operatorName && <div className="text-gray-400 mt-0.5">操作人：{log.operatorName}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* 公开备注区域 */}
-        <FunderNoteRow
+        {!previewMode && <FunderNoteRow
           orderId={order.id}
           ledgerId={ledgerId}
           initialNote={order.public_note || ''}
@@ -1704,11 +2230,11 @@ export function FunderOrderCard({
           currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar || (membersData as any[])?.find((u: any) => u.userId === (currentUser as any).id)?.avatar || undefined } : undefined}
           isAdmin={isAdmin}
           membersData={membersData as any[]}
-        />
+        />}
       </div>
 
       {/* 状态操作底部弹窗 */}
-      {showStatusSheet && (
+      {!previewMode && showStatusSheet && (
         <div className="fixed inset-0 z-[300] flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} onClick={() => setShowStatusSheet(false)}>
           <div className="bg-white rounded-t-2xl w-full max-w-md px-5 pt-5 pb-8" onClick={e => e.stopPropagation()}>
             <div className="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-5" />
@@ -1775,3 +2301,61 @@ export function FunderOrderCard({
   </>);
 }
 // ===== END FunderOrderCard =====
+
+// 担保操作日志子组件
+function CollateralLogSection({ orderId, ledgerId, refreshKey }: { orderId: number; ledgerId: number; refreshKey: boolean }) {
+  const [open, setOpen] = useState(false);
+  const logsQuery = trpc.ledger.financeGetOrderLogs.useQuery(
+    { orderId, ledgerId },
+    { enabled: open, staleTime: 0 }
+  );
+  // refreshKey 变化时重新获取
+  React.useEffect(() => {
+    if (open) logsQuery.refetch();
+  }, [refreshKey]);
+
+  const actionLabel = (action: string) => {
+    if (action === 'collateral_update') return '担保变更';
+    return action;
+  };
+
+  const fmtTime = (dt: any) => {
+    if (!dt) return '';
+    const d = new Date(dt);
+    const yy = String(d.getFullYear()).slice(2);
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mi = String(d.getMinutes()).padStart(2, '0');
+    return `${yy}.${mm}.${dd} ${hh}:${mi}`;
+  };
+
+  return (
+    <div className="mt-1">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between py-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+      >
+        <span>操作日志{logsQuery.data ? ` (${logsQuery.data.logs.length})` : ''}</span>
+        <span>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="space-y-1.5 mt-1">
+          {logsQuery.isLoading && <div className="text-xs text-gray-400 text-center py-2">加载中…</div>}
+          {logsQuery.data?.logs.length === 0 && <div className="text-xs text-gray-400 text-center py-2">暂无日志</div>}
+          {logsQuery.data?.logs.map(log => (
+            <div key={log.id} className="rounded-lg bg-gray-50 border border-gray-100 px-2.5 py-2 space-y-0.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium" style={{ color: '#1A2340' }}>{actionLabel(log.action)}</span>
+                <span className="text-[10px] text-gray-400">{fmtTime(log.createdAt)}</span>
+              </div>
+              <div className="text-[11px] text-gray-500">{log.note}</div>
+              <div className="text-[10px] text-gray-400">操作人: {log.operatorName}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

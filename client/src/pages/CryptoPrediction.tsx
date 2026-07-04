@@ -3176,7 +3176,9 @@ export default function CryptoPrediction() {
                 <div className="text-gray-400 text-sm">管理员将为您配置融资订单</div>
               </div>
             ) : (() => {
-              const sortedOrders = [...financeOrders].sort((a: any, b: any) => {
+              // 过滤掉已删除（deleted）和已结清（settled/completed/cancelled）的订单，普通用户只看进行中
+              const activeOrders = financeOrders.filter((o: any) => o.status === 'active');
+              const sortedOrders = [...activeOrders].sort((a: any, b: any) => {
                 const aSold = String(a.admin_note || '').includes('[已卖出]') ? 1 : 0;
                 const bSold = String(b.admin_note || '').includes('[已卖出]') ? 1 : 0;
                 if (aSold !== bSold) return aSold - bSold;
@@ -3186,13 +3188,13 @@ export default function CryptoPrediction() {
               const myOrders = sortedOrders.filter((o: any) => !o._isParticipant && !o._fromFunder);
               const sharedOrders = sortedOrders.filter((o: any) => o._isParticipant || o._fromFunder);
 
-              // 自己订单按担保类型分组
-              const mySharedColl = myOrders.filter((o: any) => o.status === 'active' && o.collateral_mode === 'shared');
-              const mySoloColl = myOrders.filter((o: any) => o.status === 'active' && o.collateral_mode !== 'shared');
-              const mySettled = myOrders.filter((o: any) => o.status !== 'active');
+              // 自己订单按担保类型分组（已在源头过滤为 active，无已结清订单）
+              const mySharedColl = myOrders.filter((o: any) => o.collateral_mode === 'shared');
+              const mySoloColl = myOrders.filter((o: any) => o.collateral_mode !== 'shared');
+              const mySettled: any[] = []; // 已过滤，不再显示已结清
               // 共享订单（别人分享给我的）
-              const sharedActiveList = sharedOrders.filter((o: any) => o.status === 'active');
-              const sharedSettledList = sharedOrders.filter((o: any) => o.status !== 'active');
+              const sharedActiveList = sharedOrders;
+              const sharedSettledList: any[] = []; // 已过滤，不再显示已结清
 
               const renderCard = (order: any) => (
                 <FunderOrderCard
@@ -3311,3 +3313,4 @@ export default function CryptoPrediction() {
 
   );
 }
+
