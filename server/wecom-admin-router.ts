@@ -1480,3 +1480,17 @@ router.get("/api/admin/wecom/describe-af-orders", requireSuperAdmin, async (req:
     return res.status(500).json({ ok: false, error: e.message });
   }
 });
+
+// POST /api/admin/wecom/backfill-embeddings - 批量回填知识库向量
+router.post("/api/admin/wecom/backfill-embeddings", requireSuperAdmin, async (req: Request, res: Response) => {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return res.status(500).json({ ok: false, error: "db连接失败" });
+    const { backfillAllMissing } = await import("../wecom-vector");
+    const result = await backfillAllMissing(conn, { limit: 400 });
+    conn.end?.();
+    return res.json({ ok: true, ...result });
+  } catch (e: any) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+});
