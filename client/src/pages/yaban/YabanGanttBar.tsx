@@ -103,14 +103,14 @@ export default function YabanGanttBar({
         if (e <= s) return null;
         const l = pct(s), w = Math.max(pct(e) - pct(s), 2);
         const st = STATUS[a.status] || STATUS.booked;
-        const rL = 10, rR = 10; // 始终保持圆角，贴边时由容器 overflow:hidden 自然裁剪
+        // 始终保持四角圆角，上下各留 2px 间距避免相邻条紧贴
         return (
           <div
             key={ai}
             onClick={ev => { ev.stopPropagation(); onApptClick && onApptClick(a.id); }}
             style={{
-              position: "absolute", left: `${l}%`, width: `${w}%`, top: 0, bottom: 0,
-              borderRadius: `${rL}px ${rR}px ${rR}px ${rL}px`,
+              position: "absolute", left: `${l}%`, width: `${w}%`, top: 2, bottom: 2,
+              borderRadius: 10,
               background: st.color, boxShadow: "0 1px 2px rgba(30,90,160,.12)",
               display: "flex", alignItems: "center", padding: "0 4px", overflow: "hidden", cursor: "pointer",
             }}
