@@ -108,11 +108,17 @@ export default function AfFeeDetail() {
   };
 
   // 顶部主 Tab：谷底增筹（当前 af_orders）/ 融资付息（ledger_orders, finance）
+  // 谷底增筹搜索关键词
+  const [gujianSearch, setGujianSearch] = useState('');
   // 融资付息订单表格排序
   const [finSortKey, setFinSortKey] = useState<string | null>(null);
   const [finSortAsc, setFinSortAsc] = useState(true);
   // 融资付息订单搜索关键词
   const [finSearch, setFinSearch] = useState('');
+  // 融资付息分组筛选：列表/按日期/按人员/按币种
+  const [finGroupFilter, setFinGroupFilter] = useState<'list' | 'byDate' | 'byPerson' | 'byCoin'>('list');
+  // 融资付息收/付方向筛选：全部/我方收息/我方付息
+  const [finDirectionFilter, setFinDirectionFilter] = useState<'all' | 'collect' | 'pay'>('all');
   // 融资付息收费弹窗
   const [finChargeModal, setFinChargeModal] = useState<{ order: any } | null>(null);
   // 已付利息记录弹窗
@@ -201,9 +207,21 @@ export default function AfFeeDetail() {
     return { ...u, ongoingFee, settledFee, totalFee, ongoingCount, settledCount };
   }).sort((a, b) => b.totalFee - a.totalFee);
 
+  const gujianKw = gujianSearch.trim().toLowerCase();
   const filteredGroups = userGroups.map(g => ({
     ...g,
-    orders: g.orders.filter(o => feeFilter === 'all' || o.feeType === feeFilter),
+    orders: g.orders.filter(o => {
+      // 状态筛选
+      if (feeFilter !== 'all' && o.feeType !== feeFilter) return false;
+      // 搜索关键词过滤
+      if (gujianKw) {
+        const nick = (o.nickname || o.username || '').toLowerCase();
+        const orderNo = (o.orderNo || '').toLowerCase();
+        const coin = (o.coin || '').toLowerCase();
+        if (!nick.includes(gujianKw) && !orderNo.includes(gujianKw) && !coin.includes(gujianKw)) return false;
+      }
+      return true;
+    }),
   })).filter(g => g.orders.length > 0);
 
   // 批量查询各成员的【全局】钱包余额（口径与钱包页一致）
@@ -328,6 +346,22 @@ export default function AfFeeDetail() {
       {/* ── 筛选 Tab（仅谷底增筹） ── */}
       {mainTab === 'gujian' && (
       <div className="bg-white border-b border-gray-100 px-3 py-2 sticky top-0 z-10">
+        {/* 搜索框 */}
+        <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 mb-2 border border-gray-100">
+          <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" /></svg>
+          <input
+            type="text"
+            value={gujianSearch}
+            onChange={e => setGujianSearch(e.target.value)}
+            placeholder="搜索用户名、订单号、币种…"
+            className="flex-1 text-sm outline-none bg-transparent text-gray-700 placeholder-gray-400"
+          />
+          {gujianSearch && (
+            <button type="button" onClick={() => setGujianSearch('')} className="text-gray-400 hover:text-gray-600 flex-shrink-0">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          )}
+        </div>
         <div className="flex gap-2 mb-2">
           {(['all', 'ongoing', 'settled'] as const).map(key => {
             const label = key === 'all' ? `全部 ${userGroups.length} 人` : key === 'ongoing' ? '进行中' : '已结清';
@@ -943,17 +977,47 @@ export default function AfFeeDetail() {
         ) : (() => {
           const statusMap: Record<string, string> = { active: '进行中', settled: '已结清', completed: '已结清', cancelled: '已取消' };
           const isFinSettled = (o: any) => o.status === 'settled' || o.status === 'completed';
+          // 收/付方向过滤：principal_lent_out=1 表示我方出借（收息），=0 表示我方借入（付息）
+          const dirFiltered = financeOrders.filter((o: any) => {
+            if (finDirectionFilter === 'collect') return o.principal_lent_out == 1;
+            if (finDirectionFilter === 'pay') return o.principal_lent_out != 1;
+            return true;
+          });
           // 搜索过滤
           const kw = finSearch.trim().toLowerCase();
-          const finFiltered = kw ? financeOrders.filter((o: any) => {
+          const finFiltered = kw ? dirFiltered.filter((o: any) => {
             const user = (o.username || o.userName || '').toLowerCase();
             const orderNo = (o.order_no || '').toLowerCase();
             const start = (o.interest_start_date || o.buy_date || '').toLowerCase();
             const coin = (o.coin || '').toLowerCase();
             return user.includes(kw) || orderNo.includes(kw) || start.includes(kw) || coin.includes(kw);
-          }) : financeOrders;
+          }) : dirFiltered;
           const finOngoing = finFiltered.filter((o: any) => !isFinSettled(o));
           const finSettled = finFiltered.filter((o: any) => isFinSettled(o));
+          // 收息汇总（我方出借）
+          const collectTotal = finFiltered.filter((o: any) => o.principal_lent_out == 1).reduce((s: number, o: any) => {
+            const b = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
+            const r = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
+            const st = o.interest_start_date || o.buy_date || '';
+            if (!b || r == null || !st) return s;
+            const sd = new Date(st); if (isNaN(sd.getTime())) return s;
+            const startDay = new Date(sd.getFullYear(), sd.getMonth(), sd.getDate());
+            const todayDay = new Date(); todayDay.setHours(0,0,0,0);
+            const d = Math.max(1, Math.floor((todayDay.getTime() - startDay.getTime()) / 86400000) + 1);
+            return s + b * (r / 100) / 365 * d;
+          }, 0);
+          // 付息汇总（我方借入）
+          const payTotal = finFiltered.filter((o: any) => o.principal_lent_out != 1).reduce((s: number, o: any) => {
+            const b = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
+            const r = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
+            const st = o.interest_start_date || o.buy_date || '';
+            if (!b || r == null || !st) return s;
+            const sd = new Date(st); if (isNaN(sd.getTime())) return s;
+            const startDay = new Date(sd.getFullYear(), sd.getMonth(), sd.getDate());
+            const todayDay = new Date(); todayDay.setHours(0,0,0,0);
+            const d = Math.max(1, Math.floor((todayDay.getTime() - startDay.getTime()) / 86400000) + 1);
+            return s + b * (r / 100) / 365 * d;
+          }, 0);
           const renderFinTable = (rows: any[], title: string) => {
             if (rows.length === 0) return null;
             // 排序处理
@@ -1113,7 +1177,7 @@ export default function AfFeeDetail() {
             );
           };
           return (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {/* 搜索框 */}
               <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 shadow-sm border border-gray-100">
                 <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" /></svg>
@@ -1130,11 +1194,234 @@ export default function AfFeeDetail() {
                   </button>
                 )}
               </div>
+
+              {/* 收/付方向筛选 + 汇总卡片 */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                {/* 按钮行 */}
+                <div className="flex gap-2 px-3 pt-3 pb-2">
+                  {([
+                    { key: 'all' as const, label: `全部 ${financeOrders.length}单` },
+                    { key: 'collect' as const, label: '我方收息' },
+                    { key: 'pay' as const, label: '我方付息' },
+                  ]).map(t => (
+                    <button key={t.key} onClick={() => setFinDirectionFilter(t.key)}
+                      className="flex-1 py-1.5 rounded-full text-xs font-medium transition-all"
+                      style={finDirectionFilter === t.key
+                        ? { background: '#2563eb', color: '#fff' }
+                        : { background: '#eff2f9', color: '#6b7280' }}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                {/* 汇总小卡片：收息 vs 付息 */}
+                <div className="flex border-t border-gray-50">
+                  <div className="flex-1 px-3 py-2 text-center border-r border-gray-50">
+                    <p className="text-[10px] text-gray-400 mb-0.5">我方收息（待收）</p>
+                    <p className="text-sm font-bold" style={{ color: '#16a34a' }}>+{collectTotal.toFixed(2)} <span className="text-[10px] font-normal text-gray-400">U</span></p>
+                  </div>
+                  <div className="flex-1 px-3 py-2 text-center">
+                    <p className="text-[10px] text-gray-400 mb-0.5">我方付息（待付）</p>
+                    <p className="text-sm font-bold" style={{ color: '#dc2626' }}>-{payTotal.toFixed(2)} <span className="text-[10px] font-normal text-gray-400">U</span></p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 分组筛选按钮 */}
+              <div className="flex gap-2">
+                {([
+                  { key: 'list' as const, label: '列表' },
+                  { key: 'byDate' as const, label: '按日期' },
+                  { key: 'byPerson' as const, label: '按人员' },
+                  { key: 'byCoin' as const, label: '按币种' },
+                ]).map(t => (
+                  <button key={t.key} onClick={() => setFinGroupFilter(t.key)}
+                    className="flex-1 py-2 rounded-full text-sm font-medium transition-all"
+                    style={finGroupFilter === t.key
+                      ? { background: '#2563eb', color: '#fff' }
+                      : { background: '#eff2f9', color: '#6b7280' }}>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
               {kw && finOngoing.length === 0 && finSettled.length === 0 && (
                 <div className="text-center py-8 text-gray-400 text-sm">未找到匹配「{finSearch}」的订单</div>
               )}
-              {renderFinTable(finOngoing, '进行中')}
-              {renderFinTable(finSettled, '已结清')}
+
+              {/* 列表视图 */}
+              {finGroupFilter === 'list' && (
+                <>
+                  {renderFinTable(finOngoing, '进行中')}
+                  {renderFinTable(finSettled, '已结清')}
+                </>
+              )}
+
+              {/* 按日期视图 */}
+              {finGroupFilter === 'byDate' && (() => {
+                const dateMap = new Map<string, any[]>();
+                for (const o of finFiltered) {
+                  const st = o.interest_start_date || o.buy_date || '';
+                  const key = st ? st.slice(0, 10) : '日期未知';
+                  if (!dateMap.has(key)) dateMap.set(key, []);
+                  dateMap.get(key)!.push(o);
+                }
+                const sortedDates = Array.from(dateMap.keys()).sort((a, b) => b.localeCompare(a));
+                if (sortedDates.length === 0) return <div className="text-center py-8 text-gray-400 text-sm">暂无记录</div>;
+                return (
+                  <div className="space-y-2">
+                    {sortedDates.map(dk => {
+                      const items = dateMap.get(dk)!;
+                      const isOpen = expandedDates.has('fin_' + dk);
+                      const totalBase = items.reduce((s, o) => s + (o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0)), 0);
+                      const parts = dk.split('-');
+                      const shortDate = parts.length === 3 ? `${parseInt(parts[1])}月${parseInt(parts[2])}日` : dk;
+                      return (
+                        <div key={dk} className="bg-white rounded shadow-sm overflow-hidden">
+                          <button onClick={() => toggleDate('fin_' + dk)} className="w-full flex items-center justify-between px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-gray-800">{shortDate}</span>
+                              <span className="text-xs text-gray-400">{items.length}单</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-blue-600">{totalBase.toFixed(0)} U</span>
+                              {isOpen ? <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg> : <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>}
+                            </div>
+                          </button>
+                          {isOpen && (
+                            <div className="border-t border-gray-100">
+                              {items.map((o, i) => (
+                                <div key={o.id ?? i} className="flex items-center justify-between px-4 py-2 border-b border-gray-50 last:border-0">
+                                  <div>
+                                    <span className="text-xs font-medium text-gray-700">{o.username || o.userName || '-'}</span>
+                                    <span className="ml-2 text-[10px] text-gray-400">{o.coin || '-'}</span>
+                                    {o.principal_lent_out == 1
+                                      ? <span className="ml-1 text-[10px] px-1 rounded" style={{ background: '#dcfce7', color: '#16a34a' }}>收息</span>
+                                      : <span className="ml-1 text-[10px] px-1 rounded" style={{ background: '#fee2e2', color: '#dc2626' }}>付息</span>
+                                    }
+                                  </div>
+                                  <span className="text-xs font-bold text-gray-700">{o.interest_base != null ? Number(o.interest_base).toFixed(0) : (o.amount != null ? Number(o.amount).toFixed(0) : '-')} U</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+              {/* 按人员视图 */}
+              {finGroupFilter === 'byPerson' && (() => {
+                const personMap = new Map<string, { name: string; orders: any[]; totalBase: number; collectBase: number; payBase: number }>();
+                for (const o of finFiltered) {
+                  const uid = String(o.user_id || o.userId || o.username || 'unknown');
+                  const name = o.username || o.userName || uid;
+                  if (!personMap.has(uid)) personMap.set(uid, { name, orders: [], totalBase: 0, collectBase: 0, payBase: 0 });
+                  const p = personMap.get(uid)!;
+                  const b = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
+                  p.orders.push(o);
+                  p.totalBase += b;
+                  if (o.principal_lent_out == 1) p.collectBase += b; else p.payBase += b;
+                }
+                const persons = Array.from(personMap.values()).sort((a, b) => b.totalBase - a.totalBase);
+                if (persons.length === 0) return <div className="text-center py-8 text-gray-400 text-sm">暂无记录</div>;
+                return (
+                  <div className="space-y-2">
+                    {persons.map(p => {
+                      const isOpen = expandedPersons.has('fin_' + p.name);
+                      return (
+                        <div key={p.name} className="bg-white rounded shadow-sm overflow-hidden">
+                          <button onClick={() => togglePerson('fin_' + p.name)} className="w-full flex items-center justify-between px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-gray-800">{p.name}</span>
+                              <span className="text-xs text-gray-400">{p.orders.length}单</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              {p.collectBase > 0 && <span className="text-xs font-semibold" style={{ color: '#16a34a' }}>+{p.collectBase.toFixed(0)}</span>}
+                              {p.payBase > 0 && <span className="text-xs font-semibold" style={{ color: '#dc2626' }}>-{p.payBase.toFixed(0)}</span>}
+                              {isOpen ? <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg> : <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>}
+                            </div>
+                          </button>
+                          {isOpen && (
+                            <div className="border-t border-gray-100">
+                              {p.orders.map((o, i) => (
+                                <div key={o.id ?? i} className="flex items-center justify-between px-4 py-2 border-b border-gray-50 last:border-0">
+                                  <div>
+                                    <span className="text-xs text-gray-500">{o.interest_start_date || o.buy_date || '-'}</span>
+                                    <span className="ml-2 text-[10px] text-gray-400">{o.coin || '-'}</span>
+                                    {o.principal_lent_out == 1
+                                      ? <span className="ml-1 text-[10px] px-1 rounded" style={{ background: '#dcfce7', color: '#16a34a' }}>收息</span>
+                                      : <span className="ml-1 text-[10px] px-1 rounded" style={{ background: '#fee2e2', color: '#dc2626' }}>付息</span>
+                                    }
+                                  </div>
+                                  <span className="text-xs font-bold text-gray-700">{o.interest_base != null ? Number(o.interest_base).toFixed(0) : (o.amount != null ? Number(o.amount).toFixed(0) : '-')} U</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+              {/* 按币种视图 */}
+              {finGroupFilter === 'byCoin' && (() => {
+                const coinMap = new Map<string, { orders: any[]; totalBase: number; collectBase: number; payBase: number }>();
+                for (const o of finFiltered) {
+                  const coin = o.coin || '未知币种';
+                  if (!coinMap.has(coin)) coinMap.set(coin, { orders: [], totalBase: 0, collectBase: 0, payBase: 0 });
+                  const c = coinMap.get(coin)!;
+                  const b = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
+                  c.orders.push(o);
+                  c.totalBase += b;
+                  if (o.principal_lent_out == 1) c.collectBase += b; else c.payBase += b;
+                }
+                const coins = Array.from(coinMap.entries()).sort((a, b) => b[1].totalBase - a[1].totalBase);
+                if (coins.length === 0) return <div className="text-center py-8 text-gray-400 text-sm">暂无记录</div>;
+                const COIN_COLOR: Record<string, string> = { BTC: '#f59e0b', ETH: '#3b82f6', SOL: '#a855f7' };
+                return (
+                  <div className="space-y-2">
+                    {coins.map(([coin, cg]) => {
+                      const isOpen = expandedCoins.has('fin_' + coin);
+                      return (
+                        <div key={coin} className="bg-white rounded shadow-sm overflow-hidden">
+                          <button onClick={() => toggleCoin('fin_' + coin)} className="w-full flex items-center justify-between px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold" style={{ color: COIN_COLOR[coin] || '#374151' }}>{coin}</span>
+                              <span className="text-xs text-gray-400">{cg.orders.length}单</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              {cg.collectBase > 0 && <span className="text-xs font-semibold" style={{ color: '#16a34a' }}>+{cg.collectBase.toFixed(0)}</span>}
+                              {cg.payBase > 0 && <span className="text-xs font-semibold" style={{ color: '#dc2626' }}>-{cg.payBase.toFixed(0)}</span>}
+                              {isOpen ? <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg> : <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>}
+                            </div>
+                          </button>
+                          {isOpen && (
+                            <div className="border-t border-gray-100">
+                              {cg.orders.map((o, i) => (
+                                <div key={o.id ?? i} className="flex items-center justify-between px-4 py-2 border-b border-gray-50 last:border-0">
+                                  <div>
+                                    <span className="text-xs font-medium text-gray-700">{o.username || o.userName || '-'}</span>
+                                    <span className="ml-2 text-[10px] text-gray-400">{o.interest_start_date || o.buy_date || '-'}</span>
+                                    {o.principal_lent_out == 1
+                                      ? <span className="ml-1 text-[10px] px-1 rounded" style={{ background: '#dcfce7', color: '#16a34a' }}>收息</span>
+                                      : <span className="ml-1 text-[10px] px-1 rounded" style={{ background: '#fee2e2', color: '#dc2626' }}>付息</span>
+                                    }
+                                  </div>
+                                  <span className="text-xs font-bold text-gray-700">{o.interest_base != null ? Number(o.interest_base).toFixed(0) : (o.amount != null ? Number(o.amount).toFixed(0) : '-')} U</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           );
         })()}
