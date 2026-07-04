@@ -23,6 +23,7 @@ import {
 } from "./yaban-backup-service";
 import { uploadYabanMedia, deleteYabanMedia, type YabanMediaTier } from "./cos-upload";
 import { checkYabanPerm, ensureRoleTables, isYabanPureFounder } from "./yaban-role-router";
+import { backfillEmbeddingAsync, buildItemEmbedText } from "./wecom-vector";
 import COS from 'cos-nodejs-sdk-v5';
 import https from 'https';
 
@@ -807,6 +808,87 @@ async function ensurePriceHistory(conn: any) {
   try { await conn.execute(`ALTER TABLE yaban_charge_price_history ADD COLUMN cat1_name VARCHAR(128) NOT NULL DEFAULT '' AFTER product_name`); } catch (_) {}
   try { await conn.execute(`ALTER TABLE yaban_charge_price_history ADD COLUMN cat2_name VARCHAR(128) NOT NULL DEFAULT '' AFTER cat1_name`); } catch (_) {}
   priceHistoryReady = true;
+}
+
+// ─── 收费项目同步到私有知识库 ─────────────────────────────────────────────────
+// tenant_id -> wecom_knowledge_bases.id 映射（通过 wecom_clinic_channel 关联）
+async function getPrivateKbIdForTenant(conn: any, tenantId: number): Promise<number | null> {
+  try {
+    const [rows]: any = await conn.execute(
+      `SELECT wkb.id FROM wecom_knowledge_bases wkb
+       INNER JOIN wecom_clinic_channel wcc ON wcc.clinic_channel_id = wkb.channel_id
+       WHERE wcc.service_type = 'yaban' AND wcc.service_tenant_id = ? AND wkb.is_shared = 0
+       LIMIT 1`,
+      [tenantId]
+    );
+    return (rows as any[])[0]?.id ?? null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * 将指定诊所的收费项目同步到其私有知识库（异步，不阻塞主流程）
+ * 策略：按一级分类生成 Q&A 条目（source_file='charge_products_sync'），先删旧再写新
+ */
+async function syncChargeProductsToKbAsync(conn: any, tenantId: number): Promise<void> {
+  try {
+    const kbId = await getPrivateKbIdForTenant(conn, tenantId);
+    if (!kbId) return;
+
+    // 查询该诊所所有启用的收费项目（含分类名）
+    const [rows]: any = await conn.execute(
+      `SELECT p.name AS pname, p.price, p.price_max, p.unit,
+              c1.name AS cat1, c2.name AS cat2
+       FROM yaban_charge_product p
+       LEFT JOIN yaban_charge_category c1 ON c1.id = p.category_id AND c1.tenant_id = p.tenant_id
+       LEFT JOIN yaban_charge_category c2 ON c2.id = p.subcategory_id AND c2.tenant_id = p.tenant_id
+       WHERE p.tenant_id = ? AND p.enabled = 1
+       ORDER BY c1.sort ASC, c2.sort ASC, p.sort ASC`,
+      [tenantId]
+    );
+    const products = rows as any[];
+    if (!products.length) return;
+
+    // 按一级分类分组，生成 Q&A
+    const catMap = new Map<string, string[]>();
+    for (const p of products) {
+      const cat = p.cat1 || '其他';
+      if (!catMap.has(cat)) catMap.set(cat, []);
+      let priceStr = '';
+      if (p.price > 0 && p.price_max > 0 && p.price_max !== p.price) {
+        priceStr = `${p.price}~${p.price_max}元/${p.unit || '次'}`;
+      } else if (p.price > 0) {
+        priceStr = `${p.price}元/${p.unit || '次'}`;
+      } else {
+        priceStr = `面议`;
+      }
+      const sub = p.cat2 ? `${p.cat2}-` : '';
+      catMap.get(cat)!.push(`${sub}${p.pname}：${priceStr}`);
+    }
+
+    // 删除旧的同步条目
+    await conn.execute(
+      `DELETE FROM wecom_knowledge_items WHERE kb_id = ? AND source_file = 'charge_products_sync'`,
+      [kbId]
+    );
+
+    // 写入新条目
+    for (const [cat, items] of catMap.entries()) {
+      const question = `${cat}多少钱？${cat}价格是多少？`;
+      const answer = `${cat}收费项目如下：\n${items.join('\n')}`;
+      const [r]: any = await conn.execute(
+        `INSERT INTO wecom_knowledge_items (kb_id, item_type, question, answer, source_file, category) VALUES (?, 'qa', ?, ?, 'charge_products_sync', ?)`,
+        [kbId, question, answer, cat]
+      );
+      const newId = (r as any).insertId;
+      if (newId) {
+        backfillEmbeddingAsync(conn, 'wecom_knowledge_items', Number(newId), buildItemEmbedText(question, answer));
+      }
+    }
+  } catch (e: any) {
+    console.error('[syncChargeToKb] 同步失败:', e?.message || e);
+  }
 }
 
 // 创建顾客输入校验
@@ -2610,6 +2692,8 @@ export const yabanCustomerRouter = router({
              WHERE tenant_id = ? AND id = ?`,
           [catId, subCatId, input.name, input.unit, input.price, input.priceMax ?? 0, input.isCommon ? 1 : 0, input.enabled ? 1 : 0, input.sort, TENANT_ID, Number(input.id)]
         );
+        // 异步同步收费项目到私有知识库（不阻塞响应）
+        syncChargeProductsToKbAsync(conn, TENANT_ID).catch(() => {});
         return { id: Number(input.id) };
       }
       const [r] = (await (conn as any).execute(
@@ -2626,6 +2710,8 @@ export const yabanCustomerRouter = router({
           [input.name.trim()]
         );
       } catch (_) {}
+      // 异步同步收费项目到私有知识库（不阻塞响应）
+      syncChargeProductsToKbAsync(conn, TENANT_ID).catch(() => {});
       return { id: Number((r as any).insertId) };
     }),
 
@@ -2644,6 +2730,8 @@ export const yabanCustomerRouter = router({
         `UPDATE yaban_charge_product SET enabled = 0, is_common = 0 WHERE tenant_id = ? AND id = ?`,
         [TENANT_ID, Number(input.id)]
       );
+      // 异步同步收费项目到私有知识库
+      syncChargeProductsToKbAsync(conn, TENANT_ID).catch(() => {});
       return { success: true };
     }),
 
@@ -3929,9 +4017,10 @@ export const yabanCustomerRouter = router({
         }
       }
 
+      // 异步同步目标诊所收费项目到私有知识库
+      syncChargeProductsToKbAsync(conn, input.toTenantId).catch(() => {});
       return { addedCats, skippedCats, overwrittenCats, addedProds, skippedProds, overwrittenProds };
     }),
-
   // ============ 调价记录：查询（项目级 or 全局级） ============
   listPriceHistory: protectedProcedure
     .input(z.object({
