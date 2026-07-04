@@ -476,7 +476,12 @@ export const yabanAppointmentRouter = router({
                 COALESCE(t.color, '#1E88D6') AS bar_color
          FROM yaban_clinic_member m
          LEFT JOIN users u ON u.id = m.user_id
-         LEFT JOIN yaban_shift_template t ON t.staff_user_id = m.user_id AND t.tenant_id = m.tenant_id AND t.is_active = 1 AND t.role_key <> '__biz__'
+         LEFT JOIN (
+           SELECT staff_user_id, tenant_id, color,
+                  ROW_NUMBER() OVER (PARTITION BY staff_user_id, tenant_id ORDER BY id DESC) AS rn
+           FROM yaban_shift_template
+           WHERE is_active = 1 AND role_key <> '__biz__'
+         ) t ON t.staff_user_id = m.user_id AND t.tenant_id = m.tenant_id AND t.rn = 1
          WHERE m.tenant_id=? AND m.status='active'
          ORDER BY FIELD(m.role_key,'owner','doctor','nurse','assistant','receptionist','finance'), m.id ASC`,
         [tenantId]
