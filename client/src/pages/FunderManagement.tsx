@@ -1037,9 +1037,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           }
                           setFormData(d => {
                           const newType = d.assetType === opt.value ? '' : opt.value;
-                          // 股票类型自动锁定币种为 CNY
+                          // 股票类型自动锁定币种为 CNY（购买币种 + 融资币种同步）
                           if (newType === 'stock') {
-                            return { ...d, assetType: newType, coin: 'CNY' as CoinType };
+                            return { ...d, assetType: newType, coin: 'CNY' as CoinType, amountCurrency: 'CNY' as CoinType };
                           }
                           return { ...d, assetType: newType };
                           });
