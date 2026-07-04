@@ -1486,7 +1486,7 @@ router.post("/api/admin/wecom/backfill-embeddings", requireSuperAdmin, async (re
   try {
     const conn = await getDbConnection();
     if (!conn) return res.status(500).json({ ok: false, error: "db连接失败" });
-    const { backfillAllMissing } = await import("../wecom-vector");
+    const { backfillAllMissing } = require("./wecom-vector");
     const result = await backfillAllMissing(conn, { limit: 400 });
     conn.end?.();
     return res.json({ ok: true, ...result });
