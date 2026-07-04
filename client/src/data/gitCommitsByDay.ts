@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-04
+// 生成时间：2026-07-05
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8114,5 +8114,17 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-04T10:15:42Z", type: "feat", cleanMessage: "空档时长改为中文格式（满60分钟显示小时，全部中文）" },
     { date: "2026-07-04T10:18:57Z", type: "feat", cleanMessage: "第二步预约时段改为两行显示——时间加粗大字，日期+时长小字副标题" },
     { date: "2026-07-04T11:06:08Z", type: "feat", cleanMessage: "修复收费项目->知识库同步，支持yaban_charge_category叶子节点（恒愿/博雅）和yaban_charge_product（德盟）双数据源" },
+    { date: "2026-07-04T11:15:13Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-04T11:20:38Z", type: "chore", cleanMessage: "一次性脚本-写入口腔诊所AI客服拟人化公共指令库" },
+    { date: "2026-07-04T11:23:27Z", type: "fix", cleanMessage: "修正insert-prompt-lib workflow格式" },
+    { date: "2026-07-04T11:24:20Z", type: "chore", cleanMessage: "删除旧insert-prompt-lib workflow" },
+    { date: "2026-07-04T11:25:08Z", type: "feat", cleanMessage: "写入口腔诊所AI客服拟人化公共指令库 v2" },
+    { date: "2026-07-04T11:27:02Z", type: "fix", cleanMessage: "修复workflow YAML语法，Python脚本独立存放" },
+    { date: "2026-07-04T12:23:00Z", type: "fix", cleanMessage: "修复 A316 预约页 dow 映射 bug——统一用 (getDay()+6)%7（0=周一），与 A317 保存约定一致" },
+    { date: "2026-07-04T13:25:21Z", type: "fix", cleanMessage: "持仓中Tab计数包含赠单，使各状态加总等于全部" },
+    { date: "2026-07-04T13:27:20Z", type: "fix", cleanMessage: "改用ubuntu-latest+SSH方式执行，绕过离线的self-hosted runner" },
+    { date: "2026-07-04T13:30:41Z", type: "chore", cleanMessage: "删除旧workflow，强制GitHub刷新" },
+    { date: "2026-07-04T13:31:10Z", type: "feat", cleanMessage: "新增写入口腔AI客服拟人化指令库workflow（ubuntu-latest+SSH）" },
+    { date: "2026-07-04T13:33:22Z", type: "fix", cleanMessage: "委买中/持仓中count包含赠单，使各状态加总等于全部" },
   ],
 };
