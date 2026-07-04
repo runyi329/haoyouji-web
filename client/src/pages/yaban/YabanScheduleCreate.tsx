@@ -207,6 +207,11 @@ export default function YabanScheduleCreate() {
   }, []);
 
   const { currentTenantId, current, clinics, selectClinic, hasMultiple } = useYabanClinic();
+  // 读取诊所可见性配置
+  const clinicInfoQuery = trpc.yabanClinic.myClinic.useQuery();
+  const clinicInfo = clinicInfoQuery.data?.clinic as any;
+  const showRoomRow = clinicInfo?.showRoom !== false;
+  const showDeptRow = clinicInfo?.showDept !== false;
   const [showClinicPicker, setShowClinicPicker] = useState(false);
   // 这张预约单的归属诊所（仅影响当前订单，不改全局状态）
   const [apptTenantId, setApptTenantId] = useState<number | null>(null);
@@ -385,6 +390,7 @@ export default function YabanScheduleCreate() {
   );
   const shiftTemplates = (weekSched?.templates ?? []) as any[];
   const shiftOverrides = (weekSched?.overrides ?? []) as any[];
+  const shiftDaySegs = (weekSched?.daySegs ?? []) as any[];
 
   // 某天全院可排总时长
   function getDayCapacity(dStr: string): { capacity: number; hasShift: boolean } {
@@ -462,17 +468,28 @@ export default function YabanScheduleCreate() {
   }
   const toMin = (t?: string|null) => t ? timeToMin(t) : null;
 
-  // 用 userId 匹配排班模板（比 staffName 字符串更可靠）
+  // 用 userId 匹配排班模板，优先使用新 daySegs（每天独立时段），回退旧 shiftTemplates
   function getEffectiveShift(userId: number, dStr: string): EffShift {
-    const tpl = shiftTemplates.find((t: any) => t.staffUserId === userId);
+    // 单日覆盖（优先级最高）
     const ov = shiftOverrides.find((o: any) => o.staffUserId === userId && o.overrideDate === dStr);
     if (ov) {
       if (ov.shiftType === "rest" || ov.shiftType === "leave") return null;
       if (ov.workStart && ov.workEnd) return buildShift(timeToMin(ov.workStart), timeToMin(ov.workEnd), toMin(ov.breakStart), toMin(ov.breakEnd));
     }
+    // 新格式：daySegs（yaban_shift_day_segs，每天独立时段）
+    const dsEntry = shiftDaySegs.find((s: any) => Number(s.staffUserId) === userId);
+    if (dsEntry && Array.isArray(dsEntry.segs)) {
+      const dow = new Date(dStr + 'T00:00:00').getDay();
+      const seg = dsEntry.segs.find((x: any) => Number(x.dow) === dow);
+      if (!seg) return null;
+      if (seg.isRest) return null;
+      return buildShift(timeToMin(seg.workStart), timeToMin(seg.workEnd), toMin(seg.breakStart), toMin(seg.breakEnd));
+    }
+    // 旧格式回退：shiftTemplates（yaban_shift_template，workDays 字段）
+    const tpl = shiftTemplates.find((t: any) => t.staffUserId === userId);
     if (tpl) {
-      const dow = new Date(dStr).getDay();
-      const days: number[] = tpl.workDays || [];
+      const dow = new Date(dStr + 'T00:00:00').getDay();
+      const days: number[] = (tpl.workDays || []).map(Number);
       if (days.length > 0 && !days.includes(dow)) return null;
       if (tpl.workStart && tpl.workEnd) return buildShift(timeToMin(tpl.workStart), timeToMin(tpl.workEnd), toMin(tpl.breakStart), toMin(tpl.breakEnd));
     }
@@ -483,7 +500,7 @@ export default function YabanScheduleCreate() {
   const docShiftList = useMemo(() =>
     DOCTORS.map((doc: any) => ({ userId: doc.userId, name: doc.name, shift: getEffectiveShift(doc.userId, dateStr) })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [DOCTORS, dateStr, shiftTemplates, shiftOverrides]
+    [DOCTORS, dateStr, shiftTemplates, shiftOverrides, shiftDaySegs]
   );
 
   const { data: dayAppointments = [] } = trpc.yabanAppointment.listByDate.useQuery(
@@ -1029,9 +1046,68 @@ export default function YabanScheduleCreate() {
 
                     return (
                       <div>
-                        <div style={{ fontSize: 12, color: GRAY_L, marginBottom: 8 }}>
-                          工作时间：{hm(workStart)} – {hm(workEnd)}，滚动选择开始和结束时间
-                        </div>
+                        {/* 空档时段提示块 */}
+                        {(() => {
+                          // 计算当天该医生的空余时段（工作段内扣除已预约时间）
+                          const freeSlots: { start: number; end: number }[] = [];
+                          for (const [segStart, segEnd] of (shift?.segments ?? [])) {
+                            // 收集该段内所有已预约区间
+                            const bookedRanges: { s: number; e: number }[] = (dayAppointments as any[])
+                              .filter((a: any) => a.appointTime)
+                              .map((a: any) => ({
+                                s: timeToMin(a.appointTime),
+                                e: a.endTime ? timeToMin(a.endTime) : timeToMin(a.appointTime) + (a.duration || 30),
+                              }))
+                              .filter(r => r.s < segEnd && r.e > segStart)
+                              .sort((a, b) => a.s - b.s);
+                            // 用扫描线算法切出空余段
+                            let cursor = segStart;
+                            for (const br of bookedRanges) {
+                              if (br.s > cursor) freeSlots.push({ start: cursor, end: Math.min(br.s, segEnd) });
+                              cursor = Math.max(cursor, br.e);
+                            }
+                            if (cursor < segEnd) freeSlots.push({ start: cursor, end: segEnd });
+                          }
+                          if (freeSlots.length === 0) {
+                            return (
+                              <div style={{ fontSize: 12, color: "#EF4444", marginBottom: 8, fontWeight: 500 }}>
+                                {selDoc?.name}今日已约满
+                              </div>
+                            );
+                          }
+                          return (
+                            <div style={{ marginBottom: 10 }}>
+                              <span style={{ fontSize: 11, color: GRAY_L, marginRight: 6 }}>今日空档：</span>
+                              <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 5 }}>
+                                {freeSlots.map((s, i) => {
+                                  const dur = s.end - s.start;
+                                  return (
+                                    <button
+                                      key={i}
+                                      onClick={() => {
+                                        const endMin = Math.min(s.start + 30, s.end);
+                                        setPendingStart(hm(s.start));
+                                        setPendingEnd(hm(endMin));
+                                        pendingStartRef.current = hm(s.start);
+                                        pendingEndRef.current = hm(endMin);
+                                      }}
+                                      style={{
+                                        fontSize: 11, fontWeight: 600,
+                                        color: SKY_D, background: "#EFF6FF",
+                                        border: `1px solid #BFDBFE`,
+                                        borderRadius: 4, padding: "2px 7px",
+                                        cursor: "pointer", lineHeight: 1.5,
+                                      }}
+                                    >
+                                      {hm(s.start)}–{hm(s.end)}
+                                      <span style={{ color: GRAY_L, fontWeight: 400, marginLeft: 3 }}>{dur}min</span>
+                                    </button>
+                                  );
+                                })}
+                              </span>
+                            </div>
+                          );
+                        })()}
                         {/* 双轮盘 */}
                         <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                           <WheelPickerMemo
@@ -1218,10 +1294,10 @@ export default function YabanScheduleCreate() {
                 <span style={{ fontSize: 13, color: GRAY_L }}>请先在后台配置收费项目</span>
               )}
             </div>
-            {/* 诊室 */}
-            <SelectRow label="诊室" value={form.room} placeholder="请选择诊室" onClick={() => setShowPicker("room")} />
-            {/* 科室 */}
-            <SelectRow label="科室" value={form.department} placeholder="请选择科室" onClick={() => setShowPicker("department")} />
+            {/* 诊室 - 根据 showRoom 控制显隐 */}
+            {showRoomRow && <SelectRow label="诊室" value={form.room} placeholder="请选择诊室" onClick={() => setShowPicker("room")} />}
+            {/* 科室 - 根据 showDept 控制显隐 */}
+            {showDeptRow && <SelectRow label="科室" value={form.department} placeholder="请选择科室" onClick={() => setShowPicker("department")} />}
             {/* 预约来源 */}
             <SelectRow label="预约来源" value={form.source} placeholder="请选择来源" onClick={() => setShowPicker("source")} />
           </div>

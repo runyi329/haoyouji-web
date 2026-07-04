@@ -99,7 +99,8 @@ const SELECT_COLS = `id, tenant_id, name, short_name, tax_no, clinic_type, legal
   contact_name, contact_phone, province, city, district, address,
   license_no, business_license_no, license_image, logo_image,
   established_date, scale, intro, remark,
-  status, apply_user_id, apply_user_name, reject_reason, approved_by, approved_at, created_at, updated_at`;
+  status, apply_user_id, apply_user_name, reject_reason, approved_by, approved_at, created_at, updated_at,
+  show_room, show_dept`;
 
 function mapClinicRow(c: any) {
   if (!c) return null;
@@ -131,18 +132,31 @@ function mapClinicRow(c: any) {
     rejectReason: c.reject_reason || "",
     approvedAt: c.approved_at,
     createdAt: c.created_at,
+    showRoom: c.show_room === undefined ? true : c.show_room === 1,
+    showDept: c.show_dept === undefined ? true : c.show_dept === 1,
   };
 }
 
 export const yabanClinicRouter = router({
   // ==================== 院长/股东侧 ====================
 
-  // 我的企业信息（owner 才有意义）
-  myClinic: protectedProcedure.query(async ({ ctx }) => {
+  // 我的企业信息（owner/shareholder 均可查，支持指定 tenantId）
+  myClinic: protectedProcedure
+    .input(z.object({ tenantId: z.number().int().optional() }).optional())
+    .query(async ({ ctx, input }) => {
     const conn = await getDbConnection();
     if (!conn) return { isOwner: false, clinic: null as any };
     const ownerTenantIds = await getOwnerTenantIds(conn, ctx.user.id);
     let clinic: any = null;
+    // 优先用指定的 tenantId 直接查询
+    if (input?.tenantId) {
+      const [rows] = (await conn.execute(
+        `SELECT ${SELECT_COLS} FROM yaban_clinic WHERE tenant_id=? LIMIT 1`,
+        [input.tenantId]
+      )) as any;
+      clinic = (rows as any[])[0] || null;
+      return { isOwner: ownerTenantIds.includes(input.tenantId), clinic: mapClinicRow(clinic) };
+    }
     if (ownerTenantIds.length > 0) {
       // 优先取我作为 owner 关联的医院（按 tenant_id 匹配主表）
       const [rows] = (await conn.execute(
@@ -160,6 +174,21 @@ export const yabanClinicRouter = router({
         clinic = (r2 as any[])[0] || null;
       }
     }
+    // 如果 owner 查不到，尝试通过 shareholder/其他成员身份查找
+    if (!clinic) {
+      const [memberRows] = (await conn.execute(
+        `SELECT tenant_id FROM yaban_clinic_member WHERE user_id=? AND status='active' ORDER BY id ASC LIMIT 1`,
+        [ctx.user.id]
+      )) as any;
+      const memberTenantId = (memberRows as any[])[0]?.tenant_id;
+      if (memberTenantId) {
+        const [rows2] = (await conn.execute(
+          `SELECT ${SELECT_COLS} FROM yaban_clinic WHERE tenant_id=? LIMIT 1`,
+          [memberTenantId]
+        )) as any;
+        clinic = (rows2 as any[])[0] || null;
+      }
+    }
     if (!clinic) {
       const [rows] = (await conn.execute(
         `SELECT ${SELECT_COLS} FROM yaban_clinic WHERE apply_user_id=? ORDER BY id DESC LIMIT 1`,
@@ -169,6 +198,29 @@ export const yabanClinicRouter = router({
     }
     return { isOwner: ownerTenantIds.length > 0, clinic: mapClinicRow(clinic) };
   }),
+
+  // 更新诊室/科室可见性
+  updateVisibility: protectedProcedure
+    .input(z.object({
+      tenantId: z.number().int().optional(),
+      showRoom: z.boolean().optional(),
+      showDept: z.boolean().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const allowedTenantIds = await getOwnerTenantIds(conn, ctx.user.id);
+      const tenantId = input.tenantId ?? allowedTenantIds[0];
+      if (!tenantId || !allowedTenantIds.includes(tenantId)) throw new TRPCError({ code: "FORBIDDEN", message: "无权操作" });
+      const sets: string[] = [];
+      const params: any[] = [];
+      if (input.showRoom !== undefined) { sets.push("show_room=?"); params.push(input.showRoom ? 1 : 0); }
+      if (input.showDept !== undefined) { sets.push("show_dept=?"); params.push(input.showDept ? 1 : 0); }
+      if (sets.length === 0) return { success: true };
+      params.push(tenantId);
+      await conn.execute(`UPDATE yaban_clinic SET ${sets.join(",")} WHERE tenant_id=?`, params);
+      return { success: true };
+    }),
 
   // 当前用户已加入的门店列表（下拉切换用）：参加几家返回几家
   // 来源：yaban_clinic_member(status=active) 关联 yaban_clinic 主表取门店名
