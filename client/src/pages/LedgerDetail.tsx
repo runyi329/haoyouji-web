@@ -5003,31 +5003,25 @@ export default function LedgerDetail() {
       {isCustomAF && !effectiveIsFunder && (
         <div className="flex-1 px-4 pb-20">
           <div className="space-y-3 mt-2">
-              {/* 谷底增籹入口：BTC / ETH / SOL 三币大图标靠左重叠，箭头靠右 */}
-              <button
-                onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
-                className="w-full rounded-2xl p-4 flex items-center shadow-sm active:opacity-90"
-                style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)' }}
-              >
-                {/* 三币图标靠左，25%重叠 */}
-                <div className="flex items-center flex-shrink-0">
-                  <div className="w-10 h-10 rounded-full flex-shrink-0 overflow-hidden flex items-center justify-center" style={{ position: 'relative', zIndex: 3 }}>
-                    <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/btc-official.png" alt="BTC" style={{ width: '140%', height: '140%', objectFit: 'contain', transform: 'scale(1.4)' }} />
-                  </div>
-                  <div className="w-10 h-10 rounded-full flex-shrink-0 overflow-hidden flex items-center justify-center" style={{ position: 'relative', zIndex: 2, marginLeft: '-8px', outline: '2px solid #fff' }}>
-                    <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/eth-official.png" alt="ETH" style={{ width: '140%', height: '140%', objectFit: 'contain', transform: 'scale(1.4)' }} />
-                  </div>
-                  <div className="w-10 h-10 rounded-full flex-shrink-0 overflow-hidden flex items-center justify-center" style={{ position: 'relative', zIndex: 1, marginLeft: '-8px', outline: '2px solid #fff' }}>
-                    <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/sol-official.png" alt="SOL" style={{ width: '140%', height: '140%', objectFit: 'contain', transform: 'scale(1.4)' }} />
-                  </div>
-                </div>
-                {/* 中间留白 */}
-                <div className="flex-1" />
-                {/* 箭头靠右对齐 */}
-                <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: '#3B5BDB' }}>
-                  <ChevronRight className="w-4 h-4 text-white" />
-                </div>
-              </button>
+              {/* 谷底增筹 / 融资付息 左右两个入口按鈕 */}
+              <div className="flex gap-3">
+                {/* 谷底增筹 */}
+                <button
+                  onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction?hideTab=1${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
+                  className="flex-1 rounded-2xl flex items-center justify-center shadow-sm active:opacity-90"
+                  style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)', minHeight: '64px' }}
+                >
+                  <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>谷底增筹</span>
+                </button>
+                {/* 融资付息 */}
+                <button
+                  onClick={() => setLocation(`/ledger/${ledgerId}/crypto-prediction?tab=finance&hideTab=1${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
+                  className="flex-1 rounded-2xl flex items-center justify-center shadow-sm active:opacity-90"
+                  style={{ backgroundColor: '#FFFFFF', border: '1px solid #E0E8FF', boxShadow: '0 2px 8px rgba(26,86,219,0.08)', minHeight: '64px' }}
+                >
+                  <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>融资付息</span>
+                </button>
+              </div>
 
               {/* ETH 智能仓位管理（全宽） */}
               <button

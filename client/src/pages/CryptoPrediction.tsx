@@ -2192,6 +2192,13 @@ export default function CryptoPrediction() {
     return "contract";
   })() as "contract" | "spot" | "market" | "finance" | "gujian";
   const [tab, setTab] = useState<"contract" | "spot" | "market" | "finance" | "gujian">(initialTab);
+  // 首页分流进入时隐藏 Tab 切换区（hideTab=1）
+  const hideTab = urlParams.get("hideTab") === "1";
+  // 谷底增筹建仓表单抽屉状态
+  const [showOrderForm, setShowOrderForm] = useState(false);
+  // 谷底增筹订单列表筛选
+  const [contractStatusFilter, setContractStatusFilter] = useState<'all'|'pending'|'holding'|'selling'|'sold'|'cancelled'>('all');
+  const [contractCoinFilter, setContractCoinFilter] = useState<'all'|'BTC'|'ETH'|'SOL'>('all');
 
   // 委托交易面板状态
   const [orderSide, setOrderSide] = useState<"buy" | "sell">("buy");
@@ -2232,6 +2239,8 @@ export default function CryptoPrediction() {
   // 融资订单三层筛选
   const [financeL2Tab, setFinanceL2Tab] = useState<'all' | 'mine' | 'shared'>('all');
   const [financeL3Tab, setFinanceL3Tab] = useState<'all' | 'stock' | 'crypto' | 'collateral'>('all');
+  // 融资付息视图模式：记账图（卡片）/ 订单图（OKX深色风格）
+  const [financeViewMode, setFinanceViewMode] = useState<'ledger' | 'order'>('ledger');
   // 融资付息：资产汇总
   const { data: financeAssetSummary } = trpc.ledger.financeGetAssetSummary.useQuery(
     { ledgerId },
@@ -2274,7 +2283,18 @@ export default function CryptoPrediction() {
   const orders: any[] = (ordersData as any[]) || [];
   // 订单列表排序计算
   const sortedOrders = useMemo(() => {
-    const arr = [...orders];
+    // 先按状态和币种过滤
+    const arr = orders.filter((o: any) => {
+      const statusMatch = contractStatusFilter === 'all' ? true
+        : contractStatusFilter === 'pending' ? (o.status === 'pending' && !o.sellStatus)
+        : contractStatusFilter === 'holding' ? (o.status === 'completed' && !o.sellStatus)
+        : contractStatusFilter === 'selling' ? (o.sellStatus === 'selling')
+        : contractStatusFilter === 'sold' ? (o.sellStatus === 'sold')
+        : contractStatusFilter === 'cancelled' ? (o.status === 'cancelled')
+        : true;
+      const coinMatch = contractCoinFilter === 'all' ? true : (o.coin === contractCoinFilter || o.coinKey === contractCoinFilter);
+      return statusMatch && coinMatch;
+    });
     arr.sort((a, b) => {
       let va: any, vb: any;
       if (orderSortKey === 'time') { va = a.createdAt; vb = b.createdAt; }
@@ -2286,7 +2306,7 @@ export default function CryptoPrediction() {
       return 0;
     });
     return arr;
-  }, [orders, orderSortKey, orderSortDir]);
+  }, [orders, orderSortKey, orderSortDir, contractStatusFilter, contractCoinFilter]);
   const handleOrderSort = (key: typeof orderSortKey) => {
     if (orderSortKey === key) {
       setOrderSortDir(prev => prev === 'desc' ? 'asc' : 'desc');
@@ -2420,7 +2440,33 @@ export default function CryptoPrediction() {
             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
           <span className="text-base font-semibold">{coin.fullName}（{coin.name}）</span>
         </div>
-
+        {/* 谷底增筹：新建订单胶囊按钮 */}
+        {tab === 'contract' && (
+          <button
+            onClick={() => setShowOrderForm(true)}
+            className="px-3 py-1.5 rounded-full text-xs font-semibold"
+            style={{ background: 'rgba(255,255,255,0.22)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)' }}
+          >
+            + 新建订单
+          </button>
+        )}
+        {/* 融资付息视图切换：记账图 / 订单图 */}
+        {tab === 'finance' && (
+          <div className="flex rounded-full p-0.5" style={{ background: 'rgba(255,255,255,0.18)' }}>
+            {(['ledger', 'order'] as const).map(mode => (
+              <button
+                key={mode}
+                onClick={() => setFinanceViewMode(mode)}
+                className="px-2.5 py-1 rounded-full text-xs font-medium transition-all"
+                style={financeViewMode === mode
+                  ? { background: '#fff', color: '#1A56DB' }
+                  : { background: 'transparent', color: 'rgba(255,255,255,0.8)' }}
+              >
+                {mode === 'ledger' ? '记账图' : '订单图'}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 视角切换横幅（固定底部） */}
@@ -2441,7 +2487,8 @@ export default function CryptoPrediction() {
         </div>
       )}
 
-      {/* Tab 切换 */}
+      {/* Tab 切换：首页分流进入时隐藏 */}
+      {!hideTab && (
       <div className="px-4 pt-3">
         <div className="flex rounded p-1 gap-1" style={{ backgroundColor: '#E8EEFF' }}>
           {(isCustomAF && !isFunder ? [
@@ -2472,6 +2519,7 @@ export default function CryptoPrediction() {
           ))}
         </div>
       </div>
+      )}
 
       {/* Tab 内容 */}
       <div className="px-4 pt-3">
@@ -2479,6 +2527,37 @@ export default function CryptoPrediction() {
         {/* 无损合约 */}
         {tab === "contract" && (
           <div className="space-y-3 pb-4">
+            {/* 建仓表单底部抽屉遮罩层 */}
+            {showOrderForm && (
+              <div
+                className="fixed inset-0 z-[70]"
+                style={{ background: 'rgba(0,0,0,0.45)' }}
+                onClick={() => setShowOrderForm(false)}
+              />
+            )}
+            {/* 建仓表单底部抽屉 */}
+            <div
+              className="fixed left-0 right-0 bottom-0 z-[80] rounded-t-3xl overflow-y-auto"
+              style={{
+                background: '#F0F4FF',
+                maxHeight: '85vh',
+                transform: showOrderForm ? 'translateY(0)' : 'translateY(100%)',
+                transition: 'transform 0.3s cubic-bezier(0.32,0.72,0,1)',
+                paddingBottom: 'env(safe-area-inset-bottom, 16px)',
+              }}
+            >
+              {/* 抽屉指示条 */}
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="w-10 h-1 rounded-full" style={{ background: '#CBD5E1' }} />
+              </div>
+              {/* 抽屉标题行 */}
+              <div className="flex items-center justify-between px-4 py-2 mb-1">
+                <span className="text-base font-bold" style={{ color: '#1A2340' }}>新建订单</span>
+                <button onClick={() => setShowOrderForm(false)} className="p-1 rounded-full" style={{ background: 'rgba(26,35,64,0.08)' }}>
+                  <svg className="w-4 h-4" style={{ color: '#6B7A9A' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="px-4 pb-6 space-y-3">
             {/* 委买 / 委卖 切换 */}
             <div className="flex rounded-xl overflow-hidden" style={{ border: '1px solid #D0DBFF' }}>
               <button
@@ -2785,6 +2864,8 @@ export default function CryptoPrediction() {
             >
               {submitOrderMutation.isPending ? "提交中..." : orderSide === "buy" ? `买入 ${coin.name}` : selectedSellOrderIds.size > 1 ? `批量卖出 ${selectedSellOrderIds.size} 笔` : `卖出 ${coin.name}`}
             </button>
+              </div>{/* end px-4 pb-6 space-y-3 */}
+            </div>{/* end 建仓表单底部抽屉 */}
             {/* 当前委托订单列表 - 独立渲染，不依赖 K 线图加载状态 */}
             {/* 点击详情区域外关闭详情：透明覆盖层 */}
             {orderDetailId !== null && (
@@ -2794,9 +2875,42 @@ export default function CryptoPrediction() {
               />
             )}
             <div className="mt-4 relative z-20">
+              {/* 筛选栏：状态 + 币种全部在同一容器 */}
+              <div className="mb-3 rounded-lg p-2.5 flex flex-wrap gap-1.5" style={{ background: '#fff', border: '1px solid #DDE5F5' }}>
+                {([
+                  { type: 'status', key: 'all', label: '全部' },
+                  { type: 'status', key: 'pending', label: '委买中' },
+                  { type: 'status', key: 'holding', label: '持仓中' },
+                  { type: 'status', key: 'selling', label: '委卖中' },
+                  { type: 'status', key: 'sold', label: '已卖出' },
+                  { type: 'status', key: 'cancelled', label: '已撤单' },
+                  { type: 'coin', key: 'all', label: '全币种' },
+                  { type: 'coin', key: 'BTC', label: 'BTC' },
+                  { type: 'coin', key: 'ETH', label: 'ETH' },
+                  { type: 'coin', key: 'SOL', label: 'SOL' },
+                ] as const).map(({ type, key, label }) => {
+                  const isActive = type === 'status'
+                    ? contractStatusFilter === key
+                    : contractCoinFilter === (key as any);
+                  return (
+                    <button
+                      key={`${type}-${key}`}
+                      onClick={() => type === 'status'
+                        ? setContractStatusFilter(key as any)
+                        : setContractCoinFilter(key as any)}
+                      className="px-2.5 py-1 text-xs font-medium transition-all"
+                      style={isActive
+                        ? { background: '#1A56DB', color: '#fff', borderRadius: 4 }
+                        : { background: '#F0F4FF', color: '#6B7A9A', borderRadius: 4, border: '1px solid #D0DBFF' }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm font-semibold" style={{ color: '#1A2340' }}>
-                  当前订单{(!ordersLoading && orders.length > 0) ? `（${orders.length}单）` : ''}
+                  {`当前订单${!ordersLoading && sortedOrders.length > 0 ? `（${sortedOrders.length}单）` : ''}`}
                 </span>
               </div>
               {ordersLoading ? (

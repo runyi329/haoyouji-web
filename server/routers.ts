@@ -26249,8 +26249,8 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
     adminGetUsers: protectedProcedure
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
-        const allowedRoles = ['super_admin', 'admin', 'parent'];
-        if (!allowedRoles.includes(ctx.user.role)) {
+        // 订单流管理用户列表：仅 super_admin 可调用
+        if (ctx.user.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         }
         const db = await getLedgerDb();
@@ -26291,8 +26291,8 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         status: z.enum(['open', 'closed', 'all']).default('all'),
       }))
       .query(async ({ ctx, input }) => {
-        const allowedRoles = ['super_admin', 'admin', 'parent'];
-        if (!allowedRoles.includes(ctx.user.role)) {
+        // 订单流管理全量查询：仅 super_admin 可调用
+        if (ctx.user.role !== 'super_admin') {
           throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         }
         const db = await getLedgerDb();

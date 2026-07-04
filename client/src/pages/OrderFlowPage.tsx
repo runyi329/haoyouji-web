@@ -518,7 +518,8 @@ export default function OrderFlowPage() {
   const [, setLocation] = useLocation();
   const ledgerId = params ? parseInt(params.id) : 0;
   const { isAuthenticated, user } = useAuth();
-  const isAdmin = user?.role === 'super_admin' || user?.role === 'admin' || user?.role === 'parent';
+  // 订单流管理「全部用户」视图：仅 super_admin 可见，parent/admin 只能看自己的订单
+  const isAdmin = user?.role === 'super_admin';
   // 管理员选中的目标用户（0=全部）
   const [adminTargetUserId, setAdminTargetUserId] = useState<number>(0); // 0=全部, >0=指定用户
 
