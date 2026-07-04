@@ -936,7 +936,7 @@ export default function YabanScheduleCreate() {
                     </div>
                     <div>
                       <div style={{ fontSize: 17, fontWeight: 700, color: INK }}>{form.startTime} – {form.endTime}</div>
-                      <div style={{ fontSize: 12, color: GRAY_L, marginTop: 3 }}>{form.date} &nbsp;·&nbsp; 共 {durMin} 分钟</div>
+                      <div style={{ fontSize: 12, color: GRAY_L, marginTop: 3 }}>{form.date} &nbsp;·&nbsp; 共 {durMin >= 60 ? (durMin % 60 === 0 ? `${Math.floor(durMin/60)}小时` : `${Math.floor(durMin/60)}小时${durMin%60}分`) : `${durMin}分钟`}</div>
                     </div>
                   </div>
                 </div>
@@ -1081,6 +1081,9 @@ export default function YabanScheduleCreate() {
                               <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 5 }}>
                                 {freeSlots.map((s, i) => {
                                   const dur = s.end - s.start;
+                                  const durLabel = dur >= 60
+                                    ? (dur % 60 === 0 ? `${Math.floor(dur/60)}小时` : `${Math.floor(dur/60)}小时${dur%60}分`)
+                                    : `${dur}分钟`;
                                   return (
                                     <button
                                       key={i}
@@ -1100,7 +1103,7 @@ export default function YabanScheduleCreate() {
                                       }}
                                     >
                                       {hm(s.start)}–{hm(s.end)}
-                                      <span style={{ color: GRAY_L, fontWeight: 400, marginLeft: 3 }}>{dur}min</span>
+                                      <span style={{ color: GRAY_L, fontWeight: 400, marginLeft: 3 }}>{durLabel}</span>
                                     </button>
                                   );
                                 })}
@@ -1147,7 +1150,7 @@ export default function YabanScheduleCreate() {
                           }}
                         >
                           确定时间：{hm(selStartMin)} – {hm(selEndMin)}
-                          <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 500, opacity: 0.85 }}>共{selEndMin - selStartMin}分钟</span>
+                          <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 500, opacity: 0.85 }}>共{(() => { const d = selEndMin - selStartMin; return d >= 60 ? (d % 60 === 0 ? `${Math.floor(d/60)}小时` : `${Math.floor(d/60)}小时${d%60}分`) : `${d}分钟`; })()}</span>
                         </button>
                         {isConfirmed && (
                           <div style={{ marginTop: 6, textAlign: "center", fontSize: 12, color: "#16A34A" }}>
