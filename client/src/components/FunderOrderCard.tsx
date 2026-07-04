@@ -698,13 +698,13 @@ export function FunderOrderCard({
   const altAccrued = convertAlt(displayAccrued);
   const altPaid = convertAlt(displayPaid);
 
-  // 持有时长——已结清订单冻结在 settled_at 时刻
+  // 持有时长——已结清订单冻结在 settled_at 时刻；无数据或未到开仓日均显示 0小时
   const holdDurationLabel = (() => {
-    if (!order.buy_date) return null;
-    if (order.status !== 'active' && !order.settled_at) return null;
+    if (!order.buy_date) return '0小时';
+    if (order.status !== 'active' && !order.settled_at) return '0小时';
     const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
     const elapsed = endTs - new Date(order.buy_date + 'T00:00:00').getTime();
-    if (elapsed < 0) return null;
+    if (elapsed <= 0) return '0小时';
     const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
     const days = Math.floor(totalHours / 24);
     const hours = totalHours % 24;
@@ -932,7 +932,7 @@ export function FunderOrderCard({
                 <span className="font-medium" style={{ color: '#4B5563' }}>{fmtDate(order.buy_date)}</span>
               </div>
             )}
-            {show('holdDuration') && holdDurationLabel && (
+            {show('holdDuration') && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">持有时长</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{holdDurationLabel}</span>
@@ -1168,14 +1168,23 @@ export function FunderOrderCard({
                 </span>
               </div>
             )}
-            {show('interestDuration') && order.interest_start_date && (order.status === 'active' || order.settled_at) && (() => {
+            {show('interestDuration') && (() => {
+              if (!order.interest_start_date || (order.status !== 'active' && !order.settled_at)) {
+                return (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400">计息时长</span>
+                    <span className="font-medium" style={{ color: '#4B5563' }}>0小时</span>
+                  </div>
+                );
+              }
               const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
               const elapsed = endTs - new Date(String(order.interest_start_date).slice(0, 10) + 'T00:00:00').getTime();
-              if (elapsed < 0) return null;
-              const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
-              const days = Math.floor(totalHours / 24);
-              const hours = totalHours % 24;
-              const label = days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
+              const label = elapsed <= 0 ? '0小时' : (() => {
+                const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
+                const days = Math.floor(totalHours / 24);
+                const hours = totalHours % 24;
+                return days > 0 ? `${days}天 ${hours}小时` : `${hours}小时`;
+              })();
               return (
                 <div className="flex items-center justify-between">
                   <span className="text-gray-400">计息时长</span>
