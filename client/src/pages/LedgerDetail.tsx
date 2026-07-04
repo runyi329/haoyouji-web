@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef, lazy, Suspense, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, lazy, Suspense, useCallback, useMemo } from "react";
 import { FunderOrderCard, FunderNoteRow, formatCoinQtyFunder, useAccruedInterestFunder, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType } from "@/components/FunderOrderCard";
+import { FunderOrderCardV2, FunderOrderCardV2Light, FunderOrderCardV2Silver } from "@/components/FunderOrderCardV2";
 import Lottie from "lottie-react";
 import aiTagAnimData from "@/assets/aitag-blue.json";
 import { FunderAIPanel } from "@/components/FunderAIPanel";
@@ -2458,7 +2459,7 @@ export default function LedgerDetail() {
   const PREV_PRICE_CACHE_KEY = `funder_prev_prices_${ledgerId}`;
   const [funderPriceDirection, setFunderPriceDirection] = useState<Record<string, 'up' | 'down' | 'same'>>({});
   // 资产订单视图模式：large=大图（单列放大），medium=中图（左右双栏），small=小图（紧凑列表）
-  const [funderViewMode, setFunderViewMode] = useState<'large' | 'medium' | 'small'>('medium');
+  const [funderViewMode, setFunderViewMode] = useState<'card' | 'order'>('card');
   useEffect(() => {
     if (!hasFreshPrices) return;
     let prevPrices: Record<string, number> = {};
@@ -5121,21 +5122,16 @@ export default function LedgerDetail() {
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>资产订单</h3>
               <span className="text-xs text-gray-400 ml-1.5">共 {(funderAssetOrders as any[])?.length ?? 0} 笔</span>
               <div className="ml-auto flex items-center gap-1">
-                {(['large', 'medium', 'small'] as const).map((mode) => (
+                {(['card', 'order'] as const).map((mode) => (
                   <button
                     key={mode}
                     onClick={() => setFunderViewMode(mode)}
-                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors"
-                    style={{
-                      background: funderViewMode === mode ? '#EFF6FF' : 'transparent',
-                      color: funderViewMode === mode ? '#1A56DB' : '#9CA3AF',
-                      border: funderViewMode === mode ? '1px solid #BFDBFE' : '1px solid transparent',
-                    }}
+                    className="px-2.5 py-1 rounded-full text-xs font-medium transition-all"
+                    style={funderViewMode === mode
+                      ? { background: '#1A56DB', color: '#fff' }
+                      : { background: 'transparent', color: '#9CA3AF' }}
                   >
-                    {mode === 'large' && <LayoutGrid className="w-3.5 h-3.5" />}
-                    {mode === 'medium' && <LayoutList className="w-3.5 h-3.5" />}
-                    {mode === 'small' && <Minus className="w-3.5 h-3.5" />}
-                    <span>{mode === 'large' ? '大图' : mode === 'medium' ? '中图' : '小图'}</span>
+                    {mode === 'card' ? '卡片模式' : '订单模式'}
                   </button>
                 ))}
               </div>
@@ -5146,75 +5142,34 @@ export default function LedgerDetail() {
                 <div className="text-gray-400 text-base mb-1">暂无资产订单</div>
                 <div className="text-gray-400 text-sm">管理员将为您配置资产订单</div>
               </div>
-            ) : funderViewMode === 'medium' ? (
-              /* 中图模式：原双栏卡片 */
+            ) : funderViewMode === 'card' ? (
+              /* 卡片模式：銀色铭牌风格 */
               <div className="space-y-3">
-                {(funderAssetOrders as any[]).map((order: any) => {
-                  const details = interestSummaryMap[Number(order.id)] || [];
-                  // 计算折算USDT总额（用于风险敲口计算）
-                  let totalInU = 0;
-                  for (const d of details) {
-                    if (d.currency === 'CNY') { totalInU += d.exchangeRate > 0 ? d.total / d.exchangeRate : d.total / cnyRate; }
-                    else { totalInU += d.total; }
-                  }
-                  return (
-                    <FunderOrderCard
-                      key={order.id}
-                      order={order}
-                      ledgerId={ledgerId}
-                      livePrices={funderLivePrices}
-                      priceDirection={funderPriceDirection}
-                      currentUser={user}
-                      membersData={membersData as any[]}
-                      isAdmin={false}
-                    />
-                  );
-                })}
-              </div>
-            ) : funderViewMode === 'large' ? (
-              /* 大图模式：单列放大，复用FunderOrderCard并传入viewMode='large' */
-              <div className="space-y-3">
-                {(funderAssetOrders as any[]).map((order: any) => {
-                  const details = interestSummaryMap[Number(order.id)] || [];
-                  let totalInU = 0;
-                  for (const d of details) {
-                    if (d.currency === 'CNY') { totalInU += d.exchangeRate > 0 ? d.total / d.exchangeRate : d.total / cnyRate; }
-                    else { totalInU += d.total; }
-                  }
-                  return (
-                    <FunderOrderCard
-                      key={order.id}
-                      order={order}
-                      ledgerId={ledgerId}
-                      livePrices={funderLivePrices}
-                      priceDirection={funderPriceDirection}
-                      viewMode="large"
-                      currentUser={user}
-                      membersData={membersData as any[]}
-                      isAdmin={false}
-                    />
-                  );
-                })}
+                {(funderAssetOrders as any[]).map((order: any) => (
+                  <FunderOrderCardV2Silver
+                    key={order.id}
+                    order={order}
+                    livePrices={funderLivePrices}
+                    priceDirection={funderPriceDirection}
+                    membersData={membersData as any[]}
+                  />
+                ))}
               </div>
             ) : (
-              /* 小图模式：只显示当前资产和待结利息 */
-              <div className="space-y-2">
-                {(funderAssetOrders as any[]).map((order: any) => {
-                  return (
-                    <FunderOrderCard
-                      key={order.id}
-                      order={order}
-                      ledgerId={ledgerId}
-                      livePrices={funderLivePrices}
-                      priceDirection={funderPriceDirection}
-                      currentUser={user}
-                      membersData={membersData as any[]}
-                      isAdmin={false}
-                      onExposureGapChange={handleExposureGapChange}
-                      sharedGapMap={sharedGapMap}
-                    />
-                  );
-                })}
+              /* 订单模式：原始 FunderOrderCard */
+              <div className="space-y-3">
+                {(funderAssetOrders as any[]).map((order: any) => (
+                  <FunderOrderCard
+                    key={order.id}
+                    order={order}
+                    ledgerId={ledgerId}
+                    livePrices={funderLivePrices}
+                    priceDirection={funderPriceDirection}
+                    currentUser={user}
+                    membersData={membersData as any[]}
+                    isAdmin={false}
+                  />
+                ))}
               </div>
             )}
           </div>

@@ -1381,3 +1381,9 @@ input[type="date"].date-centered::-webkit-calendar-picker-indicator {
   display: none;
   -webkit-appearance: none;
 }
+
+/* 银色铭牌卡片：强制统一字体，覆盖Tailwind和Nunito默认 */
+.silver-card,
+.silver-card * {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Arial, 'PingFang SC', sans-serif !important;
+}

@@ -435,27 +435,24 @@ export default function AfOrderManage() {
   };
 
   // 根据筛选条件过滤订单
+  // 互斥分类规则（四Tab加起来 = 全部）：
+  //   全部    = 排除 cancelled + 排除赠单pending
+  //   委买中  = status=pending 且 非赠单
+  //   委卖中  = sellStatus=selling（优先级高于持仓中）
+  //   已卖出  = sellStatus=sold
+  //   持仓中  = completed 且 sellStatus 不是 sold/selling（即 null 或 sell_cancelled）
   const filteredOrders = (orders as any[] | undefined)?.filter((order: any) => {
-    // 赠予订单在 pending 状态时不单独展示（只在对应委买订单卡片的折叠区块里显示）
     const isGift = order.isGift === true || order.isGift === 1;
+    // 已撤销订单在所有Tab中均不显示
+    if (order.status === 'cancelled') return false;
     if (statusFilter === 'all') return !(isGift && order.status === 'pending');
     if (statusFilter === 'pending') return order.status === 'pending' && !isGift;
+    if (statusFilter === 'selling') return order.sellStatus === 'selling';
+    if (statusFilter === 'sold') return order.sellStatus === 'sold';
     if (statusFilter === 'holding') {
-      // 持仓中：正单（completed且未sold）+ 孤儿赠单（自身completed且未sold，但父正单已sold）
-      if (!isGift) return order.status === 'completed' && order.sellStatus !== 'sold';
-      // 赠单：如果自身仍持仓（completed且未sold），也要显示（处理父正单已卖出但赠单卖出取消的情况）
-      if (isGift && order.status === 'completed' && order.sellStatus !== 'sold') {
-        // 检查父正单是否已卖出（如果是，则这是孤儿赠单，需要独立显示）
-        const parentId = order.sourceOrderId;
-        if (parentId) {
-          const parentOrder = (orders as any[] || []).find((o: any) => o.id === parentId);
-          if (parentOrder && parentOrder.sellStatus === 'sold') return true; // 孤儿赠单
-        }
-      }
-      return false;
+      // 持仓中：completed 且 sellStatus 不是 sold 也不是 selling（含正单+赠单）
+      return order.status === 'completed' && order.sellStatus !== 'sold' && order.sellStatus !== 'selling';
     }
-    if (statusFilter === 'selling') return order.sellStatus === 'selling'; // 委卖中：赠单也显示
-    if (statusFilter === 'sold') return order.sellStatus === 'sold'; // 已卖出：赠单也显示
     return true;
   }) ?? [];
 
@@ -969,9 +966,9 @@ export default function AfOrderManage() {
         {/* 第二行：状态筛选 */}
         <div className="flex">
           {([
-            { key: 'all' as const, label: '全部', count: (orders as any[])?.filter((o: any) => { const g = o.isGift === true || o.isGift === 1; return !(g && o.status === 'pending'); }).length ?? 0 },
-            { key: 'pending' as const, label: '委买中', count: (orders as any[])?.filter((o: any) => o.status === 'pending').length ?? 0 },
-            { key: 'holding' as const, label: '持仓中', count: (orders as any[])?.filter((o: any) => o.status === 'completed' && !o.sellStatus).length ?? 0 },
+            { key: 'all' as const, label: '全部', count: (orders as any[])?.filter((o: any) => { const g = o.isGift === true || o.isGift === 1; return o.status !== 'cancelled' && !(g && o.status === 'pending'); }).length ?? 0 },
+            { key: 'pending' as const, label: '委买中', count: (orders as any[])?.filter((o: any) => { const g = o.isGift === true || o.isGift === 1; return o.status === 'pending' && !g; }).length ?? 0 },
+            { key: 'holding' as const, label: '持仓中', count: (orders as any[])?.filter((o: any) => o.status === 'completed' && o.sellStatus !== 'sold' && o.sellStatus !== 'selling').length ?? 0 },
             { key: 'selling' as const, label: '委卖中', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'selling').length ?? 0 },
             { key: 'sold' as const, label: '已卖出', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'sold').length ?? 0 },
           ]).map((tab, idx, arr) => (
@@ -2429,3 +2426,5 @@ export default function AfOrderManage() {
     </div>
   );
 }
+
+ 

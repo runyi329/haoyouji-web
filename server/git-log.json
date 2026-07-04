@@ -1,5 +1,878 @@
 [
   {
+    "hash": "dcb4f4dc126a0b08b209fd5290d0bc772630a187",
+    "author": "runyi329",
+    "date": "2026-07-04T05:27:27+00:00",
+    "message": "UI优化：圆角偏直角、按钮文字加大加粗、帽檐/备注背景色区分、下拉框收起只显示用户名、备注去除框中框",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "UI优化：圆角偏直角、按钮文字加大加粗、帽檐/备注背景色区分、下拉框收起只显示用户名、备注去除框中框"
+  },
+  {
+    "hash": "5cb683a94237b960e8bf6075c49f1d6bcd9903c6",
+    "author": "runyi329",
+    "date": "2026-07-04T04:39:58+00:00",
+    "message": "feat: 股票订单完整支持 - 证券公司/账号字段、融资金额固定CNY不折算、卡片复用统一组件、客户端过滤已结清订单",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "股票订单完整支持 - 证券公司/账号字段、融资金额固定CNY不折算、卡片复用统一组件、客户端过滤已结清订单"
+  },
+  {
+    "hash": "8b275b9ed254b2709eabcea9c010b44d2ef866e7",
+    "author": "runyi329",
+    "date": "2026-07-04T01:47:17+00:00",
+    "message": "fix: 选择股票类型时融资币种同步锁定为CNY",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "选择股票类型时融资币种同步锁定为CNY"
+  },
+  {
+    "hash": "b0e4881a8fd29b852a1c20244568a2a5d9a6f8be",
+    "author": "Manus Dev",
+    "date": "2026-07-04T01:15:45+00:00",
+    "message": "fix: 甘特图预约条始终4角圆润，上下留2px间距，相邻条之间有细小分隔",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "甘特图预约条始终4角圆润，上下留2px间距，相邻条之间有细小分隔"
+  },
+  {
+    "hash": "60f06834e743f373abe81b3cc5701bbb64d14beb",
+    "author": "Manus Dev",
+    "date": "2026-07-04T00:57:07+00:00",
+    "message": "fix: 甘特图预约条始终保持4角圆润，贴边时由容器裁剪，视觉更美观",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "甘特图预约条始终保持4角圆润，贴边时由容器裁剪，视觉更美观"
+  },
+  {
+    "hash": "78c7d21bfa7f662df0ae3a1c5ff1d5c60f78fb6c",
+    "author": "Manus Dev",
+    "date": "2026-07-04T00:54:26+00:00",
+    "message": "fix: 修复向量回填接口的模块路径（动态import改为require）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复向量回填接口的模块路径（动态import改为require）"
+  },
+  {
+    "hash": "e7d2a22cfc3d2427eb9ad32d8d0f1156f243fd3e",
+    "author": "Manus Dev",
+    "date": "2026-07-04T00:37:53+00:00",
+    "message": "feat: 添加管理员向量回填接口 /api/admin/wecom/backfill-embeddings",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "添加管理员向量回填接口 /api/admin/wecom/backfill-embeddings"
+  },
+  {
+    "hash": "fe6f05128fc545e3ff1d8d334b24acb5582e8116",
+    "author": "Manus Dev",
+    "date": "2026-07-03T23:41:07+00:00",
+    "message": "feat: 顾客预约+员工排班页均加入周/月视图切换箭头，月视图使用 YabanHeatCalendar 热力日历",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "顾客预约+员工排班页均加入周/月视图切换箭头，月视图使用 YabanHeatCalendar 热力日历"
+  },
+  {
+    "hash": "b4b6f8c334698bcd3007056486d869fc80a78a0b",
+    "author": "Manus Dev",
+    "date": "2026-07-03T23:27:06+00:00",
+    "message": "feat: 员工排班页日历格子 UI 与顾客预约页完全统一，底部显示在岗人数",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "员工排班页日历格子 UI 与顾客预约页完全统一，底部显示在岗人数"
+  },
+  {
+    "hash": "47fac37ff33cfeeba97df3a3cdfe1c0f83a78a6d",
+    "author": "Manus Dev",
+    "date": "2026-07-03T23:11:13+00:00",
+    "message": "fix: 员工排班页 getStaffDaySegs 修复 dow 计算错位 + 补充 daySegs 分支，与顾客预约页口径一致",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "员工排班页 getStaffDaySegs 修复 dow 计算错位 + 补充 daySegs 分支，与顾客预约页口径一致"
+  },
+  {
+    "hash": "727345aaf0ea69d38044bde6be28dc24a04af597",
+    "author": "github-actions[bot]",
+    "date": "2026-07-03T17:26:06+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "4b502997262955cda9107bf807364bd62e07cebd",
+    "author": "Manus Dev",
+    "date": "2026-07-03T15:26:06+00:00",
+    "message": "fix: 格子布局改为5天铺满+周六日缩小在右侧，精确 calc 宽度计算",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "格子布局改为5天铺满+周六日缩小在右侧，精确 calc 宽度计算"
+  },
+  {
+    "hash": "4a922917574ff7dd7f4c353a1ecd801bdfeeac51",
+    "author": "Manus Dev",
+    "date": "2026-07-03T15:21:04+00:00",
+    "message": "debug: 在 weekSchedule 接口加 console.log 调试日志",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "debug: 在 weekSchedule 接口加 console.log 调试日志"
+  },
+  {
+    "hash": "8985ae088ac41b41261b90bff1782ef1c929973f",
+    "author": "Manus Dev",
+    "date": "2026-07-03T15:04:44+00:00",
+    "message": "feat: 员工排班日历改为格子布局，彻底重写 getEffectiveShift 逻辑",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "员工排班日历改为格子布局，彻底重写 getEffectiveShift 逻辑"
+  },
+  {
+    "hash": "6870efa435106ac898a57a12341d3196182c7662",
+    "author": "Manus Dev",
+    "date": "2026-07-03T14:39:07+00:00",
+    "message": "fix: daySegs 改为数组格式避免 superjson key 类型问题，彻底修复排班日历错位 bug",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "daySegs 改为数组格式避免 superjson key 类型问题，彻底修复排班日历错位 bug"
+  },
+  {
+    "hash": "bb79890bacbbe88628d4fa52d7d6b961c4ef4b6d",
+    "author": "Manus Dev",
+    "date": "2026-07-03T14:16:41+00:00",
+    "message": "fix: 修复 UTC 时区偏移导致 dow 计算错一天的 bug，改用本地时间解析日期",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复 UTC 时区偏移导致 dow 计算错一天的 bug，改用本地时间解析日期"
+  },
+  {
+    "hash": "0b4f5d854de798f5c416cbb8c25527112a52b02a",
+    "author": "Manus Dev",
+    "date": "2026-07-03T14:05:43+00:00",
+    "message": "fix: 修复 daySegs dows key 类型问题，兼容数字和字符串 key",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复 daySegs dows key 类型问题，兼容数字和字符串 key"
+  },
+  {
+    "hash": "5686aa755fc1a9015804fa51ece8ab67a229879d",
+    "author": "Manus Dev",
+    "date": "2026-07-03T14:00:02+00:00",
+    "message": "fix: 日历图优先用 daySegs 判断每天班次，修复 workDays 错位 bug",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "日历图优先用 daySegs 判断每天班次，修复 workDays 错位 bug"
+  },
+  {
+    "hash": "8208e83f9695fdf44c168dc2a366a7eb414cd0c7",
+    "author": "Manus Dev",
+    "date": "2026-07-03T13:51:00+00:00",
+    "message": "fix: 修复日历图 dow 错位 bug，getDay() 统一转换为 0=周一 与存储一致",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复日历图 dow 错位 bug，getDay() 统一转换为 0=周一 与存储一致"
+  },
+  {
+    "hash": "cdebc7edd12597275a3e1c23f8dac3ffadd438a9",
+    "author": "Manus Dev",
+    "date": "2026-07-03T13:44:53+00:00",
+    "message": "fix: 清空模板只清页面内容不动数据库，更新弹窗提示文字",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "清空模板只清页面内容不动数据库，更新弹窗提示文字"
+  },
+  {
+    "hash": "c3dcbe5a998c7b7648d34dd7bc5fa0c7917d526e",
+    "author": "Manus Dev",
+    "date": "2026-07-03T13:36:34+00:00",
+    "message": "fix: 时间设置框去掉AM/PM标签，改为24小时制显示",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "时间设置框去掉AM/PM标签，改为24小时制显示"
+  },
+  {
+    "hash": "87ed76202871babaeb68ecbf1775ef1fcb701ace",
+    "author": "Manus Dev",
+    "date": "2026-07-03T13:31:49+00:00",
+    "message": "fix: 清空模板按钮在编辑状态下始终显示（含未保存过的情况）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "清空模板按钮在编辑状态下始终显示（含未保存过的情况）"
+  },
+  {
+    "hash": "917cba1c2dad525b068d0f2cb87df3899fa6624c",
+    "author": "Manus Dev",
+    "date": "2026-07-03T13:24:33+00:00",
+    "message": "fix: 清空模板按钮移到长期周模板标题行，不依赖格子选中状态",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "清空模板按钮移到长期周模板标题行，不依赖格子选中状态"
+  },
+  {
+    "hash": "867ec407f0a96a9ceaeb0f76519c68d6726b1e9c",
+    "author": "Manus Dev",
+    "date": "2026-07-03T13:18:45+00:00",
+    "message": "feat: 上半区加清空周模板按钮，后端新增 clearDaySegs 接口",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "上半区加清空周模板按钮，后端新增 clearDaySegs 接口"
+  },
+  {
+    "hash": "f6f0ffe9bb79b299c3566ff6ae7b17fe8173b3bc",
+    "author": "Manus Dev",
+    "date": "2026-07-03T13:12:22+00:00",
+    "message": "feat: 0天工作日禁用保存按钮，个性设置标签宽度统一对齐，甘特图名字列宽自适应",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "0天工作日禁用保存按钮，个性设置标签宽度统一对齐，甘特图名字列宽自适应"
+  },
+  {
+    "hash": "b0dadc6cf0d5657aca5cea80d591c29053af9f01",
+    "author": "Manus Dev",
+    "date": "2026-07-03T13:03:18+00:00",
+    "message": "fix: 休息日斜纹加深提升对比度，去掉格子AM/PM标签只保留时间数字",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "休息日斜纹加深提升对比度，去掉格子AM/PM标签只保留时间数字"
+  },
+  {
+    "hash": "b71d21b8031397b925e072582257cf778061cefb",
+    "author": "Manus Dev",
+    "date": "2026-07-03T13:02:53+00:00",
+    "message": "fix: 休息日格子斜纹加深，周X文字改深灰，X和休息文字加深，提升对比度",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "休息日格子斜纹加深，周X文字改深灰，X和休息文字加深，提升对比度"
+  },
+  {
+    "hash": "67d7a1a316bc3b103023e58fa5c73e0c7a95c1e1",
+    "author": "Manus Dev",
+    "date": "2026-07-03T12:59:19+00:00",
+    "message": "feat: 格子统一高度100px，待设置虚线框+加号，休息日斜纹+X，时间框加上午/下午标签，连接符加深，错误提示加大",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "格子统一高度100px，待设置虚线框+加号，休息日斜纹+X，时间框加上午/下午标签，连接符加深，错误提示加大"
+  },
+  {
+    "hash": "a0e729d6d25f5e705cd9b785e8e0b3f38477e918",
+    "author": "Manus Dev",
+    "date": "2026-07-03T12:55:09+00:00",
+    "message": "feat: 清空按钮移至个性设置区，顶栏层级优化，周模板区块标题强化",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "清空按钮移至个性设置区，顶栏层级优化，周模板区块标题强化"
+  },
+  {
+    "hash": "500fc9844ea960e98a7be736d637321ac1cab2e8",
+    "author": "Manus Dev",
+    "date": "2026-07-03T12:45:20+00:00",
+    "message": "feat(yaban): 单日覆盖 - 长按员工头像弹出当天时间编辑面板，保存写入 shift_override",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "单日覆盖 - 长按员工头像弹出当天时间编辑面板，保存写入 shift_override"
+  },
+  {
+    "hash": "240ac48bc65a0174793ef7255de9ce88a5242b5a",
+    "author": "github-actions[bot]",
+    "date": "2026-07-03T11:58:07+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "837c860ccb76178482ca74d201eeb1148927f2c0",
+    "author": "runyi329",
+    "date": "2026-07-03T11:55:28+00:00",
+    "message": "feat: 排班抽屉深度重构 - 每天独立时段/AM-PM格子/上下午两行/保存两态/个性设置行式布局",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "排班抽屉深度重构 - 每天独立时段/AM-PM格子/上下午两行/保存两态/个性设置行式布局"
+  },
+  {
+    "hash": "9ac2427f40b9e45053f0c4b1364014a50d8cd2d1",
+    "author": "Manus Dev",
+    "date": "2026-07-03T08:55:28+00:00",
+    "message": "fix: 去掉display_config联动同步逻辑，每张订单独立保存自己的字段显示配置",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "去掉display_config联动同步逻辑，每张订单独立保存自己的字段显示配置"
+  },
+  {
+    "hash": "523be7811dee684599093fad222592acb0a9d0f9",
+    "author": "Manus Dev",
+    "date": "2026-07-03T08:10:17+00:00",
+    "message": "feat: 订单卡片UI优化——四列主行(数量/开仓价/最新价/浮动盈亏)、涨跌点数、去掉盈亏平衡行、筛选栏合并一行、标签改回中文",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "订单卡片UI优化——四列主行(数量/开仓价/最新价/浮动盈亏)、涨跌点数、去掉盈亏平衡行、筛选栏合并一行、标签改回中文"
+  },
+  {
+    "hash": "2e666aec5d81edd472822f4bbbfe27163ba93eea",
+    "author": "github-actions[bot]",
+    "date": "2026-07-03T07:23:02+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "8981388a6bf7f164ad7d58fbaf1a612a6454a2cd",
+    "author": "Manus Dev",
+    "date": "2026-07-03T01:54:52+00:00",
+    "message": "feat: 止盈利润改为毛利润，订单编号、持仓汇总银色铭牌、管理员用户切换等优化",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "止盈利润改为毛利润，订单编号、持仓汇总银色铭牌、管理员用户切换等优化"
+  },
+  {
+    "hash": "b17e4fbeb105f0cd3a5417ec32eec566f4af2829",
+    "author": "Manus Dev",
+    "date": "2026-07-03T00:13:38+00:00",
+    "message": "feat: 持仓汇总——止盈价格加距止盈涨跌点数/百分比，到期盈利加人民币折算+实时汇率，数字统一整数显示",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "持仓汇总——止盈价格加距止盈涨跌点数/百分比，到期盈利加人民币折算+实时汇率，数字统一整数显示"
+  },
+  {
+    "hash": "ac8d6243f45edc7da2ab0440c2a3bcb86f32c9a0",
+    "author": "Manus Dev",
+    "date": "2026-07-02T23:37:56+00:00",
+    "message": "feat: 持仓汇总铭牌升级——银色拉丝+四角铆钉+统一字色+标题行显示ETH实时价和北京时间",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "持仓汇总铭牌升级——银色拉丝+四角铆钉+统一字色+标题行显示ETH实时价和北京时间"
+  },
+  {
+    "hash": "8bdc5d6b3932d3fc15a66e2e398d9eb3e5d9c0e9",
+    "author": "Manus Dev",
+    "date": "2026-07-02T22:55:50+00:00",
+    "message": "feat: 订单流管理持仓汇总容器改为深金色/琥珀色背景（第15步）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "订单流管理持仓汇总容器改为深金色/琥珀色背景（第15步）"
+  },
+  {
+    "hash": "bab31495d12cfe3ca99d7d96ec7253b125e1eddb",
+    "author": "github-actions[bot]",
+    "date": "2026-07-02T17:48:22+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "8370aeaa1489ba9c1bcb4d4588d4e9af7c227d97",
+    "author": "Manus Dev",
+    "date": "2026-07-02T13:49:12+00:00",
+    "message": "feat: 删除 ETH 一次性付款型杠杆买入区块（网格交易卡片下方）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "删除 ETH 一次性付款型杠杆买入区块（网格交易卡片下方）"
+  },
+  {
+    "hash": "c02731b291d44b5a138ba686c3fd9ed98f2849c3",
+    "author": "Manus Dev",
+    "date": "2026-07-02T13:31:00+00:00",
+    "message": "feat: 网格交易模拟测算移至GTO策略下方，样式统一为卡片容器",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "网格交易模拟测算移至GTO策略下方，样式统一为卡片容器"
+  },
+  {
+    "hash": "5850d4aa1f4d947f154e5c59859cb38fa2513398",
+    "author": "github-actions[bot]",
+    "date": "2026-07-02T12:00:11+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "c4b976effe4a86d363c8f9fce0d7df66d45eac4b",
+    "author": "runyi329",
+    "date": "2026-07-02T08:41:39+00:00",
+    "message": "feat: 邀请二维码按钮、顾客头像修复、预约联动沟通记录",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "邀请二维码按钮、顾客头像修复、预约联动沟通记录"
+  },
+  {
+    "hash": "ea22f94dfd2cfd8bc7d044be1a398db5016e5b2d",
+    "author": "Manus Dev",
+    "date": "2026-07-02T07:47:14+00:00",
+    "message": "fix: 概览合计行始终显示（不依赖marginCny>0）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "概览合计行始终显示（不依赖marginCny>0）"
+  },
+  {
+    "hash": "571cd5c0b8fed551d689b9d05ed1915d71ff0beb",
+    "author": "github-actions[bot]",
+    "date": "2026-07-02T07:34:47+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "7612da96e935324999b9010ebf9715889d3d2817",
+    "author": "Manus Dev",
+    "date": "2026-07-02T06:56:27+00:00",
+    "message": "feat: 多账号管理+Manus子Tab+全屏模型选择+去推荐字样（步骤11-14）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "多账号管理+Manus子Tab+全屏模型选择+去推荐字样（步骤11-14）"
+  },
+  {
+    "hash": "ce22247852cc4ce7a99c8396b366d77bc5bc1a72",
+    "author": "runyi329",
+    "date": "2026-07-02T06:33:51+00:00",
+    "message": "feat(yaban): 售前售后预约记录卡片 + 日历预约点击跳转 + listByPatient 接口",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "售前售后预约记录卡片 + 日历预约点击跳转 + listByPatient 接口"
+  },
+  {
+    "hash": "c984fc00aaa4e6689d5874377d183a9968413b7e",
+    "author": "runyi329",
+    "date": "2026-07-02T06:12:31+00:00",
+    "message": "feat(yaban): 诊所本地切换+项目智能搜索+全局圆角收紧+ChargeProductPicker多选高亮+时间轮盘对齐修复",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "诊所本地切换+项目智能搜索+全局圆角收紧+ChargeProductPicker多选高亮+时间轮盘对齐修复"
+  },
+  {
+    "hash": "0692f73c3856e0c84e882e3a817f3274eed34e27",
+    "author": "runyi329",
+    "date": "2026-07-02T03:50:27+00:00",
+    "message": "feat(yaban): 新增预约表单字段（咨询师/助理/就诊类型/项目多选/诊室/科室/来源/备注）+ 时间轮盘双轮盘优化 + 诊室科室设置后台页面",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "新增预约表单字段（咨询师/助理/就诊类型/项目多选/诊室/科室/来源/备注）+ 时间轮盘双轮盘优化 + 诊室科室设置后台页面"
+  },
+  {
+    "hash": "05ee0a7d2ef14630fd992f9ee0a97d7a4471d61f",
+    "author": "Manus Dev",
+    "date": "2026-07-02T02:58:02+00:00",
+    "message": "feat: A127渠道配置页系列优化",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "A127渠道配置页系列优化"
+  },
+  {
+    "hash": "44297077d02c76b997c02be5a17538bcbebd6137",
+    "author": "runyi329",
+    "date": "2026-07-02T02:12:33+00:00",
+    "message": "fix: COS Region 修正为 ap-shanghai（Bucket 所在地区）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "COS Region 修正为 ap-shanghai（Bucket 所在地区）"
+  },
+  {
+    "hash": "dde6ec2496a0f57798e50d327af63b1c3e4828ca",
+    "author": "runyi329",
+    "date": "2026-07-02T02:06:09+00:00",
+    "message": "refactor: getMinuteKlines/getMinuteStats 改为直接从COS读取内存，服务器零磁盘占用，按需加载当前页月份",
+    "type": "refactor",
+    "scope": "",
+    "cleanMessage": "getMinuteKlines/getMinuteStats 改为直接从COS读取内存，服务器零磁盘占用，按需加载当前页月份"
+  },
+  {
+    "hash": "933212ac24534549ae7c26bcd823741458a9600f",
+    "author": "runyi329",
+    "date": "2026-07-02T01:48:11+00:00",
+    "message": "fix: getMinuteKlines/getMinuteStats 本地文件不存在时自动从COS下载并缓存（懒加载）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "getMinuteKlines/getMinuteStats 本地文件不存在时自动从COS下载并缓存（懒加载）"
+  },
+  {
+    "hash": "4de4a70cb47afc3fb0ab6ee5c93fe650beee6b16",
+    "author": "runyi329",
+    "date": "2026-07-02T01:24:03+00:00",
+    "message": "feat: 数据分析Tab全容器筛选Tab + 分钟线分页表格 + getMinuteKlines/getMinuteStats API",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "数据分析Tab全容器筛选Tab + 分钟线分页表格 + getMinuteKlines/getMinuteStats API"
+  },
+  {
+    "hash": "4e8be57c65d96cc39b0e4dcc800339cb626b3be5",
+    "author": "Manus Dev",
+    "date": "2026-07-02T01:26:00+00:00",
+    "message": "fix: 修正淘汰赛对阵图16强位置顺序（严格按R32胜者bracket连线配对）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修正淘汰赛对阵图16强位置顺序（严格按R32胜者bracket连线配对）"
+  },
+  {
+    "hash": "386d3e1f98a58dfa0c10938bb186a6e204e0d35a",
+    "author": "Manus Dev",
+    "date": "2026-07-02T01:14:18+00:00",
+    "message": "fix: 更新淘汰赛对阵图 knockoutMatches 数据（32强比分+16强晋级球队旗帜）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "更新淘汰赛对阵图 knockoutMatches 数据（32强比分+16强晋级球队旗帜）"
+  },
+  {
+    "hash": "4fa3275b3465bdd4fb4e2534397515db389e6c6a",
+    "author": "Manus Dev",
+    "date": "2026-07-02T01:06:59+00:00",
+    "message": "feat: 更新世界杯32强比赛结果（6月28日-7月1日）及16强对阵",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "更新世界杯32强比赛结果（6月28日-7月1日）及16强对阵"
+  },
+  {
+    "hash": "7d27250bca482c0602de6330baa5341a6327a16d",
+    "author": "Manus Dev",
+    "date": "2026-07-02T00:50:33+00:00",
+    "message": "fix: 均价改回原始数量作分母，浮盈用折后数量，弹窗新增折后数量列",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "均价改回原始数量作分母，浮盈用折后数量，弹窗新增折后数量列"
+  },
+  {
+    "hash": "b28b09dffe1f39dbc2188460bad7c389a35e8768",
+    "author": "Manus Dev",
+    "date": "2026-07-02T00:41:44+00:00",
+    "message": "fix: 个人均价和浮盈改用折后数量作分母（档位折扣影响有效数量，从而影响均价）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "个人均价和浮盈改用折后数量作分母（档位折扣影响有效数量，从而影响均价）"
+  },
+  {
+    "hash": "e9b6f51817f79475ad95cde28dc51f04def5133c",
+    "author": "Manus Dev",
+    "date": "2026-07-02T00:28:57+00:00",
+    "message": "feat: 个人均价问号改为自定义弹窗，展示订单折扣明细表格（小字体，紧凑布局）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "个人均价问号改为自定义弹窗，展示订单折扣明细表格（小字体，紧凑布局）"
+  },
+  {
+    "hash": "ee0fbb2a31184877c219edb12590d9c7bb972a5d",
+    "author": "Manus Dev",
+    "date": "2026-07-02T00:20:57+00:00",
+    "message": "fix: 浮盈改用个人均价基准计算，个人均价问号弹窗展示订单折扣明细",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "浮盈改用个人均价基准计算，个人均价问号弹窗展示订单折扣明细"
+  },
+  {
+    "hash": "cf5adf7426649d544b1f376e925482c2aa4fa663",
+    "author": "Manus Dev",
+    "date": "2026-07-01T23:47:11+00:00",
+    "message": "feat: 订单卡片左栏新增开仓币价字段（显示在当前币价上方，受 display_config.openPrice 开关控制）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "订单卡片左栏新增开仓币价字段（显示在当前币价上方，受 display_config.openPrice 开关控制）"
+  },
+  {
+    "hash": "d756eff5dd56a046139ae13b0ab20ae479c6253f",
+    "author": "runyi329",
+    "date": "2026-07-01T23:24:13+00:00",
+    "message": "feat(yaban): 新建预约页第一步重构为三折叠卡片（选顾客/选时间/选医生）",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "新建预约页第一步重构为三折叠卡片（选顾客/选时间/选医生）"
+  },
+  {
+    "hash": "82785cd0213d7782457d7ac1a85b6237ef2c50d3",
+    "author": "runyi329",
+    "date": "2026-07-01T10:36:44+00:00",
+    "message": "fix(A316): 角色成员分组直接用后端rolesData，不依赖localStorage缓存，完全联动角色管理排序",
+    "type": "fix",
+    "scope": "A316",
+    "cleanMessage": "角色成员分组直接用后端rolesData，不依赖localStorage缓存，完全联动角色管理排序"
+  },
+  {
+    "hash": "ed19e857fcacdf9eced9e8a0f07a88e6d622ef47",
+    "author": "Manus Dev",
+    "date": "2026-07-01T22:34:28+00:00",
+    "message": "feat: 网格交易模拟器 - 完整功能上线",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "网格交易模拟器 - 完整功能上线"
+  },
+  {
+    "hash": "a320b472579d9aa9c8fc6dc234c8f444a70253ec",
+    "author": "github-actions[bot]",
+    "date": "2026-07-01T17:56:06+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "192aad6a9b69541e24fc1e1eaef72568ea6dfe8f",
+    "author": "Manus Dev",
+    "date": "2026-07-01T17:20:04+00:00",
+    "message": "feat: WecomAdmin 13步改造 - 三色Tab/圆形开关/卡片圆角/欢迎语移底部/颜色系统修复",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "WecomAdmin 13步改造 - 三色Tab/圆形开关/卡片圆角/欢迎语移底部/颜色系统修复"
+  },
+  {
+    "hash": "85d313a9ab8a4568e888dbef46106d4b25bb2fea",
+    "author": "Manus Dev",
+    "date": "2026-07-01T16:57:57+00:00",
+    "message": "fix(WecomAdmin): 修复三个Tab颜色系统，绕过全局主题映射",
+    "type": "fix",
+    "scope": "WecomAdmin",
+    "cleanMessage": "修复三个Tab颜色系统，绕过全局主题映射"
+  },
+  {
+    "hash": "816933f800b519ecf1802ca1965e5c9d37897a17",
+    "author": "github-actions[bot]",
+    "date": "2026-07-01T12:26:15+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "61c3f8165b8c52a3b8fbb9c0a7b831cefd216a00",
+    "author": "HaoYouJi Dev",
+    "date": "2026-07-01T09:52:29+00:00",
+    "message": "fix(LedgerDetailAA): 合计行tooltip改为向上弹出，避免被屏幕底部截断",
+    "type": "fix",
+    "scope": "LedgerDetailAA",
+    "cleanMessage": "合计行tooltip改为向上弹出，避免被屏幕底部截断"
+  },
+  {
+    "hash": "2683605d862b280598442a6033ee9855621c47a8",
+    "author": "HaoYouJi Dev",
+    "date": "2026-07-01T09:39:06+00:00",
+    "message": "fix(LedgerDetailAA): 合计行今日变动tooltip改fixed定位，修复被截断无法显示",
+    "type": "fix",
+    "scope": "LedgerDetailAA",
+    "cleanMessage": "合计行今日变动tooltip改fixed定位，修复被截断无法显示"
+  },
+  {
+    "hash": "388b6b5ec1077f2667ea64843a361724ab744c91",
+    "author": "HaoYouJi Dev",
+    "date": "2026-07-01T09:32:32+00:00",
+    "message": "fix(LedgerDetailAA): 全局关闭tooltip改为冒泡阶段，避免stopPropagation失效",
+    "type": "fix",
+    "scope": "LedgerDetailAA",
+    "cleanMessage": "全局关闭tooltip改为冒泡阶段，避免stopPropagation失效"
+  },
+  {
+    "hash": "26cb132ab32107fe66732b55c90523dd0f7b2c2e",
+    "author": "HaoYouJi Dev",
+    "date": "2026-07-01T09:21:33+00:00",
+    "message": "fix(LedgerDetailAA): tooltip点击外部关闭+名称列改fixed定位不被截断",
+    "type": "fix",
+    "scope": "LedgerDetailAA",
+    "cleanMessage": "tooltip点击外部关闭+名称列改fixed定位不被截断"
+  },
+  {
+    "hash": "ae69d7e7bab25a37d5ab63a5a896131123aaf821",
+    "author": "HaoYouJi Dev",
+    "date": "2026-07-01T09:07:32+00:00",
+    "message": "fix(LedgerDetailAA): tooltip弹层改为向右展开，避免左边缘截断",
+    "type": "fix",
+    "scope": "LedgerDetailAA",
+    "cleanMessage": "tooltip弹层改为向右展开，避免左边缘截断"
+  },
+  {
+    "hash": "9ce01e14af356612129fc53ca3a1ec5ddf03ca95",
+    "author": "HaoYouJi Dev",
+    "date": "2026-07-01T08:59:26+00:00",
+    "message": "fix(LedgerDetailAA): 修复合计行列顺序，回报列正确显示各行pnl之和",
+    "type": "fix",
+    "scope": "LedgerDetailAA",
+    "cleanMessage": "修复合计行列顺序，回报列正确显示各行pnl之和"
+  },
+  {
+    "hash": "127a4e713acc04a31f56b8f6a3dfec58e735dbb3",
+    "author": "HaoYouJi Dev",
+    "date": "2026-07-01T08:42:16+00:00",
+    "message": "fix(LedgerDetailAA): 修复回报合计=各行latestPnl之和，当天列合计只统计彩色数字标签",
+    "type": "fix",
+    "scope": "LedgerDetailAA",
+    "cleanMessage": "修复回报合计=各行latestPnl之和，当天列合计只统计彩色数字标签"
+  },
+  {
+    "hash": "0b5211cd0187d1b96534dd24ccf6e98afa1b4bd4",
+    "author": "HaoYouJi Dev",
+    "date": "2026-07-01T08:18:42+00:00",
+    "message": "feat(A307): 角色管理重构 - 统一内置/自定义角色，支持增删改排序，排序联动预约界面",
+    "type": "feat",
+    "scope": "A307",
+    "cleanMessage": "角色管理重构 - 统一内置/自定义角色，支持增删改排序，排序联动预约界面"
+  },
+  {
+    "hash": "9cefb26a6b8d168db8aaff87fd2541e7e6cadb12",
+    "author": "github-actions[bot]",
+    "date": "2026-07-01T08:15:45+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "1dc2c9f679607d078ba07725312bc3e1c291c71f",
+    "author": "github-actions[bot]",
+    "date": "2026-06-30T17:54:11+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "514d114f955742326860697075c40e2010f705fe",
+    "author": "github-actions[bot]",
+    "date": "2026-06-30T12:03:39+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "37baadda0b3d58ee569b4d5974be9735d82681ff",
+    "author": "Manus Dev",
+    "date": "2026-06-30T11:06:28+00:00",
+    "message": "调价记录：完整路径+涨跌幅+操作人头像，仿RecordLogs样式",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "调价记录：完整路径+涨跌幅+操作人头像，仿RecordLogs样式"
+  },
+  {
+    "hash": "772993d1e6c6b2917ca528d6cf3b3eabfb2abdf8",
+    "author": "Manus Dev",
+    "date": "2026-06-30T10:57:35+00:00",
+    "message": "feat: 智能搜索扩展（名称+价格+单位+分类名）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "智能搜索扩展（名称+价格+单位+分类名）"
+  },
+  {
+    "hash": "bbca85427334005a3de9f8254b475cccd60d0649",
+    "author": "Manus Dev",
+    "date": "2026-06-30T10:44:51+00:00",
+    "message": "feat: 面议橙色显示、一级汇总数字、删除二级括号、搜索路径显示",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "面议橙色显示、一级汇总数字、删除二级括号、搜索路径显示"
+  },
+  {
+    "hash": "b70363858a1a7eb0536d47dc7b5a7b28046d52da",
+    "author": "Manus Dev",
+    "date": "2026-06-30T10:20:52+00:00",
+    "message": "fix(yaban): 修复 listPriceHistory LIMIT 参数绑定错误",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "修复 listPriceHistory LIMIT 参数绑定错误"
+  },
+  {
+    "hash": "0c8718212547e6da4f2addd256040091abb3b465",
+    "author": "Manus Dev",
+    "date": "2026-06-30T10:10:13+00:00",
+    "message": "fix(yaban): 调价记录加上错误状态显示，方便排查接口问题",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "调价记录加上错误状态显示，方便排查接口问题"
+  },
+  {
+    "hash": "4b10e92806560ed954d1004538efca25eb10438f",
+    "author": "Manus",
+    "date": "2026-06-30T09:43:58+00:00",
+    "message": "fix(yaban): 调价记录改用独立子组件，挂载即查询，彻底解决缓存问题",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "调价记录改用独立子组件，挂载即查询，彻底解决缓存问题"
+  },
+  {
+    "hash": "f783fc6642bb8b3eff84a73dc1a7b87e6143faa0",
+    "author": "Manus",
+    "date": "2026-06-30T09:30:04+00:00",
+    "message": "fix(yaban): invalidate 清缓存后再 fetch，修复调价记录秒出但显示空的问题",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "invalidate 清缓存后再 fetch，修复调价记录秒出但显示空的问题"
+  },
+  {
+    "hash": "d6b3ef46160b143eee4ec659662955d377205651",
+    "author": "Manus",
+    "date": "2026-06-30T09:22:58+00:00",
+    "message": "fix(yaban): 调价记录改用 utils.fetch 直接调接口，彻底去除缓存问题",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "调价记录改用 utils.fetch 直接调接口，彻底去除缓存问题"
+  },
+  {
+    "hash": "505fa9924e9ec3487c2b09c611b68e9cb4fe201b",
+    "author": "Manus",
+    "date": "2026-06-30T09:14:37+00:00",
+    "message": "fix(yaban): 用时间戳破坏 tRPC 缓存 key，修复调价记录始终显示空的问题",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "用时间戳破坏 tRPC 缓存 key，修复调价记录始终显示空的问题"
+  },
+  {
+    "hash": "b01539641848fd37b9f50772590fa8bacbaf6787",
+    "author": "Manus",
+    "date": "2026-06-30T09:03:25+00:00",
+    "message": "fix(yaban): 调价记录三处修复",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "调价记录三处修复"
+  },
+  {
+    "hash": "b6cb5c61f64e12d4b175c702584476fc6910bc15",
+    "author": "Manus",
+    "date": "2026-06-30T08:56:23+00:00",
+    "message": "fix(yaban): 调价记录两处修复",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "调价记录两处修复"
+  },
+  {
+    "hash": "3144fbf85d123c65c546c4220b7e42c3436848af",
+    "author": "Manus",
+    "date": "2026-06-30T08:37:17+00:00",
+    "message": "feat(yaban): 收费项目调价记录功能",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "收费项目调价记录功能"
+  },
+  {
+    "hash": "64624de8a8acff91b3dc5c87c8e3fc2dd9a1466c",
+    "author": "Manus",
+    "date": "2026-06-30T08:02:25+00:00",
+    "message": "feat: 收费项目三级结构改造 - 三级分类/复制门诊/价格范围/账单选择器三级联动/排序优化",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "收费项目三级结构改造 - 三级分类/复制门诊/价格范围/账单选择器三级联动/排序优化"
+  },
+  {
+    "hash": "06450b0cd06b0b81cb6f2513fd9c1569fa4a59f1",
+    "author": "github-actions[bot]",
+    "date": "2026-06-30T07:55:43+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "cd61fba158cdce0b150905d723a089b195aafac2",
+    "author": "Manus Deploy",
+    "date": "2026-06-30T05:24:26+00:00",
+    "message": "feat: YabanChargeProducts 全面优化 - 三态模式/拖拽排序/双击编辑/牙伴库/批量添加/1.1序号/搜索频率排序等",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "YabanChargeProducts 全面优化 - 三态模式/拖拽排序/双击编辑/牙伴库/批量添加/1.1序号/搜索频率排序等"
+  },
+  {
+    "hash": "6d585d08b162291ca7ca0862939d8c01f1e9b7cb",
+    "author": "Manus Deploy",
+    "date": "2026-06-30T01:41:13+00:00",
+    "message": "fix: 将担保缺口/待结利息/保证金率弹窗状态提升到父组件，防止数据刷新（refetchInterval）导致弹窗自动关闭",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "将担保缺口/待结利息/保证金率弹窗状态提升到父组件，防止数据刷新（refetchInterval）导致弹窗自动关闭"
+  },
+  {
     "hash": "e6cb1daa40b828e7b7077811882cfe25c82c79fd",
     "author": "Manus Deploy",
     "date": "2026-06-30T01:12:46+00:00",

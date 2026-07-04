@@ -7,6 +7,7 @@
  */
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { FunderOrderCard } from "@/components/FunderOrderCard";
+import { FunderOrderCardV2Silver } from "@/components/FunderOrderCardV2";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
@@ -2239,8 +2240,8 @@ export default function CryptoPrediction() {
   // 融资订单三层筛选
   const [financeL2Tab, setFinanceL2Tab] = useState<'all' | 'mine' | 'shared'>('all');
   const [financeL3Tab, setFinanceL3Tab] = useState<'all' | 'stock' | 'crypto' | 'collateral'>('all');
-  // 融资付息视图模式：记账图（卡片）/ 订单图（OKX深色风格）
-  const [financeViewMode, setFinanceViewMode] = useState<'ledger' | 'order'>('ledger');
+  // 融资付息视图模式：卡片模式（银色铭牌）/ 订单模式（原始）
+  const [financeViewMode, setFinanceViewMode] = useState<'card' | 'order'>('card');
   // 融资付息：资产汇总
   const { data: financeAssetSummary } = trpc.ledger.financeGetAssetSummary.useQuery(
     { ledgerId },
@@ -2453,7 +2454,7 @@ export default function CryptoPrediction() {
         {/* 融资付息视图切换：记账图 / 订单图 */}
         {tab === 'finance' && (
           <div className="flex rounded-full p-0.5" style={{ background: 'rgba(255,255,255,0.18)' }}>
-            {(['ledger', 'order'] as const).map(mode => (
+            {(['card', 'order'] as const).map(mode => (
               <button
                 key={mode}
                 onClick={() => setFinanceViewMode(mode)}
@@ -2462,7 +2463,7 @@ export default function CryptoPrediction() {
                   ? { background: '#fff', color: '#1A56DB' }
                   : { background: 'transparent', color: 'rgba(255,255,255,0.8)' }}
               >
-                {mode === 'ledger' ? '记账图' : '订单图'}
+                {mode === 'card' ? '卡片模式' : '订单模式'}
               </button>
             ))}
           </div>
@@ -3344,6 +3345,18 @@ export default function CryptoPrediction() {
                   {sortedOrders.length === 0 ? (
                     <div className="text-center py-12">
                       <div className="text-gray-400 text-sm">该分类下暂无订单</div>
+                    </div>
+                  ) : financeViewMode === 'card' ? (
+                    <div className="space-y-3">
+                      {sortedOrders.map((order: any) => (
+                        <FunderOrderCardV2Silver
+                          key={order.id}
+                          order={order}
+                          livePrices={financeLivePrices}
+                          priceDirection={{}}
+                          membersData={(ledgerInfo as any)?.members || []}
+                        />
+                      ))}
                     </div>
                   ) : (
                     <div className="space-y-3">
