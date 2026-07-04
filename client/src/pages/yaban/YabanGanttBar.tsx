@@ -103,7 +103,7 @@ export default function YabanGanttBar({
         if (e <= s) return null;
         const l = pct(s), w = Math.max(pct(e) - pct(s), 2);
         const st = STATUS[a.status] || STATUS.booked;
-        const rL = l <= 0.5 ? 10 : 0, rR = pct(e) >= 99.5 ? 10 : 0;
+        const rL = 10, rR = 10; // 始终保持圆角，贴边时由容器 overflow:hidden 自然裁剪
         return (
           <div
             key={ai}
