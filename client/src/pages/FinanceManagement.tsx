@@ -3044,6 +3044,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                   </div>
                 );
               })()}
+              </>)}
 
                         <div className="sticky bottom-0 bg-white px-5 py-4 border-t border-gray-100">
               <button
@@ -3056,6 +3057,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
               </button>
             </div>
           </div>
+        </div>
         </div>
       )}
 
