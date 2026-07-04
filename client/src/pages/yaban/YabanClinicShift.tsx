@@ -925,7 +925,7 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
 
   // 周模板编辑模式：有已保存数据时默认只读
   const hasSavedWork = savedDaySegs && savedDaySegs.some((r: any) => !r.isRest);
-  const [tplEditing, setTplEditing] = useState(false);
+  const [tplEditing, setTplEditing] = useState(true);
   // 清空周模板确认弹窗
   const [showClearTplConfirm, setShowClearTplConfirm] = useState(false);
   // 清空 override 确认弹窗
@@ -1060,20 +1060,6 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
 
           {/* ── 上半区：通用周模板 ── */}
           <div style={{ background: "#fff", marginTop: 10, padding: "14px 16px 18px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: INK }}>长期周模板</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                {(hasSavedWork || tplEditing) && (
-                  <span onClick={() => setShowClearTplConfirm(true)}
-                    style={{ fontSize: 12, color: "#B0BEC5", cursor: "pointer", padding: "4px 8px", border: "1px solid #DBE1E8", borderRadius: 14, background: "#F6F8FA", display: "flex", alignItems: "center", gap: 3 }}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#B0BEC5" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                    清空模板
-                  </span>
-                )}
-                <div style={{ fontSize: 12, color: "#9AA7B5" }}>点格子设时段 · 7天均可设置</div>
-              </div>
-            </div>
-
             {/* 两行星期格子：第一行周一~周四，第二行周五~周日 */}
             {(() => {
               // 渲染单个格子的函数
@@ -1083,49 +1069,76 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
                 const configured = ds.status === 'work';
                 const isRest = ds.status === 'rest';
                 const isActive = activeDow === i;
-                const bg = isActive ? SKY_D : configured ? "#EBF5FF" : isRest ? "#EEF2F6" : "#F0F4F8";
-                const bd = isActive ? SKY_D : configured ? "#90CAF9" : isRest ? "#C5CDD8" : LINE;
-                const tc = isActive ? "#fff" : "#1565C0";
-                const tc2 = isActive ? "rgba(255,255,255,.55)" : "#90CAF9";
-                const hd = isActive ? "rgba(255,255,255,.7)" : configured ? "#5BA4CF" : "#9AA7B5";
+                // 配色层次设计：深色 INK + 白色 + 不同深浅蓝，形成明显对比
+                // 选中态：深蓝实色背景 + 纯白文字（最高优先级）
+                // 已配置：纯白底 + 深幕蓝文字 + 中蓝边框
+                // 休息：冷灰斜纹，低饱和灰色文字
+                // 待设置：极浅灰底，浅蓝虚线边框
+                const bg = isActive
+                  ? "linear-gradient(150deg, #1567AE 0%, #1E88D6 100%)"
+                  : configured ? "#FFFFFF"
+                  : isRest ? "#EEF2F6"
+                  : "#F4F7FA";
+                const bd = isActive ? "#1567AE" : configured ? "#7BBFE8" : isRest ? "#C5CDD8" : "#D8E2EC";
+                // 文字色
+                const tc  = isActive ? "#FFFFFF" : "#1567AE";   // 时间数字：白色 vs 深幕蓝
+                const tc2 = isActive ? "rgba(255,255,255,.45)" : "#9ABFD8"; // 分隔符
+                const hd  = isActive ? "rgba(255,255,255,.9)" : configured ? INK : "#9AA7B5"; // 星期标题：白/深黑/灰
                 const fmt = (t: string) => t.replace(/^0/, "");
                 const am1 = fmt(ds.workStart); const am2 = fmt(ds.breakStart || "12:00");
                 const pm1 = fmt(ds.breakEnd || "13:00"); const pm2 = fmt(ds.workEnd);
                 return (
                   <div key={i} onClick={() => { if (!hasSavedWork || tplEditing) toggleDow(i); }}
-                    style={{ width: cellW, flexShrink: 0,
+                    style={{ width: cellW, flexShrink: 0, boxSizing: "border-box",
                       height: 100, borderRadius: 10, display: "flex",
-                      flexDirection: "column", alignItems: "center", justifyContent: "center",
-                      gap: 0, cursor: "pointer", transition: "all .2s", padding: "8px 3px",
-                      background: isRest ? "repeating-linear-gradient(45deg,#D8DDE4,#D8DDE4 3px,#EEF1F5 3px,#EEF1F5 7px)" : bg,
+                      flexDirection: "column", alignItems: "stretch",
+                      cursor: "pointer", transition: "all .2s", padding: "8px 5px 6px",
+                      background: isRest
+                          ? "repeating-linear-gradient(45deg,#CDD4DC,#CDD4DC 3px,#E8EDF2 3px,#E8EDF2 7px)"
+                          : bg,
                       border: `2px solid ${bd}`,
                       boxShadow: isActive ? "0 2px 8px rgba(30,136,214,.25)" : "none",
-                      overflow: "hidden", position: "relative" }}>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: isRest ? "#5A6878" : hd, lineHeight: 1, marginBottom: 5, fontFamily: "system-ui,-apple-system,sans-serif" }}>周{label}</span>
+                      overflow: "hidden", position: "relative", gap: 0 }}>
+                    {/* 顶部：星期标题，居中 */}
+                    <div style={{ textAlign: "center", flexShrink: 0, marginBottom: 5 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: isRest ? "#5A6878" : hd, lineHeight: 1 }}>周{label}</span>
+                    </div>
                     {configured ? (
-                      <div style={{ display: "flex", gap: 0, alignItems: "stretch", width: "100%", height: 56, overflow: "hidden", padding: "0 1px" }}>
-                        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-evenly", padding: "2px 2px 2px 0" }}>
-                          <span style={{ fontSize: 8, fontWeight: 800, color: tc, lineHeight: 1, fontFamily: "system-ui,-apple-system,sans-serif", whiteSpace: "nowrap" }}>{am1}</span>
-                          <span style={{ fontSize: 7, color: tc2, lineHeight: 1 }}>–</span>
-                          <span style={{ fontSize: 8, fontWeight: 800, color: tc, lineHeight: 1, fontFamily: "system-ui,-apple-system,sans-serif", whiteSpace: "nowrap" }}>{am2}</span>
+                      /* 上班状态：上午/下午两段各占一半剩余高度 */
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 0, minHeight: 0 }}>
+                        {/* 上午段 */}
+                        <div style={{ flex: 1, display: "flex", flexDirection: "column",
+                          alignItems: "center", justifyContent: "center",
+                          background: isActive ? "rgba(255,255,255,.18)" : "#EBF5FB",
+                          borderRadius: "5px 5px 0 0", minHeight: 0 }}>
+                          <span style={{ fontSize: 9, fontWeight: 600, color: isActive ? "rgba(255,255,255,.7)" : "#5BA4CF", lineHeight: 1, marginBottom: 2, letterSpacing: 0.5 }}>上午</span>
+                          <span style={{ fontSize: 11, fontWeight: 800, color: tc, lineHeight: 1, whiteSpace: "nowrap", letterSpacing: -0.3 }}>{am1}–{am2}</span>
                         </div>
-                        <div style={{ width: 1, background: isActive ? "rgba(255,255,255,.25)" : "#C5D8EA", flexShrink: 0, margin: "4px 0" }} />
-                        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "space-evenly", padding: "2px 0 2px 2px" }}>
-                          <span style={{ fontSize: 8, fontWeight: 800, color: tc, lineHeight: 1, fontFamily: "system-ui,-apple-system,sans-serif", whiteSpace: "nowrap" }}>{pm1}</span>
-                          <span style={{ fontSize: 7, color: tc2, lineHeight: 1 }}>–</span>
-                          <span style={{ fontSize: 8, fontWeight: 800, color: tc, lineHeight: 1, fontFamily: "system-ui,-apple-system,sans-serif", whiteSpace: "nowrap" }}>{pm2}</span>
+                        {/* 分割线 */}
+                        <div style={{ height: 1, background: isActive ? "rgba(255,255,255,.3)" : "#C8E0F0", flexShrink: 0 }} />
+                        {/* 下午段 */}
+                        <div style={{ flex: 1, display: "flex", flexDirection: "column",
+                          alignItems: "center", justifyContent: "center",
+                          background: isActive ? "rgba(255,255,255,.1)" : "#F5FAFD",
+                          borderRadius: "0 0 5px 5px", minHeight: 0 }}>
+                          <span style={{ fontSize: 9, fontWeight: 600, color: isActive ? "rgba(255,255,255,.7)" : "#5BA4CF", lineHeight: 1, marginBottom: 2, letterSpacing: 0.5 }}>下午</span>
+                          <span style={{ fontSize: 11, fontWeight: 800, color: tc, lineHeight: 1, whiteSpace: "nowrap", letterSpacing: -0.3 }}>{pm1}–{pm2}</span>
                         </div>
                       </div>
                     ) : isRest ? (
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, marginTop: 2 }}>
-                        <span style={{ fontSize: 16, color: "#7A8898", fontWeight: 700 }}>✕</span>
-                        <span style={{ fontSize: 10, color: "#5A6878", fontWeight: 600, textAlign: "center", lineHeight: 1.3 }}>休息</span>
+                      /* 休息状态：图标+文字充满剩余空间，冷灰色调 */
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column",
+                        alignItems: "center", justifyContent: "center", gap: 5 }}>
+                        <span style={{ fontSize: 20, color: "#8A97A6", lineHeight: 1, fontWeight: 400 }}>✕</span>
+                        <span style={{ fontSize: 11, color: "#6A7888", fontWeight: 600, letterSpacing: 1.5 }}>休息</span>
                       </div>
                     ) : (
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, marginTop: 2,
-                        border: "1.5px dashed #C5D0DB", borderRadius: 6, padding: "5px 8px", width: "70%" }}>
-                        <span style={{ fontSize: 14, color: "#C5D0DB", lineHeight: 1 }}>+</span>
-                        <span style={{ fontSize: 9, color: "#C5D0DB", textAlign: "center", lineHeight: 1.2 }}>待设置</span>
+                      /* 待设置状态：虚线框充满剩余空间，与主色呼应的浅蓝虚线 */
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column",
+                        alignItems: "center", justifyContent: "center", gap: 5,
+                        border: "1.5px dashed #A8CCE8", borderRadius: 6 }}>
+                        <span style={{ fontSize: 20, color: "#A8CCE8", lineHeight: 1, fontWeight: 300 }}>+</span>
+                        <span style={{ fontSize: 10, color: "#A8CCE8", letterSpacing: 0.5 }}>待设置</span>
                       </div>
                     )}
                   </div>
@@ -1147,27 +1160,34 @@ function SchDrawer({ staffUserId, staffName, roleKey, clinicName, date, initSegs
               );
             })()}
 
+            {/* 格子下方操作行：休息在左，清空模板在右 */}
             {/* 时间设置区：选中某天后显示 */}
             {activeDow === null ? (
-              <div style={{ marginTop: 18, padding: "20px 0", textAlign: "center", color: "#9AA7B5", fontSize: 13 }}>
+              <div style={{ marginTop: 14, padding: "16px 0", textAlign: "center", color: "#9AA7B5", fontSize: 13 }}>
                 点击上方星期格子设置该天时间
               </div>
             ) : (
               <>
-                {/* 当前选中天标题 */}
-                <div style={{ marginTop: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                {/* 当前选中天标题 + 按鈕行 */}
+                <div style={{ marginTop: 14, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: INK }}>周{DOW_LABELS[activeDow]} 时间设置</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    {(!hasSavedWork || tplEditing) && (
+                  {(!hasSavedWork || tplEditing) && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span onClick={() => setCurDay({ isRest: false, status: 'work' })}
+                        style={{ fontSize: 12, cursor: "pointer", padding: "4px 10px", borderRadius: 14,
+                          color: curDay && curDay.status !== 'rest' ? "#fff" : "#9AA7B5",
+                          background: curDay && curDay.status !== 'rest' ? SKY_D : "#F6F8FA",
+                          border: curDay && curDay.status !== 'rest' ? `1px solid ${SKY_D}` : "1px solid #DBE1E8",
+                          fontWeight: curDay && curDay.status !== 'rest' ? 600 : 400 }}>上班</span>
+                      <span onClick={() => setCurDay({ isRest: true, status: 'rest' })}
+                        style={{ fontSize: 12, cursor: "pointer", padding: "4px 10px", borderRadius: 14,
+                          color: curDay && curDay.status === 'rest' ? "#fff" : "#9AA7B5",
+                          background: curDay && curDay.status === 'rest' ? "#9AA7B5" : "#F6F8FA",
+                          border: "1px solid #DBE1E8" }}>休息</span>
                       <span onClick={() => setShowClearTplConfirm(true)}
-                        style={{ fontSize: 12, color: "#B0BEC5", cursor: "pointer", padding: "4px 10px", border: "1px solid #DBE1E8", borderRadius: 14, background: "#F6F8FA" }}>清空模板</span>
-                    )}
-                    {curDay && curDay.status !== 'rest' ? (
-                      <span onClick={() => setCurDay({ isRest: true, status: 'rest' })} style={{ fontSize: 13, color: "#9AA7B5", cursor: "pointer", padding: "4px 10px", border: "1px solid #DBE1E8", borderRadius: 14, background: "#F6F8FA" }}>休息日</span>
-                    ) : (
-                      <span onClick={() => setCurDay({ isRest: false, status: 'work' })} style={{ fontSize: 13, color: SKY_D, fontWeight: 600, cursor: "pointer", padding: "4px 10px", border: `1px solid ${SKY_D}`, borderRadius: 14 }}>上班</span>
-                    )}
-                  </div>
+                        style={{ fontSize: 12, color: "#B0BEC5", cursor: "pointer", padding: "4px 10px", border: "1px solid #DBE1E8", borderRadius: 14, background: "#F6F8FA" }}>清空</span>
+                    </div>
+                  )}
                 </div>
 
                 {curDay && curDay.status === 'rest' ? (
