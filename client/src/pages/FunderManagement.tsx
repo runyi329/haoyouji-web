@@ -3,7 +3,7 @@ import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X } from "lucide-react";
 import { toast } from "sonner";
-import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType } from "@/components/FunderOrderCard";
+import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER } from "@/components/FunderOrderCard";
 
 
 
@@ -857,13 +857,13 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 {selectedUserId === null
                   ? '全部成员'
                   : (funderUsers as any[])?.find((u: any) => u.userId === selectedUserId)
-                    ? (() => { const _u = (funderUsers as any[]).find((u: any) => u.userId === selectedUserId); return _u?.username + (_u?.name && _u.name !== _u.username ? ` (${_u.name})` : ''); })()
+                    ? (() => { const _u = (funderUsers as any[]).find((u: any) => u.userId === selectedUserId); return _u?.username || _u?.name || '成员'; })()
                     : '选择成员'}
               </span>
               <ChevronDown className="w-4 h-4 text-gray-400 ml-1 shrink-0" />
             </button>
             {showUserDropdown && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-2xl shadow-lg border border-gray-100 z-50 overflow-hidden">
+              <div className="absolute top-full left-0 mt-1 bg-white rounded-2xl shadow-lg border border-gray-100 z-50 overflow-hidden" style={{ minWidth: '240px', width: 'max-content', maxWidth: '90vw' }}>
                 {(funderUsers as any[])?.length > 10 && (
                   <div className="px-3 pt-2 pb-1">
                     <input
@@ -876,7 +876,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     />
                   </div>
                 )}
-                <div className="max-h-52 overflow-y-auto">
+                <div className="max-h-52 overflow-y-auto overflow-x-hidden">
                   <button
                     onClick={() => { setSelectedUserId(null); setShowUserDropdown(false); }}
                     className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors"
@@ -899,7 +899,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       className="w-full text-left px-4 py-2.5 text-sm hover:bg-blue-50 transition-colors flex items-center justify-between"
                       style={{ color: selectedUserId === u.userId ? '#1A56DB' : '#374151', fontWeight: selectedUserId === u.userId ? 600 : 400 }}
                     >
-                      <span>{u.username}{u.name && u.name !== u.username ? ` (${u.name})` : ''}</span>
+                      <span className="whitespace-nowrap">{u.username}{u.name && u.name !== u.username ? ` (${u.name})` : ''}</span>
                       <span className="text-xs ml-2 shrink-0" style={{ color: '#9CA3AF', fontWeight: 400 }}>
                         {activeCount > 0 && <span style={{ color: '#22C55E' }}>进行中 {activeCount}</span>}
                         {activeCount > 0 && settledCount > 0 && <span style={{ color: '#D1D5DB' }}> / </span>}
@@ -1932,8 +1932,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     {([
                       { key: 'approxHolding', label: '持有资产约等于' },
                       { key: 'approxInterest', label: '待结利息约等于' },
-                      { key: 'approxCollateralItem', label: '担保物约等于' },
-                      { key: 'approxCollateralValue', label: '担保价值约等于' },
+                      { key: 'approxCollateralItem', label: '担保货币约等于' },
+                      { key: 'approxCollateralValue', label: '担保价値约等于' },
                     ] as { key: string; label: string }[]).map(({ key, label }) => (
                       <div key={key}>
                         <div className="text-sm text-gray-600 mb-1">{label}</div>
@@ -2370,3 +2370,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     </div>
   );
 }
+
+
+
+

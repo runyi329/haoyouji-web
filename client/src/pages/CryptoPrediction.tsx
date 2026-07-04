@@ -2228,6 +2228,10 @@ export default function CryptoPrediction() {
   const [sharedSettledExpanded, setSharedSettledExpanded] = useState(false);
   const [mySharedCollExpanded, setMySharedCollExpanded] = useState(true);
   const [mySoloCollExpanded, setMySoloCollExpanded] = useState(true);
+  // 融资订单子tab：全部 / 股 / 币 / 共享
+  // 融资订单三层筛选
+  const [financeL2Tab, setFinanceL2Tab] = useState<'all' | 'mine' | 'shared'>('all');
+  const [financeL3Tab, setFinanceL3Tab] = useState<'all' | 'stock' | 'crypto'>('all');
   // 融资付息：资产汇总
   const { data: financeAssetSummary } = trpc.ledger.financeGetAssetSummary.useQuery(
     { ledgerId },
@@ -2439,10 +2443,9 @@ export default function CryptoPrediction() {
 
       {/* Tab 切换 */}
       <div className="px-4 pt-3">
-        <div className="flex rounded-xl p-1 gap-1" style={{ backgroundColor: '#E8EEFF' }}>
+        <div className="flex rounded p-1 gap-1" style={{ backgroundColor: '#E8EEFF' }}>
           {(isCustomAF && !isFunder ? [
             { key: "contract", label: "谷底增筹" },
-            { key: "gujian", label: "谷间优筹" },
             { key: "finance", label: "融资付息" },
             ...(isOwner ? [{ key: "market", label: "冠军预测" }] : []),
           ] : [
@@ -2460,7 +2463,7 @@ export default function CryptoPrediction() {
               }
               setTab(t.key as any);
             }}
-              className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
+              className={`flex-1 py-2 rounded text-base font-bold transition-all ${
                 tab === t.key ? "text-white shadow-sm" : "text-gray-500"
               }`}
               style={tab === t.key ? { backgroundColor: '#1A56DB' } : {}}>
@@ -3112,63 +3115,6 @@ export default function CryptoPrediction() {
         {/* 融资付息 */}
         {tab === "finance" && (
           <div className="pb-4">
-            {/* 融资资产汇总卡片 */}
-            {(() => {
-              const cb = (financeAssetSummary as any)?.coinBreakdown || {};
-              const coins = ['ETH', 'BTC', 'SOL'];
-              let totalMarketValue = 0;
-              for (const c of coins) {
-                const qty = cb[c]?.quantity || 0;
-                const price = financeLivePrices[c] || 0;
-                totalMarketValue += qty * price;
-              }
-              const cnyValue = totalMarketValue * 7.15;
-              return (
-                <div className="rounded-2xl p-4 mb-4" style={{ background: 'linear-gradient(135deg, #1a3a8a 0%, #3B5BDB 100%)' }}>
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="text-white/70 text-xs">融资资产</span>
-                    <span className="text-white/70 text-xs">总市值 {totalMarketValue.toLocaleString(undefined, { maximumFractionDigits: 0 })} U ≈ {cnyValue >= 10000 ? (cnyValue / 10000).toFixed(2) + '万元' : cnyValue.toFixed(0) + '元'}</span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-0">
-                    {coins.map((coin, idx) => {
-                      const info = cb[coin] || { quantity: 0, avgCost: 0 };
-                      const price = financeLivePrices[coin] || 0;
-                      const qty = info.quantity || 0;
-                      const marketVal = qty * price;
-                      return (
-                        <div key={coin} className={`${idx < 2 ? 'border-r border-white/20' : ''} px-2`}>
-                          <div className="text-white font-bold text-sm mb-1">{coin}</div>
-                          <div className="text-white/60 text-[10px]">持有数量</div>
-                          <div className="text-white text-xs font-medium">{formatCoinQty(qty, coin)}</div>
-                          <div className="text-white/60 text-[10px] mt-1">平均成本</div>
-                          <div className="text-white text-xs">{info.avgCost ? info.avgCost.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '0 U'}</div>
-                          <div className="text-white/60 text-[10px] mt-1">当前价格</div>
-                          <div className="text-white text-xs">{price ? price.toLocaleString(undefined, { maximumFractionDigits: 2 }) + ' U' : '0 U'}</div>
-                          <div className="text-white/60 text-[10px] mt-1">当前市值</div>
-                          <div className="text-white text-xs">{marketVal ? marketVal.toLocaleString(undefined, { maximumFractionDigits: 0 }) + ' U' : '0 U'}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })()}
-            {/* 融资订单列表 */}
-            <div className="flex items-center mb-3">
-              <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>融资订单</h3>
-              <span className="text-xs text-gray-400 ml-1.5">共 {financeOrders.length} 笔</span>
-              <button
-                onClick={() => {
-                  const url = new URL(window.location.href);
-                  url.searchParams.set('tab', 'finance');
-                  window.location.href = url.toString();
-                }}
-                className="ml-2 px-2.5 py-0.5 rounded text-xs font-medium"
-                style={{ backgroundColor: '#EEF2FF', color: '#3B82F6' }}
-              >
-                刷新
-              </button>
-            </div>
             {financeOrders.length === 0 ? (
               <div className="text-center py-12">
                 <AlertCircle className="w-14 h-14 text-gray-300 mx-auto mb-3" />
@@ -3176,128 +3122,118 @@ export default function CryptoPrediction() {
                 <div className="text-gray-400 text-sm">管理员将为您配置融资订单</div>
               </div>
             ) : (() => {
-              // 过滤掉已删除（deleted）和已结清（settled/completed/cancelled）的订单，普通用户只看进行中
               const activeOrders = financeOrders.filter((o: any) => o.status === 'active');
-              const sortedOrders = [...activeOrders].sort((a: any, b: any) => {
-                const aSold = String(a.admin_note || '').includes('[已卖出]') ? 1 : 0;
-                const bSold = String(b.admin_note || '').includes('[已卖出]') ? 1 : 0;
-                if (aSold !== bSold) return aSold - bSold;
+              const mineOrders = activeOrders.filter((o: any) => !(o._isParticipant || o._fromFunder));
+              const sharedOrders = activeOrders.filter((o: any) => !!(o._isParticipant || o._fromFunder));
+
+              // 第2层：全部/自己/共享 → 决定订单池
+              const l2Pool = financeL2Tab === 'mine' ? mineOrders
+                           : financeL2Tab === 'shared' ? sharedOrders
+                           : activeOrders;
+
+              // 第3层：全部/股/币（自己和共享都显示）
+              const showL3 = financeL2Tab === 'mine' || financeL2Tab === 'shared';
+              const l3Pool = showL3
+                ? l2Pool.filter((o: any) => {
+                    if (financeL3Tab === 'stock') return o.asset_type === 'stock';
+                    if (financeL3Tab === 'crypto') return o.asset_type !== 'stock';
+                    return true;
+                  })
+                : l2Pool;
+
+              // 第2层计数
+              const cntAll = activeOrders.length;
+              const cntMine = mineOrders.length;
+              const cntShared = sharedOrders.length;
+              // 第3层计数（基于当前l2Pool）
+              const cntL3All = l2Pool.length;
+              const cntL3Stock = l2Pool.filter((o: any) => o.asset_type === 'stock').length;
+              const cntL3Crypto = l2Pool.filter((o: any) => o.asset_type !== 'stock').length;
+
+              const sortedOrders = [...l3Pool].sort((a: any, b: any) => {
                 const statusOrder: Record<string, number> = { active: 0, completed: 1, settled: 1, cancelled: 2 };
                 return (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9);
               });
-              const myOrders = sortedOrders.filter((o: any) => !o._isParticipant && !o._fromFunder);
-              const sharedOrders = sortedOrders.filter((o: any) => o._isParticipant || o._fromFunder);
 
-              // 自己订单按担保类型分组（已在源头过滤为 active，无已结清订单）
-              const mySharedColl = myOrders.filter((o: any) => o.collateral_mode === 'shared');
-              const mySoloColl = myOrders.filter((o: any) => o.collateral_mode !== 'shared');
-              const mySettled: any[] = []; // 已过滤，不再显示已结清
-              // 共享订单（别人分享给我的）
-              const sharedActiveList = sharedOrders;
-              const sharedSettledList: any[] = []; // 已过滤，不再显示已结清
+              const tabBtnStyle = (active: boolean) => ({
+                flex: 1,
+                padding: '6px 0',
+                borderRadius: '4px',
+                fontSize: '15px',
+                fontWeight: 700,
+                transition: 'all 0.15s',
+                backgroundColor: active ? '#1A56DB' : 'transparent',
+                color: active ? '#fff' : '#6B7280',
+                boxShadow: active ? '0 1px 3px rgba(26,86,219,0.3)' : 'none',
+              } as React.CSSProperties);
 
-              const renderCard = (order: any) => (
-                <FunderOrderCard
-                  key={order.id}
-                  order={order}
-                  ledgerId={ledgerId}
-                  livePrices={financeLivePrices}
-                  priceDirection={{}}
-                  currentUser={meData ? { id: (meData as any).id, name: (meData as any).name, username: (meData as any).username, avatar: (meData as any).avatar } : undefined}
-                  isAdmin={false}
-                  membersData={(ledgerInfo as any)?.members || []}
-                />
-              );
-
-              // 折叠分组组件
-              const CollapseGroup = ({ title, count, color, bgColor, borderColor, expanded, onToggle, children }: {
-                title: string; count: number; color: string; bgColor: string; borderColor: string;
-                expanded: boolean; onToggle: () => void; children: React.ReactNode;
-              }) => (
-                <div className="mt-3">
-                  <button
-                    onClick={onToggle}
-                    className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl transition-all"
-                    style={{ backgroundColor: bgColor, border: `1px solid ${borderColor}` }}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium" style={{ color }}>{title}</span>
-                      <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: borderColor, color }}>{count} 笔</span>
-                    </div>
-                    <ChevronDown className={`w-4 h-4 transition-transform ${expanded ? 'rotate-180' : ''}`} style={{ color }} />
-                  </button>
-                  {expanded && <div className="space-y-3 mt-3">{children}</div>}
-                </div>
-              );
+              const subBtnStyle = (active: boolean) => ({
+                flex: 1,
+                padding: '5px 0',
+                borderRadius: '4px',
+                fontSize: '14px',
+                fontWeight: 700,
+                transition: 'all 0.15s',
+                backgroundColor: active ? '#1A56DB' : 'transparent',
+                color: active ? '#fff' : '#6B7280',
+                boxShadow: active ? '0 1px 3px rgba(26,86,219,0.25)' : 'none',
+              } as React.CSSProperties);
 
               return (
-                <div className="space-y-1">
-                  {mySharedColl.length > 0 && (
-                    <CollapseGroup
-                      title="自己订单 · 共享担保"
-                      count={mySharedColl.length}
-                      color="#7C3AED"
-                      bgColor="#F5F3FF"
-                      borderColor="#DDD6FE"
-                      expanded={mySharedCollExpanded}
-                      onToggle={() => setMySharedCollExpanded(v => !v)}
-                    >
-                      {mySharedColl.map(renderCard)}
-                    </CollapseGroup>
+                <>
+                  {/* 第2层：全部 / 自己 / 共享 */}
+                  <div className="flex rounded p-1 gap-1 mb-3" style={{ backgroundColor: '#E8EEFF', border: '1px solid #C7D7FF' }}>
+                    {([
+                      ['all',    '全部',  cntAll],
+                      ['mine',   '自己',  cntMine],
+                      ['shared', '共享',  cntShared],
+                    ] as const).map(([key, label, cnt]) => (
+                      <button key={key} onClick={() => setFinanceL2Tab(key as any)}
+                        style={tabBtnStyle(financeL2Tab === key)}>
+                        {label} <span style={{ opacity: 0.75, fontSize: '11px' }}>{cnt}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* 第3层：全部 / 股 / 币（自己/共享时显示） */}
+                  {showL3 && (
+                    <div className="flex rounded p-1 gap-1 mb-4" style={{ backgroundColor: '#EEF2FF', border: '1px solid #C7D7FF' }}>
+                      {([
+                        ['all',    '全部', cntL3All],
+                        ['stock',  '股',   cntL3Stock],
+                        ['crypto', '币',   cntL3Crypto],
+                      ] as const).map(([key, label, cnt]) => (
+                        <button key={key} onClick={() => setFinanceL3Tab(key as any)}
+                          style={subBtnStyle(financeL3Tab === key)}>
+                          {label} <span style={{ opacity: 0.75, fontSize: '11px' }}>{cnt}</span>
+                        </button>
+                      ))}
+                    </div>
                   )}
-                  {mySoloColl.length > 0 && (
-                    <CollapseGroup
-                      title="自己订单 · 单独担保"
-                      count={mySoloColl.length}
-                      color="#1D4ED8"
-                      bgColor="#EFF6FF"
-                      borderColor="#BFDBFE"
-                      expanded={mySoloCollExpanded}
-                      onToggle={() => setMySoloCollExpanded(v => !v)}
-                    >
-                      {mySoloColl.map(renderCard)}
-                    </CollapseGroup>
+
+                  {/* 订单列表 */}
+                  {sortedOrders.length === 0 ? (
+                    <div className="text-center py-12">
+                      <div className="text-gray-400 text-sm">该分类下暂无订单</div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {sortedOrders.map((order: any) => (
+                        <FunderOrderCard
+                          key={order.id}
+                          order={order}
+                          ledgerId={ledgerId}
+                          livePrices={financeLivePrices}
+                          priceDirection={{}}
+                          currentUser={meData ? { id: (meData as any).id, name: (meData as any).name, username: (meData as any).username, avatar: (meData as any).avatar } : undefined}
+                          isAdmin={false}
+                          membersData={(ledgerInfo as any)?.members || []}
+                          isInvited={!!(order._isParticipant || order._fromFunder)}
+                        />
+                      ))}
+                    </div>
                   )}
-                  {mySettled.length > 0 && (
-                    <CollapseGroup
-                      title="自己订单 · 已结束"
-                      count={mySettled.length}
-                      color="#DC2626"
-                      bgColor="#FEF2F2"
-                      borderColor="#FCA5A5"
-                      expanded={mySettledExpanded}
-                      onToggle={() => setMySettledExpanded(v => !v)}
-                    >
-                      {mySettled.map(renderCard)}
-                    </CollapseGroup>
-                  )}
-                  {sharedActiveList.length > 0 && (
-                    <CollapseGroup
-                      title="共享订单 · 进行中"
-                      count={sharedActiveList.length}
-                      color="#16A34A"
-                      bgColor="#F0FDF4"
-                      borderColor="#86EFAC"
-                      expanded={sharedOrdersExpanded}
-                      onToggle={() => setSharedOrdersExpanded(v => !v)}
-                    >
-                      {sharedActiveList.map(renderCard)}
-                    </CollapseGroup>
-                  )}
-                  {sharedSettledList.length > 0 && (
-                    <CollapseGroup
-                      title="共享订单 · 已结束"
-                      count={sharedSettledList.length}
-                      color="#9CA3AF"
-                      bgColor="#F9FAFB"
-                      borderColor="#E5E7EB"
-                      expanded={sharedSettledExpanded}
-                      onToggle={() => setSharedSettledExpanded(v => !v)}
-                    >
-                      {sharedSettledList.map(renderCard)}
-                    </CollapseGroup>
-                  )}
-                </div>
+                </>
               );
             })()}
           </div>
@@ -3313,4 +3249,10 @@ export default function CryptoPrediction() {
 
   );
 }
+
+
+
+
+
+
 

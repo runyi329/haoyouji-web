@@ -221,7 +221,7 @@ export function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, current
     await saveNotes(notes.filter((_, i) => i !== idx));
   };
   return (
-    <div className="px-3 py-2 text-xs mt-2 rounded-xl" style={{ backgroundColor: '#F8FBFF', border: '1px solid #DBEAFE' }} onClick={e => e.stopPropagation()}>
+    <div className="text-xs" onClick={e => e.stopPropagation()}>
       <div className="flex items-center justify-between cursor-pointer select-none" onClick={() => setExpanded(v => !v)}>
         <div className="flex items-center gap-1.5">
           <span className="shrink-0 text-xs font-bold" style={{ color: '#6B7280' }}>公开备注</span>
@@ -297,7 +297,7 @@ export function FunderNoteRow({ orderId, ledgerId, initialNote, onSaved, current
 // ===== END FunderNoteRow =====
 
 // ===== Helper: formatCoinQty =====
-const INTEGER_COINS_FUNDER = new Set(['SUI', 'ONDO', 'LDO', 'ENA', 'ARKM', 'AAVE']);
+export const INTEGER_COINS_FUNDER = new Set(['SUI', 'ONDO', 'LDO', 'ENA', 'ARKM', 'AAVE']);
 export function formatCoinQtyFunder(qty: string | number | null | undefined, coin: string): string {
   if (qty === null || qty === undefined || qty === '') return '0';
   const num = typeof qty === 'string' ? parseFloat(qty) : qty;
@@ -594,6 +594,8 @@ export function FunderOrderCard({
   const [collateralItemApprox, setCollateralItemApprox] = useState<Record<string, string>>({});
   // 担保价值约等于显示配置
   const [collateralValueApprox, setCollateralValueApprox] = useState<string>('U');
+  // 担保价值行显示开关
+  const [collateralValueVisible, setCollateralValueVisible] = useState<boolean>(true);
   const _intSaveCollateralMutation = trpc.ledger.financeUpdateOrder.useMutation({
     onSuccess: () => { toast.success('担保已保存'); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
     onError: (err) => toast.error(err.message),
@@ -627,7 +629,8 @@ export function FunderOrderCard({
         setCollateralItemApprox({});
       }
       setCollateralValueApprox(parsedDC.approxCollateralValue ?? 'U');
-    } catch { setCollateralItemApprox({}); setCollateralValueApprox('U'); }
+      setCollateralValueVisible(parsedDC.collateralValue !== false);
+    } catch { setCollateralItemApprox({}); setCollateralValueApprox('U'); setCollateralValueVisible(true); }
     setShowCollateralPanel(true);
   };
   const handleSaveCollateral = () => {
@@ -640,6 +643,7 @@ export function FunderOrderCard({
     } catch {}
     newDC.approxCollateralItem = collateralItemApprox;
     newDC.approxCollateralValue = collateralValueApprox;
+    newDC.collateralValue = collateralValueVisible;
     _intSaveCollateralMutation.mutate({ id: Number(order.id), ledgerId, collateralAssets: valid, displayConfig: newDC });
   };
   // ===== END 担保物快捷编辑面板 =====
@@ -780,10 +784,10 @@ export function FunderOrderCard({
   return (
     <>
     <div
-      className="bg-white rounded-2xl overflow-hidden relative"
+      className="rounded-lg overflow-hidden relative"
       style={isInvited
-        ? { border: '1px solid #86EFAC', boxShadow: '0 1px 6px rgba(34,197,94,0.08)' }
-        : { border: '1px solid #E8EDFF', boxShadow: '0 1px 4px rgba(26,35,64,0.05)' }}
+        ? { background: '#f0fdf4', border: '1px solid #86EFAC', boxShadow: '0 1px 6px rgba(34,197,94,0.08)' }
+        : { background: '#ffffff', border: '1px solid #E8EDFF', boxShadow: '0 1px 4px rgba(26,35,64,0.05)' }}
     >
       {isSettled && (
         <div className="absolute inset-0 pointer-events-none select-none flex items-center justify-center" style={{ backgroundColor: 'rgba(220,38,38,0.06)', zIndex: 10 }}>
@@ -792,7 +796,7 @@ export function FunderOrderCard({
       )}
 
       {/* 帽子：标签行 + 操作按钮 */}
-      <div className="flex items-center gap-2 px-4 py-2" style={{ borderBottom: '1px solid #F0F0F5', backgroundColor: isInvited ? '#F0FDF4' : '#F7F8FC' }}>
+      <div className="flex items-center gap-2 px-4 py-2" style={{ borderBottom: '1px solid #E4E8F5', backgroundColor: isInvited ? '#DCFCE7' : '#E8EBF5' }}>
 
         {/* 状态：仅非持有中时显示（圆点 + 文字） */}
         {order.status !== 'active' && (
@@ -1744,24 +1748,38 @@ export function FunderOrderCard({
               </div>
             </div>
           ))}
-          {/* 担保价值约等于全局控制 */}
-          <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 space-y-1.5">
-            <div className="text-xs text-gray-500">担保价值约等于</div>
-            <div className="flex gap-2">
-              {(['hidden', 'U', 'CNY'] as const).map(opt => (
-                <button
-                  key={opt}
-                  type="button"
-                  onClick={() => setCollateralValueApprox(opt)}
-                  className="flex-1 py-1 text-xs rounded-lg border transition-colors"
-                  style={{
-                    backgroundColor: collateralValueApprox === opt ? '#3B82F6' : '#fff',
-                    color: collateralValueApprox === opt ? '#fff' : '#6B7280',
-                    borderColor: collateralValueApprox === opt ? '#3B82F6' : '#E5E7EB'
-                  }}
-                >{opt === 'hidden' ? '不显示' : opt === 'U' ? '≈ u' : '≈ 元'}</button>
-              ))}
+          {/* 担保价值开关 + 约等于控制 */}
+          <div className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="text-xs text-gray-500">担保价值</div>
+              <button
+                type="button"
+                onClick={() => setCollateralValueVisible(v => !v)}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 focus:outline-none ${collateralValueVisible ? 'bg-blue-500' : 'bg-gray-200'}`}
+              >
+                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${collateralValueVisible ? 'translate-x-4' : 'translate-x-0.5'}`} />
+              </button>
             </div>
+            {collateralValueVisible && (
+              <>
+                <div className="text-xs text-gray-400">约等于</div>
+                <div className="flex gap-2">
+                  {(['hidden', 'U', 'CNY'] as const).map(opt => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setCollateralValueApprox(opt)}
+                      className="flex-1 py-1 text-xs rounded-lg border transition-colors"
+                      style={{
+                        backgroundColor: collateralValueApprox === opt ? '#3B82F6' : '#fff',
+                        color: collateralValueApprox === opt ? '#fff' : '#6B7280',
+                        borderColor: collateralValueApprox === opt ? '#3B82F6' : '#E5E7EB'
+                      }}
+                    >{opt === 'hidden' ? '不显示' : opt === 'U' ? '≈ u' : '≈ 元'}</button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
           <button
             type="button"
@@ -1938,7 +1956,7 @@ export function FunderOrderCard({
       )}
 
       {/* 结息面板 + 备注区 */}
-      <div className="px-4 pt-3 pb-3 border-t border-blue-100">
+      <div className="px-4 pt-3 pb-3 border-t border-blue-100" style={{ backgroundColor: isInvited ? '#DCFCE7' : '#E8EBF5' }}>
 
         {$showPaymentPanel === order.id && (
           <div className="bg-blue-50 rounded-xl p-3 mb-3 space-y-2">
@@ -2359,3 +2377,10 @@ function CollateralLogSection({ orderId, ledgerId, refreshKey }: { orderId: numb
     </div>
   );
 }
+
+
+
+
+
+
+
