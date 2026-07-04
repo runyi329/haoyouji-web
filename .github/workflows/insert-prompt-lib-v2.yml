@@ -8,14 +8,16 @@ on:
         default: '写入拟人化公共指令库'
 jobs:
   insert:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
-      - name: Insert prompt lib to DB
+      - name: setup ssh
         run: |
-          ENV_FILE="/root/haoyouji-web/.env"
-          DATABASE_URL=$(grep "^DATABASE_URL=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2- | tr -d '"' || echo "")
-          if [ -z "$DATABASE_URL" ]; then
-            DATABASE_URL=$(grep "^ORIGINAL_DATABASE_URL=" "$ENV_FILE" 2>/dev/null | head -1 | cut -d'=' -f2- | tr -d '"' || echo "")
-          fi
-          echo "DATABASE_URL已获取: ${DATABASE_URL:0:40}..."
-          python3 /root/haoyouji-web/scripts/insert_prompt_lib.py "$DATABASE_URL"
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          printf 'Host *\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n' > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+      - name: run insert script on server
+        run: |
+          ssh -i ~/.ssh/id_rsa -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "python3 /root/haoyouji-web/scripts/insert_prompt_lib.py \"\$(grep '^DATABASE_URL=' /root/haoyouji-web/.env | head -1 | cut -d'=' -f2- | tr -d '\"')\""
