@@ -796,7 +796,7 @@ export function FunderOrderCard({
       )}
 
       {/* 帽子：标签行 + 操作按钮 */}
-      <div className="flex items-center gap-2 px-4 py-2" style={{ borderBottom: '1px solid #E4E8F5', backgroundColor: isInvited ? '#DCFCE7' : '#E8EBF5' }}>
+      <div className="flex items-center gap-2 px-4 py-2" style={{ borderBottom: '1px solid #E4E8F5', backgroundColor: isInvited ? '#DCFCE7' : '#D0D6EE' }}>
 
         {/* 状态：仅非持有中时显示（圆点 + 文字） */}
         {order.status !== 'active' && (
@@ -1956,7 +1956,7 @@ export function FunderOrderCard({
       )}
 
       {/* 结息面板 + 备注区 */}
-      <div className="px-4 pt-3 pb-3 border-t border-blue-100" style={{ backgroundColor: isInvited ? '#DCFCE7' : '#E8EBF5' }}>
+      <div className="px-4 pt-3 pb-3 border-t border-blue-100" style={{ backgroundColor: isInvited ? '#DCFCE7' : '#D0D6EE' }}>
 
         {$showPaymentPanel === order.id && (
           <div className="bg-blue-50 rounded-xl p-3 mb-3 space-y-2">
