@@ -477,9 +477,10 @@ export default function YabanScheduleCreate() {
       if (ov.workStart && ov.workEnd) return buildShift(timeToMin(ov.workStart), timeToMin(ov.workEnd), toMin(ov.breakStart), toMin(ov.breakEnd));
     }
     // 新格式：daySegs（yaban_shift_day_segs，每天独立时段）
+    // dow 统一用 (getDay()+6)%7：0=周一,1=周二,...,6=周日（与 A317 保存时一致）
     const dsEntry = shiftDaySegs.find((s: any) => Number(s.staffUserId) === userId);
     if (dsEntry && Array.isArray(dsEntry.segs)) {
-      const dow = new Date(dStr + 'T00:00:00').getDay();
+      const dow = (new Date(dStr + 'T00:00:00').getDay() + 6) % 7;
       const seg = dsEntry.segs.find((x: any) => Number(x.dow) === dow);
       if (!seg) return null;
       if (seg.isRest) return null;
@@ -488,7 +489,7 @@ export default function YabanScheduleCreate() {
     // 旧格式回退：shiftTemplates（yaban_shift_template，workDays 字段）
     const tpl = shiftTemplates.find((t: any) => t.staffUserId === userId);
     if (tpl) {
-      const dow = new Date(dStr + 'T00:00:00').getDay();
+      const dow = (new Date(dStr + 'T00:00:00').getDay() + 6) % 7;
       const days: number[] = (tpl.workDays || []).map(Number);
       if (days.length > 0 && !days.includes(dow)) return null;
       if (tpl.workStart && tpl.workEnd) return buildShift(timeToMin(tpl.workStart), timeToMin(tpl.workEnd), toMin(tpl.breakStart), toMin(tpl.breakEnd));
