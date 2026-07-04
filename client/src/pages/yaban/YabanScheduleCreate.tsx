@@ -1226,9 +1226,14 @@ export default function YabanScheduleCreate() {
               <span style={{ fontSize: 15, fontWeight: 600, color: LABEL }}>医生</span>
               <span style={{ fontSize: 15, color: form.doctor ? INK : GRAY_L, fontWeight: form.doctor ? 600 : 400 }}>{form.doctor || "待选择"}</span>
             </div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 14px", minHeight: 46, borderBottom: `1px solid ${LINE}` }}>
-              <span style={{ fontSize: 15, fontWeight: 600, color: LABEL }}>预约时段</span>
-              <span style={{ fontSize: 15, color: INK, fontWeight: 600 }}>{form.date} {form.startTime}–{form.endTime}</span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderBottom: `1px solid ${LINE}` }}>
+              <span style={{ fontSize: 15, fontWeight: 600, color: LABEL, flexShrink: 0 }}>预约时段</span>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 15, color: INK, fontWeight: 700 }}>{form.startTime} – {form.endTime}</div>
+                <div style={{ fontSize: 12, color: GRAY_L, marginTop: 2 }}>
+                  {form.date} · 共{(() => { const d = timeToMin(form.endTime) - timeToMin(form.startTime); return d >= 60 ? (d % 60 === 0 ? `${Math.floor(d/60)}小时` : `${Math.floor(d/60)}小时${d%60}分`) : `${d}分钟`; })()}
+                </div>
+              </div>
             </div>
             {/* 咨询师 */}
             <SelectRow label="咨询师" value={form.consultant} placeholder="请选择咨询师" onClick={() => setShowPicker("consultant")} />
