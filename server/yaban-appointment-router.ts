@@ -471,9 +471,12 @@ export const yabanAppointmentRouter = router({
       const conn = await getDbConnection();
       if (!conn) return [];
       const tenantId = input?.tenantId ?? (await resolveTenantId(ctx));
+      // 按 user_id 分组，合并多个身份的 role_key（如院长+医生）
       const [rows] = (await conn.execute(
-        `SELECT m.user_id, u.name, m.role_key,
-                COALESCE(t.color, '#1E88D6') AS bar_color
+        `SELECT m.user_id, u.name,
+                GROUP_CONCAT(DISTINCT m.role_key ORDER BY FIELD(m.role_key,'owner','shareholder','doctor','nurse','assistant','receptionist','finance') SEPARATOR ',') AS role_keys,
+                COALESCE(t.color, '#1E88D6') AS bar_color,
+                MIN(FIELD(m.role_key,'owner','shareholder','doctor','nurse','assistant','receptionist','finance')) AS role_rank
          FROM yaban_clinic_member m
          LEFT JOIN users u ON u.id = m.user_id
          LEFT JOIN (
@@ -483,15 +486,22 @@ export const yabanAppointmentRouter = router({
            WHERE is_active = 1 AND role_key <> '__biz__'
          ) t ON t.staff_user_id = m.user_id AND t.tenant_id = m.tenant_id AND t.rn = 1
          WHERE m.tenant_id=? AND m.status='active'
-         ORDER BY FIELD(m.role_key,'owner','doctor','nurse','assistant','receptionist','finance'), m.id ASC`,
+         GROUP BY m.user_id, u.name, t.color
+         ORDER BY role_rank ASC, m.user_id ASC`,
         [tenantId]
       )) as any;
-      return (rows as any[]).map((r) => ({
-        userId: Number(r.user_id),
-        name: r.name || "",
-        roleKey: r.role_key || "doctor",
-        color: r.bar_color || "#1E88D6",
-      }));
+      return (rows as any[]).map((r) => {
+        const roleKeys: string[] = (r.role_keys || "doctor").split(",");
+        // 主身份取优先级最高的（第一个）
+        const primaryRole = roleKeys[0] || "doctor";
+        return {
+          userId: Number(r.user_id),
+          name: r.name || "",
+          roleKey: primaryRole,
+          roleKeys,
+          color: r.bar_color || "#1E88D6",
+        };
+      });
     }),
 });
 

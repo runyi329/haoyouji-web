@@ -263,7 +263,7 @@ export default function YabanClinicShift() {
   const roster = useMemo(() => {
     const tplMap = new Map<number, any>();
     (templates as any[]).forEach((t) => tplMap.set(t.staffUserId, t));
-    const list: { staffUserId: number; staffName: string; roleKey: string; hasTemplate: boolean; color?: string }[] = [];
+    const list: { staffUserId: number; staffName: string; roleKey: string; roleKeys: string[]; hasTemplate: boolean; color?: string }[] = [];
     const seen = new Set<number>();
     (allMembers as any[]).forEach((m) => {
       seen.add(m.userId);
@@ -272,6 +272,7 @@ export default function YabanClinicShift() {
         staffUserId: m.userId,
         staffName: m.name || tpl?.staffName || "",
         roleKey: m.roleKey || tpl?.roleKey || "doctor",
+        roleKeys: (m.roleKeys as string[] | undefined) || [m.roleKey || tpl?.roleKey || "doctor"],
         hasTemplate: !!tpl,
         color: tpl?.color,  // 自定义进度条颜色
       });
@@ -279,7 +280,7 @@ export default function YabanClinicShift() {
     // 尺底：有模板但名册查不到的人（历史数据），也纳入
     (templates as any[]).forEach((t) => {
       if (!seen.has(t.staffUserId)) {
-        list.push({ staffUserId: t.staffUserId, staffName: t.staffName, roleKey: t.roleKey || "doctor", hasTemplate: true, color: t.color });
+        list.push({ staffUserId: t.staffUserId, staffName: t.staffName, roleKey: t.roleKey || "doctor", roleKeys: [t.roleKey || "doctor"], hasTemplate: true, color: t.color });
       }
     });
     list.sort((a, b) => roleRank(a.roleKey) - roleRank(b.roleKey) || a.staffUserId - b.staffUserId);
@@ -288,13 +289,13 @@ export default function YabanClinicShift() {
 
   // 经角色筛选后的清单
   const filteredRoster = useMemo(
-    () => (roleFilter ? roster.filter((r) => r.roleKey === roleFilter) : roster),
+    () => (roleFilter ? roster.filter((r) => (r.roleKeys || [r.roleKey]).includes(roleFilter)) : roster),
     [roster, roleFilter]
   );
 
   // 出现过的角色（用于筛选 chips，保持固定顺序）
   const presentRoles = useMemo(() => {
-    const s = new Set(roster.map((r) => r.roleKey));
+    const s = new Set(roster.flatMap((r) => r.roleKeys || [r.roleKey]));
     return ROLE_ORDER.filter((k) => s.has(k));
   }, [roster]);
 
@@ -621,7 +622,14 @@ export default function YabanClinicShift() {
               {/* 列二：名字(上) 职称(下) */}
               <div style={{ width: 60, flexShrink: 0, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "#26303C", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.staffName}</div>
-                <div style={{ display: "inline-block", fontSize: 10, fontWeight: 600, lineHeight: 1.5, padding: "0 5px", borderRadius: 4, marginTop: 2, color: rc.fg, background: rc.bg }}>{roleLabel(r.roleKey)}</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 2, marginTop: 2 }}>
+                  {(r.roleKeys || [r.roleKey]).map((rk: string) => {
+                    const tagRc = roleColor(rk);
+                    const tagBg = hasCustomColor ? rc.bg : tagRc.bg;
+                    const tagFg = hasCustomColor ? rc.fg : tagRc.fg;
+                    return <span key={rk} style={{ display: "inline-block", fontSize: 10, fontWeight: 600, lineHeight: 1.5, padding: "0 5px", borderRadius: 4, color: tagFg, background: tagBg }}>{roleLabel(rk)}</span>;
+                  })}
+                </div>
               </div>
               {/* 列三：进度条(色块内显示时长) + 工时文字与色块左对齐 */}
               <div style={{ flex: 1, minWidth: 0 }}>
