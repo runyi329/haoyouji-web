@@ -3665,11 +3665,11 @@ export default function LedgerDetail() {
           </div>
         )}
         {/* AF 账本：2×2 数据容器 */}
-        {isCustomAF && !isCustomAH && (
+        {isCustomAF && !isCustomAH && !effectiveIsFunder && (
           <div className="px-4 pt-2 pb-4">
             <div className="grid grid-cols-2 gap-3">
               {/* 卡片 1：资金方看“资产”，其他角色看“余额” */}
-              {effectiveIsFunder ? (
+              {!effectiveIsFunder && (
                 <div className="col-span-2 rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs text-white/70">资产</span>
@@ -3720,62 +3720,6 @@ export default function LedgerDetail() {
                       );
                     })}
                   </div>
-                </div>
-              ) : (
-                <div className="rounded-2xl px-4 py-3 relative" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
-                  {/* 右上角：自动转资金费率开关 */}
-                  <div className="absolute top-2 right-3 flex items-center gap-1.5">
-                    <span className="text-[10px] text-white/60">闲时自动赚费</span>
-                    <button
-                      onClick={() => {
-                        if (!viewAsUserId) {
-                          const newEnabled = !(localFundingRateEnabled ?? false);
-                          setLocalFundingRateEnabled(newEnabled);
-                          const currentBalance = afTotalAsset ? Number(afTotalAsset.total) : 0;
-                          toggleFundingRateMutation.mutate({ ledgerId: Number(ledgerId), enabled: newEnabled, currentBalance: String(currentBalance) });
-                        }
-                      }}
-                      disabled={!!viewAsUserId || toggleFundingRateMutation.isPending}
-                      className="relative inline-flex h-4 w-7 items-center rounded-full transition-colors"
-                      style={{ backgroundColor: (localFundingRateEnabled ?? false) ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.25)' }}
-                    >
-                      <span
-                        className="inline-block h-3 w-3 rounded-full bg-white shadow transition-transform"
-                        style={{
-                          backgroundColor: (localFundingRateEnabled ?? false) ? '#16a34a' : 'rgba(255,255,255,0.6)',
-                          transform: (localFundingRateEnabled ?? false) ? 'translateX(14px)' : 'translateX(2px)',
-                        }}
-                      />
-                    </button>
-                  </div>
-                  <div className="text-xs text-white/70 mb-1">余额</div>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-lg font-bold text-white">
-                      {afTotalAsset ? Number(afTotalAsset.total).toFixed(2) : '0.00'}
-                    </span>
-                    <span className="text-xs text-white/60">USDT</span>
-                  </div>
-                  {/* 赚费累计显示 + 秒表 */}
-                  {(localFundingRateEnabled ?? false) && (
-                    <div className="flex flex-col gap-0.5 mt-1">
-                      <div className="flex items-center gap-1">
-                        <span className="text-[10px] text-white/60">赚费</span>
-                        <span className="text-xs font-semibold text-white/90">{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(4)}</span>
-                        <span className="text-[10px] text-white/50">USDT</span>
-                        <button
-                          onClick={() => setShowFundingRateLogs(true)}
-                          className="ml-0.5 flex items-center"
-                          title="查看自动赚费详情"
-                        >
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <polyline points="12 6 12 12 16 14"/>
-                          </svg>
-                        </button>
-                      </div>
-
-                    </div>
-                  )}
                 </div>
               )}
               {/* 卡片 2：推荐人数（资金方不显示） */}
@@ -5120,7 +5064,7 @@ export default function LedgerDetail() {
 
             <div className="flex items-center mb-3">
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>资产订单</h3>
-              <span className="text-xs text-gray-400 ml-1.5">共 {(funderAssetOrders as any[])?.length ?? 0} 笔</span>
+              <span className="text-xs text-gray-400 ml-1.5">共 {(funderAssetOrders as any[])?.filter((o: any) => o.status !== 'settled').length ?? 0} 笔</span>
               {/* 左右拨动开关 */}
               <div
                 className="ml-auto flex items-center"
@@ -5175,7 +5119,7 @@ export default function LedgerDetail() {
             ) : funderViewMode === 'card' ? (
               /* 卡片模式：銀色铭牌风格 */
               <div className="space-y-3">
-                {(funderAssetOrders as any[]).map((order: any) => {
+                {(funderAssetOrders as any[]).filter((order: any) => order.status !== 'settled').map((order: any) => {
                   const rate = parseFloat(order.interest_rate_annual || '0');
                   return rate >= 0 ? (
                     <FunderLenderCardSilver
@@ -5202,7 +5146,7 @@ export default function LedgerDetail() {
             ) : (
               /* 订单模式：原始 FunderOrderCard */
               <div className="space-y-3">
-                {(funderAssetOrders as any[]).map((order: any) => (
+                {(funderAssetOrders as any[]).filter((order: any) => order.status !== 'settled').map((order: any) => (
                   <FunderOrderCard
                     key={order.id}
                     order={order}

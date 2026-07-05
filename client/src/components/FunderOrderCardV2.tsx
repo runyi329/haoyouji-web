@@ -1164,7 +1164,10 @@ export function FunderLenderCardSilver({
               return m ? (m.nickname || m.username) : null;
             })();
             const buyDateStr = order.buy_date ? fmtDate(order.buy_date) : null;
-            const items = [ownerName, buyDateStr].filter(Boolean);
+            const brokerStr = order.asset_type === 'stock'
+              ? [order.broker_name, order.broker_account].filter(Boolean).join(' ')
+              : null;
+            const items = [ownerName, buyDateStr, brokerStr].filter(Boolean);
             // 当前币价（带红绿色+闪烁箭头）
             const priceDiff2 = liveP !== null && buyPrice > 0 ? liveP - buyPrice : null;
             const livePriceColor = priceDiff2 === null ? SL_TEXT_PRI : priceDiff2 >= 0 ? SL_GREEN : SL_RED;
@@ -1338,21 +1341,7 @@ export function FunderLenderCardSilver({
                 </div>
               );
             })()}
-            {/* 已结利息（始终显示） */}
-            <div className="flex justify-between items-center">
-              <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
-                已结利息
-                <button
-                  type="button"
-                  onClick={() => setShowInterestHistory(v => !v)}
-                  className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold leading-none flex-shrink-0"
-                  style={{ backgroundColor: showInterestHistory ? '#6B7280' : '#E5E7EB', color: showInterestHistory ? '#fff' : '#6B7280' }}
-                  title="已结利息记录"
-                >!</button>
-              </span>
-              <span style={{ color: LN_EARN, fontVariantNumeric: 'tabular-nums' }}>{displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}</span>
-            </div>
-            {/* 已结利息历史浮层 */}
+            {/* 已结利息：卡片模式不显示 */}
             {showInterestHistory && (
               <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowInterestHistory(false)}>
                 <div className="rounded-2xl p-4 w-80 max-h-[70vh] overflow-y-auto" style={{ background: '#F9FAFB', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
