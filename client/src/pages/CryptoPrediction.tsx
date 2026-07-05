@@ -3258,7 +3258,27 @@ export default function CryptoPrediction() {
         {/* 融资付息 */}
         {tab === "finance" && (
           <div className="pb-4">
-            {financeOrders.length === 0 ? (
+            {financeOrdersFetching && financeOrders.length === 0 ? (
+              /* 加载中骨架屏，避免误以为暂无订单 */
+              <div className="space-y-3 mt-2">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="rounded-2xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #e8e8e8 0%, #d0d0d0 40%, #e8e8e8 100%)', border: '1.5px solid rgba(0,0,0,0.08)', boxShadow: '0 2px 8px rgba(0,0,0,0.08)', minHeight: '120px', position: 'relative', animation: 'pulse 1.5s ease-in-out infinite' }}>
+                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%)', animation: 'shimmer 1.5s infinite' }} />
+                    <div className="px-4 pt-3 pb-2" style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                      <div style={{ height: '12px', width: '40%', background: 'rgba(0,0,0,0.10)', borderRadius: '6px' }} />
+                    </div>
+                    <div className="px-4 py-3">
+                      <div style={{ height: '28px', width: '30%', background: 'rgba(0,0,0,0.10)', borderRadius: '6px', marginBottom: '10px' }} />
+                      <div className="flex gap-3">
+                        <div style={{ height: '10px', flex: 1, background: 'rgba(0,0,0,0.07)', borderRadius: '4px' }} />
+                        <div style={{ height: '10px', flex: 1, background: 'rgba(0,0,0,0.07)', borderRadius: '4px' }} />
+                        <div style={{ height: '10px', flex: 1, background: 'rgba(0,0,0,0.07)', borderRadius: '4px' }} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : financeOrders.length === 0 ? (
               <div className="text-center py-12">
                 <AlertCircle className="w-14 h-14 text-gray-300 mx-auto mb-3" />
                 <div className="text-gray-400 text-base mb-1">暂无融资订单</div>
