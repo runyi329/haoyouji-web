@@ -3668,60 +3668,61 @@ export default function LedgerDetail() {
         {isCustomAF && !isCustomAH && !effectiveIsFunder && (
           <div className="px-4 pt-2 pb-4">
             <div className="grid grid-cols-2 gap-3">
-              {/* 卡片 1：资金方看“资产”，其他角色看“余额” */}
-              {!effectiveIsFunder && (
-                <div className="col-span-2 rounded-2xl px-4 py-3" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-white/70">资产</span>
-                    <span className="text-xs text-white/50">{funderAssetSummary ? (() => {
-                      const bd = funderAssetSummary.coinBreakdown as any;
-                      let total = 0;
-                      for (const coin of ['BTC','ETH','SOL']) {
-                        const d = bd[coin];
-                        const price = funderLivePrices[coin] || 0;
-                        if (d && d.quantity > 0 && price > 0) total += d.quantity * price;
-                      }
-                      if (total <= 0) return '---';
-                      const cny = total * cnyRate;
-                      return `总市值 ${total.toLocaleString(undefined, { maximumFractionDigits: 0 })} U ≈ ${(cny / 10000).toFixed(2)}万元`;
-                    })() : '---'}</span>
+              {/* 卡片 1：普通用户看"余额"（智能钱包），资方不显示 */}
+              <div className="rounded-2xl px-4 py-3 relative" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
+                  {/* 右上角：自动转资金费率开关 */}
+                  <div className="absolute top-2 right-3 flex items-center gap-1.5">
+                    <span className="text-[10px] text-white/60">闲时自动赚费</span>
+                    <button
+                      onClick={() => {
+                        if (!viewAsUserId) {
+                          const newEnabled = !(localFundingRateEnabled ?? false);
+                          setLocalFundingRateEnabled(newEnabled);
+                          const currentBalance = afTotalAsset ? Number(afTotalAsset.total) : 0;
+                          toggleFundingRateMutation.mutate({ ledgerId: Number(ledgerId), enabled: newEnabled, currentBalance: String(currentBalance) });
+                        }
+                      }}
+                      disabled={!!viewAsUserId || toggleFundingRateMutation.isPending}
+                      className="relative inline-flex h-4 w-7 items-center rounded-full transition-colors"
+                      style={{ backgroundColor: (localFundingRateEnabled ?? false) ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.25)' }}
+                    >
+                      <span
+                        className="inline-block h-3 w-3 rounded-full bg-white shadow transition-transform"
+                        style={{
+                          backgroundColor: (localFundingRateEnabled ?? false) ? '#16a34a' : 'rgba(255,255,255,0.6)',
+                          transform: (localFundingRateEnabled ?? false) ? 'translateX(14px)' : 'translateX(2px)',
+                        }}
+                      />
+                    </button>
                   </div>
-                  {/* 三列币种统计 */}
-                  <div className="flex items-stretch">
-                    {['ETH','BTC','SOL'].map((coin, idx) => {
-                      const bd = (funderAssetSummary?.coinBreakdown as any)?.[coin];
-                      const qty = bd?.quantity ?? 0;
-                      const avgCost = bd?.avgCost ?? 0;
-                      const livePrice = equityLivePrices[coin] || 0;
-                      const marketValue = qty > 0 && livePrice > 0 ? qty * livePrice : 0;
-                      const decimals = coin === 'BTC' ? 6 : 4;
-                      return (
-                        <div key={coin} className="flex-1 flex flex-col" style={{ borderLeft: idx > 0 ? '1px solid rgba(255,255,255,0.2)' : 'none', paddingLeft: idx > 0 ? '12px' : '0', paddingRight: idx < 2 ? '12px' : '0' }}>
-                          <div className="text-xs font-bold text-white mb-1.5">{coin}</div>
-                          <div className="space-y-1">
-                            <div>
-                              <div className="text-[10px] text-white/40">持有数量</div>
-                              <div className="text-xs font-semibold text-white">{qty > 0 ? parseFloat(qty.toFixed(decimals)).toString() : '0'}</div>
-                            </div>
-                            <div>
-                              <div className="text-[10px] text-white/40">平均成本</div>
-                              <div className="text-xs font-semibold text-white">{avgCost > 0 ? avgCost.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '0'} U</div>
-                            </div>
-                            <div>
-                              <div className="text-[10px] text-white/40">当前价格</div>
-                              <div className="text-xs font-semibold text-white">{livePrice > 0 ? livePrice.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '0'} U</div>
-                            </div>
-                            <div>
-                              <div className="text-[10px] text-white/40">当前市値</div>
-                              <div className="text-xs font-semibold text-white">{marketValue > 0 ? marketValue.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '0'} U</div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                  <div className="text-xs text-white/70 mb-1">余额</div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-lg font-bold text-white">
+                      {afTotalAsset ? Number(afTotalAsset.total).toFixed(2) : '0.00'}
+                    </span>
+                    <span className="text-xs text-white/60">USDT</span>
                   </div>
-                </div>
-              )}
+                  {/* 赚费累计显示 */}
+                  {(localFundingRateEnabled ?? false) && (
+                    <div className="flex flex-col gap-0.5 mt-1">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] text-white/60">赚费</span>
+                        <span className="text-xs font-semibold text-white/90">{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(4)}</span>
+                        <span className="text-[10px] text-white/50">USDT</span>
+                        <button
+                          onClick={() => setShowFundingRateLogs(true)}
+                          className="ml-0.5 flex items-center"
+                          title="查看自动赚费详情"
+                        >
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polyline points="12 6 12 12 16 14"/>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+              </div>
               {/* 卡片 2：推荐人数（资金方不显示） */}
               {!effectiveIsFunder && (
               <div className="rounded-2xl px-4 py-3 relative" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)', cursor: ((user as any)?.id === 4957151 || isOwner || isAdmin) ? 'pointer' : 'default' }} onClick={() => { if ((user as any)?.id === 4957151 || isOwner || isAdmin) setLocation(`/ledger/${ledgerId}/af-invite-tree${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`); }}>
