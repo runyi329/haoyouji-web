@@ -5121,8 +5121,11 @@ export default function LedgerDetail() {
               /* 卡片模式：銀色铭牌风格 */
               <div className="space-y-3">
                 {(funderAssetOrders as any[]).filter((order: any) => order.status !== 'settled').map((order: any) => {
-                  const rate = parseFloat(order.interest_rate_annual || '0');
-                  return rate >= 0 ? (
+                  // 权益型：有持有数量（buy_quantity>0）且非股票类 → 显示持有数量/浮动盈亏
+                  // 付息型：股票类或无持有数量 → 显示应收利息/年化利率
+                  const hasQty = parseFloat(order.buy_quantity || '0') > 0;
+                  const isStockOrder = order.asset_type === 'stock';
+                  return (!hasQty || isStockOrder) ? (
                     <FunderLenderCardSilver
                       key={order.id}
                       order={order}
