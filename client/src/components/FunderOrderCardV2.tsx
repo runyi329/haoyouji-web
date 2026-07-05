@@ -1204,7 +1204,7 @@ export function FunderLenderCardSilver({
               <span style={{ color: SL_TEXT_SEC }}>计息基数</span>
               <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
                 {buyPrice > 0 && qty > 0
-                  ? `${fmt(buyPrice, 0)}(U) × ${fmtQty(qty)}(${coin}) = ${fmt(interestBase, 0)} ${baseUnit}`
+                  ? `${fmt(buyPrice, 0)}U（开仓币价）× ${fmtQty(qty)}${coin} = ${fmt(interestBase, 0)} ${baseUnit}`
                   : interestBase ? `${fmt(interestBase, 0)} ${baseUnit}` : '--'
                 }
               </span>
