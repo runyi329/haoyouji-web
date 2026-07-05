@@ -838,51 +838,59 @@ export function FunderOrderCardV2Silver({
           )}
         </div>
 
-        {/* 买入价：占 20% */}
-        <div className="text-center" style={{ flex: 1 }}>
-          <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC }}>买入价 (U)</div>
-          <div style={{ lineHeight: 1 }}>
-            <span style={{ fontSize: '1.1rem', fontWeight: 400, color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
-              {buyPrice > 0 ? fmt(buyPrice, 0) : '--'}
-            </span>
-          </div>
-        </div>
-
-        {/* 当前价：占 20% */}
-        <div className="text-center" style={{ flex: 1 }}>
-          <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC }}>当前价 (U)</div>
-          <div style={{ lineHeight: 1 }}>
-            <span style={{ fontSize: '1.1rem', fontWeight: 400, color: SL_GOLD, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
-              {liveP != null ? fmt(liveP, 0) : '--'}
-            </span>
-          </div>
-
-        </div>
-
-        {/* 浮动盈亏：占 20%，包含涨跌幅 */}
-        <div className="text-right" style={{ flex: 1 }}>
-          <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC }}>浮动盈亏 (U)</div>
-          <div style={{ lineHeight: 1 }}>
-            <span style={{ fontSize: '1.1rem', fontWeight: 500, color: pnlColor, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
-              {floatPnl != null ? `${floatPnl >= 0 ? '+' : ''}${fmt(floatPnl, 0)}` : '--'}
-            </span>
-          </div>
-          {/* 涨跌幅合并到浮动盈亏列 */}
-          {floatPct != null && (
-            <div className="text-[9px] mt-0.5" style={{ color: pnlColor, fontFamily: SL_NUM_FONT, fontVariantNumeric: 'tabular-nums' }}>
-              {floatPct >= 0 ? '+' : ''}{floatPct.toFixed(2)}%
+        {/* 买入价 / 当前价 / 浮动盈亏：股票类隐藏 */}
+        {!isStockCard && (
+          <>
+            {/* 买入价：占 20% */}
+            <div className="text-center" style={{ flex: 1 }}>
+              <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC }}>买入价 (U)</div>
+              <div style={{ lineHeight: 1 }}>
+                <span style={{ fontSize: '1.1rem', fontWeight: 400, color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
+                  {buyPrice > 0 ? fmt(buyPrice, 0) : '--'}
+                </span>
+              </div>
             </div>
-          )}
-        </div>
+
+            {/* 当前价：占 20% */}
+            <div className="text-center" style={{ flex: 1 }}>
+              <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC }}>当前价 (U)</div>
+              <div style={{ lineHeight: 1 }}>
+                <span style={{ fontSize: '1.1rem', fontWeight: 400, color: SL_GOLD, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
+                  {liveP != null ? fmt(liveP, 0) : '--'}
+                </span>
+              </div>
+            </div>
+
+            {/* 浮动盈亏：占 20%，包含涨跌幅 */}
+            <div className="text-right" style={{ flex: 1 }}>
+              <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC }}>浮动盈亏 (U)</div>
+              <div style={{ lineHeight: 1 }}>
+                <span style={{ fontSize: '1.1rem', fontWeight: 500, color: pnlColor, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
+                  {floatPnl != null ? `${floatPnl >= 0 ? '+' : ''}${fmt(floatPnl, 0)}` : '--'}
+                </span>
+              </div>
+              {floatPct != null && (
+                <div className="text-[9px] mt-0.5" style={{ color: pnlColor, fontFamily: SL_NUM_FONT, fontVariantNumeric: 'tabular-nums' }}>
+                  {floatPct >= 0 ? '+' : ''}{floatPct.toFixed(2)}%
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* ── 行3：次要数据行（3列）── */}
       <div className="grid grid-cols-3 gap-0 px-4 py-2" style={{ fontFamily: SL_NUM_FONT }}>
         <div>
-          <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>当前市値 (U)</div>
-          <div className="text-sm" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
-            {currentValue != null ? fmt(currentValue, 0) : '--'}
-          </div>
+          {/* 股票类隐藏当前市値 */}
+          {!isStockCard && (
+            <>
+              <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>当前市値 (U)</div>
+              <div className="text-sm" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+                {currentValue != null ? fmt(currentValue, 0) : '--'}
+              </div>
+            </>
+          )}
         </div>
         <div className="text-center">
           <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>开仓日期</div>
@@ -891,10 +899,34 @@ export function FunderOrderCardV2Silver({
           </div>
         </div>
         <div className="text-right">
-          <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>担保资产</div>
-          <div className="text-sm" style={{ color: SL_TEXT_PRI }}>
-            {collateralAssets.length > 0 ? collateralAssets.map((c) => `${c.qty} ${c.coin}`).join(' + ') : '--'}
-          </div>
+          {isStockCard ? (
+            // 股票类：显示证券公司 + 证券账号
+            <>
+              {order.broker_name && (
+                <>
+                  <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>证券公司</div>
+                  <div className="text-sm" style={{ color: SL_TEXT_PRI }}>{order.broker_name}</div>
+                </>
+              )}
+              {order.broker_account && (
+                <>
+                  <div className="text-[10px] mb-0.5 mt-1" style={{ color: SL_TEXT_SEC }}>证券账号</div>
+                  <div className="text-sm font-mono" style={{ color: SL_TEXT_PRI }}>{order.broker_account}</div>
+                </>
+              )}
+              {!order.broker_name && !order.broker_account && (
+                <div className="text-sm" style={{ color: SL_TEXT_SEC }}>--</div>
+              )}
+            </>
+          ) : (
+            // 数字币类：显示担保资产
+            <>
+              <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>担保资产</div>
+              <div className="text-sm" style={{ color: SL_TEXT_PRI }}>
+                {collateralAssets.length > 0 ? collateralAssets.map((c) => `${c.qty} ${c.coin}`).join(' + ') : '--'}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
