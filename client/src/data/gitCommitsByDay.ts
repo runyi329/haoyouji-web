@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-05
+// 生成时间：2026-07-06
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8156,5 +8156,9 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-05T09:44:14Z", type: "fix", cleanMessage: "利率符号持久化——用display_config.rate_negative保存负号，解决-0被decimal字段抹除问题" },
     { date: "2026-07-05T09:50:29Z", type: "fix", cleanMessage: "将rate_negative加入实际提交的payload.displayConfig，而非仅预览对象" },
     { date: "2026-07-05T11:09:33Z", type: "feat", cleanMessage: "权益型卡片担保资产位置——共享担保时显示红色「共享担保」文字" },
+    { date: "2026-07-05T11:20:58Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-05T12:14:05Z", type: "feat", cleanMessage: "备注双栏Tab/共享担保弹窗/担保缺口/已结利息/负利率符号修复/ledgerId解构修复" },
+    { date: "2026-07-05T12:40:11Z", type: "fix", cleanMessage: "备注列表加入编辑/删除按钮" },
+    { date: "2026-07-05T12:56:20Z", type: "fix", cleanMessage: "计息基数货币切换自动同步利率货币；修正7条历史数据interest_rate_currency" },
   ],
 };
