@@ -636,7 +636,21 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       status: order.status,
       adminNote: order.admin_note || '',
       publicNote: order.public_note || '',
-      interestRateAnnual: order.interest_rate_annual || '',
+      interestRateAnnual: (() => {
+        const r = String(order.interest_rate_annual ?? '');
+        // 如果利率本身带负号（如-8），直接用
+        if (r.startsWith('-')) return r;
+        // 如果利率是0或空，检查display_config里的rate_negative标记
+        const rNum = parseFloat(r);
+        if ((rNum === 0 || r === '' || r === '0') && !r.startsWith('-')) {
+          try {
+            const dc = order.display_config;
+            const parsed = dc ? (typeof dc === 'string' ? JSON.parse(dc) : dc) : null;
+            if (parsed?.rate_negative === true) return '-0';
+          } catch {}
+        }
+        return r || '';
+      })(),
       interestPaymentType: order.interest_payment_type || '',
       interestBase: order.interest_base || '',
       interestBaseCurrency: (['CNY', 'RMB', 'cny', 'rmb', '人民币'].includes(order.interest_base_currency || '') ? 'CNY' : 'USDT') as 'USDT' | 'CNY',
@@ -2078,7 +2092,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   principal_lent_out: formData.principalLentOut ? 1 : 0,
                   collateral_assets: collateralAssets.length > 0 ? JSON.stringify(collateralAssets) : null,
                   collateral_share_mode: collateralShareMode || 'none',
-                  display_config: JSON.stringify({ ...displayConfig, marginAlertThreshold: marginAlertThreshold || undefined }),
+                  display_config: JSON.stringify({ ...displayConfig, marginAlertThreshold: marginAlertThreshold || undefined, rate_negative: formData.interestRateAnnual.startsWith('-') }),
                   tags: formData.tags && formData.tags.length > 0 ? JSON.stringify(formData.tags) : null,
                   public_note: null,
                   admin_note: null,

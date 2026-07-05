@@ -30,6 +30,22 @@ const FONT = "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Ne
 
 const DEFAULT_CNY_RATE = 7.25;
 
+// 读取利率字符串，当利率为0时从 display_config.rate_negative 判断符号
+function getRateStr(order: any): string {
+  const r = String(order.interest_rate_annual ?? '');
+  if (r.startsWith('-')) return r;
+  // 利率为0或空时，检查 display_config.rate_negative
+  const rNum = parseFloat(r);
+  if (rNum === 0 || r === '' || r === '0') {
+    try {
+      const dc = order.display_config;
+      const parsed = dc ? (typeof dc === 'string' ? JSON.parse(dc) : dc) : null;
+      if (parsed?.rate_negative === true) return '-0';
+    } catch {}
+  }
+  return r;
+}
+
 interface FunderOrderCardV2Props {
   order: any;
   livePrices: Record<string, number>;
@@ -66,7 +82,7 @@ export function FunderOrderCardV2({
   const priceColor = priceDiff === null ? OKX_TEXT_PRI : priceDiff >= 0 ? OKX_GREEN : OKX_RED;
 
   // 利息计算
-  const rateStr = String(order.interest_rate_annual || "");
+  const rateStr = getRateStr(order);
   const isNegRate = rateStr.startsWith("-");
   const rateAbs = rateStr ? parseFloat(isNegRate ? rateStr.slice(1) : rateStr).toFixed(0) : "";
   const accrued = useAccruedInterestFunder(
@@ -382,7 +398,7 @@ export function FunderOrderCardV2Light({
   const priceDiff = liveP !== null && buyPrice > 0 ? liveP - buyPrice : null;
   const priceColor = priceDiff === null ? LT_TEXT_PRI : priceDiff >= 0 ? LT_GREEN : LT_RED;
 
-  const rateStr = String(order.interest_rate_annual || "");
+  const rateStr = getRateStr(order);
   const isNegRate = rateStr.startsWith("-");
   const rateAbs = rateStr ? parseFloat(isNegRate ? rateStr.slice(1) : rateStr).toFixed(0) : "";
   const accrued = useAccruedInterestFunder(
@@ -636,7 +652,7 @@ export function FunderOrderCardV2Silver({
   const priceDiff = liveP !== null && buyPrice > 0 ? liveP - buyPrice : null;
   const priceColor = priceDiff === null ? SL_TEXT_PRI : priceDiff >= 0 ? SL_GREEN : SL_RED;
 
-  const rateStr = String(order.interest_rate_annual || '');
+  const rateStr = getRateStr(order);
   const isNegRate = rateStr.startsWith('-');
   const rateAbs = rateStr ? parseFloat(isNegRate ? rateStr.slice(1) : rateStr).toFixed(0) : '';
   const accrued = useAccruedInterestFunder(
@@ -1133,7 +1149,7 @@ export function FunderLenderCardSilver({
   const priceDiff = liveP !== null && buyPrice > 0 ? liveP - buyPrice : null;
   const priceColor = priceDiff === null ? SL_TEXT_PRI : priceDiff >= 0 ? SL_GREEN : SL_RED;
 
-  const rateStr = String(order.interest_rate_annual || '');
+  const rateStr = getRateStr(order);
   const isNegRate = rateStr.startsWith('-');
   const rateAbs = rateStr ? parseFloat(isNegRate ? rateStr.slice(1) : rateStr).toFixed(0) : '';
   const accrued = useAccruedInterestFunder(
