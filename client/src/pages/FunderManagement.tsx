@@ -799,6 +799,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
           Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean' || typeof v === 'string')
         ),
         ...(marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? { marginAlertThreshold: parseFloat(marginAlertThreshold) } : {}),
+        rate_negative: formData.interestRateAnnual.startsWith('-'),
       } as Record<string, boolean | number>,
       assetType: formData.assetType || undefined,
       ownerLabel: formData.ownerLabel || undefined,
