@@ -7,7 +7,7 @@
  */
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { FunderOrderCard } from "@/components/FunderOrderCard";
-import { FunderOrderCardV2Silver } from "@/components/FunderOrderCardV2";
+import { FunderOrderCardV2Silver, FunderLenderCardSilver } from "@/components/FunderOrderCardV2";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import {
@@ -3376,15 +3376,28 @@ export default function CryptoPrediction() {
                     </div>
                   ) : financeViewMode === 'card' ? (
                     <div className="space-y-3">
-                      {sortedOrders.map((order: any) => (
-                        <FunderOrderCardV2Silver
-                          key={order.id}
-                          order={order}
-                          livePrices={financeLivePrices}
-                          priceDirection={{}}
-                          membersData={(ledgerInfo as any)?.members || []}
-                        />
-                      ))}
+                      {sortedOrders.map((order: any) => {
+                        // 按利率符号判断布局：正号（rate>=0）→付息型（突出利息，股票金色），负号（rate<0）→权益型（突出持仓，銀色）
+                        const rateVal = parseFloat(String(order.interest_rate_annual || '0'));
+                        return rateVal >= 0 ? (
+                          <FunderLenderCardSilver
+                            key={order.id}
+                            order={order}
+                            ledgerId={ledgerId ? Number(ledgerId) : undefined}
+                            livePrices={financeLivePrices}
+                            priceDirection={{}}
+                            membersData={(ledgerInfo as any)?.members || []}
+                          />
+                        ) : (
+                          <FunderOrderCardV2Silver
+                            key={order.id}
+                            order={order}
+                            livePrices={financeLivePrices}
+                            priceDirection={{}}
+                            membersData={(ledgerInfo as any)?.members || []}
+                          />
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="space-y-3">
