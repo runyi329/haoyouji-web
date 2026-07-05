@@ -16622,7 +16622,38 @@ ${klinesSummary}
             }
           }
         } catch (_e) { /* 表不存在或无参与方则忽略 */ }
-        return { orders: allOrders };
+        // 附带已结利息汇总（paidTotal）
+        let paidTotalMap: Record<number, { amount: number; currency: string }> = {};
+        if (allOrders.length > 0) {
+          try {
+            const ptConn = await getDbConnection();
+            if (ptConn) {
+              const ptOrderIds = allOrders.map((o: any) => Number(o.id));
+              const ptPlaceholders = ptOrderIds.map(() => '?').join(',');
+              const ptRows = await ptConn.execute(
+                `SELECT order_id, IFNULL(currency, 'U') as currency, SUM(amount) as total_paid
+                 FROM ledger_order_payments
+                 WHERE order_id IN (${ptPlaceholders})
+                 GROUP BY order_id, IFNULL(currency, 'U')`,
+                ptOrderIds
+              ) as any;
+              const ptArr = Array.isArray(ptRows[0]) ? ptRows[0] : (Array.isArray(ptRows) ? ptRows : []);
+              for (const row of ptArr) {
+                const oid = Number(row.order_id);
+                if (!paidTotalMap[oid]) {
+                  paidTotalMap[oid] = { amount: parseFloat(row.total_paid || '0'), currency: row.currency };
+                } else {
+                  paidTotalMap[oid].amount += parseFloat(row.total_paid || '0');
+                }
+              }
+            }
+          } catch (_ptE) { /* 忽略错误 */ }
+        }
+        const ordersWithPaid = allOrders.map((o: any) => ({
+          ...o,
+          paidTotal: paidTotalMap[Number(o.id)] || null,
+        }));
+        return { orders: ordersWithPaid };
       }),
 
     // 查询融资付息资产汇总

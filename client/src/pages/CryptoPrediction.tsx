@@ -2238,8 +2238,8 @@ export default function CryptoPrediction() {
   const [mySoloCollExpanded, setMySoloCollExpanded] = useState(true);
   // 融资订单子tab：全部 / 股 / 币 / 共享
   // 融资订单三层筛选
-  const [financeL2Tab, setFinanceL2Tab] = useState<'all' | 'mine' | 'shared'>('all');
-  const [financeL3Tab, setFinanceL3Tab] = useState<'all' | 'stock' | 'crypto' | 'collateral'>('all');
+  const [financeL2Tab, setFinanceL2Tab] = useState<'mine' | 'shared'>('mine');
+  const [financeL3Tab, setFinanceL3Tab] = useState<'all' | 'stock' | 'crypto'>('all');
   // 融资付息视图模式：卡片模式（银色铭牌）/ 订单模式（原始）
   const [financeViewMode, setFinanceViewMode] = useState<'card' | 'order'>('card');
   // 融资付息：资产汇总
@@ -3300,13 +3300,11 @@ export default function CryptoPrediction() {
                 return !!(o._isParticipant || o._fromFunder);
               });
 
-              // 第2层：全部/自己/共享 → 决定订单池
-              const l2Pool = financeL2Tab === 'mine' ? mineOrders
-                           : financeL2Tab === 'shared' ? sharedOrders
-                           : activeOrders;
+              // 第2层：自己/共享 → 决定订单池
+              const l2Pool = financeL2Tab === 'shared' ? sharedOrders : mineOrders;
 
-                            // 第3层：全部/股/币/共享担保（自己和他人都显示）
-              const showL3 = financeL2Tab === 'mine' || financeL2Tab === 'shared';
+                            // 第3层：全部/股/币（自己和他人都显示）
+              const showL3 = true;
               // 共享担保：担保物选择为「共享担保」的订单（collateral_share_mode === 'self'）
               const hasCollateral = (o: any) => o.collateral_share_mode === 'self';
               const l3Pool = showL3
@@ -3318,14 +3316,12 @@ export default function CryptoPrediction() {
                   })
                 : l2Pool;
               // 第2层计数
-              const cntAll = activeOrders.length;
               const cntMine = mineOrders.length;
               const cntShared = sharedOrders.length;
               // 第3层计数（基于当前l2Pool）
               const cntL3All = l2Pool.length;
               const cntL3Stock = l2Pool.filter((o: any) => o.asset_type === 'stock').length;
               const cntL3Crypto = l2Pool.filter((o: any) => o.asset_type !== 'stock').length;
-              const cntL3Collateral = l2Pool.filter(hasCollateral).length;
 
               const sortedOrders = [...l3Pool].sort((a: any, b: any) => {
                 const statusOrder: Record<string, number> = { active: 0, completed: 1, settled: 1, cancelled: 2 };
@@ -3358,28 +3354,26 @@ export default function CryptoPrediction() {
 
               return (
                 <>
-                  {/* 第2层：全部 / 自己 / 共享 */}
+                  {/* 第2层：自己 / 他人 */}
                   <div className="flex rounded p-1 gap-1 mb-3" style={{ backgroundColor: '#E8EEFF', border: '1px solid #C7D7FF' }}>
                     {([
-                      ['all',    '全部',  cntAll],
                       ['mine',   '自己',  cntMine],
                       ['shared', '他人',  cntShared],
                     ] as const).map(([key, label, cnt]) => (
-                      <button key={key} onClick={() => setFinanceL2Tab(key as any)}
+                      <button key={key} onClick={() => { setFinanceL2Tab(key as any); setFinanceL3Tab('all'); }}
                         style={tabBtnStyle(financeL2Tab === key)}>
                         {label} <span style={{ opacity: 0.75, fontSize: '11px' }}>{cnt}</span>
                       </button>
                     ))}
                   </div>
 
-                  {/* 第3层：全部 / 股 / 币（自己/共享时显示） */}
+                  {/* 第3层：股票 / 数字币 */}
                   {showL3 && (
                     <div className="flex rounded p-1 gap-1 mb-4" style={{ backgroundColor: '#EEF2FF', border: '1px solid #C7D7FF' }}>
                       {([
-                        ['all',        '全部',   cntL3All],
-                        ['stock',      '股',     cntL3Stock],
-                        ['crypto',     '币',     cntL3Crypto],
-                        ['collateral', '共享担保', cntL3Collateral],
+                        ['all',    '全部',   cntL3All],
+                        ['stock',  '股票',   cntL3Stock],
+                        ['crypto', '数字币', cntL3Crypto],
                       ] as const).map(([key, label, cnt]) => (
                         <button key={key} onClick={() => setFinanceL3Tab(key as any)}
                           style={subBtnStyle(financeL3Tab === key)}>

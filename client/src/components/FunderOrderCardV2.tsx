@@ -655,6 +655,8 @@ export function FunderOrderCardV2Silver({
     return val;
   };
   const displayAccrued = convertAccrued(accrued);
+  const totalPaid = (order as any).paidTotal ? parseFloat((order as any).paidTotal.amount || '0') : 0;
+  const displayPaid = convertAccrued(totalPaid);
 
   const holdDurationLabel = (() => {
     if (!order.buy_date) return '--';
@@ -832,7 +834,7 @@ export function FunderOrderCardV2Silver({
           {isStockCard ? (
             // 股票类：显示持有资产（计息基数，单位元）
             <>
-              <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC }}>持有资产 (元)</div>
+              <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC }}>仓位额度 (元)</div>
               <div style={{ lineHeight: 1 }}>
                 <span style={{ fontSize: '1.6rem', fontWeight: 700, color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: SL_TEXT_SHADOW_LG }}>
                   {order.interest_base ? parseFloat(order.interest_base).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '--'}
@@ -852,6 +854,17 @@ export function FunderOrderCardV2Silver({
           )}
         </div>
 
+        {/* 股票类：利息（月化 = 年化÷12）显示在右侧 */}
+        {isStockCard && (
+          <div className="text-right" style={{ flex: 1 }}>
+            <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>利息</div>
+            <div style={{ lineHeight: 1 }}>
+              <span style={{ fontSize: '1.1rem', fontWeight: 700, color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
+                {rateAbs ? `${(parseFloat(rateAbs) / 12).toFixed(2)}%` : '--'}
+              </span>
+            </div>
+          </div>
+        )}
         {/* 买入价 / 当前价 / 浮动盈亏：股票类隐藏 */}
         {!isStockCard && (
           <>
@@ -895,27 +908,61 @@ export function FunderOrderCardV2Silver({
 
       {/* ── 行3：次要数据行（3列）── */}
       <div className="grid grid-cols-3 gap-0 px-4 py-2" style={{ fontFamily: SL_NUM_FONT }}>
-        <div>
-          {/* 股票类隐藏当前市値 */}
-          {!isStockCard && (
-            <>
-              <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>当前市値 (U)</div>
-              <div className="text-sm" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
-                {currentValue != null ? fmt(currentValue, 0) : '--'}
-              </div>
-            </>
-          )}
-        </div>
-        <div className="text-center">
-          <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>开仓日期</div>
-          <div className="text-sm" style={{ color: SL_TEXT_PRI }}>
-            {order.buy_date ? fmtDate(order.buy_date) : '--'}
+        {isStockCard ? (
+          // 股票类：开仓日期居左
+          <div>
+            <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>开仓日期</div>
+            <div className="text-sm" style={{ color: SL_TEXT_PRI }}>
+              {order.buy_date ? fmtDate(order.buy_date) : '--'}
+            </div>
           </div>
-        </div>
+        ) : (
+          // 数字币类：当前市値居左
+          <div>
+            <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>当前市値 (U)</div>
+            <div className="text-sm" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+              {currentValue != null ? fmt(currentValue, 0) : '--'}
+            </div>
+          </div>
+        )}
+        {isStockCard ? (
+          // 股票类：交易天数居中
+          <div className="text-center">
+            <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>交易天数</div>
+            <div className="text-sm" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+              {order.buy_date
+                ? (() => {
+                    // startDay: 开仓日北京时间0点
+                    const startDay = new Date(order.buy_date + 'T00:00:00+08:00').getTime();
+                    // nowDay: 当前北京时间日期的0点
+                    const nowBJStr = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+                    const nowDay = new Date(nowBJStr + 'T00:00:00+08:00').getTime();
+                    if (nowDay < startDay) return 0;
+                    return Math.floor((nowDay - startDay) / (1000 * 60 * 60 * 24)) + 1;
+                  })()
+                : '--'}
+            </div>
+          </div>
+        ) : (
+          // 数字币类：开仓日期居中
+          <div className="text-center">
+            <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>开仓日期</div>
+            <div className="text-sm" style={{ color: SL_TEXT_PRI }}>
+              {order.buy_date ? fmtDate(order.buy_date) : '--'}
+            </div>
+          </div>
+        )}
         <div className="text-right">
           {isStockCard ? (
-            // 股票类：证券公司和证券账号已在帐檐行显示，此处不再重复
-            null
+            // 股票类：显示担保资产
+            <>
+              <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>担保资产</div>
+              <div className="text-sm" style={{ color: SL_TEXT_PRI }}>
+                {collateralAssets.length > 0
+                  ? collateralAssets.map((c) => `${parseFloat(c.qty).toLocaleString()} ${c.coin === 'CNY' ? '元' : c.coin}`).join(' + ')
+                  : '--'}
+              </div>
+            </>
           ) : (
             // 数字币类：显示担保资产
             <>
@@ -974,10 +1021,12 @@ export function FunderOrderCardV2Silver({
               const e = toBeijing(endD);
               const fmtBJ = (d: Date) => `${String(d.getFullYear()).slice(2)}年${d.getMonth()+1}月${d.getDate()}日`;
               const days = calcDays(order.interest_start_date, endD.getTime());
+              // 还没到开仓日（结束日 < 开始日），显示「未开始」
+              const notStarted = endD.getTime() < startD.getTime();
               return (
                 <div className="flex justify-between">
                   <span style={{ color: SL_TEXT_SEC }}>计息日期{order.interest_payment_type ? `（${({'monthly_pre':'月付先付','monthly_post':'月付后付','semi_pre':'半年付先付','semi_post':'半年付后付','annual_pre':'年付先付','annual_post':'年付后付','end_post':'结束后付','monthly_prepaid':'月付先付','monthly_postpaid':'月付后付','quarterly':'季付','maturity':'到期付'} as any)[order.interest_payment_type] || order.interest_payment_type}）` : ''}</span>
-                  <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{fmtBJ(s)} ~ {fmtBJ(e)}  {days}天</span>
+                  <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{notStarted ? `${fmtBJ(s)} 未开始` : `${fmtBJ(s)} ~ ${fmtBJ(e)}  ${days}天`}</span>
                 </div>
               );
             })()}
@@ -1005,15 +1054,24 @@ export function FunderOrderCardV2Silver({
                 </span>
               </div>
             )}
-            <div className="flex justify-between" style={{ borderTop: `1px solid ${SL_DIVIDER}`, paddingTop: 4, marginTop: 4 }}>
-              <span style={{ color: SL_TEXT_SEC }}>合计待付</span>
-              <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
-                {isStockCard
-                  ? `${displayAccrued > 0 ? '-' : ''}${fmt(displayAccrued, 2)} ${interestUnit}`
-                  : `${(displayAccrued + tradingFee) > 0 ? '-' : ''}${fmt(displayAccrued + tradingFee, 2)} ${interestUnit}`
-                }
-              </span>
+            {/* 已结利息：始终显示 */}
+            <div className="flex justify-between">
+              <span style={{ color: SL_TEXT_SEC }}>已结利息</span>
+              <span style={{ color: '#22C55E', fontVariantNumeric: 'tabular-nums' }}>+{fmt(displayPaid, 2)} {interestUnit}</span>
             </div>
+            {/* 合计待付 = 待付利息 + 手续费 - 已结利息 */}
+            {(() => {
+              const gross = isStockCard ? displayAccrued : displayAccrued + tradingFee;
+              const net = gross - displayPaid;
+              return (
+                <div className="flex justify-between" style={{ borderTop: `1px solid ${SL_DIVIDER}`, paddingTop: 4, marginTop: 4 }}>
+                  <span style={{ color: SL_TEXT_SEC }}>合计待付</span>
+                  <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                    {net > 0 ? '-' : ''}{fmt(Math.abs(net), 2)} {interestUnit}
+                  </span>
+                </div>
+              );
+            })()}
           </div>
         );
       })()}
@@ -1493,6 +1551,13 @@ export function FunderLenderCardSilver({
                 })() : <span style={{ color: SL_TEXT_PRI }}>{fmt(displayAccrued, 2)} {interestUnit}</span>}
               </span>
             </div>
+            {/* 已结利息 */}
+            {displayPaid > 0 && (
+              <div className="flex justify-between">
+                <span style={{ color: SL_TEXT_SEC }}>已结利息</span>
+                <span style={{ color: '#22C55E', fontVariantNumeric: 'tabular-nums' }}>{fmt(displayPaid, 2)} {interestUnit}</span>
+              </div>
+            )}
             {/* 合计应收 = 待收利息 - 已结利息 */}
             {(() => {
               const net = displayAccrued - displayPaid;

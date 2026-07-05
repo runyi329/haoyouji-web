@@ -1547,7 +1547,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     <button
                       type="button"
                       title="收"
-                      onClick={() => { const raw = formData.interestRateAnnual; if (raw.startsWith('-')) setFormData(d => ({ ...d, interestRateAnnual: raw.slice(1) })); }}
+                      onClick={() => { const raw = formData.interestRateAnnual; const absVal = raw.startsWith('-') ? raw.slice(1) : raw; setFormData(d => ({ ...d, interestRateAnnual: absVal || '0' })); }}
                       className="w-9 h-9 rounded-full flex items-center justify-center text-lg font-bold shrink-0 transition-all"
                       style={!isNeg
                         ? { background: '#FEE2E2', color: '#DC2626', border: '2px solid #DC2626' }
@@ -1556,7 +1556,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     <button
                       type="button"
                       title="付"
-                      onClick={() => { const raw = formData.interestRateAnnual; if (!raw.startsWith('-')) setFormData(d => ({ ...d, interestRateAnnual: raw ? '-' + raw : '-' })); }}
+                      onClick={() => { const raw = formData.interestRateAnnual; const absVal = raw.startsWith('-') ? raw.slice(1) : raw; setFormData(d => ({ ...d, interestRateAnnual: '-' + (absVal || '0') })); }}
                       className="w-9 h-9 rounded-full flex items-center justify-center text-lg font-bold shrink-0 transition-all"
                       style={isNeg
                         ? { background: '#DEF7EC', color: '#059669', border: '2px solid #059669' }
@@ -2065,7 +2065,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   storage_account: formData.storageAccount || null,
                   broker_name: formData.brokerName || null,
                   broker_account: formData.brokerAccount || null,
-                  interest_rate_annual: formData.interestRateAnnual || null,
+                  interest_rate_annual: (() => { const r = formData.interestRateAnnual; if (!r || r === '+' || r === '-') return (r === '-' ? '-0' : '0'); return r; })() || null,
                   interest_payment_type: formData.interestPaymentType || null,
                   interest_base: formData.interestBase || null,
                   interest_base_currency: formData.interestBaseCurrency || 'USDT',
