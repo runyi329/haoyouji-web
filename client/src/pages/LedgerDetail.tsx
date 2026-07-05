@@ -5155,6 +5155,7 @@ export default function LedgerDetail() {
                       livePrices={funderLivePrices}
                       priceDirection={funderPriceDirection}
                       membersData={membersData as any[]}
+                      cnyRate={cnyRate}
                     />
                   ) : (
                     <FunderOrderCardV2Silver
@@ -5163,6 +5164,7 @@ export default function LedgerDetail() {
                       livePrices={funderLivePrices}
                       priceDirection={funderPriceDirection}
                       membersData={membersData as any[]}
+                      cnyRate={cnyRate}
                     />
                   );
                 })}
