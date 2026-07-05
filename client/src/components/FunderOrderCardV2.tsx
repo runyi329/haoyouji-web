@@ -602,6 +602,7 @@ const SL_GOLD = SL_TEXT_PRI;     // 去掉金色，改用主文字色
 const SL_DIVIDER = 'rgba(0,0,0,0.08)';
 const SL_GREEN = '#A80000';      // 涨 = 深红（中国习惯）
 const SL_RED = '#16A34A';        // 跌 = 深绿
+const LN_EARN = '#C00000';       // 收益型卡片应收利息颜色（深红）
 
 export function FunderOrderCardV2Silver({
   order,
