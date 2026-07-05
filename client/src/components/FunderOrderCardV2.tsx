@@ -690,14 +690,41 @@ export function FunderOrderCardV2Silver({
     { bottom: '6px', right: '7px' },
   ];
 
+  // 金/银色：股票类用金色，数字币用银色
+  const isStockCard = order.asset_type === 'stock';
+  const GOLD_BG_SV = [
+    'linear-gradient(135deg, rgba(255,255,255,0.50) 0%, rgba(255,255,255,0.15) 22%, rgba(255,255,255,0.0) 45%, rgba(0,0,0,0.0) 60%, rgba(0,0,0,0.28) 100%)',
+    'linear-gradient(90deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 35%, rgba(0,0,0,0.0) 55%, rgba(0,0,0,0.18) 100%)',
+    'linear-gradient(180deg, rgba(0,0,0,0.10) 0%, rgba(255,255,255,0.18) 35%, rgba(255,255,255,0.25) 50%, rgba(255,255,255,0.08) 70%, rgba(0,0,0,0.14) 100%)',
+    'linear-gradient(160deg, #9e7c28 0%, #c89e32 18%, #ddb545 40%, #c49030 62%, #ceA03c 80%, #9e7c28 100%)',
+  ].join(', ');
+  const GOLD_BORDER_SV = '1.5px solid rgba(150,108,12,0.95)';
+  const GOLD_SHADOW_SV = [
+    '0 6px 20px rgba(0,0,0,0.35)',
+    '0 1px 3px rgba(0,0,0,0.25)',
+    'inset 0 1.5px 0 rgba(255,228,100,0.88)',
+    'inset 0 -1.5px 0 rgba(80,48,0,0.62)',
+    'inset 1.5px 0 rgba(245,205,65,0.28)',
+    'inset -1.5px 0 rgba(0,0,0,0.16)',
+  ].join(', ');
+  const cardBg = isStockCard ? GOLD_BG_SV : SL_BG;
+  const cardBorder = isStockCard ? GOLD_BORDER_SV : SL_BORDER;
+  const cardShadow = isStockCard ? GOLD_SHADOW_SV : SL_SHADOW;
+  const rivetBg = isStockCard
+    ? 'radial-gradient(circle at 35% 35%, #fff8d0 0%, #e8c050 35%, #a07010 65%, #6a4800 100%)'
+    : SL_RIVET_BG;
+  const rivetShadow = isStockCard
+    ? '0 1px 2px rgba(0,0,0,0.55), inset 0 1px 1px rgba(255,240,140,0.9)'
+    : '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.8)';
+
   return (
     <div
       className="rounded-2xl overflow-hidden silver-card"
       style={{
         position: 'relative',
-        background: SL_BG,
-        border: SL_BORDER,
-        boxShadow: SL_SHADOW,
+        background: cardBg,
+        border: cardBorder,
+        boxShadow: cardShadow,
       }}
     >
       {/* SVG 磨砂噪点滤镜定义（隐藏） */}
@@ -731,8 +758,8 @@ export function FunderOrderCardV2Silver({
             borderRadius: '50%',
             zIndex: 10,
             ...pos,
-            background: SL_RIVET_BG,
-            boxShadow: '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.8)',
+            background: rivetBg,
+            boxShadow: rivetShadow,
           }}
         />
       ))}
