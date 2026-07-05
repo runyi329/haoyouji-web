@@ -1586,7 +1586,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     onChange={e => {
                       const val = e.target.value;
                       const isNeg = formData.interestRateAnnual.startsWith('-');
-                      setFormData(d => ({ ...d, interestRateAnnual: isNeg ? '-' + val : val }));
+                      // 负号模式下，输入0或空时保持'-0'，确保rate_negative不丢失
+                      const newVal = isNeg ? ('-' + (val || '0')) : (val || '0');
+                      setFormData(d => ({ ...d, interestRateAnnual: newVal }));
                     }}
                     className="flex-1 min-w-0 px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
                     placeholder="如：8.5"
