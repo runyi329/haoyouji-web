@@ -1447,7 +1447,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   <div className="flex rounded-xl border border-gray-200 overflow-hidden shrink-0">
                     <button
                       type="button"
-                      onClick={() => setFormData(d => ({ ...d, interestBaseCurrency: 'USDT' }))}
+                      onClick={() => setFormData(d => ({ ...d, interestBaseCurrency: 'USDT', interestRateCurrency: 'USDT' }))}
                       className={`px-3 py-3 text-sm font-medium transition-colors ${
                         formData.interestBaseCurrency === 'USDT'
                           ? 'bg-blue-600 text-white'
@@ -1456,7 +1456,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     >USDT</button>
                     <button
                       type="button"
-                      onClick={() => setFormData(d => ({ ...d, interestBaseCurrency: 'CNY' }))}
+                      onClick={() => setFormData(d => ({ ...d, interestBaseCurrency: 'CNY', interestRateCurrency: 'CNY' }))}
                       className={`px-3 py-3 text-sm font-medium transition-colors ${
                         formData.interestBaseCurrency === 'CNY'
                           ? 'bg-blue-600 text-white'

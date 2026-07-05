@@ -650,6 +650,7 @@ export function FunderOrderCardV2Silver({
   const [noteEditingIdx, setNoteEditingIdx] = useState<number | null>(null);
   const [noteEditValue, setNoteEditValue] = useState('');
   const [noteSaving, setNoteSaving] = useState(false);
+  const [noteDeleteConfirmIdx, setNoteDeleteConfirmIdx] = useState<number | null>(null);
   const updateNoteM = trpc.ledger.funderUpdatePublicNote.useMutation();
   const saveNoteItems = async (newItems: ReturnType<typeof parseNotes>) => {
     if (!ledgerId) return;
@@ -1428,19 +1429,37 @@ export function FunderOrderCardV2Silver({
                     {note.time && <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_DIM }}>{formatNoteTime(note.time)}</div>}
                     <div className="break-all" style={{ color: SL_TEXT_PRI, fontSize: '11px', lineHeight: '1.5' }}>{note.text}</div>
                   </div>
-                  <div className="shrink-0 flex flex-col gap-1 self-start mt-0.5">
+                  <div className="shrink-0 flex flex-row gap-1.5 self-start mt-0.5 items-center">
+                    {/* 编辑图标 */}
                     <button
                       type="button"
-                      onClick={() => { setNoteEditingIdx(idx); setNoteEditValue(note.text); }}
-                      className="text-[10px] px-1.5 py-0.5 rounded"
-                      style={{ background: '#EFF6FF', color: '#3B82F6', lineHeight: 1.2 }}
-                    >编辑</button>
-                    <button
-                      type="button"
-                      onClick={() => { if (window.confirm('确认删除这条备注？')) saveNoteItems(noteItems.filter((_, i) => i !== idx)); }}
-                      className="text-[10px] px-1.5 py-0.5 rounded"
-                      style={{ background: '#FEF2F2', color: '#EF4444', lineHeight: 1.2 }}
-                    >删除</button>
+                      onClick={() => { setNoteEditingIdx(idx); setNoteEditValue(note.text); setNoteDeleteConfirmIdx(null); }}
+                      className="p-1 rounded"
+                      style={{ background: '#EFF6FF', color: '#3B82F6' }}
+                      title="编辑"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                    {/* 删除：两次确认 */}
+                    {noteDeleteConfirmIdx === idx ? (
+                      <button
+                        type="button"
+                        onClick={() => { saveNoteItems(noteItems.filter((_, i) => i !== idx)); setNoteDeleteConfirmIdx(null); }}
+                        className="p-1 rounded text-[10px] font-bold px-1.5"
+                        style={{ background: '#EF4444', color: '#fff' }}
+                        title="再次点击确认删除"
+                      >确认?</button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setNoteDeleteConfirmIdx(idx)}
+                        className="p-1 rounded"
+                        style={{ background: '#FEF2F2', color: '#EF4444' }}
+                        title="删除"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
