@@ -295,10 +295,12 @@ export function FunderOrderCardV2({
         </div>
         <div className="text-right">
           <div className="text-[10px] mb-0.5" style={{ color: OKX_TEXT_SEC }}>担保资产</div>
-          <div className="text-sm" style={{ color: OKX_TEXT_PRI }}>
-            {collateralAssets.length > 0
-              ? collateralAssets.map((c) => `${c.qty} ${c.coin}`).join(" + ")
-              : "--"}
+          <div className="text-sm" style={{ color: (order as any).collateral_share_mode === 'self' ? '#DC2626' : OKX_TEXT_PRI }}>
+            {(order as any).collateral_share_mode === 'self'
+              ? '共享担保'
+              : collateralAssets.length > 0
+                ? collateralAssets.map((c) => `${c.qty} ${c.coin}`).join(" + ")
+                : "--"}
           </div>
         </div>
       </div>
@@ -534,8 +536,10 @@ export function FunderOrderCardV2Light({
         </div>
         <div className="text-right">
           <div className="text-[10px] mb-0.5" style={{ color: LT_TEXT_SEC }}>担保资产</div>
-          <div className="text-sm" style={{ color: LT_TEXT_PRI }}>
-            {collateralAssets.length > 0 ? collateralAssets.map((c) => `${c.qty} ${c.coin}`).join(" + ") : "--"}
+          <div className="text-sm" style={{ color: (order as any).collateral_share_mode === 'self' ? '#DC2626' : LT_TEXT_PRI }}>
+            {(order as any).collateral_share_mode === 'self'
+              ? '共享担保'
+              : collateralAssets.length > 0 ? collateralAssets.map((c) => `${c.qty} ${c.coin}`).join(" + ") : "--"}
           </div>
         </div>
       </div>
@@ -969,7 +973,13 @@ export function FunderOrderCardV2Silver({
           </div>
         )}
         <div className="text-right">
-          {isStockCard ? (
+          {(order as any).collateral_share_mode === 'self' ? (
+            // 共享担保模式
+            <>
+              <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>担保资产</div>
+              <div className="text-sm font-semibold" style={{ color: '#DC2626' }}>共享担保</div>
+            </>
+          ) : isStockCard ? (
             // 股票类：显示担保资产
             <>
               <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>担保资产</div>
