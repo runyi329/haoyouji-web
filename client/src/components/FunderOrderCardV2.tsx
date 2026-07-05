@@ -2,6 +2,7 @@
 // 仅用于对比展示，不影响原有 FunderOrderCard
 import React, { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { trpc } from "@/lib/trpc";
 import {
   COIN_COLORS,
   CoinType,
@@ -31,6 +32,7 @@ interface FunderOrderCardV2Props {
   priceDirection?: Record<string, "up" | "down" | "same">;
   cnyRate?: number;
   membersData?: any[];
+  ledgerId?: number;
 }
 
 export function FunderOrderCardV2({
@@ -735,8 +737,10 @@ export function FunderOrderCardV2Silver({
               const m = (membersData as any[])?.find((m: any) => m.userId === order.user_id);
               return m ? (m.nickname || m.username) : null;
             })();
+            const buyDateStr = order.buy_date ? fmtDate(order.buy_date) : null;
             const items = [
               ownerName,
+              buyDateStr,
             ].filter(Boolean);
             return items.map((item, i) => (
               <React.Fragment key={i}>
@@ -845,38 +849,40 @@ export function FunderOrderCardV2Silver({
 
       {feeExpanded && (() => {
         const interestBase = order.interest_base ? parseFloat(order.interest_base) : 0;
-        const tradingFee = interestBase * 0.002; // 千分之一买 + 千分之一卖 = 千分之二
+        const tradingFee = interestBase * 0.002;
+        // 计息基数单位按 interest_base_currency 判断
+        const baseUnit2 = (order.interest_base_currency || 'USDT') === 'CNY' ? '元' : 'u';
+        // 天数算法与 hook 一致：北京时间自然日，开始日算第1天
+        const calcDays = (startDateStr: string, endTs: number): number => {
+          const startDateBJ = new Date(startDateStr + 'T00:00:00+08:00');
+          const endDateBJ = new Date(endTs + 8 * 3600 * 1000);
+          const startDay = new Date(startDateBJ.toISOString().slice(0, 10) + 'T00:00:00+08:00').getTime();
+          const endDay = new Date(endDateBJ.toISOString().slice(0, 10) + 'T00:00:00+08:00').getTime();
+          return Math.max(0, Math.floor((endDay - startDay) / (1000 * 60 * 60 * 24)) + 1);
+        };
         return (
           <div className="px-4 pb-3 space-y-1.5 text-[10px]">
             <div className="flex justify-between">
               <span style={{ color: SL_TEXT_SEC }}>计息基数</span>
               <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
                 {buyPrice > 0 && qty > 0
-                  ? `${fmt(buyPrice, 0)}(U) × ${fmt(qty, qty % 1 === 0 ? 0 : 2)}(${coin}) = ${fmt(interestBase, 0)} ${interestUnit}`
-                  : interestBase ? `${fmt(interestBase, 0)} ${interestUnit}` : '--'
+                  ? `${fmt(buyPrice, 0)}(U) × ${fmt(qty, qty % 1 === 0 ? 0 : 2)}(${coin}) = ${fmt(interestBase, 0)} ${baseUnit2}`
+                  : interestBase ? `${fmt(interestBase, 0)} ${baseUnit2}` : '--'
                 }
               </span>
             </div>
             {order.interest_start_date && (() => {
-              // 计息日期起止（北京时间）
               const startD = new Date(order.interest_start_date + 'T00:00:00+08:00');
               const endD = order.settled_at ? new Date(order.settled_at) : new Date();
-              const toBeijing = (d: Date) => {
-                const bjOffset = 8 * 60;
-                const local = new Date(d.getTime() + (bjOffset - (-d.getTimezoneOffset())) * 60000);
-                return local;
-              };
+              const toBeijing = (d: Date) => new Date(d.getTime() + (8 * 60 - (-d.getTimezoneOffset())) * 60000);
               const s = toBeijing(startD);
               const e = toBeijing(endD);
-              const fmtBJ = (d: Date) => {
-                const yy = String(d.getFullYear()).slice(2);
-                return `${yy}年${d.getMonth()+1}月${d.getDate()}日`;
-              };
-              const days = Math.ceil((endD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24));
+              const fmtBJ = (d: Date) => `${String(d.getFullYear()).slice(2)}年${d.getMonth()+1}月${d.getDate()}日`;
+              const days = calcDays(order.interest_start_date, endD.getTime());
               return (
                 <div className="flex justify-between">
                   <span style={{ color: SL_TEXT_SEC }}>计息日期{order.interest_payment_type ? `（${order.interest_payment_type === 'end_post' ? '结束后付' : order.interest_payment_type}）` : ''}</span>
-                  <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{fmtBJ(s)} ~ {fmtBJ(e)}  {days}天</span>
+                  <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{fmtBJ(s)} ~ {fmtBJ(e)}  {days}天</span>
                 </div>
               );
             })()}
@@ -885,8 +891,7 @@ export function FunderOrderCardV2Silver({
               <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
                 {rateAbs && interestBase > 0 ? (() => {
                   const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
-                  const startTs = order.interest_start_date ? new Date(order.interest_start_date + 'T00:00:00').getTime() : null;
-                  const days = startTs ? Math.ceil((endTs - startTs) / (1000 * 60 * 60 * 24)) : null;
+                  const days = order.interest_start_date ? calcDays(order.interest_start_date, endTs) : null;
                   return (
                     <>
                       <span style={{ color: SL_TEXT_PRI }}>{fmt(interestBase, 0)}×{rateAbs}%÷365{days != null ? `×${days}天` : ''} = </span>
@@ -907,6 +912,417 @@ export function FunderOrderCardV2Silver({
               <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
                 {(displayAccrued + tradingFee) > 0 ? '-' : ''}{fmt(displayAccrued + tradingFee, 2)} {interestUnit}
               </span>
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+// ─── 银色铭牌·收益型（出借方）────────────────────────────────────────────────
+// 适用于 interest_rate_annual 为正数的订单（jennypu 等出借方）
+// 突出应收利息，展开区分利息块和担保物块
+
+export function FunderLenderCardSilver({
+  order,
+  livePrices,
+  priceDirection = {},
+  cnyRate = DEFAULT_CNY_RATE,
+  membersData = [],
+  ledgerId,
+}: FunderOrderCardV2Props) {
+  const [feeExpanded, setFeeExpanded] = useState(false);
+  const [showInterestHistory, setShowInterestHistory] = useState(false);
+  const interestHistoryQuery = trpc.ledger.funderGetInterestPayments.useQuery(
+    { ledgerId: ledgerId ?? 0, orderId: order.id as number },
+    { enabled: showInterestHistory && !!ledgerId, staleTime: 0 }
+  );
+
+  const coin = (order.coin || 'ETH') as CoinType;
+  const qty = parseFloat(order.buy_quantity || '0');
+  const buyPrice = parseFloat(order.buy_price || '0');
+  const liveP = livePrices[coin] ?? null;
+
+  const currentValue = liveP !== null && qty > 0 ? liveP * qty : null;
+  const buyValue = qty > 0 && buyPrice > 0 ? qty * buyPrice : parseFloat(order.amount || '0');
+  const floatPnl = currentValue !== null && buyValue > 0 ? currentValue - buyValue : null;
+  const floatPct = floatPnl !== null && buyValue > 0 ? (floatPnl / buyValue) * 100 : null;
+  const pnlColor = floatPnl === null ? SL_TEXT_SEC : floatPnl >= 0 ? SL_GREEN : SL_RED;
+
+  const dir = priceDirection?.[coin] ?? 'same';
+  const priceDiff = liveP !== null && buyPrice > 0 ? liveP - buyPrice : null;
+  const priceColor = priceDiff === null ? SL_TEXT_PRI : priceDiff >= 0 ? SL_GREEN : SL_RED;
+
+  const rateStr = String(order.interest_rate_annual || '');
+  const isNegRate = rateStr.startsWith('-');
+  const rateAbs = rateStr ? parseFloat(isNegRate ? rateStr.slice(1) : rateStr).toFixed(0) : '';
+  const accrued = useAccruedInterestFunder(
+    order.status === 'active' ? order.interest_base : null,
+    order.status === 'active' ? order.interest_rate_annual : null,
+    order.status === 'active' ? order.interest_start_date : null,
+    order.settled_at
+  );
+  const baseCur = order.interest_base_currency || 'USDT';
+  const rateCur = order.interest_rate_currency || 'USDT';
+  const interestUnit = rateCur === 'CNY' ? '元' : 'U';
+  const baseUnit = baseCur === 'CNY' ? '元' : 'U';
+  const convertAccrued = (val: number): number => {
+    if (baseCur === rateCur) return val;
+    if (baseCur === 'USDT' && rateCur === 'CNY') return val * cnyRate;
+    if (baseCur === 'CNY' && rateCur === 'USDT') return val / cnyRate;
+    return val;
+  };
+  const displayAccrued = convertAccrued(accrued);
+  const totalPaid = (order as any).paidTotal ? parseFloat((order as any).paidTotal.amount || '0') : 0;
+  const displayPaid = convertAccrued(totalPaid);
+  // 约等于换算
+  const approxAccrued = interestUnit === '元' ? displayAccrued / cnyRate : displayAccrued * cnyRate;
+  const approxUnit = interestUnit === '元' ? 'u' : '元';
+
+  let collateralAssets: { coin: string; qty: string }[] = [];
+  try {
+    const rawCA = order.collateral_assets;
+    if (rawCA) {
+      const parsed = typeof rawCA === 'string' ? JSON.parse(rawCA) : rawCA;
+      if (Array.isArray(parsed)) collateralAssets = parsed;
+    }
+  } catch {}
+
+  // 担保价值计算
+  const collateralItemValues: (number | null)[] = collateralAssets.map((a) => {
+    const p = livePrices[a.coin as CoinType] ?? null;
+    return p !== null ? p * parseFloat(a.qty || '0') : null;
+  });
+  const collateralValueKnown = collateralItemValues.every((v) => v !== null);
+  const collateralValue = collateralValueKnown
+    ? collateralItemValues.reduce((s, v) => s + (v ?? 0), 0)
+    : null;
+  // 担保缺口 = 担保价值 + 浮动盈亏 - 净应收利息
+  const collateralGap = collateralValue !== null && floatPnl !== null
+    ? collateralValue + floatPnl - (displayAccrued - displayPaid)
+    : null;
+
+  // 天数算法与 hook 一致：北京时间自然日，开始日算第1天
+  const calcDays = (startDateStr: string, endTs: number): number => {
+    const startDateBJ = new Date(startDateStr + 'T00:00:00+08:00');
+    const endDateBJ = new Date(endTs + 8 * 3600 * 1000);
+    const startDay = new Date(startDateBJ.toISOString().slice(0, 10) + 'T00:00:00+08:00').getTime();
+    const endDay = new Date(endDateBJ.toISOString().slice(0, 10) + 'T00:00:00+08:00').getTime();
+    return Math.max(0, Math.floor((endDay - startDay) / (1000 * 60 * 60 * 24)) + 1);
+  };
+
+  const fmt = (v: number | null, digits = 2) =>
+    v == null || isNaN(v) ? '--' : v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  const fmtQty = (v: number | null) =>
+    v == null || isNaN(v) ? '--' : v % 1 === 0
+      ? v.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+      : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const rivets = [
+    { top: '6px', left: '7px' },
+    { top: '6px', right: '7px' },
+    { bottom: '6px', left: '7px' },
+    { bottom: '6px', right: '7px' },
+  ];
+
+  return (
+    <div
+      className="rounded-2xl overflow-hidden silver-card"
+      style={{
+        position: 'relative',
+        background: SL_BG,
+        border: SL_BORDER,
+        boxShadow: SL_SHADOW,
+      }}
+    >
+      {/* SVG 磨砂噪点滤镜 */}
+      <svg width="0" height="0" style={{ position: 'absolute' }}>
+        <defs>
+          <filter id="brushed-metal-noise-ln" x="0%" y="0%" width="100%" height="100%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.65 0.015" numOctaves="4" seed="3" result="noise" />
+            <feColorMatrix type="saturate" values="0" in="noise" result="grayNoise" />
+            <feBlend in="SourceGraphic" in2="grayNoise" mode="overlay" result="blended" />
+            <feComposite in="blended" in2="SourceGraphic" operator="in" />
+          </filter>
+        </defs>
+      </svg>
+      {/* 磨砂噪点覆盖层 */}
+      <div
+        style={{
+          position: 'absolute', inset: 0, zIndex: 1, borderRadius: 'inherit', pointerEvents: 'none',
+          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75 0.02' numOctaves='4' seed='7'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.18'/%3E%3C/svg%3E")`,
+          backgroundSize: '200px 200px',
+          mixBlendMode: 'overlay',
+        }}
+      />
+      {/* 四角铆钉 */}
+      {rivets.map((pos, i) => (
+        <div
+          key={i}
+          style={{
+            position: 'absolute', width: '6px', height: '6px', borderRadius: '50%', zIndex: 10,
+            ...pos,
+            background: SL_RIVET_BG,
+            boxShadow: '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.8)',
+          }}
+        />
+      ))}
+
+      {/* ── 行1：名字 | 开仓日期 + 订单号 ── */}
+      <div className="flex items-center px-4 pt-3 pb-2" style={{ borderBottom: `1px solid ${SL_DIVIDER}` }}>
+        <div className="flex items-center text-xs" style={{ color: SL_TEXT_SEC, gap: 0 }}>
+          {(() => {
+            const ownerName = order.owner_label || (() => {
+              const m = (membersData as any[])?.find((m: any) => m.userId === order.user_id);
+              return m ? (m.nickname || m.username) : null;
+            })();
+            const buyDateStr = order.buy_date ? fmtDate(order.buy_date) : null;
+            const items = [ownerName, buyDateStr].filter(Boolean);
+            return items.map((item, i) => (
+              <React.Fragment key={i}>
+                {i > 0 && <span style={{ color: SL_TEXT_DIM, margin: '0 6px' }}>|</span>}
+                <span style={{ color: i === 0 ? SL_TEXT_PRI : SL_TEXT_SEC, fontWeight: i === 0 ? 500 : 400 }}>{item}</span>
+              </React.Fragment>
+            ));
+          })()}
+        </div>
+        {order.order_no && (
+          <span className="ml-auto text-[10px] font-mono" style={{ color: SL_TEXT_DIM, letterSpacing: '0.05em' }}>
+            {order.order_no}
+          </span>
+        )}
+      </div>
+
+      {/* ── 行2：应收利息大字（左）+ 年化利率（右）── */}
+      <div className="flex gap-0 px-5 py-3" style={{ borderBottom: `1px solid ${SL_DIVIDER}` }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC }}>应收利息 ({interestUnit})</div>
+          <div style={{ lineHeight: 1, display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+            <span style={{ fontSize: '1.6rem', fontWeight: 700, color: LN_EARN, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: SL_TEXT_SHADOW_LG }}>
+              {displayAccrued > 0 ? '+' : ''}{fmt(displayAccrued, 2)}
+            </span>
+            <span className="text-[10px]" style={{ color: SL_TEXT_SEC, whiteSpace: 'nowrap' }}>
+              ≈{approxAccrued > 0 ? approxAccrued.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '--'} {approxUnit}
+            </span>
+          </div>
+        </div>
+        <div className="text-right" style={{ flex: 1 }}>
+          <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC }}>年化利率</div>
+          <div style={{ lineHeight: 1 }}>
+            <span style={{ fontSize: '1.1rem', fontWeight: 700, color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
+              {rateAbs ? `${rateAbs}%` : '--'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── 行3：持有数量 / 计息基数 / 计息天数 ── */}
+      <div className="grid grid-cols-3 gap-0 px-4 py-2" style={{ fontFamily: SL_NUM_FONT }}>
+        <div>
+          <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>持有 ({coin})</div>
+          <div className="text-sm font-semibold" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+            {fmtQty(qty)}
+          </div>
+        </div>
+        <div className="text-center">
+          <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>计息基数 ({baseUnit})</div>
+          <div className="text-sm" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+            {order.interest_base ? fmt(parseFloat(order.interest_base), 0) : '--'}
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>计息天数</div>
+          <div className="text-sm" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+            {order.interest_start_date
+              ? `${calcDays(order.interest_start_date, order.settled_at ? new Date(order.settled_at).getTime() : Date.now())}天`
+              : '--'}
+          </div>
+        </div>
+      </div>
+
+      {/* ── 展开按钮 ── */}
+      <button
+        className="w-full flex items-center justify-between px-4 py-2"
+        style={{ borderTop: `1px dashed ${SL_DIVIDER}` }}
+        onClick={() => setFeeExpanded((v) => !v)}
+      >
+        <div />
+        <div className="flex items-center">
+          {feeExpanded
+            ? <ChevronUp className="w-3 h-3" style={{ color: SL_TEXT_DIM }} />
+            : <ChevronDown className="w-3 h-3" style={{ color: SL_TEXT_DIM }} />}
+        </div>
+      </button>
+
+      {/* ── 展开区 ── */}
+      {feeExpanded && (() => {
+        const interestBase = order.interest_base ? parseFloat(order.interest_base) : 0;
+        return (
+          <div className="px-4 pb-3 space-y-1.5 text-[10px]">
+            {/* ── 利息块 ── */}
+            {/* 计息基数 */}
+            <div className="flex justify-between">
+              <span style={{ color: SL_TEXT_SEC }}>计息基数</span>
+              <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+                {buyPrice > 0 && qty > 0
+                  ? `${fmt(buyPrice, 0)}(U) × ${fmtQty(qty)}(${coin}) = ${fmt(interestBase, 0)} ${baseUnit}`
+                  : interestBase ? `${fmt(interestBase, 0)} ${baseUnit}` : '--'
+                }
+              </span>
+            </div>
+            {/* 计息日期 */}
+            {order.interest_start_date && (() => {
+              const startD = new Date(order.interest_start_date + 'T00:00:00+08:00');
+              const endD = order.settled_at ? new Date(order.settled_at) : new Date();
+              const toBeijing = (d: Date) => new Date(d.getTime() + (8 * 60 - (-d.getTimezoneOffset())) * 60000);
+              const s = toBeijing(startD);
+              const e = toBeijing(endD);
+              const fmtBJ = (d: Date) => `${String(d.getFullYear()).slice(2)}年${d.getMonth()+1}月${d.getDate()}日`;
+              const days = calcDays(order.interest_start_date, endD.getTime());
+              return (
+                <div className="flex justify-between">
+                  <span style={{ color: SL_TEXT_SEC }}>计息日期{order.interest_payment_type ? `（${order.interest_payment_type === 'end_post' ? '结束后收' : order.interest_payment_type}）` : ''}</span>
+                  <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{fmtBJ(s)} ~ {fmtBJ(e)}  {days}天</span>
+                </div>
+              );
+            })()}
+            {/* 已结利息（始终显示） */}
+            <div className="flex justify-between items-center">
+              <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
+                已结利息
+                <button
+                  type="button"
+                  onClick={() => setShowInterestHistory(v => !v)}
+                  className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold leading-none flex-shrink-0"
+                  style={{ backgroundColor: showInterestHistory ? '#6B7280' : '#E5E7EB', color: showInterestHistory ? '#fff' : '#6B7280' }}
+                  title="已结利息记录"
+                >!</button>
+              </span>
+              <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}</span>
+            </div>
+            {/* 已结利息历史浮层 */}
+            {showInterestHistory && (
+              <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowInterestHistory(false)}>
+                <div className="rounded-2xl p-4 w-80 max-h-[70vh] overflow-y-auto" style={{ background: '#F9FAFB', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-sm font-bold" style={{ color: '#1A2340' }}>已结利息记录</span>
+                    <button onClick={() => setShowInterestHistory(false)} className="text-gray-400 text-lg leading-none">×</button>
+                  </div>
+                  {interestHistoryQuery.isLoading && <div className="text-xs text-gray-400 text-center py-4">加载中...</div>}
+                  {interestHistoryQuery.data && (interestHistoryQuery.data as any[]).length === 0 && (
+                    <div className="text-xs text-gray-400 text-center py-4">暂无结息记录</div>
+                  )}
+                  {interestHistoryQuery.data && (interestHistoryQuery.data as any[]).length > 0 && (
+                    <div>
+                      {(interestHistoryQuery.data as any[]).map((p: any, i: number) => {
+                        const cur = (p.currency || 'U') === 'CNY' ? '元' : 'u';
+                        const fmtD = (s: string) => { const d = s ? String(s).slice(0, 10) : ''; return d ? `${d.slice(2,4)}.${d.slice(5,7)}.${d.slice(8,10)}` : ''; };
+                        const payDateFmt = fmtD(p.pay_date);
+                        const ps = p.period_start ? fmtD(p.period_start) : '';
+                        const pe = p.period_end ? fmtD(p.period_end) : '';
+                        const periodLabel = ps && pe ? `${ps} → ${pe}` : ps ? `${ps} 起` : pe ? `至 ${pe}` : '';
+                        const amtStr = `${parseFloat(p.amount || '0').toLocaleString(undefined, { maximumFractionDigits: 4 })} ${cur}`;
+                        const mainLeft = periodLabel ? `结算周期 ${periodLabel}` : `${payDateFmt} 结息`;
+                        const needSecondLine = !!(periodLabel && payDateFmt) || !!p.note;
+                        return (
+                          <div key={p.id || i} className="py-2.5" style={{ borderBottom: '1px solid #F0F0F5' }}>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs" style={{ color: '#4B5563' }}>{mainLeft}</span>
+                              <span className="text-xs font-semibold shrink-0" style={{ color: '#1A2340' }}>{amtStr}</span>
+                            </div>
+                            {needSecondLine && (
+                              <div className="flex items-center gap-2 mt-0.5">
+                                {periodLabel && payDateFmt && <span className="text-[11px]" style={{ color: '#9CA3AF' }}>{payDateFmt} 结息</span>}
+                                {p.note && <span className="text-[11px] text-gray-400 truncate">{p.note}</span>}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      <div className="pt-2 flex items-center justify-between">
+                        <span className="text-xs text-gray-400">共结息 {(interestHistoryQuery.data as any[]).length} 笔</span>
+                        <span className="text-xs font-bold" style={{ color: '#3B82F6' }}>
+                          {(() => {
+                            const rows = interestHistoryQuery.data as any[];
+                            const uTotal = rows.filter(r => (r.currency || 'U') !== 'CNY').reduce((s, r) => s + parseFloat(r.amount || '0'), 0);
+                            const cnyTotal = rows.filter(r => (r.currency || 'U') === 'CNY').reduce((s, r) => s + parseFloat(r.amount || '0'), 0);
+                            const parts = [];
+                            if (uTotal > 0) parts.push(`${uTotal.toLocaleString(undefined, { maximumFractionDigits: 4 })} u`);
+                            if (cnyTotal > 0) parts.push(`${cnyTotal.toLocaleString(undefined, { maximumFractionDigits: 2 })} 元`);
+                            return parts.join(' + ') || '0 u';
+                          })()}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {/* 待收利息 */}
+            <div className="flex justify-between items-center">
+              <span style={{ color: SL_TEXT_SEC }}>待收利息{rateAbs ? `（年化${rateAbs}%）` : ''}</span>
+              <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+                {rateAbs && interestBase > 0 ? (() => {
+                  const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
+                  const days = order.interest_start_date ? calcDays(order.interest_start_date, endTs) : null;
+                  return (
+                    <>
+                      <span style={{ color: SL_TEXT_PRI }}>{fmt(interestBase, 0)}×{rateAbs}%÷365{days != null ? `×${days}天` : ''} = </span>
+                      <span style={{ color: SL_TEXT_PRI, fontWeight: 600 }}>{fmt(displayAccrued, 2)} {interestUnit}</span>
+                    </>
+                  );
+                })() : <span style={{ color: SL_TEXT_PRI, fontWeight: displayAccrued > 0 ? 600 : 400 }}>{fmt(displayAccrued, 2)} {interestUnit}</span>}
+              </span>
+            </div>
+            {/* 合计应收 = 待收利息 - 已结利息 */}
+            {(() => {
+              const net = displayAccrued - displayPaid;
+              const label = net >= 0 ? '待收利息' : '超收利息';
+              const numColor = net >= 0 ? LN_EARN : '#16A34A';
+              return (
+                <div className="flex justify-between" style={{ borderTop: `1px solid ${SL_DIVIDER}`, paddingTop: 4, marginTop: 4 }}>
+                  <span style={{ color: SL_TEXT_SEC }}>合计应收</span>
+                  <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, fontSize: '0.85rem' }}>
+                    <span style={{ color: SL_TEXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{label}</span>
+                    <span style={{ color: numColor }}>{fmt(Math.abs(net), 2)} {interestUnit}</span>
+                  </span>
+                </div>
+              );
+            })()}
+
+            {/* ── 担保物块 ── */}
+            <div style={{ borderTop: `1px solid ${SL_DIVIDER}`, marginTop: 6, paddingTop: 6 }}>
+              {/* 担保资产 */}
+              {collateralAssets.length > 0 && (
+                <div className="flex justify-between mb-1">
+                  <span style={{ color: SL_TEXT_SEC }}>担保资产</span>
+                  <span style={{ color: SL_TEXT_PRI }}>{collateralAssets.map((c) => `${c.qty} ${c.coin}`).join(' + ')}</span>
+                </div>
+              )}
+              {/* 担保价值 */}
+              {collateralValue !== null && (
+                <div className="flex justify-between mb-1">
+                  <span style={{ color: SL_TEXT_SEC }}>担保价值</span>
+                  <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{fmt(collateralValue, 2)} U</span>
+                </div>
+              )}
+              {/* 担保缺口 */}
+              {collateralGap !== null && (
+                <div className="flex justify-between mb-1">
+                  <span style={{ color: SL_TEXT_SEC }}>担保缺口</span>
+                  <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: collateralGap >= 0 ? '#16A34A' : '#DC2626' }}>
+                    {collateralGap >= 0 ? '+' : ''}{fmt(collateralGap, 2)} U
+                  </span>
+                </div>
+              )}
+              {/* 买入价 */}
+              {buyPrice > 0 && (
+                <div className="flex justify-between">
+                  <span style={{ color: SL_TEXT_SEC }}>买入价</span>
+                  <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{fmt(buyPrice, 0)} U</span>
+                </div>
+              )}
             </div>
           </div>
         );

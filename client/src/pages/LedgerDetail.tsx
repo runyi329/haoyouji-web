@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, lazy, Suspense, useCallback, useMemo } from "react";
 import { FunderOrderCard, FunderNoteRow, formatCoinQtyFunder, useAccruedInterestFunder, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType } from "@/components/FunderOrderCard";
-import { FunderOrderCardV2, FunderOrderCardV2Light, FunderOrderCardV2Silver } from "@/components/FunderOrderCardV2";
+import { FunderOrderCardV2, FunderOrderCardV2Light, FunderOrderCardV2Silver, FunderLenderCardSilver } from "@/components/FunderOrderCardV2";
 import Lottie from "lottie-react";
 import aiTagAnimData from "@/assets/aitag-blue.json";
 import { FunderAIPanel } from "@/components/FunderAIPanel";
@@ -5145,15 +5145,27 @@ export default function LedgerDetail() {
             ) : funderViewMode === 'card' ? (
               /* 卡片模式：銀色铭牌风格 */
               <div className="space-y-3">
-                {(funderAssetOrders as any[]).map((order: any) => (
-                  <FunderOrderCardV2Silver
-                    key={order.id}
-                    order={order}
-                    livePrices={funderLivePrices}
-                    priceDirection={funderPriceDirection}
-                    membersData={membersData as any[]}
-                  />
-                ))}
+                {(funderAssetOrders as any[]).map((order: any) => {
+                  const rate = parseFloat(order.interest_rate_annual || '0');
+                  return rate >= 0 ? (
+                    <FunderLenderCardSilver
+                      key={order.id}
+                      order={order}
+                      ledgerId={ledgerId}
+                      livePrices={funderLivePrices}
+                      priceDirection={funderPriceDirection}
+                      membersData={membersData as any[]}
+                    />
+                  ) : (
+                    <FunderOrderCardV2Silver
+                      key={order.id}
+                      order={order}
+                      livePrices={funderLivePrices}
+                      priceDirection={funderPriceDirection}
+                      membersData={membersData as any[]}
+                    />
+                  );
+                })}
               </div>
             ) : (
               /* 订单模式：原始 FunderOrderCard */
