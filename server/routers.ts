@@ -11918,8 +11918,10 @@ ${klinesSummary}
         accountMultiplier: z.string().nullable().optional(),
         marginBase: z.string().nullable().optional(),
         fundFlow: z.string().nullable().optional(),
+        targetTotal: z.string().nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        console.log('[DEBUG saveTagConfig] targetTotal=', input.targetTotal, 'ledgerId=', input.ledgerId, 'tagName=', input.tagName);
         const dbLedgerMod = await import('./db-ledger');
         const myMembership = await dbLedgerMod.getUserMembership(input.ledgerId, ctx.user.id);
         if (!myMembership || (myMembership.role !== 'owner' && myMembership.role !== 'admin')) {
@@ -11944,6 +11946,9 @@ ${klinesSummary}
         } catch {}
         try {
           await db.execute(sql`ALTER TABLE ledger_tag_config ADD COLUMN fund_flow TEXT NULL`);
+        } catch {}
+        try {
+          await db.execute(sql`ALTER TABLE ledger_tag_config ADD COLUMN target_total VARCHAR(64) NULL`);
         } catch {}
         const existing = await db.execute(
           sql`SELECT id FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId} AND tag_name = ${input.tagName} LIMIT 1`
@@ -11971,6 +11976,7 @@ ${klinesSummary}
           if (input.accountMultiplier !== undefined) { setParts.push('account_multiplier = ?'); setValues.push(input.accountMultiplier); }
           if (input.marginBase !== undefined) { setParts.push('margin_base = ?'); setValues.push(input.marginBase); }
           if (input.fundFlow !== undefined) { setParts.push('fund_flow = ?'); setValues.push(input.fundFlow); }
+          if (input.targetTotal !== undefined) { setParts.push('target_total = ?'); setValues.push(input.targetTotal); }
           if (setParts.length > 0) {
             // 使用原始 mysql2 连接池执行参数化 SQL，避免 drizzle sql.raw 注入风险
             const { getDbConnection } = await import('./db');
@@ -11984,7 +11990,7 @@ ${klinesSummary}
           }
         } else {
           await db.execute(
-            sql`INSERT INTO ledger_tag_config (ledger_id, tag_name, settlement_amount, interest_mode, interest_rate, interest_base_amount, interest_start_date, pause_date, end_date, note, margin_by_coin, pnl_manual, pnl_note, original_amount, account_balance, balance_date, initial_amount, account_multiplier, margin_base, fund_flow, created_by) VALUES (${input.ledgerId}, ${input.tagName}, ${input.settlementAmount ?? null}, ${input.interestMode ?? 'fixed'}, ${input.interestRate ?? null}, ${input.interestBaseAmount ?? null}, ${input.interestStartDate ?? null}, ${input.pauseDate ?? null}, ${input.endDate ?? null}, ${input.note ?? null}, ${input.marginByCoin ?? null}, ${input.pnlManual ?? null}, ${input.pnlNote ?? null}, ${input.originalAmount ?? null}, ${input.accountBalance ?? null}, ${input.balanceDate ?? null}, ${input.initialAmount ?? null}, ${input.accountMultiplier ?? null}, ${input.marginBase ?? null}, ${input.fundFlow ?? null}, ${ctx.user.id})`
+            sql`INSERT INTO ledger_tag_config (ledger_id, tag_name, settlement_amount, interest_mode, interest_rate, interest_base_amount, interest_start_date, pause_date, end_date, note, margin_by_coin, pnl_manual, pnl_note, original_amount, account_balance, balance_date, initial_amount, account_multiplier, margin_base, fund_flow, target_total, created_by) VALUES (${input.ledgerId}, ${input.tagName}, ${input.settlementAmount ?? null}, ${input.interestMode ?? 'fixed'}, ${input.interestRate ?? null}, ${input.interestBaseAmount ?? null}, ${input.interestStartDate ?? null}, ${input.pauseDate ?? null}, ${input.endDate ?? null}, ${input.note ?? null}, ${input.marginByCoin ?? null}, ${input.pnlManual ?? null}, ${input.pnlNote ?? null}, ${input.originalAmount ?? null}, ${input.accountBalance ?? null}, ${input.balanceDate ?? null}, ${input.initialAmount ?? null}, ${input.accountMultiplier ?? null}, ${input.marginBase ?? null}, ${input.fundFlow ?? null}, ${input.targetTotal ?? null}, ${ctx.user.id})`
           );
         }
         return { success: true };
@@ -12139,7 +12145,7 @@ ${klinesSummary}
         const db = await getLedgerDb();
         // 查询所有标签的配置
         const configRows = await db.execute(
-          sql`SELECT tag_name, margin_by_coin, initial_amount, account_multiplier, margin_base, fund_flow, pause_date, margin_pause_date FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId}`
+          sql`SELECT tag_name, margin_by_coin, initial_amount, account_multiplier, margin_base, fund_flow, pause_date, margin_pause_date, target_total FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId}`
         );
         const configs = (configRows as any)[0] as any[];
         // 查询每个标签最新一条记录的余额（排除transfer类型和已删除记录）
@@ -12177,6 +12183,7 @@ ${klinesSummary}
             fundFlow: cfg.fund_flow,
             pauseDate: cfg.pause_date ?? null,
             marginPauseDate: cfg.margin_pause_date ?? null,
+            targetTotal: (cfg as any).target_total ?? null,
             latestBalance: latestMap[cfg.tag_name] ?? null,
           };
         }
