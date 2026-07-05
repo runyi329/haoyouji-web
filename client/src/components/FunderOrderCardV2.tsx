@@ -729,7 +729,7 @@ export function FunderOrderCardV2Silver({
         />
       ))}
 
-      {/* ── 行1：标签行 ── */}
+      {/* ── 行1：名字 | 开仓日期 | 当前币价 + 订单号 ── */}
       <div className="flex items-center px-4 pt-3 pb-2" style={{ borderBottom: `1px solid ${SL_DIVIDER}` }}>
         {/* 左侧：竖线分隔的标签组 */}
         <div className="flex items-center text-xs" style={{ color: SL_TEXT_SEC, gap: 0 }}>
@@ -739,16 +739,30 @@ export function FunderOrderCardV2Silver({
               return m ? (m.nickname || m.username) : null;
             })();
             const buyDateStr = order.buy_date ? fmtDate(order.buy_date) : null;
-            const items = [
-              ownerName,
-              buyDateStr,
-            ].filter(Boolean);
-            return items.map((item, i) => (
-              <React.Fragment key={i}>
-                {i > 0 && <span style={{ color: SL_TEXT_DIM, margin: '0 6px' }}>|</span>}
-                <span style={{ color: i === 0 ? SL_TEXT_PRI : SL_TEXT_SEC, fontWeight: i === 0 ? 500 : 400 }}>{item}</span>
-              </React.Fragment>
-            ));
+            const items = [ownerName, buyDateStr].filter(Boolean);
+            const priceDiff2 = liveP !== null && buyPrice > 0 ? liveP - buyPrice : null;
+            const livePriceColor = priceDiff2 === null ? SL_TEXT_PRI : priceDiff2 >= 0 ? SL_GREEN : SL_RED;
+            return (
+              <>
+                {items.map((item, i) => (
+                  <React.Fragment key={i}>
+                    {i > 0 && <span style={{ color: SL_TEXT_DIM, margin: '0 6px' }}>|</span>}
+                    <span style={{ color: i === 0 ? SL_TEXT_PRI : SL_TEXT_SEC, fontWeight: i === 0 ? 500 : 400 }}>{item}</span>
+                  </React.Fragment>
+                ))}
+                {coin !== 'CNY' && coin !== 'USDT' && (
+                  <>
+                    <span style={{ color: SL_TEXT_DIM, margin: '0 6px' }}>|</span>
+                    <span className="flex items-center gap-0.5" style={{ color: livePriceColor, fontWeight: 500 }}>
+                      {dir === 'up' && <span className="text-[10px] inline-flex items-center" style={{ color: SL_RED, animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
+                      {dir === 'down' && <span className="text-[10px] inline-flex items-center" style={{ color: SL_GREEN, animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
+                      <span>{coin}</span>
+                      <span style={{ marginLeft: '3px' }}>{liveP != null ? liveP.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '---'}</span>
+                    </span>
+                  </>
+                )}
+              </>
+            );
           })()}
         </div>
         {/* 右侧：订单号 */}
