@@ -314,13 +314,12 @@ export function useAccruedInterestFunder(interestBase: string | null, interestRa
     const base = parseFloat(interestBase || '0');
     const rate = Math.abs(parseFloat(interestRateAnnual || '0'));
     if (!base || !rate || !interestStartDate) return 0;
-    const startTs = new Date(interestStartDate + 'T00:00:00').getTime();
-    if (isNaN(startTs)) return 0;
+    // 统一使用北京时间（+08:00），避免服务器时区差异
+    const startDay = new Date(interestStartDate + 'T00:00:00+08:00').getTime();
+    if (isNaN(startDay)) return 0;
     const endTs = settledAt ? new Date(settledAt).getTime() : Date.now();
     // 按北京时间自然日计天：开始日期当天算1天，每过零点+1天
-    const startDateStr = new Date(startTs + 8 * 3600 * 1000).toISOString().slice(0, 10);
     const endDateStr = new Date(endTs + 8 * 3600 * 1000).toISOString().slice(0, 10);
-    const startDay = new Date(startDateStr + 'T00:00:00+08:00').getTime();
     const endDay = new Date(endDateStr + 'T00:00:00+08:00').getTime();
     const elapsedDays = Math.max(0, Math.floor((endDay - startDay) / (1000 * 60 * 60 * 24)) + 1);
     const perDay = (base * rate / 100) / 365;

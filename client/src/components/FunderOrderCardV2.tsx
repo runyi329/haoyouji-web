@@ -935,6 +935,7 @@ export function FunderLenderCardSilver({
 }: FunderOrderCardV2Props) {
   const [feeExpanded, setFeeExpanded] = useState(false);
   const [showInterestHistory, setShowInterestHistory] = useState(false);
+  const [showCollateralInfo, setShowCollateralInfo] = useState(false);
   const interestHistoryQuery = trpc.ledger.funderGetInterestPayments.useQuery(
     { ledgerId: ledgerId ?? 0, orderId: order.id as number },
     { enabled: showInterestHistory && !!ledgerId, staleTime: 0 }
@@ -999,10 +1000,14 @@ export function FunderLenderCardSilver({
   const collateralValue = collateralValueKnown
     ? collateralItemValues.reduce((s, v) => s + (v ?? 0), 0)
     : null;
-  // 担保缺口 = 担保价值 + 浮动盈亏 - 净应收利息
-  const collateralGap = collateralValue !== null && floatPnl !== null
-    ? collateralValue + floatPnl - (displayAccrued - displayPaid)
+  // 担保缺口 = 担保价值 + 浮动盈亏 - 待收利息 + 已结利息（与老订单模式一致）
+  // 正数=充足，负数=缺口
+  const collateralGap = collateralValue !== null
+    ? floatPnl !== null
+      ? collateralValue + floatPnl - displayAccrued + displayPaid
+      : collateralValue - displayAccrued + displayPaid
     : null;
+  const isSufficient = collateralGap !== null && collateralGap >= 0;
 
   // 天数算法与 hook 一致：北京时间自然日，开始日算第1天
   const calcDays = (startDateStr: string, endTs: number): number => {
@@ -1310,12 +1315,89 @@ export function FunderLenderCardSilver({
               )}
               {/* 担保缺口 */}
               {collateralGap !== null && (
-                <div className="flex justify-between mb-1">
-                  <span style={{ color: SL_TEXT_SEC }}>担保缺口</span>
-                  <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: collateralGap >= 0 ? '#16A34A' : '#DC2626' }}>
-                    {collateralGap >= 0 ? '+' : ''}{fmt(collateralGap, 2)} U
-                  </span>
-                </div>
+                <>
+                  {/* 弹出说明窗 */}
+                  {showCollateralInfo && (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowCollateralInfo(false)}>
+                      <div className="rounded-2xl p-5 mx-4 w-full max-w-xs" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-bold" style={{ color: '#1A2340' }}>担保缺口计算说明</span>
+                          <button onClick={() => setShowCollateralInfo(false)} className="text-gray-400 text-lg leading-none">×</button>
+                        </div>
+                        <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
+                          <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+                            <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 浮动盈亏</div>
+                            <div>= 当前市值 - 计息基数（正数为浮盈，负数为亏损）</div>
+                            <div className="mt-1 font-mono">
+                              {floatPnl !== null
+                                ? <><span style={{ color: '#3B82F6' }}>= {(liveP! * qty).toFixed(2)} - {buyValue.toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} u{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>
+                                : <span className="text-gray-400">当前市值暂无实时价格，暂无法计算浮动盈亏</span>
+                              }
+                            </div>
+                          </div>
+                          <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+                            <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 担保价值</div>
+                            {collateralAssets.length === 0
+                              ? <div className="font-mono mt-1" style={{ color: '#9CA3AF' }}>0.00 u（无担保物）</div>
+                              : <>
+                                  {collateralAssets.map((a, idx) => {
+                                    const itemVal = collateralItemValues[idx];
+                                    return (
+                                      <div key={idx} className="mt-1 flex justify-between">
+                                        <span className="font-mono" style={{ color: '#6B7280' }}>{a.qty} {a.coin}</span>
+                                        {itemVal !== null
+                                          ? <span className="font-mono font-semibold" style={{ color: '#3B82F6' }}>{itemVal.toFixed(2)} u</span>
+                                          : <span className="font-mono" style={{ color: '#D1D5DB' }}>暂无实时价</span>
+                                        }
+                                      </div>
+                                    );
+                                  })}
+                                  {collateralAssets.length > 1 && collateralValue !== null && (
+                                    <div className="font-mono mt-1 pt-1 font-semibold" style={{ borderTop: '1px solid #D1D5DB', color: '#1A2340' }}>
+                                      合计 {collateralValue.toFixed(2)} u
+                                    </div>
+                                  )}
+                                </>
+                            }
+                          </div>
+                          <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#FFF1F1' : '#F0FDF4' }}>
+                            <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>③ 风险敞口</div>
+                            <div>担保物 + 浮动盈亏 − 待结利息 + 已结利息（正数充足，负数缺口）</div>
+                            <div className="mt-1 font-mono">
+              {(() => {
+                                const gap = collateralGap!;
+                                return floatPnl !== null
+                                  ? <span style={{ color: '#3B82F6' }}>= {(collateralValue ?? 0).toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {displayAccrued.toFixed(2)} + {displayPaid.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} u</strong></span>
+                                  : <span style={{ color: '#3B82F6' }}>= {(collateralValue ?? 0).toFixed(2)} + ---（暂无实时价） − {displayAccrued.toFixed(2)} + {displayPaid.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} u</strong></span>;
+                              })()
+                              }
+                            </div>
+                            <div className="mt-1.5" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
+                              {isSufficient
+                                ? `担保物充足，还有 ${collateralGap!.toFixed(2)} u 的余量空间`
+                                : `担保物不足，还需补充 ${Math.abs(collateralGap!).toFixed(2)} u 才能覆盖风险`
+                              }
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex justify-between mb-1 items-center">
+                    <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
+                      担保缺口
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
+                        className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
+                        style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+                      >?</button>
+                    </span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: isSufficient ? '#DC2626' : '#16A34A' }}>
+                      {isSufficient ? '+' : ''}{fmt(collateralGap, 2)} U
+                    </span>
+                  </div>
+                </>
               )}
               {/* 买入价 */}
               {buyPrice > 0 && (
