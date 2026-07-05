@@ -785,7 +785,21 @@ export function FunderOrderCardV2Silver({
                     <span style={{ color: i === 0 ? SL_TEXT_PRI : SL_TEXT_SEC, fontWeight: i === 0 ? 500 : 400 }}>{item}</span>
                   </React.Fragment>
                 ))}
-                {coin !== 'CNY' && coin !== 'USDT' && (
+                {/* 股票类：证券公司 + 证券账号，无标题，用竖线分隔 */}
+                {isStockCard && order.broker_name && (
+                  <>
+                    <span style={{ color: SL_TEXT_DIM, margin: '0 6px' }}>|</span>
+                    <span style={{ color: SL_TEXT_SEC }}>{order.broker_name}</span>
+                  </>
+                )}
+                {isStockCard && order.broker_account && (
+                  <>
+                    <span style={{ color: SL_TEXT_DIM, margin: '0 6px' }}>|</span>
+                    <span className="font-mono" style={{ color: SL_TEXT_SEC }}>{order.broker_account}</span>
+                  </>
+                )}
+                {/* 数字币类：实时币价 */}
+                {!isStockCard && coin !== 'CNY' && coin !== 'USDT' && (
                   <>
                     <span style={{ color: SL_TEXT_DIM, margin: '0 6px' }}>|</span>
                     <span className="flex items-center gap-0.5" style={{ color: livePriceColor, fontWeight: 500 }}>
@@ -900,24 +914,8 @@ export function FunderOrderCardV2Silver({
         </div>
         <div className="text-right">
           {isStockCard ? (
-            // 股票类：显示证券公司 + 证券账号
-            <>
-              {order.broker_name && (
-                <>
-                  <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>证券公司</div>
-                  <div className="text-sm" style={{ color: SL_TEXT_PRI }}>{order.broker_name}</div>
-                </>
-              )}
-              {order.broker_account && (
-                <>
-                  <div className="text-[10px] mb-0.5 mt-1" style={{ color: SL_TEXT_SEC }}>证券账号</div>
-                  <div className="text-sm font-mono" style={{ color: SL_TEXT_PRI }}>{order.broker_account}</div>
-                </>
-              )}
-              {!order.broker_name && !order.broker_account && (
-                <div className="text-sm" style={{ color: SL_TEXT_SEC }}>--</div>
-              )}
-            </>
+            // 股票类：证券公司和证券账号已在帐檐行显示，此处不再重复
+            null
           ) : (
             // 数字币类：显示担保资产
             <>
