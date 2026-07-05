@@ -5123,7 +5123,7 @@ export default function LedgerDetail() {
                 {(funderAssetOrders as any[]).filter((order: any) => order.status !== 'settled').map((order: any) => {
                   // 按利率符号判断布局：正号（rate>=0）→付息型（突出利息），负号（rate<0）→权益型（突出持有数量/浮动盈亏）
                   const rateVal = parseFloat(String(order.interest_rate_annual || '0'));
-                  return rateVal >= 0 ? (
+                  return rateVal > 0 ? (
                     <FunderLenderCardSilver
                       key={order.id}
                       order={order}

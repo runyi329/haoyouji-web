@@ -3392,9 +3392,9 @@ export default function CryptoPrediction() {
                     <div className="space-y-3">
                       {sortedOrders.map((order: any) => {
                         // 按利率符号判断布局：正号（rate>=0）→付息型（突出利息，股票金色），负号（rate<0）→权益型（突出持仓，銀色）
-                        const rateVal = parseFloat(String(order.interest_rate_annual || '0'));
-                        const _dcParsed = (() => { try { const dc = order.display_config; return dc ? (typeof dc === 'string' ? JSON.parse(dc) : dc) : null; } catch { return null; } })();
-                        const _isRateNeg = rateVal < 0 || (rateVal === 0 && _dcParsed?.rate_negative === true);
+                        // 利率为负或为0 → 权益型（突出资产）；利率为正 → 付息型（突出利息）
+                        const _rateNum = parseFloat(String(order.interest_rate_annual ?? '0'));
+                        const _isRateNeg = _rateNum <= 0;
                         return !_isRateNeg ? (
                           <FunderLenderCardSilver
                             key={order.id}

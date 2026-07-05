@@ -463,7 +463,7 @@ export function FunderOrderCardV2Light({
         </span>
         <span className="text-[10px]" style={{ color: LT_TEXT_SEC }}>{holdDurationLabel}</span>
         {order.order_no && (
-          <span className="ml-auto text-[10px] font-mono" style={{ color: "rgba(0,0,0,0.20)", letterSpacing: "0.05em" }}>
+          <span className="ml-auto text-[10px] font-mono" style={{ color: LT_TEXT_DIM, letterSpacing: "0.05em" }}>
             {order.order_no}
           </span>
         )}
@@ -629,7 +629,7 @@ const SL_TEXT_DIM = 'rgba(0,0,0,0.38)';  // 弱化但在銀色背景上可见
 const SL_GOLD = SL_TEXT_PRI;     // 去掉金色，改用主文字色
 const SL_DIVIDER = 'rgba(0,0,0,0.08)';
 const SL_GREEN = '#A80000';      // 涨 = 深红（中国习惯）
-const SL_RED = '#16A34A';        // 跌 = 深绿
+const SL_RED = '#16A34A';        // 跌 = 绿色
 const LN_EARN = '#C00000';       // 收益型卡片应收利息颜色（深红）
 
 export function FunderOrderCardV2Silver({
@@ -672,9 +672,8 @@ export function FunderOrderCardV2Silver({
   const buyValue = qty > 0 && buyPrice > 0 ? qty * buyPrice : parseFloat(order.amount || '0');
   const floatPnl = currentValue !== null && buyValue > 0 ? currentValue - buyValue : null;
   const floatPct = floatPnl !== null && buyValue > 0 ? (floatPnl / buyValue) * 100 : null;
-  const pnlColor = floatPnl === null ? SL_TEXT_SEC : floatPnl >= 0 ? SL_GREEN : SL_RED;
-
   const dir = priceDirection?.[coin] ?? 'same';
+  const pnlColor = floatPnl === null ? SL_TEXT_SEC : floatPnl >= 0 ? SL_GREEN : SL_RED;
   const priceDiff = liveP !== null && buyPrice > 0 ? liveP - buyPrice : null;
   const priceColor = priceDiff === null ? SL_TEXT_PRI : priceDiff >= 0 ? SL_GREEN : SL_RED;
 
@@ -847,7 +846,7 @@ export function FunderOrderCardV2Silver({
             const buyDateStr = order.buy_date ? fmtDate(order.buy_date) : null;
             const items = [ownerName, buyDateStr].filter(Boolean);
             const priceDiff2 = liveP !== null && buyPrice > 0 ? liveP - buyPrice : null;
-            const livePriceColor = priceDiff2 === null ? SL_TEXT_PRI : priceDiff2 >= 0 ? SL_GREEN : SL_RED;
+            const livePriceColor = dir === 'up' ? SL_GREEN : dir === 'down' ? SL_RED : SL_TEXT_PRI;
             return (
               <>
                 {items.map((item, i) => (
@@ -873,11 +872,11 @@ export function FunderOrderCardV2Silver({
                 {!isStockCard && coin !== 'CNY' && coin !== 'USDT' && (
                   <>
                     <span style={{ color: SL_TEXT_DIM, margin: '0 6px' }}>|</span>
-                    <span className="flex items-center gap-0.5" style={{ color: livePriceColor, fontWeight: 500 }}>
-                      {dir === 'up' && <span className="text-[10px] inline-flex items-center" style={{ color: SL_RED, animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
-                      {dir === 'down' && <span className="text-[10px] inline-flex items-center" style={{ color: SL_GREEN, animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
-                      <span>{coin}</span>
-                      <span style={{ marginLeft: '3px' }}>{liveP != null ? liveP.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '---'}</span>
+                    <span className="flex items-center gap-0.5" style={{ fontWeight: 500 }}>
+                      {dir === 'up' && <span className="text-[10px] inline-flex items-center" style={{ color: SL_GREEN, animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
+                      {dir === 'down' && <span className="text-[10px] inline-flex items-center" style={{ color: SL_RED, animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
+                      <span style={{ color: SL_TEXT_PRI }}>{coin}</span>
+                      <span style={{ marginLeft: '3px', color: livePriceColor }}>{liveP != null ? liveP.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '---'}</span>
                     </span>
                   </>
                 )}
@@ -960,15 +959,32 @@ export function FunderOrderCardV2Silver({
             {/* 浮动盈亏：占 20%，包含涨跌幅 */}
             <div className="text-right" style={{ flex: 1 }}>
               <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC }}>浮动盈亏 (U)</div>
-              <div style={{ lineHeight: 1 }}>
-                <span style={{ fontSize: '1.1rem', fontWeight: 500, color: pnlColor, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
-                  {floatPnl != null ? `${floatPnl >= 0 ? '+' : ''}${fmt(floatPnl, 0)}` : '--'}
-                </span>
-              </div>
-              {floatPct != null && (
-                <div className="text-[9px] mt-0.5" style={{ color: pnlColor, fontFamily: SL_NUM_FONT, fontVariantNumeric: 'tabular-nums' }}>
-                  {floatPct >= 0 ? '+' : ''}{floatPct.toFixed(2)}%
-                </div>
+              {floatPnl != null && floatPnl < 0 && floatPct != null ? (
+                // 负数：大字显示跌幅%，小字显示亏损金额
+                <>
+                  <div style={{ lineHeight: 1 }}>
+                    <span style={{ fontSize: '1.1rem', fontWeight: 500, color: pnlColor, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
+                      {floatPct.toFixed(2)}%
+                    </span>
+                  </div>
+                  <div className="text-[9px] mt-0.5" style={{ color: pnlColor, fontFamily: SL_NUM_FONT, fontVariantNumeric: 'tabular-nums' }}>
+                    {fmt(floatPnl, 0)} U
+                  </div>
+                </>
+              ) : (
+                // 正数或无数据：原样显示
+                <>
+                  <div style={{ lineHeight: 1 }}>
+                    <span style={{ fontSize: '1.1rem', fontWeight: 500, color: pnlColor, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
+                      {floatPnl != null ? `${floatPnl >= 0 ? '+' : ''}${fmt(floatPnl, 0)}` : '--'}
+                    </span>
+                  </div>
+                  {floatPct != null && (
+                    <div className="text-[9px] mt-0.5" style={{ color: pnlColor, fontFamily: SL_NUM_FONT, fontVariantNumeric: 'tabular-nums' }}>
+                      {floatPct >= 0 ? '+' : ''}{floatPct.toFixed(2)}%
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </>
@@ -1334,7 +1350,7 @@ export function FunderOrderCardV2Silver({
                       className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
                       style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}>?</button>
                   </span>
-                  <span style={{ color: isSufficient ? '#16A34A' : '#DC2626', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                  <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
                     {isSufficient ? '+' : '-'}{Math.abs(exposure).toLocaleString(undefined, { maximumFractionDigits: 2 })} u
                   </span>
                 </div>
@@ -1435,7 +1451,7 @@ export function FunderOrderCardV2Silver({
                       type="button"
                       onClick={() => { setNoteEditingIdx(idx); setNoteEditValue(note.text); setNoteDeleteConfirmIdx(null); }}
                       className="p-1 rounded"
-                      style={{ background: '#EFF6FF', color: '#3B82F6' }}
+                      style={{ background: 'transparent', color: SL_TEXT_PRI, border: `1px solid ${SL_TEXT_PRI}` }}
                       title="编辑"
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -1446,7 +1462,7 @@ export function FunderOrderCardV2Silver({
                         type="button"
                         onClick={() => { saveNoteItems(noteItems.filter((_, i) => i !== idx)); setNoteDeleteConfirmIdx(null); }}
                         className="p-1 rounded text-[10px] font-bold px-1.5"
-                        style={{ background: '#EF4444', color: '#fff' }}
+                        style={{ background: 'transparent', color: SL_TEXT_PRI, border: `1px solid ${SL_TEXT_PRI}` }}
                         title="再次点击确认删除"
                       >确认?</button>
                     ) : (
@@ -1454,7 +1470,7 @@ export function FunderOrderCardV2Silver({
                         type="button"
                         onClick={() => setNoteDeleteConfirmIdx(idx)}
                         className="p-1 rounded"
-                        style={{ background: '#FEF2F2', color: '#EF4444' }}
+                        style={{ background: 'transparent', color: SL_TEXT_PRI, border: `1px solid ${SL_TEXT_PRI}` }}
                         title="删除"
                       >
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
@@ -1475,9 +1491,9 @@ export function FunderOrderCardV2Silver({
                 setNoteEditValue('');
               }}
               className="flex items-center gap-1"
-              style={{ color: '#9CA3AF' }}
+              style={{ color: SL_TEXT_PRI }}
             >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
               <span style={{ fontSize: '11px' }}>添加备注</span>
             </button>
           </div>
@@ -1542,9 +1558,8 @@ export function FunderLenderCardSilver({
   const buyValue = qty > 0 && buyPrice > 0 ? qty * buyPrice : parseFloat(order.amount || '0');
   const floatPnl = currentValue !== null && buyValue > 0 ? currentValue - buyValue : null;
   const floatPct = floatPnl !== null && buyValue > 0 ? (floatPnl / buyValue) * 100 : null;
-  const pnlColor = floatPnl === null ? SL_TEXT_SEC : floatPnl >= 0 ? SL_GREEN : SL_RED;
-
   const dir = priceDirection?.[coin] ?? 'same';
+  const pnlColor = floatPnl === null ? SL_TEXT_SEC : floatPnl >= 0 ? SL_GREEN : SL_RED;
   const priceDiff = liveP !== null && buyPrice > 0 ? liveP - buyPrice : null;
   const priceColor = priceDiff === null ? SL_TEXT_PRI : priceDiff >= 0 ? SL_GREEN : SL_RED;
 
@@ -1721,7 +1736,7 @@ export function FunderLenderCardSilver({
             const items = [ownerName, buyDateStr, brokerStr].filter(Boolean);
             // 当前币价（带红绿色+闪烁箭头）
             const priceDiff2 = liveP !== null && buyPrice > 0 ? liveP - buyPrice : null;
-            const livePriceColor = priceDiff2 === null ? SL_TEXT_PRI : priceDiff2 >= 0 ? SL_GREEN : SL_RED;
+            const livePriceColor = dir === 'up' ? SL_GREEN : dir === 'down' ? SL_RED : SL_TEXT_PRI;
             return (
               <>
                 {items.map((item, i) => (
@@ -1733,11 +1748,11 @@ export function FunderLenderCardSilver({
                 {coin !== 'CNY' && coin !== 'USDT' && (
                   <>
                     <span style={{ color: SL_TEXT_DIM, margin: '0 6px' }}>|</span>
-                    <span className="flex items-center gap-0.5" style={{ color: livePriceColor, fontWeight: 500 }}>
-                      {dir === 'up' && <span className="text-[10px] inline-flex items-center" style={{ color: SL_RED, animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
-                      {dir === 'down' && <span className="text-[10px] inline-flex items-center" style={{ color: SL_GREEN, animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
-                      <span>{coin}</span>
-                      <span style={{ marginLeft: '3px' }}>{liveP != null ? liveP.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '---'}</span>
+                    <span className="flex items-center gap-0.5" style={{ fontWeight: 500 }}>
+                      {dir === 'up' && <span className="text-[10px] inline-flex items-center" style={{ color: SL_GREEN, animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
+                      {dir === 'down' && <span className="text-[10px] inline-flex items-center" style={{ color: SL_RED, animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
+                      <span style={{ color: SL_TEXT_PRI }}>{coin}</span>
+                      <span style={{ marginLeft: '3px', color: livePriceColor }}>{liveP != null ? liveP.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '---'}</span>
                     </span>
                   </>
                 )}
@@ -1825,7 +1840,7 @@ export function FunderLenderCardSilver({
           {showField('collateral') ? (
             <>
               <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>担保缺口</div>
-              <div className="text-sm font-semibold" style={{ textShadow: SL_TEXT_SHADOW, color: collateralGap === null ? SL_TEXT_SEC : collateralGap >= 0 ? LN_EARN : '#16A34A' }}>
+              <div className="text-sm font-semibold" style={{ textShadow: SL_TEXT_SHADOW, color: SL_TEXT_PRI }}>
                 {collateralGap !== null ? (collateralGap >= 0 ? '充足' : '不足') : '--'}
               </div>
             </>
@@ -2248,13 +2263,13 @@ export function FunderLenderCardSilver({
                         return allKnown
                           ? <span style={{ fontVariantNumeric: 'tabular-nums' }}>
                               <span style={{ color: SL_TEXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{diffSufficient ? '充足' : '不足'}</span>
-                              <span style={{ color: diffSufficient ? LN_EARN : '#16A34A' }}>{diffSufficient ? '+' : ''}{diff.toFixed(2)} U</span>
+                              <span style={{ color: SL_TEXT_PRI }}>{diffSufficient ? '+' : ''}{diff.toFixed(2)} U</span>
                             </span>
                           : <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>计算中...</span>;
                       })() : (
                         <span style={{ fontVariantNumeric: 'tabular-nums' }}>
                           <span style={{ color: SL_TEXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{isSufficient ? '充足' : '不足'}</span>
-                          <span style={{ color: isSufficient ? LN_EARN : '#16A34A' }}>{isSufficient ? '+' : ''}{fmt(collateralGap, 2)} U</span>
+                          <span style={{ color: SL_TEXT_PRI }}>{isSufficient ? '+' : ''}{fmt(collateralGap, 2)} U</span>
                         </span>
                       )}
                     </div>
@@ -2349,9 +2364,9 @@ export function FunderLenderCardSilver({
                 setNoteEditValue('');
               }}
               className="flex items-center gap-1"
-              style={{ color: '#9CA3AF' }}
+              style={{ color: SL_TEXT_PRI }}
             >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
               <span style={{ fontSize: '11px' }}>添加备注</span>
             </button>
           </div>
