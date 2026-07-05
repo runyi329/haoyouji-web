@@ -1335,7 +1335,7 @@ export function FunderLenderCardSilver({
       {/* ── 行3：计息基数 / 计息天数 / 担保缺口 ── */}
       <div className="grid grid-cols-3 gap-0 px-4 py-2" style={{ fontFamily: SL_NUM_FONT }}>
         <div>
-          <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>计息基数 ({baseUnit})</div>
+          <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>{isStock ? `仓位额度 (${baseUnit})` : `计息基数 (${baseUnit})`}</div>
           <div className="text-sm font-semibold" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
             {order.interest_base ? fmt(parseFloat(order.interest_base), 0) : '--'}
           </div>
@@ -1393,7 +1393,7 @@ export function FunderLenderCardSilver({
             {/* ── 利息块 ── */}
             {/* 计息基数 */}
             <div className="flex justify-between">
-              <span style={{ color: SL_TEXT_SEC }}>计息基数</span>
+              <span style={{ color: SL_TEXT_SEC }}>{isStock ? '仓位额度' : '计息基数'}</span>
               <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
                 {buyPrice > 0 && qty > 0
                   ? `${fmt(buyPrice, 0)}U（开仓币价）× ${fmtQty(qty)}${coin} = ${fmt(interestBase, 0)} ${baseUnit}`
