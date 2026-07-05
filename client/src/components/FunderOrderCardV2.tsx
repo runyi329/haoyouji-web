@@ -1428,6 +1428,20 @@ export function FunderOrderCardV2Silver({
                     {note.time && <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_DIM }}>{formatNoteTime(note.time)}</div>}
                     <div className="break-all" style={{ color: SL_TEXT_PRI, fontSize: '11px', lineHeight: '1.5' }}>{note.text}</div>
                   </div>
+                  <div className="shrink-0 flex flex-col gap-1 self-start mt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => { setNoteEditingIdx(idx); setNoteEditValue(note.text); }}
+                      className="text-[10px] px-1.5 py-0.5 rounded"
+                      style={{ background: '#EFF6FF', color: '#3B82F6', lineHeight: 1.2 }}
+                    >编辑</button>
+                    <button
+                      type="button"
+                      onClick={() => { if (window.confirm('确认删除这条备注？')) saveNoteItems(noteItems.filter((_, i) => i !== idx)); }}
+                      className="text-[10px] px-1.5 py-0.5 rounded"
+                      style={{ background: '#FEF2F2', color: '#EF4444', lineHeight: 1.2 }}
+                    >删除</button>
+                  </div>
                 </div>
               )}
             </div>
