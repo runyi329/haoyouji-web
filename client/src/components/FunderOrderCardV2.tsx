@@ -9,6 +9,10 @@ import {
   fmtDate,
   formatCoinQtyFunder,
   useAccruedInterestFunder,
+  FunderNoteRow,
+  parseNotes,
+  formatNoteTime,
+  NoteAvatar,
 } from "./FunderOrderCard";
 
 // OKX 风格颜色系统
@@ -336,7 +340,7 @@ export function FunderOrderCardV2({
           <div className="flex justify-between">
             <span style={{ color: OKX_TEXT_DIM }}>付息方式</span>
             <span style={{ color: OKX_TEXT_DIM }}>
-              {order.interest_payment_type === "end_post" ? "结束后付" : order.interest_payment_type || "--"}
+              {({'monthly_pre':'月付先付','monthly_post':'月付后付','semi_pre':'半年付先付','semi_post':'半年付后付','annual_pre':'年付先付','annual_post':'年付后付','end_post':'结束后付','monthly_prepaid':'月付先付','monthly_postpaid':'月付后付','quarterly':'季付','maturity':'到期付'} as any)[order.interest_payment_type] || order.interest_payment_type || '--'}
             </span>
           </div>
         </div>
@@ -559,7 +563,7 @@ export function FunderOrderCardV2Light({
           <div className="flex justify-between">
             <span style={{ color: LT_TEXT_DIM }}>付息方式</span>
             <span style={{ color: LT_TEXT_DIM }}>
-              {order.interest_payment_type === "end_post" ? "结束后付" : order.interest_payment_type || "--"}
+              {({'monthly_pre':'月付先付','monthly_post':'月付后付','semi_pre':'半年付先付','semi_post':'半年付后付','annual_pre':'年付先付','annual_post':'年付后付','end_post':'结束后付','monthly_prepaid':'月付先付','monthly_postpaid':'月付后付','quarterly':'季付','maturity':'到期付'} as any)[order.interest_payment_type] || order.interest_payment_type || '--'}
             </span>
           </div>
         </div>
@@ -592,10 +596,14 @@ const SL_SHADOW = [
 const SL_RIVET_BG = 'radial-gradient(circle at 35% 35%, #ffffff 0%, #d8dadd 35%, #a0a4aa 65%, #707478 100%)';
 const SL_TEXT_PRI = '#1A1A1A';
 const SL_NUM_FONT = "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Arial, 'PingFang SC', sans-serif";
-// 凸起金属字效果：下方白色高光 + 上方暗色压影
-const SL_TEXT_SHADOW = '0 1px 0 rgba(255,255,255,0.75), 0 -0.5px 0 rgba(0,0,0,0.25)';
+// G柔光凹刻（强度减半）：下方白色柔光 + 上方深影
+const SL_TEXT_SHADOW = '0 1px 1.5px rgba(255,255,255,0.48), 0 -0.5px 1px rgba(0,0,0,0.18)';
 // 大字加强版
-const SL_TEXT_SHADOW_LG = '0 1.5px 0 rgba(255,255,255,0.80), 0 -1px 0 rgba(0,0,0,0.30), 0 2px 3px rgba(0,0,0,0.15)';
+const SL_TEXT_SHADOW_LG = '0 1px 2px rgba(255,255,255,0.48), 0 -0.5px 1.5px rgba(0,0,0,0.20)';
+// 凹刻同款（年化利率区域用）
+const SL_TEXT_ENGRAVE = '0 1px 1.5px rgba(255,255,255,0.48), 0 -0.5px 1px rgba(0,0,0,0.18)';
+// 凹刻大字加强版
+const SL_TEXT_ENGRAVE_LG = '0 1px 2px rgba(255,255,255,0.48), 0 -0.5px 1.5px rgba(0,0,0,0.20)';
 const SL_TEXT_SEC = 'rgba(0,0,0,0.45)';
 const SL_TEXT_DIM = 'rgba(0,0,0,0.38)';  // 弱化但在銀色背景上可见
 const SL_GOLD = SL_TEXT_PRI;     // 去掉金色，改用主文字色
@@ -896,7 +904,7 @@ export function FunderOrderCardV2Silver({
               const days = calcDays(order.interest_start_date, endD.getTime());
               return (
                 <div className="flex justify-between">
-                  <span style={{ color: SL_TEXT_SEC }}>计息日期{order.interest_payment_type ? `（${order.interest_payment_type === 'end_post' ? '结束后付' : order.interest_payment_type}）` : ''}</span>
+                  <span style={{ color: SL_TEXT_SEC }}>计息日期{order.interest_payment_type ? `（${({'monthly_pre':'月付先付','monthly_post':'月付后付','semi_pre':'半年付先付','semi_post':'半年付后付','annual_pre':'年付先付','annual_post':'年付后付','end_post':'结束后付','monthly_prepaid':'月付先付','monthly_postpaid':'月付后付','quarterly':'季付','maturity':'到期付'} as any)[order.interest_payment_type] || order.interest_payment_type}）` : ''}</span>
                   <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{fmtBJ(s)} ~ {fmtBJ(e)}  {days}天</span>
                 </div>
               );
@@ -947,7 +955,26 @@ export function FunderLenderCardSilver({
   membersData = [],
   ledgerId,
 }: FunderOrderCardV2Props) {
-  const [feeExpanded, setFeeExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState<'detail' | 'note' | null>(null);
+  const feeExpanded = activeTab === 'detail';
+  const noteExpanded = activeTab === 'note';
+  const toggleTab = (tab: 'detail' | 'note') => setActiveTab(v => v === tab ? null : tab);
+  // 备注相关 state
+  const [noteItems, setNoteItems] = useState(() => parseNotes(order.public_note || ''));
+  const [noteEditingIdx, setNoteEditingIdx] = useState<number | null>(null);
+  const [noteEditValue, setNoteEditValue] = useState('');
+  const [noteSaving, setNoteSaving] = useState(false);
+  const updateNoteM = trpc.ledger.funderUpdatePublicNote.useMutation();
+  const saveNoteItems = async (newItems: ReturnType<typeof parseNotes>) => {
+    if (!ledgerId) return;
+    setNoteSaving(true);
+    try {
+      const raw = JSON.stringify(newItems);
+      await updateNoteM.mutateAsync({ id: order.id as number, ledgerId, publicNote: raw });
+      setNoteItems(newItems);
+      order.public_note = raw;
+    } finally { setNoteSaving(false); }
+  };
   const [showInterestHistory, setShowInterestHistory] = useState(false);
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
   const interestHistoryQuery = trpc.ledger.funderGetInterestPayments.useQuery(
@@ -1014,14 +1041,28 @@ export function FunderLenderCardSilver({
   const collateralValue = collateralValueKnown
     ? collateralItemValues.reduce((s, v) => s + (v ?? 0), 0)
     : null;
-  // 担保缺口 = 担保价值 + 浮动盈亏 - 待收利息 + 已结利息（与老订单模式一致）
+  // 担保缺口 = 担保价值 + 浮动盈亏 - 待收利息(U) + 已结利息(U)（与老订单模式一致）
+  // 利息如果是元，需先除以cnyRate换算成U
+  const effectiveCnyRate = cnyRate && cnyRate > 0 ? cnyRate : 7.25;
+  const accruedInU = interestUnit === '元' ? displayAccrued / effectiveCnyRate : displayAccrued;
+  const paidInU = interestUnit === '元' ? displayPaid / effectiveCnyRate : displayPaid;
   // 正数=充足，负数=缺口
   const collateralGap = collateralValue !== null
     ? floatPnl !== null
-      ? collateralValue + floatPnl - displayAccrued + displayPaid
-      : collateralValue - displayAccrued + displayPaid
+      ? collateralValue + floatPnl - accruedInU + paidInU
+      : collateralValue - accruedInU + paidInU
     : null;
   const isSufficient = collateralGap !== null && collateralGap >= 0;
+
+  // 读取 display_config 开关（与订单模式一致）
+  const dc: Record<string, boolean> | null = (() => {
+    try {
+      const raw = order.display_config;
+      if (!raw) return null;
+      return typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch { return null; }
+  })();
+  const showField = (key: string) => dc ? (dc[key] !== false) : true;
 
   // 天数算法与 hook 一致：北京时间自然日，开始日算第1天
   const calcDays = (startDateStr: string, endTs: number): number => {
@@ -1046,14 +1087,35 @@ export function FunderLenderCardSilver({
     { bottom: '6px', right: '7px' },
   ];
 
+  const isStock = order.asset_type === 'stock';
+  const GOLD_BG = [
+    // 层1：左上角高光（稍弱）
+    'linear-gradient(135deg, rgba(255,255,255,0.50) 0%, rgba(255,255,255,0.15) 22%, rgba(255,255,255,0.0) 45%, rgba(0,0,0,0.0) 60%, rgba(0,0,0,0.28) 100%)',
+    // 层2：左亮右暗（加强纵深感）
+    'linear-gradient(90deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 35%, rgba(0,0,0,0.0) 55%, rgba(0,0,0,0.18) 100%)',
+    // 层3：垂直弧面光影（中间亮上下暗）
+    'linear-gradient(180deg, rgba(0,0,0,0.10) 0%, rgba(255,255,255,0.18) 35%, rgba(255,255,255,0.25) 50%, rgba(255,255,255,0.08) 70%, rgba(0,0,0,0.14) 100%)',
+    // 层4：黄金底色（上一版基础上饱和度+20%）
+    'linear-gradient(160deg, #9e7c28 0%, #c89e32 18%, #ddb545 40%, #c49030 62%, #ceA03c 80%, #9e7c28 100%)',
+  ].join(', ');
+  const GOLD_BORDER = '1.5px solid rgba(150,108,12,0.95)';
+  const GOLD_SHADOW = [
+    '0 6px 20px rgba(0,0,0,0.35)',
+    '0 1px 3px rgba(0,0,0,0.25)',
+    'inset 0 1.5px 0 rgba(255,228,100,0.88)',
+    'inset 0 -1.5px 0 rgba(80,48,0,0.62)',
+    'inset 1.5px 0 rgba(245,205,65,0.28)',
+    'inset -1.5px 0 rgba(0,0,0,0.16)',
+  ].join(', ');
+
   return (
     <div
       className="rounded-2xl overflow-hidden silver-card"
       style={{
         position: 'relative',
-        background: SL_BG,
-        border: SL_BORDER,
-        boxShadow: SL_SHADOW,
+        background: isStock ? GOLD_BG : SL_BG,
+        border: isStock ? GOLD_BORDER : SL_BORDER,
+        boxShadow: isStock ? GOLD_SHADOW : SL_SHADOW,
       }}
     >
       {/* SVG 磨砂噪点滤镜 */}
@@ -1083,8 +1145,12 @@ export function FunderLenderCardSilver({
           style={{
             position: 'absolute', width: '6px', height: '6px', borderRadius: '50%', zIndex: 10,
             ...pos,
-            background: SL_RIVET_BG,
-            boxShadow: '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.8)',
+            background: isStock
+              ? 'radial-gradient(circle at 35% 35%, #fff8d0 0%, #e8c050 35%, #a07010 65%, #6a4800 100%)'
+              : SL_RIVET_BG,
+            boxShadow: isStock
+              ? '0 1px 2px rgba(0,0,0,0.55), inset 0 1px 1px rgba(255,240,140,0.9)'
+              : '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.8)',
           }}
         />
       ))}
@@ -1146,58 +1212,103 @@ export function FunderLenderCardSilver({
           </div>
         </div>
         <div className="text-right" style={{ flex: 1 }}>
-          <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC }}>年化利率</div>
+          <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_ENGRAVE }}>年化利率</div>
           <div style={{ lineHeight: 1 }}>
-            <span style={{ fontSize: '1.1rem', fontWeight: 700, color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
+            <span style={{ fontSize: '1.1rem', fontWeight: 700, color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_ENGRAVE_LG }}>
               {rateAbs ? `${rateAbs}%` : '--'}
             </span>
           </div>
         </div>
       </div>
 
-      {/* ── 行3：持有数量 / 计息基数 / 计息天数 ── */}
+      {/* ── 行2.5：今日/本月/全年利息折算 ── */}
+      {rateAbs && parseFloat(order.interest_base || '0') > 0 && (() => {
+        // 计息基数单位是baseCur，先算出baseCur单位的利息，再用convertAccrued换算成显示单位
+        const base = parseFloat(order.interest_base!);
+        const rate = rateAbs / 100;
+        const dailyRaw = base * rate / 365;
+        const monthlyRaw = base * rate / 12;
+        const yearlyRaw = base * rate;
+        const daily = convertAccrued(dailyRaw);
+        const monthly = convertAccrued(monthlyRaw);
+        const yearly = convertAccrued(yearlyRaw);
+        const fmtSmall = (n: number) => n >= 0.01 ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : n.toFixed(4);
+        return (
+          <div className="grid grid-cols-3 gap-0 px-4 py-2" style={{ fontFamily: SL_NUM_FONT, borderBottom: `1px solid ${SL_DIVIDER}` }}>
+            <div>
+              <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>今日利息 ({interestUnit})</div>
+              <div className="text-sm font-semibold" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>{fmtSmall(daily)}</div>
+            </div>
+            <div className="text-center">
+              <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>整月利息 ({interestUnit})</div>
+              <div className="text-sm font-semibold" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>{fmtSmall(monthly)}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>全年利息 ({interestUnit})</div>
+              <div className="text-sm font-semibold" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>{fmtSmall(yearly)}</div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── 行3：计息基数 / 计息天数 / 担保缺口 ── */}
       <div className="grid grid-cols-3 gap-0 px-4 py-2" style={{ fontFamily: SL_NUM_FONT }}>
         <div>
-          <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>持有 ({coin})</div>
-          <div className="text-sm font-semibold" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
-            {fmtQty(qty)}
-          </div>
-        </div>
-        <div className="text-center">
-          <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>计息基数 ({baseUnit})</div>
-          <div className="text-sm" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+          <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>计息基数 ({baseUnit})</div>
+          <div className="text-sm font-semibold" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
             {order.interest_base ? fmt(parseFloat(order.interest_base), 0) : '--'}
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>计息天数</div>
-          <div className="text-sm" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+        <div className="text-center">
+          <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>计息天数 (天)</div>
+          <div className="text-sm font-semibold" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
             {order.interest_start_date
-              ? `${calcDays(order.interest_start_date, order.settled_at ? new Date(order.settled_at).getTime() : Date.now())}天`
+              ? calcDays(order.interest_start_date, order.settled_at ? new Date(order.settled_at).getTime() : Date.now())
               : '--'}
           </div>
         </div>
+        <div className="text-right">
+          {showField('collateral') ? (
+            <>
+              <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>担保缺口</div>
+              <div className="text-sm font-semibold" style={{ textShadow: SL_TEXT_SHADOW, color: collateralGap === null ? SL_TEXT_SEC : collateralGap >= 0 ? LN_EARN : '#16A34A' }}>
+                {collateralGap !== null ? (collateralGap >= 0 ? '充足' : '不足') : '--'}
+              </div>
+            </>
+          ) : null}
+        </div>
       </div>
 
-      {/* ── 展开按钮 ── */}
-      <button
-        className="w-full flex items-center justify-between px-4 py-2"
-        style={{ borderTop: `1px dashed ${SL_DIVIDER}` }}
-        onClick={() => setFeeExpanded((v) => !v)}
-      >
-        <div />
-        <div className="flex items-center">
+      {/* ── Tab 栏：详情 | 备注 ── */}
+      <div className="flex" style={{ borderTop: `1px dashed ${SL_DIVIDER}` }}>
+        <button
+          className="flex-1 flex items-center justify-center gap-1 py-2"
+          style={{ borderRight: `1px dashed ${SL_DIVIDER}`, background: feeExpanded ? 'rgba(0,0,0,0.03)' : 'transparent' }}
+          onClick={() => toggleTab('detail')}
+        >
+          <span style={{ color: feeExpanded ? SL_TEXT_PRI : SL_TEXT_DIM, fontSize: '0.7rem', fontWeight: feeExpanded ? 600 : 400 }}>详情</span>
           {feeExpanded
             ? <ChevronUp className="w-3 h-3" style={{ color: SL_TEXT_DIM }} />
             : <ChevronDown className="w-3 h-3" style={{ color: SL_TEXT_DIM }} />}
-        </div>
-      </button>
+        </button>
+        <button
+          className="flex-1 flex items-center justify-center gap-1 py-2"
+          style={{ background: noteExpanded ? 'rgba(0,0,0,0.03)' : 'transparent' }}
+          onClick={() => toggleTab('note')}
+        >
+          <span style={{ color: noteExpanded ? SL_TEXT_PRI : SL_TEXT_DIM, fontSize: '0.7rem', fontWeight: noteExpanded ? 600 : 400 }}>备注</span>
+          {(() => { const cnt = parseNotes(order.public_note || '').length; return cnt > 0 ? <span style={{ color: SL_TEXT_DIM, fontSize: '0.65rem' }}>({cnt})</span> : null; })()}
+          {noteExpanded
+            ? <ChevronUp className="w-3 h-3" style={{ color: SL_TEXT_DIM }} />
+            : <ChevronDown className="w-3 h-3" style={{ color: SL_TEXT_DIM }} />}
+        </button>
+      </div>
 
       {/* ── 展开区 ── */}
       {feeExpanded && (() => {
         const interestBase = order.interest_base ? parseFloat(order.interest_base) : 0;
         return (
-          <div className="px-4 pb-3 space-y-1.5 text-[10px]">
+          <div className="px-4 pt-4 pb-3 space-y-1.5 text-[10px]">
             {/* ── 利息块 ── */}
             {/* 计息基数 */}
             <div className="flex justify-between">
@@ -1210,17 +1321,19 @@ export function FunderLenderCardSilver({
               </span>
             </div>
             {/* 计息日期 */}
-            {order.interest_start_date && (() => {
-              const startD = new Date(order.interest_start_date + 'T00:00:00+08:00');
+{(() => {
+              const startStr = order.interest_start_date || order.buy_date;
+              if (!startStr) return null;
+              const startD = new Date(startStr + 'T00:00:00+08:00');
               const endD = order.settled_at ? new Date(order.settled_at) : new Date();
               const toBeijing = (d: Date) => new Date(d.getTime() + (8 * 60 - (-d.getTimezoneOffset())) * 60000);
               const s = toBeijing(startD);
               const e = toBeijing(endD);
               const fmtBJ = (d: Date) => `${String(d.getFullYear()).slice(2)}年${d.getMonth()+1}月${d.getDate()}日`;
-              const days = calcDays(order.interest_start_date, endD.getTime());
+              const days = calcDays(startStr, endD.getTime());
               return (
                 <div className="flex justify-between">
-                  <span style={{ color: SL_TEXT_SEC }}>计息日期{order.interest_payment_type ? `（${order.interest_payment_type === 'end_post' ? '结束后收' : order.interest_payment_type}）` : ''}</span>
+                  <span style={{ color: SL_TEXT_SEC }}>计息日期（{fmtBJ(s)}）</span>
                   <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{fmtBJ(s)} ~ {fmtBJ(e)}  {days}天</span>
                 </div>
               );
@@ -1237,7 +1350,7 @@ export function FunderLenderCardSilver({
                   title="已结利息记录"
                 >!</button>
               </span>
-              <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}</span>
+              <span style={{ color: LN_EARN, fontVariantNumeric: 'tabular-nums' }}>{displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}</span>
             </div>
             {/* 已结利息历史浮层 */}
             {showInterestHistory && (
@@ -1307,10 +1420,10 @@ export function FunderLenderCardSilver({
                   return (
                     <>
                       <span style={{ color: SL_TEXT_PRI }}>{fmt(interestBase, 0)}×{rateAbs}%÷365{days != null ? `×${days}天` : ''} = </span>
-                      <span style={{ color: SL_TEXT_PRI, fontWeight: 600 }}>{fmt(displayAccrued, 2)} {interestUnit}</span>
+                      <span style={{ color: SL_TEXT_PRI }}>{fmt(displayAccrued, 2)} {interestUnit}</span>
                     </>
                   );
-                })() : <span style={{ color: SL_TEXT_PRI, fontWeight: displayAccrued > 0 ? 600 : 400 }}>{fmt(displayAccrued, 2)} {interestUnit}</span>}
+                })() : <span style={{ color: SL_TEXT_PRI }}>{fmt(displayAccrued, 2)} {interestUnit}</span>}
               </span>
             </div>
             {/* 合计应收 = 待收利息 - 已结利息 */}
@@ -1331,6 +1444,13 @@ export function FunderLenderCardSilver({
 
             {/* ── 担保物块 ── */}
             <div style={{ borderTop: `1px solid ${SL_DIVIDER}`, marginTop: 6, paddingTop: 6 }}>
+              {/* 持有资产 */}
+              {qty > 0 && (
+                <div className="flex justify-between mb-1">
+                  <span style={{ color: SL_TEXT_SEC }}>持有资产</span>
+                  <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{buyPrice > 0 ? `（开仓价 ${fmt(buyPrice, 0)} U） ${fmtQty(qty)} ${coin}` : `${fmtQty(qty)} ${coin}`}</span>
+                </div>
+              )}
               {/* 担保资产 */}
               {collateralAssets.length > 0 && (
                 <div className="flex justify-between mb-1">
@@ -1339,14 +1459,14 @@ export function FunderLenderCardSilver({
                 </div>
               )}
               {/* 担保价值 */}
-              {collateralValue !== null && (
+              {showField('collateral') && collateralValue !== null && (
                 <div className="flex justify-between mb-1">
                   <span style={{ color: SL_TEXT_SEC }}>担保价值</span>
                   <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{fmt(collateralValue, 2)} U</span>
                 </div>
               )}
               {/* 担保缺口 */}
-              {collateralGap !== null && (
+              {showField('collateral') && collateralGap !== null && (
                 <>
                   {/* 弹出说明窗 */}
                   {showCollateralInfo && (
@@ -1394,20 +1514,23 @@ export function FunderLenderCardSilver({
                           </div>
                           <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#FFF1F1' : '#F0FDF4' }}>
                             <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>③ 风险敞口</div>
-                            <div>担保物 + 浮动盈亏 − 待结利息 + 已结利息（正数充足，负数缺口）</div>
+                            <div>担保物 + 浮动盈亏 − 待结利息(U) + 已结利息(U)（正数充足，负数缺口）</div>
+                            {interestUnit === '元' && (
+                              <div className="text-[10px] mt-0.5" style={{ color: '#9CA3AF' }}>利息已按汇率 {effectiveCnyRate.toFixed(2)} 换算为 U</div>
+                            )}
                             <div className="mt-1 font-mono">
               {(() => {
                                 const gap = collateralGap!;
                                 return floatPnl !== null
-                                  ? <span style={{ color: '#3B82F6' }}>= {(collateralValue ?? 0).toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {displayAccrued.toFixed(2)} + {displayPaid.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} u</strong></span>
-                                  : <span style={{ color: '#3B82F6' }}>= {(collateralValue ?? 0).toFixed(2)} + ---（暂无实时价） − {displayAccrued.toFixed(2)} + {displayPaid.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} u</strong></span>;
+                                  ? <span style={{ color: '#3B82F6' }}>= {(collateralValue ?? 0).toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accruedInU.toFixed(2)} + {paidInU.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} U</strong></span>
+                                  : <span style={{ color: '#3B82F6' }}>= {(collateralValue ?? 0).toFixed(2)} + ---（暂无实时价） − {accruedInU.toFixed(2)} + {paidInU.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} U</strong></span>;
                               })()
                               }
                             </div>
                             <div className="mt-1.5" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
                               {isSufficient
-                                ? `担保物充足，还有 ${collateralGap!.toFixed(2)} u 的余量空间`
-                                : `担保物不足，还需补充 ${Math.abs(collateralGap!).toFixed(2)} u 才能覆盖风险`
+                                ? `担保物充足，还有 ${collateralGap!.toFixed(2)} U 的余量空间`
+                                : `担保物不足，还需补充 ${Math.abs(collateralGap!).toFixed(2)} U 才能覆盖风险`
                               }
                             </div>
                           </div>
@@ -1425,23 +1548,111 @@ export function FunderLenderCardSilver({
                         style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
                       >?</button>
                     </span>
-                    <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: isSufficient ? '#DC2626' : '#16A34A' }}>
-                      {isSufficient ? '+' : ''}{fmt(collateralGap, 2)} U
+                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                      <span style={{ color: SL_TEXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{isSufficient ? '充足' : '不足'}</span>
+                      <span style={{ color: isSufficient ? LN_EARN : '#16A34A' }}>{isSufficient ? '+' : ''}{fmt(collateralGap, 2)} U</span>
                     </span>
                   </div>
                 </>
               )}
-              {/* 买入价 */}
-              {buyPrice > 0 && (
-                <div className="flex justify-between">
-                  <span style={{ color: SL_TEXT_SEC }}>买入价</span>
-                  <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{fmt(buyPrice, 0)} U</span>
-                </div>
-              )}
             </div>
+
           </div>
         );
       })()}
+
+      {/* ── 备注展开区 ── */}
+      {noteExpanded && (
+        <div className="px-4 pb-3 pt-2 text-xs" style={{ borderTop: `1px dashed ${SL_DIVIDER}` }} onClick={e => e.stopPropagation()}>
+          {/* 备注列表 */}
+          {noteItems.length === 0 && noteEditingIdx === null && (
+            <div style={{ color: SL_TEXT_DIM }} className="py-1">暂无备注</div>
+          )}
+          {noteItems.map((note, idx) => (
+            <div key={idx}>
+              {idx > 0 && <div style={{ borderTop: `1px solid ${SL_DIVIDER}` }} className="my-1.5" />}
+              {noteEditingIdx === idx ? (
+                <div className="flex items-center gap-1 py-0.5">
+                  <input
+                    autoFocus
+                    className="flex-1 text-xs border rounded px-1.5 py-0.5 outline-none"
+                    style={{ borderColor: '#C7D7FF', color: '#1A2340', minWidth: 0 }}
+                    value={noteEditValue}
+                    onChange={e => setNoteEditValue(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        if (!noteEditValue.trim()) return;
+                        saveNoteItems(noteItems.map((n, i) => i === idx ? { ...n, text: noteEditValue.trim(), time: new Date().toISOString() } : n));
+                        setNoteEditingIdx(null);
+                      }
+                      if (e.key === 'Escape') { setNoteEditingIdx(null); if (!note.text) setNoteItems(noteItems.filter((_, i) => i !== idx)); }
+                    }}
+                    placeholder="输入备注..."
+                    maxLength={200}
+                  />
+                  <button
+                    onClick={() => {
+                      if (!noteEditValue.trim()) return;
+                      saveNoteItems(noteItems.map((n, i) => i === idx ? { ...n, text: noteEditValue.trim(), time: new Date().toISOString() } : n));
+                      setNoteEditingIdx(null);
+                    }}
+                    disabled={noteSaving}
+                    className="shrink-0 text-xs px-2 py-0.5 rounded"
+                    style={{ background: '#3B82F6', color: '#fff' }}
+                  >{noteSaving ? '...' : '保存'}</button>
+                  <button
+                    onClick={() => { setNoteEditingIdx(null); if (!note.text) setNoteItems(noteItems.filter((_, i) => i !== idx)); }}
+                    className="shrink-0 text-xs px-1.5 py-0.5 rounded"
+                    style={{ background: '#F3F4F6', color: '#6B7280' }}
+                  >取消</button>
+                </div>
+              ) : (
+                <div className="flex gap-2 py-0.5">
+                  {/* 左侧头像 */}
+                  <div className="shrink-0 self-start mt-0.5">
+                    {(() => {
+                      const avatarUrl = note.userAvatar || (note.userId ? (membersData as any[])?.find((m: any) => m.userId === note.userId)?.avatar : null);
+                      const ownerMember = !note.userId ? (membersData as any[])?.find((m: any) => m.role === 'owner') : null;
+                      const finalAvatar = avatarUrl || (!note.userId ? ownerMember?.avatar : null);
+                      const name = note.userName || (!note.userId ? (ownerMember?.username || ownerMember?.nickname || '') : '');
+                      if (finalAvatar) return <img src={finalAvatar} alt="" className="w-6 h-6 rounded-full object-cover" style={{ border: `1px solid ${SL_DIVIDER}` }} />;
+                      if (!name) return <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: '#E5E7EB' }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>;
+                      const initials = name.slice(0, 1).toUpperCase();
+                      const colors = ['#6366F1','#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6'];
+                      const color = colors[name.charCodeAt(0) % colors.length] || '#6366F1';
+                      return <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: color }}>{initials}</div>;
+                    })()}
+                  </div>
+                  {/* 右侧内容 */}
+                  <div className="flex-1 min-w-0">
+                    {note.time && <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_DIM }}>{formatNoteTime(note.time)}</div>}
+                    <div className="break-all" style={{ color: SL_TEXT_PRI, fontSize: '11px', lineHeight: '1.5' }}>{note.text}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+          {/* 添加备注按鈕 */}
+          <div style={{ borderTop: noteItems.length > 0 ? `1px solid ${SL_DIVIDER}` : 'none' }} className="mt-1 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                const newItems = [...noteItems, { text: '', time: new Date().toISOString() }];
+                setNoteItems(newItems);
+                setNoteEditingIdx(newItems.length - 1);
+                setNoteEditValue('');
+              }}
+              className="flex items-center gap-1"
+              style={{ color: '#9CA3AF' }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+              <span style={{ fontSize: '11px' }}>添加备注</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+

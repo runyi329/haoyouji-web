@@ -5121,19 +5121,49 @@ export default function LedgerDetail() {
             <div className="flex items-center mb-3">
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>资产订单</h3>
               <span className="text-xs text-gray-400 ml-1.5">共 {(funderAssetOrders as any[])?.length ?? 0} 笔</span>
-              <div className="ml-auto flex items-center gap-1">
-                {(['card', 'order'] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    onClick={() => setFunderViewMode(mode)}
-                    className="px-2.5 py-1 rounded-full text-xs font-medium transition-all"
-                    style={funderViewMode === mode
-                      ? { background: '#1A56DB', color: '#fff' }
-                      : { background: 'transparent', color: '#9CA3AF' }}
-                  >
-                    {mode === 'card' ? '卡片模式' : '订单模式'}
-                  </button>
-                ))}
+              {/* 左右拨动开关 */}
+              <div
+                className="ml-auto flex items-center"
+                style={{
+                  background: '#E5E7EB',
+                  borderRadius: '999px',
+                  padding: '2px',
+                  position: 'relative',
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                  width: '160px',
+                  height: '26px',
+                }}
+                onClick={() => setFunderViewMode(funderViewMode === 'card' ? 'order' : 'card')}
+              >
+                {/* 滑动块 */}
+                <div style={{
+                  position: 'absolute',
+                  top: '2px',
+                  left: funderViewMode === 'card' ? '2px' : '80px',
+                  width: '78px',
+                  height: '22px',
+                  borderRadius: '999px',
+                  background: '#1A56DB',
+                  transition: 'left 0.22s cubic-bezier(0.4,0,0.2,1)',
+                  boxShadow: '0 1px 4px rgba(26,86,219,0.25)',
+                }} />
+                {/* 左标签：卡片模式 */}
+                <span style={{
+                  position: 'relative', zIndex: 1,
+                  fontSize: '11px', fontWeight: 500,
+                  color: funderViewMode === 'card' ? '#fff' : '#9CA3AF',
+                  transition: 'color 0.22s',
+                  width: '80px', lineHeight: '22px', textAlign: 'center', display: 'inline-block',
+                }}>卡片模式</span>
+                {/* 右标签：订单模式 */}
+                <span style={{
+                  position: 'relative', zIndex: 1,
+                  fontSize: '11px', fontWeight: 500,
+                  color: funderViewMode === 'order' ? '#fff' : '#9CA3AF',
+                  transition: 'color 0.22s',
+                  width: '80px', lineHeight: '22px', textAlign: 'center', display: 'inline-block',
+                }}>订单模式</span>
               </div>
             </div>
             {(!funderAssetOrders || (funderAssetOrders as any[]).length === 0) ? (

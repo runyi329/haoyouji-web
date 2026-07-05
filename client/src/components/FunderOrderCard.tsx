@@ -830,7 +830,13 @@ export function FunderOrderCard({
             );
           })()}
           {order.asset_type && show('assetType') && (
-            <span className="text-[11px] font-medium px-1.5 py-0.5 rounded" style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}>
+            <span
+              className="text-[11px] font-medium px-1.5 py-0.5 rounded"
+              style={order.asset_type === 'stock'
+                ? { background: 'linear-gradient(135deg, #B8860B 0%, #FFD700 50%, #B8860B 100%)', color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }
+                : { background: 'linear-gradient(135deg, #9CA3AF 0%, #E5E7EB 50%, #9CA3AF 100%)', color: '#374151', textShadow: '0 1px 1px rgba(255,255,255,0.6)' }
+              }
+            >
               {order.asset_type === 'stock' ? '股票' : '数字币'}
             </span>
           )}

@@ -2453,19 +2453,47 @@ export default function CryptoPrediction() {
         )}
         {/* 融资付息视图切换：记账图 / 订单图 */}
         {tab === 'finance' && (
-          <div className="flex rounded-full p-0.5" style={{ background: 'rgba(255,255,255,0.18)' }}>
-            {(['card', 'order'] as const).map(mode => (
-              <button
-                key={mode}
-                onClick={() => setFinanceViewMode(mode)}
-                className="px-2.5 py-1 rounded-full text-xs font-medium transition-all"
-                style={financeViewMode === mode
-                  ? { background: '#fff', color: '#1A56DB' }
-                  : { background: 'transparent', color: 'rgba(255,255,255,0.8)' }}
-              >
-                {mode === 'card' ? '卡片模式' : '订单模式'}
-              </button>
-            ))}
+          <div
+            style={{
+              background: 'rgba(255,255,255,0.18)',
+              borderRadius: '999px',
+              padding: '2px',
+              position: 'relative',
+              cursor: 'pointer',
+              userSelect: 'none',
+              width: '160px',
+              height: '26px',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+            onClick={() => setFinanceViewMode(financeViewMode === 'card' ? 'order' : 'card')}
+          >
+            {/* 滑动块 */}
+            <div style={{
+              position: 'absolute',
+              top: '2px',
+              left: financeViewMode === 'card' ? '2px' : '80px',
+              width: '78px',
+              height: '22px',
+              borderRadius: '999px',
+              background: '#fff',
+              transition: 'left 0.22s cubic-bezier(0.4,0,0.2,1)',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
+            }} />
+            <span style={{
+              position: 'relative', zIndex: 1,
+              fontSize: '11px', fontWeight: 500,
+              color: financeViewMode === 'card' ? '#1A56DB' : 'rgba(255,255,255,0.8)',
+              transition: 'color 0.22s',
+              width: '80px', lineHeight: '22px', textAlign: 'center', display: 'inline-block',
+            }}>卡片模式</span>
+            <span style={{
+              position: 'relative', zIndex: 1,
+              fontSize: '11px', fontWeight: 500,
+              color: financeViewMode === 'order' ? '#1A56DB' : 'rgba(255,255,255,0.8)',
+              transition: 'color 0.22s',
+              width: '80px', lineHeight: '22px', textAlign: 'center', display: 'inline-block',
+            }}>订单模式</span>
           </div>
         )}
       </div>
