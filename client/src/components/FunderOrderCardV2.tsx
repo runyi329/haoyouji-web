@@ -996,16 +996,22 @@ export function FunderOrderCardV2Silver({
                 })() : <span style={{ color: SL_TEXT_PRI }}>{displayAccrued > 0 ? '-' : ''}{fmt(displayAccrued, 2)} {interestUnit}</span>}
               </span>
             </div>
-            <div className="flex justify-between">
-              <span style={{ color: SL_TEXT_SEC }}>交易手续费 (1‰买+1‰卖)</span>
-              <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
-                {tradingFee > 0 ? '-' : ''}{fmt(tradingFee, 2)} {interestUnit}
-              </span>
-            </div>
+            {/* 交易手续费：仅数字币（银色卡片）显示 */}
+            {!isStockCard && (
+              <div className="flex justify-between">
+                <span style={{ color: SL_TEXT_SEC }}>交易手续费 (1‰买+1‰卖)</span>
+                <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+                  {tradingFee > 0 ? '-' : ''}{fmt(tradingFee, 2)} {interestUnit}
+                </span>
+              </div>
+            )}
             <div className="flex justify-between" style={{ borderTop: `1px solid ${SL_DIVIDER}`, paddingTop: 4, marginTop: 4 }}>
               <span style={{ color: SL_TEXT_SEC }}>合计待付</span>
               <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
-                {(displayAccrued + tradingFee) > 0 ? '-' : ''}{fmt(displayAccrued + tradingFee, 2)} {interestUnit}
+                {isStockCard
+                  ? `${displayAccrued > 0 ? '-' : ''}${fmt(displayAccrued, 2)} ${interestUnit}`
+                  : `${(displayAccrued + tradingFee) > 0 ? '-' : ''}${fmt(displayAccrued + tradingFee, 2)} ${interestUnit}`
+                }
               </span>
             </div>
           </div>
