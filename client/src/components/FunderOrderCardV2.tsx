@@ -813,14 +813,29 @@ export function FunderOrderCardV2Silver({
 
       {/* ── 行2：主数据行（持有数量占宽，其侙3列均分）── */}
       <div className="flex gap-0 px-5 py-3" style={{ borderBottom: `1px solid ${SL_DIVIDER}` }}>
-        {/* 持有数量：占 40% */}
+        {/* 持有数量/持有资产：占 40% */}
         <div style={{ flex: '0 0 40%' }}>
-          <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC }}>持有数量 ({coin})</div>
-          <div style={{ lineHeight: 1 }}>
-            <span style={{ fontSize: '1.6rem', fontWeight: 700, color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: SL_TEXT_SHADOW_LG }}>
-              {fmt(qty, 2)}
-            </span>
-          </div>
+          {isStockCard ? (
+            // 股票类：显示持有资产（计息基数，单位元）
+            <>
+              <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC }}>持有资产 (元)</div>
+              <div style={{ lineHeight: 1 }}>
+                <span style={{ fontSize: '1.6rem', fontWeight: 700, color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: SL_TEXT_SHADOW_LG }}>
+                  {order.interest_base ? parseFloat(order.interest_base).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '--'}
+                </span>
+              </div>
+            </>
+          ) : (
+            // 数字币：显示持有数量
+            <>
+              <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC }}>持有数量 ({coin})</div>
+              <div style={{ lineHeight: 1 }}>
+                <span style={{ fontSize: '1.6rem', fontWeight: 700, color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: SL_TEXT_SHADOW_LG }}>
+                  {fmt(qty, 2)}
+                </span>
+              </div>
+            </>
+          )}
         </div>
 
         {/* 买入价：占 20% */}
