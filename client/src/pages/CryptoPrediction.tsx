@@ -3303,8 +3303,8 @@ export default function CryptoPrediction() {
               // 第2层：自己/共享 → 决定订单池
               const l2Pool = financeL2Tab === 'shared' ? sharedOrders : mineOrders;
 
-                            // 第3层：全部/股/币（自己和他人都显示）
-              const showL3 = true;
+                            // 第3层：全部/股/币（他人视角才显示，自己视角直接显示全部）
+              const showL3 = financeL2Tab === 'shared';
               // 共享担保：担保物选择为「共享担保」的订单（collateral_share_mode === 'self'）
               const hasCollateral = (o: any) => o.collateral_share_mode === 'self';
               const l3Pool = showL3
@@ -3408,6 +3408,7 @@ export default function CryptoPrediction() {
                           <FunderOrderCardV2Silver
                             key={order.id}
                             order={order}
+                            ledgerId={ledgerId ? Number(ledgerId) : undefined}
                             livePrices={financeLivePrices}
                             priceDirection={{}}
                             membersData={(ledgerInfo as any)?.members || []}

@@ -299,7 +299,7 @@ export function FunderOrderCardV2({
             {(order as any).collateral_share_mode === 'self'
               ? '共享担保'
               : collateralAssets.length > 0
-                ? collateralAssets.map((c) => `${c.qty} ${c.coin}`).join(" + ")
+                ? <>{collateralAssets.map((c, i) => <div key={i}>{c.qty} {c.coin}</div>)}</>
                 : "--"}
           </div>
         </div>
@@ -539,7 +539,7 @@ export function FunderOrderCardV2Light({
           <div className="text-sm" style={{ color: (order as any).collateral_share_mode === 'self' ? '#DC2626' : LT_TEXT_PRI }}>
             {(order as any).collateral_share_mode === 'self'
               ? '共享担保'
-              : collateralAssets.length > 0 ? collateralAssets.map((c) => `${c.qty} ${c.coin}`).join(" + ") : "--"}
+              : collateralAssets.length > 0 ? <>{collateralAssets.map((c, i) => <div key={i}>{c.qty} {c.coin}</div>)}</> : "--"}
           </div>
         </div>
       </div>
@@ -638,8 +638,29 @@ export function FunderOrderCardV2Silver({
   priceDirection = {},
   cnyRate = DEFAULT_CNY_RATE,
   membersData = [],
+  ledgerId,
 }: FunderOrderCardV2Props) {
-  const [feeExpanded, setFeeExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState<'detail' | 'note' | null>(null);
+  const feeExpanded = activeTab === 'detail';
+  const noteExpanded = activeTab === 'note';
+  const toggleTab = (tab: 'detail' | 'note') => setActiveTab(v => v === tab ? null : tab);
+  const [showCollateralInfo, setShowCollateralInfo] = useState(false);
+  // 备注相关 state
+  const [noteItems, setNoteItems] = useState(() => parseNotes(order.public_note || ''));
+  const [noteEditingIdx, setNoteEditingIdx] = useState<number | null>(null);
+  const [noteEditValue, setNoteEditValue] = useState('');
+  const [noteSaving, setNoteSaving] = useState(false);
+  const updateNoteM = trpc.ledger.funderUpdatePublicNote.useMutation();
+  const saveNoteItems = async (newItems: ReturnType<typeof parseNotes>) => {
+    if (!ledgerId) return;
+    setNoteSaving(true);
+    try {
+      const raw = JSON.stringify(newItems);
+      await updateNoteM.mutateAsync({ id: order.id as number, ledgerId, publicNote: raw });
+      setNoteItems(newItems);
+      order.public_note = raw;
+    } finally { setNoteSaving(false); }
+  };
 
   const coin = (order.coin || 'ETH') as CoinType;
   const qty = parseFloat(order.buy_quantity || '0');
@@ -697,6 +718,33 @@ export function FunderOrderCardV2Silver({
       if (Array.isArray(parsed)) collateralAssets = parsed;
     }
   } catch {}
+
+  const isSharedMode = (order as any).collateral_share_mode === 'self';
+  const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
+    { ledgerId: (order as any).ledger_id ?? 0, userId: Number(order.user_id) },
+    { enabled: isSharedMode && !!((order as any).ledger_id), staleTime: 0, refetchInterval: 3000 }
+  );
+
+  // 担保物价値计算（非共享担保模式）
+  let collateralValue = 0;
+  let collateralValueKnown = true;
+  const collateralItemValues: (number | null)[] = [];
+  for (const item of collateralAssets) {
+    const iq = parseFloat(item.qty);
+    if (!item.coin || isNaN(iq)) { collateralItemValues.push(null); collateralValueKnown = false; continue; }
+    if (item.coin === 'USDT') { collateralValue += iq; collateralItemValues.push(iq); }
+    else if (item.coin === 'CNY') { const cv = iq / cnyRate; collateralValue += cv; collateralItemValues.push(cv); }
+    else {
+      const p = livePrices[item.coin as CoinType] ?? null;
+      if (p) { collateralValue += iq * p; collateralItemValues.push(iq * p); }
+      else { collateralItemValues.push(null); collateralValueKnown = false; }
+    }
+  }
+  // 担保缺口 = 担保总値 + 浮动盈亏 - 待结利息 + 已结利息
+  const exposure = floatPnl !== null
+    ? collateralValue + floatPnl - displayAccrued + displayPaid
+    : collateralValue - displayAccrued + displayPaid;
+  const isSufficient = exposure >= 0;
 
   const fmt = (v: number | null, digits = 2) =>
     v == null || isNaN(v) ? '--' : v.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
@@ -985,7 +1033,7 @@ export function FunderOrderCardV2Silver({
               <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>担保资产</div>
               <div className="text-sm" style={{ color: SL_TEXT_PRI }}>
                 {collateralAssets.length > 0
-                  ? collateralAssets.map((c) => `${parseFloat(c.qty).toLocaleString()} ${c.coin === 'CNY' ? '元' : c.coin}`).join(' + ')
+                  ? collateralAssets.map((c, i) => <div key={i}>{parseFloat(c.qty).toLocaleString()} {c.coin === 'CNY' ? '元' : c.coin}</div>)
                   : '--'}
               </div>
             </>
@@ -994,26 +1042,37 @@ export function FunderOrderCardV2Silver({
             <>
               <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>担保资产</div>
               <div className="text-sm" style={{ color: SL_TEXT_PRI }}>
-                {collateralAssets.length > 0 ? collateralAssets.map((c) => `${c.qty} ${c.coin}`).join(' + ') : '--'}
+                {collateralAssets.length > 0 ? collateralAssets.map((c, i) => <div key={i}>{c.qty} {c.coin}</div>) : '--'}
               </div>
             </>
           )}
         </div>
       </div>
 
-      {/* ── 行4：服务费（极弱化，可折叠）── */}
-      <button
-        className="w-full flex items-center justify-between px-4 py-2"
-        style={{ borderTop: `1px dashed ${SL_DIVIDER}` }}
-        onClick={() => setFeeExpanded((v) => !v)}
-      >
-        <div />
-        <div className="flex items-center">
+      {/* ── Tab栏：详情 | 备注 ── */}
+      <div className="flex" style={{ borderTop: `1px dashed ${SL_DIVIDER}` }}>
+        <button
+          className="flex-1 flex items-center justify-center gap-1 py-2"
+          style={{ borderRight: `1px dashed ${SL_DIVIDER}`, background: feeExpanded ? 'rgba(0,0,0,0.03)' : 'transparent' }}
+          onClick={() => toggleTab('detail')}
+        >
+          <span style={{ color: feeExpanded ? SL_TEXT_PRI : SL_TEXT_DIM, fontSize: '0.7rem', fontWeight: feeExpanded ? 600 : 400 }}>详情</span>
           {feeExpanded
             ? <ChevronUp className="w-3 h-3" style={{ color: SL_TEXT_DIM }} />
             : <ChevronDown className="w-3 h-3" style={{ color: SL_TEXT_DIM }} />}
-        </div>
-      </button>
+        </button>
+        <button
+          className="flex-1 flex items-center justify-center gap-1 py-2"
+          style={{ background: noteExpanded ? 'rgba(0,0,0,0.03)' : 'transparent' }}
+          onClick={() => toggleTab('note')}
+        >
+          <span style={{ color: noteExpanded ? SL_TEXT_PRI : SL_TEXT_DIM, fontSize: '0.7rem', fontWeight: noteExpanded ? 600 : 400 }}>备注</span>
+          {(() => { const cnt = parseNotes(order.public_note || '').length; return cnt > 0 ? <span style={{ color: SL_TEXT_DIM, fontSize: '0.65rem' }}>({cnt})</span> : null; })()}
+          {noteExpanded
+            ? <ChevronUp className="w-3 h-3" style={{ color: SL_TEXT_DIM }} />
+            : <ChevronDown className="w-3 h-3" style={{ color: SL_TEXT_DIM }} />}
+        </button>
+      </div>
 
       {feeExpanded && (() => {
         const interestBase = order.interest_base ? parseFloat(order.interest_base) : 0;
@@ -1083,7 +1142,7 @@ export function FunderOrderCardV2Silver({
             {/* 已结利息：始终显示 */}
             <div className="flex justify-between">
               <span style={{ color: SL_TEXT_SEC }}>已结利息</span>
-              <span style={{ color: '#22C55E', fontVariantNumeric: 'tabular-nums' }}>+{fmt(displayPaid, 2)} {interestUnit}</span>
+              <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>+{fmt(displayPaid, 2)} {interestUnit}</span>
             </div>
             {/* 合计待付 = 待付利息 + 手续费 - 已结利息 */}
             {(() => {
@@ -1098,9 +1157,299 @@ export function FunderOrderCardV2Silver({
                 </div>
               );
             })()}
+            {/* 共享担保标记行（共享担保模式才显示） */}
+            {isSharedMode && (
+              <>
+                {/* 共享担保缺口弹窗 */}
+                {showCollateralInfo && (
+                  <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowCollateralInfo(false)}>
+                    <div className="rounded-2xl p-5 mx-4 w-full max-w-xs overflow-y-auto" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm font-bold" style={{ color: '#1A2340' }}>担保缺口计算说明</span>
+                        <button onClick={() => setShowCollateralInfo(false)} className="text-gray-400 text-lg leading-none">×</button>
+                      </div>
+                      <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
+                        {/* ① 共享订单缺口汇总 */}
+                        <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
+                          <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>① 共享订单缺口汇总</div>
+                          <div className="mb-1" style={{ color: '#9CA3AF' }}>每张订单缺口 = 浮动盈亏 - 待结利息</div>
+                          {sharedPoolInfo ? (
+                            <>
+                              <div className="space-y-1.5">
+                                {((sharedPoolInfo as any).orders ?? []).map((o: any) => {
+                                  const oQty = Number(o.quantity ?? 0);
+                                  const oPrincipal = Number(o.principal ?? 0);
+                                  const oCoin = (o.coin || '').toUpperCase();
+                                  const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null ? Number(o.currentPrice) : null);
+                                  const oCurrentValue = oLiveP !== null ? oLiveP * oQty : null;
+                                  const oFloatPnl = oCurrentValue !== null ? oCurrentValue - oPrincipal : null;
+                                  const oPendingInterest = Number(o.pendingInterest ?? 0);
+                                  const gap = oFloatPnl !== null ? oFloatPnl - oPendingInterest : null;
+                                  return (
+                                    <div key={o.orderId} className="flex justify-between items-center">
+                                      <div>
+                                        <span className="font-mono font-medium" style={{ color: '#374151' }}>{o.orderNo}</span>
+                                        <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
+                                      </div>
+                                      <div className="text-right">
+                                        {gap !== null
+                                          ? <span className="font-mono font-semibold" style={{ color: gap >= 0 ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} u</span>
+                                          : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              {(() => {
+                                const orders = (sharedPoolInfo as any).orders ?? [];
+                                let totalGapLive = 0; let allKnown = true;
+                                for (const o of orders) {
+                                  const oQty = Number(o.quantity ?? 0); const oPrincipal = Number(o.principal ?? 0);
+                                  const oCoin = (o.coin || '').toUpperCase();
+                                  const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null ? Number(o.currentPrice) : null);
+                                  if (oLiveP === null) { allKnown = false; continue; }
+                                  totalGapLive += oLiveP * oQty - oPrincipal - Number(o.pendingInterest ?? 0);
+                                }
+                                return (
+                                  <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
+                                    <span style={{ color: '#374151' }}>合计缺口需求</span>
+                                    {allKnown
+                                      ? <span className="font-mono" style={{ color: totalGapLive >= 0 ? '#DC2626' : '#16A34A' }}>{totalGapLive >= 0 ? '+' : ''}{totalGapLive.toFixed(2)} u</span>
+                                      : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
+                                  </div>
+                                );
+                              })()}
+                            </>
+                          ) : <div className="text-gray-400">加载中...</div>}
+                        </div>
+                        {/* ② 共享担保物汇总 */}
+                        <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
+                          <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>② 共享担保物汇总</div>
+                          {sharedPoolInfo ? (
+                            <>
+                              <div className="space-y-1.5">
+                                {((sharedPoolInfo as any).orders ?? []).map((o: any) => (
+                                  <div key={o.orderId} className="flex justify-between items-center">
+                                    <span className="font-mono" style={{ color: '#374151' }}>{o.orderNo}</span>
+                                    {(o.collateralAssets ?? []).length === 0
+                                      ? <span style={{ color: '#9CA3AF' }}>无担保物</span>
+                                      : <span className="font-mono font-semibold" style={{ color: '#DC2626' }}>{o.collateralValue > 0 ? `+${o.collateralValue.toFixed(2)} u` : '+--- u'}</span>}
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
+                                <span style={{ color: '#374151' }}>合计担保物价値</span>
+                                <span className="font-mono" style={{ color: '#DC2626' }}>+{((sharedPoolInfo as any).totalCollateralValue ?? 0).toFixed(2)} u</span>
+                              </div>
+                            </>
+                          ) : <div className="text-gray-400">加载中...</div>}
+                        </div>
+                        {/* ③ 总计风险敎口 */}
+                        {sharedPoolInfo && (() => {
+                          const orders = (sharedPoolInfo as any).orders ?? [];
+                          let totalRequired = 0; let allHaveGap = true;
+                          for (const o of orders) {
+                            const oQty = Number(o.quantity ?? 0); const oPrincipal = Number(o.principal ?? 0);
+                            const oCoin = (o.coin || '').toUpperCase();
+                            const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null ? Number(o.currentPrice) : null);
+                            if (oLiveP === null) { allHaveGap = false; continue; }
+                            totalRequired += oLiveP * oQty - oPrincipal - Number(o.pendingInterest ?? 0);
+                          }
+                          const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
+                          const totalBuyValue = (sharedPoolInfo as any).totalBuyValue ?? 0;
+                          const diff = totalColl + totalRequired;
+                          const diffColor = diff < 0 ? '#16A34A' : '#DC2626';
+                          const marginRatio = totalBuyValue > 0 ? (diff / totalBuyValue) * 100 : null;
+                          const ratioColor = marginRatio === null ? '#9CA3AF' : (marginRatio < 0 ? '#16A34A' : '#DC2626');
+                          return (
+                            <>
+                              <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
+                                <div className="font-semibold mb-1" style={{ color: '#374151' }}>③ 总计风险敎口</div>
+                                <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>担保物合计 + 净缺口合计</div>
+                                <div className="font-mono text-xs" style={{ color: '#6B7280' }}>
+                                  {allHaveGap
+                                    ? <>{totalColl.toFixed(2)} + ({totalRequired >= 0 ? '+' : ''}{totalRequired.toFixed(2)}) = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} u</span></>
+                                    : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
+                                </div>
+                              </div>
+                              <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
+                                <div className="font-semibold mb-1" style={{ color: '#374151' }}>④ 保证金比例</div>
+                                <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>风险敎口 ÷ 总订单买入价値</div>
+                                <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
+                                  {allHaveGap
+                                    ? <>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} ÷ {totalBuyValue.toFixed(2)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '--'}</span></>
+                                    : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
+                                </div>
+                                <div className="text-xs" style={{ color: '#9CA3AF' }}>总买入价値 {totalBuyValue.toFixed(2)} u（各订单买入价 × 数量之和，不随币价变动）</div>
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div className="flex justify-between" style={{ marginTop: 6 }}>
+                  <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
+                    担保资产
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
+                      className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
+                      style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+                    >?</button>
+                  </span>
+                  <span className="font-semibold" style={{ color: '#DC2626' }}>共享担保</span>
+                </div>
+              </>
+            )}
+            {/* 非共享担保：担保货币 / 担保总值 / 担保缺口 */}
+            {!isSharedMode && !isStockCard && collateralAssets.length > 0 && (
+              <>
+                {collateralAssets.map((a, idx) => (
+                  <div key={idx}>
+                    <div className="flex justify-between" style={{ marginTop: 6 }}>
+                      <span style={{ color: SL_TEXT_SEC }}>{collateralAssets.length > 1 ? `担保货币${idx + 1}` : '担保货币'}</span>
+                      <span style={{ color: SL_TEXT_PRI }}>{parseFloat(a.qty).toLocaleString()} {a.coin === 'CNY' ? '元' : a.coin}</span>
+                    </div>
+                    {collateralItemValues[idx] !== null && (
+                      <div className="flex justify-between">
+                        <span></span>
+                        <span style={{ color: SL_TEXT_SEC }}>≈ {(collateralItemValues[idx] as number).toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {collateralAssets.length > 1 && (
+                  <div className="flex justify-between" style={{ marginTop: 4 }}>
+                    <span style={{ color: SL_TEXT_SEC }}>担保总值</span>
+                    <span style={{ color: SL_TEXT_PRI }}>{collateralValueKnown ? `${collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} u` : '计算中...'}</span>
+                  </div>
+                )}
+                <div className="flex justify-between" style={{ marginTop: 4 }}>
+                  <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
+                    担保缺口
+                    <button type="button" onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
+                      className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
+                      style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}>?</button>
+                  </span>
+                  <span style={{ color: isSufficient ? '#16A34A' : '#DC2626', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                    {isSufficient ? '+' : '-'}{Math.abs(exposure).toLocaleString(undefined, { maximumFractionDigits: 2 })} u
+                  </span>
+                </div>
+                {showCollateralInfo && (
+                  <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowCollateralInfo(false)}>
+                    <div className="rounded-2xl p-5 mx-4 w-full max-w-xs" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm font-bold" style={{ color: '#1A2340' }}>担保缺口计算说明</span>
+                        <button onClick={() => setShowCollateralInfo(false)} className="text-gray-400 text-lg leading-none">×</button>
+                      </div>
+                      <div className="text-xs space-y-2" style={{ color: '#4B5563' }}>
+                        <div>担保缺口 = 担保总值 + 浮动盈亏 − 待结利息 + 已结利息</div>
+                        <div className="font-mono p-2 rounded" style={{ background: '#F9FAFB' }}>
+                          = {collateralValue.toFixed(2)}
+                          {floatPnl !== null ? ` + (${floatPnl >= 0 ? '+' : ''}${floatPnl.toFixed(2)})` : ' + ---'}
+                          {` − ${displayAccrued.toFixed(2)}`}
+                          {` + ${displayPaid.toFixed(2)}`}
+                          {` = `}
+                          <strong style={{ color: isSufficient ? '#16A34A' : '#DC2626' }}>{exposure >= 0 ? '+' : ''}{exposure.toFixed(2)} u</strong>
+                        </div>
+                        <div style={{ color: '#9CA3AF' }}>正数表示担保充足，负数表示担保缺口</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
         );
       })()}
+      {/* ── 备注展开区 ── */}
+      {noteExpanded && (
+        <div className="px-4 pb-3 pt-2 text-xs" style={{ borderTop: `1px dashed ${SL_DIVIDER}` }} onClick={e => e.stopPropagation()}>
+          {noteItems.length === 0 && noteEditingIdx === null && (
+            <div style={{ color: SL_TEXT_DIM }} className="py-1">暂无备注</div>
+          )}
+          {noteItems.map((note, idx) => (
+            <div key={idx}>
+              {idx > 0 && <div style={{ borderTop: `1px solid ${SL_DIVIDER}` }} className="my-1.5" />}
+              {noteEditingIdx === idx ? (
+                <div className="flex items-center gap-1 py-0.5">
+                  <input
+                    autoFocus
+                    className="flex-1 text-xs border rounded px-1.5 py-0.5 outline-none"
+                    style={{ borderColor: '#C7D7FF', color: '#1A2340', minWidth: 0 }}
+                    value={noteEditValue}
+                    onChange={e => setNoteEditValue(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        if (!noteEditValue.trim()) return;
+                        saveNoteItems(noteItems.map((n, i) => i === idx ? { ...n, text: noteEditValue.trim(), time: new Date().toISOString() } : n));
+                        setNoteEditingIdx(null);
+                      }
+                      if (e.key === 'Escape') { setNoteEditingIdx(null); if (!note.text) setNoteItems(noteItems.filter((_, i) => i !== idx)); }
+                    }}
+                    placeholder="输入备注..."
+                    maxLength={200}
+                  />
+                  <button
+                    onClick={() => {
+                      if (!noteEditValue.trim()) return;
+                      saveNoteItems(noteItems.map((n, i) => i === idx ? { ...n, text: noteEditValue.trim(), time: new Date().toISOString() } : n));
+                      setNoteEditingIdx(null);
+                    }}
+                    disabled={noteSaving}
+                    className="shrink-0 text-xs px-2 py-0.5 rounded"
+                    style={{ background: '#3B82F6', color: '#fff' }}
+                  >{noteSaving ? '...' : '保存'}</button>
+                  <button
+                    onClick={() => { setNoteEditingIdx(null); if (!note.text) setNoteItems(noteItems.filter((_, i) => i !== idx)); }}
+                    className="shrink-0 text-xs px-1.5 py-0.5 rounded"
+                    style={{ background: '#F3F4F6', color: '#6B7280' }}
+                  >取消</button>
+                </div>
+              ) : (
+                <div className="flex gap-2 py-0.5">
+                  <div className="shrink-0 self-start mt-0.5">
+                    {(() => {
+                      const avatarUrl = note.userAvatar || (note.userId ? (membersData as any[])?.find((m: any) => m.userId === note.userId)?.avatar : null);
+                      const ownerMember = !note.userId ? (membersData as any[])?.find((m: any) => m.role === 'owner') : null;
+                      const finalAvatar = avatarUrl || (!note.userId ? ownerMember?.avatar : null);
+                      const name = note.userName || (!note.userId ? (ownerMember?.username || ownerMember?.nickname || '') : '');
+                      if (finalAvatar) return <img src={finalAvatar} alt="" className="w-6 h-6 rounded-full object-cover" style={{ border: `1px solid ${SL_DIVIDER}` }} />;
+                      if (!name) return <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: '#E5E7EB' }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>;
+                      const initials = name.slice(0, 1).toUpperCase();
+                      const colors = ['#6366F1','#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6'];
+                      const color = colors[name.charCodeAt(0) % colors.length] || '#6366F1';
+                      return <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: color }}>{initials}</div>;
+                    })()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    {note.time && <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_DIM }}>{formatNoteTime(note.time)}</div>}
+                    <div className="break-all" style={{ color: SL_TEXT_PRI, fontSize: '11px', lineHeight: '1.5' }}>{note.text}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+          <div style={{ borderTop: noteItems.length > 0 ? `1px solid ${SL_DIVIDER}` : 'none' }} className="mt-1 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                const newItems = [...noteItems, { text: '', time: new Date().toISOString() }];
+                setNoteItems(newItems);
+                setNoteEditingIdx(newItems.length - 1);
+                setNoteEditValue('');
+              }}
+              className="flex items-center gap-1"
+              style={{ color: '#9CA3AF' }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+              <span style={{ fontSize: '11px' }}>添加备注</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1142,6 +1491,13 @@ export function FunderLenderCardSilver({
   const interestHistoryQuery = trpc.ledger.funderGetInterestPayments.useQuery(
     { ledgerId: ledgerId ?? 0, orderId: order.id as number },
     { enabled: showInterestHistory && !!ledgerId, staleTime: 0 }
+  );
+  // 共享担保池查询（仅当订单开启了本人订单共享时才查询）
+  const orderShareMode = (order as any).collateral_share_mode;
+  const isSharedMode = orderShareMode === 'self';
+  const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
+    { ledgerId: ledgerId ?? 0, userId: Number(order.user_id) },
+    { enabled: !!ledgerId && isSharedMode, staleTime: 0, refetchInterval: 3000 }
   );
 
   const coin = (order.coin || 'ETH') as CoinType;
@@ -1581,7 +1937,7 @@ export function FunderLenderCardSilver({
             {displayPaid > 0 && (
               <div className="flex justify-between">
                 <span style={{ color: SL_TEXT_SEC }}>已结利息</span>
-                <span style={{ color: '#22C55E', fontVariantNumeric: 'tabular-nums' }}>{fmt(displayPaid, 2)} {interestUnit}</span>
+                <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{fmt(displayPaid, 2)} {interestUnit}</span>
               </div>
             )}
             {/* 合计应收 = 待收利息 - 已结利息 */}
@@ -1609,108 +1965,267 @@ export function FunderLenderCardSilver({
                   <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{buyPrice > 0 ? `（开仓价 ${fmt(buyPrice, 0)} U） ${fmtQty(qty)} ${coin}` : `${fmtQty(qty)} ${coin}`}</span>
                 </div>
               )}
-              {/* 担保资产 */}
-              {collateralAssets.length > 0 && (
+              {/* 担保资产 / 共享担保 */}
+              {isSharedMode ? (
                 <div className="flex justify-between mb-1">
                   <span style={{ color: SL_TEXT_SEC }}>担保资产</span>
-                  <span style={{ color: SL_TEXT_PRI }}>{collateralAssets.map((c) => `${c.qty} ${c.coin}`).join(' + ')}</span>
+                  <span className="font-semibold" style={{ color: '#DC2626' }}>共享担保</span>
+                </div>
+              ) : collateralAssets.length > 0 && (
+                <div className="flex justify-between mb-1 items-start">
+                  <span style={{ color: SL_TEXT_SEC }}>担保资产</span>
+                  <div className="text-right" style={{ color: SL_TEXT_PRI }}>
+                    {collateralAssets.map((c, i) => <div key={i}>{c.qty} {c.coin}</div>)}
+                  </div>
                 </div>
               )}
-              {/* 担保价值 */}
-              {showField('collateral') && collateralValue !== null && (
+              {/* 担保价値（非共享模式才显示） */}
+              {!isSharedMode && showField('collateral') && collateralValue !== null && (
                 <div className="flex justify-between mb-1">
-                  <span style={{ color: SL_TEXT_SEC }}>担保价值</span>
+                  <span style={{ color: SL_TEXT_SEC }}>担保价値</span>
                   <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{fmt(collateralValue, 2)} U</span>
                 </div>
               )}
               {/* 担保缺口 */}
-              {showField('collateral') && collateralGap !== null && (
+              {showField('collateral') && (
                 <>
                   {/* 弹出说明窗 */}
                   {showCollateralInfo && (
                     <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowCollateralInfo(false)}>
-                      <div className="rounded-2xl p-5 mx-4 w-full max-w-xs" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+                      <div className="rounded-2xl p-5 mx-4 w-full max-w-xs overflow-y-auto" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-3">
                           <span className="text-sm font-bold" style={{ color: '#1A2340' }}>担保缺口计算说明</span>
                           <button onClick={() => setShowCollateralInfo(false)} className="text-gray-400 text-lg leading-none">×</button>
                         </div>
                         <div className="text-xs space-y-2.5" style={{ color: '#4B5563' }}>
-                          <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
-                            <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 浮动盈亏</div>
-                            <div>= 当前市值 - 计息基数（正数为浮盈，负数为亏损）</div>
-                            <div className="mt-1 font-mono">
-                              {floatPnl !== null
-                                ? <><span style={{ color: '#3B82F6' }}>= {(liveP! * qty).toFixed(2)} - {buyValue.toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} u{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>
-                                : <span className="text-gray-400">当前市值暂无实时价格，暂无法计算浮动盈亏</span>
-                              }
-                            </div>
-                          </div>
-                          <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
-                            <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 担保价值</div>
-                            {collateralAssets.length === 0
-                              ? <div className="font-mono mt-1" style={{ color: '#9CA3AF' }}>0.00 u（无担保物）</div>
-                              : <>
-                                  {collateralAssets.map((a, idx) => {
-                                    const itemVal = collateralItemValues[idx];
-                                    return (
-                                      <div key={idx} className="mt-1 flex justify-between">
-                                        <span className="font-mono" style={{ color: '#6B7280' }}>{a.qty} {a.coin}</span>
-                                        {itemVal !== null
-                                          ? <span className="font-mono font-semibold" style={{ color: '#3B82F6' }}>{itemVal.toFixed(2)} u</span>
-                                          : <span className="font-mono" style={{ color: '#D1D5DB' }}>暂无实时价</span>
-                                        }
-                                      </div>
-                                    );
-                                  })}
-                                  {collateralAssets.length > 1 && collateralValue !== null && (
-                                    <div className="font-mono mt-1 pt-1 font-semibold" style={{ borderTop: '1px solid #D1D5DB', color: '#1A2340' }}>
-                                      合计 {collateralValue.toFixed(2)} u
+                          {isSharedMode ? (
+                            <>
+                              {/* 共享担保：三段式 */}
+                              {/* ① 共享订单缺口汇总 */}
+                              <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
+                                <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>① 共享订单缺口汇总</div>
+                                <div className="mb-1" style={{ color: '#9CA3AF' }}>每张订单缺口 = 浮动盈亏 - 待结利息</div>
+                                {sharedPoolInfo ? (
+                                  <>
+                                    <div className="space-y-1.5">
+                                      {((sharedPoolInfo as any).orders ?? []).map((o: any) => {
+                                        const oQty = Number(o.quantity ?? 0);
+                                        const oPrincipal = Number(o.principal ?? 0);
+                                        const oCoin = (o.coin || '').toUpperCase();
+                                        const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null ? Number(o.currentPrice) : null);
+                                        const oCurrentValue = oLiveP !== null ? oLiveP * oQty : null;
+                                        const oFloatPnl = oCurrentValue !== null ? oCurrentValue - oPrincipal : null;
+                                        const oPendingInterest = Number(o.pendingInterest ?? 0);
+                                        const gap = oFloatPnl !== null ? oFloatPnl - oPendingInterest : null;
+                                        return (
+                                          <div key={o.orderId} className="flex justify-between items-center">
+                                            <div>
+                                              <span className="font-mono font-medium" style={{ color: '#374151' }}>{o.orderNo}</span>
+                                              <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
+                                            </div>
+                                            <div className="text-right">
+                                              {gap !== null
+                                                ? <span className="font-mono font-semibold" style={{ color: gap >= 0 ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} u</span>
+                                                : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
                                     </div>
+                                    {(() => {
+                                      const orders = (sharedPoolInfo as any).orders ?? [];
+                                      let totalGapLive = 0; let allKnown = true;
+                                      for (const o of orders) {
+                                        const oQty = Number(o.quantity ?? 0); const oPrincipal = Number(o.principal ?? 0);
+                                        const oCoin = (o.coin || '').toUpperCase();
+                                        const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null ? Number(o.currentPrice) : null);
+                                        if (oLiveP === null) { allKnown = false; continue; }
+                                        totalGapLive += oLiveP * oQty - oPrincipal - Number(o.pendingInterest ?? 0);
+                                      }
+                                      return (
+                                        <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
+                                          <span style={{ color: '#374151' }}>合计缺口需求</span>
+                                          {allKnown
+                                            ? <span className="font-mono" style={{ color: totalGapLive >= 0 ? '#DC2626' : '#16A34A' }}>{totalGapLive >= 0 ? '+' : ''}{totalGapLive.toFixed(2)} u</span>
+                                            : <span className="font-mono" style={{ color: '#9CA3AF' }}>计算中...</span>}
+                                        </div>
+                                      );
+                                    })()}
+                                  </>
+                                ) : <div className="text-gray-400">加载中...</div>}
+                              </div>
+                              {/* ② 共享担保物汇总 */}
+                              <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
+                                <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>② 共享担保物汇总</div>
+                                {sharedPoolInfo ? (
+                                  <>
+                                    <div className="space-y-1.5">
+                                      {((sharedPoolInfo as any).orders ?? []).map((o: any) => (
+                                        <div key={o.orderId} className="flex justify-between items-center">
+                                          <span className="font-mono" style={{ color: '#374151' }}>{o.orderNo}</span>
+                                          {(o.collateralAssets ?? []).length === 0
+                                            ? <span style={{ color: '#9CA3AF' }}>无担保物</span>
+                                            : <span className="font-mono font-semibold" style={{ color: '#DC2626' }}>{o.collateralValue > 0 ? `+${o.collateralValue.toFixed(2)} u` : '+--- u'}</span>}
+                                        </div>
+                                      ))}
+                                    </div>
+                                    <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
+                                      <span style={{ color: '#374151' }}>合计担保物价値</span>
+                                      <span className="font-mono" style={{ color: '#DC2626' }}>+{((sharedPoolInfo as any).totalCollateralValue ?? 0).toFixed(2)} u</span>
+                                    </div>
+                                  </>
+                                ) : <div className="text-gray-400">加载中...</div>}
+                              </div>
+                              {/* ③ 总计风险敎口 */}
+                              {sharedPoolInfo && (() => {
+                                const orders = (sharedPoolInfo as any).orders ?? [];
+                                let totalRequired = 0; let allHaveGap = true;
+                                for (const o of orders) {
+                                  const oQty = Number(o.quantity ?? 0); const oPrincipal = Number(o.principal ?? 0);
+                                  const oCoin = (o.coin || '').toUpperCase();
+                                  const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null ? Number(o.currentPrice) : null);
+                                  if (oLiveP === null) { allHaveGap = false; continue; }
+                                  totalRequired += oLiveP * oQty - oPrincipal - Number(o.pendingInterest ?? 0);
+                                }
+                                const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
+                                const totalBuyValue = (sharedPoolInfo as any).totalBuyValue ?? 0;
+                                const diff = totalColl + totalRequired;
+                                const diffColor = diff < 0 ? '#16A34A' : '#DC2626';
+                                const marginRatio = totalBuyValue > 0 ? (diff / totalBuyValue) * 100 : null;
+                                const ratioColor = marginRatio === null ? '#9CA3AF' : (marginRatio < 0 ? '#16A34A' : '#DC2626');
+                                return (
+                                  <>
+                                    <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
+                                      <div className="font-semibold mb-1" style={{ color: '#374151' }}>③ 总计风险敎口</div>
+                                      <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>担保物合计 + 净缺口合计</div>
+                                      <div className="font-mono text-xs" style={{ color: '#6B7280' }}>
+                                        {allHaveGap
+                                          ? <>{totalColl.toFixed(2)} + ({totalRequired >= 0 ? '+' : ''}{totalRequired.toFixed(2)}) = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} u</span></>
+                                          : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
+                                      </div>
+                                    </div>
+                                    <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
+                                      <div className="font-semibold mb-1" style={{ color: '#374151' }}>④ 保证金比例</div>
+                                      <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>风险敎口 ÷ 总订单买入价値</div>
+                                      <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
+                                        {allHaveGap
+                                          ? <>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} ÷ {totalBuyValue.toFixed(2)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '--'}</span></>
+                                          : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
+                                      </div>
+                                      <div className="text-xs" style={{ color: '#9CA3AF' }}>总买入价値 {totalBuyValue.toFixed(2)} u（各订单买入价 × 数量之和，不随币价变动）</div>
+                                    </div>
+                                  </>
+                                );
+                              })()}
+                            </>
+                          ) : (
+                            <>
+                              {/* 普通担保：原有三段式 */}
+                              <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>① 浮动盈亏</div>
+                                <div>= 当前市値 - 计息基数（正数为浮盈，负数为亏损）</div>
+                                <div className="mt-1 font-mono">
+                                  {floatPnl !== null
+                                    ? <><span style={{ color: '#3B82F6' }}>= {(liveP! * qty).toFixed(2)} - {buyValue.toFixed(2)} = </span><strong style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>{floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)} u{floatPnl >= 0 ? '（浮盈）' : '（亏损）'}</strong></>
+                                    : <span className="text-gray-400">当前市値暂无实时价格，暂无法计算浮动盈亏</span>
+                                  }
+                                </div>
+                              </div>
+                              <div className="p-2.5 rounded-lg" style={{ background: '#F0F4FF' }}>
+                                <div className="font-semibold mb-1" style={{ color: '#1A2340' }}>② 担保价値</div>
+                                {collateralAssets.length === 0
+                                  ? <div className="font-mono mt-1" style={{ color: '#9CA3AF' }}>0.00 u（无担保物）</div>
+                                  : <>
+                                      {collateralAssets.map((a, idx) => {
+                                        const itemVal = collateralItemValues[idx];
+                                        return (
+                                          <div key={idx} className="mt-1 flex justify-between">
+                                            <span className="font-mono" style={{ color: '#6B7280' }}>{a.qty} {a.coin}</span>
+                                            {itemVal !== null
+                                              ? <span className="font-mono font-semibold" style={{ color: '#3B82F6' }}>{itemVal.toFixed(2)} u</span>
+                                              : <span className="font-mono" style={{ color: '#D1D5DB' }}>暂无实时价</span>
+                                            }
+                                          </div>
+                                        );
+                                      })}
+                                      {collateralAssets.length > 1 && collateralValue !== null && (
+                                        <div className="font-mono mt-1 pt-1 font-semibold" style={{ borderTop: '1px solid #D1D5DB', color: '#1A2340' }}>
+                                          合计 {collateralValue.toFixed(2)} u
+                                        </div>
+                                      )}
+                                    </>
+                                }
+                              </div>
+                              {collateralGap !== null && (
+                                <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#FFF1F1' : '#F0FDF4' }}>
+                                  <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>③ 风险敎口</div>
+                                  <div>担保物 + 浮动盈亏 − 待结利息(U) + 已结利息(U)（正数充足，负数缺口）</div>
+                                  {interestUnit === '元' && (
+                                    <div className="text-[10px] mt-0.5" style={{ color: '#9CA3AF' }}>利息已按汇率 {effectiveCnyRate.toFixed(2)} 换算为 U</div>
                                   )}
-                                </>
-                            }
-                          </div>
-                          <div className="p-2.5 rounded-lg" style={{ background: isSufficient ? '#FFF1F1' : '#F0FDF4' }}>
-                            <div className="font-semibold mb-1" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>③ 风险敞口</div>
-                            <div>担保物 + 浮动盈亏 − 待结利息(U) + 已结利息(U)（正数充足，负数缺口）</div>
-                            {interestUnit === '元' && (
-                              <div className="text-[10px] mt-0.5" style={{ color: '#9CA3AF' }}>利息已按汇率 {effectiveCnyRate.toFixed(2)} 换算为 U</div>
-                            )}
-                            <div className="mt-1 font-mono">
-              {(() => {
-                                const gap = collateralGap!;
-                                return floatPnl !== null
-                                  ? <span style={{ color: '#3B82F6' }}>= {(collateralValue ?? 0).toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accruedInU.toFixed(2)} + {paidInU.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} U</strong></span>
-                                  : <span style={{ color: '#3B82F6' }}>= {(collateralValue ?? 0).toFixed(2)} + ---（暂无实时价） − {accruedInU.toFixed(2)} + {paidInU.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} U</strong></span>;
-                              })()
-                              }
-                            </div>
-                            <div className="mt-1.5" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
-                              {isSufficient
-                                ? `担保物充足，还有 ${collateralGap!.toFixed(2)} U 的余量空间`
-                                : `担保物不足，还需补充 ${Math.abs(collateralGap!).toFixed(2)} U 才能覆盖风险`
-                              }
-                            </div>
-                          </div>
+                                  <div className="mt-1 font-mono">
+                                    {(() => {
+                                      const gap = collateralGap!;
+                                      return floatPnl !== null
+                                        ? <span style={{ color: '#3B82F6' }}>= {(collateralValue ?? 0).toFixed(2)} + ({floatPnl >= 0 ? '+' : ''}{floatPnl.toFixed(2)}) − {accruedInU.toFixed(2)} + {paidInU.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} U</strong></span>
+                                        : <span style={{ color: '#3B82F6' }}>= {(collateralValue ?? 0).toFixed(2)} + ---（暂无实时价） − {accruedInU.toFixed(2)} + {paidInU.toFixed(2)} = <strong style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} U</strong></span>;
+                                    })()}
+                                  </div>
+                                  <div className="mt-1.5" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
+                                    {isSufficient
+                                      ? `担保物充足，还有 ${collateralGap!.toFixed(2)} U 的余量空间`
+                                      : `担保物不足，还需补充 ${Math.abs(collateralGap!).toFixed(2)} U 才能覆盖风险`
+                                    }
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
                   )}
-                  <div className="flex justify-between mb-1 items-center">
-                    <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
-                      担保缺口
-                      <button
-                        type="button"
-                        onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
-                        className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
-                        style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
-                      >?</button>
-                    </span>
-                    <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      <span style={{ color: SL_TEXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{isSufficient ? '充足' : '不足'}</span>
-                      <span style={{ color: isSufficient ? LN_EARN : '#16A34A' }}>{isSufficient ? '+' : ''}{fmt(collateralGap, 2)} U</span>
-                    </span>
-                  </div>
+                  {/* 担保缺口行：共享模式显示共享池缺口，普通模式显示单订单缺口 */}
+                  {(isSharedMode || collateralGap !== null) && (
+                    <div className="flex justify-between mb-1 items-center">
+                      <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
+                        担保缺口
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
+                          className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
+                          style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+                        >?</button>
+                      </span>
+                      {isSharedMode ? (() => {
+                        // 共享模式：用 livePrices 重算共享池缺口
+                        if (!sharedPoolInfo) return <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>计算中...</span>;
+                        const orders = (sharedPoolInfo as any).orders ?? [];
+                        let totalRequired = 0; let allKnown = true;
+                        for (const o of orders) {
+                          const oQty = Number(o.quantity ?? 0); const oPrincipal = Number(o.principal ?? 0);
+                          const oCoin = (o.coin || '').toUpperCase();
+                          const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null ? Number(o.currentPrice) : null);
+                          if (oLiveP === null) { allKnown = false; continue; }
+                          totalRequired += oLiveP * oQty - oPrincipal - Number(o.pendingInterest ?? 0);
+                        }
+                        const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
+                        const diff = totalColl + totalRequired;
+                        const diffSufficient = diff >= 0;
+                        return allKnown
+                          ? <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                              <span style={{ color: SL_TEXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{diffSufficient ? '充足' : '不足'}</span>
+                              <span style={{ color: diffSufficient ? LN_EARN : '#16A34A' }}>{diffSufficient ? '+' : ''}{diff.toFixed(2)} U</span>
+                            </span>
+                          : <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>计算中...</span>;
+                      })() : (
+                        <span style={{ fontVariantNumeric: 'tabular-nums' }}>
+                          <span style={{ color: SL_TEXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{isSufficient ? '充足' : '不足'}</span>
+                          <span style={{ color: isSufficient ? LN_EARN : '#16A34A' }}>{isSufficient ? '+' : ''}{fmt(collateralGap, 2)} U</span>
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
             </div>
