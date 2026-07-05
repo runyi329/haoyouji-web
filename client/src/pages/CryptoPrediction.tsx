@@ -3258,7 +3258,7 @@ export default function CryptoPrediction() {
         {/* 融资付息 */}
         {tab === "finance" && (
           <div className="pb-4">
-            {financeOrdersFetching && financeOrders.length === 0 ? (
+            {(financeOrdersFetching || financeOrdersData === undefined) && financeOrders.length === 0 ? (
               /* 加载中骨架屏，避免误以为暂无订单 */
               <div className="space-y-3 mt-2">
                 {[1, 2, 3].map(i => (
