@@ -11826,11 +11826,17 @@ ${klinesSummary}
       }))
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
-        const rows = await db.execute(
-          sql`SELECT tag_name FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId} AND (margin_pause_date IS NULL OR margin_pause_date = '')`
-        );
-        const list = (rows as any)[0] as any[];
-        return list.map((r: any) => ({ tagName: r.tag_name as string }));
+        if (!db) return [];
+        try {
+          const rows = await db.execute(
+            sql`SELECT tag_name FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId} AND margin_pause_date IS NULL`
+          );
+          const list = (rows as any)[0] as any[];
+          return list.map((r: any) => ({ tagName: r.tag_name as string }));
+        } catch (e: any) {
+          console.error('[getActiveMarginTags] error:', e.message);
+          return [];
+        }
       }),
 
     // 专用：只更新 pause_date，不影响其他字段

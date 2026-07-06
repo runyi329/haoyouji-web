@@ -1674,7 +1674,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               </div>}
 
               {/* 担保物来源切换 - 受邀订单隐藏 */}
-              {!editingOrder?.participantInfo && (
+              {!editingOrder?.participantInfo && formData.assetType === 'stock' && (
               <div className="flex gap-2 mb-2">
                 <button
                   type="button"
@@ -1698,7 +1698,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               )}
 
               {/* 调用其他账本担保物：下拉框选择标签 */}
-              {!editingOrder?.participantInfo && collateralSourceMode === 'external' && (
+              {!editingOrder?.participantInfo && formData.assetType === 'stock' && collateralSourceMode === 'external' && (
               <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 space-y-2">
                 <div className="text-sm font-medium text-blue-700">选择保证金标签（37号账本）</div>
                 <select
