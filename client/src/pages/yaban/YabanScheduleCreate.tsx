@@ -313,7 +313,7 @@ export default function YabanScheduleCreate() {
 
   // 医生列表（role_key = doctor）
   const DOCTORS = useMemo(() =>
-    (membersData as any[]).filter((m: any) => m.roleKey === "doctor").map((m: any) => ({ userId: m.userId, name: m.name, color: m.color, avatar: m.avatar, phone: m.phone, roleName: m.roleName })).filter((m: any) => m.name),
+    (membersData as any[]).filter((m: any) => (m.roleKeys || []).includes("doctor") || m.roleKey === "doctor").map((m: any) => ({ userId: m.userId, name: m.name, color: m.color, avatar: m.avatar, phone: m.phone, roleName: m.roleName })).filter((m: any) => m.name),
     [membersData]
   );
 

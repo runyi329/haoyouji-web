@@ -104,6 +104,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   // 调用其他账本担保物（collateralSource）
   const [collateralSourceMode, setCollateralSourceMode] = useState<'manual' | 'external'>('manual');
   const [collateralSource, setCollateralSource] = useState<{ ledgerId: number; tagName: string } | null>(null);
+  const [interestTagName, setInterestTagName] = useState<string>(''); // 利息标签（与保证金标签联动）
 
   // 字段展示配置（控制订单卡片各字段的显示/隐藏）
   const DEFAULT_DISPLAY_CONFIG: Record<string, boolean | string> = {
@@ -628,6 +629,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     setCollateralShareMode('none');
     setCollateralSourceMode('manual');
     setCollateralSource(null);
+    setInterestTagName('');
     setDisplayConfig(DEFAULT_DISPLAY_CONFIG);
     setEditingOrder(null);
     setShowDatePicker(false);
@@ -709,17 +711,21 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         if (parsed && parsed.ledgerId && parsed.tagName) {
           setCollateralSourceMode('external');
           setCollateralSource({ ledgerId: parsed.ledgerId, tagName: parsed.tagName });
+          setInterestTagName(parsed.interestTagName || parsed.tagName || '');
         } else {
           setCollateralSourceMode('manual');
           setCollateralSource(null);
+          setInterestTagName('');
         }
       } else {
         setCollateralSourceMode('manual');
         setCollateralSource(null);
+        setInterestTagName('');
       }
     } catch {
       setCollateralSourceMode('manual');
       setCollateralSource(null);
+      setInterestTagName('');
     }
     // 加载字段展示配置
     try {
@@ -838,7 +844,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       ownerLabel: formData.ownerLabel || undefined,
       tags: formData.tags.length > 0 ? formData.tags : undefined,
       collateralShareMode: collateralShareMode !== 'none' ? collateralShareMode : undefined,
-      collateralSource: collateralSourceMode === 'external' && collateralSource ? collateralSource : null,
+      collateralSource: collateralSourceMode === 'external' && collateralSource
+        ? { ...collateralSource, interestTagName: interestTagName || collateralSource.tagName }
+        : null,
       principalLentOut: formData.principalLentOut,
       brokerName: formData.brokerName || undefined,
       brokerAccount: formData.brokerAccount || undefined,
@@ -1699,23 +1707,51 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
 
               {/* 调用其他账本担保物：下拉框选择标签 */}
               {!editingOrder?.participantInfo && formData.assetType === 'stock' && collateralSourceMode === 'external' && (
-              <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 space-y-2">
-                <div className="text-sm font-medium text-blue-700">选择保证金标签（37号账本）</div>
-                <select
-                  value={collateralSource?.tagName || ''}
-                  onChange={e => {
-                    const tag = e.target.value;
-                    setCollateralSource(tag ? { ledgerId: 37, tagName: tag } : null);
-                  }}
-                  className="w-full px-3 py-2.5 rounded-xl border border-blue-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-300 appearance-none bg-white"
-                >
-                  <option value="">请选择标签</option>
-                  {(activeMarginTags as any[])?.map((t: any) => (
-                    <option key={t.tagName} value={t.tagName}>{t.tagName}</option>
-                  ))}
-                </select>
-                {collateralSource && (
-                  <div className="text-xs text-blue-600">已绑定：{collateralSource.tagName}</div>
+              <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 space-y-3">
+                {/* 保证金标签 */}
+                <div className="space-y-1.5">
+                  <div className="text-xs font-medium text-blue-600">保证金标签（37号账本）</div>
+                  <select
+                    value={collateralSource?.tagName || ''}
+                    onChange={e => {
+                      const tag = e.target.value;
+                      setCollateralSource(tag ? { ledgerId: 37, tagName: tag } : null);
+                      // 联动：保证金选了，利息同步
+                      if (tag) setInterestTagName(tag);
+                    }}
+                    className="w-full px-3 py-2.5 rounded-xl border border-blue-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-300 appearance-none bg-white"
+                  >
+                    <option value="">请选择标签</option>
+                    {(activeMarginTags as any[])?.map((t: any) => (
+                      <option key={t.tagName} value={t.tagName}>{t.tagName}</option>
+                    ))}
+                  </select>
+                </div>
+                {/* 利息标签 */}
+                <div className="space-y-1.5">
+                  <div className="text-xs font-medium text-blue-600">利息标签（37号账本）</div>
+                  <select
+                    value={interestTagName}
+                    onChange={e => {
+                      const tag = e.target.value;
+                      setInterestTagName(tag);
+                      // 联动：利息选了，保证金同步
+                      if (tag) setCollateralSource({ ledgerId: 37, tagName: tag });
+                    }}
+                    className="w-full px-3 py-2.5 rounded-xl border border-blue-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-300 appearance-none bg-white"
+                  >
+                    <option value="">请选择标签</option>
+                    {(activeMarginTags as any[])?.map((t: any) => (
+                      <option key={t.tagName} value={t.tagName}>{t.tagName}</option>
+                    ))}
+                  </select>
+                </div>
+                {(collateralSource || interestTagName) && (
+                  <div className="text-xs text-blue-500 pt-0.5">
+                    {collateralSource && <span>保证金：{collateralSource.tagName}</span>}
+                    {collateralSource && interestTagName && <span className="mx-1.5 text-blue-300">·</span>}
+                    {interestTagName && <span>利息：{interestTagName}</span>}
+                  </div>
                 )}
               </div>
               )}

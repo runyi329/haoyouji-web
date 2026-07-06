@@ -20,7 +20,7 @@ const BLUE_GRAD = "linear-gradient(135deg, #2196C8 0%, #4DB8E8 100%)";
 const PRESET_UNITS = ["次", "颗", "支", "套", "天", "课", "题", "个", "边", "局", "序", "疗程", "张", "片", "节", "期", "口", "牙", "侧", "段"];
 
 // 每行5个，显示4行 = 20个，最后一格留给"更多"按钮
-const VISIBLE_UNIT_COUNT = 19;
+const VISIBLE_UNIT_COUNT = 50;
 
 interface SubCatGroup {
   id: number;
@@ -271,13 +271,24 @@ function UnitPicker({ value, onChange, myUnits, onSaveUnits }: UnitPickerProps) 
           {/* 添加新单位输入框 */}
           <div className="px-5 py-4 border-b border-gray-100">
             <div className="flex gap-3">
-              <input
-                value={customInput}
-                onChange={(e) => setCustomInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleAddToDraft()}
-                placeholder="输入新单位，如：牙弓、疗程"
-                className="flex-1 bg-gray-100 rounded-md px-4 py-3 text-base outline-none"
-              />
+              <div className="flex-1 relative">
+                <input
+                  value={customInput}
+                  onChange={(e) => setCustomInput(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAddToDraft()}
+                  placeholder="输入新单位，如：牙弓、疗程"
+                  className="w-full bg-gray-100 rounded-md px-4 py-3 text-base outline-none"
+                  style={{
+                    paddingRight: (customInput.trim() && draftUnits.includes(customInput.trim())) || draftUnits.length >= MAX_UNITS ? '80px' : '16px'
+                  }}
+                />
+                {customInput.trim() && draftUnits.includes(customInput.trim()) && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-red-500 font-medium whitespace-nowrap pointer-events-none">已存在</span>
+                )}
+                {!(customInput.trim() && draftUnits.includes(customInput.trim())) && draftUnits.length >= MAX_UNITS && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-red-500 font-medium whitespace-nowrap pointer-events-none">已达上限</span>
+                )}
+              </div>
               <button
                 type="button"
                 onClick={handleAddToDraft}
@@ -425,6 +436,17 @@ export default function YabanChargeAdd() {
   const handleSaveUnits = (units: string[]) => {
     setMyUnits(units);
     localStorage.setItem(UNIT_STORE_KEY, JSON.stringify(units));
+  };
+
+  // 将使用过的单位自动加入单位库（如果不存在则追加）
+  const bumpUnit = (unit: string) => {
+    if (!unit || unit === "自定义") return;
+    setMyUnits((prev) => {
+      if (prev.includes(unit)) return prev;
+      const next = [...prev, unit];
+      localStorage.setItem(UNIT_STORE_KEY, JSON.stringify(next));
+      return next;
+    });
   };
 
   // ===== Tab1：批量添加一级分类 =====
