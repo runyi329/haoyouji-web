@@ -298,6 +298,188 @@ export const yabanCommRouter = router({
       };
     }),
 
+  /** 今日视角：今日预约列表 + 今日随访列表 */
+  todayOverview: protectedProcedure
+    .input(z.object({ date: z.string().optional() })) // YYYY-MM-DD，不传则用服务器今天
+    .query(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      const TENANT_ID = await resolveTenantId(ctx);
+      const today = input.date || new Date().toISOString().slice(0, 10);
+      const tomorrow = (() => {
+        const d = new Date(today); d.setDate(d.getDate() + 1);
+        return d.toISOString().slice(0, 10);
+      })();
+
+      // 今日预约（yaban_appointment 用 patient_id/patient_name/doctor 字段）
+      const [apptRows] = await (conn as any).execute(
+        `SELECT a.id, a.appoint_date, a.appoint_time, a.status,
+                COALESCE(c.name, a.patient_name) AS customer_name,
+                COALESCE(a.patient_id, 0) AS customer_id,
+                a.doctor AS doctor_name
+         FROM yaban_appointment a
+         LEFT JOIN yaban_customer c ON c.id = a.patient_id AND c.tenant_id = a.tenant_id
+         WHERE a.tenant_id = ? AND a.appoint_date >= ? AND a.appoint_date < ?
+         ORDER BY a.appoint_time ASC, a.id ASC`,
+        [TENANT_ID, today, tomorrow]
+      );
+
+      // 今日随访（followup_date = today）
+      const [followRows] = await (conn as any).execute(
+        `SELECT r.id, r.followup_date, r.followup_status, r.customer_id,
+                c.name AS customer_name
+         FROM yaban_comm_record r
+         LEFT JOIN yaban_customer c ON c.id = r.customer_id AND c.tenant_id = r.tenant_id
+         WHERE r.tenant_id = ? AND r.biz_type = 'followup'
+           AND r.followup_date >= ? AND r.followup_date < ?
+         ORDER BY r.followup_date ASC, r.id ASC`,
+        [TENANT_ID, today, tomorrow]
+      );
+
+      // 今日收费统计
+      const [chargeRows] = await (conn as any).execute(
+        `SELECT COUNT(*) AS cnt, COALESCE(SUM(actual_amount), 0) AS total
+         FROM yaban_charge
+         WHERE tenant_id = ? AND charge_date >= ? AND charge_date < ?`,
+        [TENANT_ID, today, tomorrow]
+      );
+      const chargeCount = Number((chargeRows as any[])[0]?.cnt || 0);
+      const chargeTotal = Number((chargeRows as any[])[0]?.total || 0);
+
+      const appts = (apptRows as any[]).map(r => ({
+        id: r.id,
+        customerId: Number(r.customer_id) || 0,
+        customerName: r.customer_name || '未知顾客',
+        appointTime: r.appoint_time || '',
+        doctorName: r.doctor_name || '',
+        status: r.status || '',
+      }));
+
+      const apptTotal = appts.length;
+      const apptPending = appts.filter(a => a.status === 'pending').length;
+      const apptArrived = appts.filter(a => a.status === 'arrived' || a.status === 'completed').length;
+      const apptConfirmed = appts.filter(a => a.status === 'confirmed').length;
+
+      const follows = (followRows as any[]).map(r => ({
+        id: r.id,
+        customerId: r.customer_id,
+        customerName: r.customer_name || '未知顾客',
+        followupStatus: r.followup_status || 'pending',
+      }));
+      const followTotal = follows.length;
+      const followPending = follows.filter(f => f.followupStatus === 'pending').length;
+      const followDone = follows.filter(f => f.followupStatus === 'done' || f.followupStatus === 'completed').length;
+
+      return {
+        date: today,
+        appointments: appts,
+        followups: follows,
+        stats: {
+          apptTotal, apptPending, apptArrived, apptConfirmed,
+          followTotal, followPending, followDone,
+          chargeCount, chargeTotal,
+        },
+      };
+    }),
+
+  /** 周视角：本周7天每天的预约数+随访数 */
+  weekOverview: protectedProcedure
+    .input(z.object({ weekStart: z.string() })) // YYYY-MM-DD（周一）
+    .query(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      const TENANT_ID = await resolveTenantId(ctx);
+      const start = input.weekStart;
+      const end = (() => {
+        const d = new Date(start); d.setDate(d.getDate() + 7);
+        return d.toISOString().slice(0, 10);
+      })();
+
+      const [apptRows] = await (conn as any).execute(
+        `SELECT DATE(appoint_date) AS d, COUNT(*) AS c FROM yaban_appointment
+         WHERE tenant_id = ? AND appoint_date >= ? AND appoint_date < ?
+         GROUP BY DATE(appoint_date)`,
+        [TENANT_ID, start, end]
+      );
+      // 周视角 appt 字段已正确（不需要 customer_id）
+      const [followRows] = await (conn as any).execute(
+        `SELECT DATE(followup_date) AS d, COUNT(*) AS c FROM yaban_comm_record
+         WHERE tenant_id = ? AND biz_type = 'followup' AND followup_date >= ? AND followup_date < ?
+         GROUP BY DATE(followup_date)`,
+        [TENANT_ID, start, end]
+      );
+
+      const apptMap: Record<string, number> = {};
+      for (const r of apptRows as any[]) apptMap[String(r.d).slice(0, 10)] = Number(r.c);
+      const followMap: Record<string, number> = {};
+      for (const r of followRows as any[]) followMap[String(r.d).slice(0, 10)] = Number(r.c);
+
+      // 生成7天数组
+      const days = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(start); d.setDate(d.getDate() + i);
+        const ds = d.toISOString().slice(0, 10);
+        days.push({ date: ds, appt: apptMap[ds] || 0, follow: followMap[ds] || 0 });
+      }
+      return { days };
+    }),
+
+  /** 今日收费列表：查询指定日期所有收费记录，含顾客姓名 */
+  todayCharges: protectedProcedure
+    .input(z.object({ date: z.string().optional() }))
+    .query(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      const TENANT_ID = await resolveTenantId(ctx);
+      const today = input.date || (() => {
+        const d = new Date();
+        const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+        return `${y}-${m}-${day}`;
+      })();
+      const tomorrow = (() => {
+        const d = new Date(today + 'T00:00:00');
+        d.setDate(d.getDate() + 1);
+        const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+        return `${y}-${m}-${day}`;
+      })();
+
+      const [rows] = await (conn as any).execute(
+        `SELECT ch.id, ch.customer_id, ch.charge_no, ch.status,
+                ch.total_amount, ch.receivable, ch.paid, ch.actual_amount,
+                ch.doctor, ch.cashier_name,
+                DATE_FORMAT(ch.charge_date, '%Y-%m-%d') AS charge_date,
+                COALESCE(c.name, '') AS customer_name
+           FROM yaban_charge ch
+           LEFT JOIN yaban_customer c ON c.id = ch.customer_id AND c.tenant_id = ch.tenant_id
+          WHERE ch.tenant_id = ? AND ch.charge_date >= ? AND ch.charge_date < ?
+          ORDER BY ch.id DESC`,
+        [TENANT_ID, today, tomorrow]
+      );
+
+      const CHARGE_STATUS_MAP: Record<string, string> = {
+        draft: '草稿', paid: '已收费', partial: '部分收款', refunded: '已退款', cancelled: '已取消',
+      };
+
+      return {
+        date: today,
+        list: (rows as any[]).map(r => ({
+          id: Number(r.id),
+          customerId: Number(r.customer_id) || 0,
+          customerName: r.customer_name || '未知顾客',
+          chargeNo: r.charge_no || '',
+          status: r.status || '',
+          statusLabel: CHARGE_STATUS_MAP[r.status] || r.status || '',
+          totalAmount: Number(r.total_amount || 0),
+          receivable: Number(r.receivable || 0),
+          paid: Number(r.paid || 0),
+          actualAmount: Number(r.actual_amount || 0),
+          doctor: r.doctor || '',
+          cashierName: r.cashier_name || '',
+          chargeDate: r.charge_date || today,
+        })),
+      };
+    }),
+
   /** 获取某顾客的沟通记录列表（按时间倒序），同时返回该患者的预约记录 */
   list: protectedProcedure
     .input(z.object({

@@ -809,6 +809,7 @@ function Router() {
         <Route path="/yaban/patients" component={YabanPatientList} />
         <Route path="/yaban/patient/:id/profile" component={lazy(() => import("./pages/yaban/YabanPatientProfile"))} />
         <Route path="/yaban/patient/:id/media" component={lazy(() => import("./pages/yaban/YabanPatientMedia"))} />
+        <Route path="/yaban/charge" component={lazy(() => import("./pages/yaban/YabanTodayCharges"))} />
         <Route path="/yaban/patient/:id/charge" component={lazy(() => import("./pages/yaban/YabanPatientCharge"))} />
         <Route path="/yaban/patient/:id/edit" component={YabanPatientCreate} />
         <Route path="/yaban/patient/:id/comm" component={lazy(() => import("./pages/yaban/YabanPatientComm"))} />
