@@ -1108,14 +1108,16 @@ export function FunderOrderCardV2Silver({
             // 股票类：显示担保资产
             <>
               <div className="text-[10px] mb-0.5 flex items-center justify-end gap-1" style={{ color: SL_TEXT_SEC }}>
+                {isFC2977 && fc2977RemainingMarginU !== null && (
+                  <span style={{ backgroundColor: 'rgba(60,35,0,0.75)', color: '#F5C842', fontSize: '0.55rem', padding: '1.5px 5px', borderRadius: 8, fontWeight: 700, lineHeight: 1.2 }}>{fc2977RemainingMarginU >= 0 ? '余' : '缺'}</span>
+                )}
                 担保资产
               </div>
               <div className="text-sm" style={{ color: SL_TEXT_PRI }}>
                 {isFC2977 ? (
                   fc2977RemainingMarginU !== null ? (
-                    <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                      <span style={{ backgroundColor: 'rgba(60,35,0,0.75)', color: '#F5C842', fontSize: '0.55rem', padding: '1.5px 5px', borderRadius: 8, fontWeight: 700, lineHeight: 1.2 }}>{fc2977RemainingMarginU >= 0 ? '余' : '缺'}</span>
-                       <span style={{ color: SL_TEXT_PRI }}>{Math.abs(fc2977RemainingMarginU).toLocaleString('zh-CN', { maximumFractionDigits: 0 })} U</span>
+                    <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                      {Math.abs(fc2977RemainingMarginU).toLocaleString('zh-CN', { maximumFractionDigits: 0 })} U
                     </span>
                   ) : <span style={{ color: SL_TEXT_DIM }}>加载中...</span>
                 ) : collateralAssets.length > 0
