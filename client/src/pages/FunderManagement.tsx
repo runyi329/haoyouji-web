@@ -211,10 +211,13 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     const price = parseFloat(formData.buyPrice);
     const qty = parseFloat(formData.buyQuantity);
     if (!isNaN(price) && !isNaN(qty) && price > 0 && qty > 0) {
-      return (price * qty).toFixed(2);
+      const rawAmt = price * qty;
+      // 购买币种为 CNY 时，价格单位是 CNY/枚，需要按汇率转换为 USDT 基准
+      const usdtBase = formData.coin === 'CNY' ? rawAmt / cnyRate : rawAmt;
+      return usdtBase.toFixed(2);
     }
     return '';
-  }, [formData.buyPrice, formData.buyQuantity]);
+  }, [formData.buyPrice, formData.buyQuantity, formData.coin, cnyRate]);
   // 当 computedAmount 变化且用户未在编辑时，同步到输入框
   // computedAmount = 买入价×币数 = USDT 价值；融资金额输入框按出资币种(amountCurrency)折算显示
   useEffect(() => {
