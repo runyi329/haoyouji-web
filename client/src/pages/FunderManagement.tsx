@@ -101,6 +101,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const [collateralShareMode, setCollateralShareMode] = useState<'none' | 'self' | 'cross'>('none');
   // 共享担保确认弹窗
   const [shareConfirmModal, setShareConfirmModal] = useState<{ mode: 'self' | 'cross'; sharedOrders: any[] } | null>(null);
+  // 调用其他账本担保物（collateralSource）
+  const [collateralSourceMode, setCollateralSourceMode] = useState<'manual' | 'external'>('manual');
+  const [collateralSource, setCollateralSource] = useState<{ ledgerId: number; tagName: string } | null>(null);
 
   // 字段展示配置（控制订单卡片各字段的显示/隐藏）
   const DEFAULT_DISPLAY_CONFIG: Record<string, boolean | string> = {
@@ -186,6 +189,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     { enabled: ledgerId > 0 && !!sharedCollateralUserId && collateralShareMode === 'self', staleTime: 5000 }
   );
   const { data: cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: "USD", tocoin: "CNY", money: 1 }, { staleTime: 3000, refetchInterval: 3000 });
+  // 获取37号账本活跃的右侧保证金标签列表（供下拉框使用）
+  const { data: activeMarginTags } = trpc.ledger.getActiveMarginTags.useQuery(
+    { ledgerId: 37 },
+    { enabled: collateralSourceMode === 'external', staleTime: 30000 }
+  );
   const cnyRate = parseFloat((cnyRateData as any)?.money ?? "7.2") || 7.2;
   // 通用折算：任一币种数额 -> USDT 基准（CNY 用 cnyRate，USDT=1，其余按实时价 USDT/枚）
   const toUsdtBase = (val: number, cur: string): number | null => {
@@ -618,6 +626,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     setCollateralAssets([]);
     setCollateralEditMode(true); // 新建订单：担保货币恒为可编辑
     setCollateralShareMode('none');
+    setCollateralSourceMode('manual');
+    setCollateralSource(null);
     setDisplayConfig(DEFAULT_DISPLAY_CONFIG);
     setEditingOrder(null);
     setShowDatePicker(false);
@@ -691,6 +701,26 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     // 加载共享担保模式
     const csm = (order as any).collateral_share_mode;
     setCollateralShareMode(csm === 'self' || csm === 'cross' ? csm : 'none');
+    // 加载调用其他账本担保物
+    try {
+      const cs = (order as any).collateral_source;
+      if (cs) {
+        const parsed = typeof cs === 'string' ? JSON.parse(cs) : cs;
+        if (parsed && parsed.ledgerId && parsed.tagName) {
+          setCollateralSourceMode('external');
+          setCollateralSource({ ledgerId: parsed.ledgerId, tagName: parsed.tagName });
+        } else {
+          setCollateralSourceMode('manual');
+          setCollateralSource(null);
+        }
+      } else {
+        setCollateralSourceMode('manual');
+        setCollateralSource(null);
+      }
+    } catch {
+      setCollateralSourceMode('manual');
+      setCollateralSource(null);
+    }
     // 加载字段展示配置
     try {
       const dc = order.display_config;
@@ -808,6 +838,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       ownerLabel: formData.ownerLabel || undefined,
       tags: formData.tags.length > 0 ? formData.tags : undefined,
       collateralShareMode: collateralShareMode !== 'none' ? collateralShareMode : undefined,
+      collateralSource: collateralSourceMode === 'external' && collateralSource ? collateralSource : null,
       principalLentOut: formData.principalLentOut,
       brokerName: formData.brokerName || undefined,
       brokerAccount: formData.brokerAccount || undefined,
@@ -1642,8 +1673,55 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 <div className="flex-1 h-px" style={{ background: collateralShareMode === 'self' ? '#FECACA' : '#F3F4F6' }} />
               </div>}
 
-              {/* 担保货币列表 - 受邀订单隐藏 */}
+              {/* 担保物来源切换 - 受邀订单隐藏 */}
               {!editingOrder?.participantInfo && (
+              <div className="flex gap-2 mb-2">
+                <button
+                  type="button"
+                  onClick={() => { setCollateralSourceMode('manual'); setCollateralSource(null); }}
+                  className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
+                    collateralSourceMode === 'manual'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-gray-100 text-gray-600'
+                  }`}
+                >手动输入</button>
+                <button
+                  type="button"
+                  onClick={() => setCollateralSourceMode('external')}
+                  className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
+                    collateralSourceMode === 'external'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-gray-100 text-gray-600'
+                  }`}
+                >调用其他账本担保物</button>
+              </div>
+              )}
+
+              {/* 调用其他账本担保物：下拉框选择标签 */}
+              {!editingOrder?.participantInfo && collateralSourceMode === 'external' && (
+              <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 space-y-2">
+                <div className="text-sm font-medium text-blue-700">选择保证金标签（37号账本）</div>
+                <select
+                  value={collateralSource?.tagName || ''}
+                  onChange={e => {
+                    const tag = e.target.value;
+                    setCollateralSource(tag ? { ledgerId: 37, tagName: tag } : null);
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl border border-blue-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-300 appearance-none bg-white"
+                >
+                  <option value="">请选择标签</option>
+                  {(activeMarginTags as any[])?.map((t: any) => (
+                    <option key={t.tagName} value={t.tagName}>{t.tagName}</option>
+                  ))}
+                </select>
+                {collateralSource && (
+                  <div className="text-xs text-blue-600">已绑定：{collateralSource.tagName}</div>
+                )}
+              </div>
+              )}
+
+              {/* 担保货币列表 - 受邀订单隐藏，手动输入模式时显示 */}
+              {!editingOrder?.participantInfo && collateralSourceMode === 'manual' && (
               <div className="space-y-3">
                 {/* 只读态：编辑已有订单且未进入编辑模式时 */}
                 {editingOrder?.id && !collateralEditMode ? (

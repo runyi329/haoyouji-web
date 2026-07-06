@@ -1,8 +1,9 @@
 // FunderOrderCardV2 —— OKX 深色风格订单卡片（资产感优先，服务费弱化）
 // 仅用于对比展示，不影响原有 FunderOrderCard
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { RightMarginDetail } from "./RightMarginDetail";
 import {
   COIN_COLORS,
   CoinType,
@@ -720,6 +721,63 @@ export function FunderOrderCardV2Silver({
   } catch {}
 
   const isSharedMode = (order as any).collateral_share_mode === 'self';
+  // 动态解析 collateral_source（调用其他账本担保物）
+  const _parsedCollateralSource = useMemo(() => {
+    try {
+      const cs = (order as any).collateral_source;
+      if (!cs) return null;
+      const parsed = typeof cs === 'string' ? JSON.parse(cs) : cs;
+      if (parsed && parsed.ledgerId && parsed.tagName) return parsed as { ledgerId: number; tagName: string };
+    } catch {}
+    return null;
+  }, [(order as any).collateral_source]);
+  const hasExternalCollateral = !!_parsedCollateralSource;
+  // 兼容别名，保留下游代码不变
+  const isFC2977 = hasExternalCollateral;
+  const { data: _fc2977TagConfig } = trpc.ledger.getTagConfig.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: _parsedCollateralSource?.tagName ?? '' },
+    { enabled: hasExternalCollateral, staleTime: 3000 }
+  );
+  const { data: _fc2977TagSummary } = (trpc.ledger as any).getTagSummary.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: _parsedCollateralSource?.tagName ?? '' },
+    { enabled: hasExternalCollateral, staleTime: 3000 }
+  );
+  const { data: _fc2977CryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
+    enabled: hasExternalCollateral, refetchInterval: 3000, staleTime: 0,
+  });
+  const { fc2977RemainingMarginU, fc2977MarginBasePct } = (() => {
+    if (!isFC2977 || !_fc2977TagConfig) return { fc2977RemainingMarginU: null as number | null, fc2977MarginBasePct: null as number | null };
+    const _cnyR = (_fc2977CryptoPricesRaw as any)?.usdtCnyRate ?? 7.0;
+    const _pricesMap = (_fc2977CryptoPricesRaw as any)?.prices ?? {};
+    const _prices: Record<string, number> = {};
+    for (const [k, v] of Object.entries(_pricesMap)) { _prices[k] = Number(v) * _cnyR; }
+    _prices['USDT'] = _cnyR;
+    const _toCNY = (m: string | number, coin: string) => {
+      const n = typeof m === 'number' ? m : parseFloat(m as string);
+      if (isNaN(n) || n === 0) return 0;
+      if (!coin || coin === '人民币' || coin === '元') return n;
+      return n * (_prices[coin] ?? 0);
+    };
+    let rightTotalCNY = 0;
+    try {
+      const parsed = JSON.parse(_fc2977TagConfig.margin_by_coin as string);
+      const items = Array.isArray(parsed)
+        ? parsed.map((e: any) => ({ coin: e.coin || '元', amount: Number(e.amount) }))
+        : Object.entries(parsed).map(([coin, amount]) => ({ coin, amount: Number(amount) }));
+      rightTotalCNY = items.reduce((s, { coin, amount }) => s + _toCNY(String(amount), coin), 0);
+    } catch {}
+    const latestBalance = (_fc2977TagSummary as any)?.latestBalance;
+    const balanceNum = latestBalance?.balance ? parseFloat(String(latestBalance.balance)) : null;
+    const initialNum = parseFloat((_fc2977TagConfig as any).initial_amount || '0') || 0;
+    const multiplierNum = parseFloat((_fc2977TagConfig as any).account_multiplier || '1') || 1;
+    if (balanceNum === null) return { fc2977RemainingMarginU: null, fc2977MarginBasePct: null };
+    const pnl = (balanceNum - initialNum) * multiplierNum;
+    const remainingCNY = pnl + rightTotalCNY;
+    const remainingU = _cnyR > 0 ? remainingCNY / _cnyR : null;
+    const marginBaseNum = parseFloat((_fc2977TagConfig as any).margin_base || '0') || 0;
+    const pct = marginBaseNum > 0 ? (remainingCNY / marginBaseNum * 100) : null;
+    return { fc2977RemainingMarginU: remainingU, fc2977MarginBasePct: pct };
+  })();
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
     { ledgerId: (order as any).ledger_id ?? 0, userId: Number(order.user_id) },
     { enabled: isSharedMode && !!((order as any).ledger_id), staleTime: 0, refetchInterval: 3000 }
@@ -1047,9 +1105,25 @@ export function FunderOrderCardV2Silver({
           ) : isStockCard ? (
             // 股票类：显示担保资产
             <>
-              <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>担保资产</div>
+              <div className="text-[10px] mb-0.5 flex items-center justify-end gap-1" style={{ color: SL_TEXT_SEC }}>
+                担保资产
+                {isFC2977 && (
+                  <button
+                    type="button"
+                    onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
+                    className="w-3 h-3 rounded-full flex items-center justify-center flex-shrink-0 text-[8px] font-bold leading-none"
+                    style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+                  >!</button>
+                )}
+              </div>
               <div className="text-sm" style={{ color: SL_TEXT_PRI }}>
-                {collateralAssets.length > 0
+                {isFC2977 ? (
+                  fc2977RemainingMarginU !== null ? (
+                    <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: SL_TEXT_PRI }}>
+                      <span style={{ color: fc2977RemainingMarginU >= 0 ? '#B71C1C' : '#388E3C' }}>{fc2977RemainingMarginU >= 0 ? '+' : '-'}</span>{Math.abs(fc2977RemainingMarginU).toLocaleString('zh-CN', { maximumFractionDigits: 1 })} U
+                    </span>
+                  ) : <span style={{ color: SL_TEXT_DIM }}>加载中...</span>
+                ) : collateralAssets.length > 0
                   ? collateralAssets.map((c, i) => <div key={i}>{parseFloat(c.qty).toLocaleString()} {c.coin === 'CNY' ? '元' : c.coin}</div>)
                   : '--'}
               </div>
@@ -1174,6 +1248,48 @@ export function FunderOrderCardV2Silver({
                 </div>
               );
             })()}
+            {/* 担保资产行（股票类订单，非共享模式） */}
+            {isStockCard && !isSharedMode && (
+              <div className="flex justify-between items-start" style={{ borderTop: `1px solid ${SL_DIVIDER}`, paddingTop: 4, marginTop: 4 }}>
+                <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
+                  担保资产
+                  <button
+                    type="button"
+                    onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
+                    className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
+                    style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+                  >!</button>
+                </span>
+                {isFC2977 ? (
+                  fc2977RemainingMarginU !== null ? (
+                    <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: SL_TEXT_PRI }}>
+                      <span style={{ color: fc2977RemainingMarginU >= 0 ? '#B71C1C' : '#388E3C' }}>{fc2977RemainingMarginU >= 0 ? '+' : '-'}</span>{Math.abs(fc2977RemainingMarginU).toLocaleString('zh-CN', { maximumFractionDigits: 1 })} U
+                    </span>
+                  ) : (
+                    <span style={{ color: SL_TEXT_DIM, fontSize: '0.75rem' }}>加载中...</span>
+                  )
+                ) : collateralAssets.length > 0 ? (
+                  <div className="text-right" style={{ color: SL_TEXT_PRI }}>
+                    {collateralAssets.map((c, i) => <div key={i}>{c.qty} {c.coin}</div>)}
+                  </div>
+                ) : (
+                  <span style={{ color: SL_TEXT_DIM, fontSize: '0.75rem' }}>暂无 <span style={{ color: '#F59E0B', fontWeight: 700 }}>!</span></span>
+                )}
+              </div>
+            )}
+            {/* 保证金率行（FC2977专属，显示剩余保证金占基数比） */}
+            {isFC2977 && isStockCard && !isSharedMode && (
+              <div className="flex justify-between items-center" style={{ borderTop: `1px solid ${SL_DIVIDER}`, paddingTop: 4, marginTop: 4 }}>
+                <span style={{ color: SL_TEXT_SEC }}>保证金率</span>
+                {fc2977MarginBasePct !== null ? (
+                  <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: SL_TEXT_PRI }}>
+                    <span style={{ color: fc2977MarginBasePct >= 0 ? '#B71C1C' : '#388E3C' }}>{fc2977MarginBasePct >= 0 ? '+' : '-'}</span>{Math.abs(fc2977MarginBasePct).toFixed(1)}%
+                  </span>
+                ) : (
+                  <span style={{ color: SL_TEXT_DIM, fontSize: '0.75rem' }}>--</span>
+                )}
+              </div>
+            )}
             {/* 共享担保标记行（共享担保模式才显示） */}
             {isSharedMode && (
               <>
@@ -1326,7 +1442,17 @@ export function FunderOrderCardV2Silver({
                 {collateralAssets.map((a, idx) => (
                   <div key={idx}>
                     <div className="flex justify-between" style={{ marginTop: 6 }}>
-                      <span style={{ color: SL_TEXT_SEC }}>{collateralAssets.length > 1 ? `担保货币${idx + 1}` : '担保货币'}</span>
+                      <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
+                        {collateralAssets.length > 1 ? `担保货币${idx + 1}` : '担保货币'}
+                        {isFC2977 && (
+                          <button
+                            type="button"
+                            onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
+                            className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
+                            style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+                          >!</button>
+                        )}
+                      </span>
                       <span style={{ color: SL_TEXT_PRI }}>{parseFloat(a.qty).toLocaleString()} {a.coin === 'CNY' ? '元' : a.coin}</span>
                     </div>
                     {collateralItemValues[idx] !== null && (
@@ -1381,6 +1507,18 @@ export function FunderOrderCardV2Silver({
           </div>
         );
       })()}
+      {/* 担保资产专属弹窗 —— 动态联动外部账本担保物 */}
+      {hasExternalCollateral && _parsedCollateralSource && showCollateralInfo && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowCollateralInfo(false)}>
+          <div className="rounded-2xl p-5 mx-4 w-full max-w-xs overflow-y-auto" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-bold" style={{ color: '#1A2340' }}>{_parsedCollateralSource.tagName}</span>
+              <button onClick={() => setShowCollateralInfo(false)} className="text-gray-400 text-lg leading-none">×</button>
+            </div>
+            <RightMarginDetail ledgerId={_parsedCollateralSource.ledgerId} tagName={_parsedCollateralSource.tagName} />
+          </div>
+        </div>
+      )}
       {/* ── 备注展开区 ── */}
       {noteExpanded && (
         <div className="px-4 pb-3 pt-2 text-xs" style={{ borderTop: `1px dashed ${SL_DIVIDER}` }} onClick={e => e.stopPropagation()}>
@@ -2013,20 +2151,7 @@ export function FunderLenderCardSilver({
                   <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{buyPrice > 0 ? `（开仓价 ${fmt(buyPrice, 0)} U） ${fmtQty(qty)} ${coin}` : `${fmtQty(qty)} ${coin}`}</span>
                 </div>
               )}
-              {/* 担保资产 / 共享担保 */}
-              {isSharedMode ? (
-                <div className="flex justify-between mb-1">
-                  <span style={{ color: SL_TEXT_SEC }}>担保资产</span>
-                  <span className="font-semibold" style={{ color: '#DC2626' }}>共享担保</span>
-                </div>
-              ) : collateralAssets.length > 0 && (
-                <div className="flex justify-between mb-1 items-start">
-                  <span style={{ color: SL_TEXT_SEC }}>担保资产</span>
-                  <div className="text-right" style={{ color: SL_TEXT_PRI }}>
-                    {collateralAssets.map((c, i) => <div key={i}>{c.qty} {c.coin}</div>)}
-                  </div>
-                </div>
-              )}
+
               {/* 担保价値（非共享模式才显示） */}
               {!isSharedMode && showField('collateral') && collateralValue !== null && (
                 <div className="flex justify-between mb-1">

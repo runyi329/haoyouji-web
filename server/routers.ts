@@ -11819,6 +11819,20 @@ ${klinesSummary}
         return list.length > 0 ? list[0] : null;
       }),
 
+    // 获取指定账本活跃的右侧保证金标签列表（margin_pause_date IS NULL）
+    getActiveMarginTags: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const rows = await db.execute(
+          sql`SELECT tag_name FROM ledger_tag_config WHERE ledger_id = ${input.ledgerId} AND (margin_pause_date IS NULL OR margin_pause_date = '')`
+        );
+        const list = (rows as any)[0] as any[];
+        return list.map((r: any) => ({ tagName: r.tag_name as string }));
+      }),
+
     // 专用：只更新 pause_date，不影响其他字段
     setTagPauseDate: protectedProcedure
       .input(z.object({
@@ -16838,6 +16852,7 @@ ${klinesSummary}
         principalLentOut: z.boolean().optional(),
         brokerName: z.string().optional(),
         brokerAccount: z.string().optional(),
+        collateralSource: z.object({ ledgerId: z.number(), tagName: z.string() }).nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -16869,6 +16884,11 @@ ${klinesSummary}
         if (input.tags !== undefined) { updateCols.push('tags = ?'); updateVals.push(input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null); }
         if (input.collateralShareMode !== undefined) { updateCols.push('collateral_share_mode = ?'); updateVals.push(input.collateralShareMode || 'none'); }
         if (input.principalLentOut !== undefined) { updateCols.push('principal_lent_out = ?'); updateVals.push(input.principalLentOut ? 1 : 0); }
+        // 特殊处理 collateralSource（JSON 序列化）
+        if (input.collateralSource !== undefined) {
+          updateCols.push('collateral_source = ?');
+          updateVals.push(input.collateralSource ? JSON.stringify(input.collateralSource) : null);
+        }
         // 特殊处理 collateralAssets（JSON 序列化）
         // 判断是否正在清空担保物（collateralAssets 为空数组）
         const isClearingCollateral = input.collateralAssets !== undefined && input.collateralAssets.length === 0;

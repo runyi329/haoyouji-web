@@ -1231,6 +1231,21 @@ function FunderOrderCardLegacy({
               })()}
               </>
             )}
+            {/* 担保资产：仅股票类（金色）且出利息方（非受邀方）才显示 */}
+            {order.asset_type === 'stock' && !isInvited && (
+              <div className="flex items-center justify-between mt-1">
+                <span className="flex items-center gap-1">
+                  <span className="text-gray-400 whitespace-nowrap">担保资产</span>
+                  <button
+                    type="button"
+                    className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold leading-none flex-shrink-0"
+                    style={{ backgroundColor: '#DBEAFE', color: '#3B82F6' }}
+                    title="担保资产"
+                  >!</button>
+                </span>
+                <span className="font-medium" style={{ color: '#9CA3AF' }}>暂无</span>
+              </div>
+            )}
             {/* 收益分成（受 display_config.profitShare 开关控制；解析 commission_share 文本拿类型与比例） */}
             {show('profitShare') && order.show_profit_share && order.commission_share && (() => {
               const cs = String(order.commission_share);

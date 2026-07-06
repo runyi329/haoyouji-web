@@ -4,6 +4,7 @@
 // 禁止在此文件外重复定义 FunderOrderCard 组件
 // @since FV0245（2026-06-25）之后的新订单使用此组件
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { RightMarginDetail } from "@/components/RightMarginDetail";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -575,6 +576,65 @@ export function FunderOrderCard({
     { ledgerId, userId: Number(order.user_id) },
     { enabled: ledgerId > 0 && orderShareMode === 'self', staleTime: 0, refetchInterval: 3000 }
   );
+  // 解析 collateral_source（调用其他账本担保物）
+  const _parsedCollateralSource = useMemo(() => {
+    try {
+      const cs = (order as any).collateral_source;
+      if (!cs) return null;
+      const parsed = typeof cs === 'string' ? JSON.parse(cs) : cs;
+      if (parsed && parsed.ledgerId && parsed.tagName) return parsed as { ledgerId: number; tagName: string };
+    } catch {}
+    return null;
+  }, [(order as any).collateral_source]);
+  const hasExternalCollateral = !!_parsedCollateralSource;
+
+  // 动态查询绑定的保证金标签数据
+  const { data: _extTagConfig } = trpc.ledger.getTagConfig.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: _parsedCollateralSource?.tagName ?? '' },
+    { enabled: hasExternalCollateral, staleTime: 3000 }
+  );
+  const { data: _extTagSummary } = (trpc.ledger as any).getTagSummary.useQuery(
+    { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: _parsedCollateralSource?.tagName ?? '' },
+    { enabled: hasExternalCollateral, staleTime: 3000 }
+  );
+  const { data: _extCryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
+    enabled: hasExternalCollateral, refetchInterval: 3000, staleTime: 0,
+  });
+  // 计算剩余保证金U值和保证金率
+  const { extRemainingMarginU, extMarginBasePct } = useMemo(() => {
+    if (!hasExternalCollateral || !_extTagConfig) return { extRemainingMarginU: null as number | null, extMarginBasePct: null as number | null };
+    const _cnyR = (_extCryptoPricesRaw as any)?.usdtCnyRate ?? 7.0;
+    const _pricesMap = (_extCryptoPricesRaw as any)?.prices ?? {};
+    const _prices: Record<string, number> = {};
+    for (const [k, v] of Object.entries(_pricesMap)) { _prices[k] = Number(v) * _cnyR; }
+    _prices['USDT'] = _cnyR;
+    const _toCNY = (m: string | number, coin: string) => {
+      const n = typeof m === 'number' ? m : parseFloat(m as string);
+      if (isNaN(n) || n === 0) return 0;
+      if (!coin || coin === '人民币' || coin === '元') return n;
+      return n * (_prices[coin] ?? 0);
+    };
+    let rightTotalCNY = 0;
+    try {
+      const parsed = JSON.parse((_extTagConfig as any).margin_by_coin as string);
+      const items = Array.isArray(parsed)
+        ? parsed.map((e: any) => ({ coin: e.coin || '元', amount: Number(e.amount) }))
+        : Object.entries(parsed).map(([coin, amount]) => ({ coin, amount: Number(amount) }));
+      rightTotalCNY = items.reduce((s: number, { coin, amount }: any) => s + _toCNY(String(amount), coin), 0);
+    } catch {}
+    const latestBalance = (_extTagSummary as any)?.latestBalance;
+    const balanceNum = latestBalance?.balance ? parseFloat(String(latestBalance.balance)) : null;
+    const initialNum = parseFloat((_extTagConfig as any).initial_amount || '0') || 0;
+    const multiplierNum = parseFloat((_extTagConfig as any).account_multiplier || '1') || 1;
+    if (balanceNum === null) return { extRemainingMarginU: null, extMarginBasePct: null };
+    const pnl = (balanceNum - initialNum) * multiplierNum;
+    const remainingCNY = pnl + rightTotalCNY;
+    const remainingU = _cnyR > 0 ? remainingCNY / _cnyR : null;
+    const marginBaseNum = parseFloat((_extTagConfig as any).margin_base || '0') || 0;
+    const pct = marginBaseNum > 0 ? (remainingCNY / marginBaseNum * 100) : null;
+    return { extRemainingMarginU: remainingU, extMarginBasePct: pct };
+  }, [hasExternalCollateral, _extTagConfig, _extTagSummary, _extCryptoPricesRaw]);
+
   // 弹窗状态：优先使用父组件传入的 props，否则 fallback 到内部 state
   // （父组件提升状态可防止数据刷新导致弹窗自动关闭）
   const [_intShowInterestTip, _intSetShowInterestTip] = useState(false);
@@ -1201,7 +1261,27 @@ export function FunderOrderCard({
               </div>
             )}
             {/* 担保货币（与 LedgerDetail 前端完全一致：受 display_config 开关控制） */}
-            {show('collateralCoin') && (
+            {show('collateralCoin') && hasExternalCollateral && (
+              <div className="flex items-center justify-between text-xs mt-0.5">
+                <span className="flex items-center gap-1">
+                  <span className="text-gray-400">担保货币</span>
+                  <button
+                    type="button"
+                    className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold leading-none flex-shrink-0"
+                    style={{ backgroundColor: '#E5E7EB', color: '#6B7280' }}
+                    onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
+                  >!</button>
+                </span>
+                {extRemainingMarginU !== null ? (
+                  <span className="font-medium">
+                    <span style={{ color: extRemainingMarginU >= 0 ? '#B71C1C' : '#16A34A' }}>{extRemainingMarginU >= 0 ? '+' : '-'}</span>
+                    <span style={{ color: '#1A2340' }}>{Math.abs(extRemainingMarginU).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                    <span style={{ color: '#6B7280' }}> U</span>
+                  </span>
+                ) : <span style={{ color: '#9CA3AF' }}>加载中...</span>}
+              </div>
+            )}
+            {show('collateralCoin') && !hasExternalCollateral && (
               orderShareMode === 'self'
                 ? (
                   // 开启了共享担保：标题改为红色“共享担保”
@@ -1244,7 +1324,17 @@ export function FunderOrderCard({
                     : collateralAssets.map((a, idx) => (
                       <div key={idx}>
                         <div className="flex items-center justify-between mt-0.5">
-                          <span className="text-gray-400">{collateralAssets.length > 1 ? `担保货币${idx + 1}` : '担保货币'}</span>
+                          <span className="flex items-center gap-1">
+                            <span className="text-gray-400">{collateralAssets.length > 1 ? `担保货币${idx + 1}` : '担保货币'}</span>
+                            {hasExternalCollateral && idx === 0 && (
+                              <button
+                                type="button"
+                                className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] font-bold leading-none flex-shrink-0"
+                                style={{ backgroundColor: '#E5E7EB', color: '#6B7280' }}
+                                onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
+                              >!</button>
+                            )}
+                          </span>
                           <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(a.qty).toLocaleString()} {a.coin === 'CNY' ? '元' : a.coin}</span>
                         </div>
                         {collateralItemValues[idx] !== null && collateralItemValues[idx] !== undefined && (() => {
@@ -1262,6 +1352,22 @@ export function FunderOrderCard({
                 )
             )}
             {show('collateralValue') && (() => {
+              if (hasExternalCollateral) {
+                // 有外部担保物绑定：显示剩余保证金U值
+                const val = extRemainingMarginU;
+                return (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400">担保价值</span>
+                    {val !== null ? (
+                      <span className="font-medium">
+                        <span style={{ color: val >= 0 ? '#B71C1C' : '#16A34A' }}>{val >= 0 ? '+' : '-'}</span>
+                        <span style={{ color: '#1A2340' }}>{Math.abs(val).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                        <span style={{ color: '#6B7280' }}> U</span>
+                      </span>
+                    ) : <span className="text-xs" style={{ color: '#9CA3AF' }}>加载中...</span>}
+                  </div>
+                );
+              }
               const approxCV = dc?.approxCollateralValue ?? 'U';
               const cvDisplay = approxCV === 'hidden' ? null
                 : approxCV === 'U' ? `${collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} u`
@@ -1277,7 +1383,19 @@ export function FunderOrderCard({
               <>
               {showCollateralInfo && (
                 <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowCollateralInfo(false)}>
-                  <div className="rounded-2xl p-5 mx-4 w-full max-w-xs" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+                  <div className="rounded-2xl mx-4 w-full max-w-sm overflow-y-auto" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)', maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
+                    {hasExternalCollateral && _parsedCollateralSource ? (
+                      <>
+                        <div className="flex items-center justify-between px-5 pt-4 pb-2">
+                          <span className="text-sm font-bold" style={{ color: '#1A2340' }}>担保资产详情</span>
+                          <button onClick={() => setShowCollateralInfo(false)} className="text-gray-400 text-lg leading-none">×</button>
+                        </div>
+                        <div className="px-2 pb-4">
+                          <RightMarginDetail ledgerId={_parsedCollateralSource.ledgerId} tagName={_parsedCollateralSource.tagName} />
+                        </div>
+                      </>
+                    ) : (
+                    <div className="p-5">
                     <div className="flex items-center justify-between mb-3">
                       <span className="text-sm font-bold" style={{ color: '#1A2340' }}>担保缺口计算说明</span>
                       <button onClick={() => setShowCollateralInfo(false)} className="text-gray-400 text-lg leading-none">×</button>
@@ -1487,27 +1605,34 @@ export function FunderOrderCard({
                         </>
                       )}
                     </div>
+                    </div>
+                    )}
                   </div>
                 </div>
               )}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-0.5">
-                  <span className="text-gray-400">担保缺口</span>
+                  <span className="text-gray-400">{hasExternalCollateral ? '保证金率' : '担保缺口'}</span>
                   <button
                     onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
                     className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
                     style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
-                  >?</button>
+                  >!</button>
                 </div>
-                {showExposureLoading
-                  ? <span className="text-xs" style={{ color: '#9CA3AF' }}>计算中...</span>
-                  : <span className="font-medium" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
-                      {isSufficient ? `+${effectiveExposure.toLocaleString(undefined, { maximumFractionDigits: 2 })} u` : `-${(Math.abs(effectiveExposure)).toLocaleString(undefined, { maximumFractionDigits: 2 })} u`}
-                    </span>
-                }
+                {hasExternalCollateral ? (
+                  extMarginBasePct !== null
+                    ? <span className="font-bold" style={{ color: extMarginBasePct >= 100 ? '#16A34A' : extMarginBasePct >= 50 ? '#D97706' : '#DC2626' }}>{extMarginBasePct.toFixed(1)}%</span>
+                    : <span className="text-xs" style={{ color: '#9CA3AF' }}>加载中...</span>
+                ) : (
+                  showExposureLoading
+                    ? <span className="text-xs" style={{ color: '#9CA3AF' }}>计算中...</span>
+                    : <span className="font-medium" style={{ color: isSufficient ? '#DC2626' : '#16A34A' }}>
+                        {isSufficient ? `+${effectiveExposure.toLocaleString(undefined, { maximumFractionDigits: 2 })} u` : `-${(Math.abs(effectiveExposure)).toLocaleString(undefined, { maximumFractionDigits: 2 })} u`}
+                      </span>
+                )}
               </div>
               {/* 保证金率：(担保物市值 + 浮动盈亏 - 应付利息 + 已付利息) ÷ 计息基数 × 100% */}
-              {show('marginRate') && collateralValueKnown && collateralAssets.length > 0 && interestBaseNum > 0 && (() => {
+              {show('marginRate') && !hasExternalCollateral && collateralValueKnown && collateralAssets.length > 0 && interestBaseNum > 0 && (() => {
                 const effectiveCollateral = floatPnl !== null
                   ? collateralValue + floatPnl - accrued + totalPaid
                   : collateralValue - accrued + totalPaid;
@@ -1587,6 +1712,7 @@ export function FunderOrderCard({
               })()}
               </>
             )}
+
             {/* 收益分成（受 display_config.profitShare 开关控制；解析 commission_share 文本拿类型与比例） */}
             {show('profitShare') && order.show_profit_share && order.commission_share && (() => {
               const cs = String(order.commission_share);
