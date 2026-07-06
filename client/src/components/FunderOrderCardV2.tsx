@@ -1122,8 +1122,8 @@ export function FunderOrderCardV2Silver({
                 {isFC2977 ? (
                   fc2977RemainingMarginU !== null ? (
                     <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                      <span style={{ backgroundColor: fc2977RemainingMarginU >= 0 ? '#B71C1C' : '#388E3C', color: '#fff', fontSize: '0.55rem', padding: '1.5px 5px', borderRadius: 8, fontWeight: 700, lineHeight: 1.2 }}>{fc2977RemainingMarginU >= 0 ? '余' : '缺'}</span>
-                      <span style={{ color: SL_TEXT_PRI }}>{Math.abs(fc2977RemainingMarginU).toLocaleString('zh-CN', { maximumFractionDigits: 0 })} U</span>
+                      <span style={{ backgroundColor: 'rgba(60,35,0,0.75)', color: '#F5C842', fontSize: '0.55rem', padding: '1.5px 5px', borderRadius: 8, fontWeight: 700, lineHeight: 1.2 }}>{fc2977RemainingMarginU >= 0 ? '余' : '缺'}</span>
+                       <span style={{ color: SL_TEXT_PRI }}>{Math.abs(fc2977RemainingMarginU).toLocaleString('zh-CN', { maximumFractionDigits: 0 })} U</span>
                     </span>
                   ) : <span style={{ color: SL_TEXT_DIM }}>加载中...</span>
                 ) : collateralAssets.length > 0
@@ -1276,7 +1276,7 @@ export function FunderOrderCardV2Silver({
                 {isFC2977 ? (
                   fc2977RemainingMarginU !== null ? (
                     <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                      <span style={{ backgroundColor: fc2977RemainingMarginU >= 0 ? '#B71C1C' : '#388E3C', color: '#fff', fontSize: '0.55rem', padding: '1.5px 5px', borderRadius: 8, fontWeight: 700, lineHeight: 1.2 }}>{fc2977RemainingMarginU >= 0 ? '余' : '缺'}</span>
+                      <span style={{ backgroundColor: 'rgba(60,35,0,0.75)', color: '#F5C842', fontSize: '0.55rem', padding: '1.5px 5px', borderRadius: 8, fontWeight: 700, lineHeight: 1.2 }}>{fc2977RemainingMarginU >= 0 ? '余' : '缺'}</span>
                       <span style={{ color: SL_TEXT_PRI }}>{Math.abs(fc2977RemainingMarginU).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U</span>
                     </span>
                   ) : (
