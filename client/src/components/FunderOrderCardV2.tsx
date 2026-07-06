@@ -2144,8 +2144,16 @@ export function FunderLenderCardSilver({
             </div>
             {/* 已结利息 */}
             {displayPaid > 0 && (
-              <div className="flex justify-between">
-                <span style={{ color: SL_TEXT_SEC }}>已结利息</span>
+              <div className="flex justify-between items-center">
+                <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
+                  已结利息
+                  <button
+                    type="button"
+                    onClick={e => { e.stopPropagation(); setShowInterestHistory(true); }}
+                    className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
+                    style={{ background: 'rgba(60,35,0,0.75)', color: '#F5C842', border: 'none', cursor: 'pointer', lineHeight: 1, boxShadow: '0 1px 2px rgba(0,0,0,0.15)' }}
+                  >!</button>
+                </span>
                 <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{fmt(displayPaid, 2)} {interestUnit}</span>
               </div>
             )}
