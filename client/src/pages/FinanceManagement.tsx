@@ -243,6 +243,11 @@ function FinanceOrderCard({
   setShowMarginInfo,
 }: FinanceOrderCardProps) {
   const [showStatusSheet, setShowStatusSheet] = useState(false);
+  const [showPaymentHistory, setShowPaymentHistory] = useState(false);
+  const paymentHistoryQuery = trpc.ledger.financeGetInterestPayments.useQuery(
+    { ledgerId, orderId: order.id as number },
+    { enabled: showPaymentHistory && !!ledgerId, staleTime: 0 }
+  );
   // showCollateralInfo 和 showMarginInfo 已提升到父组件，通过 props 传入
   // 共享订单（参与者视角）用参与者各自的利率/计息基数/起息日；自己的订单用订单本身参数
   const _isGreen = !!(order._fromFunder || order._isParticipant);
@@ -632,11 +637,55 @@ function FinanceOrderCard({
             {orderDc.paidInterest !== false && (
               <>
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-400 whitespace-nowrap">{isGreenOrder ? '已结利息' : '已付利息'}</span>
+                  <span className="flex items-center gap-1 text-gray-400 whitespace-nowrap">
+                    {isGreenOrder ? '已结利息' : '已付利息'}
+                    {displayPaid > 0 && (
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); setShowPaymentHistory(true); }}
+                        className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
+                        style={{ background: 'rgba(60,35,0,0.75)', color: '#F5C842', border: 'none', cursor: 'pointer', lineHeight: 1, boxShadow: '0 1px 2px rgba(0,0,0,0.15)' }}
+                      >!</button>
+                    )}
+                  </span>
                   <span className="font-medium" style={{ color: '#4B5563' }}>
                     {displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
                   </span>
                 </div>
+                {/* 已付利息只读弹窗 */}
+                {showPaymentHistory && (
+                  <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowPaymentHistory(false)}>
+                    <div className="rounded-2xl p-4 w-80 max-h-[70vh] overflow-y-auto" style={{ background: '#F9FAFB', boxShadow: '0 8px 32px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm font-bold" style={{ color: '#1A2340' }}>{isGreenOrder ? '已结利息记录' : '已付利息记录'}</span>
+                        <button onClick={() => setShowPaymentHistory(false)} className="text-gray-400 text-lg leading-none">×</button>
+                      </div>
+                      {paymentHistoryQuery.isLoading && <div className="text-xs text-gray-400 text-center py-4">加载中...</div>}
+                      {paymentHistoryQuery.data && (paymentHistoryQuery.data as any[]).length === 0 && (
+                        <div className="text-xs text-gray-400 text-center py-4">暂无结息记录</div>
+                      )}
+                      {paymentHistoryQuery.data && (paymentHistoryQuery.data as any[]).length > 0 && (
+                        <div className="space-y-1.5">
+                          {(paymentHistoryQuery.data as any[]).map((p: any) => (
+                            <div key={p.id} className="flex items-center justify-between text-xs bg-white rounded-lg px-3 py-2 shadow-sm">
+                              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                <span className="font-medium" style={{ color: '#16A34A' }}>+{parseFloat(p.amount).toFixed(2)} {interestUnit}</span>
+                                {p.note && <span className="text-gray-400 ml-1 truncate">{p.note}</span>}
+                              </div>
+                              <span className="text-gray-400 ml-2 flex-shrink-0">{(p.pay_date || p.payment_date || '').slice(0, 10)}</span>
+                            </div>
+                          ))}
+                          <div className="pt-2 flex items-center justify-between border-t border-gray-100">
+                            <span className="text-xs text-gray-400">共 {(paymentHistoryQuery.data as any[]).length} 笔</span>
+                            <span className="text-xs font-bold" style={{ color: '#16A34A' }}>
+                              合计 {(paymentHistoryQuery.data as any[]).reduce((s: number, r: any) => s + parseFloat(r.amount || '0'), 0).toFixed(2)} {interestUnit}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {displayPaid > 0 && (
                   <div className="flex justify-end">
                     <span className="text-gray-400">≈{altPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {altUnit}</span>
