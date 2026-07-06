@@ -1131,12 +1131,10 @@ export default function DepositManage() {
                     }
                     // 盈亏净值（与展开里 pnl 逻辑完全一致）
                     const latestBal = tagSummaryData.latestBalance;
-                    const balNum = latestBal ? parseFloat(String(latestBal.balance)) : null;
+                    const balNum = latestBal ? parseFloat(String(latestBal.balance)) : 0;
                     const initialNum = parseFloat(tagSummaryData.initialAmount || '0') || 0;
                     const multiplierNum = parseFloat(tagSummaryData.accountMultiplier || '1') || 1;
-                    // 账户余额未更新时用初始金额兜底
-                    const effectiveBal = balNum !== null ? balNum : (initialNum > 0 ? initialNum : 0);
-                    const pnl = (effectiveBal - initialNum) * multiplierNum;
+                    const pnl = (balNum - initialNum) * multiplierNum;
                     const remaining = pnl + totalMarginCNY;
                     collapseRatio = marginBase > 0 ? (remaining / marginBase) * 100 : null;
                   }
@@ -1395,18 +1393,16 @@ export default function DepositManage() {
                               const initialNum = parseFloat(savedInitial || "0") || 0;
                               const multiplierNum = parseFloat(savedMultiplier || "1") || 1;
                               const marginBaseNum = parseFloat(savedMarginBase || "0") || 0;
-                              // 当账户余额尚未每日更新时，用初始金额兜底
-                              const effectiveBalance = autoBalanceNum !== null ? autoBalanceNum : (initialNum > 0 ? initialNum : null);
                               // 盈亏净値 = (余额 - 初始金额) × 倍数
                               // 实时 USDT/CNY 汇率（用于盈亏净值折算为 U）
                               const _cnyRate = cryptoPrices["USDT"] ?? CNY_RATE_FALLBACK;
-                              const pnl = effectiveBalance !== null ? (effectiveBalance - initialNum) * multiplierNum : null;
+                              const pnl = autoBalanceNum !== null ? (autoBalanceNum - initialNum) * multiplierNum : null;
                               // 剩余保证金 = 盈亏净値 + 已付保证金（盈亏为负表示输给公司，加上保证金得剩余；盈亏为正表示赢了，加上保证金得总资产）
                               const remainingMargin = pnl !== null ? pnl + rightTotalCNY : null;
                               // 保证金占基数比 = 剩余保证金 / 保证金基数
                               const marginBasePct = marginBaseNum > 0 && remainingMargin !== null ? (remainingMargin / marginBaseNum * 100) : null;
                               // 保证金占余额比（降级备用）
-                              const marginPct = effectiveBalance !== null && effectiveBalance > 0 ? (rightTotalCNY / effectiveBalance * 100) : null;
+                              const marginPct = autoBalanceNum !== null && autoBalanceNum > 0 ? (rightTotalCNY / autoBalanceNum * 100) : null;
                               return (
                                 <div className="mt-3 rounded-xl p-3 space-y-2" style={{ backgroundColor: "#F8FBFF", border: "1px solid #DBEAFE" }}>
                                   {/* 设置按鈕单独一行，靠右 */}
@@ -1441,10 +1437,7 @@ export default function DepositManage() {
                                       )}
                                     </span>
                                     <span className="text-sm font-semibold text-gray-700">
-                                      {autoBalanceNum !== null
-                                        ? `¥${autoBalanceNum.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`
-                                        : (initialNum > 0 ? <><span>¥{initialNum.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</span><span className="text-[10px] text-gray-400 ml-1">(初始)</span></> : "--")
-                                      }
+                                      {autoBalanceNum !== null ? `¥${autoBalanceNum.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}` : "--"}
                                     </span>
                                   </div>
                                   {/* 初始金额：查看模式显示保存值，编辑模式显示输入框 */}
@@ -1466,7 +1459,7 @@ export default function DepositManage() {
                                           {savedMarginBase ? `¥${parseFloat(savedMarginBase).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}` : "--"}
                                         </span>
                                       </div>
-                                      {effectiveBalance !== null && savedInitial && (
+                                      {autoBalanceNum !== null && savedInitial && (
                                         <>
                                           <div style={{ borderTop: "1px solid #DBEAFE", paddingTop: 6 }}>
                                             <div className="flex items-center justify-between">
