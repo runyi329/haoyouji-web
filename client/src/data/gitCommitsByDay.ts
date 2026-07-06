@@ -8178,5 +8178,10 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-06T06:37:45Z", type: "style", cleanMessage: "余/缺标签移到担保资产文字前面" },
     { date: "2026-07-06T06:52:48Z", type: "feat", cleanMessage: "银色卡片已结利息行添加感叹号按钮触发结息记录弹窗" },
     { date: "2026-07-06T07:03:57Z", type: "feat", cleanMessage: "借款方卡片已付利息行添加感叹号按钮触发只读结息记录弹窗" },
+    { date: "2026-07-06T08:23:06Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-06T08:56:42Z", type: "feat", cleanMessage: "银色卡片已结利息感叹号按钮（白底灰字样式）+ 担保资产/担保缺口问号改感叹号 + 修复ledgerId参数缺失" },
+    { date: "2026-07-06T09:33:16Z", type: "fix", cleanMessage: "修复bumpUnit未定义错误；单位库上限50；输入框内提示；选医生列表显示全部" },
+    { date: "2026-07-06T10:06:24Z", type: "feat", cleanMessage: "客户档案新增顾客主诉和医生建议字段" },
+    { date: "2026-07-06T11:27:11Z", type: "feat", cleanMessage: "首页三视角日历 + 今日收费列表页 + 顾客主诉/医生建议字段" },
   ],
 };
