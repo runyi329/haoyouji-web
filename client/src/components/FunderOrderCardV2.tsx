@@ -4,6 +4,7 @@ import React, { useState, useMemo } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { RightMarginDetail } from "./RightMarginDetail";
+import { RightInterestDetail } from "./RightInterestDetail";
 import {
   COIN_COLORS,
   CoinType,
@@ -646,6 +647,7 @@ export function FunderOrderCardV2Silver({
   const noteExpanded = activeTab === 'note';
   const toggleTab = (tab: 'detail' | 'note') => setActiveTab(v => v === tab ? null : tab);
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
+  const [showInterestDetail, setShowInterestDetail] = useState(false);
   // 备注相关 state
   const [noteItems, setNoteItems] = useState(() => parseNotes(order.public_note || ''));
   const [noteEditingIdx, setNoteEditingIdx] = useState<number | null>(null);
@@ -1111,16 +1113,17 @@ export function FunderOrderCardV2Silver({
                   <button
                     type="button"
                     onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
-                    className="w-3 h-3 rounded-full flex items-center justify-center flex-shrink-0 text-[8px] font-bold leading-none"
-                    style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+                    className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[8px] font-bold leading-none"
+                    style={{ backgroundColor: '#8B6914', color: '#FFFFFF', border: 'none', cursor: 'pointer', lineHeight: 1, boxShadow: '0 1px 2px rgba(0,0,0,0.3)' }}
                   >!</button>
                 )}
               </div>
               <div className="text-sm" style={{ color: SL_TEXT_PRI }}>
                 {isFC2977 ? (
                   fc2977RemainingMarginU !== null ? (
-                    <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: SL_TEXT_PRI }}>
-                      <span style={{ color: fc2977RemainingMarginU >= 0 ? '#B71C1C' : '#388E3C' }}>{fc2977RemainingMarginU >= 0 ? '+' : '-'}</span>{Math.abs(fc2977RemainingMarginU).toLocaleString('zh-CN', { maximumFractionDigits: 1 })} U
+                    <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                      <span style={{ backgroundColor: fc2977RemainingMarginU >= 0 ? '#B71C1C' : '#388E3C', color: '#fff', fontSize: '0.55rem', padding: '1.5px 5px', borderRadius: 8, fontWeight: 700, lineHeight: 1.2 }}>{fc2977RemainingMarginU >= 0 ? '余' : '缺'}</span>
+                      <span style={{ color: SL_TEXT_PRI }}>{Math.abs(fc2977RemainingMarginU).toLocaleString('zh-CN', { maximumFractionDigits: 0 })} U</span>
                     </span>
                   ) : <span style={{ color: SL_TEXT_DIM }}>加载中...</span>
                 ) : collateralAssets.length > 0
@@ -1231,8 +1234,18 @@ export function FunderOrderCardV2Silver({
               </div>
             )}
             {/* 已结利息：始终显示 */}
-            <div className="flex justify-between">
-              <span style={{ color: SL_TEXT_SEC }}>已结利息</span>
+            <div className="flex justify-between items-center">
+              <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
+                已结利息
+                {isFC2977 && _parsedCollateralSource && (
+                  <button
+                    type="button"
+                    onClick={e => { e.stopPropagation(); setShowInterestDetail(true); }}
+                    className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
+                    style={{ background: '#8B6914', color: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.18)' }}
+                  >!</button>
+                )}
+              </span>
               <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>+{fmt(displayPaid, 2)} {interestUnit}</span>
             </div>
             {/* 合计待付 = 待付利息 + 手续费 - 已结利息 */}
@@ -1257,13 +1270,14 @@ export function FunderOrderCardV2Silver({
                     type="button"
                     onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
                     className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
-                    style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+                    style={{ backgroundColor: '#8B6914', color: '#FFFFFF', border: 'none', cursor: 'pointer', lineHeight: 1, boxShadow: '0 1px 2px rgba(0,0,0,0.3)' }}
                   >!</button>
                 </span>
                 {isFC2977 ? (
                   fc2977RemainingMarginU !== null ? (
-                    <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: SL_TEXT_PRI }}>
-                      <span style={{ color: fc2977RemainingMarginU >= 0 ? '#B71C1C' : '#388E3C' }}>{fc2977RemainingMarginU >= 0 ? '+' : '-'}</span>{Math.abs(fc2977RemainingMarginU).toLocaleString('zh-CN', { maximumFractionDigits: 1 })} U
+                    <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                      <span style={{ backgroundColor: fc2977RemainingMarginU >= 0 ? '#B71C1C' : '#388E3C', color: '#fff', fontSize: '0.55rem', padding: '1.5px 5px', borderRadius: 8, fontWeight: 700, lineHeight: 1.2 }}>{fc2977RemainingMarginU >= 0 ? '余' : '缺'}</span>
+                      <span style={{ color: SL_TEXT_PRI }}>{Math.abs(fc2977RemainingMarginU).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U</span>
                     </span>
                   ) : (
                     <span style={{ color: SL_TEXT_DIM, fontSize: '0.75rem' }}>加载中...</span>
@@ -1283,7 +1297,7 @@ export function FunderOrderCardV2Silver({
                 <span style={{ color: SL_TEXT_SEC }}>保证金率</span>
                 {fc2977MarginBasePct !== null ? (
                   <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: SL_TEXT_PRI }}>
-                    <span style={{ color: fc2977MarginBasePct >= 0 ? '#B71C1C' : '#388E3C' }}>{fc2977MarginBasePct >= 0 ? '+' : '-'}</span>{Math.abs(fc2977MarginBasePct).toFixed(1)}%
+                    {fc2977MarginBasePct >= 0 ? '+' : '-'}{Math.abs(fc2977MarginBasePct).toFixed(1)}%
                   </span>
                 ) : (
                   <span style={{ color: SL_TEXT_DIM, fontSize: '0.75rem' }}>--</span>
@@ -1516,6 +1530,21 @@ export function FunderOrderCardV2Silver({
               <button onClick={() => setShowCollateralInfo(false)} className="text-gray-400 text-lg leading-none">×</button>
             </div>
             <RightMarginDetail ledgerId={_parsedCollateralSource.ledgerId} tagName={_parsedCollateralSource.tagName} />
+          </div>
+        </div>
+      )}
+      {/* ── 已结利息详情弹窗 ── */}
+      {showInterestDetail && isFC2977 && _parsedCollateralSource && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowInterestDetail(false)}>
+          <div className="rounded-2xl p-5 mx-4 w-full max-w-xs overflow-y-auto" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-bold" style={{ color: '#1A2340' }}>利息明细 · {(_parsedCollateralSource as any).interestTagName || _parsedCollateralSource.tagName}</span>
+              <button onClick={() => setShowInterestDetail(false)} className="text-gray-400 text-lg leading-none">×</button>
+            </div>
+            <RightInterestDetail
+              ledgerId={_parsedCollateralSource.ledgerId}
+              tagName={(_parsedCollateralSource as any).interestTagName || _parsedCollateralSource.tagName}
+            />
           </div>
         </div>
       )}
