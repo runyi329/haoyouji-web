@@ -1184,7 +1184,7 @@ export function FunderOrderCard({
             <>
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-1">
-                <span className="text-gray-400 whitespace-nowrap">{isInvited ? '已结佣金' : '已结利息'}</span>
+                <span className="whitespace-nowrap">{isInvited ? '已结佣金' : '已结利息'}</span>
                 <button
                   type="button"
                   onClick={() => setShowInterestHistory(v => !v)}

@@ -940,7 +940,7 @@ function FunderOrderCardLegacy({
             {show('paidInterest') && (
             <>
             <div className="flex items-center justify-between">
-              <span className="text-gray-400 whitespace-nowrap">{isInvited ? '已结佣金' : '已结利息'}</span>
+              <span className="whitespace-nowrap">{isInvited ? '已结佣金' : '已结利息'}</span>
               <span className="font-medium" style={{ color: '#4B5563' }}>
                 {displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}
               </span>

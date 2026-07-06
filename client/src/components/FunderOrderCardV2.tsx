@@ -648,6 +648,11 @@ export function FunderOrderCardV2Silver({
   const toggleTab = (tab: 'detail' | 'note') => setActiveTab(v => v === tab ? null : tab);
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
   const [showInterestDetail, setShowInterestDetail] = useState(false);
+  const [showInterestHistory, setShowInterestHistory] = useState(false);
+  const { data: interestPaymentsData } = trpc.ledger.funderGetInterestPayments.useQuery(
+    { orderId: order.id as number, ledgerId: ledgerId as number },
+    { enabled: showInterestHistory && !!ledgerId, staleTime: 10000 }
+  );
   // 备注相关 state
   const [noteItems, setNoteItems] = useState(() => parseNotes(order.public_note || ''));
   const [noteEditingIdx, setNoteEditingIdx] = useState<number | null>(null);
@@ -1231,6 +1236,12 @@ export function FunderOrderCardV2Silver({
             <div className="flex justify-between items-center">
               <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
                 已结利息
+                <button
+                  type="button"
+                  onClick={e => { e.stopPropagation(); setShowInterestHistory(true); }}
+                  className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
+                  style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+                >!</button>
                 {isFC2977 && _parsedCollateralSource && (
                   <button
                     type="button"
@@ -1438,7 +1449,7 @@ export function FunderOrderCardV2Silver({
                       onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
                       className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
                       style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
-                    >?</button>
+                    >!</button>
                   </span>
                   <span className="font-semibold" style={{ color: '#DC2626' }}>共享担保</span>
                 </div>
@@ -1482,7 +1493,7 @@ export function FunderOrderCardV2Silver({
                     担保缺口
                     <button type="button" onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
                       className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
-                      style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}>?</button>
+                      style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}>!</button>
                   </span>
                   <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
                     {isSufficient ? '+' : '-'}{Math.abs(exposure).toLocaleString(undefined, { maximumFractionDigits: 2 })} u
@@ -1528,6 +1539,35 @@ export function FunderOrderCardV2Silver({
         </div>
       )}
       {/* ── 已结利息详情弹窗 ── */}
+      {showInterestHistory && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowInterestHistory(false)}>
+          <div className="rounded-2xl p-5 mx-4 w-full max-w-xs overflow-y-auto" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-bold" style={{ color: '#1A2340' }}>已结利息记录</span>
+              <button onClick={() => setShowInterestHistory(false)} className="text-gray-400 text-lg leading-none">×</button>
+            </div>
+            {(!interestPaymentsData || (interestPaymentsData as any[]).length === 0) ? (
+              <div className="text-center py-6 text-gray-400 text-sm">暂无结息记录</div>
+            ) : (
+              <div className="space-y-2">
+                {(interestPaymentsData as any[]).map((p: any, i: number) => (
+                  <div key={i} className="flex justify-between items-start py-1.5" style={{ borderBottom: '1px solid #F3F4F6' }}>
+                    <div>
+                      <div className="text-xs" style={{ color: '#6B7280' }}>{p.pay_date ? String(p.pay_date).slice(0, 10) : '--'}</div>
+                      {p.note && <div className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>{p.note}</div>}
+                    </div>
+                    <div className="text-sm font-semibold" style={{ color: '#16A34A' }}>+{parseFloat(p.amount || '0').toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {p.currency || interestUnit}</div>
+                  </div>
+                ))}
+                <div className="flex justify-between items-center pt-2">
+                  <span className="text-xs" style={{ color: '#6B7280' }}>共 {(interestPaymentsData as any[]).length} 笔</span>
+                  <span className="text-sm font-bold" style={{ color: '#1A2340' }}>合计 +{(interestPaymentsData as any[]).reduce((s: number, p: any) => s + parseFloat(p.amount || '0'), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {showInterestDetail && isFC2977 && _parsedCollateralSource && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowInterestDetail(false)}>
           <div className="rounded-2xl p-5 mx-4 w-full max-w-xs overflow-y-auto" style={{ background: '#fff', boxShadow: '0 8px 32px rgba(0,0,0,0.18)', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
@@ -2143,20 +2183,18 @@ export function FunderLenderCardSilver({
               </span>
             </div>
             {/* 已结利息 */}
-            {displayPaid > 0 && (
-              <div className="flex justify-between items-center">
-                <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
-                  已结利息
-                  <button
-                    type="button"
-                    onClick={e => { e.stopPropagation(); setShowInterestHistory(true); }}
-                    className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
-                    style={{ background: 'rgba(60,35,0,0.75)', color: '#F5C842', border: 'none', cursor: 'pointer', lineHeight: 1, boxShadow: '0 1px 2px rgba(0,0,0,0.15)' }}
-                  >!</button>
-                </span>
-                <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{fmt(displayPaid, 2)} {interestUnit}</span>
-              </div>
-            )}
+            <div className="flex justify-between items-center">
+              <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
+                已结利息
+                <button
+                  type="button"
+                  onClick={e => { e.stopPropagation(); setShowInterestHistory(true); }}
+                  className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
+                  style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+                >!</button>
+              </span>
+              <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{displayPaid > 0 ? `+${fmt(displayPaid, 2)} ${interestUnit}` : `+0.00 ${interestUnit}`}</span>
+            </div>
             {/* 合计应收 = 待收利息 - 已结利息 */}
             {(() => {
               const net = displayAccrued - displayPaid;
