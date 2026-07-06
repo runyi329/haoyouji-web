@@ -83,6 +83,8 @@ const CUSTOMER_FIELDS: FieldDef[] = [
   { key: "_yabanPassword", label: "初始密码", placeholder: "", kind: "readonly", width: "half" },
   { key: "referrerUsername", label: "推荐人", placeholder: "搜索脉动网用户名", kind: "input", width: "full" },
   { key: "history", label: "AI健康标签", placeholder: "点击选择或搜索", kind: "history", width: "full" },
+  { key: "patientComplaint", label: "顾客主诉", placeholder: "请输入顾客主诉", kind: "textarea", width: "full" },
+  { key: "doctorAdvice", label: "医生建议", placeholder: "请输入医生建议", kind: "textarea", width: "full" },
   { key: "patientRemark", label: "顾客备注", placeholder: "请输入顾客备注", kind: "textarea", width: "full" },
 ];
 // 所有字段（用于必填校验等遍历）
@@ -312,6 +314,8 @@ export default function YabanPatientCreate() {
       relativeRelation: d.relative_relation ?? "",
       history: d.history ?? "",
       patientRemark: d.remark ?? "",
+      patientComplaint: d.patient_complaint ?? "",
+      doctorAdvice: d.doctor_advice ?? "",
       chiefComplaint: d.chief_complaint ?? "",
     });
     if (d.avatar) setAvatarManual(d.avatar as AvatarKey);
@@ -440,6 +444,8 @@ export default function YabanPatientCreate() {
       consultant: form.consultant,
       history: form.history,
       remark: form.patientRemark,
+      patientComplaint: form.patientComplaint,
+      doctorAdvice: form.doctorAdvice,
       referrerUsername: form.referrerUsername || undefined,
       relativeId: relativeSelected?.id || undefined,
       relativeRelation: form.relativeRelation || undefined,
@@ -1776,10 +1782,21 @@ function FieldCell({
     control = (
       <textarea
         value={value}
-        onChange={(e) => onInput(e.target.value)}
+        onChange={(e) => {
+          onInput(e.target.value);
+          const el = e.target;
+          el.style.height = "auto";
+          el.style.height = el.scrollHeight + "px";
+        }}
+        onFocus={(e) => {
+          const el = e.target;
+          el.style.height = "auto";
+          el.style.height = el.scrollHeight + "px";
+        }}
         placeholder={field.placeholder}
         rows={2}
-        className="w-full px-3 py-2 rounded bg-gray-50 border border-[#D6E6F5] text-sm text-gray-800 placeholder-gray-300 outline-none resize-none transition-colors focus:bg-white focus:border-[#1E88D6]"
+        className="w-full px-3 py-2 rounded bg-gray-50 border border-[#D6E6F5] text-sm text-gray-800 placeholder-gray-300 outline-none resize-none transition-colors focus:bg-white focus:border-[#1E88D6] overflow-hidden"
+        style={{ minHeight: "2.75rem" }}
       />
     );
   } else if (field.inputType === "date") {
@@ -1850,7 +1867,20 @@ function FieldCell({
   if (stacked) {
     return (
       <div style={{ flex: `1 1 ${basis}`, minWidth: 140, maxWidth: "100%" }} className="py-1.5">
-        {label}
+        {field.kind === "textarea" ? (
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-gray-700 text-base">{field.label}</label>
+            {value && (
+              <button
+                type="button"
+                onClick={() => onInput("")}
+                className="text-xs text-gray-400 active:text-red-400 flex items-center gap-0.5"
+              >
+                <span>清空</span>
+              </button>
+            )}
+          </div>
+        ) : label}
         {control}
       </div>
     );

@@ -443,6 +443,12 @@ async function ensureCustomerTable(conn: any) {
   try {
     await conn.execute(`ALTER TABLE yaban_customer ADD COLUMN relative_relation VARCHAR(50) DEFAULT NULL AFTER relative_id`);
   } catch (e) { /* 列已存在则忽略 */ }
+  try {
+    await conn.execute(`ALTER TABLE yaban_customer ADD COLUMN patient_complaint TEXT DEFAULT NULL AFTER remark`);
+  } catch (e) { /* 列已存在则忽略 */ }
+  try {
+    await conn.execute(`ALTER TABLE yaban_customer ADD COLUMN doctor_advice TEXT DEFAULT NULL AFTER patient_complaint`);
+  } catch (e) { /* 列已存在则忽略 */ }
 }
 
 // 确保标签表与关联表存在
@@ -969,6 +975,8 @@ const createInput = z.object({
   yabanPassword: z.string().max(32).optional(),
   history: z.string().max(2000).optional(),
   remark: z.string().max(255).optional(),
+  patientComplaint: z.string().max(1000).optional(),
+  doctorAdvice: z.string().max(1000).optional(),
   chiefComplaint: z.string().max(128).optional(),
   healthStatus: z.string().max(64).optional(),
   drugAllergy: z.string().max(255).optional(),
@@ -1381,10 +1389,11 @@ export const yabanCustomerRouter = router({
             avatar,
             emergency_contact, emergency_relation, occupation, emergency_phone,
             source, source_tag, net_consultant, consultant, yaban_username, yaban_password, referrer_username, relative_id, relative_relation, history, remark,
+            patient_complaint, doctor_advice,
             chief_complaint, health_status, drug_allergy, food_allergy,
             heart, hypertension, diabetes, kidney, infectious, bleeding, pregnant, medication,
             created_by)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?, ?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?, ?,?)`,
+           VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?, ?,?,?, ?,?,?,?,?,?, ?,?,?,?,?,?,?,?, ?,?)`,
           [
             TENANT_ID,
             (input.name || "").trim(),
@@ -1436,6 +1445,8 @@ export const yabanCustomerRouter = router({
             s(input.relativeRelation),
             s(input.history),
             s(input.remark),
+            s(input.patientComplaint),
+            s(input.doctorAdvice),
             s(input.chiefComplaint),
             s(input.healthStatus),
             s(input.drugAllergy),
@@ -1522,6 +1533,7 @@ export const yabanCustomerRouter = router({
            avatar = ?,
            emergency_contact = ?, emergency_relation = ?, occupation = ?, emergency_phone = ?,
            source = ?, source_tag = ?, net_consultant = ?, consultant = ?, relative_id = ?, relative_relation = ?, history = ?, remark = ?,
+           patient_complaint = ?, doctor_advice = ?,
            chief_complaint = ?, health_status = ?, drug_allergy = ?, food_allergy = ?,
            heart = ?, hypertension = ?, diabetes = ?, kidney = ?, infectious = ?, bleeding = ?, pregnant = ?, medication = ?
          WHERE id = ? AND tenant_id = ?`,
@@ -1571,6 +1583,8 @@ export const yabanCustomerRouter = router({
           s(input.relativeRelation),
           s(input.history),
           s(input.remark),
+          s(input.patientComplaint),
+          s(input.doctorAdvice),
           s(input.chiefComplaint),
           s(input.healthStatus),
           s(input.drugAllergy),

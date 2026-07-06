@@ -48,6 +48,8 @@ export default function YabanPatientDetail() {
     lastDoctor: row?.last_doctor || '',
     lastVisit: row?.last_visit || '',
     remark: row?.remark || '',
+    patientComplaint: row?.patient_complaint || '',
+    doctorAdvice: row?.doctor_advice || '',
     mobile: row?.mobile || '',
     address: row?.address || '',
     history: row?.history || '',
@@ -262,9 +264,17 @@ export default function YabanPatientDetail() {
             {healthTags && (
               <InfoItem label="健康标签" value={healthTags} span={4} copyable />
             )}
+            {/* 顾客主诉 */}
+            {patient.patientComplaint && (
+              <InfoItem label="顾客主诉" value={patient.patientComplaint} span={4} copyable />
+            )}
+            {/* 医生建议 */}
+            {patient.doctorAdvice && (
+              <InfoItem label="医生建议" value={patient.doctorAdvice} span={4} copyable />
+            )}
             {/* 备注 */}
             {patient.remark && (
-              <InfoItem label="备注" value={patient.remark} span={4} />
+              <InfoItem label="备注" value={patient.remark} span={4} copyable />
             )}
           </div>
         </div>

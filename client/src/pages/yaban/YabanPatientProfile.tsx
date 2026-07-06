@@ -260,6 +260,14 @@ export default function YabanPatientProfile() {
             <Field label="上次就诊医生" value={val(r.last_doctor)} span="md" />
             <Field label="上次就诊" value={val(r.last_visit)} span="md" />
             <Field label="建档时间" value={fmtTime(r.created_at)} span="lg" />
+
+            {(r.patient_complaint || r.doctor_advice) && (
+              <>
+                <GroupTitle text="顾客主诉和医生建议" />
+                {r.patient_complaint && <Field label="顾客主诉" value={val(r.patient_complaint)} span="full" />}
+                {r.doctor_advice && <Field label="医生建议" value={val(r.doctor_advice)} span="full" />}
+              </>
+            )}
           </div>
         </div>
 
