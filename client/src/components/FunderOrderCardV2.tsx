@@ -1109,14 +1109,6 @@ export function FunderOrderCardV2Silver({
             <>
               <div className="text-[10px] mb-0.5 flex items-center justify-end gap-1" style={{ color: SL_TEXT_SEC }}>
                 担保资产
-                {isFC2977 && (
-                  <button
-                    type="button"
-                    onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
-                    className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[8px] font-bold leading-none"
-                    style={{ backgroundColor: '#8B6914', color: '#FFFFFF', border: 'none', cursor: 'pointer', lineHeight: 1, boxShadow: '0 1px 2px rgba(0,0,0,0.3)' }}
-                  >!</button>
-                )}
               </div>
               <div className="text-sm" style={{ color: SL_TEXT_PRI }}>
                 {isFC2977 ? (
