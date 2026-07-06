@@ -128,10 +128,12 @@ export function RightMarginDetail({ ledgerId, tagName }: Props) {
   const multiplierNum = parseFloat(savedMultiplier || "1") || 1;
   const marginBaseNum = parseFloat(savedMarginBase || "0") || 0;
   const _cnyRate = cryptoPrices["USDT"] ?? CNY_RATE_FALLBACK;
-  const pnl = autoBalanceNum !== null ? (autoBalanceNum - initialNum) * multiplierNum : null;
+  // 当账户余额尚未每日更新时，用初始金额兜底
+  const effectiveBalance = autoBalanceNum !== null ? autoBalanceNum : (initialNum > 0 ? initialNum : null);
+  const pnl = effectiveBalance !== null ? (effectiveBalance - initialNum) * multiplierNum : null;
   const remainingMargin = pnl !== null ? pnl + rightTotalCNY : null;
   const marginBasePct = marginBaseNum > 0 && remainingMargin !== null ? (remainingMargin / marginBaseNum * 100) : null;
-  const marginPct = autoBalanceNum !== null && autoBalanceNum > 0 ? (rightTotalCNY / autoBalanceNum * 100) : null;
+  const marginPct = effectiveBalance !== null && effectiveBalance > 0 ? (rightTotalCNY / effectiveBalance * 100) : null;
 
   return (
     <div className="text-xs space-y-3" style={{ color: "#4B5563" }}>
@@ -276,7 +278,10 @@ export function RightMarginDetail({ ledgerId, tagName }: Props) {
               )}
             </span>
             <span className="text-sm font-semibold text-gray-700">
-              {autoBalanceNum !== null ? `¥${autoBalanceNum.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}` : "--"}
+              {autoBalanceNum !== null
+                ? `¥${autoBalanceNum.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`
+                : (initialNum > 0 ? <><span>¥{initialNum.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</span><span className="text-[10px] text-gray-400 ml-1">(初始)</span></> : "--")
+              }
             </span>
           </div>
           <div className="flex items-center justify-between">
@@ -295,7 +300,7 @@ export function RightMarginDetail({ ledgerId, tagName }: Props) {
               {savedMarginBase ? `¥${parseFloat(savedMarginBase).toLocaleString("zh-CN", { maximumFractionDigits: 2 })}` : "--"}
             </span>
           </div>
-          {autoBalanceNum !== null && savedInitial && (
+          {effectiveBalance !== null && savedInitial && (
             <div style={{ borderTop: "1px solid #DBEAFE", paddingTop: 6 }}>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-500">盈亏净值 (余额-初始)×倍数</span>

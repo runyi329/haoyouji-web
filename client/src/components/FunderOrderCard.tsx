@@ -1613,11 +1613,13 @@ export function FunderOrderCard({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-0.5">
                   <span className="text-gray-400">{hasExternalCollateral ? '保证金率' : '担保缺口'}</span>
-                  <button
-                    onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
-                    className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
-                    style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
-                  >!</button>
+                  {!hasExternalCollateral && (
+                    <button
+                      onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
+                      className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
+                      style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
+                    >!</button>
+                  )}
                 </div>
                 {hasExternalCollateral ? (
                   extMarginBasePct !== null
