@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { useLocation, useParams } from "wouter";
 import { ArrowLeft, ChevronDown, ChevronRight, DollarSign } from "lucide-react";
+import Tooltip from "@/components/Tooltip";
 import { trpc } from "@/lib/trpc";
 
 // 持币量格式化：整数位数 + 小数位数 = 5位，不足补0
@@ -119,6 +120,12 @@ export default function AfFeeDetail() {
   const [finGroupFilter, setFinGroupFilter] = useState<'list' | 'byDate' | 'byPerson' | 'byCoin'>('list');
   // 融资付息收/付方向筛选：全部/我方收息/我方付息
   const [finDirectionFilter, setFinDirectionFilter] = useState<'all' | 'collect' | 'pay'>('all');
+  // 融资付息天数Tooltip
+  const [finDaysTooltip, setFinDaysTooltip] = useState<{ orderId: number; start: string; days: number } | null>(null);
+  const finDaysTriggerRef = useRef<HTMLButtonElement | null>(null);
+  // 计息本金折算详情Tooltip
+  const [finBaseTooltip, setFinBaseTooltip] = useState<{ orderId: number; coin: string; baseRaw: number; baseU: number; rate: number } | null>(null);
+  const finBaseTriggerRef = useRef<HTMLElement | null>(null);
   // 融资付息收费弹窗
   const [finChargeModal, setFinChargeModal] = useState<{ order: any } | null>(null);
   // 已付利息记录弹窗
@@ -161,11 +168,18 @@ export default function AfFeeDetail() {
   const financeOrdersRaw: any[] = Array.isArray((financeOrdersData as any)?.orders)
     ? (financeOrdersData as any).orders
     : (Array.isArray(financeOrdersData) ? (financeOrdersData as any) : []);
-  // 过滤：只保留融资付息主订单（order_role='finance'），
-  // 去掉共享者/参与方视角的跟随行（_isParticipant 或非 finance 角色）
+  // 只保留 finance 主订单（order_role='finance'），不过滤 _isParticipant
+  // 因为部分订单的借款人同时也是参与方，会被后端标记 _isParticipant，但它们仍是主订单应显示
   const financeOrders: any[] = financeOrdersRaw.filter(
-    (o: any) => !o._isParticipant && (o.order_role == null || o.order_role === 'finance')
+    (o: any) => o.order_role == null || o.order_role === 'finance'
   );
+  // 实时 CNY/USDT 汇率（3秒刷新）
+  const { data: cnyRateData } = trpc.exchange.getRate.useQuery(
+    { fromcoin: 'USD', tocoin: 'CNY', money: 1 },
+    { staleTime: 3000, refetchInterval: 3000, enabled: !!ledgerId && mainTab === 'finance' }
+  );
+  const cnyRate = parseFloat((cnyRateData as any)?.money ?? '7.25') || 7.25;
+
   // 已付利息汇总（按订单聚合）
   const finOrderIds = useMemo(
     () => financeOrders.map((o: any) => o.id).filter(Boolean),
@@ -977,10 +991,15 @@ export default function AfFeeDetail() {
         ) : (() => {
           const statusMap: Record<string, string> = { active: '进行中', settled: '已结清', completed: '已结清', cancelled: '已取消' };
           const isFinSettled = (o: any) => o.status === 'settled' || o.status === 'completed';
-          // 收/付方向过滤：principal_lent_out=1 表示我方出借（收息），=0 表示我方借入（付息）
+          // 收/付方向判断：年利率≤ 0（负数或零）则为收息，否则按 principal_lent_out 判断
+          const isCollect = (o: any) => {
+            const rate = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
+            if (rate != null && rate <= 0) return true;
+            return o.principal_lent_out == 1;
+          };
           const dirFiltered = financeOrders.filter((o: any) => {
-            if (finDirectionFilter === 'collect') return o.principal_lent_out == 1;
-            if (finDirectionFilter === 'pay') return o.principal_lent_out != 1;
+            if (finDirectionFilter === 'collect') return isCollect(o);
+            if (finDirectionFilter === 'pay') return !isCollect(o);
             return true;
           });
           // 搜索过滤
@@ -1076,13 +1095,13 @@ export default function AfFeeDetail() {
                   <table className="border-collapse text-xs" style={{ width: 'auto', tableLayout: 'auto' }}>
                     <thead>
                       <tr style={{ background: '#f8faff' }} className="text-gray-500">
-                        <th onClick={() => toggleFinSort('username')} className="px-2 py-2 text-left font-semibold border border-gray-200 cursor-pointer select-none" style={{ width: '2em', minWidth: '2em', maxWidth: '2em' }}>用户</th>
-                        <th onClick={() => toggleFinSort('start')} className="px-2 py-2 text-left font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">起息日</th>
+                        <th onClick={() => toggleFinSort('username')} className="px-2 py-2 text-left font-semibold border border-gray-200 cursor-pointer select-none" style={{ width: '4em', minWidth: '4em', maxWidth: '4em' }}>用户</th>
                         <th onClick={() => toggleFinSort('coin')} className="px-2 py-2 text-center font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">币</th>
                         <th onClick={() => toggleFinSort('days')} className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">天数</th>
                         <th className="px-2 py-2 text-left font-semibold border border-gray-200 whitespace-nowrap">订单</th>
                         <th onClick={() => toggleFinSort('base')} className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">计息本金</th>
                         <th onClick={() => toggleFinSort('rate')} className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">年利率</th>
+                        <th className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap">日息</th>
                         <th onClick={() => toggleFinSort('accrued')} className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">待付利息</th>
                         <th onClick={() => toggleFinSort('paid')} className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">已付利息</th>
                         <th className="px-2 py-2 text-center font-semibold border border-gray-200 whitespace-nowrap">状态</th>
@@ -1091,7 +1110,10 @@ export default function AfFeeDetail() {
                     </thead>
                     <tbody>
                       {sortedRows.map((o: any, i: number) => {
-                        const base = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
+                        const baseRaw = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
+                        // CNY 订单按实时汇率折算成 USDT
+                        const isCNY = o.coin === 'CNY';
+                        const base = isCNY ? baseRaw / cnyRate : baseRaw;
                         const rate = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
                         const start = o.interest_start_date || o.buy_date || '';
                         // 距今天数：起息日当天算第1天
@@ -1114,10 +1136,9 @@ export default function AfFeeDetail() {
                         const paid = finPaidMap[Number(o.id)] != null ? Number(finPaidMap[Number(o.id)]) : 0;
                         return (
                           <tr key={o.id ?? i} className="text-gray-700">
-                            <td className="px-2 py-2 border border-gray-100 overflow-hidden" style={{ width: '2em', minWidth: '2em', maxWidth: '2em' }}>
-                              <div className="overflow-hidden" style={{ width: '2em', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'clip' }}>{o.username || o.userName || '-'}</div>
+                            <td className="px-2 py-2 border border-gray-100 overflow-hidden" style={{ width: '4em', minWidth: '4em', maxWidth: '4em' }}>
+                              <div className="overflow-hidden" style={{ width: '4em', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{o.username || o.userName || '-'}</div>
                             </td>
-                            <td className="px-2 py-2 border border-gray-100 whitespace-nowrap">{start || '-'}</td>
                             <td className="px-2 py-2 text-center border border-gray-100 whitespace-nowrap">
                               {(() => {
                                 const C: Record<string, { s: string; c: string }> = {
@@ -1131,12 +1152,42 @@ export default function AfFeeDetail() {
                                   : <span className="text-gray-700">{o.coin || '-'}</span>;
                               })()}
                             </td>
-                            <td className="px-2 py-2 text-right border border-gray-100 whitespace-nowrap">{elapsedDays != null ? elapsedDays : '-'}</td>
+                            <td className="px-2 py-2 text-right border border-gray-100 whitespace-nowrap">
+                              {elapsedDays != null ? (
+                                <button
+                                  type="button"
+                                  ref={finDaysTooltip?.orderId === o.id ? (el => { if (el) (finDaysTriggerRef as any).current = el; }) : undefined}
+                                  onClick={e => {
+                                    (finDaysTriggerRef as any).current = e.currentTarget;
+                                    setFinDaysTooltip(finDaysTooltip?.orderId === o.id ? null : { orderId: o.id, start, days: elapsedDays });
+                                  }}
+                                  className="underline decoration-dotted underline-offset-2 font-medium"
+                                  style={{ color: '#374151' }}
+                                >{elapsedDays}</button>
+                              ) : '-'}
+                            </td>
                             <td className="px-2 py-2 border border-gray-100 whitespace-nowrap">
                               <button type="button" onClick={() => setFinDetailOrder({ ...o, _elapsedDays: elapsedDays })} className="font-mono underline decoration-dotted underline-offset-2" style={{ color: '#2563eb' }}>{orderNoShort}</button>
                             </td>
-                            <td className="px-2 py-2 text-right border border-gray-100 whitespace-nowrap">{base ? base.toFixed(2) : '-'}</td>
+                            <td className="px-2 py-2 text-right border border-gray-100 whitespace-nowrap">
+                              {base ? (
+                                isCNY ? (
+                                  <button
+                                    type="button"
+                                    onClick={e => {
+                                      (finBaseTriggerRef as any).current = e.currentTarget;
+                                      setFinBaseTooltip(finBaseTooltip?.orderId === o.id ? null : { orderId: o.id, coin: o.coin, baseRaw, baseU: base, rate: cnyRate });
+                                    }}
+                                    className="underline decoration-dotted underline-offset-2"
+                                    style={{ color: '#374151' }}
+                                  >{base.toFixed(2)}</button>
+                                ) : <span>{base.toFixed(2)}</span>
+                              ) : '-'}
+                            </td>
                             <td className="px-2 py-2 text-right border border-gray-100 whitespace-nowrap">{rate != null ? rate + '%' : '-'}</td>
+                            <td className="px-2 py-2 text-right border border-gray-100 whitespace-nowrap" style={{ color: '#6b7280' }}>
+                              {(base && rate != null) ? (Math.abs(base * (rate / 100) / 365)).toFixed(2) : '-'}
+                            </td>
                             <td className="px-2 py-2 text-right border border-gray-100 whitespace-nowrap" style={{ color: '#2563eb' }}>{accrued != null ? accrued.toFixed(2) : '-'}</td>
                             <td className="px-2 py-2 text-right border border-gray-100 whitespace-nowrap">
                               <button
@@ -1165,6 +1216,7 @@ export default function AfFeeDetail() {
                         <td className="px-2 py-2 border border-gray-200"></td>
                         <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap">{baseSum.toFixed(2)}</td>
                         <td className="px-2 py-2 border border-gray-200"></td>
+                        <td className="px-2 py-2 border border-gray-200"></td>
                         <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap" style={{ color: '#2563eb' }}>{accruedSum.toFixed(2)}</td>
                         <td className="px-2 py-2 text-right border border-gray-200 whitespace-nowrap" style={{ color: '#16a34a' }}>{paidSum.toFixed(2)}</td>
                         <td className="px-2 py-2 border border-gray-200"></td>
@@ -1176,8 +1228,57 @@ export default function AfFeeDetail() {
               </div>
             );
           };
+          // 天数Tooltip内容生成
+          const daysTooltipContent = finDaysTooltip ? (() => {
+            const s = finDaysTooltip.start ? finDaysTooltip.start.slice(0, 10) : null;
+            const todayStr = (() => { const t = new Date(); return `${t.getFullYear()}.${String(t.getMonth()+1).padStart(2,'0')}.${String(t.getDate()).padStart(2,'0')}`; })();
+            const startStr = s ? (() => { const p = s.split('-'); return p.length===3 ? `${p[0]}.${p[1]}.${p[2]}` : s; })() : '-';
+            return (
+              <div className="text-xs text-gray-700 flex items-center gap-1 pr-4 whitespace-nowrap">
+                <span className="text-gray-400">起息日</span>
+                <span className="font-medium">{startStr}</span>
+                <span className="text-gray-300 mx-0.5">→</span>
+                <span className="text-gray-400">今天</span>
+                <span className="font-medium">{todayStr}</span>
+                <span className="text-gray-300 mx-0.5">，共</span>
+                <span className="font-bold text-blue-600">{finDaysTooltip.days}天</span>
+              </div>
+            );
+          })() : null;
+
+          // 计息本金折算Tooltip内容
+          const baseTooltipContent = finBaseTooltip ? (
+            <div className="text-xs text-gray-700 flex items-center gap-1 pr-4 whitespace-nowrap">
+              <span className="font-medium">{finBaseTooltip.baseRaw.toLocaleString()}</span>
+              <span className="text-gray-400">{finBaseTooltip.coin}</span>
+              <span className="text-gray-300 mx-0.5">÷</span>
+              <span className="text-gray-400">汇率</span>
+              <span className="font-medium">{finBaseTooltip.rate.toFixed(4)}</span>
+              <span className="text-gray-300 mx-0.5">=</span>
+              <span className="font-bold text-blue-600">{finBaseTooltip.baseU.toFixed(2)} U</span>
+            </div>
+          ) : null;
+
           return (
             <div className="space-y-3">
+              {/* 天数Tooltip */}
+              {finDaysTooltip && daysTooltipContent && (
+                <Tooltip
+                  content={daysTooltipContent}
+                  isOpen={true}
+                  onClose={() => setFinDaysTooltip(null)}
+                  triggerRef={finDaysTriggerRef as any}
+                />
+              )}
+              {/* 计息本金折算Tooltip */}
+              {finBaseTooltip && baseTooltipContent && (
+                <Tooltip
+                  content={baseTooltipContent}
+                  isOpen={true}
+                  onClose={() => setFinBaseTooltip(null)}
+                  triggerRef={finBaseTriggerRef as any}
+                />
+              )}
               {/* 搜索框 */}
               <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 shadow-sm border border-gray-100">
                 <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" /></svg>
@@ -1200,9 +1301,9 @@ export default function AfFeeDetail() {
                 {/* 按钮行 */}
                 <div className="flex gap-2 px-3 pt-3 pb-2">
                   {([
-                    { key: 'all' as const, label: `全部 ${financeOrders.length}单` },
-                    { key: 'collect' as const, label: '我方收息' },
-                    { key: 'pay' as const, label: '我方付息' },
+                    { key: 'all' as const, label: `全部 ${financeOrders.filter((o: any) => !isFinSettled(o)).length}单` },
+                    { key: 'collect' as const, label: `我方收息 ${finFiltered.filter((o: any) => o.principal_lent_out == 1 && !isFinSettled(o)).length}单` },
+                    { key: 'pay' as const, label: `我方付息 ${finFiltered.filter((o: any) => o.principal_lent_out != 1 && !isFinSettled(o)).length}单` },
                   ]).map(t => (
                     <button key={t.key} onClick={() => setFinDirectionFilter(t.key)}
                       className="flex-1 py-1.5 rounded-full text-xs font-medium transition-all"
@@ -1251,8 +1352,10 @@ export default function AfFeeDetail() {
               {/* 列表视图 */}
               {finGroupFilter === 'list' && (
                 <>
-                  {renderFinTable(finOngoing, '进行中')}
-                  {renderFinTable(finSettled, '已结清')}
+                  {renderFinTable(finOngoing.filter((o: any) => isCollect(o)), '进行中 · 收息')}
+                  {renderFinTable(finOngoing.filter((o: any) => !isCollect(o)), '进行中 · 付息')}
+                  {renderFinTable(finSettled.filter((o: any) => isCollect(o)), '已结清 · 收息')}
+                  {renderFinTable(finSettled.filter((o: any) => !isCollect(o)), '已结清 · 付息')}
                 </>
               )}
 
