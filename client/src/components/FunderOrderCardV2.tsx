@@ -1025,7 +1025,7 @@ export function FunderOrderCardV2Silver({
             <div className="text-right" style={{ flex: 1 }}>
               <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC }}>开仓价 (U)</div>
               <div style={{ lineHeight: 1 }}>
-                <span style={{ fontSize: '1.25rem', fontWeight: 500, color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
+                <span className="text-sm font-semibold" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
                   {buyPrice > 0 ? fmt(buyPrice, 2) : '--'}
                 </span>
               </div>
@@ -1035,7 +1035,7 @@ export function FunderOrderCardV2Silver({
             <div className="text-right" style={{ flex: 1 }}>
               <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC }}>当前价 (U)</div>
               <div style={{ lineHeight: 1 }}>
-                <span style={{ fontSize: '1.25rem', fontWeight: 500, color: SL_GOLD, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
+                <span className="text-sm font-semibold" style={{ color: SL_GOLD, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
                   {liveP != null ? fmt(liveP, 2) : '--'}
                 </span>
               </div>
