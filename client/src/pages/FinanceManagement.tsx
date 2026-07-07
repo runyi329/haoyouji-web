@@ -1238,6 +1238,7 @@ function FinanceOrderCard({
 // ===== END FinanceOrderCard =====
 
 const INTEREST_PAYMENT_OPTIONS = [
+  { value: 'profit_post', label: '盈利后付' },
   { value: 'monthly_pre', label: '月付先付' },
   { value: 'monthly_post', label: '月付后付' },
   { value: 'semi_pre', label: '半年付先付' },
@@ -1809,7 +1810,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
       interestBase: order.interest_base || '',
       interestBaseCurrency: (order.interest_base_currency || 'USDT') as 'USDT' | 'CNY',
       interestStartDate: order.interest_start_date || '',
-      interestRateAnnual: isNeg ? rateStr.slice(1) : rateStr,
+      interestRateAnnual: isNeg ? (rateStr.slice(1) === '0' ? '' : rateStr.slice(1)) : (rateStr === '0' ? '' : rateStr),
       interestRateSign: isNeg ? '-' : '+',
       interestPaymentType: order.interest_payment_type || '',
       publicNote: order.public_note || '',
@@ -2779,7 +2780,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                     {formData.interestRateSign}
                   </button>
                   <input
-                    type="number"
+                    type="text"
                     inputMode="decimal"
                     value={formData.interestRateAnnual}
                     onChange={e => setFormData(d => ({ ...d, interestRateAnnual: e.target.value }))}
