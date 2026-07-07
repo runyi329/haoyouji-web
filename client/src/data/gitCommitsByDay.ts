@@ -8185,4 +8185,15 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-06T11:27:11Z", type: "feat", cleanMessage: "首页三视角日历 + 今日收费列表页 + 顾客主诉/医生建议字段" },
     { date: "2026-07-06T13:36:11Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
   ],
+  "2026-07-07": [
+    { date: "2026-07-06T18:11:12Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-07T00:12:09Z", type: "feat", cleanMessage: "新增固定差价止盈网格模拟测算页面" },
+    { date: "2026-07-07T00:30:29Z", type: "fix", cleanMessage: "修复预约在班校验未读取新周模板(day_segs)导致误报不在班" },
+    { date: "2026-07-07T01:05:31Z", type: "fix", cleanMessage: "金色股票卡片多项UI优化" },
+    { date: "2026-07-07T05:32:34Z", type: "feat", cleanMessage: "日/周/月三视图Tab切换，Tab上方显示待到诊列表，Tab下方显示医生圆圈+甘特条" },
+    { date: "2026-07-07T05:39:07Z", type: "fix", cleanMessage: "移除后端在班硬校验，避免因排班数据源不一致导致误报不在班" },
+    { date: "2026-07-07T06:01:31Z", type: "feat", cleanMessage: "预约成功toast弹窗反馈 + 甘特条排班底色加斜纹 + 预约块暖色系哈希取色" },
+    { date: "2026-07-07T06:30:10Z", type: "feat", cleanMessage: "重新设计甘特条 - 加高44px、排班斜纹、暖色预约块、圆角贴合排班底色" },
+    { date: "2026-07-07T07:07:22Z", type: "feat", cleanMessage: "数字币银色卡片UI优化" },
+  ],
 };
