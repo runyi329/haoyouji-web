@@ -62,6 +62,8 @@ export default function YabanSchedule() {
   }, [today]);
   const [selDate, setSelDate] = useState(initSelDate);
   const [apptView, setApptView] = useState<"doc"|"time">("doc");
+  // 日/周/月三视图切换
+  const [viewMode, setViewMode] = useState<"day"|"week"|"month">("day");
   // 周/月视图切换
   const [calMode, setCalMode] = useState<"week"|"month">("week");
   const [monthCursor, setMonthCursor] = useState(() => new Date(initSelDate.getFullYear(), initSelDate.getMonth(), 1));
@@ -106,8 +108,8 @@ export default function YabanSchedule() {
 
   const { data: appointments = [], refetch: refetchAppts } = trpc.yabanAppointment.listByDate.useQuery({ date: dateStr, tenantId: currentTenantId ?? undefined });
   const { data: monthStats = {} } = trpc.yabanAppointment.monthStats.useQuery({
-    year: calMode === "month" ? monthCursor.getFullYear() : selDate.getFullYear(),
-    month: calMode === "month" ? monthCursor.getMonth() + 1 : selDate.getMonth() + 1,
+    year: viewMode === "month" ? monthCursor.getFullYear() : selDate.getFullYear(),
+    month: viewMode === "month" ? monthCursor.getMonth() + 1 : selDate.getMonth() + 1,
     tenantId: currentTenantId ?? undefined,
   });
   const { data: members = [] } = trpc.yabanAppointment.listMembers.useQuery({ tenantId: currentTenantId ?? undefined }, { staleTime: 0 });
@@ -314,126 +316,325 @@ export default function YabanSchedule() {
       {/* 顶栏占位：与 fixed 顶栏等高，防止主体被遮挡 */}
       <div style={{ height: headerH }} aria-hidden />
 
-      {/* 周/月日历：周视图为自定义格子，月视图为 YabanHeatCalendar 热力日历 */}
-      {calMode === "week" ? (
-        <div style={{ background: "#fff", padding: "10px 16px 0", borderBottom: `1px solid ${LINE}` }}>
-          {/* 周导航 */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-            <div onClick={() => setWeekOffset(w => w - 1)} style={{ width: 30, height: 30, borderRadius: 4, background: "#F6F8FA", color: GRAY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, cursor: "pointer" }}>‹</div>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: INK }}>
-                {weekDates[0].getMonth() + 1}月{weekDates[0].getDate()}日 – {weekDates[6].getMonth() + 1}月{weekDates[6].getDate()}日
-              </div>
-              <div style={{ fontSize: 11, color: weekOffset === 0 ? SKY_D : GRAY, marginTop: 2, fontWeight: weekOffset === 0 ? 600 : 400 }}>
-                {weekOffset === 0 ? "本周" : weekOffset < 0 ? `前${-weekOffset}周` : `后${weekOffset}周`}
-              </div>
+      {/* 日视图 */}
+      {viewMode === "day" && (
+        <>
+          {/* 单日导航：← 7月7日（周X）→ + 诊所下拉 */}
+          <div style={{ background: "#fff", padding: "8px 14px", display: "flex", alignItems: "center", gap: 8, borderBottom: `1px solid ${LINE}` }}>
+            <div onClick={() => { const d = new Date(selDate); d.setDate(d.getDate() - 1); setSelDate(d); setWeekOffset(Math.round((d.getTime() - today.getTime()) / (7 * 86400000))); }} style={{ width: 30, height: 30, borderRadius: 6, background: "#F6F8FA", color: GRAY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, cursor: "pointer", flexShrink: 0 }}>‹</div>
+            <div style={{ flex: 1, textAlign: "center" }}>
+              <span style={{ fontSize: 15, fontWeight: 700, color: INK }}>{selDate.getMonth() + 1}月{selDate.getDate()}日</span>
+              <span style={{ fontSize: 12, color: GRAY, marginLeft: 6 }}>{["周日","周一","周二","周三","周四","周五","周六"][selDate.getDay()]}{isSameDay(selDate, today) ? " · 今天" : ""}</span>
             </div>
-            <div onClick={() => setWeekOffset(w => w + 1)} style={{ width: 30, height: 30, borderRadius: 4, background: "#F6F8FA", color: GRAY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, cursor: "pointer" }}>›</div>
+            <YabanClinicHeader compact />
+            <div onClick={() => { const d = new Date(selDate); d.setDate(d.getDate() + 1); setSelDate(d); setWeekOffset(Math.round((d.getTime() - today.getTime()) / (7 * 86400000))); }} style={{ width: 30, height: 30, borderRadius: 6, background: "#F6F8FA", color: GRAY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, cursor: "pointer", flexShrink: 0 }}>›</div>
           </div>
-          {/* 格子行：周末显示7天铺满，周一到周五只显示5天（周六日隐藏在屏幕外） */}
-          <div style={todayIsWeekend
-            ? { overflowX: "auto", margin: "0 -16px", padding: "0 16px 2px", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none" }
-            : { overflow: "hidden", margin: "0 -16px", padding: "0 16px 2px" }}>
-            <div style={{ display: "flex", gap: 3 }}>
-              {["一","二","三","四","五","六","日"].map((label, i) => {
-                const d = weekDates[i];
-                const dStr2 = toDateStr(d);
-                const isSelected = isSameDay(d, selDate);
-                const isToday = isSameDay(d, today);
-                const isWeekend = i >= 5;
-                const cellW = todayIsWeekend ? "calc((100vw - 50px) / 7)" : "calc((100vw - 44px) / 5)";
-                const apptCount = (monthStats as any)[dStr2]?.cnt ?? 0;
-                const bg = isSelected ? SKY_D : isToday ? SKY_L : "#F6F8FA";
-                const bd = isSelected ? SKY_D : isToday ? SKY : LINE;
-                const tc = isSelected ? "#fff" : INK;
-                const gc = isSelected ? "rgba(255,255,255,.75)" : GRAY;
+
+          {/* 待到诊列表 */}
+          {appointments.length > 0 && (() => {
+            const pending = appointments.filter(a => ["booked","confirmed","registered","consulting"].includes(a.status || "booked"));
+            const treating = appointments.filter(a => a.status === "treating");
+            const done = appointments.filter(a => ["done","treated","paid","left"].includes(a.status || ""));
+            const missed = appointments.filter(a => ["missed","cancelled"].includes(a.status || ""));
+            const groups = [
+              { label: "待到诊", color: "#1E88D6", bg: "#EBF5FB", items: pending },
+              { label: "治疗中", color: "#1567AE", bg: "#E0EDF7", items: treating },
+              { label: "已完成", color: "#3D7A53", bg: "#EAF2EC", items: done },
+              { label: "爽约",   color: "#9A6E1F", bg: "#F5EEDD", items: missed },
+            ].filter(g => g.items.length > 0);
+            return (
+              <div style={{ background: "#fff", borderBottom: `8px solid ${BG}` }}>
+                {groups.map(g => (
+                  <div key={g.label} style={{ padding: "8px 14px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                      <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 8, color: g.color, background: g.bg, fontWeight: 600 }}>{g.label} {g.items.length}</span>
+                    </div>
+                    {g.items.map(a => (
+                      <div key={a.id} onClick={() => setDetailModal({ open: true, apptId: a.id })} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${LINE}`, cursor: "pointer" }}>
+                        <div style={{ minWidth: 44, fontSize: 12, color: GRAY, fontWeight: 500 }}>{a.appointTime?.slice(0,5)}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: INK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.patientName}</div>
+                          <div style={{ fontSize: 11, color: GRAY, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.doctor} · {a.project}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
+          {/* 日/周/月 Tab 栏 */}
+          <div style={{ background: `linear-gradient(90deg,${SKY},#3BA9E0)`, padding: "10px 16px", display: "flex", justifyContent: "center" }}>
+            <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,.18)", borderRadius: 6, padding: 4 }}>
+              {(["day","week","month"] as const).map((vm) => {
+                const labels = { day: "日", week: "周", month: "月" };
+                const active = viewMode === vm;
                 return (
-                  <div key={i}
-                    onClick={() => { setSelDate(d); }}
-                    style={{ width: cellW, flexShrink: 0,
-                      marginLeft: (!todayIsWeekend && i === 5) ? 16 : 0,
-                      height: 72, borderRadius: 10, display: "flex", flexDirection: "column",
-                      alignItems: "center", justifyContent: "center", gap: 2,
-                      cursor: "pointer", transition: "all .18s",
-                      background: bg, border: `2px solid ${bd}`,
-                      boxShadow: isSelected ? "0 2px 8px rgba(30,136,214,.25)" : "none" }}>
-                    <span style={{ fontSize: todayIsWeekend ? 10 : 11, color: gc, fontWeight: 500 }}>周{label}</span>
-                    <span style={{ fontSize: todayIsWeekend ? 16 : 20, fontWeight: 700, color: tc, lineHeight: 1.1 }}>{d.getDate()}</span>
-                    <span style={{ fontSize: 10, color: isSelected ? "rgba(255,255,255,.8)" : (apptCount > 0 ? SKY_D : "transparent"), fontWeight: 600, lineHeight: 1 }}>{apptCount > 0 ? `${apptCount}约` : "·"}</span>
+                  <div key={vm} onClick={() => {
+                    setViewMode(vm);
+                    if (vm === "week") setCalMode("week");
+                    if (vm === "month") { setCalMode("month"); setMonthCursor(new Date(selDate.getFullYear(), selDate.getMonth(), 1)); }
+                  }} style={{
+                    padding: "7px 28px", borderRadius: 4, fontSize: 14, fontWeight: 600,
+                    background: active ? "#fff" : "transparent",
+                    color: active ? SKY_D : "#EBF5FB",
+                    boxShadow: active ? "0 1px 3px rgba(0,0,0,.1)" : "none",
+                    whiteSpace: "nowrap", cursor: "pointer", transition: "all .18s",
+                  }}>{labels[vm]}</div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 忙闲速览 */}
+          <div style={{ background: "#fff", padding: "6px 14px 10px" }}>
+            <div style={{ display: "flex", gap: 14, overflowX: "auto", padding: "10px 4px" }}>
+              <div onClick={() => setSelectedDocIdx(null)} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 46, cursor: "pointer", opacity: selectedDocIdx !== null ? 0.38 : 1, transform: selectedDocIdx !== null ? "scale(.88)" : "none", transition: ".22s" }}>
+                <div style={{ width: 46, height: 46, borderRadius: "50%", padding: 3, background: selectedDocIdx === null ? SKY_D : "#EBF5FB" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600, color: selectedDocIdx === null ? "#fff" : "#7c93a8", background: selectedDocIdx === null ? SKY_D : "#EBF5FB" }}>全部</div>
+                </div>
+                <div style={{ fontSize: 11, color: selectedDocIdx === null ? SKY_D : "#647386", marginTop: 5, fontWeight: selectedDocIdx === null ? 600 : 400 }}>全员</div>
+                <div style={{ fontSize: 9, color: "#9AA7B5", marginTop: 1 }}>{docList.length}人</div>
+              </div>
+              {docList.map((doc, idx) => {
+                const lv = loadLevel(doc.appts);
+                const sel = selectedDocIdx === idx;
+                const dimmed = selectedDocIdx !== null && !sel;
+                return (
+                  <div key={doc.name} onClick={() => setSelectedDocIdx(sel ? null : idx)} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 46, cursor: "pointer", opacity: dimmed ? 0.38 : 1, transform: sel ? "scale(1.05)" : dimmed ? "scale(.88)" : "none", filter: dimmed ? "grayscale(.4)" : "none", transition: ".22s" }}>
+                    <div style={{ width: 46, height: 46, borderRadius: "50%", padding: 3, background: ringBg(lv) }}>
+                      <div style={{ width: 40, height: 40, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 600, color: "#fff", background: (doc.color && doc.color !== "#1E88D6") ? doc.color : (doc.appts.length > 0 ? "#5aa9dd" : "#DBE1E8") }}>{doc.name.charAt(0)}</div>
+                    </div>
+                    <div style={{ fontSize: 11, color: sel ? SKY_D : "#647386", marginTop: 5, fontWeight: sel ? 700 : 400 }}>{doc.name}</div>
+                    <div style={{ fontSize: 9, color: lv.col, marginTop: 1 }}>{lv.t}</div>
                   </div>
                 );
               })}
             </div>
           </div>
-          {/* 展开按鈕：点击切换到月视图 */}
-          <div
-            onClick={() => { setCalMode("month"); setMonthCursor(new Date(selDate.getFullYear(), selDate.getMonth(), 1)); }}
-            style={{ textAlign: "center", color: "#DBE1E8", fontSize: 18, lineHeight: 1, padding: "5px 0 8px", cursor: "pointer" }}
-          >⌄</div>
-        </div>
-      ) : (
-        <YabanHeatCalendar
-          selDate={selDate}
-          onSelectDate={(d) => { setSelDate(d); setWeekOffset(Math.round((d.getTime() - today.getTime()) / (7 * 86400000))); }}
-          getCellLoad={cellLoad}
-          monthCursor={monthCursor}
-          onMonthChange={setMonthCursor}
-          disablePast={false}
-          showToggle={true}
-          calMode="month"
-          onToggleMode={() => setCalMode("week")}
-          weekDates={weekDates}
-        />
+
+          {/* 视图切换 */}
+          <div style={{ background: "#fff", padding: "8px 14px", display: "flex", gap: 8, alignItems: "center", borderBottom: `1px solid ${LINE}` }}>
+            {(["doc","time"] as const).map(v => (
+              <div key={v} onClick={() => setApptView(v)} style={{ fontSize: 12, padding: "5px 12px", borderRadius: 10, fontWeight: 500, cursor: "pointer", background: apptView === v ? SKY : "#F6F8FA", color: apptView === v ? "#fff" : "#647386" }}>
+                {v === "doc" ? "按医生" : "按时段"}
+              </div>
+            ))}
+            <span style={{ marginLeft: "auto", fontSize: 11, color: GRAY }}>{appointments.length} 个预约</span>
+          </div>
+
+          {/* 内容区 */}
+          <div style={{ paddingBottom: 90 }}>
+            {apptView === "doc" ? (
+              selectedDocIdx !== null && docList[selectedDocIdx]
+                ? <SoloView doc={docList[selectedDocIdx]} onBack={() => setSelectedDocIdx(null)} onApptClick={id => setDetailModal({ open: true, apptId: id })} onNewAppt={(docName, start, end) => gotoCreate({ docName, start, end })} trkStart={trkStart} trkEnd={trkEnd} pctM={pctM} OPEN_START={OPEN_START} OPEN_END={OPEN_END} />
+                : <DocRows docList={docList} onDocClick={idx => setSelectedDocIdx(idx)} onApptClick={id => setDetailModal({ open: true, apptId: id })} onNewAppt={(docName, start, end) => gotoCreate({ docName, start, end })} trkStart={trkStart} trkEnd={trkEnd} pctM={pctM} onEditShift={(userId, name, color) => openOverride(userId, name, color)} />
+            ) : (
+              <TimeView docList={selectedDocIdx !== null && docList[selectedDocIdx] ? [docList[selectedDocIdx]] : docList} onApptClick={id => setDetailModal({ open: true, apptId: id })} onNewAppt={(docName, start, end) => gotoCreate({ docName, start, end })} trkStart={trkStart} trkEnd={trkEnd} />
+            )}
+          </div>
+        </>
       )}
 
-      {/* 忙闲速览 */}
-      <div style={{ background: "#fff", padding: "6px 14px 10px", borderBottom: `8px solid ${BG}` }}>
-        <div style={{ display: "flex", gap: 14, overflowX: "auto", padding: "10px 4px" }}>
-          {/* 全员 */}
-          <div onClick={() => setSelectedDocIdx(null)} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 46, cursor: "pointer", opacity: selectedDocIdx !== null ? 0.38 : 1, transform: selectedDocIdx !== null ? "scale(.88)" : "none", transition: ".22s" }}>
-            <div style={{ width: 46, height: 46, borderRadius: "50%", padding: 3, background: selectedDocIdx === null ? SKY_D : "#EBF5FB" }}>
-              <div style={{ width: 40, height: 40, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600, color: selectedDocIdx === null ? "#fff" : "#7c93a8", background: selectedDocIdx === null ? SKY_D : "#EBF5FB" }}>全部</div>
-            </div>
-            <div style={{ fontSize: 11, color: selectedDocIdx === null ? SKY_D : "#647386", marginTop: 5, fontWeight: selectedDocIdx === null ? 600 : 400 }}>全员</div>
-            <div style={{ fontSize: 9, color: "#9AA7B5", marginTop: 1 }}>{docList.length}人</div>
-          </div>
-          {docList.map((doc, idx) => {
-            const lv = loadLevel(doc.appts);
-            const sel = selectedDocIdx === idx;
-            const dimmed = selectedDocIdx !== null && !sel;
-            return (
-              <div key={doc.name} onClick={() => setSelectedDocIdx(sel ? null : idx)} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 46, cursor: "pointer", opacity: dimmed ? 0.38 : 1, transform: sel ? "scale(1.05)" : dimmed ? "scale(.88)" : "none", filter: dimmed ? "grayscale(.4)" : "none", transition: ".22s" }}>
-                <div style={{ width: 46, height: 46, borderRadius: "50%", padding: 3, background: ringBg(lv) }}>
-                  <div style={{ width: 40, height: 40, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 600, color: "#fff", background: (doc.color && doc.color !== "#1E88D6") ? doc.color : (doc.appts.length > 0 ? "#5aa9dd" : "#DBE1E8") }}>{doc.name.charAt(0)}</div>
+      {/* 周视图 */}
+      {viewMode === "week" && (
+        <>
+          <div style={{ background: "#fff", padding: "10px 16px 0", borderBottom: `1px solid ${LINE}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+              <div onClick={() => setWeekOffset(w => w - 1)} style={{ width: 28, height: 28, borderRadius: 4, background: "#F6F8FA", color: GRAY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, cursor: "pointer", flexShrink: 0 }}>‹</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: INK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {weekOffset === 0 ? "本周" : weekOffset < 0 ? `前${-weekOffset}周` : `后${weekOffset}周`}　{weekDates[0].getMonth() + 1}/{weekDates[0].getDate()} – {weekDates[6].getMonth() + 1}/{weekDates[6].getDate()}
                 </div>
-                <div style={{ fontSize: 11, color: sel ? SKY_D : "#647386", marginTop: 5, fontWeight: sel ? 700 : 400 }}>{doc.name}</div>
-                <div style={{ fontSize: 9, color: lv.col, marginTop: 1 }}>{lv.t}</div>
               </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 视图切换 */}
-      <div style={{ background: "#fff", padding: "8px 14px", display: "flex", gap: 8, alignItems: "center", borderBottom: `1px solid ${LINE}` }}>
-        {(["doc","time"] as const).map(v => (
-          <div key={v} onClick={() => setApptView(v)} style={{ fontSize: 12, padding: "5px 12px", borderRadius: 10, fontWeight: 500, cursor: "pointer", background: apptView === v ? SKY : "#F6F8FA", color: apptView === v ? "#fff" : "#647386" }}>
-            {v === "doc" ? "按医生" : "按时段"}
+              <YabanClinicHeader compact />
+              <div onClick={() => setWeekOffset(w => w + 1)} style={{ width: 28, height: 28, borderRadius: 4, background: "#F6F8FA", color: GRAY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, cursor: "pointer", flexShrink: 0 }}>›</div>
+            </div>
+            <div style={{ overflowX: "auto", margin: "0 -16px", padding: "0 16px 2px", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none" }}>
+              <div style={{ display: "flex", gap: 3 }}>
+                {["\u4e00","\u4e8c","\u4e09","\u56db","\u4e94","\u516d","\u65e5"].map((label, i) => {
+                  const d = weekDates[i];
+                  const dStr2 = toDateStr(d);
+                  const isSelected = isSameDay(d, selDate);
+                  const isToday = isSameDay(d, today);
+                  const isWeekend = i >= 5;
+                  const cellW = "calc((100vw - 50px) / 7)";
+                  const apptCount = (monthStats as any)[dStr2]?.cnt ?? 0;
+                  const bg = isSelected ? SKY_D : isToday ? SKY_L : isWeekend ? "#F0F4F8" : "#F6F8FA";
+                  const bd = isSelected ? SKY_D : isToday ? SKY : LINE;
+                  const tc = isSelected ? "#fff" : INK;
+                  return (
+                    <div key={i}
+                      onClick={() => { setSelDate(d); setViewMode("day"); }}
+                      style={{ width: cellW, flexShrink: 0,
+                        height: 72, borderRadius: 10, display: "flex", flexDirection: "column",
+                        alignItems: "center", justifyContent: "center", gap: 2,
+                        cursor: "pointer", transition: "all .18s",
+                        background: bg, border: `2px solid ${bd}`,
+                        boxShadow: isSelected ? "0 2px 8px rgba(30,136,214,.25)" : "none" }}>
+                      <span style={{ fontSize: 9, color: isSelected ? "rgba(255,255,255,.55)" : "#B0BAC6", fontWeight: 400, letterSpacing: 0.2 }}>周{label}</span>
+                      <span style={{ fontSize: 20, fontWeight: 800, color: tc, lineHeight: 1.05 }}>{d.getDate()}</span>
+                      <span style={{ fontSize: 10, color: isSelected ? "rgba(255,255,255,.8)" : (apptCount > 0 ? SKY_D : "transparent"), fontWeight: 600, lineHeight: 1 }}>{apptCount > 0 ? `${apptCount}约` : "·"}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div style={{ padding: "10px 0 14px", textAlign: "center", color: GRAY, fontSize: 12 }}>点击日期可进入日视图</div>
           </div>
-        ))}
-        <span style={{ marginLeft: "auto", fontSize: 11, color: GRAY }}>{appointments.length} 个预约</span>
-      </div>
 
-      {/* 内容区 */}
-      <div style={{ paddingBottom: 90 }}>
-        {apptView === "doc" ? (
-          selectedDocIdx !== null && docList[selectedDocIdx]
-            ? <SoloView doc={docList[selectedDocIdx]} onBack={() => setSelectedDocIdx(null)} onApptClick={id => setDetailModal({ open: true, apptId: id })} onNewAppt={(docName, start, end) => gotoCreate({ docName, start, end })} trkStart={trkStart} trkEnd={trkEnd} pctM={pctM} OPEN_START={OPEN_START} OPEN_END={OPEN_END} />
-            : <DocRows docList={docList} onDocClick={idx => setSelectedDocIdx(idx)} onApptClick={id => setDetailModal({ open: true, apptId: id })} onNewAppt={(docName, start, end) => gotoCreate({ docName, start, end })} trkStart={trkStart} trkEnd={trkEnd} pctM={pctM} onEditShift={(userId, name, color) => openOverride(userId, name, color)} />
-        ) : (
-          <TimeView docList={selectedDocIdx !== null && docList[selectedDocIdx] ? [docList[selectedDocIdx]] : docList} onApptClick={id => setDetailModal({ open: true, apptId: id })} onNewAppt={(docName, start, end) => gotoCreate({ docName, start, end })} trkStart={trkStart} trkEnd={trkEnd} />
-        )}
-      </div>
+          {/* 日/周/月 Tab 栏 */}
+          <div style={{ background: `linear-gradient(90deg,${SKY},#3BA9E0)`, padding: "10px 16px", display: "flex", justifyContent: "center" }}>
+            <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,.18)", borderRadius: 6, padding: 4 }}>
+              {(["day","week","month"] as const).map((vm) => {
+                const labels = { day: "日", week: "周", month: "月" };
+                const active = viewMode === vm;
+                return (
+                  <div key={vm} onClick={() => {
+                    setViewMode(vm);
+                    if (vm === "month") { setCalMode("month"); setMonthCursor(new Date(selDate.getFullYear(), selDate.getMonth(), 1)); }
+                  }} style={{
+                    padding: "7px 28px", borderRadius: 4, fontSize: 14, fontWeight: 600,
+                    background: active ? "#fff" : "transparent",
+                    color: active ? SKY_D : "#EBF5FB",
+                    boxShadow: active ? "0 1px 3px rgba(0,0,0,.1)" : "none",
+                    whiteSpace: "nowrap", cursor: "pointer", transition: "all .18s",
+                  }}>{labels[vm]}</div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 忙闲速览 */}
+          <div style={{ background: "#fff", padding: "6px 14px 10px" }}>
+            <div style={{ display: "flex", gap: 14, overflowX: "auto", padding: "10px 4px" }}>
+              <div onClick={() => setSelectedDocIdx(null)} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 46, cursor: "pointer", opacity: selectedDocIdx !== null ? 0.38 : 1, transform: selectedDocIdx !== null ? "scale(.88)" : "none", transition: ".22s" }}>
+                <div style={{ width: 46, height: 46, borderRadius: "50%", padding: 3, background: selectedDocIdx === null ? SKY_D : "#EBF5FB" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600, color: selectedDocIdx === null ? "#fff" : "#7c93a8", background: selectedDocIdx === null ? SKY_D : "#EBF5FB" }}>全部</div>
+                </div>
+                <div style={{ fontSize: 11, color: selectedDocIdx === null ? SKY_D : "#647386", marginTop: 5, fontWeight: selectedDocIdx === null ? 600 : 400 }}>全员</div>
+                <div style={{ fontSize: 9, color: "#9AA7B5", marginTop: 1 }}>{docList.length}人</div>
+              </div>
+              {docList.map((doc, idx) => {
+                const lv = loadLevel(doc.appts);
+                const sel = selectedDocIdx === idx;
+                const dimmed = selectedDocIdx !== null && !sel;
+                return (
+                  <div key={doc.name} onClick={() => setSelectedDocIdx(sel ? null : idx)} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 46, cursor: "pointer", opacity: dimmed ? 0.38 : 1, transform: sel ? "scale(1.05)" : dimmed ? "scale(.88)" : "none", filter: dimmed ? "grayscale(.4)" : "none", transition: ".22s" }}>
+                    <div style={{ width: 46, height: 46, borderRadius: "50%", padding: 3, background: ringBg(lv) }}>
+                      <div style={{ width: 40, height: 40, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 600, color: "#fff", background: (doc.color && doc.color !== "#1E88D6") ? doc.color : (doc.appts.length > 0 ? "#5aa9dd" : "#DBE1E8") }}>{doc.name.charAt(0)}</div>
+                    </div>
+                    <div style={{ fontSize: 11, color: sel ? SKY_D : "#647386", marginTop: 5, fontWeight: sel ? 700 : 400 }}>{doc.name}</div>
+                    <div style={{ fontSize: 9, color: lv.col, marginTop: 1 }}>{lv.t}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div style={{ background: "#fff", padding: "8px 14px", display: "flex", gap: 8, alignItems: "center", borderBottom: `1px solid ${LINE}` }}>
+            {(["doc","time"] as const).map(v => (
+              <div key={v} onClick={() => setApptView(v)} style={{ fontSize: 12, padding: "5px 12px", borderRadius: 10, fontWeight: 500, cursor: "pointer", background: apptView === v ? SKY : "#F6F8FA", color: apptView === v ? "#fff" : "#647386" }}>
+                {v === "doc" ? "按医生" : "按时段"}
+              </div>
+            ))}
+            <span style={{ marginLeft: "auto", fontSize: 11, color: GRAY }}>{appointments.length} 个预约</span>
+          </div>
+          <div style={{ paddingBottom: 90 }}>
+            {apptView === "doc" ? (
+              selectedDocIdx !== null && docList[selectedDocIdx]
+                ? <SoloView doc={docList[selectedDocIdx]} onBack={() => setSelectedDocIdx(null)} onApptClick={id => setDetailModal({ open: true, apptId: id })} onNewAppt={(docName, start, end) => gotoCreate({ docName, start, end })} trkStart={trkStart} trkEnd={trkEnd} pctM={pctM} OPEN_START={OPEN_START} OPEN_END={OPEN_END} />
+                : <DocRows docList={docList} onDocClick={idx => setSelectedDocIdx(idx)} onApptClick={id => setDetailModal({ open: true, apptId: id })} onNewAppt={(docName, start, end) => gotoCreate({ docName, start, end })} trkStart={trkStart} trkEnd={trkEnd} pctM={pctM} onEditShift={(userId, name, color) => openOverride(userId, name, color)} />
+            ) : (
+              <TimeView docList={selectedDocIdx !== null && docList[selectedDocIdx] ? [docList[selectedDocIdx]] : docList} onApptClick={id => setDetailModal({ open: true, apptId: id })} onNewAppt={(docName, start, end) => gotoCreate({ docName, start, end })} trkStart={trkStart} trkEnd={trkEnd} />
+            )}
+          </div>
+        </>
+      )}
+
+      {/* 月视图 */}
+      {viewMode === "month" && (
+        <>
+          <YabanHeatCalendar
+            selDate={selDate}
+            onSelectDate={(d) => { setSelDate(d); setWeekOffset(Math.round((d.getTime() - today.getTime()) / (7 * 86400000))); setViewMode("day"); }}
+            getCellLoad={cellLoad}
+            monthCursor={monthCursor}
+            onMonthChange={setMonthCursor}
+            disablePast={false}
+            showToggle={false}
+            calMode="month"
+            onToggleMode={() => setViewMode("week")}
+            weekDates={weekDates}
+          />
+
+          {/* 日/周/月 Tab 栏 */}
+          <div style={{ background: `linear-gradient(90deg,${SKY},#3BA9E0)`, padding: "10px 16px", display: "flex", justifyContent: "center" }}>
+            <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,.18)", borderRadius: 6, padding: 4 }}>
+              {(["day","week","month"] as const).map((vm) => {
+                const labels = { day: "日", week: "周", month: "月" };
+                const active = viewMode === vm;
+                return (
+                  <div key={vm} onClick={() => {
+                    setViewMode(vm);
+                    if (vm === "week") setCalMode("week");
+                  }} style={{
+                    padding: "7px 28px", borderRadius: 4, fontSize: 14, fontWeight: 600,
+                    background: active ? "#fff" : "transparent",
+                    color: active ? SKY_D : "#EBF5FB",
+                    boxShadow: active ? "0 1px 3px rgba(0,0,0,.1)" : "none",
+                    whiteSpace: "nowrap", cursor: "pointer", transition: "all .18s",
+                  }}>{labels[vm]}</div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 忙闲速览 */}
+          <div style={{ background: "#fff", padding: "6px 14px 10px" }}>
+            <div style={{ display: "flex", gap: 14, overflowX: "auto", padding: "10px 4px" }}>
+              <div onClick={() => setSelectedDocIdx(null)} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 46, cursor: "pointer", opacity: selectedDocIdx !== null ? 0.38 : 1, transform: selectedDocIdx !== null ? "scale(.88)" : "none", transition: ".22s" }}>
+                <div style={{ width: 46, height: 46, borderRadius: "50%", padding: 3, background: selectedDocIdx === null ? SKY_D : "#EBF5FB" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600, color: selectedDocIdx === null ? "#fff" : "#7c93a8", background: selectedDocIdx === null ? SKY_D : "#EBF5FB" }}>全部</div>
+                </div>
+                <div style={{ fontSize: 11, color: selectedDocIdx === null ? SKY_D : "#647386", marginTop: 5, fontWeight: selectedDocIdx === null ? 600 : 400 }}>全员</div>
+                <div style={{ fontSize: 9, color: "#9AA7B5", marginTop: 1 }}>{docList.length}人</div>
+              </div>
+              {docList.map((doc, idx) => {
+                const lv = loadLevel(doc.appts);
+                const sel = selectedDocIdx === idx;
+                const dimmed = selectedDocIdx !== null && !sel;
+                return (
+                  <div key={doc.name} onClick={() => setSelectedDocIdx(sel ? null : idx)} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 46, cursor: "pointer", opacity: dimmed ? 0.38 : 1, transform: sel ? "scale(1.05)" : dimmed ? "scale(.88)" : "none", filter: dimmed ? "grayscale(.4)" : "none", transition: ".22s" }}>
+                    <div style={{ width: 46, height: 46, borderRadius: "50%", padding: 3, background: ringBg(lv) }}>
+                      <div style={{ width: 40, height: 40, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 600, color: "#fff", background: (doc.color && doc.color !== "#1E88D6") ? doc.color : (doc.appts.length > 0 ? "#5aa9dd" : "#DBE1E8") }}>{doc.name.charAt(0)}</div>
+                    </div>
+                    <div style={{ fontSize: 11, color: sel ? SKY_D : "#647386", marginTop: 5, fontWeight: sel ? 700 : 400 }}>{doc.name}</div>
+                    <div style={{ fontSize: 9, color: lv.col, marginTop: 1 }}>{lv.t}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div style={{ background: "#fff", padding: "8px 14px", display: "flex", gap: 8, alignItems: "center", borderBottom: `1px solid ${LINE}` }}>
+            {(["doc","time"] as const).map(v => (
+              <div key={v} onClick={() => setApptView(v)} style={{ fontSize: 12, padding: "5px 12px", borderRadius: 10, fontWeight: 500, cursor: "pointer", background: apptView === v ? SKY : "#F6F8FA", color: apptView === v ? "#fff" : "#647386" }}>
+                {v === "doc" ? "按医生" : "按时段"}
+              </div>
+            ))}
+            <span style={{ marginLeft: "auto", fontSize: 11, color: GRAY }}>{appointments.length} 个预约</span>
+          </div>
+          <div style={{ paddingBottom: 90 }}>
+            {apptView === "doc" ? (
+              selectedDocIdx !== null && docList[selectedDocIdx]
+                ? <SoloView doc={docList[selectedDocIdx]} onBack={() => setSelectedDocIdx(null)} onApptClick={id => setDetailModal({ open: true, apptId: id })} onNewAppt={(docName, start, end) => gotoCreate({ docName, start, end })} trkStart={trkStart} trkEnd={trkEnd} pctM={pctM} OPEN_START={OPEN_START} OPEN_END={OPEN_END} />
+                : <DocRows docList={docList} onDocClick={idx => setSelectedDocIdx(idx)} onApptClick={id => setDetailModal({ open: true, apptId: id })} onNewAppt={(docName, start, end) => gotoCreate({ docName, start, end })} trkStart={trkStart} trkEnd={trkEnd} pctM={pctM} onEditShift={(userId, name, color) => openOverride(userId, name, color)} />
+            ) : (
+              <TimeView docList={selectedDocIdx !== null && docList[selectedDocIdx] ? [docList[selectedDocIdx]] : docList} onApptClick={id => setDetailModal({ open: true, apptId: id })} onNewAppt={(docName, start, end) => gotoCreate({ docName, start, end })} trkStart={trkStart} trkEnd={trkEnd} />
+            )}
+          </div>
+        </>
+      )}
 
       {/* 单日覆盖编辑弹层 */}
       {overrideModal?.open && (
