@@ -5066,6 +5066,23 @@ export default function LedgerDetail() {
                   <ChevronRight className="w-4 h-4 text-white" />
                 </div>
               </button>}
+              {/* 固定差价止盈网格模拟测算入口 - 仅创建者可见，视角查看时隐藏 */}
+              {isCustomAF && isOwner && !viewAsUserId && <button
+                onClick={() => setLocation(`/ledger/${ledgerId}/grid-tp-simulator`)}
+                className="w-full rounded-2xl p-4 flex items-center gap-4 shadow-sm active:opacity-90"
+                style={{ background: 'linear-gradient(135deg, #1a0a3d 0%, #2e1a5c 50%, #1f0d4a 100%)', border: '1px solid #4a2d7a', boxShadow: '0 2px 12px rgba(40,0,80,0.18)' }}
+              >
+                <div className="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 text-2xl" style={{ background: 'rgba(255,255,255,0.12)', border: '1.5px solid rgba(255,255,255,0.25)' }}>
+                  📈
+                </div>
+                <div className="text-left flex-1">
+                  <div className="font-semibold text-base text-white">固定差价止盈网格</div>
+                  <div className="text-xs mt-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>差价设置 · 止盈模拟 · 最优差价分析</div>
+                </div>
+                <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.3)' }}>
+                  <ChevronRight className="w-4 h-4 text-white" />
+                </div>
+              </button>}
             </div>
         </div>
       )}

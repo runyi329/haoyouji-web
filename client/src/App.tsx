@@ -155,6 +155,7 @@ const AJContract = lazy(() => import("./pages/AJContract"));
 const AfFeeDetail = lazy(() => import("./pages/AfFeeDetail"));
 const AfProfitForecast = lazy(() => import("./pages/AfProfitForecast"));
 const GridTradeSimulator = lazy(() => import("./pages/GridTradeSimulator"));
+const GridTpSimulator = lazy(() => import("./pages/GridTpSimulator"));
 const AfPayoutManage = lazy(() => import("./pages/AfPayoutManage"));
 const WaveRatioManage = lazy(() => import("./pages/WaveRatioManage"));
 const InterestManagePage = lazy(() => import("./pages/InterestManagePage"));
@@ -541,6 +542,7 @@ function Router() {
         <Route path="/ledger/:id/af-profit-forecast" component={AfProfitForecast} />
         <Route path="/ledger/:id/grid-simulator" component={GridTradeSimulator} />
         <Route path="/ledger/:id/grid-simulator/log/:logId" component={lazy(() => import("./pages/GridSimLogDetail"))} />
+        <Route path="/ledger/:id/grid-tp-simulator" component={GridTpSimulator} />
         <Route path="/ledger/:id/af-payout-manage" component={AfPayoutManage} />
         <Route path="/ledger/:id/wave-ratio-manage" component={WaveRatioManage} />
         <Route path="/ledger/:id/interest-manage" component={InterestManagePage} />
