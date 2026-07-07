@@ -659,6 +659,10 @@ export function FunderOrderCardV2Silver({
   const [noteEditValue, setNoteEditValue] = useState('');
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteDeleteConfirmIdx, setNoteDeleteConfirmIdx] = useState<number | null>(null);
+  // 当order.public_note从服务器加载完成后同步更新noteItems
+  useEffect(() => {
+    setNoteItems(parseNotes(order.public_note || ''));
+  }, [order.public_note]);
   const updateNoteM = trpc.ledger.funderUpdatePublicNote.useMutation();
   const saveNoteItems = async (newItems: ReturnType<typeof parseNotes>) => {
     if (!ledgerId) return;
@@ -1705,6 +1709,10 @@ export function FunderLenderCardSilver({
   const [noteEditingIdx, setNoteEditingIdx] = useState<number | null>(null);
   const [noteEditValue, setNoteEditValue] = useState('');
   const [noteSaving, setNoteSaving] = useState(false);
+  // 当order.public_note从服务器加载完成后同步更新noteItems
+  useEffect(() => {
+    setNoteItems(parseNotes(order.public_note || ''));
+  }, [order.public_note]);
   const updateNoteM = trpc.ledger.funderUpdatePublicNote.useMutation();
   const saveNoteItems = async (newItems: ReturnType<typeof parseNotes>) => {
     if (!ledgerId) return;
