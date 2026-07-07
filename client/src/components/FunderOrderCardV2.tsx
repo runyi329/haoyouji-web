@@ -967,7 +967,7 @@ export function FunderOrderCardV2Silver({
           {isStockCard ? (
             // 股票类：显示持有资产（计息基数，单位元）
             <>
-              <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC }}>仓位额度 (元)</div>
+              <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>仓位额度 (元)</div>
               <div style={{ lineHeight: 1 }}>
                 <span style={{ fontSize: '1.6rem', fontWeight: 700, color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: SL_TEXT_SHADOW_LG }}>
                   {order.interest_base ? parseFloat(order.interest_base).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '--'}
@@ -977,7 +977,7 @@ export function FunderOrderCardV2Silver({
           ) : (
             // 数字币：显示持有数量
             <>
-              <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC }}>持有数量 ({coin})</div>
+              <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>持有数量 ({coin})</div>
               <div style={{ lineHeight: 1 }}>
                 <span style={{ fontSize: '1.6rem', fontWeight: 700, color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: SL_TEXT_SHADOW_LG }}>
                   {fmt(qty, 2)}
@@ -987,15 +987,35 @@ export function FunderOrderCardV2Silver({
           )}
         </div>
 
-        {/* 股票类：利息（月化 = 年化÷12）显示在右侧 */}
+        {/* 股票类：担保资产显示在右侧（行2） */}
         {isStockCard && (
           <div className="text-right" style={{ flex: 1 }}>
-            <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>利息</div>
-            <div style={{ lineHeight: 1 }}>
-              <span style={{ fontSize: '1.1rem', fontWeight: 700, color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
-                {rateAbs ? `${(parseFloat(rateAbs) / 12).toFixed(2)}%` : '--'}
-              </span>
-            </div>
+            {(order as any).collateral_share_mode === 'self' ? (
+              <>
+                <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>担保资产</div>
+                <div className="text-sm font-semibold" style={{ color: '#DC2626' }}>共享担保</div>
+              </>
+            ) : (
+              <>
+                <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>担保资产</div>
+                <div className="text-sm text-right" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+                  {isFC2977 ? (
+                    fc2977MarginBasePct !== null ? (
+                      <span>
+                        <span style={{ display: 'inline-block', backgroundColor: 'rgba(60,35,0,0.75)', color: '#F5C842', fontSize: '0.55rem', padding: '1.5px 5px', borderRadius: 8, fontWeight: 700, lineHeight: 1.2, verticalAlign: 'middle', marginRight: 3 }}>
+                          {fc2977MarginBasePct >= 0 ? '余' : '缺'}
+                        </span>
+                        <span style={{ fontWeight: 400, color: SL_TEXT_PRI }}>
+                          {fc2977MarginBasePct >= 0 ? '+' : '-'}{Math.abs(fc2977MarginBasePct).toFixed(1)}%
+                        </span>
+                      </span>
+                    ) : <span style={{ color: SL_TEXT_DIM }}>加载中...</span>
+                  ) : collateralAssets.length > 0
+                    ? collateralAssets.map((c, i) => <div key={i}>{parseFloat(c.qty).toLocaleString()} {c.coin === 'CNY' ? '元' : c.coin}</div>)
+                    : '--'}
+                </div>
+              </>
+            )}
           </div>
         )}
         {/* 买入价 / 当前价 / 浮动盈亏：股票类隐藏 */}
@@ -1057,102 +1077,76 @@ export function FunderOrderCardV2Silver({
       </div>
 
       {/* ── 行3：次要数据行（3列）── */}
-      <div className="grid grid-cols-3 gap-0 px-4 py-2" style={{ fontFamily: SL_NUM_FONT }}>
+      <div className={isStockCard ? "flex gap-0 px-5 py-2" : "grid grid-cols-3 gap-0 px-4 py-2"} style={{ fontFamily: SL_NUM_FONT }}>
         {isStockCard ? (
-          // 股票类：开仓日期居左
-          <div>
-            <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>开仓日期</div>
-            <div className="text-sm" style={{ color: SL_TEXT_PRI }}>
-              {order.buy_date ? fmtDate(order.buy_date) : '--'}
+          // 股票类：交易周期居左（开仓日期 ~ 今天北京时间，单行显示）
+          <div style={{ flex: '0 0 60%' }}>
+            <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>
+              交易周期{order.buy_date && (() => {
+                const startDay = new Date(order.buy_date + 'T00:00:00+08:00').getTime();
+                const nowBJStr = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+                const nowDay = new Date(nowBJStr + 'T00:00:00+08:00').getTime();
+                const days = nowDay < startDay ? 0 : Math.floor((nowDay - startDay) / (1000 * 60 * 60 * 24)) + 1;
+                return <span> ({days}天)</span>;
+              })()}
+            </div>
+            <div className="text-sm" style={{ color: SL_TEXT_PRI, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'tabular-nums' }}>
+              {order.buy_date ? (() => {
+                const todayBJ = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+                return `${fmtDate(order.buy_date)} ~ ${fmtDate(todayBJ)}`;
+              })() : '--'}
             </div>
           </div>
         ) : (
           // 数字币类：当前市値居左
           <div>
-            <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>当前市値 (U)</div>
+            <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>当前市値 (U)</div>
             <div className="text-sm" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
               {currentValue != null ? fmt(currentValue, 0) : '--'}
             </div>
           </div>
         )}
-        {isStockCard ? (
-          // 股票类：交易天数居中
-          <div className="text-center">
-            <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>交易天数</div>
-            <div className="text-sm" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
-              {order.buy_date
-                ? (() => {
-                    // startDay: 开仓日北京时间0点
-                    const startDay = new Date(order.buy_date + 'T00:00:00+08:00').getTime();
-                    // nowDay: 当前北京时间日期的0点
-                    const nowBJStr = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
-                    const nowDay = new Date(nowBJStr + 'T00:00:00+08:00').getTime();
-                    if (nowDay < startDay) return 0;
-                    return Math.floor((nowDay - startDay) / (1000 * 60 * 60 * 24)) + 1;
-                  })()
-                : '--'}
-            </div>
-          </div>
-        ) : (
+        {!isStockCard && (
           // 数字币类：开仓日期居中
           <div className="text-center">
-            <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>开仓日期</div>
+            <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>开仓日期</div>
             <div className="text-sm" style={{ color: SL_TEXT_PRI }}>
               {order.buy_date ? fmtDate(order.buy_date) : '--'}
             </div>
           </div>
         )}
-        <div className="text-right">
-          {(order as any).collateral_share_mode === 'self' ? (
-            // 共享担保模式
-            <>
-              <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>担保资产</div>
-              <div className="text-sm font-semibold" style={{ color: '#DC2626' }}>共享担保</div>
-            </>
-          ) : isStockCard ? (
-            // 股票类：显示担保资产
-            <>
-              <div className="text-[10px] mb-0.5 flex items-center justify-end gap-1" style={{ color: SL_TEXT_SEC }}>
-                {isFC2977 && fc2977RemainingMarginU !== null && (
-                  <span style={{ backgroundColor: 'rgba(60,35,0,0.75)', color: '#F5C842', fontSize: '0.55rem', padding: '1.5px 5px', borderRadius: 8, fontWeight: 700, lineHeight: 1.2 }}>{fc2977RemainingMarginU >= 0 ? '余' : '缺'}</span>
-                )}
-                担保资产
-              </div>
-              <div className="text-sm" style={{ color: SL_TEXT_PRI }}>
-                {isFC2977 ? (
-                  fc2977RemainingMarginU !== null ? (
-                    <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
-                      {Math.abs(fc2977RemainingMarginU).toLocaleString('zh-CN', { maximumFractionDigits: 0 })} U
-                    </span>
-                  ) : <span style={{ color: SL_TEXT_DIM }}>加载中...</span>
-                ) : collateralAssets.length > 0
-                  ? collateralAssets.map((c, i) => <div key={i}>{parseFloat(c.qty).toLocaleString()} {c.coin === 'CNY' ? '元' : c.coin}</div>)
-                  : '--'}
-              </div>
-            </>
-          ) : (
-            // 数字币类：显示担保资产
-            <>
-              <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC }}>担保资产</div>
-              <div className="text-sm" style={{ color: SL_TEXT_PRI }}>
-                {collateralAssets.length > 0 ? collateralAssets.map((c, i) => <div key={i}>{c.qty} {c.coin}</div>) : '--'}
-              </div>
-            </>
-          )}
-        </div>
+        {/* 股票类：利息居右（行3） */}
+        {isStockCard ? (
+          <div className="text-right" style={{ flex: 1 }}>
+            <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>利息</div>
+            <div className="text-sm" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+              {rateAbs ? `${(parseFloat(rateAbs) / 12).toFixed(2)}%` : '--'}
+            </div>
+          </div>
+        ) : (
+          // 数字币类：担保资产居右
+          <div className="text-right">
+            <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>担保资产</div>
+            <div className="text-sm" style={{ color: SL_TEXT_PRI }}>
+              {collateralAssets.length > 0 ? collateralAssets.map((c, i) => <div key={i}>{c.qty} {c.coin}</div>) : '--'}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Tab栏：详情 | 备注 ── */}
-      <div className="flex" style={{ borderTop: `1px dashed ${SL_DIVIDER}` }}>
+      <div className="flex" style={{ borderTop: `1px solid ${SL_DIVIDER}` }}>
         <button
-          className="flex-1 flex items-center justify-center gap-1 py-2"
-          style={{ borderRight: `1px dashed ${SL_DIVIDER}`, background: feeExpanded ? 'rgba(0,0,0,0.03)' : 'transparent' }}
+          className="flex-1 flex items-center justify-center gap-1 py-2 relative"
+          style={{ background: feeExpanded ? 'rgba(0,0,0,0.03)' : 'transparent' }}
           onClick={() => toggleTab('detail')}
         >
           <span style={{ color: feeExpanded ? SL_TEXT_PRI : SL_TEXT_DIM, fontSize: '0.7rem', fontWeight: feeExpanded ? 600 : 400 }}>详情</span>
           {feeExpanded
             ? <ChevronUp className="w-3 h-3" style={{ color: SL_TEXT_DIM }} />
             : <ChevronDown className="w-3 h-3" style={{ color: SL_TEXT_DIM }} />}
+          {/* 不顶天立地的垂直分隔线 */}
+          <span style={{ position: 'absolute', right: 0, top: '20%', height: '60%', width: 1, background: SL_DIVIDER }} />
         </button>
         <button
           className="flex-1 flex items-center justify-center gap-1 py-2"
@@ -1236,12 +1230,6 @@ export function FunderOrderCardV2Silver({
             <div className="flex justify-between items-center">
               <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
                 已结利息
-                <button
-                  type="button"
-                  onClick={e => { e.stopPropagation(); setShowInterestHistory(true); }}
-                  className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
-                  style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
-                >!</button>
                 {isFC2977 && _parsedCollateralSource && (
                   <button
                     type="button"
@@ -2050,16 +2038,18 @@ export function FunderLenderCardSilver({
       </div>
 
       {/* ── Tab 栏：详情 | 备注 ── */}
-      <div className="flex" style={{ borderTop: `1px dashed ${SL_DIVIDER}` }}>
+      <div className="flex" style={{ borderTop: `1px solid ${SL_DIVIDER}` }}>
         <button
-          className="flex-1 flex items-center justify-center gap-1 py-2"
-          style={{ borderRight: `1px dashed ${SL_DIVIDER}`, background: feeExpanded ? 'rgba(0,0,0,0.03)' : 'transparent' }}
+          className="flex-1 flex items-center justify-center gap-1 py-2 relative"
+          style={{ background: feeExpanded ? 'rgba(0,0,0,0.03)' : 'transparent' }}
           onClick={() => toggleTab('detail')}
         >
           <span style={{ color: feeExpanded ? SL_TEXT_PRI : SL_TEXT_DIM, fontSize: '0.7rem', fontWeight: feeExpanded ? 600 : 400 }}>详情</span>
           {feeExpanded
             ? <ChevronUp className="w-3 h-3" style={{ color: SL_TEXT_DIM }} />
             : <ChevronDown className="w-3 h-3" style={{ color: SL_TEXT_DIM }} />}
+          {/* 不顶天立地的垂直分隔线 */}
+          <span style={{ position: 'absolute', right: 0, top: '20%', height: '60%', width: 1, background: SL_DIVIDER }} />
         </button>
         <button
           className="flex-1 flex items-center justify-center gap-1 py-2"
@@ -2186,12 +2176,6 @@ export function FunderLenderCardSilver({
             <div className="flex justify-between items-center">
               <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
                 已结利息
-                <button
-                  type="button"
-                  onClick={e => { e.stopPropagation(); setShowInterestHistory(true); }}
-                  className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
-                  style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}
-                >!</button>
               </span>
               <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{displayPaid > 0 ? `+${fmt(displayPaid, 2)} ${interestUnit}` : `+0.00 ${interestUnit}`}</span>
             </div>
