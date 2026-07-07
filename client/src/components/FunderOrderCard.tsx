@@ -20,6 +20,7 @@ export const STATUS_OPTIONS = [
 ];
 
 export const INTEREST_PAYMENT_OPTIONS = [
+  { value: 'profit_post', label: '盈利后付' },
   { value: 'monthly_pre', label: '月付先付' },
   { value: 'monthly_post', label: '月付后付' },
   { value: 'semi_pre', label: '半年付先付' },
