@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-07
+// 生成时间：2026-07-08
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8197,5 +8197,10 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-07T07:07:22Z", type: "feat", cleanMessage: "数字币银色卡片UI优化" },
     { date: "2026-07-07T07:41:31Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
     { date: "2026-07-07T11:50:10Z", type: "feat", cleanMessage: "融资付息列表优化 - 收/付分区、日息列、CNY折算、天数Tooltip、起息日隐藏、收息判断修复" },
+    { date: "2026-07-07T12:19:38Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-07T13:08:48Z", type: "feat", cleanMessage: "融资付息全列可排序 + 蓝色汇总区域按tab分别显示" },
+    { date: "2026-07-07T13:12:34Z", type: "fix", cleanMessage: "提升isCollect到组件顶层，修复蓝色区域Can't find variable报错" },
+    { date: "2026-07-07T14:41:10Z", type: "fix", cleanMessage: "融资付息列表优化及订单拥有者切换修复" },
+    { date: "2026-07-07T14:47:25Z", type: "feat", cleanMessage: "融资付息按方向视图，去掉顶部汇总小卡片" },
   ],
 };
