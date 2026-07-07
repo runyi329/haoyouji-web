@@ -152,6 +152,12 @@ export default function AfFeeDetail() {
       setFinSortAsc(true);
     }
   };
+  // 收/付方向判断：年利率≤ 0（负数或零）则为收息，否则按 principal_lent_out 判断
+  const isCollect = (o: any) => {
+    const rate = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
+    if (rate != null && rate <= 0) return true;
+    return o.principal_lent_out == 1;
+  };
 
   const [mainTab, setMainTab] = useState<'gujian' | 'finance'>('gujian');
 
@@ -1042,12 +1048,6 @@ export default function AfFeeDetail() {
         ) : (() => {
           const statusMap: Record<string, string> = { active: '进行中', settled: '已结清', completed: '已结清', cancelled: '已取消' };
           const isFinSettled = (o: any) => o.status === 'settled' || o.status === 'completed';
-          // 收/付方向判断：年利率≤ 0（负数或零）则为收息，否则按 principal_lent_out 判断
-          const isCollect = (o: any) => {
-            const rate = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
-            if (rate != null && rate <= 0) return true;
-            return o.principal_lent_out == 1;
-          };
           const dirFiltered = financeOrders.filter((o: any) => {
             if (finDirectionFilter === 'collect') return isCollect(o);
             if (finDirectionFilter === 'pay') return !isCollect(o);
