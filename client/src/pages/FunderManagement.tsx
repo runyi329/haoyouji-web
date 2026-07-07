@@ -884,18 +884,45 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       {/* 顶部导航 */}
       {!hideHeader && (
       <div
-        className="sticky top-0 z-10 px-4 py-3 flex items-center gap-3"
+        className="sticky top-0 z-10"
         style={{ background: 'linear-gradient(135deg, #1A56DB 0%, #3B82F6 100%)' }}
       >
-        <button onClick={() => setLocation(`/ledger/${ledgerId}/settings`)} className="p-1 -ml-2">
-          <ChevronLeft className="w-6 h-6 text-white" />
-        </button>
-        <h1 className="text-lg font-semibold text-white flex-1">资方管理</h1>
-        {isAdminUser && (
-          <button onClick={() => setShowRecycleBin(true)} className="p-1" title="回收站">
-            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+        {/* 第一行：返回 + 标题 + 回收站 */}
+        <div className="px-4 py-3 flex items-center gap-3">
+          <button onClick={() => setLocation(`/ledger/${ledgerId}/settings`)} className="p-1 -ml-2">
+            <ChevronLeft className="w-6 h-6 text-white" />
           </button>
-        )}
+          <h1 className="text-lg font-semibold text-white flex-1">资方管理</h1>
+          {isAdminUser && (
+            <button onClick={() => setShowRecycleBin(true)} className="p-1" title="回收站">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            </button>
+          )}
+        </div>
+        {/* 第二行：持币统计 */}
+        {(() => {
+          const activeOrders: any[] = (assetOrders as any[]).filter((o: any) => o.status === 'active');
+          const coinMap: Record<string, number> = {};
+          for (const o of activeOrders) {
+            const coin = o.coin || o.asset_coin || '';
+            const qty = parseFloat(o.buy_quantity || o.quantity || '0');
+            if (!coin || isNaN(qty) || qty <= 0) continue;
+            coinMap[coin] = (coinMap[coin] || 0) + qty;
+          }
+          const entries = Object.entries(coinMap);
+          if (entries.length === 0) return null;
+          const fmtQty = (v: number) => v % 1 === 0 ? v.toLocaleString() : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+          return (
+            <div className="px-4 pb-3 flex flex-wrap gap-x-4 gap-y-1">
+              {entries.map(([coin, qty]) => (
+                <div key={coin} className="flex items-baseline gap-1">
+                  <span className="text-[11px] font-medium" style={{ color: 'rgba(255,255,255,0.6)' }}>{coin}</span>
+                  <span className="text-sm font-bold" style={{ color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{fmtQty(qty)}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
       </div>
       )}
 
