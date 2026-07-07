@@ -294,33 +294,28 @@ export default function AfFeeDetail() {
           </div>
         </div>
 
-        {/* 三列卡片：管理费(进行中/已结清/累计) + 今日(管理费/订单数) */}
-        {(() => {
+        {/* 蓝色汇总区域：按 tab 分别显示 */}
+        {mainTab === 'gujian' ? (() => {
+          // 谷底增筹：管理费进行中/已结清/累计 + 今日
           const nowBJ = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
           const todayStartBJ = new Date(nowBJ.getFullYear(), nowBJ.getMonth(), nowBJ.getDate());
           let todayFee = 0;
           let todayOrderCount = 0;
           for (const item of feeItems) {
             if (item.feeType === 'settled') {
-              // 已卖出：卖出日是今天才计入
               const sellDate = item.sellConfirmedAt ? new Date(item.sellConfirmedAt) : null;
               if (sellDate) {
                 const sellBJ = new Date(sellDate.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
                 const sellDay = new Date(sellBJ.getFullYear(), sellBJ.getMonth(), sellBJ.getDate());
-                if (sellDay.getTime() >= todayStartBJ.getTime()) {
-                  todayFee += item.dailyFee;
-                  todayOrderCount += 1;
-                }
+                if (sellDay.getTime() >= todayStartBJ.getTime()) { todayFee += item.dailyFee; todayOrderCount += 1; }
               }
             } else {
-              // 进行中（持仓中/委卖中）：每天都计费
               todayFee += item.dailyFee;
               todayOrderCount += 1;
             }
           }
           return (
             <div className="grid grid-cols-2 gap-2 px-4 pb-5 pt-3">
-              {/* 管理费容器：进行中/已结清/累计 */}
               <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
                 <p className="text-white/55 text-xs mb-2">管理费</p>
                 <div className="space-y-1.5">
@@ -338,7 +333,6 @@ export default function AfFeeDetail() {
                   </div>
                 </div>
               </div>
-              {/* 今日容器：今日管理费/订单数 */}
               <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
                 <p className="text-white/55 text-xs mb-2">今日</p>
                 <div className="space-y-1.5">
@@ -349,6 +343,63 @@ export default function AfFeeDetail() {
                   <div className="flex justify-between text-xs">
                     <span className="text-white/50">订单数</span>
                     <span className="text-white font-bold">{todayOrderCount} 单</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })() : (() => {
+          // 融资付息：收息/付息/日息汇总
+          const ongoingOrders = financeOrders.filter((o: any) => o.status === 'active');
+          const getBase = (o: any) => {
+            const raw = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
+            return o.coin === 'CNY' ? raw / cnyRate : raw;
+          };
+          const getDailyAbs = (o: any) => {
+            const b = getBase(o);
+            const r = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
+            return (b && r != null) ? Math.abs(b * (r / 100) / 365) : 0;
+          };
+          const collectOrders = ongoingOrders.filter((o: any) => isCollect(o));
+          const payOrders = ongoingOrders.filter((o: any) => !isCollect(o));
+          const collectDailyTotal = collectOrders.reduce((s: number, o: any) => s + getDailyAbs(o), 0);
+          const payDailyTotal = payOrders.reduce((s: number, o: any) => s + getDailyAbs(o), 0);
+          const netDaily = collectDailyTotal - payDailyTotal;
+          const collectBaseTotal = collectOrders.reduce((s: number, o: any) => s + getBase(o), 0);
+          const payBaseTotal = payOrders.reduce((s: number, o: any) => s + getBase(o), 0);
+          return (
+            <div className="grid grid-cols-2 gap-2 px-4 pb-5 pt-3">
+              <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
+                <p className="text-white/55 text-xs mb-2">利息（进行中）</p>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-white/50">收息日息</span>
+                    <span className="text-emerald-300 font-semibold">+{collectDailyTotal.toFixed(2)} U</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-white/50">付息日息</span>
+                    <span className="text-rose-300 font-semibold">-{payDailyTotal.toFixed(2)} U</span>
+                  </div>
+                  <div className="flex justify-between text-xs border-t border-white/10 pt-1.5">
+                    <span className="text-white/70">净日息</span>
+                    <span className={`font-bold ${netDaily >= 0 ? 'text-white' : 'text-rose-300'}`}>{netDaily >= 0 ? '+' : ''}{netDaily.toFixed(2)} U</span>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
+                <p className="text-white/55 text-xs mb-2">本金规模（进行中）</p>
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-white/50">收息本金</span>
+                    <span className="text-emerald-300 font-semibold">{collectBaseTotal.toFixed(0)} U</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-white/50">付息本金</span>
+                    <span className="text-rose-300 font-semibold">{payBaseTotal.toFixed(0)} U</span>
+                  </div>
+                  <div className="flex justify-between text-xs border-t border-white/10 pt-1.5">
+                    <span className="text-white/70">订单数</span>
+                    <span className="text-white font-bold">{ongoingOrders.length} 单</span>
                   </div>
                 </div>
               </div>
@@ -1068,6 +1119,12 @@ export default function AfFeeDetail() {
               else if (finSortKey === 'rate') { av = a.interest_rate_annual != null ? Number(a.interest_rate_annual) : 0; bv = b.interest_rate_annual != null ? Number(b.interest_rate_annual) : 0; }
               else if (finSortKey === 'accrued') { av = getAccrued(a); bv = getAccrued(b); }
               else if (finSortKey === 'paid') { av = finPaidMap[Number(a.id)] != null ? Number(finPaidMap[Number(a.id)]) : 0; bv = finPaidMap[Number(b.id)] != null ? Number(finPaidMap[Number(b.id)]) : 0; }
+              else if (finSortKey === 'order_no') { av = (a.order_no || '').toLowerCase(); bv = (b.order_no || '').toLowerCase(); }
+              else if (finSortKey === 'daily') {
+                const getDaily = (o: any) => { const b2 = getBase(o); const r2 = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null; return (b2 && r2 != null) ? Math.abs(b2 * (r2 / 100) / 365) : 0; };
+                av = getDaily(a); bv = getDaily(b);
+              }
+              else if (finSortKey === 'status') { av = (a.status || ''); bv = (b.status || ''); }
               else return 0;
               if (av < bv) return finSortAsc ? -1 : 1;
               if (av > bv) return finSortAsc ? 1 : -1;
@@ -1095,16 +1152,16 @@ export default function AfFeeDetail() {
                   <table className="border-collapse text-xs" style={{ width: 'auto', tableLayout: 'auto' }}>
                     <thead>
                       <tr style={{ background: '#f8faff' }} className="text-gray-500">
-                        <th onClick={() => toggleFinSort('username')} className="px-2 py-2 text-left font-semibold border border-gray-200 cursor-pointer select-none" style={{ width: '4em', minWidth: '4em', maxWidth: '4em' }}>用户</th>
-                        <th onClick={() => toggleFinSort('coin')} className="px-2 py-2 text-center font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">币</th>
-                        <th onClick={() => toggleFinSort('days')} className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">天数</th>
-                        <th className="px-2 py-2 text-left font-semibold border border-gray-200 whitespace-nowrap">订单</th>
-                        <th onClick={() => toggleFinSort('base')} className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">计息本金</th>
-                        <th onClick={() => toggleFinSort('rate')} className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">年利率</th>
-                        <th className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap">日息</th>
-                        <th onClick={() => toggleFinSort('accrued')} className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">待付利息</th>
-                        <th onClick={() => toggleFinSort('paid')} className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">已付利息</th>
-                        <th className="px-2 py-2 text-center font-semibold border border-gray-200 whitespace-nowrap">状态</th>
+                        <th onClick={() => toggleFinSort('username')} className="px-2 py-2 text-left font-semibold border border-gray-200 cursor-pointer select-none" style={{ width: '4em', minWidth: '4em', maxWidth: '4em' }}>用户{finSortKey === 'username' ? (finSortAsc ? ' ↑' : ' ↓') : ''}</th>
+                        <th onClick={() => toggleFinSort('coin')} className="px-2 py-2 text-center font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">币{finSortKey === 'coin' ? (finSortAsc ? ' ↑' : ' ↓') : ''}</th>
+                        <th onClick={() => toggleFinSort('days')} className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">天数{finSortKey === 'days' ? (finSortAsc ? ' ↑' : ' ↓') : ''}</th>
+                        <th onClick={() => toggleFinSort('order_no')} className="px-2 py-2 text-left font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">订单{finSortKey === 'order_no' ? (finSortAsc ? ' ↑' : ' ↓') : ''}</th>
+                        <th onClick={() => toggleFinSort('base')} className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">计息本金{finSortKey === 'base' ? (finSortAsc ? ' ↑' : ' ↓') : ''}</th>
+                        <th onClick={() => toggleFinSort('rate')} className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">年利率{finSortKey === 'rate' ? (finSortAsc ? ' ↑' : ' ↓') : ''}</th>
+                        <th onClick={() => toggleFinSort('daily')} className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">日息{finSortKey === 'daily' ? (finSortAsc ? ' ↑' : ' ↓') : ''}</th>
+                        <th onClick={() => toggleFinSort('accrued')} className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">待付利息{finSortKey === 'accrued' ? (finSortAsc ? ' ↑' : ' ↓') : ''}</th>
+                        <th onClick={() => toggleFinSort('paid')} className="px-2 py-2 text-right font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">已付利息{finSortKey === 'paid' ? (finSortAsc ? ' ↑' : ' ↓') : ''}</th>
+                        <th onClick={() => toggleFinSort('status')} className="px-2 py-2 text-center font-semibold border border-gray-200 whitespace-nowrap cursor-pointer select-none">状态{finSortKey === 'status' ? (finSortAsc ? ' ↑' : ' ↓') : ''}</th>
                         <th className="px-2 py-2 text-center font-semibold border border-gray-200 whitespace-nowrap"></th>
                       </tr>
                     </thead>
