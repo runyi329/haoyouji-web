@@ -1604,7 +1604,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     <button
                       type="button"
                       title="收"
-                      onClick={() => { const raw = formData.interestRateAnnual; const absVal = raw.startsWith('-') ? raw.slice(1) : raw; setFormData(d => ({ ...d, interestRateAnnual: absVal || '0' })); }}
+                      onClick={() => { const raw = formData.interestRateAnnual; const absVal = raw.startsWith('-') ? raw.slice(1) : raw; setFormData(d => ({ ...d, interestRateAnnual: absVal })); }}
                       className="w-9 h-9 rounded-full flex items-center justify-center text-lg font-bold shrink-0 transition-all"
                       style={!isNeg
                         ? { background: '#FEE2E2', color: '#DC2626', border: '2px solid #DC2626' }
@@ -1613,7 +1613,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     <button
                       type="button"
                       title="付"
-                      onClick={() => { const raw = formData.interestRateAnnual; const absVal = raw.startsWith('-') ? raw.slice(1) : raw; setFormData(d => ({ ...d, interestRateAnnual: '-' + (absVal || '0') })); }}
+                      onClick={() => { const raw = formData.interestRateAnnual; const absVal = raw.startsWith('-') ? raw.slice(1) : raw; setFormData(d => ({ ...d, interestRateAnnual: '-' + absVal })); }}
                       className="w-9 h-9 rounded-full flex items-center justify-center text-lg font-bold shrink-0 transition-all"
                       style={isNeg
                         ? { background: '#DEF7EC', color: '#059669', border: '2px solid #059669' }
@@ -1622,14 +1622,13 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   </>
                   ); })()}
                   <input
-                    type="number"
+                    type="text"
                     inputMode="decimal"
                     value={formData.interestRateAnnual.startsWith('-') ? formData.interestRateAnnual.slice(1) : formData.interestRateAnnual}
                     onChange={e => {
                       const val = e.target.value;
                       const isNeg = formData.interestRateAnnual.startsWith('-');
-                      // 负号模式下，输入0或空时保持'-0'，确保rate_negative不丢失
-                      const newVal = isNeg ? ('-' + (val || '0')) : (val || '0');
+                      const newVal = isNeg ? ('-' + val) : val;
                       setFormData(d => ({ ...d, interestRateAnnual: newVal }));
                     }}
                     className="flex-1 min-w-0 px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-blue-200"
