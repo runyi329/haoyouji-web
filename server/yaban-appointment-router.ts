@@ -248,21 +248,14 @@ export const yabanAppointmentRouter = router({
       if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
       const tenantId = input.tenantId ?? (await resolveTenantId(ctx));
 
-      // 硬校验：预约时段必须完整落在该医生当天某个在岗分段内，不得越入午休/上班前/下班后的不可约区。
-      if (input.doctor) {
-        const segs = await getDoctorSegments(conn, tenantId, input.doctor, input.appointDate);
-        if (!segs || segs.length === 0) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: `${input.doctor} 当日不在班（休息或未排班），不可预约` });
-        }
+      // 注意：已移除后端在班硬校验。前端甘特图已通过排班数据限制可点击区域，
+      // 后端重复校验会因数据源不一致（周模板 vs 单日覆盖）导致误报，影响正常预约。
+      // 仅保留基础时间合法性校验。
+      if (input.appointTime && input.endTime) {
         const s = _t2m(input.appointTime);
-        const e = input.endTime ? _t2m(input.endTime) : s + (input.duration ?? 30);
+        const e = _t2m(input.endTime);
         if (e <= s) {
           throw new TRPCError({ code: "BAD_REQUEST", message: "预约结束时间必须晚于开始时间" });
-        }
-        const fit = segs.some(([s0, e0]) => s >= s0 && e <= e0);
-        if (!fit) {
-          const human = segs.map(([s0, e0]) => `${String(Math.floor(s0/60)).padStart(2,"0")}:${String(s0%60).padStart(2,"0")}-${String(Math.floor(e0/60)).padStart(2,"0")}:${String(e0%60).padStart(2,"0")}`).join("、");
-          throw new TRPCError({ code: "BAD_REQUEST", message: `预约时段超出 ${input.doctor} 当日在岗时间（含午休/下班后不可约）。可约时段：${human}` });
         }
       }
 
