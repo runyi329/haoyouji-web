@@ -983,14 +983,14 @@ function FunderOrderCardLegacy({
                   collateralAssets.length === 0
                     ? (
                       <div className="flex items-center justify-between text-xs mt-0.5">
-                        <span className="font-semibold" style={{ color: '#DC2626' }}>共享担保</span>
-                        <span className="text-xs" style={{ color: '#DC2626' }}>共享担保物</span>
+                        <span className="font-semibold" style={{ color: '#A80000' }}>共享担保</span>
+                        <span className="text-xs" style={{ color: '#A80000' }}>共享担保物</span>
                       </div>
                     )
                     : collateralAssets.map((a, idx) => (
                       <div key={idx}>
                         <div className="flex items-center justify-between mt-0.5">
-                          <span className="font-semibold" style={{ color: '#DC2626' }}>{collateralAssets.length > 1 ? `共享担保${idx + 1}` : '共享担保'}</span>
+                          <span className="font-semibold" style={{ color: '#A80000' }}>{collateralAssets.length > 1 ? `共享担保${idx + 1}` : '共享担保'}</span>
                           <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(a.qty).toLocaleString()} {a.coin}</span>
                         </div>
                         {collateralItemValues[idx] !== null && collateralItemValues[idx] !== undefined && (
@@ -1029,7 +1029,7 @@ function FunderOrderCardLegacy({
             )}
             {show('collateralValue') && (
               <div className="flex items-center justify-between">
-                <span className={orderShareMode === 'self' ? 'font-semibold' : 'text-gray-400'} style={{ color: orderShareMode === 'self' ? '#DC2626' : undefined }}>{collateralAssets.length > 1 ? '共享担保总値' : (orderShareMode === 'self' ? '共享担保价値' : '担保价値')}</span>
+                <span className={orderShareMode === 'self' ? 'font-semibold' : 'text-gray-400'} style={{ color: orderShareMode === 'self' ? '#A80000' : undefined }}>{collateralAssets.length > 1 ? '共享担保总値' : (orderShareMode === 'self' ? '共享担保价値' : '担保价値')}</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>{collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} U</span>
               </div>
             )}
