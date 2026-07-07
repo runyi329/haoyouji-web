@@ -1077,7 +1077,7 @@ export function FunderOrderCardV2Silver({
                 return <span> ({days}天)</span>;
               })()}
             </div>
-            <div className="text-sm" style={{ color: SL_TEXT_PRI, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'tabular-nums' }}>
+            <div className="text-sm font-semibold" style={{ color: SL_TEXT_PRI, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'tabular-nums' }}>
               {order.buy_date ? fmtDate(order.buy_date) : '--'}
             </div>
           </div>
@@ -1105,7 +1105,7 @@ export function FunderOrderCardV2Silver({
           // 数字币类：担保资产居右
           <div className="text-right" style={{ flex: '0 0 auto', marginLeft: 8 }}>
             <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>担保资产</div>
-            <div className="text-sm" style={{ color: (order as any).collateral_share_mode === 'self' ? '#A80000' : SL_TEXT_PRI }}>
+            <div className="text-sm font-semibold" style={{ color: (order as any).collateral_share_mode === 'self' ? '#A80000' : SL_TEXT_PRI }}>
               {(order as any).collateral_share_mode === 'self'
                 ? '共享担保'
                 : collateralAssets.length > 0 ? collateralAssets.map((c, i) => <div key={i}>{c.qty} {c.coin}</div>) : '--'}
