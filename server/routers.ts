@@ -16502,7 +16502,7 @@ ${klinesSummary}
                   FROM ledger_order_participants
                   GROUP BY order_id
                 ) pc ON pc.order_id = fo.id
-                WHERE fo.ledger_id = ${input.ledgerId} AND fo.order_role = 'finance' AND fo.deleted_at IS NULL
+                WHERE fo.ledger_id = ${input.ledgerId} AND fo.order_role IN ('finance', 'funder') AND fo.deleted_at IS NULL
                 ORDER BY FIELD(fo.status, 'active', 'completed', 'cancelled'), fo.created_at DESC`
           ) as any;
           orders = ((rows[0] || rows) as any[]) || [];
@@ -16519,7 +16519,7 @@ ${klinesSummary}
                     GROUP BY order_id
                   ) pc ON pc.order_id = fo.id
                   INNER JOIN ledger_order_participants p ON p.order_id = fo.id AND p.ledger_id = ${input.ledgerId}
-                  WHERE fo.ledger_id = ${input.ledgerId} AND fo.order_role != 'finance' AND fo.deleted_at IS NULL
+                  WHERE fo.ledger_id = ${input.ledgerId} AND fo.order_role NOT IN ('finance', 'funder') AND fo.deleted_at IS NULL
                   ORDER BY fo.created_at DESC`
             ) as any;
             const crossOrders = ((crossRoleRows[0] || crossRoleRows) as any[]) || [];

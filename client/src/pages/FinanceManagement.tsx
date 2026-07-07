@@ -2282,7 +2282,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                   {selectedUser ? (
                     <div
                       className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-blue-300 bg-blue-50 cursor-pointer"
-                      onClick={() => { setShowUserDropdown(true); setUserSearchText(''); }}
+                      onClick={() => { setSelectedUserId(null); setUserSearchText(''); setShowUserDropdown(true); }}
                     >
                       <div
                         className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"

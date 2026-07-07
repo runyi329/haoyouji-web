@@ -852,7 +852,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       brokerAccount: formData.brokerAccount || undefined,
     };
     if (editingOrder) {
-      updateMutation.mutate({ id: editingOrder.id, status: formData.status, ...payload });
+      updateMutation.mutate({ id: editingOrder.id, status: formData.status, ...(formData.userId > 0 ? { userId: formData.userId } : {}), ...payload });
     } else {
       // 根据所选用户在账本中的角色自动判断归属：
       // 资方/管理员(owner/admin) -> 左侧资方订单；普通成员(member) -> 右侧借方订单
