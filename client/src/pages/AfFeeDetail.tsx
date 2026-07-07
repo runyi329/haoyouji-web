@@ -117,7 +117,7 @@ export default function AfFeeDetail() {
   // 融资付息订单搜索关键词
   const [finSearch, setFinSearch] = useState('');
   // 融资付息分组筛选：列表/按日期/按人员/按币种
-  const [finGroupFilter, setFinGroupFilter] = useState<'list' | 'byDate' | 'byPerson' | 'byCoin'>('list');
+  const [finGroupFilter, setFinGroupFilter] = useState<'list' | 'byDate' | 'byPerson' | 'byDirection'>('list');
   // 融资付息收/付方向筛选：全部/我方收息/我方付息
   const [finDirectionFilter, setFinDirectionFilter] = useState<'all' | 'collect' | 'pay'>('all');
   // 融资付息天数Tooltip
@@ -1410,29 +1410,7 @@ export default function AfFeeDetail() {
                     </button>
                   ))}
                 </div>
-                {/* 汇总小卡片：收息 vs 付息（全部时隐藏） */}
-                {finDirectionFilter !== 'all' && (
-                  <div className="border-t border-gray-50 px-3 py-2 text-center">
-                    {finDirectionFilter === 'collect' && (
-                      <>
-                        <div className="flex justify-between px-4">
-                          <span className="flex flex-col items-center gap-0.5"><span className="text-xs text-gray-400">日</span><span style={{ color: '#16a34a', fontSize: '1.1rem' }} className="font-bold">+{collectDailySum.toFixed(1)}</span></span>
-                          <span className="flex flex-col items-center gap-0.5"><span className="text-xs text-gray-400">月</span><span style={{ color: '#16a34a', fontSize: '1.1rem' }} className="font-bold">+{(collectDailySum * 30).toFixed(0)}</span></span>
-                          <span className="flex flex-col items-center gap-0.5"><span className="text-xs text-gray-400">年</span><span style={{ color: '#16a34a', fontSize: '1.1rem' }} className="font-bold">+{(collectDailySum * 365).toFixed(0)}</span></span>
-                        </div>
-                      </>
-                    )}
-                    {finDirectionFilter === 'pay' && (
-                      <>
-                        <div className="flex justify-between px-4">
-                          <span className="flex flex-col items-center gap-0.5"><span className="text-xs text-gray-400">日</span><span style={{ color: '#dc2626', fontSize: '1.1rem' }} className="font-bold">-{payDailySum.toFixed(1)}</span></span>
-                          <span className="flex flex-col items-center gap-0.5"><span className="text-xs text-gray-400">月</span><span style={{ color: '#dc2626', fontSize: '1.1rem' }} className="font-bold">-{(payDailySum * 30).toFixed(0)}</span></span>
-                          <span className="flex flex-col items-center gap-0.5"><span className="text-xs text-gray-400">年</span><span style={{ color: '#dc2626', fontSize: '1.1rem' }} className="font-bold">-{(payDailySum * 365).toFixed(0)}</span></span>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
+
               </div>
 
               {/* 分组筛选按钮 */}
@@ -1441,7 +1419,7 @@ export default function AfFeeDetail() {
                   { key: 'list' as const, label: '列表' },
                   { key: 'byDate' as const, label: '按日期' },
                   { key: 'byPerson' as const, label: '按人员' },
-                  { key: 'byCoin' as const, label: '按币种' },
+                  { key: 'byDirection' as const, label: '按方向' },
                 ]).map(t => (
                   <button key={t.key} onClick={() => setFinGroupFilter(t.key)}
                     className="flex-1 py-2 rounded-full text-sm font-medium transition-all"
@@ -1630,58 +1608,75 @@ export default function AfFeeDetail() {
                 );
               })()}
 
-              {/* 按币种视图 */}
-              {finGroupFilter === 'byCoin' && (() => {
-                const coinMap = new Map<string, { orders: any[]; totalBase: number; collectBase: number; payBase: number }>();
-                for (const o of finFiltered) {
-                  const coin = o.coin || '未知币种';
-                  if (!coinMap.has(coin)) coinMap.set(coin, { orders: [], totalBase: 0, collectBase: 0, payBase: 0 });
-                  const c = coinMap.get(coin)!;
-                  const b = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
-                  c.orders.push(o);
-                  c.totalBase += b;
-                  if (o.principal_lent_out == 1) c.collectBase += b; else c.payBase += b;
-                }
-                const coins = Array.from(coinMap.entries()).sort((a, b) => b[1].totalBase - a[1].totalBase);
-                if (coins.length === 0) return <div className="text-center py-8 text-gray-400 text-sm">暂无记录</div>;
-                const COIN_COLOR: Record<string, string> = { BTC: '#f59e0b', ETH: '#3b82f6', SOL: '#a855f7' };
+              {/* 按方向视图 */}
+              {finGroupFilter === 'byDirection' && (() => {
+                const calcDailyD = (o: any) => {
+                  const raw = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
+                  const base2 = (o.coin || '').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
+                  const rate = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
+                  if (!base2 || rate == null) return 0;
+                  return base2 * (Math.abs(rate) / 100) / 365;
+                };
+                const collectOrders = finFiltered.filter((o: any) => isCollect(o));
+                const payOrders = finFiltered.filter((o: any) => !isCollect(o));
+                const collectDailyTotal = collectOrders.reduce((s: number, o: any) => s + calcDailyD(o), 0);
+                const payDailyTotal = payOrders.reduce((s: number, o: any) => s + calcDailyD(o), 0);
+                if (finFiltered.length === 0) return <div className="text-center py-8 text-gray-400 text-sm">暂无记录</div>;
+                const renderDirectionGroup = (orders: any[], label: string, collect: boolean, dailyTotal: number) => {
+                  if (orders.length === 0) return null;
+                  const key = collect ? 'direction_collect' : 'direction_pay';
+                  const isOpen = expandedCoins.has('fin_' + key);
+                  const color = collect ? '#16a34a' : '#dc2626';
+                  return (
+                    <div className="bg-white rounded shadow-sm overflow-hidden">
+                      <button onClick={() => toggleCoin('fin_' + key)} className="w-full flex items-center justify-between px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-bold" style={{ color }}>{label}</span>
+                          <span className="text-xs text-gray-400">{orders.length}单</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-bold" style={{ color }}>{collect ? '+' : '-'}{dailyTotal.toFixed(2)}/天</span>
+                          {isOpen ? <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg> : <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>}
+                        </div>
+                      </button>
+                      {isOpen && (
+                        <div className="border-t border-gray-100">
+                          {orders.map((o: any, i: number) => {
+                            const daily = calcDailyD(o);
+                            const raw = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
+                            const base2 = (o.coin || '').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
+                            const rate = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
+                            const st = o.interest_start_date || o.buy_date || '';
+                            const stShort = st ? (() => { const p2 = st.slice(0,10).split('-'); return p2.length===3 ? `${parseInt(p2[1])}/${parseInt(p2[2])}` : st.slice(5,10); })() : '-';
+                            return (
+                              <div key={o.id ?? i} className="px-4 py-2.5 border-b border-gray-50 last:border-0">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-medium text-gray-800">{o.username || o.userName || '-'}</span>
+                                    <span className="text-[10px] font-semibold" style={{ color: o.coin === 'BTC' ? '#f59e0b' : o.coin === 'ETH' ? '#3b82f6' : o.coin === 'SOL' ? '#a855f7' : '#374151' }}>{o.coin || '-'}</span>
+                                  </div>
+                                  <span className="text-sm font-bold" style={{ color }}>
+                                    {collect ? '+' : '-'}{daily.toFixed(2)}/天
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[10px] text-gray-400 font-mono">{o.order_no || `#${o.id}`}</span>
+                                  <span className="text-[10px] text-gray-400">起息 {stShort}</span>
+                                  {rate != null && <span className="text-[10px]" style={{ color: '#2563eb' }}>年利率 {rate}%</span>}
+                                  <span className="text-[10px] text-gray-400">本金 {base2 > 0 ? base2.toFixed(0) : '-'} U</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                };
                 return (
                   <div className="space-y-2">
-                    {coins.map(([coin, cg]) => {
-                      const isOpen = expandedCoins.has('fin_' + coin);
-                      return (
-                        <div key={coin} className="bg-white rounded shadow-sm overflow-hidden">
-                          <button onClick={() => toggleCoin('fin_' + coin)} className="w-full flex items-center justify-between px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold" style={{ color: COIN_COLOR[coin] || '#374151' }}>{coin}</span>
-                              <span className="text-xs text-gray-400">{cg.orders.length}单</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              {cg.collectBase > 0 && <span className="text-xs font-semibold" style={{ color: '#16a34a' }}>+{cg.collectBase.toFixed(0)}</span>}
-                              {cg.payBase > 0 && <span className="text-xs font-semibold" style={{ color: '#dc2626' }}>-{cg.payBase.toFixed(0)}</span>}
-                              {isOpen ? <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg> : <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>}
-                            </div>
-                          </button>
-                          {isOpen && (
-                            <div className="border-t border-gray-100">
-                              {cg.orders.map((o, i) => (
-                                <div key={o.id ?? i} className="flex items-center justify-between px-4 py-2 border-b border-gray-50 last:border-0">
-                                  <div>
-                                    <span className="text-xs font-medium text-gray-700">{o.username || o.userName || '-'}</span>
-                                    <span className="ml-2 text-[10px] text-gray-400">{o.interest_start_date || o.buy_date || '-'}</span>
-                                    {o.principal_lent_out == 1
-                                      ? <span className="ml-1 text-[10px] px-1 rounded" style={{ background: '#dcfce7', color: '#16a34a' }}>收息</span>
-                                      : <span className="ml-1 text-[10px] px-1 rounded" style={{ background: '#fee2e2', color: '#dc2626' }}>付息</span>
-                                    }
-                                  </div>
-                                  <span className="text-xs font-bold text-gray-700">{o.interest_base != null ? Number(o.interest_base).toFixed(0) : (o.amount != null ? Number(o.amount).toFixed(0) : '-')} U</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {renderDirectionGroup(collectOrders, '收息', true, collectDailyTotal)}
+                    {renderDirectionGroup(payOrders, '付息', false, payDailyTotal)}
                   </div>
                 );
               })()}
