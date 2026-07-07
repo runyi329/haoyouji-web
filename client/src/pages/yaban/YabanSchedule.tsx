@@ -873,9 +873,15 @@ function SoloView({ doc, onBack, onApptClick, onNewAppt, trkStart, trkEnd, pctM,
           >
             {/* 在岗底色按分段渲染，午休空档保持灰底；休息时用斜线纹底 */}
             {!doc.shift && <div style={{ position: "absolute", inset: 0, background: "repeating-linear-gradient(45deg,#ECEFF3,#ECEFF3 4px,#F6F8FA 4px,#F6F8FA 8px)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, color: "#bcc6d0" }}>今日休息</div>}
-            {(doc.shift ? doc.shift.segments : []).map(([s0, e0], si) => (
-              <div key={si} style={{ position: "absolute", top: 0, bottom: 0, left: `${sp(s0)}%`, width: `${Math.max(sp(e0) - sp(s0), 0)}%`, background: (doc.color && doc.color !== "#1E88D6") ? doc.color : getRoleBarColor(doc.roleKey) }} />
-            ))}
+            {(doc.shift ? doc.shift.segments : []).map(([s0, e0], si) => {
+              const barColor = (doc.color && doc.color !== "#1E88D6") ? doc.color : getRoleBarColor(doc.roleKey);
+              return (
+                <div key={si} style={{ position: "absolute", top: 0, bottom: 0, left: `${sp(s0)}%`, width: `${Math.max(sp(e0) - sp(s0), 0)}%`, background: barColor }}>
+                  {/* 排班底色叠加45度斜向白色细条纹，与纯色预约块形成区分 */}
+                  <div style={{ position: "absolute", inset: 0, background: "repeating-linear-gradient(45deg, rgba(255,255,255,0.18) 0px, rgba(255,255,255,0.18) 2px, transparent 2px, transparent 12px)" }} />
+                </div>
+              );
+            })}
             {sorted.map((a, i) => {
               if (!a.appointTime) return null;
               let s = timeToMin(a.appointTime);
@@ -886,12 +892,14 @@ function SoloView({ doc, onBack, onApptClick, onNewAppt, trkStart, trkEnd, pctM,
               if (hostR) { s = Math.max(s, hostR[0]); e = Math.min(e, hostR[1]); }
               else { const ns = segsR.find(([s0]) => s0 >= s) || segsR[segsR.length - 1]; s = ns[0]; e = Math.min(s + (a.duration || 30), ns[1]); }
               if (e <= s) return null;
-              const st = STATUS[a.status] || STATUS.booked;
+              // 暖色+绿+橙系色盘，与蓝紫系排班底色形成对比，根据预约ID哈希取色
+              const WARM_PALETTE = ["#FF7043","#FFA726","#26A69A","#EC407A","#66BB6A","#FF5722","#FF8F00","#26C6DA","#F06292","#8D6E63"];
+              const apptColor = WARM_PALETTE[a.id % WARM_PALETTE.length];
               const rL = sp(s) <= 0.5 ? 9 : 0, rR = sp(e) >= 99.5 ? 9 : 0;
               return (
-                <div key={i} onClick={() => onApptClick(a.id)} style={{ position: "absolute", left: `${sp(s)}%`, width: `${Math.max(sp(e) - sp(s), 2)}%`, top: 0, bottom: 0, borderRadius: `${rL}px ${rR}px ${rR}px ${rL}px`, background: st.color, display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center", padding: "0 7px", overflow: "hidden", cursor: "pointer" }}>
+                <div key={i} onClick={() => onApptClick(a.id)} style={{ position: "absolute", left: `${sp(s)}%`, width: `${Math.max(sp(e) - sp(s), 2)}%`, top: 0, bottom: 0, borderRadius: `${rL}px ${rR}px ${rR}px ${rL}px`, background: apptColor, display: "flex", flexDirection: "column", alignItems: "flex-start", justifyContent: "center", padding: "0 7px", overflow: "hidden", cursor: "pointer" }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", width: "100%" }}>{a.patientName}</span>
-                  <span style={{ fontSize: 9, color: "rgba(255,255,255,.8)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", width: "100%" }}>{a.project}</span>
+                  <span style={{ fontSize: 9, color: "rgba(255,255,255,.85)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", width: "100%" }}>{a.project}</span>
                 </div>
               );
             })}

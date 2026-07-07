@@ -21,6 +21,7 @@ import { loadApptRoleConfig, BUILTIN_ROLE_PRESETS } from "./YabanApptConfig";
 import YabanHeatCalendar from "./YabanHeatCalendar";
 import YabanGanttBar from "./YabanGanttBar";
 import ChargeProductPicker from "./ChargeProductPicker";
+import { toast } from "sonner";
 
 // ── 共享样式常量（与 A314 联动，修改 yabanSharedStyles.ts 即可同步） ──
 import {
@@ -510,8 +511,12 @@ export default function YabanScheduleCreate() {
 
   // 创建预约
   const createAppointment = trpc.yabanAppointment.create.useMutation({
-    onSuccess: () => { setSubmitting(false); setLocation("/yaban/schedule"); },
-    onError: (err) => { setSubmitting(false); alert(err.message || "创建失败，请重试"); },
+    onSuccess: () => {
+      setSubmitting(false);
+      toast.success("预约创建成功", { description: `${form.patientName} · ${form.startTime}–${form.endTime}` });
+      setTimeout(() => setLocation("/yaban/schedule"), 1200);
+    },
+    onError: (err) => { setSubmitting(false); toast.error(err.message || "创建失败，请重试"); },
   });
 
   // 顾客搜索（内嵌，不跳转）
