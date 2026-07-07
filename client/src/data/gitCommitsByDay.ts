@@ -8195,5 +8195,7 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-07T06:01:31Z", type: "feat", cleanMessage: "预约成功toast弹窗反馈 + 甘特条排班底色加斜纹 + 预约块暖色系哈希取色" },
     { date: "2026-07-07T06:30:10Z", type: "feat", cleanMessage: "重新设计甘特条 - 加高44px、排班斜纹、暖色预约块、圆角贴合排班底色" },
     { date: "2026-07-07T07:07:22Z", type: "feat", cleanMessage: "数字币银色卡片UI优化" },
+    { date: "2026-07-07T07:41:31Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-07T11:50:10Z", type: "feat", cleanMessage: "融资付息列表优化 - 收/付分区、日息列、CNY折算、天数Tooltip、起息日隐藏、收息判断修复" },
   ],
 };
