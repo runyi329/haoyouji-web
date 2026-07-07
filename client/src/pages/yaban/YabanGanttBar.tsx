@@ -10,7 +10,7 @@
  *   appointments   — 该成员当天的预约列表（可选，用于显示占用块）
  *   trackStart     — 轨道开始时间（分钟），默认 9*60
  *   trackEnd       — 轨道结束时间（分钟），默认 18*60
- *   height         — 甘特条高度，默认 24
+ *   height         — 甘特条高度，默认 44
  *   isSelected     — 是否选中（加深底色）
  *   showSlots      — 是否显示可点击时段格子（A316 用）
  *   slotDuration   — 时段格子间隔分钟，默认 30
@@ -20,7 +20,7 @@
  *   onBarClick     — 点击进度条空白处回调（A314 用，按位置换算时间）
  */
 import React from "react";
-import { getRoleBarColor, STATUS, timeToMin, hm } from "./yabanSharedStyles";
+import { getRoleBarColor, timeToMin, hm } from "./yabanSharedStyles";
 
 export type EffShift = { workStart: number; workEnd: number; segments: [number, number][] } | null;
 
@@ -41,6 +41,25 @@ export interface YabanGanttBarProps {
   onBarClick?: (ev: React.MouseEvent<HTMLDivElement>) => void;
 }
 
+// 暖色+绿+橙系色盘（10色），与蓝紫系排班底色形成明显对比
+// 根据预约ID哈希取色，同一预约永远是同一颜色
+const WARM_PALETTE = [
+  "#FF7043", // 珊瑚橙
+  "#FFA726", // 琥珀金
+  "#26A69A", // 翠绿
+  "#EC407A", // 玫瑰红
+  "#66BB6A", // 草绿
+  "#FF5722", // 橙红
+  "#FF8F00", // 深琥珀
+  "#26C6DA", // 薄荷青
+  "#F06292", // 玫瑰粉
+  "#8D6E63", // 棕橙
+];
+
+function getApptColor(apptId: number): string {
+  return WARM_PALETTE[Math.abs(apptId) % WARM_PALETTE.length];
+}
+
 export default function YabanGanttBar({
   shift,
   roleKey,
@@ -48,7 +67,7 @@ export default function YabanGanttBar({
   appointments = [],
   trackStart = 9 * 60,
   trackEnd = 18 * 60,
-  height = 24,
+  height = 44,
   isSelected = false,
   showSlots = false,
   slotDuration = 30,
@@ -61,32 +80,49 @@ export default function YabanGanttBar({
   function pct(min: number) { return Math.max(0, Math.min(100, (min - trackStart) / span * 100)); }
 
   const barColor = customColor || getRoleBarColor(roleKey);
-  // 工作时段底色：完全实心色，与员工排班页A317完全一致，不加任何透明度
-  const workBg = barColor;
 
   if (!shift) {
     return (
       <div style={{
-        position: "relative", height, borderRadius: 4, overflow: "hidden",
+        position: "relative", height, borderRadius: 6, overflow: "hidden",
         background: "repeating-linear-gradient(45deg,#ECEFF3,#ECEFF3 4px,#F6F8FA 4px,#F6F8FA 8px)",
         display: "flex", alignItems: "center", justifyContent: "center",
       }}>
-        <span style={{ fontSize: 10, color: "#bcc6d0" }}>今日休息</span>
+        <span style={{ fontSize: 11, color: "#bcc6d0", letterSpacing: 1 }}>今日休息</span>
       </div>
     );
   }
 
+  // 预约块铺满全高，四角与排班底色对齐
+
   return (
     <div
       onClick={onBarClick}
-      style={{ position: "relative", height, borderRadius: 4, overflow: "hidden", background: "#E2E8EF", cursor: onBarClick ? "pointer" : "default" }}
+      style={{
+        position: "relative", height, borderRadius: 6, overflow: "hidden",
+        background: "#E2E8EF",
+        cursor: onBarClick ? "pointer" : "default",
+      }}
     >
-      {/* 工作时段底色（按角色着色） */}
+      {/* 工作时段底色（按角色着色）+ 45°斜向白色细条纹覆盖 */}
       {shift.segments.map(([s, e], si) => (
-        <div key={si} style={{ position: "absolute", top: 0, bottom: 0, left: `${pct(s)}%`, width: `${pct(e) - pct(s)}%`, background: workBg, borderRadius: 4 }} />
+        <div
+          key={si}
+          style={{
+            position: "absolute", top: 0, bottom: 0,
+            left: `${pct(s)}%`, width: `${Math.max(pct(e) - pct(s), 0)}%`,
+            background: barColor,
+          }}
+        >
+          {/* 斜纹叠加层：排班底色有纹理，预约块纯色，一眼可区分 */}
+          <div style={{
+            position: "absolute", inset: 0,
+            background: "repeating-linear-gradient(45deg, rgba(255,255,255,0.18) 0px, rgba(255,255,255,0.18) 2px, transparent 2px, transparent 12px)",
+          }} />
+        </div>
       ))}
 
-      {/* 预约占用块 */}
+      {/* 预约占用块：暖色系纯色，上下留边距，圆角胶囊 */}
       {appointments.map((a, ai) => {
         if (!a.appointTime) return null;
         let s = timeToMin(a.appointTime);
@@ -102,22 +138,35 @@ export default function YabanGanttBar({
         }
         if (e <= s) return null;
         const l = pct(s), w = Math.max(pct(e) - pct(s), 2);
-        const st = STATUS[a.status] || STATUS.booked;
-        // 始终保持四角圆角，上下各留 2px 间距避免相邻条紧贴
+        const apptColor = getApptColor(a.id);
+        // 圆角：左端贴合排班底色弧度(6px)，右端同，中间直角(0)
+        // host 是该预约所在的排班分段
+        const hostSeg = segs.find(([s0, e0]) => s >= s0 && e <= e0) || host;
+        const R = 6;
+        const rTL = hostSeg && s <= hostSeg[0] + 1 ? R : 0;
+        const rBL = rTL;
+        const rTR = hostSeg && e >= hostSeg[1] - 1 ? R : 0;
+        const rBR = rTR;
         return (
           <div
             key={ai}
             onClick={ev => { ev.stopPropagation(); onApptClick && onApptClick(a.id); }}
             style={{
-              position: "absolute", left: `${l}%`, width: `${w}%`, top: 2, bottom: 2,
-              borderRadius: 10,
-              background: st.color, boxShadow: "0 1px 2px rgba(30,90,160,.12)",
-              display: "flex", alignItems: "center", padding: "0 4px", overflow: "hidden", cursor: "pointer",
+              position: "absolute",
+              left: `${l}%`, width: `${w}%`,
+              top: 0, bottom: 0,
+              borderRadius: `${rTL}px ${rTR}px ${rBR}px ${rBL}px`,
+              background: apptColor,
+              boxShadow: "0 1px 3px rgba(0,0,0,0.18)",
+              display: "flex", flexDirection: "column",
+              alignItems: "flex-start", justifyContent: "center",
+              padding: "0 6px", overflow: "hidden", cursor: "pointer",
+              zIndex: 2,
             }}
             title={a.patientName || ""}
           >
-            <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden" }}>
-              {(a.patientName || "").slice(0, 2)}
+            <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", maxWidth: "100%" }}>
+              {(a.patientName || "").slice(0, 3)}
             </span>
           </div>
         );
@@ -142,11 +191,11 @@ export default function YabanGanttBar({
               onClick={ev => { ev.stopPropagation(); !isOccupied && onSlotClick && onSlotClick(t, slotEnd); }}
               title={`${hm(t)}–${hm(slotEnd)}`}
               style={{
-                position: "absolute", top: 2, bottom: 2,
+                position: "absolute", top: 3, bottom: 3,
                 left: `${l}%`, width: `calc(${w}% - 2px)`,
-                borderRadius: 3,
+                borderRadius: 4,
                 background: isSelSlot ? barColor : "transparent",
-                border: isOccupied ? "none" : `1px dashed ${barColor}88`,
+                border: isOccupied ? "none" : `1.5px dashed ${barColor}99`,
                 cursor: isOccupied ? "default" : "pointer",
                 opacity: isOccupied ? 0.3 : 1,
                 transition: "background .12s",
