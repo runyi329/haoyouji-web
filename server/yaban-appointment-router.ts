@@ -42,6 +42,7 @@ function _buildSegs(ws: number, we: number, bs: number | null, be: number | null
 }
 async function getDoctorSegments(conn: any, tenantId: number, doctor: string, dateStr: string): Promise<[number, number][] | null> {
   if (!doctor) return null;
+  const toMin = (t?: string | null) => (t ? _t2m(t) : null);
   // 模板（按姓名匹配，与前端一致）
   const [tplRows] = (await conn.execute(
     `SELECT staff_user_id, work_start, work_end, break_start, break_end, work_days
@@ -51,8 +52,10 @@ async function getDoctorSegments(conn: any, tenantId: number, doctor: string, da
   )) as any;
   const tpl = (tplRows as any[])[0];
   const staffId = tpl?.staff_user_id;
-  const toMin = (t?: string | null) => (t ? _t2m(t) : null);
-  // 单日覆盖优先
+  // 计算星期几（0=周一，6=周日），用本地时间避免 UTC 偏移
+  const [_y, _m, _d] = dateStr.split("-").map(Number);
+  const dow = (new Date(_y, _m - 1, _d).getDay() + 6) % 7;
+  // 单日覆盖优先（override）
   if (staffId != null) {
     const [ovRows] = (await conn.execute(
       `SELECT shift_type, work_start, work_end, break_start, break_end
@@ -65,10 +68,22 @@ async function getDoctorSegments(conn: any, tenantId: number, doctor: string, da
       if (ov.work_start && ov.work_end) return _buildSegs(_t2m(ov.work_start), _t2m(ov.work_end), toMin(ov.break_start), toMin(ov.break_end));
     }
   }
-  // 回退周期模板
+  // 新周模板：yaban_shift_day_segs（优先于旧 work_days 字段）
+  if (staffId != null) {
+    const [dsRows] = (await conn.execute(
+      `SELECT work_start, work_end, break_start, break_end, is_rest
+       FROM yaban_shift_day_segs
+       WHERE tenant_id=? AND staff_user_id=? AND dow=? LIMIT 1`,
+      [tenantId, staffId, dow]
+    )) as any;
+    const ds = (dsRows as any[])[0];
+    if (ds) {
+      if (Number(ds.is_rest) === 1) return null;
+      if (ds.work_start && ds.work_end) return _buildSegs(_t2m(ds.work_start), _t2m(ds.work_end), toMin(ds.break_start), toMin(ds.break_end));
+    }
+  }
+  // 回退旧周期模板（work_days 字段）
   if (tpl) {
-    const [_y, _m, _d] = dateStr.split("-").map(Number);
-    const dow = (new Date(_y, _m - 1, _d).getDay() + 6) % 7; // 本地时间解析，避免 UTC 时区偏移问题
     const days: number[] = (tpl.work_days || "1,2,3,4,5").split(",").map(Number);
     if (days.length > 0 && !days.includes(dow)) return null;
     if (tpl.work_start && tpl.work_end) return _buildSegs(_t2m(tpl.work_start), _t2m(tpl.work_end), toMin(tpl.break_start), toMin(tpl.break_end));
