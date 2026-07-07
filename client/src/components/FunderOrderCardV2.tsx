@@ -1104,11 +1104,17 @@ export function FunderOrderCardV2Silver({
         ) : (
           // 数字币类：担保资产居右
           <div className="text-right" style={{ flex: '0 0 auto', marginLeft: 8 }}>
-            <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>担保资产</div>
+            <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>
+              担保资产{(order as any).collateral_share_mode !== 'self' && collateralAssets.length > 0 && collateralAssets.length === 1 ? ` (${collateralAssets[0].coin})` : ''}
+            </div>
             <div className="text-sm font-semibold" style={{ color: (order as any).collateral_share_mode === 'self' ? '#A80000' : SL_TEXT_PRI }}>
               {(order as any).collateral_share_mode === 'self'
                 ? '共享担保'
-                : collateralAssets.length > 0 ? collateralAssets.map((c, i) => <div key={i}>{c.qty} {c.coin}</div>) : '--'}
+                : collateralAssets.length > 0
+                  ? collateralAssets.length === 1
+                    ? collateralAssets[0].qty
+                    : collateralAssets.map((c, i) => <div key={i}>{c.qty} {c.coin}</div>)
+                  : '--'}
             </div>
           </div>
         )}
