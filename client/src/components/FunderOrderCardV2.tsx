@@ -1067,7 +1067,7 @@ export function FunderOrderCardV2Silver({
           </div>
         ) : (
           // 数字币类：开仓日期居左
-          <div style={{ flex: '0 0 40%' }}>
+          <div style={{ flex: '0 0 auto', marginRight: 8 }}>
             <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>
               开仓日期{order.buy_date && (() => {
                 const startDay = new Date(order.buy_date + 'T00:00:00+08:00').getTime();
@@ -1084,7 +1084,7 @@ export function FunderOrderCardV2Silver({
         )}
         {!isStockCard && (
           // 数字币类：浮动盈亏居中（数字+括号百分比）
-          <div className="text-center" style={{ flex: '0 0 35%' }}>
+          <div className="text-center" style={{ flex: '1 1 auto', minWidth: 0 }}>
             <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>浮动盈亏 (U)</div>
             <div className="text-sm font-semibold" style={{ color: pnlColor, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW, whiteSpace: 'nowrap' }}>
               {floatPnl !== null
@@ -1103,7 +1103,7 @@ export function FunderOrderCardV2Silver({
           </div>
         ) : (
           // 数字币类：担保资产居右
-          <div className="text-right" style={{ flex: '0 0 25%' }}>
+          <div className="text-right" style={{ flex: '0 0 auto', marginLeft: 8 }}>
             <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>担保资产</div>
             <div className="text-sm" style={{ color: (order as any).collateral_share_mode === 'self' ? '#A80000' : SL_TEXT_PRI }}>
               {(order as any).collateral_share_mode === 'self'
