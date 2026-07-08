@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, lazy, Suspense, useCallback, useMemo } from "react";
+import { useUsdCnyRate } from "@/lib/useLivePrice"; // 规则G
 import { FunderOrderCard, FunderNoteRow, formatCoinQtyFunder, useAccruedInterestFunder, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType } from "@/components/FunderOrderCard";
 import { FunderOrderCardV2, FunderOrderCardV2Light, FunderOrderCardV2Silver, FunderLenderCardSilver } from "@/components/FunderOrderCardV2";
 import Lottie from "lottie-react";
@@ -523,7 +524,8 @@ function FunderOrderCardLegacy({
   participantsEditMode,
   setParticipantsEditMode,
 }: FunderOrderCardLegacyProps) {
-  const { data: _cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: "USD", tocoin: "CNY", money: 1 }, { staleTime: 3000, refetchInterval: 3000 });
+  // 规则G：汇率通过Cloudflare Worker代理（老方案已封存：trpc.exchange.getRate）
+  const { data: _cnyRateData } = useUsdCnyRate(60000);
   const cnyRate = parseFloat((_cnyRateData as any)?.money ?? "7.2") || 7.2;
   // 共享担保池查询（仅当订单开启了本人订单共享时才查询）
   const orderShareMode = (order as any).collateral_share_mode;
@@ -2465,10 +2467,8 @@ export default function LedgerDetail() {
     ? funderLivePrices
     : (Object.keys(userLivePrices).length > 0 ? userLivePrices : cachedPrices);
   // 实时 USD/CNY 汇率（3秒刷新，用于 CNY 订单折算 U 值）
-  const { data: cnyRateData } = trpc.exchange.getRate.useQuery(
-    { fromcoin: 'USD', tocoin: 'CNY', money: 1 },
-    { staleTime: 1000, refetchInterval: 3000, enabled: isCustomAF && effectiveIsFunder }
-  );
+  // 规则G：汇率通过Cloudflare Worker代理（老方案已封存：trpc.exchange.getRate）
+  const { data: cnyRateData } = useUsdCnyRate(60000);
   const cnyRate = (cnyRateData?.success && cnyRateData?.money) ? parseFloat(cnyRateData.money) : 7.2;
   // 涨跌方向计算：用 localStorage 存储上一次价格，刷新页面后第一次加载就能显示筜头
   const PREV_PRICE_CACHE_KEY = `funder_prev_prices_${ledgerId}`;

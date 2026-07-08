@@ -1,4 +1,6 @@
 import { trpc } from "@/lib/trpc";
+// 规则G：前端直连行情（数字币直连/大宗商品+指数通过Cloudflare Worker代理）
+import { useGoldPrice, useOilPrice, useDollarIndex, useUsdCnh, useBtcPrice, useShanghaiIndex, useHangSengIndex, useSP500Index } from "@/lib/useLivePrice";
 import Lottie from "lottie-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -704,11 +706,12 @@ const WalletLottie = React.memo(function WalletLottie() {
 // ── 全球市场跑马灯卡片（独立组件，避免Home重渲染导致闪烁）────────────────────
 const GlobalMarketStrip= React.memo(function GlobalMarketStrip() {
   const [, setLocation] = useLocation();
-  const { data: goldPrice } = trpc.stock.getGoldPrice.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
-  const { data: oilPrice } = trpc.stock.getOilPrice.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
-  const { data: dollarIndex } = trpc.stock.getDollarIndex.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
-  const { data: usdCnh } = trpc.stock.getUsdCnh.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
-  const { data: btcPrice } = trpc.stock.getBtcPrice.useQuery(undefined, { refetchInterval: 3000, staleTime: 1000 });
+  // 规则G：前端直连（老方案已封存：trpc.stock.getGoldPrice/getOilPrice/getDollarIndex/getUsdCnh/getBtcPrice）
+  const { data: goldPrice } = useGoldPrice(3000);
+  const { data: oilPrice } = useOilPrice(3000);
+  const { data: dollarIndex } = useDollarIndex(3000);
+  const { data: usdCnh } = useUsdCnh(3000);
+  const { data: btcPrice } = useBtcPrice(3000);
 
   const [globalMarketStatus, setGlobalMarketStatus] = useState<'open' | 'closed'>(() => getGlobalMarketStatusOuter(new Date()));
   const [globalCountdown, setGlobalCountdown] = useState('');
@@ -1618,22 +1621,10 @@ export default function Home() {
   // 获取上证指数实时数据
   // 注意：必须用 marketStatus state（每秒更新）来驱动 refetchInterval，
   // 不能用 isMarketOpen()（只在组件初始化时求值一次，之后不会随时间变化）
-  const { data: shanghaiIndex } = trpc.stock.getShanghaiIndex.useQuery(undefined, {
-    refetchInterval: marketStatus === 'open' ? 3000 : false,
-    staleTime: 3000,
-  });
-
-  // 获取恒生指数实时数据（港股市场时间：9:30-12:00, 13:00-16:00 HKT）
-  const { data: hangSengIndex } = trpc.stock.getHangSengIndex.useQuery(undefined, {
-    refetchInterval: 3000, // 港股市场状态判断复杂，简化为定时刷新
-    staleTime: 1000,
-  });
-
-  // 获取标普500实时数据（美股）
-  const { data: sp500Index } = trpc.stock.getSP500Index.useQuery(undefined, {
-    refetchInterval: usMarketStatus === 'open' ? 3000 : 60000,
-    staleTime: 1000,
-  });
+  // 规则G：指数行情通过Cloudflare Worker代理（老方案已封存：trpc.stock.getShanghaiIndex/getHangSengIndex/getSP500Index）
+  const { data: shanghaiIndex } = useShanghaiIndex(marketStatus === 'open' ? 3000 : 60000);
+  const { data: hangSengIndex } = useHangSengIndex(3000);
+  const { data: sp500Index } = useSP500Index(usMarketStatus === 'open' ? 3000 : 60000);
 
   // 全球市场卡片已移至独立的 GlobalMarketStrip 组件
   // 股票卡片滑动状态（保留）

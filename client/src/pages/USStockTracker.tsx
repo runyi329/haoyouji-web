@@ -8,6 +8,7 @@ import { useState, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft, TrendingUp, TrendingDown, Search, X, BarChart2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useSP500Index } from "@/lib/useLivePrice"; // 规则G
 
 // ─── 配色 ────────────────────────────────────────────────
 const BLUE = "#1565C0";
@@ -460,11 +461,8 @@ export default function USStockTracker() {
     { refetchInterval: 60_000, staleTime: 30_000 }
   );
 
-  // 标普500
-  const { data: sp500 } = trpc.stock.getSP500Index.useQuery(undefined, {
-    refetchInterval: 5000,
-    staleTime: 2000,
-  });
+  // 标普500 - 规则G：通过Cloudflare Worker代理（老方案已封存：trpc.stock.getSP500Index）
+  const { data: sp500 } = useSP500Index(5000);
   const sp500Up = (sp500?.changePercent ?? 0) >= 0;
 
   return (

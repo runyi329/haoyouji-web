@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useUsdCnyRate } from "@/lib/useLivePrice"; // 规则G
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X } from "lucide-react";
@@ -211,7 +212,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     { ledgerId, userId: Number(sharedCollateralUserId) },
     { enabled: ledgerId > 0 && !!sharedCollateralUserId && collateralShareMode === 'self', staleTime: 5000 }
   );
-  const { data: cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: "USD", tocoin: "CNY", money: 1 }, { staleTime: 3000, refetchInterval: 3000 });
+  // 规则G：汇率通过Cloudflare Worker代理（老方案已封存：trpc.exchange.getRate）
+  const { data: cnyRateData } = useUsdCnyRate(60000);
   // Deribit 到期日 & 行权价（前端直接调用 Deribit 公开 API，静态数据兑底）
   const { expiries: expiriesList, isLive: expiriesIsLive } = useDeribitExpiries(formData.optionCoin);
   const expiriesData = { expiries: expiriesList };

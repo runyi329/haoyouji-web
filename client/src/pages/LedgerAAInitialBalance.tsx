@@ -20,6 +20,7 @@
  *   tagName__visible       → 显示开关 (1 = 显示, 0 = 隐藏)
  */
 import { useState, useMemo, useEffect } from "react";
+import { useCryptoPrices } from "@/lib/useLivePrice"; // 规则G
 import { useParams, useLocation } from "wouter";
 import { ChevronLeft, ChevronDown, Save, Tag, Users, Trash2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -93,7 +94,8 @@ export default function LedgerAAInitialBalance() {
   const [savingUsers, setSavingUsers] = useState<Set<number>>(new Set());
 
   // 数字币价格（USDT），统一走后端代理（规范：crypto-price-unified）
-  const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 3000, staleTime: 0, placeholderData: (prev: any) => prev });
+  // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
+  const cryptoPricesRaw = useCryptoPrices(3000);
   // 使用接口返回的实时 USDT/CNY 汇率，居底用 CNY_RATE_FALLBACK
   const cryptoPrices: Record<string, number> = {};
   if (cryptoPricesRaw) {

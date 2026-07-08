@@ -8,6 +8,7 @@
  * - 支持现货/永续合约、VIP等级、市价/限价挂单
  */
 import React, { useState, useEffect, useMemo } from "react";
+import { useCryptoPrices } from "@/lib/useLivePrice"; // 规则G
 import { useRoute, useLocation } from "wouter";
 import {
   ChevronLeft,
@@ -524,10 +525,8 @@ export default function OrderFlowPage() {
   const [adminTargetUserId, setAdminTargetUserId] = useState<number>(0); // 0=全部, >0=指定用户
 
     // 实时价格（3秒刷新）
-  const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
-    refetchInterval: 3000,
-    staleTime: 1000,
-  });
+  // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
+  const \1 = useCryptoPrices(3000);
   // 从价格缓存中按币种取价格
   const getPriceForSymbol = (symbol: string): number | null => {
     const coin = symbol.replace('USDT', '');
@@ -542,10 +541,8 @@ export default function OrderFlowPage() {
   }, [cryptoPricesRaw]);
   // USDT/CNY 实时汇率
   const [cnyRate, setCnyRate] = useState<number>(7.28);
-  const { data: rateData } = trpc.exchange.getRate.useQuery(
-    { fromcoin: 'USD', tocoin: 'CNY', money: 1 },
-    { staleTime: 1000, refetchInterval: 3000 }
-  );
+  // 规则G：汇率通过Cloudflare Worker代理（老方案已封存：trpc.exchange.getRate）
+  const { data: rateData } = useUsdCnyRate(60000);
   useEffect(() => {
     if (rateData?.success && rateData.money) {
       const r = parseFloat(rateData.money);

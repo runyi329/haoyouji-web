@@ -7,6 +7,7 @@
  * - v2：新增「订单」Tab，完整复用订单流卡片和表单，可直接增删改期权订单
  */
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useCryptoPrices } from "@/lib/useLivePrice"; // 规则G
 import { useRoute, useLocation } from "wouter";
 import {
   ChevronLeft,
@@ -831,10 +832,8 @@ export default function OptionAnalysisPage() {
   const [iv, setIv] = useState("0.80");
   const [riskFreeRate, setRiskFreeRate] = useState("0.05");
   // ===== 实时 ETH 价格 =====
-  const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
-    refetchInterval: 30000,
-    staleTime: 15000,
-  });
+  // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
+  const \1 = useCryptoPrices(3000);
   useEffect(() => {
     const price = (cryptoPricesRaw as any)?.prices?.ETH ?? (cryptoPricesRaw as any)?.ETH;
     if (price && price > 0) setEthPrice(String(Math.round(price)));

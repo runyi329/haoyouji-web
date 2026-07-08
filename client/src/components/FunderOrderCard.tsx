@@ -7,6 +7,7 @@ import React, { useState, useMemo, useEffect, useCallback, useRef } from "react"
 import { RightMarginDetail } from "@/components/RightMarginDetail";
 import { trpc } from "@/lib/trpc";
 import { useDeribitGreeks } from "@/lib/useDeribit";
+import { useCryptoPrices, useUsdCnyRate } from "@/lib/useLivePrice";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -570,8 +571,9 @@ export function FunderOrderCard({
     { value: 'borrower', label: '借方', color: '#F59E0B', defaultRateLabel: '利率' },
   ];
   // ===== END 内部 fallback =====
-  const { data: _cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: "USD", tocoin: "CNY", money: 1 }, { staleTime: 3000, refetchInterval: 3000 });
-  const cnyRate = parseFloat((_cnyRateData as any)?.money ?? "7.2") || 7.2;
+  // 规则G：汇率通过Cloudflare Worker代理（老方案已封存：trpc.exchange.getRate）
+  const { data: _cnyRateData } = useUsdCnyRate(60000);
+  const cnyRate = (_cnyRateData as any)?.rate ?? 7.2;
   // 共享担保池查询（仅当订单开启了本人订单共享时才查询）
   const orderShareMode = (order as any).collateral_share_mode;
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
@@ -599,9 +601,9 @@ export function FunderOrderCard({
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: _parsedCollateralSource?.tagName ?? '' },
     { enabled: hasExternalCollateral, staleTime: 3000 }
   );
-  const { data: _extCryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
-    enabled: hasExternalCollateral, refetchInterval: 3000, staleTime: 0,
-  });
+  // 规则G：数字币价格前端直连（老方案已封存：trpc.getCryptoPrices）
+  const _livePriceData = useCryptoPrices(hasExternalCollateral ? 3000 : 0);
+  const _extCryptoPricesRaw = hasExternalCollateral ? _livePriceData : undefined;
   // 计算剩余保证金U值和保证金率
   const { extRemainingMarginU, extMarginBasePct } = useMemo(() => {
     if (!hasExternalCollateral || !_extTagConfig) return { extRemainingMarginU: null as number | null, extMarginBasePct: null as number | null };

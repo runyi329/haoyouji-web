@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useCryptoPrices } from "@/lib/useLivePrice"; // 规则G
 import { ChevronLeft, Play, RotateCcw, Settings, TrendingUp, Users, BarChart2, Info, Trash2 } from "lucide-react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -355,10 +356,8 @@ export default function GridTradeSimulator() {
   });
 
   // 实时ETH价格（每30秒轮询）
-  const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
-    refetchInterval: 3000,
-    staleTime: 2000,
-  });
+  // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
+  const \1 = useCryptoPrices(3000);
   const liveEthPrice: number | null = (cryptoPricesRaw as any)?.prices?.['ETH'] ?? null;
   // 实时时钟（每秒更新）
   const [nowTs, setNowTs] = useState(() => Date.now());

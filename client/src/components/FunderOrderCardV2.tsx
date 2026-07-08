@@ -3,6 +3,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useCryptoPrices } from "@/lib/useLivePrice"; // 规则G
 import { RightMarginDetail } from "./RightMarginDetail";
 import { RightInterestDetail } from "./RightInterestDetail";
 import {
@@ -753,9 +754,8 @@ export function FunderOrderCardV2Silver({
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: _parsedCollateralSource?.tagName ?? '' },
     { enabled: hasExternalCollateral, staleTime: 3000 }
   );
-  const { data: _fc2977CryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
-    enabled: hasExternalCollateral, refetchInterval: 3000, staleTime: 0,
-  });
+  // 规则G：数字币价格前端直连（老方案已封存：trpc.getCryptoPrices）
+  const _fc2977CryptoPricesRaw = useCryptoPrices(hasExternalCollateral ? 3000 : 0);
   const { fc2977RemainingMarginU, fc2977MarginBasePct } = (() => {
     if (!isFC2977 || !_fc2977TagConfig) return { fc2977RemainingMarginU: null as number | null, fc2977MarginBasePct: null as number | null };
     const _cnyR = (_fc2977CryptoPricesRaw as any)?.usdtCnyRate ?? 7.0;

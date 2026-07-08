@@ -6,6 +6,7 @@
  *   三 Tab 切换：无损合约 / 无损现货 / 行情评估（含竞猜）
  */
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useCryptoPrices } from "@/lib/useLivePrice"; // 规则G
 import { FunderOrderCard } from "@/components/FunderOrderCard";
 import { FunderOrderCardV2Silver, FunderLenderCardSilver } from "@/components/FunderOrderCardV2";
 import { useRoute, useLocation } from "wouter";
@@ -414,11 +415,8 @@ export function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
 
   // 实时价格（吤24h涨跌幅）——用于订单卡片底部显示
   // placeholderData: keepPreviousData 确保刷新时不闪烁，保留上次数据
-  const { data: betCardPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
-    refetchInterval: 3000,
-    staleTime: 0,
-    placeholderData: (prev: any) => prev,
-  });
+  // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
+  const \1 = useCryptoPrices(3000);
   const betCardPrices = (betCardPricesRaw as any)?.prices ?? betCardPricesRaw ?? {};
   const betCardChanges = (betCardPricesRaw as any)?.changes ?? {};
   const betCardOpens = (betCardPricesRaw as any)?.opens ?? {};
@@ -1422,12 +1420,8 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
     { enabled: order.side === 'buy', staleTime: 8000, refetchInterval: 3000, refetchOnWindowFocus: false } // 每3秒刷新，与 crypto-price-unified 规范一致
   );
   // 实时价格（用于计算当前市値）- 使用统一价格接口
-  const { data: cryptoPricesForOrder } = trpc.getCryptoPrices.useQuery(undefined, {
-    enabled: order.side === 'buy',
-    refetchInterval: 3000,
-    staleTime: 0,
-    placeholderData: (prev: any) => prev,
-  });
+  // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
+  const \1 = useCryptoPrices(3000);
   // 适配新的返回结构 { prices: {...}, changes: {...} }
   const _pricesForOrder = (cryptoPricesForOrder as any)?.prices ?? cryptoPricesForOrder;
   const livePrice = _pricesForOrder?.[order.coin] ?? 0;
@@ -2351,11 +2345,8 @@ export default function CryptoPrediction() {
   const { data: klinesData, isLoading: klinesLoading, refetch: refetchKlines } =
     trpc.ledger.getBinanceKlines.useQuery({ symbol: coin.symbol, interval, limit: 60 }, { staleTime: 30000 });
   // 当前价格使用统一价格接口（三级备用，更稳定）
-  const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
-    refetchInterval: 3000,
-    staleTime: 0,
-    placeholderData: (prev: any) => prev,
-  });
+  // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
+  const \1 = useCryptoPrices(3000);
   // 适配新的返回结构 { prices: {...}, changes: {...} }
   const cryptoPrices = (cryptoPricesRaw as any)?.prices ?? cryptoPricesRaw;
   const cryptoChanges = (cryptoPricesRaw as any)?.changes ?? {};

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { useUsdCnyRate } from "@/lib/useLivePrice"; // 规则G
 import { useDeribitExpiries, useDeribitStrikes } from "@/lib/useDeribit";
 import { useRoute, useLocation } from "wouter";
 import { FunderOrderCard } from "@/components/FunderOrderCard";
@@ -1630,10 +1631,8 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     { enabled: !!ledgerId && orderIds.length > 0 }
   );
   // 实时 USD/CNY 汇率（3秒刷新，用于 CNY 订单折算 U 值）
-  const { data: cnyRateData } = trpc.exchange.getRate.useQuery(
-    { fromcoin: 'USD', tocoin: 'CNY', money: 1 },
-    { staleTime: 1000, refetchInterval: 3000 }
-  );
+  // 规则G：汇率通过Cloudflare Worker代理（老方案已封存：trpc.exchange.getRate）
+  const { data: cnyRateData } = useUsdCnyRate(60000);
   const cnyRate = (cnyRateData?.success && cnyRateData?.money) ? parseFloat(cnyRateData.money) : 7.2;
 
   const createMutation = trpc.ledger.financeCreateOrder.useMutation({
