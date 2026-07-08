@@ -46,7 +46,13 @@ export default function YabanScheduleDetail() {
 
   const utils = trpc.useUtils();
   const updateStatus = trpc.yabanAppointment.updateStatus.useMutation({
-    onSuccess: () => utils.yabanAppointment.getById.invalidate({ id: Number(params.id) }),
+    onSuccess: () => {
+      utils.yabanAppointment.getById.invalidate({ id: Number(params.id) });
+      // 刷新首页日/周/月三个视角数据
+      utils.yabanComm.todayOverview.invalidate();
+      utils.yabanComm.weekOverview.invalidate();
+      utils.yabanComm.calendarStats.invalidate();
+    },
   });
 
   if (isLoading) {
