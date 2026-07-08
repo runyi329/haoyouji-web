@@ -803,14 +803,11 @@ function ProjectCreationRuleContent() {
         </ul>
       </RuleSection>
 
-      <RuleSection icon={Plug} title="通道二：黄金 / 石油 / 汇率 / 指数 → 服务器 tRPC（暂行）">
+      <RuleSection icon={Plug} title="通道二：美股 / 港股 / 黄金 / 石油 / 汇率 → Cloudflare Worker 代理">
         <p className="text-[12.5px] text-gray-700 leading-relaxed mb-3">
-          这类数据的数据源（腾讯财经 / 新浪财经）有 CORS 限制，浏览器无法直连。目前走服务器端 tRPC 接口（按需请求，不轮询）。待登录 Cloudflare 后台配置 API Token 后，可一键切换到 Worker 代理方案，服务器很轻轻。
+          Yahoo Finance 有 CORS 限制，浏览器无法直连。通过项目已有的 Cloudflare Worker 做轻量代理，Worker 加 CORS 头后返回给前端，服务器完全不参与。Worker 永久免费（每日 10 万次请求额度）。
         </p>
-        <p className="text-[12px] bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-3 text-amber-700">
-          ⚠️ Worker 代码已就绪（<span className="font-mono text-[11px]">cloudflare-worker/worker.js</span>），待登录 Cloudflare 后台生成 API Token 后配置 GitHub Secrets 即可自动部署。切换时只需将 <span className="font-mono text-[11px]">useLivePrice.ts</span> 中的 <span className="font-mono text-[11px]">fetchMarketFromServer</span> 改为 <span className="font-mono text-[11px]">fetchMarketFromWorker</span>。
-        </p>
-        <p className="text-[12px] font-semibold text-gray-800 mb-1">Worker 地址（备用）</p>
+        <p className="text-[12px] font-semibold text-gray-800 mb-1">Worker 地址</p>
         <p className="font-mono text-[11px] bg-gray-100 px-2 py-1 rounded mb-3">https://polymarket-proxy.runyihongkong.workers.dev</p>
         <p className="text-[12px] font-semibold text-gray-800 mb-1">资产代码规范</p>
         <table className="w-full text-[12px] border-collapse">
@@ -892,7 +889,7 @@ export const RULES: Rule[] = [
     id: "005",
     title: "项目创建规则",
     summary:
-      "新建项目总规范：A角色与归属权限 B会员权限 C项目骨架 D初始化清单 E多项目登录皮肤路由 F图片/视频/文件上传规范 G金融数据获取规则（数字币前端直连币安/OKX/CoinGecko三重兜底；期权行权日/行权价/希腊字母前端直连Deribit；黄金/石油/汇率/指数暂走服务器tRPC，待Cloudflare Worker部署后切换；老方案封存备用）。",
+      "新建项目总规范：A角色与归属权限 B会员权限 C项目骨架 D初始化清单 E多项目登录皮肤路由 F图片/视频/文件上传规范 G金融数据获取规则（数字币前端直连币安/OKX/CoinGecko三重兜底；美股/港股/黄金/石油走Cloudflare Worker代理Yahoo Finance；老方案封存备用）。",
     content: <ProjectCreationRuleContent />,
   },
   {
