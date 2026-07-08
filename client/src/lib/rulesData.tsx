@@ -558,6 +558,11 @@ function ProjectCreationRuleContent() {
             <span className="font-medium text-gray-900">图片/视频/文件上传规范</span>
             <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">已定</span>
           </li>
+          <li className="flex items-center gap-2">
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-[#5A2E1C] text-white text-[10px] font-bold shrink-0">G</span>
+            <span className="font-medium text-gray-900">金融数据获取规则</span>
+            <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">已定</span>
+          </li>
         </ol>
       </div>
 
@@ -744,6 +749,105 @@ function ProjectCreationRuleContent() {
         </ul>
       </RuleSection>
 
+      {/* ===== 板块 G：金融数据获取规则 ===== */}
+      <div className="flex items-center gap-2 pt-1">
+        <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-[#5A2E1C] text-white text-[10px] font-bold">G</span>
+        <span className="text-[13px] font-bold text-[#5A2E1C]">金融数据获取规则</span>
+      </div>
+
+      <RuleSection icon={Server} title="核心原则：服务器只管业务数据，行情全部前端获取">
+        <p className="text-[12.5px] text-gray-700 leading-relaxed">
+          所有金融行情数据（价格、Greeks、汇率等）按资产类型分两条通道获取，<span className="font-semibold text-gray-900">服务器不再承担任何行情拉取职责</span>，只负责订单、账本、用户等业务数据。彻底消除服务器轮询压力，同时降低延迟。
+        </p>
+        <p className="text-[12px] text-gray-400 mt-1">
+          老方案（服务器端 price-scanner / getRate / getLivePrices）代码保留不删，注释标注「已封存，新方案见 useLivePrice.ts / useDeribit.ts」，备用切回。
+        </p>
+      </RuleSection>
+
+      <RuleSection icon={Link2} title="通道一：数字币 + 期权 → 前端直连（Client-Side Fetching）">
+        <p className="text-[12.5px] text-gray-700 leading-relaxed mb-3">
+          浏览器直接请求交易所公开接口，CORS 完全开放，无需 API Key，永久免费。
+        </p>
+        <p className="text-[12px] font-semibold text-gray-800 mb-1">数字币价格（三重兜底）</p>
+        <table className="w-full text-[12px] border-collapse mb-3">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">优先级</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">数据源</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">接口地址</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="p-1.5 border border-gray-200 text-gray-700">主</td>
+              <td className="p-1.5 border border-gray-200 font-medium">币安 Binance</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500 font-mono text-[11px]">api.binance.com/api/v3/ticker/price</td>
+            </tr>
+            <tr className="bg-gray-50">
+              <td className="p-1.5 border border-gray-200 text-gray-700">备用</td>
+              <td className="p-1.5 border border-gray-200 font-medium">OKX</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500 font-mono text-[11px]">okx.com/api/v5/market/ticker</td>
+            </tr>
+            <tr>
+              <td className="p-1.5 border border-gray-200 text-gray-700">兜底</td>
+              <td className="p-1.5 border border-gray-200 font-medium">CoinGecko</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500 font-mono text-[11px]">api.coingecko.com/api/v3/simple/price</td>
+            </tr>
+          </tbody>
+        </table>
+        <p className="text-[12px] font-semibold text-gray-800 mb-1">期权（Deribit）— 已完成实现</p>
+        <ul className="text-[12px] text-gray-700 space-y-1">
+          <li>行权日 / 行权价下拉框：直连 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">deribit.com/api/v2/public/get_instruments</span>，静态数据兜底</li>
+          <li>希腊字母（IV / Delta / Gamma / Theta / Vega）：直连 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">deribit.com/api/v2/public/ticker</span>，每 30 秒自动刷新</li>
+          <li>实现文件：<span className="font-mono text-[11px] bg-gray-100 px-1 rounded">client/src/lib/useDeribit.ts</span></li>
+        </ul>
+      </RuleSection>
+
+      <RuleSection icon={Plug} title="通道二：美股 / 港股 / 黄金 / 石油 / 汇率 → Cloudflare Worker 代理">
+        <p className="text-[12.5px] text-gray-700 leading-relaxed mb-3">
+          Yahoo Finance 有 CORS 限制，浏览器无法直连。通过项目已有的 Cloudflare Worker 做轻量代理，Worker 加 CORS 头后返回给前端，服务器完全不参与。Worker 永久免费（每日 10 万次请求额度）。
+        </p>
+        <p className="text-[12px] font-semibold text-gray-800 mb-1">Worker 地址</p>
+        <p className="font-mono text-[11px] bg-gray-100 px-2 py-1 rounded mb-3">https://polymarket-proxy.runyihongkong.workers.dev</p>
+        <p className="text-[12px] font-semibold text-gray-800 mb-1">资产代码规范</p>
+        <table className="w-full text-[12px] border-collapse">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">资产类型</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">代码格式</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">示例</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="p-1.5 border border-gray-200">美股</td>
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">直接股票代码</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">AAPL、MSTR、TSLA、NVDA</td>
+            </tr>
+            <tr className="bg-gray-50">
+              <td className="p-1.5 border border-gray-200">港股</td>
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">代码 + .HK</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">0700.HK（腾讯）、1211.HK（比亚迪）</td>
+            </tr>
+            <tr>
+              <td className="p-1.5 border border-gray-200">黄金</td>
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">GC=F</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">黄金期货，美元/盎司</td>
+            </tr>
+            <tr className="bg-gray-50">
+              <td className="p-1.5 border border-gray-200">石油</td>
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">CL=F / NG=F</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">WTI 原油 / 天然气</td>
+            </tr>
+            <tr>
+              <td className="p-1.5 border border-gray-200">汇率</td>
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">USDCNH=X</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">美元/人民币离岸汇率</td>
+            </tr>
+          </tbody>
+        </table>
+      </RuleSection>
+
       <p className="text-center text-[11px] text-gray-300 pt-1">
         规则 005 · 项目创建规则 · 仅超级管理员可见
       </p>
@@ -785,7 +889,7 @@ export const RULES: Rule[] = [
     id: "005",
     title: "项目创建规则",
     summary:
-      "新建项目总规范【角色与归属权限板块】：①三层角色（脉动网超管 / {project_id名}网站管理员 / 项目成员）统一命名靠 project_id 区分 ②用户为脉动网统一账号、按项目归属 ③网站管理员只能看自己项目的用户（后端强制 project_id 过滤） ④权限一切圈定在本项目。后续可补项目骨架、初始化清单等板块。",
+      "新建项目总规范：A角色与归属权限 B会员权限 C项目骨架 D初始化清单 E多项目登录皮肤路由 F图片/视频/文件上传规范 G金融数据获取规则（数字币前端直连币安/OKX/CoinGecko三重兜底；美股/港股/黄金/石油走Cloudflare Worker代理Yahoo Finance；老方案封存备用）。",
     content: <ProjectCreationRuleContent />,
   },
   {
