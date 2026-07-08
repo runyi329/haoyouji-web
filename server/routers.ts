@@ -145,6 +145,56 @@ function scheduleDeribitDailyRefresh() {
   console.log(`[Deribit] 下次到期日刷新将在 ${nextRefresh.toISOString()} (北京时间凌晨00:00)`);
 }
 scheduleDeribitDailyRefresh();
+
+// ===== Deribit 行权价每日缓存（与到期日缓存同步刷新）=====
+// Map key: "BTC:8JUL26" -> { strikes: number[] }
+const _deribitStrikesCache = new Map<string, { strikes: number[]; fetchedAt: number }>();
+async function fetchAndCacheDeribitStrikes(currency: 'BTC' | 'ETH'): Promise<void> {
+  try {
+    const res = await fetch(`https://www.deribit.com/api/v2/public/get_instruments?currency=${currency}&kind=option&expired=false`);
+    const data = await res.json() as any;
+    const instruments: any[] = data.result || [];
+    const byExpiry = new Map<string, Set<number>>();
+    for (const inst of instruments) {
+      const ts = inst.expiration_timestamp;
+      const dt = new Date(ts);
+      const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+      const dd = dt.getUTCDate();
+      const mon = months[dt.getUTCMonth()];
+      const yy = String(dt.getUTCFullYear()).slice(2);
+      const deribitLabel = `${dd}${mon}${yy}`;
+      const key = `${currency}:${deribitLabel}`;
+      if (!byExpiry.has(key)) byExpiry.set(key, new Set());
+      byExpiry.get(key)!.add(inst.strike);
+    }
+    const now = Date.now();
+    for (const [key, strikeSet] of byExpiry) {
+      const strikes = Array.from(strikeSet).sort((a, b) => a - b);
+      _deribitStrikesCache.set(key, { strikes, fetchedAt: now });
+    }
+    console.log(`[Deribit] ${currency} 行权价缓存已更新，共 ${byExpiry.size} 个到期日`);
+  } catch (e: any) {
+    console.error(`[Deribit] ${currency} 行权价缓存更新失败:`, e.message);
+  }
+}
+// 服务器启动时预热
+fetchAndCacheDeribitStrikes('BTC');
+fetchAndCacheDeribitStrikes('ETH');
+// 每天北京时间凌晨 00:00 自动刷新（与到期日缓存同步）
+setTimeout(() => {
+  fetchAndCacheDeribitStrikes('BTC');
+  fetchAndCacheDeribitStrikes('ETH');
+  setInterval(() => {
+    fetchAndCacheDeribitStrikes('BTC');
+    fetchAndCacheDeribitStrikes('ETH');
+  }, 24 * 60 * 60 * 1000);
+}, (() => {
+  const now = new Date();
+  const next = new Date(now);
+  next.setUTCHours(16, 0, 0, 0);
+  if (next <= now) next.setUTCDate(next.getUTCDate() + 1);
+  return next.getTime() - now.getTime();
+})());
 // ================================================================
 
 // Manus 聊天功能（管理员发送消息/文件给用户）
@@ -16822,9 +16872,14 @@ ${klinesSummary}
           premium: z.string().optional(),
           exerciseDate: z.string().optional(),
           buyPrice: z.string().optional(),
+          buyQty: z.string().optional(),
+          buyTotal: z.string().optional(),
           strikePrice: z.string().optional(),
           denomination: z.enum(['B', 'U']).optional(),
           coin: z.enum(['BTC', 'ETH']).optional(),
+          premiumConverted: z.string().optional(),
+          direction: z.enum(['long_call', 'long_put', 'short_call', 'short_put']).optional(),
+          targetPrice: z.string().optional(),
         }).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -16925,9 +16980,14 @@ ${klinesSummary}
           premium: z.string().optional(),
           exerciseDate: z.string().optional(),
           buyPrice: z.string().optional(),
+          buyQty: z.string().optional(),
+          buyTotal: z.string().optional(),
           strikePrice: z.string().optional(),
           denomination: z.enum(['B', 'U']).optional(),
           coin: z.enum(['BTC', 'ETH']).optional(),
+          premiumConverted: z.string().optional(),
+          direction: z.enum(['long_call', 'long_put', 'short_call', 'short_put']).optional(),
+          targetPrice: z.string().optional(),
         }).nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -17204,8 +17264,8 @@ ${klinesSummary}
       }),
 
     // ========== Deribit 期权数据接口 ==========
-    // 获取 Deribit 可用到期日列表（BTC 或 ETH）
-    deribitGetExpiries: protectedProcedure
+    // 获取 Deribit 可用到期日列表（BTC 或 ETH）—— 公开接口，无需登录，供前端预取
+    deribitGetExpiries: publicProcedure
       .input(z.object({ currency: z.enum(['BTC', 'ETH']) }))
       .query(async ({ input }) => {
         // 优先读取内存缓存（每日北京时间凌晨预热）
@@ -17229,6 +17289,24 @@ ${klinesSummary}
           diffDays: Math.ceil((e.ts - now) / (1000 * 60 * 60 * 24)),
         }));
         return { expiries: freshExpiries, fromCache: false, fetchedAt: afterFetch.fetchedAt };
+      }),
+    // 获取指定到期日的行权价列表（公开接口，无需登录）
+    deribitGetStrikes: publicProcedure
+      .input(z.object({
+        currency: z.enum(['BTC', 'ETH']),
+        deribitLabel: z.string(), // 如 "8JUL26"
+      }))
+      .query(async ({ input }) => {
+        const key = `${input.currency}:${input.deribitLabel}`;
+        const cached = _deribitStrikesCache.get(key);
+        if (cached && cached.strikes.length > 0) {
+          return { strikes: cached.strikes, fromCache: true };
+        }
+        // 缓存未命中时实时拉取
+        await fetchAndCacheDeribitStrikes(input.currency);
+        const afterFetch = _deribitStrikesCache.get(key);
+        if (!afterFetch) return { strikes: [], fromCache: false };
+        return { strikes: afterFetch.strikes, fromCache: false };
       }),
     // 获取 Deribit 期权希腊字母（Delta/Gamma/Theta/Vega/IV）
     deribitGetGreeks: protectedProcedure

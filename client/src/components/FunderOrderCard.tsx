@@ -710,6 +710,18 @@ export function FunderOrderCard({
   const [showStatusSheet, setShowStatusSheet] = useState(false);
   const tipBtnRef = useRef<HTMLButtonElement>(null);
   const [tipPos, setTipPos] = useState<{ bottom: number; right: number }>({ bottom: 0, right: 0 });
+  // ===== 期权希腊字母查询（必须在顶层，不能放在条件渲染内）=====
+  const _optionInfo = (() => { try { const raw = (order as any).option_info; if (!raw) return null; return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; } })();
+  const _greeksEnabled = order.asset_type === 'crypto_option' && !!(_optionInfo?.strikePrice && _optionInfo?.exerciseDate && _optionInfo?.direction);
+  const greeksQuery = trpc.ledger.deribitGetGreeks.useQuery(
+    {
+      currency: ((_optionInfo?.coin || 'BTC') as 'BTC' | 'ETH'),
+      exerciseDate: _optionInfo?.exerciseDate || '',
+      strikePrice: parseFloat(_optionInfo?.strikePrice || '0'),
+      direction: (_optionInfo?.direction || 'long_call') as 'long_call' | 'long_put' | 'short_call' | 'short_put',
+    },
+    { refetchInterval: 3000, staleTime: 0, enabled: _greeksEnabled }
+  );
   const accrued = useAccruedInterestFunder(
     (order.status === 'active' || order.settled_at) ? order.interest_base : null,
     (order.status === 'active' || order.settled_at) ? (isInvited ? order.participantInfo?.commissionRate : order.interest_rate_annual) : null,
@@ -1209,43 +1221,33 @@ export function FunderOrderCard({
                   </div>
                 )}
               </div>
-              {/* 希腊字母区域（Deribit 实时） */}
+              {/* 希腊字母区域（Deribit 实时）- greeksQuery 在组件顶层，此处仅渲染 */}
               {show('optionGreeks') && oi?.strikePrice && oi?.exerciseDate && oi?.direction && (() => {
-                const greeksQuery = trpc.deribitGetGreeks.useQuery(
-                  {
-                    currency: (oi.coin || 'BTC') as 'BTC' | 'ETH',
-                    exerciseDate: oi.exerciseDate,
-                    strikePrice: parseFloat(oi.strikePrice),
-                    direction: oi.direction as 'long_call' | 'long_put' | 'short_call' | 'short_put',
-                  },
-                  { refetchInterval: 3000, staleTime: 0, enabled: !!(oi.strikePrice && oi.exerciseDate && oi.direction) }
-                );
                 const g = greeksQuery.data;
                 const fmt4 = (v: number | null | undefined) => v == null ? '--' : v.toFixed(4);
                 const fmtPct = (v: number | null | undefined) => v == null ? '--' : `${(v * 100).toFixed(1)}%`;
                 return (
                   <div className="mt-2 pt-2" style={{ borderTop: '1px solid #E5E7EB' }}>
-                    <div className="text-[10px] mb-1" style={{ color: '#3B82F6' }}>希腊字母 {g?.instrumentName ? <span style={{ color: '#9CA3AF' }}>({g.instrumentName})</span> : null}</div>
-                    <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-xs">
+                    <div className="space-y-0.5 text-xs">
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-400">δ Delta</span>
+                        <span className="text-gray-400">IV</span>
+                        <span className="font-mono font-medium" style={{ color: '#7C3AED' }}>{fmtPct(g?.iv != null ? g.iv / 100 : null)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-400">Delta</span>
                         <span className="font-mono font-medium" style={{ color: '#1A2340' }}>{fmt4(g?.delta)}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-400">γ Gamma</span>
+                        <span className="text-gray-400">Gamma</span>
                         <span className="font-mono font-medium" style={{ color: '#1A2340' }}>{fmt4(g?.gamma)}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-400">θ Theta</span>
+                        <span className="text-gray-400">Theta</span>
                         <span className="font-mono font-medium" style={{ color: '#1A2340' }}>{fmt4(g?.theta)}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-gray-400">ν Vega</span>
+                        <span className="text-gray-400">Vega</span>
                         <span className="font-mono font-medium" style={{ color: '#1A2340' }}>{fmt4(g?.vega)}</span>
-                      </div>
-                      <div className="col-span-2 flex items-center justify-between">
-                        <span className="text-gray-400">IV 隐含波动率</span>
-                        <span className="font-mono font-medium" style={{ color: '#7C3AED' }}>{fmtPct(g?.iv != null ? g.iv / 100 : null)}</span>
                       </div>
                     </div>
                     {greeksQuery.isLoading && <div className="text-[10px] text-gray-400 mt-0.5">加载中…</div>}

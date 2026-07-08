@@ -212,15 +212,27 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   );
   const { data: cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: "USD", tocoin: "CNY", money: 1 }, { staleTime: 3000, refetchInterval: 3000 });
   // Deribit 到期日列表（期权资产类型时加载）
-  const { data: expiriesData, isLoading: expiriesLoading } = trpc.deribitGetExpiries.useQuery(
-    { currency: (formData.optionCoin || 'BTC') as 'BTC' | 'ETH' },
-    {
-      // 服务端已预热缓存，这里只需开启期权类型时就查询（不需等 showForm）
-      enabled: formData.assetType === 'crypto_option',
-      // 客户端缓存 5 分钟，切换 BTC/ETH 时自动重新请求（currency 变化就是新 key）
-      staleTime: 5 * 60 * 1000,
-    }
+  // 组件挂载时立即预取 BTC + ETH 到期日（服务端已预热缓存，响应极快）
+  // 两个 query 同时发出，切换币种时直接读客户端缓存，无任何等待
+  const { data: expiriesBTC } = trpc.ledger.deribitGetExpiries.useQuery(
+    { currency: 'BTC' },
+    { staleTime: 24 * 60 * 60 * 1000 } // 客户端缓存24小时，与服务端刷新周期一致
   );
+  const { data: expiriesETH } = trpc.ledger.deribitGetExpiries.useQuery(
+    { currency: 'ETH' },
+    { staleTime: 24 * 60 * 60 * 1000 }
+  );
+  // 根据当前选择的期权币种取对应数据
+  const expiriesData = formData.optionCoin === 'ETH' ? expiriesETH : expiriesBTC;
+  const expiriesLoading = false; // 服务端缓存预热，几乎不会有加载状态
+  // 当前选中行权日对应的 deribitLabel（如 "8JUL26"），用于查询行权价列表
+  const selectedDeribitLabel = expiriesData?.expiries?.find(e => e.dateStr === formData.optionExerciseDate)?.deribitLabel ?? '';
+  // 查询当前选中到期日的行权价列表（服务端已预热缓存，响应极快）
+  const { data: strikesData } = trpc.ledger.deribitGetStrikes.useQuery(
+    { currency: formData.optionCoin, deribitLabel: selectedDeribitLabel },
+    { enabled: !!selectedDeribitLabel, staleTime: 24 * 60 * 60 * 1000 }
+  );
+  const strikesList: number[] = strikesData?.strikes ?? [];
   // 获取37号账本活跃的右侧保证金标签列表（供下拉框使用）
   const { data: activeMarginTags } = trpc.ledger.getActiveMarginTags.useQuery(
     { ledgerId: 37 },
@@ -851,17 +863,33 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       return;
     }
     // 底层 amount 统一存 USDT 价值（与老订单口径一致，下游计算零改动）；amountCurrency 另存出资币种供展示折算
-    // 股票类型：融资金额直接是 CNY 值，不折算；非股票用 computedAmount（已是 USDT 价值）
-    const finalAmount = formData.assetType === 'stock'
-      ? (() => { const v = parseFloat(amountInputValue); return isNaN(v) ? '' : v.toFixed(2); })()
-      : (computedAmount || (editingOrder ? formData.originalAmount : ''));
-    if (!finalAmount || parseFloat(finalAmount) <= 0) {
-      toast.error(formData.assetType === 'stock' ? '请填写融资金额' : '请填写买入价格和买入数量以自动计算总金额');
-      return;
+    // 股票类型：融资金额直接是 CNY 值，不折算；期权类型：权利金 × 买入币数；非股票用 computedAmount（已是 USDT 价值）
+    let finalAmount: string;
+    if (formData.assetType === 'stock') {
+      const v = parseFloat(amountInputValue);
+      finalAmount = isNaN(v) ? '' : v.toFixed(2);
+      if (!finalAmount || parseFloat(finalAmount) <= 0) {
+        toast.error('请填写融资金额');
+        return;
+      }
+    } else if (formData.assetType === 'crypto_option') {
+      // 期权：用权利金 × 买入币数计算总额；两者都没填时允许以 0 保存
+      const premium = parseFloat(formData.optionPremium || '0');
+      const qty = parseFloat(formData.optionBuyPrice || '0');
+      const optionTotal = premium * qty;
+      finalAmount = isNaN(optionTotal) || optionTotal <= 0
+        ? (editingOrder ? formData.originalAmount : '0')
+        : optionTotal.toFixed(2);
+    } else {
+      finalAmount = computedAmount || (editingOrder ? formData.originalAmount : '');
+      if (!finalAmount || parseFloat(finalAmount) <= 0) {
+        toast.error('请填写买入价格和买入数量以自动计算总金额');
+        return;
+      }
     }
     const payload = {
       ledgerId,
-      coin: formData.coin,
+      coin: formData.assetType === 'crypto_option' ? formData.optionCoin : formData.coin,
       amount: finalAmount,
       amountCurrency: formData.assetType === 'stock' ? 'CNY' : (formData.amountCurrency || undefined),
       buyPrice: formData.buyPrice || undefined,
@@ -1641,59 +1669,62 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     return null;
                   })()}
 
-                  {/* 行权价 */}
+                  {/* 行权日 - 下拉框（Deribit 预加载，12个选项） */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-2">行权价</label>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">行权日</label>
                     <div className="relative">
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        value={formData.optionStrikePrice}
-                        onChange={e => setFormData(d => ({ ...d, optionStrikePrice: e.target.value }))}
-                        className="w-full pl-4 pr-20 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-green-200"
-                        placeholder="如：100000"
-                        style={{ display: 'block', boxSizing: 'border-box' }}
-                      />
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold pointer-events-none" style={{ color: '#6B7280' }}>USDT</span>
+                      <select
+                        value={formData.optionExerciseDate}
+                        onChange={e => setFormData(d => ({ ...d, optionExerciseDate: e.target.value, optionStrikePrice: '' }))}
+                        className="w-full px-3 py-3 rounded-xl border text-sm appearance-none bg-white"
+                        style={{ borderColor: formData.optionExerciseDate ? '#059669' : '#E5E7EB', color: formData.optionExerciseDate ? '#065F46' : '#9CA3AF', fontWeight: formData.optionExerciseDate ? 600 : 400 }}
+                      >
+                        <option value="">请选择到期日</option>
+                        {(expiriesData?.expiries || []).map(e => (
+                          <option key={e.dateStr} value={e.dateStr}>
+                            {e.dateStr}（{e.diffDays > 0 ? `${e.diffDays}天后` : '已到期'}）
+                          </option>
+                        ))}
+                      </select>
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">▾</span>
                     </div>
                   </div>
 
-                  {/* 行权日 - Deribit 平铺列表 */}
+                  {/* 行权价 - 选了行权日后显示对应行权价下拉框 */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-2">行权日</label>
-                    {expiriesLoading ? (
-                      <div className="text-xs text-gray-400 py-2">正在从 Deribit 加载到期日…</div>
-                    ) : expiriesData?.expiries && expiriesData.expiries.length > 0 ? (
-                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                        {expiriesData.expiries.map(e => (
-                          <button
-                            key={e.dateStr}
-                            type="button"
-                            onClick={() => setFormData(d => ({ ...d, optionExerciseDate: e.dateStr }))}
-                            className="w-full px-3 py-2 rounded-lg border text-sm text-left transition-colors"
-                            style={formData.optionExerciseDate === e.dateStr
-                              ? { backgroundColor: '#D1FAE5', borderColor: '#059669', color: '#065F46', fontWeight: 600 }
-                              : { backgroundColor: '#fff', borderColor: '#E5E7EB', color: '#374151' }
-                            }
+                    <label className="block text-sm font-medium text-gray-600 mb-2">行权价</label>
+                    <div className="relative">
+                      {strikesList.length > 0 ? (
+                        <>
+                          <select
+                            value={formData.optionStrikePrice}
+                            onChange={e => setFormData(d => ({ ...d, optionStrikePrice: e.target.value }))}
+                            className="w-full px-3 py-3 rounded-xl border text-sm appearance-none bg-white"
+                            style={{ borderColor: formData.optionStrikePrice ? '#059669' : '#E5E7EB', color: formData.optionStrikePrice ? '#065F46' : '#9CA3AF', fontWeight: formData.optionStrikePrice ? 600 : 400 }}
                           >
-                            <span>{e.dateStr}</span>
-                            <span className="ml-2 text-xs" style={{ color: formData.optionExerciseDate === e.dateStr ? '#059669' : '#9CA3AF' }}>
-                              {e.diffDays > 0 ? `${e.diffDays}天后` : '已到期'}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-xs text-gray-400 py-2">暂无到期日数据（请先选择期权币种）</div>
-                    )}
-                    {/* 已选中日期显示 */}
-                    {formData.optionExerciseDate && (
-                      <div className="mt-1.5 flex items-center gap-1.5">
-                        <span className="text-xs text-gray-400">已选：</span>
-                        <span className="text-xs font-medium" style={{ color: '#059669' }}>{formData.optionExerciseDate}</span>
-                        <button type="button" onClick={() => setFormData(d => ({ ...d, optionExerciseDate: '' }))} className="text-xs text-gray-400 hover:text-gray-600">×清除</button>
-                      </div>
-                    )}
+                            <option value="">请选择行权价</option>
+                            {strikesList.map(s => (
+                              <option key={s} value={String(s)}>{s.toLocaleString()} USDT</option>
+                            ))}
+                          </select>
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">▾</span>
+                        </>
+                      ) : (
+                        <>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={formData.optionStrikePrice}
+                            onChange={e => setFormData(d => ({ ...d, optionStrikePrice: e.target.value }))}
+                            className="w-full pl-4 pr-20 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-green-200"
+                            placeholder={formData.optionExerciseDate ? '加载中…' : '请先选择行权日'}
+                            readOnly={!!formData.optionExerciseDate && strikesList.length === 0}
+                            style={{ display: 'block', boxSizing: 'border-box', backgroundColor: formData.optionExerciseDate && strikesList.length === 0 ? '#F9FAFB' : undefined }}
+                          />
+                          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold pointer-events-none" style={{ color: '#6B7280' }}>USDT</span>
+                        </>
+                      )}
+                    </div>
                   </div>
 
                   {/* 目标止盈价（可选） */}
@@ -2609,27 +2640,23 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                             </div>
                           </div>
                         )}
+                        {/* Greeks 开关 */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">Greeks（IV / Delta / Gamma / Theta / Vega）</span>
+                          <button
+                            type="button"
+                            onClick={() => setDisplayConfig(c => ({ ...c, optionGreeks: !c.optionGreeks }))}
+                            className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none ${
+                              displayConfig.optionGreeks ? 'bg-green-500' : 'bg-gray-200'
+                            }`}
+                          >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                              displayConfig.optionGreeks ? 'translate-x-5' : 'translate-x-1'
+                            }`} />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                    {/* 希腊字母开关 */}
-                    <div className="px-0 pb-0">
-                      <div className="text-xs font-medium mb-2" style={{ color: '#059669' }}>实时希腊字母（Deribit）</div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">希腊字母（δγθν·IV）</span>
-                        <button
-                          type="button"
-                          onClick={() => setDisplayConfig(c => ({ ...c, optionGreeks: !c.optionGreeks }))}
-                          className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none ${
-                            displayConfig.optionGreeks ? 'bg-green-500' : 'bg-gray-200'
-                          }`}
-                        >
-                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                            displayConfig.optionGreeks ? 'translate-x-5' : 'translate-x-1'
-                          }`} />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="mx-4 h-px bg-gray-100 my-2" />
                   </>
                 )}
                 {/* 借出本金开关 */}
@@ -2729,7 +2756,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   order_no: editingOrder?.order_no ?? null,
                   user_id: formData.userId,
                   owner_label: ownerLabel,
-                  coin: formData.coin,
+                  coin: formData.assetType === 'crypto_option' ? formData.optionCoin : formData.coin,
                   asset_type: formData.assetType || null,
                   buy_price: formData.buyPrice || null,
                   buy_quantity: formData.assetType === 'stock' ? null : (formData.buyQuantity || null),
