@@ -416,7 +416,7 @@ export function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
   // 实时价格（吤24h涨跌幅）——用于订单卡片底部显示
   // placeholderData: keepPreviousData 确保刷新时不闪烁，保留上次数据
   // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
-  const \1 = useCryptoPrices(3000);
+  const cryptoPricesRaw = useCryptoPrices(3000);
   const betCardPrices = (betCardPricesRaw as any)?.prices ?? betCardPricesRaw ?? {};
   const betCardChanges = (betCardPricesRaw as any)?.changes ?? {};
   const betCardOpens = (betCardPricesRaw as any)?.opens ?? {};
@@ -1421,7 +1421,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
   );
   // 实时价格（用于计算当前市値）- 使用统一价格接口
   // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
-  const \1 = useCryptoPrices(3000);
+  const cryptoPricesRaw = useCryptoPrices(3000);
   // 适配新的返回结构 { prices: {...}, changes: {...} }
   const _pricesForOrder = (cryptoPricesForOrder as any)?.prices ?? cryptoPricesForOrder;
   const livePrice = _pricesForOrder?.[order.coin] ?? 0;
@@ -2346,7 +2346,7 @@ export default function CryptoPrediction() {
     trpc.ledger.getBinanceKlines.useQuery({ symbol: coin.symbol, interval, limit: 60 }, { staleTime: 30000 });
   // 当前价格使用统一价格接口（三级备用，更稳定）
   // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
-  const \1 = useCryptoPrices(3000);
+  const cryptoPricesRaw = useCryptoPrices(3000);
   // 适配新的返回结构 { prices: {...}, changes: {...} }
   const cryptoPrices = (cryptoPricesRaw as any)?.prices ?? cryptoPricesRaw;
   const cryptoChanges = (cryptoPricesRaw as any)?.changes ?? {};

@@ -257,7 +257,7 @@ export default function DepositManage() {
     );
 
   // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
-  const \1 = useCryptoPrices(3000);
+  const cryptoPricesRaw = useCryptoPrices(3000);
   const cryptoPrices: Record<string, number> = useMemo(() => {
     const result: Record<string, number> = {};
     if (cryptoPricesRaw) {

@@ -526,7 +526,7 @@ export default function OrderFlowPage() {
 
     // 实时价格（3秒刷新）
   // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
-  const \1 = useCryptoPrices(3000);
+  const cryptoPricesRaw = useCryptoPrices(3000);
   // 从价格缓存中按币种取价格
   const getPriceForSymbol = (symbol: string): number | null => {
     const coin = symbol.replace('USDT', '');

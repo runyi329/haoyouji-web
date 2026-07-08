@@ -43,7 +43,7 @@ export default function AfProfitForecast() {
 
   // 拉取实时价格
   // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
-  const \1 = useCryptoPrices(3000);
+  const cryptoPricesRaw = useCryptoPrices(3000);
   const livePrice: Record<string, number> = (cryptoPricesRaw as any)?.prices ?? {};
 
   // 只取持仓中订单（completed + 未卖出）

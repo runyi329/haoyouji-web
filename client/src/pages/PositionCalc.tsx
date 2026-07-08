@@ -547,7 +547,7 @@ export default function PositionCalc() {
 
   // ETH 价格 — 3秒刷新，保留上次値（新数据未到前不清空）
   // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
-  const \1 = useCryptoPrices(3000);
+  const cryptoPricesRaw = useCryptoPrices(3000);
 
   useEffect(() => {
     // getCryptoPrices 返回 { prices: { ETH: ... }, changes: {...} } 结构

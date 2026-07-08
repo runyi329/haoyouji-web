@@ -101,7 +101,7 @@ function GudizengchouDetail({ order, ledgerId }: { order: any; ledgerId: number 
     { enabled: order.side === 'buy', staleTime: 8000, refetchInterval: 3000, refetchOnWindowFocus: false }
   );
   // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
-  const \1 = useCryptoPrices(3000);
+  const cryptoPricesRaw = useCryptoPrices(3000);
   const _prices = (cryptoPricesRaw as any)?.prices ?? cryptoPricesRaw;
   const livePrice = _prices?.[order.coin] ?? 0;
   const cancelMutation = trpc.ledger.afCancelOrder.useMutation({

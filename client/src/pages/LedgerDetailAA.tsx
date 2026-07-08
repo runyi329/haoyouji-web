@@ -109,7 +109,7 @@ export default function LedgerDetailAA({
 
   // 数字币价格（每3秒刷新，规范：crypto-price-unified）
   // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
-  const \1 = useCryptoPrices(3000);
+  const cryptoPricesRaw = useCryptoPrices(3000);
   // 适配新的返回结构 { prices: {...}, changes: {...} }
   const aaCryptoPrices: Record<string, number> = (cryptoPricesData as any)?.prices ?? cryptoPricesData ?? {};
 

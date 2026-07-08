@@ -357,7 +357,7 @@ export default function GridTradeSimulator() {
 
   // 实时ETH价格（每30秒轮询）
   // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
-  const \1 = useCryptoPrices(3000);
+  const cryptoPricesRaw = useCryptoPrices(3000);
   const liveEthPrice: number | null = (cryptoPricesRaw as any)?.prices?.['ETH'] ?? null;
   // 实时时钟（每秒更新）
   const [nowTs, setNowTs] = useState(() => Date.now());

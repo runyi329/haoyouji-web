@@ -833,7 +833,7 @@ export default function OptionAnalysisPage() {
   const [riskFreeRate, setRiskFreeRate] = useState("0.05");
   // ===== 实时 ETH 价格 =====
   // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
-  const \1 = useCryptoPrices(3000);
+  const cryptoPricesRaw = useCryptoPrices(3000);
   useEffect(() => {
     const price = (cryptoPricesRaw as any)?.prices?.ETH ?? (cryptoPricesRaw as any)?.ETH;
     if (price && price > 0) setEthPrice(String(Math.round(price)));
