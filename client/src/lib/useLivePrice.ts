@@ -182,7 +182,7 @@ async function fetchMarketFromServer(endpoint: string, usSymbol?: string): Promi
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
     const d = await res.json() as any;
-    const result = d?.result?.data;
+    const result = d?.result?.data?.json ?? d?.result?.data;
     if (!result) return null;
     // exchange.getRate 返回格式不同
     if (endpoint === '/market/usdcny') {
