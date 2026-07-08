@@ -4,7 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X } from "lucide-react";
 import { toast } from "sonner";
 import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER } from "@/components/FunderOrderCard";
-import { DERIBIT_EXPIRIES_BTC, DERIBIT_EXPIRIES_ETH, DERIBIT_STRIKES_BTC, DERIBIT_STRIKES_ETH } from "@/lib/deribitStaticData";
+import { useDeribitExpiries, useDeribitStrikes } from "@/lib/useDeribit";
 
 
 
@@ -212,14 +212,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     { enabled: ledgerId > 0 && !!sharedCollateralUserId && collateralShareMode === 'self', staleTime: 5000 }
   );
   const { data: cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: "USD", tocoin: "CNY", money: 1 }, { staleTime: 3000, refetchInterval: 3000 });
-  // Deribit 到期日 & 行权价（静态数据，直接从打包文件读取，无网络请求）
-  const expiriesData = formData.optionCoin === 'ETH'
-    ? { expiries: DERIBIT_EXPIRIES_ETH }
-    : { expiries: DERIBIT_EXPIRIES_BTC };
-  const selectedDeribitLabel = (formData.optionCoin === 'ETH' ? DERIBIT_EXPIRIES_ETH : DERIBIT_EXPIRIES_BTC)
-    .find(e => e.dateStr === formData.optionExerciseDate)?.deribitLabel ?? '';
-  const strikesMap = formData.optionCoin === 'ETH' ? DERIBIT_STRIKES_ETH : DERIBIT_STRIKES_BTC;
-  const strikesList: number[] = selectedDeribitLabel ? (strikesMap[selectedDeribitLabel] ?? []) : [];
+  // Deribit 到期日 & 行权价（前端直接调用 Deribit 公开 API，静态数据兑底）
+  const { expiries: expiriesList, isLive: expiriesIsLive } = useDeribitExpiries(formData.optionCoin);
+  const expiriesData = { expiries: expiriesList };
+  const selectedDeribitLabel = expiriesList.find(e => e.dateStr === formData.optionExerciseDate)?.deribitLabel ?? '';
+  const strikesList = useDeribitStrikes(formData.optionCoin, selectedDeribitLabel);
   // 获取37号账本活跃的右侧保证金标签列表（供下拉框使用）
   const { data: activeMarginTags } = trpc.ledger.getActiveMarginTags.useQuery(
     { ledgerId: 37 },

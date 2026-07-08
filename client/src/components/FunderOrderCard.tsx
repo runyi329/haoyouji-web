@@ -6,6 +6,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { RightMarginDetail } from "@/components/RightMarginDetail";
 import { trpc } from "@/lib/trpc";
+import { useDeribitGreeks } from "@/lib/useDeribit";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -713,15 +714,23 @@ export function FunderOrderCard({
   // ===== 期权希腊字母查询（必须在顶层，不能放在条件渲染内）=====
   const _optionInfo = (() => { try { const raw = (order as any).option_info; if (!raw) return null; return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; } })();
   const _greeksEnabled = order.asset_type === 'crypto_option' && !!(_optionInfo?.strikePrice && _optionInfo?.exerciseDate && _optionInfo?.direction);
-  const greeksQuery = trpc.ledger.deribitGetGreeks.useQuery(
-    {
-      currency: ((_optionInfo?.coin || 'BTC') as 'BTC' | 'ETH'),
-      exerciseDate: _optionInfo?.exerciseDate || '',
-      strikePrice: parseFloat(_optionInfo?.strikePrice || '0'),
-      direction: (_optionInfo?.direction || 'long_call') as 'long_call' | 'long_put' | 'short_call' | 'short_put',
-    },
-    { refetchInterval: 3000, staleTime: 0, enabled: _greeksEnabled }
-  );
+  // 构建 Deribit 合约名（如 BTC-8JUL26-100000-C）
+  const _greeksInstrumentName = (() => {
+    if (!_greeksEnabled) return null;
+    const isCall = _optionInfo.direction === 'long_call' || _optionInfo.direction === 'short_call';
+    const optType = isCall ? 'C' : 'P';
+    const dt = new Date(_optionInfo.exerciseDate + 'T08:00:00Z');
+    const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    const dd = dt.getUTCDate();
+    const mon = MONTHS[dt.getUTCMonth()];
+    const yy = String(dt.getUTCFullYear()).slice(2);
+    const strike = parseFloat(_optionInfo.strikePrice);
+    const currency = (_optionInfo.coin || 'BTC').toUpperCase();
+    return `${currency}-${dd}${mon}${yy}-${strike}-${optType}`;
+  })();
+  const _greeksData = useDeribitGreeks(_greeksInstrumentName);
+  // 兼容旧的 greeksQuery.data 接口
+  const greeksQuery = { data: _greeksEnabled ? _greeksData : null, isLoading: false };
   const accrued = useAccruedInterestFunder(
     (order.status === 'active' || order.settled_at) ? order.interest_base : null,
     (order.status === 'active' || order.settled_at) ? (isInvited ? order.participantInfo?.commissionRate : order.interest_rate_annual) : null,
