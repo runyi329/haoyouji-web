@@ -792,6 +792,7 @@ function Router() {
         <Route path="/yaban/settings/charge-products" component={YabanChargeProducts} />
         <Route path="/yaban/settings/charge-add" component={YabanChargeAdd} />
         <Route path="/yaban/settings/website-features" component={lazy(() => import("./pages/yaban/YabanWebsiteFeatures"))} />
+        <Route path="/yaban/settings/homepage-display" component={lazy(() => import("./pages/yaban/YabanHomepageSettings"))} />
         <Route path="/yaban/settings/appt-config" component={lazy(() => import("./pages/yaban/YabanApptConfig"))} />
         <Route path="/yaban/settings/customer-source" component={lazy(() => import("./pages/yaban/YabanCustomerSource"))} />
         <Route path="/yaban/settings/patient-type" component={lazy(() => import("./pages/yaban/YabanPatientType"))} />

@@ -488,4 +488,94 @@ export const yabanOpsRouter = router({
         totalOwedCount: Number(s.total_owed_count || 0),
       };
     }),
+
+  // 接口：今日快速统计（新顾客数、出勤员工数）
+  todayStats: protectedProcedure
+    .input(z.object({ date: z.string().optional(), tenantId: z.number().optional() }))
+    .query(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const TENANT_ID = await resolveTenantId(ctx);
+      const today = input.date || new Date().toISOString().slice(0, 10);
+
+      // 今日新顾客数（按 created_at 日期）
+      const [newCustRows] = (await (conn as any).execute(
+        `SELECT COUNT(*) AS c FROM yaban_customer
+         WHERE tenant_id = ? AND DATE(created_at) = ?`,
+        [TENANT_ID, today]
+      )) as any;
+      const newCustomerCount = Number((newCustRows as any[])[0]?.c || 0);
+
+      // 今日出勤员工数：有排班模板且今天是工作日（未被 override 为 rest）
+      // 1. 获取所有活跃员工的排班模板
+      const [tplRows] = (await (conn as any).execute(
+        `SELECT t.staff_user_id, t.work_days, t.is_active
+         FROM yaban_shift_template t
+         WHERE t.tenant_id = ? AND t.is_active = 1 AND t.staff_user_id <> 0 AND t.role_key <> '__biz__'`,
+        [TENANT_ID]
+      )) as any;
+
+      // 计算今天是周几（0=周一,...,6=周日，与项目 dow 格式一致）
+      const todayDate = new Date(today + 'T00:00:00');
+      const jsDay = todayDate.getDay(); // 0=周日,1=周一,...,6=周六
+      const dow = (jsDay + 6) % 7; // 转换为 0=周一,...,6=周日
+
+      // 收集今天应出勤的员工 userId 集合
+      const onDutySet = new Set<number>();
+      for (const tpl of (tplRows as any[])) {
+        const workDays: string = tpl.work_days || '';
+        // work_days 格式："0,1,2,3,4" 表示周一到周五
+        const days = workDays.split(',').map((d: string) => parseInt(d.trim(), 10));
+        if (days.includes(dow)) {
+          onDutySet.add(Number(tpl.staff_user_id));
+        }
+      }
+
+      // 2. 检查 override（单日调班/请假），如果今天被 override 为 rest，则从集合中移除
+      if (onDutySet.size > 0) {
+        const staffIds = Array.from(onDutySet);
+        const placeholders = staffIds.map(() => '?').join(',');
+        const [ovRows] = (await (conn as any).execute(
+          `SELECT staff_user_id FROM yaban_shift_override
+           WHERE tenant_id = ? AND override_date = ? AND shift_type = 'rest'
+           AND staff_user_id IN (${placeholders})`,
+          [TENANT_ID, today, ...staffIds]
+        )) as any;
+        for (const ov of (ovRows as any[])) {
+          onDutySet.delete(Number(ov.staff_user_id));
+        }
+      }
+
+      // 3. 检查是否有 yaban_shift_day_segs（新周模板），有排班段的也算出勤
+      const [segRows] = (await (conn as any).execute(
+        `SELECT DISTINCT s.staff_user_id
+         FROM yaban_shift_day_segs s
+         JOIN yaban_shift_template t ON t.staff_user_id = s.staff_user_id AND t.tenant_id = s.tenant_id
+         WHERE s.tenant_id = ? AND s.dow = ? AND t.is_active = 1 AND t.role_key <> '__biz__'`,
+        [TENANT_ID, dow]
+      )) as any;
+      for (const seg of (segRows as any[])) {
+        onDutySet.add(Number(seg.staff_user_id));
+      }
+      // 再次移除 rest override
+      if (onDutySet.size > 0) {
+        const staffIds = Array.from(onDutySet);
+        const placeholders = staffIds.map(() => '?').join(',');
+        const [ovRows2] = (await (conn as any).execute(
+          `SELECT staff_user_id FROM yaban_shift_override
+           WHERE tenant_id = ? AND override_date = ? AND shift_type = 'rest'
+           AND staff_user_id IN (${placeholders})`,
+          [TENANT_ID, today, ...staffIds]
+        )) as any;
+        for (const ov of (ovRows2 as any[])) {
+          onDutySet.delete(Number(ov.staff_user_id));
+        }
+      }
+
+      conn.release?.();
+      return {
+        newCustomerCount,
+        onDutyCount: onDutySet.size,
+      };
+    }),
 });

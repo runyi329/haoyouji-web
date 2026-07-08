@@ -234,7 +234,7 @@ export default function YabanHome() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
 
       {/* 顶部蓝色渐变 Header */}
       <div
@@ -365,10 +365,10 @@ export default function YabanHome() {
         </div>
       )}
 
-      {/* 主内容区 */}
-      <div className="max-w-lg mx-auto pb-20">
+      {/* 主内容区：flex-1 撑满剩余高度，overflow-hidden 禁止整页滚动 */}
+      <div className="flex-1 overflow-hidden flex flex-col max-w-lg mx-auto w-full">
         {/* 上半部分：功能网格（2行×4列，末位为「更多」） */}
-        <div className="bg-white mx-3 mt-3 rounded-md p-4">
+        <div className="bg-white mx-3 mt-3 rounded-md p-4 flex-shrink-0">
           <div className="grid grid-cols-4 gap-x-2 gap-y-4">
             {homeFeatures.map((feat, idx) => (
               <button
@@ -400,8 +400,10 @@ export default function YabanHome() {
           </div>
         </div>
 
-        {/* 下半部分：数据报表 / 3D立体月历 */}
-        <YabanCalendar tenantId={currentTenantId} />
+        {/* 下半部分：数据报表 / 3D立体月历（flex-1 自适应撑满剩余空间，overflow-y-auto 允许内部滚动） */}
+        <div className="flex-1 overflow-y-auto">
+          <YabanCalendar tenantId={currentTenantId} />
+        </div>
       </div>
 
       {/* 底部 Tab 栏 */}
@@ -409,3 +411,4 @@ export default function YabanHome() {
     </div>
   );
 }
+
