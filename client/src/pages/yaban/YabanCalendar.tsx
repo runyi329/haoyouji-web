@@ -70,12 +70,12 @@ function DayView({ viewDate, tenantId }: { viewDate: string; tenantId: number })
 
   const { data, isLoading } = trpc.yabanComm.todayOverview.useQuery(
     { date: viewDate },
-    { keepPreviousData: true, enabled: tenantId > 0 }
+    { keepPreviousData: true }
   );
 
   const s = data?.stats;
 
-  // 卡片配置
+  // 卡片配置（暂只显示今日预约）
   const cards = [
     {
       key: "appt",
@@ -88,28 +88,6 @@ function DayView({ viewDate, tenantId }: { viewDate: string; tenantId: number })
       ],
       gradient: "linear-gradient(135deg, #4DB8E8 0%, #2196C8 100%)",
       onClick: () => navigate(`/yaban/schedule?date=${viewDate}`),
-    },
-    {
-      key: "follow",
-      label: "今日随访",
-      total: s?.followTotal ?? 0,
-      subs: [
-        { label: "待随访", val: s?.followPending ?? 0, color: "text-gray-600" },
-        { label: "已完成", val: s?.followDone ?? 0, color: "text-gray-600" },
-      ],
-      gradient: "linear-gradient(135deg, #34D399 0%, #10B981 100%)",
-      onClick: () => navigate(`/yaban/followup`),
-    },
-    {
-      key: "charge",
-      label: "今日收费",
-      total: s?.chargeCount ?? 0,
-      totalSuffix: "笔",
-      subs: [
-        { label: "实收金额", val: s?.chargeTotal ?? 0, color: "text-gray-600", prefix: "¥", isAmount: true },
-      ],
-      gradient: "linear-gradient(135deg, #F59E0B 0%, #D97706 100%)",
-      onClick: () => navigate(`/yaban/charge`),
     },
   ];
 
