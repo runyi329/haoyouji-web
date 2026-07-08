@@ -353,7 +353,7 @@ export default function Profile() {
   // 提交个人信息更新
   const handleSubmitProfile = () => {
     if (!editForm.name.trim()) {
-      toast.error("姓名不能为空");
+      toast.error("昵称不能为空");
       return;
     }
     updateProfileMutation.mutate({
@@ -686,12 +686,12 @@ export default function Profile() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="name">姓名</Label>
+              <Label htmlFor="name">昵称</Label>
               <Input
                 id="name"
                 value={editForm.name}
                 onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                placeholder="请输入姓名"
+                placeholder="请输入昵称"
               />
             </div>
             <div className="space-y-2">
