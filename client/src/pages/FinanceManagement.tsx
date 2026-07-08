@@ -1684,6 +1684,23 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     { enabled: !!ledgerId && showForm, staleTime: 10000, refetchInterval: 10000 }
   );
   const formLivePrices: Record<string, number> = (assetSummaryForm as any)?.livePrices ?? livePrices;
+  // ===== Deribit 期权到期日 & 行权价（数据库缓存，跨实例共享）=====
+  const { data: expiriesBTC } = trpc.ledger.deribitGetExpiries.useQuery(
+    { currency: 'BTC' },
+    { staleTime: 24 * 60 * 60 * 1000 }
+  );
+  const { data: expiriesETH } = trpc.ledger.deribitGetExpiries.useQuery(
+    { currency: 'ETH' },
+    { staleTime: 24 * 60 * 60 * 1000 }
+  );
+  const expiriesData = formData.optionCoin === 'ETH' ? expiriesETH : expiriesBTC;
+  const selectedDeribitLabel = (expiriesData?.expiries ?? []).find((e: any) => e.dateStr === formData.optionExerciseDate)?.deribitLabel ?? '';
+  const { data: strikesData } = trpc.ledger.deribitGetStrikes.useQuery(
+    { currency: formData.optionCoin, deribitLabel: selectedDeribitLabel },
+    { enabled: !!selectedDeribitLabel, staleTime: 24 * 60 * 60 * 1000 }
+  );
+  const strikesList: number[] = strikesData?.strikes ?? [];
+  // ================================================================
   // 融资金额单位折算：以 USDT 为内部基准（买入价单位为 USDT/枚）
   // 把某币种计价的金额折算成 USDT 基准值
   const amtToUsdt = (val: number, cur: string): number => {
@@ -2452,22 +2469,25 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                     />
                   </div>
 
-                  {/* 行权日 */}
+                  {/* 行权日 - Deribit 下拉框 */}
                   <div>
                     <label className="block text-sm font-medium text-gray-600 mb-2">行权日</label>
-                    <button
-                      type="button"
-                      onClick={() => setShowOptionExerciseDatePicker(v => !v)}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base text-left focus:outline-none"
-                      style={{ backgroundColor: '#fff', color: formData.optionExerciseDate ? '#1A2340' : '#9CA3AF', display: 'block', boxSizing: 'border-box' }}
-                    >
-                      {formData.optionExerciseDate || '点击选择行权日'}
-                    </button>
-                    {showOptionExerciseDatePicker && (
-                      <div className="mt-2">
-                        <DatePicker value={formData.optionExerciseDate} onChange={v => { setFormData(d => ({ ...d, optionExerciseDate: v })); setShowOptionExerciseDatePicker(false); }} />
-                      </div>
-                    )}
+                    <div className="relative">
+                      <select
+                        value={formData.optionExerciseDate}
+                        onChange={e => setFormData(d => ({ ...d, optionExerciseDate: e.target.value, optionStrikePrice: '' }))}
+                        className="w-full px-3 py-3 rounded-xl border text-sm appearance-none bg-white"
+                        style={{ borderColor: formData.optionExerciseDate ? '#059669' : '#E5E7EB', color: formData.optionExerciseDate ? '#065F46' : '#9CA3AF', fontWeight: formData.optionExerciseDate ? 600 : 400 }}
+                      >
+                        <option value="">请选择到期日</option>
+                        {(expiriesData?.expiries ?? []).map((e: any) => (
+                          <option key={e.dateStr} value={e.dateStr}>
+                            {e.dateStr}（{e.diffDays > 0 ? `${e.diffDays}天后` : '已到期'}）
+                          </option>
+                        ))}
+                      </select>
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">▾</span>
+                    </div>
                   </div>
 
                   {/* 买入价格（期权） */}
@@ -2484,18 +2504,41 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                     />
                   </div>
 
-                  {/* 行权价 */}
+                  {/* 行权价 - 联动下拉框 */}
                   <div>
                     <label className="block text-sm font-medium text-gray-600 mb-2">行权价</label>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      value={formData.optionStrikePrice}
-                      onChange={e => setFormData(d => ({ ...d, optionStrikePrice: e.target.value }))}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-green-200"
-                      placeholder="如：100000"
-                      style={{ display: 'block', boxSizing: 'border-box' }}
-                    />
+                    <div className="relative">
+                      {strikesList.length > 0 ? (
+                        <>
+                          <select
+                            value={formData.optionStrikePrice}
+                            onChange={e => setFormData(d => ({ ...d, optionStrikePrice: e.target.value }))}
+                            className="w-full px-3 py-3 rounded-xl border text-sm appearance-none bg-white"
+                            style={{ borderColor: formData.optionStrikePrice ? '#059669' : '#E5E7EB', color: formData.optionStrikePrice ? '#065F46' : '#9CA3AF', fontWeight: formData.optionStrikePrice ? 600 : 400 }}
+                          >
+                            <option value="">请选择行权价</option>
+                            {strikesList.map((s: number) => (
+                              <option key={s} value={String(s)}>{s.toLocaleString()} USDT</option>
+                            ))}
+                          </select>
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">▾</span>
+                        </>
+                      ) : (
+                        <>
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            value={formData.optionStrikePrice}
+                            onChange={e => setFormData(d => ({ ...d, optionStrikePrice: e.target.value }))}
+                            className="w-full pl-4 pr-20 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-green-200"
+                            placeholder={formData.optionExerciseDate ? '加载中…' : '请先选择行权日'}
+                            readOnly={!!formData.optionExerciseDate}
+                            style={{ display: 'block', boxSizing: 'border-box', backgroundColor: formData.optionExerciseDate ? '#F9FAFB' : undefined }}
+                          />
+                          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold pointer-events-none" style={{ color: '#6B7280' }}>USDT</span>
+                        </>
+                      )}
+                    </div>
                   </div>
 
                   {/* B本位 / U本位 */}
