@@ -970,6 +970,17 @@ export default function YabanScheduleCreate() {
                       <div style={{ fontSize: 12, color: GRAY_L, marginTop: 1 }}>{selDoc ? "选择日期和时段" : "请先选医生"}</div>
                     </div>
                   </div>
+                  {/* 分钟步长 Tab，放在标题行右侧 */}
+                  <div style={{ display: "flex", gap: 5 }}>
+                    {([5, 15] as const).map(v => (
+                      <button key={v} onClick={() => handleMinuteStep(v)} style={{
+                        padding: "4px 10px", fontSize: 12, fontWeight: 600,
+                        borderRadius: 5, border: `1.5px solid ${minuteStep === v ? SKY_D : LINE}`,
+                        background: minuteStep === v ? SKY_D : "#fff",
+                        color: minuteStep === v ? "#fff" : GRAY_L, cursor: "pointer",
+                      }}>{v}分钟/档</button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* 28天日期条（scroll-snap 吸附，嘎嗒嘎嗒） */}
@@ -1125,17 +1136,6 @@ export default function YabanScheduleCreate() {
                             </div>
                           );
                         })()}
-                        {/* 分钟步长 Tab */}
-                        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-                          {([5, 15] as const).map(v => (
-                            <button key={v} onClick={() => handleMinuteStep(v)} style={{
-                              flex: 1, padding: "6px 0", fontSize: 13, fontWeight: 600,
-                              borderRadius: 5, border: `1.5px solid ${minuteStep === v ? SKY_D : LINE}`,
-                              background: minuteStep === v ? SKY_D : "#fff",
-                              color: minuteStep === v ? "#fff" : GRAY_L, cursor: "pointer",
-                            }}>{v}分钟/档</button>
-                          ))}
-                        </div>
                         {/* 双轮盘 */}
                         <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
                           <WheelPickerMemo
