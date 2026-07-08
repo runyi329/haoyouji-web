@@ -1423,7 +1423,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
   // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
   const cryptoPricesRaw = useCryptoPrices(3000);
   // 适配新的返回结构 { prices: {...}, changes: {...} }
-  const _pricesForOrder = (cryptoPricesForOrder as any)?.prices ?? cryptoPricesForOrder;
+  const _pricesForOrder = (cryptoPricesRaw as any)?.prices ?? cryptoPricesRaw;
   const livePrice = _pricesForOrder?.[order.coin] ?? 0;
   const cancelMutation = trpc.ledger.afCancelOrder.useMutation({
     onSuccess: () => { toast.success('委托已撒销'); },

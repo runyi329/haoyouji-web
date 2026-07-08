@@ -111,7 +111,7 @@ export default function LedgerDetailAA({
   // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
   const cryptoPricesRaw = useCryptoPrices(3000);
   // 适配新的返回结构 { prices: {...}, changes: {...} }
-  const aaCryptoPrices: Record<string, number> = (cryptoPricesData as any)?.prices ?? cryptoPricesData ?? {};
+  const aaCryptoPrices: Record<string, number> = (cryptoPricesRaw as any)?.prices ?? cryptoPricesRaw ?? {};
 
   // 日历当前月份
   const [calendarDate, setCalendarDate] = useState(() => {
