@@ -94,8 +94,41 @@ function setCache(key: string, data: any): void {
 }
 // ================================================================
 
-// ===== Deribit 到期日每日缓存（北京时间凌晨 00:00 刷新，TTL=24h）=====
-const _deribitExpiriesCache = new Map<'BTC' | 'ETH', { expiries: any[]; fetchedAt: number }>();
+// ===== Deribit 数据库缓存（每天北京时间凌晨 00:00 刷新，跨实例共享）=====
+// 使用数据库存储缓存，解决 Autoscale 无状态环境下内存缓存失效的问题
+const DERIBIT_MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+async function deribitDbGet(cacheKey: string): Promise<any | null> {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return null;
+    const [rows] = await (conn as any).execute(
+      'SELECT cache_value, fetched_at FROM deribit_cache WHERE cache_key = ? LIMIT 1',
+      [cacheKey]
+    );
+    if (!rows || (rows as any[]).length === 0) return null;
+    const row = (rows as any[])[0];
+    return { data: JSON.parse(row.cache_value), fetchedAt: Number(row.fetched_at) };
+  } catch (e: any) {
+    console.error('[Deribit DB] 读取缓存失败:', e.message);
+    return null;
+  }
+}
+
+async function deribitDbSet(cacheKey: string, data: any): Promise<void> {
+  try {
+    const conn = await getDbConnection();
+    if (!conn) return;
+    await (conn as any).execute(
+      `INSERT INTO deribit_cache (cache_key, cache_value, fetched_at)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE cache_value = VALUES(cache_value), fetched_at = VALUES(fetched_at)`,
+      [cacheKey, JSON.stringify(data), Date.now()]
+    );
+  } catch (e: any) {
+    console.error('[Deribit DB] 写入缓存失败:', e.message);
+  }
+}
 
 async function fetchAndCacheDeribitExpiries(currency: 'BTC' | 'ETH'): Promise<void> {
   try {
@@ -103,7 +136,6 @@ async function fetchAndCacheDeribitExpiries(currency: 'BTC' | 'ETH'): Promise<vo
     const data = await res.json() as any;
     const instruments: any[] = data.result || [];
     const tsSet = new Set<number>(instruments.map((i: any) => i.expiration_timestamp));
-    const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
     const expiries = Array.from(tsSet).sort((a, b) => a - b).map(ts => {
       const dt = new Date(ts);
       const yyyy = dt.getUTCFullYear();
@@ -111,44 +143,16 @@ async function fetchAndCacheDeribitExpiries(currency: 'BTC' | 'ETH'): Promise<vo
       const dd = dt.getUTCDate();
       const dateStr = `${yyyy}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
       const diffDays = Math.ceil((ts - Date.now()) / (1000 * 60 * 60 * 24));
-      const deribitLabel = `${dd}${months[mm-1]}${String(yyyy).slice(2)}`;
+      const deribitLabel = `${dd}${DERIBIT_MONTHS[mm-1]}${String(yyyy).slice(2)}`;
       return { dateStr, diffDays, deribitLabel, ts };
     });
-    _deribitExpiriesCache.set(currency, { expiries, fetchedAt: Date.now() });
-    console.log(`[Deribit] ${currency} 到期日缓存已更新，共 ${expiries.length} 个`);
+    await deribitDbSet(`expiries:${currency}`, expiries);
+    console.log(`[Deribit] ${currency} 到期日缓存已写入数据库，共 ${expiries.length} 个`);
   } catch (e: any) {
     console.error(`[Deribit] ${currency} 到期日缓存更新失败:`, e.message);
   }
 }
 
-// 服务器启动时预热 BTC + ETH
-fetchAndCacheDeribitExpiries('BTC');
-fetchAndCacheDeribitExpiries('ETH');
-
-// 每天北京时间凌晨 00:00（UTC 16:00）自动刷新
-function scheduleDeribitDailyRefresh() {
-  const now = new Date();
-  // 计算下一个 UTC 16:00
-  const nextRefresh = new Date(now);
-  nextRefresh.setUTCHours(16, 0, 0, 0);
-  if (nextRefresh <= now) nextRefresh.setUTCDate(nextRefresh.getUTCDate() + 1);
-  const msUntilNext = nextRefresh.getTime() - now.getTime();
-  setTimeout(() => {
-    fetchAndCacheDeribitExpiries('BTC');
-    fetchAndCacheDeribitExpiries('ETH');
-    // 之后每 24 小时重复
-    setInterval(() => {
-      fetchAndCacheDeribitExpiries('BTC');
-      fetchAndCacheDeribitExpiries('ETH');
-    }, 24 * 60 * 60 * 1000);
-  }, msUntilNext);
-  console.log(`[Deribit] 下次到期日刷新将在 ${nextRefresh.toISOString()} (北京时间凌晨00:00)`);
-}
-scheduleDeribitDailyRefresh();
-
-// ===== Deribit 行权价每日缓存（与到期日缓存同步刷新）=====
-// Map key: "BTC:8JUL26" -> { strikes: number[] }
-const _deribitStrikesCache = new Map<string, { strikes: number[]; fetchedAt: number }>();
 async function fetchAndCacheDeribitStrikes(currency: 'BTC' | 'ETH'): Promise<void> {
   try {
     const res = await fetch(`https://www.deribit.com/api/v2/public/get_instruments?currency=${currency}&kind=option&expired=false`);
@@ -158,44 +162,56 @@ async function fetchAndCacheDeribitStrikes(currency: 'BTC' | 'ETH'): Promise<voi
     for (const inst of instruments) {
       const ts = inst.expiration_timestamp;
       const dt = new Date(ts);
-      const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
       const dd = dt.getUTCDate();
-      const mon = months[dt.getUTCMonth()];
+      const mon = DERIBIT_MONTHS[dt.getUTCMonth()];
       const yy = String(dt.getUTCFullYear()).slice(2);
       const deribitLabel = `${dd}${mon}${yy}`;
       const key = `${currency}:${deribitLabel}`;
       if (!byExpiry.has(key)) byExpiry.set(key, new Set());
       byExpiry.get(key)!.add(inst.strike);
     }
-    const now = Date.now();
     for (const [key, strikeSet] of byExpiry) {
-      const strikes = Array.from(strikeSet).sort((a, b) => a - b);
-      _deribitStrikesCache.set(key, { strikes, fetchedAt: now });
+      const strikes = Array.from(strikeSet).sort((a: number, b: number) => a - b);
+      await deribitDbSet(`strikes:${key}`, strikes);
     }
-    console.log(`[Deribit] ${currency} 行权价缓存已更新，共 ${byExpiry.size} 个到期日`);
+    console.log(`[Deribit] ${currency} 行权价缓存已写入数据库，共 ${byExpiry.size} 个到期日`);
   } catch (e: any) {
     console.error(`[Deribit] ${currency} 行权价缓存更新失败:`, e.message);
   }
 }
-// 服务器启动时预热
-fetchAndCacheDeribitStrikes('BTC');
-fetchAndCacheDeribitStrikes('ETH');
-// 每天北京时间凌晨 00:00 自动刷新（与到期日缓存同步）
-setTimeout(() => {
-  fetchAndCacheDeribitStrikes('BTC');
-  fetchAndCacheDeribitStrikes('ETH');
-  setInterval(() => {
-    fetchAndCacheDeribitStrikes('BTC');
-    fetchAndCacheDeribitStrikes('ETH');
-  }, 24 * 60 * 60 * 1000);
-}, (() => {
+
+// 服务器启动时预热（延迟3秒等待数据库连接就绪）
+setTimeout(async () => {
+  console.log('[Deribit] 开始预热到期日和行权价缓存...');
+  await fetchAndCacheDeribitExpiries('BTC');
+  await fetchAndCacheDeribitExpiries('ETH');
+  await fetchAndCacheDeribitStrikes('BTC');
+  await fetchAndCacheDeribitStrikes('ETH');
+  console.log('[Deribit] 预热完成');
+}, 3000);
+
+// 每天北京时间凌晨 00:00（UTC 16:00）自动刷新
+(function scheduleDeribitDailyRefresh() {
   const now = new Date();
-  const next = new Date(now);
-  next.setUTCHours(16, 0, 0, 0);
-  if (next <= now) next.setUTCDate(next.getUTCDate() + 1);
-  return next.getTime() - now.getTime();
-})());
-// ================================================================
+  const nextRefresh = new Date(now);
+  nextRefresh.setUTCHours(16, 0, 0, 0);
+  if (nextRefresh <= now) nextRefresh.setUTCDate(nextRefresh.getUTCDate() + 1);
+  const msUntilNext = nextRefresh.getTime() - now.getTime();
+  setTimeout(async () => {
+    console.log('[Deribit] 每日定时刷新开始...');
+    await fetchAndCacheDeribitExpiries('BTC');
+    await fetchAndCacheDeribitExpiries('ETH');
+    await fetchAndCacheDeribitStrikes('BTC');
+    await fetchAndCacheDeribitStrikes('ETH');
+    setInterval(async () => {
+      await fetchAndCacheDeribitExpiries('BTC');
+      await fetchAndCacheDeribitExpiries('ETH');
+      await fetchAndCacheDeribitStrikes('BTC');
+      await fetchAndCacheDeribitStrikes('ETH');
+    }, 24 * 60 * 60 * 1000);
+  }, msUntilNext);
+  console.log(`[Deribit] 下次到期日刷新将在 ${nextRefresh.toISOString()} (北京时间凌晨00:00)`);
+})();
 
 // Manus 聊天功能（管理员发送消息/文件给用户）
 const manusRouter = router({
@@ -17268,23 +17284,25 @@ ${klinesSummary}
     deribitGetExpiries: publicProcedure
       .input(z.object({ currency: z.enum(['BTC', 'ETH']) }))
       .query(async ({ input }) => {
-        // 优先读取内存缓存（每日北京时间凌晨预热）
-        const cached = _deribitExpiriesCache.get(input.currency);
-        if (cached && cached.expiries.length > 0) {
+        // 优先读取数据库缓存（每日北京时间凌晨预热，跨实例共享）
+        const cached = await deribitDbGet(`expiries:${input.currency}`);
+        if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
           // 重新计算 diffDays（基于当前时间，避免缓存中的天数过期）
           const now = Date.now();
-          const freshExpiries = cached.expiries.map(e => ({
+          const freshExpiries = cached.data.map((e: any) => ({
             ...e,
             diffDays: Math.ceil((e.ts - now) / (1000 * 60 * 60 * 24)),
           }));
           return { expiries: freshExpiries, fromCache: true, fetchedAt: cached.fetchedAt };
         }
-        // 缓存为空（首次启动预热尚未完成）时，实时拉取并写入缓存
+        // 数据库缓存为空时，实时拉取并写入数据库
         await fetchAndCacheDeribitExpiries(input.currency);
-        const afterFetch = _deribitExpiriesCache.get(input.currency);
-        if (!afterFetch) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Deribit API 请求失败' });
+        const afterFetch = await deribitDbGet(`expiries:${input.currency}`);
+        if (!afterFetch || !Array.isArray(afterFetch.data) || afterFetch.data.length === 0) {
+          throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Deribit API 请求失败' });
+        }
         const now = Date.now();
-        const freshExpiries = afterFetch.expiries.map(e => ({
+        const freshExpiries = afterFetch.data.map((e: any) => ({
           ...e,
           diffDays: Math.ceil((e.ts - now) / (1000 * 60 * 60 * 24)),
         }));
@@ -17297,16 +17315,16 @@ ${klinesSummary}
         deribitLabel: z.string(), // 如 "8JUL26"
       }))
       .query(async ({ input }) => {
-        const key = `${input.currency}:${input.deribitLabel}`;
-        const cached = _deribitStrikesCache.get(key);
-        if (cached && cached.strikes.length > 0) {
-          return { strikes: cached.strikes, fromCache: true };
+        const dbKey = `strikes:${input.currency}:${input.deribitLabel}`;
+        const cached = await deribitDbGet(dbKey);
+        if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
+          return { strikes: cached.data, fromCache: true };
         }
-        // 缓存未命中时实时拉取
+        // 数据库缓存未命中时实时拉取整个币种的行权价
         await fetchAndCacheDeribitStrikes(input.currency);
-        const afterFetch = _deribitStrikesCache.get(key);
-        if (!afterFetch) return { strikes: [], fromCache: false };
-        return { strikes: afterFetch.strikes, fromCache: false };
+        const afterFetch = await deribitDbGet(dbKey);
+        if (!afterFetch || !Array.isArray(afterFetch.data)) return { strikes: [], fromCache: false };
+        return { strikes: afterFetch.data, fromCache: false };
       }),
     // 获取 Deribit 期权希腊字母（Delta/Gamma/Theta/Vega/IV）
     deribitGetGreeks: protectedProcedure
