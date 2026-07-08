@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { DERIBIT_EXPIRIES_BTC, DERIBIT_EXPIRIES_ETH, DERIBIT_STRIKES_BTC, DERIBIT_STRIKES_ETH } from "@/lib/deribitStaticData";
 import { useRoute, useLocation } from "wouter";
 import { FunderOrderCard } from "@/components/FunderOrderCard";
 import { trpc } from "@/lib/trpc";
@@ -1684,22 +1685,14 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     { enabled: !!ledgerId && showForm, staleTime: 10000, refetchInterval: 10000 }
   );
   const formLivePrices: Record<string, number> = (assetSummaryForm as any)?.livePrices ?? livePrices;
-  // ===== Deribit 期权到期日 & 行权价（数据库缓存，跨实例共享）=====
-  const { data: expiriesBTC } = trpc.ledger.deribitGetExpiries.useQuery(
-    { currency: 'BTC' },
-    { staleTime: 24 * 60 * 60 * 1000 }
-  );
-  const { data: expiriesETH } = trpc.ledger.deribitGetExpiries.useQuery(
-    { currency: 'ETH' },
-    { staleTime: 24 * 60 * 60 * 1000 }
-  );
-  const expiriesData = formData.optionCoin === 'ETH' ? expiriesETH : expiriesBTC;
-  const selectedDeribitLabel = (expiriesData?.expiries ?? []).find((e: any) => e.dateStr === formData.optionExerciseDate)?.deribitLabel ?? '';
-  const { data: strikesData } = trpc.ledger.deribitGetStrikes.useQuery(
-    { currency: formData.optionCoin, deribitLabel: selectedDeribitLabel },
-    { enabled: !!selectedDeribitLabel, staleTime: 24 * 60 * 60 * 1000 }
-  );
-  const strikesList: number[] = strikesData?.strikes ?? [];
+  // ===== Deribit 到期日 & 行权价（静态数据，直接从打包文件读取，无网络请求）=====
+  const expiriesData = formData.optionCoin === 'ETH'
+    ? { expiries: DERIBIT_EXPIRIES_ETH }
+    : { expiries: DERIBIT_EXPIRIES_BTC };
+  const selectedDeribitLabel = (formData.optionCoin === 'ETH' ? DERIBIT_EXPIRIES_ETH : DERIBIT_EXPIRIES_BTC)
+    .find((e: any) => e.dateStr === formData.optionExerciseDate)?.deribitLabel ?? '';
+  const strikesMap = formData.optionCoin === 'ETH' ? DERIBIT_STRIKES_ETH : DERIBIT_STRIKES_BTC;
+  const strikesList: number[] = selectedDeribitLabel ? (strikesMap[selectedDeribitLabel] ?? []) : [];
   // ================================================================
   // 融资金额单位折算：以 USDT 为内部基准（买入价单位为 USDT/枚）
   // 把某币种计价的金额折算成 USDT 基准值

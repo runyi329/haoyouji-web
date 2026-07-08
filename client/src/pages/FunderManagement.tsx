@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X } from "lucide-react";
 import { toast } from "sonner";
 import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER } from "@/components/FunderOrderCard";
+import { DERIBIT_EXPIRIES_BTC, DERIBIT_EXPIRIES_ETH, DERIBIT_STRIKES_BTC, DERIBIT_STRIKES_ETH } from "@/lib/deribitStaticData";
 
 
 
@@ -211,28 +212,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     { enabled: ledgerId > 0 && !!sharedCollateralUserId && collateralShareMode === 'self', staleTime: 5000 }
   );
   const { data: cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: "USD", tocoin: "CNY", money: 1 }, { staleTime: 3000, refetchInterval: 3000 });
-  // Deribit 到期日列表（期权资产类型时加载）
-  // 组件挂载时立即预取 BTC + ETH 到期日（服务端已预热缓存，响应极快）
-  // 两个 query 同时发出，切换币种时直接读客户端缓存，无任何等待
-  const { data: expiriesBTC } = trpc.ledger.deribitGetExpiries.useQuery(
-    { currency: 'BTC' },
-    { staleTime: 24 * 60 * 60 * 1000 } // 客户端缓存24小时，与服务端刷新周期一致
-  );
-  const { data: expiriesETH } = trpc.ledger.deribitGetExpiries.useQuery(
-    { currency: 'ETH' },
-    { staleTime: 24 * 60 * 60 * 1000 }
-  );
-  // 根据当前选择的期权币种取对应数据
-  const expiriesData = formData.optionCoin === 'ETH' ? expiriesETH : expiriesBTC;
-  const expiriesLoading = false; // 服务端缓存预热，几乎不会有加载状态
-  // 当前选中行权日对应的 deribitLabel（如 "8JUL26"），用于查询行权价列表
-  const selectedDeribitLabel = expiriesData?.expiries?.find(e => e.dateStr === formData.optionExerciseDate)?.deribitLabel ?? '';
-  // 查询当前选中到期日的行权价列表（服务端已预热缓存，响应极快）
-  const { data: strikesData } = trpc.ledger.deribitGetStrikes.useQuery(
-    { currency: formData.optionCoin, deribitLabel: selectedDeribitLabel },
-    { enabled: !!selectedDeribitLabel, staleTime: 24 * 60 * 60 * 1000 }
-  );
-  const strikesList: number[] = strikesData?.strikes ?? [];
+  // Deribit 到期日 & 行权价（静态数据，直接从打包文件读取，无网络请求）
+  const expiriesData = formData.optionCoin === 'ETH'
+    ? { expiries: DERIBIT_EXPIRIES_ETH }
+    : { expiries: DERIBIT_EXPIRIES_BTC };
+  const selectedDeribitLabel = (formData.optionCoin === 'ETH' ? DERIBIT_EXPIRIES_ETH : DERIBIT_EXPIRIES_BTC)
+    .find(e => e.dateStr === formData.optionExerciseDate)?.deribitLabel ?? '';
+  const strikesMap = formData.optionCoin === 'ETH' ? DERIBIT_STRIKES_ETH : DERIBIT_STRIKES_BTC;
+  const strikesList: number[] = selectedDeribitLabel ? (strikesMap[selectedDeribitLabel] ?? []) : [];
   // 获取37号账本活跃的右侧保证金标签列表（供下拉框使用）
   const { data: activeMarginTags } = trpc.ledger.getActiveMarginTags.useQuery(
     { ledgerId: 37 },
