@@ -213,10 +213,6 @@ export default function YabanPatientCharge() {
       resetCreate();
       utils.yabanCustomer.listCharges.invalidate({ customerId });
       utils.yabanCustomer.chargeStats.invalidate({ customerId });
-      // 刷新首页日/周/月三个视角数据
-      utils.yabanComm.todayOverview.invalidate();
-      utils.yabanComm.weekOverview.invalidate();
-      utils.yabanComm.calendarStats.invalidate();
     } catch (e: any) {
       toast.error(e.message || "开单失败");
     } finally {
@@ -251,10 +247,6 @@ export default function YabanPatientCharge() {
       utils.yabanCustomer.chargeDetail.invalidate({ id: detailId });
       utils.yabanCustomer.listCharges.invalidate({ customerId });
       utils.yabanCustomer.chargeStats.invalidate({ customerId });
-      // 刷新首页日/周/月三个视角数据
-      utils.yabanComm.todayOverview.invalidate();
-      utils.yabanComm.weekOverview.invalidate();
-      utils.yabanComm.calendarStats.invalidate();
     } catch (e: any) {
       toast.error(e.message || "补收失败");
     }
@@ -269,10 +261,6 @@ export default function YabanPatientCharge() {
       setDetailId(null);
       utils.yabanCustomer.listCharges.invalidate({ customerId });
       utils.yabanCustomer.chargeStats.invalidate({ customerId });
-      // 刷新首页日/周/月三个视角数据
-      utils.yabanComm.todayOverview.invalidate();
-      utils.yabanComm.weekOverview.invalidate();
-      utils.yabanComm.calendarStats.invalidate();
     } catch (e: any) {
       toast.error(e.message || "作废失败");
     }

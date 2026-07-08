@@ -47,7 +47,6 @@ export default function YabanFollowUpDetail() {
   const id = Number(params.id);
   const [showMenu, setShowMenu] = useState(false);
 
-  const utils = trpc.useUtils();
   const { data: detail, isLoading, refetch } = trpc.yabanComm.followupDetail.useQuery(
     { id },
     { enabled: !isNaN(id) && id > 0 }
@@ -63,10 +62,6 @@ export default function YabanFollowUpDetail() {
     try {
       await updateStatus.mutateAsync({ id: detail.id, status: "随访完成" });
       await refetch();
-      // 刷新首页日/周/月三个视角数据
-      utils.yabanComm.todayOverview.invalidate();
-      utils.yabanComm.weekOverview.invalidate();
-      utils.yabanComm.calendarStats.invalidate();
       alert("随访已标记为完成");
     } catch (e: any) {
       alert(`操作失败：${e?.message || "请重试"}`);

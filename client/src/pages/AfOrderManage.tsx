@@ -295,7 +295,7 @@ export default function AfOrderManage() {
 
   // 实时币价（每3秒刷新，与全站规范一致）
   // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
-  const cryptoPricesRaw = useCryptoPrices(3000);
+  const \1 = useCryptoPrices(3000);
   const livePrice: Record<string, number> = (cryptoPricesRaw as any)?.prices ?? {};
 
   // 查询当前编辑订单的扣档记录（直接用订单ID，不再需要sourceOrderId）

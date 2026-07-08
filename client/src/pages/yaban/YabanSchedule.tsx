@@ -687,18 +687,7 @@ export default function YabanSchedule() {
       {/* 预约详情弹窗 */}
       {detailModal.open && detailAppt && (
         <BottomSheet onClose={() => setDetailModal({ open: false })}>
-          <h3
-            style={{ fontSize: 17, marginBottom: 4, cursor: detailAppt.patientId ? "pointer" : "default", display: "inline-flex", alignItems: "center", gap: 4 }}
-            onClick={() => {
-              if (detailAppt.patientId) {
-                setDetailModal({ open: false });
-                setLocation(`/yaban/patient/${detailAppt.patientId}`);
-              }
-            }}
-          >
-            {detailAppt.patientName}
-            {detailAppt.patientId && <span style={{ fontSize: 12, color: "#1E88D6", fontWeight: 400 }}>&#8250;</span>}
-          </h3>
+          <h3 style={{ fontSize: 17, marginBottom: 4 }}>{detailAppt.patientName}</h3>
           <div style={{ fontSize: 12, color: GRAY, marginBottom: 6 }}>所属：{current?.name?.trim() || current?.shortName?.trim() || "门店预约"}</div>
           {[
             { k: "就诊医生", v: detailAppt.doctor },

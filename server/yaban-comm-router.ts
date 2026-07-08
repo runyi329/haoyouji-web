@@ -336,12 +336,11 @@ export const yabanCommRouter = router({
         [TENANT_ID, today, tomorrow]
       );
 
-      // 今日收费统计（status <> 'void' 排除作废单，paid 为实收金额，日期用 DATE(created_at)）
+      // 今日收费统计
       const [chargeRows] = await (conn as any).execute(
-        `SELECT COUNT(*) AS cnt, COALESCE(SUM(paid), 0) AS total
+        `SELECT COUNT(*) AS cnt, COALESCE(SUM(actual_amount), 0) AS total
          FROM yaban_charge
-         WHERE tenant_id = ? AND DATE(created_at) >= ? AND DATE(created_at) < ?
-           AND status <> 'void'`,
+         WHERE tenant_id = ? AND charge_date >= ? AND charge_date < ?`,
         [TENANT_ID, today, tomorrow]
       );
       const chargeCount = Number((chargeRows as any[])[0]?.cnt || 0);

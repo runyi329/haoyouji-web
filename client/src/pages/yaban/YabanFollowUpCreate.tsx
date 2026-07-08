@@ -48,7 +48,6 @@ interface FormData {
 
 export default function YabanFollowUpCreate() {
   const [, setLocation] = useLocation();
-  const utils = trpc.useUtils();
   const { current } = useYabanClinic();
   const clinicName = current?.name?.trim() || current?.shortName?.trim() || "";
   const search = useSearch();
@@ -137,10 +136,6 @@ export default function YabanFollowUpCreate() {
         remark: formData.remark || undefined,
         visitTime: formData.visitTime ? formData.visitTime.replace(/\//g, "-") : undefined,
       });
-      // 刷新首页日/周/月三个视角数据
-      utils.yabanComm.todayOverview.invalidate();
-      utils.yabanComm.weekOverview.invalidate();
-      utils.yabanComm.calendarStats.invalidate();
       alert("保存成功");
       setLocation("/yaban/followup");
     } catch (e: any) {
