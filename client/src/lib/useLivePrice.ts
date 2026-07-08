@@ -150,47 +150,17 @@ export async function fetchCryptoPrices(coins: string[]): Promise<{
   return { prices, changes, opens, usdtCnyRate: rate };
 }
 
-// ===== 通道二：市场行情（直接调用服务器 tRPC，待 Cloudflare Worker 部署后切换）=====
-// TODO: Worker 部署后将 fetchMarketFromServer 改为 fetchMarketFromWorker
+// ===== 通道二：市场行情（通过 Cloudflare Worker 代理）=====
 
 type MarketPriceResult = { price: number; prevClose: number; change: number; changePercent: number; success: boolean };
 
-// tRPC 路由名称映射
-const TRPC_ROUTE_MAP: Record<string, string> = {
-  '/market/gold': 'stock.getGoldPrice',
-  '/market/oil': 'stock.getOilPrice',
-  '/market/dxy': 'stock.getDollarIndex',
-  '/market/usdcnh': 'stock.getUsdCnh',
-  '/market/sh': 'stock.getShanghaiIndex',
-  '/market/hsi': 'stock.getHangSengIndex',
-  '/market/sp500': 'stock.getSP500Index',
-  '/market/usdcny': 'exchange.getRate',
-};
-
-async function fetchMarketFromServer(endpoint: string, usSymbol?: string): Promise<MarketPriceResult | null> {
+async function fetchMarketFromWorker(endpoint: string): Promise<MarketPriceResult | null> {
   try {
-    let url = '';
-    if (endpoint.startsWith('/market/us')) {
-      url = `/api/trpc/stock.getUsStockPrice?input=${encodeURIComponent(JSON.stringify({ symbol: usSymbol || '' }))}`;
-    } else if (endpoint === '/market/usdcny') {
-      url = `/api/trpc/exchange.getRate?input=${encodeURIComponent(JSON.stringify({ fromcoin: 'USD', tocoin: 'CNY' }))}` ;
-    } else {
-      const route = TRPC_ROUTE_MAP[endpoint];
-      if (!route) return null;
-      url = `/api/trpc/${route}`;
-    }
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const res = await fetch(`${CF_WORKER}${endpoint}`, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
     const d = await res.json() as any;
-    const result = d?.result?.data;
-    if (!result) return null;
-    // exchange.getRate 返回格式不同
-    if (endpoint === '/market/usdcny') {
-      const rate = parseFloat(result.money || '0');
-      return { price: rate, prevClose: rate, change: 0, changePercent: 0, success: rate > 0 };
-    }
-    if (!result.success) return null;
-    return { price: result.price || 0, prevClose: result.prevClose || 0, change: result.change || 0, changePercent: result.changePercent || 0, success: true };
+    if (!d.success) return null;
+    return { price: d.price || 0, prevClose: d.prevClose || 0, change: d.change || 0, changePercent: d.changePercent || 0, success: true };
   } catch {
     return null;
   }
@@ -200,7 +170,7 @@ async function fetchMarketFromServer(endpoint: string, usSymbol?: string): Promi
 export async function fetchGoldPrice(): Promise<MarketPriceResult> {
   const cached = _marketCache['gold'];
   if (cached && Date.now() - cached.fetchedAt < MARKET_CACHE_TTL) return cached;
-  const result = await fetchMarketFromServer('/market/gold') || cached || { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
+  const result = await fetchMarketFromWorker('/market/gold') || cached || { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
   if (result.success) _marketCache['gold'] = { ...result, fetchedAt: Date.now() };
   return result;
 }
@@ -209,7 +179,7 @@ export async function fetchGoldPrice(): Promise<MarketPriceResult> {
 export async function fetchOilPrice(): Promise<MarketPriceResult> {
   const cached = _marketCache['oil'];
   if (cached && Date.now() - cached.fetchedAt < MARKET_CACHE_TTL) return cached;
-  const result = await fetchMarketFromServer('/market/oil') || cached || { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
+  const result = await fetchMarketFromWorker('/market/oil') || cached || { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
   if (result.success) _marketCache['oil'] = { ...result, fetchedAt: Date.now() };
   return result;
 }
@@ -218,7 +188,7 @@ export async function fetchOilPrice(): Promise<MarketPriceResult> {
 export async function fetchDollarIndex(): Promise<MarketPriceResult> {
   const cached = _marketCache['dxy'];
   if (cached && Date.now() - cached.fetchedAt < MARKET_CACHE_TTL) return cached;
-  const result = await fetchMarketFromServer('/market/dxy') || cached || { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
+  const result = await fetchMarketFromWorker('/market/dxy') || cached || { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
   if (result.success) _marketCache['dxy'] = { ...result, fetchedAt: Date.now() };
   return result;
 }
@@ -227,7 +197,7 @@ export async function fetchDollarIndex(): Promise<MarketPriceResult> {
 export async function fetchUsdCnh(): Promise<MarketPriceResult> {
   const cached = _marketCache['usdcnh'];
   if (cached && Date.now() - cached.fetchedAt < MARKET_CACHE_TTL) return cached;
-  const result = await fetchMarketFromServer('/market/usdcnh') || cached || { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
+  const result = await fetchMarketFromWorker('/market/usdcnh') || cached || { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
   if (result.success) _marketCache['usdcnh'] = { ...result, fetchedAt: Date.now() };
   return result;
 }
@@ -236,7 +206,7 @@ export async function fetchUsdCnh(): Promise<MarketPriceResult> {
 export async function fetchShanghaiIndex(): Promise<MarketPriceResult> {
   const cached = _marketCache['sh'];
   if (cached && Date.now() - cached.fetchedAt < MARKET_CACHE_TTL) return cached;
-  const result = await fetchMarketFromServer('/market/sh') || cached || { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
+  const result = await fetchMarketFromWorker('/market/sh') || cached || { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
   if (result.success) _marketCache['sh'] = { ...result, fetchedAt: Date.now() };
   return result;
 }
@@ -245,7 +215,7 @@ export async function fetchShanghaiIndex(): Promise<MarketPriceResult> {
 export async function fetchHangSengIndex(): Promise<MarketPriceResult> {
   const cached = _marketCache['hsi'];
   if (cached && Date.now() - cached.fetchedAt < MARKET_CACHE_TTL) return cached;
-  const result = await fetchMarketFromServer('/market/hsi') || cached || { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
+  const result = await fetchMarketFromWorker('/market/hsi') || cached || { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
   if (result.success) _marketCache['hsi'] = { ...result, fetchedAt: Date.now() };
   return result;
 }
@@ -254,7 +224,7 @@ export async function fetchHangSengIndex(): Promise<MarketPriceResult> {
 export async function fetchSP500Index(): Promise<MarketPriceResult> {
   const cached = _marketCache['sp500'];
   if (cached && Date.now() - cached.fetchedAt < MARKET_CACHE_TTL) return cached;
-  const result = await fetchMarketFromServer('/market/sp500') || cached || { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
+  const result = await fetchMarketFromWorker('/market/sp500') || cached || { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
   if (result.success) _marketCache['sp500'] = { ...result, fetchedAt: Date.now() };
   return result;
 }
@@ -264,7 +234,7 @@ export async function fetchUSStockPrice(symbol: string): Promise<MarketPriceResu
   const key = `us_${symbol.toUpperCase()}`;
   const cached = _marketCache[key];
   if (cached && Date.now() - cached.fetchedAt < MARKET_CACHE_TTL) return cached;
-  const result = await fetchMarketFromServer(`/market/us`, symbol.toUpperCase()) || cached || { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
+  const result = await fetchMarketFromWorker(`/market/us?symbol=${symbol.toUpperCase()}`) || cached || { price: 0, prevClose: 0, change: 0, changePercent: 0, success: false };
   if (result.success) _marketCache[key] = { ...result, fetchedAt: Date.now() };
   return result;
 }
@@ -275,14 +245,12 @@ export async function fetchUsdCnyRate(): Promise<number> {
     return _rateCacheValue.rate;
   }
   try {
-    const res = await fetch(`/api/trpc/exchange.getRate?input=${encodeURIComponent(JSON.stringify({ fromcoin: 'USD', tocoin: 'CNY' }))}`, { signal: AbortSignal.timeout(5000) });
+    const res = await fetch(`${CF_WORKER}/market/usdcny`, { signal: AbortSignal.timeout(5000) });
     if (res.ok) {
       const d = await res.json() as any;
-      const rateResult = d?.result?.data;
-      const rate = rateResult?.success ? parseFloat(rateResult.money || '0') : 0;
-      if (rate > 0) {
-        _rateCacheValue = { rate, fetchedAt: Date.now() };
-        return rate;
+      if (d.success && d.price > 0) {
+        _rateCacheValue = { rate: d.price, fetchedAt: Date.now() };
+        return d.price;
       }
     }
   } catch { /* 兜底 */ }
