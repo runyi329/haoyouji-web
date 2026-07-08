@@ -170,9 +170,10 @@ export function useDeribitGreeks(instrumentName: string | null | undefined): Der
     if (!instrumentName) { setGreeks(empty); return; }
 
     const fetchGreeks = () => {
-      fetch(`${DERIBIT_BASE}/get_order_book?instrument_name=${instrumentName}&depth=1`)
+      fetch(`${DERIBIT_BASE}/ticker?instrument_name=${instrumentName}`)
         .then(r => r.json())
         .then(data => {
+          if (data.error) return; // 合约不存在或其他错误
           const result = data.result;
           if (!result) return;
           const g = result.greeks || {};
