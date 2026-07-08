@@ -118,49 +118,47 @@ function DayView({ viewDate, tenantId }: { viewDate: string; tenantId: number })
       className="px-3 pb-3 pt-2"
       style={{ background: "linear-gradient(180deg, #F8FBFF 0%, #F2F6FA 100%)" }}
     >
-      {isLoading ? (
-        <div className="py-6 text-center text-xs text-gray-400">加载中...</div>
-      ) : (
-        <div className="grid grid-cols-3 gap-2">
-          {cards.map((card) => (
-            <button
-              key={card.key}
-              className="flex flex-col rounded-xl p-3 text-left active:opacity-80 transition-opacity"
-              style={{
-                background: "#fff",
-                boxShadow: "0 2px 10px rgba(33,150,200,0.10), 0 1px 3px rgba(0,0,0,0.04)",
-                borderTop: `3px solid transparent`,
-                borderImage: `${card.gradient} 1`,
-              }}
-              onClick={card.onClick}
+      <div className="grid grid-cols-3 gap-2">
+        {cards.map((card) => (
+          <button
+            key={card.key}
+            className="flex flex-col rounded-xl p-3 text-left active:opacity-80 transition-opacity"
+            style={{
+              background: "#fff",
+              boxShadow: "0 2px 10px rgba(33,150,200,0.10), 0 1px 3px rgba(0,0,0,0.04)",
+              borderTop: `3px solid transparent`,
+              borderImage: `${card.gradient} 1`,
+            }}
+            onClick={card.onClick}
+          >
+            {/* 标题行 */}
+            <div className="flex items-center justify-between w-full mb-1.5">
+              <span className="text-[11px] text-gray-500 font-medium">{card.label}</span>
+              <ArrowRight className="w-3 h-3 text-gray-300" />
+            </div>
+            {/* 主数字：加载中时显示占位符 */}
+            <div
+              className="text-2xl font-bold leading-none mb-2"
+              style={{ background: card.gradient, WebkitBackgroundClip: "text", WebkitTextFillColor: isLoading ? "transparent" : "transparent" }}
             >
-              {/* 标题行 */}
-              <div className="flex items-center justify-between w-full mb-1.5">
-                <span className="text-[11px] text-gray-500 font-medium">{card.label}</span>
-                <ArrowRight className="w-3 h-3 text-gray-300" />
-              </div>
-              {/* 主数字 */}
-              <div
-                className="text-2xl font-bold leading-none mb-2"
-                style={{ background: card.gradient, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}
-              >
-                {card.total}{card.totalSuffix || ""}
-              </div>
-              {/* 细分状态 */}
-              <div className="space-y-0.5 w-full">
-                {card.subs.map((sub) => (
-                  <div key={sub.label} className="flex items-center justify-between">
-                    <span className="text-[10px] text-gray-400">{sub.label}</span>
-                    <span className={`text-[10px] font-semibold ${sub.color}`}>
-                      {sub.prefix || ""}{sub.isAmount ? sub.val.toLocaleString() : sub.val}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
+              {isLoading
+                ? <span style={{ WebkitTextFillColor: "#ccc", background: "none" }}>—</span>
+                : <>{card.total}{card.totalSuffix || ""}</>}
+            </div>
+            {/* 细分状态 */}
+            <div className="space-y-0.5 w-full">
+              {card.subs.map((sub) => (
+                <div key={sub.label} className="flex items-center justify-between">
+                  <span className="text-[10px] text-gray-400">{sub.label}</span>
+                  <span className={`text-[10px] font-semibold ${sub.color}`}>
+                    {isLoading ? "—" : `${sub.prefix || ""}${sub.isAmount ? sub.val.toLocaleString() : sub.val}`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
