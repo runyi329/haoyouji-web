@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-08
+// 生成时间：2026-07-09
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8238,5 +8238,21 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-08T10:42:23Z", type: "revert", cleanMessage: "回滚到649e8e766，恢复到今天所有改动之前的稳定版本" },
     { date: "2026-07-08T10:49:24Z", type: "feat", cleanMessage: "预约时间选择新增5分钟/档·15分钟/档切换Tab，默认15分钟，localStorage持久化" },
     { date: "2026-07-08T10:59:23Z", type: "feat", cleanMessage: "分钟步长Tab移至选时间标题行右侧" },
+    { date: "2026-07-08T11:39:48Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-08T11:45:03Z", type: "fix", cleanMessage: "还原useLivePrice.ts，行情数据改回走Cloudflare Worker" },
+    { date: "2026-07-08T11:51:16Z", type: "fix", cleanMessage: "行情数据改回走服务器tRPC（新浪财经），Worker未部署不可用" },
+    { date: "2026-07-08T11:55:15Z", type: "fix", cleanMessage: "修复tRPC响应解析缺少.json层导致行情数据拿不到" },
+    { date: "2026-07-08T12:03:14Z", type: "fix", cleanMessage: "批量修复const \\1语法错误（11个文件），恢复构建" },
+    { date: "2026-07-08T12:10:00Z", type: "fix", cleanMessage: "修复LedgerDetailAA和CryptoPrediction中变量名不一致（cryptoPricesData/ForOrder→Raw）" },
+    { date: "2026-07-08T12:23:15Z", type: "feat", cleanMessage: "牙伴首页联动invalidate+预约弹窗顾客姓名跳转档案详情页" },
+    { date: "2026-07-08T12:45:38Z", type: "fix", cleanMessage: "首页日历数据按当前门店tenantId请求，修复显示0的问题" },
+    { date: "2026-07-08T12:50:25Z", type: "fix", cleanMessage: "首页三卡片容器立即渲染，加载中显示占位符而非隐藏容器" },
+    { date: "2026-07-08T12:54:31Z", type: "fix", cleanMessage: "今日预约卡片立即发请求（去掉enabled条件），暂隐藏随访和收费卡片" },
+    { date: "2026-07-08T13:00:23Z", type: "fix", cleanMessage: "去掉clinicsLoading全屏等待，今日预约卡片简化为只显示总数（所有状态均计入）" },
+    { date: "2026-07-08T14:22:53Z", type: "other", cleanMessage: "UI优化：Tab栏轻薄化、导航栏门店+日期整合、甘特条等高、预约块圆角智能对齐、短预约块隐藏文字、左侧头像布局优化" },
+    { date: "2026-07-08T15:54:59Z", type: "feat", cleanMessage: "首页工作台9卡片自定义展示设置" },
+  ],
+  "2026-07-09": [
+    { date: "2026-07-08T16:09:36Z", type: "feat", cleanMessage: "融资复息订单管理新增币种 SKHYMIX（海力士）" },
   ],
 };
