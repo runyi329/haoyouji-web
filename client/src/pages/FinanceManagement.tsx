@@ -442,7 +442,7 @@ function FinanceOrderCard({
           })()}
           {order.asset_type && (
             <span className="text-[10px] px-1.5 py-0.5 font-medium" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A', backgroundColor: 'transparent' }}>
-              {order.asset_type === 'stock' ? '股票' : '数字币'}
+              {order.asset_type === 'stock' ? '股票' : order.asset_type === 'crypto_option' ? '数字币期权' : '数字币'}
             </span>
           )}
           {order.owner_label && (
@@ -1330,11 +1330,18 @@ const emptyForm = {
   commissionRate: '',
   commissionBase: '',
   commissionStartDate: '',
-  assetType: '' as '' | 'stock' | 'crypto',
+  assetType: '' as '' | 'stock' | 'crypto' | 'crypto_option',
   ownerLabel: '',
   interestRateCurrency: 'USDT' as 'USDT' | 'CNY',
   tags: [] as string[],
   principalLentOut: false,
+  // 数字币期权专属字段
+  optionPremium: '',
+  optionExerciseDate: '',
+  optionBuyPrice: '',
+  optionStrikePrice: '',
+  optionDenomination: 'U' as 'B' | 'U',
+  optionCoin: 'BTC' as 'BTC' | 'ETH',
 };
 
 // ===== 订单公开备注组件 =====
@@ -1501,6 +1508,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   // 日期选择器
   const [showBuyDatePicker, setShowBuyDatePicker] = useState(false);
   const [showInterestDatePicker, setShowInterestDatePicker] = useState(false);
+  const [showOptionExerciseDatePicker, setShowOptionExerciseDatePicker] = useState(false);
 
   // 结息记录
   const [showPaymentPanel, setShowPaymentPanel] = useState<number | null>(null);
@@ -1845,7 +1853,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
       financeType: (order.finance_type || '保本分成') as '保本分成' | '自负盈亏',
       showProfitShare: order.show_profit_share !== 0 && order.show_profit_share !== false,
       commissionShare: order.commission_share || '',
-      assetType: (order.asset_type || '') as '' | 'stock' | 'crypto',
+      assetType: (order.asset_type || '') as '' | 'stock' | 'crypto' | 'crypto_option',
       ownerLabel: '',
       interestRateCurrency: (order.interest_rate_currency || 'USDT') as 'USDT' | 'CNY',
       commissionRate: order.participantInfo?.commissionRate || '',
@@ -1863,6 +1871,22 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         } catch { return order.owner_label ? [order.owner_label] : []; }
       })(),
       principalLentOut: !!(order.principal_lent_out),
+      // 数字币期权专属字段
+      ...(() => {
+        try {
+          const oi = order.option_info;
+          const parsed = oi ? (typeof oi === 'string' ? JSON.parse(oi) : oi) : null;
+          if (parsed) return {
+            optionPremium: parsed.premium || '',
+            optionExerciseDate: parsed.exerciseDate || '',
+            optionBuyPrice: parsed.buyPrice || '',
+            optionStrikePrice: parsed.strikePrice || '',
+            optionDenomination: (parsed.denomination || 'U') as 'B' | 'U',
+            optionCoin: (parsed.coin || 'BTC') as 'BTC' | 'ETH',
+          };
+        } catch {}
+        return { optionPremium: '', optionExerciseDate: '', optionBuyPrice: '', optionStrikePrice: '', optionDenomination: 'U' as 'B' | 'U', optionCoin: 'BTC' as 'BTC' | 'ETH' };
+      })(),
     });
     // 加载字段展示配置
     if (order.display_config) {
@@ -1941,6 +1965,14 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         tags: formData.tags.length > 0 ? formData.tags : [],
         counterparty: formData.counterparty,
         principalLentOut: formData.principalLentOut,
+        optionInfo: formData.assetType === 'crypto_option' ? {
+          premium: formData.optionPremium || undefined,
+          exerciseDate: formData.optionExerciseDate || undefined,
+          buyPrice: formData.optionBuyPrice || undefined,
+          strikePrice: formData.optionStrikePrice || undefined,
+          denomination: formData.optionDenomination,
+          coin: formData.optionCoin,
+        } : null,
         displayConfig: {
           ...Object.fromEntries(Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')),
           ...(marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? { marginAlertThreshold: parseFloat(marginAlertThreshold) } : {}),
@@ -1977,6 +2009,14 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         interestRateCurrency: formData.interestRateCurrency,
         tags: formData.tags.length > 0 ? formData.tags : undefined,
         principalLentOut: formData.principalLentOut,
+        optionInfo: formData.assetType === 'crypto_option' ? {
+          premium: formData.optionPremium || undefined,
+          exerciseDate: formData.optionExerciseDate || undefined,
+          buyPrice: formData.optionBuyPrice || undefined,
+          strikePrice: formData.optionStrikePrice || undefined,
+          denomination: formData.optionDenomination,
+          coin: formData.optionCoin,
+        } : undefined,
         displayConfig: {
           ...Object.fromEntries(Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')),
           ...(marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? { marginAlertThreshold: parseFloat(marginAlertThreshold) } : {}),
@@ -2210,7 +2250,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
               {!editingOrder?.participantInfo && (<div>
                 <label className="block text-sm font-medium text-gray-600 mb-2">类型<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，单选</span></label>
                 <div className="flex gap-2">
-                  {([{ value: 'stock', label: '股票' }, { value: 'crypto', label: '数字币' }] as const).map(opt => (
+                  {([{ value: 'stock', label: '股票' }, { value: 'crypto', label: '数字币' }, { value: 'crypto_option', label: '数字币期权' }] as const).map(opt => (
                     <button
                       key={opt.value}
                       type="button"
@@ -2359,7 +2399,10 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                   className="w-full px-3 py-3 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none"
                   style={{ backgroundColor: '#fff', color: COIN_COLORS[formData.coin as keyof typeof COIN_COLORS] || '#1A2340' }}
                 >
-                  {['CNY', ...COIN_OPTIONS.filter(c => c !== 'CNY')].map(c => (
+                  {(formData.assetType === 'crypto_option'
+                    ? ['BTC', 'ETH']
+                    : ['CNY', ...COIN_OPTIONS.filter(c => c !== 'CNY')]
+                  ).map(c => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
@@ -2368,6 +2411,116 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
 
               {/* 以下字段受邀订单时不显示 */}
               {!editingOrder?.participantInfo && (<>
+
+              {/* 数字币期权专属字段（仅当 assetType === 'crypto_option' 时显示） */}
+              {formData.assetType === 'crypto_option' && (
+                <div className="rounded-2xl border border-green-200 bg-green-50 p-4 space-y-4">
+                  <div className="text-xs font-semibold text-green-700 mb-1">期权专属信息</div>
+
+                  {/* 期权币种（BTC / ETH） */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">期权币种</label>
+                    <div className="flex gap-3">
+                      {(['BTC', 'ETH'] as const).map(c => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setFormData(d => ({ ...d, optionCoin: c }))}
+                          className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-colors ${
+                            formData.optionCoin === c
+                              ? 'bg-green-600 border-green-600 text-white'
+                              : 'bg-white border-gray-200 text-gray-500'
+                          }`}
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 权利金 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">权利金</label>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={formData.optionPremium}
+                      onChange={e => setFormData(d => ({ ...d, optionPremium: e.target.value }))}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-green-200"
+                      placeholder="如：1500"
+                      style={{ display: 'block', boxSizing: 'border-box' }}
+                    />
+                  </div>
+
+                  {/* 行权日 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">行权日</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowOptionExerciseDatePicker(v => !v)}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base text-left focus:outline-none"
+                      style={{ backgroundColor: '#fff', color: formData.optionExerciseDate ? '#1A2340' : '#9CA3AF', display: 'block', boxSizing: 'border-box' }}
+                    >
+                      {formData.optionExerciseDate || '点击选择行权日'}
+                    </button>
+                    {showOptionExerciseDatePicker && (
+                      <div className="mt-2">
+                        <DatePicker value={formData.optionExerciseDate} onChange={v => { setFormData(d => ({ ...d, optionExerciseDate: v })); setShowOptionExerciseDatePicker(false); }} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 买入价格（期权） */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">买入价格</label>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={formData.optionBuyPrice}
+                      onChange={e => setFormData(d => ({ ...d, optionBuyPrice: e.target.value }))}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-green-200"
+                      placeholder="如：95000"
+                      style={{ display: 'block', boxSizing: 'border-box' }}
+                    />
+                  </div>
+
+                  {/* 行权价 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">行权价</label>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={formData.optionStrikePrice}
+                      onChange={e => setFormData(d => ({ ...d, optionStrikePrice: e.target.value }))}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-green-200"
+                      placeholder="如：100000"
+                      style={{ display: 'block', boxSizing: 'border-box' }}
+                    />
+                  </div>
+
+                  {/* B本位 / U本位 */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">本位</label>
+                    <div className="flex gap-3">
+                      {([['B', 'B本位'], ['U', 'U本位']] as const).map(([val, label]) => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => setFormData(d => ({ ...d, optionDenomination: val }))}
+                          className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-colors ${
+                            formData.optionDenomination === val
+                              ? 'bg-green-600 border-green-600 text-white'
+                              : 'bg-white border-gray-200 text-gray-500'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* 融资金额 / 买入价格 / 买入数量 三字段联动 */}
               <div className="rounded-2xl border border-gray-200" style={{ overflow: 'visible' }}>
                 <div className="px-4 pt-3 pb-1">

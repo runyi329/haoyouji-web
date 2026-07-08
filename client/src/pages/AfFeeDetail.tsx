@@ -1517,10 +1517,11 @@ export default function AfFeeDetail() {
                                         ? <span className="text-[10px] px-1 rounded" style={{ background: '#fee2e2', color: '#dc2626' }}>收息</span>
                                         : <span className="text-[10px] px-1 rounded" style={{ background: '#dcfce7', color: '#16a34a' }}>付息</span>
                                       }
-                                      {o.asset_type === 'stock' && <span className="text-[10px] px-1 rounded" style={{ background: '#fef3c7', color: '#d97706' }}>股票</span>}
-                                      {o.asset_type === 'crypto' && <span className="text-[10px] px-1 rounded" style={{ background: '#ede9fe', color: '#7c3aed' }}>数字币</span>}
-                                    </div>
-                                    <span className="text-sm font-bold" style={{ color: collect ? '#dc2626' : '#16a34a' }}>
+                                       {o.asset_type === 'stock' && <span className="text-[10px] px-1 rounded" style={{ background: '#fef3c7', color: '#d97706' }}>股票</span>}
+                                       {o.asset_type === 'crypto' && <span className="text-[10px] px-1 rounded" style={{ background: '#ede9fe', color: '#7c3aed' }}>数字币</span>}
+                                       {o.asset_type === 'crypto_option' && <span className="text-[10px] px-1 rounded" style={{ background: '#f0fdf4', color: '#15803d' }}>数字币期权</span>}
+                                     </div>
+                                     <span className="text-sm font-bold" style={{ color: collect ? '#dc2626' : '#16a34a' }}>
                                       {collect ? '+' : '-'}{daily.toFixed(2)}/天
                                     </span>
                                   </div>
@@ -1601,10 +1602,11 @@ export default function AfFeeDetail() {
                                         ? <span className="text-[10px] px-1 rounded" style={{ background: '#fee2e2', color: '#dc2626' }}>收息</span>
                                         : <span className="text-[10px] px-1 rounded" style={{ background: '#dcfce7', color: '#16a34a' }}>付息</span>
                                       }
-                                      {o.asset_type === 'stock' && <span className="text-[10px] px-1 rounded" style={{ background: '#fef3c7', color: '#d97706' }}>股票</span>}
-                                      {o.asset_type === 'crypto' && <span className="text-[10px] px-1 rounded" style={{ background: '#ede9fe', color: '#7c3aed' }}>数字币</span>}
-                                    </div>
-                                    {/* 日息突出显示 */}
+                                       {o.asset_type === 'stock' && <span className="text-[10px] px-1 rounded" style={{ background: '#fef3c7', color: '#d97706' }}>股票</span>}
+                                       {o.asset_type === 'crypto' && <span className="text-[10px] px-1 rounded" style={{ background: '#ede9fe', color: '#7c3aed' }}>数字币</span>}
+                                       {o.asset_type === 'crypto_option' && <span className="text-[10px] px-1 rounded" style={{ background: '#f0fdf4', color: '#15803d' }}>数字币期权</span>}
+                                     </div>
+                                     {/* 日息突出显示 */}
                                     <span className="text-sm font-bold" style={{ color: collect ? '#dc2626' : '#16a34a' }}>
                                       {collect ? '+' : '-'}{daily.toFixed(2)}/天
                                     </span>
@@ -1673,10 +1675,11 @@ export default function AfFeeDetail() {
                                   <div className="flex items-center gap-1.5">
                                     <span className="text-xs font-medium text-gray-800">{o.username || o.userName || '-'}</span>
                                     <span className="text-[10px] font-semibold" style={{ color: o.coin === 'BTC' ? '#f59e0b' : o.coin === 'ETH' ? '#3b82f6' : o.coin === 'SOL' ? '#a855f7' : '#374151' }}>{o.coin || '-'}</span>
-                                    {o.asset_type === 'stock' && <span className="text-[10px] px-1 rounded" style={{ background: '#fef3c7', color: '#d97706' }}>股票</span>}
-                                    {o.asset_type === 'crypto' && <span className="text-[10px] px-1 rounded" style={{ background: '#ede9fe', color: '#7c3aed' }}>数字币</span>}
-                                  </div>
-                                  <span className="text-sm font-bold" style={{ color }}>
+                                     {o.asset_type === 'stock' && <span className="text-[10px] px-1 rounded" style={{ background: '#fef3c7', color: '#d97706' }}>股票</span>}
+                                     {o.asset_type === 'crypto' && <span className="text-[10px] px-1 rounded" style={{ background: '#ede9fe', color: '#7c3aed' }}>数字币</span>}
+                                     {o.asset_type === 'crypto_option' && <span className="text-[10px] px-1 rounded" style={{ background: '#f0fdf4', color: '#15803d' }}>数字币期权</span>}
+                                   </div>
+                                   <span className="text-sm font-bold" style={{ color }}>
                                     {collect ? '+' : '-'}{daily.toFixed(2)}/天
                                   </span>
                                 </div>
@@ -1713,6 +1716,7 @@ export default function AfFeeDetail() {
                 };
                 const stockOrders = finFiltered.filter((o: any) => o.asset_type === 'stock');
                 const cryptoOrders = finFiltered.filter((o: any) => o.asset_type === 'crypto' || !o.asset_type);
+                const cryptoOptionOrders = finFiltered.filter((o: any) => o.asset_type === 'crypto_option');
                 if (finFiltered.length === 0) return <div className="text-center py-8 text-gray-400 text-sm">暂无记录</div>;
                 const renderTypeGroup = (orders: any[], label: string, typeKey: string, bgColor: string, textColor: string) => {
                   if (orders.length === 0) return null;
@@ -1775,6 +1779,7 @@ export default function AfFeeDetail() {
                   <div className="space-y-2">
                     {renderTypeGroup(stockOrders, '股票', 'stock', '#fef3c7', '#d97706')}
                     {renderTypeGroup(cryptoOrders, '数字币', 'crypto', '#ede9fe', '#7c3aed')}
+                    {renderTypeGroup(cryptoOptionOrders, '数字币期权', 'crypto_option', '#f0fdf4', '#15803d')}
                   </div>
                 );
               })()}

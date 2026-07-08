@@ -94,6 +94,59 @@ function setCache(key: string, data: any): void {
 }
 // ================================================================
 
+// ===== Deribit 到期日每日缓存（北京时间凌晨 00:00 刷新，TTL=24h）=====
+const _deribitExpiriesCache = new Map<'BTC' | 'ETH', { expiries: any[]; fetchedAt: number }>();
+
+async function fetchAndCacheDeribitExpiries(currency: 'BTC' | 'ETH'): Promise<void> {
+  try {
+    const res = await fetch(`https://www.deribit.com/api/v2/public/get_instruments?currency=${currency}&kind=option&expired=false`);
+    const data = await res.json() as any;
+    const instruments: any[] = data.result || [];
+    const tsSet = new Set<number>(instruments.map((i: any) => i.expiration_timestamp));
+    const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    const expiries = Array.from(tsSet).sort((a, b) => a - b).map(ts => {
+      const dt = new Date(ts);
+      const yyyy = dt.getUTCFullYear();
+      const mm = dt.getUTCMonth() + 1;
+      const dd = dt.getUTCDate();
+      const dateStr = `${yyyy}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+      const diffDays = Math.ceil((ts - Date.now()) / (1000 * 60 * 60 * 24));
+      const deribitLabel = `${dd}${months[mm-1]}${String(yyyy).slice(2)}`;
+      return { dateStr, diffDays, deribitLabel, ts };
+    });
+    _deribitExpiriesCache.set(currency, { expiries, fetchedAt: Date.now() });
+    console.log(`[Deribit] ${currency} 到期日缓存已更新，共 ${expiries.length} 个`);
+  } catch (e: any) {
+    console.error(`[Deribit] ${currency} 到期日缓存更新失败:`, e.message);
+  }
+}
+
+// 服务器启动时预热 BTC + ETH
+fetchAndCacheDeribitExpiries('BTC');
+fetchAndCacheDeribitExpiries('ETH');
+
+// 每天北京时间凌晨 00:00（UTC 16:00）自动刷新
+function scheduleDeribitDailyRefresh() {
+  const now = new Date();
+  // 计算下一个 UTC 16:00
+  const nextRefresh = new Date(now);
+  nextRefresh.setUTCHours(16, 0, 0, 0);
+  if (nextRefresh <= now) nextRefresh.setUTCDate(nextRefresh.getUTCDate() + 1);
+  const msUntilNext = nextRefresh.getTime() - now.getTime();
+  setTimeout(() => {
+    fetchAndCacheDeribitExpiries('BTC');
+    fetchAndCacheDeribitExpiries('ETH');
+    // 之后每 24 小时重复
+    setInterval(() => {
+      fetchAndCacheDeribitExpiries('BTC');
+      fetchAndCacheDeribitExpiries('ETH');
+    }, 24 * 60 * 60 * 1000);
+  }, msUntilNext);
+  console.log(`[Deribit] 下次到期日刷新将在 ${nextRefresh.toISOString()} (北京时间凌晨00:00)`);
+}
+scheduleDeribitDailyRefresh();
+// ================================================================
+
 // Manus 聊天功能（管理员发送消息/文件给用户）
 const manusRouter = router({
   // 管理员发送消息（文字或文件）
@@ -16765,6 +16818,14 @@ ${klinesSummary}
         principalLentOut: z.boolean().optional(),
         brokerName: z.string().optional(),
         brokerAccount: z.string().optional(),
+        optionInfo: z.object({
+          premium: z.string().optional(),
+          exerciseDate: z.string().optional(),
+          buyPrice: z.string().optional(),
+          strikePrice: z.string().optional(),
+          denomination: z.enum(['B', 'U']).optional(),
+          coin: z.enum(['BTC', 'ETH']).optional(),
+        }).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -16798,6 +16859,7 @@ ${klinesSummary}
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS principal_lent_out TINYINT(1) DEFAULT 0`).catch(() => {});
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS broker_name VARCHAR(100) DEFAULT NULL`).catch(() => {});
           await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS broker_account VARCHAR(100) DEFAULT NULL`).catch(() => {});
+          await conn.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS option_info JSON DEFAULT NULL`).catch(() => {});
           await conn.end();
         } catch(e) {}
         // 生成唯一订单号
@@ -16814,8 +16876,8 @@ ${klinesSummary}
           if (!exists) isUnique = true;
         }
         await db.execute(
-          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, amount_currency, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, collateral_assets, lent_out_assets, show_profit_share, commission_share, display_config, asset_type, owner_label, tags, collateral_share_mode, principal_lent_out, broker_name, broker_account, created_by)
-              VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.amountCurrency || null}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets ? JSON.stringify(input.lentOutAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.principalLentOut ? 1 : 0}, ${input.brokerName || null}, ${input.brokerAccount || null}, ${ctx.user.id})`
+          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, amount_currency, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, collateral_assets, lent_out_assets, show_profit_share, commission_share, display_config, asset_type, owner_label, tags, collateral_share_mode, principal_lent_out, broker_name, broker_account, option_info, created_by)
+              VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.amountCurrency || null}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets ? JSON.stringify(input.lentOutAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.principalLentOut ? 1 : 0}, ${input.brokerName || null}, ${input.brokerAccount || null}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${ctx.user.id})`
         );
         return { success: true };
       }),
@@ -16859,6 +16921,14 @@ ${klinesSummary}
         brokerName: z.string().optional(),
         brokerAccount: z.string().optional(),
         collateralSource: z.object({ ledgerId: z.number(), tagName: z.string() }).nullable().optional(),
+        optionInfo: z.object({
+          premium: z.string().optional(),
+          exerciseDate: z.string().optional(),
+          buyPrice: z.string().optional(),
+          strikePrice: z.string().optional(),
+          denomination: z.enum(['B', 'U']).optional(),
+          coin: z.enum(['BTC', 'ETH']).optional(),
+        }).nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -16890,6 +16960,7 @@ ${klinesSummary}
         if (input.tags !== undefined) { updateCols.push('tags = ?'); updateVals.push(input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null); }
         if (input.collateralShareMode !== undefined) { updateCols.push('collateral_share_mode = ?'); updateVals.push(input.collateralShareMode || 'none'); }
         if (input.principalLentOut !== undefined) { updateCols.push('principal_lent_out = ?'); updateVals.push(input.principalLentOut ? 1 : 0); }
+        if (input.optionInfo !== undefined) { updateCols.push('option_info = ?'); updateVals.push(input.optionInfo ? JSON.stringify(input.optionInfo) : null); }
         // 特殊处理 collateralSource（JSON 序列化）
         if (input.collateralSource !== undefined) {
           updateCols.push('collateral_source = ?');
@@ -17130,6 +17201,70 @@ ${klinesSummary}
         await conn.execute('UPDATE ledger_orders SET public_note = ? WHERE id = ? AND ledger_id = ?', [input.publicNote || null, input.id, input.ledgerId]);
         await conn.end();
         return { success: true };
+      }),
+
+    // ========== Deribit 期权数据接口 ==========
+    // 获取 Deribit 可用到期日列表（BTC 或 ETH）
+    deribitGetExpiries: protectedProcedure
+      .input(z.object({ currency: z.enum(['BTC', 'ETH']) }))
+      .query(async ({ input }) => {
+        // 优先读取内存缓存（每日北京时间凌晨预热）
+        const cached = _deribitExpiriesCache.get(input.currency);
+        if (cached && cached.expiries.length > 0) {
+          // 重新计算 diffDays（基于当前时间，避免缓存中的天数过期）
+          const now = Date.now();
+          const freshExpiries = cached.expiries.map(e => ({
+            ...e,
+            diffDays: Math.ceil((e.ts - now) / (1000 * 60 * 60 * 24)),
+          }));
+          return { expiries: freshExpiries, fromCache: true, fetchedAt: cached.fetchedAt };
+        }
+        // 缓存为空（首次启动预热尚未完成）时，实时拉取并写入缓存
+        await fetchAndCacheDeribitExpiries(input.currency);
+        const afterFetch = _deribitExpiriesCache.get(input.currency);
+        if (!afterFetch) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Deribit API 请求失败' });
+        const now = Date.now();
+        const freshExpiries = afterFetch.expiries.map(e => ({
+          ...e,
+          diffDays: Math.ceil((e.ts - now) / (1000 * 60 * 60 * 24)),
+        }));
+        return { expiries: freshExpiries, fromCache: false, fetchedAt: afterFetch.fetchedAt };
+      }),
+    // 获取 Deribit 期权希腊字母（Delta/Gamma/Theta/Vega/IV）
+    deribitGetGreeks: protectedProcedure
+      .input(z.object({
+        currency: z.enum(['BTC', 'ETH']),
+        exerciseDate: z.string(), // YYYY-MM-DD
+        strikePrice: z.number(),
+        direction: z.enum(['long_call', 'long_put', 'short_call', 'short_put']),
+      }))
+      .query(async ({ input }) => {
+        try {
+          const isCall = input.direction === 'long_call' || input.direction === 'short_call';
+          const optionType = isCall ? 'C' : 'P';
+          // 转换日期为 Deribit 格式：YYYY-MM-DD -> 8JUL26
+          const dt = new Date(input.exerciseDate + 'T08:00:00Z');
+          const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+          const dd = dt.getUTCDate();
+          const mon = months[dt.getUTCMonth()];
+          const yy = String(dt.getUTCFullYear()).slice(2);
+          const instrumentName = `${input.currency}-${dd}${mon}${yy}-${input.strikePrice}-${optionType}`;
+          const res = await fetch(`https://www.deribit.com/api/v2/public/get_order_book?instrument_name=${instrumentName}&depth=1`);
+          const data = await res.json() as any;
+          if (data.error) throw new Error(data.error.message || '合约不存在');
+          const r = data.result;
+          return {
+            instrumentName,
+            delta: r.greeks?.delta ?? null,
+            gamma: r.greeks?.gamma ?? null,
+            theta: r.greeks?.theta ?? null,
+            vega: r.greeks?.vega ?? null,
+            iv: r.mark_iv ?? null,
+            markPrice: r.mark_price ?? null,
+          };
+        } catch (e: any) {
+          return { instrumentName: '', delta: null, gamma: null, theta: null, vega: null, iv: null, markPrice: null, error: e.message };
+        }
       }),
 
     // ========== 多视角订单参与方接口 ==========
