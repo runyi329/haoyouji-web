@@ -19,7 +19,7 @@
  *   onApptClick    — 点击预约块回调 (apptId) => void（A314 用）
  *   onBarClick     — 点击进度条空白处回调（A314 用，按位置换算时间）
  */
-import React from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { getRoleBarColor, timeToMin, hm } from "./yabanSharedStyles";
 
 export type EffShift = { workStart: number; workEnd: number; segments: [number, number][] } | null;
@@ -79,6 +79,19 @@ export default function YabanGanttBar({
   const span = Math.max(1, trackEnd - trackStart);
   function pct(min: number) { return Math.max(0, Math.min(100, (min - trackStart) / span * 100)); }
 
+  // 获取容器实际像素宽度，用于判断预约块是否宽到可以显示文字
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerW, setContainerW] = useState(0);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => setContainerW(el.offsetWidth);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const barColor = customColor || getRoleBarColor(roleKey);
 
   if (!shift) {
@@ -97,6 +110,7 @@ export default function YabanGanttBar({
 
   return (
     <div
+      ref={containerRef}
       onClick={onBarClick}
       style={{
         position: "relative", height, borderRadius: 6, overflow: "hidden",
@@ -139,14 +153,15 @@ export default function YabanGanttBar({
         if (e <= s) return null;
         const l = pct(s), w = Math.max(pct(e) - pct(s), 2);
         const apptColor = getApptColor(a.id);
-        // 圆角：左端贴合排班底色弧度(6px)，右端同，中间直角(0)
-        // host 是该预约所在的排班分段
+        // 圆角跟排班底色走：
+        // 左圆角 = 预约贴着排班段左端 AND 排班段左端贴着容器左端（trackStart）
+        // 右圆角 = 预约贴着排班段右端 AND 排班段右端贴着容器右端（trackEnd）
         const hostSeg = segs.find(([s0, e0]) => s >= s0 && e <= e0) || host;
-        const R = 6;
-        const rTL = hostSeg && s <= hostSeg[0] + 1 ? R : 0;
-        const rBL = rTL;
-        const rTR = hostSeg && e >= hostSeg[1] - 1 ? R : 0;
-        const rBR = rTR;
+        const R = 6, THRESH = 5;
+        const segAtContainerLeft = hostSeg && hostSeg[0] <= trackStart + THRESH;
+        const segAtContainerRight = hostSeg && hostSeg[1] >= trackEnd - THRESH;
+        const rL = hostSeg && s <= hostSeg[0] + THRESH && segAtContainerLeft ? R : 0;
+        const rR = hostSeg && e >= hostSeg[1] - THRESH && segAtContainerRight ? R : 0;
         return (
           <div
             key={ai}
@@ -155,7 +170,7 @@ export default function YabanGanttBar({
               position: "absolute",
               left: `${l}%`, width: `${w}%`,
               top: 0, bottom: 0,
-              borderRadius: `${rTL}px ${rTR}px ${rBR}px ${rBL}px`,
+              borderRadius: `${rL}px ${rR}px ${rR}px ${rL}px`,
               background: apptColor,
               boxShadow: "0 1px 3px rgba(0,0,0,0.18)",
               display: "flex", flexDirection: "column",
@@ -165,9 +180,12 @@ export default function YabanGanttBar({
             }}
             title={a.patientName || ""}
           >
-            <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", maxWidth: "100%" }}>
-              {(a.patientName || "").slice(0, 3)}
-            </span>
+            {/* 实际像素宽度 >= 28px 才显示文字，否则纯色块 */}
+            {containerW > 0 && (w / 100) * containerW >= 28 && (
+              <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", whiteSpace: "nowrap", overflow: "hidden", maxWidth: "100%" }}>
+                {(a.patientName || "").slice(0, 3)}
+              </span>
+            )}
           </div>
         );
       })}

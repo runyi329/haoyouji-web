@@ -7,10 +7,11 @@
  * 无模拟数据，无 emoji
  */
 import { useState, useRef, useEffect, useMemo } from "react";
+import { Building2, ChevronDown, Check } from "lucide-react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { useYabanClinic } from "./useYabanClinic";
+import { useYabanClinic, YABAN_MODEL_TENANT_ID } from "./useYabanClinic";
 import YabanClinicHeader from "./YabanClinicHeader";
 import YabanGanttBar, { YabanGanttTimeline } from "./YabanGanttBar";
 import YabanHeatCalendar from "./YabanHeatCalendar";
@@ -71,6 +72,26 @@ export default function YabanSchedule() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [selectedDocIdx, setSelectedDocIdx] = useState<number|null>(null);
   const [detailModal, setDetailModal] = useState<{ open: boolean; apptId?: number }>({ open: false });
+  // 日视图导航栏门店下拉
+  const [dayNavOpen, setDayNavOpen] = useState(false);
+  const dayNavRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (dayNavRef.current && !dayNavRef.current.contains(e.target as Node)) setDayNavOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+  // 周视图导航栏门店下拉
+  const [weekNavOpen, setWeekNavOpen] = useState(false);
+  const weekNavRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (weekNavRef.current && !weekNavRef.current.contains(e.target as Node)) setWeekNavOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
   // 单日覆盖编辑
   const [overrideModal, setOverrideModal] = useState<{ open: boolean; userId: number; name: string; color?: string } | null>(null);
   const [ovAmStart, setOvAmStart] = useState("09:00");
@@ -104,7 +125,7 @@ export default function YabanSchedule() {
     return () => { ro.disconnect(); window.removeEventListener("resize", update); };
   }, []);
 
-  const { currentTenantId, current } = useYabanClinic();
+  const { currentTenantId, current, hasMultiple, selectClinic, clinics } = useYabanClinic();
 
   const { data: appointments = [], refetch: refetchAppts } = trpc.yabanAppointment.listByDate.useQuery({ date: dateStr, tenantId: currentTenantId ?? undefined });
   const { data: monthStats = {} } = trpc.yabanAppointment.monthStats.useQuery({
@@ -303,15 +324,6 @@ export default function YabanSchedule() {
             </button>
           </div>
         </div>
-        <YabanClinicHeader
-          asBar
-          compact
-          rightSlot={
-            <span style={{ whiteSpace: "nowrap" }}>
-              {selDate.getMonth() + 1}月{selDate.getDate()}日 · {appointments.length} 个预约
-            </span>
-          }
-        />
       </div>
       {/* 顶栏占位：与 fixed 顶栏等高，防止主体被遮挡 */}
       <div style={{ height: headerH }} aria-hidden />
@@ -319,14 +331,50 @@ export default function YabanSchedule() {
       {/* 日视图 */}
       {viewMode === "day" && (
         <>
-          {/* 单日导航：← 7月7日（周X）→ + 诊所下拉 */}
+          {/* 单日导航：门店 + 日期 整合一行 */}
           <div style={{ background: "#fff", padding: "8px 14px", display: "flex", alignItems: "center", gap: 8, borderBottom: `1px solid ${LINE}` }}>
             <div onClick={() => { const d = new Date(selDate); d.setDate(d.getDate() - 1); setSelDate(d); setWeekOffset(Math.round((d.getTime() - today.getTime()) / (7 * 86400000))); }} style={{ width: 30, height: 30, borderRadius: 6, background: "#F6F8FA", color: GRAY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, cursor: "pointer", flexShrink: 0 }}>‹</div>
-            <div style={{ flex: 1, textAlign: "center" }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: INK }}>{selDate.getMonth() + 1}月{selDate.getDate()}日</span>
-              <span style={{ fontSize: 12, color: GRAY, marginLeft: 6 }}>{["周日","周一","周二","周三","周四","周五","周六"][selDate.getDay()]}{isSameDay(selDate, today) ? " · 今天" : ""}</span>
+            {/* 门店 + 日期 整合中间区域 */}
+            <div ref={dayNavRef} style={{ flex: 1, position: "relative" }}>
+              <div onClick={() => hasMultiple && setDayNavOpen(v => !v)}
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5, cursor: hasMultiple ? "pointer" : "default", padding: "4px 8px", borderRadius: 8, transition: "background .15s", background: dayNavOpen ? "#F0F7FF" : "transparent" }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: SKY_D }}>{current ? (current.shortName?.trim() || current.name?.trim() || `门店`) : "..."}</span>
+                {current?.tenantId === YABAN_MODEL_TENANT_ID && <span style={{ fontSize: 10, padding: "1px 5px", borderRadius: 4, background: "#FEF3C7", color: "#92400E", fontWeight: 600 }}>演示</span>}
+                <span style={{ fontSize: 13, color: GRAY_L, fontWeight: 400 }}>·</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: INK }}>{selDate.getMonth() + 1}月{selDate.getDate()}日</span>
+                <span style={{ fontSize: 13, color: GRAY }}>{["周日","周一","周二","周三","周四","周五","周六"][selDate.getDay()]}{isSameDay(selDate, today) ? " · 今天" : ""}</span>
+                {hasMultiple && <ChevronDown size={13} style={{ color: GRAY, flexShrink: 0, transform: dayNavOpen ? "rotate(180deg)" : "none", transition: ".18s" }} />}
+              </div>
+              {/* 门店下拉列表 */}
+              {dayNavOpen && hasMultiple && (
+                <div style={{ position: "absolute", top: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)", zIndex: 200,
+                  width: 220, borderRadius: 12, border: "1px solid #BAE0F5", background: "#fff",
+                  boxShadow: "0 8px 24px rgba(0,0,0,.13)", overflow: "hidden",
+                  animation: "ybClinicIn 150ms cubic-bezier(0.23,1,0.32,1)" }}>
+                  <div style={{ background: "linear-gradient(90deg,#1E88D6,#3BA9E0)", padding: "8px 12px", display: "flex", alignItems: "center", gap: 6 }}>
+                    <Building2 size={13} style={{ color: "rgba(255,255,255,.9)" }} />
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#fff" }}>切换所属医院</span>
+                  </div>
+                  {clinics.map((c: any) => {
+                    const isActive = c.tenantId === current?.tenantId;
+                    const isModel = c.tenantId === YABAN_MODEL_TENANT_ID;
+                    const label = c.name?.trim() || c.shortName?.trim() || `门店 ${c.tenantId}`;
+                    return (
+                      <div key={c.tenantId} onClick={() => { selectClinic(c.tenantId); setDayNavOpen(false); }}
+                        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px",
+                          background: isActive ? "#EBF5FB" : "#fff", cursor: "pointer", fontSize: 13,
+                          color: isActive ? "#0E5F9A" : INK }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span>{label}</span>
+                          {isModel && <span style={{ fontSize: 10, padding: "1px 5px", borderRadius: 4, background: "#FEF3C7", color: "#92400E", fontWeight: 600 }}>演示</span>}
+                        </span>
+                        {isActive && <Check size={14} style={{ color: "#1E88D6" }} />}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-            <YabanClinicHeader compact />
             <div onClick={() => { const d = new Date(selDate); d.setDate(d.getDate() + 1); setSelDate(d); setWeekOffset(Math.round((d.getTime() - today.getTime()) / (7 * 86400000))); }} style={{ width: 30, height: 30, borderRadius: 6, background: "#F6F8FA", color: GRAY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, cursor: "pointer", flexShrink: 0 }}>›</div>
           </div>
 
@@ -365,26 +413,24 @@ export default function YabanSchedule() {
           })()}
 
           {/* 日/周/月 Tab 栏 */}
-          <div style={{ background: `linear-gradient(90deg,${SKY},#3BA9E0)`, padding: "10px 16px", display: "flex", justifyContent: "center" }}>
-            <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,.18)", borderRadius: 6, padding: 4 }}>
-              {(["day","week","month"] as const).map((vm) => {
-                const labels = { day: "日", week: "周", month: "月" };
-                const active = viewMode === vm;
-                return (
-                  <div key={vm} onClick={() => {
-                    setViewMode(vm);
-                    if (vm === "week") setCalMode("week");
-                    if (vm === "month") { setCalMode("month"); setMonthCursor(new Date(selDate.getFullYear(), selDate.getMonth(), 1)); }
-                  }} style={{
-                    padding: "7px 28px", borderRadius: 4, fontSize: 14, fontWeight: 600,
-                    background: active ? "#fff" : "transparent",
-                    color: active ? SKY_D : "#EBF5FB",
-                    boxShadow: active ? "0 1px 3px rgba(0,0,0,.1)" : "none",
-                    whiteSpace: "nowrap", cursor: "pointer", transition: "all .18s",
-                  }}>{labels[vm]}</div>
-                );
-              })}
-            </div>
+          <div style={{ background: `linear-gradient(90deg,${SKY},#3BA9E0)`, padding: "0 0 1px", display: "flex" }}>
+            {(["day","week","month"] as const).map((vm) => {
+              const labels = { day: "日视图", week: "周视图", month: "月视图" };
+              const active = viewMode === vm;
+              return (
+                <div key={vm} onClick={() => {
+                  setViewMode(vm);
+                  if (vm === "week") setCalMode("week");
+                  if (vm === "month") { setCalMode("month"); setMonthCursor(new Date(selDate.getFullYear(), selDate.getMonth(), 1)); }
+                }} style={{
+                  flex: 1, textAlign: "center", padding: "9px 0 7px",
+                  fontSize: 14, fontWeight: active ? 600 : 400,
+                  color: active ? "#fff" : "rgba(255,255,255,.65)",
+                  borderBottom: active ? "2px solid #fff" : "2px solid transparent",
+                  cursor: "pointer", transition: "all .18s", letterSpacing: .3,
+                }}>{labels[vm]}</div>
+              );
+            })}
           </div>
 
           {/* 忙闲速览 */}
@@ -440,16 +486,51 @@ export default function YabanSchedule() {
       {/* 周视图 */}
       {viewMode === "week" && (
         <>
-          <div style={{ background: "#fff", padding: "10px 16px 0", borderBottom: `1px solid ${LINE}` }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-              <div onClick={() => setWeekOffset(w => w - 1)} style={{ width: 28, height: 28, borderRadius: 4, background: "#F6F8FA", color: GRAY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, cursor: "pointer", flexShrink: 0 }}>‹</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: INK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {weekOffset === 0 ? "本周" : weekOffset < 0 ? `前${-weekOffset}周` : `后${weekOffset}周`}　{weekDates[0].getMonth() + 1}/{weekDates[0].getDate()} – {weekDates[6].getMonth() + 1}/{weekDates[6].getDate()}
+          <div style={{ background: "#fff", padding: "8px 14px 0", borderBottom: `1px solid ${LINE}` }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <div onClick={() => setWeekOffset(w => w - 1)} style={{ width: 30, height: 30, borderRadius: 6, background: "#F6F8FA", color: GRAY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, cursor: "pointer", flexShrink: 0 }}>‹</div>
+              {/* 门店 + 周期 整合中间区域 */}
+              <div ref={weekNavRef} style={{ flex: 1, position: "relative" }}>
+                <div onClick={() => hasMultiple && setWeekNavOpen(v => !v)}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5, cursor: hasMultiple ? "pointer" : "default", padding: "4px 8px", borderRadius: 8, transition: "background .15s", background: weekNavOpen ? "#F0F7FF" : "transparent" }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: SKY_D }}>{current ? (current.shortName?.trim() || current.name?.trim() || `门店`) : "..."}</span>
+                  {current?.tenantId === YABAN_MODEL_TENANT_ID && <span style={{ fontSize: 10, padding: "1px 5px", borderRadius: 4, background: "#FEF3C7", color: "#92400E", fontWeight: 600 }}>演示</span>}
+                  <span style={{ fontSize: 13, color: GRAY_L, fontWeight: 400 }}>·</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: INK }}>{weekOffset === 0 ? "本周" : weekOffset < 0 ? `前${-weekOffset}周` : `后${weekOffset}周`}</span>
+                  <span style={{ fontSize: 12, color: GRAY }}>{weekDates[0].getMonth() + 1}/{weekDates[0].getDate()} – {weekDates[6].getMonth() + 1}/{weekDates[6].getDate()}</span>
+                  {hasMultiple && <ChevronDown size={13} style={{ color: GRAY, flexShrink: 0, transform: weekNavOpen ? "rotate(180deg)" : "none", transition: ".18s" }} />}
                 </div>
+                {/* 门店下拉列表 */}
+                {weekNavOpen && hasMultiple && (
+                  <div style={{ position: "absolute", top: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)", zIndex: 200,
+                    width: 220, borderRadius: 12, border: "1px solid #BAE0F5", background: "#fff",
+                    boxShadow: "0 8px 24px rgba(0,0,0,.13)", overflow: "hidden",
+                    animation: "ybClinicIn 150ms cubic-bezier(0.23,1,0.32,1)" }}>
+                    <div style={{ background: "linear-gradient(90deg,#1E88D6,#3BA9E0)", padding: "8px 12px", display: "flex", alignItems: "center", gap: 6 }}>
+                      <Building2 size={13} style={{ color: "rgba(255,255,255,.9)" }} />
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "#fff" }}>切换所属医院</span>
+                    </div>
+                    {clinics.map((c: any) => {
+                      const isActive = c.tenantId === current?.tenantId;
+                      const isModel = c.tenantId === YABAN_MODEL_TENANT_ID;
+                      const label = c.name?.trim() || c.shortName?.trim() || `门店 ${c.tenantId}`;
+                      return (
+                        <div key={c.tenantId} onClick={() => { selectClinic(c.tenantId); setWeekNavOpen(false); }}
+                          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 12px",
+                            background: isActive ? "#EBF5FB" : "#fff", cursor: "pointer", fontSize: 13,
+                            color: isActive ? "#0E5F9A" : INK }}>
+                          <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <span>{label}</span>
+                            {isModel && <span style={{ fontSize: 10, padding: "1px 5px", borderRadius: 4, background: "#FEF3C7", color: "#92400E", fontWeight: 600 }}>演示</span>}
+                          </span>
+                          {isActive && <Check size={14} style={{ color: "#1E88D6" }} />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-              <YabanClinicHeader compact />
-              <div onClick={() => setWeekOffset(w => w + 1)} style={{ width: 28, height: 28, borderRadius: 4, background: "#F6F8FA", color: GRAY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, cursor: "pointer", flexShrink: 0 }}>›</div>
+              <div onClick={() => setWeekOffset(w => w + 1)} style={{ width: 30, height: 30, borderRadius: 6, background: "#F6F8FA", color: GRAY, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, cursor: "pointer", flexShrink: 0 }}>›</div>
             </div>
             <div style={{ overflowX: "auto", margin: "0 -16px", padding: "0 16px 2px", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none" }}>
               <div style={{ display: "flex", gap: 3 }}>
@@ -485,25 +566,23 @@ export default function YabanSchedule() {
           </div>
 
           {/* 日/周/月 Tab 栏 */}
-          <div style={{ background: `linear-gradient(90deg,${SKY},#3BA9E0)`, padding: "10px 16px", display: "flex", justifyContent: "center" }}>
-            <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,.18)", borderRadius: 6, padding: 4 }}>
-              {(["day","week","month"] as const).map((vm) => {
-                const labels = { day: "日", week: "周", month: "月" };
-                const active = viewMode === vm;
-                return (
-                  <div key={vm} onClick={() => {
-                    setViewMode(vm);
-                    if (vm === "month") { setCalMode("month"); setMonthCursor(new Date(selDate.getFullYear(), selDate.getMonth(), 1)); }
-                  }} style={{
-                    padding: "7px 28px", borderRadius: 4, fontSize: 14, fontWeight: 600,
-                    background: active ? "#fff" : "transparent",
-                    color: active ? SKY_D : "#EBF5FB",
-                    boxShadow: active ? "0 1px 3px rgba(0,0,0,.1)" : "none",
-                    whiteSpace: "nowrap", cursor: "pointer", transition: "all .18s",
-                  }}>{labels[vm]}</div>
-                );
-              })}
-            </div>
+          <div style={{ background: `linear-gradient(90deg,${SKY},#3BA9E0)`, padding: "0 0 1px", display: "flex" }}>
+            {(["day","week","month"] as const).map((vm) => {
+              const labels = { day: "日视图", week: "周视图", month: "月视图" };
+              const active = viewMode === vm;
+              return (
+                <div key={vm} onClick={() => {
+                  setViewMode(vm);
+                  if (vm === "month") { setCalMode("month"); setMonthCursor(new Date(selDate.getFullYear(), selDate.getMonth(), 1)); }
+                }} style={{
+                  flex: 1, textAlign: "center", padding: "9px 0 7px",
+                  fontSize: 14, fontWeight: active ? 600 : 400,
+                  color: active ? "#fff" : "rgba(255,255,255,.65)",
+                  borderBottom: active ? "2px solid #fff" : "2px solid transparent",
+                  cursor: "pointer", transition: "all .18s", letterSpacing: .3,
+                }}>{labels[vm]}</div>
+              );
+            })}
           </div>
 
           {/* 忙闲速览 */}
@@ -569,25 +648,23 @@ export default function YabanSchedule() {
           />
 
           {/* 日/周/月 Tab 栏 */}
-          <div style={{ background: `linear-gradient(90deg,${SKY},#3BA9E0)`, padding: "10px 16px", display: "flex", justifyContent: "center" }}>
-            <div style={{ display: "flex", gap: 6, background: "rgba(255,255,255,.18)", borderRadius: 6, padding: 4 }}>
-              {(["day","week","month"] as const).map((vm) => {
-                const labels = { day: "日", week: "周", month: "月" };
-                const active = viewMode === vm;
-                return (
-                  <div key={vm} onClick={() => {
-                    setViewMode(vm);
-                    if (vm === "week") setCalMode("week");
-                  }} style={{
-                    padding: "7px 28px", borderRadius: 4, fontSize: 14, fontWeight: 600,
-                    background: active ? "#fff" : "transparent",
-                    color: active ? SKY_D : "#EBF5FB",
-                    boxShadow: active ? "0 1px 3px rgba(0,0,0,.1)" : "none",
-                    whiteSpace: "nowrap", cursor: "pointer", transition: "all .18s",
-                  }}>{labels[vm]}</div>
-                );
-              })}
-            </div>
+          <div style={{ background: `linear-gradient(90deg,${SKY},#3BA9E0)`, padding: "0 0 1px", display: "flex" }}>
+            {(["day","week","month"] as const).map((vm) => {
+              const labels = { day: "日视图", week: "周视图", month: "月视图" };
+              const active = viewMode === vm;
+              return (
+                <div key={vm} onClick={() => {
+                  setViewMode(vm);
+                  if (vm === "week") setCalMode("week");
+                }} style={{
+                  flex: 1, textAlign: "center", padding: "9px 0 7px",
+                  fontSize: 14, fontWeight: active ? 600 : 400,
+                  color: active ? "#fff" : "rgba(255,255,255,.65)",
+                  borderBottom: active ? "2px solid #fff" : "2px solid transparent",
+                  cursor: "pointer", transition: "all .18s", letterSpacing: .3,
+                }}>{labels[vm]}</div>
+              );
+            })}
           </div>
 
           {/* 忙闲速览 */}
@@ -756,7 +833,7 @@ function DocRows({ docList, onDocClick, onApptClick, onNewAppt, trkStart, trkEnd
         <YabanGanttTimeline trackStart={a} trackEnd={b} paddingLeft={66} />
       </div>
       {docList.map((doc, idx) => (
-        <div key={doc.name} style={{ background: "#fff", padding: "11px 14px", display: "flex", alignItems: "center", gap: 10, borderBottom: `1px solid ${LINE}` }}>
+        <div key={doc.name} style={{ background: "#fff", padding: "8px 14px", display: "flex", alignItems: "stretch", gap: 10, borderBottom: `1px solid ${LINE}` }}>
           {/* 左侧头像/姓名：点击进入该医生放大日程；长按弹出当日排班编辑 */}
           <div
             onClick={() => onDocClick(idx)}
@@ -767,10 +844,16 @@ function DocRows({ docList, onDocClick, onApptClick, onNewAppt, trkStart, trkEnd
               e.currentTarget.addEventListener("touchend", cancel, { once: true });
               e.currentTarget.addEventListener("touchmove", cancel, { once: true });
             }}
-            style={{ minWidth: 56, maxWidth: 72, flexShrink: 0, textAlign: "center", cursor: "pointer", overflow: "hidden" }}>
-            <div style={{ width: 30, height: 30, borderRadius: "50%", background: (doc.color && doc.color !== "#1E88D6") ? doc.color : SKY_L, color: (doc.color && doc.color !== "#1E88D6") ? "#fff" : SKY_D, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 600, margin: "0 auto 3px" }}>{doc.name.charAt(0)}</div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "#26303C" }}>{doc.name}</div>
-            <div style={{ fontSize: 9, color: GRAY, marginTop: 1 }}>{doc.appts.length > 0 ? `${doc.appts.length}个预约` : "暂无"}</div>
+            style={{ width: 56, flexShrink: 0, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
+            {/* 头像 + 预约数角标 */}
+            <div style={{ position: "relative", display: "inline-block" }}>
+              <div style={{ width: 26, height: 26, borderRadius: "50%", background: (doc.color && doc.color !== "#1E88D6") ? doc.color : SKY_L, color: (doc.color && doc.color !== "#1E88D6") ? "#fff" : SKY_D, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>{doc.name.charAt(0)}</div>
+              {doc.appts.length > 0 && (
+                <div style={{ position: "absolute", top: -3, right: -5, minWidth: 14, height: 14, borderRadius: 7, background: "#E53935", color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px", border: "1.5px solid #fff", lineHeight: 1 }}>{doc.appts.length}</div>
+              )}
+            </div>
+            {/* 姓名 */}
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#26303C", textAlign: "center", width: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.name}</div>
           </div>
           <div style={{ flex: 1 }}>
             {/* 甘特条—共享组件 YabanGanttBar（与 A316 联动） */}

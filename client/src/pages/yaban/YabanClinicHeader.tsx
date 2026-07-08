@@ -20,10 +20,12 @@ interface Props {
   /** 紧凑模式：用于嵌在已有标题栏内 */
   compact?: boolean;
   className?: string;
-  /** 整行栏模式：组件自身渲染为一条左右撑满的“医院上下文栏”，右侧可放 rightSlot */
+  /** 整行栏模式：组件自身渲染为一条左右撑满的"医院上下文栏"，右侧可放 rightSlot */
   asBar?: boolean;
   /** 整行栏模式下，右侧的上下文信息（如日期 / 统计），可选 */
   rightSlot?: ReactNode;
+  /** 浅色模式：白底深色文字，适合放在白色背景行里 */
+  light?: boolean;
 }
 
 export default function YabanClinicHeader({
@@ -31,6 +33,7 @@ export default function YabanClinicHeader({
   className = "",
   asBar = false,
   rightSlot = null,
+  light = false,
 }: Props) {
   const { clinics, current, hasMultiple, selectClinic } = useYabanClinic();
   const [open, setOpen] = useState(false);
@@ -44,7 +47,17 @@ export default function YabanClinicHeader({
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
-  if (!current) return null;
+  if (!current) {
+    // 门店数据加载中，显示占位胶囊，保持布局稳定
+    return (
+      <div className={className}>
+        <div className={`flex items-center gap-1.5 rounded-md px-3 py-1 ${light ? "border border-gray-200 bg-gray-100 text-gray-400" : "border border-white/30 bg-white/15 text-white/60"} ${compact ? "text-xs" : "text-sm"}`}>
+          <Building2 size={compact ? 13 : 15} className="shrink-0 opacity-50" />
+          <span className="text-[11px]">...</span>
+        </div>
+      </div>
+    );
+  }
 
   const display = current.shortName?.trim() || current.name?.trim() || `门店 ${current.tenantId}`;
   const isModel = current.tenantId === YABAN_MODEL_TENANT_ID;
@@ -55,12 +68,12 @@ export default function YabanClinicHeader({
       <button
         type="button"
         onClick={() => hasMultiple && setOpen((v) => !v)}
-        className={`flex items-center gap-1.5 rounded-md border border-white/30 bg-white/15 px-3 py-1 text-white backdrop-blur-sm transition active:scale-[0.97] ${
-          hasMultiple ? "cursor-pointer hover:bg-white/25" : "cursor-default"
+        className={`flex items-center gap-1.5 rounded-md border px-3 py-1 backdrop-blur-sm transition active:scale-[0.97] ${light ? "border-sky-300 bg-sky-50 text-sky-700" : "border-white/30 bg-white/15 text-white"} ${
+          hasMultiple ? (light ? "cursor-pointer hover:bg-sky-100" : "cursor-pointer hover:bg-white/25") : "cursor-default"
         } ${compact ? "text-xs" : "text-sm"}`}
         style={{ transitionTimingFunction: "cubic-bezier(0.23, 1, 0.32, 1)", transitionDuration: "160ms" }}
       >
-        <Building2 size={compact ? 13 : 15} className="shrink-0 opacity-90" />
+        <Building2 size={compact ? 13 : 15} className={`shrink-0 opacity-90 ${light ? "text-sky-500" : ""}`} />
         <span className="max-w-[8rem] truncate font-medium">{display}</span>
         {isModel && (
           <span className="rounded bg-amber-400/90 px-1 text-[10px] font-semibold leading-tight text-amber-950">
@@ -77,10 +90,11 @@ export default function YabanClinicHeader({
 
       {open && hasMultiple && (
         <div
-          className="absolute left-0 z-50 mt-1.5 w-72 origin-top-left overflow-hidden rounded-md border border-gray-100 bg-white shadow-lg"
+          className="absolute right-0 z-50 mt-1.5 w-72 origin-top-right overflow-hidden rounded-xl border border-sky-200 bg-white shadow-xl"
           style={{ animation: "ybClinicIn 150ms cubic-bezier(0.23, 1, 0.32, 1)" }}
         >
-          <div className="border-b border-gray-50 px-3 py-2 text-xs font-medium text-gray-400">
+          <div className="bg-gradient-to-r from-sky-500 to-sky-400 px-3 py-2.5 text-xs font-semibold text-white flex items-center gap-1.5">
+            <Building2 size={13} className="opacity-90" />
             切换所属医院
           </div>
           <div className="max-h-72 overflow-y-auto py-1">

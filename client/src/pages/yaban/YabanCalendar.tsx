@@ -68,45 +68,91 @@ type ViewMode = "day" | "week" | "month";
 function DayView({ viewDate, tenantId }: { viewDate: string; tenantId: number }) {
   const [, navigate] = useLocation();
 
-  const { data, isLoading } = trpc.yabanComm.todayOverview.useQuery(
+  // 今日预约
+  const { data: appts, isLoading: apptLoading } = trpc.yabanAppointment.listByDate.useQuery(
     { date: viewDate },
     { keepPreviousData: true }
   );
+  const apptTotal = appts?.length ?? 0;
 
-  const s = data?.stats;
+  // 今日随访（取全部，前端过滤今天的）
+  const { data: followData, isLoading: followLoading } = trpc.yabanComm.listFollowups.useQuery(
+    { status: 'all' },
+    { keepPreviousData: true }
+  );
+  const followTotal = (followData?.list || []).filter(f => f.date.replace(/\//g, '-') === viewDate).length;
 
-  // 今日预约总数（所有状态均计入）
-  const apptTotal = data?.appointments?.length ?? 0;
+  // 今日收费
+  const { data: chargeData, isLoading: chargeLoading } = trpc.yabanComm.todayCharges.useQuery(
+    { date: viewDate },
+    { keepPreviousData: true }
+  );
+  const chargeList = chargeData?.list || [];
+  const chargeTotal = chargeList.reduce((sum, c) => sum + (c.actualAmount || 0), 0);
 
-  const gradient = "linear-gradient(135deg, #4DB8E8 0%, #2196C8 100%)";
+  const cards = [
+    {
+      key: 'appt',
+      label: '今日预约',
+      value: apptLoading ? null : apptTotal,
+      suffix: '',
+      gradient: 'linear-gradient(135deg, #4DB8E8 0%, #2196C8 100%)',
+      borderColor: '#2196C8',
+      onClick: () => navigate(`/yaban/schedule?date=${viewDate}`),
+    },
+    {
+      key: 'follow',
+      label: '今日随访',
+      value: followLoading ? null : followTotal,
+      suffix: '',
+      gradient: 'linear-gradient(135deg, #34D399 0%, #10B981 100%)',
+      borderColor: '#10B981',
+      onClick: () => navigate('/yaban/followup'),
+    },
+    {
+      key: 'charge',
+      label: '今日营业额',
+      value: chargeLoading ? null : chargeTotal,
+      suffix: '',
+      prefix: '¥',
+      gradient: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
+      borderColor: '#D97706',
+      onClick: () => navigate('/yaban/charge'),
+    },
+  ];
 
   return (
     <div
       className="px-3 pb-3 pt-2"
       style={{ background: "linear-gradient(180deg, #F8FBFF 0%, #F2F6FA 100%)" }}
     >
-      <button
-        className="w-full flex flex-col rounded-xl p-3 text-left active:opacity-80 transition-opacity"
-        style={{
-          background: "#fff",
-          boxShadow: "0 2px 10px rgba(33,150,200,0.10), 0 1px 3px rgba(0,0,0,0.04)",
-          borderTop: "3px solid #2196C8",
-        }}
-        onClick={() => navigate(`/yaban/schedule?date=${viewDate}`)}
-      >
-        {/* 标题行 */}
-        <div className="flex items-center justify-between w-full mb-1.5">
-          <span className="text-[11px] text-gray-500 font-medium">今日预约</span>
-          <ArrowRight className="w-3 h-3 text-gray-300" />
-        </div>
-        {/* 主数字 */}
-        <div
-          className="text-2xl font-bold leading-none"
-          style={{ background: gradient, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}
-        >
-          {isLoading ? <span style={{ WebkitTextFillColor: "#ccc", background: "none" }}>—</span> : apptTotal}
-        </div>
-      </button>
+      <div className="grid grid-cols-3 gap-2">
+        {cards.map(card => (
+          <button
+            key={card.key}
+            className="flex flex-col rounded-xl p-3 text-left active:opacity-80 transition-opacity"
+            style={{
+              background: '#fff',
+              boxShadow: '0 2px 10px rgba(33,150,200,0.10), 0 1px 3px rgba(0,0,0,0.04)',
+              borderTop: `3px solid ${card.borderColor}`,
+            }}
+            onClick={card.onClick}
+          >
+            <div className="flex items-center justify-between w-full mb-1.5">
+              <span className="text-[11px] text-gray-500 font-medium">{card.label}</span>
+              <ArrowRight className="w-3 h-3 text-gray-300" />
+            </div>
+            <div
+              className="text-2xl font-bold leading-none"
+              style={{ background: card.gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
+            >
+              {card.value === null
+                ? <span style={{ WebkitTextFillColor: '#ccc', background: 'none' }}>—</span>
+                : <>{card.prefix || ''}{card.key === 'charge' ? card.value.toLocaleString() : card.value}{card.suffix}</>}
+            </div>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -118,12 +164,24 @@ function WeekView({ weekStart, tenantId }: { weekStart: string; tenantId: number
   const today = new Date();
   const [, navigate] = useLocation();
 
-  const { data } = trpc.yabanComm.weekOverview.useQuery(
-    { weekStart },
-    { keepPreviousData: true, enabled: tenantId > 0 }
+  // 计算本周跨越的年月（可能跨月，取周一所在年月）
+  const weekStartDate = new Date(weekStart + 'T00:00:00');
+  const year = weekStartDate.getFullYear();
+  const month = weekStartDate.getMonth() + 1;
+
+  const { data: monthStatsData } = trpc.yabanAppointment.monthStats.useQuery(
+    { year, month, tenantId: tenantId || undefined },
+    { keepPreviousData: true }
   );
 
-  const days = data?.days || [];
+  // 生成7天数组，从monthStats里取每天的预约数
+  const days = Array.from({ length: 7 }).map((_, i) => {
+    const d = new Date(weekStart + 'T00:00:00');
+    d.setDate(d.getDate() + i);
+    const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+    const ds = `${y}-${m}-${day}`;
+    return { date: ds, appt: monthStatsData?.[ds]?.cnt || 0, follow: 0 };
+  });
   const todayStr = toDateStr(today);
 
   return (
@@ -229,7 +287,7 @@ function WeekView({ weekStart, tenantId }: { weekStart: string; tenantId: number
 // ══════════════════════════════════════════════════════════════════
 // 月视角组件（原有逻辑完整保留）
 // ══════════════════════════════════════════════════════════════════
-function MonthView({ currentYear, currentMonth, prevMonth, nextMonth, showRevenue, setShowRevenue }: {
+function MonthView({ currentYear, currentMonth, prevMonth, nextMonth, showRevenue, setShowRevenue, tenantId }: {
   currentYear: number; currentMonth: number;
   prevMonth: () => void; nextMonth: () => void;
   showRevenue: boolean; setShowRevenue: (v: boolean) => void;
