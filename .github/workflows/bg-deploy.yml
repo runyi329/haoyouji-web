@@ -52,6 +52,8 @@ jobs:
           echo "[$(date '+%Y-%m-%d %H:%M:%S')] pm2 restart..." >> $LOG
           # 服务由 root 用户的 pm2 管理（/root/.pm2），直接用 root pm2 重启
           # ecosystem PORT=3000，nginx 也指向 3000
+          # 把最新构建同步到 root 目录（pm2 实际运行的目录）
+          cp -r dist/. /root/haoyouji-web/dist/ >> $LOG 2>&1
           if pm2 describe haoyouji-web > /dev/null 2>&1; then
             pm2 restart haoyouji-web --update-env >> $LOG 2>&1
           else
