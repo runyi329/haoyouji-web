@@ -167,6 +167,7 @@ const WheelPickerMemo = memo(function WheelPicker({ options, selectedMin, onSele
 
 export default function YabanScheduleCreate() {
   const [, setLocation] = useLocation();
+  const utils = trpc.useUtils();
   const prefill = useMemo(() => readPrefill(), []);
   const [showPicker, setShowPicker] = useState<string | null>(null);
   const [docSearch, setDocSearch] = useState("");
@@ -185,6 +186,14 @@ export default function YabanScheduleCreate() {
   // 日期条翻页偏移（0=今天起，7=下一周，14=再下一周……）
   const [dateOffset, setDateOffset] = useState(0);
   const [timePickerOpen, setTimePickerOpen] = useState(true);
+  // 分钟步长（5 或 15），从 localStorage 读取用户偏好
+  const [minuteStep, setMinuteStep] = useState<5 | 15>(() => {
+    try { const v = localStorage.getItem("yaban_minute_step"); if (v === "5") return 5; if (v === "15") return 15; return 15; } catch { return 15; }
+  });
+  const handleMinuteStep = (step: 5 | 15) => {
+    setMinuteStep(step);
+    try { localStorage.setItem("yaban_minute_step", String(step)); } catch {}
+  };
   // 时间轮盘临时选中（未点确定前不写入 form）
   const [pendingStart, setPendingStart] = useState("");
   const [pendingEnd, setPendingEnd] = useState("");
@@ -513,6 +522,10 @@ export default function YabanScheduleCreate() {
   const createAppointment = trpc.yabanAppointment.create.useMutation({
     onSuccess: () => {
       setSubmitting(false);
+      // 刷新首页日/周/月三个视角数据
+      utils.yabanComm.todayOverview.invalidate();
+      utils.yabanComm.weekOverview.invalidate();
+      utils.yabanComm.calendarStats.invalidate();
       toast.success("预约创建成功", { description: `${form.patientName} · ${form.startTime}–${form.endTime}` });
       setTimeout(() => setLocation("/yaban/schedule"), 1200);
     },
@@ -962,6 +975,25 @@ export default function YabanScheduleCreate() {
                       <div style={{ fontSize: 12, color: GRAY_L, marginTop: 1 }}>{selDoc ? "选择日期和时段" : "请先选医生"}</div>
                     </div>
                   </div>
+                  {/* 分钟步长 Tab */}
+                  <div style={{ display: "flex", background: "#F1F5F9", borderRadius: 6, padding: 2, gap: 2 }}>
+                    {([5, 15] as const).map(step => (
+                      <button
+                        key={step}
+                        onClick={() => handleMinuteStep(step)}
+                        style={{
+                          fontSize: 12, fontWeight: minuteStep === step ? 700 : 500,
+                          color: minuteStep === step ? SKY_D : GRAY_L,
+                          background: minuteStep === step ? "#fff" : "transparent",
+                          border: minuteStep === step ? `1px solid ${SKY_L}` : "1px solid transparent",
+                          borderRadius: 4, padding: "3px 8px", cursor: "pointer",
+                          boxShadow: minuteStep === step ? "0 1px 3px rgba(30,136,214,.15)" : "none",
+                          transition: "all .15s",
+                          whiteSpace: "nowrap",
+                        }}
+                      >{step}分钟/档</button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* 28天日期条（scroll-snap 吸附，嘎嗒嘎嗒） */}
@@ -1015,9 +1047,9 @@ export default function YabanScheduleCreate() {
                     const workStart = shift ? shift.segments[0][0] : selDaySlots[0].start;
                     const workEnd = shift ? shift.segments[shift.segments.length - 1][1] : selDaySlots[selDaySlots.length - 1].end;
 
-                    // 开始时间选项：5分钟精度
+                    // 开始时间选项：按 minuteStep 精度
                     const startOptions: { min: number; label: string; occupied: boolean }[] = [];
-                    for (let t = workStart; t < workEnd; t += 5) {
+                    for (let t = workStart; t < workEnd; t += minuteStep) {
                       const occupied = (dayAppointments as any[]).some((a: any) => {
                         if (!a.appointTime) return false;
                         const as_ = timeToMin(a.appointTime);
@@ -1032,15 +1064,16 @@ export default function YabanScheduleCreate() {
                     const curPendStart = pendingStart || form.startTime || hm(workStart);
                     const selStartMin = timeToMin(curPendStart);
 
-                    // 结束时间选项：严格大于开始时间，至 workEnd，5分钟精度
+                    // 结束时间选项：严格大于开始时间，至 workEnd，按 minuteStep 精度
                     const endOptions: { min: number; label: string }[] = [];
-                    for (let t = curStartMin + 5; t <= workEnd; t += 5) {
+                    for (let t = curStartMin + minuteStep; t <= workEnd; t += minuteStep) {
                       endOptions.push({ min: t, label: hm(t) });
                     }
 
-                    // 结束时间选中值：若当前 pendingEnd/form.endTime <= 开始时间，自动顺延 +30min
-                    const rawEndMin = pendingEnd ? timeToMin(pendingEnd) : (form.endTime ? timeToMin(form.endTime) : curStartMin + 30);
-                    const safeEndMin = rawEndMin > curStartMin ? rawEndMin : curStartMin + 30;
+                    // 结束时间选中值：若当前 pendingEnd/form.endTime <= 开始时间，自动顺延（步长的6倍，约30min）
+                    const defaultDur = minuteStep * 6;
+                    const rawEndMin = pendingEnd ? timeToMin(pendingEnd) : (form.endTime ? timeToMin(form.endTime) : curStartMin + defaultDur);
+                    const safeEndMin = rawEndMin > curStartMin ? rawEndMin : curStartMin + defaultDur;
                     // 确保不超过 workEnd
                     const clampedEndMin = Math.min(safeEndMin, workEnd);
                     const selEndMin = endOptions.find(o => o.min === clampedEndMin) ? clampedEndMin : (endOptions[0]?.min ?? clampedEndMin);
