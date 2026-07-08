@@ -65,12 +65,12 @@ type ViewMode = "day" | "week" | "month";
 // ══════════════════════════════════════════════════════════════════
 // 日视角组件：驾驶舱工作台（点击卡片跳转详情）
 // ══════════════════════════════════════════════════════════════════
-function DayView({ viewDate }: { viewDate: string }) {
+function DayView({ viewDate, tenantId }: { viewDate: string; tenantId: number }) {
   const [, navigate] = useLocation();
 
   const { data, isLoading } = trpc.yabanComm.todayOverview.useQuery(
     { date: viewDate },
-    { keepPreviousData: true }
+    { keepPreviousData: true, enabled: tenantId > 0 }
   );
 
   const s = data?.stats;
@@ -168,13 +168,13 @@ function DayView({ viewDate }: { viewDate: string }) {
 // ══════════════════════════════════════════════════════════════════
 // 周视角组件（接收 weekStart 由主组件控制）
 // ══════════════════════════════════════════════════════════════════
-function WeekView({ weekStart }: { weekStart: string }) {
+function WeekView({ weekStart, tenantId }: { weekStart: string; tenantId: number }) {
   const today = new Date();
   const [, navigate] = useLocation();
 
   const { data } = trpc.yabanComm.weekOverview.useQuery(
     { weekStart },
-    { keepPreviousData: true }
+    { keepPreviousData: true, enabled: tenantId > 0 }
   );
 
   const days = data?.days || [];
@@ -287,6 +287,7 @@ function MonthView({ currentYear, currentMonth, prevMonth, nextMonth, showRevenu
   currentYear: number; currentMonth: number;
   prevMonth: () => void; nextMonth: () => void;
   showRevenue: boolean; setShowRevenue: (v: boolean) => void;
+  tenantId: number;
 }) {
   const today = new Date();
   const [activeTab, setActiveTab] = useState(0);
@@ -304,7 +305,7 @@ function MonthView({ currentYear, currentMonth, prevMonth, nextMonth, showRevenu
 
   const { data: stats } = trpc.yabanComm.calendarStats.useQuery(
     { year: currentYear, month: currentMonth + 1 },
-    { keepPreviousData: true }
+    { keepPreviousData: true, enabled: tenantId > 0 }
   );
   const dayData: Record<number, number> = (stats?.[tab.id as keyof typeof stats] as Record<number, number>) || {};
 
@@ -455,7 +456,7 @@ function MonthView({ currentYear, currentMonth, prevMonth, nextMonth, showRevenu
 // ══════════════════════════════════════════════════════════════════
 // 主组件：三视角容器（日期导航 + 视角切换合并为一行）
 // ══════════════════════════════════════════════════════════════════
-export default function YabanCalendar() {
+export default function YabanCalendar({ tenantId = 0 }: { tenantId?: number }) {
   const todayObj = new Date();
   const todayStr = toDateStr(todayObj);
 
@@ -607,8 +608,8 @@ export default function YabanCalendar() {
       </div>
 
       {/* 视角内容 */}
-      {viewMode === "day"   && <DayView viewDate={viewDate} />}
-      {viewMode === "week"  && <WeekView weekStart={weekStart} />}
+      {viewMode === "day"   && <DayView viewDate={viewDate} tenantId={tenantId} />}
+      {viewMode === "week"  && <WeekView weekStart={weekStart} tenantId={tenantId} />}
       {viewMode === "month" && <MonthView
         currentYear={monthYear}
         currentMonth={monthMonth}
@@ -616,6 +617,7 @@ export default function YabanCalendar() {
         nextMonth={nextMonth}
         showRevenue={monthShowRevenue}
         setShowRevenue={setMonthShowRevenue}
+        tenantId={tenantId}
       />}
     </div>
   );

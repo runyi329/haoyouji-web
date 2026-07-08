@@ -410,7 +410,7 @@ export default function YabanHome() {
         </div>
 
         {/* 下半部分：数据报表 / 3D立体月历 */}
-        <YabanCalendar />
+        <YabanCalendar tenantId={currentTenantId} />
       </div>
 
       {/* 底部 Tab 栏 */}
