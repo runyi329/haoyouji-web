@@ -228,17 +228,8 @@ export default function YabanHome() {
   };
 
   // ── 权限判断：clinics 加载完成后，无门店 = 顾客，显示顾客专属视图 ──
-  // clinicsLoading 时先显示加载态，避免闪烁
-  if (clinicsLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "linear-gradient(180deg, #E8F4FD 0%, #F5F9FE 100%)" }}>
-        <Loader2 className="w-8 h-8 animate-spin text-[#2196C8]" />
-      </div>
-    );
-  }
-
-  // 顾客（未加入任何门店）→ 显示顾客专属视图
-  if (myClinicsResp && clinics.length === 0) {
+  // 顾客（未加入任何门店）→ 显示顾客专属视图（只在确认加载完且无门店时跳转，避免闪烁）
+  if (!clinicsLoading && myClinicsResp && clinics.length === 0) {
     return <CustomerHomeView />;
   }
 
