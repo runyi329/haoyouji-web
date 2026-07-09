@@ -15827,6 +15827,11 @@ ${klinesSummary}
             ) as any;
             const piArr = Array.isArray(piRows[0]) ? piRows[0] : (Array.isArray(piRows) ? piRows : []);
             for (const pi of piArr) {
+              // 序列化 commission_start_date 防止前端崩溃
+              if (pi.commission_start_date instanceof Date) {
+                const d = pi.commission_start_date as Date;
+                pi.commission_start_date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+              }
               participantInfoMap[Number(pi.order_id)] = pi;
             }
           } catch {}
@@ -16272,7 +16277,19 @@ ${klinesSummary}
         const rows = await db.execute(
           sql`SELECT fo.*, u.username, u.username as user_display_name FROM ledger_orders fo LEFT JOIN users u ON fo.user_id = u.id WHERE fo.ledger_id = ${input.ledgerId} AND fo.deleted_at IS NOT NULL ORDER BY fo.deleted_at DESC`
         ) as any;
-        return (rows[0] ?? rows) as any[];
+        const rawOrders = (rows[0] ?? rows) as any[];
+        // 把 Date 对象统一序列化为 yyyy-MM-dd 字符串，防止前端 .replace()/.split() 崩溃
+        const dateFields = ['interest_start_date', 'buy_date', 'settled_at', 'created_at', 'updated_at', 'end_date', 'start_date', 'deleted_at'];
+        return rawOrders.map((o: any) => {
+          const result = { ...o };
+          for (const field of dateFields) {
+            if (result[field] instanceof Date) {
+              const d = result[field] as Date;
+              result[field] = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            }
+          }
+          return result;
+        });
       }),
 
     // 恢复已删除的订单
@@ -16440,7 +16457,19 @@ ${klinesSummary}
               WHERE p.order_id = ${input.orderId} AND p.ledger_id = ${input.ledgerId}
               ORDER BY p.pay_date DESC, p.id DESC`
         ) as any;
-        return ((rows[0] || rows) as any[]) || [];
+        const rawPayments = ((rows[0] || rows) as any[]) || [];
+        // 把 Date 对象统一序列化为 yyyy-MM-dd 字符串，防止前端崩溃
+        const payDateFields = ['pay_date', 'period_start', 'period_end', 'created_at'];
+        return rawPayments.map((p: any) => {
+          const result = { ...p };
+          for (const field of payDateFields) {
+            if (result[field] instanceof Date) {
+              const d = result[field] as Date;
+              result[field] = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            }
+          }
+          return result;
+        });
       }),
 
     // 查询订单已结利息总额（给卡片显示用）

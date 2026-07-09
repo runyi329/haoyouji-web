@@ -10,7 +10,6 @@ interface State {
   hasError: boolean;
   error: Error | null;
   errorInfo: { componentStack?: string } | null;
-  errorCount: number;
 }
 
 // 判断是否是 chunk 加载失败（部署后旧缓存导致）
@@ -48,7 +47,7 @@ function reportErrorToServer(error: Error, componentStack?: string) {
 class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null, errorInfo: null, errorCount: 0 };
+    this.state = { hasError: false, error: null, errorInfo: null };
   }
 
   componentDidCatch(error: Error, errorInfo: { componentStack?: string }) {
@@ -64,17 +63,7 @@ class ErrorBoundary extends Component<Props, State> {
     // 上报到服务器
     reportErrorToServer(error, errorInfo.componentStack);
 
-    // 如果错误次数小于3，尝试自动恢复
-    if (this.state.errorCount < 3) {
-      setTimeout(() => {
-        this.setState({
-          hasError: false,
-          error: null,
-          errorInfo: null,
-          errorCount: this.state.errorCount + 1
-        });
-      }, 1000);
-    }
+    // 不再自动重置（会导致 Safari 检测到循环跳转），由用户手动点刷新
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
@@ -88,8 +77,6 @@ class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       const errMsg = this.state.error?.message || '未知错误';
-      const errStack = this.state.error?.stack || '';
-      const compStack = (this.state.errorInfo as any)?.componentStack || '';
 
       return (
         <div className="flex items-center justify-center min-h-screen p-8 bg-background">
@@ -100,19 +87,11 @@ class ErrorBoundary extends Component<Props, State> {
             />
 
             <h2 className="text-xl mb-2">页面出现错误</h2>
-            <p className="text-sm text-gray-600 mb-4">正在尝试自动恢复，或点击下方按钮刷新页面</p>
+            <p className="text-sm text-gray-600 mb-4">请点击下方按钮刷新页面</p>
 
             {errMsg && (
-              <div className="p-3 w-full rounded bg-red-50 border border-red-200 mb-3">
+              <div className="p-3 w-full rounded bg-red-50 border border-red-200 mb-6">
                 <p className="text-sm font-medium text-red-700">{errMsg}</p>
-              </div>
-            )}
-
-            {(errStack || compStack) && (
-              <div className="p-4 w-full rounded bg-muted overflow-auto mb-6 max-h-40">
-                <pre className="text-xs text-muted-foreground whitespace-break-spaces">
-                  {errStack || compStack}
-                </pre>
               </div>
             )}
 
