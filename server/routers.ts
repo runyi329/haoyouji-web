@@ -15800,7 +15800,7 @@ ${klinesSummary}
         // 把 Date 对象统一序列化为 yyyy-MM-dd 字符串，防止前端 .replace() 崩溃
         const orders = filteredOrders.map((o: any) => {
           const result = { ...o };
-          const dateFields = ['interest_start_date', 'created_at', 'updated_at', 'end_date', 'start_date'];
+          const dateFields = ['interest_start_date', 'buy_date', 'settled_at', 'created_at', 'updated_at', 'end_date', 'start_date'];
           for (const field of dateFields) {
             if (result[field] instanceof Date) {
               const d = result[field] as Date;
