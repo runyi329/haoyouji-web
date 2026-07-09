@@ -6,13 +6,11 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { RightMarginDetail } from "@/components/RightMarginDetail";
 import { trpc } from "@/lib/trpc";
-import { useDeribitGreeks } from "@/lib/useDeribit";
-import { useCryptoPrices, useUsdCnyRate } from "@/lib/useLivePrice";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X } from "lucide-react";
 import { toast } from "sonner";
 
 // 币种选项
-export const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'ASTER', 'SUI', 'SKHYMIX'] as const;
+export const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'ASTER', 'SUI'] as const;
 export type CoinType = typeof COIN_OPTIONS[number];
 
 export const STATUS_OPTIONS = [
@@ -61,7 +59,6 @@ export const COIN_COLORS: Record<CoinType, string> = {
   SEI: '#9C1FFF',
   ASTER: '#00D4AA',
   SUI: '#4DA2FF',
-  SKHYMIX: '#00A896',
 };
 
 // 获取北京时间（UTC+8）今天，返回 YYYY-MM-DD
@@ -572,9 +569,8 @@ export function FunderOrderCard({
     { value: 'borrower', label: '借方', color: '#F59E0B', defaultRateLabel: '利率' },
   ];
   // ===== END 内部 fallback =====
-  // 规则G：汇率通过Cloudflare Worker代理（老方案已封存：trpc.exchange.getRate）
-  const { data: _cnyRateData } = useUsdCnyRate(60000);
-  const cnyRate = (_cnyRateData as any)?.rate ?? 7.2;
+  const { data: _cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: "USD", tocoin: "CNY", money: 1 }, { staleTime: 3000, refetchInterval: 3000 });
+  const cnyRate = parseFloat((_cnyRateData as any)?.money ?? "7.2") || 7.2;
   // 共享担保池查询（仅当订单开启了本人订单共享时才查询）
   const orderShareMode = (order as any).collateral_share_mode;
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(
@@ -602,9 +598,9 @@ export function FunderOrderCard({
     { ledgerId: _parsedCollateralSource?.ledgerId ?? 0, tagName: _parsedCollateralSource?.tagName ?? '' },
     { enabled: hasExternalCollateral, staleTime: 3000 }
   );
-  // 规则G：数字币价格前端直连（老方案已封存：trpc.getCryptoPrices）
-  const _livePriceData = useCryptoPrices(hasExternalCollateral ? 3000 : 0);
-  const _extCryptoPricesRaw = hasExternalCollateral ? _livePriceData : undefined;
+  const { data: _extCryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, {
+    enabled: hasExternalCollateral, refetchInterval: 3000, staleTime: 0,
+  });
   // 计算剩余保证金U值和保证金率
   const { extRemainingMarginU, extMarginBasePct } = useMemo(() => {
     if (!hasExternalCollateral || !_extTagConfig) return { extRemainingMarginU: null as number | null, extMarginBasePct: null as number | null };
@@ -714,26 +710,6 @@ export function FunderOrderCard({
   const [showStatusSheet, setShowStatusSheet] = useState(false);
   const tipBtnRef = useRef<HTMLButtonElement>(null);
   const [tipPos, setTipPos] = useState<{ bottom: number; right: number }>({ bottom: 0, right: 0 });
-  // ===== 期权希腊字母查询（必须在顶层，不能放在条件渲染内）=====
-  const _optionInfo = (() => { try { const raw = (order as any).option_info; if (!raw) return null; return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; } })();
-  const _greeksEnabled = order.asset_type === 'crypto_option' && !!(_optionInfo?.strikePrice && _optionInfo?.exerciseDate && _optionInfo?.direction);
-  // 构建 Deribit 合约名（如 BTC-8JUL26-100000-C）
-  const _greeksInstrumentName = (() => {
-    if (!_greeksEnabled) return null;
-    const isCall = _optionInfo.direction === 'long_call' || _optionInfo.direction === 'short_call';
-    const optType = isCall ? 'C' : 'P';
-    const dt = new Date(_optionInfo.exerciseDate + 'T08:00:00Z');
-    const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-    const dd = dt.getUTCDate();
-    const mon = MONTHS[dt.getUTCMonth()];
-    const yy = String(dt.getUTCFullYear()).slice(2);
-    const strike = parseFloat(_optionInfo.strikePrice);
-    const currency = (_optionInfo.coin || 'BTC').toUpperCase();
-    return `${currency}-${dd}${mon}${yy}-${strike}-${optType}`;
-  })();
-  const _greeksData = useDeribitGreeks(_greeksInstrumentName);
-  // 兼容旧的 greeksQuery.data 接口
-  const greeksQuery = { data: _greeksEnabled ? _greeksData : null, isLoading: false };
   const accrued = useAccruedInterestFunder(
     (order.status === 'active' || order.settled_at) ? order.interest_base : null,
     (order.status === 'active' || order.settled_at) ? (isInvited ? order.participantInfo?.commissionRate : order.interest_rate_annual) : null,
@@ -914,35 +890,14 @@ export function FunderOrderCard({
               </span>
             );
           })()}
-          {order.asset_type && show('assetType') && (() => {
-            if (order.asset_type === 'crypto_option') {
-              const dirMap: Record<string, { label: string; color: string; bg: string }> = {
-                long_call: { label: '买入看涨', color: '#059669', bg: '#D1FAE5' },
-                long_put: { label: '买入看跌', color: '#DC2626', bg: '#FEE2E2' },
-                short_call: { label: '卖出看涨', color: '#0284C7', bg: '#DBEAFE' },
-                short_put: { label: '卖出看跌', color: '#9333EA', bg: '#F3E8FF' },
-              };
-              const oi = (() => { try { const raw = (order as any).option_info; if (!raw) return null; return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; } })();
-              const dir = oi?.direction;
-              const dirInfo = dir ? dirMap[dir] : null;
-              return (
-                <span
-                  className="text-[11px] font-medium px-1.5 py-0.5 rounded"
-                  style={{ backgroundColor: dirInfo ? dirInfo.bg : '#D1FAE5', color: dirInfo ? dirInfo.color : '#059669' }}
-                >
-                  {dirInfo ? `期权 · ${dirInfo.label}` : '数字币期权'}
-                </span>
-              );
-            }
-            return (
-              <span
-                className="text-[11px] font-medium px-1.5 py-0.5 rounded"
-                style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}
-              >
-                {order.asset_type === 'stock' ? '股票' : '数字币'}
-              </span>
-            );
-          })()}
+          {order.asset_type && show('assetType') && (
+            <span
+              className="text-[11px] font-medium px-1.5 py-0.5 rounded"
+              style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}
+            >
+              {order.asset_type === 'stock' ? '股票' : '数字币'}
+            </span>
+          )}
           {isInvited && (
             <span className="text-[11px] font-medium px-1.5 py-0.5 rounded" style={{ backgroundColor: '#D1FAE5', color: '#059669' }}>
               受邀
@@ -1071,205 +1026,13 @@ export function FunderOrderCard({
                 <span className="font-mono truncate ml-2" style={{ color: '#4B5563' }}>{order.broker_account}</span>
               </div>
             )}
-            {/* 期权专属字段（仅 crypto_option 类型显示） */}
-            {order.asset_type === 'crypto_option' && (() => {
-              const oi = (() => { try { const raw = order.option_info; if (!raw) return null; return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; } })();
-              if (!oi) return null;
-              const denomUnit = oi.denomination === 'B' ? (oi.coin || 'BTC') : 'u';
-              const convertedUnit = oi.denomination === 'B' ? 'u' : (oi.coin || 'BTC');
-              // 方向分色：[前两字颜色, 后两字颜色]
-              const directionColorMap: Record<string, [string, string]> = {
-                long_call:  ['#DC2626', '#DC2626'], // 买入红 看涨红
-                long_put:   ['#DC2626', '#059669'], // 买入红 看跌绿
-                short_call: ['#059669', '#DC2626'], // 卖出绿 看涨红
-                short_put:  ['#059669', '#059669'], // 卖出绿 看跌绿
-              };
-              const directionLabelMap: Record<string, [string, string]> = {
-                long_call:  ['买入', '看涨'],
-                long_put:   ['买入', '看跌'],
-                short_call: ['卖出', '看涨'],
-                short_put:  ['卖出', '看跌'],
-              };
-              return (
-                <>
-                  {oi.direction && directionColorMap[oi.direction] && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-400 shrink-0">方向</span>
-                      <span className="font-medium" style={{ color: '#4B5563' }}>
-                        <span style={{ color: directionColorMap[oi.direction][0] }}>{directionLabelMap[oi.direction][0]}</span>
-                        <span style={{ color: directionColorMap[oi.direction][1] }}>{directionLabelMap[oi.direction][1]}</span>
-                      </span>
-                    </div>
-                  )}
-                  {show('optionPremiumField') && oi.premium && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-400 shrink-0">权利金</span>
-                      <div className="flex flex-col items-end">
-                        <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(oi.premium).toLocaleString(undefined, { maximumFractionDigits: 8 })} <span className="text-[10px]">{denomUnit}</span></span>
-                        {show('optionPremiumConvertedField') && oi.premiumConverted && (() => {
-                          const v = parseFloat(oi.premiumConverted);
-                          if (isNaN(v)) return null;
-                          const fmt5 = (n: number): string => {
-                            const str = n.toPrecision(10);
-                            if (str.indexOf('.') === -1) return str.slice(0, 5);
-                            let cnt = 0, res = '';
-                            for (const c of str) {
-                              if (c === '.') { res += c; continue; }
-                              res += c; cnt++;
-                              if (cnt === 5) break;
-                            }
-                            return res.replace(/\.+$/, '');
-                          };
-                          return <span className="text-[10px]" style={{ color: '#9CA3AF' }}>≈ {fmt5(v)} <span>{convertedUnit}</span></span>;
-                        })()}
-                      </div>
-                    </div>
-                  )}
-                  {show('optionPremiumField') && (oi.buyQty || oi.buyPrice) && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-400 shrink-0">买入币数</span>
-                      <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(oi.buyQty || oi.buyPrice).toLocaleString(undefined, { maximumFractionDigits: 8 })} <span className="text-[10px]">{oi.coin || 'BTC'}</span></span>
-                    </div>
-                  )}
-                  {show('optionPremiumField') && oi.buyTotal && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-400 shrink-0">买入总额</span>
-                      <span className="font-semibold" style={{ color: '#059669' }}>{parseFloat(oi.buyTotal).toLocaleString(undefined, { maximumFractionDigits: oi.denomination === 'B' ? 8 : 2 })} <span className="text-[10px]">{denomUnit}</span></span>
-                    </div>
-                  )}
-
-                  {show('optionStrikePriceField') && oi.strikePrice && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-400 shrink-0">行权价</span>
-                      <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(oi.strikePrice).toLocaleString()} <span className="text-[10px]">u</span></span>
-                    </div>
-                  )}
-                  {show('optionExerciseDateField') && oi.exerciseDate && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-400 shrink-0">行权日</span>
-                      <span className="font-medium" style={{ color: '#4B5563' }}>{oi.exerciseDate}</span>
-                    </div>
-                  )}
-                </>
-              );
-            })()}
           </div>
         </div>
 
         {/* 中间分隔线 */}
         <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
 
-        {/* 右栏：待结利息（期权时替换为收益全览） */}
-        {order.asset_type === 'crypto_option' ? (() => {
-          const oi = (() => { try { const raw = (order as any).option_info; if (!raw) return null; return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; } })();
-          // 距到期日天数
-          const daysToExpiry = (() => {
-            if (!oi?.exerciseDate) return null;
-            const exDate = new Date(oi.exerciseDate + 'T00:00:00+08:00').getTime();
-            const now = Date.now();
-            const diff = Math.ceil((exDate - now) / (1000 * 60 * 60 * 24));
-            return diff;
-          })();
-          // 止盈利润计算
-          const profitCalc = (() => {
-            if (!oi?.targetPrice || !oi?.strikePrice) return null;
-            const target = parseFloat(oi.targetPrice);
-            const strike = parseFloat(oi.strikePrice);
-            const qty = parseFloat(oi.buyQty || oi.buyPrice || '0');
-            const dir = oi.direction;
-            if (isNaN(target) || isNaN(strike) || isNaN(qty) || qty <= 0 || !dir) return null;
-            let gross = 0;
-            if (dir === 'long_call') gross = Math.max(0, target - strike) * qty;
-            else if (dir === 'long_put') gross = Math.max(0, strike - target) * qty;
-            else if (dir === 'short_call') gross = -Math.max(0, target - strike) * qty;
-            else if (dir === 'short_put') gross = -Math.max(0, strike - target) * qty;
-            const premiumCost = (parseFloat(oi.premium || '0')) * qty;
-            const net = gross - premiumCost;
-            return { gross, net };
-          })();
-          const profitMode = (dc as any)?.optionProfitMode ?? 'net';
-          const profitVal = profitCalc ? (profitMode === 'gross' ? profitCalc.gross : profitCalc.net) : null;
-          const isProfitPos = profitVal !== null && profitVal >= 0;
-          return (
-            <div className="w-1/2 p-4 pl-3 flex flex-col">
-              <div className="flex items-center gap-1 mb-0.5" style={{ height: '16px' }}>
-                <span className="text-[10px]" style={{ color: '#3B82F6' }}>行权到期</span>
-              </div>
-              <div className="min-h-9 flex flex-col justify-center">
-                {show('optionDaysToExpiry') && daysToExpiry !== null ? (
-                  <div className="flex items-baseline gap-0.5">
-                    <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#1A2340' }}>
-                      {daysToExpiry > 0 ? daysToExpiry : 0}
-                    </span>
-                    <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>天</span>
-                    {daysToExpiry <= 0 && <span className="text-[10px] ml-1" style={{ color: '#DC2626' }}>已到期</span>}
-                  </div>
-                ) : (
-                  <div className="flex items-baseline gap-0.5">
-                    <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: '#D1D5DB' }}>--</span>
-                    <span className="text-xs font-semibold" style={{ color: '#9CA3AF' }}>天</span>
-                  </div>
-                )}
-              </div>
-              <div className="space-y-0.5 text-xs mt-1">
-                {show('optionDaysToExpiry') && oi?.exerciseDate && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-400">到期日</span>
-                    <span className="font-medium" style={{ color: '#4B5563' }}>{fmtDate(oi.exerciseDate)}</span>
-                  </div>
-                )}
-                {show('optionProfitDisplay') && profitCalc && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-400">目标止盈</span>
-                    <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(oi.targetPrice).toLocaleString()} u</span>
-                  </div>
-                )}
-                {show('optionProfitDisplay') && profitVal !== null && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-400">{profitMode === 'gross' ? '止盈毛利' : '止盈净利'}</span>
-                    <span className="font-semibold" style={{ color: '#DC2626' }}>
-                      {isProfitPos ? '+' : ''}{Math.round(profitVal).toLocaleString()} u
-                    </span>
-                  </div>
-                )}
-              </div>
-              {/* 希腊字母区域（Deribit 实时）- greeksQuery 在组件顶层，此处仅渲染 */}
-              {show('optionGreeks') && oi?.strikePrice && oi?.exerciseDate && oi?.direction && (() => {
-                const g = greeksQuery.data;
-                const fmt4 = (v: number | null | undefined) => v == null ? '--' : v.toFixed(4);
-                const fmtPct = (v: number | null | undefined) => v == null ? '--' : `${(v * 100).toFixed(1)}%`;
-                return (
-                  <div className="mt-2 pt-2" style={{ borderTop: '1px solid #E5E7EB' }}>
-                    <div className="space-y-0.5 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-400">IV</span>
-                        <span className="font-mono font-medium" style={{ color: '#7C3AED' }}>{fmtPct(g?.iv != null ? g.iv / 100 : null)}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-400">Delta</span>
-                        <span className="font-mono font-medium" style={{ color: '#1A2340' }}>{fmt4(g?.delta)}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-400">Gamma</span>
-                        <span className="font-mono font-medium" style={{ color: '#1A2340' }}>{fmt4(g?.gamma)}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-400">Theta</span>
-                        <span className="font-mono font-medium" style={{ color: '#1A2340' }}>{fmt4(g?.theta)}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-gray-400">Vega</span>
-                        <span className="font-mono font-medium" style={{ color: '#1A2340' }}>{fmt4(g?.vega)}</span>
-                      </div>
-                    </div>
-                    {greeksQuery.isLoading && <div className="text-[10px] text-gray-400 mt-0.5">加载中…</div>}
-                    {(g as any)?.error && <div className="text-[10px] mt-0.5" style={{ color: '#DC2626' }}>{(g as any).error}</div>}
-                  </div>
-                );
-              })()}
-            </div>
-          );
-        })() : (
+        {/* 右栏：待结利息 */}
         <div className="w-1/2 p-4 pl-3 flex flex-col">
           <div className="flex items-center gap-1 mb-0.5 relative" style={{ height: '16px' }}>
             <span className="text-[10px]" style={{ color: '#3B82F6' }}>{isInvited ? '待结佣金' : '待结利息'}</span>
@@ -1992,7 +1755,6 @@ export function FunderOrderCard({
             })()}
           </div>
         </div>
-        )}
       </div>
 
       {/* 内部备注 */}

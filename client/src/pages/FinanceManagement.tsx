@@ -1,6 +1,4 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-import { useUsdCnyRate } from "@/lib/useLivePrice"; // 规则G
-import { useDeribitExpiries, useDeribitStrikes } from "@/lib/useDeribit";
 import { useRoute, useLocation } from "wouter";
 import { FunderOrderCard } from "@/components/FunderOrderCard";
 import { trpc } from "@/lib/trpc";
@@ -444,7 +442,7 @@ function FinanceOrderCard({
           })()}
           {order.asset_type && (
             <span className="text-[10px] px-1.5 py-0.5 font-medium" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A', backgroundColor: 'transparent' }}>
-              {order.asset_type === 'stock' ? '股票' : order.asset_type === 'crypto_option' ? '数字币期权' : '数字币'}
+              {order.asset_type === 'stock' ? '股票' : '数字币'}
             </span>
           )}
           {order.owner_label && (
@@ -1332,18 +1330,11 @@ const emptyForm = {
   commissionRate: '',
   commissionBase: '',
   commissionStartDate: '',
-  assetType: '' as '' | 'stock' | 'crypto' | 'crypto_option',
+  assetType: '' as '' | 'stock' | 'crypto',
   ownerLabel: '',
   interestRateCurrency: 'USDT' as 'USDT' | 'CNY',
   tags: [] as string[],
   principalLentOut: false,
-  // 数字币期权专属字段
-  optionPremium: '',
-  optionExerciseDate: '',
-  optionBuyPrice: '',
-  optionStrikePrice: '',
-  optionDenomination: 'U' as 'B' | 'U',
-  optionCoin: 'BTC' as 'BTC' | 'ETH',
 };
 
 // ===== 订单公开备注组件 =====
@@ -1510,7 +1501,6 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   // 日期选择器
   const [showBuyDatePicker, setShowBuyDatePicker] = useState(false);
   const [showInterestDatePicker, setShowInterestDatePicker] = useState(false);
-  const [showOptionExerciseDatePicker, setShowOptionExerciseDatePicker] = useState(false);
 
   // 结息记录
   const [showPaymentPanel, setShowPaymentPanel] = useState<number | null>(null);
@@ -1631,8 +1621,10 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     { enabled: !!ledgerId && orderIds.length > 0 }
   );
   // 实时 USD/CNY 汇率（3秒刷新，用于 CNY 订单折算 U 值）
-  // 规则G：汇率通过Cloudflare Worker代理（老方案已封存：trpc.exchange.getRate）
-  const { data: cnyRateData } = useUsdCnyRate(60000);
+  const { data: cnyRateData } = trpc.exchange.getRate.useQuery(
+    { fromcoin: 'USD', tocoin: 'CNY', money: 1 },
+    { staleTime: 1000, refetchInterval: 3000 }
+  );
   const cnyRate = (cnyRateData?.success && cnyRateData?.money) ? parseFloat(cnyRateData.money) : 7.2;
 
   const createMutation = trpc.ledger.financeCreateOrder.useMutation({
@@ -1684,12 +1676,6 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     { enabled: !!ledgerId && showForm, staleTime: 10000, refetchInterval: 10000 }
   );
   const formLivePrices: Record<string, number> = (assetSummaryForm as any)?.livePrices ?? livePrices;
-  // ===== Deribit 到期日 & 行权价（前端直接调用 Deribit 公开 API，静态数据兑底）=====
-  const { expiries: expiriesList } = useDeribitExpiries(formData.optionCoin);
-  const expiriesData = { expiries: expiriesList };
-  const selectedDeribitLabel = expiriesList.find((e: any) => e.dateStr === formData.optionExerciseDate)?.deribitLabel ?? '';
-  const strikesList = useDeribitStrikes(formData.optionCoin, selectedDeribitLabel);
-  // ================================================================
   // 融资金额单位折算：以 USDT 为内部基准（买入价单位为 USDT/枚）
   // 把某币种计价的金额折算成 USDT 基准值
   const amtToUsdt = (val: number, cur: string): number => {
@@ -1859,7 +1845,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
       financeType: (order.finance_type || '保本分成') as '保本分成' | '自负盈亏',
       showProfitShare: order.show_profit_share !== 0 && order.show_profit_share !== false,
       commissionShare: order.commission_share || '',
-      assetType: (order.asset_type || '') as '' | 'stock' | 'crypto' | 'crypto_option',
+      assetType: (order.asset_type || '') as '' | 'stock' | 'crypto',
       ownerLabel: '',
       interestRateCurrency: (order.interest_rate_currency || 'USDT') as 'USDT' | 'CNY',
       commissionRate: order.participantInfo?.commissionRate || '',
@@ -1877,22 +1863,6 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         } catch { return order.owner_label ? [order.owner_label] : []; }
       })(),
       principalLentOut: !!(order.principal_lent_out),
-      // 数字币期权专属字段
-      ...(() => {
-        try {
-          const oi = order.option_info;
-          const parsed = oi ? (typeof oi === 'string' ? JSON.parse(oi) : oi) : null;
-          if (parsed) return {
-            optionPremium: parsed.premium || '',
-            optionExerciseDate: parsed.exerciseDate || '',
-            optionBuyPrice: parsed.buyPrice || '',
-            optionStrikePrice: parsed.strikePrice || '',
-            optionDenomination: (parsed.denomination || 'U') as 'B' | 'U',
-            optionCoin: (parsed.coin || 'BTC') as 'BTC' | 'ETH',
-          };
-        } catch {}
-        return { optionPremium: '', optionExerciseDate: '', optionBuyPrice: '', optionStrikePrice: '', optionDenomination: 'U' as 'B' | 'U', optionCoin: 'BTC' as 'BTC' | 'ETH' };
-      })(),
     });
     // 加载字段展示配置
     if (order.display_config) {
@@ -1971,14 +1941,6 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         tags: formData.tags.length > 0 ? formData.tags : [],
         counterparty: formData.counterparty,
         principalLentOut: formData.principalLentOut,
-        optionInfo: formData.assetType === 'crypto_option' ? {
-          premium: formData.optionPremium || undefined,
-          exerciseDate: formData.optionExerciseDate || undefined,
-          buyPrice: formData.optionBuyPrice || undefined,
-          strikePrice: formData.optionStrikePrice || undefined,
-          denomination: formData.optionDenomination,
-          coin: formData.optionCoin,
-        } : null,
         displayConfig: {
           ...Object.fromEntries(Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')),
           ...(marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? { marginAlertThreshold: parseFloat(marginAlertThreshold) } : {}),
@@ -2015,14 +1977,6 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         interestRateCurrency: formData.interestRateCurrency,
         tags: formData.tags.length > 0 ? formData.tags : undefined,
         principalLentOut: formData.principalLentOut,
-        optionInfo: formData.assetType === 'crypto_option' ? {
-          premium: formData.optionPremium || undefined,
-          exerciseDate: formData.optionExerciseDate || undefined,
-          buyPrice: formData.optionBuyPrice || undefined,
-          strikePrice: formData.optionStrikePrice || undefined,
-          denomination: formData.optionDenomination,
-          coin: formData.optionCoin,
-        } : undefined,
         displayConfig: {
           ...Object.fromEntries(Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')),
           ...(marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? { marginAlertThreshold: parseFloat(marginAlertThreshold) } : {}),
@@ -2256,7 +2210,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
               {!editingOrder?.participantInfo && (<div>
                 <label className="block text-sm font-medium text-gray-600 mb-2">类型<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，单选</span></label>
                 <div className="flex gap-2">
-                  {([{ value: 'stock', label: '股票' }, { value: 'crypto', label: '数字币' }, { value: 'crypto_option', label: '数字币期权' }] as const).map(opt => (
+                  {([{ value: 'stock', label: '股票' }, { value: 'crypto', label: '数字币' }] as const).map(opt => (
                     <button
                       key={opt.value}
                       type="button"
@@ -2405,10 +2359,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                   className="w-full px-3 py-3 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none"
                   style={{ backgroundColor: '#fff', color: COIN_COLORS[formData.coin as keyof typeof COIN_COLORS] || '#1A2340' }}
                 >
-                  {(formData.assetType === 'crypto_option'
-                    ? ['BTC', 'ETH']
-                    : ['CNY', ...COIN_OPTIONS.filter(c => c !== 'CNY')]
-                  ).map(c => (
+                  {['CNY', ...COIN_OPTIONS.filter(c => c !== 'CNY')].map(c => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
@@ -2417,142 +2368,6 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
 
               {/* 以下字段受邀订单时不显示 */}
               {!editingOrder?.participantInfo && (<>
-
-              {/* 数字币期权专属字段（仅当 assetType === 'crypto_option' 时显示） */}
-              {formData.assetType === 'crypto_option' && (
-                <div className="rounded-2xl border border-green-200 bg-green-50 p-4 space-y-4">
-                  <div className="text-xs font-semibold text-green-700 mb-1">期权专属信息</div>
-
-                  {/* 期权币种（BTC / ETH） */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-2">期权币种</label>
-                    <div className="flex gap-3">
-                      {(['BTC', 'ETH'] as const).map(c => (
-                        <button
-                          key={c}
-                          type="button"
-                          onClick={() => setFormData(d => ({ ...d, optionCoin: c }))}
-                          className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-colors ${
-                            formData.optionCoin === c
-                              ? 'bg-green-600 border-green-600 text-white'
-                              : 'bg-white border-gray-200 text-gray-500'
-                          }`}
-                        >
-                          {c}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* 权利金 */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-2">权利金</label>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      value={formData.optionPremium}
-                      onChange={e => setFormData(d => ({ ...d, optionPremium: e.target.value }))}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-green-200"
-                      placeholder="如：1500"
-                      style={{ display: 'block', boxSizing: 'border-box' }}
-                    />
-                  </div>
-
-                  {/* 行权日 - Deribit 下拉框 */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-2">行权日</label>
-                    <div className="relative">
-                      <select
-                        value={formData.optionExerciseDate}
-                        onChange={e => setFormData(d => ({ ...d, optionExerciseDate: e.target.value, optionStrikePrice: '' }))}
-                        className="w-full px-3 py-3 rounded-xl border text-sm appearance-none bg-white"
-                        style={{ borderColor: formData.optionExerciseDate ? '#059669' : '#E5E7EB', color: formData.optionExerciseDate ? '#065F46' : '#9CA3AF', fontWeight: formData.optionExerciseDate ? 600 : 400 }}
-                      >
-                        <option value="">请选择到期日</option>
-                        {(expiriesData?.expiries ?? []).map((e: any) => (
-                          <option key={e.dateStr} value={e.dateStr}>
-                            {e.dateStr}（{e.diffDays > 0 ? `${e.diffDays}天后` : '已到期'}）
-                          </option>
-                        ))}
-                      </select>
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">▾</span>
-                    </div>
-                  </div>
-
-                  {/* 买入价格（期权） */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-2">买入价格</label>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      value={formData.optionBuyPrice}
-                      onChange={e => setFormData(d => ({ ...d, optionBuyPrice: e.target.value }))}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-green-200"
-                      placeholder="如：95000"
-                      style={{ display: 'block', boxSizing: 'border-box' }}
-                    />
-                  </div>
-
-                  {/* 行权价 - 联动下拉框 */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-2">行权价</label>
-                    <div className="relative">
-                      {strikesList.length > 0 ? (
-                        <>
-                          <select
-                            value={formData.optionStrikePrice}
-                            onChange={e => setFormData(d => ({ ...d, optionStrikePrice: e.target.value }))}
-                            className="w-full px-3 py-3 rounded-xl border text-sm appearance-none bg-white"
-                            style={{ borderColor: formData.optionStrikePrice ? '#059669' : '#E5E7EB', color: formData.optionStrikePrice ? '#065F46' : '#9CA3AF', fontWeight: formData.optionStrikePrice ? 600 : 400 }}
-                          >
-                            <option value="">请选择行权价</option>
-                            {strikesList.map((s: number) => (
-                              <option key={s} value={String(s)}>{s.toLocaleString()} USDT</option>
-                            ))}
-                          </select>
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">▾</span>
-                        </>
-                      ) : (
-                        <>
-                          <input
-                            type="number"
-                            inputMode="decimal"
-                            value={formData.optionStrikePrice}
-                            onChange={e => setFormData(d => ({ ...d, optionStrikePrice: e.target.value }))}
-                            className="w-full pl-4 pr-20 py-3 rounded-xl border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-green-200"
-                            placeholder={formData.optionExerciseDate ? '加载中…' : '请先选择行权日'}
-                            readOnly={!!formData.optionExerciseDate}
-                            style={{ display: 'block', boxSizing: 'border-box', backgroundColor: formData.optionExerciseDate ? '#F9FAFB' : undefined }}
-                          />
-                          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-semibold pointer-events-none" style={{ color: '#6B7280' }}>USDT</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* B本位 / U本位 */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-2">本位</label>
-                    <div className="flex gap-3">
-                      {([['B', 'B本位'], ['U', 'U本位']] as const).map(([val, label]) => (
-                        <button
-                          key={val}
-                          type="button"
-                          onClick={() => setFormData(d => ({ ...d, optionDenomination: val }))}
-                          className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-colors ${
-                            formData.optionDenomination === val
-                              ? 'bg-green-600 border-green-600 text-white'
-                              : 'bg-white border-gray-200 text-gray-500'
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* 融资金额 / 买入价格 / 买入数量 三字段联动 */}
               <div className="rounded-2xl border border-gray-200" style={{ overflow: 'visible' }}>
                 <div className="px-4 pt-3 pb-1">
