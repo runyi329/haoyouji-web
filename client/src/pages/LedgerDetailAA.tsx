@@ -2344,7 +2344,7 @@ export default function LedgerDetailAA({
                           : !_isTagUpdatedToday ? '#BDBDBD'
                           : todayPnl > 0 ? '#D32F2F' : '#388E3C';
                         const _todayPnlText = _showTodayPnl && todayPnl !== null
-                          ? (todayPnl !== 0 ? `${todayPnl < 0 ? '-' : ''}${Math.abs(todayPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--')
+                          ? `${todayPnl < 0 ? '-' : ''}${Math.abs(todayPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`
                           : '--';
                         // 占比
                         const _ratioNum = initialBalancesData?.balances ? Number(initialBalancesData.balances[`${tag.name}__ratio`] ?? 0) : 0;
@@ -2353,7 +2353,7 @@ export default function LedgerDetailAA({
                         const _prevDate = tag.points.length >= 2 ? (tag.points[tag.points.length - 2]?.date ?? '') : '';
                         const _latestDateLabel = latestDate ? latestDate.slice(5).replace('-', '/') : '';
                         const _prevDateLabel = _prevDate ? _prevDate.slice(5).replace('-', '/') : '';
-                        const _canShowTooltip = _showTodayPnl && todayPnl !== null && todayPnl !== 0;
+                        const _canShowTooltip = _showTodayPnl && todayPnl !== null;
                         return (
                           <div className={dataCellCls} style={{ borderBottom: rowBorder, position: 'relative' }}>
                             <span
@@ -2380,7 +2380,7 @@ export default function LedgerDetailAA({
                                     </>
                                   )}
                                   {' = '}
-                                  <span style={{ color: todayPnl > 0 ? '#FF8A80' : '#A5D6A7', fontWeight: 600 }}>
+                                  <span style={{ color: todayPnl === 0 ? '#BDBDBD' : todayPnl > 0 ? '#FF8A80' : '#A5D6A7', fontWeight: 600 }}>
                                     {todayPnl < 0 ? '-' : ''}{Math.abs(todayPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}
                                   </span>
                                 </div>
