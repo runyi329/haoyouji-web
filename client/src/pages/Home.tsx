@@ -1673,7 +1673,7 @@ export default function Home() {
         // 检查token是否变化（用户切换了）
         const newToken = localStorage.getItem('auth-token') || '';
         const tokenChanged = newToken !== currentToken;
-        const wasHiddenLong = hiddenTime > 0 && (Date.now() - hiddenTime) > 2000;
+        const wasHiddenLong = hiddenTime > 0 && (Date.now() - hiddenTime) > 30000; // 30秒以上才触发刷新（避免HMR热更新误触发）
         
         if (tokenChanged || wasHiddenLong) {
           // 强制同步Cookie
@@ -1689,14 +1689,14 @@ export default function Home() {
       }
     };
     
-    // pageshow: 处理bfcache恢复场景
+    // pageshow: 处理bfcache恢复场景（只同步Cookie，不触发跳转，避免Safari误判重复跳转）
     const handlePageShow = (e: PageTransitionEvent) => {
       if (e.persisted) {
         const newToken = localStorage.getItem('auth-token') || '';
         if (newToken) {
           document.cookie = `app_session_id=${newToken}; path=/; max-age=${365 * 24 * 60 * 60}`;
         }
-        window.location.replace(window.location.pathname + '?_t=' + Date.now());
+        // 不再执行 window.location.replace，避免 Safari 将 bfcache 恢复触发的多次 replace 误判为重复跳转
       }
     };
     

@@ -617,6 +617,23 @@ const SL_SHADOW = [
   'inset -1.5px 0 rgba(0,0,0,0.10)',        // 右侧暗边
 ].join(', ');
 const SL_RIVET_BG = 'radial-gradient(circle at 35% 35%, #ffffff 0%, #d8dadd 35%, #a0a4aa 65%, #707478 100%)';
+// 期权紫色磨砂主题
+const OPT_BG = [
+  'linear-gradient(135deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.18) 22%, rgba(255,255,255,0.0) 45%, rgba(0,0,0,0.0) 60%, rgba(0,0,0,0.22) 100%)',
+  'linear-gradient(90deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.05) 38%, rgba(0,0,0,0.0) 58%, rgba(0,0,0,0.14) 100%)',
+  'linear-gradient(180deg, rgba(0,0,0,0.08) 0%, rgba(255,255,255,0.16) 35%, rgba(255,255,255,0.22) 50%, rgba(255,255,255,0.08) 70%, rgba(0,0,0,0.10) 100%)',
+  'linear-gradient(160deg, #5b21b6 0%, #7c3aed 18%, #8b5cf6 40%, #6d28d9 62%, #7c3aed 80%, #5b21b6 100%)',
+].join(', ');
+const OPT_BORDER = '1.5px solid rgba(109,40,217,0.90)';
+const OPT_SHADOW = [
+  '0 6px 20px rgba(91,33,182,0.35)',
+  '0 1px 3px rgba(0,0,0,0.25)',
+  'inset 0 1.5px 0 rgba(216,180,254,0.88)',
+  'inset 0 -1.5px 0 rgba(46,16,101,0.62)',
+  'inset 1.5px 0 rgba(167,139,250,0.28)',
+  'inset -1.5px 0 rgba(0,0,0,0.16)',
+].join(', ');
+const OPT_RIVET_BG = 'radial-gradient(circle at 35% 35%, #ede9fe 0%, #a78bfa 35%, #6d28d9 65%, #3b0764 100%)';
 const SL_TEXT_PRI = '#1A1A1A';
 const SL_NUM_FONT = "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Arial, 'PingFang SC', sans-serif";
 // G柔光凹刻（强度减半）：下方白色柔光 + 上方深影
@@ -831,6 +848,7 @@ export function FunderOrderCardV2Silver({
 
   // 金/银色：股票类用金色，数字币用银色
   const isStockCard = order.asset_type === 'stock';
+  const isOptionCard = order.asset_type === 'crypto_option';
   const GOLD_BG_SV = [
     'linear-gradient(135deg, rgba(255,255,255,0.50) 0%, rgba(255,255,255,0.15) 22%, rgba(255,255,255,0.0) 45%, rgba(0,0,0,0.0) 60%, rgba(0,0,0,0.28) 100%)',
     'linear-gradient(90deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 35%, rgba(0,0,0,0.0) 55%, rgba(0,0,0,0.18) 100%)',
@@ -846,15 +864,17 @@ export function FunderOrderCardV2Silver({
     'inset 1.5px 0 rgba(245,205,65,0.28)',
     'inset -1.5px 0 rgba(0,0,0,0.16)',
   ].join(', ');
-  const cardBg = isStockCard ? GOLD_BG_SV : SL_BG;
-  const cardBorder = isStockCard ? GOLD_BORDER_SV : SL_BORDER;
-  const cardShadow = isStockCard ? GOLD_SHADOW_SV : SL_SHADOW;
+  const cardBg = isStockCard ? GOLD_BG_SV : isOptionCard ? OPT_BG : SL_BG;
+  const cardBorder = isStockCard ? GOLD_BORDER_SV : isOptionCard ? OPT_BORDER : SL_BORDER;
+  const cardShadow = isStockCard ? GOLD_SHADOW_SV : isOptionCard ? OPT_SHADOW : SL_SHADOW;
   const rivetBg = isStockCard
     ? 'radial-gradient(circle at 35% 35%, #fff8d0 0%, #e8c050 35%, #a07010 65%, #6a4800 100%)'
-    : SL_RIVET_BG;
+    : isOptionCard ? OPT_RIVET_BG : SL_RIVET_BG;
   const rivetShadow = isStockCard
     ? '0 1px 2px rgba(0,0,0,0.55), inset 0 1px 1px rgba(255,240,140,0.9)'
-    : '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.8)';
+    : isOptionCard
+      ? '0 1px 2px rgba(0,0,0,0.55), inset 0 1px 1px rgba(216,180,254,0.9)'
+      : '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.8)';
 
   return (
     <div
@@ -1843,6 +1863,7 @@ export function FunderLenderCardSilver({
   ];
 
   const isStock = order.asset_type === 'stock';
+  const isOption = order.asset_type === 'crypto_option';
   const GOLD_BG = [
     // 层1：左上角高光（稍弱）
     'linear-gradient(135deg, rgba(255,255,255,0.50) 0%, rgba(255,255,255,0.15) 22%, rgba(255,255,255,0.0) 45%, rgba(0,0,0,0.0) 60%, rgba(0,0,0,0.28) 100%)',
@@ -1868,9 +1889,9 @@ export function FunderLenderCardSilver({
       className="rounded-2xl overflow-hidden silver-card"
       style={{
         position: 'relative',
-        background: isStock ? GOLD_BG : SL_BG,
-        border: isStock ? GOLD_BORDER : SL_BORDER,
-        boxShadow: isStock ? GOLD_SHADOW : SL_SHADOW,
+        background: isStock ? GOLD_BG : isOption ? OPT_BG : SL_BG,
+        border: isStock ? GOLD_BORDER : isOption ? OPT_BORDER : SL_BORDER,
+        boxShadow: isStock ? GOLD_SHADOW : isOption ? OPT_SHADOW : SL_SHADOW,
       }}
     >
       {/* SVG 磨砂噪点滤镜 */}

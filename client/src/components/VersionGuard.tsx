@@ -21,7 +21,9 @@ import { trpc } from "@/lib/trpc";
  */
 
 // 公共页：不受版本守卫约束（任何版本用户都可正常停留）
-const PUBLIC_PREFIXES = ["/login", "/privacy-policy", "/user-agreement"];
+// /ledger 账本子页面也不受约束：用户主动进入的账本子页面（如 crypto-prediction、finance 等）
+// 不应被守卫在 visibilitychange/pageshow 时拽走，避免 HMR 热更新触发误跳转
+const PUBLIC_PREFIXES = ["/login", "/privacy-policy", "/user-agreement", "/ledger"];
 
 // 由 landingPath 计算版本「领地前缀」与「恢复时落地主页」
 // 例如 landingPath="/yaban/intro" → 领地前缀 "/yaban"，主页 "/yaban"（跳主页而非 intro 开机页）

@@ -16234,11 +16234,21 @@ ${klinesSummary}
         collateralAssets: z.array(z.object({ coin: z.string(), qty: z.string(), note: z.string().optional() })).optional(),
         lentOutAssets: z.array(z.object({ coin: z.string(), qty: z.string() })).optional(),
         displayConfig: z.record(z.string(), z.union([z.boolean(), z.number(), z.string()])).optional(),
-        assetType: z.enum(['stock', 'crypto', '']).optional(),
+        assetType: z.enum(['stock', 'crypto', 'crypto_option', '']).optional(),
         ownerLabel: z.string().optional(),
         tags: z.array(z.string()).optional(),
         collateralShareMode: z.enum(['none', 'self', 'cross']).optional(),
         principalLentOut: z.boolean().optional(),
+        optionInfo: z.object({
+          coin: z.enum(['BTC', 'ETH']),
+          direction: z.enum(['long_call', 'long_put', 'short_call', 'short_put']),
+          exerciseDate: z.string().optional(),
+          deribitLabel: z.string().optional(),
+          strikePrice: z.union([z.string(), z.number()]).optional(),
+          premium: z.string().optional(),
+          denomination: z.enum(['U', 'B']).optional(),
+          buyQty: z.string().optional(),
+        }).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -16258,6 +16268,7 @@ ${klinesSummary}
         const orderRole = (targetRole === 'funder' || targetRole === 'owner' || targetRole === 'admin') ? 'funder' : 'finance';
         // 确保 principal_lent_out 字段存在
         await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS principal_lent_out TINYINT(1) DEFAULT 0`).catch(() => {});
+        await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS option_info JSON DEFAULT NULL`).catch(() => {});
         // 生成唯一订单号（2个大写字母 + 4个数字）
         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
         const digits = '0123456789';
@@ -16272,8 +16283,8 @@ ${klinesSummary}
           if (!exists) isUnique = true;
         }
         const insertResult = await db.execute(
-          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, show_profit_share, commission_share, collateral_assets, lent_out_assets, display_config, asset_type, tags, collateral_share_mode, principal_lent_out, created_by)
-              VALUES (${orderNo}, ${orderRole}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets && input.lentOutAssets.length > 0 ? JSON.stringify(input.lentOutAssets) : null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.principalLentOut ? 1 : 0}, ${ctx.user.id})`
+          sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, show_profit_share, commission_share, collateral_assets, lent_out_assets, display_config, asset_type, tags, collateral_share_mode, principal_lent_out, option_info, created_by)
+              VALUES (${orderNo}, ${orderRole}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets && input.lentOutAssets.length > 0 ? JSON.stringify(input.lentOutAssets) : null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.principalLentOut ? 1 : 0}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${ctx.user.id})`
         ) as any;
         // 新订单创建后触发即时扫描
         const newOrderId = insertResult?.insertId || (insertResult?.[0] as any)?.insertId;
@@ -17009,10 +17020,11 @@ ${klinesSummary}
         optionInfo: z.object({
           premium: z.string().optional(),
           exerciseDate: z.string().optional(),
+          deribitLabel: z.string().optional(),
           buyPrice: z.string().optional(),
           buyQty: z.string().optional(),
           buyTotal: z.string().optional(),
-          strikePrice: z.string().optional(),
+          strikePrice: z.union([z.string(), z.number()]).optional(),
           denomination: z.enum(['B', 'U']).optional(),
           coin: z.enum(['BTC', 'ETH']).optional(),
           premiumConverted: z.string().optional(),
@@ -17117,10 +17129,11 @@ ${klinesSummary}
         optionInfo: z.object({
           premium: z.string().optional(),
           exerciseDate: z.string().optional(),
+          deribitLabel: z.string().optional(),
           buyPrice: z.string().optional(),
           buyQty: z.string().optional(),
           buyTotal: z.string().optional(),
-          strikePrice: z.string().optional(),
+          strikePrice: z.union([z.string(), z.number()]).optional(),
           denomination: z.enum(['B', 'U']).optional(),
           coin: z.enum(['BTC', 'ETH']).optional(),
           premiumConverted: z.string().optional(),
@@ -17457,21 +17470,31 @@ ${klinesSummary}
         direction: z.enum(['long_call', 'long_put', 'short_call', 'short_put']),
       }))
       .query(async ({ input }) => {
+        const isCall = input.direction === 'long_call' || input.direction === 'short_call';
+        const optionType = isCall ? 'C' : 'P';
+        // 转换日期为 Deribit 格式：YYYY-MM-DD -> 8JUL26
+        const dt = new Date(input.exerciseDate + 'T08:00:00Z');
+        const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+        const dd = dt.getUTCDate();
+        const mon = months[dt.getUTCMonth()];
+        const yy = String(dt.getUTCFullYear()).slice(2);
+        const instrumentName = `${input.currency}-${dd}${mon}${yy}-${input.strikePrice}-${optionType}`;
+        const cacheKey = `greeks:${instrumentName}`;
+        const ONE_HOUR_MS = 3600 * 1000;
+        // 先读数据库缓存
+        const cached = await deribitDbGet(cacheKey);
+        const now = Date.now();
+        const cacheValid = cached && (now - cached.fetchedAt) < ONE_HOUR_MS;
+        if (cacheValid) {
+          return { ...cached.data, fromCache: true };
+        }
+        // 缓存过期或不存在，尝试拉取最新数据
         try {
-          const isCall = input.direction === 'long_call' || input.direction === 'short_call';
-          const optionType = isCall ? 'C' : 'P';
-          // 转换日期为 Deribit 格式：YYYY-MM-DD -> 8JUL26
-          const dt = new Date(input.exerciseDate + 'T08:00:00Z');
-          const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
-          const dd = dt.getUTCDate();
-          const mon = months[dt.getUTCMonth()];
-          const yy = String(dt.getUTCFullYear()).slice(2);
-          const instrumentName = `${input.currency}-${dd}${mon}${yy}-${input.strikePrice}-${optionType}`;
           const res = await fetch(`https://www.deribit.com/api/v2/public/get_order_book?instrument_name=${instrumentName}&depth=1`);
           const data = await res.json() as any;
           if (data.error) throw new Error(data.error.message || '合约不存在');
           const r = data.result;
-          return {
+          const result = {
             instrumentName,
             delta: r.greeks?.delta ?? null,
             gamma: r.greeks?.gamma ?? null,
@@ -17480,8 +17503,15 @@ ${klinesSummary}
             iv: r.mark_iv ?? null,
             markPrice: r.mark_price ?? null,
           };
+          // 写入数据库缓存
+          await deribitDbSet(cacheKey, result);
+          return { ...result, fromCache: false };
         } catch (e: any) {
-          return { instrumentName: '', delta: null, gamma: null, theta: null, vega: null, iv: null, markPrice: null, error: e.message };
+          // 拉取失败：fallback 到旧缓存（即使超过1小时也返回，加 cacheStale 标记）
+          if (cached) {
+            return { ...cached.data, fromCache: true, cacheStale: true };
+          }
+          return { instrumentName, delta: null, gamma: null, theta: null, vega: null, iv: null, markPrice: null, error: e.message, fromCache: false };
         }
       }),
 

@@ -83,13 +83,24 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     commissionRate: '',
     commissionBase: '',
     commissionStartDate: '',
-    assetType: '' as '' | 'stock' | 'crypto',
+    assetType: '' as '' | 'stock' | 'crypto' | 'crypto_option',
     ownerLabel: '',
     ownerLabelMode: 'member' as 'member' | 'manual',
     tags: [] as string[],
     principalLentOut: false,
     brokerName: '',
     brokerAccount: '',
+  });
+  // 期权专属表单数据
+  const [optionFormData, setOptionFormData] = useState({
+    optionCurrency: 'BTC' as 'BTC' | 'ETH',
+    direction: 'long_call' as 'long_call' | 'long_put' | 'short_call' | 'short_put',
+    exerciseDate: '',      // YYYY-MM-DD，用于保存和 Greeks
+    deribitLabel: '',      // Deribit 格式如 "8JUL26"，用于查行权价
+    strikePrice: '',
+    premium: '',
+    premiumDenomination: 'U' as 'U' | 'B',
+    buyQty: '',
   });
   // 标签输入状态
   const [tagInput, setTagInput] = useState('');
@@ -157,7 +168,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   // 员工名字筛选
   const [employeeNameFilter, setEmployeeNameFilter] = useState('');
   // 资产类型筛选：'' = 全部, 'stock' = 股票, 'crypto' = 数字币
-  const [assetTypeFilter, setAssetTypeFilter] = useState<'' | 'stock' | 'crypto'>('');
+  const [assetTypeFilter, setAssetTypeFilter] = useState<'' | 'stock' | 'crypto' | 'crypto_option'>();
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [confirmSettleId, setConfirmSettleId] = useState<number | null>(null);
   // 弹窗状态提升：存储当前打开弹窗的 orderId，null 表示关闭（防止子组件因数据刷新重渲染导致弹窗自动关闭）
@@ -443,6 +454,19 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     },
     onError: (err) => toast.error(err.message),
   });
+  // Deribit 期权到期日查询（表单开启且资产类型为期权时才拉取）
+  const isOptionForm = formData.assetType === 'crypto_option' && showForm;
+  const { data: expiriesData, isLoading: expiriesLoading } = (trpc.ledger as any).deribitGetExpiries.useQuery(
+    { currency: optionFormData.optionCurrency },
+    { enabled: isOptionForm, staleTime: 5 * 60 * 1000 }
+  );
+  const expiries: { label: string; deribitLabel: string; ts: number; diffDays: number }[] = expiriesData?.expiries ?? [];
+  // Deribit 期权行权价查询（选完到期日后才拉取）
+  const { data: strikesData, isLoading: strikesLoading } = (trpc.ledger as any).deribitGetStrikes.useQuery(
+    { currency: optionFormData.optionCurrency, deribitLabel: optionFormData.deribitLabel },
+    { enabled: isOptionForm && !!optionFormData.deribitLabel, staleTime: 5 * 60 * 1000 }
+  );
+  const strikes: number[] = strikesData?.strikes ?? [];
   // 回收站相关
   const { data: deletedOrdersData, refetch: refetchDeletedOrders } = trpc.ledger.funderGetDeletedOrders.useQuery(
     { ledgerId },
@@ -614,7 +638,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       commissionRate: '',
       commissionBase: '',
       commissionStartDate: '',
-      assetType: '' as '' | 'stock' | 'crypto',
+      assetType: '' as '' | 'stock' | 'crypto' | 'crypto_option',
       ownerLabel: '',
       ownerLabelMode: 'member' as 'member' | 'manual',
       tags: [] as string[],
@@ -623,6 +647,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       brokerAccount: '',
     });
     setTagInput('');
+    setOptionFormData({ optionCurrency: 'BTC', direction: 'long_call', exerciseDate: '', deribitLabel: '', strikePrice: '', premium: '', premiumDenomination: 'U', buyQty: '' });
     interestBaseTouchedRef.current = false; // 新建订单：允许融资金额(U)自动带入计息基数
     setCollateralAssets([]);
     setCollateralEditMode(true); // 新建订单：担保货币恒为可编辑
@@ -679,7 +704,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       commissionRate: order.participantInfo?.commissionRate ? String(order.participantInfo.commissionRate) : '',
       commissionBase: order.participantInfo?.commissionBase ? String(order.participantInfo.commissionBase) : '',
       commissionStartDate: order.participantInfo?.commissionStartDate ? String(order.participantInfo.commissionStartDate).slice(0, 10) : '',
-      assetType: (order.asset_type || '') as '' | 'stock' | 'crypto',
+      assetType: (order.asset_type || '') as '' | 'stock' | 'crypto' | 'crypto_option',
       ownerLabel: order.owner_label || '',
       ownerLabelMode: (order.owner_label ? 'manual' : 'member') as 'member' | 'manual',
       tags: (() => { try { const t = order.tags; return Array.isArray(t) ? t : (typeof t === 'string' ? JSON.parse(t) : []); } catch { return []; } })(),
@@ -688,6 +713,25 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       brokerAccount: order.broker_account || '',
     });
     setTagInput('');
+    // 加载期权信息
+    try {
+      const oi = order.option_info;
+      if (oi) {
+        const parsed = typeof oi === 'string' ? JSON.parse(oi) : oi;
+        setOptionFormData({
+          optionCurrency: (parsed.coin || 'BTC') as 'BTC' | 'ETH',
+          direction: (parsed.direction || 'long_call') as 'long_call' | 'long_put' | 'short_call' | 'short_put',
+          exerciseDate: parsed.exerciseDate || '',
+          deribitLabel: parsed.deribitLabel || '',
+          strikePrice: parsed.strikePrice ? String(parsed.strikePrice) : '',
+          premium: parsed.premium || '',
+          premiumDenomination: (parsed.denomination || 'U') as 'U' | 'B',
+          buyQty: parsed.buyQty || '',
+        });
+      } else {
+        setOptionFormData({ optionCurrency: 'BTC', direction: 'long_call', exerciseDate: '', deribitLabel: '', strikePrice: '', premium: '', premiumDenomination: 'U', buyQty: '' });
+      }
+    } catch { setOptionFormData({ optionCurrency: 'BTC', direction: 'long_call', exerciseDate: '', deribitLabel: '', strikePrice: '', premium: '', premiumDenomination: 'U', buyQty: '' }); }
     // 加载担保货币
     try {
       const ca = order.collateral_assets;
@@ -795,12 +839,25 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     }
     // 底层 amount 统一存 USDT 价值（与老订单口径一致，下游计算零改动）；amountCurrency 另存出资币种供展示折算
     // 股票类型：融资金额直接是 CNY 值，不折算；非股票用 computedAmount（已是 USDT 价值）
-    const finalAmount = formData.assetType === 'stock'
-      ? (() => { const v = parseFloat(amountInputValue); return isNaN(v) ? '' : v.toFixed(2); })()
-      : (computedAmount || (editingOrder ? formData.originalAmount : ''));
-    if (!finalAmount || parseFloat(finalAmount) <= 0) {
-      toast.error(formData.assetType === 'stock' ? '请填写融资金额' : '请填写买入价格和买入数量以自动计算总金额');
-      return;
+    // 期权类型：不需要买入价格和数量，用权利金×张数作为 amount
+    let finalAmount: string;
+    if (formData.assetType === 'crypto_option') {
+      const prem = parseFloat(optionFormData.premium || '0');
+      const qty = parseFloat(optionFormData.buyQty || '0');
+      // 期权订单不强制要求 amount，用权利金×张数作为总金额；两者都为空时用 0 占位
+      finalAmount = (prem > 0 && qty > 0) ? (prem * qty).toFixed(4) : (editingOrder ? formData.originalAmount : '0');
+    } else if (formData.assetType === 'stock') {
+      finalAmount = (() => { const v = parseFloat(amountInputValue); return isNaN(v) ? '' : v.toFixed(2); })();
+      if (!finalAmount || parseFloat(finalAmount) <= 0) {
+        toast.error('请填写融资金额');
+        return;
+      }
+    } else {
+      finalAmount = computedAmount || (editingOrder ? formData.originalAmount : '');
+      if (!finalAmount || parseFloat(finalAmount) <= 0) {
+        toast.error('请填写买入价格和买入数量以自动计算总金额');
+        return;
+      }
     }
     const payload = {
       ledgerId,
@@ -850,6 +907,16 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       principalLentOut: formData.principalLentOut,
       brokerName: formData.brokerName || undefined,
       brokerAccount: formData.brokerAccount || undefined,
+      optionInfo: formData.assetType === 'crypto_option' ? {
+        coin: optionFormData.optionCurrency,
+        direction: optionFormData.direction,
+        exerciseDate: optionFormData.exerciseDate || undefined,
+        deribitLabel: optionFormData.deribitLabel || undefined,
+        strikePrice: optionFormData.strikePrice ? parseFloat(optionFormData.strikePrice) : undefined,
+        premium: optionFormData.premium || undefined,
+        denomination: optionFormData.premiumDenomination,
+        buyQty: optionFormData.buyQty || undefined,
+      } : undefined,
     };
     if (editingOrder) {
       updateMutation.mutate({ id: editingOrder.id, status: formData.status, ...(formData.userId > 0 ? { userId: formData.userId } : {}), ...payload });
@@ -1000,13 +1067,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
           {/* 资产类型筛选框：全部 / 股票 / 数字币 */}
           <select
             value={assetTypeFilter}
-            onChange={e => setAssetTypeFilter(e.target.value as '' | 'stock' | 'crypto')}
+            onChange={e => setAssetTypeFilter(e.target.value as '' | 'stock' | 'crypto' | 'crypto_option')}
             className="shrink-0 px-2.5 py-2 rounded-full text-sm font-medium bg-white border border-gray-200 shadow-sm outline-none"
             style={{ color: assetTypeFilter ? '#1A56DB' : '#6B7280', minWidth: 72 }}
           >
             <option value="">全部</option>
             <option value="stock">股票</option>
             <option value="crypto">数字币</option>
+            <option value="crypto_option">期权</option>
           </select>
           {/* 添加订单按钮：借方模式下隐藏，统一在左侧资方Tab添加 */}
           {!financeOnly && (
@@ -1039,6 +1107,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               if (!assetTypeFilter) return true;
               if (assetTypeFilter === 'stock') return o.asset_type === 'stock';
               if (assetTypeFilter === 'crypto') return o.asset_type === 'crypto' || !o.asset_type;
+              if (assetTypeFilter === 'crypto_option') return o.asset_type === 'crypto_option';
               return true;
             }).sort((a: any, b: any) => {
               const aSettled = a.status === 'settled' || a.status === 'cancelled' ? 1 : 0;
@@ -1142,8 +1211,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               {!editingOrder?.participantInfo && (
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-2">类型<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，单选</span></label>
-                  <div className="flex gap-2">
-                    {([{ value: 'stock', label: '股票' }, { value: 'crypto', label: '数字币' }] as const).map(opt => (
+                  <div className="flex gap-2 flex-wrap">
+                    {([{ value: 'stock', label: '股票' }, { value: 'crypto', label: '数字币' }, { value: 'crypto_option', label: '期权' }] as const).map(opt => (
                       <button
                         key={opt.value}
                         type="button"
@@ -1157,6 +1226,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           // 股票类型自动锁定币种为 CNY（购买币种 + 融资币种同步）
                           if (newType === 'stock') {
                             return { ...d, assetType: newType, coin: 'CNY' as CoinType, amountCurrency: 'CNY' as CoinType };
+                          }
+                          if (newType === 'crypto_option') {
+                            return { ...d, assetType: newType, coin: 'BTC' as CoinType, amountCurrency: 'USDT' as CoinType };
                           }
                           return { ...d, assetType: newType };
                           });
@@ -1341,7 +1413,12 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               {/* 购买币种已移至三联最后一行（与币数并排） */}
 
               {/* 融资金额 / 买入价格 / 购买币种+币数 三字段联动（统一圆角容器框） */}
-              <div className="space-y-3" style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
+              {formData.assetType === 'crypto_option' && (
+                <div className="text-xs text-purple-500 bg-purple-50 rounded-xl px-3 py-2">
+                  期权类型：融资金额由「权利金/张 × 张数」自动计算，无需填写买入价格和数量
+                </div>
+              )}
+              <div className="space-y-3" style={{ display: formData.assetType === 'crypto_option' ? 'none' : undefined, opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
                 <span className="block text-xs text-gray-400">
                   {formData.assetType === 'stock' ? '股票类型：只需输入融资金额' : '输入任意两个，第三个自动计算 · 融资金额 = 买入价格 × 币数'}
                 </span>
@@ -1432,7 +1509,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   </>
                 )}
                 {/* 买入价格 */}
-                <div style={{ opacity: formData.assetType === 'stock' ? 0.4 : 1 }}>
+                <div style={{ opacity: formData.assetType === 'stock' || formData.assetType === 'crypto_option' ? 0.4 : 1 }}>
                   <label className="block text-xs font-medium text-gray-500 mb-1.5">买入价格</label>
                   <input
                     type="number"
@@ -1449,14 +1526,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         return d;
                       });
                     }}
-                    disabled={formData.assetType === 'stock'}
+                    disabled={formData.assetType === 'stock' || formData.assetType === 'crypto_option'}
                     className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:text-gray-300"
                     placeholder="如：95000"
                     step="any"
                   />
                 </div>
                 {/* 购买币种 + 币数（同行并排） */}
-                <div className="flex items-end gap-3" style={{ opacity: formData.assetType === 'stock' ? 0.4 : 1 }}>
+                <div className="flex items-end gap-3" style={{ opacity: formData.assetType === 'stock' || formData.assetType === 'crypto_option' ? 0.4 : 1 }}>
                   <div style={{ width: '40%' }}>
                     <label className="block text-xs font-medium text-gray-500 mb-1.5">购买币种{editingOrder && !editingOrder.participantInfo && <span className="ml-1 text-xs text-orange-500 font-normal">(不可改)</span>}</label>
                     <select
@@ -1465,7 +1542,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         if (editingOrder && !editingOrder.participantInfo) return;
                         setFormData(d => ({ ...d, coin: e.target.value as CoinType }));
                       }}
-                      disabled={!!(editingOrder && !editingOrder.participantInfo) || formData.assetType === 'stock'}
+                      disabled={!!(editingOrder && !editingOrder.participantInfo) || formData.assetType === 'stock' || formData.assetType === 'crypto_option'}
                       className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 appearance-none disabled:text-gray-300"
                       style={{ backgroundColor: '#fff', color: COIN_COLORS[formData.coin as keyof typeof COIN_COLORS] || '#1A2340' }}
                     >
@@ -1491,13 +1568,144 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                           return d;
                         });
                       }}
-                      disabled={formData.assetType === 'stock'}
-                      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:text-gray-300"
-                      placeholder="如：1.05"
+                      disabled={formData.assetType === 'stock' || formData.assetType === 'crypto_option'}
+                    className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:text-gray-300"
+                    placeholder="如：1.05"
                     />
                   </div>
                 </div>
               </div>
+
+              {/* 期权专属字段（在隐藏 div 外面，期权类型时正常显示） */}
+              {formData.assetType === 'crypto_option' && (
+                <div className="space-y-3 rounded-xl border border-purple-200 bg-purple-50 p-3">
+                  <div className="text-xs font-semibold text-purple-600 mb-1">期权参数</div>
+                  {/* 标的币种 + 方向 */}
+                  <div className="flex gap-2">
+                    <div style={{ width: '40%' }}>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">标的币种</label>
+                      <select
+                        value={optionFormData.optionCurrency}
+                        onChange={e => setOptionFormData(d => ({ ...d, optionCurrency: e.target.value as 'BTC' | 'ETH' }))}
+                        className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-200 appearance-none bg-white"
+                      >
+                        <option value="BTC">BTC</option>
+                        <option value="ETH">ETH</option>
+                      </select>
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">方向</label>
+                      <select
+                        value={optionFormData.direction}
+                        onChange={e => setOptionFormData(d => ({ ...d, direction: e.target.value as 'long_call' | 'long_put' | 'short_call' | 'short_put' }))}
+                        className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-200 appearance-none bg-white"
+                      >
+                        <option value="long_call">买入看涨（Long Call）</option>
+                        <option value="long_put">买入看跌（Long Put）</option>
+                        <option value="short_call">卖出看涨（Short Call）</option>
+                        <option value="short_put">卖出看跌（Short Put）</option>
+                      </select>
+                    </div>
+                  </div>
+                  {/* 到期日（下拉选择） */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                      到期日
+                      {expiriesLoading && <span className="ml-1 text-purple-400">加载中...</span>}
+                    </label>
+                    <select
+                      value={optionFormData.deribitLabel}
+                      onChange={e => {
+                        const selected = expiries.find(ex => ex.deribitLabel === e.target.value);
+                        let isoDate = '';
+                        if (selected) {
+                          const d = new Date(selected.ts);
+                          isoDate = d.toISOString().slice(0, 10);
+                        }
+                        setOptionFormData(prev => ({
+                          ...prev,
+                          deribitLabel: e.target.value,
+                          exerciseDate: isoDate,
+                          strikePrice: '',
+                        }));
+                      }}
+                      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-200 appearance-none bg-white"
+                    >
+                      <option value="">请选择到期日</option>
+                      {expiries.map(ex => (
+                        <option key={ex.deribitLabel} value={ex.deribitLabel}>
+                          {ex.label} ({ex.diffDays > 0 ? `${ex.diffDays}天后` : '即将到期'})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {/* 行权价（下拉选择，选完到期日后才展示） + 权利金 */}
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                        行权价（USD）
+                        {strikesLoading && <span className="ml-1 text-purple-400">加载中...</span>}
+                      </label>
+                      {optionFormData.deribitLabel ? (
+                        <select
+                          value={optionFormData.strikePrice}
+                          onChange={e => setOptionFormData(d => ({ ...d, strikePrice: e.target.value }))}
+                          className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-200 appearance-none bg-white"
+                        >
+                          <option value="">请选择行权价</option>
+                          {strikes.map(s => (
+                            <option key={s} value={String(s)}>{s.toLocaleString()}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-400 bg-gray-50">
+                          请先选择到期日
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">权利金/张</label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={optionFormData.premium}
+                        onChange={e => setOptionFormData(d => ({ ...d, premium: e.target.value }))}
+                        className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-200"
+                        placeholder="如：0.05"
+                      />
+                    </div>
+                  </div>
+                  {/* 权利金计价 + 张数 */}
+                  <div className="flex gap-2">
+                    <div style={{ width: '40%' }}>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">权利金计价</label>
+                      <div className="flex gap-1">
+                        {(['U', 'B'] as const).map(d => (
+                          <button key={d} type="button"
+                            onClick={() => setOptionFormData(prev => ({ ...prev, premiumDenomination: d }))}
+                            className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all ${
+                              optionFormData.premiumDenomination === d
+                                ? 'bg-purple-600 text-white'
+                                : 'bg-white text-gray-500 border border-gray-200'
+                            }`}
+                          >{d === 'U' ? 'USDT' : 'BTC/ETH'}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">张数</label>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        value={optionFormData.buyQty}
+                        onChange={e => setOptionFormData(d => ({ ...d, buyQty: e.target.value }))}
+                        className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-200"
+                        placeholder="如：1"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* 分隔线：利息约定 */}
               <div className="flex items-center gap-3">
@@ -2237,6 +2445,16 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   profit_share_type: formData.profitShareType || 'interest',
                   principal_lent_out: formData.principalLentOut ? 1 : 0,
                   collateral_assets: collateralAssets.length > 0 ? JSON.stringify(collateralAssets) : null,
+                  option_info: formData.assetType === 'crypto_option' ? JSON.stringify({
+                    coin: optionFormData.optionCurrency,
+                    direction: optionFormData.direction,
+                    exerciseDate: optionFormData.exerciseDate || null,
+                    deribitLabel: optionFormData.deribitLabel || null,
+                    strikePrice: optionFormData.strikePrice ? parseFloat(optionFormData.strikePrice) : null,
+                    premium: optionFormData.premium || null,
+                    denomination: optionFormData.premiumDenomination,
+                    buyQty: optionFormData.buyQty || null,
+                  }) : null,
                   collateral_share_mode: collateralShareMode || 'none',
                   display_config: JSON.stringify({ ...displayConfig, marginAlertThreshold: marginAlertThreshold || undefined, rate_negative: formData.interestRateAnnual.startsWith('-') }),
                   tags: formData.tags && formData.tags.length > 0 ? JSON.stringify(formData.tags) : null,
