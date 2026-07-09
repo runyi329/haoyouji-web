@@ -12494,8 +12494,8 @@ ${klinesSummary}
       .query(async ({ ctx, input }) => {
         const dbLedger = await import('./db-ledger');
         const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
-        if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
+        if (!membership) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权限查看' });
         }
         const db = await getLedgerDb();
         let rows;
@@ -12569,8 +12569,8 @@ ${klinesSummary}
       .query(async ({ ctx, input }) => {
         const dbLedger = await import('./db-ledger');
         const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
-        if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可查看' });
+        if (!membership) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权限查看' });
         }
         const db = await getLedgerDb();
         let rows;
