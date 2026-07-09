@@ -2276,7 +2276,7 @@ export default function LedgerDetailAA({
                 }}
               >
               <div style={{ minWidth: '100%', width: overviewInnerWidth }}>
-              {/* 表头行 */}
+              {/* 表头+数据行共用同一个grid容器，列宽统一计算 */}
               <div style={{ display: 'grid', gridTemplateColumns: gridCols, backgroundColor: '#fff' }}>
                 <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5' }}><span style={{ color: '#9E9E9E', fontSize: 12 }}>名称</span></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
@@ -2295,9 +2295,7 @@ export default function LedgerDetailAA({
                 <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('dividend')}>
                   <span style={{ color: '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px' }} onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`); }}>分红¥</span><SortArrow col="dividend" />
                 </div>
-              </div>
-              {/* 数据行 */}
-              <div style={{ display: 'grid', gridTemplateColumns: gridCols }}>
+              {/* 数据行（与表头同一grid容器，无需新开grid） */}
                 {/* 数据行 */}
                 {sortedTagData.map(({ tag, days, latestPnl, latestDate, todayPnl, prevPnl, latestBalance, prevBalance, annualized, divAmt, isLast, isPaused, firstDate, endDate }) => {
                       // 判断是否需要灰色：北京时间交易日 15:00后且最新数据不是今天
