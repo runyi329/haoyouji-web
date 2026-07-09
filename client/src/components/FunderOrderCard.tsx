@@ -4,6 +4,7 @@
 // 禁止在此文件外重复定义 FunderOrderCard 组件
 // @since FV0245（2026-06-25）之后的新订单使用此组件
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useOptionGreeks } from "@/hooks/useOptionGreeks";
 import { RightMarginDetail } from "@/components/RightMarginDetail";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X } from "lucide-react";
@@ -746,21 +747,14 @@ export function FunderOrderCard({
       return typeof oi === 'string' ? JSON.parse(oi) : oi;
     } catch { return null; }
   })();
-  // Greeks 查询（仅期权订单且有标的币种时触发）
-  const [showGreeks, setShowGreeks] = useState(false);
-  const greeksQuery = (trpc.ledger as any).deribitGetGreeks.useQuery(
-    {
-      currency: (optionInfo?.coin || 'BTC') as 'BTC' | 'ETH',
-      exerciseDate: optionInfo?.exerciseDate || '',
-      strikePrice: optionInfo?.strikePrice ? Number(optionInfo.strikePrice) : 0,
-      direction: (optionInfo?.direction || 'long_call') as 'long_call' | 'long_put' | 'short_call' | 'short_put',
-    },
-    {
-      enabled: isOptionOrder && showGreeks && !!optionInfo?.exerciseDate && !!optionInfo?.strikePrice,
-      staleTime: 60 * 1000,
-      refetchInterval: showGreeks ? 60 * 1000 : false,
-    }
-  );
+  // Greeks 查询：前端直连 Deribit，自动触发，每5分钟刷新
+  const greeksResult = useOptionGreeks({
+    currency: (optionInfo?.coin || 'ETH') as 'BTC' | 'ETH',
+    exerciseDate: optionInfo?.exerciseDate || '',
+    strikePrice: optionInfo?.strikePrice ? Number(optionInfo.strikePrice) : 0,
+    direction: (optionInfo?.direction || 'long_call') as 'long_call' | 'long_put' | 'short_call' | 'short_put',
+    enabled: isOptionOrder && !!optionInfo?.exerciseDate && !!optionInfo?.strikePrice,
+  });
   const totalU = isStockOrder
     ? parseFloat(order.amount || '0')
     : (qty > 0 && price > 0 ? qty * price : parseFloat(order.amount || '0'));
@@ -1794,51 +1788,39 @@ export function FunderOrderCard({
               <div className="border-t mt-1 pt-1" style={{ borderColor: '#E8EFFF' }}>
                 <div className="h-4 flex items-center justify-between">
                   <span className="text-xs font-medium" style={{ color: '#7C3AED' }}>Greeks</span>
-                  <button
-                    type="button"
-                    onClick={() => setShowGreeks(v => !v)}
-                    className="text-[10px] px-1.5 py-0.5 rounded font-medium"
-                    style={{ backgroundColor: showGreeks ? '#7C3AED' : '#F3E8FF', color: showGreeks ? '#fff' : '#7C3AED' }}
-                  >{showGreeks ? '收起' : '查看'}</button>
+                  {greeksResult.loading && <span className="text-[10px]" style={{ color: '#9CA3AF' }}>刷新中...</span>}
                 </div>
-                {showGreeks && (
-                  <div className="mt-1 space-y-0.5">
-                    {greeksQuery.isLoading && <div className="text-xs text-gray-400">加载中...</div>}
-                    {greeksQuery.error && <div className="text-xs" style={{ color: '#DC2626' }}>加载失败</div>}
-                    {greeksQuery.data && (() => {
-                      const d = greeksQuery.data as any;
-                      const fromCache = d?.fromCache;
-                      const cacheStale = d?.cacheStale;
-                      const instrumentName = d?.instrumentName;
-                      // 如果 delta/gamma 全为 null 且有 error 字段，说明合约不存在
-                      const hasData = d?.delta != null || d?.gamma != null || d?.markPrice != null;
-                      const fmtN = (v: any, dp = 4) => v != null && !isNaN(Number(v)) ? Number(v).toFixed(dp) : '---';
-                      if (!hasData) return (
-                        <div className="text-xs" style={{ color: '#9CA3AF' }}>
-                          {instrumentName ? `合约 ${instrumentName} 暂无行情数据` : '暂无数据'}
-                          {d?.error && <span className="ml-1" style={{ color: '#DC2626' }}>({d.error})</span>}
-                        </div>
-                      );
-                      return (
-                        <>
-                          {instrumentName && (
-                            <div className="text-[10px] mb-0.5" style={{ color: '#9CA3AF' }}>
-                              {instrumentName}
-                              {fromCache && cacheStale && <span className="ml-1" style={{ color: '#F59E0B' }}>· 旧缓存</span>}
-                              {fromCache && !cacheStale && <span className="ml-1">· 缓存</span>}
-                            </div>
-                          )}
-                          <div className="flex items-center justify-between"><span className="text-gray-400">Delta</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.delta)}</span></div>
-                          <div className="flex items-center justify-between"><span className="text-gray-400">Gamma</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.gamma)}</span></div>
-                          <div className="flex items-center justify-between"><span className="text-gray-400">Vega</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.vega)}</span></div>
-                          <div className="flex items-center justify-between"><span className="text-gray-400">Theta</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.theta)}</span></div>
-                          {d.iv != null && <div className="flex items-center justify-between"><span className="text-gray-400">IV</span><span className="font-medium" style={{ color: '#4B5563' }}>{(Number(d.iv) * 100).toFixed(1)}%</span></div>}
-                          {d.markPrice != null && <div className="flex items-center justify-between"><span className="text-gray-400">期权价格</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.markPrice)} {optionInfo?.denomination === 'B' ? (optionInfo?.coin || 'BTC') : 'USDT'}</span></div>}
-                        </>
-                      );
-                    })()}
-                  </div>
-                )}
+                <div className="mt-1 space-y-0.5">
+                  {greeksResult.loading && !greeksResult.data && <div className="text-xs text-gray-400">加载中...</div>}
+                  {greeksResult.error && !greeksResult.data && <div className="text-xs" style={{ color: '#DC2626' }}>获取失败: {greeksResult.error}</div>}
+                  {(() => {
+                    const d = greeksResult.data;
+                    if (!d) return null;
+                    const hasData = d.delta != null || d.gamma != null || d.markPrice != null;
+                    const fmtN = (v: any, dp = 4) => v != null && !isNaN(Number(v)) ? Number(v).toFixed(dp) : '---';
+                    if (!hasData) return (
+                      <div className="text-xs" style={{ color: '#9CA3AF' }}>
+                        {d.instrumentName ? `合约 ${d.instrumentName} 暂无行情数据` : '暂无数据'}
+                        {d.error && <span className="ml-1" style={{ color: '#DC2626' }}>({d.error})</span>}
+                      </div>
+                    );
+                    return (
+                      <>
+                        {d.instrumentName && (
+                          <div className="text-[10px] mb-0.5" style={{ color: '#9CA3AF' }}>
+                            {d.instrumentName}
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between"><span className="text-gray-400">Delta</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.delta)}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-gray-400">Gamma</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.gamma)}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-gray-400">Vega</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.vega)}</span></div>
+                        <div className="flex items-center justify-between"><span className="text-gray-400">Theta</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.theta)}</span></div>
+                        {d.iv != null && <div className="flex items-center justify-between"><span className="text-gray-400">IV</span><span className="font-medium" style={{ color: '#4B5563' }}>{(Number(d.iv) * 100).toFixed(1)}%</span></div>}
+                        {d.markPrice != null && <div className="flex items-center justify-between"><span className="text-gray-400">期权价格</span><span className="font-medium" style={{ color: '#4B5563' }}>{fmtN(d.markPrice)} {optionInfo?.denomination === 'B' ? (optionInfo?.coin || 'BTC') : 'USDT'}</span></div>}
+                      </>
+                    );
+                  })()}
+                </div>
               </div>
             )}
             {/* 收益分成（受 display_config.profitShare 开关控制；解析 commission_share 文本拿类型与比例） */}

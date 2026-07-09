@@ -1,6 +1,7 @@
 // FunderOrderCardV2 —— OKX 深色风格订单卡片（资产感优先，服务费弱化）
 // 仅用于对比展示，不影响原有 FunderOrderCard
 import React, { useState, useMemo, useEffect } from "react";
+import { useOptionGreeks } from "@/hooks/useOptionGreeks";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { RightMarginDetail } from "./RightMarginDetail";
@@ -360,7 +361,7 @@ export function FunderOrderCardV2({
           <div className="flex justify-between">
             <span style={{ color: OKX_TEXT_DIM }}>付息方式</span>
             <span style={{ color: OKX_TEXT_DIM }}>
-              {({'monthly_pre':'月付先付','monthly_post':'月付后付','semi_pre':'半年付先付','semi_post':'半年付后付','annual_pre':'年付先付','annual_post':'年付后付','end_post':'结束后付','monthly_prepaid':'月付先付','monthly_postpaid':'月付后付','quarterly':'季付','maturity':'到期付'} as any)[order.interest_payment_type] || order.interest_payment_type || '--'}
+              {({'monthly_pre':'月付先付','monthly_post':'月付后付','semi_pre':'半年付先付','semi_post':'半年付后付','annual_pre':'年付先付','annual_post':'年付后付','end_post':'结束后付','monthly_prepaid':'月付先付','monthly_postpaid':'月付后付','quarterly':'季付','maturity':'到期付','profit_post':'盈利后付','profit_pre':'盈利先付'} as any)[order.interest_payment_type] || order.interest_payment_type || '--'}
             </span>
           </div>
         </div>
@@ -585,7 +586,7 @@ export function FunderOrderCardV2Light({
           <div className="flex justify-between">
             <span style={{ color: LT_TEXT_DIM }}>付息方式</span>
             <span style={{ color: LT_TEXT_DIM }}>
-              {({'monthly_pre':'月付先付','monthly_post':'月付后付','semi_pre':'半年付先付','semi_post':'半年付后付','annual_pre':'年付先付','annual_post':'年付后付','end_post':'结束后付','monthly_prepaid':'月付先付','monthly_postpaid':'月付后付','quarterly':'季付','maturity':'到期付'} as any)[order.interest_payment_type] || order.interest_payment_type || '--'}
+              {({'monthly_pre':'月付先付','monthly_post':'月付后付','semi_pre':'半年付先付','semi_post':'半年付后付','annual_pre':'年付先付','annual_post':'年付后付','end_post':'结束后付','monthly_prepaid':'月付先付','monthly_postpaid':'月付后付','quarterly':'季付','maturity':'到期付','profit_post':'盈利后付','profit_pre':'盈利先付'} as any)[order.interest_payment_type] || order.interest_payment_type || '--'}
             </span>
           </div>
         </div>
@@ -633,6 +634,13 @@ const OPT_SHADOW = [
   'inset -1.5px 0 rgba(0,0,0,0.16)',
 ].join(', ');
 const OPT_RIVET_BG = 'radial-gradient(circle at 35% 35%, #ede9fe 0%, #a78bfa 35%, #6d28d9 65%, #3b0764 100%)';
+// 期权紫色卡片专属白色文字常量（深紫背景上使用）
+const OPT_TEXT_PRI = 'rgba(255,255,255,0.95)';    // 主文字：亮白
+const OPT_TEXT_SEC = 'rgba(255,255,255,0.65)';    // 次要文字：半透明白
+const OPT_TEXT_DIM = 'rgba(255,255,255,0.45)';    // 弱化文字：更透明白
+const OPT_TEXT_SHADOW = '0 1px 2.5px rgba(0,0,0,0.60), 0 -0.5px 1px rgba(255,255,255,0.22)'; // 黑白反射渐变光泽字
+const OPT_TEXT_SHADOW_LG = '0 1px 3px rgba(0,0,0,0.65), 0 -0.5px 1.5px rgba(255,255,255,0.25)'; // 大字加强版
+const OPT_DIVIDER = 'rgba(255,255,255,0.15)';     // 分隔线：白色半透明
 const SL_TEXT_PRI = '#1A1A1A';
 const SL_NUM_FONT = "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Arial, 'PingFang SC', sans-serif";
 // G柔光凹刻（强度减半）：下方白色柔光 + 上方深影
@@ -692,8 +700,11 @@ export function FunderOrderCardV2Silver({
     } finally { setNoteSaving(false); }
   };
 
-  const coin = (order.coin || 'ETH') as CoinType;
-  const qty = parseFloat(order.buy_quantity || '0');
+  // 期权订单：标的资产以 option_info.coin 为准（order.coin 可能是旧数据遗留的错误值）
+  const _optInfo = (() => { try { const oi = (order as any).option_info; return typeof oi === 'string' ? JSON.parse(oi) : (oi || null); } catch { return null; } })();
+  const _isOptCard = order.asset_type === 'crypto_option';
+  const coin = (_isOptCard && _optInfo?.coin ? _optInfo.coin : (order.coin || 'ETH')) as CoinType;
+  const qty = _isOptCard && _optInfo?.buyQty ? parseFloat(_optInfo.buyQty) : parseFloat(order.buy_quantity || '0');
   const buyPrice = parseFloat(order.buy_price || '0');
   const liveP = livePrices[coin] ?? null;
 
@@ -702,9 +713,9 @@ export function FunderOrderCardV2Silver({
   const floatPnl = currentValue !== null && buyValue > 0 ? currentValue - buyValue : null;
   const floatPct = floatPnl !== null && buyValue > 0 ? (floatPnl / buyValue) * 100 : null;
   const dir = priceDirection?.[coin] ?? 'same';
-  const pnlColor = floatPnl === null ? SL_TEXT_SEC : floatPnl >= 0 ? SL_GREEN : SL_RED;
+  const pnlColor = floatPnl === null ? (_isOptCard ? OPT_TEXT_SEC : SL_TEXT_SEC) : floatPnl >= 0 ? SL_GREEN : SL_RED;
   const priceDiff = liveP !== null && buyPrice > 0 ? liveP - buyPrice : null;
-  const priceColor = priceDiff === null ? SL_TEXT_PRI : priceDiff >= 0 ? SL_GREEN : SL_RED;
+  const priceColor = priceDiff === null ? (_isOptCard ? OPT_TEXT_PRI : SL_TEXT_PRI) : priceDiff >= 0 ? SL_GREEN : SL_RED;
 
   const rateStr = getRateStr(order);
   const isNegRate = rateStr.startsWith('-');
@@ -848,6 +859,35 @@ export function FunderOrderCardV2Silver({
   // 金/银色：股票类用金色，数字币用银色
   const isStockCard = order.asset_type === 'stock';
   const isOptionCard = order.asset_type === 'crypto_option';
+  // 期权 Greeks：前端直连 Deribit，自动触发，每5分钟刷新
+  const greeksResult = useOptionGreeks({
+    currency: (_isOptCard && _optInfo?.coin ? _optInfo.coin : (order.coin || 'ETH')) as 'BTC' | 'ETH',
+    exerciseDate: _optInfo?.exerciseDate || '',
+    strikePrice: _optInfo?.strikePrice ? Number(_optInfo.strikePrice) : 0,
+    direction: (_optInfo?.direction || 'long_call') as 'long_call' | 'long_put' | 'short_call' | 'short_put',
+    enabled: isOptionCard && !!_optInfo?.exerciseDate && !!_optInfo?.strikePrice,
+  });
+  // 期权浮动盈亏：用 markPrice（含时间价值）× 数量 - 权利金总成本
+  const optPremiumTotal = isOptionCard && _optInfo?.premium && qty > 0
+    ? parseFloat(_optInfo.premium) * qty
+    : null;
+  const optMarkPrice = greeksResult.data?.markPrice ?? null;
+  // markPrice 是以标的资产计价（如 ETH），需乘以当前价转换为 U
+  const optCurrentValue = optMarkPrice != null && liveP != null && qty > 0
+    ? optMarkPrice * liveP * qty
+    : null;
+  const optFloatPnl = optCurrentValue !== null && optPremiumTotal !== null
+    ? optCurrentValue - optPremiumTotal
+    : null;
+  const optFloatPct = optFloatPnl !== null && optPremiumTotal !== null && optPremiumTotal > 0
+    ? (optFloatPnl / optPremiumTotal) * 100
+    : null;
+  // 内在价值：不依赖 Deribit，纯本地计算
+  const optStrike = _optInfo?.strikePrice ? Number(_optInfo.strikePrice) : null;
+  const optIsCall = !_optInfo?.direction || _optInfo.direction === 'long_call' || _optInfo.direction === 'short_call';
+  const optIntrinsic = isOptionCard && optStrike !== null && liveP !== null && qty > 0
+    ? Math.max(0, optIsCall ? (liveP - optStrike) * qty : (optStrike - liveP) * qty)
+    : null;
   const GOLD_BG_SV = [
     'linear-gradient(135deg, rgba(255,255,255,0.50) 0%, rgba(255,255,255,0.15) 22%, rgba(255,255,255,0.0) 45%, rgba(0,0,0,0.0) 60%, rgba(0,0,0,0.28) 100%)',
     'linear-gradient(90deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 35%, rgba(0,0,0,0.0) 55%, rgba(0,0,0,0.18) 100%)',
@@ -866,6 +906,13 @@ export function FunderOrderCardV2Silver({
   const cardBg = isStockCard ? GOLD_BG_SV : isOptionCard ? OPT_BG : SL_BG;
   const cardBorder = isStockCard ? GOLD_BORDER_SV : isOptionCard ? OPT_BORDER : SL_BORDER;
   const cardShadow = isStockCard ? GOLD_SHADOW_SV : isOptionCard ? OPT_SHADOW : SL_SHADOW;
+  // 动态文字颜色：期权卡片用白色系列，其他用黑色系列
+  const TXT_PRI = isOptionCard ? OPT_TEXT_PRI : SL_TEXT_PRI;
+  const TXT_SEC = isOptionCard ? OPT_TEXT_SEC : SL_TEXT_SEC;
+  const TXT_DIM = isOptionCard ? OPT_TEXT_DIM : SL_TEXT_DIM;
+  const TXT_SHADOW = isOptionCard ? OPT_TEXT_SHADOW : SL_TEXT_SHADOW;
+  const TXT_SHADOW_LG = isOptionCard ? OPT_TEXT_SHADOW_LG : SL_TEXT_SHADOW_LG;
+  const DIVIDER = isOptionCard ? OPT_DIVIDER : SL_DIVIDER;
   const rivetBg = isStockCard
     ? 'radial-gradient(circle at 35% 35%, #fff8d0 0%, #e8c050 35%, #a07010 65%, #6a4800 100%)'
     : isOptionCard ? OPT_RIVET_BG : SL_RIVET_BG;
@@ -923,9 +970,9 @@ export function FunderOrderCardV2Silver({
       ))}
 
       {/* ── 行1：名字 | 开仓日期 | 当前币价 + 订单号 ── */}
-      <div className="flex items-center px-4 pt-3 pb-2" style={{ borderBottom: `1px solid ${SL_DIVIDER}` }}>
+      <div className="flex items-center px-4 pt-3 pb-2" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
         {/* 左侧：竖线分隔的标签组 */}
-        <div className="flex items-center text-xs" style={{ color: SL_TEXT_SEC, gap: 0 }}>
+        <div className="flex items-center text-xs" style={{ color: TXT_SEC, gap: 0 }}>
           {(() => {
             const ownerName = order.owner_label || (() => {
               const m = (membersData as any[])?.find((m: any) => m.userId === order.user_id);
@@ -934,36 +981,36 @@ export function FunderOrderCardV2Silver({
             const buyDateStr = order.buy_date ? fmtDate(order.buy_date) : null;
             const items = [ownerName, buyDateStr].filter(Boolean);
             const priceDiff2 = liveP !== null && buyPrice > 0 ? liveP - buyPrice : null;
-            const livePriceColor = dir === 'up' ? SL_GREEN : dir === 'down' ? SL_RED : SL_TEXT_PRI;
+            const livePriceColor = dir === 'up' ? SL_GREEN : dir === 'down' ? SL_RED : TXT_PRI;
             return (
               <>
                 {items.map((item, i) => (
                   <React.Fragment key={i}>
-                    {i > 0 && <span style={{ color: SL_TEXT_DIM, margin: '0 6px' }}>|</span>}
-                    <span style={{ color: i === 0 ? SL_TEXT_PRI : SL_TEXT_SEC, fontWeight: i === 0 ? 500 : 400 }}>{item}</span>
+                    {i > 0 && <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>}
+                    <span style={{ color: i === 0 ? TXT_PRI : TXT_SEC, fontWeight: i === 0 ? 500 : 400 }}>{item}</span>
                   </React.Fragment>
                 ))}
                 {/* 股票类：证券公司 + 证券账号，无标题，用竖线分隔 */}
                 {isStockCard && order.broker_name && (
                   <>
-                    <span style={{ color: SL_TEXT_DIM, margin: '0 6px' }}>|</span>
-                    <span style={{ color: SL_TEXT_SEC }}>{order.broker_name}</span>
+                    <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>
+                    <span style={{ color: TXT_SEC }}>{order.broker_name}</span>
                   </>
                 )}
                 {isStockCard && order.broker_account && (
                   <>
-                    <span style={{ color: SL_TEXT_DIM, margin: '0 6px' }}>|</span>
-                    <span className="font-mono" style={{ color: SL_TEXT_SEC }}>{order.broker_account}</span>
+                    <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>
+                    <span className="font-mono" style={{ color: TXT_SEC }}>{order.broker_account}</span>
                   </>
                 )}
                 {/* 数字币类：实时币价 */}
                 {!isStockCard && coin !== 'CNY' && coin !== 'USDT' && (
                   <>
-                    <span style={{ color: SL_TEXT_DIM, margin: '0 6px' }}>|</span>
+                    <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>
                     <span className="flex items-center gap-0.5" style={{ fontWeight: 500 }}>
                       {dir === 'up' && <span className="text-[10px] inline-flex items-center" style={{ color: SL_GREEN, animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
                       {dir === 'down' && <span className="text-[10px] inline-flex items-center" style={{ color: SL_RED, animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
-                      <span style={{ color: SL_TEXT_PRI }}>{coin}</span>
+                      <span style={{ color: TXT_PRI }}>{coin}</span>
                       <span style={{ marginLeft: '3px', color: livePriceColor }}>{liveP != null ? liveP.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '---'}</span>
                     </span>
                   </>
@@ -976,7 +1023,7 @@ export function FunderOrderCardV2Silver({
         {order.order_no && (
           <span
             className="ml-auto text-[10px] font-mono"
-            style={{ color: SL_TEXT_DIM, letterSpacing: '0.05em' }}
+            style={{ color: TXT_DIM, letterSpacing: '0.05em' }}
           >
             {order.order_no}
           </span>
@@ -984,15 +1031,15 @@ export function FunderOrderCardV2Silver({
       </div>
 
       {/* ── 行2：主数据行（持有数量占宽，其侙3列均分）── */}
-      <div className="flex gap-0 px-5 py-3" style={{ borderBottom: `1px solid ${SL_DIVIDER}` }}>
+      <div className="flex gap-0 px-5 py-3" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
         {/* 持有数量/持有资产：占 40% */}
         <div style={{ flex: '0 0 40%' }}>
           {isStockCard ? (
             // 股票类：显示持有资产（计息基数，单位元）
             <>
-              <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>仓位额度 (元)</div>
+              <div className="text-[10px] mb-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>仓位额度 (元)</div>
               <div style={{ lineHeight: 1 }}>
-                <span style={{ fontSize: '1.6rem', fontWeight: 700, color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: SL_TEXT_SHADOW_LG }}>
+                <span style={{ fontSize: '1.6rem', fontWeight: 700, color: TXT_PRI, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: TXT_SHADOW_LG }}>
                   {order.interest_base ? parseFloat(order.interest_base).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '--'}
                 </span>
               </div>
@@ -1000,9 +1047,9 @@ export function FunderOrderCardV2Silver({
           ) : (
             // 数字币：显示持有数量
             <>
-              <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>持有资产 ({coin})</div>
+              <div className="text-[10px] mb-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>持有资产 ({coin})</div>
               <div style={{ lineHeight: 1 }}>
-                <span style={{ fontSize: '1.6rem', fontWeight: 700, color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: SL_TEXT_SHADOW_LG }}>
+                <span style={{ fontSize: '1.6rem', fontWeight: 700, color: TXT_PRI, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: TXT_SHADOW_LG }}>
                   {fmt(qty, 2)}
                 </span>
               </div>
@@ -1015,24 +1062,24 @@ export function FunderOrderCardV2Silver({
           <div className="text-right" style={{ flex: 1 }}>
             {(order as any).collateral_share_mode === 'self' ? (
               <>
-                <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>担保资产</div>
+                <div className="text-[10px] mb-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>担保资产</div>
                 <div className="text-sm font-semibold" style={{ color: '#A80000' }}>共享担保</div>
               </>
             ) : (
               <>
-                <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>担保资产</div>
-                <div className="text-sm text-right" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+                <div className="text-[10px] mb-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>担保资产</div>
+                <div className="text-sm text-right" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
                   {isFC2977 ? (
                     fc2977MarginBasePct !== null ? (
                       <span>
                         <span style={{ display: 'inline-block', backgroundColor: 'rgba(60,35,0,0.75)', color: '#F5C842', fontSize: '0.55rem', padding: '1.5px 5px', borderRadius: 8, fontWeight: 700, lineHeight: 1.2, verticalAlign: 'middle', marginRight: 3 }}>
                           {fc2977MarginBasePct >= 0 ? '余' : '缺'}
                         </span>
-                        <span style={{ fontWeight: 400, color: SL_TEXT_PRI }}>
+                        <span style={{ fontWeight: 400, color: TXT_PRI }}>
                           {fc2977MarginBasePct >= 0 ? '+' : '-'}{Math.abs(fc2977MarginBasePct).toFixed(1)}%
                         </span>
                       </span>
-                    ) : <span style={{ color: SL_TEXT_DIM }}>加载中...</span>
+                    ) : <span style={{ color: TXT_DIM }}>加载中...</span>
                   ) : collateralAssets.length > 0
                     ? collateralAssets.map((c, i) => <div key={i}>{parseFloat(c.qty).toLocaleString()} {c.coin === 'CNY' ? '元' : c.coin}</div>)
                     : '--'}
@@ -1044,21 +1091,24 @@ export function FunderOrderCardV2Silver({
         {/* 开仓价 / 当前价：股票类隐藏 */}
         {!isStockCard && (
           <>
-            {/* 开仓价：靠右对齐，平分右侧剩余空间 */}
+
+            {/* 开仓价/行权价：靠右对齐 */}
             <div className="text-right" style={{ flex: 1 }}>
-              <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC }}>开仓价 (U)</div>
+              <div className="text-[10px] mb-1" style={{ color: TXT_SEC }}>{isOptionCard ? '行权价 (U)' : '开仓价 (U)'}</div>
               <div style={{ lineHeight: 1 }}>
-                <span className="text-sm font-semibold" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
-                  {buyPrice > 0 ? fmt(buyPrice, 2) : '--'}
+                <span className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
+                  {isOptionCard
+                    ? (_optInfo?.strikePrice ? fmt(Number(_optInfo.strikePrice), 0) : (buyPrice > 0 ? fmt(buyPrice, 0) : '--'))
+                    : (buyPrice > 0 ? fmt(buyPrice, 2) : '--')}
                 </span>
               </div>
             </div>
 
-            {/* 当前价：靠右对齐，平分右侧剩余空间 */}
+            {/* 当前价：靠右对齐 */}
             <div className="text-right" style={{ flex: 1 }}>
-              <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC }}>当前价 (U)</div>
+              <div className="text-[10px] mb-1" style={{ color: TXT_SEC }}>当前价 (U)</div>
               <div style={{ lineHeight: 1 }}>
-                <span className="text-sm font-semibold" style={{ color: SL_GOLD, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
+                <span className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
                   {liveP != null ? fmt(liveP, 2) : '--'}
                 </span>
               </div>
@@ -1072,7 +1122,7 @@ export function FunderOrderCardV2Silver({
         {isStockCard ? (
           // 股票类：交易周期居左（开仓日期 ~ 今天北京时间，单行显示）
           <div style={{ flex: '0 0 60%' }}>
-            <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>
+            <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
               交易周期{order.buy_date && (() => {
                 const startDay = new Date(order.buy_date + 'T00:00:00+08:00').getTime();
                 const nowBJStr = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
@@ -1081,7 +1131,7 @@ export function FunderOrderCardV2Silver({
                 return <span> ({days}天)</span>;
               })()}
             </div>
-            <div className="text-sm" style={{ color: SL_TEXT_PRI, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'tabular-nums' }}>
+            <div className="text-sm" style={{ color: TXT_PRI, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'tabular-nums' }}>
               {order.buy_date ? (() => {
                 const todayBJ = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
                 return `${fmtDate(order.buy_date)} ~ ${fmtDate(todayBJ)}`;
@@ -1089,48 +1139,84 @@ export function FunderOrderCardV2Silver({
             </div>
           </div>
         ) : (
-          // 数字币类：开仓日期居左
-          <div style={{ flex: '0 0 auto', marginRight: 8 }}>
-            <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>
-              开仓日期{order.buy_date && (() => {
-                const startDay = new Date(order.buy_date + 'T00:00:00+08:00').getTime();
-                const nowBJStr = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
-                const nowDay = new Date(nowBJStr + 'T00:00:00+08:00').getTime();
-                const days = nowDay < startDay ? 0 : Math.floor((nowDay - startDay) / (1000 * 60 * 60 * 24)) + 1;
-                return <span> ({days}天)</span>;
-              })()}
-            </div>
-            <div className="text-sm font-semibold" style={{ color: SL_TEXT_PRI, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'tabular-nums' }}>
-              {order.buy_date ? fmtDate(order.buy_date) : '--'}
+          // 数字币类：期权卡片显示到期日，普通数字币显示开仓日期
+          <div style={{ flex: isOptionCard ? '0 0 40%' : '0 0 auto', marginRight: isOptionCard ? 0 : 8 }}>
+            {isOptionCard ? (
+              <>
+                <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
+                  到期日{_optInfo?.exerciseDate ? ` ${fmtDate(_optInfo.exerciseDate)}` : ''}
+                </div>
+                <div className="text-sm font-semibold" style={{ color: TXT_PRI, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
+                  {_optInfo?.exerciseDate ? (() => {
+                    const expDay = new Date(_optInfo.exerciseDate + 'T00:00:00+08:00').getTime();
+                    const nowBJStr = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+                    const nowDay = new Date(nowBJStr + 'T00:00:00+08:00').getTime();
+                    const daysLeft = Math.ceil((expDay - nowDay) / (1000 * 60 * 60 * 24));
+                    return daysLeft > 0 ? `${daysLeft}天` : daysLeft === 0 ? '今天到期' : '已到期';
+                  })() : '--'}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
+                  开仓日期{order.buy_date && (() => {
+                    const startDay = new Date(order.buy_date + 'T00:00:00+08:00').getTime();
+                    const nowBJStr = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+                    const nowDay = new Date(nowBJStr + 'T00:00:00+08:00').getTime();
+                    const days = nowDay < startDay ? 0 : Math.floor((nowDay - startDay) / (1000 * 60 * 60 * 24)) + 1;
+                    return <span> ({days}天)</span>;
+                  })()}
+                </div>
+                <div className="text-sm font-semibold" style={{ color: TXT_PRI, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'tabular-nums' }}>
+                  {order.buy_date ? fmtDate(order.buy_date) : '--'}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+        {!isStockCard && isOptionCard && (
+          // 期权卡片：权利金靠右对齐（对齐行权价列）
+          <div className="text-right" style={{ flex: 1 }}>
+            <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>权利金 (U)</div>
+            <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW, whiteSpace: 'nowrap' }}>
+              {optPremiumTotal !== null ? fmt(optPremiumTotal, 0) : (_optInfo?.premium ? fmt(parseFloat(_optInfo.premium), 2) : '--')}
             </div>
           </div>
         )}
         {!isStockCard && (
-          // 数字币类：浮动盈亏居中（数字+括号百分比）
-          <div className="text-center" style={{ flex: '1 1 auto', minWidth: 0 }}>
-            <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>浮动盈亏 (U)</div>
-            <div className="text-sm font-semibold" style={{ color: pnlColor, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW, whiteSpace: 'nowrap' }}>
-              {floatPnl !== null
-                ? `${floatPnl >= 0 ? '+' : ''}${fmt(floatPnl, 0)}${floatPct !== null ? ` (${floatPct >= 0 ? '+' : ''}${floatPct.toFixed(2)}%)` : ''}`
-                : '--'}
+          // 数字币类：浮动盈亏居右（期权对齐当前价列）
+          <div className="text-right" style={{ flex: 1, minWidth: 0 }}>
+            <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
+              {isOptionCard ? '内在价值 (U)' : '浮动盈亏 (U)'}
             </div>
+            {isOptionCard ? (
+              <div className="text-sm font-semibold" style={{ color: optIntrinsic === null ? TXT_SEC : optIntrinsic > 0 ? SL_GREEN : TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW, whiteSpace: 'nowrap' }}>
+                {optIntrinsic !== null ? fmt(optIntrinsic, 0) : (liveP === null ? '加载中...' : '--')}
+              </div>
+            ) : (
+              <div className="text-sm font-semibold" style={{ color: pnlColor, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW, whiteSpace: 'nowrap' }}>
+                {floatPnl !== null
+                  ? `${floatPnl >= 0 ? '+' : ''}${fmt(floatPnl, 0)}${floatPct !== null ? ` (${floatPct >= 0 ? '+' : ''}${floatPct.toFixed(2)}%)` : ''}`
+                  : '--'}
+              </div>
+            )}
           </div>
         )}
         {/* 股票类：利息居右（行3） */}
         {isStockCard ? (
           <div className="text-right" style={{ flex: 1 }}>
-            <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>利息</div>
-            <div className="text-sm" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+            <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>利息</div>
+            <div className="text-sm" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
               {rateAbs ? `${(parseFloat(rateAbs) / 12).toFixed(2)}%` : '--'}
             </div>
           </div>
-        ) : (
-          // 数字币类：担保资产居右
+        ) : isOptionCard ? null : (
+          // 数字币类：担保资产居右（期权订单不显示）
           <div className="text-right" style={{ flex: '0 0 auto', marginLeft: 8 }}>
-            <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>
+            <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
               担保资产{(order as any).collateral_share_mode !== 'self' && collateralAssets.length > 0 && collateralAssets.length === 1 ? ` (${collateralAssets[0].coin})` : ''}
             </div>
-            <div className="text-sm font-semibold" style={{ color: (order as any).collateral_share_mode === 'self' ? '#A80000' : SL_TEXT_PRI }}>
+            <div className="text-sm font-semibold" style={{ color: (order as any).collateral_share_mode === 'self' ? '#A80000' : TXT_PRI }}>
               {(order as any).collateral_share_mode === 'self'
                 ? '共享担保'
                 : collateralAssets.length > 0
@@ -1144,29 +1230,29 @@ export function FunderOrderCardV2Silver({
       </div>
 
       {/* ── Tab栏：详情 | 备注 ── */}
-      <div className="flex" style={{ borderTop: `1px solid ${SL_DIVIDER}` }}>
+      <div className="flex" style={{ borderTop: `1px solid ${DIVIDER}` }}>
         <button
           className="flex-1 flex items-center justify-center gap-1 py-2 relative"
           style={{ background: feeExpanded ? 'rgba(0,0,0,0.03)' : 'transparent' }}
           onClick={() => toggleTab('detail')}
         >
-          <span style={{ color: feeExpanded ? SL_TEXT_PRI : SL_TEXT_DIM, fontSize: '0.7rem', fontWeight: feeExpanded ? 600 : 400 }}>详情</span>
+          <span style={{ color: feeExpanded ? TXT_PRI : TXT_DIM, fontSize: '0.7rem', fontWeight: feeExpanded ? 600 : 400 }}>详情</span>
           {feeExpanded
-            ? <ChevronUp className="w-3 h-3" style={{ color: SL_TEXT_DIM }} />
-            : <ChevronDown className="w-3 h-3" style={{ color: SL_TEXT_DIM }} />}
+            ? <ChevronUp className="w-3 h-3" style={{ color: TXT_DIM }} />
+            : <ChevronDown className="w-3 h-3" style={{ color: TXT_DIM }} />}
           {/* 不顶天立地的垂直分隔线 */}
-          <span style={{ position: 'absolute', right: 0, top: '20%', height: '60%', width: 1, background: SL_DIVIDER }} />
+          <span style={{ position: 'absolute', right: 0, top: '20%', height: '60%', width: 1, background: DIVIDER }} />
         </button>
         <button
           className="flex-1 flex items-center justify-center gap-1 py-2"
           style={{ background: noteExpanded ? 'rgba(0,0,0,0.03)' : 'transparent' }}
           onClick={() => toggleTab('note')}
         >
-          <span style={{ color: noteExpanded ? SL_TEXT_PRI : SL_TEXT_DIM, fontSize: '0.7rem', fontWeight: noteExpanded ? 600 : 400 }}>备注</span>
-          {(() => { const cnt = parseNotes(order.public_note || '').length; return cnt > 0 ? <span style={{ color: SL_TEXT_DIM, fontSize: '0.65rem' }}>({cnt})</span> : null; })()}
+          <span style={{ color: noteExpanded ? TXT_PRI : TXT_DIM, fontSize: '0.7rem', fontWeight: noteExpanded ? 600 : 400 }}>备注</span>
+          {(() => { const cnt = parseNotes(order.public_note || '').length; return cnt > 0 ? <span style={{ color: TXT_DIM, fontSize: '0.65rem' }}>({cnt})</span> : null; })()}
           {noteExpanded
-            ? <ChevronUp className="w-3 h-3" style={{ color: SL_TEXT_DIM }} />
-            : <ChevronDown className="w-3 h-3" style={{ color: SL_TEXT_DIM }} />}
+            ? <ChevronUp className="w-3 h-3" style={{ color: TXT_DIM }} />
+            : <ChevronDown className="w-3 h-3" style={{ color: TXT_DIM }} />}
         </button>
       </div>
 
@@ -1183,11 +1269,51 @@ export function FunderOrderCardV2Silver({
           const endDay = new Date(endDateBJ.toISOString().slice(0, 10) + 'T00:00:00+08:00').getTime();
           return Math.max(0, Math.floor((endDay - startDay) / (1000 * 60 * 60 * 24)) + 1);
         };
+        if (isOptionCard) {
+          // 期权卡片详情：展示5个希腊字母
+          const d = greeksResult.data;
+          const fmtG = (v: any, dp = 4) => v != null && !isNaN(Number(v)) ? Number(v).toFixed(dp) : '--';
+          const loadingVal = <span style={{ color: TXT_DIM }}>--</span>;
+          return (
+            <div className="px-4 pb-3 space-y-1.5 text-[10px]">
+              {d?.instrumentName && (
+                <div className="text-[9px] mb-1" style={{ color: TXT_DIM }}>{d.instrumentName}</div>
+              )}
+              {greeksResult.error && (
+                <div style={{ color: '#DC2626', fontSize: '0.65rem', marginBottom: 4 }}>获取失败</div>
+              )}
+              <div className="flex justify-between">
+                <span style={{ color: TXT_SEC }}>Delta</span>
+                <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{d ? fmtG(d.delta) : loadingVal}</span>
+              </div>
+              <div className="flex justify-between">
+                <span style={{ color: TXT_SEC }}>Gamma</span>
+                <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{d ? fmtG(d.gamma) : loadingVal}</span>
+              </div>
+              <div className="flex justify-between">
+                <span style={{ color: TXT_SEC }}>Vega</span>
+                <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{d ? fmtG(d.vega) : loadingVal}</span>
+              </div>
+              <div className="flex justify-between">
+                <span style={{ color: TXT_SEC }}>Theta</span>
+                <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{d ? fmtG(d.theta) : loadingVal}</span>
+              </div>
+              <div className="flex justify-between">
+                <span style={{ color: TXT_SEC }}>IV (隐含波动率)</span>
+                <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{d?.iv != null ? `${(Number(d.iv) * 100).toFixed(1)}%` : loadingVal}</span>
+              </div>
+              <div className="flex justify-between" style={{ borderTop: `1px solid ${DIVIDER}`, paddingTop: 4, marginTop: 4 }}>
+                <span style={{ color: TXT_SEC }}>期权标记价</span>
+                <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{d?.markPrice != null ? `${fmtG(d.markPrice, 4)} ${_optInfo?.coin || 'ETH'}` : loadingVal}</span>
+              </div>
+            </div>
+          );
+        }
         return (
           <div className="px-4 pb-3 space-y-1.5 text-[10px]">
             <div className="flex justify-between">
-              <span style={{ color: SL_TEXT_SEC }}>计息基数</span>
-              <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ color: TXT_SEC }}>计息基数</span>
+              <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
                 {buyPrice > 0 && qty > 0
                   ? `${fmt(buyPrice, 0)}(U) × ${fmt(qty, qty % 1 === 0 ? 0 : 2)}(${coin}) = ${fmt(interestBase, 0)} ${baseUnit2}`
                   : interestBase ? `${fmt(interestBase, 0)} ${baseUnit2}` : '--'
@@ -1206,38 +1332,38 @@ export function FunderOrderCardV2Silver({
               const notStarted = endD.getTime() < startD.getTime();
               return (
                 <div className="flex justify-between">
-                  <span style={{ color: SL_TEXT_SEC }}>计息日期{order.interest_payment_type ? `（${({'monthly_pre':'月付先付','monthly_post':'月付后付','semi_pre':'半年付先付','semi_post':'半年付后付','annual_pre':'年付先付','annual_post':'年付后付','end_post':'结束后付','monthly_prepaid':'月付先付','monthly_postpaid':'月付后付','quarterly':'季付','maturity':'到期付'} as any)[order.interest_payment_type] || order.interest_payment_type}）` : ''}</span>
-                  <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{notStarted ? `${fmtBJ(s)} 未开始` : `${fmtBJ(s)} ~ ${fmtBJ(e)}  ${days}天`}</span>
+                  <span style={{ color: TXT_SEC }}>计息日期{order.interest_payment_type ? `（${({'monthly_pre':'月付先付','monthly_post':'月付后付','semi_pre':'半年付先付','semi_post':'半年付后付','annual_pre':'年付先付','annual_post':'年付后付','end_post':'结束后付','monthly_prepaid':'月付先付','monthly_postpaid':'月付后付','quarterly':'季付','maturity':'到期付','profit_post':'盈利后付','profit_pre':'盈利先付'} as any)[order.interest_payment_type] || order.interest_payment_type}）` : ''}</span>
+                  <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{notStarted ? `${fmtBJ(s)} 未开始` : `${fmtBJ(s)} ~ ${fmtBJ(e)}  ${days}天`}</span>
                 </div>
               );
             })()}
             <div className="flex justify-between items-center">
-              <span style={{ color: SL_TEXT_SEC }}>待付利息{rateAbs ? `（年化${rateAbs}%）` : ''}</span>
-              <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ color: TXT_SEC }}>待付利息{rateAbs ? `（年化${rateAbs}%）` : ''}</span>
+              <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
                 {rateAbs && interestBase > 0 ? (() => {
                   const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
                   const days = order.interest_start_date ? calcDays(order.interest_start_date, endTs) : null;
                   return (
                     <>
-                      <span style={{ color: SL_TEXT_PRI }}>{fmt(interestBase, 0)}×{rateAbs}%÷365{days != null ? `×${days}天` : ''} = </span>
-                      <span style={{ color: SL_TEXT_PRI }}>{displayAccrued > 0 ? '-' : ''}{fmt(displayAccrued, 2)} {interestUnit}</span>
+                      <span style={{ color: TXT_PRI }}>{fmt(interestBase, 0)}×{rateAbs}%÷365{days != null ? `×${days}天` : ''} = </span>
+                      <span style={{ color: TXT_PRI }}>{displayAccrued > 0 ? '-' : ''}{fmt(displayAccrued, 2)} {interestUnit}</span>
                     </>
                   );
-                })() : <span style={{ color: SL_TEXT_PRI }}>{displayAccrued > 0 ? '-' : ''}{fmt(displayAccrued, 2)} {interestUnit}</span>}
+                })() : <span style={{ color: TXT_PRI }}>{displayAccrued > 0 ? '-' : ''}{fmt(displayAccrued, 2)} {interestUnit}</span>}
               </span>
             </div>
             {/* 交易手续费：仅数字币（银色卡片）显示 */}
             {!isStockCard && (
               <div className="flex justify-between">
-                <span style={{ color: SL_TEXT_SEC }}>交易手续费 (1‰买+1‰卖)</span>
-                <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+                <span style={{ color: TXT_SEC }}>交易手续费 (1‰买+1‰卖)</span>
+                <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
                   {tradingFee > 0 ? '-' : ''}{fmt(tradingFee, 2)} {interestUnit}
                 </span>
               </div>
             )}
             {/* 已结利息：始终显示 */}
             <div className="flex justify-between items-center">
-              <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
+              <span className="flex items-center gap-1" style={{ color: TXT_SEC }}>
                 已结利息
                 <button
                   type="button"
@@ -1246,16 +1372,16 @@ export function FunderOrderCardV2Silver({
                   style={{ background: '#8B6914', color: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.18)' }}
                 >!</button>
               </span>
-              <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>+{fmt(displayPaid, 2)} {interestUnit}</span>
+              <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>+{fmt(displayPaid, 2)} {interestUnit}</span>
             </div>
             {/* 合计待付 = 待付利息 + 手续费 - 已结利息 */}
             {(() => {
               const gross = isStockCard ? displayAccrued : displayAccrued + tradingFee;
               const net = gross - displayPaid;
               return (
-                <div className="flex justify-between" style={{ borderTop: `1px solid ${SL_DIVIDER}`, paddingTop: 4, marginTop: 4 }}>
-                  <span style={{ color: SL_TEXT_SEC }}>合计待付</span>
-                  <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                <div className="flex justify-between" style={{ borderTop: `1px solid ${DIVIDER}`, paddingTop: 4, marginTop: 4 }}>
+                  <span style={{ color: TXT_SEC }}>合计待付</span>
+                  <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
                     {net > 0 ? '-' : ''}{fmt(Math.abs(net), 2)} {interestUnit}
                   </span>
                 </div>
@@ -1263,8 +1389,8 @@ export function FunderOrderCardV2Silver({
             })()}
             {/* 担保资产行（股票类订单，非共享模式） */}
             {isStockCard && !isSharedMode && (
-              <div className="flex justify-between items-start" style={{ borderTop: `1px solid ${SL_DIVIDER}`, paddingTop: 4, marginTop: 4 }}>
-                <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
+              <div className="flex justify-between items-start" style={{ borderTop: `1px solid ${DIVIDER}`, paddingTop: 4, marginTop: 4 }}>
+                <span className="flex items-center gap-1" style={{ color: TXT_SEC }}>
                   担保资产
                   <button
                     type="button"
@@ -1277,30 +1403,30 @@ export function FunderOrderCardV2Silver({
                   fc2977RemainingMarginU !== null ? (
                     <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                       <span style={{ backgroundColor: 'rgba(60,35,0,0.75)', color: '#F5C842', fontSize: '0.55rem', padding: '1.5px 5px', borderRadius: 8, fontWeight: 700, lineHeight: 1.2 }}>{fc2977RemainingMarginU >= 0 ? '余' : '缺'}</span>
-                      <span style={{ color: SL_TEXT_PRI }}>{Math.abs(fc2977RemainingMarginU).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U</span>
+                      <span style={{ color: TXT_PRI }}>{Math.abs(fc2977RemainingMarginU).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} U</span>
                     </span>
                   ) : (
-                    <span style={{ color: SL_TEXT_DIM, fontSize: '0.75rem' }}>加载中...</span>
+                    <span style={{ color: TXT_DIM, fontSize: '0.75rem' }}>加载中...</span>
                   )
                 ) : collateralAssets.length > 0 ? (
-                  <div className="text-right" style={{ color: SL_TEXT_PRI }}>
+                  <div className="text-right" style={{ color: TXT_PRI }}>
                     {collateralAssets.map((c, i) => <div key={i}>{c.qty} {c.coin}</div>)}
                   </div>
                 ) : (
-                  <span style={{ color: SL_TEXT_DIM, fontSize: '0.75rem' }}>暂无 <span style={{ color: '#F59E0B', fontWeight: 700 }}>!</span></span>
+                  <span style={{ color: TXT_DIM, fontSize: '0.75rem' }}>暂无 <span style={{ color: '#F59E0B', fontWeight: 700 }}>!</span></span>
                 )}
               </div>
             )}
             {/* 保证金率行（FC2977专属，显示剩余保证金占基数比） */}
             {isFC2977 && isStockCard && !isSharedMode && (
-              <div className="flex justify-between items-center" style={{ borderTop: `1px solid ${SL_DIVIDER}`, paddingTop: 4, marginTop: 4 }}>
-                <span style={{ color: SL_TEXT_SEC }}>保证金率</span>
+              <div className="flex justify-between items-center" style={{ borderTop: `1px solid ${DIVIDER}`, paddingTop: 4, marginTop: 4 }}>
+                <span style={{ color: TXT_SEC }}>保证金率</span>
                 {fc2977MarginBasePct !== null ? (
-                  <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: SL_TEXT_PRI }}>
+                  <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: TXT_PRI }}>
                     {fc2977MarginBasePct >= 0 ? '+' : '-'}{Math.abs(fc2977MarginBasePct).toFixed(1)}%
                   </span>
                 ) : (
-                  <span style={{ color: SL_TEXT_DIM, fontSize: '0.75rem' }}>--</span>
+                  <span style={{ color: TXT_DIM, fontSize: '0.75rem' }}>--</span>
                 )}
               </div>
             )}
@@ -1437,7 +1563,7 @@ export function FunderOrderCardV2Silver({
                   </div>
                 )}
                 <div className="flex justify-between" style={{ marginTop: 6 }}>
-                  <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
+                  <span className="flex items-center gap-1" style={{ color: TXT_SEC }}>
                     担保资产
                     <button
                       type="button"
@@ -1456,7 +1582,7 @@ export function FunderOrderCardV2Silver({
                 {collateralAssets.map((a, idx) => (
                   <div key={idx}>
                     <div className="flex justify-between" style={{ marginTop: 6 }}>
-                      <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
+                      <span className="flex items-center gap-1" style={{ color: TXT_SEC }}>
                         {collateralAssets.length > 1 ? `担保货币${idx + 1}` : '担保货币'}
                         {isFC2977 && (
                           <button
@@ -1467,30 +1593,30 @@ export function FunderOrderCardV2Silver({
                           >!</button>
                         )}
                       </span>
-                      <span style={{ color: SL_TEXT_PRI }}>{parseFloat(a.qty).toLocaleString()} {a.coin === 'CNY' ? '元' : a.coin}</span>
+                      <span style={{ color: TXT_PRI }}>{parseFloat(a.qty).toLocaleString()} {a.coin === 'CNY' ? '元' : a.coin}</span>
                     </div>
                     {collateralItemValues[idx] !== null && (
                       <div className="flex justify-between">
                         <span></span>
-                        <span style={{ color: SL_TEXT_SEC }}>≈ {(collateralItemValues[idx] as number).toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>
+                        <span style={{ color: TXT_SEC }}>≈ {(collateralItemValues[idx] as number).toLocaleString(undefined, { maximumFractionDigits: 2 })} u</span>
                       </div>
                     )}
                   </div>
                 ))}
                 {collateralAssets.length > 1 && (
                   <div className="flex justify-between" style={{ marginTop: 4 }}>
-                    <span style={{ color: SL_TEXT_SEC }}>担保总值</span>
-                    <span style={{ color: SL_TEXT_PRI }}>{collateralValueKnown ? `${collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} u` : '计算中...'}</span>
+                    <span style={{ color: TXT_SEC }}>担保总值</span>
+                    <span style={{ color: TXT_PRI }}>{collateralValueKnown ? `${collateralValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} u` : '计算中...'}</span>
                   </div>
                 )}
                 <div className="flex justify-between" style={{ marginTop: 4 }}>
-                  <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
+                  <span className="flex items-center gap-1" style={{ color: TXT_SEC }}>
                     担保缺口
                     <button type="button" onClick={e => { e.stopPropagation(); setShowCollateralInfo(true); }}
                       className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
                       style={{ backgroundColor: '#E5E7EB', color: '#6B7280', border: 'none', cursor: 'pointer', lineHeight: 1 }}>!</button>
                   </span>
-                  <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                  <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
                     {isSufficient ? '+' : '-'}{Math.abs(exposure).toLocaleString(undefined, { maximumFractionDigits: 2 })} u
                   </span>
                 </div>
@@ -1579,13 +1705,13 @@ export function FunderOrderCardV2Silver({
       )}
       {/* ── 备注展开区 ── */}
       {noteExpanded && (
-        <div className="px-4 pb-3 pt-2 text-xs" style={{ borderTop: `1px dashed ${SL_DIVIDER}` }} onClick={e => e.stopPropagation()}>
+        <div className="px-4 pb-3 pt-2 text-xs" style={{ borderTop: `1px dashed ${DIVIDER}` }} onClick={e => e.stopPropagation()}>
           {noteItems.length === 0 && noteEditingIdx === null && (
-            <div style={{ color: SL_TEXT_DIM }} className="py-1">暂无备注</div>
+            <div style={{ color: TXT_DIM }} className="py-1">暂无备注</div>
           )}
           {noteItems.map((note, idx) => (
             <div key={idx}>
-              {idx > 0 && <div style={{ borderTop: `1px solid ${SL_DIVIDER}` }} className="my-1.5" />}
+              {idx > 0 && <div style={{ borderTop: `1px solid ${DIVIDER}` }} className="my-1.5" />}
               {noteEditingIdx === idx ? (
                 <div className="flex items-center gap-1 py-0.5">
                   <input
@@ -1629,7 +1755,7 @@ export function FunderOrderCardV2Silver({
                       const ownerMember = !note.userId ? (membersData as any[])?.find((m: any) => m.role === 'owner') : null;
                       const finalAvatar = avatarUrl || (!note.userId ? ownerMember?.avatar : null);
                       const name = note.userName || (!note.userId ? (ownerMember?.username || ownerMember?.nickname || '') : '');
-                      if (finalAvatar) return <img src={finalAvatar} alt="" className="w-6 h-6 rounded-full object-cover" style={{ border: `1px solid ${SL_DIVIDER}` }} />;
+                      if (finalAvatar) return <img src={finalAvatar} alt="" className="w-6 h-6 rounded-full object-cover" style={{ border: `1px solid ${DIVIDER}` }} />;
                       if (!name) return <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: '#E5E7EB' }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>;
                       const initials = name.slice(0, 1).toUpperCase();
                       const colors = ['#6366F1','#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6'];
@@ -1638,8 +1764,8 @@ export function FunderOrderCardV2Silver({
                     })()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    {note.time && <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_DIM }}>{formatNoteTime(note.time)}</div>}
-                    <div className="break-all" style={{ color: SL_TEXT_PRI, fontSize: '11px', lineHeight: '1.5' }}>{note.text}</div>
+                    {note.time && <div className="text-[10px] mb-0.5" style={{ color: TXT_DIM }}>{formatNoteTime(note.time)}</div>}
+                    <div className="break-all" style={{ color: TXT_PRI, fontSize: '11px', lineHeight: '1.5' }}>{note.text}</div>
                   </div>
                   <div className="shrink-0 flex flex-row gap-1.5 self-start mt-0.5 items-center">
                     {/* 编辑图标 */}
@@ -1647,7 +1773,7 @@ export function FunderOrderCardV2Silver({
                       type="button"
                       onClick={() => { setNoteEditingIdx(idx); setNoteEditValue(note.text); setNoteDeleteConfirmIdx(null); }}
                       className="p-1 rounded"
-                      style={{ background: 'transparent', color: SL_TEXT_PRI, border: `1px solid ${SL_TEXT_PRI}` }}
+                      style={{ background: 'transparent', color: TXT_PRI, border: `1px solid ${TXT_PRI}` }}
                       title="编辑"
                     >
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -1658,7 +1784,7 @@ export function FunderOrderCardV2Silver({
                         type="button"
                         onClick={() => { saveNoteItems(noteItems.filter((_, i) => i !== idx)); setNoteDeleteConfirmIdx(null); }}
                         className="p-1 rounded text-[10px] font-bold px-1.5"
-                        style={{ background: 'transparent', color: SL_TEXT_PRI, border: `1px solid ${SL_TEXT_PRI}` }}
+                        style={{ background: 'transparent', color: TXT_PRI, border: `1px solid ${TXT_PRI}` }}
                         title="再次点击确认删除"
                       >确认?</button>
                     ) : (
@@ -1666,7 +1792,7 @@ export function FunderOrderCardV2Silver({
                         type="button"
                         onClick={() => setNoteDeleteConfirmIdx(idx)}
                         className="p-1 rounded"
-                        style={{ background: 'transparent', color: SL_TEXT_PRI, border: `1px solid ${SL_TEXT_PRI}` }}
+                        style={{ background: 'transparent', color: TXT_PRI, border: `1px solid ${TXT_PRI}` }}
                         title="删除"
                       >
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
@@ -1677,7 +1803,7 @@ export function FunderOrderCardV2Silver({
               )}
             </div>
           ))}
-          <div style={{ borderTop: noteItems.length > 0 ? `1px solid ${SL_DIVIDER}` : 'none' }} className="mt-1 pt-1">
+          <div style={{ borderTop: noteItems.length > 0 ? `1px solid ${DIVIDER}` : 'none' }} className="mt-1 pt-1">
             <button
               type="button"
               onClick={() => {
@@ -1687,7 +1813,7 @@ export function FunderOrderCardV2Silver({
                 setNoteEditValue('');
               }}
               className="flex items-center gap-1"
-              style={{ color: SL_TEXT_PRI }}
+              style={{ color: TXT_PRI }}
             >
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
               <span style={{ fontSize: '11px' }}>添加备注</span>
@@ -1749,8 +1875,11 @@ export function FunderLenderCardSilver({
     { enabled: !!ledgerId && isSharedMode, staleTime: 0, refetchInterval: 3000 }
   );
 
-  const coin = (order.coin || 'ETH') as CoinType;
-  const qty = parseFloat(order.buy_quantity || '0');
+  // 期权订单：标的资产以 option_info.coin 为准（此处 isOption 尚未定义，直接用 order.asset_type 判断）
+  const _lnIsOpt = order.asset_type === 'crypto_option';
+  const _lnOptInfo = (() => { try { const oi = (order as any).option_info; return typeof oi === 'string' ? JSON.parse(oi) : (oi || null); } catch { return null; } })();
+  const coin = (_lnIsOpt && _lnOptInfo?.coin ? _lnOptInfo.coin : (order.coin || 'ETH')) as CoinType;
+  const qty = _lnIsOpt && _lnOptInfo?.buyQty ? parseFloat(_lnOptInfo.buyQty) : parseFloat(order.buy_quantity || '0');
   const buyPrice = parseFloat(order.buy_price || '0');
   const liveP = livePrices[coin] ?? null;
 
@@ -1759,9 +1888,9 @@ export function FunderLenderCardSilver({
   const floatPnl = currentValue !== null && buyValue > 0 ? currentValue - buyValue : null;
   const floatPct = floatPnl !== null && buyValue > 0 ? (floatPnl / buyValue) * 100 : null;
   const dir = priceDirection?.[coin] ?? 'same';
-  const pnlColor = floatPnl === null ? SL_TEXT_SEC : floatPnl >= 0 ? SL_GREEN : SL_RED;
+  const pnlColor = floatPnl === null ? (isOption ? OPT_TEXT_SEC : SL_TEXT_SEC) : floatPnl >= 0 ? SL_GREEN : SL_RED;
   const priceDiff = liveP !== null && buyPrice > 0 ? liveP - buyPrice : null;
-  const priceColor = priceDiff === null ? SL_TEXT_PRI : priceDiff >= 0 ? SL_GREEN : SL_RED;
+  const priceColor = priceDiff === null ? (isOption ? OPT_TEXT_PRI : SL_TEXT_PRI) : priceDiff >= 0 ? SL_GREEN : SL_RED;
 
   const rateStr = getRateStr(order);
   const isNegRate = rateStr.startsWith('-');
@@ -1855,6 +1984,13 @@ export function FunderLenderCardSilver({
 
   const isStock = order.asset_type === 'stock';
   const isOption = order.asset_type === 'crypto_option';
+  // 动态文字颜色：期权卡片用白色系列，其他用黑色系列
+  const TXT_PRI = isOption ? OPT_TEXT_PRI : SL_TEXT_PRI;
+  const TXT_SEC = isOption ? OPT_TEXT_SEC : SL_TEXT_SEC;
+  const TXT_DIM = isOption ? OPT_TEXT_DIM : SL_TEXT_DIM;
+  const TXT_SHADOW = isOption ? OPT_TEXT_SHADOW : SL_TEXT_SHADOW;
+  const TXT_SHADOW_LG = isOption ? OPT_TEXT_SHADOW_LG : SL_TEXT_SHADOW_LG;
+  const DIVIDER = isOption ? OPT_DIVIDER : SL_DIVIDER;
   const GOLD_BG = [
     // 层1：左上角高光（稍弱）
     'linear-gradient(135deg, rgba(255,255,255,0.50) 0%, rgba(255,255,255,0.15) 22%, rgba(255,255,255,0.0) 45%, rgba(0,0,0,0.0) 60%, rgba(0,0,0,0.28) 100%)',
@@ -1923,8 +2059,8 @@ export function FunderLenderCardSilver({
       ))}
 
       {/* ── 行1：名字 | 开仓日期 | 当前币价 + 订单号 ── */}
-      <div className="flex items-center px-4 pt-3 pb-2" style={{ borderBottom: `1px solid ${SL_DIVIDER}` }}>
-        <div className="flex items-center text-xs" style={{ color: SL_TEXT_SEC, gap: 0 }}>
+      <div className="flex items-center px-4 pt-3 pb-2" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
+        <div className="flex items-center text-xs" style={{ color: TXT_SEC, gap: 0 }}>
           {(() => {
             const ownerName = order.owner_label || (() => {
               const m = (membersData as any[])?.find((m: any) => m.userId === order.user_id);
@@ -1937,22 +2073,22 @@ export function FunderLenderCardSilver({
             const items = [ownerName, buyDateStr, brokerStr].filter(Boolean);
             // 当前币价（带红绿色+闪烁箭头）
             const priceDiff2 = liveP !== null && buyPrice > 0 ? liveP - buyPrice : null;
-            const livePriceColor = dir === 'up' ? SL_GREEN : dir === 'down' ? SL_RED : SL_TEXT_PRI;
+            const livePriceColor = dir === 'up' ? SL_GREEN : dir === 'down' ? SL_RED : TXT_PRI;
             return (
               <>
                 {items.map((item, i) => (
                   <React.Fragment key={i}>
-                    {i > 0 && <span style={{ color: SL_TEXT_DIM, margin: '0 6px' }}>|</span>}
-                    <span style={{ color: i === 0 ? SL_TEXT_PRI : SL_TEXT_SEC, fontWeight: i === 0 ? 500 : 400 }}>{item}</span>
+                    {i > 0 && <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>}
+                    <span style={{ color: i === 0 ? TXT_PRI : TXT_SEC, fontWeight: i === 0 ? 500 : 400 }}>{item}</span>
                   </React.Fragment>
                 ))}
                 {coin !== 'CNY' && coin !== 'USDT' && (
                   <>
-                    <span style={{ color: SL_TEXT_DIM, margin: '0 6px' }}>|</span>
+                    <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>
                     <span className="flex items-center gap-0.5" style={{ fontWeight: 500 }}>
                       {dir === 'up' && <span className="text-[10px] inline-flex items-center" style={{ color: SL_GREEN, animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▲</span>}
                       {dir === 'down' && <span className="text-[10px] inline-flex items-center" style={{ color: SL_RED, animation: 'price-blink 1.5s ease-in-out infinite', lineHeight: 1 }}>▼</span>}
-                      <span style={{ color: SL_TEXT_PRI }}>{coin}</span>
+                      <span style={{ color: TXT_PRI }}>{coin}</span>
                       <span style={{ marginLeft: '3px', color: livePriceColor }}>{liveP != null ? liveP.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '---'}</span>
                     </span>
                   </>
@@ -1962,29 +2098,29 @@ export function FunderLenderCardSilver({
           })()}
         </div>
         {order.order_no && (
-          <span className="ml-auto text-[10px] font-mono" style={{ color: SL_TEXT_DIM, letterSpacing: '0.05em' }}>
+          <span className="ml-auto text-[10px] font-mono" style={{ color: TXT_DIM, letterSpacing: '0.05em' }}>
             {order.order_no}
           </span>
         )}
       </div>
 
       {/* ── 行2：应收利息大字（左）+ 年化利率（右）── */}
-      <div className="flex gap-0 px-5 py-3" style={{ borderBottom: `1px solid ${SL_DIVIDER}` }}>
+      <div className="flex gap-0 px-5 py-3" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC }}>应收利息 ({interestUnit})</div>
+          <div className="text-[10px] mb-1" style={{ color: TXT_SEC }}>应收利息 ({interestUnit})</div>
           <div style={{ lineHeight: 1, display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-            <span style={{ fontSize: '1.6rem', fontWeight: 700, color: LN_EARN, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: SL_TEXT_SHADOW_LG }}>
+            <span style={{ fontSize: '1.6rem', fontWeight: 700, color: LN_EARN, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: TXT_SHADOW_LG }}>
               {displayAccrued > 0 ? '+' : ''}{fmt(displayAccrued, 2)}
             </span>
-            <span className="text-[10px]" style={{ color: SL_TEXT_SEC, whiteSpace: 'nowrap' }}>
+            <span className="text-[10px]" style={{ color: TXT_SEC, whiteSpace: 'nowrap' }}>
               ≈{approxAccrued > 0 ? approxAccrued.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '--'} {approxUnit}
             </span>
           </div>
         </div>
         <div className="text-right" style={{ flex: 1 }}>
-          <div className="text-[10px] mb-1" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_ENGRAVE }}>年化利率</div>
+          <div className="text-[10px] mb-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>年化利率</div>
           <div style={{ lineHeight: 1 }}>
-            <span style={{ fontSize: '1.1rem', fontWeight: 700, color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_ENGRAVE_LG }}>
+            <span style={{ fontSize: '1.1rem', fontWeight: 700, color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW_LG }}>
               {rateAbs ? `${rateAbs}%` : '--'}
             </span>
           </div>
@@ -2004,18 +2140,18 @@ export function FunderLenderCardSilver({
         const yearly = convertAccrued(yearlyRaw);
         const fmtSmall = (n: number) => n >= 0.01 ? n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : n.toFixed(4);
         return (
-          <div className="grid grid-cols-3 gap-0 px-4 py-2" style={{ fontFamily: SL_NUM_FONT, borderBottom: `1px solid ${SL_DIVIDER}` }}>
+          <div className="grid grid-cols-3 gap-0 px-4 py-2" style={{ fontFamily: SL_NUM_FONT, borderBottom: `1px solid ${DIVIDER}` }}>
             <div>
-              <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>今日利息 ({interestUnit})</div>
-              <div className="text-sm font-semibold" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>{fmtSmall(daily)}</div>
+              <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>今日利息 ({interestUnit})</div>
+              <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>{fmtSmall(daily)}</div>
             </div>
             <div className="text-center">
-              <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>整月利息 ({interestUnit})</div>
-              <div className="text-sm font-semibold" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>{fmtSmall(monthly)}</div>
+              <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>整月利息 ({interestUnit})</div>
+              <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>{fmtSmall(monthly)}</div>
             </div>
             <div className="text-right">
-              <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>全年利息 ({interestUnit})</div>
-              <div className="text-sm font-semibold" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>{fmtSmall(yearly)}</div>
+              <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>全年利息 ({interestUnit})</div>
+              <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>{fmtSmall(yearly)}</div>
             </div>
           </div>
         );
@@ -2024,14 +2160,14 @@ export function FunderLenderCardSilver({
       {/* ── 行3：计息基数 / 计息天数 / 担保缺口 ── */}
       <div className="grid grid-cols-3 gap-0 px-4 py-2" style={{ fontFamily: SL_NUM_FONT }}>
         <div>
-          <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>{isStock ? `仓位额度 (${baseUnit})` : `计息基数 (${baseUnit})`}</div>
-          <div className="text-sm font-semibold" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
+          <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>{isStock ? `仓位额度 (${baseUnit})` : `计息基数 (${baseUnit})`}</div>
+          <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
             {order.interest_base ? fmt(parseFloat(order.interest_base), 0) : '--'}
           </div>
         </div>
         <div className="text-center">
-          <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>计息天数 (天)</div>
-          <div className="text-sm font-semibold" style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: SL_TEXT_SHADOW }}>
+          <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>计息天数 (天)</div>
+          <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
             {order.interest_start_date
               ? calcDays(order.interest_start_date, order.settled_at ? new Date(order.settled_at).getTime() : Date.now())
               : '--'}
@@ -2040,8 +2176,8 @@ export function FunderLenderCardSilver({
         <div className="text-right">
           {showField('collateral') ? (
             <>
-              <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_SEC, textShadow: SL_TEXT_SHADOW }}>担保缺口</div>
-              <div className="text-sm font-semibold" style={{ textShadow: SL_TEXT_SHADOW, color: SL_TEXT_PRI }}>
+              <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>担保缺口</div>
+              <div className="text-sm font-semibold" style={{ textShadow: TXT_SHADOW, color: TXT_PRI }}>
                 {collateralGap !== null ? (collateralGap >= 0 ? '充足' : '不足') : '--'}
               </div>
             </>
@@ -2050,29 +2186,29 @@ export function FunderLenderCardSilver({
       </div>
 
       {/* ── Tab 栏：详情 | 备注 ── */}
-      <div className="flex" style={{ borderTop: `1px solid ${SL_DIVIDER}` }}>
+      <div className="flex" style={{ borderTop: `1px solid ${DIVIDER}` }}>
         <button
           className="flex-1 flex items-center justify-center gap-1 py-2 relative"
           style={{ background: feeExpanded ? 'rgba(0,0,0,0.03)' : 'transparent' }}
           onClick={() => toggleTab('detail')}
         >
-          <span style={{ color: feeExpanded ? SL_TEXT_PRI : SL_TEXT_DIM, fontSize: '0.7rem', fontWeight: feeExpanded ? 600 : 400 }}>详情</span>
+          <span style={{ color: feeExpanded ? TXT_PRI : TXT_DIM, fontSize: '0.7rem', fontWeight: feeExpanded ? 600 : 400 }}>详情</span>
           {feeExpanded
-            ? <ChevronUp className="w-3 h-3" style={{ color: SL_TEXT_DIM }} />
-            : <ChevronDown className="w-3 h-3" style={{ color: SL_TEXT_DIM }} />}
+            ? <ChevronUp className="w-3 h-3" style={{ color: TXT_DIM }} />
+            : <ChevronDown className="w-3 h-3" style={{ color: TXT_DIM }} />}
           {/* 不顶天立地的垂直分隔线 */}
-          <span style={{ position: 'absolute', right: 0, top: '20%', height: '60%', width: 1, background: SL_DIVIDER }} />
+          <span style={{ position: 'absolute', right: 0, top: '20%', height: '60%', width: 1, background: DIVIDER }} />
         </button>
         <button
           className="flex-1 flex items-center justify-center gap-1 py-2"
           style={{ background: noteExpanded ? 'rgba(0,0,0,0.03)' : 'transparent' }}
           onClick={() => toggleTab('note')}
         >
-          <span style={{ color: noteExpanded ? SL_TEXT_PRI : SL_TEXT_DIM, fontSize: '0.7rem', fontWeight: noteExpanded ? 600 : 400 }}>备注</span>
-          {(() => { const cnt = parseNotes(order.public_note || '').length; return cnt > 0 ? <span style={{ color: SL_TEXT_DIM, fontSize: '0.65rem' }}>({cnt})</span> : null; })()}
+          <span style={{ color: noteExpanded ? TXT_PRI : TXT_DIM, fontSize: '0.7rem', fontWeight: noteExpanded ? 600 : 400 }}>备注</span>
+          {(() => { const cnt = parseNotes(order.public_note || '').length; return cnt > 0 ? <span style={{ color: TXT_DIM, fontSize: '0.65rem' }}>({cnt})</span> : null; })()}
           {noteExpanded
-            ? <ChevronUp className="w-3 h-3" style={{ color: SL_TEXT_DIM }} />
-            : <ChevronDown className="w-3 h-3" style={{ color: SL_TEXT_DIM }} />}
+            ? <ChevronUp className="w-3 h-3" style={{ color: TXT_DIM }} />
+            : <ChevronDown className="w-3 h-3" style={{ color: TXT_DIM }} />}
         </button>
       </div>
 
@@ -2084,8 +2220,8 @@ export function FunderLenderCardSilver({
             {/* ── 利息块 ── */}
             {/* 计息基数 */}
             <div className="flex justify-between">
-              <span style={{ color: SL_TEXT_SEC }}>{isStock ? '仓位额度' : '计息基数'}</span>
-              <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ color: TXT_SEC }}>{isStock ? '仓位额度' : '计息基数'}</span>
+              <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
                 {buyPrice > 0 && qty > 0
                   ? `${fmt(buyPrice, 0)}U（开仓币价）× ${fmtQty(qty)}${coin} = ${fmt(interestBase, 0)} ${baseUnit}`
                   : interestBase ? `${fmt(interestBase, 0)} ${baseUnit}` : '--'
@@ -2105,8 +2241,8 @@ export function FunderLenderCardSilver({
               const days = calcDays(startStr, endD.getTime());
               return (
                 <div className="flex justify-between">
-                  <span style={{ color: SL_TEXT_SEC }}>计息日期（{fmtBJ(s)}）</span>
-                  <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{fmtBJ(s)} ~ {fmtBJ(e)}  {days}天</span>
+                  <span style={{ color: TXT_SEC }}>计息日期（{fmtBJ(s)}）</span>
+                  <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{fmtBJ(s)} ~ {fmtBJ(e)}  {days}天</span>
                 </div>
               );
             })()}
@@ -2170,26 +2306,26 @@ export function FunderLenderCardSilver({
             )}
             {/* 待收利息 */}
             <div className="flex justify-between items-center">
-              <span style={{ color: SL_TEXT_SEC }}>待收利息{rateAbs ? `（年化${rateAbs}%）` : ''}</span>
-              <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ color: TXT_SEC }}>待收利息{rateAbs ? `（年化${rateAbs}%）` : ''}</span>
+              <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
                 {rateAbs && interestBase > 0 ? (() => {
                   const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
                   const days = order.interest_start_date ? calcDays(order.interest_start_date, endTs) : null;
                   return (
                     <>
-                      <span style={{ color: SL_TEXT_PRI }}>{fmt(interestBase, 0)}×{rateAbs}%÷365{days != null ? `×${days}天` : ''} = </span>
-                      <span style={{ color: SL_TEXT_PRI }}>{fmt(displayAccrued, 2)} {interestUnit}</span>
+                      <span style={{ color: TXT_PRI }}>{fmt(interestBase, 0)}×{rateAbs}%÷365{days != null ? `×${days}天` : ''} = </span>
+                      <span style={{ color: TXT_PRI }}>{fmt(displayAccrued, 2)} {interestUnit}</span>
                     </>
                   );
-                })() : <span style={{ color: SL_TEXT_PRI }}>{fmt(displayAccrued, 2)} {interestUnit}</span>}
+                })() : <span style={{ color: TXT_PRI }}>{fmt(displayAccrued, 2)} {interestUnit}</span>}
               </span>
             </div>
             {/* 已结利息 */}
             <div className="flex justify-between items-center">
-              <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
+              <span className="flex items-center gap-1" style={{ color: TXT_SEC }}>
                 已结利息
               </span>
-              <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{displayPaid > 0 ? `+${fmt(displayPaid, 2)} ${interestUnit}` : `+0.00 ${interestUnit}`}</span>
+              <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{displayPaid > 0 ? `+${fmt(displayPaid, 2)} ${interestUnit}` : `+0.00 ${interestUnit}`}</span>
             </div>
             {/* 合计应收 = 待收利息 - 已结利息 */}
             {(() => {
@@ -2197,10 +2333,10 @@ export function FunderLenderCardSilver({
               const label = net >= 0 ? '待收利息' : '超收利息';
               const numColor = net >= 0 ? LN_EARN : '#16A34A';
               return (
-                <div className="flex justify-between" style={{ borderTop: `1px solid ${SL_DIVIDER}`, paddingTop: 4, marginTop: 4 }}>
-                  <span style={{ color: SL_TEXT_SEC }}>合计应收</span>
+                <div className="flex justify-between" style={{ borderTop: `1px solid ${DIVIDER}`, paddingTop: 4, marginTop: 4 }}>
+                  <span style={{ color: TXT_SEC }}>合计应收</span>
                   <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, fontSize: '0.85rem' }}>
-                    <span style={{ color: SL_TEXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{label}</span>
+                    <span style={{ color: TXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{label}</span>
                     <span style={{ color: numColor }}>{fmt(Math.abs(net), 2)} {interestUnit}</span>
                   </span>
                 </div>
@@ -2208,20 +2344,20 @@ export function FunderLenderCardSilver({
             })()}
 
             {/* ── 担保物块 ── */}
-            <div style={{ borderTop: `1px solid ${SL_DIVIDER}`, marginTop: 6, paddingTop: 6 }}>
+            <div style={{ borderTop: `1px solid ${DIVIDER}`, marginTop: 6, paddingTop: 6 }}>
               {/* 持有资产 */}
               {qty > 0 && (
                 <div className="flex justify-between mb-1">
-                  <span style={{ color: SL_TEXT_SEC }}>持有资产</span>
-                  <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{buyPrice > 0 ? `（开仓价 ${fmt(buyPrice, 0)} U） ${fmtQty(qty)} ${coin}` : `${fmtQty(qty)} ${coin}`}</span>
+                  <span style={{ color: TXT_SEC }}>持有资产</span>
+                  <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{buyPrice > 0 ? `（开仓价 ${fmt(buyPrice, 0)} U） ${fmtQty(qty)} ${coin}` : `${fmtQty(qty)} ${coin}`}</span>
                 </div>
               )}
 
               {/* 担保价値（非共享模式才显示） */}
               {!isSharedMode && showField('collateral') && collateralValue !== null && (
                 <div className="flex justify-between mb-1">
-                  <span style={{ color: SL_TEXT_SEC }}>担保价値</span>
-                  <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{fmt(collateralValue, 2)} U</span>
+                  <span style={{ color: TXT_SEC }}>担保价値</span>
+                  <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{fmt(collateralValue, 2)} U</span>
                 </div>
               )}
               {/* 担保缺口 */}
@@ -2426,7 +2562,7 @@ export function FunderLenderCardSilver({
                   {/* 担保缺口行：共享模式显示共享池缺口，普通模式显示单订单缺口 */}
                   {(isSharedMode || collateralGap !== null) && (
                     <div className="flex justify-between mb-1 items-center">
-                      <span className="flex items-center gap-1" style={{ color: SL_TEXT_SEC }}>
+                      <span className="flex items-center gap-1" style={{ color: TXT_SEC }}>
                         担保缺口
                         <button
                           type="button"
@@ -2452,14 +2588,14 @@ export function FunderLenderCardSilver({
                         const diffSufficient = diff >= 0;
                         return allKnown
                           ? <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                              <span style={{ color: SL_TEXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{diffSufficient ? '充足' : '不足'}</span>
-                              <span style={{ color: SL_TEXT_PRI }}>{diffSufficient ? '+' : ''}{diff.toFixed(2)} U</span>
+                              <span style={{ color: TXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{diffSufficient ? '充足' : '不足'}</span>
+                              <span style={{ color: TXT_PRI }}>{diffSufficient ? '+' : ''}{diff.toFixed(2)} U</span>
                             </span>
                           : <span style={{ color: '#9CA3AF', fontSize: '0.75rem' }}>计算中...</span>;
                       })() : (
                         <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                          <span style={{ color: SL_TEXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{isSufficient ? '充足' : '不足'}</span>
-                          <span style={{ color: SL_TEXT_PRI }}>{isSufficient ? '+' : ''}{fmt(collateralGap, 2)} U</span>
+                          <span style={{ color: TXT_PRI, fontSize: '0.7rem', fontWeight: 500, marginRight: 3, opacity: 0.85 }}>{isSufficient ? '充足' : '不足'}</span>
+                          <span style={{ color: TXT_PRI }}>{isSufficient ? '+' : ''}{fmt(collateralGap, 2)} U</span>
                         </span>
                       )}
                     </div>
@@ -2474,14 +2610,14 @@ export function FunderLenderCardSilver({
 
       {/* ── 备注展开区 ── */}
       {noteExpanded && (
-        <div className="px-4 pb-3 pt-2 text-xs" style={{ borderTop: `1px dashed ${SL_DIVIDER}` }} onClick={e => e.stopPropagation()}>
+        <div className="px-4 pb-3 pt-2 text-xs" style={{ borderTop: `1px dashed ${DIVIDER}` }} onClick={e => e.stopPropagation()}>
           {/* 备注列表 */}
           {noteItems.length === 0 && noteEditingIdx === null && (
-            <div style={{ color: SL_TEXT_DIM }} className="py-1">暂无备注</div>
+            <div style={{ color: TXT_DIM }} className="py-1">暂无备注</div>
           )}
           {noteItems.map((note, idx) => (
             <div key={idx}>
-              {idx > 0 && <div style={{ borderTop: `1px solid ${SL_DIVIDER}` }} className="my-1.5" />}
+              {idx > 0 && <div style={{ borderTop: `1px solid ${DIVIDER}` }} className="my-1.5" />}
               {noteEditingIdx === idx ? (
                 <div className="flex items-center gap-1 py-0.5">
                   <input
@@ -2526,7 +2662,7 @@ export function FunderLenderCardSilver({
                       const ownerMember = !note.userId ? (membersData as any[])?.find((m: any) => m.role === 'owner') : null;
                       const finalAvatar = avatarUrl || (!note.userId ? ownerMember?.avatar : null);
                       const name = note.userName || (!note.userId ? (ownerMember?.username || ownerMember?.nickname || '') : '');
-                      if (finalAvatar) return <img src={finalAvatar} alt="" className="w-6 h-6 rounded-full object-cover" style={{ border: `1px solid ${SL_DIVIDER}` }} />;
+                      if (finalAvatar) return <img src={finalAvatar} alt="" className="w-6 h-6 rounded-full object-cover" style={{ border: `1px solid ${DIVIDER}` }} />;
                       if (!name) return <div className="w-6 h-6 rounded-full flex items-center justify-center" style={{ backgroundColor: '#E5E7EB' }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>;
                       const initials = name.slice(0, 1).toUpperCase();
                       const colors = ['#6366F1','#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6'];
@@ -2536,15 +2672,15 @@ export function FunderLenderCardSilver({
                   </div>
                   {/* 右侧内容 */}
                   <div className="flex-1 min-w-0">
-                    {note.time && <div className="text-[10px] mb-0.5" style={{ color: SL_TEXT_DIM }}>{formatNoteTime(note.time)}</div>}
-                    <div className="break-all" style={{ color: SL_TEXT_PRI, fontSize: '11px', lineHeight: '1.5' }}>{note.text}</div>
+                    {note.time && <div className="text-[10px] mb-0.5" style={{ color: TXT_DIM }}>{formatNoteTime(note.time)}</div>}
+                    <div className="break-all" style={{ color: TXT_PRI, fontSize: '11px', lineHeight: '1.5' }}>{note.text}</div>
                   </div>
                 </div>
               )}
             </div>
           ))}
           {/* 添加备注按鈕 */}
-          <div style={{ borderTop: noteItems.length > 0 ? `1px solid ${SL_DIVIDER}` : 'none' }} className="mt-1 pt-1">
+          <div style={{ borderTop: noteItems.length > 0 ? `1px solid ${DIVIDER}` : 'none' }} className="mt-1 pt-1">
             <button
               type="button"
               onClick={() => {
@@ -2554,7 +2690,7 @@ export function FunderLenderCardSilver({
                 setNoteEditValue('');
               }}
               className="flex items-center gap-1"
-              style={{ color: SL_TEXT_PRI }}
+              style={{ color: TXT_PRI }}
             >
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
               <span style={{ fontSize: '11px' }}>添加备注</span>
