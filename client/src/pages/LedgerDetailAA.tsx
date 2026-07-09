@@ -2340,8 +2340,9 @@ export default function LedgerDetailAA({
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 今日变动：已更新彩色，未更新灰色显示数字；可点击展示计算过程 */}
                       {(() => {
-                        const _todayPnlColor = !_showTodayPnl || todayPnl === null || todayPnl === 0 ? '#BDBDBD'
+                        const _todayPnlColor = !_showTodayPnl || todayPnl === null ? '#BDBDBD'
                           : !_isTagUpdatedToday ? '#BDBDBD'
+                          : todayPnl === 0 ? '#1A1A1A'
                           : todayPnl > 0 ? '#D32F2F' : '#388E3C';
                         const _todayPnlText = _showTodayPnl && todayPnl !== null
                           ? `${todayPnl < 0 ? '-' : ''}${Math.abs(todayPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`
