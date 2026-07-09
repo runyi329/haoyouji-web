@@ -436,7 +436,12 @@ export function getLatestPrice(coin: string): number | null {
   if (!entry) return null;
   // 只要有缓存价格就返回，不设过期限制
   // 服务器无法访问境外API时，至少用上一次持久化缓存的价格显示资产
-  return entry.price;
+  let price = entry.price;
+  // 韩元计价兑底：如果 SKHYNIX 价格 > 10000，说明缓存的是韩元原始价，自动除以备用汇率 1400 换算成美元
+  if (KRW_COINS.has(coin.toUpperCase()) && price > 10000) {
+    price = parseFloat((price / 1400).toFixed(4));
+  }
+  return price;
 }
 
 export function getAllLatestPrices(): Record<string, { price: number; todayOpen: number; changePercent: number; high24h: number; low24h: number; volume24h: number; quoteVolume24h: number; updatedAt: string }> {
