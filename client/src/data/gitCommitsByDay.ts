@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-09
+// 生成时间：2026-07-10
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8285,5 +8285,12 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-09T11:38:09Z", type: "fix", cleanMessage: "52号账本相关文件行情询价改回服务器tRPC（getCryptoPrices，3秒轮询）- FunderOrderCardV2/RightMarginDetail/LedgerDetailAA/CryptoPrediction - 移除useCryptoPrices前端直连，改为trpc.getCryptoPrices.useQuery" },
     { date: "2026-07-09T11:48:48Z", type: "fix", cleanMessage: "修复getTagSummary中ledger_members查询字段名错误（ledger_id→ledgerId，user_id→userId），避免SQL报错导致账户余额显示--" },
     { date: "2026-07-09T12:04:50Z", type: "other", cleanMessage: "规则G：全项目行情询价全面改回服务器tRPC，弃用前端直连/Cloudflare Worker方案" },
+    { date: "2026-07-09T12:23:58Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-09T12:31:26Z", type: "fix", cleanMessage: "SKHYNIX价格改走OKX SWAP接口（服务器端直连，约1527U，无需韩元换算）" },
+    { date: "2026-07-09T12:34:25Z", type: "fix", cleanMessage: "SKHYNIX价格韩元→美元换算（Yahoo Finance 000660.KS ÷ USDKRW汇率，备用固定汇率1400）" },
+    { date: "2026-07-09T12:54:10Z", type: "fix", cleanMessage: "SKHYNIX getLatestPrice兜底换算（缓存为韩元时自动÷1400，立即生效无需等扫描周期）" },
+    { date: "2026-07-09T15:02:31Z", type: "feat", cleanMessage: "期权卡片全面优化 - 白色文字/行权价/到期日/权利金/内在价值/Greeks自动加载前端直连Deribit" },
+    { date: "2026-07-09T15:07:55Z", type: "fix", cleanMessage: "期权详情去掉合约名称显示行" },
+    { date: "2026-07-09T15:18:43Z", type: "fix", cleanMessage: "期权编辑表单到期日下拉显示完整日期+余N天" },
   ],
 };
