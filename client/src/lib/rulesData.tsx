@@ -795,11 +795,19 @@ function ProjectCreationRuleContent() {
             </tr>
           </tbody>
         </table>
-        <p className="text-[12px] font-semibold text-gray-800 mb-1">期权（Deribit）— 已完成实现</p>
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 mb-3">
+          <p className="text-[12px] font-bold text-amber-800 mb-1.5">⚠️ 架构铁律：父组件单例拉取，子组件只读 props</p>
+          <ul className="text-[12px] text-amber-700 space-y-1.5">
+            <li>✅ <span className="font-semibold">正确做法</span>：在页面级父组件（如 FunderManagement）顶层调用一次 <span className="font-mono text-[11px] bg-amber-100 px-1 rounded">useCryptoPrices</span>，结果放入 <span className="font-mono text-[11px] bg-amber-100 px-1 rounded">livePrices</span> prop 向下传给所有卡片。无论账本里有多少张订单，对外永远只有 <span className="font-semibold">1 个请求</span>。</li>
+            <li>❌ <span className="font-semibold text-red-700">错误做法</span>：在卡片组件（FunderOrderCard 等）内部独立调用价格 hook。N 张卡片 = N 个并发请求，移动端 Safari 超过并发阈值会触发连接重置，导致「因为出现问题，此网页已重新载入」崩溃。</li>
+            <li>📌 同理适用于 Deribit 期权数据：行权日/行权价在父组件拉一次，通过 props 传给表单，不在每个卡片实例里独立请求。</li>
+          </ul>
+        </div>
+        <p className="text-[12px] font-semibold text-gray-800 mb-1">期权（Deribit）— 待重新实现（遵循上方架构铁律）</p>
         <ul className="text-[12px] text-gray-700 space-y-1">
           <li>行权日 / 行权价下拉框：直连 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">deribit.com/api/v2/public/get_instruments</span>，静态数据兜底</li>
           <li>希腊字母（IV / Delta / Gamma / Theta / Vega）：直连 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">deribit.com/api/v2/public/ticker</span>，每 30 秒自动刷新</li>
-          <li>实现文件：<span className="font-mono text-[11px] bg-gray-100 px-1 rounded">client/src/lib/useDeribit.ts</span></li>
+          <li>实现文件（待重建）：<span className="font-mono text-[11px] bg-gray-100 px-1 rounded">client/src/lib/useDeribit.ts</span>（已因架构问题回滚删除）</li>
         </ul>
       </RuleSection>
 
@@ -889,7 +897,7 @@ export const RULES: Rule[] = [
     id: "005",
     title: "项目创建规则",
     summary:
-      "新建项目总规范：A角色与归属权限 B会员权限 C项目骨架 D初始化清单 E多项目登录皮肤路由 F图片/视频/文件上传规范 G金融数据获取规则（数字币前端直连币安/OKX/CoinGecko三重兜底；美股/港股/黄金/石油走Cloudflare Worker代理Yahoo Finance；老方案封存备用）。",
+      "新建项目总规范：A角色与归属权限 B会员权限 C项目骨架 D初始化清单 E多项目登录皮肤路由 F图片/视频/文件上传规范 G金融数据获取规则（数字币前端直连币安/OKX/CoinGecko三重兜底；美股/港股/黄金/石油走Cloudflare Worker代理Yahoo Finance；架构铁律：价格数据必须在父组件顶层统一拉取一次，通过livePrices props传给子卡片，严禁在每个卡片实例里独立调用价格hook；老方案封存备用）。",
     content: <ProjectCreationRuleContent />,
   },
   {
