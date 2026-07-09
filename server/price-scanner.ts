@@ -59,12 +59,12 @@ export function getUsdtCnyRate(): number {
 
 const COINS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'SEI', 'PLUME'];
 // 股票类合约（优先 OKX SWAP，兜底新浪财经）
-const STOCK_COINS = ['TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG'];
+const STOCK_COINS = ['TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'SKHYNIX'];
 // 优先 Yahoo Finance，兜底新浪财经
-const YAHOO_STOCKS = ['CRCL', 'DRAM', 'MU', 'MSTR', 'SKHYNIX'];
+const YAHOO_STOCKS = ['CRCL', 'DRAM', 'MU', 'MSTR'];
 // Yahoo Finance 代码映射（内部代码 → Yahoo symbol，用于非美股）
 const YAHOO_CODE_MAP: Record<string, string> = {
-  SKHYNIX: '000660.KS', // SK海力士（韩国交易所 KRX）
+  // SKHYNIX 已改走 OKX SWAP（服务器端直连，无需韩元换算）
 };
 
 // 新浪财经美股代码映射（所有股票统一用新浪兜底）
