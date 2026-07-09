@@ -595,6 +595,15 @@ export default function YabanScheduleCreate() {
   const handleSave = () => {
     if (!form.patientName) { alert("请选择顾客"); return; }
     if (!form.doctor) { alert("请在第1步选择医生时段"); return; }
+    // 校验医生当天是否有排班，今日休息时阻止提交
+    const selDoc = DOCTORS.find((m: any) => m.name === form.doctor);
+    if (selDoc) {
+      const docShift = getEffectiveShift(selDoc.userId, form.date);
+      if (!docShift) {
+        toast.error(`${form.doctor}在 ${form.date} 没有排班，无法预约`);
+        return;
+      }
+    }
     if (form.selectedProjects.length === 0 && !form.project) { alert("请选择项目"); return; }
     if (!form.visitType) { alert("请选择就诊类型"); return; }
     if (submitting) return;

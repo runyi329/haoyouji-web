@@ -644,35 +644,27 @@ export default function YabanClinicShift() {
             <div
               key={r.staffUserId}
               onClick={() => { if (batchMode) { toggleBatchSel(r.staffUserId); } else { openSch(r.staffUserId, r.staffName, selDate); } }}
-              style={{ background: "#fff", padding: "11px 14px", display: "flex", alignItems: "center", gap: 9, borderBottom: `1px solid ${LINE}`, cursor: batchMode ? "pointer" : "default", userSelect: "none" }}
+              style={{ background: "#fff", padding: "8px 14px", borderBottom: `1px solid ${LINE}`, cursor: batchMode ? "pointer" : "default", userSelect: "none" }}
             >
-              {batchMode && (
-                <div style={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${isBatchSel ? SKY_D : "#DBE1E8"}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: isBatchSel ? SKY_D : "transparent", transition: ".16s" }}>
-                  {isBatchSel && <svg width="10" height="10" viewBox="0 0 10 10"><polyline points="1.5,5 4,8 8.5,2" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-                </div>
-              )}
-              {/* 列一：头像 */}
-              <div style={{ width: 38, height: 38, flexShrink: 0, borderRadius: "50%", background: hasShift ? rc.bg : "#e8ecf0", color: hasShift ? rc.fg : "#9AA7B5", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 600, filter: hasShift ? "none" : "grayscale(1)", opacity: hasShift ? 1 : 0.7 }}>{r.staffName.charAt(0)}</div>
-              {/* 列二：名字(上) 职称(下) */}
-              <div style={{ width: 60, flexShrink: 0, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#26303C", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.staffName}</div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 2, marginTop: 2 }}>
-                  {(r.roleKeys || [r.roleKey]).map((rk: string) => {
-                    const tagRc = roleColor(rk);
-                    const tagBg = hasCustomColor ? rc.bg : tagRc.bg;
-                    const tagFg = hasCustomColor ? rc.fg : tagRc.fg;
-                    return <span key={rk} style={{ display: "inline-block", fontSize: 10, fontWeight: 600, lineHeight: 1.5, padding: "0 5px", borderRadius: 4, color: tagFg, background: tagBg }}>{roleLabel(rk)}</span>;
-                  })}
-                </div>
-              </div>
-              {/* 列三：进度条(色块内显示时长) + 工时文字与色块左对齐 */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                {!hasShift ? (
-                  <div style={{ position: "relative", height: 44, borderRadius: 4, overflow: "hidden", background: "repeating-linear-gradient(45deg,#ECEFF3,#ECEFF3 4px,#F6F8FA 4px,#F6F8FA 8px)", cursor: batchMode ? "inherit" : "pointer" }}>
-                    <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "#bcc6d0" }}>{r.hasTemplate ? "今日休息 · 点击排班" : "未排班 · 点击排班"}</span>
+              {/* 上层：左侧列 + 甘特条，alignItems:center 不受时间标注影响 */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {batchMode && (
+                  <div style={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${isBatchSel ? SKY_D : "#DBE1E8"}`, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: isBatchSel ? SKY_D : "transparent", transition: ".16s" }}>
+                    {isBatchSel && <svg width="10" height="10" viewBox="0 0 10 10"><polyline points="1.5,5 4,8 8.5,2" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
                   </div>
-                ) : (
-                  <>
+                )}
+                {/* 左侧：姓名 + 职务标签 */}
+                <div style={{ width: 56, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#26303C", textAlign: "center", width: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: "1.2" }}>{r.staffName}</div>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: hasShift ? rc.fg : "#9AA7B5", background: hasShift ? rc.bar : "#e8ecf0", padding: "1px 6px", borderRadius: 4, whiteSpace: "nowrap" }}>{roleLabel(r.roleKey)}</span>
+                </div>
+                {/* 甘特条 */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {!hasShift ? (
+                    <div style={{ position: "relative", height: 44, borderRadius: 4, overflow: "hidden", background: "repeating-linear-gradient(45deg,#ECEFF3,#ECEFF3 4px,#F6F8FA 4px,#F6F8FA 8px)", cursor: batchMode ? "inherit" : "pointer" }}>
+                      <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", fontSize: 11, color: "#bcc6d0" }}>{r.hasTemplate ? "今日休息 · 点击排班" : "未排班 · 点击排班"}</span>
+                    </div>
+                  ) : (
                     <div title="点击编辑排班" style={{ position: "relative", height: 44, borderRadius: 4, overflow: "hidden", background: "#E2E8EF", cursor: batchMode ? "inherit" : "pointer" }}>
                       {segs.map((s: Seg, si: number) => {
                         const L = pctM(toMin(s.start)), W = pctM(toMin(s.end)) - L;
@@ -689,18 +681,20 @@ export default function YabanClinicShift() {
                         );
                       })}
                     </div>
-                    {/* 工时文字：按段定位在色块正下方，与色块对齐 */}
-                    <div style={{ position: "relative", height: 14, marginTop: 3 }}>
-                      {segs.map((s: Seg, si: number) => {
-                        const L = pctM(toMin(s.start)), W = pctM(toMin(s.end)) - L;
-                        return (
-                          <div key={si} style={{ position: "absolute", left: `${L}%`, width: `${Math.max(W, 1)}%`, top: 0, textAlign: "center", fontSize: 10, color: GRAY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.start}–{s.end}</div>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
+                  )}
+                </div>
               </div>
+              {/* 下层：工时时间标注（独立在甘特条下方，左边留出 56+10=66px 对齐） */}
+              {hasShift && (
+                <div style={{ position: "relative", height: 14, marginTop: 3, marginLeft: 66 }}>
+                  {segs.map((s: Seg, si: number) => {
+                    const L = pctM(toMin(s.start)), W = pctM(toMin(s.end)) - L;
+                    return (
+                      <div key={si} style={{ position: "absolute", left: `${L}%`, width: `${Math.max(W, 1)}%`, top: 0, textAlign: "center", fontSize: 10, color: GRAY, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.start}–{s.end}</div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })

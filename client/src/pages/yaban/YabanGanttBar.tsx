@@ -186,6 +186,18 @@ export default function YabanGanttBar({
                 {(a.patientName || "").slice(0, 3)}
               </span>
             )}
+            {/* 已确认预约：右上角绿色✓角标 */}
+            {a.status === "confirmed" && (
+              <div style={{
+                position: "absolute", top: 2, right: 2,
+                width: 12, height: 12, borderRadius: "50%",
+                background: "#1A9E5A",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 8, fontWeight: 900, color: "#fff",
+                lineHeight: 1, zIndex: 3,
+                boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+              }}>&#10003;</div>
+            )}
           </div>
         );
       })}

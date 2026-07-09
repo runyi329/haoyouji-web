@@ -414,11 +414,12 @@ export const yabanCommRouter = router({
       const followMap: Record<string, number> = {};
       for (const r of followRows as any[]) followMap[String(r.d).slice(0, 10)] = Number(r.c);
 
-      // 生成7天数组
+      // 生成7天数组（用本地日期避免UTC时区偏移）
       const days = [];
       for (let i = 0; i < 7; i++) {
-        const d = new Date(start); d.setDate(d.getDate() + i);
-        const ds = d.toISOString().slice(0, 10);
+        const d = new Date(start + 'T00:00:00'); d.setDate(d.getDate() + i);
+        const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+        const ds = `${y}-${m}-${day}`;
         days.push({ date: ds, appt: apptMap[ds] || 0, follow: followMap[ds] || 0 });
       }
       return { days };

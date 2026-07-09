@@ -67,7 +67,7 @@ export function getRoleBarBgColor(roleKey?: string): string {
 // ── 预约状态色 ──
 export const STATUS: Record<string, { label: string; color: string; bg: string }> = {
   booked:     { label: "已预约",   color: "#3D9FD6", bg: "#EBF5FB" },
-  confirmed:  { label: "已确认",   color: "#1E88D6", bg: "#EBF5FB" },
+  confirmed:  { label: "已确认",   color: "#1A9E5A", bg: "#E6F7EE" },
   treating:   { label: "治疗中",   color: "#1567AE", bg: "#E0EDF7" },
   done:       { label: "已完成",   color: "#3D7A53", bg: "#EAF2EC" },
   missed:     { label: "失约",     color: "#9A6E1F", bg: "#F5EEDD" },

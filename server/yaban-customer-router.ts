@@ -4131,4 +4131,30 @@ export const yabanCustomerRouter = router({
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: `K线数据获取失败: ${err?.message || '未知错误'}` });
       }
     }),
+
+  // 今日生日顾客列表
+  todayBirthday: protectedProcedure
+    .input(z.object({ date: z.string().optional() }))
+    .query(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+      const TENANT_ID = await resolveTenantId(ctx);
+      // 取今天的月-日，匹配 birthday 字段（格式 YYYY-MM-DD 或 YYYY.MM.DD）
+      const today = input.date || new Date().toISOString().slice(0, 10);
+      const mmdd = today.slice(5); // "MM-DD"
+      const [rows] = (await (conn as any).execute(
+        `SELECT id, name, gender, birthday, mobile
+         FROM yaban_customer
+         WHERE tenant_id = ?
+           AND birthday IS NOT NULL
+           AND birthday != ''
+           AND (
+             SUBSTRING(birthday, 6, 5) = ?
+             OR REPLACE(SUBSTRING(birthday, 6, 5), '.', '-') = ?
+           )`,
+        [TENANT_ID, mmdd, mmdd]
+      )) as any;
+      conn.release?.();
+      return { list: rows as any[], count: (rows as any[]).length };
+    }),
 });

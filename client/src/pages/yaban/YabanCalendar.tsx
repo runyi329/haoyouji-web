@@ -74,6 +74,7 @@ function DayView({ viewDate, tenantId }: { viewDate: string; tenantId: number })
     { keepPreviousData: true }
   );
   const apptTotal = appts?.length ?? 0;
+  const apptConfirmedCount = (appts || []).filter((a: any) => a.status === "confirmed").length;
 
   // 今日随访（取全部，前端过滤今天的）
   const { data: followData, isLoading: followLoading } = trpc.yabanComm.listFollowups.useQuery(
@@ -90,12 +91,25 @@ function DayView({ viewDate, tenantId }: { viewDate: string; tenantId: number })
   const chargeList = chargeData?.list || [];
   const chargeTotal = chargeList.reduce((sum, c) => sum + (c.actualAmount || 0), 0);
 
-  const cards = [
+  // 今日生日顾客
+  const { data: birthdayData, isLoading: birthdayLoading } = trpc.yabanCustomer.todayBirthday.useQuery(
+    { date: viewDate },
+    { keepPreviousData: true }
+  );
+  const birthdayCount = birthdayData?.count ?? 0;
+
+  // 从预约数据派生：到诊、爽约、未确认
+  const arrivedCount = apptLoading ? null : (appts || []).filter((a: any) => a.status === 'arrived' || a.status === 'completed').length;
+  const missedCount = apptLoading ? null : (appts || []).filter((a: any) => a.status === 'cancelled' || a.status === 'missed').length;
+  const unbookedCount = apptLoading ? null : (appts || []).filter((a: any) => a.status === 'booked').length;
+
+  // 第一行：核心运营指标
+  const row1 = [
     {
       key: 'appt',
       label: '今日预约',
       value: apptLoading ? null : apptTotal,
-      suffix: '',
+      subLabel: apptLoading ? null : (apptConfirmedCount > 0 ? `已确认 ${apptConfirmedCount}` : null),
       gradient: 'linear-gradient(135deg, #4DB8E8 0%, #2196C8 100%)',
       borderColor: '#2196C8',
       onClick: () => navigate(`/yaban/schedule?date=${viewDate}`),
@@ -104,7 +118,6 @@ function DayView({ viewDate, tenantId }: { viewDate: string; tenantId: number })
       key: 'follow',
       label: '今日随访',
       value: followLoading ? null : followTotal,
-      suffix: '',
       gradient: 'linear-gradient(135deg, #34D399 0%, #10B981 100%)',
       borderColor: '#10B981',
       onClick: () => navigate('/yaban/followup'),
@@ -113,45 +126,59 @@ function DayView({ viewDate, tenantId }: { viewDate: string; tenantId: number })
       key: 'charge',
       label: '今日营业额',
       value: chargeLoading ? null : chargeTotal,
-      suffix: '',
       prefix: '¥',
+      isRevenue: true,
       gradient: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
       borderColor: '#D97706',
       onClick: () => navigate('/yaban/charge'),
     },
   ];
 
+  // 第二行：辅助指标
+  const row2 = [
+    {
+      key: 'arrived',
+      label: '今日到诊',
+      value: arrivedCount,
+      gradient: 'linear-gradient(135deg, #818CF8 0%, #6366F1 100%)',
+      borderColor: '#6366F1',
+      onClick: () => navigate(`/yaban/schedule?date=${viewDate}`),
+    },
+    {
+      key: 'missed',
+      label: '今日爽约',
+      value: missedCount,
+      gradient: 'linear-gradient(135deg, #F87171 0%, #EF4444 100%)',
+      borderColor: '#EF4444',
+      onClick: () => navigate(`/yaban/schedule?date=${viewDate}`),
+    },
+    {
+      key: 'birthday',
+      label: '今日生日',
+      value: birthdayLoading ? null : birthdayCount,
+      gradient: 'linear-gradient(135deg, #F472B6 0%, #EC4899 100%)',
+      borderColor: '#EC4899',
+      onClick: () => navigate('/yaban/customer'),
+    },
+  ];
+
+  const renderCard = (card: any) => (
+    <button key={card.key} onClick={card.onClick} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRadius: 14, padding: '14px 8px', textAlign: 'center', background: card.gradient, boxShadow: `0 4px 14px ${card.borderColor}44`, border: 'none', cursor: 'pointer', minHeight: 80 }}>
+      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)', fontWeight: 500, marginBottom: 6 }}>{card.label}</div>
+      <div style={{ fontSize: 26, fontWeight: 800, color: '#fff', lineHeight: 1 }}>
+        {card.value === null ? '—' : <>{card.prefix || ''}{card.isRevenue ? card.value.toLocaleString() : card.value}</>}
+      </div>
+      {card.subLabel && <div style={{ marginTop: 5, fontSize: 10, color: 'rgba(255,255,255,0.9)', fontWeight: 600, background: 'rgba(255,255,255,0.22)', borderRadius: 4, padding: '1px 6px' }}>{card.subLabel}</div>}
+    </button>
+  );
+
   return (
-    <div
-      className="px-3 pb-3 pt-2"
-      style={{ background: "linear-gradient(180deg, #F8FBFF 0%, #F2F6FA 100%)" }}
-    >
-      <div className="grid grid-cols-3 gap-2">
-        {cards.map(card => (
-          <button
-            key={card.key}
-            className="flex flex-col rounded-xl p-3 text-left active:opacity-80 transition-opacity"
-            style={{
-              background: '#fff',
-              boxShadow: '0 2px 10px rgba(33,150,200,0.10), 0 1px 3px rgba(0,0,0,0.04)',
-              borderTop: `3px solid ${card.borderColor}`,
-            }}
-            onClick={card.onClick}
-          >
-            <div className="flex items-center justify-between w-full mb-1.5">
-              <span className="text-[11px] text-gray-500 font-medium">{card.label}</span>
-              <ArrowRight className="w-3 h-3 text-gray-300" />
-            </div>
-            <div
-              className="text-2xl font-bold leading-none"
-              style={{ background: card.gradient, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
-            >
-              {card.value === null
-                ? <span style={{ WebkitTextFillColor: '#ccc', background: 'none' }}>—</span>
-                : <>{card.prefix || ''}{card.key === 'charge' ? card.value.toLocaleString() : card.value}{card.suffix}</>}
-            </div>
-          </button>
-        ))}
+    <div style={{ padding: '10px 12px 8px', background: '#F0F4F8', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+        {row1.map(renderCard)}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+        {row2.map(renderCard)}
       </div>
     </div>
   );

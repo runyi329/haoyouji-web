@@ -302,6 +302,10 @@ export default function YabanSchedule() {
     onSuccess: () => { refetchAppts(); setDetailModal({ open: false }); toast.success("预约已删除"); },
     onError: (e) => toast.error(e.message),
   });
+  const confirmApptMut = trpc.yabanAppointment.updateStatus.useMutation({
+    onSuccess: () => { refetchAppts(); setDetailModal({ open: false }); toast.success("预约已确认 ✓"); },
+    onError: (e) => toast.error(e.message),
+  });
 
   // ── 渲染 ──
 
@@ -384,6 +388,7 @@ export default function YabanSchedule() {
             const treating = appointments.filter(a => a.status === "treating");
             const done = appointments.filter(a => ["done","treated","paid","left"].includes(a.status || ""));
             const missed = appointments.filter(a => ["missed","cancelled"].includes(a.status || ""));
+            const confirmedCount = pending.filter(a => a.status === "confirmed").length;
             const groups = [
               { label: "待到诊", color: "#1E88D6", bg: "#EBF5FB", items: pending },
               { label: "治疗中", color: "#1567AE", bg: "#E0EDF7", items: treating },
@@ -396,12 +401,18 @@ export default function YabanSchedule() {
                   <div key={g.label} style={{ padding: "8px 14px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                       <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 8, color: g.color, background: g.bg, fontWeight: 600 }}>{g.label} {g.items.length}</span>
+                      {g.label === "待到诊" && confirmedCount > 0 && (
+                        <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 8, color: "#1A9E5A", background: "#E6F7EE", fontWeight: 600 }}>已确认 {confirmedCount}</span>
+                      )}
                     </div>
                     {g.items.map(a => (
                       <div key={a.id} onClick={() => setDetailModal({ open: true, apptId: a.id })} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${LINE}`, cursor: "pointer" }}>
                         <div style={{ minWidth: 44, fontSize: 12, color: GRAY, fontWeight: 500 }}>{a.appointTime?.slice(0,5)}</div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: INK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.patientName}</div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={{ fontSize: 13, fontWeight: 600, color: INK, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.patientName}</span>
+                            {a.status === "confirmed" && <span style={{ fontSize: 10, padding: "1px 5px", borderRadius: 4, color: "#1A9E5A", background: "#E6F7EE", fontWeight: 600, flexShrink: 0 }}>已确认</span>}
+                          </div>
                           <div style={{ fontSize: 11, color: GRAY, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.doctor} · {a.project}</div>
                         </div>
                       </div>
@@ -792,10 +803,18 @@ export default function YabanSchedule() {
               }
             </div>
           ))}
-          <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
-            <div onClick={() => deleteApptMut.mutate({ id: detailAppt.id, tenantId: currentTenantId ?? undefined })} style={{ flex: "0 0 auto", padding: "13px 20px", borderRadius: 6, fontSize: 15, fontWeight: 600, cursor: "pointer", background: "#FDECEC", color: "#D64545", textAlign: "center" }}>删除</div>
-            <div onClick={() => setDetailModal({ open: false })} style={{ flex: 1, padding: 13, borderRadius: 6, fontSize: 15, fontWeight: 600, cursor: "pointer", background: "#F6F8FA", color: "#5b6675", textAlign: "center" }}>关闭</div>
-            <div onClick={() => { const id = detailAppt.id; setDetailModal({ open: false }); setLocation(`/yaban/schedule/create?id=${id}`); }} style={{ flex: 1, padding: 13, borderRadius: 6, fontSize: 15, fontWeight: 600, cursor: "pointer", background: SKY, color: "#fff", textAlign: "center" }}>编辑预约</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 18 }}>
+            <div onClick={() => deleteApptMut.mutate({ id: detailAppt.id, tenantId: currentTenantId ?? undefined })} style={{ padding: "11px 0", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", background: "#FDECEC", color: "#D64545", textAlign: "center" }}>删除</div>
+            <div onClick={() => setDetailModal({ open: false })} style={{ padding: "11px 0", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", background: "#F6F8FA", color: "#5b6675", textAlign: "center" }}>关闭</div>
+            {detailAppt.status !== "confirmed" ? (
+              <div
+                onClick={() => confirmApptMut.mutate({ id: detailAppt.id, status: "confirmed", tenantId: currentTenantId ?? undefined })}
+                style={{ padding: "11px 0", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", background: "#E6F7EE", color: "#1A9E5A", textAlign: "center" }}
+              >确认预约</div>
+            ) : (
+              <div style={{ padding: "11px 0", borderRadius: 8, fontSize: 14, fontWeight: 600, background: "#E6F7EE", color: "#1A9E5A", textAlign: "center", opacity: 0.7 }}>已确认</div>
+            )}
+            <div onClick={() => { const id = detailAppt.id; setDetailModal({ open: false }); setLocation(`/yaban/schedule/create?id=${id}`); }} style={{ padding: "11px 0", borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: "pointer", background: SKY, color: "#fff", textAlign: "center" }}>编辑预约</div>
           </div>
         </BottomSheet>
       )}
@@ -833,76 +852,76 @@ function DocRows({ docList, onDocClick, onApptClick, onNewAppt, trkStart, trkEnd
         <YabanGanttTimeline trackStart={a} trackEnd={b} paddingLeft={66} />
       </div>
       {docList.map((doc, idx) => (
-        <div key={doc.name} style={{ background: "#fff", padding: "8px 14px", display: "flex", alignItems: "stretch", gap: 10, borderBottom: `1px solid ${LINE}` }}>
-          {/* 左侧头像/姓名：点击进入该医生放大日程；长按弹出当日排班编辑 */}
-          <div
-            onClick={() => onDocClick(idx)}
-            onContextMenu={e => { e.preventDefault(); if (onEditShift && doc.userId != null) onEditShift(doc.userId, doc.name, doc.color); }}
-            onTouchStart={e => {
-              const t = setTimeout(() => { if (onEditShift && doc.userId != null) onEditShift(doc.userId, doc.name, doc.color); }, 600);
-              const cancel = () => clearTimeout(t);
-              e.currentTarget.addEventListener("touchend", cancel, { once: true });
-              e.currentTarget.addEventListener("touchmove", cancel, { once: true });
-            }}
-            style={{ width: 56, flexShrink: 0, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
-            {/* 头像 + 预约数角标 */}
-            <div style={{ position: "relative", display: "inline-block" }}>
-              <div style={{ width: 26, height: 26, borderRadius: "50%", background: (doc.color && doc.color !== "#1E88D6") ? doc.color : SKY_L, color: (doc.color && doc.color !== "#1E88D6") ? "#fff" : SKY_D, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>{doc.name.charAt(0)}</div>
-              {doc.appts.length > 0 && (
-                <div style={{ position: "absolute", top: -3, right: -5, minWidth: 14, height: 14, borderRadius: 7, background: "#E53935", color: "#fff", fontSize: 9, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px", border: "1.5px solid #fff", lineHeight: 1 }}>{doc.appts.length}</div>
-              )}
+        <div key={doc.name} style={{ background: "#fff", padding: "8px 14px 8px", borderBottom: `1px solid ${LINE}` }}>
+          {/* 上层：左侧列 + 甘特条，alignItems:center 不受时间标注影响 */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {/* 左侧：姓名 + 职务标签 */}
+            <div
+              onClick={() => onDocClick(idx)}
+              onContextMenu={e => { e.preventDefault(); if (onEditShift && doc.userId != null) onEditShift(doc.userId, doc.name, doc.color); }}
+              onTouchStart={e => {
+                const t = setTimeout(() => { if (onEditShift && doc.userId != null) onEditShift(doc.userId, doc.name, doc.color); }, 600);
+                const cancel = () => clearTimeout(t);
+                e.currentTarget.addEventListener("touchend", cancel, { once: true });
+                e.currentTarget.addEventListener("touchmove", cancel, { once: true });
+              }}
+              style={{ width: 56, flexShrink: 0, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#26303C", textAlign: "center", width: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: "1.2" }}>{doc.name}</div>
+              {(() => {
+                const roleKey = doc.roleKey || "doctor";
+                const barColor = (doc.color && doc.color !== "#1E88D6") ? doc.color : getRoleBarColor(roleKey);
+                const label = { founder: "创始人", co_founder: "创始股东", owner: "院长", shareholder: "股东", doctor: "医生", nurse: "护士", assistant: "助理", receptionist: "前台", finance: "财务" }[roleKey] || "医生";
+                return <span style={{ fontSize: 10, fontWeight: 600, color: "#fff", background: barColor, padding: "1px 6px", borderRadius: 4, whiteSpace: "nowrap" }}>{label}</span>;
+              })()}
             </div>
-            {/* 姓名 */}
-            <div style={{ fontSize: 12, fontWeight: 600, color: "#26303C", textAlign: "center", width: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{doc.name}</div>
+            <div style={{ flex: 1 }}>
+              <YabanGanttBar
+                shift={doc.shift ?? null}
+                roleKey={doc.roleKey}
+                customColor={doc.color && doc.color !== "#1E88D6" ? doc.color : undefined}
+                appointments={doc.appts}
+                trackStart={a}
+                trackEnd={b}
+                onApptClick={(id) => onApptClick(id)}
+                onBarClick={doc.shift ? (ev) => {
+                  const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+                  const ratio = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
+                  let mins = a + ratio * (b - a);
+                  mins = Math.round(mins / 30) * 30;
+                  const segs2 = doc.shift!.segments;
+                  const inSeg = segs2.find(([s0, e0]) => mins >= s0 && mins < e0);
+                  let seg = inSeg;
+                  if (!seg) {
+                    seg = segs2.reduce((best, cur) => {
+                      const d = mins < cur[0] ? cur[0] - mins : mins - cur[1];
+                      const bd = mins < best[0] ? best[0] - mins : mins - best[1];
+                      return d < bd ? cur : best;
+                    }, segs2[0]);
+                  }
+                  if (!seg) return;
+                  const [segStart, segEnd] = seg;
+                  const start = Math.max(segStart, Math.min(mins, segEnd - 30));
+                  const end = Math.min(start + 60, segEnd);
+                  onNewAppt(doc.name, start, end);
+                } : undefined}
+              />
+            </div>
           </div>
-          <div style={{ flex: 1 }}>
-            {/* 甘特条—共享组件 YabanGanttBar（与 A316 联动） */}
-            <YabanGanttBar
-              shift={doc.shift ?? null}
-              roleKey={doc.roleKey}
-              customColor={doc.color && doc.color !== "#1E88D6" ? doc.color : undefined}
-              appointments={doc.appts}
-              trackStart={a}
-              trackEnd={b}
-              onApptClick={(id) => onApptClick(id)}
-              onBarClick={doc.shift ? (ev) => {
-                const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
-                const ratio = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width));
-                let mins = a + ratio * (b - a);
-                mins = Math.round(mins / 30) * 30;
-                const segs2 = doc.shift!.segments;
-                const inSeg = segs2.find(([s0, e0]) => mins >= s0 && mins < e0);
-                let seg = inSeg;
-                if (!seg) {
-                  seg = segs2.reduce((best, cur) => {
-                    const d = mins < cur[0] ? cur[0] - mins : mins - cur[1];
-                    const bd = mins < best[0] ? best[0] - mins : mins - best[1];
-                    return d < bd ? cur : best;
-                  }, segs2[0]);
-                }
-                if (!seg) return;
-                const [segStart, segEnd] = seg;
-                const start = Math.max(segStart, Math.min(mins, segEnd - 30));
-                const end = Math.min(start + 60, segEnd);
-                onNewAppt(doc.name, start, end);
-              } : undefined}
-            />
-            {/* 进度条下方：工作时段文字标注 */}
-            {doc.shift && doc.shift.segments.length > 0 && (
-              <div style={{ position: "relative", marginTop: 4, height: 14 }}>
-                {doc.shift.segments.map(([s0, e0], si) => {
-                  const span2 = Math.max(1, b - a);
-                  const l = Math.max(0, Math.min(100, (s0 - a) / span2 * 100));
-                  const w = Math.max(0, Math.min(100, (e0 - a) / span2 * 100)) - l;
-                  return (
-                    <span key={si} style={{ position: "absolute", left: `${l}%`, width: `${w}%`, fontSize: 10, color: GRAY, textAlign: "center", whiteSpace: "nowrap", overflow: "visible" }}>
-                      {hm(s0)}–{hm(e0)}
-                    </span>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          {/* 下层：时间标注（独立在甘特条下方，左边留出 56+10=66px 对齐） */}
+          {doc.shift && doc.shift.segments.length > 0 && (
+            <div style={{ position: "relative", marginTop: 4, height: 14, marginLeft: 66 }}>
+              {doc.shift.segments.map(([s0, e0], si) => {
+                const span2 = Math.max(1, b - a);
+                const l = Math.max(0, Math.min(100, (s0 - a) / span2 * 100));
+                const w = Math.max(0, Math.min(100, (e0 - a) / span2 * 100)) - l;
+                return (
+                  <span key={si} style={{ position: "absolute", left: `${l}%`, width: `${w}%`, fontSize: 10, color: GRAY, textAlign: "center", whiteSpace: "nowrap", overflow: "visible" }}>
+                    {hm(s0)}–{hm(e0)}
+                  </span>
+                );
+              })}
+            </div>
+          )}
         </div>
       ))}
       {docList.length === 0 && (

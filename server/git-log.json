@@ -1,5 +1,1283 @@
 [
   {
+    "hash": "a0ddf7e3b02ec376f8e252b83bac05695a7d6662",
+    "author": "Manus Dev",
+    "date": "2026-07-08T13:00:23+00:00",
+    "message": "fix: 去掉clinicsLoading全屏等待，今日预约卡片简化为只显示总数（所有状态均计入）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "去掉clinicsLoading全屏等待，今日预约卡片简化为只显示总数（所有状态均计入）"
+  },
+  {
+    "hash": "826176cc36f15d0d01752886f99170b939c43419",
+    "author": "Manus Dev",
+    "date": "2026-07-08T12:54:31+00:00",
+    "message": "fix: 今日预约卡片立即发请求（去掉enabled条件），暂隐藏随访和收费卡片",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "今日预约卡片立即发请求（去掉enabled条件），暂隐藏随访和收费卡片"
+  },
+  {
+    "hash": "8bfae309b58a2b2bbc061c397385f44a3e8aca32",
+    "author": "Manus Dev",
+    "date": "2026-07-08T12:50:25+00:00",
+    "message": "fix: 首页三卡片容器立即渲染，加载中显示占位符而非隐藏容器",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "首页三卡片容器立即渲染，加载中显示占位符而非隐藏容器"
+  },
+  {
+    "hash": "2e75219a3b551abc57f0178168831e06b45dbbeb",
+    "author": "Manus Dev",
+    "date": "2026-07-08T12:45:38+00:00",
+    "message": "fix: 首页日历数据按当前门店tenantId请求，修复显示0的问题",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "首页日历数据按当前门店tenantId请求，修复显示0的问题"
+  },
+  {
+    "hash": "b2fe61d0b6dd453403f15da02caad6ee82312e68",
+    "author": "Manus Dev",
+    "date": "2026-07-08T12:23:15+00:00",
+    "message": "feat: 牙伴首页联动invalidate+预约弹窗顾客姓名跳转档案详情页",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "牙伴首页联动invalidate+预约弹窗顾客姓名跳转档案详情页"
+  },
+  {
+    "hash": "25ff2226375606eb4f3979e8a9f7d6401f75e123",
+    "author": "Manus Dev",
+    "date": "2026-07-08T12:10:00+00:00",
+    "message": "fix: 修复LedgerDetailAA和CryptoPrediction中变量名不一致（cryptoPricesData/ForOrder→Raw）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复LedgerDetailAA和CryptoPrediction中变量名不一致（cryptoPricesData/ForOrder→Raw）"
+  },
+  {
+    "hash": "b3badbc73b6c4812df85e2ff31edbe4aea0995de",
+    "author": "Manus Dev",
+    "date": "2026-07-08T12:03:14+00:00",
+    "message": "fix: 批量修复const \\1语法错误（11个文件），恢复构建",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "批量修复const \\1语法错误（11个文件），恢复构建"
+  },
+  {
+    "hash": "05497fd3f27bee693c9d8d4170c0fe075ca3143d",
+    "author": "Manus Dev",
+    "date": "2026-07-08T11:55:15+00:00",
+    "message": "fix: 修复tRPC响应解析缺少.json层导致行情数据拿不到",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复tRPC响应解析缺少.json层导致行情数据拿不到"
+  },
+  {
+    "hash": "52cdb4ac1d3bb74b7c1fa7978ad0471ff8dad9c5",
+    "author": "Manus Dev",
+    "date": "2026-07-08T11:51:16+00:00",
+    "message": "fix: 行情数据改回走服务器tRPC（新浪财经），Worker未部署不可用",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "行情数据改回走服务器tRPC（新浪财经），Worker未部署不可用"
+  },
+  {
+    "hash": "b2a0c2181046b9a3e036d233c376ee9d8bccc3d5",
+    "author": "Manus Dev",
+    "date": "2026-07-08T11:45:03+00:00",
+    "message": "fix: 还原useLivePrice.ts，行情数据改回走Cloudflare Worker",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "还原useLivePrice.ts，行情数据改回走Cloudflare Worker"
+  },
+  {
+    "hash": "7021bb9b6e871cf3fb24cab581558b942a72535d",
+    "author": "github-actions[bot]",
+    "date": "2026-07-08T11:39:48+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "a951681d22083be6f3ef6beb205ad7f6edbe94de",
+    "author": "Manus Dev",
+    "date": "2026-07-08T10:59:23+00:00",
+    "message": "feat: 分钟步长Tab移至选时间标题行右侧",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "分钟步长Tab移至选时间标题行右侧"
+  },
+  {
+    "hash": "7dc55ddae44ff777fab8478a8fb003d02bb53501",
+    "author": "Manus Dev",
+    "date": "2026-07-08T10:49:24+00:00",
+    "message": "feat: 预约时间选择新增5分钟/档·15分钟/档切换Tab，默认15分钟，localStorage持久化",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "预约时间选择新增5分钟/档·15分钟/档切换Tab，默认15分钟，localStorage持久化"
+  },
+  {
+    "hash": "2f39c63138c57fb4390059c9ec13c858aff64417",
+    "author": "Manus Dev",
+    "date": "2026-07-08T10:42:23+00:00",
+    "message": "revert: 回滚到649e8e766，恢复到今天所有改动之前的稳定版本",
+    "type": "revert",
+    "scope": "",
+    "cleanMessage": "回滚到649e8e766，恢复到今天所有改动之前的稳定版本"
+  },
+  {
+    "hash": "20c6c104b10f82fad3f2cdb54faaf1809b5530d2",
+    "author": "Manus Dev",
+    "date": "2026-07-08T10:34:57+00:00",
+    "message": "revert: 回滚到24b71960a，撤销今天后续所有改动",
+    "type": "revert",
+    "scope": "",
+    "cleanMessage": "回滚到24b71960a，撤销今天后续所有改动"
+  },
+  {
+    "hash": "0850eabad4b67aa42d3e81771dafb9b706edb11f",
+    "author": "Manus Dev",
+    "date": "2026-07-08T10:20:15+00:00",
+    "message": "fix: 修正部署脚本cp路径为绝对路径，确保新构建同步到root目录",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修正部署脚本cp路径为绝对路径，确保新构建同步到root目录"
+  },
+  {
+    "hash": "ae24c8b08ce579bb971f0ca9aee44a057b0b4212",
+    "author": "Manus Dev",
+    "date": "2026-07-08T10:13:59+00:00",
+    "message": "fix: 部署脚本补充同步dist到root目录，彻底修复每次部署前端不更新的问题",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "部署脚本补充同步dist到root目录，彻底修复每次部署前端不更新的问题"
+  },
+  {
+    "hash": "983127be18f1b980227718b0e7a5c8d003bafee0",
+    "author": "Manus Dev",
+    "date": "2026-07-08T10:07:07+00:00",
+    "message": "fix: 修复AfOrderManage.tsx语法错误导致构建失败",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复AfOrderManage.tsx语法错误导致构建失败"
+  },
+  {
+    "hash": "82b365e1cd64d72e562fce1c8f3116ca4709aa1f",
+    "author": "Manus Dev",
+    "date": "2026-07-08T09:49:25+00:00",
+    "message": "feat: 预约弹窗顾客姓名可点击跳转档案详情页",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "预约弹窗顾客姓名可点击跳转档案详情页"
+  },
+  {
+    "hash": "203704e501ac51e4003249a6e30e32c260b952fb",
+    "author": "Manus Dev",
+    "date": "2026-07-08T09:40:16+00:00",
+    "message": "fix: 部署脚本改用root pm2重启，端口统一为3000",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "部署脚本改用root pm2重启，端口统一为3000"
+  },
+  {
+    "hash": "234e8a7eba023b200f24f62f764088ff19a1f450",
+    "author": "Manus Dev",
+    "date": "2026-07-08T09:23:58+00:00",
+    "message": "fix: 首页日/周/月三视角联动+收费SQL字段修复+分钟步长默认15分钟",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "首页日/周/月三视角联动+收费SQL字段修复+分钟步长默认15分钟"
+  },
+  {
+    "hash": "24b71960a11259261ec769607eed16904e363326",
+    "author": "Manus Dev",
+    "date": "2026-07-08T08:56:43+00:00",
+    "message": "fix: 个人中心基本信息\"姓名\"统一改为\"昵称\"",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "个人中心基本信息\"姓名\"统一改为\"昵称\""
+  },
+  {
+    "hash": "9c93cce8bcfcb0855f0970f218e3b773dbe36bb6",
+    "author": "Manus Dev",
+    "date": "2026-07-08T08:41:09+00:00",
+    "message": "规则G：更新通道二描述为服务器tRPC暂行，补充期权Deribit直连说明",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "规则G：更新通道二描述为服务器tRPC暂行，补充期权Deribit直连说明"
+  },
+  {
+    "hash": "649e8e7662075e8f0875176d0bd307dfb13671b8",
+    "author": "Manus Dev",
+    "date": "2026-07-08T08:36:07+00:00",
+    "message": "fix: 市场行情改回走服务器tRPC，待Worker部署后切换",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "市场行情改回走服务器tRPC，待Worker部署后切换"
+  },
+  {
+    "hash": "22162faafa25afcd3efff16609db2e2cbbc4d365",
+    "author": "Manus Dev",
+    "date": "2026-07-08T07:08:52+00:00",
+    "message": "规则G：52号掌门行情数据全面迁移至前端直连+Cloudflare Worker代理",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "规则G：52号掌门行情数据全面迁移至前端直连+Cloudflare Worker代理"
+  },
+  {
+    "hash": "a09ce00651a0ca7d04cbb70300ebffd4a870e9bd",
+    "author": "Manus Dev",
+    "date": "2026-07-08T06:52:11+00:00",
+    "message": "feat: 规则库005添加G板块-金融数据获取规则（数字币前端直连/美股港股Cloudflare Worker代理/老方案封存）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "规则库005添加G板块-金融数据获取规则（数字币前端直连/美股港股Cloudflare Worker代理/老方案封存）"
+  },
+  {
+    "hash": "d4a9cc609f88789709d3ed8f18b94712bc8a90f9",
+    "author": "github-actions[bot]",
+    "date": "2026-07-08T06:29:45+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "5e3b7d47402f1829c48d9249766d9a1d4e9656a5",
+    "author": "Manus Dev",
+    "date": "2026-07-08T06:19:43+00:00",
+    "message": "fix: 希腊字母接口改为ticker（get_order_book不返回greeks）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "希腊字母接口改为ticker（get_order_book不返回greeks）"
+  },
+  {
+    "hash": "8c3be7bcfcbbc66168080d97c04487ab3e099316",
+    "author": "Manus",
+    "date": "2026-07-08T05:41:28+00:00",
+    "message": "feat: 期权行权日/行权价/希腊字母改为前端直接调用Deribit公开API（不经过服务器）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "期权行权日/行权价/希腊字母改为前端直接调用Deribit公开API（不经过服务器）"
+  },
+  {
+    "hash": "98ba47740a677a0340f5274cb398940baf544751",
+    "author": "Manus",
+    "date": "2026-07-08T05:31:18+00:00",
+    "message": "fix: 期权行权日/行权价改用静态数据（不依赖服务端API）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "期权行权日/行权价改用静态数据（不依赖服务端API）"
+  },
+  {
+    "hash": "daded0347bcc5db21947658228ab1f8450210b06",
+    "author": "Manus",
+    "date": "2026-07-08T05:23:22+00:00",
+    "message": "fix: FinanceManagement期权表单行权日改为Deribit下拉框，行权价改为联动下拉框",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "FinanceManagement期权表单行权日改为Deribit下拉框，行权价改为联动下拉框"
+  },
+  {
+    "hash": "02d6ab8405d473969b621d065e1a8f8707d44a1d",
+    "author": "Manus",
+    "date": "2026-07-08T05:15:31+00:00",
+    "message": "feat: Deribit缓存改为数据库存储（解决Autoscale无状态内存缓存失效）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "Deribit缓存改为数据库存储（解决Autoscale无状态内存缓存失效）"
+  },
+  {
+    "hash": "b53fde80614b4f75eeec127094891821f1eac6e6",
+    "author": "Manus",
+    "date": "2026-07-08T04:45:08+00:00",
+    "message": "fix: 期权行权日/行权价联动下拉框+Greeks展示+保存字段修复",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "期权行权日/行权价联动下拉框+Greeks展示+保存字段修复"
+  },
+  {
+    "hash": "699009c733d8382e7f3232cf767477c6c71a9bdf",
+    "author": "Manus",
+    "date": "2026-07-08T03:44:17+00:00",
+    "message": "fix: Deribit到期日服务端每日缓存+前端联动修复",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "Deribit到期日服务端每日缓存+前端联动修复"
+  },
+  {
+    "hash": "f500173513efb1b259d8d684c129f7e9a7802a0f",
+    "author": "Manus",
+    "date": "2026-07-07T21:36:47+00:00",
+    "message": "fix: FunderOrderCardV2补充useEffect导入",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "FunderOrderCardV2补充useEffect导入"
+  },
+  {
+    "hash": "db200737879ce85d516be5dea38d113a3112608e",
+    "author": "Manus",
+    "date": "2026-07-07T21:34:35+00:00",
+    "message": "fix: 银色卡片备注useEffect同步，修复public_note异步加载后不显示的问题",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "银色卡片备注useEffect同步，修复public_note异步加载后不显示的问题"
+  },
+  {
+    "hash": "40fe886d3514b15cd5821ad00097ebdbbe166dad",
+    "author": "Manus",
+    "date": "2026-07-07T21:30:32+00:00",
+    "message": "fix: 担保资产币种移到标题行，数字行只显示数量",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "担保资产币种移到标题行，数字行只显示数量"
+  },
+  {
+    "hash": "dd216d25b553277381cea545cc2908e639a02955",
+    "author": "Manus",
+    "date": "2026-07-07T21:29:47+00:00",
+    "message": "fix: 开仓日期/担保资产数字加font-semibold，与浮动盈亏/月利息字体统一",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "开仓日期/担保资产数字加font-semibold，与浮动盈亏/月利息字体统一"
+  },
+  {
+    "hash": "9c432eb0b5d3c0768de60621d76be639acd22893",
+    "author": "Manus",
+    "date": "2026-07-07T21:28:57+00:00",
+    "message": "fix: 开仓价/当前价字体改为与月利息/年利息一致(text-sm font-semibold)",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "开仓价/当前价字体改为与月利息/年利息一致(text-sm font-semibold)"
+  },
+  {
+    "hash": "a8b8be9e65866b999d1445d0132037896da26eb8",
+    "author": "Manus",
+    "date": "2026-07-07T21:23:36+00:00",
+    "message": "feat: 资方管理页顶部蓝色区域加入持币统计汇总",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "资方管理页顶部蓝色区域加入持币统计汇总"
+  },
+  {
+    "hash": "725981225191873c404457da1eeeb17a89a292e7",
+    "author": "Manus",
+    "date": "2026-07-07T21:19:00+00:00",
+    "message": "fix: 卡片第三行浮动盈亏自适应宽度，不再挤压开仓日期和担保资产",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "卡片第三行浮动盈亏自适应宽度，不再挤压开仓日期和担保资产"
+  },
+  {
+    "hash": "524324d1ded9978754c1739548589697a05690df",
+    "author": "Manus",
+    "date": "2026-07-07T21:11:02+00:00",
+    "message": "fix: FunderManagement年利率输入框改text模式，允许清空0",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "FunderManagement年利率输入框改text模式，允许清空0"
+  },
+  {
+    "hash": "483f8e841ae10b074a174a4cc9a6773bcdf63233",
+    "author": "Manus",
+    "date": "2026-07-07T21:05:55+00:00",
+    "message": "fix: FunderOrderCard利息支付方式加盈利后付",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "FunderOrderCard利息支付方式加盈利后付"
+  },
+  {
+    "hash": "6664f0eef9cac0e038ccf014ee4e6adc9564b003",
+    "author": "Manus",
+    "date": "2026-07-07T20:59:49+00:00",
+    "message": "feat: 融资付息页面优化 + 利息支付方式加盈利后付 + 年利率输入框修复",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "融资付息页面优化 + 利息支付方式加盈利后付 + 年利率输入框修复"
+  },
+  {
+    "hash": "b192a7fdd38d0263c662b5e8a12c2cd276498732",
+    "author": "github-actions[bot]",
+    "date": "2026-07-07T17:59:24+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "1cc136633c977a0a109e800d33539bd0cba2514e",
+    "author": "Manus",
+    "date": "2026-07-07T14:47:25+00:00",
+    "message": "feat: 融资付息按方向视图，去掉顶部汇总小卡片",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "融资付息按方向视图，去掉顶部汇总小卡片"
+  },
+  {
+    "hash": "6c5525056f1ee110e5dab688ee760507509815c9",
+    "author": "Manus",
+    "date": "2026-07-07T14:41:10+00:00",
+    "message": "fix: 融资付息列表优化及订单拥有者切换修复",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "融资付息列表优化及订单拥有者切换修复"
+  },
+  {
+    "hash": "ac8eff19f2e583b7c399c56ab50276a38938b102",
+    "author": "Manus",
+    "date": "2026-07-07T13:12:34+00:00",
+    "message": "fix: 提升isCollect到组件顶层，修复蓝色区域Can't find variable报错",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "提升isCollect到组件顶层，修复蓝色区域Can't find variable报错"
+  },
+  {
+    "hash": "2de6e774c53bfd4f1f424c0860be2be4b1ac44de",
+    "author": "Manus",
+    "date": "2026-07-07T13:08:48+00:00",
+    "message": "feat(AfFeeDetail): 融资付息全列可排序 + 蓝色汇总区域按tab分别显示",
+    "type": "feat",
+    "scope": "AfFeeDetail",
+    "cleanMessage": "融资付息全列可排序 + 蓝色汇总区域按tab分别显示"
+  },
+  {
+    "hash": "0551782824e73d0afde60fb207b0db7af5359cd2",
+    "author": "github-actions[bot]",
+    "date": "2026-07-07T12:19:38+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "8a86e23a2cb53bbb90b4e0d990184c493e8fef0d",
+    "author": "Manus",
+    "date": "2026-07-07T11:50:10+00:00",
+    "message": "feat: 融资付息列表优化 - 收/付分区、日息列、CNY折算、天数Tooltip、起息日隐藏、收息判断修复",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "融资付息列表优化 - 收/付分区、日息列、CNY折算、天数Tooltip、起息日隐藏、收息判断修复"
+  },
+  {
+    "hash": "ab515c383f351f0e16ce62fadedf3fc8245ecb4a",
+    "author": "github-actions[bot]",
+    "date": "2026-07-07T07:41:31+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "b4e2f16b49a27ac928ae04936be67483d7fdf55b",
+    "author": "Manus Dev",
+    "date": "2026-07-07T07:07:22+00:00",
+    "message": "feat(FunderOrderCardV2): 数字币银色卡片UI优化",
+    "type": "feat",
+    "scope": "FunderOrderCardV2",
+    "cleanMessage": "数字币银色卡片UI优化"
+  },
+  {
+    "hash": "58081dba990fc8efc45335531216b73a99b5447d",
+    "author": "Manus Dev",
+    "date": "2026-07-07T06:30:10+00:00",
+    "message": "feat(yaban): 重新设计甘特条 - 加高44px、排班斜纹、暖色预约块、圆角贴合排班底色",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "重新设计甘特条 - 加高44px、排班斜纹、暖色预约块、圆角贴合排班底色"
+  },
+  {
+    "hash": "09286ec97a6b7c5a41b059de2ec204a10c3694fa",
+    "author": "Manus Dev",
+    "date": "2026-07-07T06:01:31+00:00",
+    "message": "feat(yaban): 预约成功toast弹窗反馈 + 甘特条排班底色加斜纹 + 预约块暖色系哈希取色",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "预约成功toast弹窗反馈 + 甘特条排班底色加斜纹 + 预约块暖色系哈希取色"
+  },
+  {
+    "hash": "12cc200c898204284e3eec082e86784407cc9a32",
+    "author": "Manus Dev",
+    "date": "2026-07-07T05:39:07+00:00",
+    "message": "fix(yaban): 移除后端在班硬校验，避免因排班数据源不一致导致误报不在班",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "移除后端在班硬校验，避免因排班数据源不一致导致误报不在班"
+  },
+  {
+    "hash": "1c30bf42bda77c9710caf2014c7d93793d8485ce",
+    "author": "Manus Dev",
+    "date": "2026-07-07T05:32:34+00:00",
+    "message": "feat(yaban): 日/周/月三视图Tab切换，Tab上方显示待到诊列表，Tab下方显示医生圆圈+甘特条",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "日/周/月三视图Tab切换，Tab上方显示待到诊列表，Tab下方显示医生圆圈+甘特条"
+  },
+  {
+    "hash": "45f8bc4b7694e96a33baeb53fab5181eb12bbb1b",
+    "author": "Manus",
+    "date": "2026-07-07T01:05:31+00:00",
+    "message": "fix(FunderOrderCardV2): 金色股票卡片多项UI优化",
+    "type": "fix",
+    "scope": "FunderOrderCardV2",
+    "cleanMessage": "金色股票卡片多项UI优化"
+  },
+  {
+    "hash": "826984400042a048cd44904822e567e23abe1fa2",
+    "author": "Manus",
+    "date": "2026-07-07T00:30:29+00:00",
+    "message": "fix(yaban): 修复预约在班校验未读取新周模板(day_segs)导致误报不在班",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "修复预约在班校验未读取新周模板(day_segs)导致误报不在班"
+  },
+  {
+    "hash": "e634c7bbf3fa4b7f9fef67362976232296d0c207",
+    "author": "Manus",
+    "date": "2026-07-07T00:12:09+00:00",
+    "message": "feat: 新增固定差价止盈网格模拟测算页面",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "新增固定差价止盈网格模拟测算页面"
+  },
+  {
+    "hash": "e9d5c1fea9c1a578a3d2cca8352b49e2b528af44",
+    "author": "github-actions[bot]",
+    "date": "2026-07-06T18:11:12+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "7962e833f676eb87bad7f05279fa22d619b8f090",
+    "author": "github-actions[bot]",
+    "date": "2026-07-06T13:36:11+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "a30eeaffb596e4df41856a944be992d517f81372",
+    "author": "Manus Dev",
+    "date": "2026-07-06T11:27:11+00:00",
+    "message": "feat: 首页三视角日历 + 今日收费列表页 + 顾客主诉/医生建议字段",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "首页三视角日历 + 今日收费列表页 + 顾客主诉/医生建议字段"
+  },
+  {
+    "hash": "be1331ec5435fe0576c53990e4e44718c1348a3a",
+    "author": "Manus Dev",
+    "date": "2026-07-06T10:06:24+00:00",
+    "message": "feat(yaban): 客户档案新增顾客主诉和医生建议字段",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "客户档案新增顾客主诉和医生建议字段"
+  },
+  {
+    "hash": "7ec816fdc6666bb84ce45e18d3a212f76e3c18cc",
+    "author": "Manus Dev",
+    "date": "2026-07-06T09:33:16+00:00",
+    "message": "fix(yaban): 修复bumpUnit未定义错误；单位库上限50；输入框内提示；选医生列表显示全部",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "修复bumpUnit未定义错误；单位库上限50；输入框内提示；选医生列表显示全部"
+  },
+  {
+    "hash": "22a676596fcfb0cfeaa263720d10d69981bc17b3",
+    "author": "Manus Dev",
+    "date": "2026-07-06T08:56:42+00:00",
+    "message": "feat: 银色卡片已结利息感叹号按钮（白底灰字样式）+ 担保资产/担保缺口问号改感叹号 + 修复ledgerId参数缺失",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "银色卡片已结利息感叹号按钮（白底灰字样式）+ 担保资产/担保缺口问号改感叹号 + 修复ledgerId参数缺失"
+  },
+  {
+    "hash": "f550f04a54640e90afde6b8a30fcc0d4107668d1",
+    "author": "github-actions[bot]",
+    "date": "2026-07-06T08:23:06+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "af7350e444c045c0d39d0a4e815399bfc247b9e7",
+    "author": "Manus Dev",
+    "date": "2026-07-06T07:03:57+00:00",
+    "message": "feat: 借款方卡片已付利息行添加感叹号按钮触发只读结息记录弹窗",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "借款方卡片已付利息行添加感叹号按钮触发只读结息记录弹窗"
+  },
+  {
+    "hash": "2d1bc95b11f82c54d8840eca8f4c3d6f2f7ad387",
+    "author": "Manus Dev",
+    "date": "2026-07-06T06:52:48+00:00",
+    "message": "feat: 银色卡片已结利息行添加感叹号按钮触发结息记录弹窗",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "银色卡片已结利息行添加感叹号按钮触发结息记录弹窗"
+  },
+  {
+    "hash": "0d72a48a2b562759e62f92eb81f167807ebf419b",
+    "author": "Manus Dev",
+    "date": "2026-07-06T06:37:45+00:00",
+    "message": "style: 余/缺标签移到担保资产文字前面",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "余/缺标签移到担保资产文字前面"
+  },
+  {
+    "hash": "2e8b60f725ba9419e5dc7cc3cb2d8fcbb2e16e54",
+    "author": "Manus Dev",
+    "date": "2026-07-06T06:31:53+00:00",
+    "message": "style: 卡片收起状态顶部担保资产行去掉感叹号按钮",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "卡片收起状态顶部担保资产行去掉感叹号按钮"
+  },
+  {
+    "hash": "477c4e96ff78f6824785863d06cbc1fef9603f28",
+    "author": "Manus Dev",
+    "date": "2026-07-06T06:25:30+00:00",
+    "message": "style: 余/缺胶囊标签改为深棕底金字（款式6）",
+    "type": "style",
+    "scope": "",
+    "cleanMessage": "余/缺胶囊标签改为深棕底金字（款式6）"
+  },
+  {
+    "hash": "157b3aec09789089de4866ed512066e2f649e9f6",
+    "author": "Manus Dev",
+    "date": "2026-07-06T05:49:28+00:00",
+    "message": "feat: 已结利息行添加利息详情弹窗（RightInterestDetail）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "已结利息行添加利息详情弹窗（RightInterestDetail）"
+  },
+  {
+    "hash": "5e5d413550a985e0c2eeca3b678f5c7309a79f94",
+    "author": "Manus Dev",
+    "date": "2026-07-06T05:03:57+00:00",
+    "message": "revert: 撤销账户余额兜底功能（用户手动管理即可）",
+    "type": "revert",
+    "scope": "",
+    "cleanMessage": "撤销账户余额兜底功能（用户手动管理即可）"
+  },
+  {
+    "hash": "1fcf44db88746a430a7b87fefda20f166f2a5e5d",
+    "author": "Manus Dev",
+    "date": "2026-07-06T04:57:11+00:00",
+    "message": "fix: DepositManage保证金管理页面账户余额未更新时用初始金额兜底",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "DepositManage保证金管理页面账户余额未更新时用初始金额兜底"
+  },
+  {
+    "hash": "cff535dbc0f195d4a8afe374aa67ba8fd0d79e33",
+    "author": "Manus Dev",
+    "date": "2026-07-06T04:50:46+00:00",
+    "message": "fix: 订单模式保证金率行去掉重复感叹号 + 账户余额未更新时用初始金额兜底",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "订单模式保证金率行去掉重复感叹号 + 账户余额未更新时用初始金额兜底"
+  },
+  {
+    "hash": "e9b8bd2897c4ea3205953e8a633a329858f5c687",
+    "author": "Manus Dev",
+    "date": "2026-07-06T04:32:41+00:00",
+    "message": "fix: getActiveMarginTags SQL修复(去除空字符串比较) + 担保物切换按钮仅股票类型显示",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "getActiveMarginTags SQL修复(去除空字符串比较) + 担保物切换按钮仅股票类型显示"
+  },
+  {
+    "hash": "1f7cced107e4935b3fd0304372953da1633afe78",
+    "author": "Manus Dev",
+    "date": "2026-07-06T04:01:59+00:00",
+    "message": "feat(collateral): 动态绑定外部账本担保物 - 新增collateral_source字段支持绑定其他账本保证金标签 - FunderManagement编辑页面新增下拉选择37号账本活跃标签 - FunderOrderCard/V2动态读取绑定标签的剩余保证金和保证金率 - 移除FC2977硬编码，改为通用collateral_source驱动 - 新增getActiveMarginTags tRPC查询接口",
+    "type": "feat",
+    "scope": "collateral",
+    "cleanMessage": "动态绑定外部账本担保物 - 新增collateral_source字段支持绑定其他账本保证金标签 - FunderManagement编辑页面新增下拉选择37号账本活跃标签 - FunderOrderCard/V2动态读取绑定标签的剩余保证金和保证金率 - 移除FC2977硬编码，改为通用collateral_source驱动 - 新增getActiveMarginTags tRPC查询接口"
+  },
+  {
+    "hash": "6370e6e46f943ce53f800832619165d0c6684641",
+    "author": "Manus Dev",
+    "date": "2026-07-06T00:09:27+00:00",
+    "message": "fix: 购买币种为CNY时融资金额折算正确（computedAmount统一转USDT基准）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "购买币种为CNY时融资金额折算正确（computedAmount统一转USDT基准）"
+  },
+  {
+    "hash": "d3c3d61af31218aeeeb0a4a3b83ff56583bd0154",
+    "author": "Manus Dev",
+    "date": "2026-07-05T21:39:33+00:00",
+    "message": "feat: 目标金额用户级存储+凑整工具双模式+分母统一用目标金额+标签下拉暂停排序+金额总和显示",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "目标金额用户级存储+凑整工具双模式+分母统一用目标金额+标签下拉暂停排序+金额总和显示"
+  },
+  {
+    "hash": "b0fcd1c4e3d8f1ad1264c0662604626e917e0034",
+    "author": "Manus Dev",
+    "date": "2026-07-05T19:29:32+00:00",
+    "message": "fix: 卡片UI优化 - 箭头价格联动涨红跌绿、付息型负盈亏显示跌幅%、担保缺口数值黑色、备注按钮黑色线条",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "卡片UI优化 - 箭头价格联动涨红跌绿、付息型负盈亏显示跌幅%、担保缺口数值黑色、备注按钮黑色线条"
+  },
+  {
+    "hash": "0c50bb01a590b433ff02f7fe5e7b705c122beaaf",
+    "author": "Manus Dev",
+    "date": "2026-07-05T17:55:12+00:00",
+    "message": "fix: 利率输入框负号模式下输入0时保持rate_negative；修正HJ3468数据库rate_negative",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "利率输入框负号模式下输入0时保持rate_negative；修正HJ3468数据库rate_negative"
+  },
+  {
+    "hash": "a5e99d90df225c24820151cb135467ea5de60239",
+    "author": "github-actions[bot]",
+    "date": "2026-07-05T17:11:00+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "8838f5bc791442b1c68cedffb136ae03029ff0fb",
+    "author": "Manus Dev",
+    "date": "2026-07-05T12:56:20+00:00",
+    "message": "fix: 计息基数货币切换自动同步利率货币；修正7条历史数据interest_rate_currency",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "计息基数货币切换自动同步利率货币；修正7条历史数据interest_rate_currency"
+  },
+  {
+    "hash": "52de2ced8f93601f0ea60410130c09e38326c0e7",
+    "author": "Manus Dev",
+    "date": "2026-07-05T12:40:11+00:00",
+    "message": "fix: 备注列表加入编辑/删除按钮",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "备注列表加入编辑/删除按钮"
+  },
+  {
+    "hash": "5448254322d1fd18033a22a152cbd1234529cd66",
+    "author": "Manus Dev",
+    "date": "2026-07-05T12:14:05+00:00",
+    "message": "feat: 备注双栏Tab/共享担保弹窗/担保缺口/已结利息/负利率符号修复/ledgerId解构修复",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "备注双栏Tab/共享担保弹窗/担保缺口/已结利息/负利率符号修复/ledgerId解构修复"
+  },
+  {
+    "hash": "c4be461b288a4a817dd0137d39e86ae94312e402",
+    "author": "github-actions[bot]",
+    "date": "2026-07-05T11:20:58+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "bed2f4980df78492e8ff18cf03ee8fbdc87c3dbc",
+    "author": "Manus Dev",
+    "date": "2026-07-05T11:09:33+00:00",
+    "message": "feat: 权益型卡片担保资产位置——共享担保时显示红色「共享担保」文字",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "权益型卡片担保资产位置——共享担保时显示红色「共享担保」文字"
+  },
+  {
+    "hash": "0aba33239929b8a1223a65d977068fb7eb80ef7f",
+    "author": "Manus Dev",
+    "date": "2026-07-05T09:50:29+00:00",
+    "message": "fix: 将rate_negative加入实际提交的payload.displayConfig，而非仅预览对象",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "将rate_negative加入实际提交的payload.displayConfig，而非仅预览对象"
+  },
+  {
+    "hash": "a3bd21a6f7d55f2ffbed1f2d9a32f5a9001c705e",
+    "author": "Manus Dev",
+    "date": "2026-07-05T09:44:14+00:00",
+    "message": "fix: 利率符号持久化——用display_config.rate_negative保存负号，解决-0被decimal字段抹除问题",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "利率符号持久化——用display_config.rate_negative保存负号，解决-0被decimal字段抹除问题"
+  },
+  {
+    "hash": "deace9913497414d7ac53ae202fe1f7e6e455dde",
+    "author": "Manus Dev",
+    "date": "2026-07-05T09:28:43+00:00",
+    "message": "feat: 付息型卡片加已结利息字段，financeGetOrders附加paidTotal，修复利率符号保存报错",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "付息型卡片加已结利息字段，financeGetOrders附加paidTotal，修复利率符号保存报错"
+  },
+  {
+    "hash": "069318dd1c03457e824e816532cc19e8ced3ce93",
+    "author": "Manus Dev",
+    "date": "2026-07-05T08:42:21+00:00",
+    "message": "feat: 金色付息型卡片(股票类)计息基数标签改为仓位额度（行3和展开详情）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "金色付息型卡片(股票类)计息基数标签改为仓位额度（行3和展开详情）"
+  },
+  {
+    "hash": "fb60d48938bd0b26f422e129eb1515141f0288c5",
+    "author": "Manus Dev",
+    "date": "2026-07-05T08:40:20+00:00",
+    "message": "fix: 融资付息页数据未返回时也显示骨架屏，彻底避免闪现暂无订单",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "融资付息页数据未返回时也显示骨架屏，彻底避免闪现暂无订单"
+  },
+  {
+    "hash": "d361e2086913d5fe8d89858c3e1e02f89e94f4c9",
+    "author": "Manus Dev",
+    "date": "2026-07-05T08:38:17+00:00",
+    "message": "feat: 金色卡片(股票类)展开详情隐藏交易手续费，合计待付只计利息",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "金色卡片(股票类)展开详情隐藏交易手续费，合计待付只计利息"
+  },
+  {
+    "hash": "ab78591d0c0d41154989de216f4b9472ad5b4092",
+    "author": "Manus Dev",
+    "date": "2026-07-05T08:36:15+00:00",
+    "message": "feat: 金色权益型卡片(股票类)帽檐行显示证券公司+证券账号，行3右侧不再重复显示",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "金色权益型卡片(股票类)帽檐行显示证券公司+证券账号，行3右侧不再重复显示"
+  },
+  {
+    "hash": "40b1d489802043879b79d82665f72ec587d84343",
+    "author": "Manus Dev",
+    "date": "2026-07-05T08:34:27+00:00",
+    "message": "feat: 金色权益型卡片(股票类)隐藏买入价/当前价/浮动盈亏/当前市值，行3右侧显示证券公司+证券账号",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "金色权益型卡片(股票类)隐藏买入价/当前价/浮动盈亏/当前市值，行3右侧显示证券公司+证券账号"
+  },
+  {
+    "hash": "0f28601b4531ddade676ae0ad58fad81bc254ef0",
+    "author": "Manus Dev",
+    "date": "2026-07-05T08:32:51+00:00",
+    "message": "fix: 金色权益型卡片(股票类)持有数量改为显示持有资产(interest_base，单位元)",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "金色权益型卡片(股票类)持有数量改为显示持有资产(interest_base，单位元)"
+  },
+  {
+    "hash": "0b8520ca6125d2fc20ba2991b2fd50759d45de10",
+    "author": "Manus Dev",
+    "date": "2026-07-05T08:28:11+00:00",
+    "message": "fix: 融资付息页加载中显示骨架屏，避免误以为暂无订单",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "融资付息页加载中显示骨架屏，避免误以为暂无订单"
+  },
+  {
+    "hash": "c775f81eb5f7c7aca0f0f52b70c6a1c171fea85c",
+    "author": "Manus Dev",
+    "date": "2026-07-05T08:25:40+00:00",
+    "message": "feat: FunderOrderCardV2Silver权益型卡片也按asset_type区分金色(股票)/银色(数字币)",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "FunderOrderCardV2Silver权益型卡片也按asset_type区分金色(股票)/银色(数字币)"
+  },
+  {
+    "hash": "bcde3d5c67e4cd94ee728c3fdc80ff221015d3d1",
+    "author": "Manus Dev",
+    "date": "2026-07-05T08:09:01+00:00",
+    "message": "feat: 普通用户融资付息页卡片模式也按利率符号区分金色/银色付息型/权益型",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "普通用户融资付息页卡片模式也按利率符号区分金色/银色付息型/权益型"
+  },
+  {
+    "hash": "02698d4b1b57bb92e5abb30ae538eaaebce12896",
+    "author": "github-actions[bot]",
+    "date": "2026-07-05T07:28:59+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "4d12fd2253be41a645c3da8900e4b27200d984fa",
+    "author": "Manus Dev",
+    "date": "2026-07-05T07:13:00+00:00",
+    "message": "fix: 卡片布局判断改回利率符号——正号走付息型，负号走权益型",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "卡片布局判断改回利率符号——正号走付息型，负号走权益型"
+  },
+  {
+    "hash": "09a3a81e981d1630da1c4bdf93ec522861f92e99",
+    "author": "Manus Dev",
+    "date": "2026-07-05T07:10:58+00:00",
+    "message": "fix: 卡片模式按buy_quantity判断权益型/付息型，修复利率0%订单误显示利息布局",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "卡片模式按buy_quantity判断权益型/付息型，修复利率0%订单误显示利息布局"
+  },
+  {
+    "hash": "c5b33cb6bb51dfc28faefe552f83674e76e89fbb",
+    "author": "Manus Dev",
+    "date": "2026-07-05T07:04:59+00:00",
+    "message": "fix: 恢复普通用户余额（智能钱包）卡片，去掉误显示的资产卡片",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "恢复普通用户余额（智能钱包）卡片，去掉误显示的资产卡片"
+  },
+  {
+    "hash": "6cec2b699eee7c147e9640be1ff91fbe83480f64",
+    "author": "Manus Dev",
+    "date": "2026-07-05T04:45:38+00:00",
+    "message": "feat: 资方视角隐藏AF账本蓝色资产汇总容器",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "资方视角隐藏AF账本蓝色资产汇总容器"
+  },
+  {
+    "hash": "57a9b059c76cd0e3f70c36545132317b353b7fb0",
+    "author": "Manus Dev",
+    "date": "2026-07-05T04:20:45+00:00",
+    "message": "feat: 银色/金色卡片模式全面优化",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "银色/金色卡片模式全面优化"
+  },
+  {
+    "hash": "d8210a547303c6c7192aaf4cf242b5bc427a617f",
+    "author": "Manus",
+    "date": "2026-07-05T02:13:04+00:00",
+    "message": "feat: 计息基数公式加开仓币价标注",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "计息基数公式加开仓币价标注"
+  },
+  {
+    "hash": "ca55a9087e6763f28e6106c3c948906bf4cc8601",
+    "author": "Manus",
+    "date": "2026-07-05T02:05:57+00:00",
+    "message": "feat: FunderOrderCardV2Silver行1也加当前币价（带红绿色+闪烁箭头）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "FunderOrderCardV2Silver行1也加当前币价（带红绿色+闪烁箭头）"
+  },
+  {
+    "hash": "313b64eda8ecd4d331e271fa22261185330f07ed",
+    "author": "Manus",
+    "date": "2026-07-05T02:05:04+00:00",
+    "message": "feat: FunderLenderCardSilver行1加当前币价（带红绿色+闪烁箭头）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "FunderLenderCardSilver行1加当前币价（带红绿色+闪烁箭头）"
+  },
+  {
+    "hash": "4f9c3c59ce80e6c8e6018b7823e8c2c0c8b2654c",
+    "author": "Manus",
+    "date": "2026-07-05T01:57:59+00:00",
+    "message": "fix: 卡片模式传入实时cnyRate，修复汇率写死导致利息数字与订单模式不一致",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "卡片模式传入实时cnyRate，修复汇率写死导致利息数字与订单模式不一致"
+  },
+  {
+    "hash": "e98381fc384b83b0211ddcfeedc5d31ec563f6ce",
+    "author": "Manus",
+    "date": "2026-07-05T01:41:15+00:00",
+    "message": "fix: 统一所有时区计算为北京时间(+08:00)，修复跨时区天数差异",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "统一所有时区计算为北京时间(+08:00)，修复跨时区天数差异"
+  },
+  {
+    "hash": "cfac7b594d1c88dd30bba71385ec58e707ecd620",
+    "author": "Manus",
+    "date": "2026-07-05T01:05:58+00:00",
+    "message": "fix: 补充LN_EARN常量定义，修复页面崩溃",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "补充LN_EARN常量定义，修复页面崩溃"
+  },
+  {
+    "hash": "46226df7829b524872668bc687efa6c212f643b1",
+    "author": "Manus",
+    "date": "2026-07-05T00:58:05+00:00",
+    "message": "feat: FunderLenderCardSilver收益型卡片（付息型行1加日期、天数统一自然日算法、担保价值/缺口移入展开区）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "FunderLenderCardSilver收益型卡片（付息型行1加日期、天数统一自然日算法、担保价值/缺口移入展开区）"
+  },
+  {
+    "hash": "923bf7ce129a00f0362cfdb4191b292b96748e13",
+    "author": "runyi329",
+    "date": "2026-07-04T18:01:48+00:00",
+    "message": "feat: 卡片模式/订单模式切换，银色铭牌卡片优化（展开区布局、颜色、字段、负号逻辑）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "卡片模式/订单模式切换，银色铭牌卡片优化（展开区布局、颜色、字段、负号逻辑）"
+  },
+  {
+    "hash": "c8c7d0bd3f52916d7a3ebe1d13ee1a8eaa453738",
+    "author": "github-actions[bot]",
+    "date": "2026-07-04T17:06:18+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "a6b88a4c23b7b455d324aea7d415da6e9a5a4252",
+    "author": "runyi329",
+    "date": "2026-07-04T13:33:22+00:00",
+    "message": "fix: 委买中/持仓中count包含赠单，使各状态加总等于全部",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "委买中/持仓中count包含赠单，使各状态加总等于全部"
+  },
+  {
+    "hash": "d9be8868d5eebceba50d91ab9e25b5720d1078f0",
+    "author": "runyi329",
+    "date": "2026-07-04T13:31:10+00:00",
+    "message": "feat: 新增写入口腔AI客服拟人化指令库workflow（ubuntu-latest+SSH）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "新增写入口腔AI客服拟人化指令库workflow（ubuntu-latest+SSH）"
+  },
+  {
+    "hash": "4e647a486e12e1743e0625c42c9e83b8fa6a72e7",
+    "author": "runyi329",
+    "date": "2026-07-04T13:30:41+00:00",
+    "message": "chore: 删除旧workflow，强制GitHub刷新",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "删除旧workflow，强制GitHub刷新"
+  },
+  {
+    "hash": "ba40b397625344cabce8cab392b8610c5e176208",
+    "author": "runyi329",
+    "date": "2026-07-04T13:27:20+00:00",
+    "message": "fix: 改用ubuntu-latest+SSH方式执行，绕过离线的self-hosted runner",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "改用ubuntu-latest+SSH方式执行，绕过离线的self-hosted runner"
+  },
+  {
+    "hash": "3ec31dcc21d263a96705627e9c3ad8970d9c2405",
+    "author": "runyi329",
+    "date": "2026-07-04T13:25:21+00:00",
+    "message": "fix: 持仓中Tab计数包含赠单，使各状态加总等于全部",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "持仓中Tab计数包含赠单，使各状态加总等于全部"
+  },
+  {
+    "hash": "794f34c735bed2e608442417b57d0acae87e0e25",
+    "author": "Manus Dev",
+    "date": "2026-07-04T12:23:00+00:00",
+    "message": "fix(yaban): 修复 A316 预约页 dow 映射 bug——统一用 (getDay()+6)%7（0=周一），与 A317 保存约定一致",
+    "type": "fix",
+    "scope": "yaban",
+    "cleanMessage": "修复 A316 预约页 dow 映射 bug——统一用 (getDay()+6)%7（0=周一），与 A317 保存约定一致"
+  },
+  {
+    "hash": "f029b8c5b39cfc88319aa5d16c46347d4574237d",
+    "author": "runyi329",
+    "date": "2026-07-04T11:27:02+00:00",
+    "message": "fix: 修复workflow YAML语法，Python脚本独立存放",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复workflow YAML语法，Python脚本独立存放"
+  },
+  {
+    "hash": "e8390deeb6052bb67bcb6e43835fe28066989526",
+    "author": "runyi329",
+    "date": "2026-07-04T11:25:08+00:00",
+    "message": "feat: 写入口腔诊所AI客服拟人化公共指令库 v2",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "写入口腔诊所AI客服拟人化公共指令库 v2"
+  },
+  {
+    "hash": "3670afaa133a71db5369b8025a3111b2b5879a52",
+    "author": "runyi329",
+    "date": "2026-07-04T11:24:20+00:00",
+    "message": "chore: 删除旧insert-prompt-lib workflow",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "删除旧insert-prompt-lib workflow"
+  },
+  {
+    "hash": "27c4fdf2dcfaeff0c9443e7e2c783b6e99502ced",
+    "author": "runyi329",
+    "date": "2026-07-04T11:23:27+00:00",
+    "message": "fix: 修正insert-prompt-lib workflow格式",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修正insert-prompt-lib workflow格式"
+  },
+  {
+    "hash": "67f90bf8f6470ce418e23ec1abd7476dbd7f5e90",
+    "author": "runyi329",
+    "date": "2026-07-04T11:20:38+00:00",
+    "message": "chore: 一次性脚本-写入口腔诊所AI客服拟人化公共指令库",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "一次性脚本-写入口腔诊所AI客服拟人化公共指令库"
+  },
+  {
+    "hash": "64f87bf74155b7f721ba45c34e0c3f4ed8a18e3a",
+    "author": "github-actions[bot]",
+    "date": "2026-07-04T11:15:13+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "a30b28584bff278a9712b5ded59cc094cdd94dc0",
+    "author": "runyi329",
+    "date": "2026-07-04T11:06:08+00:00",
+    "message": "feat(yaban): 修复收费项目->知识库同步，支持yaban_charge_category叶子节点（恒愿/博雅）和yaban_charge_product（德盟）双数据源",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "修复收费项目->知识库同步，支持yaban_charge_category叶子节点（恒愿/博雅）和yaban_charge_product（德盟）双数据源"
+  },
+  {
+    "hash": "cc4b29d0c59a0b6ca7e47fa67d55929c9b7362b6",
+    "author": "Manus Dev",
+    "date": "2026-07-04T10:18:57+00:00",
+    "message": "feat(yaban): 第二步预约时段改为两行显示——时间加粗大字，日期+时长小字副标题",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "第二步预约时段改为两行显示——时间加粗大字，日期+时长小字副标题"
+  },
+  {
+    "hash": "633763688ca8fdb9a2a541f01a15e0e7600917af",
+    "author": "Manus Dev",
+    "date": "2026-07-04T10:15:42+00:00",
+    "message": "feat(yaban): 空档时长改为中文格式（满60分钟显示小时，全部中文）",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "空档时长改为中文格式（满60分钟显示小时，全部中文）"
+  },
+  {
+    "hash": "bb593448676a00d8324ceaf32532c0d46ac05eec",
+    "author": "Manus Dev",
+    "date": "2026-07-04T10:13:26+00:00",
+    "message": "feat(yaban): 修复预约表单排班联动——daySegs优先读取，日期格子正确显示可约/休，滚轮上方显示今日空档时段",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "修复预约表单排班联动——daySegs优先读取，日期格子正确显示可约/休，滚轮上方显示今日空档时段"
+  },
+  {
+    "hash": "98e19417a0d814e7be7e9ec1a35dd30ecf7aa3a0",
+    "author": "Manus Dev",
+    "date": "2026-07-04T09:14:57+00:00",
+    "message": "feat: 多项优化——谷底增筹建仓抽屉+订单筛选、融资付息记账图/订单图切换、订单流管理权限收紧、52号账本首页双入口、持有/计息时长始终显示",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "多项优化——谷底增筹建仓抽屉+订单筛选、融资付息记账图/订单图切换、订单流管理权限收紧、52号账本首页双入口、持有/计息时长始终显示"
+  },
+  {
+    "hash": "80d3e8bc79c0b3bba6695f6adb060f3450398bc0",
+    "author": "Manus Dev",
+    "date": "2026-07-04T08:39:14+00:00",
+    "message": "feat: 融资付息多项优化——自己/他人Tab修复重复计算、加共享担保筛选、持有时长&计息时长无数据显示0小时",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "融资付息多项优化——自己/他人Tab修复重复计算、加共享担保筛选、持有时长&计息时长无数据显示0小时"
+  },
+  {
+    "hash": "7d8c70ffa08cfe827abee615b6032d4a76bffcf6",
+    "author": "Manus Dev",
+    "date": "2026-07-04T08:16:00+00:00",
+    "message": "feat(A108): 管理费明细页功能增强",
+    "type": "feat",
+    "scope": "A108",
+    "cleanMessage": "管理费明细页功能增强"
+  },
+  {
+    "hash": "2a36113a8bb1bf5c282e67f3f9d409349cd4bb9d",
+    "author": "Manus Dev",
+    "date": "2026-07-04T08:01:56+00:00",
+    "message": "feat(yaban): 优化长期周模板格子UI——内容充满格子+层次分明配色",
+    "type": "feat",
+    "scope": "yaban",
+    "cleanMessage": "优化长期周模板格子UI——内容充满格子+层次分明配色"
+  },
+  {
+    "hash": "65f2b692b08b5913ddec6a73cd89c420bdde6afb",
+    "author": "Manus Dev",
+    "date": "2026-07-04T07:43:40+00:00",
+    "message": "feat: 长期周模板格子改为两行布局（周一~四一行，周五~日一行），7天全部可见",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "长期周模板格子改为两行布局（周一~四一行，周五~日一行），7天全部可见"
+  },
+  {
+    "hash": "e8f8a8e4bb027ee14ba2a1367d47bb0a8d1728d5",
+    "author": "Manus Dev",
+    "date": "2026-07-04T07:30:39+00:00",
+    "message": "feat: 同一员工多身份合并为一行，标签并排显示（如院长+医生）",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "同一员工多身份合并为一行，标签并排显示（如院长+医生）"
+  },
+  {
+    "hash": "76cec0b63135694cd84b5e00af8474d33db7b705",
+    "author": "Manus Dev",
+    "date": "2026-07-04T07:14:03+00:00",
+    "message": "fix: listMembers SQL 加 ROW_NUMBER 子查询，防止同一员工有多条 is_active 模板时重复显示",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "listMembers SQL 加 ROW_NUMBER 子查询，防止同一员工有多条 is_active 模板时重复显示"
+  },
+  {
+    "hash": "5b7f3e2ff825a8124503b8df7a6be55f475db31f",
+    "author": "Manus Dev",
+    "date": "2026-07-04T06:58:40+00:00",
+    "message": "feat: 收费项目保存/删除/复制时自动同步到诊所私有知识库，生成 Q&A 条目并回填 embedding",
+    "type": "feat",
+    "scope": "",
+    "cleanMessage": "收费项目保存/删除/复制时自动同步到诊所私有知识库，生成 Q&A 条目并回填 embedding"
+  },
+  {
+    "hash": "117a9514dfb47feafa1bcda1cfbb04401c1ebaef",
+    "author": "github-actions[bot]",
+    "date": "2026-07-04T06:48:41+00:00",
+    "message": "chore(P210-A): 自动更新工作日志静态数据 [skip ci]",
+    "type": "chore",
+    "scope": "P210-A",
+    "cleanMessage": "自动更新工作日志静态数据 [skip ci]"
+  },
+  {
+    "hash": "7694f3003f41f04b9e4e852b2427e875647b7a0d",
+    "author": "runyi329",
+    "date": "2026-07-04T06:46:37+00:00",
+    "message": "ui: 帽檐/备注背景色加深为#D0D6EE（更深蓝灰）",
+    "type": "chore",
+    "scope": "",
+    "cleanMessage": "ui: 帽檐/备注背景色加深为#D0D6EE（更深蓝灰）"
+  },
+  {
+    "hash": "10cc4dc064dad0bd3045ea4a6c75d1488e92b657",
+    "author": "runyi329",
+    "date": "2026-07-04T06:36:32+00:00",
+    "message": "fix: 修复FinanceManagement.tsx JSX结构错误（fragment未关闭+弹窗div层级）",
+    "type": "fix",
+    "scope": "",
+    "cleanMessage": "修复FinanceManagement.tsx JSX结构错误（fragment未关闭+弹窗div层级）"
+  },
+  {
     "hash": "dcb4f4dc126a0b08b209fd5290d0bc772630a187",
     "author": "runyi329",
     "date": "2026-07-04T05:27:27+00:00",
