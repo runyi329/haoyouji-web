@@ -6,7 +6,6 @@
  *   三 Tab 切换：无损合约 / 无损现货 / 行情评估（含竞猜）
  */
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { useCryptoPrices } from "@/lib/useLivePrice"; // 规则G
 import { FunderOrderCard } from "@/components/FunderOrderCard";
 import { FunderOrderCardV2Silver, FunderLenderCardSilver } from "@/components/FunderOrderCardV2";
 import { useRoute, useLocation } from "wouter";
@@ -414,12 +413,11 @@ export function MarketBetPanelWithTabs({ ledgerId }: { ledgerId: number }) {
   const ethPos = ethPositionData as any;
 
   // 实时价格（吤24h涨跌幅）——用于订单卡片底部显示
-  // placeholderData: keepPreviousData 确保刷新时不闪烁，保留上次数据
-  // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
-  const cryptoPricesRaw = useCryptoPrices(3000);
-  const betCardPrices = (betCardPricesRaw as any)?.prices ?? betCardPricesRaw ?? {};
-  const betCardChanges = (betCardPricesRaw as any)?.changes ?? {};
-  const betCardOpens = (betCardPricesRaw as any)?.opens ?? {};
+  // 实时价格（走服务器tRPC，price-scanner缓存，3秒刷新）
+  const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 3000, staleTime: 2000 });
+  const betCardPrices = (cryptoPricesRaw as any)?.prices ?? {};
+  const betCardChanges = (cryptoPricesRaw as any)?.changes ?? {};
+  const betCardOpens = (cryptoPricesRaw as any)?.opens ?? {};
 
   // 全局倒计时状态（每秒更新）
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -1419,11 +1417,9 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
     { orderId: order.id, ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: order.side === 'buy', staleTime: 8000, refetchInterval: 3000, refetchOnWindowFocus: false } // 每3秒刷新，与 crypto-price-unified 规范一致
   );
-  // 实时价格（用于计算当前市値）- 使用统一价格接口
-  // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
-  const cryptoPricesRaw = useCryptoPrices(3000);
-  // 适配新的返回结构 { prices: {...}, changes: {...} }
-  const _pricesForOrder = (cryptoPricesRaw as any)?.prices ?? cryptoPricesRaw;
+  // 实时价格（走服务器tRPC，price-scanner缓存，3秒刷新）
+  const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 3000, staleTime: 2000 });
+  const _pricesForOrder = (cryptoPricesRaw as any)?.prices ?? {};
   const livePrice = _pricesForOrder?.[order.coin] ?? 0;
   const cancelMutation = trpc.ledger.afCancelOrder.useMutation({
     onSuccess: () => { toast.success('委托已撒销'); },
@@ -2344,11 +2340,9 @@ export default function CryptoPrediction() {
     trpc.ledger.getBinanceTicker.useQuery({ symbol: coin.symbol }, { staleTime: 30000, refetchInterval: 30000 });
   const { data: klinesData, isLoading: klinesLoading, refetch: refetchKlines } =
     trpc.ledger.getBinanceKlines.useQuery({ symbol: coin.symbol, interval, limit: 60 }, { staleTime: 30000 });
-  // 当前价格使用统一价格接口（三级备用，更稳定）
-  // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
-  const cryptoPricesRaw = useCryptoPrices(3000);
-  // 适配新的返回结构 { prices: {...}, changes: {...} }
-  const cryptoPrices = (cryptoPricesRaw as any)?.prices ?? cryptoPricesRaw;
+  // 当前价格（走服务器tRPC，price-scanner缓存，3秒刷新）
+  const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 3000, staleTime: 2000 });
+  const cryptoPrices = (cryptoPricesRaw as any)?.prices ?? {};
   const cryptoChanges = (cryptoPricesRaw as any)?.changes ?? {};
 
   const bars: KlineBar[] = (klinesData as KlineBar[] | undefined) || [];

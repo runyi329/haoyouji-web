@@ -22,7 +22,6 @@
  *   注意：balance 是当天 income - expense，不是累计余额
  */
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { useCryptoPrices } from "@/lib/useLivePrice"; // 规则G
 import ReactECharts from "echarts-for-react";
 import { useLocation } from "wouter";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -107,11 +106,9 @@ export default function LedgerDetailAA({
     { enabled: true }
   );
 
-  // 数字币价格（每3秒刷新，规范：crypto-price-unified）
-  // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
-  const cryptoPricesRaw = useCryptoPrices(3000);
-  // 适配新的返回结构 { prices: {...}, changes: {...} }
-  const aaCryptoPrices: Record<string, number> = (cryptoPricesRaw as any)?.prices ?? cryptoPricesRaw ?? {};
+  // 数字币价格（走服务器tRPC，price-scanner缓存，3秒刷新）
+  const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 3000, staleTime: 2000 });
+  const aaCryptoPrices: Record<string, number> = (cryptoPricesRaw as any)?.prices ?? {};
 
   // 日历当前月份
   const [calendarDate, setCalendarDate] = useState(() => {
