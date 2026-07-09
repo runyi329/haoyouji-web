@@ -8,7 +8,7 @@ import { useState, useRef, TouchEvent, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Eye, EyeOff, Clock, Phone, ChevronRight as ArrowRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
-import { type CardMetricKey, CARD_METRICS, DEFAULT_CARD_KEYS, loadCardConfig } from "./YabanHomepageSettings";
+import { type CardMetricKey, CARD_METRICS_MAP, DEFAULT_CARD_KEYS, loadCardConfig } from "./YabanHomepageSettings";
 
 // ── 月视角 Tab 配置 ──────────────────────────────────────────────
 const MONTH_TABS = [
@@ -104,34 +104,33 @@ function DayView({ viewDate, tenantId }: { viewDate: string; tenantId: number })
   );
   const birthdayCount = birthdayData?.count ?? 0;
 
-  // 从预约数据派生：到诊、爽约、未确认
+  // 从预约数据派生：到诊、爽约、已确认
   const arrivedCount = apptLoading ? null : (appts || []).filter((a: any) => a.status === 'arrived' || a.status === 'completed').length;
   const missedCount = apptLoading ? null : (appts || []).filter((a: any) => a.status === 'cancelled' || a.status === 'missed').length;
-  const unbookedCount = apptLoading ? null : (appts || []).filter((a: any) => a.status === 'booked').length;
 
-  // 第一行：核心运营指标
-  const row1 = [
-    {
-      key: 'appt',
-      label: '今日预约',
+  // 今日新顾客 & 今日出勤（todayStats接口）
+  const { data: statsData } = trpc.yabanOps.todayStats.useQuery(
+    { date: viewDate },
+    { keepPreviousData: true }
+  );
+  const newCustomerCount = statsData?.newCustomerCount ?? null;
+  const onDutyCount = statsData?.onDutyCount ?? null;
+
+  // 所有指标的数据字典
+  const metricsData: Record<string, { value: number | null; prefix?: string; isRevenue?: boolean; subLabel?: string | null; onClick: () => void }> = {
+    appt: {
       value: apptLoading ? null : apptTotal,
       subLabel: apptLoading ? null : (apptConfirmedCount > 0 ? `已确认 ${apptConfirmedCount}` : null),
-      gradient: 'linear-gradient(135deg, #4DB8E8 0%, #2196C8 100%)',
-      borderColor: '#2196C8',
       onClick: () => navigate(`/yaban/schedule?date=${viewDate}`),
     },
     follow: {
       value: followLoading ? null : followTotal,
-      gradient: 'linear-gradient(135deg, #34D399 0%, #10B981 100%)',
-      borderColor: '#10B981',
       onClick: () => navigate('/yaban/followup'),
     },
     charge: {
       value: chargeLoading ? null : chargeTotal,
       prefix: '¥',
       isRevenue: true,
-      gradient: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
-      borderColor: '#D97706',
       onClick: () => navigate('/yaban/charge'),
     },
     arrived: {
@@ -158,57 +157,29 @@ function DayView({ viewDate, tenantId }: { viewDate: string; tenantId: number })
       value: onDutyCount,
       onClick: () => navigate('/yaban/clinic-shift'),
     },
-    empty: {
-      value: null,
-      onClick: () => {},
-    },
   };
 
-  // 第二行：辅助指标
-  const row2 = [
-    {
-      key: 'arrived',
-      label: '今日到诊',
-      value: arrivedCount,
-      gradient: 'linear-gradient(135deg, #818CF8 0%, #6366F1 100%)',
-      borderColor: '#6366F1',
-      onClick: () => navigate(`/yaban/schedule?date=${viewDate}`),
-    },
-    {
-      key: 'missed',
-      label: '今日爽约',
-      value: missedCount,
-      gradient: 'linear-gradient(135deg, #F87171 0%, #EF4444 100%)',
-      borderColor: '#EF4444',
-      onClick: () => navigate(`/yaban/schedule?date=${viewDate}`),
-    },
-    {
-      key: 'birthday',
-      label: '今日生日',
-      value: birthdayLoading ? null : birthdayCount,
-      gradient: 'linear-gradient(135deg, #F472B6 0%, #EC4899 100%)',
-      borderColor: '#EC4899',
-      onClick: () => navigate('/yaban/customer'),
-    },
-  ];
+  // 按用户配置的9个key渲染卡片
+  const cards = cardKeys.map((key) => {
+    const meta = CARD_METRICS_MAP[key];
+    const data = metricsData[key] || { value: null, onClick: () => {} };
+    return { key, label: meta?.label || key, gradient: meta?.gradient || 'linear-gradient(135deg, #9CA3AF 0%, #6B7280 100%)', borderColor: meta?.borderColor || '#6B7280', ...data };
+  });
 
   const renderCard = (card: any) => (
-    <button key={card.key} onClick={card.onClick} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRadius: 14, padding: '14px 8px', textAlign: 'center', background: card.gradient, boxShadow: `0 4px 14px ${card.borderColor}44`, border: 'none', cursor: 'pointer', minHeight: 80 }}>
+    <button key={card.key} onClick={card.onClick} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRadius: 14, padding: '14px 8px', textAlign: 'center', background: card.gradient, boxShadow: `0 4px 14px ${card.borderColor}44`, border: 'none', cursor: 'pointer' }}>
       <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)', fontWeight: 500, marginBottom: 6 }}>{card.label}</div>
       <div style={{ fontSize: 26, fontWeight: 800, color: '#fff', lineHeight: 1 }}>
-        {card.value === null ? '—' : <>{card.prefix || ''}{card.isRevenue ? card.value.toLocaleString() : card.value}</>}
+        {card.value === null ? '—' : <>{card.prefix || ''}{card.isRevenue ? (card.value as number).toLocaleString() : card.value}</>}
       </div>
       {card.subLabel && <div style={{ marginTop: 5, fontSize: 10, color: 'rgba(255,255,255,0.9)', fontWeight: 600, background: 'rgba(255,255,255,0.22)', borderRadius: 4, padding: '1px 6px' }}>{card.subLabel}</div>}
     </button>
   );
 
   return (
-    <div style={{ padding: '10px 12px 8px', background: '#F0F4F8', display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-        {row1.map(renderCard)}
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-        {row2.map(renderCard)}
+    <div style={{ padding: '10px 12px 8px', background: '#F0F4F8' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gridAutoRows: '1fr', gap: 8 }}>
+        {cards.map(renderCard)}
       </div>
     </div>
   );

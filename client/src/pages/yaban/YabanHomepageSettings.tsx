@@ -99,6 +99,11 @@ export const CARD_METRICS: CardMetricDef[] = [
   },
 ];
 
+// 以 key 为索引的字典，供首页卡片渲染快速查找
+export const CARD_METRICS_MAP: Record<string, CardMetricDef> = Object.fromEntries(
+  CARD_METRICS.map((m) => [m.key, m])
+);
+
 // 默认9个卡片配置（按原来6个 + 3个新增）
 export const DEFAULT_CARD_KEYS: CardMetricKey[] = [
   "appt", "follow", "charge",
