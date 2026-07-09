@@ -303,6 +303,28 @@ export async function fetchUsdCnyRate(): Promise<number> {
 
 // ===== React Hooks =====
 
+// ===== 自定义币种 localStorage key（与 LivePriceAdmin.tsx 保持同步）=====
+const CUSTOM_COINS_KEY = 'custom_crypto_coins';
+
+/** 从 localStorage 读取自定义币种代码列表 */
+function getCustomCoinSymbols(): string[] {
+  try {
+    const stored = localStorage.getItem(CUSTOM_COINS_KEY);
+    if (!stored) return [];
+    const coins = JSON.parse(stored) as Array<{ symbol: string; binance?: string; okx?: string; coingecko?: string }>;
+    // 同步注册到三个 MAP，使 fetchCryptoPrice 能正确拉取
+    coins.forEach(c => {
+      const sym = c.symbol.toUpperCase();
+      if (c.binance) BINANCE_SYMBOL_MAP[sym] = c.binance;
+      if (c.okx) OKX_SYMBOL_MAP[sym] = c.okx;
+      if (c.coingecko) COINGECKO_ID_MAP[sym] = c.coingecko;
+    });
+    return coins.map(c => c.symbol.toUpperCase());
+  } catch {
+    return [];
+  }
+}
+
 /** Hook：实时数字币价格（替换 trpc.getCryptoPrices.useQuery） */
 export function useCryptoPrices(intervalMs = 3000) {
   const [data, setData] = useState<{
@@ -312,10 +334,13 @@ export function useCryptoPrices(intervalMs = 3000) {
     usdtCnyRate: number;
   }>({ prices: {}, changes: {}, opens: {}, usdtCnyRate: 7.25 });
 
-  const ALL_COINS = ['BTC', 'ETH', 'SOL', 'BNB', 'AAVE', 'SUI', 'ONDO', 'LDO', 'ENA', 'ARKM', 'SEI', 'PLUME', 'ASTER', 'DRAM', 'MU'];
+  const BUILTIN_COINS = ['BTC', 'ETH', 'SOL', 'BNB', 'AAVE', 'SUI', 'ONDO', 'LDO', 'ENA', 'ARKM', 'SEI', 'PLUME', 'ASTER', 'DRAM', 'MU'];
 
   const fetch_ = useCallback(async () => {
-    const result = await fetchCryptoPrices(ALL_COINS);
+    // 每次拉取前合并 localStorage 中的自定义币种
+    const customCoins = getCustomCoinSymbols();
+    const allCoins = Array.from(new Set([...BUILTIN_COINS, ...customCoins]));
+    const result = await fetchCryptoPrices(allCoins);
     setData(prev => ({
       prices: { ...prev.prices, ...result.prices },
       changes: { ...prev.changes, ...result.changes },

@@ -168,6 +168,7 @@ const EquityWeightManage = lazy(() => import("./pages/EquityWeightManage"));
 const FunderManagement = lazy(() => import("./pages/FunderManagement"));
 const FinanceManagement = lazy(() => import("./pages/FinanceManagement"));
 const FinanceUnified = lazy(() => import("./pages/FinanceUnified"));
+const LivePriceAdmin = lazy(() => import("./pages/LivePriceAdmin"));
 const AhCompanyWorkspace = lazy(() => import("./pages/AhCompanyWorkspace"));
 const AiCompanyWorkspace = lazy(() => import("./pages/AiCompanyWorkspace"));
 const MarketEvalSettings = lazy(() => import("./pages/MarketEvalSettings"));
@@ -549,6 +550,7 @@ function Router() {
         <Route path="/ledger/:id/funder-management" component={FunderManagement} />
         <Route path="/ledger/:id/finance-management" component={FinanceManagement} />
         <Route path="/ledger/:id/finance-unified" component={FinanceUnified} />
+        <Route path="/ledger/:id/live-price-admin" component={LivePriceAdmin} />
         <Route path="/ledger/:id/company/:companyId" component={AhCompanyWorkspace} />
         <Route path="/ledger/:id/ai-company/:companyId" component={AiCompanyWorkspace} />
         <Route path="/ledger/:ledgerId/aj-companies" component={AJCompanyManager} />

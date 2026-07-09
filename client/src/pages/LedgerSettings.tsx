@@ -448,6 +448,9 @@ export default function LedgerSettings() {
  {ledgerData?.type === 'custom_af' && (
    <SettingItem label="融资付息订单管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/finance-unified${_viewAsSuffix}`)} />
  )}
+ {ledgerData?.type === 'custom_af' && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
+   <SettingItem label="实时价格管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/live-price-admin`)} />
+ )}
  <SettingItem 
  label={ledgerData?.type === 'opinion_book' ? '店铺名称' : ['diet', 'custom_ac'].includes(ledgerData?.type) ? '减肥账本名称' : '账本名称'} 
  value={ledgerData.name} 
