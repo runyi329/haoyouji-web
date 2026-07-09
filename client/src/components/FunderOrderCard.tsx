@@ -10,7 +10,7 @@ import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, Chevr
 import { toast } from "sonner";
 
 // 币种选项
-export const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'ASTER', 'SUI'] as const;
+export const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SKHYNIX', 'PLUME', 'SEI', 'ASTER', 'SUI'] as const;
 export type CoinType = typeof COIN_OPTIONS[number];
 
 export const STATUS_OPTIONS = [
@@ -41,6 +41,7 @@ export const COIN_COLORS: Record<CoinType, string> = {
   NVDA: '#76B900',
   AAPL: '#555555',
   MSFT: '#00A4EF',
+  SKHYNIX: '#EB1C24',
   GOOGL: '#4285F4',
   META: '#0866FF',
   AMZN: '#FF9900',

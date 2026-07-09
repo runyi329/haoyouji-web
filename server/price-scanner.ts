@@ -61,7 +61,11 @@ const COINS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA'
 // 股票类合约（优先 OKX SWAP，兜底新浪财经）
 const STOCK_COINS = ['TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG'];
 // 优先 Yahoo Finance，兜底新浪财经
-const YAHOO_STOCKS = ['CRCL', 'DRAM', 'MU', 'MSTR'];
+const YAHOO_STOCKS = ['CRCL', 'DRAM', 'MU', 'MSTR', 'SKHYNIX'];
+// Yahoo Finance 代码映射（内部代码 → Yahoo symbol，用于非美股）
+const YAHOO_CODE_MAP: Record<string, string> = {
+  SKHYNIX: '000660.KS', // SK海力士（韩国交易所 KRX）
+};
 
 // 新浪财经美股代码映射（所有股票统一用新浪兜底）
 const SINA_CODE_MAP: Record<string, string> = {
@@ -363,7 +367,8 @@ async function scanPrices() {
   const yahooMissing: string[] = [];
   for (const coin of YAHOO_STOCKS) {
     try {
-      const price = await fetchYahooStockPrice(coin);
+      const yahooSymbol = YAHOO_CODE_MAP[coin] ?? coin;
+      const price = await fetchYahooStockPrice(yahooSymbol);
       if (price !== null && price > 0) {
         const prevChange = latestPrices[coin]?.changePercent ?? 0;
         const prevOpen = latestPrices[coin]?.todayOpen ?? 0;
@@ -467,6 +472,27 @@ export async function testCoinPrice(symbol: string): Promise<{ price: number; so
         const p = parseFloat(j.data[0].last);
         if (!isNaN(p) && p > 0) return { price: p, source: 'OKX', supported: true };
       }
+    }
+  } catch {}
+  // 再试 OKX SWAP（股票合约）
+  try {
+    const r = await fetch(`https://www.okx.com/api/v5/market/ticker?instId=${coin}-USDT-SWAP`, { signal: AbortSignal.timeout(8000) });
+    if (r.ok) {
+      const j: any = await r.json();
+      if (j.code === '0' && j.data?.[0]?.last) {
+        const p = parseFloat(j.data[0].last);
+        if (!isNaN(p) && p > 0) return { price: p, source: 'OKX SWAP', supported: true };
+      }
+    }
+  } catch {}
+  // 再试 Yahoo Finance（用 YAHOO_CODE_MAP 映射，或直接用 coin 作为 Yahoo symbol）
+  const yahooSym = YAHOO_CODE_MAP[coin] ?? coin;
+  try {
+    const r = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=1d&range=1d`, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) });
+    if (r.ok) {
+      const j: any = await r.json();
+      const p = j?.chart?.result?.[0]?.meta?.regularMarketPrice;
+      if (typeof p === 'number' && p > 0) return { price: p, source: 'Yahoo Finance', supported: true };
     }
   } catch {}
   return { price: 0, source: 'none', supported: false };

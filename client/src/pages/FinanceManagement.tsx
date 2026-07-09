@@ -5,7 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight } from "lucide-react";
 import { toast } from "sonner";
 
-const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU'] as const;
+const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SKHYNIX'] as const;
 type CoinType = typeof COIN_OPTIONS[number];
 
 // 整数型币种（单价较低，通常以整数计量）
@@ -138,6 +138,7 @@ const COIN_COLORS: Record<CoinType, string> = {
   NVDA: '#76B900',
   AAPL: '#555555',
   MSFT: '#00A4EF',
+  SKHYNIX: '#EB1C24',
   GOOGL: '#4285F4',
   META: '#0866FF',
   AMZN: '#FF9900',
