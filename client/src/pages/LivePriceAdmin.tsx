@@ -228,9 +228,18 @@ export default function LivePriceAdmin() {
     await Promise.all(allSymbols.map(s => refreshPrice(s)));
   }, [customCoins, refreshPrice]);
 
+  // 页面挂载时立即刷新内置币种（不等 customCoins，避免进入页面需要手动刷新）
   useEffect(() => {
-    refreshAll();
-  }, [customCoins.length]);
+    const builtinSymbols = BUILTIN_COINS.map(c => c.symbol);
+    Promise.all(builtinSymbols.map(s => refreshPrice(s)));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // customCoins 加载完成后，补充刷新自定义币种
+  useEffect(() => {
+    if (customCoins.length > 0) {
+      Promise.all(customCoins.map((c: any) => refreshPrice(c.symbol)));
+    }
+  }, [customCoins.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 查询新币种
   const handleQuery = async () => {
