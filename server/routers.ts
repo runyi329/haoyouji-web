@@ -12325,7 +12325,7 @@ ${klinesSummary}
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
         const balancesRows = await db.execute(
-          sql`SELECT user_id, initial_balances FROM ledger_members WHERE ledger_id = ${input.ledgerId}`
+          sql`SELECT userId, initial_balances FROM ledger_members WHERE ledgerId = ${input.ledgerId}`
         );
         const balancesList = (balancesRows as any)[0] as any[];
         const marginByCoin: Record<string, number> = {};
