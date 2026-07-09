@@ -1276,9 +1276,7 @@ export function FunderOrderCardV2Silver({
           const loadingVal = <span style={{ color: TXT_DIM }}>--</span>;
           return (
             <div className="px-4 pb-3 space-y-1.5 text-[10px]">
-              {d?.instrumentName && (
-                <div className="text-[9px] mb-1" style={{ color: TXT_DIM }}>{d.instrumentName}</div>
-              )}
+
               {greeksResult.error && (
                 <div style={{ color: '#DC2626', fontSize: '0.65rem', marginBottom: 4 }}>获取失败</div>
               )}
