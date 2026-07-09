@@ -7,7 +7,7 @@
  */
 import { useLocation } from "wouter";
 import { useSmartBack } from "@/hooks/useSmartBack";
-import { ChevronLeft, ChevronRight, Tags, Users, Heart, MessageSquare, CalendarClock, LayoutGrid } from "lucide-react";
+import { ChevronLeft, ChevronRight, Tags, Users, Heart, MessageSquare, CalendarClock, LayoutGrid, LayoutDashboard } from "lucide-react";
 import YabanClinicHeader from "./YabanClinicHeader";
 import { trpc } from "@/lib/trpc";
 
@@ -24,6 +24,13 @@ export default function YabanWebsiteFeatures() {
   const canSeeChatSetting: boolean = isPureFounder || isCoFounder || isShareholder;
 
   const baseItems = [
+    {
+      key: "homepage-display",
+      icon: <LayoutDashboard className="w-5 h-5 text-[#1E88D6]" />,
+      label: "首页展示设置",
+      hint: "自定义首页工作台9个数据卡片显示的内容",
+      onClick: () => navigate("/yaban/settings/homepage-display"),
+    },
     {
       key: "appt-config",
       icon: <CalendarClock className="w-5 h-5 text-[#1E88D6]" />,

@@ -4,10 +4,11 @@
  * 周视角：本周7天概览，每天显示预约数+随访数
  * 月视角：原有3D立体月历图（完整保留）
  */
-import { useState, useRef, TouchEvent } from "react";
+import { useState, useRef, TouchEvent, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Eye, EyeOff, Clock, Phone, ChevronRight as ArrowRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useLocation } from "wouter";
+import { type CardMetricKey, CARD_METRICS, DEFAULT_CARD_KEYS, loadCardConfig } from "./YabanHomepageSettings";
 
 // ── 月视角 Tab 配置 ──────────────────────────────────────────────
 const MONTH_TABS = [
@@ -68,6 +69,12 @@ type ViewMode = "day" | "week" | "month";
 function DayView({ viewDate, tenantId }: { viewDate: string; tenantId: number }) {
   const [, navigate] = useLocation();
 
+  // 读取用户自定义卡片配置
+  const [cardKeys, setCardKeys] = useState<CardMetricKey[]>(DEFAULT_CARD_KEYS);
+  useEffect(() => {
+    if (tenantId > 0) setCardKeys(loadCardConfig(tenantId));
+  }, [tenantId]);
+
   // 今日预约
   const { data: appts, isLoading: apptLoading } = trpc.yabanAppointment.listByDate.useQuery(
     { date: viewDate },
@@ -76,20 +83,19 @@ function DayView({ viewDate, tenantId }: { viewDate: string; tenantId: number })
   const apptTotal = appts?.length ?? 0;
   const apptConfirmedCount = (appts || []).filter((a: any) => a.status === "confirmed").length;
 
-  // 今日随访（取全部，前端过滤今天的）
+  // 今日随访
   const { data: followData, isLoading: followLoading } = trpc.yabanComm.listFollowups.useQuery(
     { status: 'all' },
     { keepPreviousData: true }
   );
-  const followTotal = (followData?.list || []).filter(f => f.date.replace(/\//g, '-') === viewDate).length;
+  const followTotal = (followData?.list || []).filter((f: any) => f.date.replace(/\//g, '-') === viewDate).length;
 
   // 今日收费
   const { data: chargeData, isLoading: chargeLoading } = trpc.yabanComm.todayCharges.useQuery(
     { date: viewDate },
     { keepPreviousData: true }
   );
-  const chargeList = chargeData?.list || [];
-  const chargeTotal = chargeList.reduce((sum, c) => sum + (c.actualAmount || 0), 0);
+  const chargeTotal = (chargeData?.list || []).reduce((sum: number, c: any) => sum + (c.actualAmount || 0), 0);
 
   // 今日生日顾客
   const { data: birthdayData, isLoading: birthdayLoading } = trpc.yabanCustomer.todayBirthday.useQuery(
@@ -114,17 +120,13 @@ function DayView({ viewDate, tenantId }: { viewDate: string; tenantId: number })
       borderColor: '#2196C8',
       onClick: () => navigate(`/yaban/schedule?date=${viewDate}`),
     },
-    {
-      key: 'follow',
-      label: '今日随访',
+    follow: {
       value: followLoading ? null : followTotal,
       gradient: 'linear-gradient(135deg, #34D399 0%, #10B981 100%)',
       borderColor: '#10B981',
       onClick: () => navigate('/yaban/followup'),
     },
-    {
-      key: 'charge',
-      label: '今日营业额',
+    charge: {
       value: chargeLoading ? null : chargeTotal,
       prefix: '¥',
       isRevenue: true,
@@ -132,7 +134,35 @@ function DayView({ viewDate, tenantId }: { viewDate: string; tenantId: number })
       borderColor: '#D97706',
       onClick: () => navigate('/yaban/charge'),
     },
-  ];
+    arrived: {
+      value: arrivedCount,
+      onClick: () => navigate(`/yaban/schedule?date=${viewDate}`),
+    },
+    missed: {
+      value: missedCount,
+      onClick: () => navigate(`/yaban/schedule?date=${viewDate}`),
+    },
+    birthday: {
+      value: birthdayLoading ? null : birthdayCount,
+      onClick: () => navigate('/yaban/customer'),
+    },
+    confirmed: {
+      value: apptLoading ? null : apptConfirmedCount,
+      onClick: () => navigate(`/yaban/schedule?date=${viewDate}`),
+    },
+    newCustomer: {
+      value: newCustomerCount,
+      onClick: () => navigate('/yaban/patients'),
+    },
+    onDuty: {
+      value: onDutyCount,
+      onClick: () => navigate('/yaban/clinic-shift'),
+    },
+    empty: {
+      value: null,
+      onClick: () => {},
+    },
+  };
 
   // 第二行：辅助指标
   const row2 = [
@@ -653,3 +683,4 @@ export default function YabanCalendar({ tenantId = 0 }: { tenantId?: number }) {
     </div>
   );
 }
+
