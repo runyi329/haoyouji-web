@@ -2240,8 +2240,8 @@ export default function LedgerDetailAA({
             // Grid 列定义：名称固定52px，其他列 minmax 自适应
             // 横向可滑动概览表：名称/周期/金额/今日变动/回报/占比（可滑动）/年化/分红
             // 前5列自动平分屏幕宽度，占比/年化/分红固定宽度溢出到右侧可滑动查看
-            // 列定义：名称(72px) 周期(1fr) 金额(1.5fr) 今日变动(1.5fr) 回报(1.5fr) 占比(52px溢出) 年化(64px溢出) 分红(64px溢出)
-            const gridCols = '72px 1px 1fr 1px 1.5fr 1px 1.5fr 1px 1.5fr 1px 52px 1px 64px 1px 64px';
+            // 列定义：名称(72px) 周期(1fr) 金额(1.5fr) 今日变动(1.5fr) 回报(1.5fr) 占比(52px溢出) 年化(80px溢出) 分红(64px溢出)
+            const gridCols = '72px 1px 1fr 1px 1.5fr 1px 1.5fr 1px 1.5fr 1px 52px 1px 80px 1px 64px';
             // 列标题日期：取所有 tag 中最新一条数据的日期（不管是不是当天）
             const _latestDataDate = visibleTags.reduce((maxDate, t) => {
               const d = t.points[t.points.length - 1]?.date ?? '';
@@ -2251,7 +2251,7 @@ export default function LedgerDetailAA({
               ? (() => { const [, m, d] = _latestDataDate.split('-'); return `${Number(m)}/${Number(d)}`; })()
               : (() => { const n = new Date(Date.now() + 8 * 3600 * 1000); return `${n.getUTCMonth() + 1}/${n.getUTCDate()}`; })();
             // 内容宽度：前5列占满屏幕，占比/年化/分红固定宽度溢出
-            const overviewInnerWidth = 'calc(100% + 172px)';
+            const overviewInnerWidth = 'calc(100% + 188px)';
             // 表头行高与数据行一致：py-2
             const cellCls = 'px-1 py-2 font-medium text-center flex items-center justify-center';
             const dataCellCls = 'px-1 py-2 text-center flex items-center justify-center';
@@ -2463,7 +2463,7 @@ export default function LedgerDetailAA({
                       })()}
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 年化 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'normal', wordBreak: 'break-all', fontSize: 13, color: _isStale || annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}>
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap', fontSize: 12, color: _isStale || annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}>
                         {annualized === null ? '--' : `${annualized >= 0 ? '+' : ''}${annualized.toFixed(1)}%`}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
