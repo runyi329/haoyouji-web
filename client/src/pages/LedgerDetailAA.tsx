@@ -2241,7 +2241,7 @@ export default function LedgerDetailAA({
             // 横向可滑动概览表：名称/周期/金额/今日变动/回报/占比（可滑动）/年化/分红
             // 前5列自动平分屏幕宽度，占比/年化/分红固定宽度溢出到右侧可滑动查看
             // 列定义：名称(72px) 周期(1fr) 金额(1.5fr) 今日变动(1.5fr) 回报(1.5fr) 占比(52px溢出) 年化(minmax(64px,max-content)溢出) 分红(64px溢出)
-            const gridCols = '72px 1px 1fr 1px 1.5fr 1px 1.5fr 1px 1.5fr 1px 52px 1px minmax(64px,max-content) 1px 64px';
+            const gridCols = '72px 1px minmax(44px,max-content) 1px minmax(52px,max-content) 1px minmax(44px,max-content) 1px minmax(52px,max-content) 1px 52px 1px minmax(64px,max-content) 1px 64px';
             // 列标题日期：取所有 tag 中最新一条数据的日期（不管是不是当天）
             const _latestDataDate = visibleTags.reduce((maxDate, t) => {
               const d = t.points[t.points.length - 1]?.date ?? '';
