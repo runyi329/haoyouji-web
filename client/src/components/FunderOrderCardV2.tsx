@@ -1242,18 +1242,10 @@ export function FunderOrderCardV2Silver({
                 已结利息
                 <button
                   type="button"
-                  onClick={e => { e.stopPropagation(); setShowInterestHistory(true); }}
+                  onClick={e => { e.stopPropagation(); setShowInterestHistory(true); if (isFC2977 && _parsedCollateralSource) setShowInterestDetail(true); }}
                   className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
-                  style={{ background: '#6B7280', color: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.18)' }}
+                  style={{ background: '#8B6914', color: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.18)' }}
                 >!</button>
-                {isFC2977 && _parsedCollateralSource && (
-                  <button
-                    type="button"
-                    onClick={e => { e.stopPropagation(); setShowInterestDetail(true); }}
-                    className="w-3.5 h-3.5 rounded-full flex items-center justify-center flex-shrink-0 text-[9px] font-bold leading-none"
-                    style={{ background: '#8B6914', color: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.18)' }}
-                  >!</button>
-                )}
               </span>
               <span style={{ color: SL_TEXT_PRI, fontVariantNumeric: 'tabular-nums' }}>+{fmt(displayPaid, 2)} {interestUnit}</span>
             </div>
