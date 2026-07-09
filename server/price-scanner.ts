@@ -59,13 +59,15 @@ export function getUsdtCnyRate(): number {
 
 const COINS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'SEI', 'PLUME'];
 // 股票类合约（优先 OKX SWAP，兜底新浪财经）
-const STOCK_COINS = ['TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'SKHYNIX'];
+const STOCK_COINS = ['TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG'];
 // 优先 Yahoo Finance，兜底新浪财经
-const YAHOO_STOCKS = ['CRCL', 'DRAM', 'MU', 'MSTR'];
+const YAHOO_STOCKS = ['CRCL', 'DRAM', 'MU', 'MSTR', 'SKHYNIX'];
 // Yahoo Finance 代码映射（内部代码 → Yahoo symbol，用于非美股）
 const YAHOO_CODE_MAP: Record<string, string> = {
-  // SKHYNIX 已改走 OKX SWAP（服务器端直连，无需韩元换算）
+  SKHYNIX: '000660.KS', // SK海力士（韩国交易所 KRX，韩元计价，需除以 USDKRW 汇率换算成美元）
 };
+// 韩元计价的股票（Yahoo Finance 返回 KRW，需除以 USD/KRW 汇率换算）
+const KRW_COINS = new Set(['SKHYNIX']);
 
 // 新浪财经美股代码映射（所有股票统一用新浪兜底）
 const SINA_CODE_MAP: Record<string, string> = {
@@ -364,11 +366,25 @@ async function scanPrices() {
   }
 
   // ── Yahoo 美股：Yahoo Finance 主用，新浪财经兜底 ──
+  // 韩元计价股票需要 USD/KRW 汇率，提前拉取
+  let usdKrwRate: number | null = null;
+  if (YAHOO_STOCKS.some(c => KRW_COINS.has(c))) {
+    try {
+      const krwRate = await fetchYahooStockPrice('USDKRW=X');
+      if (krwRate && krwRate > 0) usdKrwRate = krwRate;
+    } catch {}
+  }
   const yahooMissing: string[] = [];
   for (const coin of YAHOO_STOCKS) {
     try {
       const yahooSymbol = YAHOO_CODE_MAP[coin] ?? coin;
-      const price = await fetchYahooStockPrice(yahooSymbol);
+      let price = await fetchYahooStockPrice(yahooSymbol);
+      // 韩元计价股票：除以 USD/KRW 汇率换算成美元
+      if (price !== null && KRW_COINS.has(coin)) {
+        const rate = usdKrwRate ?? 1400; // 备用固定汇率
+        price = parseFloat((price / rate).toFixed(4));
+        console.log(`[价格扫描] ${coin} 韩元换算: ${yahooSymbol}=${price * rate} KRW ÷ ${rate} = ${price} USD`);
+      }
       if (price !== null && price > 0) {
         const prevChange = latestPrices[coin]?.changePercent ?? 0;
         const prevOpen = latestPrices[coin]?.todayOpen ?? 0;
