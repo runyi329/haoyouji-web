@@ -1636,7 +1636,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       <option value="">请选择到期日</option>
                       {expiries.map(ex => (
                         <option key={ex.deribitLabel} value={ex.deribitLabel}>
-                          {ex.label} ({ex.diffDays > 0 ? `${ex.diffDays}天后` : '即将到期'})
+                          {ex.dateStr || ex.deribitLabel}（{ex.diffDays > 0 ? `余${ex.diffDays}天` : '即将到期'}）
                         </option>
                       ))}
                     </select>
