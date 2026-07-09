@@ -2360,7 +2360,7 @@ export default function LedgerDetailAA({
                             <span
                               style={{ fontSize: 13, color: _todayPnlColor, cursor: _canShowTooltip ? 'pointer' : 'default',
                                 textDecoration: _canShowTooltip ? 'underline' : 'none', textDecorationStyle: 'dashed',
-                                textDecorationColor: _todayPnlColor, textUnderlineOffset: '2px', whiteSpace: 'nowrap' }}
+                                textDecorationColor: _todayPnlColor, textUnderlineOffset: '2px', whiteSpace: 'normal', wordBreak: 'break-all', textAlign: 'center' }}
                               onClick={(e) => { if (_canShowTooltip) { e.stopPropagation(); setTooltipTodayPnlTag(tooltipTodayPnlTag === tag.name ? null : tag.name); } }}
                             >{_todayPnlText}</span>
                             {tooltipTodayPnlTag === tag.name && _canShowTooltip && (
@@ -2392,7 +2392,7 @@ export default function LedgerDetailAA({
                       })()}
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 回报 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap', fontSize: 13, color: _isStale ? '#BDBDBD' : latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'normal', wordBreak: 'break-all', fontSize: 13, color: _isStale ? '#BDBDBD' : latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
                         {latestPnl !== 0 ? `${latestPnl < 0 ? '-' : ''}${Math.abs(latestPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
@@ -2463,12 +2463,12 @@ export default function LedgerDetailAA({
                       })()}
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 年化 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap', fontSize: 13, color: _isStale || annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}>
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'normal', wordBreak: 'break-all', fontSize: 13, color: _isStale || annualized === null ? '#BDBDBD' : annualized >= 0 ? '#D32F2F' : '#388E3C' }}>
                         {annualized === null ? '--' : `${annualized >= 0 ? '+' : ''}${annualized.toFixed(1)}%`}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 分红 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap', fontSize: 13, color: divAmt > 0 ? '#D32F2F' : '#BDBDBD' }}>
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'normal', wordBreak: 'break-all', fontSize: 13, color: divAmt > 0 ? '#D32F2F' : '#BDBDBD' }}>
                         {divAmt > 0 ? (
                           <span
                             onClick={(e) => { e.stopPropagation(); setDividendNoteTag(tag.name); }}
