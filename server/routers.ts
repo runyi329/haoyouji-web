@@ -1101,8 +1101,101 @@ ${klinesSummary}
       const prevClose = price > 0 ? price - change : 0;
       return { price, prevClose, change, changePercent, todayOpen: t?.todayOpen ?? 0, high24h: t?.high24h ?? 0, low24h: t?.low24h ?? 0, volume24h: t?.volume24h ?? 0, quoteVolume24h: t?.quoteVolume24h ?? 0, success: price > 0 };
     }),
-  }),
 
+    // ===== 自定义币种管理（管理员添加，全局生效）=====
+    /** 获取自定义币种列表（公开，所有设备都能读到） */
+    getCustomCoins: publicProcedure.query(async () => {
+      try {
+        const conn = await getDbConnection();
+        if (!conn) return [];
+        await (conn as any).execute(`
+          CREATE TABLE IF NOT EXISTS \`custom_crypto_coins\` (
+            \`id\` INT AUTO_INCREMENT PRIMARY KEY,
+            \`symbol\` VARCHAR(20) NOT NULL COMMENT '币种代码，如 PEPE',
+            \`binance\` VARCHAR(30) COMMENT '币安交易对，如 PEPEUSDT',
+            \`okx\` VARCHAR(30) COMMENT 'OKX交易对，如 PEPE-USDT',
+            \`coingecko\` VARCHAR(50) COMMENT 'CoinGecko id，如 pepe',
+            \`added_by\` INT COMMENT '添加人userId',
+            \`created_at\` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY \`uk_symbol\` (\`symbol\`)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='自定义实时价格币种'
+        `);
+        const [rows] = await (conn as any).execute(
+          `SELECT symbol, binance, okx, coingecko FROM custom_crypto_coins ORDER BY created_at ASC`
+        );
+        return (rows as any[]).map((r: any) => ({
+          symbol: r.symbol as string,
+          binance: r.binance as string | null,
+          okx: r.okx as string | null,
+          coingecko: r.coingecko as string | null,
+        }));
+      } catch (e) {
+        console.error('[getCustomCoins]', e);
+        return [];
+      }
+    }),
+
+    /** 添加自定义币种（52号账本 owner/admin 可操作） */
+    addCustomCoin: protectedProcedure
+      .input(z.object({
+        symbol: z.string().min(1).max(20),
+        binance: z.string().optional(),
+        okx: z.string().optional(),
+        coingecko: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const memberRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = 52 AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (memberRows[0]?.[0]?.role ?? memberRows[0]?.role ?? '');
+        if (role !== 'owner' && role !== 'admin' && ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        }
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        await (conn as any).execute(
+          `INSERT INTO custom_crypto_coins (symbol, binance, okx, coingecko, added_by)
+           VALUES (?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE binance=VALUES(binance), okx=VALUES(okx), coingecko=VALUES(coingecko), added_by=VALUES(added_by)`,
+          [input.symbol.toUpperCase(), input.binance || null, input.okx || null, input.coingecko || null, ctx.user.id]
+        );
+        return { success: true };
+      }),
+
+    /** 删除自定义币种（52号账本 owner/admin 可操作） */
+    deleteCustomCoin: protectedProcedure
+      .input(z.object({ symbol: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const memberRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = 52 AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (memberRows[0]?.[0]?.role ?? memberRows[0]?.role ?? '');
+        if (role !== 'owner' && role !== 'admin' && ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        }
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        await (conn as any).execute(
+          `DELETE FROM custom_crypto_coins WHERE symbol = ?`,
+                    [input.symbol.toUpperCase()]
+        );
+        return { success: true };
+      }),
+    /** 服务器端测试新币种是否可拉到价格（服务器在香港，不受国内网络限制） */
+    testCoinPrice: protectedProcedure
+      .input(z.object({ symbol: z.string().min(1).max(20) }))
+      .mutation(async ({ ctx, input }) => {
+        const memberRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = 52 AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (memberRows[0]?.[0]?.role ?? memberRows[0]?.role ?? '');
+        if (role !== 'owner' && role !== 'admin' && ctx.user.role !== 'super_admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        }
+        const { testCoinPrice } = await import('./price-scanner');
+        return await testCoinPrice(input.symbol);
+      }),
+  }),
   // 支付账户管理
   paymentAccounts: router({
     // ========== 银行卡管理 ==========

@@ -755,59 +755,54 @@ function ProjectCreationRuleContent() {
         <span className="text-[13px] font-bold text-[#5A2E1C]">金融数据获取规则</span>
       </div>
 
-      <RuleSection icon={Server} title="核心原则：服务器只管业务数据，行情全部前端获取">
+            <RuleSection icon={Server} title="核心原则：必须走服务器中转，严禁前端直连">
         <p className="text-[12.5px] text-gray-700 leading-relaxed">
-          所有金融行情数据（价格、Greeks、汇率等）按资产类型分两条通道获取，<span className="font-semibold text-gray-900">服务器不再承担任何行情拉取职责</span>，只负责订单、账本、用户等业务数据。彻底消除服务器轮询压力，同时降低延迟。
-        </p>
-        <p className="text-[12px] text-gray-400 mt-1">
-          老方案（服务器端 price-scanner / getRate / getLivePrices）代码保留不删，注释标注「已封存，新方案见 useLivePrice.ts / useDeribit.ts」，备用切回。
+          <span className="font-semibold text-red-600">网络限制铁律</span>：币安、OKX 等主流数字币交易所的 API 在国内网络下被墙，前端直接 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">fetch</span> 会导致请求超时或连接重置。<span className="font-semibold text-gray-900">必须通过 tRPC 走服务器中转</span>（服务器在香港/海外，不受限制）。
         </p>
       </RuleSection>
-
-      <RuleSection icon={Link2} title="通道一：数字币 + 期权 → 前端直连（Client-Side Fetching）">
+      <RuleSection icon={Link2} title="通道一：数字币（加密货币） → 服务器 tRPC 拉取">
         <p className="text-[12.5px] text-gray-700 leading-relaxed mb-3">
-          浏览器直接请求交易所公开接口，CORS 完全开放，无需 API Key，永久免费。
+          服务器端每 3 秒自动拉取价格，缓存在内存中（TTL 5秒）。前端通过 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">trpc.getCryptoPrices</span> 拉取服务器缓存，避免并发请求压垮外部 API。
         </p>
-        <p className="text-[12px] font-semibold text-gray-800 mb-1">数字币价格（三重兜底）</p>
+        <p className="text-[12px] font-semibold text-gray-800 mb-1">服务器端三重兜底机制</p>
         <table className="w-full text-[12px] border-collapse mb-3">
           <thead>
             <tr className="bg-gray-100">
               <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">优先级</th>
               <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">数据源</th>
-              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">接口地址</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">说明</th>
             </tr>
           </thead>
           <tbody>
             <tr>
               <td className="p-1.5 border border-gray-200 text-gray-700">主</td>
-              <td className="p-1.5 border border-gray-200 font-medium">币安 Binance</td>
-              <td className="p-1.5 border border-gray-200 text-gray-500 font-mono text-[11px]">api.binance.com/api/v3/ticker/price</td>
+              <td className="p-1.5 border border-gray-200 font-medium">Gate.io / 币安</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500 text-[11px]">首选数据源</td>
             </tr>
             <tr className="bg-gray-50">
               <td className="p-1.5 border border-gray-200 text-gray-700">备用</td>
-              <td className="p-1.5 border border-gray-200 font-medium">OKX</td>
-              <td className="p-1.5 border border-gray-200 text-gray-500 font-mono text-[11px]">okx.com/api/v5/market/ticker</td>
+              <td className="p-1.5 border border-gray-200 font-medium">火币 / OKX</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500 text-[11px]">主源失败时自动降级</td>
             </tr>
             <tr>
               <td className="p-1.5 border border-gray-200 text-gray-700">兜底</td>
               <td className="p-1.5 border border-gray-200 font-medium">CoinGecko</td>
-              <td className="p-1.5 border border-gray-200 text-gray-500 font-mono text-[11px]">api.coingecko.com/api/v3/simple/price</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500 text-[11px]">最终兜底</td>
             </tr>
           </tbody>
         </table>
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 mb-3">
           <p className="text-[12px] font-bold text-amber-800 mb-1.5">⚠️ 架构铁律：父组件单例拉取，子组件只读 props</p>
           <ul className="text-[12px] text-amber-700 space-y-1.5">
-            <li>✅ <span className="font-semibold">正确做法</span>：在页面级父组件（如 FunderManagement）顶层调用一次 <span className="font-mono text-[11px] bg-amber-100 px-1 rounded">useCryptoPrices</span>，结果放入 <span className="font-mono text-[11px] bg-amber-100 px-1 rounded">livePrices</span> prop 向下传给所有卡片。无论账本里有多少张订单，对外永远只有 <span className="font-semibold">1 个请求</span>。</li>
+            <li>✅ <span className="font-semibold">正确做法</span>：在页面级父组件（如 FunderManagement）顶层调用一次 <span className="font-mono text-[11px] bg-amber-100 px-1 rounded">trpc.getCryptoPrices</span>，结果放入 <span className="font-mono text-[11px] bg-amber-100 px-1 rounded">livePrices</span> prop 向下传给所有卡片。无论账本里有多少张订单，前端到服务器永远只有 <span className="font-semibold">1 个请求</span>。</li>
             <li>❌ <span className="font-semibold text-red-700">错误做法</span>：在卡片组件（FunderOrderCard 等）内部独立调用价格 hook。N 张卡片 = N 个并发请求，移动端 Safari 超过并发阈值会触发连接重置，导致「因为出现问题，此网页已重新载入」崩溃。</li>
             <li>📌 同理适用于 Deribit 期权数据：行权日/行权价在父组件拉一次，通过 props 传给表单，不在每个卡片实例里独立请求。</li>
           </ul>
         </div>
-        <p className="text-[12px] font-semibold text-gray-800 mb-1">期权（Deribit）— 待重新实现（遵循上方架构铁律）</p>
+        <p className="text-[12px] font-semibold text-gray-800 mb-1">自定义币种配置</p>
         <ul className="text-[12px] text-gray-700 space-y-1">
-          <li>行权日 / 行权价下拉框：直连 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">deribit.com/api/v2/public/get_instruments</span>，静态数据兜底</li>
-          <li>希腊字母（IV / Delta / Gamma / Theta / Vega）：直连 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">deribit.com/api/v2/public/ticker</span>，每 30 秒自动刷新</li>
-          <li>实现文件（待重建）：<span className="font-mono text-[11px] bg-gray-100 px-1 rounded">client/src/lib/useDeribit.ts</span>（已因架构问题回滚删除）</li>
+          <li>统一在「实时价格管理」页面（LivePriceAdmin）添加，数据存入 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">custom_crypto_coins</span> 表</li>
+          <li>添加后所有设备全局生效，<span className="font-mono text-[11px] bg-gray-100 px-1 rounded">price-scanner</span> 会在下次扫描时自动拉取</li>
         </ul>
       </RuleSection>
 

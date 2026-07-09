@@ -434,6 +434,44 @@ export function getLatestTickerData(coin: string): { price: number; todayOpen: n
   return { price: entry.price, todayOpen: entry.todayOpen, changePercent: entry.changePercent, high24h: entry.high24h, low24h: entry.low24h, volume24h: entry.volume24h, quoteVolume24h: entry.quoteVolume24h };
 }
 
+/** 测试任意币种是否能从服务器拉到价格（供管理页面查询新币种使用）
+ * 服务器在香港，可直接访问 Gate.io / 火币 / OKX，不受国内网络限制
+ */
+export async function testCoinPrice(symbol: string): Promise<{ price: number; source: string; supported: boolean }> {
+  const coin = symbol.toUpperCase().trim();
+  // 先试 Gate.io
+  try {
+    const r = await fetch(`https://api.gateio.ws/api/v4/spot/tickers?currency_pair=${coin}_USDT`, { signal: AbortSignal.timeout(5000) });
+    if (r.ok) {
+      const data: any[] = await r.json();
+      if (Array.isArray(data) && data.length > 0 && data[0].last) {
+        const p = parseFloat(data[0].last);
+        if (!isNaN(p) && p > 0) return { price: p, source: 'Gate.io', supported: true };
+      }
+    }
+  } catch {}
+  // 再试火币
+  try {
+    const r = await fetch(`https://api.huobi.pro/market/detail/merged?symbol=${coin.toLowerCase()}usdt`, { signal: AbortSignal.timeout(5000) });
+    if (r.ok) {
+      const j: any = await r.json();
+      if (j.status === 'ok' && j.tick?.close) return { price: j.tick.close, source: '火币', supported: true };
+    }
+  } catch {}
+  // 再试 OKX
+  try {
+    const r = await fetch(`https://www.okx.com/api/v5/market/ticker?instId=${coin}-USDT`, { signal: AbortSignal.timeout(8000) });
+    if (r.ok) {
+      const j: any = await r.json();
+      if (j.code === '0' && j.data?.[0]?.last) {
+        const p = parseFloat(j.data[0].last);
+        if (!isNaN(p) && p > 0) return { price: p, source: 'OKX', supported: true };
+      }
+    }
+  } catch {}
+  return { price: 0, source: 'none', supported: false };
+}
+
 export function startPriceScanner() {
   // 先从文件恢复上次的价格（避免重启后短暂显示---）
   loadCacheFromFile();
