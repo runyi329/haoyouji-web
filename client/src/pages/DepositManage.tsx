@@ -8,7 +8,6 @@
  *   右侧保证金：按标签管理，多币种，存储在 tag_config.margin_by_coin
  */
 import { useState, useMemo, useEffect } from "react";
-import { useCryptoPrices } from "@/lib/useLivePrice"; // 规则G
 import React from "react";
 import { useParams, useLocation } from "wouter";
 import {
@@ -256,8 +255,8 @@ export default function DepositManage() {
       { enabled: !!ledgerId }
     );
 
-  // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
-  const cryptoPricesRaw = useCryptoPrices(3000);
+  // 走服务器tRPC获取币价（price-scanner缓存，3秒刷新）
+  const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 3000, staleTime: 2000 });
   const cryptoPrices: Record<string, number> = useMemo(() => {
     const result: Record<string, number> = {};
     if (cryptoPricesRaw) {

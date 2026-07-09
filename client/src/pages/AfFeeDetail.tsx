@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { useUsdCnyRate } from "@/lib/useLivePrice"; // 规则G
 import { useLocation, useParams } from "wouter";
 import { ArrowLeft, ChevronDown, ChevronRight, DollarSign } from "lucide-react";
 import Tooltip from "@/components/Tooltip";
@@ -182,9 +181,8 @@ export default function AfFeeDetail() {
   const financeOrders: any[] = financeOrdersRaw.filter(
     (o: any) => o.order_role == null || o.order_role === 'finance' || o.order_role === 'funder'
   );
-  // 实时 CNY/USDT 汇率（3秒刷新）
-  // 规则G：汇率通过Cloudflare Worker代理（老方案已封存：trpc.exchange.getRate）
-  const { data: cnyRateData } = useUsdCnyRate(60000);
+  // 实时 CNY/USDT 汇率 — 走服务器tRPC，60秒刷新
+  const { data: cnyRateData } = trpc.exchange.getRate.useQuery(undefined, { refetchInterval: 60000, staleTime: 30000 });
   const cnyRate = parseFloat((cnyRateData as any)?.money ?? '7.25') || 7.25;
 
   // 已付利息汇总（按订单聚合）

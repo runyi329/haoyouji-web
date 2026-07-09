@@ -4,7 +4,6 @@
  * 布局：顶部导航 → 行情选股 → 下单面板 → 我的订单列表
  */
 import React, { useState, useEffect, useMemo } from "react";
-import { useCryptoPrices } from "@/lib/useLivePrice"; // 规则G
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ChevronLeft, TrendingUp, TrendingDown, Loader2, RefreshCw, ChevronDown, ChevronUp, ChevronsUpDown } from "lucide-react";
@@ -100,8 +99,8 @@ function GudizengchouDetail({ order, ledgerId }: { order: any; ledgerId: number 
     { orderId: order.id, ledgerId },
     { enabled: order.side === 'buy', staleTime: 8000, refetchInterval: 3000, refetchOnWindowFocus: false }
   );
-  // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
-  const cryptoPricesRaw = useCryptoPrices(3000);
+  // 走服务器tRPC获取币价（price-scanner缓存，3秒刷新）
+  const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 3000, staleTime: 2000 });
   const _prices = (cryptoPricesRaw as any)?.prices ?? cryptoPricesRaw;
   const livePrice = _prices?.[order.coin] ?? 0;
   const cancelMutation = trpc.ledger.afCancelOrder.useMutation({

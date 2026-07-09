@@ -1,5 +1,4 @@
 import { useState, useMemo } from "react";
-import { useCryptoPrices } from "@/lib/useLivePrice"; // 规则G
 import { useLocation, useParams } from "wouter";
 import { ChevronLeft, ChevronDown, ChevronRight } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -41,9 +40,8 @@ export default function AfProfitForecast() {
     { enabled: !!ledgerId }
   );
 
-  // 拉取实时价格
-  // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
-  const cryptoPricesRaw = useCryptoPrices(3000);
+  // 走服务器tRPC获取币价（price-scanner缓存，3秒刷新）
+  const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 3000, staleTime: 2000 });
   const livePrice: Record<string, number> = (cryptoPricesRaw as any)?.prices ?? {};
 
   // 只取持仓中订单（completed + 未卖出）

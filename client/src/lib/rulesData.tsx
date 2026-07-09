@@ -806,46 +806,58 @@ function ProjectCreationRuleContent() {
         </ul>
       </RuleSection>
 
-      <RuleSection icon={Plug} title="通道二：美股 / 港股 / 黄金 / 石油 / 汇率 → Cloudflare Worker 代理">
+      <RuleSection icon={Plug} title="通道二：美股 / 港股 / 黄金 / 石油 / 汇率 → 服务器 tRPC 接口">
         <p className="text-[12.5px] text-gray-700 leading-relaxed mb-3">
-          Yahoo Finance 有 CORS 限制，浏览器无法直连。通过项目已有的 Cloudflare Worker 做轻量代理，Worker 加 CORS 头后返回给前端，服务器完全不参与。Worker 永久免费（每日 10 万次请求额度）。
+          <span className="font-semibold text-red-600">【已弃用】Cloudflare Worker 前端直连方案</span>：经实测，前端直连（含 Worker 代理）在 Safari / iOS WebKit 上会因并发连接数超限触发「WebKit 遇到内部错误」崩溃白屏。<span className="font-semibold text-gray-900">全部改为走服务器 tRPC 接口</span>（<span className="font-mono text-[11px] bg-gray-100 px-1 rounded">trpc.stock.*</span>），服务器统一代理后缓存，前端只读 tRPC 数据。
         </p>
-        <p className="text-[12px] font-semibold text-gray-800 mb-1">Worker 地址</p>
-        <p className="font-mono text-[11px] bg-gray-100 px-2 py-1 rounded mb-3">https://polymarket-proxy.runyihongkong.workers.dev</p>
-        <p className="text-[12px] font-semibold text-gray-800 mb-1">资产代码规范</p>
         <table className="w-full text-[12px] border-collapse">
           <thead>
             <tr className="bg-gray-100">
               <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">资产类型</th>
-              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">代码格式</th>
-              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">示例</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">tRPC 接口</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">刷新频率</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td className="p-1.5 border border-gray-200">美股</td>
-              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">直接股票代码</td>
-              <td className="p-1.5 border border-gray-200 text-gray-500">AAPL、MSTR、TSLA、NVDA</td>
-            </tr>
-            <tr className="bg-gray-50">
-              <td className="p-1.5 border border-gray-200">港股</td>
-              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">代码 + .HK</td>
-              <td className="p-1.5 border border-gray-200 text-gray-500">0700.HK（腾讯）、1211.HK（比亚迪）</td>
-            </tr>
-            <tr>
               <td className="p-1.5 border border-gray-200">黄金</td>
-              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">GC=F</td>
-              <td className="p-1.5 border border-gray-200 text-gray-500">黄金期货，美元/盎司</td>
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">trpc.stock.getGoldPrice</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">3秒</td>
             </tr>
             <tr className="bg-gray-50">
               <td className="p-1.5 border border-gray-200">石油</td>
-              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">CL=F / NG=F</td>
-              <td className="p-1.5 border border-gray-200 text-gray-500">WTI 原油 / 天然气</td>
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">trpc.stock.getOilPrice</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">3秒</td>
             </tr>
             <tr>
-              <td className="p-1.5 border border-gray-200">汇率</td>
-              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">USDCNH=X</td>
-              <td className="p-1.5 border border-gray-200 text-gray-500">美元/人民币离岸汇率</td>
+              <td className="p-1.5 border border-gray-200">美元指数</td>
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">trpc.stock.getDollarIndex</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">3秒</td>
+            </tr>
+            <tr className="bg-gray-50">
+              <td className="p-1.5 border border-gray-200">离岸人民币</td>
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">trpc.stock.getUsdCnh</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">3秒</td>
+            </tr>
+            <tr>
+              <td className="p-1.5 border border-gray-200">上证指数</td>
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">trpc.stock.getShanghaiIndex</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">3秒/60秒</td>
+            </tr>
+            <tr className="bg-gray-50">
+              <td className="p-1.5 border border-gray-200">恒生指数</td>
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">trpc.stock.getHangSengIndex</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">3秒</td>
+            </tr>
+            <tr>
+              <td className="p-1.5 border border-gray-200">标普500</td>
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">trpc.stock.getSP500Index</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">3秒/60秒</td>
+            </tr>
+            <tr className="bg-gray-50">
+              <td className="p-1.5 border border-gray-200">美元/人民币汇率</td>
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">trpc.exchange.getRate</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">60秒</td>
             </tr>
           </tbody>
         </table>
@@ -892,7 +904,7 @@ export const RULES: Rule[] = [
     id: "005",
     title: "项目创建规则",
     summary:
-      "新建项目总规范：A角色与归属权限 B会员权限 C项目骨架 D初始化清单 E多项目登录皮肤路由 F图片/视频/文件上传规范 G金融数据获取规则（数字币前端直连币安/OKX/CoinGecko三重兜底；美股/港股/黄金/石油走Cloudflare Worker代理Yahoo Finance；架构铁律：价格数据必须在父组件顶层统一拉取一次，通过livePrices props传给子卡片，严禁在每个卡片实例里独立调用价格hook；老方案封存备用）。",
+      "新建项目总规范：A角色与归属权限 B会员权限 C项目骨架 D初始化清单 E多项目登录皮肤路由 F图片/视频/文件上传规范 G金融数据获取规则（【铁律】所有行情数据全部走服务器tRPC，严禁前端直连任何外部API；数字币走trpc.getCryptoPrices，大宗商品/指数/汇率走trpc.stock.*；架构铁律：价格数据必须在父组件顶层统一拉取一次，通过livePrices props传给子卡片，严禁在每个卡片实例里独立调用价格hook；前端直连/Cloudflare Worker方案已弃用，Safari/iOS WebKit会崩溃）。",
     content: <ProjectCreationRuleContent />,
   },
   {

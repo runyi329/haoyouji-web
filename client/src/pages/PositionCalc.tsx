@@ -6,7 +6,6 @@
  * - 点击档位弹出 modal，选择修改计划量或已买量
  */
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { useCryptoPrices } from "@/lib/useLivePrice"; // 规则G
 // 注入双端滑块样式
 const RANGE_SLIDER_STYLE = `
   .dual-range input[type=range] {
@@ -284,9 +283,8 @@ export default function PositionCalc() {
     return levels.reduce((s, p) => s + (parseFloat(allocManualQtys[p] || '0') || 0), 0);
   }, [allocManualQtys, allocMinPrice, allocMaxPrice]);
 
-  // 获取实时 USDT/CNY 汇率 — 3秒刷新，保留上次値
-  // 规则G：汇率通过Cloudflare Worker代理（老方案已封存：trpc.exchange.getRate）
-  const { data: rateData } = useUsdCnyRate(60000);
+  // 获取实时 USDT/CNY 汇率 — 走服务器tRPC，60秒刷新
+  const { data: rateData } = trpc.exchange.getRate.useQuery(undefined, { refetchInterval: 60000, staleTime: 30000 });
   useEffect(() => {
     if (rateData?.success && rateData.money) {
       const r = parseFloat(rateData.money);
@@ -545,9 +543,8 @@ export default function PositionCalc() {
     }
   }, [positionData, positionLoading, dataLoaded]);
 
-  // ETH 价格 — 3秒刷新，保留上次値（新数据未到前不清空）
-  // 规则G：数字币前端直连（老方案已封存：trpc.getCryptoPrices）
-  const cryptoPricesRaw = useCryptoPrices(3000);
+  // ETH 价格 — 走服务器tRPC，3秒刷新，保留上次値（新数据未到前不清空）
+  const { data: cryptoPricesRaw } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 3000, staleTime: 2000 });
 
   useEffect(() => {
     // getCryptoPrices 返回 { prices: { ETH: ... }, changes: {...} } 结构
