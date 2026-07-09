@@ -16215,7 +16215,7 @@ ${klinesSummary}
       .input(z.object({
         ledgerId: z.number(),
         userId: z.number(),
-        coin: z.enum(['BTC', 'ETH', 'SOL', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'ASTER', 'SUI', 'SKHYNIX']),
+        coin: z.enum(['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'ASTER', 'SUI', 'SKHYNIX']),
         amount: z.string(),
         buyPrice: z.string().optional(),
         buyDate: z.string().optional(),

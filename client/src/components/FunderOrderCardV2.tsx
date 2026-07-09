@@ -2004,7 +2004,7 @@ export function FunderLenderCardSilver({
       {rateAbs && parseFloat(order.interest_base || '0') > 0 && (() => {
         // 计息基数单位是baseCur，先算出baseCur单位的利息，再用convertAccrued换算成显示单位
         const base = parseFloat(order.interest_base!);
-        const rate = rateAbs / 100;
+        const rate = parseFloat(rateAbs) / 100;
         const dailyRaw = base * rate / 365;
         const monthlyRaw = base * rate / 12;
         const yearlyRaw = base * rate;

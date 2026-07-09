@@ -634,6 +634,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       interestStartDate: getBeijingToday(),
       showProfitShare: true,
       commissionShare: '',
+      profitShareRatio: '',
+      profitShareType: 'interest' as 'interest' | 'coin',
       originalAmount: '',
       commissionRate: '',
       commissionBase: '',
@@ -876,7 +878,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       interestBaseCurrency: formData.interestBaseCurrency,
       interestRateCurrency: formData.interestRateCurrency,
       interestStartDate: formData.interestStartDate || undefined,
-      showProfitShare: displayConfig.profitShare,
+      showProfitShare: Boolean(displayConfig.profitShare),
       commissionShare: (() => {
         if (!displayConfig.profitShare) return undefined;
         const typeLabel = formData.profitShareType === 'coin' ? '利润分成' : '利息分成';

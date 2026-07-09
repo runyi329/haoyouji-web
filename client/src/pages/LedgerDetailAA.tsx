@@ -2195,9 +2195,10 @@ export default function LedgerDetailAA({
               // 今日变动 = (昨日balance - 今日balance) × 占比%
               // 用户与标签对赌，标签账户上升则用户亏，所以符号取反
               const prevPnl = tag.points.length >= 2 ? (tag.points[tag.points.length - 2]?.pnl ?? 0) : 0;
-              const todayPnl = (latestBalance !== null && prevBalance !== null && _tagRatio > 0)
+              // 今日变动：有balance数据时乘以占比（ratio=0时结果为0）；无balance数据时fallback到pnl差值再乘ratio
+              const todayPnl = (latestBalance !== null && prevBalance !== null)
                 ? (prevBalance - latestBalance) * (_tagRatio / 100)
-                : (tag.points.length > 0 ? latestPnl - prevPnl : null);
+                : (_tagRatio > 0 && tag.points.length > 0 ? (latestPnl - prevPnl) * (_tagRatio / 100) : (_tagRatio === 0 ? 0 : (tag.points.length > 0 ? latestPnl - prevPnl : null)));
               const annualized = tag.marginCny > 0 && days > 0 ? (latestPnl / tag.marginCny / days) * 365 * 100 : null;
               const divAmt = dividendByTag[tag.name] ?? 0;
               return { tag, days, latestPnl, latestDate, todayPnl, prevPnl, latestBalance, prevBalance, annualized, divAmt, isLast: idx === visibleTags.length - 1, isPaused, firstDate, endDate };
@@ -2370,11 +2371,12 @@ export default function LedgerDetailAA({
                                   {latestBalance !== null && prevBalance !== null ? (
                                     <>
                                       ({prevBalance.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} − {latestBalance.toLocaleString('zh-CN', { maximumFractionDigits: 0 })})
-                                      {_ratioNum > 0 ? ` × ${_ratioNum.toFixed(0)}%` : ''}
+                                      {` × ${_ratioNum.toFixed(0)}%`}
                                     </>
                                   ) : (
                                     <>
                                       ({latestPnl.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} − {prevPnl.toLocaleString('zh-CN', { maximumFractionDigits: 0 })})
+                                      {` × ${_ratioNum.toFixed(0)}%`}
                                     </>
                                   )}
                                   {' = '}

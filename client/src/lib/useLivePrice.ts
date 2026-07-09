@@ -476,11 +476,11 @@ export function useUSStockPrice(symbol: string, intervalMs = 10000) {
 
 /** Hook：BTC价格（替换 trpc.stock.getBtcPrice.useQuery，兼容旧格式） */
 export function useBtcPrice(intervalMs = 3000) {
-  const [data, setData] = useState<{ price: number; changePercent: number; success: boolean }>({ price: 0, changePercent: 0, success: false });
+  const [data, setData] = useState<{ price: number; change: number; changePercent: number; success: boolean }>({ price: 0, change: 0, changePercent: 0, success: false });
   useEffect(() => {
-    fetchCryptoPrice('BTC').then(r => setData({ price: r.price, changePercent: r.changePercent, success: r.price > 0 }));
+    fetchCryptoPrice('BTC').then(r => setData({ price: r.price, change: 0, changePercent: r.changePercent, success: r.price > 0 }));
     const t = setInterval(() => {
-      fetchCryptoPrice('BTC').then(r => setData({ price: r.price, changePercent: r.changePercent, success: r.price > 0 }));
+      fetchCryptoPrice('BTC').then(r => setData({ price: r.price, change: 0, changePercent: r.changePercent, success: r.price > 0 }));
     }, intervalMs);
     return () => clearInterval(t);
   }, [intervalMs]);

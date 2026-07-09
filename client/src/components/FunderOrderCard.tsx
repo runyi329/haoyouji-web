@@ -10,7 +10,7 @@ import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, Chevr
 import { toast } from "sonner";
 
 // 币种选项
-export const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SKHYNIX', 'PLUME', 'SEI', 'ASTER', 'SUI'] as const;
+export const COIN_OPTIONS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'SKHYNIX', 'PLUME', 'SEI', 'ASTER', 'SUI', 'AAVE', 'ONDO', 'LDO', 'ENA', 'ARKM'] as const;
 export type CoinType = typeof COIN_OPTIONS[number];
 
 export const STATUS_OPTIONS = [
@@ -60,6 +60,11 @@ export const COIN_COLORS: Record<CoinType, string> = {
   SEI: '#9C1FFF',
   ASTER: '#00D4AA',
   SUI: '#4DA2FF',
+  AAVE: '#B6509E',
+  ONDO: '#1A1A2E',
+  LDO: '#F68B1E',
+  ENA: '#00C4B4',
+  ARKM: '#FF6B00',
 };
 
 // 获取北京时间（UTC+8）今天，返回 YYYY-MM-DD
@@ -797,7 +802,7 @@ export function FunderOrderCard({
   })();
 
   // 读取 display_config（与 LedgerDetail show() 函数一致：默认全部显示，除非明确设为 false）
-  const dc: Record<string, boolean> | null = (() => {
+  const dc: Record<string, boolean | string | number> | null = (() => {
     try {
       const raw = order.display_config;
       if (!raw) return null;
@@ -2628,7 +2633,7 @@ function CollateralLogSection({ orderId, ledgerId, refreshKey }: { orderId: numb
                 <span className="text-xs font-medium" style={{ color: '#1A2340' }}>{actionLabel(log.action)}</span>
                 <span className="text-[10px] text-gray-400">{fmtTime(log.createdAt)}</span>
               </div>
-              <div className="text-[11px] text-gray-500">{log.note}</div>
+              <div className="text-[11px] text-gray-500">{log.summary}</div>
               <div className="text-[10px] text-gray-400">操作人: {log.operatorName}</div>
             </div>
           ))}
