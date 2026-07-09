@@ -303,26 +303,37 @@ export async function fetchUsdCnyRate(): Promise<number> {
 
 // ===== React Hooks =====
 
-// ===== 自定义币种 localStorage key（与 LivePriceAdmin.tsx 保持同步）=====
-const CUSTOM_COINS_KEY = 'custom_crypto_coins';
+// ===== 自定义币种内存缓存（从数据库 API 读取，60秒刷新一次）=====
+let _customCoinsCache: Array<{ symbol: string; binance?: string | null; okx?: string | null; coingecko?: string | null }> = [];
+let _customCoinsCacheAt = 0;
+const CUSTOM_COINS_CACHE_TTL = 60000; // 60秒
 
-/** 从 localStorage 读取自定义币种代码列表 */
-function getCustomCoinSymbols(): string[] {
-  try {
-    const stored = localStorage.getItem(CUSTOM_COINS_KEY);
-    if (!stored) return [];
-    const coins = JSON.parse(stored) as Array<{ symbol: string; binance?: string; okx?: string; coingecko?: string }>;
-    // 同步注册到三个 MAP，使 fetchCryptoPrice 能正确拉取
-    coins.forEach(c => {
-      const sym = c.symbol.toUpperCase();
-      if (c.binance) BINANCE_SYMBOL_MAP[sym] = c.binance;
-      if (c.okx) OKX_SYMBOL_MAP[sym] = c.okx;
-      if (c.coingecko) COINGECKO_ID_MAP[sym] = c.coingecko;
-    });
-    return coins.map(c => c.symbol.toUpperCase());
-  } catch {
-    return [];
+/** 从数据库 API 读取自定义币种（带内存缓存，避免频繁请求） */
+async function fetchCustomCoinsFromDb(): Promise<string[]> {
+  // 缓存未过期则直接返回
+  if (_customCoinsCacheAt > 0 && Date.now() - _customCoinsCacheAt < CUSTOM_COINS_CACHE_TTL) {
+    return _customCoinsCache.map(c => c.symbol.toUpperCase());
   }
+  try {
+    const res = await fetch('/api/trpc/cryptoData.getCustomCoins', { signal: AbortSignal.timeout(5000) });
+    if (res.ok) {
+      const d = await res.json() as any;
+      const coins = d?.result?.data?.json ?? d?.result?.data ?? [];
+      if (Array.isArray(coins)) {
+        _customCoinsCache = coins;
+        _customCoinsCacheAt = Date.now();
+        // 同步注册到三个 MAP，使 fetchCryptoPrice 能正确拉取
+        coins.forEach((c: any) => {
+          const sym = (c.symbol as string).toUpperCase();
+          if (c.binance) BINANCE_SYMBOL_MAP[sym] = c.binance;
+          if (c.okx) OKX_SYMBOL_MAP[sym] = c.okx;
+          if (c.coingecko) COINGECKO_ID_MAP[sym] = c.coingecko;
+        });
+        return coins.map((c: any) => (c.symbol as string).toUpperCase());
+      }
+    }
+  } catch { /* 网络失败时使用缓存 */ }
+  return _customCoinsCache.map(c => c.symbol.toUpperCase());
 }
 
 /** Hook：实时数字币价格（替换 trpc.getCryptoPrices.useQuery） */
@@ -334,12 +345,12 @@ export function useCryptoPrices(intervalMs = 3000) {
     usdtCnyRate: number;
   }>({ prices: {}, changes: {}, opens: {}, usdtCnyRate: 7.25 });
 
-  const BUILTIN_COINS = ['BTC', 'ETH', 'SOL', 'BNB', 'AAVE', 'SUI', 'ONDO', 'LDO', 'ENA', 'ARKM', 'SEI', 'PLUME', 'ASTER', 'DRAM', 'MU'];
+  const BUILTIN_COINS_LIST = ['BTC', 'ETH', 'SOL', 'BNB', 'AAVE', 'SUI', 'ONDO', 'LDO', 'ENA', 'ARKM', 'SEI', 'PLUME', 'ASTER', 'DRAM', 'MU'];
 
   const fetch_ = useCallback(async () => {
-    // 每次拉取前合并 localStorage 中的自定义币种
-    const customCoins = getCustomCoinSymbols();
-    const allCoins = Array.from(new Set([...BUILTIN_COINS, ...customCoins]));
+    // 每次拉取前合并数据库中的自定义币种（带内存缓存，不会每次都发请求）
+    const customCoins = await fetchCustomCoinsFromDb();
+    const allCoins = Array.from(new Set([...BUILTIN_COINS_LIST, ...customCoins]));
     const result = await fetchCryptoPrices(allCoins);
     setData(prev => ({
       prices: { ...prev.prices, ...result.prices },

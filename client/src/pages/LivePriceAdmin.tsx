@@ -4,7 +4,7 @@
  * 功能：
  * 1. 展示当前所有已配置的数字币（含实时价格、数据源、涨跌幅）
  * 2. 查询新币种：输入代码 → 自动试三个数据源 → 查到了一键添加
- * 3. 添加后立即生效（存 localStorage，useCryptoPrices 自动读取）
+ * 3. 添加后存入数据库，全局所有设备立即生效
  * 4. 展示数据源规则说明
  *
  * 架构铁律：本页面仅管理配置，不做全局价格轮询
@@ -14,6 +14,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import { ChevronLeft, Plus, Trash2, RefreshCw, CheckCircle2, XCircle, Search, Info, Zap, Globe, Shield } from "lucide-react";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 
 // ===== 内置币种（与 useLivePrice.ts 保持同步）=====
 const BUILTIN_COINS = [
@@ -34,17 +35,6 @@ const BUILTIN_COINS = [
   { symbol: 'MU', name: 'MU' },
   { symbol: 'USDT', name: 'USDT/USDC' },
 ];
-
-export const CUSTOM_COINS_KEY = 'custom_crypto_coins';
-
-export interface CustomCoin {
-  symbol: string;
-  name: string;
-  binance: string;
-  okx: string;
-  coingecko: string;
-  addedAt: string;
-}
 
 interface PriceResult {
   price: number;
@@ -193,7 +183,6 @@ export default function LivePriceAdmin() {
   const params = useParams();
   const ledgerId = params?.id ? parseInt(params.id) : 52;
 
-  const [customCoins, setCustomCoins] = useState<CustomCoin[]>([]);
   const [priceCache, setPriceCache] = useState<Record<string, PriceResult & { loading?: boolean }>>({});
 
   // 查询区
@@ -204,23 +193,27 @@ export default function LivePriceAdmin() {
   // 删除确认
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  // 加载自定义币种
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(CUSTOM_COINS_KEY);
-      if (stored) setCustomCoins(JSON.parse(stored));
-    } catch { /* ignore */ }
-  }, []);
+  // ===== tRPC 接口 =====
+  const { data: customCoins = [], refetch: refetchCustomCoins } = trpc.cryptoData.getCustomCoins.useQuery(undefined, {
+    staleTime: 30000,
+  });
 
-  const saveCustomCoins = (coins: CustomCoin[]) => {
-    setCustomCoins(coins);
-    localStorage.setItem(CUSTOM_COINS_KEY, JSON.stringify(coins));
-  };
+  const addCustomCoinMutation = trpc.cryptoData.addCustomCoin.useMutation({
+    onSuccess: () => {
+      refetchCustomCoins();
+    },
+  });
+
+  const deleteCustomCoinMutation = trpc.cryptoData.deleteCustomCoin.useMutation({
+    onSuccess: () => {
+      refetchCustomCoins();
+    },
+  });
 
   // 刷新单个币种价格
   const refreshPrice = useCallback(async (symbol: string) => {
     const src = BUILTIN_SOURCES[symbol];
-    const custom = customCoins.find(c => c.symbol === symbol);
+    const custom = customCoins.find((c: any) => c.symbol === symbol);
     const binance = src?.binance || custom?.binance || `${symbol}USDT`;
     const okx = src?.okx || custom?.okx || `${symbol}-USDT`;
     const coingecko = src?.coingecko || custom?.coingecko || '';
@@ -231,7 +224,7 @@ export default function LivePriceAdmin() {
 
   // 刷新所有
   const refreshAll = useCallback(async () => {
-    const allSymbols = [...BUILTIN_COINS.map(c => c.symbol), ...customCoins.map(c => c.symbol)];
+    const allSymbols = [...BUILTIN_COINS.map(c => c.symbol), ...customCoins.map((c: any) => c.symbol)];
     await Promise.all(allSymbols.map(s => refreshPrice(s)));
   }, [customCoins, refreshPrice]);
 
@@ -250,34 +243,43 @@ export default function LivePriceAdmin() {
     setQuerying(false);
   };
 
-  // 一键添加
-  const handleAdd = () => {
+  // 一键添加（存数据库）
+  const handleAdd = async () => {
     if (!queryResult || queryResult.source === 'none') return;
     const sym = querySymbol.trim().toUpperCase();
-    const exists = [...BUILTIN_COINS, ...customCoins].find(c => c.symbol === sym);
-    if (exists) { toast.error(`${sym} 已存在`); return; }
-    const newCoin: CustomCoin = {
-      symbol: sym,
-      name: sym,
-      binance: queryResult.binance,
-      okx: queryResult.okx,
-      coingecko: queryResult.coingecko,
-      addedAt: new Date().toISOString(),
-    };
-    saveCustomCoins([...customCoins, newCoin]);
-    toast.success(`${sym} 已添加，实时价格立即生效`);
-    setQuerySymbol('');
-    setQueryResult(null);
+    const existsBuiltin = BUILTIN_COINS.find(c => c.symbol === sym);
+    const existsCustom = customCoins.find((c: any) => c.symbol === sym);
+    if (existsBuiltin || existsCustom) { toast.error(`${sym} 已存在`); return; }
+    try {
+      await addCustomCoinMutation.mutateAsync({
+        symbol: sym,
+        binance: queryResult.binance || undefined,
+        okx: queryResult.okx || undefined,
+        coingecko: queryResult.coingecko || undefined,
+      });
+      toast.success(`${sym} 已添加，全局所有设备立即生效`);
+      setQuerySymbol('');
+      setQueryResult(null);
+    } catch (e: any) {
+      toast.error(e?.message || '添加失败');
+    }
   };
 
   // 删除自定义币种
-  const handleDelete = (symbol: string) => {
-    saveCustomCoins(customCoins.filter(c => c.symbol !== symbol));
-    toast.success(`${symbol} 已删除`);
-    setDeleteConfirm(null);
+  const handleDelete = async (symbol: string) => {
+    try {
+      await deleteCustomCoinMutation.mutateAsync({ symbol });
+      toast.success(`${symbol} 已删除`);
+      setDeleteConfirm(null);
+    } catch (e: any) {
+      toast.error(e?.message || '删除失败');
+    }
   };
 
-  const allCoins = [...BUILTIN_COINS.map(c => ({ ...c, isCustom: false })), ...customCoins.map(c => ({ ...c, isCustom: true }))];
+  const allCoins = [
+    ...BUILTIN_COINS.map(c => ({ ...c, isCustom: false })),
+    ...customCoins.map((c: any) => ({ symbol: c.symbol, name: c.symbol, isCustom: true })),
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -338,15 +340,16 @@ export default function LivePriceAdmin() {
                           {sourceLabel(queryResult.source)}
                         </span>
                       </div>
-                      <p className="text-[11px] text-green-700 mt-0.5">查询成功，可以添加</p>
+                      <p className="text-[11px] text-green-700 mt-0.5">查询成功，添加后全局生效</p>
                     </div>
                   </div>
                   <button
                     onClick={handleAdd}
-                    className="flex items-center gap-1 px-3 py-2 rounded-xl bg-green-600 text-white text-[12px] font-semibold shrink-0"
+                    disabled={addCustomCoinMutation.isPending}
+                    className="flex items-center gap-1 px-3 py-2 rounded-xl bg-green-600 text-white text-[12px] font-semibold shrink-0 disabled:opacity-50"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    添加
+                    {addCustomCoinMutation.isPending ? '添加中…' : '添加'}
                   </button>
                 </div>
               ) : (
@@ -478,8 +481,8 @@ export default function LivePriceAdmin() {
               <span className="font-semibold text-gray-800">每 60 秒</span>
             </div>
             <div className="flex items-center justify-between text-[12px] px-1">
-              <span className="text-gray-500">内存缓存有效期</span>
-              <span className="font-semibold text-gray-800">5 秒</span>
+              <span className="text-gray-500">自定义币种存储</span>
+              <span className="font-semibold text-gray-800">数据库（全局生效）</span>
             </div>
           </div>
         </div>
@@ -491,10 +494,16 @@ export default function LivePriceAdmin() {
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center px-6">
           <div className="bg-white rounded-2xl p-5 w-full max-w-sm">
             <h3 className="text-base font-semibold text-gray-900 mb-2">删除 {deleteConfirm}？</h3>
-            <p className="text-[13px] text-gray-500 mb-4">删除后，该币种将从自定义列表中移除，订单卡片中将不再显示其实时价格。</p>
+            <p className="text-[13px] text-gray-500 mb-4">删除后，该币种将从所有设备的自定义列表中移除，订单卡片中将不再显示其实时价格。</p>
             <div className="flex gap-3">
               <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-[13px] text-gray-600">取消</button>
-              <button onClick={() => handleDelete(deleteConfirm)} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-[13px] font-semibold">删除</button>
+              <button
+                onClick={() => handleDelete(deleteConfirm)}
+                disabled={deleteCustomCoinMutation.isPending}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-[13px] font-semibold disabled:opacity-50"
+              >
+                {deleteCustomCoinMutation.isPending ? '删除中…' : '删除'}
+              </button>
             </div>
           </div>
         </div>
