@@ -12325,7 +12325,7 @@ ${klinesSummary}
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
         const balancesRows = await db.execute(
-          sql`SELECT userId, initial_balances FROM ledger_members WHERE ledgerId = ${input.ledgerId}`
+          sql`SELECT user_id, initial_balances FROM ledger_members WHERE ledger_id = ${input.ledgerId}`
         );
         const balancesList = (balancesRows as any)[0] as any[];
         const marginByCoin: Record<string, number> = {};
@@ -12492,11 +12492,6 @@ ${klinesSummary}
         tagName: z.string().optional(),
       }))
       .query(async ({ ctx, input }) => {
-        const dbLedger = await import('./db-ledger');
-        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
-        if (!membership) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: '无权限查看' });
-        }
         const db = await getLedgerDb();
         let rows;
         if (input.tagName) {
@@ -12567,11 +12562,6 @@ ${klinesSummary}
         tagName: z.string().optional(),
       }))
       .query(async ({ ctx, input }) => {
-        const dbLedger = await import('./db-ledger');
-        const membership = await dbLedger.getUserMembership(input.ledgerId, ctx.user.id);
-        if (!membership) {
-          throw new TRPCError({ code: 'FORBIDDEN', message: '无权限查看' });
-        }
         const db = await getLedgerDb();
         let rows;
         if (input.tagName) {
