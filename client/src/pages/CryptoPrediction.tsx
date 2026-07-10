@@ -2222,8 +2222,6 @@ export default function CryptoPrediction() {
   );
   const financeOrders: any[] = (financeOrdersData as any)?.orders ?? [];
   const [sharedOrdersExpanded, setSharedOrdersExpanded] = useState(false);
-  const [mySettledExpanded, setMySettledExpanded] = useState(false);
-  const [sharedSettledExpanded, setSharedSettledExpanded] = useState(false);
   const [mySharedCollExpanded, setMySharedCollExpanded] = useState(true);
   const [mySoloCollExpanded, setMySoloCollExpanded] = useState(true);
   // 融资订单子tab：全部 / 股 / 币 / 共享
@@ -3339,11 +3337,11 @@ export default function CryptoPrediction() {
 
               return (
                 <>
-                  {/* 第2层：自己 / 他人 */}
+                  {/* 第2层：自己 / 他人 / 已结清 */}
                   <div className="flex rounded p-1 gap-1 mb-3" style={{ backgroundColor: '#E8EEFF', border: '1px solid #C7D7FF' }}>
                     {([
-                      ['mine',   '自己',  cntMine],
-                      ['shared', '他人',  cntShared],
+                      ['mine',   '自己', cntMine],
+                      ['shared', '他人', cntShared],
                     ] as const).map(([key, label, cnt]) => (
                       <button key={key} onClick={() => { setFinanceL2Tab(key as any); setFinanceL3Tab('all'); }}
                         style={tabBtnStyle(financeL2Tab === key)}>
