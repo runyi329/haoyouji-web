@@ -4,8 +4,22 @@ import { FunderOrderCard, FunderNoteRow, formatCoinQtyFunder, useAccruedInterest
 import { FunderOrderCardV2, FunderOrderCardV2Light, FunderOrderCardV2Silver, FunderLenderCardSilver } from "@/components/FunderOrderCardV2";
 import Lottie from "lottie-react";
 import aiTagAnimData from "@/assets/aitag-blue.json";
+
 import { FunderAIPanel } from "@/components/FunderAIPanel";
 import EthLeverageProduct from "@/components/EthLeverageProduct";
+
+// 智能钱包动图（与首页保持一致）
+const WalletLottie = React.memo(function WalletLottie() {
+  const [animData, setAnimData] = React.useState<object | null>(null);
+  React.useEffect(() => {
+    fetch('/wallet_gold.json')
+      .then(r => r.json())
+      .then(setAnimData)
+      .catch(() => {});
+  }, []);
+  if (!animData) return <div style={{ width: 14, height: 14 }} />;
+  return <Lottie animationData={animData} loop={true} style={{ width: '100%', height: '100%' }} />;
+});
 
 // PDF导出功能
 function exportLedgerToPDF() {
@@ -3710,13 +3724,23 @@ export default function LedgerDetail() {
                 <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #F5D78E 40%, #C9A84C 60%, transparent 95%)' }} />
                 {/* 底部暗影线 */}
                 <div className="absolute inset-x-0 bottom-0 h-px" style={{ background: 'rgba(0,0,0,0.5)' }} />
-                {/* 标题行：钱包图标 + 标签 */}
+                {/* 标题行：钱包动图 + 标签 */}
                 <div className="flex items-center gap-2 mb-3">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
-                    <line x1="1" y1="10" x2="23" y2="10"/>
-                  </svg>
-                  <span className="text-xs font-semibold" style={{ color: '#C9A84C', letterSpacing: '0.1em' }}>智能钱包</span>
+                  {/* WalletLottie 动图（与首页保持一致） */}
+                  <div style={{ width: 14, height: 14, overflow: 'visible', position: 'relative', flexShrink: 0, marginLeft: -16 }}>
+                    <div style={{
+                      width: 400,
+                      height: 400,
+                      transform: 'scale(0.07)',
+                      transformOrigin: 'bottom left',
+                      position: 'absolute',
+                      bottom: -3,
+                      left: 0,
+                    }}>
+                      <WalletLottie />
+                    </div>
+                  </div>
+                  <span className="text-xs font-semibold" style={{ color: '#C9A84C', letterSpacing: '0.1em', marginLeft: 12 }}>智能钱包</span>
                 </div>
                 {/* 余额主数字 */}
                 <div className="mb-4">
