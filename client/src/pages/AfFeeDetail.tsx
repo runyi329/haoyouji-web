@@ -165,7 +165,12 @@ export default function AfFeeDetail() {
     return rate != null && rate > 0;
   };
 
-  const [mainTab, setMainTab] = useState<'gujian' | 'finance'>('gujian');
+  // 读取 URL ?tab= 参数初始化 mainTab
+  const [mainTab, setMainTab] = useState<'gujian' | 'finance'>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    return tab === 'finance' ? 'finance' : 'gujian';
+  });
 
   const { data: orders, isLoading } = trpc.ledger.afAdminGetOrders.useQuery(
     { ledgerId },

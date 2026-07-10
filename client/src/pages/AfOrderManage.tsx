@@ -501,6 +501,22 @@ export default function AfOrderManage() {
             <ArrowLeft className="w-5 h-5 text-white" />
           </button>
           <span className="text-white font-semibold text-base flex-1">订单管理</span>
+          {/* 右上角：管理费明细 Tab 快捷入口 */}
+          <div className="flex rounded-full p-0.5 mr-2" style={{ background: 'rgba(255,255,255,0.14)' }}>
+            {([
+              { key: 'gujian', label: '谷底增筹' },
+              { key: 'finance', label: '融资付息' },
+            ]).map(t => (
+              <button
+                key={t.key}
+                onClick={() => setLocation(`/ledger/${ledgerId}/af-fee-detail?tab=${t.key}`)}
+                className="px-2.5 py-1 rounded-full text-xs font-medium transition-all"
+                style={{ background: 'transparent', color: 'rgba(255,255,255,0.75)' }}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
           <button
             onClick={() => window.location.reload()}
             className="text-xs px-3 py-1 rounded-full active:opacity-70"
@@ -513,74 +529,6 @@ export default function AfOrderManage() {
         {/* 统计汇总 */}
         {stats && (
           <div className="px-4 pb-5 pt-3 space-y-2">
-            {/* 第一行：管理费（单独占满宽） */}
-            <button
-              className="w-full rounded-2xl px-4 py-3 text-left active:opacity-75"
-              style={{ background: 'rgba(255,255,255,0.14)' }}
-              onClick={() => setLocation(`/ledger/${ledgerId}/af-fee-detail`)}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-white/55 text-xs">管理费</p>
-                <ChevronRight className="w-3.5 h-3.5 text-white/30" />
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-xs">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-white/50">进行中</span>
-                  <span className="text-amber-300 font-semibold">{stats.fees.ongoingFee.toFixed(2)} U</span>
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-white/50">已结清</span>
-                  <span className="text-emerald-300 font-semibold">{stats.fees.settledFee.toFixed(2)} U</span>
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-white/70">累计</span>
-                  <span className="text-white font-bold">{stats.fees.totalFee.toFixed(2)} U</span>
-                </div>
-              </div>
-              <div className="mt-2 pt-2 border-t border-white/10 flex gap-4 text-xs">
-                <div className="flex items-center gap-1">
-                  <span className="text-white/50">今日管理费</span>
-                  <span className="text-sky-300 font-semibold">{(stats.fees as any).todayFee?.toFixed(4) ?? '0.0000'} U</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="text-white/50">今日新增</span>
-                  <span className="text-white font-bold">{(stats.fees as any).todayOrderCount ?? 0} 单</span>
-                </div>
-              </div>
-            </button>
-            {/* 第二行：累计订单 + 今日（各占一半） */}
-            <div className="grid grid-cols-2 gap-2">
-              {/* 累计订单 */}
-              <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
-                <p className="text-white/55 text-xs mb-2">累计订单</p>
-                <div className="space-y-1.5">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-white/50">普通</span>
-                    <span className="text-white/80 font-semibold">{stats.orders.normalCount} 笔</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-white/50">赠送</span>
-                    <span className="text-amber-300 font-semibold">{stats.orders.giftCount} 笔</span>
-                  </div>
-                  <div className="flex justify-between text-xs border-t border-white/10 pt-1.5">
-                    <span className="text-white/70">合计</span>
-                    <span className="text-white font-bold">{stats.orders.totalCount} 笔</span>
-                  </div>
-                </div>
-              </div>
-              {/* 盈利预测 */}
-              <button
-                onClick={() => setLocation(`/ledger/${ledgerId}/af-profit-forecast`)}
-                className="rounded-2xl px-4 py-3 text-left w-full active:opacity-70 transition-opacity"
-                style={{ background: 'rgba(255,255,255,0.14)' }}
-              >
-                <p className="text-white/55 text-xs mb-2">盈利预测</p>
-                <div className="flex items-center justify-between h-10">
-                  <span className="text-white text-sm font-semibold">模拟目标价</span>
-                  <span className="text-white/60 text-xs">→</span>
-                </div>
-              </button>
-            </div>
             {/* 持仓中各币种数量统计 */}
             {(() => {
               // 持仓中币种：只统计已成交且未卖出的（status=completed，sellStatus != sold）
@@ -762,6 +710,14 @@ export default function AfOrderManage() {
                       </div>
                     );
                   })()}
+                  {/* 盈利预测入口 */}
+                  <button
+                    onClick={() => setLocation(`/ledger/${ledgerId}/af-profit-forecast`)}
+                    className="mt-2 pt-2 border-t border-gray-100 w-full flex justify-between items-center active:opacity-70"
+                  >
+                    <span className="text-gray-400 text-xs">盈利预测</span>
+                    <span className="text-blue-500 text-xs">模拟目标价 →</span>
+                  </button>
                 </div>
               );
             })()}
@@ -940,48 +896,50 @@ export default function AfOrderManage() {
             )}
           </div>
         </div>
-        {/* 第一行：分组维度切换 */}
-        <div className="flex items-center justify-center gap-1 px-4 pt-2 pb-1">
-          {([
-            { key: 'time' as const, label: '按时间' },
-            { key: 'person' as const, label: '按人员' },
-            { key: 'coin' as const, label: '按币种' },
-            { key: 'price' as const, label: '按价格' },
-          ]).map(tab => (
-            <button
-              key={tab.key}
-              onClick={() => setGroupMode(tab.key)}
-              className="px-4 py-1 rounded-full text-xs font-medium transition-all"
-              style={groupMode === tab.key
-                ? { background: '#2563eb', color: '#fff' }
-                : { background: '#F3F4F6', color: '#6b7280' }}
-            >
-              {tab.label}
-            </button>
-          ))}
+        {/* 第一行：状态筛选（胶囊按钮样式） */}
+        <div className="px-3 pt-2 pb-1">
+          <div className="flex rounded p-0.5 gap-0.5" style={{ background: '#f3f4f6' }}>
+            {([
+              { key: 'all' as const, label: `全部(${(orders as any[])?.filter((o: any) => { const g = o.isGift === true || o.isGift === 1; return o.status !== 'cancelled' && !(g && o.status === 'pending'); }).length ?? 0})` },
+              { key: 'pending' as const, label: `委买(${(orders as any[])?.filter((o: any) => { const g = o.isGift === true || o.isGift === 1; return o.status === 'pending' && !g; }).length ?? 0})` },
+              { key: 'holding' as const, label: `持仓(${(orders as any[])?.filter((o: any) => o.status === 'completed' && o.sellStatus !== 'sold' && o.sellStatus !== 'selling').length ?? 0})` },
+              { key: 'selling' as const, label: `委卖(${(orders as any[])?.filter((o: any) => o.sellStatus === 'selling').length ?? 0})` },
+              { key: 'sold' as const, label: `卖出(${(orders as any[])?.filter((o: any) => o.sellStatus === 'sold').length ?? 0})` },
+            ]).map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setStatusFilter(tab.key)}
+                className="flex-1 py-1.5 rounded text-xs font-medium transition-all"
+                style={statusFilter === tab.key
+                  ? { background: '#2563eb', color: '#fff' }
+                  : { background: 'transparent', color: '#6b7280' }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
-        {/* 第二行：状态筛选 */}
-        <div className="flex">
-          {([
-            { key: 'all' as const, label: '全部', count: (orders as any[])?.filter((o: any) => { const g = o.isGift === true || o.isGift === 1; return o.status !== 'cancelled' && !(g && o.status === 'pending'); }).length ?? 0 },
-            { key: 'pending' as const, label: '委买中', count: (orders as any[])?.filter((o: any) => { const g = o.isGift === true || o.isGift === 1; return o.status === 'pending' && !g; }).length ?? 0 },
-            { key: 'holding' as const, label: '持仓中', count: (orders as any[])?.filter((o: any) => o.status === 'completed' && o.sellStatus !== 'sold' && o.sellStatus !== 'selling').length ?? 0 },
-            { key: 'selling' as const, label: '委卖中', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'selling').length ?? 0 },
-            { key: 'sold' as const, label: '已卖出', count: (orders as any[])?.filter((o: any) => o.sellStatus === 'sold').length ?? 0 },
-          ]).map((tab, idx, arr) => (
-            <button
-              key={tab.key}
-              onClick={() => setStatusFilter(tab.key)}
-              className="flex-1 py-2.5 text-xs font-medium transition-all relative"
-              style={statusFilter === tab.key
-                ? { color: '#2563eb', borderBottom: '2px solid #2563eb' }
-                : { color: '#6b7280', borderBottom: '2px solid transparent' }}
-            >
-              {idx > 0 && <span className="absolute left-0 top-1/2 -translate-y-1/2 h-3 w-px bg-gray-200" />}
-              {tab.label}
-              {tab.count > 0 && <span className="ml-0.5 text-[10px] opacity-60">{tab.count}</span>}
-            </button>
-          ))}
+        {/* 第二行：分组维度切换（胶囊按钮样式） */}
+        <div className="px-3 pb-2">
+          <div className="flex rounded p-0.5 gap-0.5" style={{ background: '#f3f4f6' }}>
+            {([
+              { key: 'time' as const, label: '时间' },
+              { key: 'person' as const, label: '人员' },
+              { key: 'coin' as const, label: '币种' },
+              { key: 'price' as const, label: '价格' },
+            ]).map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setGroupMode(tab.key)}
+                className="flex-1 py-1.5 rounded text-xs font-medium transition-all"
+                style={groupMode === tab.key
+                  ? { background: '#2563eb', color: '#fff' }
+                  : { background: 'transparent', color: '#6b7280' }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
