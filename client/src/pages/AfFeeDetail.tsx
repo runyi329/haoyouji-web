@@ -118,6 +118,9 @@ export default function AfFeeDetail() {
   const [finSearch, setFinSearch] = useState('');
   // 融资付息分组筛选：列表/按日期/按人员/按币种
   const [finGroupFilter, setFinGroupFilter] = useState<'byDate' | 'byPerson' | 'byDirection' | 'byType'>('byDate');
+  // 按人员视图订单排序
+  const [finPersonOrderSort, setFinPersonOrderSort] = useState<'date' | 'rate' | 'daily'>('daily');
+  const [gujianPersonSort, setGujianPersonSort] = useState<'daily' | 'amount' | 'days'>('daily');
   // 融资付息收/付方向筛选：全部/我方收息/我方付息
   const [finDirectionFilter, setFinDirectionFilter] = useState<'all' | 'collect' | 'pay'>('all');
   // 融资付息天数Tooltip
@@ -179,7 +182,8 @@ export default function AfFeeDetail() {
   // 保留 finance 和 funder 主订单（均为管理员在 ledger_orders 表开的单），不过滤 _isParticipant
   // 谷底增筹是 af_orders 表，与此处完全不同的数据源，不会重叠
   const financeOrders: any[] = financeOrdersRaw.filter(
-    (o: any) => o.order_role == null || o.order_role === 'finance' || o.order_role === 'funder'
+    (o: any) => (o.order_role == null || o.order_role === 'finance' || o.order_role === 'funder')
+      && o.asset_type !== 'crypto_option'  // 期权订单一次性付权利金，不参与融资付息计算
   );
   // 实时 CNY/USDT 汇率 — 走服务器tRPC，60秒刷新
   const { data: cnyRateData } = trpc.exchange.getRate.useQuery(undefined, { refetchInterval: 60000, staleTime: 30000 });
@@ -301,9 +305,10 @@ export default function AfFeeDetail() {
 
         {/* 蓝色汇总区域：按 tab 分别显示 */}
         {mainTab === 'gujian' ? (() => {
-          // 谷底增筹：管理费进行中/已结清/累计 + 今日
+          // 谷底增筹：管理费进行中/已结清/累计 + 今日 + 预测
           const nowBJ = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
           const todayStartBJ = new Date(nowBJ.getFullYear(), nowBJ.getMonth(), nowBJ.getDate());
+          const todayKey2 = `${nowBJ.getFullYear()}-${String(nowBJ.getMonth()+1).padStart(2,'0')}-${String(nowBJ.getDate()).padStart(2,'0')}`;
           let todayFee = 0;
           let todayOrderCount = 0;
           for (const item of feeItems) {
@@ -319,36 +324,71 @@ export default function AfFeeDetail() {
               todayOrderCount += 1;
             }
           }
+          // 预测计算：当前活跃订单的日费合计
+          const todayActive = feeItems.filter((item: any) => {
+            const startBJ = new Date(new Date(item.createdAt).toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+            const startKey = `${startBJ.getFullYear()}-${String(startBJ.getMonth()+1).padStart(2,'0')}-${String(startBJ.getDate()).padStart(2,'0')}`;
+            if (startKey > todayKey2) return false;
+            if (item.feeType === 'settled' && item.sellConfirmedAt) {
+              const sellBJ = new Date(new Date(item.sellConfirmedAt).toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+              const sellKey = `${sellBJ.getFullYear()}-${String(sellBJ.getMonth()+1).padStart(2,'0')}-${String(sellBJ.getDate()).padStart(2,'0')}`;
+              return sellKey >= todayKey2;
+            }
+            return true;
+          });
+          const dailyTotal2 = todayActive.reduce((s: number, i: any) => s + i.dailyFee, 0);
+          const monthlyForecast2 = dailyTotal2 * 30;
+          const yearlyForecast2 = dailyTotal2 * 365;
           return (
-            <div className="grid grid-cols-2 gap-2 px-4 pb-5 pt-3">
-              <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
-                <p className="text-white/55 text-xs mb-2">管理费</p>
-                <div className="space-y-1.5">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-white/50">进行中</span>
-                    <span className="text-amber-300 font-semibold">{totalOngoing.toFixed(2)} U</span>
+            <div className="px-4 pb-4 pt-3 space-y-2">
+              {/* 管理费汇总 + 今日 */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
+                  <p className="text-white/55 text-xs mb-2">管理费</p>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-white/50">进行中</span>
+                      <span className="text-amber-300 font-semibold">{totalOngoing.toFixed(2)} U</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-white/50">已结清</span>
+                      <span className="text-emerald-300 font-semibold">{totalSettled.toFixed(2)} U</span>
+                    </div>
+                    <div className="flex justify-between text-xs border-t border-white/10 pt-1.5">
+                      <span className="text-white/70">累计</span>
+                      <span className="text-white font-bold">{totalAll.toFixed(2)} U</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-white/50">已结清</span>
-                    <span className="text-emerald-300 font-semibold">{totalSettled.toFixed(2)} U</span>
-                  </div>
-                  <div className="flex justify-between text-xs border-t border-white/10 pt-1.5">
-                    <span className="text-white/70">累计</span>
-                    <span className="text-white font-bold">{totalAll.toFixed(2)} U</span>
+                </div>
+                <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
+                  <p className="text-white/55 text-xs mb-2">今日</p>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-white/50">管理费</span>
+                      <span className="text-sky-300 font-semibold">{todayFee.toFixed(4)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-white/50">订单数</span>
+                      <span className="text-white font-bold">{todayOrderCount} 单</span>
+                    </div>
                   </div>
                 </div>
               </div>
-              <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
-                <p className="text-white/55 text-xs mb-2">今日</p>
-                <div className="space-y-1.5">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-white/50">管理费</span>
-                    <span className="text-sky-300 font-semibold">{todayFee.toFixed(4)}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-white/50">订单数</span>
-                    <span className="text-white font-bold">{todayOrderCount} 单</span>
-                  </div>
+              {/* 预测行：日/月/年 */}
+              <div className="rounded-2xl px-4 py-2.5 flex gap-3" style={{ background: 'rgba(255,255,255,0.10)' }}>
+                <div className="flex-1 text-center">
+                  <p className="text-[10px] text-white/50 mb-0.5">日费（当前）</p>
+                  <p className="text-sm font-bold text-white tabular-nums">{dailyTotal2.toFixed(2)} <span className="text-[10px] font-normal text-white/50">U/天</span></p>
+                </div>
+                <div className="w-px" style={{ background: 'rgba(255,255,255,0.15)' }} />
+                <div className="flex-1 text-center">
+                  <p className="text-[10px] text-white/50 mb-0.5">月预测（×30）</p>
+                  <p className="text-sm font-bold text-sky-300 tabular-nums">{Math.round(monthlyForecast2)} <span className="text-[10px] font-normal text-white/50">U</span></p>
+                </div>
+                <div className="w-px" style={{ background: 'rgba(255,255,255,0.15)' }} />
+                <div className="flex-1 text-center">
+                  <p className="text-[10px] text-white/50 mb-0.5">年预测（×365）</p>
+                  <p className="text-sm font-bold text-emerald-300 tabular-nums">{Math.round(yearlyForecast2)} <span className="text-[10px] font-normal text-white/50">U</span></p>
                 </div>
               </div>
             </div>
@@ -373,39 +413,76 @@ export default function AfFeeDetail() {
           const collectBaseTotal = collectOrders.reduce((s: number, o: any) => s + getBase(o), 0);
           const payBaseTotal = payOrders.reduce((s: number, o: any) => s + getBase(o), 0);
           return (
-            <div className="grid grid-cols-2 gap-2 px-4 pb-5 pt-3">
-              <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
-                <p className="text-white/55 text-xs mb-2">利息（进行中）</p>
-                <div className="space-y-1.5">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-white/50">收息日息</span>
-                    <span className="text-emerald-300 font-semibold">+{collectDailyTotal.toFixed(2)} U</span>
+            <div className="px-4 pb-4 pt-3 space-y-2">
+              {/* 利息汇总 + 本金规模 */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
+                  <p className="text-white/55 text-xs mb-2">利息（进行中）</p>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-white/50">收息日息</span>
+                      <span className="text-emerald-300 font-semibold">+{collectDailyTotal.toFixed(2)} U</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-white/50">付息日息</span>
+                      <span className="text-rose-300 font-semibold">-{payDailyTotal.toFixed(2)} U</span>
+                    </div>
+                    <div className="flex justify-between text-xs border-t border-white/10 pt-1.5">
+                      <span className="text-white/70">净日息</span>
+                      <span className={`font-bold ${netDaily >= 0 ? 'text-white' : 'text-rose-300'}`}>{netDaily >= 0 ? '+' : ''}{netDaily.toFixed(2)} U</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-white/50">付息日息</span>
-                    <span className="text-rose-300 font-semibold">-{payDailyTotal.toFixed(2)} U</span>
-                  </div>
-                  <div className="flex justify-between text-xs border-t border-white/10 pt-1.5">
-                    <span className="text-white/70">净日息</span>
-                    <span className={`font-bold ${netDaily >= 0 ? 'text-white' : 'text-rose-300'}`}>{netDaily >= 0 ? '+' : ''}{netDaily.toFixed(2)} U</span>
+                </div>
+                <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
+                  <p className="text-white/55 text-xs mb-2">本金规模（进行中）</p>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-white/50">收息本金</span>
+                      <span className="text-emerald-300 font-semibold">{collectBaseTotal.toFixed(0)} U</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-white/50">付息本金</span>
+                      <span className="text-rose-300 font-semibold">{payBaseTotal.toFixed(0)} U</span>
+                    </div>
+                    <div className="flex justify-between text-xs border-t border-white/10 pt-1.5">
+                      <span className="text-white/70">订单数</span>
+                      <span className="text-white font-bold">{ongoingOrders.length} 单</span>
+                    </div>
                   </div>
                 </div>
               </div>
-              <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
-                <p className="text-white/55 text-xs mb-2">本金规模（进行中）</p>
-                <div className="space-y-1.5">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-white/50">收息本金</span>
-                    <span className="text-emerald-300 font-semibold">{collectBaseTotal.toFixed(0)} U</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-white/50">付息本金</span>
-                    <span className="text-rose-300 font-semibold">{payBaseTotal.toFixed(0)} U</span>
-                  </div>
-                  <div className="flex justify-between text-xs border-t border-white/10 pt-1.5">
-                    <span className="text-white/70">订单数</span>
-                    <span className="text-white font-bold">{ongoingOrders.length} 单</span>
-                  </div>
+              {/* 利息预测（收息 + 付息 + 汇总） */}
+              <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.10)' }}>
+                <p className="text-[10px] text-white/50 mb-2">利息预测</p>
+                {/* 表头 */}
+                <div className="flex gap-3 mb-1.5">
+                  <div className="w-10 flex-shrink-0" />
+                  <div className="flex-1 text-center"><p className="text-[10px] text-white/35">日息</p></div>
+                  <div className="flex-1 text-center"><p className="text-[10px] text-white/35">月预测</p></div>
+                  <div className="flex-1 text-center"><p className="text-[10px] text-white/35">年预测</p></div>
+                </div>
+                {/* 收息行 */}
+                <div className="flex items-center gap-3 mb-1.5">
+                  <div className="w-10 flex-shrink-0"><p className="text-[10px] text-white/50">收息</p></div>
+                  <div className="flex-1 text-center"><p className="text-xs font-semibold text-emerald-300 tabular-nums">+{collectDailyTotal.toFixed(2)}</p></div>
+                  <div className="flex-1 text-center"><p className="text-xs font-semibold text-emerald-300 tabular-nums">+{Math.round(collectDailyTotal * 30)}</p></div>
+                  <div className="flex-1 text-center"><p className="text-xs font-semibold text-emerald-300 tabular-nums">+{Math.round(collectDailyTotal * 365)}</p></div>
+                </div>
+                {/* 付息行 */}
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 flex-shrink-0"><p className="text-[10px] text-white/50">付息</p></div>
+                  <div className="flex-1 text-center"><p className="text-xs font-semibold text-rose-300 tabular-nums">-{payDailyTotal.toFixed(2)}</p></div>
+                  <div className="flex-1 text-center"><p className="text-xs font-semibold text-rose-300 tabular-nums">-{Math.round(payDailyTotal * 30)}</p></div>
+                  <div className="flex-1 text-center"><p className="text-xs font-semibold text-rose-300 tabular-nums">-{Math.round(payDailyTotal * 365)}</p></div>
+                </div>
+                {/* 分隔线 */}
+                <div className="border-t mb-2" style={{ borderColor: 'rgba(255,255,255,0.12)' }} />
+                {/* 汇总净日息行 */}
+                <div className="flex items-center gap-3">
+                  <div className="w-10 flex-shrink-0"><p className="text-[10px] text-white/70">汇总</p></div>
+                  <div className="flex-1 text-center"><p className="text-xs font-bold tabular-nums" style={{ color: netDaily >= 0 ? '#6ee7b7' : '#fca5a5' }}>{netDaily >= 0 ? '+' : ''}{netDaily.toFixed(2)}</p></div>
+                  <div className="flex-1 text-center"><p className="text-xs font-bold tabular-nums" style={{ color: netDaily >= 0 ? '#6ee7b7' : '#fca5a5' }}>{netDaily >= 0 ? '+' : ''}{Math.round(netDaily * 30)}</p></div>
+                  <div className="flex-1 text-center"><p className="text-xs font-bold tabular-nums" style={{ color: netDaily >= 0 ? '#6ee7b7' : '#fca5a5' }}>{netDaily >= 0 ? '+' : ''}{Math.round(netDaily * 365)}</p></div>
                 </div>
               </div>
             </div>
@@ -624,108 +701,91 @@ export default function AfFeeDetail() {
           if (persons.length === 0) return <div className="text-center py-16 text-gray-400 text-sm">暂无进行中订单</div>;
           return (
             <div className="space-y-2">
-              {persons.map(person => {
+              {persons.map((person) => {
                 const uid = person.nickname;
                 const isOpen = expandedPersons.has(uid);
+                const pendingFee = person.orders.reduce((s, o) => {
+                  const prepaid = parseFloat((o as any).prepaidFee || '0');
+                  return s + Math.max(0, o.totalFee - prepaid);
+                }, 0);
+                const walletBal = (person.userId > 0 && memberBalances) ? (memberBalances[person.userId] ?? null) : null;
+                const isShortfall = walletBal !== null && walletBal < pendingFee;
                 return (
                   <div key={uid} className="bg-white rounded shadow-sm overflow-hidden">
-                    <button
-                      onClick={() => togglePerson(uid)}
-                      className="w-full px-4 py-3 text-left"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
+                    {/* 收缩行：姓名 + 单数 + 日费（第一行），钉包余额 + 累积应付（第二行） */}
+                    <button onClick={() => togglePerson(uid)} className="w-full flex items-start justify-between px-4 py-3">
+                      <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                        {/* 第一行：姓名 · 单数 · 日费 */}
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-bold text-gray-800">{person.nickname}</span>
                           {person.username && person.username !== person.nickname && (
-                            <span className="text-[10px] text-gray-400">@{person.username}</span>
+                            <span className="text-xs text-gray-400">@{person.username}</span>
                           )}
                           <span className="text-xs text-gray-400">{person.orders.length}单</span>
+                          <span className="text-xs tabular-nums" style={{ color: '#475569' }}>日费 {person.dailyTotal.toFixed(2)} U</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-blue-600">{person.dailyTotal.toFixed(4)}</span>
-                          <span className="text-[10px] text-gray-400">U/天</span>
-                          {isOpen ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                        {/* 第二行：钱包余额 + 累积应付 + 缺口金额 */}
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs tabular-nums" style={{ color: walletBal !== null ? (isShortfall ? '#dc2626' : '#16a34a') : '#94a3b8' }}>
+                            钱包 {walletBal !== null ? `${walletBal.toFixed(2)} U` : '-'}
+                          </span>
+                          <span className="text-xs tabular-nums" style={{ color: '#1e40af' }}>
+                            应付 {pendingFee.toFixed(2)} U
+                          </span>
+                          {isShortfall && walletBal !== null && (
+                            <span className="text-xs font-semibold tabular-nums" style={{ color: '#dc2626' }}>
+                              缺口 {(pendingFee - walletBal).toFixed(2)} U
+                            </span>
+                          )}
                         </div>
                       </div>
-                      {!isOpen && (
-                        <div className="flex gap-3 mt-1">
-                          <span className="text-[10px] text-gray-400">月化 <span className="text-blue-500 font-semibold">{Math.round(person.dailyTotal*30)}</span>u</span>
-                          <span className="text-[10px] text-gray-400">季化 <span className="text-purple-500 font-semibold">{Math.round(person.dailyTotal*90)}</span>u</span>
-                          <span className="text-[10px] text-gray-400">年化 <span className="text-emerald-500 font-semibold">{Math.round(person.dailyTotal*365)}</span>u</span>
-                        </div>
-                      )}
-                      {/* 最后一行：钱包余额 + 应付管理费 + 状态 */}
-                      {(() => {
-                        const pendingFee = person.orders.reduce((s, o) => {
-                          const prepaid = parseFloat((o as any).prepaidFee || '0');
-                          return s + Math.max(0, o.totalFee - prepaid);
-                        }, 0);
-                        const walletBal = (person.userId > 0 && memberBalances) ? (memberBalances[person.userId] ?? null) : null;
-                        return (
-                          <div className="flex items-center gap-3 mt-1">
-                            {walletBal !== null && (
-                              <span className="text-[10px] text-gray-400">钱包余额 <span className="font-semibold" style={{ color: walletBal >= 0 ? '#d97706' : '#dc2626' }}>{walletBal.toFixed(2)}</span> <span className="text-gray-400">u</span></span>
-                            )}
-                            <span className="text-[10px] text-gray-400">应付管理费 <span className="font-semibold" style={{ color: pendingFee > 0 ? '#ea580c' : '#16a34a' }}>{pendingFee.toFixed(2)}</span> <span className="text-gray-400">u</span></span>
-                            {walletBal !== null && (
-                              walletBal >= pendingFee
-                                ? <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: '#fee2e2', color: '#dc2626' }}>充足</span>
-                                : <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: '#dcfce7', color: '#15803d' }}>补 <span style={{color:'#15803d'}}>{(pendingFee - walletBal).toFixed(2)}</span> <span className="text-gray-400 font-normal">u</span></span>
-                            )}
-                          </div>
-                        );
-                      })()}
+                      <div className="flex-shrink-0 mt-1">
+                        {isOpen ? <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg> : <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>}
+                      </div>
                     </button>
+                    {/* 展开：每条订单单行布局 */}
                     {isOpen && (
                       <div className="border-t border-gray-100">
-                        {/* 表格 */}
-                        <table className="w-full" style={{ borderCollapse: 'collapse' }}>
-                          <thead>
-                            <tr className="bg-gray-50">
-                              <th className="text-[9px] font-normal text-gray-400 text-center px-2 py-1 border-r border-b border-gray-200 w-12">币种</th>
-                              <th className="text-[9px] font-normal text-gray-400 text-right px-2 py-1 border-r border-b border-gray-200 w-18">持仓金额</th>
-                              <th className="text-[9px] font-normal text-gray-400 text-right px-2 py-1 border-r border-b border-gray-200 w-14">持仓天</th>
-                              <th className="text-[9px] font-normal text-gray-400 text-right px-2 py-1 border-r border-b border-gray-200 w-24">累计管理费</th>
-                              <th className="text-[9px] font-normal text-gray-400 text-center px-2 py-1 border-b border-gray-200 w-12">操作</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                          {person.orders.sort((a, b) => b.dailyFee - a.dailyFee).map((item, idx) => {
-                              const prepaidFee = parseFloat(item.prepaidFee || '0');
-                              const remainingFee = Math.max(0, item.totalFee - prepaidFee);
-                              return (
-                            <tr key={item.id} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
-                              <td className="text-[10px] text-gray-500 font-medium text-center px-2 py-1.5 border-r border-gray-200">{item.coin}</td>
-                              <td className="text-[10px] text-gray-400 text-right px-2 py-1.5 border-r border-gray-200">{Math.round(parseFloat(item.amount||'0'))}u</td>
-                              <td className="text-[10px] text-gray-400 text-right px-2 py-1.5 border-r border-gray-200">{item.holdDays}天</td>
-                              <td className="px-2 py-1.5 border-r border-gray-200">
-                                <div className="text-right">
-                                  <div className="text-[11px] font-bold text-gray-800">{item.totalFee.toFixed(4)}</div>
-                                  {prepaidFee > 0 && <div className="text-[9px] text-green-600">已付{prepaidFee.toFixed(4)}</div>}
-                                  <div className="text-[9px] text-orange-500">待付{remainingFee.toFixed(4)}</div>
-                                </div>
-                              </td>
-                              <td className="px-2 py-1.5 text-center">
+                        {person.orders.map((item, i) => {
+                          const prepaidFee = parseFloat(item.prepaidFee || '0');
+                          const remainingFee = Math.max(0, item.totalFee - prepaidFee);
+                          // 开仓日期：优先用 createdAt（订单确认日），startDate 字段在 af_orders 中不存在
+                          const createdAtStr = item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' }) : '';
+                          const stShort = createdAtStr ? (() => { const p2 = createdAtStr.split('-'); return p2.length===3 ? `${parseInt(p2[1])}/${parseInt(p2[2])}` : createdAtStr.slice(5,10); })() : '-';
+                          const todayNow = new Date(); const todayStrNow = `${todayNow.getFullYear()}-${String(todayNow.getMonth()+1).padStart(2,'0')}-${String(todayNow.getDate()).padStart(2,'0')}`;
+                          const st = createdAtStr || '';
+                          const accDays = st ? Math.max(0, Math.round((new Date(todayStrNow).getTime() - new Date(st.slice(0,10)).getTime()) / 86400000) + 1) : 0;
+                          const accInterest = item.dailyFee * accDays;
+                          const coinColor = item.coin === 'BTC' ? '#d97706' : item.coin === 'ETH' ? '#2563eb' : item.coin === 'SOL' ? '#7c3aed' : '#334155';
+                          return (
+                            <div key={item.id ?? i} className="px-4 py-3" style={{ borderBottom: '1px solid #f1f5f9' }}>
+                              {/* 第一行：币种 · 订单金额 · 编号 · 开仓日 · 共X天 */}
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                <span className="text-sm font-bold" style={{ color: coinColor }}>{item.coin || '-'}</span>
+                                <span className="text-sm font-semibold tabular-nums" style={{ color: '#334155' }}>{Math.round(parseFloat(item.amount||'0'))} U</span>
+                                <span className="text-xs" style={{ color: '#64748b' }}>订单编号 {String(item.id).padStart(4, '0')}</span>
+                                <span className="text-xs" style={{ color: '#94a3b8' }}>开仓 {stShort}</span>
+                                <span className="text-xs tabular-nums" style={{ color: '#94a3b8' }}>共 {item.holdDays} 天</span>
+                              </div>
+                              {/* 第二行：日费 · 累积 · 待付 · 收费按钮 */}
+                              <div className="flex items-center gap-2.5 flex-wrap">
+                                <span className="text-xs tabular-nums" style={{ color: '#64748b' }}>{item.dailyFee.toFixed(2)} U/天</span>
+                                <span className="text-xs font-semibold tabular-nums" style={{ color: '#1e40af' }}>累积 {accInterest.toFixed(2)} U</span>
+                                {remainingFee > 0 && <span className="text-xs font-semibold tabular-nums" style={{ color: '#ea580c' }}>待付 {remainingFee.toFixed(2)} U</span>}
                                 <button
-                                  onClick={() => {
-                                    setCollectModal({ order: item, totalFee: item.totalFee, prepaidFee });
-                                    setCollectAmount(remainingFee.toFixed(4));
-                                    setCollectNote('');
-                                  }}
-                                  className="bg-orange-500 text-white text-[9px] px-2 py-1 rounded-full font-medium"
+                                  onClick={e => { e.stopPropagation(); setCollectModal({ order: item, totalFee: item.totalFee, prepaidFee }); setCollectAmount(remainingFee.toFixed(4)); setCollectNote(''); }}
+                                  className="text-xs font-semibold px-2 py-0.5 rounded"
+                                  style={{ background: '#1e3a8a', color: '#fff' }}
                                 >收费</button>
-                              </td>
-                            </tr>
-                              );
-                          })}
-                          </tbody>
-                          <tfoot>
-                            <tr className="bg-gray-50">
-                              <td className="text-[10px] text-gray-500 font-semibold px-3 py-1.5 border-t border-gray-200" colSpan={4}>每日合计</td>
-                              <td className="text-xs font-bold text-blue-600 text-right px-3 py-1.5 border-t border-gray-200">{person.dailyTotal.toFixed(4)}</td>
-                            </tr>
-                          </tfoot>
-                        </table>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {/* 底部合计 */}
+                        <div className="flex items-center justify-between px-4 py-2" style={{ background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
+                          <span className="text-xs font-semibold" style={{ color: '#475569' }}>日费合计</span>
+                          <span className="text-sm font-bold tabular-nums" style={{ color: '#1e40af' }}>{person.dailyTotal.toFixed(2)} U/天</span>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1504,6 +1564,9 @@ export default function AfFeeDetail() {
                                 const st = (o.interest_start_date || o.buy_date || '').slice(0, 10);
                                 const stParts = st.split('-');
                                 const stShort = stParts.length === 3 ? `起息 ${parseInt(stParts[1])}/${parseInt(stParts[2])}` : '';
+                                // 累计利息：日息 × (当前日期 dk − 起息日 st) 天数
+                                const accDays = st ? Math.max(0, Math.round((new Date(dk).getTime() - new Date(st).getTime()) / 86400000) + 1) : 0;
+                                const accInterest = daily * accDays;
                                 return (
                                 <div key={o.id ?? i} className="px-4 py-2.5 border-b border-gray-50 last:border-0">
                                   <div className="flex items-center justify-between">
@@ -1518,9 +1581,16 @@ export default function AfFeeDetail() {
                                        {o.asset_type === 'crypto' && <span className="text-[10px] px-1 rounded" style={{ background: '#ede9fe', color: '#7c3aed' }}>数字币</span>}
                                        {o.asset_type === 'crypto_option' && <span className="text-[10px] px-1 rounded" style={{ background: '#f0fdf4', color: '#15803d' }}>数字币期权</span>}
                                      </div>
-                                     <span className="text-sm font-bold" style={{ color: collect ? '#dc2626' : '#16a34a' }}>
-                                      {collect ? '+' : '-'}{daily.toFixed(2)}/天
-                                    </span>
+                                    <div className="flex flex-col items-end gap-0.5">
+                                      <span className="text-sm font-bold" style={{ color: collect ? '#dc2626' : '#16a34a' }}>
+                                        {collect ? '+' : '-'}{daily.toFixed(2)}/天
+                                      </span>
+                                      {accInterest > 0 && (
+                                        <span className="text-[10px] font-semibold" style={{ color: collect ? '#dc2626' : '#16a34a', opacity: 0.75 }}>
+                                          累计 {collect ? '+' : '-'}{accInterest.toFixed(2)} U
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                   <div className="flex items-center gap-2 mt-0.5">
                                     <span className="text-[10px] text-gray-400 font-mono">{o.order_no || `#${o.id}`}</span>
@@ -1559,7 +1629,12 @@ export default function AfFeeDetail() {
                   p.orders.push(o);
                   if (isCollect(o)) p.collectDaily += d; else p.payDaily += d;
                 }
-                const persons = Array.from(personMap.values()).sort((a, b) => (b.collectDaily + b.payDaily) - (a.collectDaily + a.payDaily));
+                const persons = Array.from(personMap.values()).sort((a, b) => {
+                  const aIsPay = a.payDaily > 0 && a.collectDaily === 0;
+                  const bIsPay = b.payDaily > 0 && b.collectDaily === 0;
+                  if (aIsPay !== bIsPay) return aIsPay ? -1 : 1; // 付息在前
+                  return (a.collectDaily + a.payDaily) - (b.collectDaily + b.payDaily); // 同类内日息从小到大
+                });
                 if (persons.length === 0) return <div className="text-center py-8 text-gray-400 text-sm">暂无记录</div>;
                 return (
                   <div className="space-y-2">
@@ -1580,7 +1655,28 @@ export default function AfFeeDetail() {
                           </button>
                           {isOpen && (
                             <div className="border-t border-gray-100">
-                              {p.orders.map((o, i) => {
+                              {/* 排序按鈕栏 */}
+                              <div className="flex items-center gap-1.5 px-4 py-2" style={{ borderBottom: '1px solid #f1f5f9', background: '#fafafa' }}>
+                                <span className="text-[11px]" style={{ color: '#94a3b8' }}>排序：</span>
+                                {(['date', 'rate', 'daily'] as const).map(k => (
+                                  <button key={k} onClick={e => { e.stopPropagation(); setFinPersonOrderSort(k); }}
+                                    className="text-[11px] px-2 py-0.5 rounded"
+                                    style={{ background: finPersonOrderSort === k ? '#1e293b' : '#e2e8f0', color: finPersonOrderSort === k ? '#fff' : '#475569', fontWeight: finPersonOrderSort === k ? 600 : 400 }}>
+                                    {k === 'date' ? '日期' : k === 'rate' ? '利率' : '日息'}
+                                  </button>
+                                ))}
+                              </div>
+                              {[...p.orders].sort((a: any, b: any) => {
+                                if (finPersonOrderSort === 'date') {
+                                  const da = a.interest_start_date || a.buy_date || '';
+                                  const db = b.interest_start_date || b.buy_date || '';
+                                  return da.localeCompare(db);
+                                } else if (finPersonOrderSort === 'rate') {
+                                  return (Math.abs(Number(a.interest_rate_annual) || 0)) - (Math.abs(Number(b.interest_rate_annual) || 0));
+                                } else {
+                                  return calcDaily2(a) - calcDaily2(b);
+                                }
+                              }).map((o, i) => {
                                 const raw = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
                                 const base2 = (o.coin || '').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
                                 const rate = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
@@ -1588,31 +1684,34 @@ export default function AfFeeDetail() {
                                 const stShort = st ? (() => { const p2 = st.slice(0,10).split('-'); return p2.length===3 ? `${parseInt(p2[1])}/${parseInt(p2[2])}` : st.slice(5,10); })() : '-';
                                 const daily = calcDaily2(o);
                                 const collect = isCollect(o);
+                                const todayNow = new Date(); const todayStrNow = `${todayNow.getFullYear()}-${String(todayNow.getMonth()+1).padStart(2,'0')}-${String(todayNow.getDate()).padStart(2,'0')}`;
+                                const accDaysP = st ? Math.max(0, Math.round((new Date(todayStrNow).getTime() - new Date(st.slice(0,10)).getTime()) / 86400000) + 1) : 0;
+                                const accInterestP = daily * accDaysP;
+                                const accentColor = collect ? '#dc2626' : '#16a34a';
+                                const typeLabel = o.asset_type === 'stock' ? '股票' : o.asset_type === 'crypto_option' ? '期权' : '数字币';
                                 return (
-                                <div key={o.id ?? i} className="px-4 py-2.5 border-b border-gray-50 last:border-0">
-                                  {/* 第一行：订单号 + 币种 + 收付标签 + 日息（突出） */}
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <span className="text-[10px] text-gray-400 font-mono">{o.order_no || `#${o.id}`}</span>
-                                      <span className="text-[10px] font-semibold" style={{ color: o.coin === 'BTC' ? '#f59e0b' : o.coin === 'ETH' ? '#3b82f6' : o.coin === 'SOL' ? '#a855f7' : '#374151' }}>{o.coin || '-'}</span>
-                                      {collect
-                                        ? <span className="text-[10px] px-1 rounded" style={{ background: '#fee2e2', color: '#dc2626' }}>收息</span>
-                                        : <span className="text-[10px] px-1 rounded" style={{ background: '#dcfce7', color: '#16a34a' }}>付息</span>
-                                      }
-                                       {o.asset_type === 'stock' && <span className="text-[10px] px-1 rounded" style={{ background: '#fef3c7', color: '#d97706' }}>股票</span>}
-                                       {o.asset_type === 'crypto' && <span className="text-[10px] px-1 rounded" style={{ background: '#ede9fe', color: '#7c3aed' }}>数字币</span>}
-                                       {o.asset_type === 'crypto_option' && <span className="text-[10px] px-1 rounded" style={{ background: '#f0fdf4', color: '#15803d' }}>数字币期权</span>}
-                                     </div>
-                                     {/* 日息突出显示 */}
-                                    <span className="text-sm font-bold" style={{ color: collect ? '#dc2626' : '#16a34a' }}>
-                                      {collect ? '+' : '-'}{daily.toFixed(2)}/天
-                                    </span>
+                                <div key={o.id ?? i} className="flex items-start justify-between px-4 py-3" style={{ borderBottom: '1px solid #e8edf2' }}>
+                                  {/* 左侧：两行信息 */}
+                                  <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+                                    {/* 第一行：非数据信息 */}
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="text-sm font-bold" style={{ color: '#0f172a' }}>{o.coin || '-'}</span>
+                                      <span className="text-xs" style={{ color: '#64748b' }}>{typeLabel}</span>
+                                      <span className="text-xs font-medium" style={{ color: accentColor }}>{collect ? '收息' : '付息'}</span>
+                                      <span className="text-xs" style={{ color: '#94a3b8' }}>{o.order_no || `#${o.id}`}</span>
+                                      <span className="text-xs" style={{ color: '#64748b' }}>起息 {stShort}</span>
+                                    </div>
+                                    {/* 第二行：数据信息 */}
+                                    <div className="flex items-center gap-3">
+                                      {rate != null && <span className="text-xs font-semibold" style={{ color: '#334155' }}>{rate}%<span className="font-normal text-[11px] ml-0.5" style={{ color: '#94a3b8' }}>/年</span></span>}
+                                      <span className="text-xs font-semibold" style={{ color: '#334155' }}>{base2 > 0 ? base2.toFixed(0) : '-'}<span className="font-normal text-[11px] ml-0.5" style={{ color: '#94a3b8' }}>U 本金</span></span>
+                                      <span className="text-xs font-semibold tabular-nums" style={{ color: accentColor }}>{collect ? '+' : '-'}{accInterestP.toFixed(2)}<span className="font-normal text-[11px] ml-0.5" style={{ color: '#94a3b8' }}>U 累计</span></span>
+                                    </div>
                                   </div>
-                                  {/* 第二行：起息日 + 年利率 + 本金 */}
-                                  <div className="flex items-center gap-2 mt-0.5">
-                                    <span className="text-[10px] text-gray-400">起息 {stShort}</span>
-                                    {rate != null && <span className="text-[10px]" style={{ color: '#2563eb' }}>年利率 {rate}%</span>}
-                                    <span className="text-[10px] text-gray-400">本金 {base2 > 0 ? base2.toFixed(0) : '-'} U</span>
+                                  {/* 右侧：日息大字 */}
+                                  <div className="flex-shrink-0 ml-4 text-right">
+                                    <span className="text-base font-bold tabular-nums" style={{ color: accentColor }}>{collect ? '+' : '-'}{daily.toFixed(2)}</span>
+                                    <div className="text-[11px]" style={{ color: '#94a3b8' }}>/天</div>
                                   </div>
                                 </div>
                                 );
@@ -1666,6 +1765,9 @@ export default function AfFeeDetail() {
                             const rate = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
                             const st = o.interest_start_date || o.buy_date || '';
                             const stShort = st ? (() => { const p2 = st.slice(0,10).split('-'); return p2.length===3 ? `${parseInt(p2[1])}/${parseInt(p2[2])}` : st.slice(5,10); })() : '-';
+                            const todayD = new Date(); const todayStrD = `${todayD.getFullYear()}-${String(todayD.getMonth()+1).padStart(2,'0')}-${String(todayD.getDate()).padStart(2,'0')}`;
+                            const accDaysD = st ? Math.max(0, Math.round((new Date(todayStrD).getTime() - new Date(st.slice(0,10)).getTime()) / 86400000) + 1) : 0;
+                            const accInterestD = daily * accDaysD;
                             return (
                               <div key={o.id ?? i} className="px-4 py-2.5 border-b border-gray-50 last:border-0">
                                 <div className="flex items-center justify-between">
@@ -1676,9 +1778,16 @@ export default function AfFeeDetail() {
                                      {o.asset_type === 'crypto' && <span className="text-[10px] px-1 rounded" style={{ background: '#ede9fe', color: '#7c3aed' }}>数字币</span>}
                                      {o.asset_type === 'crypto_option' && <span className="text-[10px] px-1 rounded" style={{ background: '#f0fdf4', color: '#15803d' }}>数字币期权</span>}
                                    </div>
-                                   <span className="text-sm font-bold" style={{ color }}>
-                                    {collect ? '+' : '-'}{daily.toFixed(2)}/天
-                                  </span>
+                                  <div className="flex flex-col items-end gap-0.5">
+                                    <span className="text-sm font-bold" style={{ color }}>
+                                      {collect ? '+' : '-'}{daily.toFixed(2)}/天
+                                    </span>
+                                    {accInterestD > 0 && (
+                                      <span className="text-[10px] font-semibold" style={{ color, opacity: 0.75 }}>
+                                        累计 {collect ? '+' : '-'}{accInterestD.toFixed(2)} U
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                                 <div className="flex items-center gap-2 mt-0.5">
                                   <span className="text-[10px] text-gray-400 font-mono">{o.order_no || `#${o.id}`}</span>
@@ -1743,6 +1852,9 @@ export default function AfFeeDetail() {
                             const collect = isCollect(o);
                             const st = o.interest_start_date || o.buy_date || '';
                             const stShort = st ? (() => { const p2 = st.slice(0,10).split('-'); return p2.length===3 ? `${parseInt(p2[1])}/${parseInt(p2[2])}` : st.slice(5,10); })() : '-';
+                            const todayT = new Date(); const todayStrT = `${todayT.getFullYear()}-${String(todayT.getMonth()+1).padStart(2,'0')}-${String(todayT.getDate()).padStart(2,'0')}`;
+                            const accDaysT = st ? Math.max(0, Math.round((new Date(todayStrT).getTime() - new Date(st.slice(0,10)).getTime()) / 86400000) + 1) : 0;
+                            const accInterestT = daily * accDaysT;
                             return (
                               <div key={o.id ?? i} className="px-4 py-2.5 border-b border-gray-50 last:border-0">
                                 <div className="flex items-center justify-between">
@@ -1754,9 +1866,16 @@ export default function AfFeeDetail() {
                                       : <span className="text-[10px] px-1 rounded" style={{ background: '#dcfce7', color: '#16a34a' }}>付息</span>
                                     }
                                   </div>
-                                  <span className="text-sm font-bold" style={{ color: collect ? '#dc2626' : '#16a34a' }}>
-                                    {collect ? '+' : '-'}{daily.toFixed(2)}/天
-                                  </span>
+                                  <div className="flex flex-col items-end gap-0.5">
+                                    <span className="text-sm font-bold" style={{ color: collect ? '#dc2626' : '#16a34a' }}>
+                                      {collect ? '+' : '-'}{daily.toFixed(2)}/天
+                                    </span>
+                                    {accInterestT > 0 && (
+                                      <span className="text-[10px] font-semibold" style={{ color: collect ? '#dc2626' : '#16a34a', opacity: 0.75 }}>
+                                        累计 {collect ? '+' : '-'}{accInterestT.toFixed(2)} U
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                                 <div className="flex items-center gap-2 mt-0.5">
                                   <span className="text-[10px] text-gray-400 font-mono">{o.order_no || `#${o.id}`}</span>
