@@ -1313,13 +1313,16 @@ export default function OrderFlowPage() {
                       ? orderPrice ? fmt(orderPrice, 2) : "--"
                       : order.exit_price ? fmt(parseFloat(order.exit_price), 2) : "--"}
                   </div>
-                  {/* 相对开仓价的涨跌 */}
+                  {/* 相对开仓价的涨跌（期权用最新价-行权价，其他用最新价-开仓价） */}
                   {(() => {
                     const curPrice = isOpen ? orderPrice : (order.exit_price ? parseFloat(order.exit_price) : null);
                     const entryPrice = parseFloat(order.entry_price);
                     if (curPrice == null || isNaN(entryPrice)) return null;
-                    const diff = curPrice - entryPrice;
-                    const pct = diff / entryPrice * 100;
+                    // 期权：涨幅 = 最新价 - 行权价（内在价值逻辑）
+                    const strikePrice = isOption && order.strike_price ? parseFloat(order.strike_price) : null;
+                    const basePrice = (isOption && strikePrice != null) ? strikePrice : entryPrice;
+                    const diff = curPrice - basePrice;
+                    const pct = diff / basePrice * 100;
                     const isUp = diff >= 0;
                     const color = isLong ? (isUp ? "#F6465D" : "#0ECB81") : (isUp ? "#0ECB81" : "#F6465D");
                     return (
