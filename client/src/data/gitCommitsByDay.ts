@@ -8293,4 +8293,18 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-09T15:07:55Z", type: "fix", cleanMessage: "期权详情去掉合约名称显示行" },
     { date: "2026-07-09T15:18:43Z", type: "fix", cleanMessage: "期权编辑表单到期日下拉显示完整日期+余N天" },
   ],
+  "2026-07-10": [
+    { date: "2026-07-09T17:56:17Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-10T00:50:26Z", type: "feat", cleanMessage: "优化谷底增筹和融资付息蓝色区域布局" },
+    { date: "2026-07-10T02:14:51Z", type: "feat", cleanMessage: "全面重构管理费明细页面UI" },
+    { date: "2026-07-10T02:27:40Z", type: "feat", cleanMessage: "订单管理Tab样式优化、蓝色区域重构、盈利预测合并入持仓容器" },
+    { date: "2026-07-10T02:45:56Z", type: "feat", cleanMessage: "移除融资付息已结清Tab" },
+    { date: "2026-07-10T02:55:45Z", type: "feat", cleanMessage: "升级52号账本余额卡片为黑金财富感风格" },
+    { date: "2026-07-10T02:58:10Z", type: "feat", cleanMessage: "智能钱包卡片改为整行展示，推荐内嵌到按钮行" },
+    { date: "2026-07-10T03:00:11Z", type: "feat", cleanMessage: "闲时自动赚费开关和赚费累计独立成底部横向区域" },
+    { date: "2026-07-10T03:02:57Z", type: "feat", cleanMessage: "余额卡片标题换用WalletLottie动图（与首页保持一致）" },
+    { date: "2026-07-10T03:23:06Z", type: "feat", cleanMessage: "智能钱包卡片3方案并列对比(A当前/B竖排/C同行) + 邀请树权限收紧(仅YJH+jiang) + 赚费累计2位小数" },
+    { date: "2026-07-10T03:28:03Z", type: "feat", cleanMessage: "智能钱包卡片确定方案C（余额+充值提现同行，底部赚费区域）" },
+    { date: "2026-07-10T07:31:54Z", type: "fix", cleanMessage: "sw.js修复缓存miss时返回null导致Safari白屏(v2.3.1)" },
+  ],
 };
