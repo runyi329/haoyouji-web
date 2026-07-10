@@ -3710,18 +3710,28 @@ export default function LedgerDetail() {
                 <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #F5D78E 40%, #C9A84C 60%, transparent 95%)' }} />
                 {/* 底部暗影线 */}
                 <div className="absolute inset-x-0 bottom-0 h-px" style={{ background: 'rgba(0,0,0,0.5)' }} />
-                {/* 标题行：钱包图标 + 标签 + 右侧闲时自动赚费开关 */}
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
-                      <line x1="1" y1="10" x2="23" y2="10"/>
-                    </svg>
-                    <span className="text-xs font-semibold" style={{ color: '#C9A84C', letterSpacing: '0.1em' }}>智能钱包</span>
+                {/* 标题行：钱包图标 + 标签 */}
+                <div className="flex items-center gap-2 mb-3">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+                    <line x1="1" y1="10" x2="23" y2="10"/>
+                  </svg>
+                  <span className="text-xs font-semibold" style={{ color: '#C9A84C', letterSpacing: '0.1em' }}>智能钱包</span>
+                </div>
+                {/* 余额主数字 */}
+                <div className="mb-4">
+                  <div className="text-[11px] mb-1" style={{ color: 'rgba(201,168,76,0.5)' }}>余额</div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-bold tabular-nums" style={{ fontSize: '2rem', lineHeight: 1.1, color: '#F5D78E', textShadow: '0 0 20px rgba(245,215,142,0.35)' }}>
+                      {afTotalAsset ? Number(afTotalAsset.total).toFixed(2) : '0.00'}
+                    </span>
+                    <span className="text-sm font-medium" style={{ color: 'rgba(201,168,76,0.55)' }}>USDT</span>
                   </div>
-                  {/* 闲时自动赚费开关 */}
+                </div>
+                {/* 独立区域：闲时自动赚费开关 + 赚费累计 */}
+                <div className="flex items-center justify-between pt-3" style={{ borderTop: '1px solid rgba(201,168,76,0.18)' }}>
+                  {/* 左侧：开关 + 文字 */}
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px]" style={{ color: 'rgba(245,215,142,0.55)' }}>闲时自动赚费</span>
                     <button
                       onClick={() => {
                         if (!viewAsUserId) {
@@ -3732,7 +3742,7 @@ export default function LedgerDetail() {
                         }
                       }}
                       disabled={!!viewAsUserId || toggleFundingRateMutation.isPending}
-                      className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors"
+                      className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0"
                       style={{ backgroundColor: (localFundingRateEnabled ?? false) ? 'rgba(201,168,76,0.85)' : 'rgba(255,255,255,0.12)' }}
                     >
                       <span
@@ -3743,38 +3753,27 @@ export default function LedgerDetail() {
                         }}
                       />
                     </button>
+                    <span className="text-[11px]" style={{ color: (localFundingRateEnabled ?? false) ? 'rgba(245,215,142,0.8)' : 'rgba(255,255,255,0.35)' }}>闲时自动赚费</span>
                   </div>
-                </div>
-                {/* 余额主数字 + 赚费左右布局 */}
-                <div className="flex items-end justify-between">
-                  <div>
-                    <div className="text-[11px] mb-1" style={{ color: 'rgba(201,168,76,0.5)' }}>余额</div>
-                    <div className="flex items-baseline gap-2">
-                      <span className="font-bold tabular-nums" style={{ fontSize: '2rem', lineHeight: 1.1, color: '#F5D78E', textShadow: '0 0 20px rgba(245,215,142,0.35)' }}>
-                        {afTotalAsset ? Number(afTotalAsset.total).toFixed(2) : '0.00'}
-                      </span>
-                      <span className="text-sm font-medium" style={{ color: 'rgba(201,168,76,0.55)' }}>USDT</span>
+                  {/* 右侧：赚费累计（开关开时显示） */}
+                  {(localFundingRateEnabled ?? false) ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px]" style={{ color: 'rgba(201,168,76,0.5)' }}>赚费累计</span>
+                      <span className="text-sm font-bold tabular-nums" style={{ color: '#F5D78E' }}>{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(4)}</span>
+                      <span className="text-[11px]" style={{ color: 'rgba(201,168,76,0.45)' }}>USDT</span>
+                      <button
+                        onClick={() => setShowFundingRateLogs(true)}
+                        className="flex items-center"
+                        title="查看自动赚费详情"
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(201,168,76,0.55)" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10"/>
+                          <polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                      </button>
                     </div>
-                  </div>
-                  {/* 赚费累计（开关开时显示） */}
-                  {(localFundingRateEnabled ?? false) && (
-                    <div className="text-right">
-                      <div className="text-[11px] mb-1" style={{ color: 'rgba(201,168,76,0.5)' }}>赚费累计</div>
-                      <div className="flex items-baseline gap-1.5 justify-end">
-                        <span className="text-lg font-bold tabular-nums" style={{ color: '#F5D78E' }}>{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(4)}</span>
-                        <span className="text-xs" style={{ color: 'rgba(201,168,76,0.5)' }}>USDT</span>
-                        <button
-                          onClick={() => setShowFundingRateLogs(true)}
-                          className="flex items-center"
-                          title="查看自动赚费详情"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(201,168,76,0.55)" strokeWidth="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <polyline points="12 6 12 12 16 14"/>
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
+                  ) : (
+                    <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.2)' }}>开启后自动赚取资金费率</span>
                   )}
                 </div>
               </div>
