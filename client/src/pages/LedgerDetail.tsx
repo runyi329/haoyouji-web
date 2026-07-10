@@ -3689,60 +3689,75 @@ export default function LedgerDetail() {
         {isCustomAF && !isCustomAH && !effectiveIsFunder && (
           <div className="px-4 pt-2 pb-4">
             <div className="grid grid-cols-2 gap-3">
-              {/* 卡片 1：普通用户看"余额"（智能钱包），资方不显示 */}
-              <div className="rounded-2xl px-4 py-3 relative" style={{ backgroundColor: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)' }}>
-                  {/* 右上角：自动转资金费率开关 */}
-                  <div className="absolute top-2 right-3 flex items-center gap-1.5">
-                    <span className="text-[10px] text-white/60">闲时自动赚费</span>
-                    <button
-                      onClick={() => {
-                        if (!viewAsUserId) {
-                          const newEnabled = !(localFundingRateEnabled ?? false);
-                          setLocalFundingRateEnabled(newEnabled);
-                          const currentBalance = afTotalAsset ? Number(afTotalAsset.total) : 0;
-                          toggleFundingRateMutation.mutate({ ledgerId: Number(ledgerId), enabled: newEnabled, currentBalance: String(currentBalance) });
-                        }
+              {/* 卡片 1：普通用户看"余额"（智能钱包）黑金财富感版，资方不显示 */}
+              <div className="rounded-2xl relative overflow-hidden" style={{
+                background: 'linear-gradient(160deg, #111111 0%, #1c1c1c 45%, #0f0f0f 100%)',
+                border: '1px solid rgba(201,168,76,0.55)',
+                boxShadow: '0 6px 24px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,228,100,0.18), inset 0 -1px 0 rgba(80,48,0,0.4)',
+                padding: '10px 14px 10px 14px',
+              }}>
+                {/* 顶部金色高光线 */}
+                <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #F5D78E 40%, #C9A84C 60%, transparent 95%)' }} />
+                {/* 底部暗影线 */}
+                <div className="absolute inset-x-0 bottom-0 h-px" style={{ background: 'rgba(0,0,0,0.5)' }} />
+                {/* 右上角：自动转资金费率开关 */}
+                <div className="absolute top-2 right-3 flex items-center gap-1.5">
+                  <span className="text-[10px]" style={{ color: 'rgba(245,215,142,0.55)' }}>闲时自动赚费</span>
+                  <button
+                    onClick={() => {
+                      if (!viewAsUserId) {
+                        const newEnabled = !(localFundingRateEnabled ?? false);
+                        setLocalFundingRateEnabled(newEnabled);
+                        const currentBalance = afTotalAsset ? Number(afTotalAsset.total) : 0;
+                        toggleFundingRateMutation.mutate({ ledgerId: Number(ledgerId), enabled: newEnabled, currentBalance: String(currentBalance) });
+                      }
+                    }}
+                    disabled={!!viewAsUserId || toggleFundingRateMutation.isPending}
+                    className="relative inline-flex h-4 w-7 items-center rounded-full transition-colors"
+                    style={{ backgroundColor: (localFundingRateEnabled ?? false) ? 'rgba(201,168,76,0.85)' : 'rgba(255,255,255,0.12)' }}
+                  >
+                    <span
+                      className="inline-block h-3 w-3 rounded-full shadow transition-transform"
+                      style={{
+                        backgroundColor: (localFundingRateEnabled ?? false) ? '#000' : 'rgba(255,255,255,0.45)',
+                        transform: (localFundingRateEnabled ?? false) ? 'translateX(14px)' : 'translateX(2px)',
                       }}
-                      disabled={!!viewAsUserId || toggleFundingRateMutation.isPending}
-                      className="relative inline-flex h-4 w-7 items-center rounded-full transition-colors"
-                      style={{ backgroundColor: (localFundingRateEnabled ?? false) ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.25)' }}
+                    />
+                  </button>
+                </div>
+                {/* 标题行：钱包图标 + 标签 */}
+                <div className="flex items-center gap-1.5 mb-2">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C9A84C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+                    <line x1="1" y1="10" x2="23" y2="10"/>
+                  </svg>
+                  <span className="text-[11px] font-semibold tracking-widest" style={{ color: '#C9A84C', letterSpacing: '0.08em' }}>智能钱包</span>
+                </div>
+                {/* 余额主数字 */}
+                <div className="flex items-baseline gap-1.5">
+                  <span className="font-bold tabular-nums" style={{ fontSize: '1.6rem', lineHeight: 1.1, color: '#F5D78E', textShadow: '0 0 18px rgba(245,215,142,0.3)' }}>
+                    {afTotalAsset ? Number(afTotalAsset.total).toFixed(2) : '0.00'}
+                  </span>
+                  <span className="text-xs font-medium" style={{ color: 'rgba(201,168,76,0.55)' }}>USDT</span>
+                </div>
+                {/* 赚费累计显示（保留原有功能） */}
+                {(localFundingRateEnabled ?? false) && (
+                  <div className="flex items-center gap-1 mt-1.5 pt-1.5" style={{ borderTop: '1px solid rgba(201,168,76,0.12)' }}>
+                    <span className="text-[10px]" style={{ color: 'rgba(245,215,142,0.45)' }}>赚费</span>
+                    <span className="text-xs font-semibold" style={{ color: '#F5D78E' }}>{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(4)}</span>
+                    <span className="text-[10px]" style={{ color: 'rgba(201,168,76,0.4)' }}>USDT</span>
+                    <button
+                      onClick={() => setShowFundingRateLogs(true)}
+                      className="ml-0.5 flex items-center"
+                      title="查看自动赚费详情"
                     >
-                      <span
-                        className="inline-block h-3 w-3 rounded-full bg-white shadow transition-transform"
-                        style={{
-                          backgroundColor: (localFundingRateEnabled ?? false) ? '#16a34a' : 'rgba(255,255,255,0.6)',
-                          transform: (localFundingRateEnabled ?? false) ? 'translateX(14px)' : 'translateX(2px)',
-                        }}
-                      />
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(201,168,76,0.55)" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                      </svg>
                     </button>
                   </div>
-                  <div className="text-xs text-white/70 mb-1">余额</div>
-                  <div className="flex items-baseline gap-1">
-                    <span className="text-lg font-bold text-white">
-                      {afTotalAsset ? Number(afTotalAsset.total).toFixed(2) : '0.00'}
-                    </span>
-                    <span className="text-xs text-white/60">USDT</span>
-                  </div>
-                  {/* 赚费累计显示 */}
-                  {(localFundingRateEnabled ?? false) && (
-                    <div className="flex flex-col gap-0.5 mt-1">
-                      <div className="flex items-center gap-1">
-                        <span className="text-[10px] text-white/60">赚费</span>
-                        <span className="text-xs font-semibold text-white/90">{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(4)}</span>
-                        <span className="text-[10px] text-white/50">USDT</span>
-                        <button
-                          onClick={() => setShowFundingRateLogs(true)}
-                          className="ml-0.5 flex items-center"
-                          title="查看自动赚费详情"
-                        >
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <polyline points="12 6 12 12 16 14"/>
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                )}
               </div>
               {/* 卡片 2：推荐人数（资金方不显示） */}
               {!effectiveIsFunder && (
