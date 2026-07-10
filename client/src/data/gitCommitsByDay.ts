@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-10
+// 生成时间：2026-07-11
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8307,5 +8307,9 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-10T03:28:03Z", type: "feat", cleanMessage: "智能钱包卡片确定方案C（余额+充值提现同行，底部赚费区域）" },
     { date: "2026-07-10T07:31:54Z", type: "fix", cleanMessage: "sw.js修复缓存miss时返回null导致Safari白屏(v2.3.1)" },
     { date: "2026-07-10T07:38:13Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-10T12:16:54Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-10T13:11:23Z", type: "fix", cleanMessage: "期权订单涨幅改为最新价-行权价（内在价值逻辑）" },
+    { date: "2026-07-10T13:18:42Z", type: "fix", cleanMessage: "期权浮动盈亏改为(最新价-行权价)×数量-权利金（内在价值逻辑）" },
+    { date: "2026-07-10T14:20:36Z", type: "fix", cleanMessage: "期权浮动盈亏统一用(最新价-行权价)×数量-权利金，不区分实值虚值" },
   ],
 };
