@@ -1,6 +1,6 @@
 // Service Worker for 脉动 PWA
 // 版本号：每次更新 SW 时需要修改此版本号以触发更新
-const CACHE_VERSION = 'v2.3.0';
+const CACHE_VERSION = 'v2.3.1';
 const CACHE_NAME = `maidong-cache-${CACHE_VERSION}`;
 
 // 需要缓存的静态资源（不缓存 index.html，避免部署后旧缓存导致白屏）
@@ -92,8 +92,12 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => {
-        // 网络失败时，尝试从缓存读取
-        return caches.match(request);
+        // 网络失败时，尝试从缓存读取；缓存也没有则返回 504
+        return caches.match(request).then((cached) => {
+          if (cached) return cached;
+          // 缓存和网络都失败，返回 504 而非 null（避免 Safari 白屏）
+          return new Response('Network error', { status: 504, statusText: 'Gateway Timeout' });
+        });
       })
   );
 });
