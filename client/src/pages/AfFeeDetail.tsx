@@ -3,6 +3,7 @@ import { useLocation, useParams } from "wouter";
 import { ArrowLeft, ChevronDown, ChevronRight, DollarSign } from "lucide-react";
 import Tooltip from "@/components/Tooltip";
 import { trpc } from "@/lib/trpc";
+import { FunderOrderCard } from "@/components/FunderOrderCard";
 
 // 持币量格式化：整数位数 + 小数位数 = 5位，不足补0
 function formatQty(val: string | number): string {
@@ -341,54 +342,53 @@ export default function AfFeeDetail() {
           const yearlyForecast2 = dailyTotal2 * 365;
           return (
             <div className="px-4 pb-4 pt-3 space-y-2">
-              {/* 管理费汇总 + 今日 */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
-                  <p className="text-white/55 text-xs mb-2">管理费</p>
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-white/50">进行中</span>
-                      <span className="text-amber-300 font-semibold">{totalOngoing.toFixed(2)} U</span>
+              {/* 管理费汇总 — 横向 4 列表格 */}
+              {(() => {
+                const ongoingCnt2 = feeItems.filter((f: any) => f.feeType === 'ongoing').length;
+                const settledCnt2 = feeItems.filter((f: any) => f.feeType === 'settled').length;
+                const allCnt2 = feeItems.length;
+                const todayStr2 = new Date().toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }).replace('/', '/');
+                return (
+                  <div className="rounded overflow-hidden" style={{ border: '1px solid #d1d5db', background: '#fff' }}>
+                    {/* 表头 */}
+                    <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr', borderBottom: '1px solid #e5e7eb', background: '#f8fafc' }}>
+                      {[`管理费 ${todayStr2}`, '进行中(U)', '已结清(U)', '累计(U)'].map((h, i) => (
+                        <div key={i} className="py-1.5 px-2 text-[10px] text-gray-400 text-center" style={{ borderRight: i < 3 ? '1px solid #e5e7eb' : 'none' }}>{h}</div>
+                      ))}
                     </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-white/50">已结清</span>
-                      <span className="text-emerald-300 font-semibold">{totalSettled.toFixed(2)} U</span>
+                    {/* 订单数行 */}
+                    <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr', borderBottom: '1px solid #e5e7eb' }}>
+                      <div className="py-1.5 px-2 text-[10px] text-gray-400 text-center" style={{ borderRight: '1px solid #e5e7eb' }}>订单数</div>
+                      <div className="py-1.5 px-2 text-xs text-center tabular-nums font-medium" style={{ color: '#d97706', borderRight: '1px solid #e5e7eb' }}>{ongoingCnt2}单</div>
+                      <div className="py-1.5 px-2 text-xs text-center tabular-nums font-medium" style={{ color: '#16a34a', borderRight: '1px solid #e5e7eb' }}>{settledCnt2}单</div>
+                      <div className="py-1.5 px-2 text-xs text-center tabular-nums font-bold" style={{ color: '#1e3a8a' }}>{allCnt2}单</div>
                     </div>
-                    <div className="flex justify-between text-xs border-t border-white/10 pt-1.5">
-                      <span className="text-white/70">累计</span>
-                      <span className="text-white font-bold">{totalAll.toFixed(2)} U</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
-                  <p className="text-white/55 text-xs mb-2">今日</p>
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-white/50">管理费</span>
-                      <span className="text-sky-300 font-semibold">{todayFee.toFixed(4)}</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-white/50">订单数</span>
-                      <span className="text-white font-bold">{todayOrderCount} 单</span>
+                    {/* 金额行 */}
+                    <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
+                      <div className="py-1.5 px-2 text-[10px] text-gray-400 text-center" style={{ borderRight: '1px solid #e5e7eb' }}>金额</div>
+                      <div className="py-1.5 px-2 text-xs text-center tabular-nums font-medium" style={{ color: '#d97706', borderRight: '1px solid #e5e7eb' }}>{totalOngoing.toFixed(2)}</div>
+                      <div className="py-1.5 px-2 text-xs text-center tabular-nums font-medium" style={{ color: '#16a34a', borderRight: '1px solid #e5e7eb' }}>{totalSettled.toFixed(2)}</div>
+                      <div className="py-1.5 px-2 text-xs text-center tabular-nums font-bold" style={{ color: '#1e3a8a' }}>{totalAll.toFixed(2)}</div>
                     </div>
                   </div>
+                );
+              })()}
+              {/* 预测行：日/月/年 — 横向 4 列表格 */}
+              <div className="rounded overflow-hidden" style={{ border: '1px solid #d1d5db', background: '#fff' }}>
+                {/* 表头行 */}
+                <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr', borderBottom: '1px solid #e5e7eb', background: '#f8fafc' }}>
+                  {['管理费预测', '日费(U)', '月预测(U)', '年预测(U)'].map((h, i) => (
+                    <div key={i} className="py-1.5 px-2 text-[10px] text-gray-400 text-center" style={{ borderRight: i < 3 ? '1px solid #e5e7eb' : 'none' }}>{h}</div>
+                  ))}
                 </div>
-              </div>
-              {/* 预测行：日/月/年 */}
-              <div className="rounded-2xl px-4 py-2.5 flex gap-3" style={{ background: 'rgba(255,255,255,0.10)' }}>
-                <div className="flex-1 text-center">
-                  <p className="text-[10px] text-white/50 mb-0.5">日费（当前）</p>
-                  <p className="text-sm font-bold text-white tabular-nums">{dailyTotal2.toFixed(2)} <span className="text-[10px] font-normal text-white/50">U/天</span></p>
-                </div>
-                <div className="w-px" style={{ background: 'rgba(255,255,255,0.15)' }} />
-                <div className="flex-1 text-center">
-                  <p className="text-[10px] text-white/50 mb-0.5">月预测（×30）</p>
-                  <p className="text-sm font-bold text-sky-300 tabular-nums">{Math.round(monthlyForecast2)} <span className="text-[10px] font-normal text-white/50">U</span></p>
-                </div>
-                <div className="w-px" style={{ background: 'rgba(255,255,255,0.15)' }} />
-                <div className="flex-1 text-center">
-                  <p className="text-[10px] text-white/50 mb-0.5">年预测（×365）</p>
-                  <p className="text-sm font-bold text-emerald-300 tabular-nums">{Math.round(yearlyForecast2)} <span className="text-[10px] font-normal text-white/50">U</span></p>
+                {/* 数据行 */}
+                <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
+                  <div className="py-2 px-2 text-xs text-gray-500 text-center" style={{ borderRight: '1px solid #e5e7eb' }}>
+                    {new Date().toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }).replace('/', '/')}
+                  </div>
+                  <div className="py-2 px-2 text-xs text-center tabular-nums font-medium" style={{ color: '#334155', borderRight: '1px solid #e5e7eb' }}>{dailyTotal2.toFixed(2)}</div>
+                  <div className="py-2 px-2 text-xs text-center tabular-nums font-medium" style={{ color: '#0369a1', borderRight: '1px solid #e5e7eb' }}>{Math.round(monthlyForecast2)}</div>
+                  <div className="py-2 px-2 text-xs text-center tabular-nums font-bold" style={{ color: '#16a34a' }}>{Math.round(yearlyForecast2)}</div>
                 </div>
               </div>
             </div>
@@ -414,75 +414,116 @@ export default function AfFeeDetail() {
           const payBaseTotal = payOrders.reduce((s: number, o: any) => s + getBase(o), 0);
           return (
             <div className="px-4 pb-4 pt-3 space-y-2">
-              {/* 利息汇总 + 本金规模 */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
-                  <p className="text-white/55 text-xs mb-2">利息（进行中）</p>
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-white/50">收息日息</span>
-                      <span className="text-emerald-300 font-semibold">+{collectDailyTotal.toFixed(2)} U</span>
+              {/* 本金规模（左）+ 订单概况（右） */}
+{(() => {
+                const todayStr = new Date().toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' }).replace('/', '/');
+                const BORDER = '1px solid rgba(0,0,0,0.09)';
+                const CELL_BG = 'rgba(255,255,255,0.80)';
+                const HEADER_BG = 'rgba(255,255,255,0.92)';
+                return (
+                <div className="grid grid-cols-2 gap-2">
+                  {/* 本金规模线框表格 */}
+                  <div className="overflow-hidden rounded" style={{ border: BORDER }}>
+                    <div className="flex" style={{ borderBottom: BORDER }}>
+                      <div className="flex items-center px-2 py-1.5" style={{ width: '80px', flexShrink: 0, background: HEADER_BG }}>
+                        <span className="text-[10px] font-medium text-gray-500">本金规模</span>
+                      </div>
+                      <div className="flex-1 flex items-center justify-end px-2 py-1.5" style={{ background: HEADER_BG }}>
+                        <span className="text-[10px] font-medium text-gray-400">{todayStr}</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-white/50">付息日息</span>
-                      <span className="text-rose-300 font-semibold">-{payDailyTotal.toFixed(2)} U</span>
+                    {[
+                      { label: '收息本金(U)', value: collectBaseTotal.toFixed(0), color: '#16a34a' },
+                      { label: '付息本金(U)', value: payBaseTotal.toFixed(0), color: '#dc2626' },
+                      { label: '净本金(U)', value: (collectBaseTotal - payBaseTotal).toFixed(0), color: collectBaseTotal >= payBaseTotal ? '#16a34a' : '#dc2626', bold: true },
+                    ].map((row, i, arr) => (
+                      <div key={i} className="flex" style={{ borderBottom: i < arr.length - 1 ? BORDER : 'none' }}>
+                        <div className="flex items-center px-2 py-1.5" style={{ width: '80px', flexShrink: 0, borderRight: BORDER, background: CELL_BG }}>
+                          <span className="text-[10px] text-gray-500 whitespace-nowrap">{row.label}</span>
+                        </div>
+                        <div className="flex-1 flex items-center justify-end px-2 py-1.5" style={{ background: CELL_BG }}>
+                          <span className={`text-xs tabular-nums ${row.bold ? 'font-bold' : 'font-semibold'}`} style={{ color: row.color }}>{row.value}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* 订单概况线框表格 */}
+                  <div className="overflow-hidden rounded" style={{ border: BORDER }}>
+                    <div className="flex" style={{ borderBottom: BORDER }}>
+                      <div className="flex items-center px-2 py-1.5" style={{ width: '80px', flexShrink: 0, background: HEADER_BG }}>
+                        <span className="text-[10px] font-medium text-gray-500">订单概况</span>
+                      </div>
+                      <div className="flex-1 flex items-center justify-end px-2 py-1.5" style={{ background: HEADER_BG }}>
+                        <span className="text-[10px] font-medium text-gray-400">{todayStr}</span>
+                      </div>
                     </div>
-                    <div className="flex justify-between text-xs border-t border-white/10 pt-1.5">
-                      <span className="text-white/70">净日息</span>
-                      <span className={`font-bold ${netDaily >= 0 ? 'text-white' : 'text-rose-300'}`}>{netDaily >= 0 ? '+' : ''}{netDaily.toFixed(2)} U</span>
-                    </div>
+                    {[
+                      { label: '收息单', value: `${collectOrders.length} 单`, color: '#16a34a' },
+                      { label: '付息单', value: `${payOrders.length} 单`, color: '#dc2626' },
+                      { label: '共', value: `${ongoingOrders.length} 单`, color: '#111827', bold: true },
+                    ].map((row, i, arr) => (
+                      <div key={i} className="flex" style={{ borderBottom: i < arr.length - 1 ? BORDER : 'none' }}>
+                        <div className="flex items-center px-2 py-1.5" style={{ width: '80px', flexShrink: 0, borderRight: BORDER, background: CELL_BG }}>
+                          <span className="text-[10px] text-gray-500 whitespace-nowrap">{row.label}</span>
+                        </div>
+                        <div className="flex-1 flex items-center justify-end px-2 py-1.5" style={{ background: CELL_BG }}>
+                          <span className={`text-xs tabular-nums ${row.bold ? 'font-bold' : 'font-semibold'}`} style={{ color: row.color }}>{row.value}</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-                <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.14)' }}>
-                  <p className="text-white/55 text-xs mb-2">本金规模（进行中）</p>
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-white/50">收息本金</span>
-                      <span className="text-emerald-300 font-semibold">{collectBaseTotal.toFixed(0)} U</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-white/50">付息本金</span>
-                      <span className="text-rose-300 font-semibold">{payBaseTotal.toFixed(0)} U</span>
-                    </div>
-                    <div className="flex justify-between text-xs border-t border-white/10 pt-1.5">
-                      <span className="text-white/70">订单数</span>
-                      <span className="text-white font-bold">{ongoingOrders.length} 单</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
               {/* 利息预测（收息 + 付息 + 汇总） */}
-              <div className="rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.10)' }}>
-                <p className="text-[10px] text-white/50 mb-2">利息预测</p>
-                {/* 表头 */}
-                <div className="flex gap-3 mb-1.5">
-                  <div className="w-10 flex-shrink-0" />
-                  <div className="flex-1 text-center"><p className="text-[10px] text-white/35">日息</p></div>
-                  <div className="flex-1 text-center"><p className="text-[10px] text-white/35">月预测</p></div>
-                  <div className="flex-1 text-center"><p className="text-[10px] text-white/35">年预测</p></div>
+              {/* 利息预测线框表格：4列（利息预测标题 / 日息 / 月预测 / 年预测），3行（收息 / 付息 / 汇总） */}
+              <div className="overflow-hidden rounded" style={{ border: '1px solid rgba(255,255,255,0.30)' }}>
+                {/* 表头行 */}
+                <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr', borderBottom: '1px solid rgba(0,0,0,0.10)' }}>
+                  {['利息预测', '日息(U)', '月预测(U)', '年预测(U)'].map((h, i) => (
+                    <div key={i} className="flex items-center justify-center py-1.5 px-1" style={{ borderRight: i < 3 ? '1px solid rgba(0,0,0,0.08)' : 'none', background: 'rgba(255,255,255,0.85)' }}>
+                      <span className="text-[10px] font-medium text-gray-500">{h}</span>
+                    </div>
+                  ))}
                 </div>
                 {/* 收息行 */}
-                <div className="flex items-center gap-3 mb-1.5">
-                  <div className="w-10 flex-shrink-0"><p className="text-[10px] text-white/50">收息</p></div>
-                  <div className="flex-1 text-center"><p className="text-xs font-semibold text-emerald-300 tabular-nums">+{collectDailyTotal.toFixed(2)}</p></div>
-                  <div className="flex-1 text-center"><p className="text-xs font-semibold text-emerald-300 tabular-nums">+{Math.round(collectDailyTotal * 30)}</p></div>
-                  <div className="flex-1 text-center"><p className="text-xs font-semibold text-emerald-300 tabular-nums">+{Math.round(collectDailyTotal * 365)}</p></div>
+                <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr', borderBottom: '1px solid rgba(0,0,0,0.07)' }}>
+                  {[
+                    { v: '收息', color: '#374151', bold: false },
+                    { v: `+${collectDailyTotal.toFixed(2)}`, color: '#16a34a', bold: true },
+                    { v: `+${Math.round(collectDailyTotal * 30)}`, color: '#16a34a', bold: true },
+                    { v: `+${Math.round(collectDailyTotal * 365)}`, color: '#16a34a', bold: true },
+                  ].map((col, i) => (
+                    <div key={i} className="flex items-center justify-center py-1.5 px-1" style={{ borderRight: i < 3 ? '1px solid rgba(0,0,0,0.07)' : 'none', background: 'rgba(255,255,255,0.75)' }}>
+                      <span className={`text-xs tabular-nums ${col.bold ? 'font-semibold' : ''}`} style={{ color: col.color }}>{col.v}</span>
+                    </div>
+                  ))}
                 </div>
                 {/* 付息行 */}
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-10 flex-shrink-0"><p className="text-[10px] text-white/50">付息</p></div>
-                  <div className="flex-1 text-center"><p className="text-xs font-semibold text-rose-300 tabular-nums">-{payDailyTotal.toFixed(2)}</p></div>
-                  <div className="flex-1 text-center"><p className="text-xs font-semibold text-rose-300 tabular-nums">-{Math.round(payDailyTotal * 30)}</p></div>
-                  <div className="flex-1 text-center"><p className="text-xs font-semibold text-rose-300 tabular-nums">-{Math.round(payDailyTotal * 365)}</p></div>
+                <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr', borderBottom: '1px solid rgba(0,0,0,0.10)' }}>
+                  {[
+                    { v: '付息', color: '#374151', bold: false },
+                    { v: `-${payDailyTotal.toFixed(2)}`, color: '#dc2626', bold: true },
+                    { v: `-${Math.round(payDailyTotal * 30)}`, color: '#dc2626', bold: true },
+                    { v: `-${Math.round(payDailyTotal * 365)}`, color: '#dc2626', bold: true },
+                  ].map((col, i) => (
+                    <div key={i} className="flex items-center justify-center py-1.5 px-1" style={{ borderRight: i < 3 ? '1px solid rgba(0,0,0,0.07)' : 'none', background: 'rgba(255,255,255,0.75)' }}>
+                      <span className={`text-xs tabular-nums ${col.bold ? 'font-semibold' : ''}`} style={{ color: col.color }}>{col.v}</span>
+                    </div>
+                  ))}
                 </div>
-                {/* 分隔线 */}
-                <div className="border-t mb-2" style={{ borderColor: 'rgba(255,255,255,0.12)' }} />
-                {/* 汇总净日息行 */}
-                <div className="flex items-center gap-3">
-                  <div className="w-10 flex-shrink-0"><p className="text-[10px] text-white/70">汇总</p></div>
-                  <div className="flex-1 text-center"><p className="text-xs font-bold tabular-nums" style={{ color: netDaily >= 0 ? '#6ee7b7' : '#fca5a5' }}>{netDaily >= 0 ? '+' : ''}{netDaily.toFixed(2)}</p></div>
-                  <div className="flex-1 text-center"><p className="text-xs font-bold tabular-nums" style={{ color: netDaily >= 0 ? '#6ee7b7' : '#fca5a5' }}>{netDaily >= 0 ? '+' : ''}{Math.round(netDaily * 30)}</p></div>
-                  <div className="flex-1 text-center"><p className="text-xs font-bold tabular-nums" style={{ color: netDaily >= 0 ? '#6ee7b7' : '#fca5a5' }}>{netDaily >= 0 ? '+' : ''}{Math.round(netDaily * 365)}</p></div>
+                {/* 汇总行 */}
+                <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
+                  {[
+                    { v: '汇总', color: '#111827', bold: true },
+                    { v: `${netDaily >= 0 ? '+' : ''}${netDaily.toFixed(2)}`, color: netDaily >= 0 ? '#16a34a' : '#dc2626', bold: true },
+                    { v: `${netDaily >= 0 ? '+' : ''}${Math.round(netDaily * 30)}`, color: netDaily >= 0 ? '#16a34a' : '#dc2626', bold: true },
+                    { v: `${netDaily >= 0 ? '+' : ''}${Math.round(netDaily * 365)}`, color: netDaily >= 0 ? '#16a34a' : '#dc2626', bold: true },
+                  ].map((col, i) => (
+                    <div key={i} className="flex items-center justify-center py-2 px-1" style={{ borderRight: i < 3 ? '1px solid rgba(0,0,0,0.07)' : 'none', background: 'rgba(255,255,255,0.90)' }}>
+                      <span className={`text-xs tabular-nums ${col.bold ? 'font-bold' : ''}`} style={{ color: col.color }}>{col.v}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -494,7 +535,7 @@ export default function AfFeeDetail() {
       {mainTab === 'gujian' && (
       <div className="bg-white border-b border-gray-100 px-3 py-2 sticky top-0 z-10">
         {/* 搜索框 */}
-        <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 mb-2 border border-gray-100">
+        <div className="flex items-center gap-2 bg-gray-50 rounded px-3 py-2 mb-2 border border-gray-100">
           <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" /></svg>
           <input
             type="text"
@@ -509,30 +550,32 @@ export default function AfFeeDetail() {
             </button>
           )}
         </div>
-        <div className="flex gap-2 mb-2">
-          {(['all', 'ongoing', 'settled'] as const).map(key => {
-            const label = key === 'all' ? `全部 ${userGroups.length} 人` : key === 'ongoing' ? '进行中' : '已结清';
-            return (
-              <button key={key} onClick={() => setFeeFilter(key)}
-                className="flex-1 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap"
-                style={feeFilter === key ? { background: '#2563eb', color: '#fff' } : { background: '#eff2f9', color: '#6b7280' }}>
-                {label}
-              </button>
-            );
-          })}
-        </div>
-        <div className="flex gap-2">
-          {(['byDate', 'byPerson', 'byCoin'] as const).map(key => {
-            const label = key === 'byDate' ? '按日期' : key === 'byPerson' ? '按人员' : '按币种';
-            return (
-              <button key={key} onClick={() => setFeeFilter(key)}
-                className="flex-1 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap"
-                style={feeFilter === key ? { background: '#2563eb', color: '#fff' } : { background: '#eff2f9', color: '#6b7280' }}>
-                {label}
-              </button>
-            );
-          })}
-        </div>
+        {/* 分组筛选按钮（单行合并） */}
+        {(() => {
+          const ongoingCnt = feeItems.filter((f: any) => f.feeType === 'ongoing').length;
+          const settledCnt = feeItems.filter((f: any) => f.feeType === 'settled').length;
+          const allCnt = feeItems.length;
+          const ACTIVE = { background: '#2563eb', color: '#fff' };
+          const INACTIVE = { background: '#eff2f9', color: '#6b7280' };
+          return (
+            <div className="flex gap-1.5">
+              {([
+                { key: 'all' as const, label: `全部(${allCnt})`, flex: false },
+                { key: 'ongoing' as const, label: `进行(${ongoingCnt})`, flex: false },
+                { key: 'settled' as const, label: `结清(${settledCnt})`, flex: false },
+                { key: 'byDate' as const, label: '日期', flex: true },
+                { key: 'byPerson' as const, label: '人员', flex: true },
+                { key: 'byCoin' as const, label: '币种', flex: true },
+              ]).map(t => (
+                <button key={t.key} onClick={() => setFeeFilter(t.key)}
+                  className={`${t.flex ? 'flex-1' : ''} py-1.5 rounded text-xs font-medium transition-all whitespace-nowrap px-2`}
+                  style={feeFilter === t.key ? ACTIVE : INACTIVE}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          );
+        })()}
       </div>
       )}
 
@@ -712,37 +755,43 @@ export default function AfFeeDetail() {
                 const isShortfall = walletBal !== null && walletBal < pendingFee;
                 return (
                   <div key={uid} className="bg-white rounded shadow-sm overflow-hidden">
-                    {/* 收缩行：姓名 + 单数 + 日费（第一行），钉包余额 + 累积应付（第二行） */}
-                    <button onClick={() => togglePerson(uid)} className="w-full flex items-start justify-between px-4 py-3">
-                      <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                        {/* 第一行：姓名 · 单数 · 日费 */}
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-bold text-gray-800">{person.nickname}</span>
-                          {person.username && person.username !== person.nickname && (
-                            <span className="text-xs text-gray-400">@{person.username}</span>
-                          )}
-                          <span className="text-xs text-gray-400">{person.orders.length}单</span>
-                          <span className="text-xs tabular-nums" style={{ color: '#475569' }}>日费 {person.dailyTotal.toFixed(2)} U</span>
-                        </div>
-                        {/* 第二行：钱包余额 + 累积应付 + 缺口金额 */}
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs tabular-nums" style={{ color: walletBal !== null ? (isShortfall ? '#dc2626' : '#16a34a') : '#94a3b8' }}>
-                            钱包 {walletBal !== null ? `${walletBal.toFixed(2)} U` : '-'}
-                          </span>
-                          <span className="text-xs tabular-nums" style={{ color: '#1e40af' }}>
-                            应付 {pendingFee.toFixed(2)} U
-                          </span>
-                          {isShortfall && walletBal !== null && (
-                            <span className="text-xs font-semibold tabular-nums" style={{ color: '#dc2626' }}>
-                              缺口 {(pendingFee - walletBal).toFixed(2)} U
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex-shrink-0 mt-1">
-                        {isOpen ? <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg> : <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>}
-                      </div>
-                    </button>
+                    {/* 收缩行：两行4格表格 */}
+                    {(() => {
+                      const wBal = walletBal !== null ? walletBal : 0;
+                      const shortfall = isShortfall ? (pendingFee - wBal) : 0;
+                      const gjRow1 = [
+                        { label: '姓名', value: person.nickname, color: '#0f172a', bold: true, bg: undefined },
+                        { label: '钱包', value: wBal.toFixed(2) + ' U', color: isShortfall ? '#dc2626' : '#16a34a', bg: undefined },
+                        { label: '应付', value: pendingFee.toFixed(2) + ' U', color: '#1e40af', bg: undefined },
+                        { label: '缺口', value: isShortfall ? '-' + shortfall.toFixed(2) + ' U' : '0 U', color: isShortfall ? '#dc2626' : '#94a3b8', bg: isShortfall ? '#fee2e2' : undefined },
+                      ];
+                      const gjRow2 = [
+                        { label: '单数', value: person.orders.length + '单', color: '#475569', bg: undefined },
+                        { label: '日费', value: person.dailyTotal.toFixed(2) + ' U', color: '#334155', bg: undefined },
+                        { label: '月预测', value: Math.round(person.dailyTotal * 30) + ' U', color: '#475569', bg: undefined },
+                        { label: '年预测', value: Math.round(person.dailyTotal * 365) + ' U', color: '#475569', bg: undefined },
+                      ];
+                      return (
+                        <button onClick={() => togglePerson(uid)} className="w-full">
+                          <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', borderBottom: '1px solid #e2e8f0' }}>
+                            {gjRow1.map((col, ci) => (
+                              <div key={ci} className="flex flex-col items-center px-1 py-1.5" style={{ borderRight: ci < 3 ? '1px solid #e2e8f0' : 'none', background: (col as any).bg || '#fff' }}>
+                                <span className="text-[9px] leading-tight mb-0.5" style={{ color: '#94a3b8' }}>{col.label}</span>
+                                <span className={`text-[11px] leading-tight w-full text-center truncate ${(col as any).bold ? 'font-bold' : 'font-semibold'} tabular-nums`} style={{ color: col.color }}>{col.value}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+                            {gjRow2.map((col, ci) => (
+                              <div key={ci} className="flex flex-col items-center px-1 py-1.5" style={{ borderRight: ci < 3 ? '1px solid #e2e8f0' : 'none', background: (col as any).bg || '#fff' }}>
+                                <span className="text-[9px] leading-tight mb-0.5" style={{ color: '#94a3b8' }}>{col.label}</span>
+                                <span className="text-[11px] font-semibold tabular-nums leading-tight w-full text-center" style={{ color: col.color }}>{col.value}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </button>
+                      );
+                    })()}
                     {/* 展开：每条订单单行布局 */}
                     {isOpen && (
                       <div className="border-t border-gray-100">
@@ -1154,7 +1203,7 @@ export default function AfFeeDetail() {
           const payOngoing = finOngoing.filter((o: any) => !isCollect(o));
           const getBase2 = (o: any) => {
             const raw = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
-            if ((o.coin || '').toUpperCase() === 'CNY') return raw / cnyRate;
+            if ((o.interest_base_currency || 'USDT').toUpperCase() === 'CNY') return raw / cnyRate;
             return raw;
           };
           const collectDailySum = collectOngoing.reduce((s: number, o: any) => {
@@ -1212,12 +1261,12 @@ export default function AfFeeDetail() {
             });
             const baseSum = rows.reduce((s, o) => {
               const raw = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
-              const b = (o.coin || '').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
+              const b = (o.interest_base_currency || 'USDT').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
               return s + b;
             }, 0);
             const dailySum = rows.reduce((s, o) => {
               const raw = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
-              const b = (o.coin || '').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
+              const b = (o.interest_base_currency || 'USDT').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
               const r = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
               return (b && r != null) ? s + Math.abs(b * (r / 100) / 365) : s;
             }, 0);
@@ -1261,7 +1310,7 @@ export default function AfFeeDetail() {
                       {sortedRows.map((o: any, i: number) => {
                         const baseRaw = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
                         // CNY 订单按实时汇率折算成 USDT
-                        const isCNY = o.coin === 'CNY';
+                        const isCNY = (o.interest_base_currency || 'USDT').toUpperCase() === 'CNY';
                         const base = isCNY ? baseRaw / cnyRate : baseRaw;
                         const rate = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
                         const start = o.interest_start_date || o.buy_date || '';
@@ -1433,7 +1482,7 @@ export default function AfFeeDetail() {
                 />
               )}
               {/* 搜索框 */}
-              <div className="flex items-center gap-2 bg-white rounded-lg px-3 py-2 shadow-sm border border-gray-100">
+              <div className="flex items-center gap-2 bg-white rounded px-3 py-2 shadow-sm border border-gray-100">
                 <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" /></svg>
                 <input
                   type="text"
@@ -1449,44 +1498,34 @@ export default function AfFeeDetail() {
                 )}
               </div>
 
-              {/* 收/付方向筛选 + 汇总卡片 */}
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                {/* 按钮行 */}
-                <div className="flex gap-2 px-3 pt-3 pb-2">
-                  {([
-                    { key: 'all' as const, label: `全部 ${financeOrders.filter((o: any) => !isFinSettled(o)).length}单` },
-                    { key: 'collect' as const, label: `收息 资方 ${financeOrders.filter((o: any) => isCollect(o) && !isFinSettled(o)).length}单` },
-                    { key: 'pay' as const, label: `付息 借方 ${financeOrders.filter((o: any) => !isCollect(o) && !isFinSettled(o)).length}单` },
-                  ]).map(t => (
-                    <button key={t.key} onClick={() => setFinDirectionFilter(t.key)}
-                      className="flex-1 py-1.5 rounded-full text-xs font-medium transition-all"
-                      style={finDirectionFilter === t.key
-                        ? { background: '#2563eb', color: '#fff' }
-                        : { background: '#eff2f9', color: '#6b7280' }}>
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-
-              </div>
-
-              {/* 分组筛选按钮 */}
-              <div className="flex gap-2">
-                {([
-                  { key: 'byDate' as const, label: '日期' },
-                  { key: 'byPerson' as const, label: '人员' },
-                  { key: 'byDirection' as const, label: '方向' },
-                  { key: 'byType' as const, label: '类型' },
-                ]).map(t => (
-                  <button key={t.key} onClick={() => setFinGroupFilter(t.key)}
-                    className="flex-1 py-2 rounded-full text-sm font-medium transition-all"
-                    style={finGroupFilter === t.key
-                      ? { background: '#2563eb', color: '#fff' }
-                      : { background: '#eff2f9', color: '#6b7280' }}>
-                    {t.label}
-                  </button>
-                ))}
-              </div>
+              {/* 分组筛选按钮（方案C） */}
+              {(() => {
+                const totalOngoing = financeOrders.filter((o: any) => !isFinSettled(o)).length;
+                const collectCnt = financeOrders.filter((o: any) => isCollect(o) && !isFinSettled(o)).length;
+                const payCnt = financeOrders.filter((o: any) => !isCollect(o) && !isFinSettled(o)).length;
+                const ACTIVE = { background: '#2563eb', color: '#fff' };
+                const INACTIVE = { background: '#eff2f9', color: '#6b7280' };
+                return (
+                  <div className="flex gap-1.5">
+                    {([
+                      { dir: 'all' as const, grp: null, label: `全部(${totalOngoing})` },
+                      { dir: 'collect' as const, grp: null, label: `收息(${collectCnt})` },
+                      { dir: 'pay' as const, grp: null, label: `付息(${payCnt})` },
+                      { dir: null, grp: 'byDate' as const, label: '日期' },
+                      { dir: null, grp: 'byPerson' as const, label: '人员' },
+                      { dir: null, grp: 'byDirection' as const, label: '方向' },
+                      { dir: null, grp: 'byType' as const, label: '类型' },
+                    ]).map((t, i) => {
+                      const isActive = t.dir ? finDirectionFilter === t.dir : finGroupFilter === t.grp;
+                      return (
+                        <button key={i} onClick={() => { if (t.dir) setFinDirectionFilter(t.dir); else if (t.grp) setFinGroupFilter(t.grp); }}
+                          className="flex-1 py-1.5 rounded text-xs font-medium transition-all"
+                          style={isActive ? ACTIVE : INACTIVE}>{t.label}</button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
 
               {kw && finOngoing.length === 0 && (
                 <div className="text-center py-8 text-gray-400 text-sm">未找到匹配「{finSearch}」的订单</div>
@@ -1498,7 +1537,7 @@ export default function AfFeeDetail() {
               {finGroupFilter === 'byDate' && (() => {
                 const calcDailyFn = (o: any) => {
                   const raw = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
-                  const base2 = (o.coin || '').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
+                  const base2 = (o.interest_base_currency || 'USDT').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
                   const rate = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
                   if (!base2 || rate == null) return 0;
                   return base2 * (Math.abs(rate) / 100) / 365;
@@ -1558,7 +1597,7 @@ export default function AfFeeDetail() {
                               {[...items].sort((a, b) => (isCollect(b) ? 1 : 0) - (isCollect(a) ? 1 : 0)).map((o: any, i: number) => {
                                 const daily = calcDailyFn(o);
                                 const raw = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
-                                const base2 = (o.coin || '').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
+                                const base2 = (o.interest_base_currency || 'USDT').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
                                 const rate = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
                                 const collect = isCollect(o);
                                 const st = (o.interest_start_date || o.buy_date || '').slice(0, 10);
@@ -1614,16 +1653,17 @@ export default function AfFeeDetail() {
               {finGroupFilter === 'byPerson' && (() => {
                 const calcDaily2 = (o: any) => {
                   const raw = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
-                  const base2 = (o.coin || '').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
+                  const base2 = (o.interest_base_currency || 'USDT').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
                   const rate = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
                   if (!base2 || rate == null) return 0;
                   return base2 * (Math.abs(rate) / 100) / 365;
                 };
-                const personMap = new Map<string, { name: string; orders: any[]; collectDaily: number; payDaily: number }>();
+                const personMap = new Map<string, { name: string; userId: number; orders: any[]; collectDaily: number; payDaily: number }>();
                 for (const o of finFiltered) {
                   const uid = String(o.user_id || o.userId || o.username || 'unknown');
                   const name = o.username || o.userName || uid;
-                  if (!personMap.has(uid)) personMap.set(uid, { name, orders: [], collectDaily: 0, payDaily: 0 });
+                  const numericUid = parseInt(o.user_id || o.userId || '0');
+                  if (!personMap.has(uid)) personMap.set(uid, { name, userId: Number.isFinite(numericUid) ? numericUid : 0, orders: [], collectDaily: 0, payDaily: 0 });
                   const p = personMap.get(uid)!;
                   const d = calcDaily2(o);
                   p.orders.push(o);
@@ -1642,21 +1682,65 @@ export default function AfFeeDetail() {
                       const isOpen = expandedPersons.has('fin_' + p.name);
                       return (
                         <div key={p.name} className="bg-white rounded shadow-sm overflow-hidden">
-                          <button onClick={() => togglePerson('fin_' + p.name)} className="w-full flex items-center justify-between px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold text-gray-800">{p.name}</span>
-                              <span className="text-xs text-gray-400">{p.orders.length}单</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              {p.collectDaily > 0 && <span className="text-sm font-bold" style={{ color: '#dc2626' }}>+{p.collectDaily.toFixed(2)}/天</span>}
-                              {p.payDaily > 0 && <span className="text-sm font-bold" style={{ color: '#16a34a' }}>-{p.payDaily.toFixed(2)}/天</span>}
-                              {isOpen ? <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg> : <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>}
-                            </div>
-                          </button>
+                          {(() => {
+                            const netD = p.collectDaily - p.payDaily;
+                            // 应付：付息订单的累计应付利息
+                            const finPendingFee = p.orders
+                              .filter((o: any) => !isCollect(o))
+                              .reduce((s: number, o: any) => {
+                                const prepaid = parseFloat((o as any).prepaidFee || o.prepaid_fee || '0');
+                                const accD = (() => {
+                                  const st2 = o.interest_start_date || o.buy_date || '';
+                                  if (!st2) return 0;
+                                  const todayNow2 = new Date();
+                                  const todayStr2 = `${todayNow2.getFullYear()}-${String(todayNow2.getMonth()+1).padStart(2,'0')}-${String(todayNow2.getDate()).padStart(2,'0')}`;
+                                  return Math.max(0, Math.round((new Date(todayStr2).getTime() - new Date(st2.slice(0,10)).getTime()) / 86400000) + 1);
+                                })();
+                                return s + Math.max(0, calcDaily2(o) * accD - prepaid);
+                              }, 0);
+                            const finWalletBal = (p.userId > 0 && memberBalances) ? (memberBalances[p.userId] ?? null) : null;
+                            const finShortfall = finWalletBal !== null && finWalletBal < finPendingFee;
+                            const walBal = finWalletBal !== null ? finWalletBal : 0;
+                            const shortfallAmt = finShortfall ? (finPendingFee - walBal) : 0;
+                            const row1 = [
+                              { label: '姓名', value: p.name, color: '#0f172a', bold: true, bg: undefined },
+                              { label: '钱包', value: walBal.toFixed(2) + ' U', color: finShortfall ? '#dc2626' : '#16a34a', bg: undefined },
+                              { label: '应付', value: finPendingFee.toFixed(2) + ' U', color: '#1e40af', bg: undefined },
+                              { label: '缺口', value: finShortfall ? '-' + shortfallAmt.toFixed(2) + ' U' : '0 U', color: finShortfall ? '#dc2626' : '#94a3b8', bg: finShortfall ? '#fee2e2' : undefined },
+                            ];
+                            const row2 = [
+                              { label: '单数', value: p.orders.length + '单', color: '#475569', bg: undefined },
+                              { label: '收息/天', value: p.collectDaily > 0 ? '+' + p.collectDaily.toFixed(2) : '0', color: p.collectDaily > 0 ? '#dc2626' : '#94a3b8', bg: undefined },
+                              { label: '付息/天', value: p.payDaily > 0 ? '-' + p.payDaily.toFixed(2) : '0', color: p.payDaily > 0 ? '#16a34a' : '#94a3b8', bg: undefined },
+                              { label: '净日息', value: (netD >= 0 ? '+' : '') + netD.toFixed(2), color: netD >= 0 ? '#dc2626' : '#16a34a', bg: undefined },
+                            ];
+                            return (
+                              <button onClick={() => togglePerson('fin_' + p.name)} className="w-full">
+                                {/* 第一行表格：姓名 / 钱包 / 应付 / 缺口 */}
+                                <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', borderBottom: '1px solid #e2e8f0' }}>
+                                  {row1.map((col, ci) => (
+                                    <div key={ci} className="flex flex-col items-center px-1 py-1.5" style={{ borderRight: ci < 3 ? '1px solid #e2e8f0' : 'none', background: (col as any).bg || '#fff' }}>
+                                      <span className="text-[9px] leading-tight mb-0.5" style={{ color: '#94a3b8' }}>{col.label}</span>
+                                      <span className={`text-[11px] leading-tight w-full text-center truncate ${(col as any).bold ? 'font-bold' : 'font-semibold'} tabular-nums`} style={{ color: col.color }}>{col.value}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                                {/* 第二行表格：单数 / 收息/天 / 付息/天 / 净日息 */}
+                                <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+                                  {row2.map((col, ci) => (
+                                    <div key={ci} className="flex flex-col items-center px-1 py-1.5" style={{ borderRight: ci < 3 ? '1px solid #e2e8f0' : 'none', background: (col as any).bg || '#fff' }}>
+                                      <span className="text-[9px] leading-tight mb-0.5" style={{ color: '#94a3b8' }}>{col.label}</span>
+                                      <span className="text-[11px] font-semibold tabular-nums leading-tight w-full text-center" style={{ color: col.color }}>{col.value}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </button>
+                            );
+                          })()}
                           {isOpen && (
-                            <div className="border-t border-gray-100">
+                            <div className="border-t border-gray-100" style={{ background: '#dce6f0' }}>
                               {/* 排序按鈕栏 */}
-                              <div className="flex items-center gap-1.5 px-4 py-2" style={{ borderBottom: '1px solid #f1f5f9', background: '#fafafa' }}>
+                              <div className="flex items-center gap-1.5 px-4 py-2" style={{ borderBottom: '1px solid #c8d6e5', background: '#cfdcea' }}>
                                 <span className="text-[11px]" style={{ color: '#94a3b8' }}>排序：</span>
                                 {(['date', 'rate', 'daily'] as const).map(k => (
                                   <button key={k} onClick={e => { e.stopPropagation(); setFinPersonOrderSort(k); }}
@@ -1678,7 +1762,7 @@ export default function AfFeeDetail() {
                                 }
                               }).map((o, i) => {
                                 const raw = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
-                                const base2 = (o.coin || '').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
+                                const base2 = (o.interest_base_currency || 'USDT').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
                                 const rate = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
                                 const st = o.interest_start_date || o.buy_date || '';
                                 const stShort = st ? (() => { const p2 = st.slice(0,10).split('-'); return p2.length===3 ? `${parseInt(p2[1])}/${parseInt(p2[2])}` : st.slice(5,10); })() : '-';
@@ -1689,29 +1773,42 @@ export default function AfFeeDetail() {
                                 const accInterestP = daily * accDaysP;
                                 const accentColor = collect ? '#dc2626' : '#16a34a';
                                 const typeLabel = o.asset_type === 'stock' ? '股票' : o.asset_type === 'crypto_option' ? '期权' : '数字币';
+                                const orderNo = o.order_no || String(o.id || '').padStart(4, '0');
+                                const finOrdRow1 = [
+                                  { label: '币种', value: o.coin || '-', color: '#0f172a', bold: true },
+                                  { label: '订单号', value: orderNo, color: '#334155' },
+                                  { label: '起息', value: stShort, color: '#64748b' },
+                                  { label: '持有', value: accDaysP + '天', color: '#475569' },
+                                ];
+                                const dailyVal = daily.toFixed(2);
+                                const accVal = accInterestP.toFixed(2);
+                                const finOrdRow2 = [
+                                  { label: '本金(U)', value: base2 > 0 ? base2.toFixed(2) : '-', color: '#334155' },
+                                  { label: '方向', value: collect ? '收息' : '付息', color: accentColor },
+                                  { label: '日息(U)', value: daily === 0 ? '0.00' : (collect ? '+' : '-') + dailyVal, color: daily === 0 ? '#334155' : accentColor },
+                                  { label: '累计(U)', value: accInterestP === 0 ? '0.00' : (collect ? '+' : '-') + accVal, color: accInterestP === 0 ? '#334155' : accentColor },
+                                ];
                                 return (
-                                <div key={o.id ?? i} className="flex items-start justify-between px-4 py-3" style={{ borderBottom: '1px solid #e8edf2' }}>
-                                  {/* 左侧：两行信息 */}
-                                  <div className="flex flex-col gap-1.5 min-w-0 flex-1">
-                                    {/* 第一行：非数据信息 */}
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="text-sm font-bold" style={{ color: '#0f172a' }}>{o.coin || '-'}</span>
-                                      <span className="text-xs" style={{ color: '#64748b' }}>{typeLabel}</span>
-                                      <span className="text-xs font-medium" style={{ color: accentColor }}>{collect ? '收息' : '付息'}</span>
-                                      <span className="text-xs" style={{ color: '#94a3b8' }}>{o.order_no || `#${o.id}`}</span>
-                                      <span className="text-xs" style={{ color: '#64748b' }}>起息 {stShort}</span>
-                                    </div>
-                                    {/* 第二行：数据信息 */}
-                                    <div className="flex items-center gap-3">
-                                      {rate != null && <span className="text-xs font-semibold" style={{ color: '#334155' }}>{rate}%<span className="font-normal text-[11px] ml-0.5" style={{ color: '#94a3b8' }}>/年</span></span>}
-                                      <span className="text-xs font-semibold" style={{ color: '#334155' }}>{base2 > 0 ? base2.toFixed(0) : '-'}<span className="font-normal text-[11px] ml-0.5" style={{ color: '#94a3b8' }}>U 本金</span></span>
-                                      <span className="text-xs font-semibold tabular-nums" style={{ color: accentColor }}>{collect ? '+' : '-'}{accInterestP.toFixed(2)}<span className="font-normal text-[11px] ml-0.5" style={{ color: '#94a3b8' }}>U 累计</span></span>
-                                    </div>
+                                <div key={o.id ?? i} className="px-2 py-2" style={{ borderBottom: '1px solid #b8cfe8', background: '#dce6f0' }}>
+                                  <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', borderLeft: '1px solid #b8cfe8', borderRight: '1px solid #b8cfe8', borderTop: '1px solid #b8cfe8', borderBottom: 'none', borderRadius: '3px 3px 0 0', overflow: 'hidden' }}>
+                                    {finOrdRow1.map((col, ci) => (
+                                      <div key={ci}
+                                        className={`flex flex-col items-center px-1 py-1${ci === 1 ? ' cursor-pointer active:opacity-70' : ''}`}
+                                        style={{ borderRight: ci < 3 ? '1px solid #b8cfe8' : 'none', background: '#eaf1f8' }}
+                                        onClick={ci === 1 ? (e) => { e.stopPropagation(); setFinDetailOrder({ ...o, _elapsedDays: accDaysP }); } : undefined}
+                                      >
+                                        <span className="text-[9px] leading-tight mb-0.5" style={{ color: ci === 1 ? '#2563eb' : '#7a9ab8' }}>{col.label}</span>
+                                        <span className={`text-[11px] leading-tight w-full text-center truncate ${(col as any).bold ? 'font-bold' : 'font-medium'}${ci === 1 ? ' underline decoration-dotted underline-offset-1' : ''}`} style={{ color: ci === 1 ? '#2563eb' : col.color }}>{col.value}</span>
+                                      </div>
+                                    ))}
                                   </div>
-                                  {/* 右侧：日息大字 */}
-                                  <div className="flex-shrink-0 ml-4 text-right">
-                                    <span className="text-base font-bold tabular-nums" style={{ color: accentColor }}>{collect ? '+' : '-'}{daily.toFixed(2)}</span>
-                                    <div className="text-[11px]" style={{ color: '#94a3b8' }}>/天</div>
+                                  <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', border: '1px solid #b8cfe8', borderRadius: '0 0 3px 3px', overflow: 'hidden' }}>
+                                    {finOrdRow2.map((col, ci) => (
+                                      <div key={ci} className="flex flex-col items-center px-1 py-1" style={{ borderRight: ci < 3 ? '1px solid #b8cfe8' : 'none', background: '#eaf1f8' }}>
+                                        <span className="text-[9px] leading-tight mb-0.5" style={{ color: '#7a9ab8' }}>{col.label}</span>
+                                        <span className="text-[11px] font-semibold tabular-nums leading-tight w-full text-center" style={{ color: col.color }}>{col.value}</span>
+                                      </div>
+                                    ))}
                                   </div>
                                 </div>
                                 );
@@ -1729,7 +1826,7 @@ export default function AfFeeDetail() {
               {finGroupFilter === 'byDirection' && (() => {
                 const calcDailyD = (o: any) => {
                   const raw = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
-                  const base2 = (o.coin || '').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
+                  const base2 = (o.interest_base_currency || 'USDT').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
                   const rate = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
                   if (!base2 || rate == null) return 0;
                   return base2 * (Math.abs(rate) / 100) / 365;
@@ -1761,7 +1858,7 @@ export default function AfFeeDetail() {
                           {orders.map((o: any, i: number) => {
                             const daily = calcDailyD(o);
                             const raw = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
-                            const base2 = (o.coin || '').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
+                            const base2 = (o.interest_base_currency || 'USDT').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
                             const rate = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
                             const st = o.interest_start_date || o.buy_date || '';
                             const stShort = st ? (() => { const p2 = st.slice(0,10).split('-'); return p2.length===3 ? `${parseInt(p2[1])}/${parseInt(p2[2])}` : st.slice(5,10); })() : '-';
@@ -1815,7 +1912,7 @@ export default function AfFeeDetail() {
               {finGroupFilter === 'byType' && (() => {
                 const calcDailyT = (o: any) => {
                   const raw = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
-                  const base2 = (o.coin || '').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
+                  const base2 = (o.interest_base_currency || 'USDT').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
                   const rate = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
                   if (!base2 || rate == null) return 0;
                   return base2 * (Math.abs(rate) / 100) / 365;
@@ -1847,7 +1944,7 @@ export default function AfFeeDetail() {
                           {[...orders].sort((a, b) => (isCollect(b) ? 1 : 0) - (isCollect(a) ? 1 : 0)).map((o: any, i: number) => {
                             const daily = calcDailyT(o);
                             const raw = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
-                            const base2 = (o.coin || '').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
+                            const base2 = (o.interest_base_currency || 'USDT').toUpperCase() === 'CNY' ? raw / cnyRate : raw;
                             const rate = o.interest_rate_annual != null ? Number(o.interest_rate_annual) : null;
                             const collect = isCollect(o);
                             const st = o.interest_start_date || o.buy_date || '';
@@ -1920,7 +2017,7 @@ export default function AfFeeDetail() {
             ) : (
               <div className="space-y-2">
                 {finPaidDetailList.map((p: any) => (
-                  <div key={p.id} className="bg-gray-50 rounded-xl px-4 py-3">
+                  <div key={p.id} className="bg-gray-50 rounded px-4 py-3">
                     <div className="flex items-center justify-between">
                       <span className="font-semibold text-sm" style={{ color: '#dc2626' }}>+{parseFloat(p.amount).toFixed(2)} U</span>
                       <span className="text-xs text-gray-400">{p.pay_date || p.payment_date || '-'}</span>
@@ -1959,7 +2056,7 @@ export default function AfFeeDetail() {
                   inputMode="decimal"
                   value={finChargeAmount}
                   onChange={e => setFinChargeAmount(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  className="w-full px-3 py-2 rounded border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
                   placeholder="如：500"
                 />
               </div>
@@ -1969,7 +2066,7 @@ export default function AfFeeDetail() {
                   type="date"
                   value={finChargeDate}
                   onChange={e => setFinChargeDate(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  className="w-full px-3 py-2 rounded border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
                 />
               </div>
             </div>
@@ -1979,7 +2076,7 @@ export default function AfFeeDetail() {
                 type="text"
                 value={finChargeNote}
                 onChange={e => setFinChargeNote(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+                className="w-full px-3 py-2 rounded border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
                 placeholder="结息说明"
               />
             </div>
@@ -1996,7 +2093,7 @@ export default function AfFeeDetail() {
                   note: finChargeNote,
                 });
               }}
-              className="w-full py-3 rounded-xl text-white text-sm font-semibold disabled:opacity-50"
+              className="w-full py-3 rounded text-white text-sm font-semibold disabled:opacity-50"
               style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
             >
               {addFinPaymentMutation.isPending ? '提交中...' : '确认记录'}
@@ -2019,7 +2116,7 @@ export default function AfFeeDetail() {
             onClick={() => setAprInfo(null)}
           >
             <div
-              className="bg-white rounded-2xl w-full max-w-sm p-5"
+              className="bg-white rounded w-full max-w-sm p-5"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-3">
@@ -2061,7 +2158,7 @@ export default function AfFeeDetail() {
               </div>
               <button
                 onClick={() => setAprInfo(null)}
-                className="mt-4 w-full py-2 rounded-xl text-sm font-medium text-white"
+                className="mt-4 w-full py-2 rounded text-sm font-medium text-white"
                 style={{ background: '#2563eb' }}
               >
                 知道了
@@ -2084,7 +2181,7 @@ export default function AfFeeDetail() {
         );
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setDetailOrder(null)}>
-            <div className="bg-white rounded-2xl w-full max-w-sm p-5 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-white rounded w-full max-w-sm p-5 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-base font-bold text-gray-900">订单详情</h3>
                 <button onClick={() => setDetailOrder(null)} className="text-gray-400 text-xl leading-none">×</button>
@@ -2104,64 +2201,32 @@ export default function AfFeeDetail() {
                 <Row k="名义年化" v={`${(d.nominalApr * 100).toFixed(2)}%`} color="#2563eb" />
                 <Row k="实际年化" v={`${(d.actualApr * 100).toFixed(2)}%`} color="#1e40af" />
               </div>
-              <button onClick={() => setDetailOrder(null)} className="mt-4 w-full py-2 rounded-xl text-sm font-medium text-white" style={{ background: '#2563eb' }}>关闭</button>
+              <button onClick={() => setDetailOrder(null)} className="mt-4 w-full py-2 rounded text-sm font-medium text-white" style={{ background: '#2563eb' }}>关闭</button>
             </div>
           </div>
         );
       })()}
 
-      {/* 融资付息订单只读详情弹窗 */}
-      {finDetailOrder && (() => {
-        const d = finDetailOrder;
-        const statusMap: Record<string, string> = { active: '进行中', settled: '已结清', completed: '已结清', cancelled: '已取消' };
-        const baseRaw = d.interest_base != null ? Number(d.interest_base) : (d.amount != null ? Number(d.amount) : null);
-        const isCNYOrder = (d.coin || '').toUpperCase() === 'CNY';
-        const base = (baseRaw != null && isCNYOrder) ? baseRaw / cnyRate : baseRaw;
-        const rate = d.interest_rate_annual != null ? Number(d.interest_rate_annual) : null;
-        const start = d.interest_start_date || d.buy_date || '';
-        const finAccrued = (base != null && rate != null && d._elapsedDays != null)
-          ? base * (rate / 100) / 365 * d._elapsedDays : null;
-        const finPaid = finPaidMap[Number(d.id)] != null ? Number(finPaidMap[Number(d.id)]) : 0;
-        const Row = ({ k, v, color }: { k: string; v: any; color?: string }) => (
-          <div className="flex justify-between border-b border-gray-100 py-2 text-xs">
-            <span className="text-gray-500">{k}</span>
-            <span className="font-medium" style={color ? { color } : undefined}>{v}</span>
-          </div>
-        );
-        const coinCfg: Record<string, { s: string; c: string }> = {
-          BTC: { s: 'B', c: '#f59e0b' }, ETH: { s: 'E', c: '#3b82f6' }, SOL: { s: 'S', c: '#a855f7' },
-        };
-        const cc = coinCfg[d.coin];
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setFinDetailOrder(null)}>
-            <div className="bg-white rounded-2xl w-full max-w-sm p-5 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-bold text-gray-900">融资付息订单详情</h3>
-                <button onClick={() => setFinDetailOrder(null)} className="text-gray-400 text-xl leading-none">×</button>
-              </div>
-              <div className="space-y-0">
-                <Row k="订单编号" v={<span className="font-mono">{d.order_no || '-'}</span>} />
-                <Row k="用户" v={d.username || d.userName || '-'} />
-                <Row k="币种" v={cc ? <span className="font-bold" style={{ color: cc.c }}>{d.coin}</span> : (d.coin || '-')} />
-                <Row k="计息本金" v={base != null ? (
-                  isCNYOrder
-                    ? <span>{base.toFixed(2)} U <span className="text-gray-400 text-[10px]">（{baseRaw?.toFixed(0)} CNY ÷ {cnyRate.toFixed(4)}）</span></span>
-                    : `${base.toFixed(2)} U`
-                ) : '-'} />
-                <Row k="年利率" v={rate != null ? `${rate}%` : '-'} />
-                <Row k="起息日" v={start || '-'} />
-                <Row k="天数" v={d._elapsedDays != null ? `${d._elapsedDays} 天` : '-'} />
-                <Row k="日息" v={(base != null && rate != null) ? `${(Math.abs(base * (rate / 100) / 365)).toFixed(2)} U` : '-'} color="#6b7280" />
-                <Row k="待付利息" v={finAccrued != null ? `${finAccrued.toFixed(2)} U` : '-'} color="#2563eb" />
-                <Row k="已付利息" v={`${finPaid.toFixed(2)} U`} color="#16a34a" />
-                <Row k="参与方数" v={d._participantCount != null ? `${d._participantCount} 人` : '-'} />
-                <Row k="状态" v={statusMap[d.status] || d.status || '-'} />
-              </div>
-              <button onClick={() => setFinDetailOrder(null)} className="mt-4 w-full py-2 rounded-xl text-sm font-medium text-white" style={{ background: '#2563eb' }}>关闭</button>
+      {/* 融资付息订单详情弹窗 —— 复用 FunderOrderCardV2Silver 快照 */}
+      {finDetailOrder && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8 px-3" style={{ background: 'rgba(0,0,0,0.55)' }} onClick={() => setFinDetailOrder(null)}>
+          <div className="w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-end mb-2">
+              <button onClick={() => setFinDetailOrder(null)} className="text-white text-2xl leading-none opacity-70">×</button>
             </div>
+            <FunderOrderCard
+              order={finDetailOrder}
+              livePrices={{}}
+              priceDirection={{}}
+              currentUser={null}
+              membersData={[]}
+              ledgerId={ledgerId}
+              isAdmin={false}
+              previewMode={true}
+            />
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       {/* 预收管理费弹窗 */}
       {collectModal && (() => {
@@ -2169,12 +2234,12 @@ export default function AfFeeDetail() {
         const remaining = Math.max(0, totalFee - prepaidFee);
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setCollectModal(null)}>
-            <div className="bg-white rounded-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
+            <div className="bg-white rounded w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-base font-bold text-gray-900">预收管理费</h3>
                 <button onClick={() => setCollectModal(null)} className="text-gray-400 text-xl">×</button>
               </div>
-              <div className="mb-4 bg-gray-50 rounded-xl p-3 space-y-1.5">
+              <div className="mb-4 bg-gray-50 rounded p-3 space-y-1.5">
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-500">订单</span>
                   <span className="font-medium">{order.coin} #{order.id}</span>
@@ -2201,7 +2266,7 @@ export default function AfFeeDetail() {
                   max={remaining}
                   value={collectAmount}
                   onChange={e => setCollectAmount(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+                  className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
                   placeholder="输入金额"
                 />
               </div>
@@ -2211,12 +2276,12 @@ export default function AfFeeDetail() {
                   type="text"
                   value={collectNote}
                   onChange={e => setCollectNote(e.target.value)}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
+                  className="w-full border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:border-orange-400"
                   placeholder="如：6月份管理费"
                 />
               </div>
               <div className="flex gap-2">
-                <button onClick={() => setCollectModal(null)} className="flex-1 py-2.5 rounded-xl text-sm text-gray-500 bg-gray-100">取消</button>
+                <button onClick={() => setCollectModal(null)} className="flex-1 py-2.5 rounded text-sm text-gray-500 bg-gray-100">取消</button>
                 <button
                   disabled={collectLoading || !collectAmount || parseFloat(collectAmount) <= 0}
                   onClick={async () => {
@@ -2239,7 +2304,7 @@ export default function AfFeeDetail() {
                       setCollectLoading(false);
                     }
                   }}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white bg-orange-500 disabled:opacity-50"
+                  className="flex-1 py-2.5 rounded text-sm font-bold text-white bg-orange-500 disabled:opacity-50"
                 >{collectLoading ? '处理中...' : '确认收费'}</button>
               </div>
             </div>
