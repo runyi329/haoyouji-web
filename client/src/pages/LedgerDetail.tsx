@@ -3459,24 +3459,7 @@ export default function LedgerDetail() {
               {/* 52号账本（AF）：操作按钮行（充值/提现/邀请/刷新/返回）横排一行 */}
               {isCustomAF && (
                 <div className="flex items-center gap-2 w-full">
-                  {!effectiveIsFunder && (
-                    <button
-                      onClick={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
-                      className="flex-1 h-9 rounded-full text-sm font-medium border border-white/60 text-white text-center"
-                      style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
-                    >
-                      充值
-                    </button>
-                  )}
-                  {!effectiveIsFunder && (
-                    <button
-                      onClick={() => setLocation(`/ledger/${ledgerId}/af-withdraw${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
-                      className="flex-1 h-9 rounded-full text-sm font-medium border border-white/60 text-white text-center"
-                      style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
-                    >
-                      提现
-                    </button>
-                  )}
+                  {/* 充値和提现已内置到智能钱包卡片内 */}
                   {!effectiveIsFunder && (
                     <button
                       onClick={() => setLocation(`/ledger/${ledgerId}/af-invite${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
@@ -3718,7 +3701,7 @@ export default function LedgerDetail() {
                 background: 'linear-gradient(160deg, #111111 0%, #1c1c1c 45%, #0f0f0f 100%)',
                 border: '1px solid rgba(201,168,76,0.55)',
                 boxShadow: '0 6px 24px rgba(0,0,0,0.55), 0 2px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,228,100,0.18), inset 0 -1px 0 rgba(80,48,0,0.4)',
-                padding: '14px 18px',
+                padding: '10px 14px',
               }}>
                 {/* 顶部金色高光线 */}
                 <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #F5D78E 40%, #C9A84C 60%, transparent 95%)' }} />
@@ -3743,15 +3726,34 @@ export default function LedgerDetail() {
                   <span className="text-xs font-semibold" style={{ color: '#C9A84C', letterSpacing: '0.1em', marginLeft: 12 }}>智能钱包</span>
                 </div>
                 {/* 余额主数字 */}
-                <div className="mb-4">
-                  <div className="text-[11px] mb-1" style={{ color: 'rgba(201,168,76,0.5)' }}>余额</div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-bold tabular-nums" style={{ fontSize: '2rem', lineHeight: 1.1, color: '#F5D78E', textShadow: '0 0 20px rgba(245,215,142,0.35)' }}>
+                  <div className="mb-2">
+                    <div className="text-[10px] mb-0.5" style={{ color: 'rgba(201,168,76,0.5)' }}>余额</div>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="font-bold tabular-nums" style={{ fontSize: '1.4rem', lineHeight: 1.1, color: '#F5D78E', textShadow: '0 0 16px rgba(245,215,142,0.3)' }}>
                       {afTotalAsset ? Number(afTotalAsset.total).toFixed(2) : '0.00'}
                     </span>
                     <span className="text-sm font-medium" style={{ color: 'rgba(201,168,76,0.55)' }}>USDT</span>
                   </div>
                 </div>
+                {/* 内置充値/提现按钮行 */}
+                {!effectiveIsFunder && (
+                  <div className="flex gap-2 mb-2">
+                    <button
+                      onClick={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
+                      className="flex-1 h-7 rounded-full text-xs font-semibold"
+                      style={{ background: 'linear-gradient(135deg, #C9A84C 0%, #F5D78E 50%, #C9A84C 100%)', color: '#000', boxShadow: '0 1px 4px rgba(201,168,76,0.35)' }}
+                    >
+                      充値
+                    </button>
+                    <button
+                      onClick={() => setLocation(`/ledger/${ledgerId}/af-withdraw${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
+                      className="flex-1 h-7 rounded-full text-xs font-semibold"
+                      style={{ background: 'transparent', border: '1px solid rgba(201,168,76,0.55)', color: '#F5D78E' }}
+                    >
+                      提现
+                    </button>
+                  </div>
+                )}
                 {/* 独立区域：闲时自动赚费开关 + 赚费累计 */}
                 <div className="flex items-center justify-between pt-3" style={{ borderTop: '1px solid rgba(201,168,76,0.18)' }}>
                   {/* 左侧：开关 + 文字 */}
@@ -3783,7 +3785,7 @@ export default function LedgerDetail() {
                   {(localFundingRateEnabled ?? false) ? (
                     <div className="flex items-center gap-1.5">
                       <span className="text-[11px]" style={{ color: 'rgba(201,168,76,0.5)' }}>赚费累计</span>
-                      <span className="text-sm font-bold tabular-nums" style={{ color: '#F5D78E' }}>{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(4)}</span>
+                      <span className="text-sm font-bold tabular-nums" style={{ color: '#F5D78E' }}>{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(2)}</span>
                       <span className="text-[11px]" style={{ color: 'rgba(201,168,76,0.45)' }}>USDT</span>
                       <button
                         onClick={() => setShowFundingRateLogs(true)}
@@ -3801,6 +3803,122 @@ export default function LedgerDetail() {
                   )}
                 </div>
               </div>
+              {/* ===== 方案B：标题单行，余额左+按鈕竖排右 ===== */}
+              <div className="col-span-2 rounded-2xl relative overflow-hidden" style={{
+                background: 'linear-gradient(160deg, #111111 0%, #1c1c1c 45%, #0f0f0f 100%)',
+                border: '1px solid rgba(201,168,76,0.55)',
+                boxShadow: '0 6px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,228,100,0.18)',
+                padding: '10px 14px',
+              }}>
+                <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #F5D78E 40%, #C9A84C 60%, transparent 95%)' }} />
+                <div className="text-[10px] font-bold mb-2" style={{ color: 'rgba(201,168,76,0.4)', letterSpacing: '0.08em' }}>▶ 方案 B</div>
+                {/* 标题行 */}
+                <div className="flex items-center gap-2 mb-2">
+                  <div style={{ width: 14, height: 14, overflow: 'visible', position: 'relative', flexShrink: 0, marginLeft: -16 }}>
+                    <div style={{ width: 400, height: 400, transform: 'scale(0.07)', transformOrigin: 'bottom left', position: 'absolute', bottom: -3, left: 0 }}>
+                      <WalletLottie />
+                    </div>
+                  </div>
+                  <span className="text-xs font-semibold" style={{ color: '#C9A84C', letterSpacing: '0.1em', marginLeft: 12 }}>智能錢包</span>
+                </div>
+                {/* 余额左 + 按鈕竖排右 */}
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <div className="text-[10px] mb-0.5" style={{ color: 'rgba(201,168,76,0.5)' }}>余额</div>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="font-bold tabular-nums" style={{ fontSize: '1.4rem', lineHeight: 1.1, color: '#F5D78E', textShadow: '0 0 16px rgba(245,215,142,0.3)' }}>
+                        {afTotalAsset ? Number(afTotalAsset.total).toFixed(2) : '0.00'}
+                      </span>
+                      <span className="text-sm font-medium" style={{ color: 'rgba(201,168,76,0.55)' }}>USDT</span>
+                    </div>
+                  </div>
+                  {!effectiveIsFunder && (
+                    <div className="flex flex-col gap-1.5">
+                      <button
+                        onClick={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
+                        className="h-7 rounded-full text-xs font-semibold"
+                        style={{ width: 64, background: 'linear-gradient(135deg, #C9A84C 0%, #F5D78E 50%, #C9A84C 100%)', color: '#000', boxShadow: '0 1px 4px rgba(201,168,76,0.35)' }}
+                      >充値</button>
+                      <button
+                        onClick={() => setLocation(`/ledger/${ledgerId}/af-withdraw${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
+                        className="h-7 rounded-full text-xs font-semibold"
+                        style={{ width: 64, background: 'transparent', border: '1px solid rgba(201,168,76,0.55)', color: '#F5D78E' }}
+                      >提现</button>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid rgba(201,168,76,0.18)' }}>
+                  <div className="flex items-center gap-2">
+                    <button disabled className="relative inline-flex h-5 w-9 items-center rounded-full flex-shrink-0" style={{ backgroundColor: (localFundingRateEnabled ?? false) ? 'rgba(201,168,76,0.85)' : 'rgba(255,255,255,0.12)' }}>
+                      <span className="inline-block h-3.5 w-3.5 rounded-full shadow" style={{ backgroundColor: (localFundingRateEnabled ?? false) ? '#000' : 'rgba(255,255,255,0.45)', transform: (localFundingRateEnabled ?? false) ? 'translateX(18px)' : 'translateX(2px)' }} />
+                    </button>
+                    <span className="text-[11px]" style={{ color: 'rgba(245,215,142,0.8)' }}>闲时自动赚费</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px]" style={{ color: 'rgba(201,168,76,0.5)' }}>赚费累计</span>
+                    <span className="text-sm font-bold tabular-nums" style={{ color: '#F5D78E' }}>{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(2)}</span>
+                    <span className="text-[11px]" style={{ color: 'rgba(201,168,76,0.45)' }}>USDT</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* ===== 方案C：最简洁，余额+按鈕同行 ===== */}
+              <div className="col-span-2 rounded-2xl relative overflow-hidden" style={{
+                background: 'linear-gradient(160deg, #111111 0%, #1c1c1c 45%, #0f0f0f 100%)',
+                border: '1px solid rgba(201,168,76,0.55)',
+                boxShadow: '0 6px 24px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,228,100,0.18)',
+                padding: '10px 14px',
+              }}>
+                <div className="absolute inset-x-0 top-0 h-px" style={{ background: 'linear-gradient(90deg, transparent 5%, #F5D78E 40%, #C9A84C 60%, transparent 95%)' }} />
+                <div className="text-[10px] font-bold mb-2" style={{ color: 'rgba(201,168,76,0.4)', letterSpacing: '0.08em' }}>▶ 方案 C</div>
+                {/* 余额+按鈕同行 */}
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <div style={{ width: 14, height: 14, overflow: 'visible', position: 'relative', flexShrink: 0, marginLeft: -16 }}>
+                        <div style={{ width: 400, height: 400, transform: 'scale(0.07)', transformOrigin: 'bottom left', position: 'absolute', bottom: -3, left: 0 }}>
+                          <WalletLottie />
+                        </div>
+                      </div>
+                      <span className="text-[10px]" style={{ color: 'rgba(201,168,76,0.5)', marginLeft: 12 }}>智能錢包 · 余额</span>
+                    </div>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="font-bold tabular-nums" style={{ fontSize: '1.3rem', lineHeight: 1.1, color: '#F5D78E', textShadow: '0 0 16px rgba(245,215,142,0.3)' }}>
+                        {afTotalAsset ? Number(afTotalAsset.total).toFixed(2) : '0.00'}
+                      </span>
+                      <span className="text-xs font-medium" style={{ color: 'rgba(201,168,76,0.55)' }}>USDT</span>
+                    </div>
+                  </div>
+                  {!effectiveIsFunder && (
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => setLocation(`/recharge?from=ledger&ledgerId=${ledgerId}${viewAsUserId ? `&viewAs=${viewAsUserId}` : ''}`)}
+                        className="h-7 rounded-full text-xs font-semibold"
+                        style={{ padding: '0 14px', background: 'linear-gradient(135deg, #C9A84C 0%, #F5D78E 50%, #C9A84C 100%)', color: '#000', boxShadow: '0 1px 4px rgba(201,168,76,0.35)' }}
+                      >充値</button>
+                      <button
+                        onClick={() => setLocation(`/ledger/${ledgerId}/af-withdraw${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
+                        className="h-7 rounded-full text-xs font-semibold"
+                        style={{ padding: '0 14px', background: 'transparent', border: '1px solid rgba(201,168,76,0.55)', color: '#F5D78E' }}
+                      >提现</button>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid rgba(201,168,76,0.18)' }}>
+                  <div className="flex items-center gap-2">
+                    <button disabled className="relative inline-flex h-5 w-9 items-center rounded-full flex-shrink-0" style={{ backgroundColor: (localFundingRateEnabled ?? false) ? 'rgba(201,168,76,0.85)' : 'rgba(255,255,255,0.12)' }}>
+                      <span className="inline-block h-3.5 w-3.5 rounded-full shadow" style={{ backgroundColor: (localFundingRateEnabled ?? false) ? '#000' : 'rgba(255,255,255,0.45)', transform: (localFundingRateEnabled ?? false) ? 'translateX(18px)' : 'translateX(2px)' }} />
+                    </button>
+                    <span className="text-[11px]" style={{ color: 'rgba(245,215,142,0.8)' }}>闲时自动赚费</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px]" style={{ color: 'rgba(201,168,76,0.5)' }}>赚费累计</span>
+                    <span className="text-sm font-bold tabular-nums" style={{ color: '#F5D78E' }}>{parseFloat(fundingRateStatus?.totalAccumulated || '0').toFixed(2)}</span>
+                    <span className="text-[11px]" style={{ color: 'rgba(201,168,76,0.45)' }}>USDT</span>
+                  </div>
+                </div>
+              </div>
+
               {/* 卡片 3：仓位 & 累计盈亏（合并，占满整行）——资金方不显示 */}
               {!effectiveIsFunder && (
               <div className="col-span-2 rounded-2xl px-0 py-3" style={{ backgroundColor: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.10)', overflow: 'hidden' }}>

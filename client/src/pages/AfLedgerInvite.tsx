@@ -19,6 +19,17 @@ export default function AfLedgerInvite() {
   const { data: me } = trpc.auth.me.useQuery();
   const inviteCode: string = (me as any)?.inviteCode || "";
 
+  // 获取账本信息，用于判断当前用户角色
+  const { data: ledgerData } = trpc.ledger.getById.useQuery(
+    { ledgerId: Number(ledgerId) },
+    { enabled: !!ledgerId }
+  );
+  const YJH_USER_ID = 4957151;
+  const JIANG_USER_ID = 870413;
+  const currentUserId = (me as any)?.id;
+  // 只有 YJH 本人（4957151）和管理员 jiang（870413）能看到邀请树按鈕
+  const canSeeInviteTree = currentUserId === YJH_USER_ID || currentUserId === JIANG_USER_ID;
+
   // 使用用户固定邀请码生成邀请链接（与上方邀请码保持一致）
   const inviteLink = inviteCode
     ? `https://jiangyuchen.cn/login?invite=${inviteCode}`
@@ -71,14 +82,18 @@ export default function AfLedgerInvite() {
           <h1 className="flex-1 text-center text-lg font-semibold text-white">
             我的邀请
           </h1>
-          {/* 右上角树状图按钮 */}
-          <button
-            onClick={() => setLocation(`/ledger/${ledgerId}/af-invite-tree${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
-            className="p-1.5 -mr-1 rounded-full bg-white/20 active:bg-white/30 transition-colors"
-            title="邀请关系树"
-          >
-            <Network className="w-5 h-5 text-white" />
-          </button>
+          {/* 右上角树状图按钮：只有 YJH 本人、owner、管理员可见 */}
+          {canSeeInviteTree ? (
+            <button
+              onClick={() => setLocation(`/ledger/${ledgerId}/af-invite-tree${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
+              className="p-1.5 -mr-1 rounded-full bg-white/20 active:bg-white/30 transition-colors"
+              title="邀请关系树"
+            >
+              <Network className="w-5 h-5 text-white" />
+            </button>
+          ) : (
+            <div className="w-8" />
+          )}
         </div>
         {/* 专属邀请码 - 一行显示，右侧一键复制图标 */}
         <div className="px-4 pb-5 flex items-center gap-2">
