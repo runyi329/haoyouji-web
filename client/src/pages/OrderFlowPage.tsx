@@ -724,9 +724,9 @@ export default function OrderFlowPage() {
       const feeRate = Math.max(0, getFeeRate(feeTableType, order.vip_level || "普通", order.order_type === "maker" ? "maker" : "taker"));
       const fee = ep * qty * feeRate * 2;
       if (order.market_type === 'option') {
-        // 期权：用执行价作为买入均价
+        // 期权：(最新价 - 行权价) × 数量
         const sp = order.strike_price ? parseFloat(order.strike_price) : ep;
-        totalPnl += (oPrice - sp) * qty - fee;
+        totalPnl += (oPrice - sp) * qty;
       } else {
         // 合约/现货：统一用现货多单视角
         totalPnl += (oPrice - ep) * qty - fee;
