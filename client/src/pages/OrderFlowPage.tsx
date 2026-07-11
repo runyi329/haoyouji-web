@@ -130,13 +130,12 @@ function calcOrder(
     const closeFeeRate = Math.max(0, getFeeRate(feeTableType, vipLevel, orderType));
     closeFee = closeNotional * closeFeeRate;
 
-    // 期权浮动盈亏 = (最新价 - 行权价) × 数量 - 权利金
-    // 虚值时为负数（但不超过 -权利金），实值时为正数
+    // 期权浮动盈亏 = (最新价 - 行权价) × 数量
+    // 盈亏比例 = 浮动盈亏 ÷ 权利金
     if (marketType === "option") {
       const premium = order.premium ? parseFloat(order.premium) : 0;
       const strike = order.strike_price ? parseFloat(order.strike_price) : entry;
-      const rawPnl = (closePrice - strike) * qty;
-      pnl = rawPnl - premium;
+      pnl = (closePrice - strike) * qty;
       pnlPct = premium > 0 ? pnl / premium : null;
     } else {
       const rawPnl =
