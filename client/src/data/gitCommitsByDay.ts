@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-11
+// 生成时间：2026-07-12
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8315,5 +8315,11 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   "2026-07-11": [
     { date: "2026-07-10T17:47:32Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
     { date: "2026-07-11T06:15:44Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-11T10:50:39Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-11T15:12:19Z", type: "fix", cleanMessage: "期权浮动盈亏改为(最新价-行权价)×数量，不减权利金" },
+    { date: "2026-07-11T15:23:03Z", type: "fix", cleanMessage: "持仓汇总期权totalPnl同步改为(最新价-行权价)×数量，不减手续费" },
+  ],
+  "2026-07-12": [
+    { date: "2026-07-11T16:23:40Z", type: "feat", cleanMessage: "牙办网会员订阅管理 - 数据库加service_expire_at/service_plan字段，后端加getMyServiceStatus/adminSetExpire接口，前端我的页面加会员状态卡片，后台管理加到期日编辑" },
   ],
 };
