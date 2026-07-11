@@ -100,7 +100,7 @@ const SELECT_COLS = `id, tenant_id, name, short_name, tax_no, clinic_type, legal
   license_no, business_license_no, license_image, logo_image,
   established_date, scale, intro, remark,
   status, apply_user_id, apply_user_name, reject_reason, approved_by, approved_at, created_at, updated_at,
-  show_room, show_dept`;
+  show_room, show_dept, service_expire_at, service_plan`;
 
 function mapClinicRow(c: any) {
   if (!c) return null;
@@ -134,6 +134,8 @@ function mapClinicRow(c: any) {
     createdAt: c.created_at,
     showRoom: c.show_room === undefined ? true : c.show_room === 1,
     showDept: c.show_dept === undefined ? true : c.show_dept === 1,
+    serviceExpireAt: c.service_expire_at ? String(c.service_expire_at).slice(0, 10) : null,
+    servicePlan: c.service_plan || null,
   };
 }
 
@@ -611,6 +613,50 @@ export const yabanClinicRouter = router({
       await conn.execute(
         `DELETE FROM yaban_clinic_member WHERE tenant_id=? AND user_id=? AND role_key='owner'`,
         [tid, input.userId]
+      );
+      return { success: true };
+    }),
+
+  // 查询当前用户所在诊所的服务到期状态（普通用户可用）
+  getMyServiceStatus: protectedProcedure
+    .query(async ({ ctx }) => {
+      const conn = await getDbConnection();
+      if (!conn) return { found: false, expireAt: null as string | null, plan: null as string | null, daysLeft: null as number | null };
+      const [memberRows] = (await conn.execute(
+        `SELECT tenant_id FROM yaban_clinic_member WHERE user_id=? AND status='active' ORDER BY id ASC LIMIT 1`,
+        [ctx.user.id]
+      )) as any;
+      const tenantId = Number((memberRows as any[])[0]?.tenant_id || 0);
+      if (!tenantId) return { found: false, expireAt: null, plan: null, daysLeft: null };
+      const [clinicRows] = (await conn.execute(
+        `SELECT service_expire_at, service_plan FROM yaban_clinic WHERE tenant_id=? LIMIT 1`,
+        [tenantId]
+      )) as any;
+      const row = (clinicRows as any[])[0];
+      if (!row) return { found: false, expireAt: null, plan: null, daysLeft: null };
+      const expireAt = row.service_expire_at ? String(row.service_expire_at).slice(0, 10) : null;
+      let daysLeft: number | null = null;
+      if (expireAt) {
+        const diff = new Date(expireAt).getTime() - Date.now();
+        daysLeft = Math.ceil(diff / (1000 * 60 * 60 * 24));
+      }
+      return { found: true, expireAt, plan: row.service_plan || null, daysLeft };
+    }),
+
+  // 创始人设置某诊所的服务到期日期
+  adminSetExpire: protectedProcedure
+    .input(z.object({
+      clinicId: z.number().int(),
+      expireAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+      plan: z.enum(["monthly", "annual", "lifetime"]).nullable().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await assertFounder(conn, ctx);
+      await conn.execute(
+        `UPDATE yaban_clinic SET service_expire_at=?, service_plan=? WHERE id=?`,
+        [input.expireAt || null, input.plan || null, input.clinicId]
       );
       return { success: true };
     }),

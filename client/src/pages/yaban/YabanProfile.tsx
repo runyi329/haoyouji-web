@@ -27,6 +27,8 @@ import {
   Copy,
   Check,
   X,
+  CalendarDays,
+  Crown,
 } from "lucide-react";
 import QRCodeLib from "qrcode";
 import YabanTabBar from "./YabanTabBar";
@@ -178,6 +180,13 @@ export default function YabanProfile() {
   const inviteCode: string = (user as any)?.inviteCode || "";
 
   const wip = (name: string) => toast.info(`${name}功能开发中，敬请期待`);
+
+  // 服务到期状态
+  const { data: serviceStatus } = trpc.yabanClinic.getMyServiceStatus.useQuery(
+    undefined,
+    { enabled: !isCustomer }
+  );
+  const PLAN_LABEL: Record<string, string> = { monthly: "月付", annual: "年付", lifetime: "永久版" };
 
   // 资产快捷入口（积分/牙银）
   const assets: { label: string; value: string; icon: React.ReactNode; onClick: () => void }[] = [
@@ -365,6 +374,70 @@ export default function YabanProfile() {
           ))}
         </div>
       </div>
+
+      {/* 服务到期状态卡片（非顾客且已加入门店时显示） */}
+      {!isCustomer && (
+        <div className="max-w-lg mx-auto px-4 mt-3">
+          <div
+            className="rounded-xl overflow-hidden"
+            style={{
+              background: "linear-gradient(135deg, #0E5A9E 0%, #1E88D6 60%, #3BA9E0 100%)",
+              boxShadow: "0 2px 12px rgba(14,90,158,0.18)",
+            }}
+          >
+            {/* 顶部标题行 */}
+            <div className="flex items-center justify-between px-4 pt-3.5 pb-2">
+              <div className="flex items-center gap-2">
+                <Crown size={15} className="text-yellow-300" strokeWidth={1.8} />
+                <span className="text-[13px] font-bold text-white">{
+                  serviceStatus?.plan ? PLAN_LABEL[serviceStatus.plan] + "会员" : "服务订阅"
+                }</span>
+              </div>
+              {serviceStatus?.plan && (
+                <span
+                  className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                  style={{ background: "rgba(255,255,255,0.18)", color: "#FFF" }}
+                >
+                  {PLAN_LABEL[serviceStatus.plan]}
+                </span>
+              )}
+            </div>
+            {/* 分隔线 */}
+            <div style={{ height: 1, background: "rgba(255,255,255,0.15)", margin: "0 16px" }} />
+            {/* 内容行 */}
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center gap-2">
+                <CalendarDays size={15} className="text-white/70" strokeWidth={1.8} />
+                <span className="text-[12px] text-white/80">到期日期</span>
+              </div>
+              <div className="flex items-center gap-3">
+                {serviceStatus?.expireAt ? (
+                  <>
+                    <span className="text-[15px] font-bold text-white">{serviceStatus.expireAt}</span>
+                    <span
+                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                      style={{
+                        background: serviceStatus.daysLeft !== null && serviceStatus.daysLeft <= 30
+                          ? "rgba(239,68,68,0.25)" : "rgba(255,255,255,0.18)",
+                        color: serviceStatus.daysLeft !== null && serviceStatus.daysLeft <= 30
+                          ? "#FCA5A5" : "#FFF",
+                      }}
+                    >
+                      {serviceStatus.daysLeft !== null && serviceStatus.daysLeft > 0
+                        ? `还有 ${serviceStatus.daysLeft} 天`
+                        : serviceStatus.daysLeft !== null && serviceStatus.daysLeft <= 0
+                        ? "已到期"
+                        : ""}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-[13px] text-white/50">未设置</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 功能分组列表：按「医院经营」与「平台管理」两个角度分区 */}
       <div className="max-w-lg mx-auto px-4 mt-4 space-y-5">

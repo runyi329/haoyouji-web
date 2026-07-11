@@ -35,6 +35,7 @@ import {
   Pencil,
   MapPin,
   Save,
+  CalendarDays,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import ClinicForm, { ClinicFormValue, EMPTY_CLINIC, fromClinic } from "./ClinicForm";
@@ -384,6 +385,18 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
     { enabled: searching && userKw.trim().length > 0 }
   );
 
+  const [expireEdit, setExpireEdit] = useState(false);
+  const [expireDate, setExpireDate] = useState("");
+  const [expirePlan, setExpirePlan] = useState<"monthly" | "annual" | "lifetime" | "">("annual");
+  const setExpire = trpc.yabanClinic.adminSetExpire.useMutation({
+    onSuccess: () => {
+      toast.success("服务到期日已保存");
+      utils.yabanClinic.adminClinicDetail.invalidate({ clinicId });
+      setExpireEdit(false);
+    },
+    onError: (e) => toast.error(e.message || "保存失败"),
+  });
+
   const appoint = trpc.yabanClinic.adminAppointOwner.useMutation({
     onSuccess: () => {
       toast.success("已任命为院长/股东");
@@ -522,6 +535,88 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
                 </div>
               )}
             </div>
+
+            {/* 服务到期日管理（仅医院管理权限者可见） */}
+            {canManageClinic && (
+              <div className="bg-white rounded p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm font-bold text-gray-700 flex items-center gap-1">
+                    <CalendarDays className="w-4 h-4 text-[#1E88D6]" /> 服务到期日
+                  </div>
+                  {!expireEdit ? (
+                    <button
+                      onClick={() => {
+                        const cur = (d?.clinic as any)?.serviceExpireAt;
+                        setExpireDate(cur ? String(cur).slice(0, 10) : "");
+                        setExpirePlan((d?.clinic as any)?.servicePlan || "annual");
+                        setExpireEdit(true);
+                      }}
+                      className="inline-flex items-center gap-1 text-xs text-[#1E88D6] active:opacity-60"
+                    >
+                      <Pencil className="w-3.5 h-3.5" /> 设置
+                    </button>
+                  ) : (
+                    <button onClick={() => setExpireEdit(false)} className="text-xs text-gray-400 active:opacity-60">取消</button>
+                  )}
+                </div>
+                {!expireEdit ? (
+                  <div className="space-y-1.5">
+                    <div className="flex items-start gap-2 text-xs">
+                      <span className="text-gray-400 shrink-0 w-16">到期日期</span>
+                      <span className={(d?.clinic as any)?.serviceExpireAt ? "text-gray-700" : "text-gray-300"}>
+                        {(d?.clinic as any)?.serviceExpireAt ? String((d?.clinic as any).serviceExpireAt).slice(0, 10) : "未设置"}
+                      </span>
+                    </div>
+                    <div className="flex items-start gap-2 text-xs">
+                      <span className="text-gray-400 shrink-0 w-16">套餐类型</span>
+                      <span className={(d?.clinic as any)?.servicePlan ? "text-gray-700" : "text-gray-300"}>
+                        {{ monthly: "月付", annual: "年付", lifetime: "永久版" }[(d?.clinic as any)?.servicePlan as string] || "未设置"}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">到期日期</label>
+                      <input
+                        type="date"
+                        value={expireDate}
+                        onChange={(e) => setExpireDate(e.target.value)}
+                        className="w-full px-3 py-2 rounded-md border border-gray-200 text-sm focus:outline-none focus:border-[#2196C8]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">套餐类型</label>
+                      <div className="flex gap-2">
+                        {(["monthly", "annual", "lifetime"] as const).map((p) => (
+                          <button
+                            key={p}
+                            onClick={() => setExpirePlan(p)}
+                            className={`flex-1 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+                              expirePlan === p
+                                ? "bg-[#2196C8] text-white border-[#2196C8]"
+                                : "bg-white text-gray-600 border-gray-200 active:bg-gray-50"
+                            }`}
+                          >
+                            {{ monthly: "月付", annual: "年付", lifetime: "永久版" }[p]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (!expireDate) { toast.error("请选择到期日期"); return; }
+                        setExpire.mutate({ clinicId, expireAt: expireDate, plan: expirePlan || null });
+                      }}
+                      disabled={setExpire.isPending}
+                      className="w-full py-2.5 rounded bg-[#2196C8] text-white text-sm font-semibold active:bg-[#1B7FB0] disabled:opacity-60 flex items-center justify-center gap-1"
+                    >
+                      {setExpire.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} 保存到期日
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 任命院长/股东（仅医院管理权限者可见） */}
             {canManageClinic && (
