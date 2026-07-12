@@ -43,6 +43,12 @@
 }
 
 :root {
+  /* 脉动网品牌色 */
+  --brand-red: #D32F2F;
+  --brand-gold: #CBA471;
+  --bg-cream: #FAF3ED;
+  --font-sans: 'Nunito', sans-serif;
+
   --primary: var(--color-blue-700);
   --primary-foreground: var(--color-blue-50);
   --sidebar-primary: var(--color-blue-600);

@@ -1,0 +1,3624 @@
+{
+  "1600": [
+    {
+      "date": "2026-02-03",
+      "ethPrice": 2233.72,
+      "markUsd": 863.33,
+      "annualCost": 43.41,
+      "distToStrike": -633.72,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-04",
+      "ethPrice": 2148.26,
+      "markUsd": 830.3,
+      "annualCost": 43.54,
+      "distToStrike": -548.26,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-05",
+      "ethPrice": 1826.83,
+      "markUsd": 685.06,
+      "annualCost": 42.38,
+      "distToStrike": -226.83,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-06",
+      "ethPrice": 2063.38,
+      "markUsd": 773.77,
+      "annualCost": 42.51,
+      "distToStrike": -463.38,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-07",
+      "ethPrice": 2087.08,
+      "markUsd": 782.65,
+      "annualCost": 42.64,
+      "distToStrike": -487.08,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-08",
+      "ethPrice": 2089.74,
+      "markUsd": 783.65,
+      "annualCost": 42.77,
+      "distToStrike": -489.74,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-09",
+      "ethPrice": 2105.02,
+      "markUsd": 789.38,
+      "annualCost": 42.91,
+      "distToStrike": -505.02,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-10",
+      "ethPrice": 2022.67,
+      "markUsd": 735.24,
+      "annualCost": 41.72,
+      "distToStrike": -422.67,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-11",
+      "ethPrice": 1941.18,
+      "markUsd": 705.62,
+      "annualCost": 41.85,
+      "distToStrike": -341.18,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-12",
+      "ethPrice": 1947.85,
+      "markUsd": 708.04,
+      "annualCost": 41.99,
+      "distToStrike": -347.85,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-13",
+      "ethPrice": 2048.72,
+      "markUsd": 744.71,
+      "annualCost": 42.12,
+      "distToStrike": -448.72,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-14",
+      "ethPrice": 2086.59,
+      "markUsd": 758.48,
+      "annualCost": 42.25,
+      "distToStrike": -486.59,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-15",
+      "ethPrice": 1966.58,
+      "markUsd": 714.85,
+      "annualCost": 42.39,
+      "distToStrike": -366.58,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-16",
+      "ethPrice": 1998.33,
+      "markUsd": 726.39,
+      "annualCost": 42.52,
+      "distToStrike": -398.33,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-17",
+      "ethPrice": 1991.66,
+      "markUsd": 723.97,
+      "annualCost": 42.66,
+      "distToStrike": -391.66,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-18",
+      "ethPrice": 1955.91,
+      "markUsd": 710.97,
+      "annualCost": 42.8,
+      "distToStrike": -355.91,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-19",
+      "ethPrice": 1949.08,
+      "markUsd": 708.49,
+      "annualCost": 42.94,
+      "distToStrike": -349.08,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-20",
+      "ethPrice": 1968.88,
+      "markUsd": 715.69,
+      "annualCost": 43.08,
+      "distToStrike": -368.88,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-21",
+      "ethPrice": 1973.35,
+      "markUsd": 717.31,
+      "annualCost": 43.22,
+      "distToStrike": -373.35,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-22",
+      "ethPrice": 1957.82,
+      "markUsd": 711.67,
+      "annualCost": 43.36,
+      "distToStrike": -357.82,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-23",
+      "ethPrice": 1856.3,
+      "markUsd": 586.59,
+      "annualCost": 37.82,
+      "distToStrike": -256.3,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-24",
+      "ethPrice": 1851.94,
+      "markUsd": 585.21,
+      "annualCost": 37.94,
+      "distToStrike": -251.94,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-25",
+      "ethPrice": 2057.48,
+      "markUsd": 728.35,
+      "annualCost": 42.64,
+      "distToStrike": -457.48,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-26",
+      "ethPrice": 2027.68,
+      "markUsd": 717.8,
+      "annualCost": 42.78,
+      "distToStrike": -427.68,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-27",
+      "ethPrice": 1929.84,
+      "markUsd": 683.16,
+      "annualCost": 42.93,
+      "distToStrike": -329.84,
+      "strike": 1600
+    },
+    {
+      "date": "2026-02-28",
+      "ethPrice": 1964.51,
+      "markUsd": 695.44,
+      "annualCost": 43.07,
+      "distToStrike": -364.51,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-01",
+      "ethPrice": 1939.71,
+      "markUsd": 686.66,
+      "annualCost": 43.21,
+      "distToStrike": -339.71,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-02",
+      "ethPrice": 2027.35,
+      "markUsd": 717.68,
+      "annualCost": 43.36,
+      "distToStrike": -427.35,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-03",
+      "ethPrice": 1982.8,
+      "markUsd": 701.91,
+      "annualCost": 43.51,
+      "distToStrike": -382.8,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-04",
+      "ethPrice": 2127.28,
+      "markUsd": 753.06,
+      "annualCost": 43.65,
+      "distToStrike": -527.28,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-05",
+      "ethPrice": 2072.86,
+      "markUsd": 733.79,
+      "annualCost": 43.8,
+      "distToStrike": -472.86,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-06",
+      "ethPrice": 1978.68,
+      "markUsd": 700.45,
+      "annualCost": 43.95,
+      "distToStrike": -378.68,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-07",
+      "ethPrice": 1969.59,
+      "markUsd": 697.23,
+      "annualCost": 44.1,
+      "distToStrike": -369.59,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-08",
+      "ethPrice": 1937.1,
+      "markUsd": 685.73,
+      "annualCost": 44.25,
+      "distToStrike": -337.1,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-09",
+      "ethPrice": 1992.98,
+      "markUsd": 713.49,
+      "annualCost": 44.9,
+      "distToStrike": -392.98,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-10",
+      "ethPrice": 2036.51,
+      "markUsd": 727.03,
+      "annualCost": 44.93,
+      "distToStrike": -436.51,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-11",
+      "ethPrice": 2051.97,
+      "markUsd": 732.55,
+      "annualCost": 45.09,
+      "distToStrike": -451.97,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-12",
+      "ethPrice": 2073.52,
+      "markUsd": 784.83,
+      "annualCost": 47.97,
+      "distToStrike": -473.52,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-13",
+      "ethPrice": 2092.22,
+      "markUsd": 813.87,
+      "annualCost": 49.47,
+      "distToStrike": -492.22,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-14",
+      "ethPrice": 2096.16,
+      "markUsd": 765.1,
+      "annualCost": 46.58,
+      "distToStrike": -496.16,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-15",
+      "ethPrice": 2178.3,
+      "markUsd": 881.12,
+      "annualCost": 51.8,
+      "distToStrike": -578.3,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-16",
+      "ethPrice": 2352.97,
+      "markUsd": 984.72,
+      "annualCost": 53.79,
+      "distToStrike": -752.97,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-17",
+      "ethPrice": 2317.39,
+      "markUsd": 969.83,
+      "annualCost": 53.98,
+      "distToStrike": -717.39,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-18",
+      "ethPrice": 2203.39,
+      "markUsd": 911.1,
+      "annualCost": 53.52,
+      "distToStrike": -603.39,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-19",
+      "ethPrice": 2137.81,
+      "markUsd": 812.37,
+      "annualCost": 49.36,
+      "distToStrike": -537.81,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-20",
+      "ethPrice": 2146.22,
+      "markUsd": 815.56,
+      "annualCost": 49.54,
+      "distToStrike": -546.22,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-21",
+      "ethPrice": 2084.87,
+      "markUsd": 792.25,
+      "annualCost": 49.71,
+      "distToStrike": -484.87,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-22",
+      "ethPrice": 2053.89,
+      "markUsd": 780.48,
+      "annualCost": 49.89,
+      "distToStrike": -453.89,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-23",
+      "ethPrice": 2152.03,
+      "markUsd": 817.77,
+      "annualCost": 50.07,
+      "distToStrike": -552.03,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-24",
+      "ethPrice": 2156.23,
+      "markUsd": 822.6,
+      "annualCost": 50.45,
+      "distToStrike": -556.23,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-25",
+      "ethPrice": 2169.02,
+      "markUsd": 827.48,
+      "annualCost": 50.64,
+      "distToStrike": -569.02,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-26",
+      "ethPrice": 2060.43,
+      "markUsd": 741.75,
+      "annualCost": 47.96,
+      "distToStrike": -460.43,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-27",
+      "ethPrice": 1992.75,
+      "markUsd": 677.54,
+      "annualCost": 45.46,
+      "distToStrike": -392.75,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-28",
+      "ethPrice": 1994.74,
+      "markUsd": 678.21,
+      "annualCost": 45.62,
+      "distToStrike": -394.74,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-29",
+      "ethPrice": 1984.64,
+      "markUsd": 702.56,
+      "annualCost": 47.68,
+      "distToStrike": -384.64,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-30",
+      "ethPrice": 2026.48,
+      "markUsd": 717.37,
+      "annualCost": 47.86,
+      "distToStrike": -426.48,
+      "strike": 1600
+    },
+    {
+      "date": "2026-03-31",
+      "ethPrice": 2105.43,
+      "markUsd": 746.37,
+      "annualCost": 48.1,
+      "distToStrike": -505.43,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-01",
+      "ethPrice": 2140.35,
+      "markUsd": 753.4,
+      "annualCost": 47.94,
+      "distToStrike": -540.35,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-02",
+      "ethPrice": 2057.17,
+      "markUsd": 720.01,
+      "annualCost": 47.85,
+      "distToStrike": -457.17,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-03",
+      "ethPrice": 2053.83,
+      "markUsd": 718.84,
+      "annualCost": 48.03,
+      "distToStrike": -453.83,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-04",
+      "ethPrice": 2065.52,
+      "markUsd": 718.8,
+      "annualCost": 47.93,
+      "distToStrike": -465.52,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-05",
+      "ethPrice": 2110.17,
+      "markUsd": 734.34,
+      "annualCost": 48.11,
+      "distToStrike": -510.17,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-06",
+      "ethPrice": 2107.16,
+      "markUsd": 733.29,
+      "annualCost": 48.3,
+      "distToStrike": -507.16,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-07",
+      "ethPrice": 2240.01,
+      "markUsd": 790.72,
+      "annualCost": 49.18,
+      "distToStrike": -640.01,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-08",
+      "ethPrice": 2190.0,
+      "markUsd": 773.07,
+      "annualCost": 49.37,
+      "distToStrike": -590.0,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-09",
+      "ethPrice": 2190.2,
+      "markUsd": 773.14,
+      "annualCost": 49.56,
+      "distToStrike": -590.2,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-10",
+      "ethPrice": 2245.05,
+      "markUsd": 792.5,
+      "annualCost": 49.75,
+      "distToStrike": -645.05,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-11",
+      "ethPrice": 2284.99,
+      "markUsd": 806.6,
+      "annualCost": 49.94,
+      "distToStrike": -684.99,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-12",
+      "ethPrice": 2191.65,
+      "markUsd": 773.65,
+      "annualCost": 50.13,
+      "distToStrike": -591.65,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-13",
+      "ethPrice": 2369.46,
+      "markUsd": 836.42,
+      "annualCost": 50.33,
+      "distToStrike": -769.46,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-14",
+      "ethPrice": 2322.44,
+      "markUsd": 819.82,
+      "annualCost": 50.53,
+      "distToStrike": -722.44,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-15",
+      "ethPrice": 2359.95,
+      "markUsd": 833.06,
+      "annualCost": 50.73,
+      "distToStrike": -759.95,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-16",
+      "ethPrice": 2348.17,
+      "markUsd": 828.9,
+      "annualCost": 50.93,
+      "distToStrike": -748.17,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-17",
+      "ethPrice": 2419.0,
+      "markUsd": 853.91,
+      "annualCost": 51.13,
+      "distToStrike": -819.0,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-18",
+      "ethPrice": 2350.32,
+      "markUsd": 829.66,
+      "annualCost": 51.33,
+      "distToStrike": -750.32,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-19",
+      "ethPrice": 2263.27,
+      "markUsd": 798.93,
+      "annualCost": 51.54,
+      "distToStrike": -663.27,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-20",
+      "ethPrice": 2313.85,
+      "markUsd": 816.79,
+      "annualCost": 51.74,
+      "distToStrike": -713.85,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-21",
+      "ethPrice": 2327.14,
+      "markUsd": 821.48,
+      "annualCost": 51.95,
+      "distToStrike": -727.14,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-22",
+      "ethPrice": 2374.07,
+      "markUsd": 838.05,
+      "annualCost": 52.16,
+      "distToStrike": -774.07,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-23",
+      "ethPrice": 2330.26,
+      "markUsd": 822.58,
+      "annualCost": 52.38,
+      "distToStrike": -730.26,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-24",
+      "ethPrice": 2314.99,
+      "markUsd": 817.19,
+      "annualCost": 52.59,
+      "distToStrike": -714.99,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-25",
+      "ethPrice": 2319.5,
+      "markUsd": 818.78,
+      "annualCost": 52.81,
+      "distToStrike": -719.5,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-26",
+      "ethPrice": 2369.44,
+      "markUsd": 836.41,
+      "annualCost": 53.02,
+      "distToStrike": -769.44,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-27",
+      "ethPrice": 2303.67,
+      "markUsd": 813.2,
+      "annualCost": 53.24,
+      "distToStrike": -703.67,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-28",
+      "ethPrice": 2289.42,
+      "markUsd": 808.17,
+      "annualCost": 53.46,
+      "distToStrike": -689.42,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-29",
+      "ethPrice": 2252.9,
+      "markUsd": 795.27,
+      "annualCost": 53.69,
+      "distToStrike": -652.9,
+      "strike": 1600
+    },
+    {
+      "date": "2026-04-30",
+      "ethPrice": 2257.51,
+      "markUsd": 796.9,
+      "annualCost": 53.91,
+      "distToStrike": -657.51,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-01",
+      "ethPrice": 2295.63,
+      "markUsd": 810.36,
+      "annualCost": 54.14,
+      "distToStrike": -695.63,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-02",
+      "ethPrice": 2316.97,
+      "markUsd": 817.89,
+      "annualCost": 54.36,
+      "distToStrike": -716.97,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-03",
+      "ethPrice": 2322.65,
+      "markUsd": 819.9,
+      "annualCost": 54.6,
+      "distToStrike": -722.65,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-04",
+      "ethPrice": 2347.16,
+      "markUsd": 828.55,
+      "annualCost": 54.83,
+      "distToStrike": -747.16,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-05",
+      "ethPrice": 2360.77,
+      "markUsd": 833.35,
+      "annualCost": 55.06,
+      "distToStrike": -760.77,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-06",
+      "ethPrice": 2350.84,
+      "markUsd": 829.85,
+      "annualCost": 55.3,
+      "distToStrike": -750.84,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-07",
+      "ethPrice": 2291.06,
+      "markUsd": 808.74,
+      "annualCost": 55.54,
+      "distToStrike": -691.06,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-08",
+      "ethPrice": 2307.06,
+      "markUsd": 814.39,
+      "annualCost": 55.78,
+      "distToStrike": -707.06,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-09",
+      "ethPrice": 2326.44,
+      "markUsd": 821.23,
+      "annualCost": 56.02,
+      "distToStrike": -726.44,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-10",
+      "ethPrice": 2371.27,
+      "markUsd": 837.06,
+      "annualCost": 56.26,
+      "distToStrike": -771.27,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-11",
+      "ethPrice": 2339.87,
+      "markUsd": 825.97,
+      "annualCost": 56.51,
+      "distToStrike": -739.87,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-12",
+      "ethPrice": 2274.96,
+      "markUsd": 803.06,
+      "annualCost": 56.76,
+      "distToStrike": -674.96,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-13",
+      "ethPrice": 2258.65,
+      "markUsd": 813.11,
+      "annualCost": 58.14,
+      "distToStrike": -658.65,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-14",
+      "ethPrice": 2283.25,
+      "markUsd": 821.97,
+      "annualCost": 58.4,
+      "distToStrike": -683.25,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-15",
+      "ethPrice": 2224.66,
+      "markUsd": 800.88,
+      "annualCost": 58.66,
+      "distToStrike": -624.66,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-16",
+      "ethPrice": 2180.77,
+      "markUsd": 752.37,
+      "annualCost": 56.47,
+      "distToStrike": -580.77,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-17",
+      "ethPrice": 2131.0,
+      "markUsd": 735.19,
+      "annualCost": 56.72,
+      "distToStrike": -531.0,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-18",
+      "ethPrice": 2130.08,
+      "markUsd": 734.88,
+      "annualCost": 56.98,
+      "distToStrike": -530.08,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-19",
+      "ethPrice": 2111.93,
+      "markUsd": 728.62,
+      "annualCost": 57.24,
+      "distToStrike": -511.93,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-20",
+      "ethPrice": 2129.44,
+      "markUsd": 696.33,
+      "annualCost": 54.5,
+      "distToStrike": -529.44,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-21",
+      "ethPrice": 2133.76,
+      "markUsd": 697.74,
+      "annualCost": 54.75,
+      "distToStrike": -533.76,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-22",
+      "ethPrice": 2065.85,
+      "markUsd": 675.53,
+      "annualCost": 55.0,
+      "distToStrike": -465.85,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-23",
+      "ethPrice": 2117.68,
+      "markUsd": 692.48,
+      "annualCost": 55.26,
+      "distToStrike": -517.68,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-24",
+      "ethPrice": 2099.85,
+      "markUsd": 686.65,
+      "annualCost": 55.51,
+      "distToStrike": -499.85,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-25",
+      "ethPrice": 2113.01,
+      "markUsd": 690.95,
+      "annualCost": 55.77,
+      "distToStrike": -513.01,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-26",
+      "ethPrice": 2073.77,
+      "markUsd": 678.12,
+      "annualCost": 56.04,
+      "distToStrike": -473.77,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-27",
+      "ethPrice": 2024.84,
+      "markUsd": 662.12,
+      "annualCost": 56.3,
+      "distToStrike": -424.84,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-28",
+      "ethPrice": 2009.9,
+      "markUsd": 657.24,
+      "annualCost": 56.57,
+      "distToStrike": -409.9,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-29",
+      "ethPrice": 2014.54,
+      "markUsd": 658.75,
+      "annualCost": 56.84,
+      "distToStrike": -414.54,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-30",
+      "ethPrice": 2022.44,
+      "markUsd": 661.34,
+      "annualCost": 57.11,
+      "distToStrike": -422.44,
+      "strike": 1600
+    },
+    {
+      "date": "2026-05-31",
+      "ethPrice": 2007.01,
+      "markUsd": 656.29,
+      "annualCost": 57.38,
+      "distToStrike": -407.01,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-01",
+      "ethPrice": 2006.73,
+      "markUsd": 656.2,
+      "annualCost": 57.66,
+      "distToStrike": -406.73,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-02",
+      "ethPrice": 1859.84,
+      "markUsd": 608.17,
+      "annualCost": 57.94,
+      "distToStrike": -259.84,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-03",
+      "ethPrice": 1813.05,
+      "markUsd": 424.25,
+      "annualCost": 41.66,
+      "distToStrike": -213.05,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-04",
+      "ethPrice": 1770.77,
+      "markUsd": 339.99,
+      "annualCost": 34.35,
+      "distToStrike": -170.77,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-05",
+      "ethPrice": 1583.4,
+      "markUsd": 297.68,
+      "annualCost": 33.8,
+      "distToStrike": 16.6,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-06",
+      "ethPrice": 1569.69,
+      "markUsd": 271.56,
+      "annualCost": 31.26,
+      "distToStrike": 30.31,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-07",
+      "ethPrice": 1690.51,
+      "markUsd": 292.46,
+      "annualCost": 31.42,
+      "distToStrike": -90.51,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-08",
+      "ethPrice": 1690.49,
+      "markUsd": 347.4,
+      "annualCost": 37.5,
+      "distToStrike": -90.49,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-09",
+      "ethPrice": 1639.52,
+      "markUsd": 336.92,
+      "annualCost": 37.69,
+      "distToStrike": -39.52,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-10",
+      "ethPrice": 1621.59,
+      "markUsd": 333.24,
+      "annualCost": 37.88,
+      "distToStrike": -21.59,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-11",
+      "ethPrice": 1673.46,
+      "markUsd": 343.9,
+      "annualCost": 38.07,
+      "distToStrike": -73.46,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-12",
+      "ethPrice": 1666.41,
+      "markUsd": 342.45,
+      "annualCost": 38.27,
+      "distToStrike": -66.41,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-13",
+      "ethPrice": 1681.18,
+      "markUsd": 332.87,
+      "annualCost": 37.06,
+      "distToStrike": -81.18,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-14",
+      "ethPrice": 1725.62,
+      "markUsd": 339.95,
+      "annualCost": 37.06,
+      "distToStrike": -125.62,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-15",
+      "ethPrice": 1796.13,
+      "markUsd": 414.91,
+      "annualCost": 43.69,
+      "distToStrike": -196.13,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-16",
+      "ethPrice": 1792.99,
+      "markUsd": 414.18,
+      "annualCost": 43.91,
+      "distToStrike": -192.99,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-17",
+      "ethPrice": 1750.6,
+      "markUsd": 404.39,
+      "annualCost": 44.14,
+      "distToStrike": -150.6,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-18",
+      "ethPrice": 1711.11,
+      "markUsd": 395.27,
+      "annualCost": 44.38,
+      "distToStrike": -111.11,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-19",
+      "ethPrice": 1711.19,
+      "markUsd": 347.37,
+      "annualCost": 39.2,
+      "distToStrike": -111.19,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-20",
+      "ethPrice": 1741.08,
+      "markUsd": 361.27,
+      "annualCost": 40.29,
+      "distToStrike": -141.08,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-21",
+      "ethPrice": 1706.94,
+      "markUsd": 354.19,
+      "annualCost": 40.5,
+      "distToStrike": -106.94,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-22",
+      "ethPrice": 1728.19,
+      "markUsd": 371.56,
+      "annualCost": 42.19,
+      "distToStrike": -128.19,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-23",
+      "ethPrice": 1667.13,
+      "markUsd": 358.43,
+      "annualCost": 42.42,
+      "distToStrike": -67.13,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-24",
+      "ethPrice": 1622.17,
+      "markUsd": 271.71,
+      "annualCost": 33.23,
+      "distToStrike": -22.17,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-25",
+      "ethPrice": 1567.84,
+      "markUsd": 235.18,
+      "annualCost": 29.92,
+      "distToStrike": 32.16,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-26",
+      "ethPrice": 1578.68,
+      "markUsd": 257.32,
+      "annualCost": 32.69,
+      "distToStrike": 21.32,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-27",
+      "ethPrice": 1573.99,
+      "markUsd": 256.56,
+      "annualCost": 32.87,
+      "distToStrike": 26.01,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-28",
+      "ethPrice": 1571.96,
+      "markUsd": 256.23,
+      "annualCost": 33.05,
+      "distToStrike": 28.04,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-29",
+      "ethPrice": 1613.07,
+      "markUsd": 262.93,
+      "annualCost": 33.24,
+      "distToStrike": -13.07,
+      "strike": 1600
+    },
+    {
+      "date": "2026-06-30",
+      "ethPrice": 1572.01,
+      "markUsd": 246.81,
+      "annualCost": 32.19,
+      "distToStrike": 27.99,
+      "strike": 1600
+    },
+    {
+      "date": "2026-07-01",
+      "ethPrice": 1609.58,
+      "markUsd": 273.63,
+      "annualCost": 35.06,
+      "distToStrike": -9.58,
+      "strike": 1600
+    },
+    {
+      "date": "2026-07-02",
+      "ethPrice": 1700.57,
+      "markUsd": 289.1,
+      "annualCost": 35.26,
+      "distToStrike": -100.57,
+      "strike": 1600
+    },
+    {
+      "date": "2026-07-03",
+      "ethPrice": 1758.21,
+      "markUsd": 342.85,
+      "annualCost": 40.67,
+      "distToStrike": -158.21,
+      "strike": 1600
+    },
+    {
+      "date": "2026-07-04",
+      "ethPrice": 1780.64,
+      "markUsd": 377.5,
+      "annualCost": 44.47,
+      "distToStrike": -180.64,
+      "strike": 1600
+    },
+    {
+      "date": "2026-07-05",
+      "ethPrice": 1785.65,
+      "markUsd": 378.56,
+      "annualCost": 44.73,
+      "distToStrike": -185.65,
+      "strike": 1600
+    },
+    {
+      "date": "2026-07-06",
+      "ethPrice": 1799.56,
+      "markUsd": 381.51,
+      "annualCost": 44.99,
+      "distToStrike": -199.56,
+      "strike": 1600
+    },
+    {
+      "date": "2026-07-07",
+      "ethPrice": 1771.45,
+      "markUsd": 375.55,
+      "annualCost": 45.25,
+      "distToStrike": -171.45,
+      "strike": 1600
+    },
+    {
+      "date": "2026-07-08",
+      "ethPrice": 1743.54,
+      "markUsd": 369.63,
+      "annualCost": 45.52,
+      "distToStrike": -143.54,
+      "strike": 1600
+    },
+    {
+      "date": "2026-07-09",
+      "ethPrice": 1745.16,
+      "markUsd": 369.97,
+      "annualCost": 45.79,
+      "distToStrike": -145.16,
+      "strike": 1600
+    },
+    {
+      "date": "2026-07-10",
+      "ethPrice": 1788.4,
+      "markUsd": 379.14,
+      "annualCost": 46.06,
+      "distToStrike": -188.4,
+      "strike": 1600
+    }
+  ],
+  "1700": [
+    {
+      "date": "2026-02-23",
+      "ethPrice": 1856.3,
+      "markUsd": 553.18,
+      "annualCost": 35.66,
+      "distToStrike": -156.3,
+      "strike": 1700
+    },
+    {
+      "date": "2026-02-24",
+      "ethPrice": 1851.94,
+      "markUsd": 551.88,
+      "annualCost": 35.78,
+      "distToStrike": -151.94,
+      "strike": 1700
+    },
+    {
+      "date": "2026-02-25",
+      "ethPrice": 2057.48,
+      "markUsd": 613.13,
+      "annualCost": 35.9,
+      "distToStrike": -357.48,
+      "strike": 1700
+    },
+    {
+      "date": "2026-02-26",
+      "ethPrice": 2027.68,
+      "markUsd": 604.25,
+      "annualCost": 36.02,
+      "distToStrike": -327.68,
+      "strike": 1700
+    },
+    {
+      "date": "2026-02-27",
+      "ethPrice": 1929.84,
+      "markUsd": 575.09,
+      "annualCost": 36.14,
+      "distToStrike": -229.84,
+      "strike": 1700
+    },
+    {
+      "date": "2026-02-28",
+      "ethPrice": 1964.51,
+      "markUsd": 583.46,
+      "annualCost": 36.13,
+      "distToStrike": -264.51,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-01",
+      "ethPrice": 1939.71,
+      "markUsd": 576.09,
+      "annualCost": 36.26,
+      "distToStrike": -239.71,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-02",
+      "ethPrice": 2027.35,
+      "markUsd": 602.12,
+      "annualCost": 36.38,
+      "distToStrike": -327.35,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-03",
+      "ethPrice": 1982.8,
+      "markUsd": 588.89,
+      "annualCost": 36.5,
+      "distToStrike": -282.8,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-04",
+      "ethPrice": 2127.28,
+      "markUsd": 631.8,
+      "annualCost": 36.62,
+      "distToStrike": -427.28,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-05",
+      "ethPrice": 2072.86,
+      "markUsd": 615.64,
+      "annualCost": 36.75,
+      "distToStrike": -372.86,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-06",
+      "ethPrice": 1978.68,
+      "markUsd": 626.25,
+      "annualCost": 39.29,
+      "distToStrike": -278.68,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-07",
+      "ethPrice": 1969.59,
+      "markUsd": 628.3,
+      "annualCost": 39.74,
+      "distToStrike": -269.59,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-08",
+      "ethPrice": 1937.1,
+      "markUsd": 617.93,
+      "annualCost": 39.88,
+      "distToStrike": -237.1,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-09",
+      "ethPrice": 1992.98,
+      "markUsd": 635.76,
+      "annualCost": 40.01,
+      "distToStrike": -292.98,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-10",
+      "ethPrice": 2036.51,
+      "markUsd": 649.65,
+      "annualCost": 40.15,
+      "distToStrike": -336.51,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-11",
+      "ethPrice": 2051.97,
+      "markUsd": 654.58,
+      "annualCost": 40.29,
+      "distToStrike": -351.97,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-12",
+      "ethPrice": 2073.52,
+      "markUsd": 661.45,
+      "annualCost": 40.43,
+      "distToStrike": -373.52,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-13",
+      "ethPrice": 2092.22,
+      "markUsd": 739.6,
+      "annualCost": 44.96,
+      "distToStrike": -392.22,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-14",
+      "ethPrice": 2096.16,
+      "markUsd": 740.99,
+      "annualCost": 45.11,
+      "distToStrike": -396.16,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-15",
+      "ethPrice": 2178.3,
+      "markUsd": 770.03,
+      "annualCost": 45.27,
+      "distToStrike": -478.3,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-16",
+      "ethPrice": 2352.97,
+      "markUsd": 831.77,
+      "annualCost": 45.43,
+      "distToStrike": -652.97,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-17",
+      "ethPrice": 2317.39,
+      "markUsd": 894.51,
+      "annualCost": 49.78,
+      "distToStrike": -617.39,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-18",
+      "ethPrice": 2203.39,
+      "markUsd": 850.51,
+      "annualCost": 49.96,
+      "distToStrike": -503.39,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-19",
+      "ethPrice": 2137.81,
+      "markUsd": 825.19,
+      "annualCost": 50.14,
+      "distToStrike": -437.81,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-20",
+      "ethPrice": 2146.22,
+      "markUsd": 828.44,
+      "annualCost": 50.32,
+      "distToStrike": -446.22,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-21",
+      "ethPrice": 2084.87,
+      "markUsd": 804.76,
+      "annualCost": 50.5,
+      "distToStrike": -384.87,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-22",
+      "ethPrice": 2053.89,
+      "markUsd": 792.8,
+      "annualCost": 50.68,
+      "distToStrike": -353.89,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-23",
+      "ethPrice": 2152.03,
+      "markUsd": 830.68,
+      "annualCost": 50.86,
+      "distToStrike": -452.03,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-24",
+      "ethPrice": 2156.23,
+      "markUsd": 832.3,
+      "annualCost": 51.05,
+      "distToStrike": -456.23,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-25",
+      "ethPrice": 2169.02,
+      "markUsd": 837.24,
+      "annualCost": 51.23,
+      "distToStrike": -469.02,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-26",
+      "ethPrice": 2060.43,
+      "markUsd": 795.33,
+      "annualCost": 51.42,
+      "distToStrike": -360.43,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-27",
+      "ethPrice": 1992.75,
+      "markUsd": 769.2,
+      "annualCost": 51.61,
+      "distToStrike": -292.75,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-28",
+      "ethPrice": 1994.74,
+      "markUsd": 769.97,
+      "annualCost": 51.8,
+      "distToStrike": -294.74,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-29",
+      "ethPrice": 1984.64,
+      "markUsd": 766.07,
+      "annualCost": 51.99,
+      "distToStrike": -284.64,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-30",
+      "ethPrice": 2026.48,
+      "markUsd": 782.22,
+      "annualCost": 52.18,
+      "distToStrike": -326.48,
+      "strike": 1700
+    },
+    {
+      "date": "2026-03-31",
+      "ethPrice": 2105.43,
+      "markUsd": 812.7,
+      "annualCost": 52.38,
+      "distToStrike": -405.43,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-01",
+      "ethPrice": 2140.35,
+      "markUsd": 826.18,
+      "annualCost": 52.57,
+      "distToStrike": -440.35,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-02",
+      "ethPrice": 2057.17,
+      "markUsd": 794.07,
+      "annualCost": 52.77,
+      "distToStrike": -357.17,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-03",
+      "ethPrice": 2053.83,
+      "markUsd": 792.78,
+      "annualCost": 52.97,
+      "distToStrike": -353.83,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-04",
+      "ethPrice": 2065.52,
+      "markUsd": 797.29,
+      "annualCost": 53.17,
+      "distToStrike": -365.52,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-05",
+      "ethPrice": 2110.17,
+      "markUsd": 814.53,
+      "annualCost": 53.37,
+      "distToStrike": -410.17,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-06",
+      "ethPrice": 2107.16,
+      "markUsd": 813.36,
+      "annualCost": 53.57,
+      "distToStrike": -407.16,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-07",
+      "ethPrice": 2240.01,
+      "markUsd": 864.64,
+      "annualCost": 53.77,
+      "distToStrike": -540.01,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-08",
+      "ethPrice": 2190.0,
+      "markUsd": 845.34,
+      "annualCost": 53.98,
+      "distToStrike": -490.0,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-09",
+      "ethPrice": 2190.2,
+      "markUsd": 742.48,
+      "annualCost": 47.59,
+      "distToStrike": -490.2,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-10",
+      "ethPrice": 2245.05,
+      "markUsd": 761.07,
+      "annualCost": 47.77,
+      "distToStrike": -545.05,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-11",
+      "ethPrice": 2284.99,
+      "markUsd": 774.61,
+      "annualCost": 47.96,
+      "distToStrike": -584.99,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-12",
+      "ethPrice": 2191.65,
+      "markUsd": 742.97,
+      "annualCost": 48.15,
+      "distToStrike": -491.65,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-13",
+      "ethPrice": 2369.46,
+      "markUsd": 803.25,
+      "annualCost": 48.33,
+      "distToStrike": -669.46,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-14",
+      "ethPrice": 2322.44,
+      "markUsd": 787.31,
+      "annualCost": 48.52,
+      "distToStrike": -622.44,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-15",
+      "ethPrice": 2359.95,
+      "markUsd": 800.02,
+      "annualCost": 48.71,
+      "distToStrike": -659.95,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-16",
+      "ethPrice": 2348.17,
+      "markUsd": 796.03,
+      "annualCost": 48.91,
+      "distToStrike": -648.17,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-17",
+      "ethPrice": 2419.0,
+      "markUsd": 820.04,
+      "annualCost": 49.1,
+      "distToStrike": -719.0,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-18",
+      "ethPrice": 2350.32,
+      "markUsd": 796.76,
+      "annualCost": 49.3,
+      "distToStrike": -650.32,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-19",
+      "ethPrice": 2263.27,
+      "markUsd": 767.25,
+      "annualCost": 49.49,
+      "distToStrike": -563.27,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-20",
+      "ethPrice": 2313.85,
+      "markUsd": 784.4,
+      "annualCost": 49.69,
+      "distToStrike": -613.85,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-21",
+      "ethPrice": 2327.14,
+      "markUsd": 788.9,
+      "annualCost": 49.89,
+      "distToStrike": -627.14,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-22",
+      "ethPrice": 2374.07,
+      "markUsd": 804.81,
+      "annualCost": 50.1,
+      "distToStrike": -674.07,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-23",
+      "ethPrice": 2330.26,
+      "markUsd": 789.96,
+      "annualCost": 50.3,
+      "distToStrike": -630.26,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-24",
+      "ethPrice": 2314.99,
+      "markUsd": 784.78,
+      "annualCost": 50.5,
+      "distToStrike": -614.99,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-25",
+      "ethPrice": 2319.5,
+      "markUsd": 786.31,
+      "annualCost": 50.71,
+      "distToStrike": -619.5,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-26",
+      "ethPrice": 2369.44,
+      "markUsd": 803.24,
+      "annualCost": 50.92,
+      "distToStrike": -669.44,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-27",
+      "ethPrice": 2303.67,
+      "markUsd": 780.94,
+      "annualCost": 51.13,
+      "distToStrike": -603.67,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-28",
+      "ethPrice": 2289.42,
+      "markUsd": 776.11,
+      "annualCost": 51.34,
+      "distToStrike": -589.42,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-29",
+      "ethPrice": 2252.9,
+      "markUsd": 763.73,
+      "annualCost": 51.56,
+      "distToStrike": -552.9,
+      "strike": 1700
+    },
+    {
+      "date": "2026-04-30",
+      "ethPrice": 2257.51,
+      "markUsd": 765.3,
+      "annualCost": 51.77,
+      "distToStrike": -557.51,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-01",
+      "ethPrice": 2295.63,
+      "markUsd": 778.22,
+      "annualCost": 51.99,
+      "distToStrike": -595.63,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-02",
+      "ethPrice": 2316.97,
+      "markUsd": 785.45,
+      "annualCost": 52.21,
+      "distToStrike": -616.97,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-03",
+      "ethPrice": 2322.65,
+      "markUsd": 787.38,
+      "annualCost": 52.43,
+      "distToStrike": -622.65,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-04",
+      "ethPrice": 2347.16,
+      "markUsd": 795.69,
+      "annualCost": 52.65,
+      "distToStrike": -647.16,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-05",
+      "ethPrice": 2360.77,
+      "markUsd": 800.3,
+      "annualCost": 52.88,
+      "distToStrike": -660.77,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-06",
+      "ethPrice": 2350.84,
+      "markUsd": 796.93,
+      "annualCost": 53.11,
+      "distToStrike": -650.84,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-07",
+      "ethPrice": 2291.06,
+      "markUsd": 776.67,
+      "annualCost": 53.33,
+      "distToStrike": -591.06,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-08",
+      "ethPrice": 2307.06,
+      "markUsd": 782.09,
+      "annualCost": 53.56,
+      "distToStrike": -607.06,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-09",
+      "ethPrice": 2326.44,
+      "markUsd": 788.66,
+      "annualCost": 53.8,
+      "distToStrike": -626.44,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-10",
+      "ethPrice": 2371.27,
+      "markUsd": 803.86,
+      "annualCost": 54.03,
+      "distToStrike": -671.27,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-11",
+      "ethPrice": 2339.87,
+      "markUsd": 793.22,
+      "annualCost": 54.27,
+      "distToStrike": -639.87,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-12",
+      "ethPrice": 2274.96,
+      "markUsd": 771.21,
+      "annualCost": 54.51,
+      "distToStrike": -574.96,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-13",
+      "ethPrice": 2258.65,
+      "markUsd": 765.68,
+      "annualCost": 54.75,
+      "distToStrike": -558.65,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-14",
+      "ethPrice": 2283.25,
+      "markUsd": 774.02,
+      "annualCost": 54.99,
+      "distToStrike": -583.25,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-15",
+      "ethPrice": 2224.66,
+      "markUsd": 754.16,
+      "annualCost": 55.24,
+      "distToStrike": -524.66,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-16",
+      "ethPrice": 2180.77,
+      "markUsd": 677.13,
+      "annualCost": 50.82,
+      "distToStrike": -480.77,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-17",
+      "ethPrice": 2131.0,
+      "markUsd": 661.68,
+      "annualCost": 51.05,
+      "distToStrike": -431.0,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-18",
+      "ethPrice": 2130.08,
+      "markUsd": 661.39,
+      "annualCost": 51.28,
+      "distToStrike": -430.08,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-19",
+      "ethPrice": 2111.93,
+      "markUsd": 655.75,
+      "annualCost": 51.51,
+      "distToStrike": -411.93,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-20",
+      "ethPrice": 2129.44,
+      "markUsd": 661.19,
+      "annualCost": 51.75,
+      "distToStrike": -429.44,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-21",
+      "ethPrice": 2133.76,
+      "markUsd": 662.53,
+      "annualCost": 51.99,
+      "distToStrike": -433.76,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-22",
+      "ethPrice": 2065.85,
+      "markUsd": 641.45,
+      "annualCost": 52.23,
+      "distToStrike": -365.85,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-23",
+      "ethPrice": 2117.68,
+      "markUsd": 657.54,
+      "annualCost": 52.47,
+      "distToStrike": -417.68,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-24",
+      "ethPrice": 2099.85,
+      "markUsd": 652.0,
+      "annualCost": 52.71,
+      "distToStrike": -399.85,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-25",
+      "ethPrice": 2113.01,
+      "markUsd": 656.09,
+      "annualCost": 52.96,
+      "distToStrike": -413.01,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-26",
+      "ethPrice": 2073.77,
+      "markUsd": 643.91,
+      "annualCost": 53.21,
+      "distToStrike": -373.77,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-27",
+      "ethPrice": 2024.84,
+      "markUsd": 628.71,
+      "annualCost": 53.46,
+      "distToStrike": -324.84,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-28",
+      "ethPrice": 2009.9,
+      "markUsd": 624.07,
+      "annualCost": 53.71,
+      "distToStrike": -309.9,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-29",
+      "ethPrice": 2014.54,
+      "markUsd": 525.79,
+      "annualCost": 45.36,
+      "distToStrike": -314.54,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-30",
+      "ethPrice": 2022.44,
+      "markUsd": 527.86,
+      "annualCost": 45.58,
+      "distToStrike": -322.44,
+      "strike": 1700
+    },
+    {
+      "date": "2026-05-31",
+      "ethPrice": 2007.01,
+      "markUsd": 523.83,
+      "annualCost": 45.8,
+      "distToStrike": -307.01,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-01",
+      "ethPrice": 2006.73,
+      "markUsd": 523.76,
+      "annualCost": 46.02,
+      "distToStrike": -306.73,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-02",
+      "ethPrice": 1859.84,
+      "markUsd": 485.42,
+      "annualCost": 46.25,
+      "distToStrike": -159.84,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-03",
+      "ethPrice": 1813.05,
+      "markUsd": 473.21,
+      "annualCost": 46.47,
+      "distToStrike": -113.05,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-04",
+      "ethPrice": 1770.77,
+      "markUsd": 462.17,
+      "annualCost": 46.7,
+      "distToStrike": -70.77,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-05",
+      "ethPrice": 1583.4,
+      "markUsd": 234.34,
+      "annualCost": 26.61,
+      "distToStrike": 116.6,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-06",
+      "ethPrice": 1569.69,
+      "markUsd": 250.37,
+      "annualCost": 28.82,
+      "distToStrike": 130.31,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-07",
+      "ethPrice": 1690.51,
+      "markUsd": 279.78,
+      "annualCost": 30.05,
+      "distToStrike": 9.49,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-08",
+      "ethPrice": 1690.49,
+      "markUsd": 279.78,
+      "annualCost": 30.2,
+      "distToStrike": 9.51,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-09",
+      "ethPrice": 1639.52,
+      "markUsd": 271.34,
+      "annualCost": 30.36,
+      "distToStrike": 60.48,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-10",
+      "ethPrice": 1621.59,
+      "markUsd": 268.37,
+      "annualCost": 30.51,
+      "distToStrike": 78.41,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-11",
+      "ethPrice": 1673.46,
+      "markUsd": 276.96,
+      "annualCost": 30.66,
+      "distToStrike": 26.54,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-12",
+      "ethPrice": 1666.41,
+      "markUsd": 275.79,
+      "annualCost": 30.82,
+      "distToStrike": 33.59,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-13",
+      "ethPrice": 1681.18,
+      "markUsd": 278.24,
+      "annualCost": 30.98,
+      "distToStrike": 18.82,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-14",
+      "ethPrice": 1725.62,
+      "markUsd": 285.59,
+      "annualCost": 31.14,
+      "distToStrike": -25.62,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-15",
+      "ethPrice": 1796.13,
+      "markUsd": 297.26,
+      "annualCost": 31.3,
+      "distToStrike": -96.13,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-16",
+      "ethPrice": 1792.99,
+      "markUsd": 296.74,
+      "annualCost": 31.46,
+      "distToStrike": -92.99,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-17",
+      "ethPrice": 1750.6,
+      "markUsd": 289.72,
+      "annualCost": 31.63,
+      "distToStrike": -50.6,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-18",
+      "ethPrice": 1711.11,
+      "markUsd": 290.89,
+      "annualCost": 32.66,
+      "distToStrike": -11.11,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-19",
+      "ethPrice": 1711.19,
+      "markUsd": 290.9,
+      "annualCost": 32.83,
+      "distToStrike": -11.19,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-20",
+      "ethPrice": 1741.08,
+      "markUsd": 295.98,
+      "annualCost": 33.01,
+      "distToStrike": -41.08,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-21",
+      "ethPrice": 1706.94,
+      "markUsd": 290.18,
+      "annualCost": 33.18,
+      "distToStrike": -6.94,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-22",
+      "ethPrice": 1728.19,
+      "markUsd": 284.29,
+      "annualCost": 32.28,
+      "distToStrike": -28.19,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-23",
+      "ethPrice": 1667.13,
+      "markUsd": 274.24,
+      "annualCost": 32.46,
+      "distToStrike": 32.87,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-24",
+      "ethPrice": 1622.17,
+      "markUsd": 230.35,
+      "annualCost": 28.17,
+      "distToStrike": 77.83,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-25",
+      "ethPrice": 1567.84,
+      "markUsd": 222.63,
+      "annualCost": 28.32,
+      "distToStrike": 132.16,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-26",
+      "ethPrice": 1578.68,
+      "markUsd": 224.17,
+      "annualCost": 28.48,
+      "distToStrike": 121.32,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-27",
+      "ethPrice": 1573.99,
+      "markUsd": 223.51,
+      "annualCost": 28.64,
+      "distToStrike": 126.01,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-28",
+      "ethPrice": 1571.96,
+      "markUsd": 223.22,
+      "annualCost": 28.79,
+      "distToStrike": 128.04,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-29",
+      "ethPrice": 1613.07,
+      "markUsd": 220.99,
+      "annualCost": 27.94,
+      "distToStrike": 86.93,
+      "strike": 1700
+    },
+    {
+      "date": "2026-06-30",
+      "ethPrice": 1572.01,
+      "markUsd": 215.37,
+      "annualCost": 28.09,
+      "distToStrike": 127.99,
+      "strike": 1700
+    },
+    {
+      "date": "2026-07-01",
+      "ethPrice": 1609.58,
+      "markUsd": 224.54,
+      "annualCost": 28.77,
+      "distToStrike": 90.42,
+      "strike": 1700
+    },
+    {
+      "date": "2026-07-02",
+      "ethPrice": 1700.57,
+      "markUsd": 254.24,
+      "annualCost": 31.0,
+      "distToStrike": -0.57,
+      "strike": 1700
+    },
+    {
+      "date": "2026-07-03",
+      "ethPrice": 1758.21,
+      "markUsd": 298.9,
+      "annualCost": 35.46,
+      "distToStrike": -58.21,
+      "strike": 1700
+    },
+    {
+      "date": "2026-07-04",
+      "ethPrice": 1780.64,
+      "markUsd": 302.71,
+      "annualCost": 35.66,
+      "distToStrike": -80.64,
+      "strike": 1700
+    },
+    {
+      "date": "2026-07-05",
+      "ethPrice": 1785.65,
+      "markUsd": 303.56,
+      "annualCost": 35.87,
+      "distToStrike": -85.65,
+      "strike": 1700
+    },
+    {
+      "date": "2026-07-06",
+      "ethPrice": 1799.56,
+      "markUsd": 305.93,
+      "annualCost": 36.08,
+      "distToStrike": -99.56,
+      "strike": 1700
+    },
+    {
+      "date": "2026-07-07",
+      "ethPrice": 1771.45,
+      "markUsd": 301.15,
+      "annualCost": 36.29,
+      "distToStrike": -71.45,
+      "strike": 1700
+    },
+    {
+      "date": "2026-07-08",
+      "ethPrice": 1743.54,
+      "markUsd": 290.3,
+      "annualCost": 35.75,
+      "distToStrike": -43.54,
+      "strike": 1700
+    },
+    {
+      "date": "2026-07-09",
+      "ethPrice": 1745.16,
+      "markUsd": 287.08,
+      "annualCost": 35.53,
+      "distToStrike": -45.16,
+      "strike": 1700
+    },
+    {
+      "date": "2026-07-10",
+      "ethPrice": 1788.4,
+      "markUsd": 294.19,
+      "annualCost": 35.74,
+      "distToStrike": -88.4,
+      "strike": 1700
+    }
+  ],
+  "1800": [
+    {
+      "date": "2026-02-05",
+      "ethPrice": 1826.83,
+      "markUsd": 548.05,
+      "annualCost": 33.9,
+      "distToStrike": -26.83,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-06",
+      "ethPrice": 2063.38,
+      "markUsd": 664.41,
+      "annualCost": 36.5,
+      "distToStrike": -263.38,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-07",
+      "ethPrice": 2087.08,
+      "markUsd": 672.04,
+      "annualCost": 36.61,
+      "distToStrike": -287.08,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-08",
+      "ethPrice": 2089.74,
+      "markUsd": 672.9,
+      "annualCost": 36.73,
+      "distToStrike": -289.74,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-09",
+      "ethPrice": 2105.02,
+      "markUsd": 677.82,
+      "annualCost": 36.84,
+      "distToStrike": -305.02,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-10",
+      "ethPrice": 2022.67,
+      "markUsd": 632.08,
+      "annualCost": 35.87,
+      "distToStrike": -222.67,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-11",
+      "ethPrice": 1941.18,
+      "markUsd": 577.5,
+      "annualCost": 34.25,
+      "distToStrike": -141.18,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-12",
+      "ethPrice": 1947.85,
+      "markUsd": 579.49,
+      "annualCost": 34.36,
+      "distToStrike": -147.85,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-13",
+      "ethPrice": 2048.72,
+      "markUsd": 609.49,
+      "annualCost": 34.47,
+      "distToStrike": -248.72,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-14",
+      "ethPrice": 2086.59,
+      "markUsd": 620.76,
+      "annualCost": 34.58,
+      "distToStrike": -286.59,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-15",
+      "ethPrice": 1966.58,
+      "markUsd": 585.06,
+      "annualCost": 34.69,
+      "distToStrike": -166.58,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-16",
+      "ethPrice": 1998.33,
+      "markUsd": 594.5,
+      "annualCost": 34.8,
+      "distToStrike": -198.33,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-17",
+      "ethPrice": 1991.66,
+      "markUsd": 584.55,
+      "annualCost": 34.45,
+      "distToStrike": -191.66,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-18",
+      "ethPrice": 1955.91,
+      "markUsd": 574.06,
+      "annualCost": 34.56,
+      "distToStrike": -155.91,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-19",
+      "ethPrice": 1949.08,
+      "markUsd": 555.49,
+      "annualCost": 33.67,
+      "distToStrike": -149.08,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-20",
+      "ethPrice": 1968.88,
+      "markUsd": 561.13,
+      "annualCost": 33.77,
+      "distToStrike": -168.88,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-21",
+      "ethPrice": 1973.35,
+      "markUsd": 562.4,
+      "annualCost": 33.88,
+      "distToStrike": -173.35,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-22",
+      "ethPrice": 1957.82,
+      "markUsd": 529.59,
+      "annualCost": 32.27,
+      "distToStrike": -157.82,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-23",
+      "ethPrice": 1856.3,
+      "markUsd": 486.35,
+      "annualCost": 31.35,
+      "distToStrike": -56.3,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-24",
+      "ethPrice": 1851.94,
+      "markUsd": 481.5,
+      "annualCost": 31.22,
+      "distToStrike": -51.94,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-25",
+      "ethPrice": 2057.48,
+      "markUsd": 534.94,
+      "annualCost": 31.32,
+      "distToStrike": -257.48,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-26",
+      "ethPrice": 2027.68,
+      "markUsd": 527.2,
+      "annualCost": 31.42,
+      "distToStrike": -227.68,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-27",
+      "ethPrice": 1929.84,
+      "markUsd": 501.76,
+      "annualCost": 31.53,
+      "distToStrike": -129.84,
+      "strike": 1800
+    },
+    {
+      "date": "2026-02-28",
+      "ethPrice": 1964.51,
+      "markUsd": 537.29,
+      "annualCost": 33.28,
+      "distToStrike": -164.51,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-01",
+      "ethPrice": 1939.71,
+      "markUsd": 530.51,
+      "annualCost": 33.39,
+      "distToStrike": -139.71,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-02",
+      "ethPrice": 2027.35,
+      "markUsd": 554.48,
+      "annualCost": 33.5,
+      "distToStrike": -227.35,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-03",
+      "ethPrice": 1982.8,
+      "markUsd": 542.3,
+      "annualCost": 33.61,
+      "distToStrike": -182.8,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-04",
+      "ethPrice": 2127.28,
+      "markUsd": 716.89,
+      "annualCost": 41.56,
+      "distToStrike": -327.28,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-05",
+      "ethPrice": 2072.86,
+      "markUsd": 698.55,
+      "annualCost": 41.7,
+      "distToStrike": -272.86,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-06",
+      "ethPrice": 1978.68,
+      "markUsd": 666.82,
+      "annualCost": 41.84,
+      "distToStrike": -178.68,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-07",
+      "ethPrice": 1969.59,
+      "markUsd": 663.75,
+      "annualCost": 41.98,
+      "distToStrike": -169.59,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-08",
+      "ethPrice": 1937.1,
+      "markUsd": 652.8,
+      "annualCost": 42.12,
+      "distToStrike": -137.1,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-09",
+      "ethPrice": 1992.98,
+      "markUsd": 671.63,
+      "annualCost": 42.27,
+      "distToStrike": -192.98,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-10",
+      "ethPrice": 2036.51,
+      "markUsd": 686.3,
+      "annualCost": 42.42,
+      "distToStrike": -236.51,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-11",
+      "ethPrice": 2051.97,
+      "markUsd": 643.29,
+      "annualCost": 39.59,
+      "distToStrike": -251.97,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-12",
+      "ethPrice": 2073.52,
+      "markUsd": 650.05,
+      "annualCost": 39.73,
+      "distToStrike": -273.52,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-13",
+      "ethPrice": 2092.22,
+      "markUsd": 655.91,
+      "annualCost": 39.87,
+      "distToStrike": -292.22,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-14",
+      "ethPrice": 2096.16,
+      "markUsd": 672.87,
+      "annualCost": 40.97,
+      "distToStrike": -296.16,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-15",
+      "ethPrice": 2178.3,
+      "markUsd": 765.67,
+      "annualCost": 45.02,
+      "distToStrike": -378.3,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-16",
+      "ethPrice": 2352.97,
+      "markUsd": 874.13,
+      "annualCost": 47.75,
+      "distToStrike": -552.97,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-17",
+      "ethPrice": 2317.39,
+      "markUsd": 860.91,
+      "annualCost": 47.91,
+      "distToStrike": -517.39,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-18",
+      "ethPrice": 2203.39,
+      "markUsd": 818.56,
+      "annualCost": 48.08,
+      "distToStrike": -403.39,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-19",
+      "ethPrice": 2137.81,
+      "markUsd": 794.2,
+      "annualCost": 48.26,
+      "distToStrike": -337.81,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-20",
+      "ethPrice": 2146.22,
+      "markUsd": 797.32,
+      "annualCost": 48.43,
+      "distToStrike": -346.22,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-21",
+      "ethPrice": 2084.87,
+      "markUsd": 774.53,
+      "annualCost": 48.6,
+      "distToStrike": -284.87,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-22",
+      "ethPrice": 2053.89,
+      "markUsd": 763.02,
+      "annualCost": 48.78,
+      "distToStrike": -253.89,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-23",
+      "ethPrice": 2152.03,
+      "markUsd": 799.48,
+      "annualCost": 48.95,
+      "distToStrike": -352.03,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-24",
+      "ethPrice": 2156.23,
+      "markUsd": 801.04,
+      "annualCost": 49.13,
+      "distToStrike": -356.23,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-25",
+      "ethPrice": 2169.02,
+      "markUsd": 722.28,
+      "annualCost": 44.2,
+      "distToStrike": -369.02,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-26",
+      "ethPrice": 2060.43,
+      "markUsd": 686.12,
+      "annualCost": 44.36,
+      "distToStrike": -260.43,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-27",
+      "ethPrice": 1992.75,
+      "markUsd": 585.87,
+      "annualCost": 39.31,
+      "distToStrike": -192.75,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-28",
+      "ethPrice": 1994.74,
+      "markUsd": 586.45,
+      "annualCost": 39.45,
+      "distToStrike": -194.74,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-29",
+      "ethPrice": 1984.64,
+      "markUsd": 583.48,
+      "annualCost": 39.6,
+      "distToStrike": -184.64,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-30",
+      "ethPrice": 2026.48,
+      "markUsd": 595.79,
+      "annualCost": 39.74,
+      "distToStrike": -226.48,
+      "strike": 1800
+    },
+    {
+      "date": "2026-03-31",
+      "ethPrice": 2105.43,
+      "markUsd": 619.0,
+      "annualCost": 39.89,
+      "distToStrike": -305.43,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-01",
+      "ethPrice": 2140.35,
+      "markUsd": 629.26,
+      "annualCost": 40.04,
+      "distToStrike": -340.35,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-02",
+      "ethPrice": 2057.17,
+      "markUsd": 604.81,
+      "annualCost": 40.19,
+      "distToStrike": -257.17,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-03",
+      "ethPrice": 2053.83,
+      "markUsd": 603.83,
+      "annualCost": 40.34,
+      "distToStrike": -253.83,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-04",
+      "ethPrice": 2065.52,
+      "markUsd": 607.26,
+      "annualCost": 40.49,
+      "distToStrike": -265.52,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-05",
+      "ethPrice": 2110.17,
+      "markUsd": 620.39,
+      "annualCost": 40.65,
+      "distToStrike": -310.17,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-06",
+      "ethPrice": 2107.16,
+      "markUsd": 619.51,
+      "annualCost": 40.8,
+      "distToStrike": -307.16,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-07",
+      "ethPrice": 2240.01,
+      "markUsd": 658.56,
+      "annualCost": 40.96,
+      "distToStrike": -440.01,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-08",
+      "ethPrice": 2190.0,
+      "markUsd": 643.86,
+      "annualCost": 41.11,
+      "distToStrike": -390.0,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-09",
+      "ethPrice": 2190.2,
+      "markUsd": 643.92,
+      "annualCost": 41.27,
+      "distToStrike": -390.2,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-10",
+      "ethPrice": 2245.05,
+      "markUsd": 660.04,
+      "annualCost": 41.43,
+      "distToStrike": -445.05,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-11",
+      "ethPrice": 2284.99,
+      "markUsd": 671.79,
+      "annualCost": 41.59,
+      "distToStrike": -484.99,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-12",
+      "ethPrice": 2191.65,
+      "markUsd": 644.35,
+      "annualCost": 41.75,
+      "distToStrike": -391.65,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-13",
+      "ethPrice": 2369.46,
+      "markUsd": 696.62,
+      "annualCost": 41.92,
+      "distToStrike": -569.46,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-14",
+      "ethPrice": 2322.44,
+      "markUsd": 682.8,
+      "annualCost": 42.08,
+      "distToStrike": -522.44,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-15",
+      "ethPrice": 2359.95,
+      "markUsd": 693.83,
+      "annualCost": 42.25,
+      "distToStrike": -559.95,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-16",
+      "ethPrice": 2348.17,
+      "markUsd": 690.36,
+      "annualCost": 42.42,
+      "distToStrike": -548.17,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-17",
+      "ethPrice": 2419.0,
+      "markUsd": 711.19,
+      "annualCost": 42.58,
+      "distToStrike": -619.0,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-18",
+      "ethPrice": 2350.32,
+      "markUsd": 690.99,
+      "annualCost": 42.75,
+      "distToStrike": -550.32,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-19",
+      "ethPrice": 2263.27,
+      "markUsd": 665.4,
+      "annualCost": 42.92,
+      "distToStrike": -463.27,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-20",
+      "ethPrice": 2313.85,
+      "markUsd": 680.27,
+      "annualCost": 43.1,
+      "distToStrike": -513.85,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-21",
+      "ethPrice": 2327.14,
+      "markUsd": 684.18,
+      "annualCost": 43.27,
+      "distToStrike": -527.14,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-22",
+      "ethPrice": 2374.07,
+      "markUsd": 697.98,
+      "annualCost": 43.45,
+      "distToStrike": -574.07,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-23",
+      "ethPrice": 2330.26,
+      "markUsd": 685.1,
+      "annualCost": 43.62,
+      "distToStrike": -530.26,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-24",
+      "ethPrice": 2314.99,
+      "markUsd": 680.61,
+      "annualCost": 43.8,
+      "distToStrike": -514.99,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-25",
+      "ethPrice": 2319.5,
+      "markUsd": 681.93,
+      "annualCost": 43.98,
+      "distToStrike": -519.5,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-26",
+      "ethPrice": 2369.44,
+      "markUsd": 696.62,
+      "annualCost": 44.16,
+      "distToStrike": -569.44,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-27",
+      "ethPrice": 2303.67,
+      "markUsd": 677.28,
+      "annualCost": 44.34,
+      "distToStrike": -503.67,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-28",
+      "ethPrice": 2289.42,
+      "markUsd": 673.09,
+      "annualCost": 44.53,
+      "distToStrike": -489.42,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-29",
+      "ethPrice": 2252.9,
+      "markUsd": 662.35,
+      "annualCost": 44.71,
+      "distToStrike": -452.9,
+      "strike": 1800
+    },
+    {
+      "date": "2026-04-30",
+      "ethPrice": 2257.51,
+      "markUsd": 663.71,
+      "annualCost": 44.9,
+      "distToStrike": -457.51,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-01",
+      "ethPrice": 2295.63,
+      "markUsd": 674.92,
+      "annualCost": 45.09,
+      "distToStrike": -495.63,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-02",
+      "ethPrice": 2316.97,
+      "markUsd": 681.19,
+      "annualCost": 45.28,
+      "distToStrike": -516.97,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-03",
+      "ethPrice": 2322.65,
+      "markUsd": 682.86,
+      "annualCost": 45.47,
+      "distToStrike": -522.65,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-04",
+      "ethPrice": 2347.16,
+      "markUsd": 690.07,
+      "annualCost": 45.66,
+      "distToStrike": -547.16,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-05",
+      "ethPrice": 2360.77,
+      "markUsd": 694.07,
+      "annualCost": 45.86,
+      "distToStrike": -560.77,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-06",
+      "ethPrice": 2350.84,
+      "markUsd": 691.15,
+      "annualCost": 46.06,
+      "distToStrike": -550.84,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-07",
+      "ethPrice": 2291.06,
+      "markUsd": 673.57,
+      "annualCost": 46.25,
+      "distToStrike": -491.06,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-08",
+      "ethPrice": 2307.06,
+      "markUsd": 678.28,
+      "annualCost": 46.45,
+      "distToStrike": -507.06,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-09",
+      "ethPrice": 2326.44,
+      "markUsd": 683.97,
+      "annualCost": 46.66,
+      "distToStrike": -526.44,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-10",
+      "ethPrice": 2371.27,
+      "markUsd": 697.15,
+      "annualCost": 46.86,
+      "distToStrike": -571.27,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-11",
+      "ethPrice": 2339.87,
+      "markUsd": 728.87,
+      "annualCost": 49.87,
+      "distToStrike": -539.87,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-12",
+      "ethPrice": 2274.96,
+      "markUsd": 708.65,
+      "annualCost": 50.09,
+      "distToStrike": -474.96,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-13",
+      "ethPrice": 2258.65,
+      "markUsd": 703.57,
+      "annualCost": 50.31,
+      "distToStrike": -458.65,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-14",
+      "ethPrice": 2283.25,
+      "markUsd": 711.23,
+      "annualCost": 50.53,
+      "distToStrike": -483.25,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-15",
+      "ethPrice": 2224.66,
+      "markUsd": 692.98,
+      "annualCost": 50.76,
+      "distToStrike": -424.66,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-16",
+      "ethPrice": 2180.77,
+      "markUsd": 613.89,
+      "annualCost": 46.08,
+      "distToStrike": -380.77,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-17",
+      "ethPrice": 2131.0,
+      "markUsd": 599.88,
+      "annualCost": 46.28,
+      "distToStrike": -331.0,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-18",
+      "ethPrice": 2130.08,
+      "markUsd": 599.62,
+      "annualCost": 46.49,
+      "distToStrike": -330.08,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-19",
+      "ethPrice": 2111.93,
+      "markUsd": 594.51,
+      "annualCost": 46.7,
+      "distToStrike": -311.93,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-20",
+      "ethPrice": 2129.44,
+      "markUsd": 599.44,
+      "annualCost": 46.92,
+      "distToStrike": -329.44,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-21",
+      "ethPrice": 2133.76,
+      "markUsd": 600.65,
+      "annualCost": 47.13,
+      "distToStrike": -333.76,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-22",
+      "ethPrice": 2065.85,
+      "markUsd": 581.54,
+      "annualCost": 47.35,
+      "distToStrike": -265.85,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-23",
+      "ethPrice": 2117.68,
+      "markUsd": 596.13,
+      "annualCost": 47.57,
+      "distToStrike": -317.68,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-24",
+      "ethPrice": 2099.85,
+      "markUsd": 591.11,
+      "annualCost": 47.79,
+      "distToStrike": -299.85,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-25",
+      "ethPrice": 2113.01,
+      "markUsd": 594.81,
+      "annualCost": 48.01,
+      "distToStrike": -313.01,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-26",
+      "ethPrice": 2073.77,
+      "markUsd": 583.77,
+      "annualCost": 48.24,
+      "distToStrike": -273.77,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-27",
+      "ethPrice": 2024.84,
+      "markUsd": 455.59,
+      "annualCost": 38.74,
+      "distToStrike": -224.84,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-28",
+      "ethPrice": 2009.9,
+      "markUsd": 452.23,
+      "annualCost": 38.92,
+      "distToStrike": -209.9,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-29",
+      "ethPrice": 2014.54,
+      "markUsd": 453.27,
+      "annualCost": 39.11,
+      "distToStrike": -214.54,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-30",
+      "ethPrice": 2022.44,
+      "markUsd": 466.17,
+      "annualCost": 40.25,
+      "distToStrike": -222.44,
+      "strike": 1800
+    },
+    {
+      "date": "2026-05-31",
+      "ethPrice": 2007.01,
+      "markUsd": 462.62,
+      "annualCost": 40.45,
+      "distToStrike": -207.01,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-01",
+      "ethPrice": 2006.73,
+      "markUsd": 462.55,
+      "annualCost": 40.64,
+      "distToStrike": -206.73,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-02",
+      "ethPrice": 1859.84,
+      "markUsd": 428.69,
+      "annualCost": 40.84,
+      "distToStrike": -59.84,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-03",
+      "ethPrice": 1813.05,
+      "markUsd": 299.15,
+      "annualCost": 29.38,
+      "distToStrike": -13.05,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-04",
+      "ethPrice": 1770.77,
+      "markUsd": 261.19,
+      "annualCost": 26.39,
+      "distToStrike": 29.23,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-05",
+      "ethPrice": 1583.4,
+      "markUsd": 212.97,
+      "annualCost": 24.18,
+      "distToStrike": 216.6,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-06",
+      "ethPrice": 1569.69,
+      "markUsd": 211.12,
+      "annualCost": 24.3,
+      "distToStrike": 230.31,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-07",
+      "ethPrice": 1690.51,
+      "markUsd": 227.37,
+      "annualCost": 24.42,
+      "distToStrike": 109.49,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-08",
+      "ethPrice": 1690.49,
+      "markUsd": 257.8,
+      "annualCost": 27.83,
+      "distToStrike": 109.51,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-09",
+      "ethPrice": 1639.52,
+      "markUsd": 250.03,
+      "annualCost": 27.97,
+      "distToStrike": 160.48,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-10",
+      "ethPrice": 1621.59,
+      "markUsd": 247.29,
+      "annualCost": 28.11,
+      "distToStrike": 178.41,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-11",
+      "ethPrice": 1673.46,
+      "markUsd": 237.63,
+      "annualCost": 26.31,
+      "distToStrike": 126.54,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-12",
+      "ethPrice": 1666.41,
+      "markUsd": 236.63,
+      "annualCost": 26.44,
+      "distToStrike": 133.59,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-13",
+      "ethPrice": 1681.18,
+      "markUsd": 238.73,
+      "annualCost": 26.58,
+      "distToStrike": 118.82,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-14",
+      "ethPrice": 1725.62,
+      "markUsd": 245.04,
+      "annualCost": 26.72,
+      "distToStrike": 74.38,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-15",
+      "ethPrice": 1796.13,
+      "markUsd": 255.05,
+      "annualCost": 26.85,
+      "distToStrike": 3.87,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-16",
+      "ethPrice": 1792.99,
+      "markUsd": 254.6,
+      "annualCost": 26.99,
+      "distToStrike": 7.01,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-17",
+      "ethPrice": 1750.6,
+      "markUsd": 248.59,
+      "annualCost": 27.14,
+      "distToStrike": 49.4,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-18",
+      "ethPrice": 1711.11,
+      "markUsd": 242.98,
+      "annualCost": 27.28,
+      "distToStrike": 88.89,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-19",
+      "ethPrice": 1711.19,
+      "markUsd": 242.99,
+      "annualCost": 27.42,
+      "distToStrike": 88.81,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-20",
+      "ethPrice": 1741.08,
+      "markUsd": 247.23,
+      "annualCost": 27.57,
+      "distToStrike": 58.92,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-21",
+      "ethPrice": 1706.94,
+      "markUsd": 242.39,
+      "annualCost": 27.72,
+      "distToStrike": 93.06,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-22",
+      "ethPrice": 1728.19,
+      "markUsd": 275.65,
+      "annualCost": 31.3,
+      "distToStrike": 71.81,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-23",
+      "ethPrice": 1667.13,
+      "markUsd": 225.06,
+      "annualCost": 26.64,
+      "distToStrike": 132.87,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-24",
+      "ethPrice": 1622.17,
+      "markUsd": 218.99,
+      "annualCost": 26.78,
+      "distToStrike": 177.83,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-25",
+      "ethPrice": 1567.84,
+      "markUsd": 191.28,
+      "annualCost": 24.33,
+      "distToStrike": 232.16,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-26",
+      "ethPrice": 1578.68,
+      "markUsd": 180.76,
+      "annualCost": 22.96,
+      "distToStrike": 221.32,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-27",
+      "ethPrice": 1573.99,
+      "markUsd": 181.01,
+      "annualCost": 23.19,
+      "distToStrike": 226.01,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-28",
+      "ethPrice": 1571.96,
+      "markUsd": 183.92,
+      "annualCost": 23.73,
+      "distToStrike": 228.04,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-29",
+      "ethPrice": 1613.07,
+      "markUsd": 197.6,
+      "annualCost": 24.98,
+      "distToStrike": 186.93,
+      "strike": 1800
+    },
+    {
+      "date": "2026-06-30",
+      "ethPrice": 1572.01,
+      "markUsd": 172.92,
+      "annualCost": 22.56,
+      "distToStrike": 227.99,
+      "strike": 1800
+    },
+    {
+      "date": "2026-07-01",
+      "ethPrice": 1609.58,
+      "markUsd": 196.37,
+      "annualCost": 25.16,
+      "distToStrike": 190.42,
+      "strike": 1800
+    },
+    {
+      "date": "2026-07-02",
+      "ethPrice": 1700.57,
+      "markUsd": 207.47,
+      "annualCost": 25.3,
+      "distToStrike": 99.43,
+      "strike": 1800
+    },
+    {
+      "date": "2026-07-03",
+      "ethPrice": 1758.21,
+      "markUsd": 262.85,
+      "annualCost": 31.18,
+      "distToStrike": 41.79,
+      "strike": 1800
+    },
+    {
+      "date": "2026-07-04",
+      "ethPrice": 1780.64,
+      "markUsd": 273.33,
+      "annualCost": 32.2,
+      "distToStrike": 19.36,
+      "strike": 1800
+    },
+    {
+      "date": "2026-07-05",
+      "ethPrice": 1785.65,
+      "markUsd": 274.1,
+      "annualCost": 32.39,
+      "distToStrike": 14.35,
+      "strike": 1800
+    },
+    {
+      "date": "2026-07-06",
+      "ethPrice": 1799.56,
+      "markUsd": 270.83,
+      "annualCost": 31.94,
+      "distToStrike": 0.44,
+      "strike": 1800
+    },
+    {
+      "date": "2026-07-07",
+      "ethPrice": 1771.45,
+      "markUsd": 266.6,
+      "annualCost": 32.12,
+      "distToStrike": 28.55,
+      "strike": 1800
+    },
+    {
+      "date": "2026-07-08",
+      "ethPrice": 1743.54,
+      "markUsd": 262.4,
+      "annualCost": 32.31,
+      "distToStrike": 56.46,
+      "strike": 1800
+    },
+    {
+      "date": "2026-07-09",
+      "ethPrice": 1745.16,
+      "markUsd": 241.7,
+      "annualCost": 29.91,
+      "distToStrike": 54.84,
+      "strike": 1800
+    },
+    {
+      "date": "2026-07-10",
+      "ethPrice": 1788.4,
+      "markUsd": 272.73,
+      "annualCost": 33.13,
+      "distToStrike": 11.6,
+      "strike": 1800
+    }
+  ]
+}

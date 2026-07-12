@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1783872503539,
+      "tag": "0000_optimal_meteorite",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1783872834401,
+      "tag": "0001_worried_puma",
+      "breakpoints": true
+    }
+  ]
+}
