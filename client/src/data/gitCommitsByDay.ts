@@ -8321,5 +8321,9 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   ],
   "2026-07-12": [
     { date: "2026-07-11T16:23:40Z", type: "feat", cleanMessage: "牙办网会员订阅管理 - 数据库加service_expire_at/service_plan字段，后端加getMyServiceStatus/adminSetExpire接口，前端我的页面加会员状态卡片，后台管理加到期日编辑" },
+    { date: "2026-07-11T16:58:33Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-12T00:23:21Z", type: "feat", cleanMessage: "积分商城'家具家纺'改为'奖金制度'，点击跳转奖金研究平台(SSO)" },
+    { date: "2026-07-12T01:36:58Z", type: "fix", cleanMessage: "奖金制度SSO改为HMAC签名方式，后端生成签名链接，前端不暴露密钥" },
+    { date: "2026-07-12T04:14:13Z", type: "feat", cleanMessage: "会员系统优化+人事驾驶舱+运营报表真实接口对接" },
   ],
 };
