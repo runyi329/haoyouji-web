@@ -44,6 +44,12 @@ import {
   Bot,
   FileText,
   RefreshCcw,
+  Globe,
+  Database,
+  FolderGit2,
+  Fingerprint,
+  BookMarked,
+  Boxes,
   type LucideIcon,
 } from "lucide-react";
 
@@ -563,6 +569,11 @@ function ProjectCreationRuleContent() {
             <span className="font-medium text-gray-900">金融数据获取规则</span>
             <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">已定</span>
           </li>
+          <li className="flex items-center gap-2">
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-[#5A2E1C] text-white text-[10px] font-bold shrink-0">H</span>
+            <span className="font-medium text-gray-900">Manus 子项目创建规范</span>
+            <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">已定</span>
+          </li>
         </ol>
       </div>
 
@@ -863,6 +874,292 @@ function ProjectCreationRuleContent() {
         </table>
       </RuleSection>
 
+      {/* ===== 板块 H：Manus 子项目创建规范 ===== */}
+      <div className="flex items-center gap-2 pt-1">
+        <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-[#5A2E1C] text-white text-[10px] font-bold">H</span>
+        <span className="text-[13px] font-bold text-[#5A2E1C]">Manus 子项目创建规范</span>
+      </div>
+
+      {/* H-0 概念说明 */}
+      <RuleSection icon={Boxes} title="什么是 Manus 子项目">
+        <p>
+          当脉动网需要一个<span className="font-semibold text-gray-900">功能独立、域名独立</span>的附属工具时，在 Manus 平台上单独创建一个新项目（子项目），与脉动网主站并列运行。子项目有自己的：
+        </p>
+        <ul className="list-disc pl-5 space-y-1.5">
+          <li><span className="font-semibold text-gray-900">独立数据库</span>（Manus 托管 TiDB Cloud，与脉动网腾讯云 MySQL 完全分离）</li>
+          <li><span className="font-semibold text-gray-900">独立域名</span>（绑定 xxx.jiangyuchen.cn 子域名）</li>
+          <li><span className="font-semibold text-gray-900">独立代码仓库</span>（但备份到脉动网同一个 GitHub 仓库的子目录）</li>
+          <li><span className="font-semibold text-gray-900">共享用户体系</span>（通过 SSO 单点登录，用脉动网账号登录子项目）</li>
+        </ul>
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 mt-2">
+          <p className="text-[12px] font-semibold text-amber-800">典型举例：奖金制度研究平台（2026年7月）</p>
+          <p className="text-[12px] text-amber-700 mt-1">正式域名：<span className="font-mono">bonus.jiangyuchen.cn</span>，Manus 项目 ID：<span className="font-mono">CHKNJmtWXcig3PadPxMzN3</span>，用于直销奖金制度研究与模拟，脉动网积分商城「奖金制度」入口点击后以 iframe 嵌入方式打开，用户无感知。</p>
+        </div>
+      </RuleSection>
+
+      {/* H-1 创建步骤 */}
+      <RuleSection icon={Layers} title="① 创建步骤（在 Manus 上操作）">
+        <ol className="list-decimal pl-5 space-y-2">
+          <li>
+            <span className="font-semibold text-gray-900">在 Manus 新建项目</span>：选择「Web App（tRPC + Manus Auth + Database）」模板，填写项目名称（英文，如 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">mlm-bonus-system</span>）和描述。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">技术栈自动配置</span>：模板自带 React 19 + Tailwind 4 + Express 4 + tRPC 11 + Drizzle ORM + TiDB Cloud（MySQL 兼容），无需手动安装。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">关闭 Manus OAuth 登录</span>：子项目不使用 Manus 自己的 OAuth，改为脉动网 SSO。在 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">server/_core/oauth.ts</span> 新增 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">/api/auth/external-login</span> 端点（见 H-3）。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">设置自定义环境变量</span>：在 Manus 后台 Settings → Secrets 添加 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">HAOYOUJI_SHARED_SECRET</span>（SSO 共享密钥，见 H-3）。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">绑定自定义域名</span>：在 Manus 后台 Settings → Domains 绑定 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">子项目名.jiangyuchen.cn</span>（见 H-4）。
+          </li>
+        </ol>
+      </RuleSection>
+
+      {/* H-2 基础设施位置 */}
+      <RuleSection icon={Database} title="② 基础设施在哪里找">
+        <p className="font-semibold text-gray-900 mb-2">子项目的数据库、服务器、存储桶全部在 Manus 平台，与脉动网腾讯云完全独立：</p>
+        <table className="w-full text-[12px] border-collapse mb-3">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">资源</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">位置</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">如何找到</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="p-1.5 border border-gray-200 font-medium">服务器</td>
+              <td className="p-1.5 border border-gray-200">Manus 云（Cloudflare + Cloud Run）</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">Manus 后台 Dashboard 面板，无需 SSH</td>
+            </tr>
+            <tr className="bg-gray-50">
+              <td className="p-1.5 border border-gray-200 font-medium">数据库</td>
+              <td className="p-1.5 border border-gray-200">TiDB Cloud（AWS us-east-1）</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">Manus 后台 Database 面板，点左下角设置查看连接串</td>
+            </tr>
+            <tr>
+              <td className="p-1.5 border border-gray-200 font-medium">存储桶</td>
+              <td className="p-1.5 border border-gray-200">Manus S3 对象存储</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">代码中用 storagePut/storageGet 操作，无需手动登录控制台</td>
+            </tr>
+            <tr className="bg-gray-50">
+              <td className="p-1.5 border border-gray-200 font-medium">环境变量</td>
+              <td className="p-1.5 border border-gray-200">Manus Secrets</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">Manus 后台 Settings → Secrets</td>
+            </tr>
+            <tr>
+              <td className="p-1.5 border border-gray-200 font-medium">域名/SSL</td>
+              <td className="p-1.5 border border-gray-200">Cloudflare（自动）</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">Manus 后台 Settings → Domains</td>
+            </tr>
+          </tbody>
+        </table>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5">
+          <p className="text-[12px] font-semibold text-blue-800 mb-1">奖金平台举例（CHKNJmtWXcig3PadPxMzN3）</p>
+          <div className="text-[12px] text-blue-700 space-y-0.5 font-mono">
+            <div>数据库：TiDB Cloud · gateway03.us-east-1.prod.aws.tidbcloud.com:4000</div>
+            <div>数据库名：CHKNJmtWXcig3PadPxMzN3（与项目 ID 同名）</div>
+            <div>服务器：Autoscale 模式，min-instances=0，闲置自动休眠</div>
+            <div>存储桶：Manus S3，通过 BUILT_IN_FORGE_API_KEY 鉴权</div>
+          </div>
+        </div>
+        <p className="text-[12px] text-gray-500 mt-2">
+          <span className="text-[#D32F2F] font-medium">注意</span>：子项目数据库与脉动网腾讯云 MySQL（124.223.54.69:3306 / crm_db）完全独立，互不影响。脉动网的用户数据仍在腾讯云，子项目只存子项目自己的业务数据。
+        </p>
+      </RuleSection>
+
+      {/* H-3 SSO 单点登录 */}
+      <RuleSection icon={Fingerprint} title="③ SSO 单点登录实现（HMAC 签名方案）">
+        <p className="mb-2">子项目不建立独立账号体系，用户必须从脉动网跳入，自动登录。实现方式为 HMAC-SHA256 签名验证，两端共享一个密钥。</p>
+        <p className="font-semibold text-gray-900 mb-1">完整流程：</p>
+        <ol className="list-decimal pl-5 space-y-1.5">
+          <li>用户在脉动网点击入口（如积分商城「奖金制度」）</li>
+          <li>脉动网前端调用后端 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">trpc.auth.mlmSsoLink</span> 生成签名链接</li>
+          <li>脉动网后端用 HMAC-SHA256 对 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">uid:name:ts</span> 签名，ts 为当前 Unix 时间戳（秒）</li>
+          <li>生成跳转 URL：<span className="font-mono text-[12px] bg-gray-100 px-1 rounded break-all">https://子项目域名/api/auth/external-login?uid=xxx&name=xxx&ts=xxx&sign=xxx&redirect=/</span></li>
+          <li>子项目验证签名（有效期 5 分钟，防重放），验证通过后写入 session，用户自动登录</li>
+        </ol>
+        <div className="bg-gray-50 rounded-xl p-3 mt-3 font-mono text-[12px] space-y-1">
+          <div className="text-gray-500">// 脉动网后端（server/routers.ts）生成签名</div>
+          <div>const ts = Math.floor(Date.now() / 1000).toString();</div>
+          <div>const msg = <span className="text-green-700">`$&#123;uid&#125;:$&#123;name&#125;:$&#123;ts&#125;`</span>;</div>
+          <div>const sign = hmac(<span className="text-green-700">HAOYOUJI_SHARED_SECRET</span>, msg);</div>
+          <div className="text-gray-500 mt-1">// 子项目后端（server/_core/oauth.ts）验证签名</div>
+          <div>const age = Date.now()/1000 - Number(ts);</div>
+          <div>if (age &gt; 300) throw <span className="text-red-600">"链接已过期"</span>;</div>
+          <div>if (sign !== expectedSign) throw <span className="text-red-600">"签名无效"</span>;</div>
+        </div>
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 mt-3">
+          <p className="text-[12px] font-semibold text-amber-800">奖金平台举例</p>
+          <ul className="text-[12px] text-amber-700 space-y-1 mt-1">
+            <li>共享密钥：<span className="font-mono">mlm-bonus-shared-secret-2026</span>（两端环境变量 HAOYOUJI_SHARED_SECRET 必须一致）</li>
+            <li>脉动网代码：<span className="font-mono">server/routers.ts</span> → <span className="font-mono">auth.mlmSsoLink</span> 过程</li>
+            <li>子项目代码：<span className="font-mono">server/_core/oauth.ts</span> → <span className="font-mono">/api/auth/external-login</span> 端点</li>
+            <li>iframe 嵌入页：<span className="font-mono">client/src/pages/MlmBonusPage.tsx</span>（脉动网 /mlm-bonus 路径）</li>
+          </ul>
+        </div>
+        <p className="text-[12px] text-gray-500 mt-2">
+          子项目还需在 <span className="font-mono">server/_core/index.ts</span> 添加 CSP 响应头，允许脉动网域名 iframe 嵌入：<span className="font-mono text-[11px] bg-gray-100 px-1 rounded">frame-ancestors 'self' https://jiangyuchen.cn https://www.jiangyuchen.cn</span>。
+        </p>
+      </RuleSection>
+
+      {/* H-4 自定义域名 */}
+      <RuleSection icon={Globe} title="④ 自定义域名绑定">
+        <ol className="list-decimal pl-5 space-y-2">
+          <li>
+            <span className="font-semibold text-gray-900">腾讯云 DNS 添加 CNAME 记录</span>：
+            <div className="bg-gray-50 rounded-lg p-2 mt-1 font-mono text-[12px]">
+              <div>主机记录：<span className="font-semibold">子项目名</span>（如 <span className="text-blue-700">bonus</span>）</div>
+              <div>记录类型：<span className="font-semibold">CNAME</span></div>
+              <div>记录值：<span className="font-semibold">Manus 自动域名</span>（如 <span className="text-blue-700">mlmbonus-chknjmtw.manus.space</span>）</div>
+            </div>
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">Manus 后台绑定</span>：Settings → Domains → 填入 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">子项目名.jiangyuchen.cn</span> → 保存。SSL 证书由 Cloudflare 自动签发，无需手动操作。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">验证</span>：等待 DNS 生效（通常 5 分钟内），访问 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">https://子项目名.jiangyuchen.cn</span> 确认正常。
+          </li>
+        </ol>
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 mt-2">
+          <p className="text-[12px] font-semibold text-amber-800">奖金平台举例</p>
+          <p className="text-[12px] text-amber-700 mt-1">腾讯云 DNS：<span className="font-mono">bonus</span> CNAME → <span className="font-mono">mlmbonus-chknjmtw.manus.space</span><br/>最终访问地址：<span className="font-mono">https://bonus.jiangyuchen.cn</span></p>
+        </div>
+      </RuleSection>
+
+      {/* H-5 代码备份规范 */}
+      <RuleSection icon={FolderGit2} title="⑤ 代码备份到 GitHub 同一仓库">
+        <p>
+          子项目代码<span className="font-semibold text-gray-900">不单独建 GitHub 仓库</span>，统一备份到脉动网同一个仓库（<span className="font-mono text-[12px] bg-gray-100 px-1 rounded">runyi329/haoyouji-web</span>）的子目录，保持所有项目代码集中管理。
+        </p>
+        <p className="font-semibold text-gray-900 mt-2 mb-1">备份目录结构：</p>
+        <div className="bg-gray-50 rounded-xl p-3 font-mono text-[12px] space-y-0.5">
+          <div>runyi329/haoyouji-web/</div>
+          <div className="pl-4">backups/</div>
+          <div className="pl-8 text-blue-700">mlm-bonus-system/          ← 奖金平台备份</div>
+          <div className="pl-12">client/src/                ← 前端源码</div>
+          <div className="pl-12">server/                    ← 后端源码</div>
+          <div className="pl-12">drizzle/                   ← 数据库 schema</div>
+          <div className="pl-12 text-[#CBA471]">项目说明文档.md            ← 必须有！</div>
+          <div className="pl-8">下一个子项目/</div>
+          <div className="pl-12">...</div>
+        </div>
+        <p className="font-semibold text-gray-900 mt-2 mb-1">备份操作步骤：</p>
+        <ol className="list-decimal pl-5 space-y-1.5">
+          <li>在 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">/home/ubuntu/haoyouji-web-fresh/backups/子项目名/</span> 创建目录</li>
+          <li>将子项目的 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">client/src/</span>、<span className="font-mono text-[12px] bg-gray-100 px-1 rounded">server/</span>、<span className="font-mono text-[12px] bg-gray-100 px-1 rounded">drizzle/</span>、<span className="font-mono text-[12px] bg-gray-100 px-1 rounded">shared/</span> 复制过来</li>
+          <li>写好「项目说明文档.md」（见 H-6）</li>
+          <li>按脉动网推送规范提交：<span className="font-mono text-[12px] bg-gray-100 px-1 rounded">git pull --rebase → pnpm check → git push</span></li>
+        </ol>
+        <p className="text-[12px] text-gray-500 mt-2">备份不含 node_modules、.git、.manus-logs 等目录，恢复后需执行 pnpm install。</p>
+      </RuleSection>
+
+      {/* H-6 项目说明文档 */}
+      <RuleSection icon={BookMarked} title="⑥ 项目说明文档必须包含的内容">
+        <p>每个子项目必须在备份目录里放一份「项目说明文档.md」，内容要覆盖以下所有章节，<span className="text-[#D32F2F] font-medium">缺一不可</span>：</p>
+        <table className="w-full text-[12px] border-collapse mt-2">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">章节</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">必须包含的内容</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="p-1.5 border border-gray-200 font-medium">项目基本信息</td>
+              <td className="p-1.5 border border-gray-200 text-gray-600">项目名、Manus 项目 ID、创建时间、定位说明</td>
+            </tr>
+            <tr className="bg-gray-50">
+              <td className="p-1.5 border border-gray-200 font-medium">访问地址</td>
+              <td className="p-1.5 border border-gray-200 text-gray-600">正式域名、Manus 自动域名（两个都写）</td>
+            </tr>
+            <tr>
+              <td className="p-1.5 border border-gray-200 font-medium">基础设施</td>
+              <td className="p-1.5 border border-gray-200 text-gray-600">数据库连接串、服务器位置、存储桶说明</td>
+            </tr>
+            <tr className="bg-gray-50">
+              <td className="p-1.5 border border-gray-200 font-medium">环境变量</td>
+              <td className="p-1.5 border border-gray-200 text-gray-600">所有 Secrets 的键名、值、用途（含自定义变量）</td>
+            </tr>
+            <tr>
+              <td className="p-1.5 border border-gray-200 font-medium">自定义域名</td>
+              <td className="p-1.5 border border-gray-200 text-gray-600">腾讯云 DNS 记录配置 + Manus 绑定说明</td>
+            </tr>
+            <tr className="bg-gray-50">
+              <td className="p-1.5 border border-gray-200 font-medium">SSO 对接</td>
+              <td className="p-1.5 border border-gray-200 text-gray-600">完整流程图、共享密钥、相关代码文件位置</td>
+            </tr>
+            <tr>
+              <td className="p-1.5 border border-gray-200 font-medium">沙箱恢复步骤</td>
+              <td className="p-1.5 border border-gray-200 text-gray-600">沙箱丢失后 4 步完整恢复流程（见 H-7）</td>
+            </tr>
+            <tr className="bg-gray-50">
+              <td className="p-1.5 border border-gray-200 font-medium">功能模块</td>
+              <td className="p-1.5 border border-gray-200 text-gray-600">每个页面/引擎的文件路径和功能说明</td>
+            </tr>
+          </tbody>
+        </table>
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 mt-2">
+          <p className="text-[12px] font-semibold text-amber-800">奖金平台举例</p>
+          <p className="text-[12px] text-amber-700 mt-1">文档位置：<span className="font-mono">runyi329/haoyouji-web → backups/mlm-bonus-system/项目说明文档.md</span><br/>最后更新：2026年7月12日，共 11 章节，含所有环境变量值和数据库连接串。</p>
+        </div>
+      </RuleSection>
+
+      {/* H-7 沙箱丢失恢复 */}
+      <RuleSection icon={RefreshCw} title="⑦ 沙箱丢失后如何恢复（4步）">
+        <p className="text-[12px] text-gray-500 mb-2">Manus 沙箱是临时环境，可能因超时、休眠等原因丢失本地代码。但线上网站和数据库不受影响，始终正常运行。</p>
+        <ol className="list-decimal pl-5 space-y-2">
+          <li>
+            <span className="font-semibold text-gray-900">找回 Manus 项目</span>：登录 Manus，在历史任务或项目列表中找到子项目（凭项目 ID 或名称）。线上网站和数据库完全不受影响，继续正常运行。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">克隆代码到新沙箱</span>：
+            <div className="bg-gray-50 rounded-lg p-2 mt-1 font-mono text-[12px]">
+              <div>cd /home/ubuntu</div>
+              <div>gh repo clone runyi329/haoyouji-web</div>
+              <div>cp -r haoyouji-web/backups/子项目名/ 子项目名/</div>
+              <div>cd 子项目名 && pnpm install</div>
+            </div>
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">确认环境变量</span>：在 Manus 后台 Settings → Secrets 确认所有自定义变量已设置（特别是 HAOYOUJI_SHARED_SECRET）。系统变量（DATABASE_URL、JWT_SECRET 等）由 Manus 自动注入，无需手动配置。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">确认域名绑定</span>：在 Manus 后台 Settings → Domains 确认自定义域名已绑定。若绑定丢失，重新按 H-4 操作。
+          </li>
+        </ol>
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 mt-2">
+          <p className="text-[12px] font-semibold text-amber-800">奖金平台举例</p>
+          <p className="text-[12px] text-amber-700 mt-1">告诉新沙箱的 AI：「帮我从 GitHub runyi329/haoyouji-web 仓库的 backups/mlm-bonus-system/ 目录恢复奖金制度研究平台（Manus 项目 ID：CHKNJmtWXcig3PadPxMzN3），继续开发」，AI 即可按项目说明文档完整恢复。</p>
+        </div>
+      </RuleSection>
+
+      {/* H-8 将来合并到脉动网主站 */}
+      <RuleSection icon={GitBranch} title="⑧ 将来合并到脉动网主站（迁移路径）">
+        <p>当子项目功能成熟、用户量稳定后，可考虑将其合并到脉动网主站，消除独立域名和 SSO 跳转的摩擦。迁移路径：</p>
+        <ol className="list-decimal pl-5 space-y-1.5">
+          <li>
+            <span className="font-semibold text-gray-900">前端合并</span>：将子项目的 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">client/src/pages/</span> 和 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">client/src/components/</span> 复制到脉动网对应目录，在 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">App.tsx</span> 注册路由。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">后端合并</span>：将子项目的 tRPC 路由（<span className="font-mono text-[12px] bg-gray-100 px-1 rounded">server/mlm-router.ts</span> 等）合并到脉动网 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">server/routers.ts</span>，删除 SSO 相关代码（改为直接读 ctx.user）。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">数据库迁移</span>：将子项目 TiDB Cloud 的数据导出，导入到脉动网腾讯云 MySQL（注意字段类型兼容性）。在 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">drizzle/schema.ts</span> 合并表定义。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">域名处理</span>：合并完成后，将 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">子项目名.jiangyuchen.cn</span> 做 301 重定向到 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">jiangyuchen.cn/对应路径</span>，保留旧链接可访问。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">关闭子项目</span>：确认迁移无误后，在 Manus 后台将子项目设为不可见或归档，保留数据库备份 30 天后删除。
+          </li>
+        </ol>
+        <p className="text-[12px] text-gray-500 mt-2">合并时机建议：子项目日活用户 &gt; 50 人，或功能与主站高度重叠时，优先考虑合并以降低维护成本。</p>
+      </RuleSection>
+
       <p className="text-center text-[11px] text-gray-300 pt-1">
         规则 005 · 项目创建规则 · 仅超级管理员可见
       </p>
@@ -904,7 +1201,7 @@ export const RULES: Rule[] = [
     id: "005",
     title: "项目创建规则",
     summary:
-      "新建项目总规范：A角色与归属权限 B会员权限 C项目骨架 D初始化清单 E多项目登录皮肤路由 F图片/视频/文件上传规范 G金融数据获取规则（【铁律】所有行情数据全部走服务器tRPC，严禁前端直连任何外部API；数字币走trpc.getCryptoPrices，大宗商品/指数/汇率走trpc.stock.*；架构铁律：价格数据必须在父组件顶层统一拉取一次，通过livePrices props传给子卡片，严禁在每个卡片实例里独立调用价格hook；前端直连/Cloudflare Worker方案已弃用，Safari/iOS WebKit会崩溃）。",
+      "新建项目总规范：A角色与归属权限 B会员权限 C项目骨架 D初始化清单 E多项目登录皮肤路由 F图片/视频/文件上传规范 G金融数据获取规则 H Manus子项目创建规范（独立项目+SSO单点登录+自定义域名+代码备份+说明文档+沙箱恢复+合并路径，以奖金平台bonus.jiangyuchen.cn为举例）。",
     content: <ProjectCreationRuleContent />,
   },
   {
