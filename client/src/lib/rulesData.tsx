@@ -1085,6 +1085,15 @@ function ProjectCreationRuleContent() {
           <div>if (age &gt; 300) throw <span className="text-red-600">"链接已过期"</span>;</div>
           <div>if (sign !== expectedSign) throw <span className="text-red-600">"签名无效"</span>;</div>
         </div>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-2.5 mt-3">
+          <p className="text-[12px] font-semibold text-red-800">🔑 统一密钥规范（所有子项目共用）</p>
+          <p className="text-[12px] text-red-700 mt-1">所有子项目统一使用同一套 SSO 共享密钥，不单独生成新密钥。密钥只存服务端，子项目之间不能互相签发通行证，只有脉动网主站才能签发。</p>
+          <div className="bg-white rounded p-2 mt-1.5 font-mono text-[12px] border border-red-100">
+            <div>环境变量名：<span className="font-semibold">HAOYOUJI_SHARED_SECRET</span></div>
+            <div className="mt-0.5">密钥值：<span className="font-semibold text-red-700">mlm-bonus-shared-secret-2026</span></div>
+          </div>
+          <p className="text-[12px] text-red-600 mt-1.5">⚠️ 新建子项目时，直接填入此值，无需生成新密钥。若将来需要更换，所有子项目和脉动网主站必须同步更新。</p>
+        </div>
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 mt-3">
           <p className="text-[12px] font-semibold text-amber-800">奖金平台举例</p>
           <ul className="text-[12px] text-amber-700 space-y-1 mt-1">
