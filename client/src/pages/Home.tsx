@@ -1886,6 +1886,11 @@ export default function Home() {
                         navigate('/mlm-bonus');
                         return;
                       }
+                      if (cat.name === '期权链接') {
+                        // 跳转到 ETH 期权监控工具（iframe嵌入，保持PWA沉浸式体验）
+                        navigate('/eth-options');
+                        return;
+                      }
                       if (cat.name === '宠物生活') {
                         navigate('/pet-platform');
                         return;
