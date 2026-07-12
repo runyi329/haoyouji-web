@@ -3,6 +3,9 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'backups/**'                      # 子项目代码备份，不触发部署
+      - 'client/src/lib/rulesData.tsx'    # 规则文档，不触发部署
   workflow_dispatch:
 jobs:
   deploy:

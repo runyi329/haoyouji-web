@@ -1148,6 +1148,30 @@ function ProjectCreationRuleContent() {
           <li>按脉动网推送规范提交：<span className="font-mono text-[12px] bg-gray-100 px-1 rounded">git pull --rebase → pnpm check → git push</span></li>
         </ol>
         <p className="text-[12px] text-gray-500 mt-2">备份不含 node_modules、.git、.manus-logs 等目录，恢复后需执行 pnpm install。</p>
+
+        {/* 备份不触发部署的配置 */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 mt-3">
+          <p className="text-[12px] font-semibold text-blue-800">🛡️ 备份推送不会触发脉动网自动部署</p>
+          <p className="text-[12px] text-blue-700 mt-1">脉动网的 <span className="font-mono">.github/workflows/bg-deploy.yml</span> 已配置 <span className="font-mono">paths-ignore</span>，<span className="font-semibold">backups/** 和 rulesData.tsx 的推送不会触发自动部署</span>，不会白距构建脉动网主站。</p>
+          <p className="text-[12px] font-semibold text-blue-800 mt-2">如何恢复触发？</p>
+          <p className="text-[12px] text-blue-700 mt-0.5">若将来需要备份推送也触发部署，将 <span className="font-mono">bg-deploy.yml</span> 第 6-8 行的 <span className="font-mono">paths-ignore</span> 块删除即可恢复原行为。</p>
+        </div>
+
+        {/* 自动备份方案 */}
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 mt-3">
+          <p className="text-[12px] font-semibold text-amber-800">⚠️ 备份是手动的，不是自动的</p>
+          <p className="text-[12px] text-amber-700 mt-1">Manus 沙箱是临时环境，没有常驻进程可以监听代码改动并自动推送。<span className="font-semibold text-amber-800">每次开发结束时，必须手动说一句话触发备份。</span></p>
+          <p className="text-[12px] font-semibold text-amber-800 mt-2">触发备份的方式</p>
+          <p className="text-[12px] text-amber-700 mt-0.5">只需对 AI 说一个字：<span className="font-mono bg-white px-1 rounded border border-amber-200 font-bold text-amber-900">「备份」</span>，AI 就会自动完成以下所有步骤：
+          </p>
+          <div className="bg-white rounded p-2 mt-1 font-mono text-[11px] border border-amber-100">
+            <div>cp -r /home/ubuntu/子项目名/... haoyouji-web/backups/子项目名/</div>
+            <div>cd haoyouji-web && git add backups/</div>
+            <div>git commit -m "backup: 更新奖金平台代码 $(date +%Y-%m-%d)"</div>
+            <div>git push origin main</div>
+          </div>
+          <p className="text-[12px] text-amber-700 mt-1.5">✅ 推送后不会触发脉动网部署（paths-ignore 已屏蔽）。</p>
+        </div>
       </RuleSection>
 
       {/* H-6 项目说明文档 */}
