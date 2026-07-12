@@ -891,4 +891,75 @@ export const yabanOpsRouter = router({
     conn.release?.();
     return { items, breakevenValue: 14800, maxRevenue };
   }),
+
+  // 成本与利润分析（简化版：基于收入估算成本）
+  costProfit: protectedProcedure.input(dateRangeInput).query(async ({ ctx, input }) => {
+    const conn = await getDbConnection();
+    if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+    await ensureChargeTables(conn);
+    const TENANT_ID = await resolveTenantId(ctx);
+    const { startDate, endDate } = input;
+    const [rows] = (await (conn as any).execute(
+      `SELECT COALESCE(SUM(paid), 0) AS total_revenue
+       FROM yaban_charge
+       WHERE ${CHARGE_RANGE_WHERE}`,
+      [TENANT_ID, startDate, endDate]
+    )) as any;
+    conn.release?.();
+    const revenue = Number((rows as any[])[0]?.total_revenue || 0);
+    // 按行业平均比例估算（没有成本表时的备用方案）
+    const materialCost = Math.round(revenue * 0.25 * 100) / 100 / 10000; // 耗材 25%
+    const laborCost = Math.round(revenue * 0.35 * 100) / 100 / 10000;    // 人力 35%
+    const otherCost = Math.round(revenue * 0.10 * 100) / 100 / 10000;    // 其他 10%
+    const grossMargin = revenue > 0 ? Math.round((1 - 0.25) * 1000) / 10 : 0; // 毛利率 75%
+    const netMargin = revenue > 0 ? Math.round((1 - 0.25 - 0.35 - 0.10) * 1000) / 10 : 0; // 净利率 30%
+    return {
+      revenue: revenue / 10000,
+      materialCost,
+      laborCost,
+      otherCost,
+      grossMargin,
+      netMargin,
+    };
+  }),
+
+  // 预约漏斗（基于预约和到诊数据）
+  appointmentFunnel: protectedProcedure.input(dateRangeInput).query(async ({ ctx, input }) => {
+    const conn = await getDbConnection();
+    if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+    await ensureChargeTables(conn);
+    const TENANT_ID = await resolveTenantId(ctx);
+    const { startDate, endDate } = input;
+    // 预约总数
+    const [apptRows] = (await (conn as any).execute(
+      `SELECT COUNT(*) AS cnt FROM yaban_appointment
+       WHERE tenant_id = ? AND appoint_date BETWEEN ? AND ?`,
+      [TENANT_ID, startDate, endDate]
+    )) as any;
+    const apptCount = Number((apptRows as any[])[0]?.cnt || 0);
+    // 到诊数（有收费记录的就算到诊）
+    const [visitRows] = (await (conn as any).execute(
+      `SELECT COUNT(DISTINCT customer_id) AS cnt
+       FROM yaban_charge
+       WHERE ${CHARGE_RANGE_WHERE}`,
+      [TENANT_ID, startDate, endDate]
+    )) as any;
+    const visitCount = Number((visitRows as any[])[0]?.cnt || 0);
+    // 收费数（paid > 0）
+    const [chargeRows] = (await (conn as any).execute(
+      `SELECT COUNT(DISTINCT customer_id) AS cnt
+       FROM yaban_charge
+       WHERE ${CHARGE_RANGE_WHERE} AND paid > 0`,
+      [TENANT_ID, startDate, endDate]
+    )) as any;
+    const chargeCount = Number((chargeRows as any[])[0]?.cnt || 0);
+    conn.release?.();
+    const maxCount = Math.max(apptCount, visitCount, chargeCount, 1);
+    const items = [
+      { label: "预约到诊", count: apptCount, pct: Math.round((apptCount / maxCount) * 100) },
+      { label: "实际到诊", count: visitCount, pct: Math.round((visitCount / maxCount) * 100) },
+      { label: "收费成交", count: chargeCount, pct: Math.round((chargeCount / maxCount) * 100) },
+    ];
+    return { items };
+  }),
 });

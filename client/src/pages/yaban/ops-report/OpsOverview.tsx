@@ -21,16 +21,17 @@ function Skeleton() {
 }
 
 export default function OpsOverview({ startDate, endDate, tenantId }: Props) {
-  const { data, isLoading } = trpc.yabanOps.revenueSummary.useQuery({ startDate, endDate, tenantId });
+  // 使用 overview 接口（后端实际接口名）
+  const { data, isLoading } = trpc.yabanOps.overview.useQuery({ startDate, endDate, tenantId });
 
   if (isLoading) return <Skeleton />;
 
   const revenue = data?.totalRevenue ?? 0;
-  const prevRevenue = data?.prevRevenue ?? 0;
-  const trendPct = prevRevenue > 0 ? Math.round(((revenue - prevRevenue) / prevRevenue) * 100) : 0;
-  const isUp = trendPct >= 0;
-  const patients = data?.totalPatients ?? 0;
-  const avgPerPatient = patients > 0 ? Math.round(revenue / patients) : 0;
+  const growthRate = data?.revenueGrowthRate ?? 0; // 环比增长率（%）
+  const isUp = growthRate >= 0;
+  const patients = data?.patientCount ?? 0;
+  const avgPerPatient = data?.avgPerPatient ?? 0;
+  const newPatients = data?.newPatientCount ?? 0;
 
   return (
     <div
@@ -51,24 +52,22 @@ export default function OpsOverview({ startDate, endDate, tenantId }: Props) {
               {revenue.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}
             </span>
           </div>
-          {prevRevenue > 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 2,
-                  fontSize: 11,
-                  fontWeight: 500,
-                  color: isUp ? "#10B981" : "#EF4444",
-                }}
-              >
-                {isUp ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                {isUp ? "+" : ""}{trendPct}%
-              </span>
-              <span style={{ fontSize: 11, color: "#9CA3AF" }}>较上期</span>
-            </div>
-          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 6 }}>
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 2,
+                fontSize: 11,
+                fontWeight: 500,
+                color: isUp ? "#10B981" : "#EF4444",
+              }}
+            >
+              {isUp ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+              {isUp ? "+" : ""}{growthRate}%
+            </span>
+            <span style={{ fontSize: 11, color: "#9CA3AF" }}>较上期</span>
+          </div>
         </div>
 
         {/* 迷你折线图占位 */}
@@ -96,9 +95,9 @@ export default function OpsOverview({ startDate, endDate, tenantId }: Props) {
         }}
       >
         {[
-          { label: "收费笔数", value: `${data?.totalCharges ?? 0}笔` },
+          { label: "新患人数", value: `${newPatients}人` },
           { label: "接诊量", value: `${patients}人` },
-          { label: "客单价", value: `¥${avgPerPatient.toLocaleString()}` },
+          { label: "客单价", value: `¥${Math.round(avgPerPatient).toLocaleString()}` },
         ].map((item, i) => (
           <div
             key={i}

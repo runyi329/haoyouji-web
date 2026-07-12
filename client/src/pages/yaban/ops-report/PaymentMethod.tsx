@@ -1,6 +1,5 @@
 import OpsCard from "./OpsCard";
 import { trpc } from "@/lib/trpc";
-import { Skeleton } from "antd";
 
 interface PaymentMethodProps {
   startDate: string;
@@ -18,13 +17,21 @@ export default function PaymentMethod({ startDate, endDate, tenantId }: PaymentM
   if (isLoading) {
     return (
       <OpsCard title="收费方式" subtitle="本月支付渠道分布">
-        <Skeleton active paragraph={{ rows: 4 }} />
+        <div>
+          {[...Array(4)].map((_, i) => (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: i < 3 ? "1px solid #F9FAFB" : "none" }}>
+              <div style={{ height: 14, background: "#F3F4F6", borderRadius: 3, width: "40%" }} />
+              <div style={{ height: 14, background: "#F3F4F6", borderRadius: 3, width: "25%" }} />
+            </div>
+          ))}
+        </div>
       </OpsCard>
     );
   }
 
   const items = data?.items || [];
-  const total = data?.total || 0;
+  // 后端 total 是原始金额（元），转换为万元
+  const total = (data?.total || 0) / 10000;
 
   if (items.length === 0) {
     return (
@@ -48,7 +55,8 @@ export default function PaymentMethod({ startDate, endDate, tenantId }: PaymentM
             <span style={{ fontSize: 12, color: "#374151" }}>{item.method}</span>
           </div>
           <div>
-            <span style={{ fontSize: 12, fontWeight: 600, color: "#1F2937" }}>{item.amount.toFixed(1)}万</span>
+            {/* 后端 amount 是原始金额（元），转换为万元显示 */}
+            <span style={{ fontSize: 12, fontWeight: 600, color: "#1F2937" }}>{(item.amount / 10000).toFixed(1)}万</span>
             <span style={{ fontSize: 10, color: "#9CA3AF", marginLeft: 6 }}>{item.ratio}%</span>
           </div>
         </div>

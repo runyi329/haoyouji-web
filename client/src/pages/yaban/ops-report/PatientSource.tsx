@@ -1,6 +1,5 @@
 import OpsCard from "./OpsCard";
 import { trpc } from "@/lib/trpc";
-import { Skeleton } from "antd";
 
 interface PatientSourceProps {
   startDate: string;
@@ -8,8 +7,22 @@ interface PatientSourceProps {
   tenantId?: number;
 }
 
+function SkeletonRows() {
+  return (
+    <div>
+      {[...Array(4)].map((_, i) => (
+        <div key={i} style={{ padding: "7px 0", borderBottom: i < 3 ? "1px solid #F9FAFB" : "none" }}>
+          <div style={{ height: 14, background: "#F3F4F6", borderRadius: 3, marginBottom: 6, width: "60%" }} />
+          <div style={{ height: 4, background: "#F3F4F6", borderRadius: 2 }} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function PatientSource({ startDate, endDate, tenantId }: PatientSourceProps) {
-  const { data, isLoading } = trpc.yabanOps.patientSourceStats.useQuery({
+  // 使用 patientSource 接口（后端实际接口名）
+  const { data, isLoading } = trpc.yabanOps.patientSource.useQuery({
     startDate,
     endDate,
     tenantId,
@@ -18,7 +31,7 @@ export default function PatientSource({ startDate, endDate, tenantId }: PatientS
   if (isLoading) {
     return (
       <OpsCard title="患者来源" subtitle="获客渠道ROI分析">
-        <Skeleton active paragraph={{ rows: 4 }} />
+        <SkeletonRows />
       </OpsCard>
     );
   }
@@ -41,8 +54,7 @@ export default function PatientSource({ startDate, endDate, tenantId }: PatientS
             <span style={{ fontSize: 12, color: "#374151" }}>{item.source}</span>
             <div style={{ textAlign: "right" }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: "#1F2937" }}>{item.count}人</span>
-              {/* ROI字段在接口返回中不存在，此处暂时移除或根据实际情况调整 */}
-              {/* {item.roi > 0 && <span style={{ fontSize: 10, color: "#10B981", marginLeft: 6 }}>ROI {item.roi}%</span>} */}
+              <span style={{ fontSize: 10, color: "#9CA3AF", marginLeft: 6 }}>{item.ratio}%</span>
             </div>
           </div>
           <div style={{ height: 4, background: "#F3F4F6", borderRadius: 2, overflow: "hidden" }}>

@@ -50,7 +50,7 @@ export default function ConsultantConversion({ startDate, endDate, tenantId }: {
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
               <span style={{ fontSize: 10, color: "#9CA3AF" }}>贡献营收</span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: "#374151" }}>{c.revenue}万</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "#374151" }}>{(c.revenue / 10000).toFixed(1)}万</span>
             </div>
           </div>
         ))}
