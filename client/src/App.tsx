@@ -818,6 +818,9 @@ function Router() {
         <Route path="/yaban/patient/:id/charge" component={lazy(() => import("./pages/yaban/YabanPatientCharge"))} />
         <Route path="/yaban/patient/:id/edit" component={YabanPatientCreate} />
         <Route path="/yaban/patient/:id/comm" component={lazy(() => import("./pages/yaban/YabanPatientComm"))} />
+        <Route path="/yaban/patient/:id/treatment/create" component={lazy(() => import("./pages/yaban/YabanTreatmentCreate"))} />
+        <Route path="/yaban/patient/:id/treatment/:tid" component={lazy(() => import("./pages/yaban/YabanTreatmentCreate"))} />
+        <Route path="/yaban/patient/:id/treatment" component={lazy(() => import("./pages/yaban/YabanTreatmentList"))} />
         <Route path="/yaban/wechat-chat" component={lazy(() => import("./pages/yaban/YabanWechatChat"))} />
         <Route path="/yaban/patient/:id" component={YabanPatientDetail} />
         <Route path="/yaban/followup/detail/:id" component={lazy(() => import("./pages/yaban/YabanFollowUpDetail"))} />

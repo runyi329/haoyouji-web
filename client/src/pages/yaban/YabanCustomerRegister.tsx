@@ -2,7 +2,7 @@
  * 牙伴齿科管理 - 客户登记表（美容院会员登记）
  * 蓝白风格，移动端优先。面向美容院到店会员办理的登记表单：
  * 会员卡号 / 姓名 / 手机 / 性别 / 生日 / 皮肤类型 / 来源 / 办卡意向 / 储值金额 / 备注。
- * 提交后写入会员库（后续接入 yabanCustomer.create）。
+ * 提交后通过 yabanCustomer.create 真正写入顾客库。
  * 注意：严禁使用 Emoji；图标统一用 lucide。
  */
 import { useState } from "react";
@@ -10,6 +10,8 @@ import { useLocation } from "wouter";
 import { useSmartBack } from "@/hooks/useSmartBack";
 import { ChevronLeft, ClipboardList, Check } from "lucide-react";
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
+import { useYabanClinic } from "./useYabanClinic";
 
 const SKY = "#2196C8";
 const SKY_D = "#1E88D6";
@@ -47,11 +49,21 @@ const EMPTY: RegForm = {
 export default function YabanCustomerRegister() {
   const [, navigate] = useLocation();
   const goBack = useSmartBack("/yaban/features");
+  const { currentTenantId } = useYabanClinic();
   const [form, setForm] = useState<RegForm>({ ...EMPTY });
-  const [submitting, setSubmitting] = useState(false);
 
   const set = <K extends keyof RegForm>(k: K, v: RegForm[K]) =>
     setForm((p) => ({ ...p, [k]: v }));
+
+  const createMutation = trpc.yabanCustomer.create.useMutation({
+    onSuccess: (data) => {
+      toast.success(`会员登记成功，档案编号：${data.medicalNo || ""}`);
+      setForm({ ...EMPTY });
+    },
+    onError: (err) => {
+      toast.error(err.message || "登记失败，请重试");
+    },
+  });
 
   const handleSubmit = () => {
     if (!form.name.trim()) {
@@ -62,14 +74,36 @@ export default function YabanCustomerRegister() {
       toast.error("请填写正确的手机号");
       return;
     }
-    setSubmitting(true);
-    // 占位：后续接入 yabanCustomer.create 真正写库
-    setTimeout(() => {
-      setSubmitting(false);
-      toast.success("会员登记成功");
-      setForm({ ...EMPTY });
-    }, 500);
+    if (!currentTenantId) {
+      toast.error("请先选择门店");
+      return;
+    }
+
+    // 将皮肤类型和卡种信息拼入 history 字段，便于后续查阅
+    const historyNote = [
+      form.skin ? `皮肤类型：${form.skin}` : "",
+      form.cardType ? `办卡意向：${form.cardType}` : "",
+      form.storedAmount && form.cardType !== "暂不办卡"
+        ? `储值金额：${form.storedAmount}元`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("；");
+
+    createMutation.mutate({
+      name: form.name.trim(),
+      mobile: form.mobile.trim(),
+      gender: form.gender,
+      birthday: form.birthday || undefined,
+      medicalNo: form.cardNo.trim() || undefined,
+      source: form.source || undefined,
+      remark: form.remark.trim() || undefined,
+      history: historyNote || undefined,
+      patientType: "会员",
+    });
   };
+
+  const submitting = createMutation.isPending;
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -103,7 +137,7 @@ export default function YabanCustomerRegister() {
             <input
               value={form.cardNo}
               onChange={(e) => set("cardNo", e.target.value)}
-              placeholder="可留空，办卡后自动生成"
+              placeholder="可留空，系统自动生成"
               className="reg-input"
             />
           </Row>
@@ -194,10 +228,9 @@ export default function YabanCustomerRegister() {
           style={{ background: `linear-gradient(135deg, ${SKY} 0%, ${SKY_D} 100%)` }}
         >
           <Check className="w-5 h-5" />
-          {submitting ? "提交中…" : "提交登记"}
+          {submitting ? "提交中..." : "提交登记"}
         </button>
       </div>
-
 
       <style>{`
         .reg-input {
