@@ -130,7 +130,7 @@ runyi329/haoyouji-web/
 | 数据库 | TiDB Cloud（AWS us-east-1） | Manus 后台 Database 面板，左下角设置查看连接串 |
 | 存储桶 | Manus S3 | 代码中用 `storagePut/storageGet` 操作 |
 | 环境变量 | Manus Secrets | Manus 后台 Settings → Secrets |
-| 域名/SSL | Cloudflare（自动） | Manus 后台 Settings → Domains |
+| 域名/SSL | **子域名由腾讯云 DNSPod 管理**，SSL 由 Manus 背后的 Cloudflare 自动签发 | DNS 在腾讯云控制台 → DNSPod，子域名绑定在 Manus 后台 Settings → Domains |
 
 > 注意：子项目数据库与脉动网腾讯云 MySQL（124.223.54.69:3306 / crm_db）完全独立，互不影响。
 
@@ -178,11 +178,13 @@ Manus 创建项目后会自动分配一个域名（如 `mlmbonus-chknjmtw.manus.
 | **用户信任度** | 用户看到 `manus.space` 陌生域名，可能不敢点击 | 用户认识 `jiangyuchen.cn`，品牌一致，信任度高 |
 | **SSO 跳转** | 脉动网生成的 SSO 链接写死了目标域名，域名变了所有链接全部失效 | 域名固定，SSO 链接永远有效 |
 
-> **技术实现**：绑定子域名并不会把流量从 Manus 迁走，只是在腾讯云 DNS 加一条 CNAME 记录，把 `bonus.jiangyuchen.cn` 指向 `mlmbonus-chknjmtw.manus.space`。流量还是走 Manus 的服务器，对外显示的地址是自己的。**Manus 自动域名依然有效，可以作为备用地址，但不对外使用。**
+> **技术实现**：绑定子域名并不会把流量从 Manus 迁走。`jiangyuchen.cn` 域名在**腾讯云 DNSPod**（登录腾讯云控制台 → DNS 解析）管理，只需在那里加一条 CNAME 记录，把 `bonus.jiangyuchen.cn` 指向 `mlmbonus-chknjmtw.manus.space`。流量还是走 Manus 的服务器，对外显示的地址是自己的。**Manus 自动域名依然有效，可以作为备用地址，但不对外使用。**
 
 #### 绑定步骤
 
-1. **腾讯云 DNS** 添加 CNAME 记录：
+> **域名管理平台**：`jiangyuchen.cn` 在**腾讯云 DNSPod** 管理。登录腾讯云控制台（https://console.cloud.tencent.com）→ DNS 解析 → 选择 `jiangyuchen.cn`。不是 Cloudflare，不是阿里云，不是其他平台。
+
+1. **腾讯云 DNSPod** 添加 CNAME 记录：
    - 主机记录：子项目名（如 `bonus`）
    - 记录类型：CNAME
    - 记录值：Manus 自动域名（如 `mlmbonus-chknjmtw.manus.space`）
