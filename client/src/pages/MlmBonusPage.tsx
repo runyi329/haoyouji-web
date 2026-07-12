@@ -17,7 +17,7 @@ export default function MlmBonusPage() {
     onError: (err) => {
       setError(err.message);
       // 降级：直接跳转到奖金平台首页（未登录状态）
-      setIframeSrc("https://mlmbonus-chknjmtw.manus.space");
+      setIframeSrc("https://bonus.jiangyuchen.cn");
     },
   });
 
@@ -25,7 +25,7 @@ export default function MlmBonusPage() {
     if (isLoading) return;
     if (!isAuthenticated) {
       // 未登录：直接显示奖金平台（未登录状态）
-      setIframeSrc("https://mlmbonus-chknjmtw.manus.space");
+      setIframeSrc("https://bonus.jiangyuchen.cn");
       return;
     }
     // 已登录：获取SSO签名链接

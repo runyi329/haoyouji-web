@@ -2795,7 +2795,7 @@ ${klinesSummary}
       const sharedSecret = process.env.HAOYOUJI_SHARED_SECRET || 'mlm-bonus-shared-secret-2026';
       const payload = `${uid}:${name}:${ts}`;
       const sign = createHmac('sha256', sharedSecret).update(payload).digest('hex');
-      const baseUrl = 'https://mlmbonus-chknjmtw.manus.space';
+      const baseUrl = 'https://bonus.jiangyuchen.cn';
       const url = `${baseUrl}/api/auth/external-login?uid=${encodeURIComponent(uid)}&name=${encodeURIComponent(name)}&ts=${ts}&sign=${sign}&redirect=/`;
       return { url };
     }),

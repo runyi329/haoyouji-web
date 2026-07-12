@@ -1250,7 +1250,7 @@ export default function Home() {
     },
     onError: () => {
       // 未登录或出错时直接跳转到奖金平台首页
-      window.location.href = 'https://mlmbonus-chknjmtw.manus.space';
+      window.location.href = 'https://bonus.jiangyuchen.cn';
     },
   });
 
