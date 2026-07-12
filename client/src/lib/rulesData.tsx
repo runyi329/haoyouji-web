@@ -1152,9 +1152,9 @@ function ProjectCreationRuleContent() {
         {/* 备份不触发部署的配置 */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 mt-3">
           <p className="text-[12px] font-semibold text-blue-800">🛡️ 备份推送不会触发脉动网自动部署</p>
-          <p className="text-[12px] text-blue-700 mt-1">脉动网的 <span className="font-mono">.github/workflows/bg-deploy.yml</span> 已配置 <span className="font-mono">paths-ignore</span>，<span className="font-semibold">backups/** 和 rulesData.tsx 的推送不会触发自动部署</span>，不会白距构建脉动网主站。</p>
+          <p className="text-[12px] text-blue-700 mt-1">脉动网的 <span className="font-mono">.github/workflows/bg-deploy.yml</span> 已配置 <span className="font-mono">paths-ignore</span>，<span className="font-semibold">仅 backups/** 的推送不会触发自动部署</span>。其他文件（包括规则文档 rulesData.tsx）修改后仍会正常触发部署。</p>
           <p className="text-[12px] font-semibold text-blue-800 mt-2">如何恢复触发？</p>
-          <p className="text-[12px] text-blue-700 mt-0.5">若将来需要备份推送也触发部署，将 <span className="font-mono">bg-deploy.yml</span> 第 6-8 行的 <span className="font-mono">paths-ignore</span> 块删除即可恢复原行为。</p>
+          <p className="text-[12px] text-blue-700 mt-0.5">若将来需要备份推送也触发部署，将 <span className="font-mono">bg-deploy.yml</span> 第 6-7 行的 <span className="font-mono">paths-ignore</span> 块删除即可恢复原行为。</p>
         </div>
 
         {/* 自动备份方案 */}

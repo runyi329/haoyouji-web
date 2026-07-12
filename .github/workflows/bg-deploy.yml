@@ -4,8 +4,7 @@ on:
     branches:
       - main
     paths-ignore:
-      - 'backups/**'                      # 子项目代码备份，不触发部署
-      - 'client/src/lib/rulesData.tsx'    # 规则文档，不触发部署
+      - 'backups/**'    # 子项目代码备份，不触发部署。其他文件（包括 rulesData.tsx）修改仍会触发部署。
   workflow_dispatch:
 jobs:
   deploy:
