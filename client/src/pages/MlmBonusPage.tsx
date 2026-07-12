@@ -4,7 +4,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
 
 export default function MlmBonusPage() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   const [, setLocation] = useLocation();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [iframeSrc, setIframeSrc] = useState<string>("");
@@ -64,6 +64,9 @@ export default function MlmBonusPage() {
     );
   }
 
+  // 取用户名首字作为头像文字
+  const avatarText = user?.name ? user.name.charAt(0).toUpperCase() : "?";
+
   return (
     <div
       style={{
@@ -87,25 +90,29 @@ export default function MlmBonusPage() {
           flexShrink: 0,
         }}
       >
+        {/* 左侧：仅箭头返回按钮 */}
         <button
           onClick={() => setLocation("/")}
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 4,
-            fontSize: 14,
+            justifyContent: "center",
+            width: 32,
+            height: 32,
             color: "#555",
             background: "none",
             border: "none",
             cursor: "pointer",
-            padding: "4px 8px",
+            borderRadius: 6,
+            padding: 0,
           }}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <polyline points="15 18 9 12 15 6" />
           </svg>
-          返回脉动网
         </button>
+
+        {/* 中间：标题 */}
         <span
           style={{
             flex: 1,
@@ -113,11 +120,42 @@ export default function MlmBonusPage() {
             fontSize: 15,
             fontWeight: 600,
             color: "#1a1a1a",
-            marginRight: 60,
           }}
         >
           奖金制度研究平台
         </span>
+
+        {/* 右侧：用户头像（仅展示，无操作） */}
+        {isAuthenticated && user ? (
+          <div
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: "50%",
+              background: "#D32F2F",
+              color: "#fff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 13,
+              fontWeight: 700,
+              flexShrink: 0,
+              overflow: "hidden",
+            }}
+          >
+            {user.avatar ? (
+              <img
+                src={user.avatar}
+                alt={user.name}
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            ) : (
+              avatarText
+            )}
+          </div>
+        ) : (
+          <div style={{ width: 30 }} />
+        )}
       </div>
 
       {/* 全屏 iframe */}
