@@ -60,6 +60,27 @@ runyi329/haoyouji-web/
 
 ---
 
+### 子项目 2：ETH 期权监控工具
+
+| 项目 | 内容 |
+|---|---|
+| **名称** | ETH 期权监控工具（eth-options-monitor） |
+| **访问地址** | https://eth-options.jiangyuchen.cn |
+| **Manus 项目名** | `eth-options-monitor` |
+| **Manus 自动域名** | `ethoptmon-ipcwyeqa.manus.space` |
+| **代码备份位置** | `backups/eth-options-monitor/` |
+| **数据库** | Manus 内置 MySQL（TiDB） |
+| **脉动网入口** | 积分商城「母婴用品」分类（前端显示为「期权链接」）→ `/eth-options` 路由 → `EthOptionsPage.tsx`（iframe SSO 嵌入） |
+| **SSO 密钥** | `HAOYOUJI_SHARED_SECRET=mlm-bonus-shared-secret-2026`（在 Manus Secrets 面板设置） |
+| **数据来源** | Deribit WebSocket API（浏览器端直连，无需后端代理） |
+
+**注意事项：**
+- 此项目是独立 Manus WebDev 项目，GitHub 仓库只是备份，不触发自动部署
+- 数据库里分类名仍为「母婴用品」，前端代码已做兼容处理（显示为「期权链接」，点击跳转 `/eth-options`）
+- 如需恢复沙箱，直接在 Manus 平台打开 `eth-options-monitor` 项目即可，路径为 `/home/ubuntu/eth-options-monitor`
+
+---
+
 ## 四、新建子项目规范（H 板块完整规则）
 
 > 每次新建子项目，严格按照以下规范执行，确保将来能顺利合并到脉动网主站。
