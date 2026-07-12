@@ -1,0 +1,129 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+:root {
+  --radius: 0.5rem;
+  /* 暗色科技风 - 深色背景，红色主色调 #D32F2F */
+  --background: oklch(0.10 0.005 240);
+  --foreground: oklch(0.92 0.005 240);
+  --card: oklch(0.14 0.008 240);
+  --card-foreground: oklch(0.92 0.005 240);
+  --popover: oklch(0.14 0.008 240);
+  --popover-foreground: oklch(0.92 0.005 240);
+  /* 红色主色调 #D32F2F → oklch */
+  --primary: oklch(0.50 0.20 25);
+  --primary-foreground: oklch(0.98 0 0);
+  --secondary: oklch(0.18 0.008 240);
+  --secondary-foreground: oklch(0.85 0.005 240);
+  --muted: oklch(0.18 0.008 240);
+  --muted-foreground: oklch(0.55 0.010 240);
+  --accent: oklch(0.20 0.012 240);
+  --accent-foreground: oklch(0.92 0.005 240);
+  --destructive: oklch(0.50 0.20 25);
+  --border: oklch(0.22 0.010 240);
+  --input: oklch(0.18 0.008 240);
+  --ring: oklch(0.50 0.20 25);
+  --chart-1: oklch(0.50 0.20 25);
+  --chart-2: oklch(0.60 0.15 200);
+  --chart-3: oklch(0.65 0.18 150);
+  --chart-4: oklch(0.70 0.15 60);
+  --chart-5: oklch(0.55 0.18 300);
+  --sidebar: oklch(0.12 0.008 240);
+  --sidebar-foreground: oklch(0.92 0.005 240);
+  --sidebar-primary: oklch(0.50 0.20 25);
+  --sidebar-primary-foreground: oklch(0.98 0 0);
+  --sidebar-accent: oklch(0.18 0.010 240);
+  --sidebar-accent-foreground: oklch(0.92 0.005 240);
+  --sidebar-border: oklch(0.22 0.010 240);
+  --sidebar-ring: oklch(0.50 0.20 25);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+}
+
+@layer utilities {
+  .container {
+    @apply mx-auto px-4;
+    max-width: 1280px;
+  }
+  .flex {
+    min-width: 0;
+    min-height: 0;
+  }
+  /* 科技风光效 */
+  .tech-glow {
+    box-shadow: 0 0 20px oklch(0.50 0.20 25 / 0.3);
+  }
+  .tech-border {
+    border: 1px solid oklch(0.50 0.20 25 / 0.4);
+  }
+  .tech-card {
+    background: linear-gradient(135deg, oklch(0.14 0.008 240) 0%, oklch(0.12 0.010 240) 100%);
+    border: 1px solid oklch(0.25 0.012 240);
+  }
+  .tech-card:hover {
+    border-color: oklch(0.50 0.20 25 / 0.6);
+    box-shadow: 0 0 24px oklch(0.50 0.20 25 / 0.2);
+  }
+  /* 红色渐变文字 */
+  .text-gradient-red {
+    background: linear-gradient(135deg, #D32F2F, #FF5252);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  /* 网格背景 */
+  .grid-bg {
+    background-image: 
+      linear-gradient(oklch(0.25 0.010 240 / 0.3) 1px, transparent 1px),
+      linear-gradient(90deg, oklch(0.25 0.010 240 / 0.3) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+}
