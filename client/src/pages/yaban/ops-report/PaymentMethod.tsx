@@ -1,25 +1,55 @@
 import OpsCard from "./OpsCard";
-import { mockPaymentMethods } from "../mockData";
+import { trpc } from "@/lib/trpc";
+import { Skeleton } from "antd";
 
-export default function PaymentMethod() {
-  const data = mockPaymentMethods;
-  const total = data.reduce((s, d) => s + d.amount, 0);
+interface PaymentMethodProps {
+  startDate: string;
+  endDate: string;
+  tenantId?: number;
+}
+
+export default function PaymentMethod({ startDate, endDate, tenantId }: PaymentMethodProps) {
+  const { data, isLoading } = trpc.yabanOps.paymentMethodStats.useQuery({
+    startDate,
+    endDate,
+    tenantId,
+  });
+
+  if (isLoading) {
+    return (
+      <OpsCard title="收费方式" subtitle="本月支付渠道分布">
+        <Skeleton active paragraph={{ rows: 4 }} />
+      </OpsCard>
+    );
+  }
+
+  const items = data?.items || [];
+  const total = data?.total || 0;
+
+  if (items.length === 0) {
+    return (
+      <OpsCard title="收费方式" subtitle="本月支付渠道分布">
+        <div style={{ textAlign: "center", padding: "20px 0", color: "#9CA3AF" }}>暂无数据</div>
+      </OpsCard>
+    );
+  }
+
   return (
     <OpsCard title="收费方式" subtitle="本月支付渠道分布">
       <div style={{ display: "flex", height: 12, borderRadius: 4, overflow: "hidden", marginBottom: 12 }}>
-        {data.map((item, i) => (
-          <div key={i} style={{ width: `${item.pct}%`, background: item.color }} title={`${item.method} ${item.pct}%`} />
+        {items.map((item, i) => (
+          <div key={i} style={{ width: `${item.ratio}%`, background: `hsl(${i * 60}, 70%, 50%)` }} title={`${item.method} ${item.ratio}%`} />
         ))}
       </div>
-      {data.map((item, i) => (
-        <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", borderBottom: i < data.length - 1 ? "1px solid #F9FAFB" : "none" }}>
+      {items.map((item, i) => (
+        <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", borderBottom: i < items.length - 1 ? "1px solid #F9FAFB" : "none" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ width: 10, height: 10, borderRadius: 2, background: item.color, display: "inline-block", flexShrink: 0 }} />
+            <span style={{ width: 10, height: 10, borderRadius: 2, background: `hsl(${i * 60}, 70%, 50%)`, display: "inline-block", flexShrink: 0 }} />
             <span style={{ fontSize: 12, color: "#374151" }}>{item.method}</span>
           </div>
           <div>
             <span style={{ fontSize: 12, fontWeight: 600, color: "#1F2937" }}>{item.amount.toFixed(1)}万</span>
-            <span style={{ fontSize: 10, color: "#9CA3AF", marginLeft: 6 }}>{item.pct}%</span>
+            <span style={{ fontSize: 10, color: "#9CA3AF", marginLeft: 6 }}>{item.ratio}%</span>
           </div>
         </div>
       ))}

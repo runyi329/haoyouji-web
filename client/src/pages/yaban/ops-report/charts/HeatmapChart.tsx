@@ -4,8 +4,14 @@
  */
 
 import { useState } from "react";
-import { genHeatmapData } from "../../mockData";
+import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+
+interface Props {
+  startDate: string;
+  endDate: string;
+  tenantId?: number;
+}
 
 const DAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 const HOURS = Array.from({ length: 13 }, (_, i) => i + 8); // 8-20
@@ -19,9 +25,10 @@ function intensityColor(v: number) {
   return "#1E3A8A";
 }
 
-export default function HeatmapChart() {
+export default function HeatmapChart({ startDate, endDate, tenantId }: Props) {
   const [weekOffset, setWeekOffset] = useState(0);
-  const data = genHeatmapData();
+  const { data: rawData } = trpc.yabanOps.heatmapStats.useQuery({ startDate, endDate, tenantId });
+  const data = rawData?.items ?? [];
 
   const weekLabel = weekOffset === 0 ? "本周" : weekOffset === -1 ? "上周" : `${-weekOffset}周前`;
 

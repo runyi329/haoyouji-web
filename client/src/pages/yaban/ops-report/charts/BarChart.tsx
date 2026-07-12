@@ -4,9 +4,12 @@
  */
 
 import { useRef, useEffect, useState } from "react";
-import { mockDailyRevenue, BREAKEVEN_VALUE } from "../../mockData";
+import { trpc } from "@/lib/trpc";
 
 interface BarChartProps {
+  startDate: string;
+  endDate: string;
+  tenantId?: number;
   onDateRangeChange?: (range: string) => void;
 }
 
@@ -17,8 +20,16 @@ const COL_W = BAR_W + BAR_GAP;
 const PADDING_LEFT = 36;
 const PADDING_RIGHT = 8;
 
-export default function BarChart({ onDateRangeChange }: BarChartProps) {
-  const data = mockDailyRevenue;
+export default function BarChart({ startDate, endDate, tenantId, onDateRangeChange }: BarChartProps) {
+  const { data: rawData } = trpc.yabanOps.revenueTrend.useQuery({ startDate, endDate, tenantId });
+  const today = new Date().toISOString().slice(0, 10);
+  const data = (rawData?.items ?? []).map((d) => ({
+    date: d.date.slice(5).replace("-", "/"),
+    value: Number(d.revenue) || 0,
+    isToday: d.date === today,
+    isFuture: false,
+  }));
+  const BREAKEVEN_VALUE = rawData?.breakevenValue ?? 0;
   const scrollRef = useRef<HTMLDivElement>(null);
   const dateScrollRef = useRef<HTMLDivElement>(null);
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: data.length - 1 });

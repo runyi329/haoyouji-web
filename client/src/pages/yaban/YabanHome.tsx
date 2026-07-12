@@ -179,6 +179,24 @@ export default function YabanHome() {
   }, [clinics]);
 
   const currentClinicObj = clinics.find((c) => c.tenantId === currentTenantId) || clinics[0] || null;
+
+  // ── 服务到期提示横幅判断 ──
+  // 演示院(9999) / lifetime 套餐 / 未设置到期日 → 不显示任何提示
+  // 到期或 ≤30 天预警时显示横幅；功能不锁定
+  const serviceNoticeBanner = (() => {
+    if (!currentClinicObj) return null;
+    const tid = currentClinicObj.tenantId;
+    if (tid === 9999) return null;
+    const plan = (currentClinicObj as any).servicePlan as string | null;
+    if (plan === "lifetime") return null;
+    const expireAt = (currentClinicObj as any).serviceExpireAt as string | null;
+    if (!expireAt) return null;
+    const daysLeft = Math.ceil((new Date(expireAt).getTime() - Date.now()) / 86400000);
+    if (daysLeft > 30) return null; // 超过30天不显示
+    const isOwner = (currentClinicObj as any).roleKey === "owner";
+    const expired = daysLeft <= 0;
+    return { daysLeft, expired, isOwner, expireAt };
+  })();
   const currentClinic =
     currentClinicObj?.shortName?.trim() || currentClinicObj?.name?.trim() || "暂无门店";
   // 门店名过长时按中点均衡折成上下两行（避免"司"字单独掉行），<=8 字不处理
@@ -367,6 +385,45 @@ export default function YabanHome() {
 
       {/* 主内容区：flex-1 撑满剩余高度，overflow-hidden 禁止整页滚动 */}
       <div className="flex-1 overflow-hidden flex flex-col max-w-lg mx-auto w-full">
+        {/* 服务到期 / 预警提示横幅 */}
+        {serviceNoticeBanner && (() => {
+          const { daysLeft, expired, isOwner, expireAt } = serviceNoticeBanner;
+          // 院长：到期红色，预警橙色；员工：统一灰色柔和样式
+          const bg = isOwner
+            ? (expired ? "#FEE2E2" : "#FEF6E6")
+            : "#F3F4F6";
+          const borderColor = isOwner
+            ? (expired ? "#FCA5A5" : "#FCD34D")
+            : "#E5E7EB";
+          const textColor = isOwner
+            ? (expired ? "#DC2626" : "#D97706")
+            : "#6B7280";
+          const fmtD = (s: string) => { const mm = s.slice(0,10).match(/^(\d{4})-(\d{2})-(\d{2})$/); return mm ? `${mm[1]}年${Number(mm[2])}月${Number(mm[3])}日` : s.slice(0,10); };
+          const msg = isOwner
+            ? (expired
+                ? `服务已于 ${fmtD(expireAt)} 到期，请尽快续费以免影响使用`
+                : `服务将于 ${fmtD(expireAt)} 到期（还有 ${daysLeft} 天），请及时续费`)
+            : (expired
+                ? `本诊所服务已到期，请联系院长续费`
+                : `本诊所服务将于 ${fmtD(expireAt)} 到期，请联系院长续费`);
+          return (
+            <div
+              className="mx-3 mt-3 rounded-md px-3 py-2 flex items-center gap-2 flex-shrink-0"
+              style={{ background: bg, border: `1px solid ${borderColor}` }}
+            >
+              <svg
+                className="w-4 h-4 shrink-0"
+                style={{ color: textColor }}
+                fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <span className="text-xs flex-1" style={{ color: textColor }}>{msg}</span>
+            </div>
+          );
+        })()}
         {/* 上半部分：功能网格（2行×4列，末位为「更多」） */}
         <div className="bg-white mx-3 mt-3 rounded-md p-4 flex-shrink-0">
           <div className="grid grid-cols-4 gap-x-2 gap-y-4">

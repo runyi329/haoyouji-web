@@ -4,12 +4,24 @@
  */
 
 import { useState } from "react";
-import { mockWeekCompare } from "../../mockData";
+import { trpc } from "@/lib/trpc";
 
-export default function WeekCompareChart() {
+interface Props {
+  startDate: string;
+  endDate: string;
+  tenantId?: number;
+}
+
+export default function WeekCompareChart({ startDate, endDate, tenantId }: Props) {
   const [forecast, setForecast] = useState<1 | 4>(1);
-  const data = mockWeekCompare;
-  const maxVal = Math.max(...data.flatMap((d) => [d.thisWeek, d.lastWeek, d.aiNext])) * 1.15;
+  const { data: rawData } = trpc.yabanOps.weekCompare.useQuery({ startDate, endDate, tenantId });
+  const data = (rawData?.items ?? []).map((d) => ({
+    day: d.day,
+    thisWeek: Number(d.thisWeek) || 0,
+    lastWeek: Number(d.lastWeek) || 0,
+    aiNext: Number(d.aiNext) || Number(d.thisWeek) || 0,
+  }));
+  const maxVal = data.length > 0 ? Math.max(...data.flatMap((d) => [d.thisWeek, d.lastWeek, d.aiNext])) * 1.15 : 1;
 
   const BAR_H_MAX = 120;
   const BAR_W = 8;

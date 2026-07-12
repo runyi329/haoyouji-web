@@ -36,6 +36,16 @@ import { trpc } from "@/lib/trpc";
 import { useYabanClinic } from "./useYabanClinic";
 import { compressAvatar } from "@/utils/imageUtils";
 
+// 将 "2026-07-31" 格式转为 "2026年7月31日 星期x"
+const fmtDate = (s: string | null | undefined): string => {
+  if (!s) return "";
+  const m = String(s).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return String(s).slice(0, 10);
+  const weekMap = ["日", "一", "二", "三", "四", "五", "六"];
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return `${m[1]}年${Number(m[2])}月${Number(m[3])}日 星期${weekMap[d.getDay()]}`;
+};
+
 type RowItem = {
   key: string;
   icon: React.ReactNode;
@@ -102,6 +112,7 @@ function InviteQrModal({ inviteCode, onClose }: { inviteCode: string; onClose: (
 export default function YabanProfile() {
   const [, navigate] = useLocation();
   const [showQr, setShowQr] = useState(false);
+  const [showServiceDetail, setShowServiceDetail] = useState(false);
   const utils = trpc.useUtils();
   const { data: user } = trpc.auth.me.useQuery();
   const { currentTenantId } = useYabanClinic();
@@ -181,9 +192,13 @@ export default function YabanProfile() {
 
   const wip = (name: string) => toast.info(`${name}功能开发中，敬请期待`);
 
-  // 服务到期状态
+  // 服务到期状态 - 支持多门店切换
+  const clinics = myClinicsResp?.clinics || [];
+  const [selectedServiceTenantId, setSelectedServiceTenantId] = useState<number | null>(null);
+  // 默认取当前门店，或第一家
+  const effectiveTenantId = selectedServiceTenantId ?? (currentTenantId || clinics[0]?.tenantId || null);
   const { data: serviceStatus } = trpc.yabanClinic.getMyServiceStatus.useQuery(
-    undefined,
+    effectiveTenantId ? { tenantId: effectiveTenantId } : undefined,
     { enabled: !isCustomer }
   );
   const PLAN_LABEL: Record<string, string> = { monthly: "月付", annual: "年付", lifetime: "永久版" };
@@ -338,6 +353,49 @@ export default function YabanProfile() {
                     {b.label}
                   </span>
                 ))}
+                {/* 会员状态小徽章：嵌入角色徽标行，不透明实色，可点击查看详情 */}
+                {!isCustomer && serviceStatus?.found && (() => {
+                  const plan = serviceStatus.plan;
+                  const daysLeft = serviceStatus.daysLeft;
+                  const expireAt = serviceStatus.expireAt;
+                  if (plan === "lifetime") {
+                    return (
+                      <button onClick={() => setShowServiceDetail(true)}
+                        className="inline-flex items-center gap-1 h-[22px] px-2.5 rounded-md text-[11px] font-semibold active:opacity-80"
+                        style={{ background: "#B8860B", color: "#FFF8DC" }}>
+                        <Crown size={10} strokeWidth={2} />永久版
+                      </button>
+                    );
+                  }
+                  if (!expireAt) return null;
+                  const expired = daysLeft !== null && daysLeft <= 0;
+                  const warning = !expired && daysLeft !== null && daysLeft <= 30;
+                  if (expired) {
+                    return (
+                      <button onClick={() => setShowServiceDetail(true)}
+                        className="inline-flex items-center gap-1 h-[22px] px-2.5 rounded-md text-[11px] font-semibold active:opacity-80"
+                        style={{ background: "#DC2626", color: "#FFF" }}>
+                        <CalendarDays size={10} strokeWidth={2} />已到期
+                      </button>
+                    );
+                  }
+                  if (warning) {
+                    return (
+                      <button onClick={() => setShowServiceDetail(true)}
+                        className="inline-flex items-center gap-1 h-[22px] px-2.5 rounded-md text-[11px] font-semibold active:opacity-80"
+                        style={{ background: "#D97706", color: "#FFF" }}>
+                        <CalendarDays size={10} strokeWidth={2} />{daysLeft}天到期
+                      </button>
+                    );
+                  }
+                  return (
+                    <button onClick={() => setShowServiceDetail(true)}
+                      className="inline-flex items-center gap-1 h-[22px] px-2.5 rounded-md text-[11px] font-semibold active:opacity-80"
+                      style={{ background: "#1565A8", color: "#FFF" }}>
+                      <CalendarDays size={10} strokeWidth={2} />{PLAN_LABEL[plan ?? ""] ?? "订阅"} · {daysLeft}天
+                    </button>
+                  );
+                })()}
               </div>
             </div>
             {/* 二维码图标按鈕，与头像同行垂直居中，方形圆角风格 */}
@@ -375,66 +433,23 @@ export default function YabanProfile() {
         </div>
       </div>
 
-      {/* 服务到期状态卡片（非顾客且已加入门店时显示） */}
-      {!isCustomer && (
-        <div className="max-w-lg mx-auto px-4 mt-3">
-          <div
-            className="rounded-xl overflow-hidden"
-            style={{
-              background: "linear-gradient(135deg, #0E5A9E 0%, #1E88D6 60%, #3BA9E0 100%)",
-              boxShadow: "0 2px 12px rgba(14,90,158,0.18)",
-            }}
-          >
-            {/* 顶部标题行 */}
-            <div className="flex items-center justify-between px-4 pt-3.5 pb-2">
-              <div className="flex items-center gap-2">
-                <Crown size={15} className="text-yellow-300" strokeWidth={1.8} />
-                <span className="text-[13px] font-bold text-white">{
-                  serviceStatus?.plan ? PLAN_LABEL[serviceStatus.plan] + "会员" : "服务订阅"
-                }</span>
-              </div>
-              {serviceStatus?.plan && (
-                <span
-                  className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                  style={{ background: "rgba(255,255,255,0.18)", color: "#FFF" }}
-                >
-                  {PLAN_LABEL[serviceStatus.plan]}
-                </span>
-              )}
-            </div>
-            {/* 分隔线 */}
-            <div style={{ height: 1, background: "rgba(255,255,255,0.15)", margin: "0 16px" }} />
-            {/* 内容行 */}
-            <div className="flex items-center justify-between px-4 py-3">
-              <div className="flex items-center gap-2">
-                <CalendarDays size={15} className="text-white/70" strokeWidth={1.8} />
-                <span className="text-[12px] text-white/80">到期日期</span>
-              </div>
-              <div className="flex items-center gap-3">
-                {serviceStatus?.expireAt ? (
-                  <>
-                    <span className="text-[15px] font-bold text-white">{serviceStatus.expireAt}</span>
-                    <span
-                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
-                      style={{
-                        background: serviceStatus.daysLeft !== null && serviceStatus.daysLeft <= 30
-                          ? "rgba(239,68,68,0.25)" : "rgba(255,255,255,0.18)",
-                        color: serviceStatus.daysLeft !== null && serviceStatus.daysLeft <= 30
-                          ? "#FCA5A5" : "#FFF",
-                      }}
-                    >
-                      {serviceStatus.daysLeft !== null && serviceStatus.daysLeft > 0
-                        ? `还有 ${serviceStatus.daysLeft} 天`
-                        : serviceStatus.daysLeft !== null && serviceStatus.daysLeft <= 0
-                        ? "已到期"
-                        : ""}
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-[13px] text-white/50">未设置</span>
-                )}
-              </div>
-            </div>
+      {/* 多门店时在资产卡片下方显示门店切换 + 到期日期（仅非顾客且多门店时显示） */}
+      {!isCustomer && clinics.length > 1 && (
+        <div className="max-w-lg mx-auto px-4 mt-2">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded shadow-sm">
+            <CalendarDays size={13} className="text-gray-400 shrink-0" strokeWidth={1.8} />
+            <select
+              value={effectiveTenantId ?? ""}
+              onChange={(e) => setSelectedServiceTenantId(Number(e.target.value))}
+              className="flex-1 text-[12px] text-gray-600 border-0 outline-none bg-transparent cursor-pointer"
+            >
+              {clinics.map((c) => (
+                <option key={c.tenantId} value={c.tenantId}>{c.name}</option>
+              ))}
+            </select>
+            {serviceStatus?.expireAt && (
+              <span className="text-[11px] text-gray-400 shrink-0">{fmtDate(serviceStatus.expireAt)}</span>
+            )}
           </div>
         </div>
       )}
@@ -504,6 +519,146 @@ export default function YabanProfile() {
 
       {/* 邀请二维码弹窗 */}
       {showQr && <InviteQrModal inviteCode={inviteCode} onClose={() => setShowQr(false)} />}
+
+      {/* 服务订阅详情弹窗 */}
+      {showServiceDetail && serviceStatus && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          style={{ background: "rgba(0,0,0,0.45)" }}
+          onClick={() => setShowServiceDetail(false)}
+        >
+          <div
+            className="w-full max-w-lg bg-white rounded-t-2xl pb-8 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 弹窗标题栏 */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <Crown size={16} className="text-[#1E88D6]" strokeWidth={1.8} />
+                <span className="text-[15px] font-bold text-gray-800">服务订阅详情</span>
+              </div>
+              <button onClick={() => setShowServiceDetail(false)} className="text-gray-400 active:text-gray-600">
+                <X size={20} strokeWidth={1.8} />
+              </button>
+            </div>
+
+            {/* 详情内容 */}
+            <div className="px-5 pt-4">
+              {clinics.length <= 1 ? (
+                /* 单门店：显示详细信息 */
+                <div className="space-y-0">
+                  {clinics.length > 0 && (
+                    <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                      <span className="text-[13px] text-gray-500">服务门店</span>
+                      <span className="text-[13px] font-medium text-gray-800">{clinics[0]?.name || "未知"}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                    <span className="text-[13px] text-gray-500">套餐类型</span>
+                    <span className="text-[13px] font-medium text-gray-800">
+                      {serviceStatus.plan ? (PLAN_LABEL[serviceStatus.plan] + "套餐") : "未设置"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                    <span className="text-[13px] text-gray-500">到期日期</span>
+                    <span className={`text-[13px] font-medium ${
+                      serviceStatus.plan === "lifetime" ? "text-[#B8860B]" :
+                      serviceStatus.daysLeft !== null && serviceStatus.daysLeft <= 0 ? "text-red-600" :
+                      serviceStatus.daysLeft !== null && serviceStatus.daysLeft <= 30 ? "text-orange-500" :
+                      "text-gray-800"
+                    }`}>
+                      {serviceStatus.plan === "lifetime" ? "永久有效" :
+                       serviceStatus.expireAt ? fmtDate(serviceStatus.expireAt) : "未设置"}
+                    </span>
+                  </div>
+                  {serviceStatus.plan !== "lifetime" && serviceStatus.daysLeft !== null && (
+                    <div className="flex items-center justify-between py-3">
+                      <span className="text-[13px] text-gray-500">服务状态</span>
+                      <span className={`text-[13px] font-semibold ${
+                        serviceStatus.daysLeft <= 0 ? "text-red-600" :
+                        serviceStatus.daysLeft <= 30 ? "text-orange-500" :
+                        "text-[#16A34A]"
+                      }`}>
+                        {serviceStatus.daysLeft <= 0 ? "已到期，请联系管理员续费"
+                          : serviceStatus.daysLeft <= 30 ? `将于 ${serviceStatus.daysLeft} 天内到期，请及时续费`
+                          : `正常使用中，还有 ${serviceStatus.daysLeft} 天`}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* 多门店：列出所有门店的到期状态 */
+                <div className="space-y-0">
+                  {clinics.map((c: any, idx: number) => {
+                    const plan = c.servicePlan as string | null;
+                    const rawExpire = c.serviceExpireAt as string | null;
+                    // 处理 mysql2 可能返回 Date 对象的情况
+                    const expireAt = (() => {
+                      if (!rawExpire) return null;
+                      if (rawExpire instanceof Date) {
+                        const d = rawExpire as unknown as Date;
+                        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+                      }
+                      return String(rawExpire).slice(0, 10);
+                    })();
+                    const daysLeft = expireAt
+                      ? Math.ceil((new Date(expireAt).getTime() - Date.now()) / 86400000)
+                      : null;
+                    const expired = daysLeft !== null && daysLeft <= 0;
+                    const warning = !expired && daysLeft !== null && daysLeft <= 30;
+                    const isCurrent = c.tenantId === effectiveTenantId;
+                    return (
+                      <div
+                        key={c.tenantId}
+                        className={`flex items-center justify-between py-3 ${idx < clinics.length - 1 ? "border-b border-gray-100" : ""}`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-[#1E88D6] shrink-0" />}
+                          {!isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-transparent shrink-0" />}
+                          <span className={`text-[13px] truncate max-w-[130px] ${isCurrent ? "font-semibold text-gray-800" : "text-gray-600"}`}>
+                            {c.name}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {plan === "lifetime" ? (
+                            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md" style={{ background: "#B8860B", color: "#FFF8DC" }}>永久版</span>
+                          ) : expireAt ? (
+                            <>
+                              <span className="text-[12px] text-gray-400">{fmtDate(expireAt)}</span>
+                              <span
+                                className="text-[11px] font-semibold px-2 py-0.5 rounded-md"
+                                style={{
+                                  background: expired ? "#DC2626" : warning ? "#D97706" : "#16A34A",
+                                  color: "#FFF"
+                                }}
+                              >
+                                {expired ? "已到期" : warning ? `${daysLeft}天到期` : `还有${daysLeft}天`}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-[12px] text-gray-300">未设置</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* 关闭按鈕 */}
+            <div className="px-5 mt-5">
+              <button
+                onClick={() => setShowServiceDetail(false)}
+                className="w-full py-3 rounded-xl text-[14px] font-semibold text-white active:opacity-80"
+                style={{ background: "linear-gradient(135deg,#1E88D6,#3BA9E0)" }}
+              >
+                我知道了
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

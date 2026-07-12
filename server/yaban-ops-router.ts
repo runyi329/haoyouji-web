@@ -578,4 +578,317 @@ export const yabanOpsRouter = router({
         onDutyCount: onDutySet.size,
       };
     }),
+
+  // 接口11：年度进度（按月汇总实收）
+  annualProgress: protectedProcedure
+    .input(z.object({ tenantId: z.number().optional(), year: z.number().optional() }))
+    .query(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      await ensureChargeTables(conn);
+      const TENANT_ID = await resolveTenantId(ctx);
+      const year = input.year ?? new Date().getFullYear();
+      const [rows] = (await (conn as any).execute(
+        `SELECT MONTH(COALESCE(visit_at, created_at)) AS month,
+                COALESCE(SUM(paid), 0) AS revenue
+         FROM yaban_charge
+         WHERE tenant_id = ? AND status <> 'void' AND YEAR(COALESCE(visit_at, created_at)) = ?
+         GROUP BY MONTH(COALESCE(visit_at, created_at))
+         ORDER BY month`,
+        [TENANT_ID, year]
+      )) as any;
+      conn.release?.();
+      const monthMap: Record<number, number> = {};
+      for (const r of rows as any[]) {
+        monthMap[Number(r.month)] = Number(r.revenue || 0);
+      }
+      const MONTH_NAMES = ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"];
+      const items = MONTH_NAMES.map((name, i) => ({
+        month: name,
+        actual: Math.round((monthMap[i + 1] ?? 0) * 100) / 100,
+        target: 0,
+      }));
+      const totalActual = items.reduce((s, x) => s + x.actual, 0);
+      return { items, totalActual, annualTarget: 0 };
+    }),
+
+  // 接口12：库存预警（低于安全库存或即将过期）
+  inventoryWarning: protectedProcedure
+    .input(z.object({ tenantId: z.number().optional() }))
+    .query(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const TENANT_ID = await resolveTenantId(ctx);
+      const [stockRows] = (await (conn as any).execute(
+        `SELECT m.id, m.name, m.unit, m.safety_stock,
+                COALESCE(SUM(b.qty), 0) AS current_stock,
+                MIN(b.expiry_date) AS earliest_expiry
+         FROM yaban_material m
+         LEFT JOIN yaban_stock_batch b ON b.material_id = m.id AND b.qty > 0
+         WHERE m.tenant_id = ? AND m.enabled = 1
+         GROUP BY m.id, m.name, m.unit, m.safety_stock
+         HAVING current_stock <= m.safety_stock * 1.5
+            OR (earliest_expiry IS NOT NULL AND earliest_expiry <= DATE_ADD(NOW(), INTERVAL 30 DAY))
+         ORDER BY (current_stock / NULLIF(m.safety_stock, 1)) ASC
+         LIMIT 20`,
+        [TENANT_ID]
+      )) as any;
+      conn.release?.();
+      const today = new Date();
+      const items = (stockRows as any[]).map(r => {
+        const stock = Number(r.current_stock);
+        const safety = Number(r.safety_stock);
+        const expiry = r.earliest_expiry ? new Date(r.earliest_expiry) : null;
+        const daysToExpiry = expiry ? Math.ceil((expiry.getTime() - today.getTime()) / 86400000) : null;
+        let status: "normal" | "warning" | "critical" = "normal";
+        if (stock <= safety * 0.5 || (daysToExpiry !== null && daysToExpiry <= 7)) status = "critical";
+        else if (stock <= safety || (daysToExpiry !== null && daysToExpiry <= 30)) status = "warning";
+        return {
+          id: Number(r.id),
+          name: String(r.name),
+          unit: String(r.unit),
+          currentStock: stock,
+          safetyStock: safety,
+          expiryDate: r.earliest_expiry ? String(r.earliest_expiry).slice(0, 10) : null,
+          daysToExpiry,
+          status,
+        };
+      });
+      return { items };
+    }),
+
+  // 接口13：运营效率（爽约率、到诊率等）
+  operationEfficiency: protectedProcedure.input(dateRangeInput).query(async ({ ctx, input }) => {
+    const conn = await getDbConnection();
+    if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+    const TENANT_ID = await resolveTenantId(ctx);
+    const { startDate, endDate } = input;
+    const [apptRows] = (await (conn as any).execute(
+      `SELECT
+         COUNT(*) AS total,
+         SUM(CASE WHEN status = 'no_show' THEN 1 ELSE 0 END) AS no_show,
+         SUM(CASE WHEN status = 'rescheduled' THEN 1 ELSE 0 END) AS rescheduled,
+         SUM(CASE WHEN status IN ('visited','charged') THEN 1 ELSE 0 END) AS visited,
+         AVG(CASE WHEN duration IS NOT NULL AND duration > 0 THEN duration ELSE NULL END) AS avg_duration
+       FROM yaban_appointment
+       WHERE tenant_id = ? AND appoint_date BETWEEN ? AND ?`,
+      [TENANT_ID, startDate, endDate]
+    )) as any;
+    const [roomRows] = (await (conn as any).execute(
+      `SELECT COUNT(*) AS room_count FROM yaban_clinic_room WHERE tenant_id = ? AND enabled = 1`,
+      [TENANT_ID]
+    )) as any;
+    conn.release?.();
+    const r = (apptRows as any[])[0] || {};
+    const total = Number(r.total || 0);
+    const noShow = Number(r.no_show || 0);
+    const rescheduled = Number(r.rescheduled || 0);
+    const visited = Number(r.visited || 0);
+    const roomCount = Number((roomRows as any[])[0]?.room_count || 0);
+    return {
+      totalAppointments: total,
+      visitedCount: visited,
+      noShowCount: noShow,
+      rescheduledCount: rescheduled,
+      noShowRate: ratio(noShow, total),
+      rescheduledRate: ratio(rescheduled, total),
+      visitRate: ratio(visited, total),
+      avgTreatmentMinutes: r.avg_duration ? Math.round(Number(r.avg_duration)) : 0,
+      roomCount,
+    };
+  }),
+
+  // 接口14：时段效率（按小时统计预约量）
+  timeSlotStats: protectedProcedure.input(dateRangeInput).query(async ({ ctx, input }) => {
+    const conn = await getDbConnection();
+    if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+    const TENANT_ID = await resolveTenantId(ctx);
+    const { startDate, endDate } = input;
+    const [rows] = (await (conn as any).execute(
+      `SELECT HOUR(STR_TO_DATE(appoint_time, '%H:%i')) AS hour,
+              COUNT(*) AS patient_count
+       FROM yaban_appointment
+       WHERE tenant_id = ? AND appoint_date BETWEEN ? AND ?
+       GROUP BY hour
+       ORDER BY hour`,
+      [TENANT_ID, startDate, endDate]
+    )) as any;
+    conn.release?.();
+    const hourMap: Record<number, number> = {};
+    for (const r of rows as any[]) {
+      hourMap[Number(r.hour)] = Number(r.patient_count);
+    }
+    const slots = [];
+    for (let h = 8; h <= 19; h++) {
+      slots.push({ hour: `${h}-${h + 1}`, patients: hourMap[h] ?? 0 });
+    }
+    return { slots };
+  }),
+
+  // 接口15：会员与储值统计
+  memberDeposit: protectedProcedure.input(dateRangeInput).query(async ({ ctx, input }) => {
+    const conn = await getDbConnection();
+    if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+    await ensureChargeTables(conn);
+    const TENANT_ID = await resolveTenantId(ctx);
+    const { startDate, endDate } = input;
+    const [custRows] = (await (conn as any).execute(
+      `SELECT
+         COUNT(*) AS total_customers,
+         SUM(CASE WHEN wallet_balance > 0 THEN 1 ELSE 0 END) AS members_with_balance,
+         COALESCE(SUM(wallet_balance), 0) AS total_balance,
+         COALESCE(SUM(CASE WHEN wallet_balance > 0 THEN wallet_balance ELSE 0 END), 0) AS active_balance
+       FROM yaban_customer
+       WHERE tenant_id = ?`,
+      [TENANT_ID]
+    )) as any;
+    const [newRows] = (await (conn as any).execute(
+      `SELECT COUNT(*) AS new_count
+       FROM yaban_customer
+       WHERE tenant_id = ? AND DATE(created_at) BETWEEN ? AND ?`,
+      [TENANT_ID, startDate, endDate]
+    )) as any;
+    conn.release?.();
+    const c = (custRows as any[])[0] || {};
+    const newCount = Number((newRows as any[])[0]?.new_count || 0);
+    const totalCustomers = Number(c.total_customers || 0);
+    const membersWithBalance = Number(c.members_with_balance || 0);
+    const totalBalance = Math.round(Number(c.total_balance || 0) * 100) / 100;
+    const activeBalance = Math.round(Number(c.active_balance || 0) * 100) / 100;
+    return {
+      totalCustomers,
+      membersWithBalance,
+      totalBalance,
+      activeBalance,
+      newCustomersThisMonth: newCount,
+      avgBalancePerMember: membersWithBalance > 0
+        ? Math.round(activeBalance / membersWithBalance * 100) / 100
+        : 0,
+    };
+  }),
+
+  // 接诊热力图：按星期几和时段统计预约数
+  heatmapStats: protectedProcedure.input(dateRangeInput).query(async ({ ctx, input }) => {
+    const conn = await getDbConnection();
+    if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+    const TENANT_ID = await resolveTenantId(ctx);
+    const { startDate, endDate } = input;
+    const [rows] = (await (conn as any).execute(
+      `SELECT DAYOFWEEK(appoint_date) AS dow,
+              HOUR(CONCAT(appoint_date, ' ', appoint_time)) AS hr,
+              COUNT(*) AS cnt
+       FROM yaban_appointment
+       WHERE tenant_id = ? AND appoint_date BETWEEN ? AND ?
+         AND status NOT IN ('cancelled','no_show')
+       GROUP BY dow, hr`,
+      [TENANT_ID, startDate, endDate]
+    )) as any;
+    conn.release?.();
+    // DAYOFWEEK: 1=日, 2=一, ..., 7=六 => 转为 0=周一..6=周日
+    const items = (rows as any[]).map((r: any) => ({
+      day: ((Number(r.dow) - 2 + 7) % 7),
+      hour: Number(r.hr),
+      value: Number(r.cnt),
+    }));
+    return { items };
+  }),
+
+  // 周对比：本周 vs 上周每天营收
+  weekCompare: protectedProcedure.input(dateRangeInput).query(async ({ ctx, input }) => {
+    const conn = await getDbConnection();
+    if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+    await ensureChargeTables(conn);
+    const TENANT_ID = await resolveTenantId(ctx);
+    const { endDate } = input;
+    const end = new Date(endDate + "T00:00:00");
+    const dayOfWeek = end.getDay();
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const thisMonday = new Date(end.getTime() + mondayOffset * 86400000);
+    const lastMonday = new Date(thisMonday.getTime() - 7 * 86400000);
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    const thisMondayStr = fmt(thisMonday);
+    const thisSundayStr = fmt(new Date(thisMonday.getTime() + 6 * 86400000));
+    const lastMondayStr = fmt(lastMonday);
+    const lastSundayStr = fmt(new Date(lastMonday.getTime() + 6 * 86400000));
+    const [thisRows] = (await (conn as any).execute(
+      `SELECT DATE(COALESCE(visit_at, created_at)) AS d, COALESCE(SUM(paid), 0) AS revenue
+       FROM yaban_charge WHERE tenant_id = ? AND status <> 'void'
+         AND DATE(COALESCE(visit_at, created_at)) BETWEEN ? AND ?
+       GROUP BY DATE(COALESCE(visit_at, created_at))`,
+      [TENANT_ID, thisMondayStr, thisSundayStr]
+    )) as any;
+    const [lastRows] = (await (conn as any).execute(
+      `SELECT DATE(COALESCE(visit_at, created_at)) AS d, COALESCE(SUM(paid), 0) AS revenue
+       FROM yaban_charge WHERE tenant_id = ? AND status <> 'void'
+         AND DATE(COALESCE(visit_at, created_at)) BETWEEN ? AND ?
+       GROUP BY DATE(COALESCE(visit_at, created_at))`,
+      [TENANT_ID, lastMondayStr, lastSundayStr]
+    )) as any;
+    conn.release?.();
+    const toMap = (rows: any[]) => {
+      const m = new Map<string, number>();
+      for (const r of rows) {
+        const key = r.d instanceof Date ? r.d.toISOString().slice(0, 10) : String(r.d).slice(0, 10);
+        m.set(key, Number(r.revenue || 0));
+      }
+      return m;
+    };
+    const thisMap = toMap(thisRows as any[]);
+    const lastMap = toMap(lastRows as any[]);
+    const DAYS_CN = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+    const items = Array.from({ length: 7 }, (_, i) => {
+      const thisDate = fmt(new Date(thisMonday.getTime() + i * 86400000));
+      const lastDate = fmt(new Date(lastMonday.getTime() + i * 86400000));
+      const thisWeek = thisMap.get(thisDate) ?? 0;
+      const lastWeek = lastMap.get(lastDate) ?? 0;
+      return {
+        day: DAYS_CN[i],
+        thisWeek: Math.round(thisWeek) / 10000,
+        lastWeek: Math.round(lastWeek) / 10000,
+        aiNext: Math.round(thisWeek * 1.05) / 10000,
+      };
+    });
+    return { items };
+  }),
+
+  // revenueTrend 别名：兼容前端调用（包含 aiRevenue 字段）
+  revenueTrend: protectedProcedure.input(dateRangeInput).query(async ({ ctx, input }) => {
+    const conn = await getDbConnection();
+    if (!conn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+    await ensureChargeTables(conn);
+    const TENANT_ID = await resolveTenantId(ctx);
+    const { startDate, endDate } = input;
+    const [rows] = (await (conn as any).execute(
+      `SELECT DATE(COALESCE(visit_at, created_at)) AS d,
+              COALESCE(SUM(paid), 0) AS revenue,
+              COUNT(DISTINCT customer_id) AS patient_count
+       FROM yaban_charge
+       WHERE ${CHARGE_RANGE_WHERE}
+       GROUP BY DATE(COALESCE(visit_at, created_at))`,
+      [TENANT_ID, startDate, endDate]
+    )) as any;
+    const map = new Map<string, { revenue: number; patientCount: number }>();
+    for (const r of rows as any[]) {
+      const key = r.d instanceof Date ? r.d.toISOString().slice(0, 10) : String(r.d).slice(0, 10);
+      map.set(key, { revenue: Number(r.revenue || 0), patientCount: Number(r.patient_count || 0) });
+    }
+    const today = new Date();
+    const todayStr = today.toISOString().slice(0, 10);
+    const msPerDay = 86400000;
+    const start = new Date(startDate + "T00:00:00");
+    const end = new Date(endDate + "T00:00:00");
+    const items: Array<{ date: string; revenue: number; aiRevenue: number; patientCount: number; isToday: boolean; isFuture: boolean }> = [];
+    let maxRevenue = 0;
+    for (let t = start.getTime(); t <= end.getTime(); t += msPerDay) {
+      const dateStr = new Date(t).toISOString().slice(0, 10);
+      const isFuture = dateStr > todayStr;
+      const hit = map.get(dateStr);
+      const revenue = isFuture ? 0 : Number(hit?.revenue || 0);
+      const patientCount = isFuture ? 0 : Number(hit?.patientCount || 0);
+      if (revenue > maxRevenue) maxRevenue = revenue;
+      items.push({ date: dateStr, revenue, aiRevenue: Math.round(revenue * 1.05 * 100) / 100, patientCount, isToday: dateStr === todayStr, isFuture });
+    }
+    conn.release?.();
+    return { items, breakevenValue: 14800, maxRevenue };
+  }),
 });

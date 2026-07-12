@@ -2,15 +2,26 @@
  * AreaChart - 营收趋势面积图（月度）
  */
 
-import { genTrendData } from "../../mockData";
+import { trpc } from "@/lib/trpc";
+
+interface Props {
+  startDate: string;
+  endDate: string;
+  tenantId?: number;
+}
 
 const CHART_H = 160;
 const CHART_W = 320;
 const PAD_L = 36;
 const PAD_B = 24;
 
-export default function AreaChart() {
-  const data = genTrendData();
+export default function AreaChart({ startDate, endDate, tenantId }: Props) {
+  const { data: rawData } = trpc.yabanOps.revenueTrend.useQuery({ startDate, endDate, tenantId });
+  const data = (rawData?.items ?? []).map((d) => ({
+    date: d.date.slice(5).replace("-", "/"),
+    actual: Number(d.revenue) || 0,
+    ai: Number(d.aiRevenue) || Number(d.revenue) || 0,
+  }));
   const maxVal = Math.max(...data.map((d) => Math.max(d.actual, d.ai))) * 1.1;
   const innerW = CHART_W - PAD_L;
   const innerH = CHART_H - PAD_B;

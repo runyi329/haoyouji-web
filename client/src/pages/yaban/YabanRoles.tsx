@@ -330,6 +330,7 @@ function StaffTab({ tenantId, my }: { tenantId: number; my: any }) {
   const [showCustomRoles, setShowCustomRoles] = useState(false);
   const [showRoleManage, setShowRoleManage] = useState(false);
   const [permMember, setPermMember] = useState<any | null>(null);
+  const [hrMember, setHrMember] = useState<any | null>(null);
 
   const assignableRoles = useMemo(
     () => (roles || []).filter((r: any) => r.role_key !== "founder" && r.role_key !== "co_founder"),
@@ -497,12 +498,20 @@ function StaffTab({ tenantId, my }: { tenantId: number; my: any }) {
                       );
                     })}
                     <td className="px-2 py-2.5 text-center">
-                      <button
-                        onClick={() => setPermMember(m)}
-                        className="text-xs text-[#1E88D6] font-medium active:opacity-70 whitespace-nowrap"
-                      >
-                        设置
-                      </button>
+                      <div className="flex flex-col gap-1 items-center">
+                        <button
+                          onClick={() => setPermMember(m)}
+                          className="text-xs text-[#1E88D6] font-medium active:opacity-70 whitespace-nowrap"
+                        >
+                          权限
+                        </button>
+                        <button
+                          onClick={() => setHrMember(m)}
+                          className="text-xs text-gray-400 font-medium active:opacity-70 whitespace-nowrap"
+                        >
+                          人事
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -517,6 +526,14 @@ function StaffTab({ tenantId, my }: { tenantId: number; my: any }) {
         </div>
       </div>
 
+      {/* 人事信息编辑弹窗 */}
+      {hrMember && (
+        <HrEditModal
+          member={hrMember}
+          tenantId={tenantId}
+          onClose={() => setHrMember(null)}
+        />
+      )}
       {/* 添加成员弹窗 */}
       {showAdd && (
         <RoleSelectModal
@@ -1753,6 +1770,224 @@ function RoleEditForm({
           {saving && <Loader2 className="w-4 h-4 animate-spin" />}
           {isEdit ? "保存修改" : "创建角色"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ============ 人事信息编辑弹窗 ============
+function HrEditModal({
+  member,
+  tenantId,
+  onClose,
+}: {
+  member: any;
+  tenantId: number;
+  onClose: () => void;
+}) {
+  const utils = trpc.useUtils();
+  // 先查询该成员的人事信息
+  const { data: staffList, isLoading } = trpc.yabanStaff.list.useQuery(
+    { tenantId },
+    { retry: false }
+  );
+  const staffInfo = staffList?.find((s: any) => s.userId === member.userId) || null;
+
+  const [joinDate, setJoinDate] = useState("");
+  const [contractExpireAt, setContractExpireAt] = useState("");
+  const [contractStatus, setContractStatus] = useState("active");
+  const [gender, setGender] = useState("");
+  const [edu, setEdu] = useState("");
+  const [licenseExpireAt, setLicenseExpireAt] = useState("");
+  const [licenseNo, setLicenseNo] = useState("");
+  const [remark, setRemark] = useState("");
+  const [initialized, setInitialized] = useState(false);
+
+  useEffect(() => {
+    if (staffInfo && !initialized) {
+      setJoinDate(staffInfo.joinDate || "");
+      setContractExpireAt(staffInfo.contractExpireAt || "");
+      setContractStatus(staffInfo.contractStatus || "active");
+      setGender(staffInfo.gender || "");
+      setEdu(staffInfo.edu || "");
+      setLicenseExpireAt(staffInfo.licenseExpireAt || "");
+      setLicenseNo(staffInfo.licenseNo || "");
+      setRemark(staffInfo.remark || "");
+      setInitialized(true);
+    }
+  }, [staffInfo, initialized]);
+
+  const updateMember = trpc.yabanStaff.updateMember.useMutation({
+    onSuccess: () => {
+      toast.success("人事信息已保存");
+      utils.yabanStaff.list.invalidate();
+      onClose();
+    },
+    onError: (e) => toast.error(e.message || "保存失败"),
+  });
+
+  const handleSave = () => {
+    if (!staffInfo) return toast.error("未找到成员信息");
+    updateMember.mutate({
+      memberId: staffInfo.id,
+      joinDate: joinDate || null,
+      contractExpireAt: contractExpireAt || null,
+      contractStatus,
+      gender: gender || null,
+      edu: edu || null,
+      licenseExpireAt: licenseExpireAt || null,
+      licenseNo: licenseNo || null,
+      remark: remark || null,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center">
+      <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl overflow-hidden">
+        {/* 标题栏 */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <span className="text-base font-bold text-gray-800">
+            人事信息 · {member.name || member.username}
+          </span>
+          <button onClick={onClose} aria-label="关闭">
+            <X className="w-5 h-5 text-gray-400" />
+          </button>
+        </div>
+
+        {isLoading ? (
+          <div className="flex justify-center py-10">
+            <Loader2 className="w-6 h-6 text-[#9CC8EC] animate-spin" />
+          </div>
+        ) : (
+          <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+            {/* 基本信息 */}
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">基本信息</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">性别</label>
+                  <select
+                    value={gender}
+                    onChange={(e) => setGender(e.target.value)}
+                    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:border-[#1E88D6]"
+                  >
+                    <option value="">未填写</option>
+                    <option value="male">男</option>
+                    <option value="female">女</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">学历</label>
+                  <select
+                    value={edu}
+                    onChange={(e) => setEdu(e.target.value)}
+                    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:border-[#1E88D6]"
+                  >
+                    <option value="">未填写</option>
+                    <option value="high_school">高中/中专</option>
+                    <option value="associate">大专</option>
+                    <option value="bachelor">本科</option>
+                    <option value="master">硕士</option>
+                    <option value="phd">博士</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* 入职信息 */}
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">入职信息</p>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">入职日期</label>
+                <input
+                  type="date"
+                  value={joinDate}
+                  onChange={(e) => setJoinDate(e.target.value)}
+                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:border-[#1E88D6]"
+                />
+              </div>
+            </div>
+
+            {/* 合同信息 */}
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">劳动合同</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">合同状态</label>
+                  <select
+                    value={contractStatus}
+                    onChange={(e) => setContractStatus(e.target.value)}
+                    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:border-[#1E88D6]"
+                  >
+                    <option value="active">已签署，有效</option>
+                    <option value="unsigned">未签署</option>
+                    <option value="expired">已到期</option>
+                    <option value="expiring">即将到期</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">合同到期日</label>
+                  <input
+                    type="date"
+                    value={contractExpireAt}
+                    onChange={(e) => setContractExpireAt(e.target.value)}
+                    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:border-[#1E88D6]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 执业证书 */}
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">执业证书</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">证书编号</label>
+                  <input
+                    type="text"
+                    value={licenseNo}
+                    onChange={(e) => setLicenseNo(e.target.value)}
+                    placeholder="执业证书编号"
+                    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:border-[#1E88D6]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">证书到期日</label>
+                  <input
+                    type="date"
+                    value={licenseExpireAt}
+                    onChange={(e) => setLicenseExpireAt(e.target.value)}
+                    className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:border-[#1E88D6]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 备注 */}
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">备注</label>
+              <textarea
+                value={remark}
+                onChange={(e) => setRemark(e.target.value)}
+                placeholder="其他备注信息"
+                rows={2}
+                className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm outline-none focus:border-[#1E88D6] resize-none"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* 保存按钮 */}
+        <div className="px-5 py-4 border-t border-gray-100">
+          <button
+            onClick={handleSave}
+            disabled={updateMember.isPending || isLoading}
+            className="w-full bg-gradient-to-r from-[#2196C8] to-[#3BA9E0] text-white rounded-md py-3 text-sm font-medium active:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
+          >
+            {updateMember.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+            保存人事信息
+          </button>
+        </div>
       </div>
     </div>
   );

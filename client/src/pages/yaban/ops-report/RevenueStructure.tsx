@@ -3,7 +3,8 @@
  */
 
 import OpsCard from "./OpsCard";
-import { mockRevenueStructure } from "../mockData";
+import { trpc } from "@/lib/trpc";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const RADIUS = 52;
 const CX = 70;
@@ -22,12 +23,52 @@ function describeArc(startAngle: number, endAngle: number) {
   return `M ${start.x} ${start.y} A ${RADIUS} ${RADIUS} 0 ${largeArc} 1 ${end.x} ${end.y}`;
 }
 
-export default function RevenueStructure() {
-  const data = mockRevenueStructure;
-  const total = data.reduce((s, d) => s + d.value, 0);
+export default function RevenueStructure({ startDate, endDate, tenantId }: { startDate: string; endDate: string; tenantId?: number }) {
+  const { data, isLoading } = trpc.yabanOps.revenueStructure.useQuery({
+    startDate,
+    endDate,
+    tenantId,
+  });
+
+  if (isLoading) {
+    return (
+      <OpsCard title="收入结构" subtitle="按项目类型">
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <Skeleton width={140} height={140} style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <Skeleton width="100%" height={20} style={{ marginBottom: 8 }} />
+            <Skeleton width="100%" height={20} style={{ marginBottom: 8 }} />
+            <Skeleton width="100%" height={20} />
+          </div>
+        </div>
+      </OpsCard>
+    );
+  }
+
+  if (!data || data.items.length === 0) {
+    return (
+      <OpsCard title="收入结构" subtitle="按项目类型">
+        <div style={{ textAlign: "center", padding: "20px 0", color: "#6B7280" }}>
+          暂无数据
+        </div>
+      </OpsCard>
+    );
+  }
+
+  // 预定义的颜色数组，确保每次渲染颜色一致
+  const colors = ["#4F46E5", "#EC4899", "#F59E0B", "#10B981", "#6366F1", "#F472B6", "#FBBF24", "#34D399"];
+
+  const formattedData = data.items.map((item, index) => ({
+    name: item.category,
+    value: item.amount / 10000, // 转换为万元
+    pct: item.ratio,
+    color: colors[index % colors.length], // 从预定义颜色数组中获取颜色
+  }));
+
+  const total = formattedData.reduce((s, d) => s + d.value, 0);
 
   let currentAngle = 0;
-  const arcs = data.map((d) => {
+  const arcs = formattedData.map((d) => {
     const sweep = (d.value / total) * 360;
     const arc = { ...d, startAngle: currentAngle, endAngle: currentAngle + sweep };
     currentAngle += sweep;
@@ -65,7 +106,7 @@ export default function RevenueStructure() {
 
         {/* 列表 */}
         <div style={{ flex: 1 }}>
-          {data.map((item, i) => (
+          {formattedData.map((item, i) => (
             <div
               key={i}
               style={{
@@ -73,7 +114,7 @@ export default function RevenueStructure() {
                 alignItems: "center",
                 justifyContent: "space-between",
                 padding: "5px 0",
-                borderBottom: i < data.length - 1 ? "1px solid #F9FAFB" : "none",
+                borderBottom: i < formattedData.length - 1 ? "1px solid #F9FAFB" : "none",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

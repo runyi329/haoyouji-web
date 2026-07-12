@@ -25,6 +25,7 @@ interface OpsHeaderProps {
   selectedDate: string;
   dateLabel: string;
   onDateChange: (value: string, label: string) => void;
+  onRangeChange?: (start: string, end: string) => void;
 }
 
 export default function OpsHeader({
@@ -35,6 +36,7 @@ export default function OpsHeader({
   selectedDate,
   dateLabel,
   onDateChange,
+  onRangeChange,
 }: OpsHeaderProps) {
   const [shopOpen, setShopOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
@@ -53,16 +55,44 @@ export default function OpsHeader({
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  function toYmd(d: Date) {
+    return d.toISOString().slice(0, 10);
+  }
+
   function handleQuickDate(opt: DateOption) {
     const today = new Date();
     let label = opt.label;
+    let start = toYmd(today);
+    let end = toYmd(today);
     if (opt.value === "today") {
       const d = `${today.getMonth() + 1}月${today.getDate()}日`;
       label = `今日（${d}）`;
+      start = toYmd(today);
+      end = toYmd(today);
+    } else if (opt.value === "week") {
+      const dow = (today.getDay() + 6) % 7;
+      const mon = new Date(today); mon.setDate(today.getDate() - dow);
+      start = toYmd(mon);
+      end = toYmd(today);
+      label = `本周（${mon.getMonth()+1}月${mon.getDate()}日 - ${today.getMonth()+1}月${today.getDate()}日）`;
     } else if (opt.value === "month") {
-      label = `本月（6月1日 - 6月16日）`;
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+      start = toYmd(firstDay);
+      end = toYmd(today);
+      label = `本月（${today.getMonth()+1}月1日 - ${today.getMonth()+1}月${today.getDate()}日）`;
+    } else if (opt.value === "quarter") {
+      const q = Math.floor(today.getMonth() / 3);
+      const firstDay = new Date(today.getFullYear(), q * 3, 1);
+      start = toYmd(firstDay);
+      end = toYmd(today);
+      label = `本季度（${firstDay.getMonth()+1}月1日 - ${today.getMonth()+1}月${today.getDate()}日）`;
+    } else if (opt.value === "year") {
+      start = `${today.getFullYear()}-01-01`;
+      end = toYmd(today);
+      label = `今年（${today.getFullYear()}年）`;
     }
     onDateChange(opt.value, label);
+    onRangeChange?.(start, end);
     setDateOpen(false);
   }
 
@@ -70,6 +100,7 @@ export default function OpsHeader({
     const s = dateStart.replace(/-/g, "/").slice(5).replace("/", "月") + "日";
     const e = dateEnd.replace(/-/g, "/").slice(5).replace("/", "月") + "日";
     onDateChange("custom", `${s} - ${e}`);
+    onRangeChange?.(dateStart, dateEnd);
     setDateOpen(false);
   }
 
@@ -105,19 +136,6 @@ export default function OpsHeader({
 
         <span style={{ fontSize: 17, fontWeight: 800, color: "white", display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
           运营报表
-          <span
-            style={{
-              fontSize: 10,
-              fontWeight: 600,
-              padding: "2px 7px",
-              borderRadius: 5,
-              background: "rgba(255,255,255,0.22)",
-              color: "white",
-              whiteSpace: "nowrap",
-            }}
-          >
-            数据对接中
-          </span>
         </span>
 
         {/* 店铺选择器 */}

@@ -1,17 +1,55 @@
 import OpsCard from "./OpsCard";
-import { mockPatientAnalysis } from "../mockData";
+import { trpc } from "@/lib/trpc";
+import { Skeleton } from "@/components/ui/skeleton";
 
-export default function PatientAnalysis() {
-  const d = mockPatientAnalysis;
-  const total = d.newPatients + d.returnPatients;
+interface PatientAnalysisProps {
+  startDate: string;
+  endDate: string;
+  tenantId?: number;
+}
+
+export default function PatientAnalysis({ startDate, endDate, tenantId }: PatientAnalysisProps) {
+  const { data, isLoading, isError } = trpc.yabanOps.patientAnalysis.useQuery({
+    startDate,
+    endDate,
+    tenantId,
+  });
+
+  if (isLoading) {
+    return (
+      <OpsCard title="患者分析" subtitle="本月患者维度数据">
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+          <Skeleton className="h-[60px] w-full" />
+          <Skeleton className="h-[60px] w-full" />
+          <Skeleton className="h-[60px] w-full" />
+          <Skeleton className="h-[60px] w-full" />
+        </div>
+        <Skeleton className="h-[150px] w-full mb-4" />
+        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <Skeleton className="h-[60px] flex-1" />
+          <Skeleton className="h-[60px] flex-1" />
+        </div>
+      </OpsCard>
+    );
+  }
+
+  if (isError || !data || (data.newPatients === 0 && data.returnPatients === 0)) {
+    return (
+      <OpsCard title="患者分析" subtitle="本月患者维度数据">
+        <div style={{ textAlign: "center", padding: "20px 0", color: "#9CA3AF" }}>暂无数据</div>
+      </OpsCard>
+    );
+  }
+
+  const { newPatients, returnPatients, returnRate } = data;
+
   return (
     <OpsCard title="患者分析" subtitle="本月患者维度数据">
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
         {[
-          { label: "新患", value: d.newPatients, color: "#1E88D6" },
-          { label: "复诊", value: d.returnPatients, color: "#10B981" },
-          { label: "复诊率", value: `${d.returnRate}%`, color: "#F59E0B" },
-          { label: "平均年龄", value: `${d.avgAge}岁`, color: "#9C27B0" },
+          { label: "新患", value: newPatients, color: "#1E88D6" },
+          { label: "复诊", value: returnPatients, color: "#10B981" },
+          { label: "复诊率", value: `${returnRate}%`, color: "#F59E0B" },
         ].map((item, i) => (
           <div key={i} style={{ background: "#F8FAFC", borderRadius: 5, padding: "10px 12px" }}>
             <div style={{ fontSize: 10, color: "#9CA3AF", marginBottom: 4 }}>{item.label}</div>
@@ -19,26 +57,7 @@ export default function PatientAnalysis() {
           </div>
         ))}
       </div>
-      <div style={{ fontSize: 11, color: "#6B7280", marginBottom: 6 }}>年龄分布</div>
-      {d.ageGroups.map((g, i) => (
-        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
-          <span style={{ width: 36, fontSize: 10, color: "#9CA3AF", flexShrink: 0 }}>{g.label}</span>
-          <div style={{ flex: 1, height: 6, background: "#F3F4F6", borderRadius: 3, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${(g.count / total) * 100}%`, background: "#1E88D6", borderRadius: 3 }} />
-          </div>
-          <span style={{ width: 28, fontSize: 10, color: "#374151", textAlign: "right", flexShrink: 0 }}>{g.count}</span>
-        </div>
-      ))}
-      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        <div style={{ flex: 1, background: "#EAF4FE", borderRadius: 4, padding: "8px 10px", textAlign: "center" }}>
-          <div style={{ fontSize: 10, color: "#6B7280" }}>男</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#1E88D6" }}>{d.genderMale}%</div>
-        </div>
-        <div style={{ flex: 1, background: "#FDF2F8", borderRadius: 4, padding: "8px 10px", textAlign: "center" }}>
-          <div style={{ fontSize: 10, color: "#6B7280" }}>女</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#EC4899" }}>{d.genderFemale}%</div>
-        </div>
-      </div>
+      {/* Removed age distribution and gender distribution as data is not available from tRPC interface */}
     </OpsCard>
   );
 }

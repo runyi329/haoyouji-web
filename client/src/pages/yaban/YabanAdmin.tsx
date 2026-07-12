@@ -43,6 +43,14 @@ import ClinicForm, { ClinicFormValue, EMPTY_CLINIC, fromClinic } from "./ClinicF
 const fmtMoney = (n: number) =>
   "¥" + Number(n || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// 将 "2026-07-31" 格式转为 "2026年7月31日"
+const fmtDate = (s: string | null | undefined): string => {
+  if (!s) return "";
+  const m = String(s).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return String(s).slice(0, 10);
+  return `${m[1]}年${Number(m[2])}月${Number(m[3])}日`;
+};
+
 const ROLE_META: { key: string; label: string; icon: React.ReactNode }[] = [
   { key: "ownerCount", label: "院长/股东", icon: <Crown className="w-3.5 h-3.5 text-[#D97706]" /> },
   { key: "doctorCount", label: "医生", icon: <Stethoscope className="w-3.5 h-3.5 text-[#2196C8]" /> },
@@ -152,6 +160,42 @@ export default function YabanAdmin() {
         <span className="inline-flex items-center gap-1"><Wallet className="w-3.5 h-3.5 text-[#16A34A]" />营业额 {fmtMoney(c.revenue)}</span>
         <button onClick={() => setDetailId(c.id)} className="inline-flex items-center gap-0.5 text-[#1E88D6]"><Pencil className="w-3 h-3" />编辑详情<ChevronRight className="w-3.5 h-3.5" /></button>
       </div>
+
+      {/* 服务到期状态标签 */}
+      {(() => {
+        const expireAt = c.serviceExpireAt as string | null;
+        const plan = c.servicePlan as string | null;
+        const PLAN_LABEL: Record<string, string> = { monthly: "月付", annual: "年付", lifetime: "永久版" };
+        if (!expireAt && !plan) return null;
+        if (plan === "lifetime") {
+          return (
+            <div className="mt-1.5 px-1 flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-[#EAF4FE] text-[#1E88D6]">
+                <Crown className="w-3 h-3" />永久版
+              </span>
+            </div>
+          );
+        }
+        if (!expireAt) return null;
+        const daysLeft = Math.ceil((new Date(expireAt).getTime() - Date.now()) / 86400000);
+        const expired = daysLeft <= 0;
+        const warning = !expired && daysLeft <= 30;
+        return (
+          <div className="mt-1.5 px-1 flex items-center gap-1.5 flex-wrap">
+            {plan && <span className="inline-flex items-center gap-0.5 text-[11px] px-1.5 py-0.5 rounded-full bg-[#EAF4FE] text-[#1E88D6]">{PLAN_LABEL[plan] ?? plan}</span>}
+            <span
+              className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full"
+              style={{
+                background: expired ? "#FDECEC" : warning ? "#FEF6E6" : "#F0FDF4",
+                color: expired ? "#DC2626" : warning ? "#D97706" : "#16A34A",
+              }}
+            >
+              <CalendarDays className="w-3 h-3" />
+              {expired ? `已到期（${fmtDate(expireAt)}）` : `${fmtDate(expireAt)} · 还有${daysLeft}天`}
+            </span>
+          </div>
+        );
+      })()}
 
       {c.status === "rejected" && c.rejectReason && (
         <div className="mt-2 text-[11px] text-[#DC2626] bg-[#FDECEC] rounded px-2 py-1">驳回原因：{c.rejectReason}</div>
@@ -564,7 +608,7 @@ function ClinicDetailSheet({ clinicId, onClose }: { clinicId: number; onClose: (
                     <div className="flex items-start gap-2 text-xs">
                       <span className="text-gray-400 shrink-0 w-16">到期日期</span>
                       <span className={(d?.clinic as any)?.serviceExpireAt ? "text-gray-700" : "text-gray-300"}>
-                        {(d?.clinic as any)?.serviceExpireAt ? String((d?.clinic as any).serviceExpireAt).slice(0, 10) : "未设置"}
+                        {(d?.clinic as any)?.serviceExpireAt ? fmtDate(String((d?.clinic as any).serviceExpireAt)) : "未设置"}
                       </span>
                     </div>
                     <div className="flex items-start gap-2 text-xs">

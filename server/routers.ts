@@ -73,6 +73,7 @@ import { yabanAppointmentRouter, yabanShiftRouter } from "./yaban-appointment-ro
 import { yabanRoomRouter, yabanDeptRouter } from "./yaban-room-dept-router";
 import { yabanValuationRouter } from "./yaban-valuation-router";
 import { yabanOpsRouter } from "./yaban-ops-router";
+import { yabanStaffRouter } from "./yaban-staff-router";
 import { versionRouter } from "./version-router";
 
 // // 在应用启动时初始化数据库
@@ -327,6 +328,7 @@ export const appRouter = router({
   yabanRole: yabanRoleRouter,
   yabanClinic: yabanClinicRouter,
   yabanCustomer: yabanCustomerRouter,
+  yabanStaff: yabanStaffRouter,
   yabanComm: yabanCommRouter,
   yabanInventory: yabanInventoryRouter,
   yabanAppointment: yabanAppointmentRouter,

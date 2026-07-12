@@ -1,12 +1,12 @@
 /**
  * 牙伴运营报表主页面
- * 路由：/yaban/ops-report（主项目注册时使用）
+ * 路由：/yaban/ops-report
  *
  * 设计规范：牙伴风格 - 蓝白商务，主色 #1E88D6，移动端优先，最大宽度 480px
  * 严禁 Emoji，图标统一用 lucide-react
  */
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import OpsHeader from "./ops-report/OpsHeader";
 import OpsOverview from "./ops-report/OpsOverview";
 import RevenueTrend from "./ops-report/RevenueTrend";
@@ -24,12 +24,45 @@ import InventoryMaterial from "./ops-report/InventoryMaterial";
 import AppointmentFunnel from "./ops-report/AppointmentFunnel";
 import MemberDeposit from "./ops-report/MemberDeposit";
 import TimeEfficiency from "./ops-report/TimeEfficiency";
-import { SHOPS, DATE_QUICK_OPTIONS } from "./mockData";
+import { DATE_QUICK_OPTIONS } from "./mockData";
+import { useYabanClinic } from "./useYabanClinic";
+
+function toYmd(d: Date) {
+  return d.toISOString().slice(0, 10);
+}
+
+function getDefaultRange(): { startDate: string; endDate: string } {
+  const today = new Date();
+  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+  return { startDate: toYmd(firstDay), endDate: toYmd(today) };
+}
 
 export default function OpsReport() {
-  const [selectedShop, setSelectedShop] = useState(0);
+  const { clinics, currentTenantId, selectClinic } = useYabanClinic();
+
+  const today = new Date();
+  const defaultRange = getDefaultRange();
+  const [startDate, setStartDate] = useState(defaultRange.startDate);
+  const [endDate, setEndDate] = useState(defaultRange.endDate);
   const [selectedDate, setSelectedDate] = useState("month");
-  const [dateLabel, setDateLabel] = useState("本月（6月1日 - 6月16日）");
+  const [dateLabel, setDateLabel] = useState(
+    `本月（${today.getMonth() + 1}月1日 - ${today.getMonth() + 1}月${today.getDate()}日）`
+  );
+
+  // 将 clinics 转换为 OpsHeader 需要的 shops 格式
+  const shops = useMemo(() => {
+    if (clinics.length === 0) return [{ id: 0, name: "全部门店", badge: "全" }];
+    return clinics.map((c) => ({
+      id: c.tenantId,
+      name: c.name,
+      badge: c.shortName?.slice(0, 1) || c.name.slice(0, 1),
+    }));
+  }, [clinics]);
+
+  const selectedShop = currentTenantId ?? (shops[0]?.id || 0);
+
+  // 传给所有子组件的公共 props
+  const queryProps = { startDate, endDate, tenantId: selectedShop || undefined };
 
   return (
     <div
@@ -43,9 +76,9 @@ export default function OpsReport() {
     >
       {/* 顶部导航 + 选择器 */}
       <OpsHeader
-        shops={SHOPS}
+        shops={shops}
         selectedShop={selectedShop}
-        onShopChange={setSelectedShop}
+        onShopChange={(id) => selectClinic(id)}
         dateQuickOptions={DATE_QUICK_OPTIONS}
         selectedDate={selectedDate}
         dateLabel={dateLabel}
@@ -53,57 +86,61 @@ export default function OpsReport() {
           setSelectedDate(val);
           setDateLabel(label);
         }}
+        onRangeChange={(start, end) => {
+          setStartDate(start);
+          setEndDate(end);
+        }}
       />
 
       {/* 内容区 */}
       <div style={{ padding: "12px 12px 32px", display: "flex", flexDirection: "column", gap: 12 }}>
         {/* 总览卡片 */}
-        <OpsOverview />
+        <OpsOverview {...queryProps} />
 
         {/* 营收趋势（柱状图/热力图/趋势图/周对比） */}
-        <RevenueTrend />
+        <RevenueTrend {...queryProps} />
 
         {/* 收入结构 */}
-        <RevenueStructure />
+        <RevenueStructure {...queryProps} />
 
         {/* 医生绩效 */}
-        <DoctorPerformance />
+        <DoctorPerformance {...queryProps} />
 
         {/* 咨询师转化 */}
-        <ConsultantConversion />
+        <ConsultantConversion {...queryProps} />
 
         {/* 患者分析 */}
-        <PatientAnalysis />
+        <PatientAnalysis {...queryProps} />
 
         {/* 患者来源 */}
-        <PatientSource />
+        <PatientSource {...queryProps} />
 
         {/* 运营效率 */}
-        <OperationEfficiency />
+        <OperationEfficiency {...queryProps} />
 
         {/* 收费方式 */}
-        <PaymentMethod />
+        <PaymentMethod {...queryProps} />
 
         {/* 欠费预警 */}
-        <DebtWarning />
+        <DebtWarning {...queryProps} />
 
         {/* 年度营收进度 */}
-        <AnnualProgress />
+        <AnnualProgress {...queryProps} />
 
         {/* 成本与利润 */}
-        <CostProfit />
+        <CostProfit {...queryProps} />
 
         {/* 库存与耗材 */}
-        <InventoryMaterial />
+        <InventoryMaterial {...queryProps} />
 
         {/* 预约漏斗 */}
-        <AppointmentFunnel />
+        <AppointmentFunnel {...queryProps} />
 
         {/* 会员与储值 */}
-        <MemberDeposit />
+        <MemberDeposit {...queryProps} />
 
         {/* 时段效率 */}
-        <TimeEfficiency />
+        <TimeEfficiency {...queryProps} />
       </div>
     </div>
   );

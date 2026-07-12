@@ -17,9 +17,15 @@ const TABS = [
   { id: "week", label: "周对比" },
 ];
 
-export default function RevenueTrend() {
+interface Props {
+  startDate: string;
+  endDate: string;
+  tenantId?: number;
+}
+
+export default function RevenueTrend({ startDate, endDate, tenantId }: Props) {
   const [activeTab, setActiveTab] = useState("bar");
-  const [dateRange, setDateRange] = useState("5月19日 - 5月27日");
+  const [dateRange, setDateRange] = useState("");
   const tabsRef = useRef<HTMLDivElement>(null);
 
   // 滚动到激活tab
@@ -36,10 +42,10 @@ export default function RevenueTrend() {
     >
       {/* 图表区 */}
       <div style={{ marginTop: 4 }}>
-        {activeTab === "bar" && <BarChart onDateRangeChange={setDateRange} />}
-        {activeTab === "heatmap" && <HeatmapChart />}
-        {activeTab === "area" && <AreaChart />}
-        {activeTab === "week" && <WeekCompareChart />}
+        {activeTab === "bar" && <BarChart startDate={startDate} endDate={endDate} tenantId={tenantId} onDateRangeChange={setDateRange} />}
+        {activeTab === "heatmap" && <HeatmapChart startDate={startDate} endDate={endDate} tenantId={tenantId} />}
+        {activeTab === "area" && <AreaChart startDate={startDate} endDate={endDate} tenantId={tenantId} />}
+        {activeTab === "week" && <WeekCompareChart startDate={startDate} endDate={endDate} tenantId={tenantId} />}
       </div>
 
       {/* Tab 切换 */}

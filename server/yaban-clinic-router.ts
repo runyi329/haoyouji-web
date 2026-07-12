@@ -231,7 +231,8 @@ export const yabanClinicRouter = router({
     if (!conn) return { clinics: [] as any[] };
     const [rows] = (await conn.execute(
       `SELECT m.tenant_id AS tenantId, m.role_key AS roleKey,
-              c.id AS clinicId, c.name AS name, c.short_name AS shortName, c.status AS status
+              c.id AS clinicId, c.name AS name, c.short_name AS shortName, c.status AS status,
+              c.service_expire_at AS serviceExpireAt, c.service_plan AS servicePlan
        FROM yaban_clinic_member m
        LEFT JOIN yaban_clinic c ON c.tenant_id = m.tenant_id
        WHERE m.user_id = ? AND m.status = 'active'
@@ -252,6 +253,8 @@ export const yabanClinicRouter = router({
         shortName: r.shortName || "",
         roleKey: r.roleKey || "",
         status: r.status || "",
+        serviceExpireAt: r.serviceExpireAt ? String(r.serviceExpireAt).slice(0, 10) : null,
+        servicePlan: r.servicePlan || null,
       });
     }
     // 演示院(tenant=9999)：仅对已加入至少一家门店的员工可见，顾客（clinics 为空）不追加
@@ -619,14 +622,18 @@ export const yabanClinicRouter = router({
 
   // 查询当前用户所在诊所的服务到期状态（普通用户可用）
   getMyServiceStatus: protectedProcedure
-    .query(async ({ ctx }) => {
+    .input(z.object({ tenantId: z.number().int().optional() }).optional())
+    .query(async ({ ctx, input }) => {
       const conn = await getDbConnection();
       if (!conn) return { found: false, expireAt: null as string | null, plan: null as string | null, daysLeft: null as number | null };
-      const [memberRows] = (await conn.execute(
-        `SELECT tenant_id FROM yaban_clinic_member WHERE user_id=? AND status='active' ORDER BY id ASC LIMIT 1`,
-        [ctx.user.id]
-      )) as any;
-      const tenantId = Number((memberRows as any[])[0]?.tenant_id || 0);
+      let tenantId = input?.tenantId || 0;
+      if (!tenantId) {
+        const [memberRows] = (await conn.execute(
+          `SELECT tenant_id FROM yaban_clinic_member WHERE user_id=? AND status='active' ORDER BY id ASC LIMIT 1`,
+          [ctx.user.id]
+        )) as any;
+        tenantId = Number((memberRows as any[])[0]?.tenant_id || 0);
+      }
       if (!tenantId) return { found: false, expireAt: null, plan: null, daysLeft: null };
       const [clinicRows] = (await conn.execute(
         `SELECT service_expire_at, service_plan FROM yaban_clinic WHERE tenant_id=? LIMIT 1`,
@@ -634,7 +641,18 @@ export const yabanClinicRouter = router({
       )) as any;
       const row = (clinicRows as any[])[0];
       if (!row) return { found: false, expireAt: null, plan: null, daysLeft: null };
-      const expireAt = row.service_expire_at ? String(row.service_expire_at).slice(0, 10) : null;
+      const expireAt = (() => {
+        if (!row.service_expire_at) return null;
+        const v = row.service_expire_at;
+        // mysql2 可能返回 Date 对象或字符串，统一转为 YYYY-MM-DD
+        if (v instanceof Date) {
+          const y = v.getFullYear();
+          const mo = String(v.getMonth() + 1).padStart(2, "0");
+          const d = String(v.getDate()).padStart(2, "0");
+          return `${y}-${mo}-${d}`;
+        }
+        return String(v).slice(0, 10);
+      })();
       let daysLeft: number | null = null;
       if (expireAt) {
         const diff = new Date(expireAt).getTime() - Date.now();
