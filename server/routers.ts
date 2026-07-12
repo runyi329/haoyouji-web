@@ -1,4 +1,5 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { createHmac } from "crypto";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
@@ -2780,6 +2781,19 @@ ${klinesSummary}
       }
       
       return result;
+    }),
+    // 奖金制度研究平台 SSO 跳转链接生成（HMAC签名，密钥不暴露到前端）
+    mlmSsoLink: protectedProcedure.mutation(async ({ ctx }) => {
+      const user = ctx.user;
+      const uid = String(user.id);
+      const name = user.name || user.username || '';
+      const ts = String(Math.floor(Date.now() / 1000));
+      const sharedSecret = process.env.HAOYOUJI_SHARED_SECRET || 'mlm-bonus-shared-secret-2026';
+      const payload = `${uid}:${name}:${ts}`;
+      const sign = createHmac('sha256', sharedSecret).update(payload).digest('hex');
+      const baseUrl = 'https://mlmbonus-chknjmtw.manus.space';
+      const url = `${baseUrl}/api/auth/external-login?uid=${encodeURIComponent(uid)}&name=${encodeURIComponent(name)}&ts=${ts}&sign=${sign}&redirect=/`;
+      return { url };
     }),
   }),
 

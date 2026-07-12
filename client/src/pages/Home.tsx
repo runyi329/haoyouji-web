@@ -1243,6 +1243,17 @@ export default function Home() {
     },
   });
 
+  // 奖金制度研究平台 SSO 跳转（后端生成HMAC签名链接，密钥不暴露到前端）
+  const mlmSsoLinkMutation = (trpc as any).auth.mlmSsoLink.useMutation({
+    onSuccess: (data: { url: string }) => {
+      window.location.href = data.url;
+    },
+    onError: () => {
+      // 未登录或出错时直接跳转到奖金平台首页
+      window.location.href = 'https://mlmbonus-chknjmtw.manus.space';
+    },
+  });
+
   // ── A股市场状态逻辑 ──────────────────────────────────────────
   // 2025-2026年A股法定节假日（不开市）
   const A_SHARE_HOLIDAYS = new Set([
@@ -1871,14 +1882,11 @@ export default function Home() {
                     className="flex flex-col items-center justify-center space-y-0.5 active:scale-90 transition-transform px-0.5"
                     onClick={() => {
                       if (cat.name === '奖金制度') {
-                        // 跳转到奖金制度研究平台，携带当前用户token实现SSO单点登录
-                        const tokenMatch = document.cookie.match(/(?:^|;\s*)app_session_id=([^;]+)/);
-                        const token = tokenMatch ? decodeURIComponent(tokenMatch[1]) : null;
-                        const baseUrl = 'https://mlmbonus-chknjmtw.manus.space';
-                        if (token && token.length > 10) {
-                          window.location.href = `${baseUrl}/api/auth/external-login?token=${encodeURIComponent(token)}&redirect=/`;
+                        // 通过后端生成HMAC签名链接，实现SSO单点登录（密钥不暴露到前端）
+                        if (user) {
+                          mlmSsoLinkMutation.mutate(undefined);
                         } else {
-                          window.location.href = baseUrl;
+                          window.location.href = 'https://mlmbonus-chknjmtw.manus.space';
                         }
                         return;
                       }
