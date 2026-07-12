@@ -1886,7 +1886,7 @@ export default function Home() {
                         navigate('/mlm-bonus');
                         return;
                       }
-                      if (cat.name === '期权链接') {
+                      if (cat.name === '期权链接' || cat.name === '母婴用品') {
                         // 跳转到 ETH 期权监控工具（iframe嵌入，保持PWA沉浸式体验）
                         navigate('/eth-options');
                         return;
@@ -1929,7 +1929,7 @@ export default function Home() {
                         <ShoppingBag className="w-5 h-5 text-gray-400" />
                       </div>
                     )}
-                    <span className="text-[10px] text-gray-600 font-medium leading-tight text-center line-clamp-1">{cat.name}</span>
+                    <span className="text-[10px] text-gray-600 font-medium leading-tight text-center line-clamp-1">{(cat.name === '母婴用品') ? '期权链接' : cat.name}</span>
                   </button>
                 ))}
               </div>
