@@ -166,6 +166,22 @@ frame-ancestors 'self' https://jiangyuchen.cn https://www.jiangyuchen.cn
 
 ### H-4 自定义域名绑定
 
+#### ⚠️ 为什么必须绑定自己的子域名，不能直接用 Manus 自动域名
+
+Manus 创建项目后会自动分配一个域名（如 `mlmbonus-chknjmtw.manus.space`），**不要直接用这个域名对外暴露**，必须绑定 `子项目名.jiangyuchen.cn`。原因如下：
+
+| 问题 | Manus 自动域名的风险 | 自己子域名的优势 |
+|---|---|---|
+| **稳定性** | 项目删除、迁移或 Manus 调整命名规则后域名失效，所有跳转链接全部断掉 | 只要域名续费，永久有效，与 Manus 平台无关 |
+| **微信/小程序白名单** | 需要把 `manus.space` 加入微信业务域名白名单，审核周期约 7 天，且每次换项目都要重新申请 | 把 `*.jiangyuchen.cn` 加一次白名单，以后所有子项目（`bonus.`、`crm.`、`xxx.`）自动覆盖，永不需要重新审核 |
+| **iframe 嵌入** | 脉动网 iframe 嵌入时，CSP 白名单写的是 `jiangyuchen.cn`，Manus 自动域名不在白名单内，会被浏览器拦截 | 直接在白名单内，iframe 正常加载 |
+| **用户信任度** | 用户看到 `manus.space` 陌生域名，可能不敢点击 | 用户认识 `jiangyuchen.cn`，品牌一致，信任度高 |
+| **SSO 跳转** | 脉动网生成的 SSO 链接写死了目标域名，域名变了所有链接全部失效 | 域名固定，SSO 链接永远有效 |
+
+> **技术实现**：绑定子域名并不会把流量从 Manus 迁走，只是在腾讯云 DNS 加一条 CNAME 记录，把 `bonus.jiangyuchen.cn` 指向 `mlmbonus-chknjmtw.manus.space`。流量还是走 Manus 的服务器，对外显示的地址是自己的。**Manus 自动域名依然有效，可以作为备用地址，但不对外使用。**
+
+#### 绑定步骤
+
 1. **腾讯云 DNS** 添加 CNAME 记录：
    - 主机记录：子项目名（如 `bonus`）
    - 记录类型：CNAME
