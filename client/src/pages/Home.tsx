@@ -1870,6 +1870,18 @@ export default function Home() {
                     key={cat.id}
                     className="flex flex-col items-center justify-center space-y-0.5 active:scale-90 transition-transform px-0.5"
                     onClick={() => {
+                      if (cat.name === '奖金制度') {
+                        // 跳转到奖金制度研究平台，携带当前用户token实现SSO单点登录
+                        const tokenMatch = document.cookie.match(/(?:^|;\s*)app_session_id=([^;]+)/);
+                        const token = tokenMatch ? decodeURIComponent(tokenMatch[1]) : null;
+                        const baseUrl = 'https://mlmbonus-chknjmtw.manus.space';
+                        if (token && token.length > 10) {
+                          window.location.href = `${baseUrl}/api/auth/external-login?token=${encodeURIComponent(token)}&redirect=/`;
+                        } else {
+                          window.location.href = baseUrl;
+                        }
+                        return;
+                      }
                       if (cat.name === '宠物生活') {
                         navigate('/pet-platform');
                         return;
