@@ -36,7 +36,7 @@ async function startServer() {
   app.use((_req, res, next) => {
     res.setHeader(
       "Content-Security-Policy",
-      "frame-ancestors 'self' https://jiangyuchen.cn https://www.jiangyuchen.cn"
+      "frame-ancestors 'self' https://jiangyuchen.cn https://www.jiangyuchen.cn https://eth-options.jiangyuchen.cn"
     );
     next();
   });
