@@ -67,17 +67,10 @@ runyi329/haoyouji-web/
 | **名称** | ETH 期权监控工具（eth-options-monitor） |
 | **访问地址** | https://eth-options.jiangyuchen.cn |
 | **Manus 项目名** | `eth-options-monitor` |
-| **Manus 自动域名** | `ethoptmon-ipcwyeqa.manus.space` |
 | **代码备份位置** | `backups/eth-options-monitor/` |
-| **数据库** | Manus 内置 MySQL（TiDB） |
-| **脉动网入口** | 积分商城「母婴用品」分类（前端显示为「期权链接」）→ `/eth-options` 路由 → `EthOptionsPage.tsx`（iframe SSO 嵌入） |
-| **SSO 密钥** | `HAOYOUJI_SHARED_SECRET=mlm-bonus-shared-secret-2026`（在 Manus Secrets 面板设置） |
-| **数据来源** | Deribit WebSocket API（浏览器端直连，无需后端代理） |
+| **脉动网入口** | 积分商城「母婴用品」分类（前端显示为「期权链接」）→ `/eth-options` 路由 |
 
-**注意事项：**
-- 此项目是独立 Manus WebDev 项目，GitHub 仓库只是备份，不触发自动部署
-- 数据库里分类名仍为「母婴用品」，前端代码已做兼容处理（显示为「期权链接」，点击跳转 `/eth-options`）
-- 如需恢复沙箱，直接在 Manus 平台打开 `eth-options-monitor` 项目即可，路径为 `/home/ubuntu/eth-options-monitor`
+**详细说明**：读取 `backups/eth-options-monitor/项目说明文档.md`，包含完整的技术信息、SSO 配置、数据库表结构、恢复步骤。
 
 ---
 
