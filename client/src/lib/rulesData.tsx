@@ -1172,6 +1172,20 @@ function ProjectCreationRuleContent() {
           </div>
           <p className="text-[12px] text-amber-700 mt-1.5">✅ 推送后不会触发脉动网部署（paths-ignore 已屏蔽）。</p>
         </div>
+
+        {/* Checkpoint ≠ GitHub 备份 */}
+        <div className="bg-red-50 border border-red-200 rounded-lg p-2.5 mt-3">
+          <p className="text-[12px] font-semibold text-red-800">⚠️ Manus Checkpoint ≠ GitHub 备份，两者完全独立</p>
+          <p className="text-[12px] text-red-700 mt-1">保存 Manus checkpoint（如版本号 <span className="font-mono">1e86780f</span>）<span className="font-semibold">不等于备份到 GitHub</span>。Manus checkpoint 保存在 Manus 内部服务器，仅用于 Manus 平台自身的部署和回滚；而 GitHub 备份才是跨沙箱恢复的唯一源。</p>
+          <table className="w-full text-[11px] border-collapse mt-2">
+            <thead><tr className="bg-red-100"><th className="text-left p-1 border border-red-200"></th><th className="text-left p-1 border border-red-200">Manus Checkpoint</th><th className="text-left p-1 border border-red-200">GitHub 备份</th></tr></thead>
+            <tbody>
+              <tr><td className="p-1 border border-red-200">地址</td><td className="p-1 border border-red-200 font-mono text-[10px]">cloudflare.net/git/prod/项目 ID.git</td><td className="p-1 border border-red-200 font-mono text-[10px]">github.com/runyi329/haoyouji-web/backups/</td></tr>
+              <tr><td className="p-1 border border-red-200">用途</td><td className="p-1 border border-red-200">Manus 部署、版本回滚</td><td className="p-1 border border-red-200">跨沙箱恢复、长期存档</td></tr>
+              <tr><td className="p-1 border border-red-200">触发</td><td className="p-1 border border-red-200">Manus 保存 checkpoint 自动</td><td className="p-1 border border-red-200">手动说「备份」才执行</td></tr>
+            </tbody>
+          </table>
+        </div>
       </RuleSection>
 
       {/* H-6 项目说明文档 */}
