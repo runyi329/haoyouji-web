@@ -1230,27 +1230,162 @@ function ProjectCreationRuleContent() {
         </div>
       </RuleSection>
 
-      {/* H-8 将来合并到脉动网主站 */}
-      <RuleSection icon={GitBranch} title="⑧ 将来合并到脉动网主站（迁移路径）">
-        <p>当子项目功能成熟、用户量稳定后，可考虑将其合并到脉动网主站，消除独立域名和 SSO 跳转的摩擦。迁移路径：</p>
-        <ol className="list-decimal pl-5 space-y-1.5">
+      {/* H-8 将来合并到脉动网主站 - 详细指南 */}
+      <RuleSection icon={GitBranch} title="⑧ 合并到脉动网主站 — 完整操作指南">
+
+        {/* 合并时机 */}
+        <div className="bg-gradient-to-br from-[#1A2B4A] to-[#243660] rounded-xl p-3 text-white mb-3">
+          <p className="text-[12px] font-semibold text-[#E0B97D] mb-1">何时合并？满足以下任一条件即可启动</p>
+          <ul className="text-[12px] text-white/80 space-y-1">
+            <li>• 子项目日活用户稳定 &gt; 50 人，需要与主站用户体系深度整合</li>
+            <li>• 功能与主站高度重叠，维护两套代码成本过高</li>
+            <li>• 需要使用主站的积分、会员、通知等核心能力</li>
+            <li>• 用户反馈 SSO 跳转体验不佳，希望无缝切换</li>
+          </ul>
+        </div>
+
+        {/* 合并前检查 */}
+        <p className="text-[12px] font-semibold text-gray-900 mb-1">▶ 合并前必做检查（避免返工）</p>
+        <table className="w-full text-[12px] border-collapse mb-3">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">检查项</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td className="p-1.5 border border-gray-200">技术栈版本一致</td><td className="p-1.5 border border-gray-200 text-gray-600">对照 H-1.5 检查清单，确认 react/tRPC/drizzle/tailwind 版本与脉动网一致</td></tr>
+            <tr className="bg-gray-50"><td className="p-1.5 border border-gray-200">路由命名无冲突</td><td className="p-1.5 border border-gray-200 text-gray-600">在脉动网 server/routers.ts 搜索子项目前缀，确认无同名过程</td></tr>
+            <tr><td className="p-1.5 border border-gray-200">表名无冲突</td><td className="p-1.5 border border-gray-200 text-gray-600">在脉动网 drizzle/schema.ts 搜索子项目表名前缀，确认无重名</td></tr>
+            <tr className="bg-gray-50"><td className="p-1.5 border border-gray-200">数据已备份</td><td className="p-1.5 border border-gray-200 text-gray-600">从 Manus 后台 Database 面板导出子项目全量数据，本地保存</td></tr>
+            <tr><td className="p-1.5 border border-gray-200">脉动网代码已拉最新</td><td className="p-1.5 border border-gray-200 text-gray-600">cd haoyouji-web && git pull --rebase，确保基于最新代码操作</td></tr>
+          </tbody>
+        </table>
+
+        {/* 第一阶段：前端合并 */}
+        <p className="text-[12px] font-bold text-[#D32F2F] mb-1">第一阶段：前端合并</p>
+        <ol className="text-[12px] text-gray-700 list-decimal pl-5 space-y-2 mb-3">
           <li>
-            <span className="font-semibold text-gray-900">前端合并</span>：将子项目的 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">client/src/pages/</span> 和 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">client/src/components/</span> 复制到脉动网对应目录，在 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">App.tsx</span> 注册路由。
+            <span className="font-semibold text-gray-900">复制页面文件</span>：将子项目 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">client/src/pages/</span> 下所有页面文件复制到脉动网同路径。若有同名文件，先重命名加子项目前缀（如 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">MlmHome.tsx</span>）。
           </li>
           <li>
-            <span className="font-semibold text-gray-900">后端合并</span>：将子项目的 tRPC 路由（<span className="font-mono text-[12px] bg-gray-100 px-1 rounded">server/mlm-router.ts</span> 等）合并到脉动网 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">server/routers.ts</span>，删除 SSO 相关代码（改为直接读 ctx.user）。
+            <span className="font-semibold text-gray-900">复制组件文件</span>：将子项目 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">client/src/components/</span> 下的专属组件复制到脉动网同路径，跳过已存在的通用组件（Button、Card 等）。
           </li>
           <li>
-            <span className="font-semibold text-gray-900">数据库迁移</span>：将子项目 TiDB Cloud 的数据导出，导入到脉动网腾讯云 MySQL（注意字段类型兼容性）。在 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">drizzle/schema.ts</span> 合并表定义。
+            <span className="font-semibold text-gray-900">修改 tRPC 调用路径</span>：子项目页面里的 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">trpc.xxx.useQuery()</span> 改为 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">trpc.mlmBonus.xxx.useQuery()</span>（加上子项目命名空间前缀）。
           </li>
           <li>
-            <span className="font-semibold text-gray-900">域名处理</span>：合并完成后，将 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">子项目名.jiangyuchen.cn</span> 做 301 重定向到 <span className="font-mono text-[12px] bg-gray-100 px-1 rounded">jiangyuchen.cn/对应路径</span>，保留旧链接可访问。
+            <span className="font-semibold text-gray-900">删除 SSO 相关代码</span>：删除子项目页面里的 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">Login.tsx</span>、外部登录跳转逻辑，改为直接使用脉动网的 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">useAuth()</span> 获取当前用户。
           </li>
           <li>
-            <span className="font-semibold text-gray-900">关闭子项目</span>：确认迁移无误后，在 Manus 后台将子项目设为不可见或归档，保留数据库备份 30 天后删除。
+            <span className="font-semibold text-gray-900">注册路由</span>：在脉动网 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">client/src/App.tsx</span> 添加路由，如：
+            <div className="bg-gray-50 rounded-lg p-2 mt-1 font-mono text-[11px]">
+              <div>{`<Route path="/mlm-bonus" component={MlmHome} />`}</div>
+              <div>{`<Route path="/mlm-bonus/:id" component={MlmDetail} />`}</div>
+            </div>
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">在脉动网导航中添加入口</span>：在侧边栏或首页积分商城区域添加跳转链接，替换原来的 iframe 入口。
           </li>
         </ol>
-        <p className="text-[12px] text-gray-500 mt-2">合并时机建议：子项目日活用户 &gt; 50 人，或功能与主站高度重叠时，优先考虑合并以降低维护成本。</p>
+
+        {/* 第二阶段：后端合并 */}
+        <p className="text-[12px] font-bold text-[#D32F2F] mb-1">第二阶段：后端合并</p>
+        <ol className="text-[12px] text-gray-700 list-decimal pl-5 space-y-2 mb-3">
+          <li>
+            <span className="font-semibold text-gray-900">复制路由文件</span>：将子项目 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">server/mlm-bonus-router.ts</span> 复制到脉动网 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">server/</span> 目录。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">修改路由文件中的 import 路径</span>：将路由文件顶部的 import 路径（如 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">../_core/trpc</span>）调整为脉动网的相对路径。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">删除 SSO 验证端点</span>：删除或注释掉 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">/api/auth/external-login</span> 端点，以及 HMAC 签名验证逻辑。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">替换用户来源</span>：路由文件里所有通过 JWT 解析用户 ID 的地方，改为直接读 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">ctx.user.id</span>（脉动网 protectedProcedure 自动注入）。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">在主路由注册</span>：在脉动网 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">server/routers.ts</span> 顶部 import，并在 appRouter 里加一行：
+            <div className="bg-gray-50 rounded-lg p-2 mt-1 font-mono text-[11px]">
+              <div>import {'{ mlmBonusRouter }'} from "./mlm-bonus-router";</div>
+              <div className="mt-1">// 在 appRouter 的 router({`{...}`}) 里加：</div>
+              <div>mlmBonus: mlmBonusRouter,</div>
+            </div>
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">删除脉动网中的 SSO 生成端点</span>：删除 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">server/routers.ts</span> 里的 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">auth.mlmSsoLink</span> 过程（约第 2790 行），以及 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">HAOYOUJI_SHARED_SECRET</span> 环境变量的使用。
+          </li>
+        </ol>
+
+        {/* 第三阶段：数据库迁移 */}
+        <p className="text-[12px] font-bold text-[#D32F2F] mb-1">第三阶段：数据库迁移</p>
+        <ol className="text-[12px] text-gray-700 list-decimal pl-5 space-y-2 mb-3">
+          <li>
+            <span className="font-semibold text-gray-900">导出子项目数据</span>：在 Manus 后台 Database 面板，对每张业务表执行导出，或通过 TiDB Cloud 控制台导出 SQL dump。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">合并 Schema 定义</span>：将子项目 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">drizzle/schema.ts</span> 里的表定义（<span className="font-mono text-[11px] bg-gray-100 px-1 rounded">mlm_companies</span> 等）追加到脉动网 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">drizzle/schema.ts</span> 末尾。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">生成并执行迁移 SQL</span>：
+            <div className="bg-gray-50 rounded-lg p-2 mt-1 font-mono text-[11px]">
+              <div>pnpm drizzle-kit generate  # 生成迁移 SQL</div>
+              <div className="text-gray-400"># 读取生成的 .sql 文件，在脉动网 Database 面板执行</div>
+            </div>
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">导入历史数据</span>：将第 1 步导出的数据，通过脉动网 Database 面板或 MySQL 客户端导入到对应表。注意：<span className="text-[#D32F2F] font-medium">用户 ID 字段需要映射</span>——子项目的用户 ID 是脉动网通过 SSO 传入的，与脉动网 users 表的 ID 一致，无需转换。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">验证数据完整性</span>：执行几条关键查询，确认记录数、关键字段值与子项目原数据库一致。
+          </li>
+        </ol>
+
+        {/* 第四阶段：域名与收尾 */}
+        <p className="text-[12px] font-bold text-[#D32F2F] mb-1">第四阶段：域名处理与收尾</p>
+        <ol className="text-[12px] text-gray-700 list-decimal pl-5 space-y-2 mb-3">
+          <li>
+            <span className="font-semibold text-gray-900">冒烟测试</span>：在脉动网开发环境完整走一遍子项目的核心功能，确认数据读写、用户权限、页面跳转均正常。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">部署脉动网</span>：提交代码，推送到 GitHub，等待 GitHub Actions 自动部署完成（绿灯 ✅）。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">设置 301 重定向</span>：在腾讯云 DNS 将 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">子项目名.jiangyuchen.cn</span> 的 CNAME 改为指向脉动网，或在 Nginx/Cloudflare 配置 301 重定向到 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">jiangyuchen.cn/对应路径</span>，保留旧链接 6 个月可访问。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">归档子项目</span>：在 Manus 后台将子项目设为不可见（Settings → General → Visibility: Private），保留 30 天后确认无问题再删除。
+          </li>
+          <li>
+            <span className="font-semibold text-gray-900">更新项目说明文档</span>：在 GitHub 备份目录的「项目说明文档.md」末尾追加「合并记录」章节，写明合并日期、合并到脉动网的哪个路径、数据迁移情况。
+          </li>
+        </ol>
+
+        {/* 奖金平台举例 */}
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 mb-3">
+          <p className="text-[12px] font-semibold text-amber-800">奖金平台（bonus.jiangyuchen.cn）合并举例</p>
+          <ul className="text-[12px] text-amber-700 space-y-1 mt-1">
+            <li>• 前端：pages/simulators/ 下各公司模拟器页面 → 脉动网 /mlm-bonus/* 路由</li>
+            <li>• 后端：server/mlm-bonus-router.ts + server/mlm-bonus-engine.ts → 脉动网 mlmBonus 命名空间</li>
+            <li>• 数据库：mlm_companies / mlm_schemes / mlm_simulations 三张表 → 脉动网 MySQL</li>
+            <li>• 删除：auth.mlmSsoLink 过程、HAOYOUJI_SHARED_SECRET 环境变量、MlmBonusPage.tsx iframe 入口</li>
+            <li>• 域名：bonus.jiangyuchen.cn → 301 → jiangyuchen.cn/mlm-bonus</li>
+          </ul>
+        </div>
+
+        {/* 合并检查清单 */}
+        <div className="bg-green-50 border border-green-200 rounded-lg p-2.5">
+          <p className="text-[12px] font-semibold text-green-800">✅ 合并完成检查清单（逐项确认后才算完成）</p>
+          <ul className="text-[12px] text-green-700 space-y-1 mt-1">
+            <li>□ 前端页面在脉动网路由下正常渲染，无白屏/报错</li>
+            <li>□ 登录用户可正常读写数据，未登录用户被正确拦截</li>
+            <li>□ 历史数据已导入，记录数与原数据库一致</li>
+            <li>□ 旧域名 301 重定向已生效（浏览器访问旧域名自动跳转）</li>
+            <li>□ 子项目在 Manus 已设为不可见</li>
+            <li>□ 项目说明文档已追加合并记录章节</li>
+            <li>□ 脉动网 routers.ts 中 SSO 生成端点已删除</li>
+          </ul>
+        </div>
       </RuleSection>
 
       <p className="text-center text-[11px] text-gray-300 pt-1">
