@@ -179,6 +179,39 @@ frame-ancestors 'self' https://jiangyuchen.cn https://www.jiangyuchen.cn
 
 ### H-5 代码备份规范
 
+#### 备份位置规则（每个子项目一个独立文件夹）
+
+所有子项目代码统一备份到 **同一个 GitHub 仓库**（`runyi329/haoyouji-web`），不单独建仓库。每个子项目在 `backups/` 下创建独立文件夹，结构如下：
+
+```
+backups/
+├── mlm-bonus-system/      ← 奖金制度研究平台（已存在）
+│   ├── 项目说明文档.md
+│   ├── client/
+│   ├── server/
+│   ├── drizzle/
+│   └── package.json
+├── 下一个子项目名/         ← 新建时照此结构创建
+│   ├── 项目说明文档.md
+│   └── ...
+└── rules/                 ← 规则纯文字版（供 AI 阅读）
+```
+
+> 新建子项目时，直接以 Manus 项目目录名作为文件夹名（如 Manus 项目叫 `crm-system`，则备份到 `backups/crm-system/`）。
+
+#### 哪些推送触发脉动网自动部署，哪些不触发
+
+| 推送内容 | 是否触发脉动网部署 | 说明 |
+|---|---|---|
+| `client/**`（前端代码） | ✅ 触发 | 脉动网主站代码 |
+| `server/**`（后端代码） | ✅ 触发 | 脉动网主站代码 |
+| `drizzle/**`（数据库） | ✅ 触发 | 脉动网主站代码 |
+| `client/src/lib/rulesData.tsx` | ✅ 触发 | 规则库更新 |
+| `AI-ONBOARDING.md` | ✅ 触发 | 根目录文档（但不影响功能） |
+| `backups/**` | ❌ 不触发 | 已在 `bg-deploy.yml` 的 `paths-ignore` 中过滤 |
+
+> 配置位置：`.github/workflows/bg-deploy.yml` → `on.push.paths-ignore: ['backups/**']`
+
 **备份位置：** `runyi329/haoyouji-web/backups/子项目名/`（不单独建仓库）
 
 **备份命令（说「备份」时执行）：**
@@ -279,7 +312,29 @@ git push
 
 ---
 
-## 六、常用命令速查
+## 六、新沙箱 AI 入职第一步
+
+当你是新沙箱 AI，刚收到用户发来的 GitHub Token 时，按以下步骤操作：
+
+```bash
+# 第一步：登录 GitHub
+gh auth login --with-token <<< "ghp_用户提供的Token"
+
+# 第二步：克隆仓库
+gh repo clone runyi329/haoyouji-web /home/ubuntu/haoyouji-web-git
+
+# 第三步：读取本文件（你现在正在读的这个）
+cat /home/ubuntu/haoyouji-web-git/AI-ONBOARDING.md
+
+# 第四步：如果要继续开发奖金平台，读取子项目说明文档
+cat /home/ubuntu/haoyouji-web-git/backups/mlm-bonus-system/项目说明文档.md
+```
+
+读完后，告诉用户：「我已了解脉动网项目背景，奖金平台 Manus 项目 ID 是 CHKNJmtWXcig3PadPxMzN3，请问今天要做什么？」
+
+---
+
+## 七、常用命令速查
 
 ```bash
 # 克隆仓库（需要 GitHub Token）
