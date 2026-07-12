@@ -8325,5 +8325,7 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-12T00:23:21Z", type: "feat", cleanMessage: "积分商城'家具家纺'改为'奖金制度'，点击跳转奖金研究平台(SSO)" },
     { date: "2026-07-12T01:36:58Z", type: "fix", cleanMessage: "奖金制度SSO改为HMAC签名方式，后端生成签名链接，前端不暴露密钥" },
     { date: "2026-07-12T04:14:13Z", type: "feat", cleanMessage: "会员系统优化+人事驾驶舱+运营报表真实接口对接" },
+    { date: "2026-07-12T06:34:39Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-12T06:53:37Z", type: "fix", cleanMessage: "修复运营报表接口名称不匹配问题" },
   ],
 };
