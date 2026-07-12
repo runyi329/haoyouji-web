@@ -17,7 +17,7 @@ export default function EthOptionsPage() {
     onError: (err) => {
       setError(err.message);
       // 降级：直接跳转到 ETH 期权监控首页（未登录状态）
-      setIframeSrc("https://ethoptmon-ipcwyeqa.manus.space");
+      setIframeSrc("https://eth-options.jiangyuchen.cn");
     },
   });
 
@@ -25,7 +25,7 @@ export default function EthOptionsPage() {
     if (isLoading) return;
     if (!isAuthenticated) {
       // 未登录：直接显示 ETH 期权监控（未登录状态）
-      setIframeSrc("https://ethoptmon-ipcwyeqa.manus.space");
+      setIframeSrc("https://eth-options.jiangyuchen.cn");
       return;
     }
     // 已登录：获取 SSO 签名链接
