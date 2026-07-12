@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-12
+// 生成时间：2026-07-13
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8327,5 +8327,25 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-12T04:14:13Z", type: "feat", cleanMessage: "会员系统优化+人事驾驶舱+运营报表真实接口对接" },
     { date: "2026-07-12T06:34:39Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
     { date: "2026-07-12T06:53:37Z", type: "fix", cleanMessage: "修复运营报表接口名称不匹配问题" },
+    { date: "2026-07-12T11:02:05Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-12T12:29:12Z", type: "feat", cleanMessage: "客户登记表真正写库 + 新建诊疗记录功能" },
+    { date: "2026-07-12T12:44:52Z", type: "feat", cleanMessage: "奖金制度改为iframe内嵌，保持PWA沉浸式体验" },
+    { date: "2026-07-12T13:34:56Z", type: "fix", cleanMessage: "奖金平台域名更新为 bonus.jiangyuchen.cn" },
+    { date: "2026-07-12T14:06:38Z", type: "other", cleanMessage: "backup: 添加奖金制度研究平台(mlm-bonus-system)代码备份" },
+    { date: "2026-07-12T14:11:35Z", type: "docs", cleanMessage: "添加奖金平台完整项目说明文档" },
+    { date: "2026-07-12T14:26:06Z", type: "feat", cleanMessage: "005规则新增板块H - Manus子项目创建规范（以奖金平台为举例）" },
+    { date: "2026-07-12T14:45:35Z", type: "feat", cleanMessage: "005-H新增技术栈对齐规范小节" },
+    { date: "2026-07-12T14:51:13Z", type: "feat", cleanMessage: "005-H8 详细合并指南 + 项目说明文档第十二章" },
+    { date: "2026-07-12T15:08:21Z", type: "feat", cleanMessage: "备份推送路径过滤 + H-5规则更新" },
+    { date: "2026-07-12T15:10:01Z", type: "fix", cleanMessage: "修正paths-ignore，rulesData.tsx改动仍触发部署" },
+    { date: "2026-07-12T15:53:08Z", type: "other", cleanMessage: "backup: 更新奖金平台代码备份 2026-07-12" },
+    { date: "2026-07-12T15:55:47Z", type: "docs", cleanMessage: "补充备份说明 - Manus Checkpoint ≠ GitHub备份，两者完全独立" },
+    { date: "2026-07-12T15:59:24Z", type: "feat", cleanMessage: "顶部导航优化 - 返回按钮只保留箭头，右上角加用户头像" },
+  ],
+  "2026-07-13": [
+    { date: "2026-07-12T16:31:16Z", type: "docs", cleanMessage: "H-3 补充统一SSO密钥规范，所有子项目共用同一密钥值" },
+    { date: "2026-07-12T16:46:14Z", type: "docs", cleanMessage: "新增 AI-ONBOARDING.md，新沙箱 AI 读此文件即可了解所有背景和规则" },
+    { date: "2026-07-12T16:54:57Z", type: "feat", cleanMessage: "添加 ETH 期权监控工具入口（/eth-options）" },
+    { date: "2026-07-12T16:55:52Z", type: "docs", cleanMessage: "补充备份规范——独立文件夹结构、过滤对比表、新沙箱入职第一步" },
   ],
 };
