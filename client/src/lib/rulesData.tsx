@@ -918,6 +918,99 @@ function ProjectCreationRuleContent() {
         </ol>
       </RuleSection>
 
+      {/* H-1.5 技术栈对齐规范 */}
+      <RuleSection icon={GitBranch} title="① 附：技术栈对齐规范（与脉动网保持一致，合并时零摩擦）">
+        <p className="text-[12px] text-gray-500 mb-2">子项目必须与脉动网使用<span className="font-semibold text-gray-900">完全相同的技术栈版本和规范</span>，这样将来合并时前端页面可以直接 copy，后端路由可以直接 merge，不需要重写。</p>
+
+        <p className="text-[12px] font-semibold text-gray-900 mb-1">① 必须使用的核心依赖版本（与脉动网锁定一致）</p>
+        <table className="w-full text-[12px] border-collapse mb-2">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">依赖包</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">版本</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td className="p-1.5 border border-gray-200 font-mono">react</td><td className="p-1.5 border border-gray-200">^19.2.1</td><td className="p-1.5 border border-gray-200 text-gray-500">前端框架</td></tr>
+            <tr className="bg-gray-50"><td className="p-1.5 border border-gray-200 font-mono">@trpc/server / client</td><td className="p-1.5 border border-gray-200">^11.6.0</td><td className="p-1.5 border border-gray-200 text-gray-500">API 层，合并时路由直接迁移</td></tr>
+            <tr><td className="p-1.5 border border-gray-200 font-mono">drizzle-orm</td><td className="p-1.5 border border-gray-200">^0.44.5</td><td className="p-1.5 border border-gray-200 text-gray-500">ORM，schema 语法一致</td></tr>
+            <tr className="bg-gray-50"><td className="p-1.5 border border-gray-200 font-mono">tailwindcss</td><td className="p-1.5 border border-gray-200">^4.1.14</td><td className="p-1.5 border border-gray-200 text-gray-500">样式，合并后视觉一致</td></tr>
+            <tr><td className="p-1.5 border border-gray-200 font-mono">@tanstack/react-query</td><td className="p-1.5 border border-gray-200">^5.90.2</td><td className="p-1.5 border border-gray-200 text-gray-500">数据请求层</td></tr>
+            <tr className="bg-gray-50"><td className="p-1.5 border border-gray-200 font-mono">wouter</td><td className="p-1.5 border border-gray-200">^3.3.5</td><td className="p-1.5 border border-gray-200 text-gray-500">路由，合并后路径直接复用</td></tr>
+            <tr><td className="p-1.5 border border-gray-200 font-mono">zod</td><td className="p-1.5 border border-gray-200">^4.1.12</td><td className="p-1.5 border border-gray-200 text-gray-500">入参校验</td></tr>
+            <tr className="bg-gray-50"><td className="p-1.5 border border-gray-200 font-mono">typescript</td><td className="p-1.5 border border-gray-200">5.9.3</td><td className="p-1.5 border border-gray-200 text-gray-500">固定版本，不用 ^</td></tr>
+            <tr><td className="p-1.5 border border-gray-200 font-mono">express</td><td className="p-1.5 border border-gray-200">^4.21.2</td><td className="p-1.5 border border-gray-200 text-gray-500">后端框架</td></tr>
+          </tbody>
+        </table>
+        <p className="text-[12px] text-green-700 font-medium mb-3">✅ Manus「Web App（tRPC + Manus Auth + Database）」模板默认就是这套版本，直接用模板即可，无需手动调整。</p>
+
+        <p className="text-[12px] font-semibold text-gray-900 mb-1">② 品牌色与样式规范（必须与脉动网一致）</p>
+        <p className="text-[12px] text-gray-600 mb-2">子项目的 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">client/src/index.css</span> 必须使用与脉动网相同的 CSS 变量体系，合并后视觉无缝衔接：</p>
+        <table className="w-full text-[12px] border-collapse mb-3">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">变量 / 色值</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">用途</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">备注</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td className="p-1.5 border border-gray-200 font-mono">#D32F2F（脉动红）</td><td className="p-1.5 border border-gray-200">主色 / 按钮 / 强调</td><td className="p-1.5 border border-gray-200 text-gray-500">--brand-red</td></tr>
+            <tr className="bg-gray-50"><td className="p-1.5 border border-gray-200 font-mono">#CBA471（至尊金）</td><td className="p-1.5 border border-gray-200">装饰边框 / 徽章</td><td className="p-1.5 border border-gray-200 text-gray-500">--brand-gold</td></tr>
+            <tr><td className="p-1.5 border border-gray-200 font-mono">#FAF3ED（杏白底）</td><td className="p-1.5 border border-gray-200">全站背景色</td><td className="p-1.5 border border-gray-200 text-gray-500">--bg-cream</td></tr>
+            <tr className="bg-gray-50"><td className="p-1.5 border border-gray-200 font-mono">#222222（核心黑）</td><td className="p-1.5 border border-gray-200">主要文字</td><td className="p-1.5 border border-gray-200 text-gray-500">--text-black</td></tr>
+            <tr><td className="p-1.5 border border-gray-200 font-mono">#5A2E1C（深棕）</td><td className="p-1.5 border border-gray-200">管理员页面标题</td><td className="p-1.5 border border-gray-200 text-gray-500">规则/后台专用</td></tr>
+            <tr className="bg-gray-50"><td className="p-1.5 border border-gray-200 font-mono">Nunito 字体</td><td className="p-1.5 border border-gray-200">全站字体</td><td className="p-1.5 border border-gray-200 text-gray-500">--font-sans，中文降级 PingFang SC</td></tr>
+          </tbody>
+        </table>
+
+        <p className="text-[12px] font-semibold text-gray-900 mb-1">③ 后端路由命名规范（合并时不冲突）</p>
+        <ul className="text-[12px] text-gray-700 space-y-1.5 mb-3">
+          <li>子项目的 tRPC 路由文件统一命名为 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">server/子项目代号-router.ts</span>（如 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">server/mlm-bonus-router.ts</span>），<span className="font-semibold text-gray-900">不要直接写在 routers.ts 里</span>，方便合并时整文件 copy</li>
+          <li>路由命名空间加子项目前缀，如 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">mlmBonus.getCompanies</span>、<span className="font-mono text-[11px] bg-gray-100 px-1 rounded">mlmBonus.simulate</span>，防止与脉动网现有过程名冲突</li>
+          <li>合并时只需在脉动网 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">server/routers.ts</span> 顶部 import 并在 appRouter 里注册一行：<span className="font-mono text-[11px] bg-gray-100 px-1 rounded">mlmBonus: mlmBonusRouter</span></li>
+        </ul>
+
+        <p className="text-[12px] font-semibold text-gray-900 mb-1">④ 数据库字段规范（与脉动网 MySQL 兼容）</p>
+        <table className="w-full text-[12px] border-collapse mb-3">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">字段类型</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">规范</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td className="p-1.5 border border-gray-200">主键 ID</td><td className="p-1.5 border border-gray-200 text-gray-600"><span className="font-mono text-[11px] bg-gray-100 px-1 rounded">int().autoincrement().notNull()</span>，与脉动网一致，合并后外键关联无需转换</td></tr>
+            <tr className="bg-gray-50"><td className="p-1.5 border border-gray-200">时间戳</td><td className="p-1.5 border border-gray-200 text-gray-600"><span className="font-mono text-[11px] bg-gray-100 px-1 rounded">timestamp(&#123; mode: 'string' &#125;)</span>，存 UTC 字符串，前端用 new Date(val).toLocaleString() 转本地时间</td></tr>
+            <tr><td className="p-1.5 border border-gray-200">短文本</td><td className="p-1.5 border border-gray-200 text-gray-600"><span className="font-mono text-[11px] bg-gray-100 px-1 rounded">varchar(&#123; length: 255 &#125;)</span>，长文本用 text()</td></tr>
+            <tr className="bg-gray-50"><td className="p-1.5 border border-gray-200">金额/比例</td><td className="p-1.5 border border-gray-200 text-gray-600"><span className="font-mono text-[11px] bg-gray-100 px-1 rounded">decimal(&#123; precision: 18, scale: 6 &#125;)</span>，不用 float 防精度丢失</td></tr>
+            <tr><td className="p-1.5 border border-gray-200">JSON 数据</td><td className="p-1.5 border border-gray-200 text-gray-600"><span className="font-mono text-[11px] bg-gray-100 px-1 rounded">json()</span>，MySQL 原生 JSON 列</td></tr>
+            <tr className="bg-gray-50"><td className="p-1.5 border border-gray-200">表命名</td><td className="p-1.5 border border-gray-200 text-gray-600">加子项目前缀，如 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">mlm_companies</span>、<span className="font-mono text-[11px] bg-gray-100 px-1 rounded">mlm_schemes</span>，防止合并时表名冲突</td></tr>
+          </tbody>
+        </table>
+
+        <p className="text-[12px] font-semibold text-gray-900 mb-1">⑤ 禁止引入的依赖（会与脉动网冲突）</p>
+        <ul className="text-[12px] text-[#D32F2F] space-y-1 mb-3">
+          <li>❌ <span className="font-mono text-[11px] bg-red-50 px-1 rounded">react-router-dom</span>：脉动网用 wouter，引入会导致路由冲突</li>
+          <li>❌ <span className="font-mono text-[11px] bg-red-50 px-1 rounded">axios</span>：统一用 tRPC，不引入额外 HTTP 客户端</li>
+          <li>❌ <span className="font-mono text-[11px] bg-red-50 px-1 rounded">moment.js</span>：用原生 Date API 或 date-fns，体积小且无时区问题</li>
+          <li>❌ 任何 CSS-in-JS 库（styled-components、emotion）：统一用 Tailwind</li>
+        </ul>
+
+        <div className="bg-green-50 border border-green-200 rounded-lg p-2.5">
+          <p className="text-[12px] font-semibold text-green-800">✅ 对齐检查清单（新建子项目时逐项确认）</p>
+          <ul className="text-[12px] text-green-700 space-y-1 mt-1">
+            <li>□ 使用 Manus「Web App（tRPC + Manus Auth + Database）」模板（版本自动对齐）</li>
+            <li>□ index.css 已复制脉动网品牌色变量（#D32F2F / #CBA471 / #FAF3ED / Nunito）</li>
+            <li>□ 后端路由独立文件，命名加子项目前缀</li>
+            <li>□ 数据库表名加子项目前缀（如 mlm_xxx）</li>
+            <li>□ 时间戳用 timestamp mode:string，金额用 decimal</li>
+            <li>□ 未引入 react-router-dom / axios / moment</li>
+          </ul>
+        </div>
+      </RuleSection>
+
       {/* H-2 基础设施位置 */}
       <RuleSection icon={Database} title="② 基础设施在哪里找">
         <p className="font-semibold text-gray-900 mb-2">子项目的数据库、服务器、存储桶全部在 Manus 平台，与脉动网腾讯云完全独立：</p>
