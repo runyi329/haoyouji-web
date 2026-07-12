@@ -1882,12 +1882,8 @@ export default function Home() {
                     className="flex flex-col items-center justify-center space-y-0.5 active:scale-90 transition-transform px-0.5"
                     onClick={() => {
                       if (cat.name === '奖金制度') {
-                        // 通过后端生成HMAC签名链接，实现SSO单点登录（密钥不暴露到前端）
-                        if (user) {
-                          mlmSsoLinkMutation.mutate(undefined);
-                        } else {
-                          window.location.href = 'https://mlmbonus-chknjmtw.manus.space';
-                        }
+                        // 跳转到脉动网内部路径，保持PWA沉浸式体验（iframe嵌入）
+                        navigate('/mlm-bonus');
                         return;
                       }
                       if (cat.name === '宠物生活') {

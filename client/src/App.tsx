@@ -835,6 +835,8 @@ function Router() {
         <Route path="/longxia" component={lazy(() => import("./pages/longxia/LongxiaHome"))} />
         <Route path="/longxia/my" component={lazy(() => import("./pages/longxia/LongxiaMy"))} />
         <Route path="/longxia/layout-templates" component={lazy(() => import("./pages/longxia/LongxiaLayoutTemplates"))} />
+        {/* 奖金制度研究平台（iframe嵌入，保持PWA沉浸式体验） */}
+        <Route path="/mlm-bonus" component={lazy(() => import("./pages/MlmBonusPage"))} />
         {/* 404 */}
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
