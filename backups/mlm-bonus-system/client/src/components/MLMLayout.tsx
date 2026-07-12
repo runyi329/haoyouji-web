@@ -1,17 +1,18 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/_core/hooks/useAuth";
 import {
   LayoutGrid,
   Users,
   TrendingUp,
   GitBranch,
-  Settings,
   ChevronLeft,
   ChevronRight,
   Menu,
-  X,
   Zap,
+  UserCircle,
+  LogOut,
 } from "lucide-react";
 
 const navItems = [
@@ -35,6 +36,7 @@ export default function MLMLayout({ children }: MLMLayoutProps) {
   const [location] = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { user, isAuthenticated, logout } = useAuth();
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -112,12 +114,35 @@ export default function MLMLayout({ children }: MLMLayoutProps) {
           <button onClick={() => setMobileOpen(true)} className="text-muted-foreground hover:text-foreground">
             <Menu className="w-5 h-5" />
           </button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-1">
             <div className="w-6 h-6 rounded bg-primary flex items-center justify-center">
               <Zap className="w-3 h-3 text-white" />
             </div>
             <span className="text-sm font-bold">奖金制度研究平台</span>
           </div>
+          {/* 用户状态 */}
+          {isAuthenticated ? (
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <UserCircle className="w-4 h-4 text-primary" />
+                <span className="max-w-[60px] truncate">{user?.name || "用户"}</span>
+              </div>
+              <button
+                onClick={logout}
+                className="text-muted-foreground hover:text-destructive transition-colors"
+                title="退出登录"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <Link href="/login">
+              <button className="flex items-center gap-1 text-xs font-medium text-primary border border-primary/30 rounded-lg px-2.5 py-1 hover:bg-primary/10 transition-colors">
+                <UserCircle className="w-3.5 h-3.5" />
+                登录
+              </button>
+            </Link>
+          )}
         </header>
 
         {/* Page content */}

@@ -252,3 +252,36 @@ export const customSchemes = mysqlTable(
 
 export type CustomScheme = typeof customSchemes.$inferSelect;
 export type InsertCustomScheme = typeof customSchemes.$inferInsert;
+
+// ============================================================
+// 公司目录（搜索索引源）
+// ============================================================
+
+export const companyCatalog = mysqlTable(
+  "mlm_company_catalog",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    companyId: varchar("companyId", { length: 50 }).notNull().unique(),
+    name: varchar("name", { length: 100 }).notNull(),
+    nameEn: varchar("nameEn", { length: 100 }).notNull(),
+    tagline: varchar("tagline", { length: 200 }).notNull(),
+    subtitle: varchar("subtitle", { length: 100 }).notNull(),
+    description: text("description").notNull(),
+    schemeType: varchar("schemeType", { length: 50 }).notNull(),
+    tag: varchar("tag", { length: 30 }).notNull(),
+    features: varchar("features", { length: 500 }).notNull(), // JSON array string
+    href: varchar("href", { length: 100 }).notNull(),
+    icon: varchar("icon", { length: 10 }).notNull(),
+    locked: boolean("locked").default(false).notNull(),
+    sortOrder: int("sortOrder").default(0).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    catalogTypeIdx: index("mlm_catalog_type_idx").on(table.schemeType),
+    catalogNameIdx: index("mlm_catalog_name_idx").on(table.name),
+  })
+);
+
+export type CompanyCatalog = typeof companyCatalog.$inferSelect;
+export type InsertCompanyCatalog = typeof companyCatalog.$inferInsert;

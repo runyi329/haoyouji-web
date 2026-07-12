@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -11,9 +11,9 @@ import {
   BarChart2,
   Zap,
   Lock,
-  LogOut,
-  ArrowLeft,
-  UserCircle,
+  Search,
+  X,
+  Loader2,
 } from "lucide-react";
 
 const COMPANIES = [
@@ -255,11 +255,74 @@ function FeatureIcon({ label }: { label: string }) {
 export default function Home() {
   const [, setLocation] = useLocation();
   const [activeFilter, setActiveFilter] = useState("全部");
-  const { user, isAuthenticated, logout } = useAuth();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const { isAuthenticated } = useAuth();
 
-  const filtered = activeFilter === "全部"
-    ? COMPANIES
-    : COMPANIES.filter((c) => c.type === activeFilter);
+  // 防抖：输入停止 300ms 后才发起搜索
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 300);
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    };
+  }, [searchQuery]);
+
+  // 后端搜索接口
+  const { data: searchData, isFetching: isSearching } = trpc.search.companies.useQuery(
+    {
+      query: debouncedQuery,
+      schemeType: activeFilter === "全部" ? "" : activeFilter,
+    },
+    { keepPreviousData: true } as any
+  );
+
+  // 如果后端有数据则使用后端结果，否则 fallback 到前端过滤
+  const backendResults = searchData?.results;
+  const filtered = backendResults
+    ? backendResults.map((r) => {
+        // 将后端结果映射到前端 COMPANIES 样式
+        const local = COMPANIES.find((c) => c.id === r.companyId);
+        return local ?? {
+          id: r.companyId,
+          name: r.name,
+          nameEn: r.nameEn,
+          tagline: r.tagline,
+          subtitle: r.subtitle,
+          desc: r.description,
+          tag: r.tag,
+          tagBg: "bg-gray-50",
+          tagText: "text-gray-700",
+          tagBorder: "border-gray-200",
+          iconBg: "bg-gray-500",
+          btnBg: "bg-gray-500 hover:bg-gray-600",
+          accentColor: "text-gray-600",
+          borderHover: "hover:border-gray-300",
+          stats: [],
+          features: r.features as string[],
+          href: r.href,
+          icon: r.icon,
+          type: r.schemeType,
+          locked: r.locked,
+        };
+      })
+    : COMPANIES.filter((c) => {
+        const matchesFilter = activeFilter === "全部" || c.type === activeFilter;
+        if (!debouncedQuery.trim()) return matchesFilter;
+        const q = debouncedQuery.trim().toLowerCase();
+        return matchesFilter && (
+          c.name.toLowerCase().includes(q) ||
+          c.nameEn.toLowerCase().includes(q) ||
+          c.type.toLowerCase().includes(q) ||
+          c.tagline.toLowerCase().includes(q) ||
+          c.subtitle.toLowerCase().includes(q) ||
+          c.features.some((f) => f.toLowerCase().includes(q)) ||
+          c.tag.toLowerCase().includes(q)
+        );
+      });
 
   const engineCount = COMPANIES.filter((c) => !c.locked && c.tag === "完整引擎").length;
   const templateCount = COMPANIES.filter((c) => !c.locked && c.tag === "成熟模板").length;
@@ -270,55 +333,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Top nav */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center">
-              <BarChart2 className="w-4 h-4 text-white" />
-            </div>
-            <span className="font-bold text-gray-900 text-sm">MLM 奖金制度研究平台</span>
-            <span className="hidden sm:block text-xs text-gray-400 ml-1">多层次直销商业模型学习与分析系统</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* 返回脉动网按钮（登录后显示） */}
-            {isAuthenticated && (
-              <a
-                href="https://www.jiangyuchen.cn"
-                className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600 transition-colors border border-gray-200 rounded-lg px-2.5 py-1.5 hover:border-blue-300"
-              >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">返回脉动网</span>
-                <span className="sm:hidden">脉动网</span>
-              </a>
-            )}
-            {/* 用户状态 */}
-            {isAuthenticated ? (
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1.5 text-xs text-gray-600">
-                  <UserCircle className="w-4 h-4 text-blue-500" />
-                  <span className="hidden sm:inline">{user?.name || "用户"}</span>
-                </div>
-                <button
-                  onClick={logout}
-                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors"
-                  title="退出登录"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setLocation("/login")}
-                className="flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 border border-blue-200 hover:border-blue-400 rounded-lg px-3 py-1.5 transition-all"
-              >
-                <UserCircle className="w-3.5 h-3.5" />
-                登录
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
 
       {/* Hero */}
       <div className="bg-white border-b border-gray-100">
@@ -331,11 +345,67 @@ export default function Home() {
           <p className="text-sm text-gray-400 max-w-xl mx-auto leading-relaxed">
             通过真实的奖金计算引擎、可视化组织树图和增长模拟器，深入理解多层次直销的商业逻辑与资金流向。
           </p>
+          {/* 统计数字栏 */}
+          <div className="mt-6 flex items-center justify-center gap-8">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">9</div>
+              <div className="text-xs text-gray-400 mt-0.5">家公司</div>
+            </div>
+            <div className="w-px h-8 bg-gray-200" />
+            <div className="text-center">
+              <div className="text-2xl font-bold text-emerald-600">{engineCount}</div>
+              <div className="text-xs text-gray-400 mt-0.5">完整引擎</div>
+            </div>
+            <div className="w-px h-8 bg-gray-200" />
+            <div className="text-center">
+              <div className="text-2xl font-bold text-purple-600">{templateCount}</div>
+              <div className="text-xs text-gray-400 mt-0.5">成熟模板</div>
+            </div>
+            <div className="w-px h-8 bg-gray-200" />
+            <div className="text-center">
+              <div className="text-2xl font-bold text-orange-500">6</div>
+              <div className="text-xs text-gray-400 mt-0.5">制度类型</div>
+            </div>
+          </div>
+
+          {/* 全局搜索框 */}
+          <div className="mt-6 max-w-lg mx-auto">
+            <div className="relative group">
+              {isSearching
+                ? <Loader2 className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-500 animate-spin" />
+                : <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+              }
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="搜索公司名称、制度类型（如：康宝莱、双轨制、代数制…）"
+                className="w-full pl-10 pr-10 py-3 rounded-2xl border border-gray-200 bg-gray-50 text-sm text-gray-800 placeholder-gray-400 outline-none focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all"
+              />
+              {searchQuery && !isSearching && (
+                <button
+                  onClick={() => { setSearchQuery(""); setDebouncedQuery(""); }}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+            {(searchQuery || debouncedQuery) && !isSearching && (
+              <p className="mt-2 text-xs text-gray-400 text-left pl-1">
+                后端搜索到 <span className="font-semibold text-blue-600">{filtered.length}</span> 个结果
+                {filtered.length === 0 && "，试试其他关键词"}
+              </p>
+            )}
+            {isSearching && searchQuery && (
+              <p className="mt-2 text-xs text-blue-400 text-left pl-1">正在搜索…</p>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Filter bar */}
-      <div className="bg-white border-b border-gray-100 sticky top-14 z-10">
+      <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4">
           <div className="flex gap-1 overflow-x-auto py-3 scrollbar-hide">
             {TYPE_FILTERS.map((f) => (
@@ -357,6 +427,21 @@ export default function Home() {
 
       {/* Company grid */}
       <div className="max-w-6xl mx-auto px-4 py-8">
+        {filtered.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
+              <Search className="w-6 h-6 text-gray-400" />
+            </div>
+            <p className="text-gray-500 font-medium mb-1">未找到匹配的奖金制度</p>
+            <p className="text-xs text-gray-400 mb-4">尝试搜索公司名称、英文名或制度类型</p>
+            <button
+              onClick={() => { setSearchQuery(""); setActiveFilter("全部"); }}
+              className="text-xs text-blue-600 border border-blue-200 rounded-lg px-4 py-1.5 hover:bg-blue-50 transition-colors"
+            >
+              清除搜索
+            </button>
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {filtered.map((company) => (
             <div

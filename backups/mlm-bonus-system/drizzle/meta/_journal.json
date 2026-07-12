@@ -15,6 +15,13 @@
       "when": 1783809366608,
       "tag": "0001_same_quicksilver",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1783870374923,
+      "tag": "0002_windy_kulan_gath",
+      "breakpoints": true
     }
   ]
 }
