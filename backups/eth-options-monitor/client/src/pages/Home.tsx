@@ -343,7 +343,7 @@ function RateCalcModal({
           </div>
 
           {/* 展开计算 */}
-          <div className="bg-gray-800 rounded-xl px-3 py-3 space-y-2 font-mono">
+          <div className="bg-gray-800 rounded-xl px-3 py-3 space-y-2 font-sans">
             <div className="flex justify-between items-center">
               <span className="text-gray-500">权利金（标记价USD）</span>
               <span className="text-gray-300">{fmt(premium)}</span>
@@ -368,10 +368,10 @@ function RateCalcModal({
 
           {/* 直观解读 */}
           <div className="bg-sky-950/30 border border-sky-900/40 rounded-xl px-3 py-2.5 text-gray-400 leading-relaxed">
-            客户出了 <span className="text-gray-300 font-mono">{fmt(premium)}</span>，
-            占现价 <span className="text-sky-300 font-mono">{(rawRate * 100).toFixed(2)}%</span>，
-            持有 <span className="text-gray-300 font-mono">{daysLeft}</span> 天。
-            折算年化相当于每年花 <span className="text-yellow-300 font-mono font-semibold">{(annualizedRate * 100).toFixed(1)}%</span>。
+            客户出了 <span className="text-gray-300 font-sans">{fmt(premium)}</span>，
+            占现价 <span className="text-sky-300 font-sans">{(rawRate * 100).toFixed(2)}%</span>，
+            持有 <span className="text-gray-300 font-sans">{daysLeft}</span> 天。
+            折算年化相当于每年花 <span className="text-yellow-300 font-sans font-semibold">{(annualizedRate * 100).toFixed(1)}%</span>。
           </div>
         </div>
       </div>
@@ -413,11 +413,11 @@ function CalcModal({
         <div className="px-4 py-4 space-y-3 text-xs">
           {/* 条件说明 */}
           <div className="text-gray-500">
-            当 ETH 到期价格达到 <span className="text-orange-300 font-mono font-bold">{fmt(trueBreakeven)}</span> 时，你的净收益 = 0：
+            当 ETH 到期价格达到 <span className="text-orange-300 font-sans font-bold">{fmt(trueBreakeven)}</span> 时，你的净收益 = 0：
           </div>
 
           {/* 逐行减法展示 */}
-          <div className="bg-gray-800 rounded-xl px-3 py-3 space-y-2 font-mono">
+          <div className="bg-gray-800 rounded-xl px-3 py-3 space-y-2 font-sans">
             <div className="flex justify-between items-center">
               <span className="text-gray-400">期权总收益（到期价−行权价）</span>
               <span className="text-sky-300">{fmt(trueBreakeven)} − {fmt(row.strike)} = <span className="font-bold">{fmt(trueBreakeven - row.strike)}</span></span>
@@ -437,7 +437,7 @@ function CalcModal({
           </div>
 
           {/* 公式源 */}
-          <div className="bg-gray-800 rounded-xl px-3 py-3 space-y-1 font-mono">
+          <div className="bg-gray-800 rounded-xl px-3 py-3 space-y-1 font-sans">
             <div className="text-gray-600 text-xs mb-1">公式源：令 (P−K) = share×(P−S)，解 P</div>
             <div className="text-gray-500 text-xs">P − {fmt(row.strike)} = {profitShare.toFixed(2)} × (P − {fmt(ethPrice)})</div>
             <div className="text-gray-500 text-xs">P × {(1 - profitShare).toFixed(2)} = {fmt(row.strike)} − {profitShare.toFixed(2)} × {fmt(ethPrice)}</div>
@@ -450,9 +450,9 @@ function CalcModal({
 
           {/* 直观解读 */}
           <div className="bg-emerald-950/30 border border-emerald-900/40 rounded-xl px-3 py-2.5 text-gray-400 leading-relaxed">
-            ETH 需从现价 <span className="text-gray-300 font-mono">{fmt(ethPrice)}</span> 再涨 
-            <span className="text-emerald-400 font-mono font-semibold">{fmt(trueBreakeven - ethPrice)}</span> (
-            <span className="text-emerald-400 font-mono">{((trueBreakeven - ethPrice) / ethPrice * 100).toFixed(1)}%</span>)，
+            ETH 需从现价 <span className="text-gray-300 font-sans">{fmt(ethPrice)}</span> 再涨 
+            <span className="text-emerald-400 font-sans font-semibold">{fmt(trueBreakeven - ethPrice)}</span> (
+            <span className="text-emerald-400 font-sans">{((trueBreakeven - ethPrice) / ethPrice * 100).toFixed(1)}%</span>)，
             超过此价之后你和 B 真正各占 {Math.round(profitShare * 100)}%。
           </div>
         </div>
@@ -563,7 +563,7 @@ function DetailModal({
         {/* 标题栏 */}
         <div className="flex items-center justify-between px-4 py-3 bg-gray-800 border-b border-gray-700 shrink-0">
           <div>
-            <div className="text-white font-bold font-mono">{row.instrumentName}</div>
+            <div className="text-white font-bold font-sans">{row.instrumentName}</div>
             <div className="text-gray-400 text-xs">ETH Call 期权 · 行权价 {fmt(row.strike)}</div>
           </div>
           <button
@@ -585,7 +585,7 @@ function DetailModal({
             ].map(item => (
               <div key={item.label} className="bg-gray-800 rounded-lg px-3 py-2">
                 <div className="text-gray-500 text-xs">{item.label}</div>
-                <div className="text-white font-mono font-semibold text-sm mt-0.5">{item.value}</div>
+                <div className="text-white font-sans font-semibold text-sm mt-0.5">{item.value}</div>
                 {item.sub && <div className="text-gray-600 text-xs">{item.sub}</div>}
               </div>
             ))}
@@ -595,7 +595,7 @@ function DetailModal({
           <div>
             <div className="text-xs text-gray-400 mb-2 flex items-center justify-between">
               <span>ETH 隐含波动率指数（过去15天）</span>
-              {row.iv != null && <span className="text-sky-400 font-mono">当前IV: {row.iv.toFixed(1)}%</span>}
+              {row.iv != null && <span className="text-sky-400 font-sans">当前IV: {row.iv.toFixed(1)}%</span>}
             </div>
             {detail.ivHistory.length > 0 ? (
               <div className="h-36 bg-gray-800 rounded-lg p-2">
@@ -632,7 +632,7 @@ function DetailModal({
               ].map(g => (
                 <div key={g.label} className="bg-gray-800 rounded-lg px-2 py-2 text-center">
                   <div className="text-gray-500 text-xs">{g.label}</div>
-                  <div className="text-white font-mono text-sm font-semibold mt-0.5">{g.value}</div>
+                  <div className="text-white font-sans text-sm font-semibold mt-0.5">{g.value}</div>
                   <div className="text-gray-600 text-xs">{g.desc}</div>
                 </div>
               ))}
@@ -651,7 +651,7 @@ function DetailModal({
               ].map(item => (
                 <div key={item.label} className="bg-gray-800 rounded-lg px-3 py-2">
                   <div className="text-gray-500 text-xs">{item.label}</div>
-                  <div className={`font-mono font-semibold text-sm mt-0.5 ${'color' in item ? (item as {color: string}).color : "text-white"}`}>{item.value}</div>
+                  <div className={`font-sans font-semibold text-sm mt-0.5 ${'color' in item ? (item as {color: string}).color : "text-white"}`}>{item.value}</div>
                   {item.sub && <div className="text-gray-600 text-xs">{item.sub}</div>}
                 </div>
               ))}
@@ -663,7 +663,7 @@ function DetailModal({
             <div className="bg-red-950/40 border border-red-900/50 rounded-lg px-3 py-2 text-xs">
               <div className="text-red-400 font-semibold mb-1">痛苦区警告</div>
               <div className="text-gray-400">
-                ETH 在 <span className="text-red-300 font-mono">{fmt(row.breakeven)} ~ {fmt(trueBreakeven)}</span> 区间内到期：
+                ETH 在 <span className="text-red-300 font-sans">{fmt(row.breakeven)} ~ {fmt(trueBreakeven)}</span> 区间内到期：
               </div>
               <div className="text-gray-400 mt-0.5">
                 期权有内在价值但不足以覆盖 {Math.round(profitShare * 100)}% 分润，需自行补贴差额。
@@ -680,26 +680,26 @@ function DetailModal({
 
               {/* 条件设定 */}
               <div className="text-gray-500 leading-relaxed">
-                令到期 ETH 价格为 <span className="text-orange-300 font-mono font-semibold">Ｐ</span>，求你的净收益 = 0
+                令到期 ETH 价格为 <span className="text-orange-300 font-sans font-semibold">Ｐ</span>，求你的净收益 = 0
               </div>
 
               {/* 公式展开 */}
               <div className="space-y-1.5 border-l-2 border-gray-700 pl-3">
                 <div className="flex justify-between items-start">
                   <span className="text-gray-500">期权内在价值</span>
-                  <span className="text-gray-300 font-mono">P − {fmt(row.strike)}</span>
+                  <span className="text-gray-300 font-sans">P − {fmt(row.strike)}</span>
                 </div>
                 <div className="flex justify-between items-start">
                   <span className="text-gray-500">减去权利金成本</span>
-                  <span className="text-red-400 font-mono">− {fmt(row.markPriceUsd)}</span>
+                  <span className="text-red-400 font-sans">− {fmt(row.markPriceUsd)}</span>
                 </div>
                 <div className="flex justify-between items-start">
                   <span className="text-gray-500">减去分润给 B</span>
-                  <span className="text-red-400 font-mono">− {Math.round(profitShare * 100)}% × (P − {fmt(ethPrice)})</span>
+                  <span className="text-red-400 font-sans">− {Math.round(profitShare * 100)}% × (P − {fmt(ethPrice)})</span>
                 </div>
                 <div className="border-t border-gray-700 pt-1.5 flex justify-between items-start">
                   <span className="text-gray-400">净收益 = 0</span>
-                  <span className="text-gray-300 font-mono text-xs">解出 P ↓</span>
+                  <span className="text-gray-300 font-sans text-xs">解出 P ↓</span>
                 </div>
               </div>
 
@@ -716,16 +716,16 @@ function DetailModal({
                 </div>
                 <div className="flex items-center gap-2 pt-0.5">
                   <span className="text-gray-400">P =</span>
-                  <span className="text-orange-300 font-mono font-bold text-base">{fmt(trueBreakeven)}</span>
+                  <span className="text-orange-300 font-sans font-bold text-base">{fmt(trueBreakeven)}</span>
                   <span className="text-gray-600">← 真实平衡点</span>
                 </div>
               </div>
 
               {/* 直观解读 */}
               <div className="text-gray-600 leading-relaxed border-t border-gray-700 pt-2">
-                ETH 需从现价 <span className="text-gray-400 font-mono">{fmt(ethPrice)}</span> 再涨 
-                <span className="text-emerald-400 font-mono font-semibold">{fmt(trueBreakeven - ethPrice)}</span>（
-                <span className="text-emerald-400 font-mono">{((trueBreakeven - ethPrice) / ethPrice * 100).toFixed(1)}%</span>），
+                ETH 需从现价 <span className="text-gray-400 font-sans">{fmt(ethPrice)}</span> 再涨 
+                <span className="text-emerald-400 font-sans font-semibold">{fmt(trueBreakeven - ethPrice)}</span>（
+                <span className="text-emerald-400 font-sans">{((trueBreakeven - ethPrice) / ethPrice * 100).toFixed(1)}%</span>），
                 期权净收益才能完全覆盖 {Math.round(profitShare * 100)}% 分润。
               </div>
             </div>
@@ -826,7 +826,7 @@ function OptionRowItem({
       {/* 行权价 + 年化占比 */}
       <div className="flex items-center justify-between mb-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-white font-mono font-bold text-base">
+          <span className="text-white font-sans font-bold text-base">
             K={fmt(row.strike)}
           </span>
           <span className={`text-xs px-1.5 py-0.5 rounded ${isAboveAtm ? "bg-orange-900/50 text-orange-300" : "bg-blue-900/50 text-blue-300"}`}>
@@ -838,14 +838,31 @@ function OptionRowItem({
             </span>
           )}
         </div>
-        <div className="text-right ml-2 shrink-0">
-          <span className={`text-lg font-mono font-bold ${rateColor(row.annualizedRate, threshold)}`}>
-            {fmtPct(row.annualizedRate)}
-          </span>
-          <button
-            onClick={() => setShowRateCalc(true)}
-            className="text-xs text-gray-500 hover:text-sky-300 underline underline-offset-2 decoration-dotted transition-colors duration-150"
-          >年化成本</button>
+        <div className="flex items-center gap-2 ml-2 shrink-0">
+          {/* Bid / Mark / Ask 三价 */}
+          <div className="flex flex-col items-end gap-0.5 text-xs font-sans">
+            <div className="flex items-center gap-1">
+              <span className="text-gray-600">B</span>
+              <span className="text-emerald-400">{row.bidPriceUsd != null ? `$${Math.round(row.bidPriceUsd)}` : "—"}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-gray-600">M</span>
+              <span className="text-gray-300">{row.markPriceUsd != null ? `$${Math.round(row.markPriceUsd)}` : "—"}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-gray-600">A</span>
+              <span className="text-red-400">{row.askPriceUsd != null ? `$${Math.round(row.askPriceUsd)}` : "—"}</span>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className={`text-lg font-sans font-bold ${rateColor(row.annualizedRate, threshold)}`}>
+              {fmtPct(row.annualizedRate)}
+            </span>
+            <button
+              onClick={() => setShowRateCalc(true)}
+              className="text-xs text-gray-500 hover:text-sky-300 underline underline-offset-2 decoration-dotted transition-colors duration-150"
+            >年化成本</button>
+          </div>
         </div>
       </div>
 
@@ -853,12 +870,12 @@ function OptionRowItem({
       <div className="grid grid-cols-3 gap-1 text-xs">
         <div>
           <div className="text-gray-500">标记价</div>
-          <div className="text-gray-200 font-mono">{fmt(row.markPriceUsd, 0)}</div>
+          <div className="text-gray-200 font-sans">{fmt(row.markPriceUsd, 0)}</div>
           <div className="text-gray-600">{row.markPrice != null ? `${row.markPrice.toFixed(4)} ETH` : "—"}</div>
         </div>
         <div>
           <div className="text-gray-500">期权平衡点</div>
-          <div className="text-yellow-300 font-mono font-semibold">{fmt(row.breakeven)}</div>
+          <div className="text-yellow-300 font-sans font-semibold">{fmt(row.breakeven)}</div>
           <div className="text-gray-600">行权价+权利金</div>
         </div>
         <div>
@@ -866,7 +883,7 @@ function OptionRowItem({
             onClick={() => setShowCalc(true)}
             className="text-gray-400 hover:text-orange-300 underline underline-offset-2 decoration-dotted transition-colors duration-150 text-xs text-left"
           >真实平衡点</button>
-          <div className="text-orange-300 font-mono font-semibold">{fmt(isFinite(trueBreakeven) ? trueBreakeven : null)}</div>
+          <div className="text-orange-300 font-sans font-semibold">{fmt(isFinite(trueBreakeven) ? trueBreakeven : null)}</div>
           <div className="text-gray-600">含{Math.round(profitShare * 100)}%分润</div>
         </div>
       </div>
@@ -875,7 +892,7 @@ function OptionRowItem({
       {painZoneEnd != null && painZoneStart != null && painZoneEnd > painZoneStart && (
         <div className="mt-1.5 text-xs">
           <span className="text-gray-500">痛苦区：</span>
-          <span className="text-red-400 font-mono">
+          <span className="text-red-400 font-sans">
             {fmt(painZoneStart)} ~ {fmt(painZoneEnd)}
           </span>
           <span className="text-gray-600 ml-1">（客户认为有利润要分，但你还在补贴中）</span>
@@ -1214,7 +1231,7 @@ function ChartModal({
                           {focusPoints.map(pt => {
                             const { text, cls } = rowDef.render(pt);
                             return (
-                              <td key={pt.strike} className={`px-2 py-1 text-center font-mono ${cls ?? "text-gray-300"}`}>{text}</td>
+                              <td key={pt.strike} className={`px-2 py-1 text-center font-sans ${cls ?? "text-gray-300"}`}>{text}</td>
                             );
                           })}
                         </tr>
@@ -1249,7 +1266,7 @@ function ChartModal({
                 <div className="text-emerald-400 font-semibold text-xs mb-2">建仓甜蜂点（年化 ≤ {thresholdPct.toFixed(0)}% 且现在就在赚）</div>
                 <div className="flex flex-wrap gap-2">
                   {sweet.map(d => (
-                    <span key={d.strike} className="bg-emerald-900/60 text-emerald-300 font-mono text-xs px-2 py-1 rounded">
+                    <span key={d.strike} className="bg-emerald-900/60 text-emerald-300 font-sans text-xs px-2 py-1 rounded">
                       K={d.strike} · 年化{d.annPct?.toFixed(1)}%
                     </span>
                   ))}
@@ -1409,7 +1426,7 @@ function MultiExpiryChartModal({
                 <span className="inline-block w-5 h-1.5 rounded-full" style={{ background: s.color }} />
                 <span style={{ color: s.color }}>{s.label}</span>
                 {boundaryStrikes[idx] && (
-                  <span className="text-yellow-400 font-mono">★K={boundaryStrikes[idx]}</span>
+                  <span className="text-yellow-400 font-sans">★K={boundaryStrikes[idx]}</span>
                 )}
               </span>
             ))}
@@ -1596,7 +1613,7 @@ function MultiExpiryChartModal({
                             {focusPoints.map(pt => {
                               const { text, cls } = rowDef.render(pt);
                               return (
-                                <td key={pt.strike} className={`px-2 py-1 text-center font-mono ${cls ?? "text-gray-300"}`}>{text}</td>
+                                <td key={pt.strike} className={`px-2 py-1 text-center font-sans ${cls ?? "text-gray-300"}`}>{text}</td>
                               );
                             })}
                           </tr>
@@ -1655,7 +1672,7 @@ function MultiExpiryChartModal({
                     return (
                       <div key={strike} className="mt-3">
                         <div className="flex items-center gap-2 mb-1.5">
-                          <span className={`text-xs font-bold font-mono ${isAtm ? "text-yellow-400" : "text-gray-300"}`}>
+                          <span className={`text-xs font-bold font-sans ${isAtm ? "text-yellow-400" : "text-gray-300"}`}>
                             K = {strike} {isAtm ? "★" : ""}
                           </span>
                           {isAtm && <span className="text-xs text-yellow-500/70">接近平价</span>}
@@ -1689,7 +1706,7 @@ function MultiExpiryChartModal({
                                   <td className="px-2 py-1 text-gray-500 sticky left-0 bg-inherit whitespace-nowrap">{rowDef.label}</td>
                                   {cols.map((c, ci) => {
                                     const { text, cls } = rowDef.render(c);
-                                    return <td key={ci} className={`px-2 py-1 text-center font-mono ${cls ?? "text-gray-300"}`}>{text}</td>;
+                                    return <td key={ci} className={`px-2 py-1 text-center font-sans ${cls ?? "text-gray-300"}`}>{text}</td>;
                                   })}
                                 </tr>
                               ))}
@@ -1818,7 +1835,7 @@ function ProfitShareSlider({
     <div className="px-4 py-3 bg-gray-900 border-b border-gray-800">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs text-gray-400">分润比例（给对方的利润占比）</span>
-        <span className="text-lg font-mono font-bold text-sky-400">{pct}%</span>
+        <span className="text-lg font-sans font-bold text-sky-400">{pct}%</span>
       </div>
 
       <div className="relative">
@@ -1889,7 +1906,7 @@ function ThresholdSlider({
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs text-gray-400">年化上限（绿色高亮阈值）</span>
         <span
-          className="text-lg font-mono font-bold transition-colors duration-200"
+          className="text-lg font-sans font-bold transition-colors duration-200"
           style={{ color: trackColor }}
         >
           {pct}%
@@ -2039,7 +2056,7 @@ function RecordDrawer({
                   <div key={rec.id} className="bg-gray-800 rounded-xl px-3 py-3 border border-gray-700">
                     <div className="flex items-start justify-between">
                       <div>
-                        <div className="text-white font-mono font-bold text-sm">{rec.instrumentName}</div>
+                        <div className="text-white font-sans font-bold text-sm">{rec.instrumentName}</div>
                         <div className="text-gray-500 text-xs mt-0.5">{dateStr} 买入</div>
                       </div>
                       <button
@@ -2050,27 +2067,27 @@ function RecordDrawer({
                     <div className="grid grid-cols-3 gap-2 mt-2.5 text-xs">
                       <div className="bg-gray-900 rounded-lg px-2 py-1.5">
                         <div className="text-gray-500">行权价</div>
-                        <div className="text-white font-mono font-semibold">{fmt(rec.strike)}</div>
+                        <div className="text-white font-sans font-semibold">{fmt(rec.strike)}</div>
                       </div>
                       <div className="bg-gray-900 rounded-lg px-2 py-1.5">
                         <div className="text-gray-500">年化成本</div>
-                        <div className="text-sky-400 font-mono font-semibold">{annPct}%</div>
+                        <div className="text-sky-400 font-sans font-semibold">{annPct}%</div>
                       </div>
                       <div className="bg-gray-900 rounded-lg px-2 py-1.5">
                         <div className="text-gray-500">买入时ETH</div>
-                        <div className="text-gray-200 font-mono font-semibold">{fmt(rec.ethPriceAtBuy)}</div>
+                        <div className="text-gray-200 font-sans font-semibold">{fmt(rec.ethPriceAtBuy)}</div>
                       </div>
                       <div className="bg-gray-900 rounded-lg px-2 py-1.5">
                         <div className="text-gray-500">权利金</div>
-                        <div className="text-gray-200 font-mono">{rec.markPriceUsd != null ? fmt(rec.markPriceUsd) : "—"}</div>
+                        <div className="text-gray-200 font-sans">{rec.markPriceUsd != null ? fmt(rec.markPriceUsd) : "—"}</div>
                       </div>
                       <div className="bg-gray-900 rounded-lg px-2 py-1.5">
                         <div className="text-gray-500">真实平衡点</div>
-                        <div className="text-orange-300 font-mono">{rec.trueBreakeven != null ? fmt(rec.trueBreakeven) : "—"}</div>
+                        <div className="text-orange-300 font-sans">{rec.trueBreakeven != null ? fmt(rec.trueBreakeven) : "—"}</div>
                       </div>
                       <div className="bg-gray-900 rounded-lg px-2 py-1.5">
                         <div className="text-gray-500">需涨幅</div>
-                        <div className={`font-mono ${pnlPct != null && parseFloat(pnlPct) > 0 ? "text-emerald-400" : "text-red-400"}`}>
+                        <div className={`font-sans ${pnlPct != null && parseFloat(pnlPct) > 0 ? "text-emerald-400" : "text-red-400"}`}>
                           {pnlPct != null ? `+${pnlPct}%` : "—"}
                         </div>
                       </div>
@@ -2178,7 +2195,7 @@ export default function Home() {
       <div className="sticky top-0 z-10 border-b" style={{ background: '#161B22', borderColor: '#21262D' }}>
         {/* 连接状态条（非已连接时显示） */}
         {wsStatus !== "connected" && (
-          <div className={`flex items-center gap-2 px-4 py-1 text-[10px] font-mono ${
+          <div className={`flex items-center gap-2 px-4 py-1 text-[10px] font-sans ${
             wsStatus === "reconnecting"
               ? "border-b text-yellow-300"
               : "border-b text-red-300"
@@ -2197,9 +2214,9 @@ export default function Home() {
         {/* 第一行：返回首页 + ETH现价 + 状态 */}
         <div className="flex items-center justify-between px-4 pt-2 pb-1.5">
           <div className="flex items-center gap-3">
-            <a href="/" className="text-[10px] font-mono tracking-wider text-[#0ECB81] hover:text-white transition-colors duration-150 border border-[#0ECB81]/40 hover:border-white/40 rounded px-2 py-0.5">← 首页</a>
+            <a href="/" className="text-[10px] font-sans tracking-wider text-[#0ECB81] hover:text-white transition-colors duration-150 border border-[#0ECB81]/40 hover:border-white/40 rounded px-2 py-0.5">← 首页</a>
             <div>
-              <div className="text-[9px] font-mono text-[#6E7681] tracking-wider">ETH / USD</div>
+              <div className="text-[9px] font-sans text-[#6E7681] tracking-wider">ETH / USD</div>
               <div className="text-xl font-sans font-bold text-[#E6EDF3] leading-tight">
                 {ethPrice > 0 ? `$${ethPrice.toLocaleString()}` : "—"}
               </div>
@@ -2212,7 +2229,7 @@ export default function Home() {
                   ? "bg-yellow-400 animate-pulse"
                   : "bg-red-500 animate-pulse"
               }`} />
-              <span className={`text-[10px] font-mono ${
+              <span className={`text-[10px] font-sans ${
                 wsStatus === "connected" ? "text-[#0ECB81]" :
                 wsStatus === "reconnecting" ? "text-yellow-400" : "text-red-400"
               }`}>
@@ -2222,13 +2239,13 @@ export default function Home() {
             </div>
           </div>
           <div className="text-right">
-            <div className="text-[9px] font-mono text-[#6E7681] tracking-wider">QUALIFIED</div>
+            <div className="text-[9px] font-sans text-[#6E7681] tracking-wider">QUALIFIED</div>
             {totalGood > 0 ? (
               <div className="text-[#0ECB81] font-sans font-bold text-lg leading-tight">{totalGood}</div>
             ) : (
-              <div className="text-[#6E7681] text-sm leading-tight font-mono">—</div>
+              <div className="text-[#6E7681] text-sm leading-tight font-sans">—</div>
             )}
-            <div className="text-[9px] font-mono text-[#8B949E]">{lastUpdate}</div>
+            <div className="text-[9px] font-sans text-[#8B949E]">{lastUpdate}</div>
           </div>
         </div>
 
@@ -2236,18 +2253,18 @@ export default function Home() {
         <div className="flex items-stretch gap-0 border-t" style={{ borderColor: '#21262D' }}>
           <button
             onClick={() => setShowMultiChart(true)}
-            className="flex-1 flex items-center justify-center py-2 text-[10px] font-mono tracking-wider text-[#8B949E] hover:text-[#E6EDF3] hover:bg-white/5 active:bg-white/10 transition-colors duration-150 border-r" style={{ borderColor: '#21262D' }}
+            className="flex-1 flex items-center justify-center py-2 text-[10px] font-sans tracking-wider text-[#8B949E] hover:text-[#E6EDF3] hover:bg-white/5 active:bg-white/10 transition-colors duration-150 border-r" style={{ borderColor: '#21262D' }}
           >
             CHART
           </button>
 
           <button
             onClick={() => setShowRecords(true)}
-            className="relative flex-1 flex items-center justify-center py-2 text-[10px] font-mono tracking-wider text-[#8B949E] hover:text-[#E6EDF3] hover:bg-white/5 active:bg-white/10 transition-colors duration-150 border-r" style={{ borderColor: '#21262D' }}
+            className="relative flex-1 flex items-center justify-center py-2 text-[10px] font-sans tracking-wider text-[#8B949E] hover:text-[#E6EDF3] hover:bg-white/5 active:bg-white/10 transition-colors duration-150 border-r" style={{ borderColor: '#21262D' }}
           >
             POSITIONS
             {records.length > 0 && (
-              <span className="absolute top-1 right-2 font-mono font-bold rounded-full flex items-center justify-center" style={{ fontSize: 8, width: 14, height: 14, background: '#0ECB81', color: '#0D1117' }}>
+              <span className="absolute top-1 right-2 font-sans font-bold rounded-full flex items-center justify-center" style={{ fontSize: 8, width: 14, height: 14, background: '#0ECB81', color: '#0D1117' }}>
                 {records.length > 9 ? "9+" : records.length}
               </span>
             )}
@@ -2255,14 +2272,14 @@ export default function Home() {
 
           <a
             href="/history"
-            className="flex-1 flex items-center justify-center py-2 text-[10px] font-mono tracking-wider text-[#8B949E] hover:text-[#E6EDF3] hover:bg-white/5 active:bg-white/10 transition-colors duration-150 border-r" style={{ borderColor: '#21262D' }}
+            className="flex-1 flex items-center justify-center py-2 text-[10px] font-sans tracking-wider text-[#8B949E] hover:text-[#E6EDF3] hover:bg-white/5 active:bg-white/10 transition-colors duration-150 border-r" style={{ borderColor: '#21262D' }}
           >
             HISTORY
           </a>
 
           <a
             href="/product-design"
-            className="flex-1 flex items-center justify-center py-2 text-[10px] font-mono tracking-wider text-[#8B949E] hover:text-[#E6EDF3] hover:bg-white/5 active:bg-white/10 transition-colors duration-150"
+            className="flex-1 flex items-center justify-center py-2 text-[10px] font-sans tracking-wider text-[#8B949E] hover:text-[#E6EDF3] hover:bg-white/5 active:bg-white/10 transition-colors duration-150"
           >
             PRODUCT
           </a>
@@ -2276,7 +2293,7 @@ export default function Home() {
       <ProfitShareSlider value={profitShare} onChange={setProfitShare} />
 
       {/* 说明栏 */}
-      <div className="px-4 py-2 border-b text-[10px] font-mono" style={{ background: '#0D1117', borderColor: '#21262D', color: '#6E7681' }}>
+      <div className="px-4 py-2 border-b text-[10px] font-sans" style={{ background: '#0D1117', borderColor: '#21262D', color: '#6E7681' }}>
         <div className="flex flex-wrap gap-x-4 gap-y-0.5">
           <span><span style={{ color: '#0ECB81' }}>深绿</span> ≤{(threshold * 75).toFixed(0)}%</span>
           <span><span style={{ color: '#26a65b' }}>绿色</span> ≤{(threshold * 100).toFixed(0)}%</span>
@@ -2300,8 +2317,8 @@ export default function Home() {
               className="flex-1 py-2.5 px-2 text-center transition-colors duration-150 relative"
               style={isActive ? { color: '#E6EDF3', borderBottom: '2px solid #F0B90B' } : { color: '#6E7681' }}
             >
-              <div className="text-[11px] font-mono tracking-wider font-semibold">{ed.label}</div>
-              <div className="text-[10px] mt-0.5 font-mono">
+              <div className="text-[11px] font-sans tracking-wider font-semibold">{ed.label}</div>
+              <div className="text-[10px] mt-0.5 font-sans">
                 {ed.loading ? (
                   <span style={{ color: '#3D444D' }}>加载中</span>
                 ) : goodCount > 0 ? (
@@ -2330,7 +2347,7 @@ export default function Home() {
       </div>
 
       {/* 底部说明 */}
-      <div className="px-4 pb-8 text-[9px] font-mono space-y-0.5 pt-3" style={{ color: '#3D444D' }}>
+      <div className="px-4 pb-8 text-[9px] font-sans space-y-0.5 pt-3" style={{ color: '#3D444D' }}>
         <div>数据来源：Deribit 实时 WebSocket</div>
         <div>年化成本 = 标记价(USD) / ETH现价 / 剩余年数</div>
         <div>真实平衡点 = (行权价 + 权利金 − 分润% × ETH) / (1 − 分润%)</div>

@@ -27,8 +27,8 @@ export default function SsoLogin() {
     >
       <div className="text-center space-y-3">
         <div className="w-8 h-8 border-2 border-sky-400 border-t-transparent rounded-full animate-spin mx-auto" />
-        <p className="text-gray-400 text-sm font-mono">正在跳转...</p>
-        <p className="text-gray-600 text-xs font-mono">
+        <p className="text-gray-400 text-sm font-sans">正在跳转...</p>
+        <p className="text-gray-600 text-xs font-sans">
           请从脉动网入口进入，3 秒后自动跳转首页
         </p>
       </div>

@@ -707,39 +707,40 @@ export default function IVSmile() {
   return (
     <div className="min-h-screen bg-[#0D1117] text-[#E6EDF3]" style={{ fontFamily: "'DM Sans', sans-serif" }}>
       {/* 顶部导航 */}
-      <div className="sticky top-0 z-30 bg-[#0D1117]/95 backdrop-blur border-b border-[#21262D]">
-        {/* 第一行 */}
-        <div className="flex items-center justify-between px-4 pt-2 pb-1">
+      <div className="sticky top-0 z-30 bg-[var(--ac-bg-base)]/95 backdrop-blur border-b border-[var(--ac-border-subtle)]">
+        {/* 第一行：品牌 + ETH价格 + 状态 */}
+        <div className="flex items-center justify-between px-4 pt-2.5 pb-1.5">
           <div className="flex items-center gap-2">
-            <span className="text-[13px] font-bold text-[#E6EDF3] tracking-wide">ETH</span>
-            <span className="text-[#6E7681] text-[11px]">/</span>
-            <span className="text-[11px] font-sans font-semibold text-amber-400">CALL + PUT</span>
-            <span className="text-[#6E7681] text-[10px]">·</span>
-            <span className="text-[10px] font-sans text-[#8B949E]">IV SMILE</span>
+            <span className="text-[length:var(--ac-fs-md)] font-sans font-semibold text-[var(--ac-text-primary)] tracking-widest">ETH</span>
+            <span className="text-[var(--ac-text-muted)]">·</span>
+            <span className="text-[length:var(--ac-fs-md)] font-sans font-semibold text-amber-400">CALL + PUT</span>
+            <span className="text-[var(--ac-text-muted)] text-[length:var(--ac-fs-md)]">·</span>
+            <span className="text-[length:var(--ac-fs-md)] font-sans text-[var(--ac-text-secondary)]">IV SMILE</span>
           </div>
           <div className="flex items-center gap-3">
             {ethPrice > 0 && (
-              <span className="text-[12px] font-sans font-semibold text-[#E6EDF3]">
-                {ethPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                <span className="text-[9px] font-normal text-[#8B949E] ml-1">USD</span>
+              <span className="text-[length:var(--ac-fs-md)] font-sans font-semibold text-[var(--ac-text-bright)]">
+                ETH {ethPrice.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
               </span>
             )}
-            <div className="flex items-center gap-1">
-              <span className={`w-1.5 h-1.5 rounded-full ${totalPoints > 0 ? 'bg-green-400' : 'bg-yellow-400 animate-pulse'}`} />
-              <span className={`text-[10px] font-mono ${totalPoints > 0 ? 'text-green-400' : 'text-yellow-400'}`}>
+            <div className="flex items-center gap-1.5">
+              <span className={`inline-block w-1.5 h-1.5 rounded-full ${totalPoints > 0 ? 'bg-green-400' : 'bg-yellow-400 animate-pulse'}`} />
+              <span className={`text-[length:var(--ac-fs-md)] font-sans ${totalPoints > 0 ? 'text-green-400' : 'text-yellow-400'}`}>
                 {totalPoints > 0 ? "已连接" : "连接中"}
               </span>
             </div>
           </div>
         </div>
         {/* 第二行：导航 + X轴模式切换 */}
-        <div className="flex items-center justify-between px-4 pb-1.5 gap-2">
+        <div className="flex items-center justify-between px-4 pb-1 gap-2 border-b border-[var(--ac-border-subtle)]/40">
           <div className="flex items-center gap-0 shrink-0">
-            <Link href="/" className="px-2 py-0.5 text-[10px] font-sans text-[#8B949E] hover:text-[#E6EDF3] transition-colors duration-150">矩阵</Link>
-            <span className="text-[#2D333B] text-[10px]">|</span>
-            <Link href="/legacy" className="px-2 py-0.5 text-[10px] font-sans text-[#8B949E] hover:text-[#E6EDF3] transition-colors duration-150">分析</Link>
-            <span className="text-[#2D333B] text-[10px]">|</span>
-            <Link href="/history" className="px-2 py-0.5 text-[10px] font-sans text-[#8B949E] hover:text-[#E6EDF3] transition-colors duration-150">历史</Link>
+            <Link href="/annualized" className="px-2 py-0.5 text-[length:var(--ac-fs-md)] font-sans text-[var(--ac-text-secondary)] hover:text-[var(--ac-text-bright)] transition-colors duration-150">分析</Link>
+            <span className="text-[var(--ac-divider)] text-[length:var(--ac-fs-md)]">|</span>
+            <Link href="/history" className="px-2 py-0.5 text-[length:var(--ac-fs-md)] font-sans text-[var(--ac-text-secondary)] hover:text-[var(--ac-text-bright)] transition-colors duration-150">历史</Link>
+            <span className="text-[var(--ac-divider)] text-[length:var(--ac-fs-md)]">|</span>
+            <Link href="/iv-smile" className="px-2 py-0.5 text-[length:var(--ac-fs-md)] font-sans text-amber-400 hover:text-amber-300 transition-colors duration-150">IV Smile</Link>
+            <span className="text-[var(--ac-divider)] text-[length:var(--ac-fs-md)]">|</span>
+            <Link href="/product-design" className="px-2 py-0.5 text-[length:var(--ac-fs-md)] font-sans text-[var(--ac-text-secondary)] hover:text-[var(--ac-text-bright)] transition-colors duration-150">谷底增筹</Link>
           </div>
           {/* X 轴模式 */}
           <div className="flex items-center gap-1">

@@ -1,5 +1,6 @@
 /**
  * 产品方案页 — 谷底增筹（单页滚动版）
+ * 资金成本：增筹A=1.33%，增筹B=2.33%（2026-07-14 更新）
  * 设计语言：与 AnnualizedChain 保持一致
  * - 背景：#0D1117 / #161B22 / #1C2128
  * - 字体：DM Sans (font-sans)，数值用 tabular-nums
@@ -18,9 +19,24 @@ function calcRatio(n: number): number {
 
 const STEPS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
 
-// 根据分润比例计算颜色：33(最小)→绿，87(最大)→红
+// 增筹B 等比分润表：涨多少分多少（10%→10%，100%→100%）
+// 基于 Black-Scholes 定价：ETH-1800-Call，347天，IV=58.3%，月利率2.5%
+const B_CLIENT_SHARES = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+
+// 增筹B：根据涨幅百分比插值返回客户分润比例（0-1）
+function getBClientShare(pct: number): number {
+  if (pct <= 0) return 0;
+  if (pct >= 100) return B_CLIENT_SHARES[9] / 100;
+  const idx = Math.floor(pct / 10);
+  const lo = idx < 1 ? 0 : B_CLIENT_SHARES[idx - 1];
+  const hi = B_CLIENT_SHARES[Math.min(idx, 9)];
+  const frac = (pct - idx * 10) / 10;
+  return (lo + (hi - lo) * frac) / 100;
+}
+
+// 根据分润比例计算颜色：10(最小)→绿，100(最大)→红
 function pctColor(pct: number): string {
-  const MIN = 33, MAX = 87;
+  const MIN = 10, MAX = 100;
   const t = Math.max(0, Math.min(1, (pct - MIN) / (MAX - MIN)));
   if (t < 0.5) {
     const u = t / 0.5;
@@ -295,8 +311,8 @@ function ProductBPayoffChart({ ethEntry }: { ethEntry: number }) {
     points: Array.from({ length: 21 }, (_, i) => {
       const pct = i * 5;
       const gain = (ethEntry * pct / 100) * (NOTIONAL / ethEntry);
-      const ratioB = calcRatio(s.drawdowns);
-      const clientNet = gain * ratioB - feeB;
+      const clientShare = getBClientShare(pct);
+      const clientNet = gain * clientShare - feeB;
       return { pct, clientNet };
     }),
   }));
@@ -366,8 +382,6 @@ function CombinedPayoffChart({ ethEntry, drawdownPct, notional }: { ethEntry: nu
   const feeA = notional * 0.025 * MONTHS;
   const feeB = notional * 0.015 * MONTHS;
   const ratioA = calcRatio(nDrawdown); // A: 回撤稀释分润
-  const ratioB = calcRatio(0);          // B: 下跌不影响收益权，始终0次回撤
-
   const dataA = Array.from({ length: 21 }, (_, i) => {
     const pct = i * 5;
     const gain = (ethEntry * pct / 100) * (notional / ethEntry);
@@ -376,7 +390,8 @@ function CombinedPayoffChart({ ethEntry, drawdownPct, notional }: { ethEntry: nu
   const dataB = Array.from({ length: 21 }, (_, i) => {
     const pct = i * 5;
     const gain = (ethEntry * pct / 100) * (notional / ethEntry);
-    return { pct, net: gain * ratioB - feeB };
+    const clientShare = getBClientShare(pct);
+    return { pct, net: gain * clientShare - feeB };
   });
 
   const allNets = [...dataA.map(d => d.net), ...dataB.map(d => d.net)];
@@ -552,9 +567,9 @@ function SimulatorSection({ ethEntry, notional, onNotionalChange }: { ethEntry: 
   const feeA = notional * 0.025 * MONTHS;
   const clientNetA = gain * (1 - ratioA) - feeA;
 
-  const ratioB = calcRatio(0);
   const feeB = notional * 0.015 * MONTHS;
-  const clientNetB = gain * ratioB - feeB;
+  const clientShareB = getBClientShare(ethPct);
+  const clientNetB = gain * clientShareB - feeB;
 
   const holdEthNet = notional * (ethPct / 100);
   const maxAbs = Math.max(Math.abs(clientNetA), Math.abs(clientNetB), Math.abs(holdEthNet), 1);
@@ -687,33 +702,39 @@ export default function ProductDesign() {
     <div className="min-h-screen font-sans" style={{ background: "#0D1117", color: "#E6EDF3" }}>
 
       {/* ── 顶部导航 ── */}
-      <div className="sticky top-0 z-40" style={{ background: "#0D1117", backdropFilter: "blur(12px)", borderBottom: "1px solid #21262D" }}>
+      <div className="sticky top-0 z-40 bg-[var(--ac-bg-base)]/95 backdrop-blur border-b border-[var(--ac-border-subtle)]">
+        {/* 第一行：品牌 + ETH价格 + 状态 */}
         <div className="flex items-center justify-between px-4 pt-2.5 pb-1.5">
           <div className="flex items-center gap-2">
-            <span className="text-[13px] font-mono font-semibold text-[#C9D1D9] tracking-widest">ETH</span>
-            <span className="text-[#6E7681] text-[12px]">·</span>
-            <span className="text-[13px] font-mono text-[#8B949E]">DERIBIT</span>
+            <span className="text-[length:var(--ac-fs-md)] font-sans font-semibold text-[var(--ac-text-primary)] tracking-widest">ETH</span>
+            <span className="text-[var(--ac-text-muted)] text-[length:var(--ac-fs-md)]">·</span>
+            <span className="text-[length:var(--ac-fs-md)] font-sans text-[var(--ac-text-secondary)]">DERIBIT</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[13px] font-mono tabular-nums" style={{ color: ethPrice ? "#3FB950" : "#484F58" }}>
-              ETH {ethPrice ? `$${fmt(ethPrice)}` : '--'}
-            </span>
-            <div className="flex items-center gap-1">
-              <span className={`w-1.5 h-1.5 rounded-full ${ethPrice ? 'bg-[#3FB950]' : 'bg-yellow-400 animate-pulse'}`} />
-              <span className={`text-[10px] font-mono ${ethPrice ? 'text-[#3FB950]' : 'text-yellow-400'}`}>
+          <div className="flex items-center gap-3">
+            {ethPrice != null && ethPrice > 0 && (
+              <span className="text-[length:var(--ac-fs-md)] font-sans font-semibold text-[var(--ac-text-bright)]">
+                ETH {ethPrice.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              </span>
+            )}
+            <div className="flex items-center gap-1.5">
+              <span className={`inline-block w-1.5 h-1.5 rounded-full ${ethPrice ? 'bg-green-400' : 'bg-yellow-400 animate-pulse'}`} />
+              <span className={`text-[length:var(--ac-fs-md)] font-sans ${ethPrice ? 'text-green-400' : 'text-yellow-400'}`}>
                 {ethPrice ? '已连接' : '连接中'}
               </span>
             </div>
           </div>
         </div>
-        <div className="flex items-center px-4 pb-1.5 gap-0 border-b" style={{ borderColor: "#21262D60" }}>
-          <a href="/annualized" className="px-2 py-0.5 text-[13px] font-sans text-[#8B949E] hover:text-[#E6EDF3] transition-colors duration-150">分析</a>
-          <span className="text-[#2D333B] text-[12px]">|</span>
-          <a href="/history" className="px-2 py-0.5 text-[13px] font-sans text-[#8B949E] hover:text-[#E6EDF3] transition-colors duration-150">历史</a>
-          <span className="text-[#2D333B] text-[12px]">|</span>
-          <a href="/product-design" className="px-2 py-0.5 text-[13px] font-sans text-amber-400/80 hover:text-amber-300 transition-colors duration-150">谷底增筹</a>
-          <span className="text-[#2D333B] text-[12px]">|</span>
-          <a href="/iv-smile" className="px-2 py-0.5 text-[13px] font-sans text-[#8B949E] hover:text-[#E6EDF3] transition-colors duration-150">IV Smile</a>
+        {/* 第二行：导航 */}
+        <div className="flex items-center justify-between px-4 pb-1 gap-2 border-b border-[var(--ac-border-subtle)]/40">
+          <div className="flex items-center gap-0">
+            <a href="/annualized" className="px-2 py-0.5 text-[length:var(--ac-fs-md)] font-sans text-[var(--ac-text-secondary)] hover:text-[var(--ac-text-bright)] transition-colors duration-150">分析</a>
+            <span className="text-[var(--ac-divider)] text-[length:var(--ac-fs-md)]">|</span>
+            <a href="/history" className="px-2 py-0.5 text-[length:var(--ac-fs-md)] font-sans text-[var(--ac-text-secondary)] hover:text-[var(--ac-text-bright)] transition-colors duration-150">历史</a>
+            <span className="text-[var(--ac-divider)] text-[length:var(--ac-fs-md)]">|</span>
+            <a href="/iv-smile" className="px-2 py-0.5 text-[length:var(--ac-fs-md)] font-sans text-[var(--ac-text-secondary)] hover:text-[var(--ac-text-bright)] transition-colors duration-150">IV Smile</a>
+            <span className="text-[var(--ac-divider)] text-[length:var(--ac-fs-md)]">|</span>
+            <a href="/product-design" className="px-2 py-0.5 text-[length:var(--ac-fs-md)] font-sans text-amber-400 hover:text-amber-300 transition-colors duration-150">谷底增筹</a>
+          </div>
         </div>
       </div>
 
@@ -781,7 +802,7 @@ export default function ProductDesign() {
                 <div className="text-[#C9D1D9] text-sm">不用补仓 不会爆仓</div>
               </div>
               <div className="px-3 py-2 border-l" style={{ borderColor: "#21262D" }}>
-                <div className="text-[#C9D1D9] text-sm">永享100%收益权</div>
+                <div className="text-[#C9D1D9] text-sm">收益权只加不减</div>
               </div>
             </div>
             {/* ETH 涨 */}
@@ -838,9 +859,7 @@ export default function ProductDesign() {
                   <span className="text-[#3FB950]">客户分润%</span>
                 </div>
                 {STEPS.map((pct, i) => {
-                  const n = i + 1;
-                  const ratio = calcRatio(n);
-                  const clientPct = (1 - ratio) * 100;
+                  const clientPct = B_CLIENT_SHARES[i];
                   const targetPriceA = ethEntry * (1 + pct / 100);
                   const isHighest = i === STEPS.length - 1;
                   return (
@@ -848,7 +867,7 @@ export default function ProductDesign() {
                       <div className="flex items-center gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="relative h-6 rounded-sm overflow-hidden" style={{ background: "#21262D" }}>
-                            <div className="absolute inset-y-0 left-0 rounded-sm" style={{ width: `${Math.round(20 + Math.pow(Math.max(0, (clientPct - 33.3) / 54.6), 2) * 75)}%`, background: clientPct < 50 ? "linear-gradient(90deg, #1a4a2a, #3FB950)" : clientPct < 65 ? "linear-gradient(90deg, #2a3a0a, #8BC34A)" : clientPct < 75 ? "linear-gradient(90deg, #4a3a0a, #F0B429)" : clientPct < 82 ? "linear-gradient(90deg, #4a2a0a, #E8922A)" : "linear-gradient(90deg, #4a1a0a, #F85149)", transition: "width 0.4s ease" }} />
+                            <div className="absolute inset-y-0 left-0 rounded-sm" style={{ width: `${clientPct}%`, background: clientPct <= 20 ? "linear-gradient(90deg, #1a4a2a, #3FB950)" : clientPct <= 40 ? "linear-gradient(90deg, #2a3a0a, #8BC34A)" : clientPct <= 60 ? "linear-gradient(90deg, #4a3a0a, #F0B429)" : clientPct <= 80 ? "linear-gradient(90deg, #4a2a0a, #E8922A)" : "linear-gradient(90deg, #4a1a0a, #F85149)", transition: "width 0.4s ease" }} />
                             <div className="absolute inset-0 flex items-center px-2 gap-1">
                               <span className="text-white text-[13px] font-medium tabular-nums whitespace-nowrap relative z-10">涨{pct}%</span>
                               <span className="text-white text-[13px] tabular-nums whitespace-nowrap relative z-10">涨到{fmt(targetPriceA)}u</span>
@@ -939,7 +958,7 @@ export default function ProductDesign() {
                 <span className="text-[#C9D1D9] text-sm font-medium">1.33%</span>
               </div>
               <div className="px-3 py-3 border-l flex items-center justify-center" style={{ borderColor: "#21262D" }}>
-                <span className="text-[#C9D1D9] text-sm font-medium">2%</span>
+                <span className="text-[#C9D1D9] text-sm font-medium">2.33%</span>
               </div>
             </div>
             <div className="px-4 py-2.5 border-t" style={{ borderColor: "#21262D", background: "#1C212860" }}>

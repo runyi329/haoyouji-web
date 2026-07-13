@@ -170,35 +170,35 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   if (!d) return null;
   return (
     <div className="bg-gray-900 border border-gray-700 rounded-lg p-3 text-xs shadow-xl min-w-[200px]">
-      <div className="text-gray-400 mb-2 font-mono">{label}</div>
+      <div className="text-gray-400 mb-2 font-sans">{label}</div>
       <div className="space-y-1">
         <div className="flex justify-between gap-4">
           <span className="text-gray-400">ETH现价</span>
-          <span className="text-white font-mono">${d.ethPrice?.toLocaleString()}</span>
+          <span className="text-white font-sans">${d.ethPrice?.toLocaleString()}</span>
         </div>
         <div className="flex justify-between gap-4">
           <span className="text-gray-400">标记价</span>
-          <span className="text-blue-300 font-mono">${d.markPriceUsd}</span>
+          <span className="text-blue-300 font-sans">${d.markPriceUsd}</span>
         </div>
         <div className="flex justify-between gap-4">
           <span className="text-gray-400">年化成本</span>
-          <span className={`font-mono font-bold ${d.annualCost <= 24 ? "text-green-400" : "text-red-400"}`}>
+          <span className={`font-sans font-bold ${d.annualCost <= 24 ? "text-green-400" : "text-red-400"}`}>
             {d.annualCost}%
           </span>
         </div>
         <div className="flex justify-between gap-4">
           <span className="text-gray-400">月化成本</span>
-          <span className="text-yellow-300 font-mono">{d.monthlyCost}%</span>
+          <span className="text-yellow-300 font-sans">{d.monthlyCost}%</span>
         </div>
         <div className="flex justify-between gap-4">
           <span className="text-gray-400">距平衡点</span>
-          <span className={`font-mono ${d.distToStrike <= 0 ? "text-green-400" : d.distToStrike <= 100 ? "text-yellow-400" : "text-gray-400"}`}>
+          <span className={`font-sans ${d.distToStrike <= 0 ? "text-green-400" : d.distToStrike <= 100 ? "text-yellow-400" : "text-gray-400"}`}>
             {d.distToStrike > 0 ? "+" : ""}{d.distToStrike}
           </span>
         </div>
         <div className="flex justify-between gap-4">
           <span className="text-gray-400">剩余天数</span>
-          <span className="text-gray-300 font-mono">{d.daysLeft}天</span>
+          <span className="text-gray-300 font-sans">{d.daysLeft}天</span>
         </div>
         {d.isSweetSpot && (
           <div className="mt-2 pt-2 border-t border-green-700 text-green-400 font-bold text-center">
@@ -245,19 +245,28 @@ export default function HistoryAnalysis() {
   return (
     <div className="min-h-screen bg-gray-950 text-white">
       {/* 顶部导航 */}
-      <div className="border-b border-gray-800 px-6 py-3 flex items-center gap-4">
-        <Link href="/">
-          <button className="text-gray-400 hover:text-white text-sm transition-colors">
-            ← 返回监控
-          </button>
-        </Link>
-        <div className="h-4 w-px bg-gray-700" />
-        <h1 className="text-white font-semibold">历史分析</h1>
-        <Badge variant="outline" className="text-yellow-400 border-yellow-700 text-xs">
-          模拟数据
-        </Badge>
-        <div className="ml-auto text-xs text-gray-500">
-          ETH-25DEC2026-2000-C · K=2000
+      <div className="sticky top-0 z-30 bg-[var(--ac-bg-base)]/95 backdrop-blur border-b border-[var(--ac-border-subtle)]">
+        {/* 第一行：品牌 + 状态 */}
+        <div className="flex items-center justify-between px-4 pt-2.5 pb-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-[length:var(--ac-fs-md)] font-sans font-semibold text-[var(--ac-text-primary)] tracking-widest">ETH</span>
+            <span className="text-[var(--ac-text-muted)] text-[length:var(--ac-fs-md)]">·</span>
+            <span className="text-[length:var(--ac-fs-md)] font-sans text-[var(--ac-text-secondary)]">DERIBIT</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400" />
+            <span className="text-[length:var(--ac-fs-md)] font-sans text-green-400">历史数据</span>
+          </div>
+        </div>
+        {/* 第二行：导航 */}
+        <div className="flex items-center px-4 pb-1 gap-0 border-b border-[var(--ac-border-subtle)]/40">
+          <Link href="/annualized" className="px-2 py-0.5 text-[length:var(--ac-fs-md)] font-sans text-[var(--ac-text-secondary)] hover:text-[var(--ac-text-bright)] transition-colors duration-150">分析</Link>
+          <span className="text-[var(--ac-divider)] text-[length:var(--ac-fs-md)]">|</span>
+          <Link href="/history" className="px-2 py-0.5 text-[length:var(--ac-fs-md)] font-sans text-amber-400 hover:text-amber-300 transition-colors duration-150">历史</Link>
+          <span className="text-[var(--ac-divider)] text-[length:var(--ac-fs-md)]">|</span>
+          <Link href="/iv-smile" className="px-2 py-0.5 text-[length:var(--ac-fs-md)] font-sans text-[var(--ac-text-secondary)] hover:text-[var(--ac-text-bright)] transition-colors duration-150">IV Smile</Link>
+          <span className="text-[var(--ac-divider)] text-[length:var(--ac-fs-md)]">|</span>
+          <Link href="/product-design" className="px-2 py-0.5 text-[length:var(--ac-fs-md)] font-sans text-[var(--ac-text-secondary)] hover:text-[var(--ac-text-bright)] transition-colors duration-150">谷底增筹</Link>
         </div>
       </div>
 
@@ -281,7 +290,7 @@ export default function HistoryAnalysis() {
               onChange={(e) => setAnnualThreshold(Number(e.target.value))}
               className="w-32 accent-green-500"
             />
-            <span className="text-green-400 font-mono font-bold w-12">{annualThreshold}%</span>
+            <span className="text-green-400 font-sans font-bold w-12">{annualThreshold}%</span>
           </div>
           <div className="flex items-center gap-3">
             <span className="text-gray-400 text-sm whitespace-nowrap">距平衡点上限</span>
@@ -290,7 +299,7 @@ export default function HistoryAnalysis() {
               onChange={(e) => setDistThreshold(Number(e.target.value))}
               className="w-32 accent-yellow-500"
             />
-            <span className="text-yellow-400 font-mono font-bold w-16">${distThreshold}</span>
+            <span className="text-yellow-400 font-sans font-bold w-16">${distThreshold}</span>
           </div>
           <div className="ml-auto flex items-center gap-2 text-sm">
             <span className="text-gray-400">甜蜜窗口共</span>
@@ -473,15 +482,15 @@ export default function HistoryAnalysis() {
                 <tbody>
                   {sweetSpots.map((d) => (
                     <tr key={d.date} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                      <td className="py-1.5 pr-4 font-mono text-gray-300">{d.date}</td>
-                      <td className="text-right pr-4 font-mono text-blue-300">${d.ethPrice.toLocaleString()}</td>
-                      <td className="text-right pr-4 font-mono text-gray-300">${d.markPriceUsd}</td>
-                      <td className="text-right pr-4 font-mono text-green-400 font-bold">{d.annualCost}%</td>
-                      <td className="text-right pr-4 font-mono text-yellow-400">{d.monthlyCost}%</td>
-                      <td className={`text-right pr-4 font-mono ${d.distToStrike <= 0 ? "text-green-400" : "text-yellow-400"}`}>
+                      <td className="py-1.5 pr-4 font-sans text-gray-300">{d.date}</td>
+                      <td className="text-right pr-4 font-sans text-blue-300">${d.ethPrice.toLocaleString()}</td>
+                      <td className="text-right pr-4 font-sans text-gray-300">${d.markPriceUsd}</td>
+                      <td className="text-right pr-4 font-sans text-green-400 font-bold">{d.annualCost}%</td>
+                      <td className="text-right pr-4 font-sans text-yellow-400">{d.monthlyCost}%</td>
+                      <td className={`text-right pr-4 font-sans ${d.distToStrike <= 0 ? "text-green-400" : "text-yellow-400"}`}>
                         {d.distToStrike > 0 ? "+" : ""}{d.distToStrike}
                       </td>
-                      <td className="text-right font-mono text-gray-400">{d.daysLeft}天</td>
+                      <td className="text-right font-sans text-gray-400">{d.daysLeft}天</td>
                     </tr>
                   ))}
                 </tbody>
