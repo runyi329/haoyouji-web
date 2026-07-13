@@ -9,7 +9,6 @@ import {
   RefreshCw, 
   Plus,
   Wallet,
-  Coins,
   Loader2,
   User,
   LogOut,
@@ -18,7 +17,6 @@ import {
   BarChart2,
   FileText,
   UserPlus,
-  Gift,
   ShoppingBag,
   Bot,
 } from "lucide-react";
@@ -1863,15 +1861,8 @@ export default function Home() {
           // 页4：积分商城（商品分类入口）
           <div key="p3" className="w-full h-full flex flex-col overflow-hidden">
             {/* 顶部标题 */}
-            <div className="flex items-center justify-between px-3 pt-2 pb-1.5 flex-shrink-0">
-              <div className="flex items-center space-x-1.5">
-                <Gift className="w-3.5 h-3.5 text-[#A80000]" />
-                <span className="text-xs font-semibold text-[#A80000]">AI 商城</span>
-              </div>
-              <div className="flex items-center space-x-1">
-                <Coins className="w-3 h-3 text-amber-500" />
-                <span className="text-[10px] text-amber-600 font-medium">{userPointsData?.points ?? 0} 积分</span>
-              </div>
+            <div className="flex items-center px-3 pt-2 pb-1.5 flex-shrink-0">
+              <span className="text-xs font-semibold text-[#A80000]">AI 商城</span>
             </div>
             {/* 15个分类入口 - 5列×3行 */}
             <div className="flex-1 overflow-hidden px-2 pb-1">
