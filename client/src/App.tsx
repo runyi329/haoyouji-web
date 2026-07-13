@@ -299,6 +299,8 @@ const OptionAnalysisPage = lazy(() => import("./pages/OptionAnalysisPage"));
 const PositionLevelEdit = lazy(() => import("./pages/PositionLevelEdit"));
 // 谷间优筹
 const GujianPage = lazy(() => import("./pages/GujianPage"));
+// 谷底增筹产品演示
+const GutdiProductDemo = lazy(() => import("./pages/GutdiProductDemo"));
 // GTO 德州扑克
 const GtoPoker = lazy(() => import("./pages/GtoPoker"));
 const LotteryEdit = lazy(() => import("./pages/LotteryEdit"));
@@ -678,6 +680,8 @@ function Router() {
         <Route path="/ledger/:id/position-calc/:price" component={PositionLevelEdit} />
         {/* 谷间优筹 */}
         <Route path="/ledger/:id/gujian" component={GujianPage} />
+        {/* 谷底增筹产品演示 */}
+        <Route path="/ledger/:id/product-demo" component={GutdiProductDemo} />
         {/* GTO 德州扑克 */}
         <Route path="/ledger/:id/gto" component={GtoPoker} />
         {/* QQ 在线人数记录 */}

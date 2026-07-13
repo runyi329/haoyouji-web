@@ -2424,15 +2424,24 @@ export default function CryptoPrediction() {
             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
           <span className="text-base font-semibold">{coin.fullName}（{coin.name}）</span>
         </div>
-        {/* 谷底增筹：新建订单胶囊按钮 */}
+        {/* 谷底增筹：产品演示 + 新建订单按钮 */}
         {tab === 'contract' && (
-          <button
-            onClick={() => setShowOrderForm(true)}
-            className="px-3 py-1.5 rounded-full text-xs font-semibold"
-            style={{ background: 'rgba(255,255,255,0.22)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)' }}
-          >
-            + 新建订单
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setLocation(`/ledger/${ledgerId}/product-demo${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
+              className="px-3 py-1.5 rounded-full text-xs font-semibold"
+              style={{ background: 'rgba(255,255,255,0.12)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.25)' }}
+            >
+              产品演示
+            </button>
+            <button
+              onClick={() => setShowOrderForm(true)}
+              className="px-3 py-1.5 rounded-full text-xs font-semibold"
+              style={{ background: 'rgba(255,255,255,0.22)', color: '#fff', border: '1px solid rgba(255,255,255,0.4)' }}
+            >
+              + 新建订单
+            </button>
+          </div>
         )}
         {/* 融资付息视图切换：记账图 / 订单图 */}
         {tab === 'finance' && (
