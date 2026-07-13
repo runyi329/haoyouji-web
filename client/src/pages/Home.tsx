@@ -1866,7 +1866,7 @@ export default function Home() {
             <div className="flex items-center justify-between px-3 pt-2 pb-1.5 flex-shrink-0">
               <div className="flex items-center space-x-1.5">
                 <Gift className="w-3.5 h-3.5 text-[#A80000]" />
-                <span className="text-xs font-semibold text-[#A80000]">积分商城</span>
+                <span className="text-xs font-semibold text-[#A80000]">AI 商城</span>
               </div>
               <div className="flex items-center space-x-1">
                 <Coins className="w-3 h-3 text-amber-500" />
