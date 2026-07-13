@@ -227,7 +227,7 @@ export default function GutdiProductDemo() {
                 <div className="text-sm" style={{ color: '#374151' }}>不用补仓 不会爆仓</div>
               </div>
               <div className="px-3 py-2 border-l" style={{ borderColor: "#E0E8FF" }}>
-                <div className="text-sm" style={{ color: '#374151' }}>永享100%收益权</div>
+                <div className="text-sm" style={{ color: '#374151' }}>收益权只加不减</div>
               </div>
             </div>
             <div className="grid border-b" style={{ gridTemplateColumns: "52px 1fr 1fr", borderColor: "#E0E8FF" }}>
