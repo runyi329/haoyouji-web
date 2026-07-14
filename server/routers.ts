@@ -27220,25 +27220,26 @@ export const adminFeatureRouter = router({
           const conn = await (await import('./db')).getDbConnection();
           if (!conn) return [];
           // 获取YJH邀请树下所有用户ID（包含YJH本人）
-          const YJH_ID = 4957151;
-          const treeIds = new Set<number>([YJH_ID]);
-          let queue = [YJH_ID];
-          while (queue.length > 0) {
-            const batch = queue.splice(0, 100);
-            const ph = batch.map(() => '?').join(',');
-            const [childRows] = await (conn as any).execute(`SELECT id FROM users WHERE invited_by_user_id IN (${ph})`, batch) as any[];
-            for (const c of (childRows as any[])) { if (!treeIds.has(c.id)) { treeIds.add(c.id); queue.push(c.id); } }
+          const YJH_ID_P = 4957151;
+          const treeIdsP = new Set<number>([YJH_ID_P]);
+          let queueP = [YJH_ID_P];
+          while (queueP.length > 0) {
+            const batchP = queueP.splice(0, 100);
+            const phP = batchP.map(() => '?').join(',');
+            const [childRowsP] = await (conn as any).execute(`SELECT id FROM users WHERE invited_by_user_id IN (${phP})`, batchP) as any[];
+            for (const c of (childRowsP as any[])) { if (!treeIdsP.has(c.id)) { treeIdsP.add(c.id); queueP.push(c.id); } }
           }
-          const ids = Array.from(treeIds);
-          if (ids.length === 0) return [];
-          const ph2 = ids.map(() => '?').join(',');
+          const idsP = Array.from(treeIdsP);
+          if (idsP.length === 0) return [];
+          const ph2P = idsP.map(() => '?').join(',');
+          const ledgerIdP = Number(input.ledgerId);
           const [rows] = await (conn as any).execute(
             `SELECT o.id, o.coin, o.side, o.amount, o.limit_price, o.order_type,
                     o.created_at as eventTime, u.name as userName, u.username
              FROM af_orders o LEFT JOIN users u ON u.id = o.user_id
-             WHERE o.ledger_id=? AND o.status='pending' AND o.is_gift=0 AND o.user_id IN (${ph2})
+             WHERE o.ledger_id=${ledgerIdP} AND o.status='pending' AND o.is_gift=0 AND o.user_id IN (${ph2P})
              ORDER BY o.created_at DESC LIMIT 10`,
-            [input.ledgerId, ...ids]
+            idsP
           );
           return (rows as any[]).map((r: any) => ({
             id: r.id, orderNo: String(r.id), coin: String(r.coin || ''), side: String(r.side || ''),
@@ -27256,26 +27257,27 @@ export const adminFeatureRouter = router({
           const conn = await (await import('./db')).getDbConnection();
           if (!conn) return [];
           // 获取YJH邀请树下所有用户ID（包含YJH本人）
-          const YJH_ID = 4957151;
-          const treeIds = new Set<number>([YJH_ID]);
-          let queue = [YJH_ID];
-          while (queue.length > 0) {
-            const batch = queue.splice(0, 100);
-            const ph = batch.map(() => '?').join(',');
-            const [childRows] = await (conn as any).execute(`SELECT id FROM users WHERE invited_by_user_id IN (${ph})`, batch) as any[];
-            for (const c of (childRows as any[])) { if (!treeIds.has(c.id)) { treeIds.add(c.id); queue.push(c.id); } }
+          const YJH_ID_C = 4957151;
+          const treeIdsC = new Set<number>([YJH_ID_C]);
+          let queueC = [YJH_ID_C];
+          while (queueC.length > 0) {
+            const batchC = queueC.splice(0, 100);
+            const phC = batchC.map(() => '?').join(',');
+            const [childRowsC] = await (conn as any).execute(`SELECT id FROM users WHERE invited_by_user_id IN (${phC})`, batchC) as any[];
+            for (const c of (childRowsC as any[])) { if (!treeIdsC.has(c.id)) { treeIdsC.add(c.id); queueC.push(c.id); } }
           }
-          const ids = Array.from(treeIds);
-          if (ids.length === 0) return [];
-          const ph2 = ids.map(() => '?').join(',');
+          const idsC = Array.from(treeIdsC);
+          if (idsC.length === 0) return [];
+          const ph2C = idsC.map(() => '?').join(',');
+          const ledgerIdC = Number(input.ledgerId);
           const [rows] = await (conn as any).execute(
             `SELECT o.id, o.coin, o.side, o.amount, o.limit_price, o.sell_price, o.order_type,
                     COALESCE(o.confirmed_at, o.sell_confirmed_at, o.updated_at, o.created_at) as eventTime,
                     u.name as userName, u.username
              FROM af_orders o LEFT JOIN users u ON u.id = o.user_id
-             WHERE o.ledger_id=? AND o.status='completed' AND o.is_gift=0 AND o.user_id IN (${ph2})
+             WHERE o.ledger_id=${ledgerIdC} AND o.status='completed' AND o.is_gift=0 AND o.user_id IN (${ph2C})
              ORDER BY COALESCE(o.confirmed_at, o.sell_confirmed_at, o.updated_at, o.created_at) DESC LIMIT 10`,
-            [input.ledgerId, ...ids]
+            idsC
           );
           return (rows as any[]).map((r: any) => ({
             id: r.id, orderNo: String(r.id), coin: String(r.coin || ''), side: String(r.side || ''),
@@ -27294,18 +27296,19 @@ export const adminFeatureRouter = router({
           const conn = await (await import('./db')).getDbConnection();
           if (!conn) return [];
           // 获取YJH邀请树下所有用户ID（包含YJH本人）
-          const YJH_ID = 4957151;
-          const treeIds = new Set<number>([YJH_ID]);
-          let queue = [YJH_ID];
-          while (queue.length > 0) {
-            const batch = queue.splice(0, 100);
-            const ph = batch.map(() => '?').join(',');
-            const [childRows] = await (conn as any).execute(`SELECT id FROM users WHERE invited_by_user_id IN (${ph})`, batch) as any[];
-            for (const c of (childRows as any[])) { if (!treeIds.has(c.id)) { treeIds.add(c.id); queue.push(c.id); } }
+          const YJH_ID_G = 4957151;
+          const treeIdsG = new Set<number>([YJH_ID_G]);
+          let queueG = [YJH_ID_G];
+          while (queueG.length > 0) {
+            const batchG = queueG.splice(0, 100);
+            const phG = batchG.map(() => '?').join(',');
+            const [childRowsG] = await (conn as any).execute(`SELECT id FROM users WHERE invited_by_user_id IN (${phG})`, batchG) as any[];
+            for (const c of (childRowsG as any[])) { if (!treeIdsG.has(c.id)) { treeIdsG.add(c.id); queueG.push(c.id); } }
           }
-          const ids = Array.from(treeIds);
-          if (ids.length === 0) return [];
-          const ph2 = ids.map(() => '?').join(',');
+          const idsG = Array.from(treeIdsG);
+          if (idsG.length === 0) return [];
+          const ph2G = idsG.map(() => '?').join(',');
+          const ledgerIdG = Number(input.ledgerId);
           const [rows] = await (conn as any).execute(
             `SELECT o.id, o.coin, o.side, o.amount, o.limit_price, o.gift_multiplier, o.source_order_id,
                     COALESCE(o.sell_confirmed_at, o.updated_at, o.created_at) as eventTime,
@@ -27314,9 +27317,9 @@ export const adminFeatureRouter = router({
              FROM af_orders o
              LEFT JOIN users u ON u.id = o.user_id
              LEFT JOIN users su ON su.id = o.source_user_id
-             WHERE o.ledger_id=? AND o.is_gift=1 AND o.status='completed' AND o.user_id IN (${ph2})
+             WHERE o.ledger_id=${ledgerIdG} AND o.is_gift=1 AND o.status='completed' AND o.source_user_id IN (${ph2G})
              ORDER BY COALESCE(o.sell_confirmed_at, o.updated_at, o.created_at) DESC LIMIT 10`,
-            [input.ledgerId, ...ids]
+            idsG
           );
           return (rows as any[]).map((r: any) => ({
             id: r.id, orderNo: String(r.id), coin: String(r.coin || ''), amount: String(r.amount || '0'),
