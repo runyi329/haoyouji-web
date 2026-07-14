@@ -20230,9 +20230,17 @@ ${klinesSummary}
         let searchCond = '';
         const searchParams: any[] = [];
         if (input.search && input.search.trim()) {
-          searchCond = `AND (u.name LIKE ? OR u.username LIKE ? OR o.coin LIKE ?)`;
-          const s = `%${input.search.trim()}%`;
-          searchParams.push(s, s, s);
+          const raw = input.search.trim();
+          const s = `%${raw}%`;
+          // 如果输入是纯数字，额外精确匹配订单号
+          const isNum = /^\d+$/.test(raw);
+          if (isNum) {
+            searchCond = `AND (o.id = ? OR u.name LIKE ? OR u.username LIKE ? OR o.coin LIKE ? OR o.amount LIKE ? OR o.limit_price LIKE ? OR o.sell_price LIKE ? OR o.order_type LIKE ?)`;
+            searchParams.push(Number(raw), s, s, s, s, s, s, s);
+          } else {
+            searchCond = `AND (u.name LIKE ? OR u.username LIKE ? OR o.coin LIKE ? OR o.amount LIKE ? OR o.limit_price LIKE ? OR o.sell_price LIKE ? OR o.order_type LIKE ? OR CAST(o.id AS CHAR) LIKE ?)`;
+            searchParams.push(s, s, s, s, s, s, s, s);
+          }
         }
         const [countRows] = await (conn as any).execute(
           `SELECT COUNT(*) as cnt FROM af_orders o LEFT JOIN users u ON u.id=o.user_id WHERE o.ledger_id=${input.ledgerId} AND o.user_id IN (${ph}) ${statusCond} ${searchCond}`,
@@ -20243,9 +20251,13 @@ ${klinesSummary}
           `SELECT o.id, o.coin, o.side, o.amount, o.quantity, o.limit_price, o.sell_price, o.status, o.order_type, o.sell_status,
                   o.is_gift, o.tier_mode, o.created_at, o.confirmed_at, o.sell_confirmed_at,
                   o.all_time_low_price,
+                  COALESCE(t.max_tier, 0) as equity_tier,
                   u.name as userName, u.username
            FROM af_orders o
            LEFT JOIN users u ON u.id=o.user_id
+           LEFT JOIN (
+             SELECT order_id, MAX(tier) as max_tier FROM af_order_tier_triggers GROUP BY order_id
+           ) t ON t.order_id=o.id
            WHERE o.ledger_id=${input.ledgerId} AND o.user_id IN (${ph}) ${statusCond} ${searchCond}
            ORDER BY o.created_at DESC
            LIMIT ${pageSize} OFFSET ${offset}`,
@@ -20267,7 +20279,7 @@ ${klinesSummary}
             sellConfirmedAt: r.sell_confirmed_at ? String(r.sell_confirmed_at) : '',
             isGift: r.is_gift === 1 || r.is_gift === '1',
             tierMode: r.tier_mode || 'step',
-            equityTier: 0,
+            equityTier: Number(r.equity_tier || 0),
             allTimeLowPrice: r.all_time_low_price ? parseFloat(r.all_time_low_price) : null,
             effectiveQty: parseFloat(r.quantity || 0),
             userName: r.userName || r.username || '新用户',
