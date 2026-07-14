@@ -8376,5 +8376,7 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-14T02:53:19Z", type: "fix", cleanMessage: "最新动态四接口加YJH邀请树过滤+30秒刷新；推荐按钮限YJH/JIANG可见；删除行情预测条目；修复市价单自动成交括号问题" },
     { date: "2026-07-14T03:03:46Z", type: "fix", cleanMessage: "最新成交/委托/赠单接口 ledger_id直接拼入SQL，IN参数单独传，修复参数偏移导致查询为空的问题" },
     { date: "2026-07-14T03:27:41Z", type: "fix", cleanMessage: "最新成交接口改为查买入+卖出completed订单，加YJH邀请树过滤，ledger_id直接拼入SQL" },
+    { date: "2026-07-14T06:12:27Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-14T06:35:34Z", type: "feat", cleanMessage: "谷底争筹统计区币种持仓分布+订单视图优化" },
   ],
 };
