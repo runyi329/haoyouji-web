@@ -2106,6 +2106,38 @@ ${klinesSummary}
         if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') throw new Error('无权限');
         return await dbRecharge.getUserCnyHistory(input.userId, input.limit ?? 20);
       }),
+    // 管理员取消充值订单（将 submitted/pending 改为 cancelled）
+    // 管理员批量删除已过期/已取消订单
+    adminBulkClearOrders: protectedProcedure
+      .input(z.object({ status: z.enum(["expired", "cancelled"]) }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== "super_admin" && ctx.user.role !== "admin") {
+          throw new Error("无权限");
+        }
+        const conn = await getDbConnection();
+        const [result] = await (conn as any).execute(
+          `DELETE FROM recharge_orders WHERE status = ?`,
+          [input.status]
+        );
+        return { success: true, count: (result as any).affectedRows };
+      }),
+        adminCancelOrder: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new Error('无权限');
+        }
+        const conn = await getDbConnection();
+        if (!conn) throw new Error('数据库连接失败');
+        const [result] = await (conn as any).execute(
+          `UPDATE recharge_orders SET status='cancelled' WHERE id=? AND status IN ('submitted','pending')`,
+          [input.id]
+        );
+        if ((result as any).affectedRows === 0) {
+          throw new Error('订单不存在或状态不允许取消');
+        }
+        return { success: true };
+      }),
   }),
 
   // 卡券系统
