@@ -154,8 +154,8 @@ export default function AfInviteTreePage() {
   // 统计数据
   const { data: treeStats } = trpc.ledger.afGetTreeOrderStats.useQuery({ ledgerId }, { enabled: canSeeRecentDynamics });
 
-  // 试驾单权限数据
-  const { data: marketPermissions = [], refetch: refetchPermissions } = trpc.ledger.afGetMarketOrderPermissions.useQuery({ ledgerId }, { enabled: isYJHOnly });
+  // 试驾单权限数据（所有有权限看该页面的人都能加载）
+  const { data: marketPermissions = [], refetch: refetchPermissions } = trpc.ledger.afGetMarketOrderPermissions.useQuery({ ledgerId }, { enabled: canSeeRecentDynamics });
   const setPermissionMutation = trpc.ledger.afSetMarketOrderPermission.useMutation({
     onSuccess: () => refetchPermissions(),
     onError: (e: any) => alert('设置失败：' + e.message),
