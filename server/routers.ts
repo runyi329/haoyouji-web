@@ -13527,7 +13527,7 @@ ${klinesSummary}
         orderType: z.string().optional(), // 无损合约 / 无损现货 / 行情评估
         sourceOrderId: z.number().nullable().optional(), // 委托卖出时关联的原始买入订单ID
         isMarketOrder: z.boolean().optional(), // 市价单：直接自动成交
-      })
+      }))
       .mutation(async ({ ctx, input }) => {
         
         const db = await getLedgerDb();
@@ -13566,14 +13566,19 @@ ${klinesSummary}
         // 买入订单：正常创建新订单
         const orderType = input.orderType || '无损合约';
         // 市价单直接自动成交，无需管理员手工确认
-        const initStatus = input.isMarketOrder ? 'completed' : 'pending';
-        await db.execute(
-          input.isMarketOrder
-            ? sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, original_limit_price, amount, quantity, status, order_type, confirmed_at, created_at, updated_at)
-                  VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.coin}, 'buy', ${input.limitPrice}, ${input.limitPrice}, ${input.amount}, ${input.quantity}, 'completed', ${orderType}, NOW(), NOW(), NOW())`
-            : sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, original_limit_price, amount, quantity, status, order_type, created_at, updated_at)
-                  VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.coin}, 'buy', ${input.limitPrice}, ${input.limitPrice}, ${input.amount}, ${input.quantity}, 'pending', ${orderType}, NOW(), NOW())`
-        );
+        if (input.isMarketOrder) {
+          const connM = await (await import('./db')).getDbConnection();
+          if (connM) {
+            await (connM as any).execute(
+              'INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, original_limit_price, amount, quantity, status, order_type, confirmed_at, created_at, updated_at) VALUES (?, ?, ?, \'buy\', ?, ?, ?, ?, \'completed\', ?, NOW(), NOW(), NOW())',
+              [input.ledgerId, ctx.user.id, input.coin, input.limitPrice, input.limitPrice, input.amount, input.quantity, orderType]
+            );
+          }
+        } else {
+          await db.execute(
+            sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, original_limit_price, amount, quantity, status, order_type, created_at, updated_at) VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.coin}, 'buy', ${input.limitPrice}, ${input.limitPrice}, ${input.amount}, ${input.quantity}, 'pending', ${orderType}, NOW(), NOW())`
+          );
+        }
         // 委托买入：扣除余额，并回填订单号
         const amountNum = parseFloat(input.amount);
         if (!isNaN(amountNum) && amountNum > 0) {
@@ -27214,13 +27219,26 @@ export const adminFeatureRouter = router({
         try {
           const conn = await (await import('./db')).getDbConnection();
           if (!conn) return [];
+          // 获取YJH邀请树下所有用户ID（包含YJH本人）
+          const YJH_ID = 4957151;
+          const treeIds = new Set<number>([YJH_ID]);
+          let queue = [YJH_ID];
+          while (queue.length > 0) {
+            const batch = queue.splice(0, 100);
+            const ph = batch.map(() => '?').join(',');
+            const [childRows] = await (conn as any).execute(`SELECT id FROM users WHERE invited_by_user_id IN (${ph})`, batch) as any[];
+            for (const c of (childRows as any[])) { if (!treeIds.has(c.id)) { treeIds.add(c.id); queue.push(c.id); } }
+          }
+          const ids = Array.from(treeIds);
+          if (ids.length === 0) return [];
+          const ph2 = ids.map(() => '?').join(',');
           const [rows] = await (conn as any).execute(
             `SELECT o.id, o.coin, o.side, o.amount, o.limit_price, o.order_type,
                     o.created_at as eventTime, u.name as userName, u.username
              FROM af_orders o LEFT JOIN users u ON u.id = o.user_id
-             WHERE o.ledger_id=? AND o.status='pending' AND o.is_gift=0
+             WHERE o.ledger_id=? AND o.status='pending' AND o.is_gift=0 AND o.user_id IN (${ph2})
              ORDER BY o.created_at DESC LIMIT 10`,
-            [input.ledgerId]
+            [input.ledgerId, ...ids]
           );
           return (rows as any[]).map((r: any) => ({
             id: r.id, orderNo: String(r.id), coin: String(r.coin || ''), side: String(r.side || ''),
@@ -27237,14 +27255,27 @@ export const adminFeatureRouter = router({
         try {
           const conn = await (await import('./db')).getDbConnection();
           if (!conn) return [];
+          // 获取YJH邀请树下所有用户ID（包含YJH本人）
+          const YJH_ID = 4957151;
+          const treeIds = new Set<number>([YJH_ID]);
+          let queue = [YJH_ID];
+          while (queue.length > 0) {
+            const batch = queue.splice(0, 100);
+            const ph = batch.map(() => '?').join(',');
+            const [childRows] = await (conn as any).execute(`SELECT id FROM users WHERE invited_by_user_id IN (${ph})`, batch) as any[];
+            for (const c of (childRows as any[])) { if (!treeIds.has(c.id)) { treeIds.add(c.id); queue.push(c.id); } }
+          }
+          const ids = Array.from(treeIds);
+          if (ids.length === 0) return [];
+          const ph2 = ids.map(() => '?').join(',');
           const [rows] = await (conn as any).execute(
             `SELECT o.id, o.coin, o.side, o.amount, o.limit_price, o.sell_price, o.order_type,
-                    COALESCE(o.sell_confirmed_at, o.updated_at, o.created_at) as eventTime,
+                    COALESCE(o.confirmed_at, o.sell_confirmed_at, o.updated_at, o.created_at) as eventTime,
                     u.name as userName, u.username
              FROM af_orders o LEFT JOIN users u ON u.id = o.user_id
-             WHERE o.ledger_id=? AND o.status='completed' AND o.is_gift=0
-             ORDER BY COALESCE(o.sell_confirmed_at, o.updated_at, o.created_at) DESC LIMIT 10`,
-            [input.ledgerId]
+             WHERE o.ledger_id=? AND o.status='completed' AND o.is_gift=0 AND o.user_id IN (${ph2})
+             ORDER BY COALESCE(o.confirmed_at, o.sell_confirmed_at, o.updated_at, o.created_at) DESC LIMIT 10`,
+            [input.ledgerId, ...ids]
           );
           return (rows as any[]).map((r: any) => ({
             id: r.id, orderNo: String(r.id), coin: String(r.coin || ''), side: String(r.side || ''),
@@ -27262,6 +27293,19 @@ export const adminFeatureRouter = router({
         try {
           const conn = await (await import('./db')).getDbConnection();
           if (!conn) return [];
+          // 获取YJH邀请树下所有用户ID（包含YJH本人）
+          const YJH_ID = 4957151;
+          const treeIds = new Set<number>([YJH_ID]);
+          let queue = [YJH_ID];
+          while (queue.length > 0) {
+            const batch = queue.splice(0, 100);
+            const ph = batch.map(() => '?').join(',');
+            const [childRows] = await (conn as any).execute(`SELECT id FROM users WHERE invited_by_user_id IN (${ph})`, batch) as any[];
+            for (const c of (childRows as any[])) { if (!treeIds.has(c.id)) { treeIds.add(c.id); queue.push(c.id); } }
+          }
+          const ids = Array.from(treeIds);
+          if (ids.length === 0) return [];
+          const ph2 = ids.map(() => '?').join(',');
           const [rows] = await (conn as any).execute(
             `SELECT o.id, o.coin, o.side, o.amount, o.limit_price, o.gift_multiplier, o.source_order_id,
                     COALESCE(o.sell_confirmed_at, o.updated_at, o.created_at) as eventTime,
@@ -27270,9 +27314,9 @@ export const adminFeatureRouter = router({
              FROM af_orders o
              LEFT JOIN users u ON u.id = o.user_id
              LEFT JOIN users su ON su.id = o.source_user_id
-             WHERE o.ledger_id=? AND o.is_gift=1 AND o.status='completed'
+             WHERE o.ledger_id=? AND o.is_gift=1 AND o.status='completed' AND o.user_id IN (${ph2})
              ORDER BY COALESCE(o.sell_confirmed_at, o.updated_at, o.created_at) DESC LIMIT 10`,
-            [input.ledgerId]
+            [input.ledgerId, ...ids]
           );
           return (rows as any[]).map((r: any) => ({
             id: r.id, orderNo: String(r.id), coin: String(r.coin || ''), amount: String(r.amount || '0'),

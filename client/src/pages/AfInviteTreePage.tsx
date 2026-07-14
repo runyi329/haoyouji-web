@@ -191,15 +191,15 @@ export default function AfInviteTreePage() {
   );
   const { data: recentPendingOrders = [] } = trpc.ledger.afGetRecentPendingOrders.useQuery(
     { ledgerId },
-    { enabled: canSeeRecentDynamics, staleTime: 5 * 60 * 1000 }
+    { enabled: canSeeRecentDynamics, refetchInterval: 30000 }
   );
   const { data: recentCompletedOrders = [] } = trpc.ledger.afGetRecentCompletedOrders.useQuery(
     { ledgerId },
-    { enabled: canSeeRecentDynamics, staleTime: 5 * 60 * 1000 }
+    { enabled: canSeeRecentDynamics, refetchInterval: 30000 }
   );
   const { data: recentGiftOrders = [] } = trpc.ledger.afGetRecentGiftOrders.useQuery(
     { ledgerId },
-    { enabled: canSeeRecentDynamics, staleTime: 5 * 60 * 1000 }
+    { enabled: canSeeRecentDynamics, refetchInterval: 30000 }
   );
 
   // 展开状态
@@ -472,17 +472,7 @@ export default function AfInviteTreePage() {
             )}
           </div>
 
-          {/* 行情预测 — 点击跳转到汇总页面 */}
-          <div
-            style={{ backgroundColor: '#F0F4FF', cursor: 'pointer' }}
-            onClick={() => setLocation(`/ledger/${ledgerId}/af-prediction-stats`)}
-          >
-            <div className="flex items-center px-3 py-2 select-none">
-              <span className="text-xs font-semibold flex-shrink-0" style={{ color: '#4F46E5' }}>行情预测</span>
-              <span className="text-xs text-gray-400 ml-2 flex-1">点击查看所有人竞猜订单汇总</span>
-              <span className="text-xs text-gray-400 ml-auto">&#8250;</span>
-            </div>
-          </div>
+
           {/* 最新赠单 */}
           <div style={{ backgroundColor: '#FFF1F2' }}>
             <div

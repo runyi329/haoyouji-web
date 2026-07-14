@@ -3483,10 +3483,10 @@ export default function LedgerDetail() {
                   >
                     返回
                   </button>
-                  {/* 推荐小标签：内嵌到按钮行 */}
-                  {!effectiveIsFunder && (
+                  {/* 推荐小标签：只有 YJH(4957151) 和 JIANG(870413) 可见 */}
+                  {((user as any)?.id === 4957151 || (user as any)?.id === 870413) && (
                     <button
-                      onClick={() => { if ((user as any)?.id === 4957151 || isOwner || isAdmin) setLocation(`/ledger/${ledgerId}/af-invite-tree${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`); }}
+                      onClick={() => setLocation(`/ledger/${ledgerId}/af-invite-tree${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`)}
                       className="flex-1 h-9 rounded-full text-sm font-medium text-center"
                       style={{ backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.6)', color: '#fff' }}
                     >
