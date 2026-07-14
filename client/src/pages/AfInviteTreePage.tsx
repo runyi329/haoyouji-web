@@ -217,6 +217,9 @@ export default function AfInviteTreePage() {
   // 试驾单权限搜索
   const [permSearch, setPermSearch] = useState('');
 
+  // 市价键抽屉
+  const [showMarketDrawer, setShowMarketDrawer] = useState(false);
+
   const stats = treeStats as any;
 
   return (
@@ -243,7 +246,7 @@ export default function AfInviteTreePage() {
                   波比树
                 </button>
                 <button
-                  onClick={() => setLocation(`/ledger/${ledgerId}/af-market-permission`)}
+                  onClick={() => setShowMarketDrawer(true)}
                   className="px-2.5 py-1 rounded text-xs font-medium"
                   style={{ background: 'rgba(255,255,255,0.18)', color: '#fff', border: '1px solid rgba(255,255,255,0.5)' }}
                 >
@@ -825,6 +828,109 @@ export default function AfInviteTreePage() {
 
       {/* 底部留白 */}
       <div className="h-6" />
+
+      {/* ===== 市价键管理抽屉 ===== */}
+      {showMarketDrawer && (
+        <div
+          className="fixed inset-0 z-50 flex flex-col justify-end"
+          style={{ backgroundColor: 'rgba(0,0,0,0.45)' }}
+          onClick={() => setShowMarketDrawer(false)}
+        >
+          <div
+            className="flex flex-col rounded-t-2xl"
+            style={{ backgroundColor: '#F5F5F5', maxHeight: '88vh' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* 抽屉标题栏 */}
+            <div style={{ background: 'linear-gradient(135deg,#1e3a8a 0%,#2563EB 100%)', borderRadius: '16px 16px 0 0' }}>
+              <div className="flex items-center px-4 pt-4 pb-3">
+                <div className="flex-1">
+                  <span className="text-white font-semibold text-base">市价键管理</span>
+                </div>
+                <div className="text-xs text-white opacity-70 mr-3">
+                  已开启 {(marketPermissions as any[]).filter((p: any) => p.enabled).length} / {(marketPermissions as any[]).length} 人
+                </div>
+                <button
+                  onClick={() => setShowMarketDrawer(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full"
+                  style={{ background: 'rgba(255,255,255,0.18)' }}
+                >
+                  <span className="text-white text-lg font-bold leading-none">×</span>
+                </button>
+              </div>
+              {/* 说明文字 */}
+              <div className="mx-4 mb-3 px-3 py-2 rounded-lg text-xs text-white opacity-80" style={{ background: 'rgba(255,255,255,0.12)' }}>
+                开启后，该用户在下单页面可以看到并使用市价单功能；关闭则不可见。
+                <br /><br />
+                <span style={{ fontWeight: 600, color: '#FDE68A' }}>注意：</span>试价单单笔金额上限为 3000U，超过 3000U 请通过委托单下单。
+              </div>
+            </div>
+
+            {/* 搜索框 */}
+            <div className="mx-3 mt-3">
+              <input
+                value={permSearch}
+                onChange={e => setPermSearch(e.target.value)}
+                placeholder="搜索用户名..."
+                className="w-full text-sm px-3 py-2 rounded-xl border border-gray-200 outline-none"
+                style={{ backgroundColor: '#fff' }}
+              />
+            </div>
+
+            {/* 用户列表（可滚动）*/}
+            <div className="mx-3 mt-2 mb-4 space-y-2 overflow-y-auto" style={{ maxHeight: '55vh' }}>
+              {(marketPermissions as any[])
+                .filter((p: any) => !permSearch || (p.name || '').includes(permSearch) || (p.username || '').includes(permSearch))
+                .length === 0 && (
+                <div className="text-center py-10 text-gray-300 text-sm">暂无数据</div>
+              )}
+              {(marketPermissions as any[])
+                .filter((p: any) => !permSearch || (p.name || '').includes(permSearch) || (p.username || '').includes(permSearch))
+                .map((p: any) => (
+                  <div
+                    key={p.userId}
+                    className="flex items-center justify-between px-3 py-3 rounded-xl"
+                    style={{ backgroundColor: '#fff', border: '1px solid #E5E7EB' }}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
+                        style={{ backgroundColor: p.enabled ? '#3B82F6' : '#9E9E9E' }}
+                      >
+                        {(p.name || '?').charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-semibold text-gray-800 truncate">{p.name}</span>
+                          <span className="text-xs text-gray-400 flex-shrink-0">{p.username}</span>
+                        </div>
+                        <div className="text-xs text-gray-400">{p.orderCount ?? 0} 单</div>
+                      </div>
+                    </div>
+                    {/* 开关按钮 */}
+                    <button
+                      onClick={() => isYJHOnly && setPermissionMutation.mutate({ ledgerId, userId: p.userId, enabled: !p.enabled })}
+                      disabled={!isYJHOnly || setPermissionMutation.isPending}
+                      className="flex-shrink-0 relative inline-flex items-center rounded-full transition-colors duration-200 focus:outline-none"
+                      style={{
+                        width: 44,
+                        height: 26,
+                        backgroundColor: p.enabled ? '#3B82F6' : '#D1D5DB',
+                        opacity: (!isYJHOnly || setPermissionMutation.isPending) ? 0.6 : 1,
+                        cursor: (!isYJHOnly || setPermissionMutation.isPending) ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      <span
+                        className="inline-block rounded-full bg-white shadow transition-transform duration-200"
+                        style={{ width: 20, height: 20, transform: p.enabled ? 'translateX(20px)' : 'translateX(3px)' }}
+                      />
+                    </button>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
