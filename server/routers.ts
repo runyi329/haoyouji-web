@@ -20237,9 +20237,8 @@ ${klinesSummary}
           const s = `%${input.search.trim()}%`;
           searchParams.push(s, s, s);
         }
-        const EXCLUDE_USER_ID = 870413; // 排除胡大叔(jiang)
         const [countRows] = await (conn as any).execute(
-          `SELECT COUNT(*) as cnt FROM af_orders o LEFT JOIN users u ON u.id=o.user_id WHERE o.ledger_id=${input.ledgerId} AND o.user_id IN (${ph}) AND o.user_id != ${EXCLUDE_USER_ID} ${statusCond} ${searchCond}`,
+          `SELECT COUNT(*) as cnt FROM af_orders o LEFT JOIN users u ON u.id=o.user_id WHERE o.ledger_id=${input.ledgerId} AND o.user_id IN (${ph}) ${statusCond} ${searchCond}`,
           [...ids, ...searchParams]
         );
         const total = Number((countRows as any[])[0]?.cnt || 0);
@@ -20250,7 +20249,7 @@ ${klinesSummary}
                   u.name as userName, u.username
            FROM af_orders o
            LEFT JOIN users u ON u.id=o.user_id
-           WHERE o.ledger_id=${input.ledgerId} AND o.user_id IN (${ph}) AND o.user_id != ${EXCLUDE_USER_ID} ${statusCond} ${searchCond}
+           WHERE o.ledger_id=${input.ledgerId} AND o.user_id IN (${ph}) ${statusCond} ${searchCond}
            ORDER BY o.created_at DESC
            LIMIT ${pageSize} OFFSET ${offset}`,
           [...ids, ...searchParams]
