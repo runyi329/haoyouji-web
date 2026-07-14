@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-14
+// 生成时间：2026-07-15
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8378,5 +8378,9 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-14T03:27:41Z", type: "fix", cleanMessage: "最新成交接口改为查买入+卖出completed订单，加YJH邀请树过滤，ledger_id直接拼入SQL" },
     { date: "2026-07-14T06:12:27Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
     { date: "2026-07-14T06:35:34Z", type: "feat", cleanMessage: "谷底争筹统计区币种持仓分布+订单视图优化" },
+    { date: "2026-07-14T11:14:55Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-14T14:26:22Z", type: "fix", cleanMessage: "修复订单视图暂无订单问题，去掉权限限制，移除tier JOIN，优化币种分布布局" },
+    { date: "2026-07-14T14:38:34Z", type: "fix", cleanMessage: "修复缺少 React/useState import 导致生产环境 404" },
+    { date: "2026-07-14T14:53:28Z", type: "feat", cleanMessage: "市价键改为页面内底部抽屉，不跳转路由" },
   ],
 };
