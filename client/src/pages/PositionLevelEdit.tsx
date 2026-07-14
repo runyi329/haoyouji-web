@@ -66,15 +66,23 @@ function migrateToItems(qty: number, notesJson: string): ChipItem[] {
           : (x.note ? [{ text: x.note, time: new Date().toISOString() }] : []),
         pending: x.pending ?? false,
         totalCost: String(x.totalCost ?? ''),
+        totalCostCurrency: (x.totalCostCurrency ?? 'USDT') as 'ETH' | 'USDT',
         costShares: Array.isArray(x.costShares)
           ? x.costShares.map((c: any) => ({
               name: String(c.name ?? ''),
               qty: String(c.qty ?? ''),
               dateFrom: String(c.dateFrom ?? ''),
               dateTo: String(c.dateTo ?? ''),
-              interest: String(c.interest ?? c.amount ?? ''), // 将旧 amount 升级为 interest
+              interest: String(c.interest ?? c.amount ?? ''),
+              interestCurrency: String(c.interestCurrency ?? 'U'),
             }))
           : [],
+        expiryDate: String(x.expiryDate ?? ''),
+        buyDate: String(x.buyDate ?? ''),
+        strikePrice: String(x.strikePrice ?? ''),
+        strikePriceCurrency: (x.strikePriceCurrency ?? 'USDT') as 'ETH' | 'USDT',
+        premium: String(x.premium ?? ''),
+        annualRate: String(x.annualRate ?? ''),
       }));
     }
     // 旧格式：[{text, time}] — 迁移
@@ -96,7 +104,14 @@ function serializeItems(items: ChipItem[]): string {
     notes: (x.notes ?? []).map(n => ({ text: n.text, time: n.time })),
     pending: x.pending ?? false,
     totalCost: x.totalCost ?? '',
+    totalCostCurrency: x.totalCostCurrency ?? 'USDT',
     costShares: x.costShares ?? [],
+    expiryDate: x.expiryDate ?? '',
+    buyDate: x.buyDate ?? '',
+    strikePrice: x.strikePrice ?? '',
+    strikePriceCurrency: x.strikePriceCurrency ?? 'USDT',
+    premium: x.premium ?? '',
+    annualRate: x.annualRate ?? '',
   })));
 }
 
