@@ -520,6 +520,8 @@ export default function GujianPage() {
   // 下单面板
   const [orderAmount, setOrderAmount] = useState("");
   const [orderPrice, setOrderPrice] = useState("");
+  const [priceMode, setPriceMode] = useState<'market' | 'limit'>('market'); // 委买价格模式
+  const [priceModeOpen, setPriceModeOpen] = useState(false); // 价格模式下拉
   const [sliderPct, setSliderPct] = useState(0);
   const [orderSide, setOrderSide] = useState<"buy" | "sell">("buy");
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
@@ -608,15 +610,17 @@ export default function GujianPage() {
     onError: (e) => toast.error("撤单失败", { description: e.message }),
   });
 
-  // 当前价格变化时，更新委托价格输入框（仅当为空时）
+  // 市价模式下，实时同步 currentPrice 到 orderPrice
   useEffect(() => {
-    if (currentPrice > 0 && !orderPrice) {
+    if (currentPrice > 0 && priceMode === 'market') {
       setOrderPrice(currentPrice.toFixed(2));
     }
-  }, [currentPrice]);
+  }, [currentPrice, priceMode]);
 
   // 滑块金额计算
   const sliderAmount = availableUsdt > 0 ? (availableUsdt * sliderPct / 100) : 0;
+
+  const MARKET_ORDER_MAX = 3000; // 市价单最大金额限制
 
   const handleSubmit = () => {
     const price = parseFloat(orderPrice);
@@ -624,6 +628,11 @@ export default function GujianPage() {
     const amt = parseFloat(orderAmount) || sliderAmount;
     if (!amt || amt <= 0) { toast.error("请输入金额"); return; }
     if (amt > availableUsdt) { toast.error("金额超过可用余额"); return; }
+    // 市价单限额校验
+    if (priceMode === 'market' && amt > MARKET_ORDER_MAX) {
+      toast.error(`市价单最高 ${MARKET_ORDER_MAX.toLocaleString()} USDT，请改用限价委托`);
+      return;
+    }
     // 股票数量 = 金额 / 价格（1:1，不加杠杆）
     const qty = (amt / price).toFixed(6);
     submitOrderMutation.mutate({

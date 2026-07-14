@@ -2195,6 +2195,7 @@ export default function CryptoPrediction() {
   const [orderSide, setOrderSide] = useState<"buy" | "sell">("buy");
   const [orderAmount, setOrderAmount] = useState("");
   const [orderPrice, setOrderPrice] = useState("");
+  const [priceMode, setPriceMode] = useState<'market' | 'limit'>('market'); // 委买价格模式：市价 or 限价
   const [sliderPct, setSliderPct] = useState(0);
   // 委卖时选中的买入订单 id（支持多选批量卖出）
   const [selectedSellOrderIds, setSelectedSellOrderIds] = useState<Set<number>>(new Set());
@@ -2350,6 +2351,20 @@ export default function CryptoPrediction() {
   const isUp = priceChange >= 0;
   // 当前价格优先用 getCryptoPrices，回落到 ticker.lastPrice
   const currentPrice = (coinKey && cryptoPrices?.[coinKey]) ? cryptoPrices[coinKey] : (ticker?.lastPrice ? parseFloat(ticker.lastPrice) : 0);
+
+  // 市价模式下，实时同步 currentPrice 到 orderPrice
+  useEffect(() => {
+    if (currentPrice > 0 && priceMode === 'market' && orderSide === 'buy') {
+      setOrderPrice(currentPrice.toFixed(2));
+    }
+  }, [currentPrice, priceMode, orderSide]);
+
+  // 切换币种时，市价模式重置为市价
+  useEffect(() => {
+    if (priceMode === 'market') {
+      setOrderPrice(currentPrice > 0 ? currentPrice.toFixed(2) : '');
+    }
+  }, [coinKey]);
 
   // 竞猜（行情评估 Tab）- 从数据库缓存读取，不依赖外网
   const predCoin = (coinKey === "SOL" ? "BTC" : coinKey) as "BTC" | "ETH";
@@ -2615,19 +2630,41 @@ export default function CryptoPrediction() {
               <svg className="w-4 h-4 flex-shrink-0" style={{ color: '#9CA3AF' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
             </div>
 
-            {/* 限价委托价格下拉选择器 */}
+            {/* 委托价格选择器：委买时第一档为市价，委卖时仅限价 */}
             <div className="rounded-xl px-4 py-3 flex items-center gap-3" style={{ backgroundColor: '#FFFFFF', border: '1px solid #D0DBFF' }}>
-              <span className="text-sm w-14 flex-shrink-0" style={{ color: '#6B7A9A' }}>限价委托</span>
+              <span className="text-sm flex-shrink-0" style={{ color: '#6B7A9A', minWidth: '4rem' }}>
+                {orderSide === 'buy' && priceMode === 'market' ? '市价委托' : '限价委托'}
+              </span>
               <select
-                value={orderPrice}
-                onChange={(e) => setOrderPrice(e.target.value)}
+                value={orderSide === 'buy' && priceMode === 'market' ? '__market__' : orderPrice}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '__market__') {
+                    setPriceMode('market');
+                    setOrderPrice(currentPrice > 0 ? currentPrice.toFixed(2) : '');
+                  } else {
+                    setPriceMode('limit');
+                    setOrderPrice(val);
+                  }
+                }}
                 className="flex-1 bg-transparent text-sm outline-none"
-                style={{ color: orderPrice ? '#1A2340' : '#9CA3AF', appearance: 'none', WebkitAppearance: 'none' }}
+                style={{ color: (orderSide === 'buy' && priceMode === 'market') || orderPrice ? '#1A2340' : '#9CA3AF', appearance: 'none', WebkitAppearance: 'none' }}
               >
-                <option value="">选择价格</option>
-                {((orderSide === 'sell' ? SELL_PRICE_OPTIONS : BUY_PRICE_OPTIONS)[coin.name] || []).map((p) => (
-                  <option key={p} value={p.toString()}>{p.toLocaleString()} USDT</option>
-                ))}
+                {orderSide === 'buy' ? (
+                  <>
+                    <option value="__market__">市价· {currentPrice > 0 ? `$${currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '加载中...'}</option>
+                    {(BUY_PRICE_OPTIONS[coin.name] || []).map((p) => (
+                      <option key={p} value={p.toString()}>限价· {p.toLocaleString()} USDT</option>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    <option value="">选择价格</option>
+                    {(SELL_PRICE_OPTIONS[coin.name] || []).map((p) => (
+                      <option key={p} value={p.toString()}>{p.toLocaleString()} USDT</option>
+                    ))}
+                  </>
+                )}
               </select>
               <svg className="w-4 h-4 flex-shrink-0" style={{ color: '#9CA3AF' }} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
             </div>
@@ -2829,6 +2866,11 @@ export default function CryptoPrediction() {
                   const amt = parseFloat(orderAmount);
                   if (!amt || amt <= 0) { toast.error("请输入金额"); return; }
                   if (amt > availableUsdt) { toast.error("金额超过可用余额"); return; }
+                  // 市价单限额校验：仅允许 3000 USDT 以内的市价单
+                  if (priceMode === 'market' && amt > 3000) {
+                    toast.error('市价单最高 3,000 USDT，请改用限价委托');
+                    return;
+                  }
                   const qty = ((amt / price) * 5.25).toFixed(8);
                   submitOrderMutation.mutate({
                     ledgerId,
