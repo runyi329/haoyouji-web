@@ -12921,9 +12921,6 @@ ${klinesSummary}
           }
         }
         const YJH_USER_ID = 4957151;
-        if (targetUserId !== YJH_USER_ID) {
-          return { users: [], allPayoutRatios: [] };
-        }
         try {
           const rawDb = await getDbConnection();
           if (!rawDb) return { users: [], allPayoutRatios: [] };
