@@ -1096,12 +1096,14 @@ export function FunderOrderCard({
           </div>
         </div>
 
-        {/* 中间分隔线 */}
-        <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
+        {/* 中间分隔线：右栏有任何内容时才显示 */}
+        {(show('accruedInterest') || show('paidInterest') || show('interestBase') || show('interestStartDate') || show('interestDuration') || show('interestPaymentType') || show('collateralCoin') || show('collateralValue') || show('collateral')) && (
+          <div className="w-px my-3" style={{ backgroundColor: '#E8EFFF' }} />
+        )}
 
         {/* 右栏：待结利息 */}
         <div className="w-1/2 p-4 pl-3 flex flex-col">
-          <div className="flex items-center gap-1 mb-0.5 relative" style={{ height: '16px' }}>
+          {show('accruedInterest') && <div className="flex items-center gap-1 mb-0.5 relative" style={{ height: '16px' }}>
             <span className="text-[10px]" style={{ color: '#3B82F6' }}>{isInvited ? '待结佣金' : '待结利息'}</span>
             {rateAbs && <span className="text-[10px] text-gray-400">(年化 {rateAbs}%)</span>}
             <button
@@ -1230,23 +1232,23 @@ export function FunderOrderCard({
                 </div>
               );
             })()}
+          </div>}
+          {show('accruedInterest') && (
+          <div className="flex items-baseline gap-0.5 flex-wrap mb-1">
+                <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: isInvited ? '#1A2340' : (displayAccrued === 0 ? '#1A2340' : (isNegRate ? '#059669' : '#DC2626')), fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+                  {isInvited ? '' : (displayAccrued === 0 ? '' : (isNegRate ? '-' : '+'))}{displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+                <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
+                {(() => {
+                  const approxInterest = dc?.approxInterest ?? 'U';
+                  if (approxInterest === 'hidden') return null;
+                  const showU = approxInterest === 'U';
+                  const val = showU ? (rateCur === 'CNY' ? displayAccrued / cnyRate : displayAccrued) : (rateCur === 'CNY' ? displayAccrued : displayAccrued * cnyRate);
+                  const unit = showU ? 'u' : '元';
+                  return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {unit}</span>;
+                })()}
           </div>
-          <div className="min-h-9 flex flex-col justify-center">
-            <div className="flex items-baseline gap-0.5 flex-wrap">
-              <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: isInvited ? '#1A2340' : (displayAccrued === 0 ? '#1A2340' : (isNegRate ? '#059669' : '#DC2626')), fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                {isInvited ? '' : (displayAccrued === 0 ? '' : (isNegRate ? '-' : '+'))}{displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-              <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
-{(() => {
-                const approxInterest = dc?.approxInterest ?? 'U';
-                if (approxInterest === 'hidden') return null;
-                const showU = approxInterest === 'U';
-                const val = showU ? (rateCur === 'CNY' ? displayAccrued / cnyRate : displayAccrued) : (rateCur === 'CNY' ? displayAccrued : displayAccrued * cnyRate);
-                const unit = showU ? 'u' : '元';
-                return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {unit}</span>;
-              })()}
-            </div>
-          </div>
+          )}
           <div className="space-y-0.5 text-xs">
             {show('paidInterest') && (
             <>
