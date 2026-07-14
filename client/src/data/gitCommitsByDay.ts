@@ -8364,5 +8364,17 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-13T02:54:36Z", type: "feat", cleanMessage: "AI商城标题去掉Gift图标和积分显示，更新奖金制度/期权链接图标" },
     { date: "2026-07-13T06:55:13Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
     { date: "2026-07-13T12:24:32Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-13T15:07:06Z", type: "feat", cleanMessage: "谷底增筹产品演示页面 + 新建订单旁加产品演示按钮（去掉收益曲线和模拟器）" },
+  ],
+  "2026-07-14": [
+    { date: "2026-07-13T17:54:57Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-13T22:48:24Z", type: "fix", cleanMessage: "增筹B产品对比表跌的描述改为收益权只加不减" },
+    { date: "2026-07-13T22:56:38Z", type: "other", cleanMessage: "backup: sync eth-options-monitor 最新版本（资金成本A=1.33%/B=2.33%，收益权只加不减）[skip ci]" },
+    { date: "2026-07-14T00:55:58Z", type: "fix", cleanMessage: "FunderOrderCard 待结利息开关关闭时完全释放空间" },
+    { date: "2026-07-14T01:53:42Z", type: "feat", cleanMessage: "委买下拉框加市价档，实时显示当前币价，市价单限额3000U" },
+    { date: "2026-07-14T01:59:46Z", type: "feat", cleanMessage: "市价单自动成交，直接以completed状态入库，无需管理员确认" },
+    { date: "2026-07-14T02:53:19Z", type: "fix", cleanMessage: "最新动态四接口加YJH邀请树过滤+30秒刷新；推荐按钮限YJH/JIANG可见；删除行情预测条目；修复市价单自动成交括号问题" },
+    { date: "2026-07-14T03:03:46Z", type: "fix", cleanMessage: "最新成交/委托/赠单接口 ledger_id直接拼入SQL，IN参数单独传，修复参数偏移导致查询为空的问题" },
+    { date: "2026-07-14T03:27:41Z", type: "fix", cleanMessage: "最新成交接口改为查买入+卖出completed订单，加YJH邀请树过滤，ledger_id直接拼入SQL" },
   ],
 };
