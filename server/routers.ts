@@ -20060,18 +20060,28 @@ ${klinesSummary}
       .query(async ({ ctx, input }) => {
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) return [];
-        const JIANG_USER_ID = 870413;
-        // 按卖出成交时间排序，只显示 sell_status=sold 的订单
+        const YJH_USER_ID = 4957151;
+        // 递归查YJH邀请树下所有用户
+        const treeIds = new Set<number>([YJH_USER_ID]);
+        let queue2: number[] = [YJH_USER_ID];
+        while (queue2.length > 0) {
+          const batch2 = queue2.splice(0, 100);
+          const ph2b = batch2.map(() => '?').join(',');
+          const [cr2] = await (conn as any).execute(`SELECT id FROM users WHERE invited_by_user_id IN (${ph2b})`, batch2);
+          for (const c of (cr2 as any[])) { if (!treeIds.has(c.id)) { treeIds.add(c.id); queue2.push(c.id); } }
+        }
+        const ids2 = Array.from(treeIds);
+        const ph2 = ids2.map(() => '?').join(',');
+        // 查买入和卖出成交（status=completed, is_gift=0），按成交时间倒序
         const [rows] = await (conn as any).execute(
           `SELECT o.id, o.coin, o.side, o.amount, o.limit_price, o.sell_price, o.order_type,
-                  COALESCE(o.sell_confirmed_at, o.updated_at) as eventTime,
+                  COALESCE(o.sell_confirmed_at, o.confirmed_at, o.updated_at) as eventTime,
                   u.name as userName, u.username
            FROM af_orders o
-           INNER JOIN ledger_members lm ON lm.userId = o.user_id AND lm.ledgerId = ?
            LEFT JOIN users u ON u.id = o.user_id
-           WHERE o.ledger_id=? AND o.sell_status='sold' AND o.is_gift=0 AND o.user_id != ?
-           ORDER BY COALESCE(o.sell_confirmed_at, o.updated_at) DESC LIMIT 10`,
-          [input.ledgerId, input.ledgerId, JIANG_USER_ID]
+           WHERE o.ledger_id=${input.ledgerId} AND o.status='completed' AND o.is_gift=0 AND o.user_id IN (${ph2})
+           ORDER BY COALESCE(o.sell_confirmed_at, o.confirmed_at, o.updated_at) DESC LIMIT 10`,
+          ids2
         );
         return (rows as any[]).map((r: any) => ({
           id: r.id,
