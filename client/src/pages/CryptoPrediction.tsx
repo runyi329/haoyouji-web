@@ -2880,6 +2880,7 @@ export default function CryptoPrediction() {
                     amount: amt.toFixed(2),
                     quantity: qty,
                     orderType: '无损合约',
+                    isMarketOrder: priceMode === 'market',
                   });
                 } else {
                   // 委卖：批量提交选中的所有订单

@@ -13526,7 +13526,8 @@ ${klinesSummary}
         quantity: z.string(),
         orderType: z.string().optional(), // 无损合约 / 无损现货 / 行情评估
         sourceOrderId: z.number().nullable().optional(), // 委托卖出时关联的原始买入订单ID
-      }))
+        isMarketOrder: z.boolean().optional(), // 市价单：直接自动成交
+      })
       .mutation(async ({ ctx, input }) => {
         
         const db = await getLedgerDb();
@@ -13564,9 +13565,14 @@ ${klinesSummary}
 
         // 买入订单：正常创建新订单
         const orderType = input.orderType || '无损合约';
+        // 市价单直接自动成交，无需管理员手工确认
+        const initStatus = input.isMarketOrder ? 'completed' : 'pending';
         await db.execute(
-          sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, original_limit_price, amount, quantity, status, order_type, created_at, updated_at)
-              VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.coin}, 'buy', ${input.limitPrice}, ${input.limitPrice}, ${input.amount}, ${input.quantity}, 'pending', ${orderType}, NOW(), NOW())`
+          input.isMarketOrder
+            ? sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, original_limit_price, amount, quantity, status, order_type, confirmed_at, created_at, updated_at)
+                  VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.coin}, 'buy', ${input.limitPrice}, ${input.limitPrice}, ${input.amount}, ${input.quantity}, 'completed', ${orderType}, NOW(), NOW(), NOW())`
+            : sql`INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, original_limit_price, amount, quantity, status, order_type, created_at, updated_at)
+                  VALUES (${input.ledgerId}, ${ctx.user.id}, ${input.coin}, 'buy', ${input.limitPrice}, ${input.limitPrice}, ${input.amount}, ${input.quantity}, 'pending', ${orderType}, NOW(), NOW())`
         );
         // 委托买入：扣除余额，并回填订单号
         const amountNum = parseFloat(input.amount);
