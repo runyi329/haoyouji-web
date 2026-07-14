@@ -20132,8 +20132,6 @@ ${klinesSummary}
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
         const YJH_USER_ID = 4957151;
-        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
-        if (ctx.user.id !== YJH_USER_ID && !isSysAdmin) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) return { activeCount: 0, activeAmount: 0, completedCount: 0, completedAmount: 0, totalCount: 0, totalAmount: 0 };
         const treeIds = new Set<number>([YJH_USER_ID]);
@@ -20210,8 +20208,6 @@ ${klinesSummary}
       }))
       .query(async ({ ctx, input }) => {
         const YJH_USER_ID = 4957151;
-        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
-        if (ctx.user.id !== YJH_USER_ID && !isSysAdmin) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) return { orders: [], total: 0 };
         const treeIds = new Set<number>([YJH_USER_ID]);
@@ -20251,8 +20247,7 @@ ${klinesSummary}
           `SELECT o.id, o.coin, o.side, o.amount, o.quantity, o.limit_price, o.sell_price, o.status, o.order_type, o.sell_status,
                   o.is_gift, o.tier_mode, o.created_at, o.confirmed_at, o.sell_confirmed_at,
                   o.all_time_low_price,
-                  u.name as userName, u.username,
-                  COALESCE((SELECT MAX(t.tier) FROM af_order_tier_triggers t WHERE t.order_id = o.id), 0) as equity_tier
+                  u.name as userName, u.username
            FROM af_orders o
            LEFT JOIN users u ON u.id=o.user_id
            WHERE o.ledger_id=${input.ledgerId} AND o.user_id IN (${ph}) AND o.user_id != ${EXCLUDE_USER_ID} ${statusCond} ${searchCond}
@@ -20276,23 +20271,9 @@ ${klinesSummary}
             sellConfirmedAt: r.sell_confirmed_at ? String(r.sell_confirmed_at) : '',
             isGift: r.is_gift === 1 || r.is_gift === '1',
             tierMode: r.tier_mode || 'step',
-            equityTier: parseInt((r.equity_tier ?? '0').toString()) || 0,
+            equityTier: 0,
             allTimeLowPrice: r.all_time_low_price ? parseFloat(r.all_time_low_price) : null,
-            effectiveQty: (() => {
-              const RATES: Record<number, number> = { 0: 1.0, 1: 0.6667, 2: 0.4444, 3: 0.3333, 4: 0.2667, 5: 0.2222, 6: 0.1905, 7: 0.1667, 8: 0.1481, 9: 0.1333 };
-              const rawQty = parseFloat(r.quantity || 0);
-              const tierMode = r.tier_mode || 'step';
-              if (tierMode === 'linear') {
-                const buyP = r.limit_price ? parseFloat(r.limit_price) : 0;
-                const allLow = r.all_time_low_price ? parseFloat(r.all_time_low_price) : 0;
-                const rate = (buyP > 0 && allLow > 0) ? Math.max(0, 1 - (buyP - allLow) / buyP) : 1.0;
-                return rawQty * rate;
-              } else {
-                const tier = parseInt((r.equity_tier ?? '0').toString()) || 0;
-                const rate = RATES[tier] ?? 1.0;
-                return rawQty * rate;
-              }
-            })(),
+            effectiveQty: parseFloat(r.quantity || 0),
             userName: r.userName || r.username || '新用户',
             username: r.username || '',
           })),
@@ -20305,8 +20286,6 @@ ${klinesSummary}
       .input(z.object({ ledgerId: z.number() }))
       .query(async ({ ctx, input }) => {
         const YJH_USER_ID = 4957151;
-        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
-        if (ctx.user.id !== YJH_USER_ID && !isSysAdmin) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) return [];
         const treeIds = new Set<number>([YJH_USER_ID]);
@@ -20377,9 +20356,6 @@ ${klinesSummary}
       .input(z.object({ ledgerId: z.number(), sourceUserId: z.number() }))
       .query(async ({ ctx, input }) => {
         const YJH_USER_ID = 4957151;
-        // 只有YJH或super_admin可用
-        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
-        if (ctx.user.id !== YJH_USER_ID && !isSysAdmin) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) return [];
         const querySQL = `SELECT r.id, r.beneficiary_user_id, r.ratio, u.name, u.username,
@@ -20478,8 +20454,6 @@ ${klinesSummary}
       }))
       .mutation(async ({ ctx, input }) => {
         const YJH_USER_ID = 4957151;
-        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
-        if (ctx.user.id !== YJH_USER_ID && !isSysAdmin) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
         // 查询当前所有受益人的拨比

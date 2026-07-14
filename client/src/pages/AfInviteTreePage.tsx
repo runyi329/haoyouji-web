@@ -167,7 +167,7 @@ export default function AfInviteTreePage() {
   const [orderPage, setOrderPage] = useState(1);
   const { data: treeOrdersData, isLoading: ordersLoading } = trpc.ledger.afGetTreeOrders.useQuery(
     { ledgerId, search: orderSearch, status: orderStatus, page: orderPage },
-    { enabled: canSeeRecentDynamics }
+    { enabled: ledgerLoaded && !!ledgerId }
   );
   const treeOrders = (treeOrdersData as any)?.orders ?? [];
   const treeOrdersTotal = (treeOrdersData as any)?.total ?? 0;
