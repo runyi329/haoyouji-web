@@ -132,6 +132,8 @@ export default function AfInviteTreePage() {
   const canSeeRecentDynamics = isCustomAF && ((user as any)?.id === YJH_USER_ID_CONST || isOwner || isAdmin);
   const isYJH = (user as any)?.id === YJH_USER_ID_CONST || (user as any)?.id === 870413;
   const isYJHOnly = (user as any)?.id === YJH_USER_ID_CONST;
+  const JIANG_USER_ID = 870413;
+  const canSetMarketPerm = (user as any)?.id === YJH_USER_ID_CONST || (user as any)?.id === JIANG_USER_ID;
 
   const ledgerLoaded = !ledgerLoading && !!ledgerData;
   const inviteTreeViewAsId = ledgerLoaded
@@ -909,15 +911,15 @@ export default function AfInviteTreePage() {
                     </div>
                     {/* 开关按钮 */}
                     <button
-                      onClick={() => isYJHOnly && setPermissionMutation.mutate({ ledgerId, userId: p.userId, enabled: !p.enabled })}
-                      disabled={!isYJHOnly || setPermissionMutation.isPending}
+                      onClick={() => canSetMarketPerm && setPermissionMutation.mutate({ ledgerId, userId: p.userId, enabled: !p.enabled })}
+                      disabled={!canSetMarketPerm || setPermissionMutation.isPending}
                       className="flex-shrink-0 relative inline-flex items-center rounded-full transition-colors duration-200 focus:outline-none"
                       style={{
                         width: 44,
                         height: 26,
                         backgroundColor: p.enabled ? '#3B82F6' : '#D1D5DB',
-                        opacity: (!isYJHOnly || setPermissionMutation.isPending) ? 0.6 : 1,
-                        cursor: (!isYJHOnly || setPermissionMutation.isPending) ? 'not-allowed' : 'pointer',
+                        opacity: (!canSetMarketPerm || setPermissionMutation.isPending) ? 0.6 : 1,
+                        cursor: (!canSetMarketPerm || setPermissionMutation.isPending) ? 'not-allowed' : 'pointer',
                       }}
                     >
                       <span

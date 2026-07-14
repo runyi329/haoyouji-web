@@ -20325,14 +20325,15 @@ ${klinesSummary}
       .input(z.object({ ledgerId: z.number(), userId: z.number(), enabled: z.boolean() }))
       .mutation(async ({ ctx, input }) => {
         const YJH_USER_ID = 4957151;
-        if (ctx.user.id !== YJH_USER_ID) throw new TRPCError({ code: 'FORBIDDEN', message: '只有YJH可操作' });
+        const JIANG_USER_ID = 870413;
+        if (ctx.user.id !== YJH_USER_ID && ctx.user.id !== JIANG_USER_ID) throw new TRPCError({ code: 'FORBIDDEN', message: '无权操作' });
         const conn = await (await import('./db')).getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
         await (conn as any).execute(
           `INSERT INTO af_market_order_permissions (ledger_id, user_id, granted_by, enabled)
            VALUES (?, ?, ?, ?)
            ON DUPLICATE KEY UPDATE enabled=?, updated_at=NOW()`,
-          [input.ledgerId, input.userId, YJH_USER_ID, input.enabled ? 1 : 0, input.enabled ? 1 : 0]
+          [input.ledgerId, input.userId, ctx.user.id, input.enabled ? 1 : 0, input.enabled ? 1 : 0]
         );
         return { success: true };
       }),
