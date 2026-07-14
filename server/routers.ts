@@ -20127,6 +20127,251 @@ ${klinesSummary}
           eventTime: r.eventTime ? String(r.eventTime) : '',
         }));
       }),
+    // ===== A100 统计：YJH树下谷底征筹订单汇总 =====
+    afGetTreeOrderStats: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const YJH_USER_ID = 4957151;
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        if (ctx.user.id !== YJH_USER_ID && !isSysAdmin) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) return { activeCount: 0, activeAmount: 0, completedCount: 0, completedAmount: 0, totalCount: 0, totalAmount: 0 };
+        const treeIds = new Set<number>([YJH_USER_ID]);
+        let queue: number[] = [YJH_USER_ID];
+        while (queue.length > 0) {
+          const batch = queue.splice(0, 100);
+          const ph = batch.map(() => '?').join(',');
+          const [cr] = await (conn as any).execute(`SELECT id FROM users WHERE invited_by_user_id IN (${ph})`, batch);
+          for (const c of (cr as any[])) { if (!treeIds.has(c.id)) { treeIds.add(c.id); queue.push(c.id); } }
+        }
+        const ids = Array.from(treeIds);
+        const ph = ids.map(() => '?').join(',');
+        const [rows] = await (conn as any).execute(
+          `SELECT
+             SUM(CASE WHEN is_gift=0 AND status!='cancelled' THEN 1 ELSE 0 END) as normalCount,
+             SUM(CASE WHEN is_gift=1 AND status!='cancelled' THEN 1 ELSE 0 END) as giftCount,
+             SUM(CASE WHEN status!='cancelled' THEN 1 ELSE 0 END) as totalCount,
+             SUM(CASE WHEN status!='cancelled' THEN COALESCE(amount,0) ELSE 0 END) as totalAmount
+           FROM af_orders
+           WHERE ledger_id=${input.ledgerId} AND user_id IN (${ph})`,
+          ids
+        );
+        // 按币种分组统计：持仓数量（应用档位折扣，与人员视图一致）+ 订单数（用于小字显示）
+        const EQUITY_RATES_STATS: Record<number, number> = {
+          0: 1.0, 1: 0.6667, 2: 0.4444, 3: 0.3333, 4: 0.2667,
+          5: 0.2222, 6: 0.1905, 7: 0.1667, 8: 0.1481, 9: 0.1333,
+        };
+        // 持仓数量（折后）
+        const [holdingRows] = await (conn as any).execute(
+          `SELECT o.id, o.coin, o.is_gift,
+             CAST(o.quantity AS DECIMAL(30,8)) as qty,
+             COALESCE(MAX(t.tier), 0) as max_tier
+           FROM af_orders o
+           LEFT JOIN af_order_tier_triggers t ON t.order_id = o.id
+           WHERE o.ledger_id=${input.ledgerId} AND o.user_id IN (${ph})
+             AND o.status = 'completed' AND o.side = 'buy'
+             AND (o.sell_status IS NULL OR o.sell_status IN ('pending', 'selling'))
+           GROUP BY o.id, o.coin, o.is_gift, o.quantity`,
+          ids
+        );
+        type CoinBreakdown = { eth: number; btc: number; sol: number; other: number };
+        const normalByCoins: CoinBreakdown = { eth: 0, btc: 0, sol: 0, other: 0 };
+        const giftByCoins: CoinBreakdown = { eth: 0, btc: 0, sol: 0, other: 0 };
+        for (const cr of (holdingRows as any[])) {
+          const target = cr.is_gift ? giftByCoins : normalByCoins;
+          const c = (cr.coin || '').toUpperCase();
+          const rawQty = parseFloat(cr.qty || 0);
+          const tier = parseInt((cr.max_tier ?? '0').toString()) || 0;
+          const discountRate = EQUITY_RATES_STATS[tier] ?? 1.0;
+          const effectiveQty = rawQty * discountRate;
+          if (c === 'ETH') target.eth += effectiveQty;
+          else if (c === 'BTC') target.btc += effectiveQty;
+          else if (c === 'SOL') target.sol += effectiveQty;
+          else target.other += effectiveQty;
+        }
+        const r = (rows as any[])[0] || {};
+        return {
+          normalCount: Number(r.normalCount || 0),
+          giftCount: Number(r.giftCount || 0),
+          totalCount: Number(r.totalCount || 0),
+          totalAmount: parseFloat(r.totalAmount || 0),
+          normalByCoins,
+          giftByCoins,
+        };
+      }),
+
+    // ===== A100 订单列表：YJH树下谷底征筹订单列表（支持搜索+状态筛选） =====
+    afGetTreeOrders: protectedProcedure
+      .input(z.object({
+        ledgerId: z.number(),
+        search: z.string().optional(),
+        status: z.enum(['all', 'holding', 'pending_buy', 'pending_sell', 'sold']).optional(),
+        page: z.number().optional(),
+      }))
+      .query(async ({ ctx, input }) => {
+        const YJH_USER_ID = 4957151;
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        if (ctx.user.id !== YJH_USER_ID && !isSysAdmin) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) return { orders: [], total: 0 };
+        const treeIds = new Set<number>([YJH_USER_ID]);
+        let queue: number[] = [YJH_USER_ID];
+        while (queue.length > 0) {
+          const batch = queue.splice(0, 100);
+          const ph = batch.map(() => '?').join(',');
+          const [cr] = await (conn as any).execute(`SELECT id FROM users WHERE invited_by_user_id IN (${ph})`, batch);
+          for (const c of (cr as any[])) { if (!treeIds.has(c.id)) { treeIds.add(c.id); queue.push(c.id); } }
+        }
+        const ids = Array.from(treeIds);
+        console.log('[afGetTreeOrders] ledgerId=', input.ledgerId, 'treeIds count=', ids.length, 'ids=', ids.slice(0,10));
+        const ph = ids.map(() => '?').join(',');
+        const page = input.page || 1;
+        const pageSize = 20;
+        const offset = (page - 1) * pageSize;
+        let statusCond = '';
+        if (input.status === 'holding') statusCond = `AND o.status='completed' AND LOWER(o.side)='buy' AND (o.sell_status IS NULL OR o.sell_status='' OR o.sell_status='sell_cancelled')`;
+        else if (input.status === 'pending_buy') statusCond = `AND o.status='pending' AND o.side='buy'`;
+        else if (input.status === 'pending_sell') statusCond = `AND o.sell_status='selling'`;
+        else if (input.status === 'sold') statusCond = `AND o.sell_status='sold'`;
+        else statusCond = `AND o.status != 'cancelled'`;
+        let searchCond = '';
+        const searchParams: any[] = [];
+        if (input.search && input.search.trim()) {
+          searchCond = `AND (u.name LIKE ? OR u.username LIKE ? OR o.coin LIKE ?)`;
+          const s = `%${input.search.trim()}%`;
+          searchParams.push(s, s, s);
+        }
+        const EXCLUDE_USER_ID = 870413; // 排除胡大叔(jiang)
+        const [countRows] = await (conn as any).execute(
+          `SELECT COUNT(*) as cnt FROM af_orders o LEFT JOIN users u ON u.id=o.user_id WHERE o.ledger_id=${input.ledgerId} AND o.user_id IN (${ph}) AND o.user_id != ${EXCLUDE_USER_ID} ${statusCond} ${searchCond}`,
+          [...ids, ...searchParams]
+        );
+        const total = Number((countRows as any[])[0]?.cnt || 0);
+        const [rows] = await (conn as any).execute(
+          `SELECT o.id, o.coin, o.side, o.amount, o.quantity, o.limit_price, o.sell_price, o.status, o.order_type, o.sell_status,
+                  o.is_gift, o.tier_mode, o.created_at, o.confirmed_at, o.sell_confirmed_at,
+                  o.all_time_low_price,
+                  u.name as userName, u.username,
+                  COALESCE((SELECT MAX(t.tier) FROM af_order_tier_triggers t WHERE t.order_id = o.id), 0) as equity_tier
+           FROM af_orders o
+           LEFT JOIN users u ON u.id=o.user_id
+           WHERE o.ledger_id=${input.ledgerId} AND o.user_id IN (${ph}) AND o.user_id != ${EXCLUDE_USER_ID} ${statusCond} ${searchCond}
+           ORDER BY o.created_at DESC
+           LIMIT ${pageSize} OFFSET ${offset}`,
+          [...ids, ...searchParams]
+        );
+        return {
+          orders: (rows as any[]).map((r: any) => ({
+            id: r.id,
+            coin: r.coin || '',
+            side: r.side || '',
+            amount: parseFloat(r.amount || 0),
+            limitPrice: r.limit_price ? parseFloat(r.limit_price) : null,
+            sellPrice: r.sell_price ? parseFloat(r.sell_price) : null,
+            sellStatus: r.sell_status || null,
+            status: r.status || '',
+            orderType: r.order_type || '',
+            createdAt: r.created_at ? String(r.created_at) : '',
+            confirmedAt: r.confirmed_at ? String(r.confirmed_at) : '',
+            sellConfirmedAt: r.sell_confirmed_at ? String(r.sell_confirmed_at) : '',
+            isGift: r.is_gift === 1 || r.is_gift === '1',
+            tierMode: r.tier_mode || 'step',
+            equityTier: parseInt((r.equity_tier ?? '0').toString()) || 0,
+            allTimeLowPrice: r.all_time_low_price ? parseFloat(r.all_time_low_price) : null,
+            effectiveQty: (() => {
+              const RATES: Record<number, number> = { 0: 1.0, 1: 0.6667, 2: 0.4444, 3: 0.3333, 4: 0.2667, 5: 0.2222, 6: 0.1905, 7: 0.1667, 8: 0.1481, 9: 0.1333 };
+              const rawQty = parseFloat(r.quantity || 0);
+              const tierMode = r.tier_mode || 'step';
+              if (tierMode === 'linear') {
+                const buyP = r.limit_price ? parseFloat(r.limit_price) : 0;
+                const allLow = r.all_time_low_price ? parseFloat(r.all_time_low_price) : 0;
+                const rate = (buyP > 0 && allLow > 0) ? Math.max(0, 1 - (buyP - allLow) / buyP) : 1.0;
+                return rawQty * rate;
+              } else {
+                const tier = parseInt((r.equity_tier ?? '0').toString()) || 0;
+                const rate = RATES[tier] ?? 1.0;
+                return rawQty * rate;
+              }
+            })(),
+            userName: r.userName || r.username || '新用户',
+            username: r.username || '',
+          })),
+          total,
+        };
+      }),
+
+    // ===== 试驾单权限：查询YJH树下所有用户的权限状态 =====
+    afGetMarketOrderPermissions: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const YJH_USER_ID = 4957151;
+        const isSysAdmin = ctx.user.role === 'admin' || ctx.user.role === 'super_admin';
+        if (ctx.user.id !== YJH_USER_ID && !isSysAdmin) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) return [];
+        const treeIds = new Set<number>([YJH_USER_ID]);
+        let queue: number[] = [YJH_USER_ID];
+        while (queue.length > 0) {
+          const batch = queue.splice(0, 100);
+          const ph = batch.map(() => '?').join(',');
+          const [cr] = await (conn as any).execute(`SELECT id FROM users WHERE invited_by_user_id IN (${ph})`, batch);
+          for (const c of (cr as any[])) { if (!treeIds.has(c.id)) { treeIds.add(c.id); queue.push(c.id); } }
+        }
+        if (treeIds.size === 0) return [];
+        const ids = Array.from(treeIds);
+        const ph = ids.map(() => '?').join(',');
+        const [userRows] = await (conn as any).execute(
+          `SELECT u.id, u.name, u.username,
+                  COALESCE(p.enabled, 0) as enabled,
+                  COUNT(o.id) as order_count
+           FROM users u
+           LEFT JOIN af_market_order_permissions p ON p.user_id=u.id AND p.ledger_id=${input.ledgerId}
+           LEFT JOIN af_orders o ON o.user_id=u.id AND o.ledger_id=${input.ledgerId} AND o.status != 'cancelled'
+           WHERE u.id IN (${ph})
+           GROUP BY u.id, u.name, u.username, p.enabled
+           ORDER BY order_count DESC, u.name ASC`,
+          ids
+        );
+        return (userRows as any[]).map((r: any) => ({
+          userId: r.id,
+          name: r.name || r.username || '新用户',
+          username: r.username || '',
+          enabled: r.enabled === 1 || r.enabled === true,
+          orderCount: Number(r.order_count) || 0,
+        }));
+      }),
+
+    // ===== 试驾单权限：YJH设置某用户的权限 =====
+    afSetMarketOrderPermission: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), userId: z.number(), enabled: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        const YJH_USER_ID = 4957151;
+        if (ctx.user.id !== YJH_USER_ID) throw new TRPCError({ code: 'FORBIDDEN', message: '只有YJH可操作' });
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        await (conn as any).execute(
+          `INSERT INTO af_market_order_permissions (ledger_id, user_id, granted_by, enabled)
+           VALUES (?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE enabled=?, updated_at=NOW()`,
+          [input.ledgerId, input.userId, YJH_USER_ID, input.enabled ? 1 : 0, input.enabled ? 1 : 0]
+        );
+        return { success: true };
+      }),
+
+    // ===== 试驾单权限：用户查询自己是否有试驾单权限 =====
+    afGetMyMarketOrderPermission: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) return { enabled: false };
+        const [rows] = await (conn as any).execute(
+          `SELECT enabled FROM af_market_order_permissions WHERE ledger_id=? AND user_id=?`,
+          [input.ledgerId, ctx.user.id]
+        );
+        const r = (rows as any[])[0];
+        return { enabled: r ? (r.enabled === 1 || r.enabled === true) : false };
+      }),
+
     // YJH专属：查询某个成员（source_user_id）的所有拨比配置
     afGetMemberPayoutRatios: protectedProcedure
       .input(z.object({ ledgerId: z.number(), sourceUserId: z.number() }))

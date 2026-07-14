@@ -2258,6 +2258,14 @@ export default function CryptoPrediction() {
   const currentUserId = (meData as any)?.id;
   const canSeeQQ = currentUserId === 870413 || currentUserId === 4957151;
 
+  // 试驾单权限：是否允许下市价单（YJH 和超管始终允许，其他人查后端权限）
+  const isYJHOrAdmin = currentUserId === 4957151 || currentUserId === 870413;
+  const { data: myMarketPermData } = trpc.ledger.afGetMyMarketOrderPermission.useQuery(
+    { ledgerId },
+    { enabled: isCustomAF && !isYJHOrAdmin, staleTime: 60000 }
+  );
+  const canUseMarketOrder = isYJHOrAdmin || (myMarketPermData as any)?.enabled === true;
+
   // 可用余额（账本总资产）
   const { data: assetData } = trpc.ledger.afGetMyTotalAsset.useQuery(
     { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
@@ -2652,7 +2660,9 @@ export default function CryptoPrediction() {
               >
                 {orderSide === 'buy' ? (
                   <>
-                    <option value="__market__">市价· {currentPrice > 0 ? `$${currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '加载中...'}</option>
+                    {canUseMarketOrder && (
+                      <option value="__market__">市价· {currentPrice > 0 ? `$${currentPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '加载中...'}</option>
+                    )}
                     {(BUY_PRICE_OPTIONS[coin.name] || []).map((p) => (
                       <option key={p} value={p.toString()}>限价· {p.toLocaleString()} USDT</option>
                     ))}
