@@ -2188,11 +2188,27 @@ export default function LedgerDetail() {
   });
   const [viewAsSearch, setViewAsSearch] = useState('');
   const [viewAsRoleFilter, setViewAsRoleFilter] = useState<'all' | 'member' | 'funder'>('all');
+  // 视角切换点击历史（localStorage持久化，用于智能排序）
+  const [viewAsClickHistory, setViewAsClickHistory] = useState<Record<number, { lastClick: number; count: number }>>(() => {
+    try {
+      const saved = localStorage.getItem(`haoyouji_viewas_history_${ledgerId}`);
+      return saved ? JSON.parse(saved) : {};
+    } catch { return {}; }
+  });
   const trpcUtils = trpc.useUtils();
   // 视角切换时同步写入 URL 和 sessionStorage，实现完全身份代入
   const handleSwitchView = (userId: number | null) => {
     setViewAsUserIdState(userId);
     setShowViewAsPicker(false);
+    // 记录点击历史（用于智能排序）
+    if (userId) {
+      const newHistory = {
+        ...viewAsClickHistory,
+        [userId]: { lastClick: Date.now(), count: (viewAsClickHistory[userId]?.count || 0) + 1 }
+      };
+      setViewAsClickHistory(newHistory);
+      try { localStorage.setItem(`haoyouji_viewas_history_${ledgerId}`, JSON.stringify(newHistory)); } catch {}
+    }
     // 写入/清除 sessionStorage（tRPC 请求头会自动带上，实现后端身份代入）
     if (userId) {
       sessionStorage.setItem('view-as-user-id', String(userId));
@@ -7242,11 +7258,11 @@ export default function LedgerDetail() {
               </div>
             </div>
             {/* 成员列表 */}
-            <div className="flex-1 overflow-y-auto px-4 py-2">
+            <div className="flex-1 overflow-y-auto px-3 py-2">
               {/* 切回自己 */}
               {viewAsUserId && (
                 <button
-                  className="w-full flex items-center gap-3 px-3 py-3 rounded-xl mb-1 bg-blue-50"
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl mb-2 bg-blue-50"
                   onClick={() => handleSwitchView(null)}
                 >
                   {user && <UserAvatar username={user.username} avatar={user.avatar} nickname={user.nickname} size="sm" />}
@@ -7257,44 +7273,65 @@ export default function LedgerDetail() {
                   <span className="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">当前</span>
                 </button>
               )}
-              {/* 成员列表 */}
-              {((membersData as any[]) || []).filter((m: any) => {
-                if (m.userId === user?.id) return false; // 排除自己
-                // 角色筛选
-                if (viewAsRoleFilter === 'member' && m.role !== 'member') return false;
-                if (viewAsRoleFilter === 'funder' && m.role !== 'funder') return false;
-                if (!viewAsSearch) return true;
-                const keyword = viewAsSearch.toLowerCase();
-                return (m.nickname || '').toLowerCase().includes(keyword) || (m.username || '').toLowerCase().includes(keyword);
-              }).map((m: any) => (
-                <button
-                  key={m.userId}
-                  className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl mb-1 transition-colors ${
-                    viewAsUserId === m.userId ? 'bg-amber-50' : 'hover:bg-gray-50'
-                  }`}
-                  onClick={() => handleSwitchView(m.userId)}
-                >
-                  <UserAvatar username={m.username} avatar={m.avatar} nickname={m.nickname} size="sm" />
-                  <div className="flex-1 text-left">
-                    {/* 昵称（users.name）和账号（users.username）同时显示，相同时只显一次 */}
-                    {(m as any).realName && (m as any).realName !== m.username ? (
-                      <>
-                        <div className="text-sm font-medium text-gray-900">{(m as any).realName}</div>
-                        {m.username && <div className="text-xs text-blue-500">@{m.username}</div>}
-                      </>
-                    ) : (
-                      <div className="text-sm font-medium text-gray-900">{m.username || '未知用户'}</div>
-                    )}
-                    <div className="text-xs text-gray-500 space-y-0.5">
-                      <div>{isCustomAJ ? (m.role === 'owner' ? '创始人' : m.role === 'admin' ? '企业主' : '业务员') : (m.role === 'owner' ? '创始人' : m.role === 'admin' ? '管理员' : m.role === 'funder' ? '资金方' : '普通成员')}</div>
-                      <div className="text-gray-400">ID: {m.userId}</div>
-                    </div>
-                  </div>
-                  {viewAsUserId === m.userId && (
-                    <span className="text-xs text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">查看中</span>
-                  )}
-                </button>
-              ))}
+              {/* 成员列表：一行两列 grid，智能排序（最近点击 > 点击次数 > 订单数量） */}
+              <div className="grid grid-cols-2 gap-2">
+                {((membersData as any[]) || []).filter((m: any) => {
+                  if (m.userId === user?.id) return false; // 排除自己
+                  // 角色筛选
+                  if (viewAsRoleFilter === 'member' && m.role !== 'member') return false;
+                  if (viewAsRoleFilter === 'funder' && m.role !== 'funder') return false;
+                  if (!viewAsSearch) return true;
+                  const keyword = viewAsSearch.toLowerCase();
+                  return (m.nickname || '').toLowerCase().includes(keyword) || (m.username || '').toLowerCase().includes(keyword);
+                }).sort((a: any, b: any) => {
+                  // 当前查看中的用户排最前
+                  if (a.userId === viewAsUserId) return -1;
+                  if (b.userId === viewAsUserId) return 1;
+                  // 按最近点击时间降序
+                  const aLastClick = viewAsClickHistory[a.userId]?.lastClick || 0;
+                  const bLastClick = viewAsClickHistory[b.userId]?.lastClick || 0;
+                  if (aLastClick !== bLastClick) return bLastClick - aLastClick;
+                  // 按点击次数降序
+                  const aCount = viewAsClickHistory[a.userId]?.count || 0;
+                  const bCount = viewAsClickHistory[b.userId]?.count || 0;
+                  if (aCount !== bCount) return bCount - aCount;
+                  // 按订单数量降序（从 funderAssetOrders 统计）
+                  const aOrders = (funderAssetOrders as any[]).filter((o: any) => Number(o.user_id) === a.userId).length;
+                  const bOrders = (funderAssetOrders as any[]).filter((o: any) => Number(o.user_id) === b.userId).length;
+                  return bOrders - aOrders;
+                }).map((m: any) => {
+                  const orderCount = (funderAssetOrders as any[]).filter((o: any) => Number(o.user_id) === m.userId).length;
+                  const displayName = (m as any).realName && (m as any).realName !== m.username
+                    ? (m as any).realName
+                    : (m.username || '未知用户');
+                  const roleName = isCustomAJ
+                    ? (m.role === 'owner' ? '创始人' : m.role === 'admin' ? '企业主' : '业务员')
+                    : (m.role === 'owner' ? '创始人' : m.role === 'admin' ? '管理员' : m.role === 'funder' ? '资金方' : '普通成员');
+                  return (
+                    <button
+                      key={m.userId}
+                      className={`flex flex-col items-center gap-1.5 px-2 py-3 rounded-xl transition-colors ${
+                        viewAsUserId === m.userId ? 'bg-amber-50 ring-1 ring-amber-300' : 'hover:bg-gray-50 bg-gray-50/50'
+                      }`}
+                      onClick={() => handleSwitchView(m.userId)}
+                    >
+                      <div className="relative">
+                        <UserAvatar username={m.username} avatar={m.avatar} nickname={m.nickname} size="md" />
+                        {viewAsUserId === m.userId && (
+                          <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border border-white" />
+                        )}
+                      </div>
+                      <div className="text-center w-full">
+                        <div className="text-xs font-medium text-gray-900 truncate px-1">{displayName}</div>
+                        {(m as any).realName && (m as any).realName !== m.username && m.username && (
+                          <div className="text-[10px] text-blue-400 truncate px-1">@{m.username}</div>
+                        )}
+                        <div className="text-[10px] text-gray-400 mt-0.5">{roleName}{orderCount > 0 ? ` · ${orderCount}笔` : ''}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
