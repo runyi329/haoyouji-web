@@ -3448,6 +3448,7 @@ export default function CryptoPrediction() {
                             livePrices={financeLivePrices}
                             priceDirection={{}}
                             membersData={(ledgerInfo as any)?.members || []}
+                            currentUser={meData ? { id: (meData as any).id, name: (meData as any).name, username: (meData as any).username, avatar: (meData as any).avatar } : undefined}
                           />
                         ) : (
                           <FunderOrderCardV2Silver
@@ -3457,6 +3458,7 @@ export default function CryptoPrediction() {
                             livePrices={financeLivePrices}
                             priceDirection={{}}
                             membersData={(ledgerInfo as any)?.members || []}
+                            currentUser={meData ? { id: (meData as any).id, name: (meData as any).name, username: (meData as any).username, avatar: (meData as any).avatar } : undefined}
                           />
                         );
                       })}

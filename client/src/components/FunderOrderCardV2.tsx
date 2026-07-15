@@ -1,9 +1,10 @@
 // FunderOrderCardV2 —— OKX 深色风格订单卡片（资产感优先，服务费弱化）
 // 仅用于对比展示，不影响原有 FunderOrderCard
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useOptionGreeks } from "@/hooks/useOptionGreeks";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { toast } from "sonner";
 import { RightMarginDetail } from "./RightMarginDetail";
 import { RightInterestDetail } from "./RightInterestDetail";
 import {
@@ -56,6 +57,7 @@ interface FunderOrderCardV2Props {
   cnyRate?: number;
   membersData?: any[];
   ledgerId?: number;
+  currentUser?: { id: number; name?: string; username?: string; avatar?: string };
 }
 
 export function FunderOrderCardV2({
@@ -666,6 +668,7 @@ export function FunderOrderCardV2Silver({
   cnyRate = DEFAULT_CNY_RATE,
   membersData = [],
   ledgerId,
+  currentUser,
 }: FunderOrderCardV2Props) {
   const [activeTab, setActiveTab] = useState<'detail' | 'note' | null>(null);
   const feeExpanded = activeTab === 'detail';
@@ -682,6 +685,7 @@ export function FunderOrderCardV2Silver({
   const [noteItems, setNoteItems] = useState(() => parseNotes(order.public_note || ''));
   const [noteEditingIdx, setNoteEditingIdx] = useState<number | null>(null);
   const [noteEditValue, setNoteEditValue] = useState('');
+  const noteEditValueRef = useRef('');
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteDeleteConfirmIdx, setNoteDeleteConfirmIdx] = useState<number | null>(null);
   // 当order.public_note从服务器加载完成后同步更新noteItems
@@ -690,14 +694,21 @@ export function FunderOrderCardV2Silver({
   }, [order.public_note]);
   const updateNoteM = trpc.ledger.funderUpdatePublicNote.useMutation();
   const saveNoteItems = async (newItems: ReturnType<typeof parseNotes>) => {
-    if (!ledgerId) return;
+    if (!ledgerId) { toast.error('账本ID缺失，无法保存备注'); return; }
     setNoteSaving(true);
     try {
       const raw = JSON.stringify(newItems);
       await updateNoteM.mutateAsync({ id: order.id as number, ledgerId, publicNote: raw });
       setNoteItems(newItems);
       order.public_note = raw;
+      toast.success('备注已保存');
+    } catch (e: any) {
+      toast.error('备注保存失败：' + (e?.message || '未知错误'));
     } finally { setNoteSaving(false); }
+  };
+  const handleNoteEditChange = (val: string) => {
+    noteEditValueRef.current = val;
+    setNoteEditValue(val);
   };
 
   // 期权订单：标的资产以 option_info.coin 为准（order.coin 可能是旧数据遗留的错误值）
@@ -1703,7 +1714,7 @@ export function FunderOrderCardV2Silver({
       )}
       {/* ── 备注展开区 ── */}
       {noteExpanded && (
-        <div className="px-4 pb-3 pt-2 text-xs" style={{ borderTop: `1px dashed ${DIVIDER}` }} onClick={e => e.stopPropagation()}>
+        <div className="px-4 pb-3 pt-2 text-xs" style={{ borderTop: `1px dashed ${DIVIDER}`, position: 'relative', zIndex: 2 }} onClick={e => e.stopPropagation()}>
           {noteItems.length === 0 && noteEditingIdx === null && (
             <div style={{ color: TXT_DIM }} className="py-1">暂无备注</div>
           )}
@@ -1805,7 +1816,7 @@ export function FunderOrderCardV2Silver({
             <button
               type="button"
               onClick={() => {
-                const newItems = [...noteItems, { text: '', time: new Date().toISOString() }];
+                const newItems = [...noteItems, { text: '', time: new Date().toISOString(), userId: currentUser?.id, userName: currentUser?.username || currentUser?.name, userAvatar: currentUser?.avatar }];
                 setNoteItems(newItems);
                 setNoteEditingIdx(newItems.length - 1);
                 setNoteEditValue('');
@@ -1834,6 +1845,7 @@ export function FunderLenderCardSilver({
   cnyRate = DEFAULT_CNY_RATE,
   membersData = [],
   ledgerId,
+  currentUser,
 }: FunderOrderCardV2Props) {
   const [activeTab, setActiveTab] = useState<'detail' | 'note' | null>(null);
   const feeExpanded = activeTab === 'detail';
@@ -1850,13 +1862,16 @@ export function FunderLenderCardSilver({
   }, [order.public_note]);
   const updateNoteM = trpc.ledger.funderUpdatePublicNote.useMutation();
   const saveNoteItems = async (newItems: ReturnType<typeof parseNotes>) => {
-    if (!ledgerId) return;
+    if (!ledgerId) { toast.error('账本ID缺失，无法保存备注'); return; }
     setNoteSaving(true);
     try {
       const raw = JSON.stringify(newItems);
       await updateNoteM.mutateAsync({ id: order.id as number, ledgerId, publicNote: raw });
       setNoteItems(newItems);
       order.public_note = raw;
+      toast.success('备注已保存');
+    } catch (e: any) {
+      toast.error('备注保存失败：' + (e?.message || '未知错误'));
     } finally { setNoteSaving(false); }
   };
   const [showInterestHistory, setShowInterestHistory] = useState(false);
@@ -1886,6 +1901,8 @@ export function FunderLenderCardSilver({
   const floatPnl = currentValue !== null && buyValue > 0 ? currentValue - buyValue : null;
   const floatPct = floatPnl !== null && buyValue > 0 ? (floatPnl / buyValue) * 100 : null;
   const dir = priceDirection?.[coin] ?? 'same';
+  const isStock = order.asset_type === 'stock';
+  const isOption = order.asset_type === 'crypto_option';
   const pnlColor = floatPnl === null ? (isOption ? OPT_TEXT_SEC : SL_TEXT_SEC) : floatPnl >= 0 ? SL_GREEN : SL_RED;
   const priceDiff = liveP !== null && buyPrice > 0 ? liveP - buyPrice : null;
   const priceColor = priceDiff === null ? (isOption ? OPT_TEXT_PRI : SL_TEXT_PRI) : priceDiff >= 0 ? SL_GREEN : SL_RED;
@@ -1980,8 +1997,6 @@ export function FunderLenderCardSilver({
     { bottom: '6px', right: '7px' },
   ];
 
-  const isStock = order.asset_type === 'stock';
-  const isOption = order.asset_type === 'crypto_option';
   // 动态文字颜色：期权卡片用白色系列，其他用黑色系列
   const TXT_PRI = isOption ? OPT_TEXT_PRI : SL_TEXT_PRI;
   const TXT_SEC = isOption ? OPT_TEXT_SEC : SL_TEXT_SEC;
@@ -2608,7 +2623,7 @@ export function FunderLenderCardSilver({
 
       {/* ── 备注展开区 ── */}
       {noteExpanded && (
-        <div className="px-4 pb-3 pt-2 text-xs" style={{ borderTop: `1px dashed ${DIVIDER}` }} onClick={e => e.stopPropagation()}>
+        <div className="px-4 pb-3 pt-2 text-xs" style={{ borderTop: `1px dashed ${DIVIDER}`, position: 'relative', zIndex: 2 }} onClick={e => e.stopPropagation()}>
           {/* 备注列表 */}
           {noteItems.length === 0 && noteEditingIdx === null && (
             <div style={{ color: TXT_DIM }} className="py-1">暂无备注</div>
@@ -2682,7 +2697,7 @@ export function FunderLenderCardSilver({
             <button
               type="button"
               onClick={() => {
-                const newItems = [...noteItems, { text: '', time: new Date().toISOString() }];
+                const newItems = [...noteItems, { text: '', time: new Date().toISOString(), userId: currentUser?.id, userName: currentUser?.username || currentUser?.name, userAvatar: currentUser?.avatar }];
                 setNoteItems(newItems);
                 setNoteEditingIdx(newItems.length - 1);
                 setNoteEditValue('');
