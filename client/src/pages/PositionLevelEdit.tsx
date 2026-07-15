@@ -20,6 +20,7 @@ interface CostShareItem {
   qty: string;                     // 分摊数量（ETH）
   dateFrom: string;                // 起始日期
   dateTo: string;                  // 结束日期
+  strikeCost: string;              // 行权成本（4位数字）
   interest: string;                // 利息金额
   interestCurrency?: 'CNY' | 'USDT'; // 利息币种，默认 USDT
 }
@@ -73,6 +74,7 @@ function migrateToItems(qty: number, notesJson: string): ChipItem[] {
               qty: String(c.qty ?? ''),
               dateFrom: String(c.dateFrom ?? ''),
               dateTo: String(c.dateTo ?? ''),
+              strikeCost: String(c.strikeCost ?? ''),
               interest: String(c.interest ?? c.amount ?? ''),
               interestCurrency: String(c.interestCurrency ?? 'U'),
             }))
@@ -105,7 +107,15 @@ function serializeItems(items: ChipItem[]): string {
     pending: x.pending ?? false,
     totalCost: x.totalCost ?? '',
     totalCostCurrency: x.totalCostCurrency ?? 'USDT',
-    costShares: x.costShares ?? [],
+    costShares: (x.costShares ?? []).map((c: any) => ({
+      name: String(c.name ?? ''),
+      qty: String(c.qty ?? ''),
+      dateFrom: String(c.dateFrom ?? ''),
+      dateTo: String(c.dateTo ?? ''),
+      strikeCost: String(c.strikeCost ?? ''),
+      interest: String(c.interest ?? ''),
+      interestCurrency: String(c.interestCurrency ?? 'U'),
+    })),
     expiryDate: x.expiryDate ?? '',
     buyDate: x.buyDate ?? '',
     strikePrice: x.strikePrice ?? '',
@@ -206,7 +216,7 @@ const NoteItem: React.FC<{
   );
 };
 
-/** 单行分摊输入行（表格式，独立 state 避免失焦） */
+/** 单行分摊输入行（Fragment 模式，配合外层统一 grid） */
 const CostShareRow: React.FC<{
   share: CostShareItem;
   rowIndex: number;
@@ -215,13 +225,16 @@ const CostShareRow: React.FC<{
   isLast: boolean;
   annualRate?: number | null;
   readOnly?: boolean;
+  interestCurrency: 'CNY' | 'USDT';
+  borderColor: string;
   onChange: (field: keyof CostShareItem, v: string) => void;
   onRemove: () => void;
-}> = ({ share, rowIndex, accentRgb, pending, isLast, annualRate, readOnly, onChange, onRemove }) => {
+}> = ({ share, rowIndex, accentRgb, pending, isLast, annualRate, readOnly, interestCurrency, borderColor, onChange, onRemove }) => {
   const [name, setName] = React.useState(share.name);
   const [qty, setQty] = React.useState(share.qty);
   const [dateFrom, setDateFrom] = React.useState(share.dateFrom);
   const [dateTo, setDateTo] = React.useState(share.dateTo);
+  const [strikeCost, setStrikeCost] = React.useState(share.strikeCost ?? '');
   const [interest, setInterest] = React.useState(share.interest);
 
   const fmtDate = (v: string) => {
@@ -231,7 +244,6 @@ const CostShareRow: React.FC<{
     return v;
   };
 
-  // 计算天数
   const days = React.useMemo(() => {
     if (!dateFrom || !dateTo) return null;
     const d1 = new Date(dateFrom).getTime();
@@ -240,59 +252,45 @@ const CostShareRow: React.FC<{
     return Math.round((d2 - d1) / 86400000);
   }, [dateFrom, dateTo]);
 
-  const toggleCurrency = () => {
-    const next: 'CNY' | 'USDT' = currency === 'USDT' ? 'CNY' : 'USDT';
-    setCurrency(next);
-    onChange('interestCurrency', next);
-  };
-
   const cellColor = pending ? 'rgba(176,106,255,0.85)' : 'rgba(255,255,255,0.8)';
   const dimColor = pending ? 'rgba(176,106,255,0.5)' : 'rgba(255,255,255,0.4)';
-  const colBorder = pending ? '1px solid rgba(176,106,255,0.2)' : `1px solid rgba(${accentRgb},0.15)`;
+  const colBorder = `1px solid ${borderColor}`;
   const rowBorder = pending ? '1px solid rgba(176,106,255,0.12)' : `1px solid rgba(${accentRgb},0.1)`;
   const rowBg = rowIndex % 2 === 0
     ? (pending ? 'rgba(176,106,255,0.05)' : `rgba(${accentRgb},0.04)`)
     : 'transparent';
 
-  const cell = (content: React.ReactNode, isLastCol = false) => (
-    <div style={{
-      borderRight: isLastCol ? 'none' : colBorder,
-      padding: '4px 5px',
-      display: 'flex',
-      alignItems: 'center',
-      minWidth: 0,
-      overflow: 'hidden',
-    }}>
-      {content}
-    </div>
-  );
+  const cellStyle = (isLastCol = false): React.CSSProperties => ({
+    borderRight: isLastCol ? 'none' : colBorder,
+    borderBottom: isLast ? 'none' : rowBorder,
+    padding: '4px 5px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 0,
+    overflow: 'hidden',
+    background: rowBg,
+  });
 
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '48px 36px 40px 40px 38px 56px 38px 24px',
-        background: rowBg,
-        borderBottom: isLast ? 'none' : rowBorder,
-      }}
-    >
-      {cell(
+    <>
+      <div style={cellStyle()}>
         <input type="text" value={name}
           onChange={e => !readOnly && setName(e.target.value)}
           onBlur={() => !readOnly && onChange('name', name)}
           readOnly={readOnly}
-          placeholder="姓名" className="text-xs outline-none bg-transparent w-full"
+          placeholder="姓名" className="text-xs outline-none bg-transparent w-full text-center"
           style={{ color: cellColor, cursor: readOnly ? 'default' : 'text' }} />
-      )}
-      {cell(
+      </div>
+      <div style={cellStyle()}>
         <input type="number" value={qty}
           onChange={e => !readOnly && setQty(e.target.value)}
           onBlur={() => !readOnly && onChange('qty', qty)}
           readOnly={readOnly}
-          placeholder="0" className="text-xs outline-none bg-transparent text-right w-full"
+          placeholder="0" className="text-xs outline-none bg-transparent text-center w-full"
           style={{ color: pending ? '#b06aff' : '#7dd3fc', minWidth: 0, cursor: readOnly ? 'default' : 'text' }} min="0" step="0.1" />
-      )}
-      {cell(
+      </div>
+      <div style={cellStyle()}>
         <label className="relative w-full" style={{ cursor: readOnly ? 'default' : 'pointer' }}>
           <span className="text-xs block text-center" style={{ color: dateFrom ? dimColor : 'rgba(255,255,255,0.2)' }}>
             {dateFrom ? fmtDate(dateFrom) : '起'}
@@ -301,8 +299,8 @@ const CostShareRow: React.FC<{
             onChange={e => { if (!readOnly) { setDateFrom(e.target.value); onChange('dateFrom', e.target.value); } }}
             className="absolute inset-0 opacity-0 w-full" style={{ fontSize: '16px', pointerEvents: readOnly ? 'none' : 'auto' }} />
         </label>
-      )}
-      {cell(
+      </div>
+      <div style={cellStyle()}>
         <label className="relative w-full" style={{ cursor: readOnly ? 'default' : 'pointer' }}>
           <span className="text-xs block text-center" style={{ color: dateTo ? dimColor : 'rgba(255,255,255,0.2)' }}>
             {dateTo ? fmtDate(dateTo) : '止'}
@@ -311,37 +309,44 @@ const CostShareRow: React.FC<{
             onChange={e => { if (!readOnly) { setDateTo(e.target.value); onChange('dateTo', e.target.value); } }}
             className="absolute inset-0 opacity-0 w-full" style={{ fontSize: '16px', pointerEvents: readOnly ? 'none' : 'auto' }} />
         </label>
-      )}
-      {cell(
+      </div>
+      <div style={cellStyle()}>
         <span className="text-xs w-full text-center" style={{ color: days !== null ? (pending ? '#b06aff' : `rgba(${accentRgb},0.8)`) : 'rgba(255,255,255,0.2)' }}>
-          {days !== null ? `${days}d` : '—'}
+          {days !== null ? `${days}d` : ''}
         </span>
-      )}
-      {/* 利息：纯数字输入 */}
-      {cell(
+      </div>
+      <div style={cellStyle()}>
+        <input type="number" value={strikeCost}
+          onChange={e => !readOnly && setStrikeCost(e.target.value)}
+          onBlur={() => !readOnly && onChange('strikeCost', strikeCost)}
+          readOnly={readOnly}
+          placeholder="" className="text-xs outline-none bg-transparent text-center w-full"
+          style={{ color: '#fbbf24', minWidth: 0, cursor: readOnly ? 'default' : 'text' }} min="0" step="100" />
+      </div>
+      <div style={cellStyle()}>
         <input type="number" value={interest}
           onChange={e => !readOnly && setInterest(e.target.value)}
           onBlur={() => !readOnly && onChange('interest', interest)}
           readOnly={readOnly}
-          placeholder="0" className="text-xs outline-none bg-transparent text-right w-full"
-          style={{ color: '#f0d060', minWidth: 0, cursor: readOnly ? 'default' : 'text' }} min="0" step="10" />
-      )}
-      {/* 年化：自动计算显示 */}
-      {cell(
-        <span className="text-xs w-full text-center" style={{
-          color: annualRate != null ? (annualRate > 20 ? '#f87171' : annualRate > 10 ? '#fbbf24' : '#86efac') : 'rgba(255,255,255,0.2)',
-          fontVariantNumeric: 'tabular-nums',
-        }}>
-          {annualRate != null ? `${annualRate.toFixed(1)}%` : '—'}
-        </span>
-      )}
-      {cell(
-        <button onClick={onRemove} disabled={readOnly} className="flex items-center justify-center w-full" style={{ color: readOnly ? 'rgba(255,80,80,0.15)' : 'rgba(255,80,80,0.4)', cursor: readOnly ? 'not-allowed' : 'pointer' }}>
-          <X className="w-3 h-3" />
-        </button>,
-        true
-      )}
-    </div>
+          placeholder="" className="text-xs outline-none bg-transparent text-center w-full"
+          style={{ color: interestCurrency === 'CNY' ? '#f87171' : '#f0d060', minWidth: 0, cursor: readOnly ? 'default' : 'text' }} min="0" step="10" />
+      </div>
+      <div style={cellStyle(true)}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px', width: '100%' }}>
+          <span className="text-xs text-center" style={{
+            color: annualRate != null ? (annualRate > 20 ? '#f87171' : annualRate > 10 ? '#fbbf24' : '#86efac') : 'rgba(255,255,255,0.2)',
+            fontVariantNumeric: 'tabular-nums', flex: 1,
+          }}>
+            {annualRate != null ? `${annualRate.toFixed(1)}%` : ''}
+          </span>
+          {!readOnly && (
+            <button onClick={onRemove} className="flex-shrink-0" style={{ color: 'rgba(255,80,80,0.5)', lineHeight: 1 }}>
+              <X className="w-2.5 h-2.5" />
+            </button>
+          )}
+        </div>
+      </div>
+    </>
   );
 };
 
@@ -473,49 +478,46 @@ const CostShareBlock: React.FC<{
   return (
     <div>
       {/* 信息汇总表格：买入日 / 行权日 / 行权价 / 权利金 / 总成本 / 年化 */}
-      <div style={{ border: `1px solid ${borderColor}`, borderRadius: '6px', overflow: 'hidden', marginBottom: '8px' }}>
-        {/* 表头 */}
-        <div style={{ display: 'grid', gridTemplateColumns: '52px 64px 50px 42px 1fr 38px', background: headerBg, borderBottom: `1px solid ${borderColor}` }}>
-          {/* 买入日 */}
-          <div style={{ borderRight: `1px solid ${borderColor}`, padding: '3px 5px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+      <div style={{ marginBottom: '8px', border: `1px solid ${borderColor}`, borderRadius: '6px', overflow: 'hidden' }}>
+        {/* 统一 grid：表头行 + 数据行在同一容器，列宽自动对齐 */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'auto auto auto auto 1fr auto' }}>
+          {/* 表头：买入日 */}
+          <div style={{ borderRight: `1px solid ${borderColor}`, borderBottom: `1px solid ${borderColor}`, padding: '3px 5px', textAlign: 'center', whiteSpace: 'nowrap', background: headerBg }}>
             <span className="text-xs" style={{ color: headerColor }}>买入日</span>
           </div>
-          {/* 行权日 */}
-          <div style={{ borderRight: `1px solid ${borderColor}`, padding: '3px 5px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+          {/* 表头：行权日 */}
+          <div style={{ borderRight: `1px solid ${borderColor}`, borderBottom: `1px solid ${borderColor}`, padding: '3px 5px', textAlign: 'center', whiteSpace: 'nowrap', background: headerBg }}>
             <span className="text-xs" style={{ color: headerColor }}>行权日</span>
           </div>
-          {/* 行权价（可切换币种） */}
-          <div style={{ borderRight: `1px solid ${borderColor}`, padding: '3px 5px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+          {/* 表头：行权价（可切换币种） */}
+          <div style={{ borderRight: `1px solid ${borderColor}`, borderBottom: `1px solid ${borderColor}`, padding: '3px 5px', textAlign: 'center', whiteSpace: 'nowrap', background: headerBg }}>
             <button
               onClick={() => onChangeStrikePriceCurrency(strikePriceCurrency === 'USDT' ? 'ETH' : 'USDT')}
               className="text-xs w-full text-center"
               style={{ color: strikePriceCurrency === 'ETH' ? '#7dd3fc' : '#f0d060', fontWeight: 500 }}
             >
-              行权价{strikePriceCurrency === 'ETH' ? 'E' : 'U'}
+              行权{strikePriceCurrency === 'ETH' ? 'E' : 'u'}
             </button>
           </div>
-          {/* 权利金 */}
-          <div style={{ borderRight: `1px solid ${borderColor}`, padding: '3px 5px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+          {/* 表头：权利金 */}
+          <div style={{ borderRight: `1px solid ${borderColor}`, borderBottom: `1px solid ${borderColor}`, padding: '3px 5px', textAlign: 'center', whiteSpace: 'nowrap', background: headerBg }}>
             <span className="text-xs" style={{ color: headerColor }}>权利金</span>
           </div>
-          {/* 总成本（可切换币种） */}
-          <div style={{ borderRight: `1px solid ${borderColor}`, padding: '3px 5px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+          {/* 表头：总成本（可切换币种） */}
+          <div style={{ borderRight: `1px solid ${borderColor}`, borderBottom: `1px solid ${borderColor}`, padding: '3px 5px', textAlign: 'center', whiteSpace: 'nowrap', background: headerBg }}>
             <button
               onClick={() => onChangeTotalCostCurrency(totalCostCurrency === 'USDT' ? 'ETH' : 'USDT')}
               className="text-xs w-full text-center"
               style={{ color: totalCostCurrency === 'ETH' ? '#7dd3fc' : '#f0d060', fontWeight: 500 }}
             >
-              总成本{totalCostCurrency === 'ETH' ? 'E' : 'U'}
+              成本{totalCostCurrency === 'ETH' ? 'E' : 'u'}
             </button>
           </div>
-          {/* 年化标题 */}
-          <div style={{ padding: '3px 5px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+          {/* 表头：年化 */}
+          <div style={{ borderBottom: `1px solid ${borderColor}`, padding: '3px 5px', textAlign: 'center', whiteSpace: 'nowrap', background: headerBg }}>
             <span className="text-xs" style={{ color: headerColor }}>年化</span>
           </div>
-        </div>
-        {/* 数据行 */}
-        <div style={{ display: 'grid', gridTemplateColumns: '52px 64px 50px 42px 1fr 38px' }}>
-          {/* 买入日 */}
+          {/* 数据：买入日 */}
           <div style={{ borderRight: `1px solid ${borderColor}`, padding: '4px 5px', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', overflow: 'hidden' }}>
             <span className="text-xs text-center" style={{ color: 'rgba(255,255,255,0.75)', pointerEvents: 'none', zIndex: 1 }}>
               {buyDate ? fmtExpiry(buyDate) : ''}
@@ -524,7 +526,7 @@ const CostShareBlock: React.FC<{
               disabled={!isEditing}
               style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: isEditing ? 'pointer' : 'default', fontSize: '16px', zIndex: 2 }} />
           </div>
-          {/* 行权日 */}
+          {/* 数据：行权日 */}
           <div style={{ borderRight: `1px solid ${borderColor}`, padding: '4px 5px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px', position: 'relative', overflow: 'hidden' }}>
             <span className="text-xs text-center" style={{ color: 'rgba(255,255,255,0.75)', pointerEvents: 'none', zIndex: 1 }}>
               {expiryDate ? fmtExpiry(expiryDate) : ''}
@@ -538,7 +540,7 @@ const CostShareBlock: React.FC<{
               disabled={!isEditing}
               style={{ position: 'absolute', inset: 0, opacity: 0, width: '100%', height: '100%', cursor: isEditing ? 'pointer' : 'default', fontSize: '16px', zIndex: 2 }} />
           </div>
-          {/* 行权价 — 数字输入框 */}
+          {/* 数据：行权价 */}
           <div style={{ borderRight: `1px solid ${borderColor}`, padding: '4px 5px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <input
               type="number"
@@ -555,13 +557,13 @@ const CostShareBlock: React.FC<{
               step="100"
             />
           </div>
-          {/* 权利金 */}
+          {/* 数据：权利金 */}
           <div style={{ borderRight: `1px solid ${borderColor}`, padding: '4px 5px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <input type="number" value={premium} onChange={e => onChangePremium(e.target.value)}
               placeholder="0" readOnly={!isEditing} className="text-xs outline-none bg-transparent text-center w-full"
               style={{ color: '#86efac', cursor: isEditing ? 'text' : 'default' }} min="0" step="10" />
           </div>
-          {/* 总成本（自动计算，可手动覆盖） */}
+          {/* 数据：总成本 */}
           <div style={{ borderRight: `1px solid ${borderColor}`, padding: '4px 5px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <input type="number" value={totalCost}
               onChange={e => onChangeTotalCost(e.target.value)}
@@ -570,8 +572,8 @@ const CostShareBlock: React.FC<{
               className="text-xs outline-none bg-transparent text-center w-full"
               style={{ color: totalCostCurrency === 'ETH' ? '#7dd3fc' : '#f0d060', cursor: isEditing ? 'text' : 'default' }} min="0" step="100" />
           </div>
-          {/* 年化（手动输入） */}
-          <div style={{ padding: '4px 3px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1px' }}>
+          {/* 数据：年化（手动输入） */}
+          <div style={{ padding: '4px 3px', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
             <input
               type="number"
               value={annualRate}
@@ -579,55 +581,55 @@ const CostShareBlock: React.FC<{
               readOnly={!isEditing}
               placeholder=""
               className="text-xs outline-none bg-transparent text-center"
-              style={{ color: '#86efac', cursor: isEditing ? 'text' : 'default', width: '28px' }}
+              style={{ color: 'transparent', cursor: isEditing ? 'text' : 'default', width: annualRate ? `${(annualRate.length + 1.5) * 7}px` : '28px', caretColor: '#86efac' }}
               min="0"
               step="0.1"
             />
-            <span className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>%</span>
+            {annualRate && (
+              <span className="text-xs pointer-events-none" style={{ position: 'absolute', color: '#86efac', fontVariantNumeric: 'tabular-nums' }}>
+                {annualRate}%
+              </span>
+            )}
           </div>
         </div>
       </div>
 
-      {/* 分摊表格 */}
+      {/* 分摊表格：单一 grid 容器，表头和数据行共享列宽 */}
       <div style={{ border: `1px solid ${borderColor}`, borderRadius: '6px', overflow: 'hidden' }}>
-        {/* 表头 */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '48px 36px 40px 40px 38px 56px 38px 24px',
-            background: headerBg,
-            borderBottom: `1px solid ${borderColor}`,
-          }}
-        >
-          {(['姓名', '数量', '起始', '结束', '周期', null, '年化', ''] as (string | null)[]).map((h, i) => (
-            <div key={i} style={{
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(7, min-content) 1fr',
+          width: '100%',
+        }}>
+          {/* 表头行（8格） */}
+          {(['姓名', '数量', '起始', '结束', '周期', '行权成本', null, '年化'] as (string | null)[]).map((h, i) => (
+            <div key={`h${i}`} style={{
               borderRight: i < 7 ? `1px solid ${borderColor}` : 'none',
+              borderBottom: `1px solid ${borderColor}`,
               padding: '4px 5px',
-              textAlign: i === 0 ? 'left' : 'center',
+              textAlign: 'center',
               whiteSpace: 'nowrap',
-              overflow: 'hidden',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: headerBg,
             }}>
-              {i === 5 ? (
+              {i === 6 ? (
                 <button
                   onClick={toggleCurrency}
                   className="text-xs w-full text-center"
-                  style={{
-                    color: interestCurrency === 'CNY' ? '#f87171' : '#86efac',
-                    fontWeight: 500,
-                  }}
+                  style={{ color: interestCurrency === 'CNY' ? '#f87171' : '#86efac', fontWeight: 500 }}
                 >
-                  利息{interestCurrency === 'CNY' ? '元' : 'U'}
+                  利息{interestCurrency === 'CNY' ? 'C' : 'u'}
                 </button>
               ) : (
                 <span className="text-xs" style={{ color: headerColor }}>{h}</span>
               )}
             </div>
           ))}
-        </div>
-        {/* 数据行 */}
-        <div>
+          {/* 数据行（每行 8 个 Fragment 格子） */}
           {shares.length === 0 && (
-            <div className="text-xs py-2 text-center" style={{ color: 'rgba(255,255,255,0.2)' }}>点击下方添加</div>
+            <div className="text-xs py-2 text-center col-span-8" style={{ color: 'rgba(255,255,255,0.2)', gridColumn: '1 / -1' }}>点击下方添加</div>
           )}
           {shares.map((s, i) => (
             <CostShareRow
@@ -639,6 +641,8 @@ const CostShareBlock: React.FC<{
               isLast={i === shares.length - 1}
               annualRate={annualRates[i]}
               readOnly={!isEditing}
+              interestCurrency={interestCurrency}
+              borderColor={borderColor}
               onChange={(field, v) => updateShare(i, field, v)}
               onRemove={() => removeShare(i)}
             />
@@ -655,7 +659,7 @@ const CostShareBlock: React.FC<{
         const costNum = parseFloat(totalCost) || parseFloat(autoCost) || 0;
         const remainCost = costNum - collectedCost;
         return (
-          <div style={{ border: `1px solid ${borderColor}`, borderRadius: '6px', overflow: 'hidden', marginTop: '6px' }}>
+          <div style={{ marginTop: '8px', border: `1px solid ${borderColor}`, borderRadius: '6px', overflow: 'hidden' }}>
             {/* 表头 */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', background: headerBg, borderBottom: `1px solid ${borderColor}` }}>
               {['已分配E', '剩余E', '已收成本', '剩余成本'].map((h, i) => (
@@ -692,7 +696,7 @@ const CostShareBlock: React.FC<{
       })()}
 
       {/* 添加行 + 平均年化 + 保存按鈕 */}
-      <div className="flex items-center justify-between mt-1.5">
+      <div className="flex items-center justify-between" style={{ padding: '6px 10px', borderTop: `4px solid ${pending ? 'rgba(176,106,255,0.15)' : `rgba(${accentRgb},0.12)`}` }}>
         <div className="flex items-center gap-2">
           <button
             onClick={addShare}
@@ -842,7 +846,7 @@ const ChipRow: React.FC<ChipRowProps> = ({ item, index, color, accentRgb, onChan
       </div>
 
       {/* 成本分摊模块（全宽容器，带顶部分隔线） */}
-      {showCost && <div className="px-3 pb-1" style={{ borderTop: `1px solid ${item.pending ? 'rgba(176,106,255,0.2)' : `rgba(${accentRgb},0.15)`}`, paddingTop: '6px' }}>
+      {showCost && <div style={{ borderTop: `1px solid ${item.pending ? 'rgba(176,106,255,0.2)' : `rgba(${accentRgb},0.15)`}` }}>
         <CostShareBlock
           totalCost={item.totalCost ?? ''}
           totalCostCurrency={(item.totalCostCurrency as 'ETH' | 'USDT') ?? 'USDT'}
