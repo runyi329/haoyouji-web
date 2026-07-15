@@ -14376,14 +14376,15 @@ ${klinesSummary}
           // 赠予订单买入时未扣本金，卖出时只结算纯利润，不加回本金
           const grossReturn = isGift ? Math.max(0, profit) : (principal + Math.max(0, profit));
           balanceAdjust = Math.max(0, grossReturn - managementFee);
+          // note 格式统一加入订单 ID，确保查重逻辑能正确匹配
           if (isGift) {
-            balanceNote = `卖出成交 ${coin} 净收益${balanceAdjust.toFixed(2)} U`;
+            balanceNote = `卖出成交 ${coin} 净收益${balanceAdjust.toFixed(2)} U #${input.orderId}`;
           } else {
-            balanceNote = `卖出成交 ${coin} 净收益${balanceAdjust.toFixed(2)} U`;
+            balanceNote = `卖出成交 ${coin} 净收益${balanceAdjust.toFixed(2)} U #${input.orderId}`;
           }
           
           if (Math.abs(balanceAdjust) > 0.001) {
-            // 方案三：查重，防止重复结算（检查是否已有相同订单的卖出成交记录）
+            // 查重：防止重复结算（note 中包含订单 ID，确保精确匹配）
             const dupRows = await db.execute(
               sql`SELECT id FROM af_manual_balances WHERE user_id = ${userId} AND ledger_id = ${input.ledgerId} AND note LIKE ${`%卖出成交%`} AND note LIKE ${`%#${input.orderId}%`} LIMIT 1`
             ) as any;
@@ -14393,9 +14394,12 @@ ${klinesSummary}
                 sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
                     VALUES (${input.ledgerId}, ${userId}, ${balanceAdjust}, ${balanceNote}, NOW(), NOW())`
               );
+              console.log(`[AF卖出成交] 订单#${input.orderId} 回款写入成功: ${balanceAdjust.toFixed(4)} U`);
             } else {
               console.warn(`[AF卖出成交] 订单#${input.orderId} 已有结算记录，跳过重复结算`);
             }
+          } else {
+            console.warn(`[AF卖出成交] 订单#${input.orderId} 净回款为0（本金=${principal}, 收益=${profit.toFixed(4)}, 管理费=${managementFee.toFixed(4)}），跳过写入`);
           }
           // 更新卖出状态
           const sellPriceUpdate = input.sellPrice ? `, sell_price = '${input.sellPrice.replace(/'/g, '')}'` : '';
