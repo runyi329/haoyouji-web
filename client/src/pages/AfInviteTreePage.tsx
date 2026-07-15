@@ -204,6 +204,9 @@ export default function AfInviteTreePage() {
   );
   const treeOrders = (treeOrdersData as any)?.orders ?? [];
   const treeOrdersTotal = (treeOrdersData as any)?.total ?? 0;
+  // 赠单折叠展开状态：key = 正单ID
+  const [expandedTreeGiftOrders, setExpandedTreeGiftOrders] = useState<Record<number, boolean>>({});
+  const toggleTreeGiftOrders = (orderId: number) => setExpandedTreeGiftOrders(prev => ({ ...prev, [orderId]: !prev[orderId] }));
 
   // 编辑状态
   const [editingNoteUserId, setEditingNoteUserId] = useState<number | null>(null);
@@ -843,6 +846,53 @@ export default function AfInviteTreePage() {
                                   </div>
                                 )}
                               </div>
+                              {/* 赠单折叠区块 */}
+                              {(() => {
+                                const gifts: any[] = (o as any).giftOrders || [];
+                                if (gifts.length === 0) return null;
+                                const isExpanded = !!expandedTreeGiftOrders[o.id];
+                                const totalQty = gifts.reduce((s: number, g: any) => s + (g.quantity || 0), 0);
+                                return (
+                                  <div className="mt-0" style={{ borderTop: '1px solid #F3F4F6' }}>
+                                    <button
+                                      onClick={() => toggleTreeGiftOrders(o.id)}
+                                      className="w-full flex items-center justify-between px-3 py-2 text-xs"
+                                      style={{ backgroundColor: '#FAF5FF', color: '#7C3AED' }}
+                                    >
+                                      <div className="flex items-center gap-1.5">
+                                        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 16, height: 16, borderRadius: '50%', backgroundColor: '#DDD6FE', color: '#5B21B6', fontWeight: 700, fontSize: 10 }}>赠</span>
+                                        <span style={{ fontWeight: 500 }}>已触发赠予订单</span>
+                                        <span style={{ color: '#A78BFA' }}>共 {gifts.length} 笔 · {totalQty.toFixed(4)} {o.coin}</span>
+                                      </div>
+                                      <span style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', display: 'inline-block', transition: 'transform 0.2s' }}>▾</span>
+                                    </button>
+                                    {isExpanded && (
+                                      <div style={{ border: '1px solid #EDE9FE', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
+                                        {gifts.map((g: any, idx: number) => {
+                                          let gStatusLabel = '委买中'; let gStatusColor = '#D97706';
+                                          if (g.sellStatus === 'sold') { gStatusLabel = '已卖出'; gStatusColor = '#2563EB'; }
+                                          else if (g.sellStatus === 'selling') { gStatusLabel = '委卖中'; gStatusColor = '#DC2626'; }
+                                          else if (g.status === 'completed') { gStatusLabel = '持仓中'; gStatusColor = '#16A34A'; }
+                                          else if (g.status === 'cancelled') { gStatusLabel = '已撤单'; gStatusColor = '#9CA3AF'; }
+                                          return (
+                                            <div key={g.id} style={{ padding: '8px 12px', fontSize: 11, backgroundColor: '#fff', borderTop: idx > 0 ? '1px solid #F5F3FF' : 'none' }}>
+                                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                                <span style={{ fontWeight: 600, color: '#374151' }}>{g.userName || g.username}</span>
+                                                <span style={{ fontWeight: 500, color: gStatusColor }}>{gStatusLabel}</span>
+                                              </div>
+                                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0 8px' }}>
+                                                <div><div style={{ fontSize: 9, color: '#9CA3AF' }}>金额(U)</div><div style={{ fontSize: 11, fontWeight: 600 }}>{g.amount.toFixed(0)}</div></div>
+                                                <div><div style={{ fontSize: 9, color: '#9CA3AF' }}>数量</div><div style={{ fontSize: 11, fontWeight: 600 }}>{g.quantity.toFixed(4)}</div></div>
+                                                <div><div style={{ fontSize: 9, color: '#9CA3AF' }}>买入价</div><div style={{ fontSize: 11, fontWeight: 600 }}>{g.limitPrice ? g.limitPrice.toFixed(0) : '市价'}</div></div>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           );
                         })}

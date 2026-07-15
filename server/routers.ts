@@ -20246,11 +20246,12 @@ ${klinesSummary}
         const pageSize = 20;
         const offset = (page - 1) * pageSize;
         let statusCond = '';
-        if (input.status === 'holding') statusCond = `AND o.status='completed' AND LOWER(o.side)='buy' AND (o.sell_status IS NULL OR o.sell_status='' OR o.sell_status='sell_cancelled')`;
-        else if (input.status === 'pending_buy') statusCond = `AND o.status='pending' AND o.side='buy'`;
-        else if (input.status === 'pending_sell') statusCond = `AND o.sell_status='selling'`;
-        else if (input.status === 'sold') statusCond = `AND o.sell_status='sold'`;
-        else statusCond = `AND o.status != 'cancelled'`;
+        // 赠单嵌套在正单里展示，所有筛选条件都排除赠单独立显示
+        if (input.status === 'holding') statusCond = `AND COALESCE(o.is_gift,0)=0 AND o.status='completed' AND LOWER(o.side)='buy' AND (o.sell_status IS NULL OR o.sell_status='' OR o.sell_status='sell_cancelled')`;
+        else if (input.status === 'pending_buy') statusCond = `AND COALESCE(o.is_gift,0)=0 AND o.status='pending' AND o.side='buy'`;
+        else if (input.status === 'pending_sell') statusCond = `AND COALESCE(o.is_gift,0)=0 AND o.sell_status='selling'`;
+        else if (input.status === 'sold') statusCond = `AND COALESCE(o.is_gift,0)=0 AND o.sell_status='sold'`;
+        else statusCond = `AND COALESCE(o.is_gift,0)=0 AND o.status != 'cancelled'`;
         let searchCond = '';
         const searchParams: any[] = [];
         if (input.search && input.search.trim()) {
@@ -20287,6 +20288,47 @@ ${klinesSummary}
            LIMIT ${pageSize} OFFSET ${offset}`,
           [...ids, ...searchParams]
         );
+        // 批量查询正单对应的赠单，嵌套在 giftOrders 里
+        const mainOrderIds = (rows as any[]).map((r: any) => r.id);
+        let giftMap: Record<number, any[]> = {};
+        if (mainOrderIds.length > 0) {
+          const gph = mainOrderIds.map(() => '?').join(',');
+          const [giftRows] = await (conn as any).execute(
+            `SELECT g.id, g.source_order_id, g.coin, g.amount, g.quantity, g.limit_price, g.sell_price,
+                    g.status, g.sell_status, g.is_gift, g.tier_mode, g.created_at, g.confirmed_at, g.sell_confirmed_at,
+                    g.all_time_low_price, COALESCE(gt.max_tier,0) as equity_tier,
+                    gu.name as userName, gu.username
+             FROM af_orders g
+             LEFT JOIN users gu ON gu.id=g.user_id
+             LEFT JOIN (SELECT order_id, MAX(tier) as max_tier FROM af_order_tier_triggers GROUP BY order_id) gt ON gt.order_id=g.id
+             WHERE g.ledger_id=${input.ledgerId} AND g.is_gift=1 AND g.source_order_id IN (${gph})
+             ORDER BY g.created_at ASC`,
+            mainOrderIds
+          );
+          for (const g of (giftRows as any[])) {
+            const srcId = g.source_order_id;
+            if (!giftMap[srcId]) giftMap[srcId] = [];
+            giftMap[srcId].push({
+              id: g.id,
+              coin: g.coin || '',
+              amount: parseFloat(g.amount || 0),
+              quantity: parseFloat(g.quantity || 0),
+              limitPrice: g.limit_price ? parseFloat(g.limit_price) : null,
+              sellPrice: g.sell_price ? parseFloat(g.sell_price) : null,
+              status: g.status || '',
+              sellStatus: g.sell_status || null,
+              isGift: true,
+              tierMode: g.tier_mode || 'step',
+              equityTier: Number(g.equity_tier || 0),
+              allTimeLowPrice: g.all_time_low_price ? parseFloat(g.all_time_low_price) : null,
+              createdAt: g.created_at ? String(g.created_at) : '',
+              confirmedAt: g.confirmed_at ? String(g.confirmed_at) : '',
+              sellConfirmedAt: g.sell_confirmed_at ? String(g.sell_confirmed_at) : '',
+              userName: g.userName || g.username || '',
+              username: g.username || '',
+            });
+          }
+        }
         return {
           orders: (rows as any[]).map((r: any) => ({
             id: r.id,
@@ -20308,6 +20350,7 @@ ${klinesSummary}
             effectiveQty: parseFloat(r.quantity || 0),
             userName: r.userName || r.username || '新用户',
             username: r.username || '',
+            giftOrders: giftMap[r.id] || [],
           })),
           total,
         };

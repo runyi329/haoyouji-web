@@ -1521,6 +1521,8 @@ export default function AfOrderManage() {
               };
               const dateGroups: Record<string, any[]> = {};
               (searchedOrders || []).forEach((order: any) => {
+                // 赠单嵌套在正单的 giftOrders 里展示，不单独加入日期分组
+                if (order.isGift === true || order.isGift === 1) return;
                 const dateKey = getOrderDateKey(order);
                 if (!dateGroups[dateKey]) dateGroups[dateKey] = [];
                 dateGroups[dateKey].push(order);
@@ -1589,12 +1591,10 @@ export default function AfOrderManage() {
                       const shortDate = dateParts.length === 3
                         ? `${parseInt(dateParts[1], 10)}月${parseInt(dateParts[2], 10)}日`
                         : dateKey;
-                      // 正单数量（非赠单，过滤掉已撤单）
-                      const normalCount = activeOrders.filter((o: any) => !o.isGift).length;
-                      // 赠单数量：独立显示的赠单行 + 嵌套在正单giftOrders里的赠单（过滤掉已撤单）
-                      const directGiftCount = activeOrders.filter((o: any) => o.isGift === true || o.isGift === 1).length;
-                      const nestedGiftCount = activeOrders.reduce((s: number, o: any) => s + ((o.giftOrders as any[] || []).length), 0);
-                      const giftCount = directGiftCount + nestedGiftCount;
+                      // 正单数量（groupOrders 已过滤掉赠单，直接取 activeOrders 长度）
+                      const normalCount = activeOrders.length;
+                      // 赠单数量：仅统计嵌套在正单 giftOrders 里的赠单（赠单不再独立分组）
+                      const giftCount = activeOrders.reduce((s: number, o: any) => s + ((o.giftOrders as any[] || []).length), 0);
                       // 各币种简写和颜色：ETH→E(蓝色) BTC→B(橙色) SOL→S(紫色)
                       const COIN_CONFIG: Record<string, { short: string; color: string }> = {
                         ETH: { short: 'E', color: '#3b82f6' },
