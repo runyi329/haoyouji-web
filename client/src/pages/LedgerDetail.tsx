@@ -5140,15 +5140,18 @@ export default function LedgerDetail() {
                       priceDirection={funderPriceDirection}
                       membersData={membersData as any[]}
                       cnyRate={cnyRate}
+                      currentUser={user ? { id: (user as any).id, name: (user as any).name, username: (user as any).username, avatar: (user as any).avatar } : undefined}
                     />
                   ) : (
                     <FunderOrderCardV2Silver
                       key={order.id}
                       order={order}
+                      ledgerId={ledgerId}
                       livePrices={funderLivePrices}
                       priceDirection={funderPriceDirection}
                       membersData={membersData as any[]}
                       cnyRate={cnyRate}
+                      currentUser={user ? { id: (user as any).id, name: (user as any).name, username: (user as any).username, avatar: (user as any).avatar } : undefined}
                     />
                   );
                 })}
