@@ -2342,6 +2342,35 @@ export default function LedgerDetail() {
     { ledgerId: Number(ledgerId) },
     { enabled: isCustomAF }
   );
+  // AF 账本：人员视图管理费数据（owner/admin 才有权限，仅在人员视图展开时加载）
+  const { data: afAdminOrdersForTree } = trpc.ledger.afAdminGetOrders.useQuery(
+    { ledgerId: Number(ledgerId) },
+    { enabled: isCustomAF, staleTime: 60000 }
+  );
+  // 按 userId 汇总：应付管理费（进行中订单累计）和缺口（应付 - 钱包余额，负数则为缺口）
+  const afFeeByUser = useMemo(() => {
+    const map = new Map<number, { pendingFee: number }>();
+    if (!afAdminOrdersForTree) return map;
+    const now2 = new Date();
+    const todayStart2 = new Date(now2.getFullYear(), now2.getMonth(), now2.getDate());
+    for (const o of (afAdminOrdersForTree as any[])) {
+      if (o.side !== 'buy' || o.status !== 'completed') continue;
+      if (o.sellStatus === 'sold') continue; // 已结清不计入应付
+      const amount = parseFloat(o.amount || '0');
+      if (amount <= 0) continue;
+      const tradeValue = o.isGift ? amount : amount * 5.25;
+      const dailyFee = tradeValue / 0.75 * 0.12 / 365;
+      const confirmedDay = new Date(new Date(o.createdAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' }));
+      const holdDays = Math.max(1, Math.floor((todayStart2.getTime() - confirmedDay.getTime()) / 86400000) + 1);
+      const totalFee = dailyFee * holdDays;
+      const prepaid = parseFloat(o.prepaidFee || '0');
+      const remaining = Math.max(0, totalFee - prepaid);
+      const uid = Number(o.userId);
+      if (!map.has(uid)) map.set(uid, { pendingFee: 0 });
+      map.get(uid)!.pendingFee += remaining;
+    }
+    return map;
+  }, [afAdminOrdersForTree]);
   // AF 账本：实时盈亏汇总（每60秒自动刷新）
   const { data: pnlData } = trpc.ledger.afGetPnlSummary.useQuery(
     { ledgerId: Number(ledgerId) },
@@ -6769,13 +6798,15 @@ export default function LedgerDetail() {
                       </div>
                       {/* 分隔细线 */}
                       <div style={{ height: 1, backgroundColor: '#E8E8E8', marginLeft: 12, marginRight: 12 }} />
-                      {/* 财务数据行：充値 / 余额 / 利润 / 获利% */}
+                      {/* 财务数据行：充値 / 余额 / 应付（管理费） / 缺口 */}
                       {(() => {
                         const recharge = Number((u as any).totalRecharge ?? 0);
                         const balance = Number(u.balance ?? 0);
-                        const profit = Number((u as any).totalProfit ?? 0);
-                        const profitPct = recharge > 0 ? (profit / recharge * 100) : 0;
-                        const profitColor = profit > 0 ? '#C62828' : profit < 0 ? '#2E7D32' : '#9E9E9E';
+                        const feeInfo = afFeeByUser.get(Number(u.id));
+                        const pendingFee = feeInfo ? feeInfo.pendingFee : 0;
+                        // 缺口 = 应付管理费 - 钉包余额，负数表示有缺口
+                        const shortfall = pendingFee - balance;
+                        const hasShortfall = shortfall > 0;
                         return (
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', borderBottom: '1px solid #F0F0F0', margin: '0 0' }}>
                             <div style={{ padding: '6px 8px', textAlign: 'center', borderRight: '1px solid #F0F0F0' }}>
@@ -6787,12 +6818,12 @@ export default function LedgerDetail() {
                               <div style={{ fontSize: 11, fontWeight: 600, color: balance > 0 ? '#2E7D32' : '#9E9E9E' }}>{balance.toFixed(0)}<span style={{ fontSize: 9, fontWeight: 400 }}>U</span></div>
                             </div>
                             <div style={{ padding: '6px 8px', textAlign: 'center', borderRight: '1px solid #F0F0F0' }}>
-                              <div style={{ fontSize: 9, color: '#9E9E9E', marginBottom: 2 }}>利润</div>
-                              <div style={{ fontSize: 11, fontWeight: 600, color: profitColor }}>{profit > 0 ? '+' : ''}{profit.toFixed(0)}<span style={{ fontSize: 9, fontWeight: 400 }}>U</span></div>
+                              <div style={{ fontSize: 9, color: '#9E9E9E', marginBottom: 2 }}>应付</div>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: pendingFee > 0 ? '#1565C0' : '#9E9E9E' }}>{pendingFee > 0 ? pendingFee.toFixed(0) : afAdminOrdersForTree ? '0' : '-'}<span style={{ fontSize: 9, fontWeight: 400 }}>{pendingFee > 0 || afAdminOrdersForTree ? 'U' : ''}</span></div>
                             </div>
                             <div style={{ padding: '6px 8px', textAlign: 'center' }}>
-                              <div style={{ fontSize: 9, color: '#9E9E9E', marginBottom: 2 }}>获利%</div>
-                              <div style={{ fontSize: 11, fontWeight: 600, color: profitColor }}>{profitPct > 0 ? '+' : ''}{profitPct.toFixed(1)}<span style={{ fontSize: 9, fontWeight: 400 }}>%</span></div>
+                              <div style={{ fontSize: 9, color: '#9E9E9E', marginBottom: 2 }}>缺口</div>
+                              <div style={{ fontSize: 11, fontWeight: 600, color: hasShortfall ? '#C62828' : '#2E7D32' }}>{afAdminOrdersForTree ? (hasShortfall ? shortfall.toFixed(0) : '0') : '-'}<span style={{ fontSize: 9, fontWeight: 400 }}>{afAdminOrdersForTree ? 'U' : ''}</span></div>
                             </div>
                           </div>
                         );
@@ -7310,23 +7341,23 @@ export default function LedgerDetail() {
                   return (
                     <button
                       key={m.userId}
-                      className={`flex flex-col items-center gap-1.5 px-2 py-3 rounded-xl transition-colors ${
+                      className={`flex items-center gap-2 px-2.5 py-2 rounded-xl transition-colors ${
                         viewAsUserId === m.userId ? 'bg-amber-50 ring-1 ring-amber-300' : 'hover:bg-gray-50 bg-gray-50/50'
                       }`}
                       onClick={() => handleSwitchView(m.userId)}
                     >
-                      <div className="relative">
-                        <UserAvatar username={m.username} avatar={m.avatar} nickname={m.nickname} size="md" />
+                      <div className="relative flex-shrink-0">
+                        <UserAvatar username={m.username} avatar={m.avatar} nickname={m.nickname} size="sm" />
                         {viewAsUserId === m.userId && (
-                          <span className="absolute -top-1 -right-1 w-3 h-3 bg-amber-400 rounded-full border border-white" />
+                          <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-400 rounded-full border border-white" />
                         )}
                       </div>
-                      <div className="text-center w-full">
-                        <div className="text-xs font-medium text-gray-900 truncate px-1">{displayName}</div>
+                      <div className="flex-1 min-w-0 text-left">
+                        <div className="text-xs font-medium text-gray-900 truncate">{displayName}</div>
                         {(m as any).realName && (m as any).realName !== m.username && m.username && (
-                          <div className="text-[10px] text-blue-400 truncate px-1">@{m.username}</div>
+                          <div className="text-[10px] text-blue-400 truncate">@{m.username}</div>
                         )}
-                        <div className="text-[10px] text-gray-400 mt-0.5">{roleName}{orderCount > 0 ? ` · ${orderCount}笔` : ''}</div>
+                        <div className="text-[10px] text-gray-400">{roleName}{orderCount > 0 ? ` · ${orderCount}笔` : ''}</div>
                       </div>
                     </button>
                   );

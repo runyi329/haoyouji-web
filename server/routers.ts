@@ -13861,12 +13861,12 @@ ${klinesSummary}
       .query(async ({ ctx, input }) => {
         
         const db = await getLedgerDb();
-        // 验证是否是 owner 或 admin
+        // 验证是否是该账本成员（任意角色均可访问）
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
         const role = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
-        if (role !== 'owner' && role !== 'admin') throw new Error('无权限');
+        if (!role) throw new Error('无权限');
         // 幂等：确保 prepaid_fee 字段存在（首次部署自动建字段）
         try { await db.execute(sql`ALTER TABLE af_orders ADD COLUMN prepaid_fee DECIMAL(20,8) NOT NULL DEFAULT 0`); } catch {}
         try {

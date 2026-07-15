@@ -25,11 +25,11 @@ const requireUser = t.middleware(async opts => {
   // 开启DEV_BYPASS_AUTH时自动使用测试用户
   if (process.env.DEV_BYPASS_AUTH === 'true' && !ctx.user) {
     const mockUser = {
-      id: 28,
+      id: 870413,
       openId: 'dev_mock_user',
-      username: 'hyy329',
+      username: 'jiang',
       passwordHash: '',
-      name: '测试用户',
+      name: '胡大叔',
       email: null,
       loginMethod: 'password' as const,
       role: 'parent' as const,
