@@ -8398,5 +8398,9 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-15T03:47:45Z", type: "fix", cleanMessage: "卡片模式银色卡片补传 ledgerId 和 currentUser，修复备注账本ID缺失问题" },
     { date: "2026-07-15T04:31:45Z", type: "fix", cleanMessage: "统一时区为北京时间 UTC+8，修复计息天数/持有时长多算1天的bug" },
     { date: "2026-07-15T05:38:27Z", type: "feat", cleanMessage: "视角切换弹窗一行两列布局+智能排序(最近点击>次数>订单数量)" },
+    { date: "2026-07-15T06:16:48Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-15T07:47:57Z", type: "feat", cleanMessage: "人员视图卡片替换利润/获利%为应付管理费/缺口，切换视角弹窗改为横向布局一行两列" },
+    { date: "2026-07-15T08:53:36Z", type: "feat", cleanMessage: "人员视图卡片替换应付管理费和缺口" },
+    { date: "2026-07-15T10:06:07Z", type: "feat", cleanMessage: "食品饮料分类跳转桓仁大米商品页，添加 /rice-product 路由" },
   ],
 };
