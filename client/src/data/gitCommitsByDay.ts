@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-15
+// 生成时间：2026-07-16
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8402,5 +8402,10 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-15T07:47:57Z", type: "feat", cleanMessage: "人员视图卡片替换利润/获利%为应付管理费/缺口，切换视角弹窗改为横向布局一行两列" },
     { date: "2026-07-15T08:53:36Z", type: "feat", cleanMessage: "人员视图卡片替换应付管理费和缺口" },
     { date: "2026-07-15T10:06:07Z", type: "feat", cleanMessage: "食品饮料分类跳转桓仁大米商品页，添加 /rice-product 路由" },
+    { date: "2026-07-15T11:18:37Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-15T15:34:55Z", type: "fix", cleanMessage: "卖出回款 note 加入订单ID确保查重有效，补充回款写入日志" },
+  ],
+  "2026-07-16": [
+    { date: "2026-07-15T16:33:03Z", type: "fix", cleanMessage: "修复赠单重复显示 bug" },
   ],
 };
