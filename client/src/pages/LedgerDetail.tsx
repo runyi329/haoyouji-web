@@ -605,7 +605,7 @@ function FunderOrderCardLegacy({
     if (!order.buy_date) return null;
     if (order.status !== 'active' && !order.settled_at) return null;
     const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
-    const elapsed = endTs - new Date(order.buy_date + 'T00:00:00').getTime();
+    const elapsed = endTs - new Date(order.buy_date + 'T00:00:00+08:00').getTime();
     if (elapsed < 0) return null;
     const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
     const days = Math.floor(totalHours / 24);

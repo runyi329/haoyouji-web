@@ -1310,7 +1310,7 @@ export function FunderOrderCard({
                 );
               }
               const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
-              const elapsed = endTs - new Date(String(order.interest_start_date).slice(0, 10) + 'T00:00:00').getTime();
+              const elapsed = endTs - new Date(String(order.interest_start_date).slice(0, 10) + 'T00:00:00+08:00').getTime();
               const label = elapsed <= 0 ? '0小时' : (() => {
                 const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
                 const days = Math.floor(totalHours / 24);

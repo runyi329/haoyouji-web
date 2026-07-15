@@ -111,7 +111,7 @@ export function FunderOrderCardV2({
   const holdDurationLabel = (() => {
     if (!order.buy_date) return "--";
     const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
-    const elapsed = endTs - new Date(order.buy_date + "T00:00:00").getTime();
+    const elapsed = endTs - new Date(order.buy_date + "T00:00:00+08:00").getTime();
     if (elapsed <= 0) return "0小时";
     const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
     const days = Math.floor(totalHours / 24);
@@ -428,7 +428,7 @@ export function FunderOrderCardV2Light({
   const holdDurationLabel = (() => {
     if (!order.buy_date) return "--";
     const endTs = order.settled_at ? new Date(order.settled_at).getTime() : Date.now();
-    const elapsed = endTs - new Date(order.buy_date + "T00:00:00").getTime();
+    const elapsed = endTs - new Date(order.buy_date + "T00:00:00+08:00").getTime();
     if (elapsed <= 0) return "0小时";
     const totalHours = Math.floor(elapsed / (1000 * 60 * 60));
     const days = Math.floor(totalHours / 24);
@@ -1274,10 +1274,11 @@ export function FunderOrderCardV2Silver({
         const baseUnit2 = (order.interest_base_currency || 'USDT') === 'CNY' ? '元' : 'u';
         // 天数算法与 hook 一致：北京时间自然日，开始日算第1天
         const calcDays = (startDateStr: string, endTs: number): number => {
-          const startDateBJ = new Date(startDateStr + 'T00:00:00+08:00');
-          const endDateBJ = new Date(endTs + 8 * 3600 * 1000);
-          const startDay = new Date(startDateBJ.toISOString().slice(0, 10) + 'T00:00:00+08:00').getTime();
-          const endDay = new Date(endDateBJ.toISOString().slice(0, 10) + 'T00:00:00+08:00').getTime();
+          // 直接用 startDateStr 构造北京时间零点，避免 toISOString() 转 UTC 导致日期偏移
+          const startDay = new Date(startDateStr + 'T00:00:00+08:00').getTime();
+          // 用 toLocaleString 获取北京时间日期字符串，再构造北京时间零点
+          const endDateBJStr = new Date(endTs).toLocaleString('sv', { timeZone: 'Asia/Shanghai' }).slice(0, 10);
+          const endDay = new Date(endDateBJStr + 'T00:00:00+08:00').getTime();
           return Math.max(0, Math.floor((endDay - startDay) / (1000 * 60 * 60 * 24)) + 1);
         };
         if (isOptionCard) {
@@ -1976,10 +1977,11 @@ export function FunderLenderCardSilver({
 
   // 天数算法与 hook 一致：北京时间自然日，开始日算第1天
   const calcDays = (startDateStr: string, endTs: number): number => {
-    const startDateBJ = new Date(startDateStr + 'T00:00:00+08:00');
-    const endDateBJ = new Date(endTs + 8 * 3600 * 1000);
-    const startDay = new Date(startDateBJ.toISOString().slice(0, 10) + 'T00:00:00+08:00').getTime();
-    const endDay = new Date(endDateBJ.toISOString().slice(0, 10) + 'T00:00:00+08:00').getTime();
+    // 直接用 startDateStr 构造北京时间零点，避免 toISOString() 转 UTC 导致日期偏移
+    const startDay = new Date(startDateStr + 'T00:00:00+08:00').getTime();
+    // 用 toLocaleString 获取北京时间日期字符串，再构造北京时间零点
+    const endDateBJStr = new Date(endTs).toLocaleString('sv', { timeZone: 'Asia/Shanghai' }).slice(0, 10);
+    const endDay = new Date(endDateBJStr + 'T00:00:00+08:00').getTime();
     return Math.max(0, Math.floor((endDay - startDay) / (1000 * 60 * 60 * 24)) + 1);
   };
 
