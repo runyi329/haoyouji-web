@@ -1872,6 +1872,10 @@ export default function Home() {
                     key={cat.id}
                     className="flex flex-col items-center justify-center space-y-0.5 active:scale-90 transition-transform px-0.5"
                     onClick={() => {
+                      if (cat.name === '食品饮料') {
+                        navigate('/rice-product');
+                        return;
+                      }
                       if (cat.name === '奖金制度') {
                         // 跳转到脉动网内部路径，保持PWA沉浸式体验（iframe嵌入）
                         navigate('/mlm-bonus');
