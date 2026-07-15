@@ -13865,21 +13865,9 @@ ${klinesSummary}
         const roleRows = await db.execute(
           sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
         ) as any;
-        const role = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role ?? roleRows?.rows?.[0]?.role ?? '';
         if (!role) throw new Error('无权限');
-        // 幂等：确保 prepaid_fee 字段存在（首次部署自动建字段）
-        try { await db.execute(sql`ALTER TABLE af_orders ADD COLUMN prepaid_fee DECIMAL(20,8) NOT NULL DEFAULT 0`); } catch {}
-        try {
-          await db.execute(sql`CREATE TABLE IF NOT EXISTS af_fee_prepaid_logs (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            ledger_id INT NOT NULL,
-            order_id INT NOT NULL,
-            user_id INT NOT NULL,
-            amount DECIMAL(20,8) NOT NULL,
-            note VARCHAR(255) DEFAULT '',
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-          )`);
-        } catch {}
+        // prepaid_fee 字段和 af_fee_prepaid_logs 表已在生产环境建好，无需每次 ALTER
         const [rows] = await db.execute(
           sql`SELECT o.id, o.user_id, o.coin, o.side, o.limit_price, o.amount, o.quantity, o.status, COALESCE(o.order_type,'') as order_type, o.created_at, o.updated_at,
                      u.username, COALESCE(u.name,'') as user_name,

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, GitBranch, ArrowUpDown, Settings, BarChart2, List, ChevronDown, ChevronUp } from "lucide-react";
@@ -162,6 +162,37 @@ export default function AfInviteTreePage() {
     onSuccess: () => refetchPermissions(),
     onError: (e: any) => alert('设置失败：' + e.message),
   });
+
+  // 管理费数据（应付 + 缺口）
+  const { data: afFeeOrders } = trpc.ledger.afAdminGetOrders.useQuery(
+    { ledgerId },
+    { enabled: ledgerLoaded && !!ledgerId }
+  );
+  const afFeeByUser = useMemo(() => {
+    const orders: any[] = Array.isArray(afFeeOrders) ? afFeeOrders : [];
+    const map: Record<number, { pending: number; balance: number }> = {};
+    const now = new Date();
+    for (const o of orders) {
+      const uid = Number(o.userId ?? 0);
+      if (!uid) continue;
+      // 只处理进行中订单（已成交且未卖出）
+      if (o.status !== 'completed' || o.sellStatus) continue;
+      // 管理费公式：amount×5.25/0.75×0.12/365×持有天数（赠予订单直接用 amount）
+      const amount = parseFloat(o.amount || '0');
+      if (amount <= 0) continue;
+      const tradeValue = o.isGift ? amount : amount * 5.25;
+      const dailyFee = tradeValue / 0.75 * 0.12 / 365;
+      const confirmedDate = new Date(o.confirmedAt || o.createdAt);
+      const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
+      const todayDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const holdDays = Math.max(1, Math.floor((todayDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+      const fee = dailyFee * holdDays - (o.prepaidFee ?? 0);
+      if (!map[uid]) map[uid] = { pending: 0, balance: Number(o.userBalance ?? 0) };
+      map[uid].pending += Math.max(0, fee);
+      map[uid].balance = Number(o.userBalance ?? map[uid].balance);
+    }
+    return map;
+  }, [afFeeOrders]);
 
   // 订单详情数据
   const [orderSearch, setOrderSearch] = useState('');
@@ -608,13 +639,14 @@ export default function AfInviteTreePage() {
                               {(() => {
                                 const totalRecharge = Number(u.totalRecharge ?? 0);
                                 const balance = Number(u.balance ?? 0);
-                                const profit = Number(u.profit ?? 0);
-                                const profitPct = totalRecharge > 0 ? (profit / totalRecharge) * 100 : 0;
-                                const profitColor = profit > 0 ? '#B91C1C' : profit < 0 ? '#15803D' : '#9E9E9E';
+                                const feeData = afFeeByUser[u.id];
+                                const pending = feeData ? feeData.pending : null;
+                                const shortfall = (pending !== null) ? Math.max(0, pending - balance) : null;
+                                const shortfallColor = shortfall !== null && shortfall > 0 ? '#B91C1C' : '#15803D';
                                 return (
                                   <>
                                     <div style={{ padding: '6px 8px', textAlign: 'center', borderRight: '1px solid #F0F0F0' }}>
-                                      <div style={{ fontSize: 9, color: '#9E9E9E', marginBottom: 2 }}>充值</div>
+                                      <div style={{ fontSize: 9, color: '#9E9E9E', marginBottom: 2 }}>充値</div>
                                       <div style={{ fontSize: 11, fontWeight: 600, color: totalRecharge > 0 ? '#1A2340' : '#9E9E9E' }}>{totalRecharge.toFixed(0)}<span style={{ fontSize: 9, fontWeight: 400 }}>U</span></div>
                                     </div>
                                     <div style={{ padding: '6px 8px', textAlign: 'center', borderRight: '1px solid #F0F0F0' }}>
@@ -622,12 +654,16 @@ export default function AfInviteTreePage() {
                                       <div style={{ fontSize: 11, fontWeight: 600, color: balance > 0 ? '#2E7D32' : '#9E9E9E' }}>{balance.toFixed(0)}<span style={{ fontSize: 9, fontWeight: 400 }}>U</span></div>
                                     </div>
                                     <div style={{ padding: '6px 8px', textAlign: 'center', borderRight: '1px solid #F0F0F0' }}>
-                                      <div style={{ fontSize: 9, color: '#9E9E9E', marginBottom: 2 }}>利润</div>
-                                      <div style={{ fontSize: 11, fontWeight: 600, color: profitColor }}>{profit > 0 ? '+' : ''}{profit.toFixed(0)}<span style={{ fontSize: 9, fontWeight: 400 }}>U</span></div>
+                                      <div style={{ fontSize: 9, color: '#9E9E9E', marginBottom: 2 }}>应付</div>
+                                      <div style={{ fontSize: 11, fontWeight: 600, color: pending !== null && pending > 0 ? '#B45309' : '#9E9E9E' }}>
+                                        {pending !== null ? <>{pending.toFixed(0)}<span style={{ fontSize: 9, fontWeight: 400 }}>U</span></> : '-'}
+                                      </div>
                                     </div>
                                     <div style={{ padding: '6px 8px', textAlign: 'center' }}>
-                                      <div style={{ fontSize: 9, color: '#9E9E9E', marginBottom: 2 }}>获利%</div>
-                                      <div style={{ fontSize: 11, fontWeight: 600, color: profitColor }}>{profitPct > 0 ? '+' : ''}{profitPct.toFixed(1)}<span style={{ fontSize: 9, fontWeight: 400 }}>%</span></div>
+                                      <div style={{ fontSize: 9, color: '#9E9E9E', marginBottom: 2 }}>缺口</div>
+                                      <div style={{ fontSize: 11, fontWeight: 600, color: shortfall !== null ? shortfallColor : '#9E9E9E' }}>
+                                        {shortfall !== null ? <>{shortfall.toFixed(0)}<span style={{ fontSize: 9, fontWeight: 400 }}>U</span></> : '-'}
+                                      </div>
                                     </div>
                                   </>
                                 );
@@ -936,3 +972,4 @@ export default function AfInviteTreePage() {
     </div>
   );
 }
+
