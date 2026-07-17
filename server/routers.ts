@@ -13655,12 +13655,15 @@ ${klinesSummary}
                   console.log(`[拨比预生成] 跳过0数量赠单 受益人(${r.beneficiary_user_id}) 拨比${r.ratio}% 金额:${giftAmount}`);
                   continue;
                 }
+                // 市价单源订单已自动 completed，赠单也应同步 completed；委托单赠单保持 pending 等管理员确认
+                const giftStatus = input.isMarketOrder ? 'completed' : 'pending';
+                const giftConfirmedAt = input.isMarketOrder ? 'NOW()' : 'NULL';
                 await (conn as any).execute(
-                  `INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, source_user_id, source_amount, created_at, updated_at)
-                   VALUES (?, ?, ?, 'buy', ?, ?, ?, 'pending', 1, ?, ?, ?, ?, NOW(), NOW())`,
-                  [input.ledgerId, r.beneficiary_user_id, input.coin, input.limitPrice, giftAmount, giftQuantity, String(ratio.toFixed(4)), newOrderId2, ctx.user.id, actualSpend.toFixed(8)]
+                  `INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, source_user_id, source_amount, confirmed_at, created_at, updated_at)
+                   VALUES (?, ?, ?, 'buy', ?, ?, ?, ?, 1, ?, ?, ?, ?, ${giftConfirmedAt}, NOW(), NOW())`,
+                  [input.ledgerId, r.beneficiary_user_id, input.coin, input.limitPrice, giftAmount, giftQuantity, giftStatus, String(ratio.toFixed(4)), newOrderId2, ctx.user.id, actualSpend.toFixed(8)]
                 );
-                console.log(`[拨比预生成] 委买订单#${newOrderId2} 下单人(${ctx.user.id}) → 受益人(${r.beneficiary_user_id}) 拨比${r.ratio}% 赠予金额:${giftAmount}`);
+                console.log(`[拨比预生成] ${input.isMarketOrder ? '市价' : '委托'}买订单#${newOrderId2} 下单人(${ctx.user.id}) → 受益人(${r.beneficiary_user_id}) 拨比${r.ratio}% 赠予金额:${giftAmount} 状态:${giftStatus}`);
               }
             } catch (e) {
               console.error('[拨比预生成] 生成pending赠予订单失败:', e);
