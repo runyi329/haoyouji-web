@@ -8418,5 +8418,7 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-17T05:02:50Z", type: "fix", cleanMessage: "修复 initAfPayoutRatiosFromInviter 批量 INSERT IGNORE 导致拨比配置不完整的 bug" },
     { date: "2026-07-17T05:11:31Z", type: "fix", cleanMessage: "市价买入赠单同步 completed 状态" },
     { date: "2026-07-17T06:11:29Z", type: "fix", cleanMessage: "订单列表统一显示用户名/昵称" },
+    { date: "2026-07-17T06:19:17Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-17T06:22:34Z", type: "feat", cleanMessage: "全局统一用户名/昵称显示格式（用户名/昵称）" },
   ],
 };
