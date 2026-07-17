@@ -1,4 +1,4 @@
-import { mysqlTable, mysqlSchema, AnyMySqlColumn, int, varchar, text, mysqlEnum, timestamp, index, uniqueIndex, json, longtext, date, decimal, tinyint, datetime, bigint, smallint } from "drizzle-orm/mysql-core"
+import { mysqlTable, mysqlSchema, AnyMySqlColumn, int, varchar, text, mysqlEnum, timestamp, index, uniqueIndex, json, longtext, date, decimal, tinyint, datetime, bigint, smallint, boolean } from "drizzle-orm/mysql-core"
 import { sql } from "drizzle-orm"
 
 export const addition20Challenges = mysqlTable("addition20_challenges", {
@@ -2198,3 +2198,167 @@ export const wcOrders = mysqlTable("wc_orders", {
   index("wc_orders_created_at_idx").on(table.createdAt),
 ]);
 export type WcOrder = typeof wcOrders.$inferSelect;
+
+// ─── 米伴子项目：购物车表 ─────────────────────────────────────────────────────
+export const mibanCartItems = mysqlTable("miban_cart_items", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId"),
+  sessionId: varchar("sessionId", { length: 64 }),
+  riceId: varchar("riceId", { length: 32 }).notNull(),
+  riceName: varchar("riceName", { length: 64 }).notNull(),
+  weightJin: decimal("weightJin", { precision: 8, scale: 2 }).notNull(),
+  pricePerJin: decimal("pricePerJin", { precision: 8, scale: 2 }).notNull(),
+  ratio: int("ratio").notNull(),
+  recipeId: varchar("recipeId", { length: 64 }),
+  recipeName: varchar("recipeName", { length: 64 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+export type CartItem = typeof mibanCartItems.$inferSelect;
+export type InsertCartItem = typeof mibanCartItems.$inferInsert;
+
+// ─── 米伴子项目：收藏配方表 ───────────────────────────────────────────────────
+export const mibanSavedRecipes = mysqlTable("miban_saved_recipes", {
+  id: int("id").primaryKey().autoincrement(),
+  userId: varchar("userId", { length: 128 }).notNull(),
+  recipeName: varchar("recipeName", { length: 100 }).notNull(),
+  purpose: varchar("purpose", { length: 20 }).notNull().default("rice"),
+  preferences: text("preferences").notNull().default("[]"),
+  aiReason: text("aiReason"),
+  items: text("items").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type SavedRecipe = typeof mibanSavedRecipes.$inferSelect;
+export type InsertSavedRecipe = typeof mibanSavedRecipes.$inferInsert;
+
+// ===== 米伴子项目表定义（补充） =====
+
+// ─── 米种百科表 ─────────────────────────────────────────────────────────────
+export const mibanRiceVarieties = mysqlTable("miban_rice_varieties", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 64 }).notNull(),
+  category: varchar("category", { length: 32 }).notNull(),
+  subCategory: varchar("subCategory", { length: 32 }),
+  origin: varchar("origin", { length: 64 }),
+  pricePerJin: decimal("pricePerJin", { precision: 8, scale: 2 }).notNull(),
+  giValue: int("giValue"),
+  sugarLevel: varchar("sugarLevel", { length: 16 }),
+  fiberLevel: varchar("fiberLevel", { length: 16 }),
+  proteinLevel: varchar("proteinLevel", { length: 16 }),
+  taste: varchar("taste", { length: 64 }),
+  suitableFor: text("suitableFor"),
+  healthTags: text("healthTags"),
+  description: text("description"),
+  colorHex: varchar("colorHex", { length: 8 }),
+  colorName: varchar("colorName", { length: 32 }),
+  img: varchar("img", { length: 255 }),
+  stock: int("stock").default(9999),
+  isActive: boolean("isActive").default(true).notNull(),
+  sortOrder: int("sortOrder").default(0),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+// ─── 预设配方表 ─────────────────────────────────────────────────────────────
+export const mibanPresetRecipes = mysqlTable("miban_preset_recipes", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 64 }).notNull(),
+  description: text("description"),
+  purpose: varchar("purpose", { length: 32 }),
+  ingredients: text("ingredients").notNull(),
+  healthTags: text("healthTags"),
+  isActive: boolean("isActive").default(true).notNull(),
+  sortOrder: int("sortOrder").default(0),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+// ─── 用户健康档案表 ──────────────────────────────────────────────────────────
+export const mibanHealthProfiles = mysqlTable("miban_health_profiles", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  age: int("age"),
+  gender: mysqlEnum("gender", ["male", "female", "other"]),
+  weight: decimal("weight", { precision: 5, scale: 1 }),
+  height: decimal("height", { precision: 5, scale: 1 }),
+  bloodSugar: mysqlEnum("bloodSugar", ["normal", "prediabetes", "diabetes"]),
+  bloodPressure: mysqlEnum("bloodPressure", ["normal", "high", "low"]),
+  dietGoal: mysqlEnum("dietGoal", ["lose_weight", "gain_muscle", "maintain", "health"]),
+  allergies: text("allergies"),
+  healthConditions: text("healthConditions"),
+  aiProfile: text("aiProfile"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+// ─── 用户自定义配方表 ────────────────────────────────────────────────────────
+export const mibanUserRecipes = mysqlTable("miban_user_recipes", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 64 }).notNull(),
+  ingredients: json("ingredients").$type<Array<{
+    riceId: number;
+    name: string;
+    percentage: number;
+    colorHex: string;
+  }>>().notNull(),
+  totalPricePerJin: decimal("totalPricePerJin", { precision: 8, scale: 2 }),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+// ─── 订单表 ──────────────────────────────────────────────────────────────────
+export const mibanOrders = mysqlTable("miban_orders", {
+  id: int("id").autoincrement().primaryKey(),
+  orderNo: varchar("orderNo", { length: 32 }).notNull().unique(),
+  userId: int("userId").notNull(),
+  recipeName: varchar("recipeName", { length: 64 }),
+  ingredients: json("ingredients").$type<Array<{
+    riceId: number;
+    name: string;
+    percentage: number;
+    colorHex: string;
+    weightJin: number;
+  }>>().notNull(),
+  totalWeightJin: decimal("totalWeightJin", { precision: 8, scale: 1 }).notNull(),
+  totalPrice: decimal("totalPrice", { precision: 10, scale: 2 }).notNull(),
+  status: mysqlEnum("miban_order_status", ["pending", "confirmed", "packing", "shipped", "delivered", "cancelled"]).default("pending").notNull(),
+  receiverName: varchar("receiverName", { length: 64 }),
+  receiverPhone: varchar("receiverPhone", { length: 20 }),
+  receiverAddress: text("receiverAddress"),
+  trackingNo: varchar("trackingNo", { length: 64 }),
+  trackingCompany: varchar("trackingCompany", { length: 32 }),
+  userNote: text("userNote"),
+  adminNote: text("adminNote"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+// ─── 佣金配置表 ──────────────────────────────────────────────────────────────
+export const mibanCommissionConfig = mysqlTable("miban_commission_config", {
+  id: int("id").autoincrement().primaryKey(),
+  agentId: int("agent_id"),
+  commissionRate: decimal("commission_rate", { precision: 5, scale: 4 }).notNull(),
+  note: text("note"),
+  updatedBy: int("updated_by"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+// ─── 佣金明细表 ────────────────────────────────────────────────────────────────────────
+export const mibanCommissions = mysqlTable("miban_commissions", {
+  id: int("id").autoincrement().primaryKey(),
+  agentId: int("agent_id").notNull(),
+  orderId: int("order_id").notNull(),
+  orderNo: varchar("order_no", { length: 32 }).notNull(),
+  buyerUserId: int("buyer_user_id").notNull(),
+  orderAmount: decimal("order_amount", { precision: 10, scale: 2 }).notNull(),
+  commissionRate: decimal("commission_rate", { precision: 5, scale: 4 }).notNull(),
+  commissionAmount: decimal("commission_amount", { precision: 10, scale: 2 }).notNull(),
+  status: mysqlEnum("miban_commission_status", ["pending", "settled", "cancelled"]).default("pending").notNull(),
+  settledAt: timestamp("settled_at"),
+  note: text("note"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});

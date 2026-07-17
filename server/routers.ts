@@ -1,4 +1,5 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { mibanRiceRouter, mibanPresetRouter, mibanHealthRouter, mibanDiyRouter, mibanRecipeRouter, mibanOrderRouter, mibanInviteRouter, mibanAgentRouter, mibanAdminUserRouter, mibanAdminCommissionRouter, mibanCartRouter, savedRecipesRouter } from "./miban";
 import { createHmac } from "crypto";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -28145,6 +28146,18 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
         return { error: e?.message || String(e) };
       }
     }),
+  rice: mibanRiceRouter,
+  preset: mibanPresetRouter,
+  health: mibanHealthRouter,
+  diy: mibanDiyRouter,
+  recipe: mibanRecipeRouter,
+  order: mibanOrderRouter,
+  mibanInvite: mibanInviteRouter,
+  agent: mibanAgentRouter,
+  adminUser: mibanAdminUserRouter,
+  adminCommission: mibanAdminCommissionRouter,
+  cart: mibanCartRouter,
+  savedRecipes: savedRecipesRouter,
 });
 export type AppRouter = typeof appRouter;
 

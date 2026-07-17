@@ -14,6 +14,7 @@
  *
  * 设计：移动端优先，绿色健康配色，lucide-react 图标，严禁 Emoji。
  */
+import React, { Suspense } from "react";
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "wouter";
 import { toast } from "sonner";
@@ -5096,6 +5097,8 @@ export function NutritionClubPage({ onBack }: { onBack?: () => void } = {}) {
 // ═══════════════════════════════════════════════════════════════
 // 路由入口：按 slug 分发到对应项目
 // ═══════════════════════════════════════════════════════════════
+const MibanAppWrapper = React.lazy(() => import("../miban/MibanApp"));
+
 export default function ProjectLanding() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug || "";
@@ -5110,6 +5113,10 @@ export default function ProjectLanding() {
 
   if (slug === "proj_tizong") {
     return <WeightCoachPage />;
+  }
+  if (slug === "proj_hzxm2t") {
+    // 米伴子项目
+    return <MibanAppWrapper />;
   }
 
   // 其他 slug：占位页
