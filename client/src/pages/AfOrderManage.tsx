@@ -1303,7 +1303,13 @@ export default function AfOrderManage() {
                                 <span className="text-[10px] text-gray-400 w-10 text-right shrink-0">{amount > 0 ? amount.toFixed(0)+'U' : ''}</span>
                                 <span className={`text-[9px] w-8 text-center shrink-0 ${statusDisplay.color}`}>{statusDisplay.label}</span>
                                 <span className="text-[9px] text-gray-400 w-14 text-right shrink-0">{dateStr}</span>
-                                {nickname && <span className="text-[9px] text-gray-400 shrink-0 ml-0.5 max-w-[40px] truncate">{nickname}</span>}
+                                {(order.username || order.nickname) && (
+                                  <span className="text-[9px] text-gray-400 shrink-0 ml-0.5 max-w-[56px] truncate">
+                                    {order.username && order.nickname && order.username !== order.nickname
+                                      ? `${order.username}/${order.nickname}`
+                                      : order.username || order.nickname}
+                                  </span>
+                                )}
                               </div>
                             );
                           })}
@@ -1479,8 +1485,12 @@ export default function AfOrderManage() {
                                 <span className={`text-[9px] text-center ${statusDisplay.color}`}>{statusDisplay.label}</span>
                                 {/* 列5: 日期 */}
                                 <span className="text-[9px] text-gray-400 text-right">{dateStr}</span>
-                                {/* 列6: 用户昵称 */}
-                                <span className="text-[9px] text-gray-400 text-right truncate">{nickname}</span>
+                                {/* 列6: 用户名/昵称 */}
+                                <span className="text-[9px] text-gray-400 text-right truncate">
+                                  {order.username && order.nickname && order.username !== order.nickname
+                                    ? `${order.username}/${order.nickname}`
+                                    : order.username || order.nickname || ''}
+                                </span>
                               </div>
                             );
                           })}
@@ -1714,7 +1724,9 @@ export default function AfOrderManage() {
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                        {order.nickname || order.username || `用户${order.userId}`}
+                        {order.username && order.nickname && order.username !== order.nickname
+                          ? `${order.username}/${order.nickname}`
+                          : order.nickname || order.username || `用户${order.userId}`}
                       </span>
                       {/* 档位模式标签 */}
                       {order.status === 'completed' && (
