@@ -255,7 +255,7 @@ export default function AfRechargeManage() {
                   />
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-gray-900 truncate">
-                      {member?.nickname || member?.username || `用户 ${uid}`}
+                      {member?.username && member?.nickname && member?.username !== member?.nickname ? `${member.username}/${member.nickname}` : member?.nickname || member?.username || `用户 ${uid}`}
                     </div>
                     {record.note && (
                       <div className="text-xs text-gray-400 truncate">{record.note}</div>

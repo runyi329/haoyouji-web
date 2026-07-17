@@ -253,7 +253,7 @@ export default function AfWithdrawManage() {
                     <div className="px-4 py-3 flex items-center justify-between border-b border-gray-50">
                       <div>
                         <span className="text-sm font-semibold text-gray-800">
-                          {w.userName || w.username || `用户#${w.userId}`}
+                          {w.username && w.userName && w.username !== w.userName ? `${w.username}/${w.userName}` : w.userName || w.username || `用户#${w.userId}`}
                         </span>
                         <span className="text-xs text-gray-400 ml-2">#{w.id}</span>
                       </div>

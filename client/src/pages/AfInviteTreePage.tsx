@@ -877,7 +877,7 @@ export default function AfInviteTreePage() {
                                           return (
                                             <div key={g.id} style={{ padding: '8px 12px', fontSize: 11, backgroundColor: '#fff', borderTop: idx > 0 ? '1px solid #F5F3FF' : 'none' }}>
                                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                                                <span style={{ fontWeight: 600, color: '#374151' }}>{g.userName || g.username}</span>
+                                                <span style={{ fontWeight: 600, color: '#374151' }}>{g.username && g.userName && g.username !== g.userName ? `${g.username}/${g.userName}` : g.userName || g.username}</span>
                                                 <span style={{ fontWeight: 500, color: gStatusColor }}>{gStatusLabel}</span>
                                               </div>
                                               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0 8px' }}>

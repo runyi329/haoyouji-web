@@ -699,7 +699,7 @@ export default function AfFeeDetail() {
                           <tbody>
                           {sortedItems.map((item, idx) => (
                             <tr key={item.id} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
-                              <td className="text-[11px] font-medium text-gray-700 truncate px-3 py-1.5 border-r border-gray-200 max-w-0" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.nickname || item.username}</td>
+                              <td className="text-[11px] font-medium text-gray-700 truncate px-3 py-1.5 border-r border-gray-200 max-w-0" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.username && item.nickname && item.username !== item.nickname ? `${item.username}/${item.nickname}` : item.nickname || item.username}</td>
                               <td className="text-[10px] text-gray-400 text-center px-2 py-1.5 border-r border-gray-200 font-mono">{String(item.id).padStart(4, '0').slice(-4)}</td>
                               <td className="text-[10px] text-center px-2 py-1.5 border-r border-gray-200 font-semibold" style={{ color: (item as any).tierMode === 'linear' ? '#3B82F6' : '#0d9488' }}>{(item as any).tierMode === 'linear' ? 'L' : `D${item.equityTier}`}</td>
                               <td className="text-[10px] text-gray-400 text-center px-2 py-1.5 border-r border-gray-200">{item.coin}</td>
@@ -946,8 +946,7 @@ export default function AfFeeDetail() {
                           {cg.orders.sort((a,b) => b.dailyFee - a.dailyFee).map((item, idx) => (
                             <tr key={item.id} style={{ background: idx % 2 === 0 ? '#ffffff' : '#f8fafc' }}>
                               <td className="text-[11px] font-medium text-gray-700 truncate px-3 py-1.5 border-r border-gray-200 max-w-0" style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                                {item.nickname || item.username}
-                                {item.username && item.username !== item.nickname && <span className="text-[9px] text-gray-400 ml-1">@{item.username}</span>}
+                {item.username && item.nickname && item.username !== item.nickname ? `${item.username}/${item.nickname}` : item.nickname || item.username}
                               </td>
                               <td className="text-[10px] text-gray-400 text-center px-2 py-1.5 border-r border-gray-200 font-mono">{String(item.id).padStart(4,'0').slice(-4)}</td>
                               <td className="text-[10px] text-center px-2 py-1.5 border-r border-gray-200 font-semibold" style={{ color: (item as any).tierMode === 'linear' ? '#3B82F6' : '#0d9488' }}>{(item as any).tierMode === 'linear' ? 'L' : `D${item.equityTier}`}</td>
@@ -1340,7 +1339,7 @@ export default function AfFeeDetail() {
                         return (
                           <tr key={o.id ?? i} className="text-gray-700">
                             <td className="px-2 py-2 border border-gray-100 overflow-hidden" style={{ width: '4em', minWidth: '4em', maxWidth: '4em' }}>
-                              <div className="overflow-hidden" style={{ width: '4em', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{o.username || o.userName || '-'}</div>
+                              <div className="overflow-hidden" style={{ width: '4em', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{o.username && o.nickname && o.username !== o.nickname ? `${o.username}/${o.nickname}` : o.nickname || o.username || o.userName || '-'}</div>
                             </td>
                             <td className="px-2 py-2 text-center border border-gray-100 whitespace-nowrap">
                               {(() => {
@@ -1615,7 +1614,7 @@ export default function AfFeeDetail() {
                                 <div key={o.id ?? i} className="px-4 py-2.5 border-b border-gray-50 last:border-0">
                                   <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-1.5">
-                                      <span className="text-xs font-medium text-gray-800">{o.username || o.userName || '-'}</span>
+                                      <span className="text-xs font-medium text-gray-800">{o.username && o.nickname && o.username !== o.nickname ? `${o.username}/${o.nickname}` : o.nickname || o.username || o.userName || '-'}</span>
                                       <span className="text-[10px] font-semibold" style={{ color: o.coin === 'BTC' ? '#f59e0b' : o.coin === 'ETH' ? '#3b82f6' : o.coin === 'SOL' ? '#a855f7' : '#374151' }}>{o.coin || '-'}</span>
                                       {collect
                                         ? <span className="text-[10px] px-1 rounded" style={{ background: '#fee2e2', color: '#dc2626' }}>收息</span>
@@ -1874,7 +1873,7 @@ export default function AfFeeDetail() {
                               <div key={o.id ?? i} className="px-4 py-2.5 border-b border-gray-50 last:border-0">
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-1.5">
-                                    <span className="text-xs font-medium text-gray-800">{o.username || o.userName || '-'}</span>
+                                    <span className="text-xs font-medium text-gray-800">{o.username && o.nickname && o.username !== o.nickname ? `${o.username}/${o.nickname}` : o.nickname || o.username || o.userName || '-'}</span>
                                     <span className="text-[10px] font-semibold" style={{ color: o.coin === 'BTC' ? '#f59e0b' : o.coin === 'ETH' ? '#3b82f6' : o.coin === 'SOL' ? '#a855f7' : '#374151' }}>{o.coin || '-'}</span>
                                      {o.asset_type === 'stock' && <span className="text-[10px] px-1 rounded" style={{ background: '#fef3c7', color: '#d97706' }}>股票</span>}
                                      {o.asset_type === 'crypto' && <span className="text-[10px] px-1 rounded" style={{ background: '#ede9fe', color: '#7c3aed' }}>数字币</span>}
@@ -1961,7 +1960,7 @@ export default function AfFeeDetail() {
                               <div key={o.id ?? i} className="px-4 py-2.5 border-b border-gray-50 last:border-0">
                                 <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-1.5">
-                                    <span className="text-xs font-medium text-gray-800">{o.username || o.userName || '-'}</span>
+                                    <span className="text-xs font-medium text-gray-800">{o.username && o.nickname && o.username !== o.nickname ? `${o.username}/${o.nickname}` : o.nickname || o.username || o.userName || '-'}</span>
                                     <span className="text-[10px] font-semibold" style={{ color: o.coin === 'BTC' ? '#f59e0b' : o.coin === 'ETH' ? '#3b82f6' : o.coin === 'SOL' ? '#a855f7' : '#374151' }}>{o.coin || '-'}</span>
                                     {collect
                                       ? <span className="text-[10px] px-1 rounded" style={{ background: '#fee2e2', color: '#dc2626' }}>收息</span>
@@ -2047,7 +2046,7 @@ export default function AfFeeDetail() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="font-semibold text-gray-800 text-base">记录结息</div>
-                <div className="text-xs text-gray-400 mt-0.5">{finChargeModal.order.username || finChargeModal.order.userName || '-'} · {finChargeModal.order.coin || '-'}</div>
+                <div className="text-xs text-gray-400 mt-0.5">{finChargeModal.order.username && finChargeModal.order.nickname && finChargeModal.order.username !== finChargeModal.order.nickname ? `${finChargeModal.order.username}/${finChargeModal.order.nickname}` : finChargeModal.order.nickname || finChargeModal.order.username || finChargeModal.order.userName || '-'} · {finChargeModal.order.coin || '-'}</div>
               </div>
               <button type="button" onClick={() => setFinChargeModal(null)} className="text-gray-400 hover:text-gray-600">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>

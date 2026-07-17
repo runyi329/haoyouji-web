@@ -135,7 +135,7 @@ function FeeDetailModal({ orders, onClose }: { orders: any[], onClose: () => voi
               </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-xs text-gray-600 font-medium">{item.nickname || item.username}</span>
+                  <span className="text-xs text-gray-600 font-medium">{item.username && item.nickname && item.username !== item.nickname ? `${item.username}/${item.nickname}` : item.nickname || item.username}</span>
                   {item.isGift && <span className="ml-1 text-[10px] text-red-400">赠</span>}
                 </div>
                 <span className="text-base font-bold text-purple-700">{item.totalFee.toFixed(4)} U</span>
@@ -2083,7 +2083,7 @@ export default function AfOrderManage() {
                                   {/* 第一行：受益人 + 拨比 + 状态 */}
                                   <div className="flex items-center justify-between mb-1.5">
                                     <div className="flex items-center gap-1.5">
-                                      <span className="font-medium text-gray-800">{g.nickname || g.username}</span>
+                                      <span className="font-medium text-gray-800">{g.username && g.nickname && g.username !== g.nickname ? `${g.username}/${g.nickname}` : g.nickname || g.username}</span>
                                       {ratioLabel && <span className="text-purple-500 bg-purple-50 px-1.5 py-0.5 rounded">{ratioLabel}</span>}
                                     </div>
                                     <span className={`font-medium ${statusColor}`}>{statusLabel}</span>
@@ -2328,7 +2328,7 @@ export default function AfOrderManage() {
                                   className="accent-red-500"
                                 />
                                 <span className="text-gray-700">
-                                  #{g.id} {g.coin} {parseFloat(g.quantity || '0').toFixed(4)} ({g.nickname || g.username})
+                                  #{g.id} {g.coin} {parseFloat(g.quantity || '0').toFixed(4)} ({g.username && g.nickname && g.username !== g.nickname ? `${g.username}/${g.nickname}` : g.nickname || g.username})
                                 </span>
                               </label>
                             ))}
@@ -2350,7 +2350,7 @@ export default function AfOrderManage() {
                         <span>同时退还投入金额到用户账户</span>
                       </label>
                       {refundChecked && (
-                        <p className="text-xs text-green-600 ml-6">将退回 {parseFloat(deleteTarget?.amount || '0').toFixed(2)} USDT 到用户 {deleteTarget?.nickname || deleteTarget?.username} 的账户</p>
+                        <p className="text-xs text-green-600 ml-6">将退回 {parseFloat(deleteTarget?.amount || '0').toFixed(2)} USDT 到用户 {deleteTarget?.username && deleteTarget?.nickname && deleteTarget?.username !== deleteTarget?.nickname ? `${deleteTarget?.username}/${deleteTarget?.nickname}` : deleteTarget?.nickname || deleteTarget?.username} 的账户</p>
                       )}
                       {deleteTarget?.status === 'pending' && (
                         <p className="text-xs text-yellow-600 ml-6">委买中的订单建议退款（资金已冻结）</p>
