@@ -19,7 +19,7 @@ const MIBAN_LOGO = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.
 const VERSION_ICONS: Record<string, string> = {
   maidong: "/maidong-switch-icon.webp",
   yaban: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/yaban/yaban_logo_bottomnav.webp",
-  miban: MIBAN_LOGO,
+  proj_hzxm2t: MIBAN_LOGO,
 };
 
 // ─── Logo + 版本切换 ─────────────────────────────────────────────────────────
@@ -53,7 +53,7 @@ function LogoWithVersionSwitch() {
   // 计算开放版本集合
   const openSet = new Set<string>(version?.switchableVersionKeys || []);
   if (version?.versionKey) openSet.add(version.versionKey);
-  openSet.add("miban"); // 当前就在米伴，必然包含
+  openSet.add("proj_hzxm2t"); // 当前就在米伴，必然包含
 
   // 只有开放 >= 2 个版本才允许切换
   const canSwitch = openSet.size >= 2;
@@ -61,7 +61,7 @@ function LogoWithVersionSwitch() {
   // 可切换选项（排除当前 miban）
   const options = canSwitch
     ? (versions || [])
-        .filter((v: any) => openSet.has(v.versionKey) && v.versionKey !== "miban")
+        .filter((v: any) => openSet.has(v.versionKey) && v.versionKey !== "proj_hzxm2t")
         .map((v: any) => ({
           versionKey: v.versionKey as string,
           name: v.name as string,
