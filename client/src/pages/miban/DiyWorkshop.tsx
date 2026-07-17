@@ -30,14 +30,14 @@ import { mtrpc } from "./mibanTrpc";
 import { useRiceFlyAnimation } from "@/hooks/useRiceFlyAnimation";
 
 const RICE_TYPES = [
-  { id: "white",  name: "白米",  desc: "软糯香甜，日常主食",   price: 4.8,  color: "#C8A87A", img: "/manus-storage/white_rice_290ef5af.png" },
-  { id: "black",  name: "黑米",  desc: "花青素丰富，补肾益气", price: 8.5,  color: "#2D1B2E", img: "/manus-storage/black_rice_aacf90c2.png" },
-  { id: "red",    name: "红米",  desc: "铁元素高，补血养颜",   price: 7.2,  color: "#8B2020", img: "/manus-storage/red_rice_fbe3b732.png" },
-  { id: "brown",  name: "糙米",  desc: "膳食纤维高，控糖减脂", price: 6.0,  color: "#A0785A", img: "/manus-storage/brown_rice_4b147313.png" },
-  { id: "purple", name: "紫米",  desc: "花青素+铁，美容养颜",  price: 9.0,  color: "#4A2060", img: "/manus-storage/purple_rice_b90b4fbe.png" },
-  { id: "millet", name: "小米",  desc: "健脾养胃，易消化",     price: 5.5,  color: "#E8C840", img: "/manus-storage/millet_9aa25ec5.png" },
-  { id: "mung",   name: "绿豆",  desc: "清热解毒，消暑降火",   price: 10.0, color: "#4A7C3F", img: "/manus-storage/mung_bean_65d6bcf5.png" },
-  { id: "coix",   name: "薏米",  desc: "祛湿消肿，美白润肤",   price: 12.0, color: "#C4956A", img: "/manus-storage/coix_91ca3c03.png" },
+  { id: "white",  name: "白米",  desc: "软糯香甜，日常主食",   price: 4.8,  color: "#C8A87A", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_white_single.png" },
+  { id: "black",  name: "黑米",  desc: "花青素丰富，补肾益气", price: 8.5,  color: "#2D1B2E", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_black_single.png" },
+  { id: "red",    name: "红米",  desc: "铁元素高，补血养颜",   price: 7.2,  color: "#8B2020", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_red_single.png" },
+  { id: "brown",  name: "糙米",  desc: "膳食纤维高，控糖减脂", price: 6.0,  color: "#A0785A", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_brown_single.png" },
+  { id: "purple", name: "紫米",  desc: "花青素+铁，美容养颜",  price: 9.0,  color: "#4A2060", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_purple_single.png" },
+  { id: "millet", name: "小米",  desc: "健脾养胃，易消化",     price: 5.5,  color: "#E8C840", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_millet_single.png" },
+  { id: "mung",   name: "绿豆",  desc: "清热解毒，消暑降火",   price: 10.0, color: "#4A7C3F", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_mung_single.png" },
+  { id: "coix",   name: "薏米",  desc: "祛湿消肿，美白润肤",   price: 12.0, color: "#C4956A", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_coix_single.png" },
 ];
 
 // 各米种营养数据（每100g干米）

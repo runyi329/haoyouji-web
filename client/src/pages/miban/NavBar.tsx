@@ -130,7 +130,7 @@ export default function NavBar() {
           {/* Logo */}
           <Link href="/p/proj_hzxm2t/" className="flex items-center gap-2">
             <img
-              src="/manus-storage/rice_logo_final_bf438530.png"
+              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/miban_logo.png"
               alt="米伴"
               className="w-7 h-7 rounded-md object-cover"
             />
