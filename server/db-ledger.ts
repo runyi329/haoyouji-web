@@ -6393,11 +6393,16 @@ export async function initAfPayoutRatiosFromInviter(
       values.push(ledgerId, newUserId, newUserId, 0.00);
     }
 
-    if (placeholders.length > 0) {
+    // 逐条 upsert，避免批量 INSERT IGNORE 在遇到第一条唯一键冲突时跳过后续所有行
+    for (let i = 0; i < placeholders.length; i++) {
+      const base = i * 4;
       await (dbConn as any).execute(
-        `INSERT IGNORE INTO af_payout_ratios (ledger_id, source_user_id, beneficiary_user_id, ratio)
-         VALUES ${placeholders.join(', ')}`,
-        values
+        `INSERT INTO af_payout_ratios (ledger_id, source_user_id, beneficiary_user_id, ratio)
+         VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+           ratio = IF(VALUES(ratio) > 0 AND ratio = 0, VALUES(ratio), ratio),
+           updated_at = NOW()`,
+        [values[base], values[base + 1], values[base + 2], values[base + 3]]
       );
     }
 
