@@ -21,6 +21,8 @@ const VERSION_ICONS: Record<string, string> = {
   maidong: "/maidong-switch-icon.webp",
   yaban:
     "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/yaban/yaban_logo_bottomnav.webp",
+  miban:
+    "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_logo_final.webp",
 };
 
 function VersionIcon({
