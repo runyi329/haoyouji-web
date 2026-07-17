@@ -71,7 +71,7 @@ function RiceBowl({ ratios, size = 140 }: { ratios: { id: string; pct: number }[
   const segments: React.ReactNode[] = [];
   let startAngle = -90;
   active.forEach((item) => {
-    const rice = RICE_TYPES.find((r) => r.id === item.id);
+    const rice = allRiceList.find((r) => r.id === item.id);
     if (!rice) return;
     const angle = (item.pct / 100) * 360;
     const endAngle = startAngle + angle;
@@ -99,7 +99,7 @@ function RiceBowl({ ratios, size = 140 }: { ratios: { id: string; pct: number }[
 function RecipePoster({ recipeName, weight, selected, ratios, totalPrice }: {
   recipeName: string; weight: number; selected: string[]; ratios: Record<string, number>; totalPrice: number;
 }) {
-  const selRices = RICE_TYPES.filter((r) => selected.includes(r.id));
+  const selRices = allRiceList.filter((r) => selected.includes(r.id));
   const ratioList = selected.map((id) => ({ id, pct: ratios[id] ?? 0 }));
   return (
     <div style={{ background: "#0A0A0A", borderRadius: 24, padding: 28, width: "100%", fontFamily: "sans-serif" }}>
@@ -140,7 +140,7 @@ function AiRatioPoster({ ratios, reason, preferences, purpose }: {
   purpose: "rice" | "porridge";
 }) {
   const purposeLabel = purpose === "porridge" ? "煮粥" : "蒸饭";
-  const selRices = RICE_TYPES.filter(r => r.id in ratios);
+  const selRices = allRiceList.filter(r => r.id in ratios);
   const sortedRatios = Object.entries(ratios).sort((a, b) => b[1] - a[1]);
   return (
     <div style={{ background: "linear-gradient(145deg,#0A0A0A 0%,#1a1208 100%)", borderRadius: 24, padding: 28, width: "100%", fontFamily: "sans-serif", boxSizing: "border-box" }}>
@@ -161,7 +161,7 @@ function AiRatioPoster({ ratios, reason, preferences, purpose }: {
             {(() => {
               let offset = 0;
               return sortedRatios.map(([id, pct], i) => {
-                const rice = RICE_TYPES.find(r => r.id === id);
+                const rice = allRiceList.find(r => r.id === id);
                 const color = rice?.color ?? "#ccc";
                 const dash = (pct / 100) * 100;
                 const el = (
@@ -178,7 +178,7 @@ function AiRatioPoster({ ratios, reason, preferences, purpose }: {
       {/* 配比标签 */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", marginBottom: 16 }}>
         {sortedRatios.map(([id, pct]) => {
-          const rice = RICE_TYPES.find(r => r.id === id);
+          const rice = allRiceList.find(r => r.id === id);
           if (!rice) return null;
           return (
             <div key={id} style={{ display: "flex", alignItems: "center", gap: 5, background: "rgba(255,255,255,0.07)", borderRadius: 20, padding: "4px 10px", border: "1px solid rgba(255,255,255,0.1)" }}>
@@ -219,6 +219,22 @@ function freshnessLevel(days: number) {
 
 export default function DiyWorkshop() {
   const { isAuthenticated } = useAuth();
+
+  // 从数据库动态加载米种（fallback 到硬编码 RICE_TYPES）
+  const { data: dbRiceRows } = mtrpc.rice.list.useQuery();
+  const riceTypes = dbRiceRows && dbRiceRows.length > 0
+    ? dbRiceRows.map((r) => ({
+        id: `db_${r.id}`,
+        name: r.name,
+        desc: r.description ?? "",
+        price: Number(r.pricePerJin ?? 0),
+        color: r.colorHex ?? "#C8A87A",
+        img: r.img ?? "",
+      }))
+    : RICE_TYPES;
+  // 统一查找函数
+  const allRiceList = riceTypes;
+
   const [step, setStep] = useState(0);
   const [weight, setWeight] = useState(10);
   const [selected, setSelected] = useState<string[]>([]);
@@ -279,7 +295,7 @@ export default function DiyWorkshop() {
     if (selected.length === 0) return;
     const totalW = cartWeight > 0 ? cartWeight : weight;
     const items = selected.map((id) => {
-      const rice = RICE_TYPES.find((r) => r.id === id)!;
+      const rice = allRiceList.find((r) => r.id === id)!;
       const pct = ratios[id] ?? Math.round(100 / selected.length);
       const w = Math.round((totalW * pct) / 100 * 10) / 10;
       return { riceId: id, riceName: rice.name, weightJin: w, pricePerJin: rice.price, ratio: pct };
@@ -303,7 +319,7 @@ export default function DiyWorkshop() {
   };
 
   const totalPrice = useCallback(() => {
-    return RICE_TYPES.reduce((sum, rice) => {
+    return allRiceList.reduce((sum, rice) => {
       const pct = ratios[rice.id] ?? 0;
       return sum + (pct / 100) * weight * rice.price;
     }, 0);
@@ -323,7 +339,7 @@ export default function DiyWorkshop() {
     setSelected((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
     // 选中新米种时触发米粒飞入动画
     if (!wasSelected && e) {
-      const rice = RICE_TYPES.find(r => r.id === id);
+      const rice = allRiceList.find(r => r.id === id);
       flyToTarget(e, bowlTargetRef, rice?.color ?? "#C8A87A");
     }
   };
@@ -416,83 +432,39 @@ export default function DiyWorkshop() {
   const ref2pF = freshnessLevel(ref2pDays);
 
   const renderStep0 = () => (
-    <div className="flex flex-col items-center px-6 pt-8 pb-6 gap-6">
-      <div className="text-center">
-        <div className="text-[13px] text-gray-400 mb-2">第一步</div>
-        <h2 className="text-[22px] font-bold text-black">你想配多少米？</h2>
-        <p className="text-[13px] text-gray-400 mt-1">10斤起配，5斤一档</p>
-      </div>
+    <div className="flex flex-col items-center px-6 pt-16 pb-6 gap-8">
       <div className="flex items-center gap-6">
-        <button onClick={() => setWeight((w) => Math.max(10, w - 5))} disabled={weight <= 10} className="w-12 h-12 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-600 disabled:opacity-30 active:scale-95 transition-transform">
-          <Minus size={20} />
+        <button onClick={() => setWeight((w) => Math.max(10, w - 5))} disabled={weight <= 10} className="w-14 h-14 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-600 disabled:opacity-30 active:scale-95 transition-transform">
+          <Minus size={22} />
         </button>
-        <div className="text-center min-w-[100px]">
-          <span className="text-[56px] font-bold text-black leading-none">{weight}</span>
-          <span className="text-[18px] font-medium text-gray-500 ml-1">斤</span>
+        <div className="text-center min-w-[120px]">
+          <span className="text-[72px] font-bold text-black leading-none">{weight}</span>
+          <span className="text-[20px] font-medium text-gray-500 ml-1.5">斤</span>
         </div>
-        <button onClick={() => setWeight((w) => w + 5)} className="w-12 h-12 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-600 active:scale-95 transition-transform">
-          <Plus size={20} />
+        <button onClick={() => setWeight((w) => w + 5)} className="w-14 h-14 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-600 active:scale-95 transition-transform">
+          <Plus size={22} />
         </button>
-      </div>
-      <div className="flex gap-2 flex-wrap justify-center">
-        {[10, 15, 20, 25, 30].map((w) => (
-          <button key={w} onClick={() => setWeight(w)} className={`px-4 py-2 rounded-full text-[13px] font-medium border transition-all active:scale-95 ${weight === w ? "bg-black text-white border-black" : "bg-white text-gray-600 border-gray-200"}`}>
-            {w}斤
-          </button>
-        ))}
       </div>
 
-      {/* 用量参考提示（只读） */}
-      <div className="w-full rounded-2xl border border-gray-100 overflow-hidden">
-        {/* 标题 */}
-        <div className="px-4 pt-3 pb-2 flex items-baseline justify-between">
-          <span className="text-[11px] font-medium text-gray-500">用量参考</span>
-          <span className="text-[10px] text-gray-300">每人每顿 100g · 早中晚三餐</span>
-        </div>
-        {/* 分隔线 */}
-        <div className="h-px bg-gray-100 mx-4" />
-        {/* 数据行 */}
-        <div className="grid grid-cols-4 divide-x divide-gray-100">
-          {usageHints.map(({ label, days }) => {
-            const f = freshnessLevel(days);
-            return (
-              <div key={label} className="py-3 flex flex-col items-center gap-0.5">
-                <span className="text-[10px] text-gray-400">{label}</span>
-                <div className="flex items-baseline gap-0.5">
-                  <span className="text-[22px] font-bold text-black leading-none tracking-tight">
-                    <AnimatedNumber value={days} />
-                  </span>
-                  <span className="text-[11px] text-gray-400 font-normal">天</span>
-                </div>
-                <span className={`text-[9px] font-medium ${f.color}`}>{f.badge}</span>
-              </div>
-            );
-          })}
-        </div>
-        {/* 底部提示 */}
-        <div className="px-4 py-2 bg-gray-50 border-t border-gray-100">
-          <p className="text-[10px] text-gray-400">建议 30 天内吃完，新鲜风味最佳</p>
-        </div>
+      {/* 用量参考胶囊 */}
+      <div className="flex flex-col items-center gap-1.5 px-6 py-4 rounded-full bg-gray-50">
+        <span className="text-[16px] font-semibold text-gray-700">约够 1 人吃 <AnimatedNumber value={Math.round(weight * 500 / 100)} /> 天</span>
+        <span className="text-[11px] text-gray-400 tracking-widest">一天一顿·每顿 100g</span>
       </div>
     </div>
   );
 
   const renderStep1 = () => { return (
     <div className="px-4 pt-6 pb-4">
-      <div className="text-center mb-5">
-        <div className="text-[13px] text-gray-400 mb-1">第二步</div>
-        <h2 className="text-[22px] font-bold text-black">选择你的米种</h2>
-        <p className="text-[13px] text-gray-400 mt-1">可多选，至少选1种</p>
-      </div>
       <button
         onClick={() => { setShowAiDialog(true); setAiResult(null); setAiNeed(""); }}
-        className="w-full mb-4 flex items-center justify-center gap-2 rounded-2xl py-3 border-2 border-dashed border-gray-200 text-gray-500 text-[14px] active:scale-95 transition-all hover:border-black hover:text-black"
+        className="w-full mb-4 flex items-center justify-center gap-2 rounded-2xl py-3 bg-[#FF6900] text-white text-[14px] font-semibold active:scale-95 transition-all shadow-sm"
       >
         <Sparkles size={16} />
         <span>AI 智能推荐组合</span>
       </button>
       <div className="grid grid-cols-2 gap-3">
-        {RICE_TYPES.map((rice) => {
+        {allRiceList.map((rice) => {
           const isSel = selected.includes(rice.id);
           return (
             <button key={rice.id} onClick={(e) => toggleRice(rice.id, e)} className={`relative rounded-2xl p-4 text-left border-2 transition-all active:scale-95 ${isSel ? "border-black bg-black text-white" : "border-gray-100 bg-gray-50 text-black"}`}>
@@ -514,7 +486,7 @@ export default function DiyWorkshop() {
   }
 
   const renderStep2 = () => {
-    const selRices = RICE_TYPES.filter((r) => selected.includes(r.id));
+    const selRices = allRiceList.filter((r) => selected.includes(r.id));
     return (
       <div className="px-4 pt-6 pb-4">
         <div className="text-center mb-5">
@@ -538,7 +510,7 @@ export default function DiyWorkshop() {
               <p className="text-[12px] text-gray-600 leading-relaxed mb-3">{aiRatioResult.reason}</p>
               <div className="flex flex-wrap gap-1.5 mb-3">
                 {Object.entries(aiRatioResult.ratios).map(([id, pct]) => {
-                  const rice = RICE_TYPES.find(r => r.id === id);
+                  const rice = allRiceList.find(r => r.id === id);
                   return rice ? (
                     <span key={id} className="text-[11px] px-2 py-0.5 rounded-full bg-white border border-orange-100 text-gray-700">
                       {rice.name} <span className="font-semibold text-[#FF6900]">{pct}%</span>
@@ -668,7 +640,7 @@ export default function DiyWorkshop() {
   };
 
   const renderStep3 = () => {
-    const selRices = RICE_TYPES.filter((r) => selected.includes(r.id));
+    const selRices = allRiceList.filter((r) => selected.includes(r.id));
     return (
       <div className="px-4 pt-6 pb-4">
         <div className="text-center mb-6">
@@ -785,7 +757,7 @@ export default function DiyWorkshop() {
           </div>
           <div className="flex flex-wrap gap-1.5 mb-3">
             {selected.map((id) => {
-              const rice = RICE_TYPES.find(r => r.id === id)!;
+              const rice = allRiceList.find(r => r.id === id)!;
               const pct = ratios[id] ?? Math.round(100 / selected.length);
               const w = Math.round(cartWeight * pct / 100 * 10) / 10;
               return (
@@ -802,7 +774,7 @@ export default function DiyWorkshop() {
             style={{ background: showCartSuccess ? "#22c55e" : "#FF6900" }}
           >
             {addBatch.isPending ? <Loader2 size={14} className="animate-spin" /> : <ShoppingCart size={14} />}
-            {showCartSuccess ? "已加入购物车 ✓" : `加入购物车 · ¥${selected.reduce((s, id) => { const rice = RICE_TYPES.find(r => r.id === id)!; const pct = ratios[id] ?? Math.round(100 / selected.length); return s + cartWeight * pct / 100 * rice.price; }, 0).toFixed(1)}`}
+            {showCartSuccess ? "已加入购物车 ✓" : `加入购物车 · ¥${selected.reduce((s, id) => { const rice = allRiceList.find(r => r.id === id)!; const pct = ratios[id] ?? Math.round(100 / selected.length); return s + cartWeight * pct / 100 * rice.price; }, 0).toFixed(1)}`}
           </button>
         </div>
         <button onClick={generatePoster} className="w-full py-3.5 rounded-2xl text-[14px] font-semibold text-black bg-white border-2 border-black flex items-center justify-center gap-2 mb-3 active:scale-95 transition-transform">
@@ -905,7 +877,7 @@ export default function DiyWorkshop() {
                 <p className="text-[12px] text-gray-400 mb-2">AI 推荐组合</p>
                 <div className="flex flex-wrap gap-2 mb-3">
                   {aiResult.recommended.map((id) => {
-                    const rice = RICE_TYPES.find((r) => r.id === id);
+                    const rice = allRiceList.find((r) => r.id === id);
                     if (!rice) return null;
                     return (
                       <div key={id} className="flex items-center gap-1.5 bg-black rounded-full px-3 py-1">

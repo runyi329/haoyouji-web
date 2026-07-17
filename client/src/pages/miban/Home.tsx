@@ -467,42 +467,13 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── 数字背书 ─────────────────────────────────────── */}
-      <section className="mx-5 mb-8">
-        <div className="rounded-2xl bg-black px-6 py-6">
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div>
-              <div className="text-[28px] font-bold text-white leading-none mb-1.5">
-                <CountUp target={12} suffix="+" />
-              </div>
-              <div className="text-[10px] text-gray-500">优质产区</div>
-            </div>
-            <div className="border-x border-gray-800">
-              <div className="text-[28px] font-bold text-white leading-none mb-1.5">
-                <CountUp target={8} />
-              </div>
-              <div className="text-[10px] text-gray-500">米种品类</div>
-            </div>
-            <div>
-              <div className="text-[28px] font-bold leading-none mb-1.5" style={{ color: "#FF6900" }}>
-                ∞
-              </div>
-              <div className="text-[10px] text-gray-500">定制组合</div>
-            </div>
-          </div>
-          <div className="h-px bg-gray-800 my-4" />
-          <p className="text-center text-[11px] text-gray-600 tracking-wide">
-            按需定配 · 新鲜发货 · 健康有据
-          </p>
-        </div>
-      </section>
+
 
       {/* ── 热门捞法 ─────────────────────────────────────── */}
       <section className="px-5 mb-8">
         <div className="mb-5 flex items-center justify-between">
           <div>
-            <h2 className="text-[18px] font-bold text-black">热门捞法</h2>
-            <p className="text-[11px] text-gray-400 mt-0.5">一键直达场景配方</p>
+
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">

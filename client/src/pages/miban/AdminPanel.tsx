@@ -84,39 +84,111 @@ function OrdersTab() {
 }
 
 function RiceManageTab() {
-  const { data: riceList, isLoading, refetch } = mtrpc.rice.list.useQuery({});
-  const updateMutation = mtrpc.rice.upsert.useMutation({ onSuccess: () => { toast.success("已更新"); refetch(); }, onError: (e: any) => toast.error(e.message) });
-  const [editing, setEditing] = useState<Record<number, { pricePerJin?: string; stock?: string }>>({});
+  const { data: riceList, isLoading, refetch } = mtrpc.rice.adminList.useQuery();
+  const upsertMutation = mtrpc.rice.upsert.useMutation({ onSuccess: () => { toast.success("已保存"); refetch(); setShowForm(false); setFormData(emptyForm); }, onError: (e: any) => toast.error(e.message) });
+  const deleteMutation = mtrpc.rice.delete.useMutation({ onSuccess: () => { toast.success("已删除"); refetch(); }, onError: (e: any) => toast.error(e.message) });
+  const toggleMutation = mtrpc.rice.toggleActive.useMutation({ onSuccess: () => refetch(), onError: (e: any) => toast.error(e.message) });
+  const uploadImgMutation = mtrpc.rice.uploadImg.useMutation({ onSuccess: (d: any) => { toast.success("图片已上传"); refetch(); }, onError: (e: any) => toast.error(e.message) });
+
+  const emptyForm = { id: undefined as number | undefined, name: "", category: "山田米", description: "", pricePerJin: "", colorHex: "#C8A87A", img: "" };
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState(emptyForm);
+
+  function openEdit(rice: any) {
+    setFormData({ id: rice.id, name: rice.name, category: rice.category ?? "山田米", description: rice.description ?? "", pricePerJin: Number(rice.pricePerJin).toFixed(1), colorHex: rice.colorHex ?? "#C8A87A", img: rice.img ?? "" });
+    setShowForm(true);
+  }
+
+  function handleImgUpload(id: number, file: File) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64 = (e.target?.result as string).split(",")[1];
+      uploadImgMutation.mutate({ id, base64, mimeType: file.type });
+    };
+    reader.readAsDataURL(file);
+  }
 
   if (isLoading) return <div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>;
 
   return (
-    <div className="space-y-2">
-      {riceList?.map((rice) => {
-        const edit = editing[rice.id] ?? {};
-        return (
-          <div key={rice.id} className="washi-card p-4 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full flex-shrink-0" style={{ backgroundColor: rice.colorHex ?? "#C8A87A" }} />
-            <span className="text-sm font-medium text-foreground flex-1">{rice.name}</span>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">¥</span>
-                <input type="number" value={edit.pricePerJin ?? Number(rice.pricePerJin).toFixed(1)} onChange={(e) => setEditing(p => ({ ...p, [rice.id]: { ...p[rice.id], pricePerJin: e.target.value } }))}
-                  className="w-16 text-xs border border-border/60 rounded-lg px-2 py-1 bg-background focus:outline-none" />
-                <span className="text-xs text-muted-foreground">/斤</span>
+    <div>
+      <div className="flex items-center justify-between mb-4">
+        <span className="text-sm text-muted-foreground">共 {riceList?.length ?? 0} 种米</span>
+        <Button size="sm" onClick={() => { setFormData(emptyForm); setShowForm(true); }} className="gap-1.5 text-xs">
+          + 添加米种
+        </Button>
+      </div>
+
+      {/* 表单弹层 */}
+      {showForm && (
+        <div className="washi-card p-5 mb-4 space-y-3">
+          <h3 className="font-semibold text-sm">{formData.id ? "编辑米种" : "添加米种"}</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground">名称 *</label>
+              <input value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} className="w-full mt-1 text-sm border border-border/60 rounded-lg px-3 py-2 bg-background focus:outline-none" placeholder="如：黑米" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">单价（元/斤） *</label>
+              <input type="number" value={formData.pricePerJin} onChange={e => setFormData(p => ({ ...p, pricePerJin: e.target.value }))} className="w-full mt-1 text-sm border border-border/60 rounded-lg px-3 py-2 bg-background focus:outline-none" placeholder="8.5" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">颜色（HEX）</label>
+              <div className="flex items-center gap-2 mt-1">
+                <input type="color" value={formData.colorHex} onChange={e => setFormData(p => ({ ...p, colorHex: e.target.value }))} className="w-8 h-8 rounded border border-border/60 cursor-pointer" />
+                <input value={formData.colorHex} onChange={e => setFormData(p => ({ ...p, colorHex: e.target.value }))} className="flex-1 text-sm border border-border/60 rounded-lg px-3 py-2 bg-background focus:outline-none" />
               </div>
-              <div className="flex items-center gap-1">
-                <span className="text-xs text-muted-foreground">库存</span>
-                <input type="number" value={edit.stock ?? (rice.stock ?? "")} onChange={(e) => setEditing(p => ({ ...p, [rice.id]: { ...p[rice.id], stock: e.target.value } }))}
-                  className="w-16 text-xs border border-border/60 rounded-lg px-2 py-1 bg-background focus:outline-none" />
-                <span className="text-xs text-muted-foreground">斤</span>
-              </div>
-              <button onClick={() => { if (!edit.pricePerJin && !edit.stock) return; updateMutation.mutate({ id: rice.id, name: rice.name, category: rice.category, pricePerJin: edit.pricePerJin ? parseFloat(edit.pricePerJin) : Number(rice.pricePerJin), stock: edit.stock ? parseInt(edit.stock) : undefined }); setEditing(p => { const n = { ...p }; delete n[rice.id]; return n; }); }}
-                className="text-primary hover:text-primary/80 transition-colors"><CheckCircle className="w-4 h-4" /></button>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">分类</label>
+              <input value={formData.category} onChange={e => setFormData(p => ({ ...p, category: e.target.value }))} className="w-full mt-1 text-sm border border-border/60 rounded-lg px-3 py-2 bg-background focus:outline-none" />
             </div>
           </div>
-        );
-      })}
+          <div>
+            <label className="text-xs text-muted-foreground">简介</label>
+            <textarea value={formData.description} onChange={e => setFormData(p => ({ ...p, description: e.target.value }))} rows={2} className="w-full mt-1 text-sm border border-border/60 rounded-lg px-3 py-2 bg-background focus:outline-none resize-none" placeholder="米种特点介绍" />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button size="sm" onClick={() => upsertMutation.mutate({ id: formData.id, name: formData.name, category: formData.category, description: formData.description, pricePerJin: parseFloat(formData.pricePerJin) || 0, colorHex: formData.colorHex })} disabled={!formData.name || !formData.pricePerJin || upsertMutation.isPending} className="flex-1 text-xs">
+              {upsertMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "保存"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => { setShowForm(false); setFormData(emptyForm); }} className="text-xs">取消</Button>
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {(riceList ?? []).map((rice: any) => (
+          <div key={rice.id} className={`washi-card p-4 flex items-center gap-3 transition-opacity ${rice.isActive ? "" : "opacity-50"}`}>
+            {/* 图片 + 上传 */}
+            <label className="relative flex-shrink-0 cursor-pointer group">
+              {rice.img
+                ? <img src={rice.img} alt={rice.name} className="w-12 h-12 rounded-xl object-cover" />
+                : <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: rice.colorHex ?? "#C8A87A" }}>{rice.name[0]}</div>
+              }
+              <div className="absolute inset-0 rounded-xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <span className="text-white text-[9px]">换图</span>
+              </div>
+              <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleImgUpload(rice.id, f); }} />
+            </label>
+            {/* 信息 */}
+            <div className="flex-1 min-w-0">
+              <div className="font-medium text-sm text-foreground">{rice.name}</div>
+              <div className="text-xs text-muted-foreground truncate">{rice.description}</div>
+            </div>
+            {/* 价格 */}
+            <span className="text-sm font-semibold text-[#FF6900] flex-shrink-0">¥{Number(rice.pricePerJin).toFixed(1)}/斤</span>
+            {/* 操作 */}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <button onClick={() => toggleMutation.mutate({ id: rice.id, isActive: !rice.isActive })} className={`text-xs px-2 py-1 rounded-lg font-medium transition-colors ${rice.isActive ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-400"}`}>
+                {rice.isActive ? "上架" : "下架"}
+              </button>
+              <button onClick={() => openEdit(rice)} className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600 font-medium">编辑</button>
+              <button onClick={() => { if (confirm(`确认删除「${rice.name}」？`)) deleteMutation.mutate({ id: rice.id }); }} className="text-xs px-2 py-1 rounded-lg bg-red-50 text-red-500 font-medium">删除</button>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

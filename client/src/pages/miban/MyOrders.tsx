@@ -4,7 +4,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Package, User } from "lucide-react";
+import { Package, User, Settings } from "lucide-react";
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   pending: { label: "待处理", color: "text-gray-700 bg-gray-100" },
@@ -15,7 +15,7 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
 };
 
 export default function MyOrders() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const { data: orders, isLoading } = mtrpc.order.myOrders.useQuery(undefined, { enabled: isAuthenticated });
 
   if (!isAuthenticated) return (
@@ -37,8 +37,19 @@ export default function MyOrders() {
             <Link href="/" className="hover:text-foreground transition-colors">首页</Link>
             <span>/</span><span className="text-foreground">我的订单</span>
           </div>
-          <h1 className="font-serif text-3xl font-bold text-foreground mb-2">我的订单</h1>
-          <p className="text-muted-foreground text-sm">查看您的定制大米订单状态</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="font-serif text-3xl font-bold text-foreground mb-2">我的订单</h1>
+              <p className="text-muted-foreground text-sm">查看您的定制大米订单状态</p>
+            </div>
+            {(user as any)?.role === "super_admin" && (
+              <Link href="/admin">
+                <button className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
+                  <Settings className="w-3.5 h-3.5" />管理后台
+                </button>
+              </Link>
+            )}
+          </div>
         </div>
       </section>
       <div className="container py-8">

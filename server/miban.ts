@@ -341,6 +341,42 @@ export const mibanRiceRouter = router({
       };
       return upsertRiceVariety(data);
     }),
+  // 管理员接口：查询所有米种（含未激活）
+  adminList: mibanAdminProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(mibanRiceVarieties).orderBy(mibanRiceVarieties.sortOrder, mibanRiceVarieties.id);
+  }),
+  // 管理员接口：删除米种
+  delete: mibanAdminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.delete(mibanRiceVarieties).where(eq(mibanRiceVarieties.id, input.id));
+      return { success: true };
+    }),
+  // 管理员接口：切换激活状态
+  toggleActive: mibanAdminProcedure
+    .input(z.object({ id: z.number(), isActive: z.boolean() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      await db.update(mibanRiceVarieties).set({ isActive: input.isActive }).where(eq(mibanRiceVarieties.id, input.id));
+      return { success: true };
+    }),
+  // 管理员接口：上传图片
+  uploadImg: mibanAdminProcedure
+    .input(z.object({ id: z.number(), base64: z.string(), mimeType: z.string().default("image/webp") }))
+    .mutation(async ({ input }) => {
+      const { uploadFileToCOS } = await import("./cos-upload");
+      const ext = input.mimeType.split("/")[1] ?? "webp";
+      const filename = `rice_db_${input.id}_${Date.now()}.${ext}`;
+      const url = await uploadFileToCOS(input.base64, "assets/miban", filename, input.mimeType);
+      const db = await getDb();
+      if (db) await db.update(mibanRiceVarieties).set({ img: url } as any).where(eq(mibanRiceVarieties.id, input.id));
+      return { url };
+    }),
 });
 
 export const mibanPresetRouter = router({
