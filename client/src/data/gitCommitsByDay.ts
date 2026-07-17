@@ -8412,4 +8412,11 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-16T06:20:47Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
     { date: "2026-07-16T11:25:10Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
   ],
+  "2026-07-17": [
+    { date: "2026-07-16T17:15:43Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-16T20:55:12Z", type: "docs", cleanMessage: "新增 Manus 平台项目迁移与数据备份最佳实践文档" },
+    { date: "2026-07-17T05:02:50Z", type: "fix", cleanMessage: "修复 initAfPayoutRatiosFromInviter 批量 INSERT IGNORE 导致拨比配置不完整的 bug" },
+    { date: "2026-07-17T05:11:31Z", type: "fix", cleanMessage: "市价买入赠单同步 completed 状态" },
+    { date: "2026-07-17T06:11:29Z", type: "fix", cleanMessage: "订单列表统一显示用户名/昵称" },
+  ],
 };
