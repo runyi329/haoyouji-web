@@ -43,7 +43,7 @@ export default function MyOrders() {
               <p className="text-muted-foreground text-sm">查看您的定制大米订单状态</p>
             </div>
             {(user as any)?.role === "super_admin" && (
-              <Link href="/admin">
+              <Link href="/p/proj_hzxm2t/admin/panel">
                 <button className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors">
                   <Settings className="w-3.5 h-3.5" />管理后台
                 </button>
