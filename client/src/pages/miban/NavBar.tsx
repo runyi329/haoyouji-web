@@ -13,6 +13,140 @@ const tabItems = [
   { href: "/p/proj_hzxm2t/my-recipes", label: "我的", icon: User },
 ];
 
+const MIBAN_LOGO = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_logo_final.webp";
+
+// 版本图标映射
+const VERSION_ICONS: Record<string, string> = {
+  maidong: "/maidong-switch-icon.webp",
+  yaban: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/yaban/yaban_logo_bottomnav.webp",
+  miban: MIBAN_LOGO,
+};
+
+// ─── Logo + 版本切换 ─────────────────────────────────────────────────────────
+function LogoWithVersionSwitch() {
+  const [open, setOpen] = useState(false);
+  const [, setLocation] = useLocation();
+  const ref = useRef<HTMLDivElement>(null);
+
+  const { data: user } = trpc.auth.me.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const { data: versions } = trpc.version.listVersions.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+    enabled: !!user,
+  });
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const version = (user as any)?.version as
+    | { versionKey?: string; switchableVersionKeys?: string[] }
+    | undefined;
+
+  // 计算开放版本集合
+  const openSet = new Set<string>(version?.switchableVersionKeys || []);
+  if (version?.versionKey) openSet.add(version.versionKey);
+  openSet.add("miban"); // 当前就在米伴，必然包含
+
+  // 只有开放 >= 2 个版本才允许切换
+  const canSwitch = openSet.size >= 2;
+
+  // 可切换选项（排除当前 miban）
+  const options = canSwitch
+    ? (versions || [])
+        .filter((v: any) => openSet.has(v.versionKey) && v.versionKey !== "miban")
+        .map((v: any) => ({
+          versionKey: v.versionKey as string,
+          name: v.name as string,
+          landingPath: (v.landingPath as string) || "/",
+        }))
+    : [];
+
+  const handleSwitch = (target: { versionKey: string; landingPath: string }) => {
+    setOpen(false);
+    try {
+      sessionStorage.setItem("_viewing_version", target.versionKey);
+    } catch {}
+    setLocation(target.landingPath || "/");
+  };
+
+  return (
+    <div ref={ref} className="relative flex items-center">
+      <button
+        type="button"
+        onClick={() => canSwitch && options.length > 0 ? setOpen(v => !v) : undefined}
+        className={`flex items-center gap-2 ${canSwitch && options.length > 0 ? "active:opacity-70" : ""}`}
+      >
+        <img
+          src={MIBAN_LOGO}
+          alt="米伴"
+          className="w-7 h-7 rounded-md object-cover"
+        />
+        <span className="text-[16px] font-bold text-black tracking-tight">
+          米伴
+        </span>
+        {canSwitch && options.length > 0 && (
+          <ChevronDown
+            className={`w-3 h-3 text-black/40 transition-transform ${open ? "rotate-180" : ""}`}
+          />
+        )}
+      </button>
+
+      {/* 版本切换下拉菜单 */}
+      {open && options.length > 0 && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-10 w-44 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50">
+            <div className="px-3 py-2 text-xs text-gray-400 border-b border-gray-50">
+              切换版本
+            </div>
+            {/* 当前：米伴（带勾） */}
+            <div className="w-full text-left px-3 py-2.5 text-sm flex items-center gap-2.5 text-[#FF6900] font-semibold bg-orange-50/50">
+              <img src={MIBAN_LOGO} alt="" width={24} height={24} className="rounded-full object-cover" style={{ width: 24, height: 24 }} />
+              <span className="flex-1">米伴</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+            </div>
+            {/* 其他可切换版本 */}
+            {options.map((opt) => (
+              <button
+                key={opt.versionKey}
+                type="button"
+                onClick={() => handleSwitch(opt)}
+                className="w-full text-left px-3 py-2.5 text-sm flex items-center gap-2.5 hover:bg-gray-50 text-gray-700"
+              >
+                {VERSION_ICONS[opt.versionKey] ? (
+                  <img
+                    src={VERSION_ICONS[opt.versionKey]}
+                    alt=""
+                    width={24}
+                    height={24}
+                    className="rounded-full object-cover"
+                    style={{ width: 24, height: 24 }}
+                  />
+                ) : (
+                  <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-xs text-gray-500">
+                    {opt.name.charAt(0)}
+                  </div>
+                )}
+                <span className="flex-1">{opt.name}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── 用户菜单（角色感知） ─────────────────────────────────────────────────────
 function UserMenu({ user, isAuthenticated, onLogout }: {
   user: { name?: string | null; role?: string } | null;
@@ -127,17 +261,8 @@ export default function NavBar() {
         <div
           className="max-w-[480px] mx-auto flex items-center justify-between px-4 h-full"
         >
-          {/* Logo */}
-          <Link href="/p/proj_hzxm2t/" className="flex items-center gap-2">
-            <img
-              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_logo_final.webp"
-              alt="米伴"
-              className="w-7 h-7 rounded-md object-cover"
-            />
-            <span className="text-[16px] font-bold text-black tracking-tight">
-              米伴
-            </span>
-          </Link>
+          {/* Logo + 版本切换 */}
+          <LogoWithVersionSwitch />
 
           {/* 右侧：购物车 + 用户头像 */}
           <div className="flex items-center gap-2">
