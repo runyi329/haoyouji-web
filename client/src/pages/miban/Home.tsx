@@ -389,7 +389,7 @@ export default function Home() {
             className="w-full py-[15px] rounded-xl text-[15px] font-bold text-white tracking-wide active:scale-[0.98] transition-transform"
             style={{ background: "#FF6900" }}
           >
-            开始捞米
+            点单
           </button>
         </Link>
       </section>
