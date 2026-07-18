@@ -87,27 +87,28 @@ const SCENE_PRESETS = [
   { label: "补血配方", tag: "补血", desc: "铁元素丰富，气色红润", href: "/diy" },
 ];
 
-// 实验室信息图 URL 映射（按米种名称匹配）
+// 实验室信息图 URL 映射（按米种名称匹配）- 存储于腾讯云 COS
+const BASE = 'https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/lab';
 const LAB_INFO_IMGS: Record<string, string> = {
-  "粳米（东北大米）": "/manus-storage/01_jingmi_f2c72388.png",
-  "盘锦大米":         "/manus-storage/02_panjin_706cc6a5.png",
-  "籼米（南方长粒米）":"/manus-storage/03_xianmi_eed50cfd.png",
-  "泰国香米（茉莉香米)":"/manus-storage/04_thaijasmine_60c4a207.png",
-  "泰国香米":         "/manus-storage/04_thaijasmine_60c4a207.png",
-  "糯米（圆粒糯米）":  "/manus-storage/05_nuomi_4488f744.png",
-  "黑米":             "/manus-storage/06_heimi_1c6e27b0.png",
-  "红米":             "/manus-storage/07_hongmi_7c8411eb.png",
-  "糙米":             "/manus-storage/08_caomi_e2bdbb4a.png",
-  "小米（粟米）":      "/manus-storage/09_xiaomi_69a4e357.png",
-  "薏米（薏苡仁）":    "/manus-storage/10_yimi_fa77c8a8.png",
-  "燕麦米":           "/manus-storage/11_yanmai_63411473.png",
-  "荞麦米":           "/manus-storage/12_qiaomai_b34d7905.png",
-  "高粱米":           "/manus-storage/13_gaoliang_ab6ff1e5.png",
-  "紫米（紫糯米）":    "/manus-storage/14_zimi_2a6c2c34.png",
-  "绿豆":             "/manus-storage/15_lvdou_2cbcb509.png",
-  "红豆（赤小豆）":    "/manus-storage/16_hongdou_dc99008f.png",
-  "莲子":             "/manus-storage/17_lianzi_cf81c9e3.png",
-  "藜麦":             "/manus-storage/18_limai_0b4810da.png",
+  "粳米（东北大米）":   `${BASE}/01_jingmi.jpg`,
+  "盘锦大米":           `${BASE}/02_panjin.jpg`,
+  "籼米（南方长粒米）": `${BASE}/03_xianmi.jpg`,
+  "泰国香米（茉莉香米)": `${BASE}/04_thaijasmine.jpg`,
+  "泰国香米":           `${BASE}/04_thaijasmine.jpg`,
+  "糯米（圆粒糯米）":   `${BASE}/05_nuomi.jpg`,
+  "黑米":               `${BASE}/06_heimi.jpg`,
+  "红米":               `${BASE}/07_hongmi.jpg`,
+  "糙米":               `${BASE}/08_caomi.jpg`,
+  "小米（粟米）":        `${BASE}/09_xiaomi.jpg`,
+  "薏米（薏苡仁）":      `${BASE}/10_yimi.jpg`,
+  "燕麦米":             `${BASE}/11_yanmai.jpg`,
+  "荞麦米":             `${BASE}/12_qiaomai.jpg`,
+  "高粱米":             `${BASE}/13_gaoliang.jpg`,
+  "紫米（紫糯米）":      `${BASE}/14_zimi.jpg`,
+  "绿豆":               `${BASE}/15_lvdou.jpg`,
+  "红豆（赤小豆）":      `${BASE}/16_hongdou.jpg`,
+  "莲子":               `${BASE}/17_lianzi.jpg`,
+  "藜麦":               `${BASE}/18_limai.jpg`,
 };
 
 // 产品拆解图风格弹窗：有实验室信息图时展示图片，否则展示 SVG 标注图
