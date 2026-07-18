@@ -918,6 +918,15 @@ export async function initDatabase() {
       console.log('[DB Init] ✅ miban_orders wallet columns checked');
     }
 
+    // 确保 miban_rice_varieties 表有 catalogId/nutritionJson/tagsJson 字段（关联标准仓库）
+    const dbConnMibanVarieties = await getDbConnection();
+    if (dbConnMibanVarieties) {
+      await safeAddColumn(dbConnMibanVarieties as any, 'miban_rice_varieties', 'catalogId', "INT DEFAULT NULL COMMENT '关联标准仓库ID'");
+      await safeAddColumn(dbConnMibanVarieties as any, 'miban_rice_varieties', 'nutritionJson', "JSON DEFAULT NULL COMMENT '营养数据JSON'");
+      await safeAddColumn(dbConnMibanVarieties as any, 'miban_rice_varieties', 'tagsJson', "JSON DEFAULT NULL COMMENT '标签JSON数组'");
+      console.log('[DB Init] ✅ miban_rice_varieties catalogId/nutritionJson/tagsJson columns checked');
+    }
+
     console.log("[DB Init] Database initialization completed successfully");
   } catch (error) {
     console.error("[DB Init] Error during database initialization:", error);

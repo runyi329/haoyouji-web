@@ -444,9 +444,19 @@ export const mibanRiceRouter = router({
     }),
   // 管理员接口：查询所有米种（含未激活）
   adminList: mibanAdminProcedure.query(async () => {
-    const db = await getDb();
-    if (!db) return [];
-    return db.select().from(mibanRiceVarieties).orderBy(mibanRiceVarieties.sortOrder, mibanRiceVarieties.id);
+    const conn = await getDbConnection();
+    if (!conn) return [];
+    const [rows]: any = await (conn as any).execute(
+      'SELECT id, name, description, price_per_jin AS pricePerJin, image_url AS img, is_active AS isActive, sort_order AS sortOrder, catalogId, nutritionJson, tagsJson, created_at AS createdAt FROM `miban_rice_varieties` ORDER BY sort_order ASC, id ASC'
+    );
+    return (Array.isArray(rows) ? rows : []).map((r: any) => ({
+      ...r,
+      pricePerJin: parseFloat(r.pricePerJin ?? '0'),
+      isActive: Boolean(r.isActive),
+      nutritionJson: r.nutritionJson ? (typeof r.nutritionJson === 'string' ? JSON.parse(r.nutritionJson) : r.nutritionJson) : null,
+      tagsJson: r.tagsJson ? (typeof r.tagsJson === 'string' ? JSON.parse(r.tagsJson) : r.tagsJson) : null,
+      catalogId: r.catalogId ? Number(r.catalogId) : null,
+    }));
   }),
   // 管理员接口：删除米种
   delete: mibanAdminProcedure
@@ -582,11 +592,16 @@ export const mibanRiceRouter = router({
       if (!catalog) throw new TRPCError({ code: 'NOT_FOUND', message: '仓库中未找到该米种' });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
-      const existing = await db.select().from(mibanRiceVarieties).where(eq(mibanRiceVarieties.name, catalog.stdName));
-      if (existing.length > 0) throw new TRPCError({ code: 'CONFLICT', message: `「${catalog.stdName}」已在本店米库中` });
+      // 改用 catalogId 做重复检测（更准确）
+      const [existRows]: any = await (conn as any).execute('SELECT id FROM `miban_rice_varieties` WHERE catalogId = ?', [input.catalogId]);
+      const existArr = Array.isArray(existRows) ? existRows : [existRows];
+      if (existArr.length > 0 && existArr[0]) throw new TRPCError({ code: 'CONFLICT', message: `「${catalog.stdName}」已在本店米库中` });
+      // 同步营养数据、标签、catalogId
+      const nutritionStr = catalog.nutritionJson ? (typeof catalog.nutritionJson === 'string' ? catalog.nutritionJson : JSON.stringify(catalog.nutritionJson)) : null;
+      const tagsStr = catalog.tagsJson ? (typeof catalog.tagsJson === 'string' ? catalog.tagsJson : JSON.stringify(catalog.tagsJson)) : null;
       const [result]: any = await (conn as any).execute(
-        'INSERT INTO `miban_rice_varieties` (name, description, price_per_jin, image_url, is_active, sort_order) VALUES (?, ?, ?, ?, 1, ?)',
-        [catalog.stdName, catalog.description ?? '', input.pricePerJin, catalog.img ?? null, catalog.sortOrder ?? 0]
+        'INSERT INTO `miban_rice_varieties` (name, description, price_per_jin, image_url, is_active, sort_order, catalogId, nutritionJson, tagsJson) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)',
+        [catalog.stdName, catalog.description ?? '', input.pricePerJin, catalog.img ?? null, catalog.sortOrder ?? 0, input.catalogId, nutritionStr, tagsStr]
       );
       return { id: result.insertId, name: catalog.stdName };
     }),

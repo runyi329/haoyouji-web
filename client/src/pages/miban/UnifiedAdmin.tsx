@@ -115,8 +115,10 @@ const RICE_CATEGORIES = ['粳米', '籼米', '糯米', '特种米', '杂粮'];
 
 function CatalogPanel() {
   const { data: catalog, isLoading, refetch } = mtrpc.rice.catalogList.useQuery({ onlyActive: false });
+  // 查询本店米库，用于判断已入库状态
+  const { data: storeList } = mtrpc.rice.adminList.useQuery();
   const upsertMutation = mtrpc.rice.catalogUpsert.useMutation({
-    onSuccess: () => { toast.success('已保存'); refetch(); setShowForm(false); setFormData(emptyCatalogForm); },
+    onSuccess: () => { toast.success('已保存'); refetch(); setShowForm(false); setFormData(emptyForm()); },
     onError: (e: any) => toast.error(e.message),
   });
   const deleteMutation = mtrpc.rice.catalogDelete.useMutation({
@@ -128,15 +130,39 @@ function CatalogPanel() {
     onError: (e: any) => toast.error(e.message),
   });
   const addToStoreMutation = mtrpc.rice.catalogAddToStore.useMutation({
-    onSuccess: (r: any) => toast.success(`「${r.name}」已添加到本店米库`),
+    onSuccess: (r: any) => { toast.success(`「${r.name}」已添加到本店米库`); refetch(); },
     onError: (e: any) => toast.error(e.message),
   });
-  const emptyCatalogForm = { id: undefined as number | undefined, stdName: '', category: '粳米', subCategory: '', origin: '', gbStandard: '', colorHex: '#C8A87A', description: '', sortOrder: 0 };
+  const sortMutation = mtrpc.rice.catalogUpsert.useMutation({
+    onSuccess: () => refetch(),
+  });
+
+  type CatalogForm = {
+    id?: number;
+    stdName: string; category: string; subCategory: string;
+    origin: string; gbStandard: string; colorHex: string;
+    description: string; sortOrder: number;
+    // 营养字段
+    calories: string; protein: string; carbs: string; fat: string; fiber: string;
+    // 标签（逗号分隔的字符串）
+    tagsInput: string;
+  };
+  const emptyForm = (): CatalogForm => ({
+    id: undefined, stdName: '', category: '粣米', subCategory: '', origin: '',
+    gbStandard: '', colorHex: '#C8A87A', description: '', sortOrder: 0,
+    calories: '', protein: '', carbs: '', fat: '', fiber: '', tagsInput: '',
+  });
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState(emptyCatalogForm);
+  const [formData, setFormData] = useState<CatalogForm>(emptyForm());
   const [filterCat, setFilterCat] = useState<string>('全部');
+  const [search, setSearch] = useState('');
   const [addPriceId, setAddPriceId] = useState<number | null>(null);
   const [addPrice, setAddPrice] = useState('');
+
+  // 已入库 catalogId 集合
+  const inStoreCatalogIds = new Set<number>(
+    (storeList ?? []).map((r: any) => r.catalogId).filter(Boolean)
+  );
 
   function handleImgUpload(id: number, file: File) {
     const reader = new FileReader();
@@ -147,13 +173,69 @@ function CatalogPanel() {
     reader.readAsDataURL(file);
   }
 
-  const filtered = (catalog ?? []).filter((c: any) => filterCat === '全部' || c.category === filterCat);
+  function openEdit(item: any) {
+    const n = item.nutritionJson ?? {};
+    const tags: string[] = Array.isArray(item.tagsJson) ? item.tagsJson : [];
+    setFormData({
+      id: item.id, stdName: item.stdName, category: item.category,
+      subCategory: item.subCategory ?? '', origin: item.origin ?? '',
+      gbStandard: item.gbStandard ?? '', colorHex: item.colorHex ?? '#C8A87A',
+      description: item.description ?? '', sortOrder: item.sortOrder ?? 0,
+      calories: n.calories != null ? String(n.calories) : '',
+      protein: n.protein != null ? String(n.protein) : '',
+      carbs: n.carbs != null ? String(n.carbs) : '',
+      fat: n.fat != null ? String(n.fat) : '',
+      fiber: n.fiber != null ? String(n.fiber) : '',
+      tagsInput: tags.join('，'),
+    });
+    setShowForm(true);
+  }
+
+  function handleSave() {
+    const nutritionJson = (formData.calories || formData.protein || formData.carbs || formData.fat || formData.fiber)
+      ? {
+          calories: formData.calories ? parseFloat(formData.calories) : undefined,
+          protein: formData.protein ? parseFloat(formData.protein) : undefined,
+          carbs: formData.carbs ? parseFloat(formData.carbs) : undefined,
+          fat: formData.fat ? parseFloat(formData.fat) : undefined,
+          fiber: formData.fiber ? parseFloat(formData.fiber) : undefined,
+        }
+      : undefined;
+    const tagsJson = formData.tagsInput
+      ? formData.tagsInput.split(/[,，、\s]+/).map(t => t.trim()).filter(Boolean)
+      : undefined;
+    upsertMutation.mutate({
+      id: formData.id, stdName: formData.stdName, category: formData.category,
+      subCategory: formData.subCategory || undefined, origin: formData.origin || undefined,
+      gbStandard: formData.gbStandard || undefined, colorHex: formData.colorHex,
+      description: formData.description || undefined, sortOrder: formData.sortOrder,
+      nutritionJson, tagsJson,
+    });
+  }
+
+  function handleSort(item: any, dir: 'up' | 'down') {
+    const list = [...(filtered)];
+    const idx = list.findIndex((c: any) => c.id === item.id);
+    const swapIdx = dir === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= list.length) return;
+    const swapItem = list[swapIdx];
+    sortMutation.mutate({ id: item.id, stdName: item.stdName, category: item.category, sortOrder: swapItem.sortOrder ?? swapIdx });
+    sortMutation.mutate({ id: swapItem.id, stdName: swapItem.stdName, category: swapItem.category, sortOrder: item.sortOrder ?? idx });
+  }
+
+  const filtered = (catalog ?? []).filter((c: any) => {
+    const matchCat = filterCat === '全部' || c.category === filterCat;
+    const q = search.trim();
+    const matchSearch = !q || c.stdName.includes(q) || (c.origin ?? '').includes(q) || (c.gbStandard ?? '').includes(q);
+    return matchCat && matchSearch;
+  });
 
   if (isLoading) return <div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>;
 
   return (
     <div>
-      <div className="flex gap-2 overflow-x-auto pb-1 mb-3" style={{ scrollbarWidth: 'none' }}>
+      {/* 分类筛选 */}
+      <div className="flex gap-2 overflow-x-auto pb-1 mb-2" style={{ scrollbarWidth: 'none' }}>
         {['全部', ...RICE_CATEGORIES].map(cat => (
           <button key={cat} onClick={() => setFilterCat(cat)}
             className={`flex-shrink-0 text-[11px] px-3 py-1.5 rounded-full font-medium transition-colors ${
@@ -164,15 +246,26 @@ function CatalogPanel() {
           </button>
         ))}
       </div>
+      {/* 搜索框 */}
+      <div className="relative mb-3">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 text-[13px]">🔍</span>
+        <input
+          value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="搜索名称、产地、国标编号..."
+          className="w-full pl-8 pr-3 py-2 text-[12px] border border-gray-200 rounded-xl bg-white focus:outline-none focus:border-orange-300"
+        />
+      </div>
       <div className="flex items-center justify-between mb-3">
         <span className="text-[12px] text-gray-400">仓库共 {filtered.length} 种</span>
-        <button onClick={() => { setFormData(emptyCatalogForm); setShowForm(true); }}
+        <button onClick={() => { setFormData(emptyForm()); setShowForm(true); }}
           className="text-[12px] px-3 py-1.5 rounded-xl text-white font-semibold active:scale-95"
           style={{ background: '#FF6900' }}>+ 新增米种</button>
       </div>
+      {/* 编辑表单 */}
       {showForm && (
         <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4 mb-4 space-y-3">
           <h3 className="text-[13px] font-bold">{formData.id ? '编辑仓库条目' : '新增标准米种'}</h3>
+          {/* 基本信息 */}
           <div className="grid grid-cols-2 gap-3">
             <div><label className="text-[11px] text-gray-500">标准名称 *</label>
               <input value={formData.stdName} onChange={e => setFormData(p => ({ ...p, stdName: e.target.value }))} className="w-full mt-1 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" placeholder="如：五常大米" /></div>
@@ -181,7 +274,7 @@ function CatalogPanel() {
                 {RICE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select></div>
             <div><label className="text-[11px] text-gray-500">小类</label>
-              <input value={formData.subCategory} onChange={e => setFormData(p => ({ ...p, subCategory: e.target.value }))} className="w-full mt-1 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" placeholder="地理标志粳米" /></div>
+              <input value={formData.subCategory} onChange={e => setFormData(p => ({ ...p, subCategory: e.target.value }))} className="w-full mt-1 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" placeholder="地理标志粣米" /></div>
             <div><label className="text-[11px] text-gray-500">主要产地</label>
               <input value={formData.origin} onChange={e => setFormData(p => ({ ...p, origin: e.target.value }))} className="w-full mt-1 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" placeholder="五常/盘锦" /></div>
             <div><label className="text-[11px] text-gray-500">国标编号</label>
@@ -194,61 +287,117 @@ function CatalogPanel() {
           </div>
           <div><label className="text-[11px] text-gray-500">简介</label>
             <textarea value={formData.description} onChange={e => setFormData(p => ({ ...p, description: e.target.value }))} rows={2} className="w-full mt-1 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none resize-none" /></div>
+          {/* 营养数据 */}
+          <div>
+            <label className="text-[11px] text-gray-500 font-medium">营养数据（每100g）</label>
+            <div className="grid grid-cols-5 gap-2 mt-1">
+              {([['calories','热量 kcal'],['protein','蛋白质 g'],['carbs','碳水 g'],['fat','脂肪 g'],['fiber','膣食纤 g']] as const).map(([k, label]) => (
+                <div key={k}>
+                  <div className="text-[9px] text-gray-400 mb-0.5">{label}</div>
+                  <input type="number" value={(formData as any)[k]} onChange={e => setFormData(p => ({ ...p, [k]: e.target.value }))}
+                    className="w-full text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none" placeholder="-" />
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* 标签 */}
+          <div>
+            <label className="text-[11px] text-gray-500 font-medium">标签（逗号分隔）</label>
+            <input value={formData.tagsInput} onChange={e => setFormData(p => ({ ...p, tagsInput: e.target.value }))}
+              className="w-full mt-1 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none"
+              placeholder="如：低糖，高蛋白，药食同源" />
+          </div>
           <div className="flex gap-2">
-            <button onClick={() => upsertMutation.mutate({ id: formData.id, stdName: formData.stdName, category: formData.category, subCategory: formData.subCategory || undefined, origin: formData.origin || undefined, gbStandard: formData.gbStandard || undefined, colorHex: formData.colorHex, description: formData.description || undefined, sortOrder: formData.sortOrder })}
+            <button onClick={handleSave}
               disabled={!formData.stdName || upsertMutation.isPending}
               className="flex-1 py-2.5 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: '#FF6900' }}>
               {upsertMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : '保存'}
             </button>
-            <button onClick={() => { setShowForm(false); setFormData(emptyCatalogForm); }} className="px-5 py-2.5 rounded-xl text-[13px] text-gray-500 bg-gray-100">取消</button>
+            <button onClick={() => { setShowForm(false); setFormData(emptyForm()); }} className="px-5 py-2.5 rounded-xl text-[13px] text-gray-500 bg-gray-100">取消</button>
           </div>
         </div>
       )}
+      {/* 列表 */}
       <div className="space-y-2">
-        {filtered.map((item: any) => (
-          <div key={item.id} className="bg-white border border-gray-100 rounded-2xl p-3 shadow-sm">
-            <div className="flex items-center gap-3">
-              <label className="relative flex-shrink-0 cursor-pointer group">
-                {item.img
-                  ? <img src={item.img} alt={item.stdName} className="w-12 h-12 rounded-xl object-cover" />
-                  : <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white text-[11px] font-bold" style={{ backgroundColor: item.colorHex ?? '#C8A87A' }}>{item.stdName[0]}</div>
-                }
-                <div className="absolute inset-0 rounded-xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <span className="text-white text-[9px]">换图</span>
+        {filtered.map((item: any, idx: number) => {
+          const hasNutrition = !!item.nutritionJson;
+          const tags: string[] = Array.isArray(item.tagsJson) ? item.tagsJson : [];
+          const isInStore = inStoreCatalogIds.has(item.id);
+          return (
+            <div key={item.id} className="bg-white border border-gray-100 rounded-2xl p-3 shadow-sm">
+              <div className="flex items-center gap-3">
+                {/* 图片/色块 */}
+                <label className="relative flex-shrink-0 cursor-pointer group">
+                  {item.img
+                    ? <img src={item.img} alt={item.stdName} className="w-12 h-12 rounded-xl object-cover" />
+                    : <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white text-[11px] font-bold" style={{ backgroundColor: item.colorHex ?? '#C8A87A' }}>{item.stdName[0]}</div>
+                  }
+                  <div className="absolute inset-0 rounded-xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <span className="text-white text-[9px]">换图</span>
+                  </div>
+                  <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleImgUpload(item.id, f); }} />
+                </label>
+                {/* 主信息 */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[13px] font-bold text-black">{item.stdName}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-500">{item.category}</span>
+                    {/* 营养完整度指示 */}
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+                      hasNutrition ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'
+                    }`}>{hasNutrition ? '✅营养' : '⚠️无营养'}</span>
+                    {/* 已入库标识 */}
+                    {isInStore && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-500 font-medium">已入库</span>}
+                    {item.gbStandard && <span className="text-[10px] text-gray-400">{item.gbStandard}</span>}
+                  </div>
+                  {item.origin && <div className="text-[11px] text-gray-400">产地：{item.origin}</div>}
+                  {/* 标签气泡 */}
+                  {tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {tags.slice(0, 4).map((t: string) => (
+                        <span key={t} className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600">{t}</span>
+                      ))}
+                      {tags.length > 4 && <span className="text-[9px] text-gray-400">+{tags.length - 4}</span>}
+                    </div>
+                  )}
                 </div>
-                <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleImgUpload(item.id, f); }} />
-              </label>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[13px] font-bold text-black">{item.stdName}</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-500">{item.category}</span>
-                  {item.gbStandard && <span className="text-[10px] text-gray-400">{item.gbStandard}</span>}
+                {/* 操作按钮 */}
+                <div className="flex flex-col gap-1 flex-shrink-0">
+                  <button onClick={() => openEdit(item)}
+                    className="text-[11px] px-2 py-1 rounded-lg bg-blue-50 text-blue-600 font-medium">编辑</button>
+                  <button onClick={() => { if (confirm(`确认删除「${item.stdName}」？`)) deleteMutation.mutate({ id: item.id }); }}
+                    className="text-[11px] px-2 py-1 rounded-lg bg-red-50 text-red-500 font-medium">删除</button>
+                  {/* 排序按钮 */}
+                  <div className="flex gap-0.5">
+                    <button onClick={() => handleSort(item, 'up')} disabled={idx === 0}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 disabled:opacity-30">↑</button>
+                    <button onClick={() => handleSort(item, 'down')} disabled={idx === filtered.length - 1}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 disabled:opacity-30">↓</button>
+                  </div>
                 </div>
-                {item.origin && <div className="text-[11px] text-gray-400">产地：{item.origin}</div>}
               </div>
-              <div className="flex flex-col gap-1 flex-shrink-0">
-                <button onClick={() => { setFormData({ id: item.id, stdName: item.stdName, category: item.category, subCategory: item.subCategory ?? '', origin: item.origin ?? '', gbStandard: item.gbStandard ?? '', colorHex: item.colorHex ?? '#C8A87A', description: item.description ?? '', sortOrder: item.sortOrder ?? 0 }); setShowForm(true); }}
-                  className="text-[11px] px-2 py-1 rounded-lg bg-blue-50 text-blue-600 font-medium">编辑</button>
-                <button onClick={() => { if (confirm(`确认删除「${item.stdName}」？`)) deleteMutation.mutate({ id: item.id }); }}
-                  className="text-[11px] px-2 py-1 rounded-lg bg-red-50 text-red-500 font-medium">删除</button>
-              </div>
+              {/* 入店区域 */}
+              {addPriceId === item.id ? (
+                <div className="mt-2 flex items-center gap-2 pt-2 border-t border-gray-50">
+                  <input type="number" value={addPrice} onChange={e => setAddPrice(e.target.value)} placeholder="定价（元/斤）" className="flex-1 text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none" />
+                  <button onClick={() => { addToStoreMutation.mutate({ catalogId: item.id, pricePerJin: parseFloat(addPrice) || 0 }); setAddPriceId(null); setAddPrice(''); }}
+                    disabled={!addPrice || addToStoreMutation.isPending}
+                    className="text-[11px] px-3 py-1.5 rounded-lg text-white font-medium disabled:opacity-50" style={{ background: '#FF6900' }}>确认入库</button>
+                  <button onClick={() => { setAddPriceId(null); setAddPrice(''); }} className="text-[11px] px-2 py-1.5 rounded-lg bg-gray-100 text-gray-500">取消</button>
+                </div>
+              ) : isInStore ? (
+                <div className="mt-2 w-full text-[11px] py-1.5 rounded-xl bg-blue-50 text-blue-500 text-center font-medium">
+                  ✓ 已入店米库
+                </div>
+              ) : (
+                <button onClick={() => { setAddPriceId(item.id); setAddPrice(''); }}
+                  className="mt-2 w-full text-[11px] py-1.5 rounded-xl border border-dashed border-orange-200 text-orange-400 hover:bg-orange-50 transition-colors">
+                  + 入店米库（设定定价）
+                </button>
+              )}
             </div>
-            {addPriceId === item.id ? (
-              <div className="mt-2 flex items-center gap-2 pt-2 border-t border-gray-50">
-                <input type="number" value={addPrice} onChange={e => setAddPrice(e.target.value)} placeholder="定价（元/斤）" className="flex-1 text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none" />
-                <button onClick={() => { addToStoreMutation.mutate({ catalogId: item.id, pricePerJin: parseFloat(addPrice) || 0 }); setAddPriceId(null); setAddPrice(''); }}
-                  disabled={!addPrice || addToStoreMutation.isPending}
-                  className="text-[11px] px-3 py-1.5 rounded-lg text-white font-medium disabled:opacity-50" style={{ background: '#FF6900' }}>确认入库</button>
-                <button onClick={() => { setAddPriceId(null); setAddPrice(''); }} className="text-[11px] px-2 py-1.5 rounded-lg bg-gray-100 text-gray-500">取消</button>
-              </div>
-            ) : (
-              <button onClick={() => { setAddPriceId(item.id); setAddPrice(''); }}
-                className="mt-2 w-full text-[11px] py-1.5 rounded-xl border border-dashed border-orange-200 text-orange-400 hover:bg-orange-50 transition-colors">
-                + 入店米库（设定定价）
-              </button>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
