@@ -25,7 +25,9 @@ export async function createContext(
   }
 
   // 开启DEV_BYPASS_AUTH时自动使用测试用户
-  if (process.env.DEV_BYPASS_AUTH === 'true' && !user) {
+  // 但如果请求携带了 Authorization header，说明前端已有真实 token，不走 bypass
+  const hasAuthHeader = !!(opts.req.headers.authorization);
+  if (process.env.DEV_BYPASS_AUTH === 'true' && !user && !hasAuthHeader) {
     user = {
       id: 28,
       openId: 'dev_mock_user',
@@ -35,6 +37,7 @@ export async function createContext(
       email: null,
       loginMethod: 'password' as const,
       role: 'parent' as const,
+      mibanRole: 'parent' as const,
       familyId: null,
       avatar: null,
       points: 0,

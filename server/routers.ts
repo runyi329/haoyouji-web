@@ -1,5 +1,5 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
-import { mibanRiceRouter, mibanPresetRouter, mibanHealthRouter, mibanDiyRouter, mibanRecipeRouter, mibanOrderRouter, mibanInviteRouter, mibanAgentRouter, mibanAdminUserRouter, mibanAdminCommissionRouter, mibanCartRouter, savedRecipesRouter } from "./miban";
+import { mibanRiceRouter, mibanPresetRouter, mibanHealthRouter, mibanDiyRouter, mibanRecipeRouter, mibanOrderRouter, mibanInviteRouter, mibanAgentRouter, mibanAdminUserRouter, mibanAdminCommissionRouter, mibanCartRouter, savedRecipesRouter, mibanImpersonateRouter } from "./miban";
 import { createHmac } from "crypto";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -27323,6 +27323,92 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
       await dbConn.execute(`DELETE FROM grid_sim_logs WHERE id = ?`, [input.id]);
       return { success: true };
     }),
+  rice: mibanRiceRouter,
+  preset: mibanPresetRouter,
+  health: mibanHealthRouter,
+  diy: mibanDiyRouter,
+  recipe: mibanRecipeRouter,
+  order: mibanOrderRouter,
+  mibanInvite: mibanInviteRouter,
+  agent: mibanAgentRouter,
+  adminUser: mibanAdminUserRouter,
+  adminCommission: mibanAdminCommissionRouter,
+  cart: mibanCartRouter,
+  savedRecipes: savedRecipesRouter,
+  mibanImpersonate: router({
+    // 获取全部可切换账号列表（三个账号完全互切）
+    switchList: protectedProcedure.query(async ({ ctx }) => {
+      const currentUsername = (ctx.user as any)?.username;
+      const ALL_ACCOUNTS = [
+        { username: "jiang", label: "管理员" },
+        { username: "hyy329", label: "米商" },
+        { username: "yunting", label: "顾客" },
+      ];
+      const allowed = ALL_ACCOUNTS.map(a => a.username);
+      if (!allowed.includes(currentUsername)) return [];
+      const dbConn = await getDb();
+      if (!dbConn) return [];
+      const result = [];
+      for (const acct of ALL_ACCOUNTS) {
+        const [u] = await dbConn.select({ id: users.id, name: users.name, username: users.username, role: users.role })
+          .from(users).where(eq(users.username, acct.username)).limit(1);
+        if (u) result.push({ ...u, label: acct.label });
+      }
+      return result;
+    }),
+    // 任意账号切换到指定用户
+    switchTo: protectedProcedure
+      .input(z.object({ username: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const currentUsername = (ctx.user as any)?.username;
+        const allowed = ["jiang", "hyy329", "yunting"];
+        if (!allowed.includes(currentUsername)) throw new TRPCError({ code: "FORBIDDEN", message: "无切换权限" });
+        if (!allowed.includes(input.username)) throw new TRPCError({ code: "FORBIDDEN", message: "目标账号不在切换列表中" });
+        const dbConn = await getDb();
+        if (!dbConn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const [u] = await dbConn.select({ id: users.id, name: users.name, username: users.username })
+          .from(users).where(eq(users.username, input.username)).limit(1);
+        if (!u) throw new TRPCError({ code: "NOT_FOUND", message: "用户不存在" });
+        const token = await sdk.createSessionToken(u.id.toString(), { expiresInMs: ONE_YEAR_MS, name: u.name || u.username || "" });
+        return { token, userId: u.id, name: u.name, username: u.username };
+      }),
+    // 兼容旧接口（前端备用）
+    fullSwitchList: protectedProcedure.query(async ({ ctx }) => {
+      const currentUsername = (ctx.user as any)?.username;
+      const allowed = ["jiang", "hyy329", "yunting"];
+      if (!allowed.includes(currentUsername)) return null;
+      const ALL_ACCOUNTS = [
+        { username: "jiang", label: "管理员" },
+        { username: "hyy329", label: "米商" },
+        { username: "yunting", label: "顾客" },
+      ];
+      const dbConn = await getDb();
+      if (!dbConn) return null;
+      const result = [];
+      for (const acct of ALL_ACCOUNTS) {
+        const [u] = await dbConn.select({ id: users.id, name: users.name, username: users.username, role: users.role })
+          .from(users).where(eq(users.username, acct.username)).limit(1);
+        if (u) result.push({ ...u, label: acct.label });
+      }
+      return result;
+    }),
+    // 兼容旧接口
+    switchToAny: protectedProcedure
+      .input(z.object({ username: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        const currentUsername = (ctx.user as any)?.username;
+        const allowed = ["jiang", "hyy329", "yunting"];
+        if (!allowed.includes(currentUsername)) throw new TRPCError({ code: "FORBIDDEN", message: "无切换权限" });
+        if (!allowed.includes(input.username)) throw new TRPCError({ code: "FORBIDDEN", message: "目标账号不在切换列表中" });
+        const dbConn = await getDb();
+        if (!dbConn) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        const [u] = await dbConn.select({ id: users.id, name: users.name, username: users.username })
+          .from(users).where(eq(users.username, input.username)).limit(1);
+        if (!u) throw new TRPCError({ code: "NOT_FOUND", message: "用户不存在" });
+        const token = await sdk.createSessionToken(u.id.toString(), { expiresInMs: ONE_YEAR_MS, name: u.name || u.username || "" });
+        return { token, userId: u.id, name: u.name, username: u.username };
+      }),
+  }),
 
 });
 
@@ -28146,18 +28232,6 @@ ${input.actualQty && input.actualQty > 0 ? `实际持仓：${input.actualQty} ET
         return { error: e?.message || String(e) };
       }
     }),
-  rice: mibanRiceRouter,
-  preset: mibanPresetRouter,
-  health: mibanHealthRouter,
-  diy: mibanDiyRouter,
-  recipe: mibanRecipeRouter,
-  order: mibanOrderRouter,
-  mibanInvite: mibanInviteRouter,
-  agent: mibanAgentRouter,
-  adminUser: mibanAdminUserRouter,
-  adminCommission: mibanAdminCommissionRouter,
-  cart: mibanCartRouter,
-  savedRecipes: savedRecipesRouter,
 });
 export type AppRouter = typeof appRouter;
 

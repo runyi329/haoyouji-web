@@ -378,12 +378,9 @@ export default function Home() {
         <p className="text-[11px] text-gray-400 tracking-widest uppercase mb-4 font-medium">
           精选产区 · 按需定配
         </p>
-        <h1 className="text-[32px] font-bold text-black leading-[1.1] tracking-tight mb-2">
-          我的米饭，<br />我做主
+        <h1 className="text-[32px] font-bold text-black leading-[1.1] tracking-tight mb-8">
+          我的饭碗我做主
         </h1>
-        <p className="text-[13px] text-gray-400 mb-8 leading-relaxed">
-          从百种好米里，捞出你的那一锅
-        </p>
         <Link href="/p/proj_hzxm2t/diy">
           <button
             className="w-full py-[15px] rounded-xl text-[15px] font-bold text-white tracking-wide active:scale-[0.98] transition-transform"

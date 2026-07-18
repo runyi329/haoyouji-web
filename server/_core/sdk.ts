@@ -102,7 +102,7 @@ class SDKServer {
         name,
       };
     } catch (error) {
-      console.warn("[Auth] Session verification failed", String(error));
+      console.error("[Auth] Session verification failed", String(error));
       return null;
     }
   }
@@ -113,6 +113,8 @@ class SDKServer {
     // 解决微信浏览器中 Cookie 残留旧用户 token 的问题
     let sessionCookie: string | undefined;
     const authHeader = req.headers.authorization;
+    console.log('[Auth-DEBUG] authorization header:', authHeader ? authHeader.substring(0, 30) + '...' : 'MISSING');
+    console.log('[Auth-DEBUG] cookie header:', req.headers.cookie ? req.headers.cookie.substring(0, 60) + '...' : 'MISSING');
     if (authHeader && authHeader.startsWith('Bearer ')) {
       sessionCookie = authHeader.substring(7); // 移除 "Bearer " 前缀
     }
@@ -123,7 +125,9 @@ class SDKServer {
       sessionCookie = cookies.get(COOKIE_NAME);
     }
     
+    console.log('[Auth-DEBUG2] sessionCookie:', sessionCookie ? sessionCookie.substring(0, 30) + '...' : 'UNDEFINED');
     const session = await this.verifySession(sessionCookie);
+    console.log('[Auth-DEBUG2] session result:', session ? JSON.stringify(session).substring(0, 60) : 'NULL');
 
     if (!session) {
       throw ForbiddenError("Invalid session cookie");
@@ -131,7 +135,15 @@ class SDKServer {
 
     const sessionUserId = session.userId;
     const signedInAt = new Date();
-    const user = await db.getUserById(parseInt(sessionUserId));
+    console.log('[Auth-DEBUG3] looking up userId:', sessionUserId);
+    let user;
+    try {
+      user = await db.getUserById(parseInt(sessionUserId));
+      console.log('[Auth-DEBUG3] getUserById result:', user ? user.username : 'NOT_FOUND');
+    } catch (e: any) {
+      console.error('[Auth-DEBUG3] getUserById ERROR:', e.message);
+      throw e;
+    }
 
     if (!user) {
       throw ForbiddenError("User not found");

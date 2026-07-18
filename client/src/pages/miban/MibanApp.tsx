@@ -13,9 +13,7 @@ import AiHealth from "./AiHealth";
 import PresetRecipes from "./PresetRecipes";
 import MyRecipes from "./MyRecipes";
 import MyOrders from "./MyOrders";
-import AdminDashboard from "./AdminDashboard";
-import AdminPanel from "./AdminPanel";
-import AgentDashboard from "./AgentDashboard";
+import UnifiedAdmin from "./UnifiedAdmin";
 import JoinPage from "./JoinPage";
 import BrandAssets from "./BrandAssets";
 
@@ -36,9 +34,9 @@ export default function MibanApp() {
           <Route path={`${BASE}/presets`} component={PresetRecipes} />
           <Route path={`${BASE}/my-recipes`} component={MyRecipes} />
           <Route path={`${BASE}/my-orders`} component={MyOrders} />
-          <Route path={`${BASE}/admin/panel`} component={AdminPanel} />
-          <Route path={`${BASE}/admin`} component={AdminDashboard} />
-          <Route path={`${BASE}/agent`} component={AgentDashboard} />
+          <Route path={`${BASE}/admin/panel`} component={UnifiedAdmin} />
+          <Route path={`${BASE}/admin`} component={UnifiedAdmin} />
+          <Route path={`${BASE}/agent`} component={UnifiedAdmin} />
           <Route path={`${BASE}/join`} component={JoinPage} />
           <Route path={`${BASE}/brand`} component={BrandAssets} />
           <Route path={`${BASE}`} component={Home} />

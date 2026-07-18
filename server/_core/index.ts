@@ -290,6 +290,40 @@ async function startServer() {
       res.status(500).json({ error: e.message });
     }
   });
+  // 临时调试：检查 users 表结构
+  app.get('/api/debug/users-columns', async (_req: any, res: any) => {
+    try {
+      const { getDbConnection } = await import('../db.js');
+      const db = await getDbConnection();
+      if (!db) return res.json({ error: 'DB连接失败' });
+      const [cols] = await (db as any).execute('SHOW COLUMNS FROM users') as any;
+      res.json({ columns: (cols as any[]).map((c: any) => c.Field) });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+  // 临时迁移接口：添加 miban_role 列
+  app.get('/api/debug/migrate-miban-role', async (_req: any, res: any) => {
+    try {
+      const { getDbConnection } = await import('../db.js');
+      const db = await getDbConnection();
+      if (!db) return res.json({ error: 'DB连接失败' });
+      // 检查列是否已存在
+      const [cols] = await (db as any).execute(
+        "SHOW COLUMNS FROM users LIKE 'miban_role'"
+      ) as any;
+      if ((cols as any[]).length > 0) {
+        return res.json({ ok: true, message: 'miban_role 列已存在，无需迁移' });
+      }
+      // 添加列
+      await (db as any).execute(
+        "ALTER TABLE users ADD COLUMN miban_role ENUM('parent', 'baby') NOT NULL DEFAULT 'baby'"
+      );
+      res.json({ ok: true, message: 'miban_role 列已添加' });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
   // 临时调试端点：查询刘丽凡在59号账本的股权数据
   app.get('/api/debug/lilifan59', async (_req: any, res: any) => {
     try {
@@ -676,6 +710,12 @@ async function startServer() {
   });
 
   // tRPC API
+  // TEMP DEBUG: log Authorization header
+  app.use('/api/trpc', (req: any, _res: any, next: any) => {
+    const auth = req.headers.authorization;
+    console.log('[TRPC-DEBUG] path:', req.path, '| auth:', auth ? auth.substring(0, 30) + '...' : 'MISSING');
+    next();
+  });
   app.use(
     "/api/trpc",
     createExpressMiddleware({

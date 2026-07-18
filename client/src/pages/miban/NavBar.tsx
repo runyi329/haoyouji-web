@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Link, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { mtrpc } from "./mibanTrpc";
+import { saveToken } from "@/lib/tokenStorage";
 import { toast } from "sonner";
 import { Home, BookOpen, FlaskConical, User, ChevronDown, LogOut, Settings, Briefcase } from "lucide-react";
 import CartDrawer from "./CartDrawer";
@@ -10,7 +12,7 @@ const tabItems = [
   { href: "/p/proj_hzxm2t/", label: "首页", icon: Home },
   { href: "/p/proj_hzxm2t/rice", label: "百科", icon: BookOpen },
   { href: "/p/proj_hzxm2t/diy", label: "配米", icon: FlaskConical },
-  { href: "/p/proj_hzxm2t/my-recipes", label: "我的", icon: User },
+  { href: "/p/proj_hzxm2t/my-orders", label: "我的", icon: User },
 ];
 
 const MIBAN_LOGO = "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_logo_final.webp";
@@ -21,6 +23,76 @@ const VERSION_ICONS: Record<string, string> = {
   yaban: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/icons/yaban/yaban_logo_bottomnav.webp",
   proj_hzxm2t: MIBAN_LOGO,
 };
+
+// 三个测试账号的颜色
+const IDENTITY_COLORS: Record<string, string> = {
+  jiang: "#FF6900",
+  hyy329: "#22C55E",
+  yunting: "#3B82F6",
+};
+const ALLOWED_IDENTITIES = ["jiang", "hyy329", "yunting"];
+
+// ─── 身份切换器（Logo 右边，仅三个测试账号可见）────────────────────────────────
+function IdentitySwitcherNav() {
+  const { user } = useAuth();
+  const currentUsername = (user as any)?.username as string | undefined;
+  const isAllowed = ALLOWED_IDENTITIES.includes(currentUsername ?? "");
+
+  // 三个账号都用 fullSwitchList + switchToAny，避免权限问题
+  const { data: rawList } = (mtrpc as any).mibanImpersonate.fullSwitchList.useQuery(
+    undefined,
+    { enabled: isAllowed }
+  );
+  const list: any[] = rawList ?? [];
+  const switchToAny = (mtrpc as any).mibanImpersonate.switchToAny.useMutation();
+  const [switching, setSwitching] = useState<string | null>(null);
+
+  if (!isAllowed) return null;
+
+  async function handleSwitch(username: string) {
+    if (switching || username === currentUsername) return;
+    setSwitching(username);
+    try {
+      const res = await switchToAny.mutateAsync({ username });
+      await saveToken(res.token);
+      toast.success(`已切换到 ${res.name || username}`);
+      setTimeout(() => window.location.reload(), 300);
+    } catch (e: any) {
+      toast.error(e?.message || "切换失败");
+      setSwitching(null);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 ml-2">
+      {list.map((acct: any) => {
+        const isCurrent = acct.username === currentUsername;
+        const color = IDENTITY_COLORS[acct.username] ?? "#999";
+        return (
+          <button
+            key={acct.username}
+            onClick={() => handleSwitch(acct.username)}
+            disabled={isCurrent || !!switching}
+            title={`切换到 ${acct.label}（${acct.username}）`}
+            style={{ opacity: isCurrent ? 1 : 0.4 }}
+            className="transition-opacity active:scale-95"
+          >
+            <div
+              className="w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold"
+              style={{
+                background: color,
+                outline: isCurrent ? `2px solid ${color}` : "none",
+                outlineOffset: "1.5px",
+              }}
+            >
+              {switching === acct.username ? "…" : (acct.name || acct.username).slice(0, 1)}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 // ─── Logo + 版本切换 ─────────────────────────────────────────────────────────
 function LogoWithVersionSwitch() {
@@ -50,15 +122,12 @@ function LogoWithVersionSwitch() {
     | { versionKey?: string; switchableVersionKeys?: string[] }
     | undefined;
 
-  // 计算开放版本集合
   const openSet = new Set<string>(version?.switchableVersionKeys || []);
   if (version?.versionKey) openSet.add(version.versionKey);
-  openSet.add("proj_hzxm2t"); // 当前就在米伴，必然包含
+  openSet.add("proj_hzxm2t");
 
-  // 只有开放 >= 2 个版本才允许切换
   const canSwitch = openSet.size >= 2;
 
-  // 可切换选项（排除当前 miban）
   const options = canSwitch
     ? (versions || [])
         .filter((v: any) => openSet.has(v.versionKey) && v.versionKey !== "proj_hzxm2t")
@@ -107,7 +176,6 @@ function LogoWithVersionSwitch() {
             <div className="px-3 py-2 text-xs text-gray-400 border-b border-gray-50">
               切换版本
             </div>
-            {/* 当前：米伴（带勾） */}
             <div className="w-full text-left px-3 py-2.5 text-sm flex items-center gap-2.5 text-[#FF6900] font-semibold bg-orange-50/50">
               <img src={MIBAN_LOGO} alt="" width={24} height={24} className="rounded-full object-cover" style={{ width: 24, height: 24 }} />
               <span className="flex-1">米伴</span>
@@ -115,7 +183,6 @@ function LogoWithVersionSwitch() {
                 <path d="M20 6L9 17l-5-5" />
               </svg>
             </div>
-            {/* 其他可切换版本 */}
             {options.map((opt) => (
               <button
                 key={opt.versionKey}
@@ -149,7 +216,7 @@ function LogoWithVersionSwitch() {
 
 // ─── 用户菜单（角色感知） ─────────────────────────────────────────────────────
 function UserMenu({ user, isAuthenticated, onLogout }: {
-  user: { name?: string | null; role?: string } | null;
+  user: { name?: string | null; role?: string; username?: string; mibanRole?: string } | null;
   isAuthenticated: boolean;
   onLogout: () => void;
 }) {
@@ -175,7 +242,10 @@ function UserMenu({ user, isAuthenticated, onLogout }: {
     );
   }
 
-  const role = user?.role ?? "user";
+  const username = (user as any)?.username ?? "";
+  const mibanRole = (user as any)?.mibanRole ?? "baby";
+  const isMibanAdmin = username === "jiang";
+  const isMibanAgent = mibanRole === "parent";
   const initial = (user?.name ?? "我").charAt(0).toUpperCase();
 
   return (
@@ -192,28 +262,27 @@ function UserMenu({ user, isAuthenticated, onLogout }: {
 
       {open && (
         <div className="absolute right-0 top-10 w-44 bg-white border border-black/10 rounded-2xl shadow-xl overflow-hidden z-50">
-          {/* 用户信息 */}
           <div className="px-4 py-3 border-b border-black/5">
             <p className="text-sm font-semibold text-black truncate">{user?.name ?? "用户"}</p>
             <p className="text-xs text-black/40 mt-0.5">
-              {role === "super_admin" ? "管理员" : role === "parent" ? "家长用户" : "普通用户"}
+              {isMibanAdmin ? "管理员" : isMibanAgent ? "米商" : "顾客"}
             </p>
           </div>
 
-          {/* 业务员入口 */}
-          {(role === "parent" || role === "super_admin") && (
+          {/* 米商入口 */}
+          {(isMibanAgent || isMibanAdmin) && (
             <Link
               href="/p/proj_hzxm2t/agent"
               onClick={() => setOpen(false)}
               className="flex items-center gap-3 px-4 py-3 text-sm text-black/70 hover:bg-black/5 transition-colors"
             >
               <Briefcase className="w-4 h-4 text-blue-500" />
-              业务员中心
+              米商中心
             </Link>
           )}
 
           {/* 管理员入口 */}
-          {role === "super_admin" && (
+          {isMibanAdmin && (
             <Link
               href="/p/proj_hzxm2t/admin"
               onClick={() => setOpen(false)}
@@ -224,7 +293,6 @@ function UserMenu({ user, isAuthenticated, onLogout }: {
             </Link>
           )}
 
-          {/* 退出 */}
           <button
             onClick={() => { setOpen(false); onLogout(); }}
             className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-500 hover:bg-red-50 transition-colors border-t border-black/5"
@@ -258,11 +326,12 @@ export default function NavBar() {
         className="fixed top-0 left-0 right-0 z-50 bg-white"
         style={{ borderBottom: "1px solid #E8E8E8", height: "52px" }}
       >
-        <div
-          className="max-w-[480px] mx-auto flex items-center justify-between px-4 h-full"
-        >
-          {/* Logo + 版本切换 */}
-          <LogoWithVersionSwitch />
+        <div className="max-w-[480px] mx-auto flex items-center justify-between px-4 h-full">
+          {/* Logo + 版本切换 + 身份切换器 */}
+          <div className="flex items-center">
+            <LogoWithVersionSwitch />
+            <IdentitySwitcherNav />
+          </div>
 
           {/* 右侧：购物车 + 用户头像 */}
           <div className="flex items-center gap-2">

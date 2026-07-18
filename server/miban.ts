@@ -16,11 +16,16 @@ import {
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
 import { TRPCError } from "@trpc/server";
-import { getDb } from "./db";
+import { getDb, getDbConnection } from "./db";
+import { sdk } from "./_core/sdk";
+import { ONE_YEAR_MS } from "@shared/const";
+import { getUserCnyBalance, adminAdjustCnyBalance, addUserBalance, getUserBalance } from "./db-recharge";
+import { getUsdtCnyRate } from "./price-scanner";
 
-// 管理员中间件（haoyouji-web 中 super_admin 对应 miban 的 admin）
+// 管理员中间件：米伴只有 jiang 一个管理员
+const MIBAN_ADMIN_USERNAME = "jiang";
 const mibanAdminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if ((ctx.user!.role as string) !== "super_admin") throw new TRPCError({ code: "FORBIDDEN", message: "需要管理员权限" });
+  if ((ctx.user as any)?.username !== MIBAN_ADMIN_USERNAME) throw new TRPCError({ code: "FORBIDDEN", message: "需要管理员权限" });
   return next({ ctx });
 });
 
@@ -183,7 +188,7 @@ async function getAgentMonthlyStats(agentUserId: number) {
 async function getAllAgentStats() {
   const db = await getDb();
   if (!db) return [];
-  const agents = await db.select({ id: users.id, name: users.name, inviteCount: users.inviteCount, createdAt: users.createdAt }).from(users).where(eq(users.role, "parent" as any));
+  const agents = await db.select({ id: users.id, name: users.name, inviteCount: users.inviteCount, createdAt: users.createdAt }).from(users).where(eq(users.mibanRole, "parent"));
   const result = await Promise.all(agents.map(async (agent) => {
     const commRows = await db.select().from(mibanCommissions).where(eq(mibanCommissions.agentId, agent.id));
     const total = commRows.reduce((s, r) => s + Number(r.commissionAmount), 0);
@@ -196,23 +201,72 @@ async function getAllAgentStats() {
 async function getAllUsers() {
   const db = await getDb();
   if (!db) return [];
-  return db.select({
+  const userList = await db.select({
     id: users.id,
     name: users.name,
+    username: users.username,
     openId: users.openId,
     role: users.role,
+    mibanRole: users.mibanRole,
     inviteCode: users.inviteCode,
     inviteCount: users.inviteCount,
     invitedByUserId: users.invitedByUserId,
     createdAt: users.createdAt,
     lastSignedIn: users.lastSignedIn,
+    balance: users.balance,
+    points: users.points,
   }).from(users).orderBy(desc(users.createdAt));
+
+  // 获取每个用户的订单数量
+  const orderCounts = await db.select({
+    userId: mibanOrders.userId,
+    orderCount: sql<number>`count(*)`,
+  }).from(mibanOrders).groupBy(mibanOrders.userId);
+  const orderCountMap = new Map(orderCounts.map(r => [r.userId, Number(r.orderCount)]));
+
+  // 批量查询全局钱包余额（与麦动网 getMembersBalance 接口完全一致）
+  // USDT: users.balance + 全部 af_manual_balances（不按账本隔离）
+  // CNY:  users.balance_cny + af_manual_balances WHERE note LIKE '[CNY]%'
+  const conn = await getDbConnection();
+  let usdtMap = new Map<number, number>();
+  let cnyMap = new Map<number, number>();
+  if (conn && userList.length > 0) {
+    const ids = userList.map(u => u.id);
+    const placeholders = ids.map(() => '?').join(',');
+    // USDT 余额（与 getMembersBalance 完全一致）
+    const [usdtRows] = await (conn as any).execute(
+      `SELECT u.id AS userId,
+        (COALESCE(u.balance, 0) + COALESCE((SELECT SUM(amount) FROM af_manual_balances WHERE user_id = u.id), 0)) AS usdtBalance
+       FROM users u WHERE u.id IN (${placeholders})`,
+      [...ids]
+    ) as any[];
+    for (const r of (Array.isArray(usdtRows) ? usdtRows : [])) {
+      usdtMap.set(Number(r.userId), parseFloat(r.usdtBalance?.toString() || '0'));
+    }
+    // CNY 余额
+    const [cnyRows] = await (conn as any).execute(
+      `SELECT u.id AS userId,
+        (COALESCE(u.balance_cny, 0) + COALESCE((SELECT SUM(amount) FROM af_manual_balances WHERE user_id = u.id AND note LIKE '[CNY]%'), 0)) AS cnyBalance
+       FROM users u WHERE u.id IN (${placeholders})`,
+      [...ids]
+    ) as any[];
+    for (const r of (Array.isArray(cnyRows) ? cnyRows : [])) {
+      cnyMap.set(Number(r.userId), parseFloat(r.cnyBalance?.toString() || '0'));
+    }
+  }
+
+  return userList.map(u => ({
+    ...u,
+    orderCount: orderCountMap.get(u.id) ?? 0,
+    usdtBalance: usdtMap.get(u.id) ?? parseFloat(String(u.balance ?? '0')),
+    cnyBalance: cnyMap.get(u.id) ?? 0,
+  }));
 }
 
-async function updateUserRole(userId: number, role: "parent" | "super_admin") {
+async function updateUserMibanRole(userId: number, role: "parent" | "baby") {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  await db.update(users).set({ role } as any).where(eq(users.id, userId));
+  await db.update(users).set({ mibanRole: role }).where(eq(users.id, userId));
 }
 
 async function getOrCreateInviteInfo(userId: number) {
@@ -533,20 +587,78 @@ export const mibanOrderRouter = router({
       receiverAddress: z.string().min(5),
       userNote: z.string().optional(),
     }))
-    .mutation(({ input, ctx }) =>
-      createOrder({
-        orderNo: `MB${Date.now()}${nanoid(4).toUpperCase()}`,
-        userId: ctx.user!.id,
+    .mutation(async ({ input, ctx }) => {
+      const userId = ctx.user!.id;
+      const totalCny = input.totalPrice; // 订单金额（人民币）
+
+      // 1. 查询用户钱包余额
+      const cnyBalance = await getUserCnyBalance(userId);
+      const usdtBalance = await getUserBalance(userId);
+      const usdtRate = await getUsdtCnyRate(); // 1 USDT = ? CNY
+
+      // 2. 计算可用总额（折合成 CNY）
+      const totalAvailableCny = cnyBalance + usdtBalance * usdtRate;
+      if (totalAvailableCny < totalCny - 0.001) {
+        throw new TRPCError({
+          code: "PAYMENT_REQUIRED",
+          message: `余额不足，需要 ¥${totalCny.toFixed(2)}，当前可用 ¥${totalAvailableCny.toFixed(2)}（CNY ¥${cnyBalance.toFixed(2)} + USDT ${usdtBalance.toFixed(4)} ≈ ¥${(usdtBalance * usdtRate).toFixed(2)}），请先充値`,
+        });
+      }
+
+      // 3. 确定扣款方案：优先扣 CNY
+      let deductCny = 0;
+      let deductUsdt = 0;
+      if (cnyBalance >= totalCny) {
+        // CNY 足够，全部扣 CNY
+        deductCny = totalCny;
+        deductUsdt = 0;
+      } else {
+        // CNY 不够，先扣完 CNY，剩余按汇率扣 USDT
+        deductCny = cnyBalance;
+        const remainCny = totalCny - cnyBalance;
+        deductUsdt = remainCny / usdtRate;
+      }
+
+      // 4. 创建订单
+      const orderNo = `MB${Date.now()}${nanoid(4).toUpperCase()}`;
+      const orderId = await createOrder({
+        orderNo,
+        userId,
         recipeName: input.recipeName,
         ingredients: JSON.stringify(input.ingredients) as any,
         totalWeightJin: input.totalWeightJin.toString() as any,
-        totalPrice: input.totalPrice.toString() as any,
+        totalPrice: totalCny.toString() as any,
         receiverName: input.receiverName,
         receiverPhone: input.receiverPhone,
         receiverAddress: input.receiverAddress,
         userNote: input.userNote,
-      })
-    ),
+        walletDeductCny: deductCny.toString() as any,
+        walletDeductUsdt: deductUsdt.toString() as any,
+        usdtCnyRateAtOrder: usdtRate.toString() as any,
+      });
+
+      // 5. 扣款（订单已入库后才扣，避免扣款成功但订单失败）
+      if (deductCny > 0.001) {
+        await adminAdjustCnyBalance({
+          userId,
+          amount: -deductCny,
+          note: `米伴订单扣款 #${orderNo}`,
+          operatorId: userId,
+        });
+      }
+      if (deductUsdt > 0.000001) {
+        await addUserBalance(
+          userId,
+          -deductUsdt,
+          'reward',
+          orderId,
+          `米伴订单扣款 #${orderNo} (-${deductUsdt.toFixed(6)} USDT ≈ ¥${(deductUsdt * usdtRate).toFixed(2)})`,
+        );
+      }
+
+      console.log(`[Miban] 订单创建并扣款成功: orderId=${orderId}, orderNo=${orderNo}, deductCny=${deductCny}, deductUsdt=${deductUsdt}, rate=${usdtRate}`);
+      return orderId;
+    }),
   myOrders: protectedProcedure.query(({ ctx }) => getUserOrders(ctx.user!.id)),
   allOrders: mibanAdminProcedure.query(() => getAllOrders()),
   updateStatus: mibanAdminProcedure
@@ -557,7 +669,45 @@ export const mibanOrderRouter = router({
       trackingCompany: z.string().optional(),
       adminNote: z.string().optional(),
     }))
-    .mutation(({ input }) => updateOrderStatus(input.id, input.status, input.trackingNo, input.trackingCompany, input.adminNote)),
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB not available" });
+
+      // 如果是取消订单，查询原订单扣款金额并退款
+      if (input.status === "cancelled") {
+        const [order] = await db.select().from(mibanOrders).where(eq(mibanOrders.id, input.id)).limit(1);
+        if (order && order.status !== "cancelled") {
+          const deductCny = parseFloat(String(order.walletDeductCny ?? 0));
+          const deductUsdt = parseFloat(String(order.walletDeductUsdt ?? 0));
+          const usdtRate = parseFloat(String(order.usdtCnyRateAtOrder ?? 0)) || 7.0;
+          const orderNo = order.orderNo;
+          const userId = order.userId;
+
+          // 退回 CNY
+          if (deductCny > 0.001) {
+            await adminAdjustCnyBalance({
+              userId,
+              amount: deductCny,
+              note: `米伴订单退款 #${orderNo}`,
+              operatorId: userId,
+            });
+          }
+          // 退回 USDT
+          if (deductUsdt > 0.000001) {
+            await addUserBalance(
+              userId,
+              deductUsdt,
+              'reward',
+              order.id,
+              `米伴订单退款 #${orderNo} (+${deductUsdt.toFixed(6)} USDT ≈ ¥${(deductUsdt * usdtRate).toFixed(2)})`,
+            );
+          }
+          console.log(`[Miban] 订单取消并退款: orderId=${order.id}, orderNo=${orderNo}, refundCny=${deductCny}, refundUsdt=${deductUsdt}`);
+        }
+      }
+
+      await updateOrderStatus(input.id, input.status, input.trackingNo, input.trackingCompany, input.adminNote);
+    }),
 });
 
 export const mibanInviteRouter = router({
@@ -590,8 +740,8 @@ export const mibanAgentRouter = router({
 export const mibanAdminUserRouter = router({
   list: mibanAdminProcedure.query(() => getAllUsers()),
   setRole: mibanAdminProcedure
-    .input(z.object({ userId: z.number(), role: z.enum(["parent", "super_admin"]) }))
-    .mutation(({ input }) => updateUserRole(input.userId, input.role)),
+    .input(z.object({ userId: z.number(), role: z.enum(["parent", "baby"]) }))
+    .mutation(({ input }) => updateUserMibanRole(input.userId, input.role)),
 });
 
 export const mibanAdminCommissionRouter = router({
@@ -648,5 +798,89 @@ export const mibanCartRouter = router({
       const cond = userId ? eq(mibanCartItems.userId, userId) : eq(mibanCartItems.sessionId, sessionId!);
       await db!.delete(mibanCartItems).where(cond);
       return { success: true };
+    }),
+});
+
+// ─── 管理员身份切换路由（仅 super_admin 可用）────────────────────────────────
+// 固定的三个账号（方便在不同身份视角间切换）
+const MIBAN_SWITCH_ACCOUNTS = [
+  { username: "jiang",   label: "管理员", role: "admin"  },
+  { username: "hyy329",  label: "米商",   role: "parent" },
+  { username: "yunting", label: "顾客",   role: "baby"   },
+];
+// 所有可互切账号（包括管理员）
+const ALL_SWITCH_USERNAMES = ["jiang", "hyy329", "yunting"];
+
+export const mibanImpersonateRouter = router({
+  // 获取可切换的账号列表（含当前登录账号信息）
+  switchList: mibanAdminProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return [];
+    const result = [];
+    for (const acct of MIBAN_SWITCH_ACCOUNTS) {
+      const [u] = await db.select({ id: users.id, name: users.name, username: users.username, avatar: users.avatar, role: users.role })
+        .from(users).where(eq(users.username, acct.username)).limit(1);
+      if (u) result.push({ ...u, label: acct.label });
+    }
+    return result;
+  }),
+
+  // 切换到指定用户（返回该用户的 session token，前端用 saveToken 写入存储后刷新页面）
+  switchTo: mibanAdminProcedure
+    .input(z.object({ username: z.string() }))
+    .mutation(async ({ input }) => {
+      const allowed = MIBAN_SWITCH_ACCOUNTS.map(a => a.username);
+      if (!allowed.includes(input.username)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "该账号不在切换列表中" });
+      }
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [u] = await db.select({ id: users.id, name: users.name, username: users.username })
+        .from(users).where(eq(users.username, input.username)).limit(1);
+      if (!u) throw new TRPCError({ code: "NOT_FOUND", message: "用户不存在" });
+      const token = await sdk.createSessionToken(u.id.toString(), {
+        expiresInMs: ONE_YEAR_MS,
+        name: u.name || u.username || "",
+      });
+      return { token, userId: u.id, name: u.name, username: u.username };
+    }),
+
+  // 获取完整切换列表（hyy329/yunting 登录时可用，包括管理员入口）
+  fullSwitchList: protectedProcedure.query(async ({ ctx }) => {
+    const currentUsername = (ctx.user as any)?.username;
+    if (!ALL_SWITCH_USERNAMES.includes(currentUsername)) return null;
+    const db = await getDb();
+    if (!db) return null;
+    const result = [];
+    for (const acct of MIBAN_SWITCH_ACCOUNTS) {
+      const [u] = await db.select({ id: users.id, name: users.name, username: users.username, role: users.role })
+        .from(users).where(eq(users.username, acct.username)).limit(1);
+      const label = acct.role === "admin" ? "管理员" : acct.role === "parent" ? "米商" : "顾客";
+      if (u) result.push({ ...u, label });
+    }
+    return result;
+  }),
+
+  // 切换到任意账号（hyy329/yunting 互切）
+  switchToAny: protectedProcedure
+    .input(z.object({ username: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const currentUsername = (ctx.user as any)?.username;
+      if (!ALL_SWITCH_USERNAMES.includes(currentUsername)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无切换权限" });
+      }
+      if (!ALL_SWITCH_USERNAMES.includes(input.username)) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "目标账号不在切换列表中" });
+      }
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const [u] = await db.select({ id: users.id, name: users.name, username: users.username })
+        .from(users).where(eq(users.username, input.username)).limit(1);
+      if (!u) throw new TRPCError({ code: "NOT_FOUND", message: "用户不存在" });
+      const token = await sdk.createSessionToken(u.id.toString(), {
+        expiresInMs: ONE_YEAR_MS,
+        name: u.name || u.username || "",
+      });
+      return { token, userId: u.id, name: u.name, username: u.username };
     }),
 });

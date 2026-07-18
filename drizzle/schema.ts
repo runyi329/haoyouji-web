@@ -961,6 +961,7 @@ export const users = mysqlTable("users", {
 	versionKey: varchar('version_key', { length: 50 }),
 	versionSwitchEnabled: tinyint('version_switch_enabled').default(0).notNull(),
 	versionSwitchScope: varchar('version_switch_scope', { length: 255 }),
+	mibanRole: mysqlEnum('miban_role', ['parent', 'baby']).default('baby').notNull(),
 },
 (table) => [
 	index("users_openId_unique").on(table.openId),
@@ -2331,6 +2332,10 @@ export const mibanOrders = mysqlTable("miban_orders", {
   trackingCompany: varchar("trackingCompany", { length: 32 }),
   userNote: text("userNote"),
   adminNote: text("adminNote"),
+  // 钱包扣款记录（用于退款原路返还）
+  walletDeductCny: decimal("walletDeductCny", { precision: 10, scale: 2 }).default("0"),
+  walletDeductUsdt: decimal("walletDeductUsdt", { precision: 18, scale: 8 }).default("0"),
+  usdtCnyRateAtOrder: decimal("usdtCnyRateAtOrder", { precision: 10, scale: 4 }).default("0"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

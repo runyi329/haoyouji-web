@@ -23,7 +23,8 @@ function AnimatedNumber({ value }: { value: number }) {
   );
 }
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Check, Minus, Plus, ChevronRight, ChevronLeft, Shuffle, Sliders, Share2, X, Download, Sparkles, Loader2, ShoppingCart } from "lucide-react";
+import { Check, Minus, Plus, ChevronRight, ChevronLeft, Shuffle, Sliders, Share2, X, Download, Sparkles, Loader2, ShoppingCart, Wallet, MapPin, Phone, User } from "lucide-react";
+import { toast } from "sonner";
 import html2canvas from "html2canvas";
 import { trpc } from "@/lib/trpc";
 import { mtrpc } from "./mibanTrpc";
@@ -252,8 +253,44 @@ export default function DiyWorkshop() {
   const bowlTargetRef = useRef<HTMLElement | null>(null);
   const { flyToTarget } = useRiceFlyAnimation();
   const [showAiDialog, setShowAiDialog] = useState(false);
+  // 下单相关状态
+  const [showOrderDialog, setShowOrderDialog] = useState(false);
+  const [orderSuccess, setOrderSuccess] = useState<{ orderId: number; deductCny: number; deductUsdt: number } | null>(null);
+  const [receiverName, setReceiverName] = useState("");
+  const [receiverPhone, setReceiverPhone] = useState("");
+  const [receiverAddress, setReceiverAddress] = useState("");
+  const [userNote, setUserNote] = useState("");
   const [aiNeed, setAiNeed] = useState("");
   const [aiResult, setAiResult] = useState<{ recommended: string[]; reason: string } | null>(null);
+  // 余额查询
+  const { data: cnyBalance } = trpc.recharge.getCnyBalance.useQuery(undefined, { enabled: isAuthenticated });
+  const { data: usdtBalance } = trpc.recharge.getBalance.useQuery(undefined, { enabled: isAuthenticated });
+  // 实时 USDT/CNY 汇率（服务端缓存，每3秒刷新）
+  const { data: cryptoPrices } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 5000, staleTime: 3000 });
+  const cnyBalanceNum = Number(cnyBalance ?? 0);
+  const usdtBalanceNum = Number(usdtBalance ?? 0);
+  const usdtCnyRate = cryptoPrices?.usdtCnyRate ?? 7.3; // 备用汇率
+  const totalAvailableCny = cnyBalanceNum + usdtBalanceNum * usdtCnyRate;
+  // 下单 mutation
+  const [pendingOrderPrice, setPendingOrderPrice] = useState(0);
+  const createOrder = mtrpc.order.create.useMutation({
+    onSuccess: (orderId: number) => {
+      setOrderSuccess({ orderId, deductCny: pendingOrderPrice, deductUsdt: 0 });
+      setShowOrderDialog(false);
+      cartList.refetch();
+    },
+    onError: (err: any) => {
+      const msg = err?.message ?? "下单失败";
+      if (msg.includes("余额不足") || msg.includes("PAYMENT_REQUIRED")) {
+        toast.error("余额不足，请先充值", {
+          description: msg.slice(0, 80),
+          action: { label: "去充值", onClick: () => { window.location.href = "/recharge"; } },
+        });
+      } else {
+        toast.error(msg.slice(0, 60));
+      }
+    },
+  });
   const aiRecommend = mtrpc.diy.aiRecommend.useMutation({
     onSuccess: (data: { recommended: string[]; reason: string }) => { setAiResult(data); },
   });
@@ -781,7 +818,11 @@ export default function DiyWorkshop() {
           <Share2 size={16} />生成配方海报
         </button>
         {isAuthenticated ? (
-          <button className="w-full py-4 rounded-2xl text-[15px] font-bold text-white" style={{ background: "#FF6900" }}>
+          <button
+            onClick={() => setShowOrderDialog(true)}
+            className="w-full py-4 rounded-2xl text-[15px] font-bold text-white active:scale-[0.98] transition-transform"
+            style={{ background: "#FF6900" }}
+          >
             立即下单 · ¥{totalPrice().toFixed(1)}
           </button>
         ) : (
@@ -942,6 +983,154 @@ export default function DiyWorkshop() {
               </button>
             </div>
             <p className="text-center text-[12px] text-white/50 mt-3">长按图片可保存到相册</p>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 下单弹窗 ─────────────────────────────────────────── */}
+      {showOrderDialog && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end" onClick={() => setShowOrderDialog(false)}>
+          <div className="w-full bg-white rounded-t-3xl p-6 pb-10 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <span className="text-[17px] font-bold text-black">确认下单</span>
+              <button onClick={() => setShowOrderDialog(false)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                <X size={16} className="text-gray-500" />
+              </button>
+            </div>
+            {/* 订单摘要 */}
+            <div className="bg-orange-50 rounded-2xl p-4 mb-5">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[13px] text-gray-600">{recipeName || "我的专属米"}</span>
+                <span className="text-[13px] font-bold text-[#FF6900]">{weight}斤</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {selected.map((id) => {
+                  const rice = allRiceList.find(r => r.id === id)!;
+                  const pct = ratios[id] ?? Math.round(100 / selected.length);
+                  return (
+                    <span key={id} className="text-[11px] px-2 py-0.5 rounded-full bg-white border border-orange-100 text-gray-600">
+                      {rice.name} <span className="font-semibold text-[#FF6900]">{pct}%</span>
+                    </span>
+                  );
+                })}
+              </div>
+              <div className="flex items-center justify-between border-t border-orange-100 pt-2">
+                <span className="text-[12px] text-gray-500">应付金额</span>
+                <span className="text-[20px] font-bold text-black">¥{totalPrice().toFixed(2)}</span>
+              </div>
+            </div>
+            {/* 钱包余额提示 */}
+            <div className="bg-gray-50 rounded-xl px-4 py-3 mb-5">
+              <div className="flex items-center gap-2 mb-2">
+                <Wallet size={15} className="text-[#FF6900] flex-shrink-0" />
+                <span className="text-[12px] text-gray-500 flex-1">脉动网钱包</span>
+                {totalAvailableCny < totalPrice() && (
+                  <button onClick={() => { setShowOrderDialog(false); window.location.href = "/recharge"; }} className="text-[12px] text-[#FF6900] font-semibold">去充值</button>
+                )}
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-gray-400">CNY 余额</span>
+                  <span className="text-[15px] font-bold text-black">¥{cnyBalanceNum.toFixed(2)}</span>
+                </div>
+                <div className="text-gray-300 text-[18px]">+</div>
+                <div className="flex flex-col">
+                  <span className="text-[11px] text-gray-400">USDT 余额</span>
+                  <span className="text-[15px] font-bold text-black">{usdtBalanceNum.toFixed(4)}</span>
+                </div>
+                <div className="text-gray-300 text-[18px]">=</div>
+                <div className="flex flex-col items-end">
+                  <span className="text-[11px] text-gray-400">可用总额（1U≈¥{usdtCnyRate.toFixed(2)}）</span>
+                  <span className={`text-[15px] font-bold ${totalAvailableCny >= totalPrice() ? 'text-green-600' : 'text-red-500'}`}>¥{totalAvailableCny.toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+            {/* 收货信息 */}
+            <div className="space-y-3 mb-5">
+              <p className="text-[13px] font-semibold text-black">收货信息</p>
+              <div className="flex items-center gap-3 border border-gray-200 rounded-xl px-4 py-3">
+                <User size={15} className="text-gray-400 flex-shrink-0" />
+                <input
+                  type="text" value={receiverName} onChange={(e) => setReceiverName(e.target.value)}
+                  placeholder="收货人姓名"
+                  className="flex-1 text-[14px] text-black outline-none bg-transparent"
+                />
+              </div>
+              <div className="flex items-center gap-3 border border-gray-200 rounded-xl px-4 py-3">
+                <Phone size={15} className="text-gray-400 flex-shrink-0" />
+                <input
+                  type="tel" value={receiverPhone} onChange={(e) => setReceiverPhone(e.target.value)}
+                  placeholder="手机号码"
+                  className="flex-1 text-[14px] text-black outline-none bg-transparent"
+                />
+              </div>
+              <div className="flex items-center gap-3 border border-gray-200 rounded-xl px-4 py-3">
+                <MapPin size={15} className="text-gray-400 flex-shrink-0" />
+                <input
+                  type="text" value={receiverAddress} onChange={(e) => setReceiverAddress(e.target.value)}
+                  placeholder="收货地址（省市区+详细地址）"
+                  className="flex-1 text-[14px] text-black outline-none bg-transparent"
+                />
+              </div>
+              <textarea
+                value={userNote} onChange={(e) => setUserNote(e.target.value)}
+                placeholder="备注（可选）"
+                rows={2}
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-[14px] text-black outline-none bg-transparent resize-none"
+              />
+            </div>
+            {/* 下单按钮 */}
+            <button
+              disabled={createOrder.isPending || !receiverName.trim() || !receiverPhone.trim() || !receiverAddress.trim() || totalAvailableCny < totalPrice()}
+              onClick={() => {
+                const price = totalPrice();
+                setPendingOrderPrice(price);
+                const ingredients = selected.map((id) => {
+                  const rice = allRiceList.find(r => r.id === id)!;
+                  const pct = ratios[id] ?? Math.round(100 / selected.length);
+                  const w = Math.round(weight * pct / 100 * 10) / 10;
+                  // riceId: db_ 前缀去掉取数字，否则用 0
+                  const numId = id.startsWith("db_") ? parseInt(id.slice(3), 10) : 0;
+                  return { riceId: numId, name: rice.name, percentage: pct, colorHex: rice.color, weightJin: w };
+                });
+                createOrder.mutate({
+                  recipeName: recipeName || "我的专属米",
+                  ingredients,
+                  totalWeightJin: weight,
+                  totalPrice: price,
+                  receiverName: receiverName.trim(),
+                  receiverPhone: receiverPhone.trim(),
+                  receiverAddress: receiverAddress.trim(),
+                  userNote: userNote.trim() || undefined,
+                });
+              }}
+              className="w-full py-4 rounded-2xl text-[15px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition-transform"
+              style={{ background: "#FF6900" }}
+            >
+              {createOrder.isPending ? <><Loader2 size={18} className="animate-spin" />提交中…</> : totalAvailableCny < totalPrice() ? "余额不足，请先充值" : `确认下单 · 扣款 ¥${totalPrice().toFixed(2)}`}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── 下单成功弹窗 ─────────────────────────────────────────── */}
+      {orderSuccess && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onClick={() => setOrderSuccess(null)}>
+          <div className="w-full max-w-[340px] bg-white rounded-3xl p-7 text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
+              <Check size={32} className="text-green-500" />
+            </div>
+            <p className="text-[18px] font-bold text-black mb-1">下单成功！</p>
+            <p className="text-[13px] text-gray-400 mb-4">订单号 #{orderSuccess.orderId}</p>
+            <div className="bg-orange-50 rounded-2xl px-5 py-4 mb-5">
+              <p className="text-[12px] text-gray-500 mb-1">已从钱包扣除</p>
+              <p className="text-[22px] font-bold text-[#FF6900]">¥{totalPrice().toFixed(2)}</p>
+              <p className="text-[11px] text-gray-400 mt-1">优先扣 CNY，不足部分按实时汇率扣 USDT</p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setOrderSuccess(null)} className="flex-1 py-3 rounded-xl border border-gray-200 text-[14px] text-gray-600">继续配米</button>
+              <button onClick={() => { setOrderSuccess(null); window.location.href = "/p/proj_hzxm2t/my-orders"; }} className="flex-1 py-3 rounded-xl text-[14px] font-semibold text-white" style={{ background: "#FF6900" }}>查看订单</button>
+            </div>
           </div>
         </div>
       )}

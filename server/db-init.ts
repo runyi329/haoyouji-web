@@ -743,6 +743,40 @@ export async function initDatabase() {
       console.log('[DB Init] ✅ yaban_voice_segment table ready');
     }
 
+    // 确保 users 表有 miban 相关字段（兼容旧部署）
+    const dbConnMiban = await getDbConnection();
+    if (dbConnMiban) {
+      const mibanUserCols = [
+        { name: 'miban_role', def: "ENUM('parent', 'baby') NOT NULL DEFAULT 'baby' COMMENT 'miban角色'" },
+        { name: 'balance', def: "DECIMAL(10,2) NOT NULL DEFAULT 0.00 COMMENT '余额'" },
+        { name: 'wallet_enabled', def: "TINYINT NOT NULL DEFAULT 0 COMMENT '是否开通钱包'" },
+        { name: 'highest_level_achieved', def: "INT NOT NULL DEFAULT 0 COMMENT '历史最高等级'" },
+        { name: 'last_viewed_sharing_at', def: "DATETIME DEFAULT NULL COMMENT '最后查看分享时间'" },
+        { name: 'real_name', def: "VARCHAR(50) DEFAULT NULL COMMENT '真实姓名'" },
+        { name: 'phone', def: "VARCHAR(20) DEFAULT NULL COMMENT '手机号'" },
+        { name: 'company', def: "VARCHAR(100) DEFAULT NULL COMMENT '公司'" },
+        { name: 'business', def: "VARCHAR(200) DEFAULT NULL COMMENT '业务描述'" },
+      ];
+      for (const col of mibanUserCols) {
+        await safeAddColumn(dbConnMiban as any, 'users', col.name, col.def);
+      }
+      console.log('[DB Init] ✅ users miban columns checked');
+    }
+
+    // 确保 miban_orders 表有钱包扣款记录字段（兼容旧部署）
+    const dbConnMibanOrders = await getDbConnection();
+    if (dbConnMibanOrders) {
+      const mibanOrderCols = [
+        { name: 'walletDeductCny', def: "DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT 'CNY扣款金额'" },
+        { name: 'walletDeductUsdt', def: "DECIMAL(18,8) NOT NULL DEFAULT 0 COMMENT 'USDT扣款金额'" },
+        { name: 'usdtCnyRateAtOrder', def: "DECIMAL(10,4) NOT NULL DEFAULT 0 COMMENT '下单时USDT/CNY汇率'" },
+      ];
+      for (const col of mibanOrderCols) {
+        await safeAddColumn(dbConnMibanOrders as any, 'miban_orders', col.name, col.def);
+      }
+      console.log('[DB Init] ✅ miban_orders wallet columns checked');
+    }
+
     console.log("[DB Init] Database initialization completed successfully");
   } catch (error) {
     console.error("[DB Init] Error during database initialization:", error);
