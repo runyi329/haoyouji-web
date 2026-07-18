@@ -23,9 +23,14 @@ import { getUserCnyBalance, adminAdjustCnyBalance, addUserBalance, getUserBalanc
 import { getUsdtCnyRate } from "./price-scanner";
 
 // 管理员中间件：米伴只有 jiang 一个管理员
-const MIBAN_ADMIN_USERNAME = "jiang";
+const MIBAN_ADMIN_USERNAMES = ["jiang"];
 const mibanAdminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if ((ctx.user as any)?.username !== MIBAN_ADMIN_USERNAME) throw new TRPCError({ code: "FORBIDDEN", message: "需要管理员权限" });
+  const user = ctx.user as any;
+  const isAdmin =
+    MIBAN_ADMIN_USERNAMES.includes(user?.username) ||
+    user?.role === 'admin' ||
+    user?.role === 'super_admin';
+  if (!isAdmin) throw new TRPCError({ code: "FORBIDDEN", message: "需要管理员权限" });
   return next({ ctx });
 });
 
