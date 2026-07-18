@@ -87,227 +87,199 @@ const SCENE_PRESETS = [
   { label: "补血配方", tag: "补血", desc: "铁元素丰富，气色红润", href: "/diy" },
 ];
 
-// callout 标注项：延伸线 + 标签
-function Callout({
-  side, label, value, unit, x1, y1, x2, y2, textAnchor, svgW, svgH,
-}: {
-  side: "left" | "right";
-  label: string; value: string | number; unit?: string;
-  x1: number; y1: number; x2: number; y2: number;
-  textAnchor: "start" | "end";
-  svgW: number; svgH: number;
-}) {
-  // 折线：从圆边缘出发，水平延伸到端点
-  const d = `M ${x1} ${y1} L ${x2} ${y2}`;
-  const dotR = 2.5;
-  const tx = side === "left" ? x2 - 6 : x2 + 6;
-  return (
-    <g>
-      {/* 延伸线 */}
-      <path d={d} fill="none" stroke="rgba(255,255,255,0.22)" strokeWidth="0.8" strokeDasharray="3 2" />
-      {/* 起点小圆 */}
-      <circle cx={x1} cy={y1} r={dotR} fill="rgba(255,105,0,0.7)" />
-      {/* 端点横线 */}
-      <line
-        x1={side === "left" ? x2 - 28 : x2}
-        y1={y2}
-        x2={side === "left" ? x2 : x2 + 28}
-        y2={y2}
-        stroke="rgba(255,255,255,0.15)"
-        strokeWidth="0.6"
-      />
-      {/* 参数名 */}
-      <text
-        x={tx}
-        y={y2 - 7}
-        textAnchor={textAnchor}
-        fontSize="8.5"
-        fill="rgba(255,255,255,0.4)"
-        fontFamily="sans-serif"
-      >{label}</text>
-      {/* 数值 */}
-      <text
-        x={tx}
-        y={y2 + 6}
-        textAnchor={textAnchor}
-        fontSize="13"
-        fontWeight="700"
-        fill="rgba(255,255,255,0.9)"
-        fontFamily="sans-serif"
-      >{value}</text>
-      {/* 单位 */}
-      {unit && (
-        <text
-          x={tx}
-          y={y2 + 16}
-          textAnchor={textAnchor}
-          fontSize="8"
-          fill="rgba(255,105,0,0.7)"
-          fontFamily="sans-serif"
-        >{unit}</text>
-      )}
-    </g>
-  );
-}
-
-// 信息图风格弹窗：中心图片 + 四周延伸线标注
+// 产品拆解图风格弹窗：白色背景，图片原样居中，四周延伸线标注
 function NutritionDrawer({ rice, onClose }: { rice: RiceType; onClose: () => void }) {
   const energyVal = rice.nutrition.calories ?? rice.nutrition.energy;
-  const W = 360; // SVG 画布宽（加宽给文字留空间）
-  const H = 300; // SVG 画布高
-  const cx = W / 2;
-  const cy = H / 2;
-  const imgR = 72; // 中心图片半径
 
-  // 6 个标注点（左3右3），均匀分布
-  // 左侧：热量、碳水、膳食纤维
-  // 右侧：蛋白质、脂肪、GI（无GI时用产地）
-  const leftItems = [
-    { label: "热量",     value: energyVal ?? "—", unit: "kcal" },
-    { label: "碳水化合物", value: rice.nutrition.carbs ?? "—", unit: "g" },
-    { label: "膳食纤维", value: rice.nutrition.fiber ?? "—", unit: "g" },
-  ];
-  const rightItems = [
-    { label: "蛋白质",   value: rice.nutrition.protein ?? "—", unit: "g" },
-    { label: "脂肪",     value: rice.nutrition.fat ?? "—", unit: "g" },
+  // SVG 画布尺寸
+  const W = 400;
+  const H = 420;
+  const cx = W / 2;   // 中心 x
+  const cy = H / 2;   // 中心 y
+  const imgW = 130;   // 图片宽度
+  const imgH = 130;   // 图片高度
+
+  // 8 个标注项：上2、下2、左2、右2
+  // 定义每个 callout 的起点（图片边缘）和终点（标注文字区）
+  const items = [
+    // 上左
+    { label: "热量",      value: String(energyVal ?? "—"), unit: "kcal/100g",
+      ox: cx - imgW * 0.3, oy: cy - imgH / 2,
+      tx: 28, ty: 28, anchor: "start" as const },
+    // 上右
+    { label: "蛋白质",    value: String(rice.nutrition.protein ?? "—"), unit: "g/100g",
+      ox: cx + imgW * 0.3, oy: cy - imgH / 2,
+      tx: W - 28, ty: 28, anchor: "end" as const },
+    // 左上
+    { label: "碳水化合物", value: String(rice.nutrition.carbs ?? "—"), unit: "g/100g",
+      ox: cx - imgW / 2, oy: cy - imgH * 0.2,
+      tx: 28, ty: cy - 20, anchor: "start" as const },
+    // 左下
+    { label: "膳食纤维", value: String(rice.nutrition.fiber ?? "—"), unit: "g/100g",
+      ox: cx - imgW / 2, oy: cy + imgH * 0.2,
+      tx: 28, ty: cy + 50, anchor: "start" as const },
+    // 右上
+    { label: "脂肪",      value: String(rice.nutrition.fat ?? "—"), unit: "g/100g",
+      ox: cx + imgW / 2, oy: cy - imgH * 0.2,
+      tx: W - 28, ty: cy - 20, anchor: "end" as const },
+    // 右下
     { label: rice.nutrition.gi ? "升糖指数 GI" : "产地",
-      value: rice.nutrition.gi ?? rice.origin ?? "—", unit: rice.nutrition.gi ? "" : undefined },
+      value: String(rice.nutrition.gi ?? rice.origin ?? "—"), unit: rice.nutrition.gi ? "" : "",
+      ox: cx + imgW / 2, oy: cy + imgH * 0.2,
+      tx: W - 28, ty: cy + 50, anchor: "end" as const },
+    // 下左
+    { label: "米种类型",   value: rice.tag || "—", unit: "",
+      ox: cx - imgW * 0.3, oy: cy + imgH / 2,
+      tx: 28, ty: H - 38, anchor: "start" as const },
+    // 下右
+    { label: "产地",      value: rice.origin || "—", unit: "",
+      ox: cx + imgW * 0.3, oy: cy + imgH / 2,
+      tx: W - 28, ty: H - 38, anchor: "end" as const },
   ];
 
-  // 左侧3个标注的 y 坐标（均匀分布在 cy-65 ~ cy+65）
-  const leftYs  = [cy - 65, cy, cy + 65];
-  const rightYs = [cy - 65, cy, cy + 65];
-
-  // 线段起点：圆边缘
-  const leftLineX  = cx - imgR - 4;
-  const rightLineX = cx + imgR + 4;
-  // 标注端点 x（留足够空间给文字）
-  const leftEndX  = 14;
-  const rightEndX = W - 14;
+  // 线条颜色列表（每条线不同颜色，丰富信息图感）
+  const lineColors = [
+    "#E8734A", "#4A90D9", "#6BBF59", "#C45AB3",
+    "#F0B429", "#3DBFA8", "#E85D75", "#7B68EE",
+  ];
 
   return (
     <>
       {/* 遮罩 */}
       <div
-        className="fixed inset-0 bg-black/50 z-40"
-        style={{ backdropFilter: "blur(3px)" }}
+        className="fixed inset-0 bg-black/40 z-40"
+        style={{ backdropFilter: "blur(4px)" }}
         onClick={onClose}
       />
-      {/* 弹窗：居中显示 */}
+      {/* 弹窗居中 */}
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center px-4"
+        className="fixed inset-0 z-50 flex items-center justify-center px-3"
         onClick={onClose}
       >
         <div
-          className="relative w-full max-w-[380px] rounded-3xl overflow-hidden"
+          className="relative w-full max-w-[420px] rounded-2xl"
           style={{
-            background: "linear-gradient(160deg, #0d0d0d 0%, #1a1208 100%)",
-            animation: "scaleIn 220ms cubic-bezier(0.23,1,0.32,1) both",
-            boxShadow: "0 24px 64px rgba(0,0,0,0.55)",
+            background: "#ffffff",
+            animation: "scaleIn 200ms cubic-bezier(0.23,1,0.32,1) both",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.08)",
           }}
           onClick={(e) => e.stopPropagation()}
         >
           {/* 关闭按钮 */}
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 z-10 w-7 h-7 rounded-full bg-white/10 flex items-center justify-center active:bg-white/20 transition-colors"
+            className="absolute top-3 right-3 z-10 w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center active:bg-gray-200 transition-colors"
           >
-            <span className="text-white/70 text-[14px] leading-none">✕</span>
+            <span className="text-gray-400 text-[13px] leading-none">✕</span>
           </button>
 
-          {/* 米种名 + 标签 */}
-          <div className="pt-6 pb-2 px-6 text-center">
-            <div className="flex items-center justify-center gap-2">
-              <span className="text-[22px] font-bold text-white tracking-wide">{rice.name}</span>
-              <span className="text-[9px] border border-white/20 rounded px-1.5 py-[2px] text-white/50 font-medium tracking-wide">
-                {rice.tag}
-              </span>
-            </div>
-            <p className="text-[11px] text-white/40 mt-1">{rice.desc}</p>
+          {/* 米种名称和简介 */}
+          <div className="pt-5 pb-1 px-5 text-center">
+            <div className="text-[18px] font-bold text-gray-900 tracking-wide">{rice.name}</div>
+            <div className="text-[11px] text-gray-400 mt-0.5">{rice.desc}</div>
           </div>
 
-          {/* 信息图 SVG */}
-          <div className="flex justify-center">
-            <svg
-              width="100%"
-              viewBox={`0 0 ${W} ${H}`}
-              style={{ display: "block" }}
-            >
-              {/* 装饰圆环 */}
-              <circle cx={cx} cy={cy} r={imgR + 14} fill="none" stroke="rgba(255,105,0,0.15)" strokeWidth="1" strokeDasharray="4 3" />
-              <circle cx={cx} cy={cy} r={imgR + 22} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+          {/* 产品拆解信息图 SVG */}
+          <svg
+            width="100%"
+            viewBox={`0 0 ${W} ${H}`}
+            style={{ display: "block" }}
+          >
+            {/* 淡灰色网格背景（信息图感） */}
+            <defs>
+              <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(0,0,0,0.04)" strokeWidth="0.5"/>
+              </pattern>
+            </defs>
+            <rect width={W} height={H} fill="url(#grid)" />
 
-              {/* 左侧 callout */}
-              {leftItems.map((item, i) => (
-                <Callout
-                  key={item.label}
-                  side="left"
-                  label={item.label}
-                  value={item.value}
-                  unit={item.unit}
-                  x1={leftLineX}
-                  y1={leftYs[i]}
-                  x2={leftEndX}
-                  y2={leftYs[i]}
-                  textAnchor="end"
-                  svgW={W}
-                  svgH={H}
-                />
-              ))}
+            {/* 每个 callout：将起点连到终点，再画标注文字 */}
+            {items.map((item, i) => {
+              const color = lineColors[i % lineColors.length];
+              // 折线：起点 → 中间转折点 → 终点
+              // 中间点：先垂直走到终点的 y，再水平走到终点的 x
+              const mx = item.ox;
+              const my = item.ty;
+              const d = `M ${item.ox} ${item.oy} L ${mx} ${my} L ${item.tx} ${item.ty}`;
+              // 标注文字 x：居左的在线段终点右边，居右的在左边
+              const labelX = item.anchor === "start" ? item.tx + 4 : item.tx - 4;
+              return (
+                <g key={item.label}>
+                  {/* 延伸线 */}
+                  <path d={d} fill="none" stroke={color} strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
+                  {/* 起点小圆点 */}
+                  <circle cx={item.ox} cy={item.oy} r="2.5" fill={color} />
+                  {/* 终点小圆点 */}
+                  <circle cx={item.tx} cy={item.ty} r="1.8" fill={color} opacity="0.6" />
+                  {/* 参数名 */}
+                  <text
+                    x={labelX}
+                    y={item.ty - 7}
+                    textAnchor={item.anchor}
+                    fontSize="8"
+                    fill="#999"
+                    fontFamily="-apple-system, sans-serif"
+                    letterSpacing="0.2"
+                  >{item.label}</text>
+                  {/* 数值 */}
+                  <text
+                    x={labelX}
+                    y={item.ty + 5}
+                    textAnchor={item.anchor}
+                    fontSize="13"
+                    fontWeight="700"
+                    fill="#111"
+                    fontFamily="-apple-system, sans-serif"
+                  >{item.value}</text>
+                  {/* 单位 */}
+                  {item.unit && (
+                    <text
+                      x={labelX}
+                      y={item.ty + 15}
+                      textAnchor={item.anchor}
+                      fontSize="7.5"
+                      fill={color}
+                      fontFamily="-apple-system, sans-serif"
+                      opacity="0.8"
+                    >{item.unit}</text>
+                  )}
+                </g>
+              );
+            })}
 
-              {/* 右侧 callout */}
-              {rightItems.map((item, i) => (
-                <Callout
-                  key={item.label}
-                  side="right"
-                  label={item.label}
-                  value={item.value}
-                  unit={item.unit}
-                  x1={rightLineX}
-                  y1={rightYs[i]}
-                  x2={rightEndX}
-                  y2={rightYs[i]}
-                  textAnchor="start"
-                  svgW={W}
-                  svgH={H}
-                />
-              ))}
+            {/* 中心图片（原图无裁剪） */}
+            {rice.img ? (
+              <image
+                href={cosImg(rice.img, 160)}
+                x={cx - imgW / 2}
+                y={cy - imgH / 2}
+                width={imgW}
+                height={imgH}
+                preserveAspectRatio="xMidYMid meet"
+                style={{ filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.12))" }}
+              />
+            ) : (
+              <rect
+                x={cx - imgW / 2} y={cy - imgH / 2}
+                width={imgW} height={imgH}
+                rx="12" fill="#C8A87A" opacity="0.5"
+              />
+            )}
 
-              {/* 中心图片（用 foreignObject 嵌入 img） */}
-              <clipPath id={`riceClip-${rice.id}`}>
-                <circle cx={cx} cy={cy} r={imgR} />
-              </clipPath>
-              {rice.img ? (
-                <image
-                  href={cosImg(rice.img, 144)}
-                  x={cx - imgR}
-                  y={cy - imgR}
-                  width={imgR * 2}
-                  height={imgR * 2}
-                  clipPath={`url(#riceClip-${rice.id})`}
-                  preserveAspectRatio="xMidYMid slice"
-                />
-              ) : (
-                <circle cx={cx} cy={cy} r={imgR} fill="#C8A87A" />
-              )}
-              {/* 图片边框 */}
-              <circle cx={cx} cy={cy} r={imgR} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="2" />
+            {/* 每100g标注 */}
+            <text x={cx} y={cy + imgH / 2 + 16} textAnchor="middle" fontSize="8" fill="#bbb" fontFamily="-apple-system, sans-serif">
+              每 100g 可食部分
+            </text>
+          </svg>
 
-              {/* 中心产地小标 */}
-              <text x={cx} y={cy + imgR + 36} textAnchor="middle" fontSize="10" fill="rgba(255,255,255,0.35)" fontFamily="sans-serif">
-                产地 · {rice.origin}
-              </text>
-            </svg>
-          </div>
-
-          {/* 底部操作区 */}
-          <div className="px-6 pb-6 pt-0">
-            <p className="text-[9px] text-white/20 text-center mb-4 leading-relaxed">
-              数据来源：中国食物成分表（第6版）· 每100g可食部分 · 仅供参考
+          {/* 底部按钮 */}
+          <div className="px-5 pb-5">
+            <p className="text-[9px] text-gray-300 text-center mb-3">
+              数据来源：中国食物成分表（第6版）· 仅供参考
             </p>
             <Link href="/p/proj_hzxm2t/encyclopedia">
               <button
-                className="w-full py-3 rounded-2xl text-[13px] font-semibold text-white/80 border border-white/15 active:bg-white/10 transition-colors"
+                className="w-full py-2.5 rounded-xl text-[13px] font-semibold text-gray-700 border border-gray-200 active:bg-gray-50 transition-colors"
                 onClick={onClose}
               >
                 查看完整百科 →
@@ -319,7 +291,7 @@ function NutritionDrawer({ rice, onClose }: { rice: RiceType; onClose: () => voi
 
       <style>{`
         @keyframes scaleIn {
-          from { opacity: 0; transform: scale(0.92); }
+          from { opacity: 0; transform: scale(0.93); }
           to   { opacity: 1; transform: scale(1); }
         }
       `}</style>
