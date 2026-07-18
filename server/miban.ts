@@ -204,87 +204,110 @@ async function getAllAgentStats() {
 }
 
 async function getAllUsers() {
-  const db = await getDb();
-  if (!db) return [];
-  const userList = await db.select({
-    id: users.id,
-    name: users.name,
-    username: users.username,
-    openId: users.openId,
-    role: users.role,
-    mibanRole: users.mibanRole,
-    inviteCode: users.inviteCode,
-    inviteCount: users.inviteCount,
-    invitedByUserId: users.invitedByUserId,
-    createdAt: users.createdAt,
-    lastSignedIn: users.lastSignedIn,
-    balance: users.balance,
-    points: users.points,
-  }).from(users).orderBy(desc(users.createdAt));
-
-  // 获取每个用户的订单数量（加 try-catch 防止表不存在时崩溃）
-  let orderCountMap = new Map<number, number>();
-  try {
-    const orderCounts = await db.select({
-      userId: mibanOrders.userId,
-      orderCount: sql<number>`count(*)`,
-    }).from(mibanOrders).groupBy(mibanOrders.userId);
-    orderCountMap = new Map(orderCounts.map(r => [r.userId, Number(r.orderCount)]));
-  } catch (e) {
-    console.warn('[miban] getAllUsers: miban_orders query failed (table may not exist yet):', (e as any)?.message);
-  }
-
-  // 批量查询全局钱包余额（一次 GROUP BY ，避免相关子查询）
-  // USDT: users.balance + 全部 af_manual_balances
-  // CNY:  users.balance_cny + af_manual_balances WHERE note LIKE '[CNY]%'
+  // 使用原生 SQL，避免 Drizzle ORM 列名映射问题（生产库用 snake_case，schema 用 camelCase）
   const conn = await getDbConnection();
-  let usdtMap = new Map<number, number>();
-  let cnyMap = new Map<number, number>();
-  if (conn && userList.length > 0) {
-    const ids = userList.map(u => u.id);
+  if (!conn) return [];
+  try {
+    // 步骤1: 查询用户基本信息（使用生产库实际列名）
+    const [userRows] = await (conn as any).execute(
+      `SELECT
+        u.id, u.name, u.username, u.openId, u.role,
+        u.miban_role AS mibanRole,
+        u.invite_code AS inviteCode,
+        u.invite_count AS inviteCount,
+        u.invited_by_user_id AS invitedByUserId,
+        u.createdAt, u.lastSignedIn,
+        u.balance, u.points
+       FROM users u
+       ORDER BY u.createdAt DESC`
+    ) as any[];
+    const userList: any[] = Array.isArray(userRows) ? userRows : [];
+    if (userList.length === 0) return [];
+    const ids = userList.map((u: any) => u.id);
     const placeholders = ids.map(() => '?').join(',');
-    // USDT 余额：users.balance + af_manual_balances SUM（一次 LEFT JOIN GROUP BY）
-    const [usdtRows] = await (conn as any).execute(
-      `SELECT u.id AS userId,
-        COALESCE(u.balance, 0) + COALESCE(m.manualSum, 0) AS usdtBalance
-       FROM users u
-       LEFT JOIN (
-         SELECT user_id, SUM(amount) AS manualSum
-         FROM af_manual_balances
-         WHERE user_id IN (${placeholders})
-         GROUP BY user_id
-       ) m ON m.user_id = u.id
-       WHERE u.id IN (${placeholders})`,
-      [...ids, ...ids]
-    ) as any[];
-    for (const r of (Array.isArray(usdtRows) ? usdtRows : [])) {
-      usdtMap.set(Number(r.userId), parseFloat(r.usdtBalance?.toString() || '0'));
-    }
-    // CNY 余额：users.balance_cny + af_manual_balances[CNY] SUM（一次 LEFT JOIN GROUP BY）
-    const [cnyRows] = await (conn as any).execute(
-      `SELECT u.id AS userId,
-        COALESCE(u.balance_cny, 0) + COALESCE(c.cnySum, 0) AS cnyBalance
-       FROM users u
-       LEFT JOIN (
-         SELECT user_id, SUM(amount) AS cnySum
-         FROM af_manual_balances
-         WHERE user_id IN (${placeholders}) AND note LIKE '[CNY]%'
-         GROUP BY user_id
-       ) c ON c.user_id = u.id
-       WHERE u.id IN (${placeholders})`,
-      [...ids, ...ids]
-    ) as any[];
-    for (const r of (Array.isArray(cnyRows) ? cnyRows : [])) {
-      cnyMap.set(Number(r.userId), parseFloat(r.cnyBalance?.toString() || '0'));
-    }
-  }
 
-  return userList.map(u => ({
-    ...u,
-    orderCount: orderCountMap.get(u.id) ?? 0,
-    usdtBalance: usdtMap.get(u.id) ?? parseFloat(String(u.balance ?? '0')),
-    cnyBalance: cnyMap.get(u.id) ?? 0,
-  }));
+    // 步骤2: 订单数量
+    let orderCountMap = new Map<number, number>();
+    try {
+      const [orderRows] = await (conn as any).execute(
+        `SELECT userId, COUNT(*) AS orderCount FROM miban_orders WHERE userId IN (${placeholders}) GROUP BY userId`,
+        ids
+      ) as any[];
+      for (const r of (Array.isArray(orderRows) ? orderRows : [])) {
+        orderCountMap.set(Number(r.userId), Number(r.orderCount));
+      }
+    } catch (e) {
+      console.warn('[miban] getAllUsers: miban_orders query failed:', (e as any)?.message);
+    }
+
+    // 步骤3: USDT 余额
+    let usdtMap = new Map<number, number>();
+    try {
+      const [usdtRows] = await (conn as any).execute(
+        `SELECT u.id AS userId,
+          COALESCE(u.balance, 0) + COALESCE(m.manualSum, 0) AS usdtBalance
+         FROM users u
+         LEFT JOIN (
+           SELECT user_id, SUM(amount) AS manualSum
+           FROM af_manual_balances
+           WHERE user_id IN (${placeholders})
+           GROUP BY user_id
+         ) m ON m.user_id = u.id
+         WHERE u.id IN (${placeholders})`,
+        [...ids, ...ids]
+      ) as any[];
+      for (const r of (Array.isArray(usdtRows) ? usdtRows : [])) {
+        usdtMap.set(Number(r.userId), parseFloat(r.usdtBalance?.toString() || '0'));
+      }
+    } catch (e) {
+      console.warn('[miban] getAllUsers: USDT balance query failed:', (e as any)?.message);
+    }
+
+    // 步骤4: CNY 余额（balance_cny 字段可能不存在，用 IFNULL 兼容）
+    let cnyMap = new Map<number, number>();
+    try {
+      const [cnyRows] = await (conn as any).execute(
+        `SELECT u.id AS userId,
+          COALESCE(IFNULL(u.balance_cny, 0), 0) + COALESCE(c.cnySum, 0) AS cnyBalance
+         FROM users u
+         LEFT JOIN (
+           SELECT user_id, SUM(amount) AS cnySum
+           FROM af_manual_balances
+           WHERE user_id IN (${placeholders}) AND note LIKE '[CNY]%'
+           GROUP BY user_id
+         ) c ON c.user_id = u.id
+         WHERE u.id IN (${placeholders})`,
+        [...ids, ...ids]
+      ) as any[];
+      for (const r of (Array.isArray(cnyRows) ? cnyRows : [])) {
+        cnyMap.set(Number(r.userId), parseFloat(r.cnyBalance?.toString() || '0'));
+      }
+    } catch (e) {
+      console.warn('[miban] getAllUsers: CNY balance query failed:', (e as any)?.message);
+    }
+
+    return userList.map((u: any) => ({
+      id: u.id,
+      name: u.name,
+      username: u.username,
+      openId: u.openId,
+      role: u.role,
+      mibanRole: u.mibanRole ?? 'baby',
+      inviteCode: u.inviteCode,
+      inviteCount: u.inviteCount ?? 0,
+      invitedByUserId: u.invitedByUserId,
+      createdAt: u.createdAt,
+      lastSignedIn: u.lastSignedIn,
+      balance: u.balance,
+      points: u.points ?? 0,
+      orderCount: orderCountMap.get(u.id) ?? 0,
+      usdtBalance: usdtMap.get(u.id) ?? parseFloat(String(u.balance ?? '0')),
+      cnyBalance: cnyMap.get(u.id) ?? 0,
+    }));
+  } catch (e) {
+    console.error('[miban] getAllUsers failed:', (e as any)?.message);
+    return [];
+  }
 }
 
 async function updateUserMibanRole(userId: number, role: "parent" | "baby") {
