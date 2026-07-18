@@ -828,6 +828,59 @@ export async function initDatabase() {
           KEY \`idx_user_id\` (\`user_id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
       `);
+      // 标准米种仓库表
+      await (dbConnMibanTables as any).execute(`
+        CREATE TABLE IF NOT EXISTS \`miban_rice_catalog\` (
+          \`id\` INT NOT NULL AUTO_INCREMENT,
+          \`stdName\` VARCHAR(100) NOT NULL COMMENT '标准名称',
+          \`category\` VARCHAR(50) NOT NULL COMMENT '大类：粳米/籼米/糯米/特种米/杂粮',
+          \`subCategory\` VARCHAR(50) DEFAULT NULL COMMENT '小类',
+          \`origin\` VARCHAR(200) DEFAULT NULL COMMENT '主要产地',
+          \`gbStandard\` VARCHAR(100) DEFAULT NULL COMMENT '国家标准编号',
+          \`colorHex\` VARCHAR(20) NOT NULL DEFAULT '#C8A87A' COMMENT '代表色',
+          \`description\` TEXT DEFAULT NULL COMMENT '描述',
+          \`nutritionJson\` JSON DEFAULT NULL COMMENT '营养数据JSON',
+          \`tagsJson\` JSON DEFAULT NULL COMMENT '标签JSON数组',
+          \`img\` TEXT DEFAULT NULL COMMENT '图片URL',
+          \`sortOrder\` INT NOT NULL DEFAULT 0,
+          \`isActive\` TINYINT(1) NOT NULL DEFAULT 1,
+          \`createdAt\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`updatedAt\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (\`id\`),
+          UNIQUE KEY \`uk_stdName\` (\`stdName\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      // 预填充标准米种数据（只在表为空时插入）
+      const [catalogCountRows]: any = await (dbConnMibanTables as any).execute('SELECT COUNT(*) as cnt FROM `miban_rice_catalog`');
+      if (Number((Array.isArray(catalogCountRows) ? catalogCountRows[0] : catalogCountRows)?.cnt ?? 0) === 0) {
+        const catalogSeeds = [
+          ['粳米（东北大米）','粳米','普通粳米','东北（黑龙江/吉林/辽宁）','GB/T 1354','#F5E6C8','颗粒圆润，口感软糯，是中国北方最主流的食用大米，蛋白质含量约7%，淀粉含量约75%。',JSON.stringify({protein:7.0,carbs:77.0,fat:0.8,fiber:0.6,calories:346}),JSON.stringify(['主粮','粳米','东北']),1],
+          ['五常大米（稻花香2号）','粳米','地理标志粳米','黑龙江省五常市','GB/T 19266','#F0DDB0','国家地理标志产品，稻花香2号品种，米粒晶莹，香气浓郁，口感极佳，被誉为"中国最好的大米"之一。',JSON.stringify({protein:7.2,carbs:76.5,fat:0.9,fiber:0.5,calories:344}),JSON.stringify(['主粮','粳米','地理标志','五常']),2],
+          ['盘锦大米','粳米','地理标志粳米','辽宁省盘锦市','GB/T 18824','#EDD9A3','国家地理标志产品，产自辽河三角洲湿地，米粒饱满，口感软糯，含有丰富的矿物质。',JSON.stringify({protein:7.1,carbs:76.8,fat:0.8,fiber:0.5,calories:345}),JSON.stringify(['主粮','粳米','地理标志','盘锦']),3],
+          ['籼米（南方长粒米）','籼米','普通籼米','华南/华中（广东/湖南/江西）','GB/T 1354','#F2E0B6','颗粒细长，直链淀粉含量高，口感偏硬爽口，是南方主流大米，适合炒饭、煲仔饭。',JSON.stringify({protein:7.5,carbs:77.5,fat:0.6,fiber:0.4,calories:348}),JSON.stringify(['主粮','籼米','南方']),4],
+          ['泰国香米（茉莉香米）','籼米','香型籼米','泰国（进口）','GB/T 1354','#EDD5A0','泰国原产茉莉花香米，米粒细长，具有天然茉莉花香，口感柔软，是东南亚最受欢迎的大米品种。',JSON.stringify({protein:7.0,carbs:78.0,fat:0.5,fiber:0.3,calories:350}),JSON.stringify(['主粮','籼米','进口','香米']),5],
+          ['糯米（圆粒糯米）','糯米','粳糯','全国各地','GB/T 1354','#F8F0DC','支链淀粉含量接近100%，口感极黏糯，适合制作汤圆、粽子、年糕等传统食品。',JSON.stringify({protein:7.3,carbs:78.3,fat:1.0,fiber:0.5,calories:350}),JSON.stringify(['主粮','糯米']),6],
+          ['黑米','特种米','有色米','云南/陕西/湖南','GB/T 20040','#2D1B4E','富含花青素、维生素E和铁元素，具有滋阴补肾、健脾暖肝的功效，是药食同源的代表性谷物。',JSON.stringify({protein:9.4,carbs:72.2,fat:2.5,fiber:3.9,calories:341}),JSON.stringify(['特种米','药食同源','有色米','黑米']),7],
+          ['红米','特种米','有色米','云南/贵州/广西','GB/T 20040','#8B2E2E','富含花青素和铁元素，外皮呈红色，保留了更多的营养成分，具有补血养颜的功效。',JSON.stringify({protein:8.0,carbs:73.0,fat:1.8,fiber:2.5,calories:336}),JSON.stringify(['特种米','药食同源','有色米','红米']),8],
+          ['糙米','特种米','全谷物','全国各地','GB/T 18810','#C8A87A','只去除稻壳保留麸皮和胚芽的全谷物大米，富含B族维生素、膳食纤维和矿物质，升糖指数低，适合控糖人群。',JSON.stringify({protein:7.9,carbs:73.1,fat:2.7,fiber:3.4,calories:348}),JSON.stringify(['特种米','全谷物','低GI','糙米']),9],
+          ['小米（粟米）','杂粮','谷子','山西/内蒙古/河北','GB/T 11766','#F5C842','中国传统五谷之一，富含铁、锌、B族维生素，具有健脾和胃的功效，是月子期和病后调养的传统食材。',JSON.stringify({protein:9.0,carbs:73.5,fat:3.1,fiber:1.6,calories:361}),JSON.stringify(['杂粮','药食同源','小米']),10],
+          ['薏米（薏苡仁）','杂粮','药食同源','贵州/福建/广西','GB/T 17891','#E8D5A3','药食同源食材，富含薏苡素，具有健脾祛湿、清热排脓的功效，是夏季祛湿的经典食材。',JSON.stringify({protein:12.8,carbs:69.1,fat:3.3,fiber:2.0,calories:357}),JSON.stringify(['杂粮','药食同源','薏米']),11],
+          ['燕麦米','杂粮','全谷物','内蒙古/河北/山西','GB/T 7711','#D4B896','富含β-葡聚糖，可降低胆固醇，升糖指数低，是控糖、减脂人群的优选谷物。',JSON.stringify({protein:15.0,carbs:61.6,fat:6.7,fiber:5.3,calories:367}),JSON.stringify(['杂粮','全谷物','低GI','燕麦']),12],
+          ['荞麦米','杂粮','药食同源','云南/四川/内蒙古','GB/T 10458','#8B7355','富含芦丁（维生素P），有助于降低血糖和血压，是糖尿病患者的友好食材，升糖指数极低。',JSON.stringify({protein:9.3,carbs:70.0,fat:2.3,fiber:6.5,calories:337}),JSON.stringify(['杂粮','药食同源','低GI','荞麦']),13],
+          ['高粱米','杂粮','传统杂粮','东北/华北','GB/T 8231','#8B2500','中国传统五谷之一，富含鞣酸和铁元素，具有健脾止泻的功效，口感偏硬，适合与其他米种搭配食用。',JSON.stringify({protein:10.4,carbs:74.7,fat:3.1,fiber:4.3,calories:360}),JSON.stringify(['杂粮','传统五谷','高粱']),14],
+          ['紫米（紫糯米）','特种米','有色米','云南西双版纳','GB/T 20040','#4A235A','云南少数民族传统食材，富含花青素和铁元素，具有补血益气、暖脾胃的功效，口感黏糯。',JSON.stringify({protein:8.3,carbs:72.2,fat:1.7,fiber:1.4,calories:343}),JSON.stringify(['特种米','药食同源','有色米','紫米']),15],
+          ['绿豆','杂粮','豆类','全国各地','GB/T 10462','#4A7C59','药食同源食材，具有清热解毒、消暑利水的功效，富含蛋白质和膳食纤维，是夏季解暑的经典食材。',JSON.stringify({protein:21.6,carbs:55.6,fat:0.8,fiber:6.4,calories:316}),JSON.stringify(['杂粮','豆类','药食同源','绿豆']),16],
+          ['红豆（赤小豆）','杂粮','豆类','全国各地','GB/T 10460','#8B1A1A','药食同源食材，具有利水消肿、解毒排脓的功效，富含铁元素，是补血养颜的传统食材。',JSON.stringify({protein:20.2,carbs:55.7,fat:0.6,fiber:7.7,calories:309}),JSON.stringify(['杂粮','豆类','药食同源','红豆']),17],
+          ['莲子','杂粮','药食同源','湖南/福建/江西','药食同源目录','#F5E6C8','药食同源食材，具有补脾止泻、益肾涩精、养心安神的功效，富含钙、磷、钾。',JSON.stringify({protein:17.2,carbs:67.2,fat:2.0,fiber:3.0,calories:344}),JSON.stringify(['杂粮','药食同源','莲子']),18],
+        ];
+        for (const row of catalogSeeds) {
+          await (dbConnMibanTables as any).execute(
+            'INSERT IGNORE INTO `miban_rice_catalog` (stdName,category,subCategory,origin,gbStandard,colorHex,description,nutritionJson,tagsJson,sortOrder) VALUES (?,?,?,?,?,?,?,?,?,?)',
+            row
+          );
+        }
+        console.log('[DB Init] ✅ miban_rice_catalog seeded with 18 standard rice varieties');
+      }
       console.log('[DB Init] ✅ miban core tables ready (CREATE IF NOT EXISTS)');
     }
 

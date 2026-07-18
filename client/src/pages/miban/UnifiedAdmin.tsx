@@ -111,7 +111,151 @@ function OrdersPanel() {
 }
 
 // ─── 米库管理 ─────────────────────────────────────────────────────────────────
+const RICE_CATEGORIES = ['粳米', '籼米', '糯米', '特种米', '杂粮'];
+
+function CatalogPanel() {
+  const { data: catalog, isLoading, refetch } = mtrpc.rice.catalogList.useQuery({ onlyActive: false });
+  const upsertMutation = mtrpc.rice.catalogUpsert.useMutation({
+    onSuccess: () => { toast.success('已保存'); refetch(); setShowForm(false); setFormData(emptyCatalogForm); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const deleteMutation = mtrpc.rice.catalogDelete.useMutation({
+    onSuccess: () => { toast.success('已删除'); refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const uploadImgMutation = mtrpc.rice.catalogUploadImg.useMutation({
+    onSuccess: () => { toast.success('图片已上传'); refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const addToStoreMutation = mtrpc.rice.catalogAddToStore.useMutation({
+    onSuccess: (r: any) => toast.success(`「${r.name}」已添加到本店米库`),
+    onError: (e: any) => toast.error(e.message),
+  });
+  const emptyCatalogForm = { id: undefined as number | undefined, stdName: '', category: '粳米', subCategory: '', origin: '', gbStandard: '', colorHex: '#C8A87A', description: '', sortOrder: 0 };
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState(emptyCatalogForm);
+  const [filterCat, setFilterCat] = useState<string>('全部');
+  const [addPriceId, setAddPriceId] = useState<number | null>(null);
+  const [addPrice, setAddPrice] = useState('');
+
+  function handleImgUpload(id: number, file: File) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const base64 = (e.target?.result as string).split(',')[1];
+      uploadImgMutation.mutate({ id, base64, mimeType: file.type });
+    };
+    reader.readAsDataURL(file);
+  }
+
+  const filtered = (catalog ?? []).filter((c: any) => filterCat === '全部' || c.category === filterCat);
+
+  if (isLoading) return <div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>;
+
+  return (
+    <div>
+      <div className="flex gap-2 overflow-x-auto pb-1 mb-3" style={{ scrollbarWidth: 'none' }}>
+        {['全部', ...RICE_CATEGORIES].map(cat => (
+          <button key={cat} onClick={() => setFilterCat(cat)}
+            className={`flex-shrink-0 text-[11px] px-3 py-1.5 rounded-full font-medium transition-colors ${
+              filterCat === cat ? 'text-white' : 'bg-gray-100 text-gray-500'
+            }`}
+            style={filterCat === cat ? { background: '#FF6900' } : {}}>
+            {cat}
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-[12px] text-gray-400">仓库共 {filtered.length} 种</span>
+        <button onClick={() => { setFormData(emptyCatalogForm); setShowForm(true); }}
+          className="text-[12px] px-3 py-1.5 rounded-xl text-white font-semibold active:scale-95"
+          style={{ background: '#FF6900' }}>+ 新增米种</button>
+      </div>
+      {showForm && (
+        <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4 mb-4 space-y-3">
+          <h3 className="text-[13px] font-bold">{formData.id ? '编辑仓库条目' : '新增标准米种'}</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="text-[11px] text-gray-500">标准名称 *</label>
+              <input value={formData.stdName} onChange={e => setFormData(p => ({ ...p, stdName: e.target.value }))} className="w-full mt-1 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" placeholder="如：五常大米" /></div>
+            <div><label className="text-[11px] text-gray-500">大类 *</label>
+              <select value={formData.category} onChange={e => setFormData(p => ({ ...p, category: e.target.value }))} className="w-full mt-1 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none">
+                {RICE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select></div>
+            <div><label className="text-[11px] text-gray-500">小类</label>
+              <input value={formData.subCategory} onChange={e => setFormData(p => ({ ...p, subCategory: e.target.value }))} className="w-full mt-1 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" placeholder="地理标志粳米" /></div>
+            <div><label className="text-[11px] text-gray-500">主要产地</label>
+              <input value={formData.origin} onChange={e => setFormData(p => ({ ...p, origin: e.target.value }))} className="w-full mt-1 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" placeholder="五常/盘锦" /></div>
+            <div><label className="text-[11px] text-gray-500">国标编号</label>
+              <input value={formData.gbStandard} onChange={e => setFormData(p => ({ ...p, gbStandard: e.target.value }))} className="w-full mt-1 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" placeholder="GB/T 1354" /></div>
+            <div><label className="text-[11px] text-gray-500">代表色</label>
+              <div className="flex items-center gap-2 mt-1">
+                <input type="color" value={formData.colorHex} onChange={e => setFormData(p => ({ ...p, colorHex: e.target.value }))} className="w-8 h-8 rounded-lg border border-gray-200 cursor-pointer" />
+                <input value={formData.colorHex} onChange={e => setFormData(p => ({ ...p, colorHex: e.target.value }))} className="flex-1 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" />
+              </div></div>
+          </div>
+          <div><label className="text-[11px] text-gray-500">简介</label>
+            <textarea value={formData.description} onChange={e => setFormData(p => ({ ...p, description: e.target.value }))} rows={2} className="w-full mt-1 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none resize-none" /></div>
+          <div className="flex gap-2">
+            <button onClick={() => upsertMutation.mutate({ id: formData.id, stdName: formData.stdName, category: formData.category, subCategory: formData.subCategory || undefined, origin: formData.origin || undefined, gbStandard: formData.gbStandard || undefined, colorHex: formData.colorHex, description: formData.description || undefined, sortOrder: formData.sortOrder })}
+              disabled={!formData.stdName || upsertMutation.isPending}
+              className="flex-1 py-2.5 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: '#FF6900' }}>
+              {upsertMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : '保存'}
+            </button>
+            <button onClick={() => { setShowForm(false); setFormData(emptyCatalogForm); }} className="px-5 py-2.5 rounded-xl text-[13px] text-gray-500 bg-gray-100">取消</button>
+          </div>
+        </div>
+      )}
+      <div className="space-y-2">
+        {filtered.map((item: any) => (
+          <div key={item.id} className="bg-white border border-gray-100 rounded-2xl p-3 shadow-sm">
+            <div className="flex items-center gap-3">
+              <label className="relative flex-shrink-0 cursor-pointer group">
+                {item.img
+                  ? <img src={item.img} alt={item.stdName} className="w-12 h-12 rounded-xl object-cover" />
+                  : <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white text-[11px] font-bold" style={{ backgroundColor: item.colorHex ?? '#C8A87A' }}>{item.stdName[0]}</div>
+                }
+                <div className="absolute inset-0 rounded-xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <span className="text-white text-[9px]">换图</span>
+                </div>
+                <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) handleImgUpload(item.id, f); }} />
+              </label>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[13px] font-bold text-black">{item.stdName}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-500">{item.category}</span>
+                  {item.gbStandard && <span className="text-[10px] text-gray-400">{item.gbStandard}</span>}
+                </div>
+                {item.origin && <div className="text-[11px] text-gray-400">产地：{item.origin}</div>}
+              </div>
+              <div className="flex flex-col gap-1 flex-shrink-0">
+                <button onClick={() => { setFormData({ id: item.id, stdName: item.stdName, category: item.category, subCategory: item.subCategory ?? '', origin: item.origin ?? '', gbStandard: item.gbStandard ?? '', colorHex: item.colorHex ?? '#C8A87A', description: item.description ?? '', sortOrder: item.sortOrder ?? 0 }); setShowForm(true); }}
+                  className="text-[11px] px-2 py-1 rounded-lg bg-blue-50 text-blue-600 font-medium">编辑</button>
+                <button onClick={() => { if (confirm(`确认删除「${item.stdName}」？`)) deleteMutation.mutate({ id: item.id }); }}
+                  className="text-[11px] px-2 py-1 rounded-lg bg-red-50 text-red-500 font-medium">删除</button>
+              </div>
+            </div>
+            {addPriceId === item.id ? (
+              <div className="mt-2 flex items-center gap-2 pt-2 border-t border-gray-50">
+                <input type="number" value={addPrice} onChange={e => setAddPrice(e.target.value)} placeholder="定价（元/斤）" className="flex-1 text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none" />
+                <button onClick={() => { addToStoreMutation.mutate({ catalogId: item.id, pricePerJin: parseFloat(addPrice) || 0 }); setAddPriceId(null); setAddPrice(''); }}
+                  disabled={!addPrice || addToStoreMutation.isPending}
+                  className="text-[11px] px-3 py-1.5 rounded-lg text-white font-medium disabled:opacity-50" style={{ background: '#FF6900' }}>确认入库</button>
+                <button onClick={() => { setAddPriceId(null); setAddPrice(''); }} className="text-[11px] px-2 py-1.5 rounded-lg bg-gray-100 text-gray-500">取消</button>
+              </div>
+            ) : (
+              <button onClick={() => { setAddPriceId(item.id); setAddPrice(''); }}
+                className="mt-2 w-full text-[11px] py-1.5 rounded-xl border border-dashed border-orange-200 text-orange-400 hover:bg-orange-50 transition-colors">
+                + 入店米库（设定定价）
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function RicePanel() {
+  const [subTab, setSubTab] = useState<'store' | 'catalog'>('store');
   const { data: riceList, isLoading, refetch } = mtrpc.rice.adminList.useQuery();
   const upsertMutation = mtrpc.rice.upsert.useMutation({
     onSuccess: () => { toast.success("已保存"); refetch(); setShowForm(false); setFormData(emptyForm); },
@@ -130,12 +274,12 @@ function RicePanel() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const emptyForm = { id: undefined as number | undefined, name: "", category: "山田米", description: "", pricePerJin: "", colorHex: "#C8A87A", img: "" };
+  const emptyForm = { id: undefined as number | undefined, name: "", category: "粳米", description: "", pricePerJin: "", colorHex: "#C8A87A", img: "" };
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState(emptyForm);
 
   function openEdit(rice: any) {
-    setFormData({ id: rice.id, name: rice.name, category: rice.category ?? "山田米", description: rice.description ?? "", pricePerJin: Number(rice.pricePerJin).toFixed(1), colorHex: rice.colorHex ?? "#C8A87A", img: rice.img ?? "" });
+    setFormData({ id: rice.id, name: rice.name, category: rice.category ?? "粳米", description: rice.description ?? "", pricePerJin: Number(rice.pricePerJin).toFixed(1), colorHex: rice.colorHex ?? "#C8A87A", img: rice.img ?? "" });
     setShowForm(true);
   }
 
@@ -148,11 +292,25 @@ function RicePanel() {
     reader.readAsDataURL(file);
   }
 
-  if (isLoading) return (
-    <div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
-  );
-
   return (
+    <div>
+      {/* 子 Tab */}
+      <div className="flex gap-2 mb-4">
+        <button onClick={() => setSubTab('store')}
+          className={`flex-1 py-2 rounded-xl text-[12px] font-semibold transition-colors ${
+            subTab === 'store' ? 'text-white' : 'bg-gray-100 text-gray-500'
+          }`} style={subTab === 'store' ? { background: '#FF6900' } : {}}>
+          本店米库
+        </button>
+        <button onClick={() => setSubTab('catalog')}
+          className={`flex-1 py-2 rounded-xl text-[12px] font-semibold transition-colors ${
+            subTab === 'catalog' ? 'text-white' : 'bg-gray-100 text-gray-500'
+          }`} style={subTab === 'catalog' ? { background: '#FF6900' } : {}}>
+          标准仓库
+        </button>
+      </div>
+      {subTab === 'catalog' && <CatalogPanel />}
+      {subTab === 'store' && (
     <div>
       <div className="flex items-center justify-between mb-4">
         <span className="text-[12px] text-gray-400">共 {riceList?.length ?? 0} 种米</span>
@@ -161,7 +319,7 @@ function RicePanel() {
           className="text-[12px] px-4 py-2 rounded-xl text-white font-semibold active:scale-95 transition-transform"
           style={{ background: "#FF6900" }}
         >
-          + 添加米种
+          + 手动添加
         </button>
       </div>
 
@@ -186,7 +344,9 @@ function RicePanel() {
             </div>
             <div>
               <label className="text-[11px] text-gray-500">分类</label>
-              <input value={formData.category} onChange={e => setFormData(p => ({ ...p, category: e.target.value }))} className="w-full mt-1 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-300" />
+              <select value={formData.category} onChange={e => setFormData(p => ({ ...p, category: e.target.value }))} className="w-full mt-1 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none">
+                {RICE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
             </div>
           </div>
           <div>
@@ -209,6 +369,7 @@ function RicePanel() {
         </div>
       )}
 
+      {isLoading && <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>}
       <div className="space-y-2">
         {(riceList ?? []).map((rice: any) => (
           <div key={rice.id} className={`bg-white border border-gray-100 rounded-2xl p-3 flex items-center gap-3 shadow-sm transition-opacity ${rice.isActive ? "" : "opacity-50"}`}>
@@ -237,6 +398,8 @@ function RicePanel() {
           </div>
         ))}
       </div>
+    </div>
+      )}
     </div>
   );
 }

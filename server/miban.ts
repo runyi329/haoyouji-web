@@ -478,6 +478,118 @@ export const mibanRiceRouter = router({
       if (db) await db.update(mibanRiceVarieties).set({ img: url } as any).where(eq(mibanRiceVarieties.id, input.id));
       return { url };
     }),
+
+  // ─── 标准米种仓库接口 ─────────────────────────────────────────────────────
+  // 公开：获取仓库列表（用于 DIY 页面选择米种）
+  catalogList: publicProcedure
+    .input(z.object({ category: z.string().optional(), onlyActive: z.boolean().optional() }).optional())
+    .query(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) return [];
+      try {
+        let sql2 = 'SELECT * FROM `miban_rice_catalog`';
+        const params: any[] = [];
+        const conditions: string[] = [];
+        if (input?.onlyActive !== false) conditions.push('isActive = 1');
+        if (input?.category) { conditions.push('category = ?'); params.push(input.category); }
+        if (conditions.length) sql2 += ' WHERE ' + conditions.join(' AND ');
+        sql2 += ' ORDER BY sortOrder ASC, id ASC';
+        const [rows]: any = await (conn as any).execute(sql2, params);
+        return (Array.isArray(rows) ? rows : []).map((r: any) => ({
+          ...r,
+          nutritionJson: typeof r.nutritionJson === 'string' ? JSON.parse(r.nutritionJson) : (r.nutritionJson ?? null),
+          tagsJson: typeof r.tagsJson === 'string' ? JSON.parse(r.tagsJson) : (r.tagsJson ?? []),
+          isActive: Boolean(r.isActive),
+        }));
+      } catch(e) { console.warn('[miban] catalogList error:', (e as any)?.message); return []; }
+    }),
+  // 管理员：仓库 upsert
+  catalogUpsert: mibanAdminProcedure
+    .input(z.object({
+      id: z.number().optional(),
+      stdName: z.string().min(1),
+      category: z.string().min(1),
+      subCategory: z.string().optional(),
+      origin: z.string().optional(),
+      gbStandard: z.string().optional(),
+      colorHex: z.string().optional(),
+      description: z.string().optional(),
+      nutritionJson: z.object({
+        protein: z.number().optional(),
+        carbs: z.number().optional(),
+        fat: z.number().optional(),
+        fiber: z.number().optional(),
+        calories: z.number().optional(),
+      }).optional(),
+      tagsJson: z.array(z.string()).optional(),
+      sortOrder: z.number().optional(),
+      isActive: z.boolean().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+      const { id, nutritionJson, tagsJson, ...rest } = input;
+      const fields: Record<string, any> = { ...rest };
+      if (nutritionJson !== undefined) fields.nutritionJson = JSON.stringify(nutritionJson);
+      if (tagsJson !== undefined) fields.tagsJson = JSON.stringify(tagsJson);
+      if (id) {
+        fields.updatedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        const setClauses = Object.keys(fields).map(k => `\`${k}\` = ?`).join(', ');
+        await (conn as any).execute(`UPDATE \`miban_rice_catalog\` SET ${setClauses} WHERE id = ?`, [...Object.values(fields), id]);
+        return { id };
+      } else {
+        const keys = Object.keys(fields);
+        const placeholders = keys.map(() => '?').join(', ');
+        const [result]: any = await (conn as any).execute(
+          `INSERT INTO \`miban_rice_catalog\` (${keys.map(k => `\`${k}\``).join(', ')}) VALUES (${placeholders})`,
+          Object.values(fields)
+        );
+        return { id: result.insertId };
+      }
+    }),
+  // 管理员：删除仓库条目
+  catalogDelete: mibanAdminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+      await (conn as any).execute('DELETE FROM `miban_rice_catalog` WHERE id = ?', [input.id]);
+      return { success: true };
+    }),
+  // 管理员：仓库条目上传图片
+  catalogUploadImg: mibanAdminProcedure
+    .input(z.object({ id: z.number(), base64: z.string(), mimeType: z.string().default('image/webp') }))
+    .mutation(async ({ input }) => {
+      const { uploadFileToCOS } = await import('./cos-upload');
+      const ext = input.mimeType.split('/')[1] ?? 'webp';
+      const filename = `rice_catalog_${input.id}_${Date.now()}.${ext}`;
+      const url = await uploadFileToCOS(input.base64, 'assets/miban/catalog', filename, input.mimeType);
+      const conn = await getDbConnection();
+      if (conn) await (conn as any).execute('UPDATE `miban_rice_catalog` SET img = ? WHERE id = ?', [url, input.id]);
+      return { url };
+    }),
+  // 管理员：从仓库添加到本店米库（创建 miban_rice_varieties 记录）
+  catalogAddToStore: mibanAdminProcedure
+    .input(z.object({
+      catalogId: z.number(),
+      pricePerJin: z.number().positive(),
+    }))
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+      const [rows]: any = await (conn as any).execute('SELECT * FROM `miban_rice_catalog` WHERE id = ?', [input.catalogId]);
+      const catalog = Array.isArray(rows) ? rows[0] : rows;
+      if (!catalog) throw new TRPCError({ code: 'NOT_FOUND', message: '仓库中未找到该米种' });
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+      const existing = await db.select().from(mibanRiceVarieties).where(eq(mibanRiceVarieties.name, catalog.stdName));
+      if (existing.length > 0) throw new TRPCError({ code: 'CONFLICT', message: `「${catalog.stdName}」已在本店米库中` });
+      const [result]: any = await (conn as any).execute(
+        'INSERT INTO `miban_rice_varieties` (name, description, price_per_jin, image_url, is_active, sort_order) VALUES (?, ?, ?, ?, 1, ?)',
+        [catalog.stdName, catalog.description ?? '', input.pricePerJin, catalog.img ?? null, catalog.sortOrder ?? 0]
+      );
+      return { id: result.insertId, name: catalog.stdName };
+    }),
 });
 
 export const mibanPresetRouter = router({
