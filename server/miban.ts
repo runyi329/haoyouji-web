@@ -224,8 +224,8 @@ async function getAllUsers() {
   }).from(mibanOrders).groupBy(mibanOrders.userId);
   const orderCountMap = new Map(orderCounts.map(r => [r.userId, Number(r.orderCount)]));
 
-  // 批量查询全局钱包余额（与麦动网 getMembersBalance 接口完全一致）
-  // USDT: users.balance + 全部 af_manual_balances（不按账本隔离）
+  // 批量查询全局钱包余额（一次 GROUP BY ，避免相关子查询）
+  // USDT: users.balance + 全部 af_manual_balances
   // CNY:  users.balance_cny + af_manual_balances WHERE note LIKE '[CNY]%'
   const conn = await getDbConnection();
   let usdtMap = new Map<number, number>();
@@ -233,22 +233,36 @@ async function getAllUsers() {
   if (conn && userList.length > 0) {
     const ids = userList.map(u => u.id);
     const placeholders = ids.map(() => '?').join(',');
-    // USDT 余额（与 getMembersBalance 完全一致）
+    // USDT 余额：users.balance + af_manual_balances SUM（一次 LEFT JOIN GROUP BY）
     const [usdtRows] = await (conn as any).execute(
       `SELECT u.id AS userId,
-        (COALESCE(u.balance, 0) + COALESCE((SELECT SUM(amount) FROM af_manual_balances WHERE user_id = u.id), 0)) AS usdtBalance
-       FROM users u WHERE u.id IN (${placeholders})`,
-      [...ids]
+        COALESCE(u.balance, 0) + COALESCE(m.manualSum, 0) AS usdtBalance
+       FROM users u
+       LEFT JOIN (
+         SELECT user_id, SUM(amount) AS manualSum
+         FROM af_manual_balances
+         WHERE user_id IN (${placeholders})
+         GROUP BY user_id
+       ) m ON m.user_id = u.id
+       WHERE u.id IN (${placeholders})`,
+      [...ids, ...ids]
     ) as any[];
     for (const r of (Array.isArray(usdtRows) ? usdtRows : [])) {
       usdtMap.set(Number(r.userId), parseFloat(r.usdtBalance?.toString() || '0'));
     }
-    // CNY 余额
+    // CNY 余额：users.balance_cny + af_manual_balances[CNY] SUM（一次 LEFT JOIN GROUP BY）
     const [cnyRows] = await (conn as any).execute(
       `SELECT u.id AS userId,
-        (COALESCE(u.balance_cny, 0) + COALESCE((SELECT SUM(amount) FROM af_manual_balances WHERE user_id = u.id AND note LIKE '[CNY]%'), 0)) AS cnyBalance
-       FROM users u WHERE u.id IN (${placeholders})`,
-      [...ids]
+        COALESCE(u.balance_cny, 0) + COALESCE(c.cnySum, 0) AS cnyBalance
+       FROM users u
+       LEFT JOIN (
+         SELECT user_id, SUM(amount) AS cnySum
+         FROM af_manual_balances
+         WHERE user_id IN (${placeholders}) AND note LIKE '[CNY]%'
+         GROUP BY user_id
+       ) c ON c.user_id = u.id
+       WHERE u.id IN (${placeholders})`,
+      [...ids, ...ids]
     ) as any[];
     for (const r of (Array.isArray(cnyRows) ? cnyRows : [])) {
       cnyMap.set(Number(r.userId), parseFloat(r.cnyBalance?.toString() || '0'));
