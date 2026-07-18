@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-18
+// 生成时间：2026-07-19
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8452,5 +8452,8 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-18T07:12:43Z", type: "feat", cleanMessage: "首页米种详情改为信息图风格弹窗（中心图片+四周延伸线标注营养参数）" },
     { date: "2026-07-18T08:28:11Z", type: "feat", cleanMessage: "米种详情改为白色背景产品拆解图风格，四周8条彩色延伸线标注参数" },
     { date: "2026-07-18T10:28:15Z", type: "feat", cleanMessage: "首页米种弹窗改为实验室分子图风格信息图" },
+    { date: "2026-07-18T10:53:50Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-18T11:27:44Z", type: "fix", cleanMessage: "更新实验室信息图为 COS 真实 URL（18张图片已上传）" },
+    { date: "2026-07-18T13:51:14Z", type: "fix", cleanMessage: "修复泰国香米名称括号匹配问题（全角括号）" },
   ],
 };
