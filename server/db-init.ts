@@ -743,6 +743,80 @@ export async function initDatabase() {
       console.log('[DB Init] ✅ yaban_voice_segment table ready');
     }
 
+    // ─── 确保 miban 四张核心表存在（CREATE TABLE IF NOT EXISTS）────────────────
+    const dbConnMibanTables = await getDbConnection();
+    if (dbConnMibanTables) {
+      await (dbConnMibanTables as any).execute(`
+        CREATE TABLE IF NOT EXISTS \`miban_rice_varieties\` (
+          \`id\` INT NOT NULL AUTO_INCREMENT,
+          \`name\` VARCHAR(100) NOT NULL COMMENT '米种名称',
+          \`description\` TEXT DEFAULT NULL,
+          \`price_per_jin\` DECIMAL(10,2) NOT NULL DEFAULT 0.00 COMMENT '每斤价格(U)',
+          \`image_url\` VARCHAR(512) DEFAULT NULL,
+          \`is_active\` TINYINT NOT NULL DEFAULT 1,
+          \`sort_order\` INT NOT NULL DEFAULT 0,
+          \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      await (dbConnMibanTables as any).execute(`
+        CREATE TABLE IF NOT EXISTS \`miban_orders\` (
+          \`id\` INT NOT NULL AUTO_INCREMENT,
+          \`user_id\` INT NOT NULL,
+          \`order_no\` VARCHAR(64) NOT NULL,
+          \`status\` VARCHAR(32) NOT NULL DEFAULT 'pending',
+          \`total_price\` DECIMAL(10,4) NOT NULL DEFAULT 0,
+          \`weight_jin\` DECIMAL(10,2) NOT NULL DEFAULT 0,
+          \`recipe_name\` VARCHAR(200) DEFAULT NULL,
+          \`ingredients\` JSON NOT NULL,
+          \`receiver_name\` VARCHAR(100) DEFAULT NULL,
+          \`receiver_phone\` VARCHAR(20) DEFAULT NULL,
+          \`receiver_address\` TEXT DEFAULT NULL,
+          \`wallet_deduct_cny\` DECIMAL(10,2) NOT NULL DEFAULT 0,
+          \`wallet_deduct_usdt\` DECIMAL(18,8) NOT NULL DEFAULT 0,
+          \`usdt_cny_rate_at_order\` DECIMAL(10,4) NOT NULL DEFAULT 0,
+          \`remark\` TEXT DEFAULT NULL,
+          \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          PRIMARY KEY (\`id\`),
+          UNIQUE KEY \`uq_order_no\` (\`order_no\`),
+          KEY \`idx_user_id\` (\`user_id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      await (dbConnMibanTables as any).execute(`
+        CREATE TABLE IF NOT EXISTS \`miban_cart_items\` (
+          \`id\` INT NOT NULL AUTO_INCREMENT,
+          \`user_id\` INT DEFAULT NULL,
+          \`session_id\` VARCHAR(64) DEFAULT NULL,
+          \`rice_id\` VARCHAR(64) NOT NULL,
+          \`rice_name\` VARCHAR(100) NOT NULL,
+          \`weight_jin\` DECIMAL(10,2) NOT NULL DEFAULT 0,
+          \`price_per_jin\` DECIMAL(10,4) NOT NULL DEFAULT 0,
+          \`ratio\` INT NOT NULL DEFAULT 0,
+          \`recipe_id\` VARCHAR(64) DEFAULT NULL,
+          \`recipe_name\` VARCHAR(200) DEFAULT NULL,
+          \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (\`id\`),
+          KEY \`idx_user_id\` (\`user_id\`),
+          KEY \`idx_session_id\` (\`session_id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      await (dbConnMibanTables as any).execute(`
+        CREATE TABLE IF NOT EXISTS \`miban_saved_recipes\` (
+          \`id\` INT NOT NULL AUTO_INCREMENT,
+          \`user_id\` INT NOT NULL,
+          \`name\` VARCHAR(200) NOT NULL,
+          \`ingredients\` JSON NOT NULL,
+          \`total_weight_jin\` DECIMAL(10,2) NOT NULL DEFAULT 0,
+          \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (\`id\`),
+          KEY \`idx_user_id\` (\`user_id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      console.log('[DB Init] ✅ miban core tables ready (CREATE IF NOT EXISTS)');
+    }
+
     // 确保 users 表有 miban 相关字段（兼容旧部署）
     const dbConnMiban = await getDbConnection();
     if (dbConnMiban) {
