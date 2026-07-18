@@ -27,7 +27,7 @@ import { Check, Minus, Plus, ChevronRight, ChevronLeft, Shuffle, Sliders, Share2
 import { toast } from "sonner";
 import html2canvas from "html2canvas";
 import { trpc } from "@/lib/trpc";
-import { mtrpc } from "./mibanTrpc";
+import { mtrpc, cosImg } from "./mibanTrpc";
 import { useRiceFlyAnimation } from "@/hooks/useRiceFlyAnimation";
 
 const RICE_TYPES = [
@@ -514,7 +514,7 @@ export default function DiyWorkshop() {
                   <Check size={12} className="text-black" strokeWidth={3} />
                 </div>
               )}
-              <img src={rice.img} alt={rice.name} className="w-10 h-10 rounded-full object-cover mb-2" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }} />
+              <img src={cosImg(rice.img, 40)} alt={rice.name} className="w-10 h-10 rounded-full object-cover mb-2" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }} />
               <div className="font-semibold text-[15px]">{rice.name}</div>
               <div className={`text-[11px] mt-0.5 ${isSel ? "text-gray-300" : "text-gray-400"}`}>{rice.desc}</div>
               <div className={`text-[12px] font-medium mt-1.5 ${isSel ? "text-orange-300" : "text-[#FF6900]"}`}>¥{rice.price}/斤</div>
@@ -641,7 +641,7 @@ export default function DiyWorkshop() {
             const pct = ratios[rice.id] ?? 0;
             return (
               <div key={rice.id} className="flex items-center gap-3">
-                <img src={rice.img} alt={rice.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                <img src={cosImg(rice.img, 32)} alt={rice.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[13px] font-medium text-black">{rice.name}</span>

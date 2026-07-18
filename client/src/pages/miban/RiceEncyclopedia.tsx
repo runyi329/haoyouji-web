@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { useState } from "react";
-import { mtrpc } from "./mibanTrpc";
+import { mtrpc, cosImg } from "./mibanTrpc";
 import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -99,7 +99,7 @@ export default function RiceEncyclopedia() {
                   {/* 米种图片或色块 */}
                   {rice.img ? (
                     <div className="w-10 h-10 rounded-full mb-3 flex-shrink-0 overflow-hidden shadow-sm">
-                      <img src={rice.img} alt={rice.stdName} className="w-full h-full object-cover" />
+                      <img src={cosImg(rice.img, 40)} alt={rice.stdName} className="w-full h-full object-cover" />
                     </div>
                   ) : (
                     <div

@@ -2,7 +2,7 @@
 import { Link } from "wouter";
 import { useRef, useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
-import { mtrpc } from "./mibanTrpc";
+import { mtrpc, cosImg } from "./mibanTrpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { ShoppingCart, Trash2, BookOpen } from "lucide-react";
 import { toast } from "sonner";
@@ -126,7 +126,7 @@ function NutritionDrawer({ rice, onClose }: { rice: RiceType; onClose: () => voi
           {/* 米种信息头 */}
           <div className="flex items-center gap-4 py-5 border-b border-gray-100">
             <div className="w-16 h-16 rounded-2xl bg-[#F7F7F7] overflow-hidden flex-shrink-0">
-              <img src={rice.img} alt={rice.name} className="w-full h-full object-cover" />
+              <img src={cosImg(rice.img, 64)} alt={rice.name} className="w-full h-full object-cover" />
             </div>
             <div>
               <div className="flex items-center gap-2 mb-1">
@@ -481,7 +481,7 @@ export default function Home() {
                 className="w-[110px] h-[110px] rounded-2xl bg-[#F7F7F7] overflow-hidden mb-2.5 transition-all duration-200 active:scale-95"
               >
                 <img
-                  src={rice.img}
+                  src={cosImg(rice.img, 110)}
                   alt={rice.name}
                   className="w-full h-full object-cover"
                 />

@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
-import { mtrpc } from "./mibanTrpc";
+import { mtrpc, cosImg } from "./mibanTrpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -329,7 +329,7 @@ function CatalogPanel() {
                 {/* 图片/色块 */}
                 <label className="relative flex-shrink-0 cursor-pointer group">
                   {item.img
-                    ? <img src={item.img} alt={item.stdName} className="w-12 h-12 rounded-xl object-cover" />
+                    ? <img src={cosImg(item.img, 48)} alt={item.stdName} className="w-12 h-12 rounded-xl object-cover" />
                     : <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white text-[11px] font-bold" style={{ backgroundColor: item.colorHex ?? '#C8A87A' }}>{item.stdName[0]}</div>
                   }
                   <div className="absolute inset-0 rounded-xl bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
