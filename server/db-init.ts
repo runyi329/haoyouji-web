@@ -760,28 +760,42 @@ export async function initDatabase() {
           PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
       `);
+      // 检查 miban_orders 是否用旧 snake_case 列名建的，如果是则 DROP 重建
+      try {
+        const [colCheck]: any = await (dbConnMibanTables as any).execute(
+          `SELECT COUNT(*) as cnt FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='miban_orders' AND COLUMN_NAME='user_id'`
+        );
+        if (Number(colCheck?.[0]?.cnt ?? 0) > 0) {
+          // 旧表用 snake_case，DROP 重建（此时表是空的，无数据损失）
+          await (dbConnMibanTables as any).execute('DROP TABLE IF EXISTS `miban_orders`');
+          console.log('[DB Init] ⚠️ miban_orders had old snake_case columns, dropped for rebuild');
+        }
+      } catch(e) { /* 表不存在时正常 */ }
       await (dbConnMibanTables as any).execute(`
         CREATE TABLE IF NOT EXISTS \`miban_orders\` (
           \`id\` INT NOT NULL AUTO_INCREMENT,
-          \`user_id\` INT NOT NULL,
-          \`order_no\` VARCHAR(64) NOT NULL,
-          \`status\` VARCHAR(32) NOT NULL DEFAULT 'pending',
-          \`total_price\` DECIMAL(10,4) NOT NULL DEFAULT 0,
-          \`weight_jin\` DECIMAL(10,2) NOT NULL DEFAULT 0,
-          \`recipe_name\` VARCHAR(200) DEFAULT NULL,
+          \`userId\` INT NOT NULL,
+          \`orderNo\` VARCHAR(32) NOT NULL,
+          \`recipeName\` VARCHAR(64) DEFAULT NULL,
           \`ingredients\` JSON NOT NULL,
-          \`receiver_name\` VARCHAR(100) DEFAULT NULL,
-          \`receiver_phone\` VARCHAR(20) DEFAULT NULL,
-          \`receiver_address\` TEXT DEFAULT NULL,
-          \`wallet_deduct_cny\` DECIMAL(10,2) NOT NULL DEFAULT 0,
-          \`wallet_deduct_usdt\` DECIMAL(18,8) NOT NULL DEFAULT 0,
-          \`usdt_cny_rate_at_order\` DECIMAL(10,4) NOT NULL DEFAULT 0,
-          \`remark\` TEXT DEFAULT NULL,
-          \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          \`totalWeightJin\` DECIMAL(8,1) NOT NULL DEFAULT 0.0,
+          \`totalPrice\` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+          \`status\` ENUM('pending','confirmed','packing','shipped','delivered','cancelled') NOT NULL DEFAULT 'pending',
+          \`receiverName\` VARCHAR(64) DEFAULT NULL,
+          \`receiverPhone\` VARCHAR(20) DEFAULT NULL,
+          \`receiverAddress\` TEXT DEFAULT NULL,
+          \`trackingNo\` VARCHAR(64) DEFAULT NULL,
+          \`trackingCompany\` VARCHAR(32) DEFAULT NULL,
+          \`userNote\` TEXT DEFAULT NULL,
+          \`adminNote\` TEXT DEFAULT NULL,
+          \`walletDeductCny\` DECIMAL(10,2) DEFAULT 0,
+          \`walletDeductUsdt\` DECIMAL(18,8) DEFAULT 0,
+          \`usdtCnyRateAtOrder\` DECIMAL(10,4) DEFAULT 0,
+          \`createdAt\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          \`updatedAt\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
           PRIMARY KEY (\`id\`),
-          UNIQUE KEY \`uq_order_no\` (\`order_no\`),
-          KEY \`idx_user_id\` (\`user_id\`)
+          UNIQUE KEY \`uq_orderNo\` (\`orderNo\`),
+          KEY \`idx_userId\` (\`userId\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
       `);
       await (dbConnMibanTables as any).execute(`

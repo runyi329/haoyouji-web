@@ -222,12 +222,17 @@ async function getAllUsers() {
     points: users.points,
   }).from(users).orderBy(desc(users.createdAt));
 
-  // 获取每个用户的订单数量
-  const orderCounts = await db.select({
-    userId: mibanOrders.userId,
-    orderCount: sql<number>`count(*)`,
-  }).from(mibanOrders).groupBy(mibanOrders.userId);
-  const orderCountMap = new Map(orderCounts.map(r => [r.userId, Number(r.orderCount)]));
+  // 获取每个用户的订单数量（加 try-catch 防止表不存在时崩溃）
+  let orderCountMap = new Map<number, number>();
+  try {
+    const orderCounts = await db.select({
+      userId: mibanOrders.userId,
+      orderCount: sql<number>`count(*)`,
+    }).from(mibanOrders).groupBy(mibanOrders.userId);
+    orderCountMap = new Map(orderCounts.map(r => [r.userId, Number(r.orderCount)]));
+  } catch (e) {
+    console.warn('[miban] getAllUsers: miban_orders query failed (table may not exist yet):', (e as any)?.message);
+  }
 
   // 批量查询全局钱包余额（一次 GROUP BY ，避免相关子查询）
   // USDT: users.balance + 全部 af_manual_balances
