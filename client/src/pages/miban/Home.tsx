@@ -9,12 +9,13 @@ import { toast } from "sonner";
 import { useRiceFlyAnimation } from "@/hooks/useRiceFlyAnimation";
 
 type RiceNutrition = {
-  energy: string;   // 热量 kcal/100g
-  protein: string;  // 蛋白质 g
-  fat: string;      // 脂肪 g
-  carbs: string;    // 碳水 g
-  fiber: string;    // 膳食纤维 g
-  gi: string;       // 升糖指数
+  energy?: string | number;   // 热量 kcal/100g（旧字段，兼容硬编码）
+  calories?: string | number; // 热量 kcal/100g（catalogList 返回字段）
+  protein: string | number;   // 蛋白质 g
+  fat: string | number;       // 脂肪 g
+  carbs: string | number;     // 碳水 g
+  fiber: string | number;     // 膳食纤维 g
+  gi?: string | number;       // 升糖指数（可选）
 };
 
 type RiceType = {
@@ -88,13 +89,15 @@ const SCENE_PRESETS = [
 
 // 营养成分详情抽屉（底部弹出）
 function NutritionDrawer({ rice, onClose }: { rice: RiceType; onClose: () => void }) {
+  // 热量字段：catalogList 返回 calories，硬编码用 energy，兼容两者
+  const energyVal = rice.nutrition.calories ?? rice.nutrition.energy;
   const rows = [
-    { label: "热量",     value: rice.nutrition.energy,  unit: "kcal" },
+    { label: "热量",     value: energyVal,              unit: "kcal" },
     { label: "蛋白质",   value: rice.nutrition.protein,  unit: "g" },
     { label: "脂肪",     value: rice.nutrition.fat,      unit: "g" },
     { label: "碳水化合物", value: rice.nutrition.carbs,  unit: "g" },
     { label: "膳食纤维", value: rice.nutrition.fiber,    unit: "g" },
-    { label: "升糖指数 GI", value: rice.nutrition.gi,   unit: "" },
+    ...(rice.nutrition.gi ? [{ label: "升糖指数 GI", value: rice.nutrition.gi, unit: "" }] : []),
   ];
 
   return (
@@ -366,9 +369,30 @@ export default function Home() {
   );
   const recipeCount = recipes?.length ?? 0;
 
+  // 从标准仓库动态加载米种数据
+  const { data: catalogData, isLoading: catalogLoading } = mtrpc.rice.catalogList.useQuery(
+    { onlyActive: true },
+    { staleTime: 5 * 60 * 1000 } // 5分钟缓存
+  );
+
+  // 将 catalogList 返回的数据映射为 RiceType 格式，加载失败时回退到硬编码
+  const riceList: RiceType[] = catalogData && catalogData.length > 0
+    ? catalogData.map((r: any) => ({
+        id: String(r.id),
+        name: r.stdName,
+        origin: r.origin ?? "",
+        desc: r.description ?? "",
+        tag: (r.tagsJson && r.tagsJson.length > 0) ? r.tagsJson[0] : (r.category ?? ""),
+        img: r.img ?? "",
+        nutrition: r.nutritionJson ?? { protein: 0, fat: 0, carbs: 0, fiber: 0 },
+        categories: r.tagsJson ?? [],
+        color: r.colorHex,
+      }))
+    : RICE_TYPES;
+
   const filteredRice = activeFilter === "全部"
-    ? RICE_TYPES
-    : RICE_TYPES.filter((r) => r.categories.includes(activeFilter));
+    ? riceList
+    : riceList.filter((r) => r.categories.includes(activeFilter));
 
   return (
     <div className="min-h-screen bg-white pb-20">
@@ -400,7 +424,7 @@ export default function Home() {
           <div>
             <h2 className="text-[18px] font-bold text-black">米库</h2>
             <p className="text-[11px] text-gray-400 mt-0.5">
-              精选 {RICE_TYPES.length} 种优质米 · 点击查看营养成分
+              精选 {riceList.length} 种优质米 · 点击查看营养成分
             </p>
           </div>
           <Link href="/p/proj_hzxm2t/encyclopedia">
@@ -435,6 +459,16 @@ export default function Home() {
           className="flex gap-3 overflow-x-auto px-5 pb-1"
           style={{ scrollSnapType: "x mandatory", scrollbarWidth: "none" }}
         >
+          {/* 加载骨架屏 */}
+          {catalogLoading && (!catalogData || catalogData.length === 0) && (
+            Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex-shrink-0 w-[110px]">
+                <div className="w-[110px] h-[110px] rounded-2xl bg-gray-100 mb-2.5 animate-pulse" />
+                <div className="h-3.5 w-16 bg-gray-100 rounded mb-1.5 animate-pulse" />
+                <div className="h-2.5 w-12 bg-gray-100 rounded animate-pulse" />
+              </div>
+            ))
+          )}
           {filteredRice.map((rice) => (
             <div
               key={rice.id}
