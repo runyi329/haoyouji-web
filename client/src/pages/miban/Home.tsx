@@ -87,8 +87,32 @@ const SCENE_PRESETS = [
   { label: "补血配方", tag: "补血", desc: "铁元素丰富，气色红润", href: "/diy" },
 ];
 
-// 产品拆解图风格弹窗：白色背景，图片原样居中，四周延伸线标注
+// 实验室信息图 URL 映射（按米种名称匹配）
+const LAB_INFO_IMGS: Record<string, string> = {
+  "粳米（东北大米）": "/manus-storage/01_jingmi_f2c72388.png",
+  "盘锦大米":         "/manus-storage/02_panjin_706cc6a5.png",
+  "籼米（南方长粒米）":"/manus-storage/03_xianmi_eed50cfd.png",
+  "泰国香米（茉莉香米)":"/manus-storage/04_thaijasmine_60c4a207.png",
+  "泰国香米":         "/manus-storage/04_thaijasmine_60c4a207.png",
+  "糯米（圆粒糯米）":  "/manus-storage/05_nuomi_4488f744.png",
+  "黑米":             "/manus-storage/06_heimi_1c6e27b0.png",
+  "红米":             "/manus-storage/07_hongmi_7c8411eb.png",
+  "糙米":             "/manus-storage/08_caomi_e2bdbb4a.png",
+  "小米（粟米）":      "/manus-storage/09_xiaomi_69a4e357.png",
+  "薏米（薏苡仁）":    "/manus-storage/10_yimi_fa77c8a8.png",
+  "燕麦米":           "/manus-storage/11_yanmai_63411473.png",
+  "荞麦米":           "/manus-storage/12_qiaomai_b34d7905.png",
+  "高粱米":           "/manus-storage/13_gaoliang_ab6ff1e5.png",
+  "紫米（紫糯米）":    "/manus-storage/14_zimi_2a6c2c34.png",
+  "绿豆":             "/manus-storage/15_lvdou_2cbcb509.png",
+  "红豆（赤小豆）":    "/manus-storage/16_hongdou_dc99008f.png",
+  "莲子":             "/manus-storage/17_lianzi_cf81c9e3.png",
+  "藜麦":             "/manus-storage/18_limai_0b4810da.png",
+};
+
+// 产品拆解图风格弹窗：有实验室信息图时展示图片，否则展示 SVG 标注图
 function NutritionDrawer({ rice, onClose }: { rice: RiceType; onClose: () => void }) {
+  const labImg = LAB_INFO_IMGS[rice.name];
   const energyVal = rice.nutrition.calories ?? rice.nutrition.energy;
 
   // SVG 画布尺寸
@@ -173,6 +197,16 @@ function NutritionDrawer({ rice, onClose }: { rice: RiceType; onClose: () => voi
             <span className="text-gray-400 text-[13px] leading-none">✕</span>
           </button>
 
+          {/* 有实验室信息图时：展示全屏图片 */}
+          {labImg ? (
+            <img
+              src={labImg}
+              alt={rice.name}
+              className="w-full rounded-2xl"
+              style={{ display: "block", maxHeight: "80vh", objectFit: "contain" }}
+            />
+          ) : (
+          <>
           {/* 米种名称和简介 */}
           <div className="pt-5 pb-1 px-5 text-center">
             <div className="text-[18px] font-bold text-gray-900 tracking-wide">{rice.name}</div>
@@ -286,6 +320,8 @@ function NutritionDrawer({ rice, onClose }: { rice: RiceType; onClose: () => voi
               </button>
             </Link>
           </div>
+          </>
+          )}
         </div>
       </div>
 
