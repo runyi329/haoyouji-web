@@ -481,9 +481,18 @@ export const mibanRiceRouter = router({
     .input(z.object({ id: z.number(), base64: z.string(), mimeType: z.string().default("image/webp") }))
     .mutation(async ({ input }) => {
       const { uploadFileToCOS } = await import("./cos-upload");
-      const ext = input.mimeType.split("/")[1] ?? "webp";
-      const filename = `rice_db_${input.id}_${Date.now()}.${ext}`;
-      const url = await uploadFileToCOS(input.base64, "assets/miban", filename, input.mimeType);
+      const sharp = (await import('sharp')).default;
+      // 压缩到 400x400 WebP，节省存储和加载流量
+      const rawBuf = Buffer.from(input.base64, 'base64');
+      const compressed = await sharp(rawBuf)
+        .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 82 })
+        .toBuffer();
+      const origKB = Math.round(rawBuf.length / 1024);
+      const newKB = Math.round(compressed.length / 1024);
+      console.log(`[miban] 米种图片压缩: ${origKB}KB → ${newKB}KB`);
+      const filename = `rice_db_${input.id}_${Date.now()}.webp`;
+      const url = await uploadFileToCOS(compressed, "assets/miban", filename, 'image/webp');
       const db = await getDb();
       if (db) await db.update(mibanRiceVarieties).set({ img: url } as any).where(eq(mibanRiceVarieties.id, input.id));
       return { url };
@@ -571,9 +580,18 @@ export const mibanRiceRouter = router({
     .input(z.object({ id: z.number(), base64: z.string(), mimeType: z.string().default('image/webp') }))
     .mutation(async ({ input }) => {
       const { uploadFileToCOS } = await import('./cos-upload');
-      const ext = input.mimeType.split('/')[1] ?? 'webp';
-      const filename = `rice_catalog_${input.id}_${Date.now()}.${ext}`;
-      const url = await uploadFileToCOS(input.base64, 'assets/miban/catalog', filename, input.mimeType);
+      const sharp = (await import('sharp')).default;
+      // 压缩到 400x400 WebP，节省存储和加载流量
+      const rawBuf = Buffer.from(input.base64, 'base64');
+      const compressed = await sharp(rawBuf)
+        .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 82 })
+        .toBuffer();
+      const origKB = Math.round(rawBuf.length / 1024);
+      const newKB = Math.round(compressed.length / 1024);
+      console.log(`[miban] 仓库米种图片压缩: ${origKB}KB → ${newKB}KB`);
+      const filename = `rice_catalog_${input.id}_${Date.now()}.webp`;
+      const url = await uploadFileToCOS(compressed, 'assets/miban/catalog', filename, 'image/webp');
       const conn = await getDbConnection();
       if (conn) await (conn as any).execute('UPDATE `miban_rice_catalog` SET img = ? WHERE id = ?', [url, input.id]);
       return { url };
