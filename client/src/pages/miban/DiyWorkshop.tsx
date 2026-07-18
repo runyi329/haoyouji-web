@@ -221,16 +221,20 @@ function freshnessLevel(days: number) {
 export default function DiyWorkshop() {
   const { isAuthenticated } = useAuth();
 
-  // 从数据库动态加载米种（fallback 到硬编码 RICE_TYPES）
-  const { data: dbRiceRows } = mtrpc.rice.list.useQuery();
-  const riceTypes = dbRiceRows && dbRiceRows.length > 0
-    ? dbRiceRows.map((r) => ({
-        id: `db_${r.id}`,
-        name: r.name,
+  // 从标准仓库动态加载米种（fallback 到硬编码 RICE_TYPES）
+  const { data: catalogRows } = mtrpc.rice.catalogList.useQuery(
+    { onlyActive: true },
+    { staleTime: 5 * 60 * 1000 }
+  );
+  const riceTypes = catalogRows && catalogRows.length > 0
+    ? (catalogRows as any[]).map((r) => ({
+        id: String(r.id),
+        name: r.stdName,
         desc: r.description ?? "",
-        price: Number(r.pricePerJin ?? 0),
+        price: 0,
         color: r.colorHex ?? "#C8A87A",
         img: r.img ?? "",
+        nutrition: r.nutritionJson ?? null,
       }))
     : RICE_TYPES;
   // 统一查找函数
@@ -713,13 +717,21 @@ export default function DiyWorkshop() {
           selRices.forEach(r => {
             const pct = ratios[r.id] ?? 0;
             const grams = totalGrams * pct / 100;
-            const n = RICE_NUTRITION[r.id];
-            if (n) {
-              totalKcal    += n.kcal    * grams / 100;
-              totalCarb    += n.carb    * grams / 100;
-              totalProtein += n.protein * grams / 100;
-              totalFat     += n.fat     * grams / 100;
-              totalFiber   += n.fiber   * grams / 100;
+            // 优先从 riceTypes 的 nutrition 字段读取（catalogList 来源），否则回退到硬编码 RICE_NUTRITION
+            const riceData = allRiceList.find(x => x.id === r.id) as any;
+            const nFromCatalog = riceData?.nutrition;
+            const nFromHardcode = RICE_NUTRITION[r.id];
+            const kcal    = nFromCatalog ? Number(nFromCatalog.calories ?? nFromCatalog.energy ?? 0) : (nFromHardcode?.kcal ?? 0);
+            const carb    = nFromCatalog ? Number(nFromCatalog.carbs   ?? 0) : (nFromHardcode?.carb    ?? 0);
+            const protein = nFromCatalog ? Number(nFromCatalog.protein ?? 0) : (nFromHardcode?.protein ?? 0);
+            const fat     = nFromCatalog ? Number(nFromCatalog.fat     ?? 0) : (nFromHardcode?.fat     ?? 0);
+            const fiber   = nFromCatalog ? Number(nFromCatalog.fiber   ?? 0) : (nFromHardcode?.fiber   ?? 0);
+            if (kcal || carb || protein || fat || fiber) {
+              totalKcal    += kcal    * grams / 100;
+              totalCarb    += carb    * grams / 100;
+              totalProtein += protein * grams / 100;
+              totalFat     += fat     * grams / 100;
+              totalFiber   += fiber   * grams / 100;
             }
           });
           const nutrients = [
