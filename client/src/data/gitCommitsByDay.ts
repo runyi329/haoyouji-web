@@ -8445,5 +8445,12 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-18T04:43:36Z", type: "feat", cleanMessage: "标准米种仓库系统 - CatalogPanel、仓库接口、预填充18种米" },
     { date: "2026-07-18T05:34:48Z", type: "feat", cleanMessage: "首页米库改为动态加载标准仓库数据" },
     { date: "2026-07-18T05:52:50Z", type: "feat", cleanMessage: "配米工坊和百科页统一改用标准仓库(catalogList)数据源" },
+    { date: "2026-07-18T06:07:03Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-18T06:25:31Z", type: "feat", cleanMessage: "标准仓库6项优化 - 营养/标签编辑、入库同步、完整度指示、搜索、已入库标识、排序" },
+    { date: "2026-07-18T06:39:53Z", type: "perf", cleanMessage: "图片压缩 - 通过COS数据万象URL参数自动缩略，减少60-90%图片体积" },
+    { date: "2026-07-18T06:42:47Z", type: "perf", cleanMessage: "上传图片时自动用sharp压缩到400px WebP，减少60-90%体积" },
+    { date: "2026-07-18T07:12:43Z", type: "feat", cleanMessage: "首页米种详情改为信息图风格弹窗（中心图片+四周延伸线标注营养参数）" },
+    { date: "2026-07-18T08:28:11Z", type: "feat", cleanMessage: "米种详情改为白色背景产品拆解图风格，四周8条彩色延伸线标注参数" },
+    { date: "2026-07-18T10:28:15Z", type: "feat", cleanMessage: "首页米种弹窗改为实验室分子图风格信息图" },
   ],
 };
