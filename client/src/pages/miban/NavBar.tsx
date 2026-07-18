@@ -269,8 +269,8 @@ function UserMenu({ user, isAuthenticated, onLogout }: {
             </p>
           </div>
 
-          {/* 米商入口 */}
-          {(isMibanAgent || isMibanAdmin) && (
+          {/* 米商入口（仅普通米商显示） */}
+          {isMibanAgent && !isMibanAdmin && (
             <Link
               href="/p/proj_hzxm2t/agent"
               onClick={() => setOpen(false)}
@@ -281,7 +281,7 @@ function UserMenu({ user, isAuthenticated, onLogout }: {
             </Link>
           )}
 
-          {/* 管理员入口 */}
+          {/* 管理员入口（管理员显示，包含订单/米库/用户/团队等全部功能） */}
           {isMibanAdmin && (
             <Link
               href="/p/proj_hzxm2t/admin"
@@ -289,7 +289,7 @@ function UserMenu({ user, isAuthenticated, onLogout }: {
               className="flex items-center gap-3 px-4 py-3 text-sm text-black/70 hover:bg-black/5 transition-colors"
             >
               <Settings className="w-4 h-4 text-[#FF6900]" />
-              管理员后台
+              管理后台
             </Link>
           )}
 
