@@ -55,6 +55,9 @@ const RICE_NUTRITION: Record<string, { kcal: number; carb: number; protein: numb
 
 const STEP_LABELS = ["选重量", "选米种", "调比例", "确认下单"];
 
+// 模块级米种列表引用（由主组件在渲染时同步，供 RiceBowl/RecipePoster/AiRatioPoster 等子组件访问）
+let allRiceList: typeof RICE_TYPES = RICE_TYPES;
+
 function RiceBowl({ ratios, size = 140 }: { ratios: { id: string; pct: number }[]; size?: number }) {
   const r = size * 0.43;
   const cx = size / 2;
@@ -237,8 +240,8 @@ export default function DiyWorkshop() {
         nutrition: r.nutritionJson ?? null,
       }))
     : RICE_TYPES;
-  // 统一查找函数
-  const allRiceList = riceTypes;
+  // 同步模块级引用（供子组件使用）
+  allRiceList = riceTypes as typeof RICE_TYPES;
 
   const [step, setStep] = useState(0);
   const [weight, setWeight] = useState(10);
