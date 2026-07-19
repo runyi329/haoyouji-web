@@ -540,6 +540,24 @@ export default function Home() {
     ? Math.min(...pearSpecs.map((s: any) => s.price))
     : 88;
 
+  // 天桂梨倒计时：截止北京时 2026-07-25 00:00:00
+  const PEAR_DEADLINE = new Date('2026-07-25T00:00:00+08:00').getTime();
+  const [pearCountdown, setPearCountdown] = useState('');
+  useEffect(() => {
+    const tick = () => {
+      const diff = PEAR_DEADLINE - Date.now();
+      if (diff <= 0) { setPearCountdown('已结束'); return; }
+      const d = Math.floor(diff / 86400000);
+      const h = Math.floor((diff % 86400000) / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setPearCountdown(`${d}天 ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`);
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // 从标准仓库动态加载米种数据
   const { data: catalogData, isLoading: catalogLoading } = mtrpc.rice.catalogList.useQuery(
     { onlyActive: true },
@@ -649,102 +667,6 @@ export default function Home() {
           ))}
         </div>
       </section>
-
-      {/* ── 分割线 ─────────────────────────────────────────── */}
-      <div className="h-px bg-gray-100 mx-5" />
-
-      {/* ── 热门捩法 ─────────────────────────────────── */}
-      <section className="px-5 pt-6 mb-8">
-        <h2 className="text-[16px] font-bold text-black mb-4">热门捩法</h2>
-        <div className="grid grid-cols-2 gap-3">
-          {SCENE_PRESETS.map((scene) => (
-            <Link key={scene.label} href={scene.href}>
-              <div className="rounded-2xl border border-gray-100 p-4 active:bg-gray-50 transition-colors cursor-pointer">
-                <div className="inline-block text-[9px] font-semibold text-gray-500 border border-gray-200 px-2 py-0.5 rounded-full mb-3 tracking-wide">
-                  {scene.tag}
-                </div>
-                <div className="text-[15px] font-bold text-black mb-1">{scene.label}</div>
-                <div className="text-[11px] text-gray-400 leading-tight">{scene.desc}</div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* ── 分割线 ─────────────────────────────────────────── */}
-      <div className="h-px bg-gray-100 mx-5" />
-
-      {/* ── 时令上新 ─────────────────────────────────── */}
-      <section className="px-5 pt-6 pb-8">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <span
-              className="text-[10px] font-bold px-2 py-0.5 rounded text-white"
-              style={{ background: "#FF6900" }}
-            >
-              上新
-            </span>
-            <h2 className="text-[16px] font-bold text-black">时令上新</h2>
-          </div>
-        </div>
-
-        {/* 天桂梨卡片 — 年轻时尚风格 */}
-        <Link href="/p/proj_hzxm2t/pear/tiangui">
-          <div
-            className="relative overflow-hidden rounded-2xl active:scale-[0.98] transition-transform"
-            style={{ background: "#FFF8F2", border: "1px solid rgba(255,105,0,0.10)" }}
-          >
-            <div className="flex items-stretch" style={{ minHeight: 110 }}>
-              {/* 左侧文字区 */}
-              <div className="flex flex-col justify-between px-5 py-4 flex-1">
-                <div>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span
-                      className="text-[9px] font-bold px-2 py-0.5 rounded-full text-white tracking-wide"
-                      style={{ background: "#FF6900" }}
-                    >
-                      季节限定
-                    </span>
-                    <span className="text-[9px] text-gray-400">7月 · 仅20天</span>
-                  </div>
-                  <h3 className="text-[22px] font-black text-gray-900 leading-none tracking-tight">天桂梨</h3>
-                  <p className="text-[10px] text-gray-400 mt-1">江西广丰 · 糖度 13%+ · 细嫩无渣</p>
-                </div>
-                <div className="flex items-baseline gap-1 mt-3">
-                  <span className="text-[11px] font-semibold" style={{ color: "#FF6900" }}>¥</span>
-                  <span className="text-[26px] font-black leading-none" style={{ color: "#FF6900" }}>{pearMinPrice}</span>
-                  <span className="text-[11px] text-gray-400">起</span>
-                  <span className="text-[10px] text-gray-300 ml-1">顺丰冷链</span>
-                </div>
-              </div>
-              {/* 右侧图片 */}
-              <div
-                className="flex-shrink-0 flex items-end justify-center"
-                style={{ width: 110 }}
-              >
-                <img
-                  src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/bxCCxBmoQFldHQma.png"
-                  alt="天桂梨"
-                  style={{ width: 100, height: 110, objectFit: "contain", objectPosition: "bottom" }}
-                />
-              </div>
-            </div>
-            {/* 底部箭头提示 */}
-            <div
-              className="flex items-center justify-end px-4 py-2"
-              style={{ borderTop: "1px solid rgba(255,105,0,0.08)" }}
-            >
-              <span className="text-[11px] font-semibold" style={{ color: "#FF6900" }}>查看详情 ›</span>
-            </div>
-          </div>
-        </Link>
-
-        {/* 占位提示 */}
-        <div className="py-6 text-center">
-          <p className="text-[12px] text-gray-300">更多时令产品即将上线</p>
-        </div>
-      </section>
-
       {/* ── 营养成分抽屉 ─────────────────────────────────── */}
       {activeRice && (
         <NutritionDrawer rice={activeRice} onClose={() => setActiveRice(null)} />

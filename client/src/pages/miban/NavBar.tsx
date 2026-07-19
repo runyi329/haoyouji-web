@@ -5,7 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { mtrpc } from "./mibanTrpc";
 import { saveToken } from "@/lib/tokenStorage";
 import { toast } from "sonner";
-import { Home, BookOpen, FlaskConical, User, ChevronDown, LogOut, Settings, Briefcase, QrCode, X, Copy, Check } from "lucide-react";
+import { Home, BookOpen, Clock, User, ChevronDown, LogOut, Settings, Briefcase, QrCode, X, Copy, Check } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 
 const SITE_URL = typeof window !== "undefined" ? window.location.origin : "";
@@ -103,7 +103,7 @@ function InviteQrButton({ isAuthenticated }: { isAuthenticated: boolean }) {
 const tabItems = [
   { href: "/p/proj_hzxm2t/", label: "首页", icon: Home },
   { href: "/p/proj_hzxm2t/rice", label: "百科", icon: BookOpen },
-  { href: "/p/proj_hzxm2t/diy", label: "配米", icon: FlaskConical },
+  { href: "/p/proj_hzxm2t/limited", label: "限时", icon: Clock },
   { href: "/p/proj_hzxm2t/my-orders", label: "我的", icon: User },
 ];
 

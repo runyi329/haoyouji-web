@@ -9,6 +9,7 @@ import Home from "./Home";
 import RiceEncyclopedia from "./RiceEncyclopedia";
 import RiceDetail from "./RiceDetail";
 import DiyWorkshop from "./DiyWorkshop";
+import LimitedSale from "./LimitedSale";
 import AiHealth from "./AiHealth";
 import PresetRecipes from "./PresetRecipes";
 import MyRecipes from "./MyRecipes";
@@ -33,6 +34,7 @@ export default function MibanApp() {
           <Route path={`${BASE}/rice/:id`} component={RiceDetail} />
           <Route path={`${BASE}/rice`} component={RiceEncyclopedia} />
           <Route path={`${BASE}/encyclopedia`} component={RiceEncyclopedia} />
+          <Route path={`${BASE}/limited`} component={LimitedSale} />
           <Route path={`${BASE}/diy`} component={DiyWorkshop} />
           <Route path={`${BASE}/ai-health`} component={AiHealth} />
           <Route path={`${BASE}/presets`} component={PresetRecipes} />
