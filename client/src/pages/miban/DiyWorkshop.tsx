@@ -516,16 +516,16 @@ export default function DiyWorkshop() {
         {allRiceList.map((rice) => {
           const isSel = selected.includes(rice.id);
           return (
-            <button key={rice.id} onClick={(e) => toggleRice(rice.id, e)} className={`relative rounded-2xl p-4 text-left border-2 transition-all active:scale-95 ${isSel ? "border-black bg-black text-white" : "border-gray-100 bg-gray-50 text-black"}`}>
+            <button key={rice.id} onClick={(e) => toggleRice(rice.id, e)} className={`relative rounded-2xl p-4 text-left border-2 transition-all active:scale-95 ${isSel ? "border-[#FF6900]" : "border-gray-100"} bg-gray-50 text-black`}>
               {isSel && (
-                <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-white flex items-center justify-center">
-                  <Check size={12} className="text-black" strokeWidth={3} />
+                <div className="absolute top-3 right-3 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: "#FF6900" }}>
+                  <Check size={12} className="text-white" strokeWidth={3} />
                 </div>
               )}
               <img src={cosImg(rice.img, 40)} alt={rice.name} className="w-10 h-10 rounded-full object-cover mb-2" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }} />
-              <div className="font-semibold text-[15px]">{rice.name}</div>
-              <div className={`text-[11px] mt-0.5 ${isSel ? "text-gray-300" : "text-gray-400"}`}>{rice.desc}</div>
-              <div className={`text-[12px] font-medium mt-1.5 ${isSel ? "text-orange-300" : "text-[#FF6900]"}`}>¥{rice.price}/斤</div>
+              <div className="font-semibold text-[15px] text-black">{rice.name}</div>
+              <div className="text-[11px] mt-0.5 text-gray-400">{rice.desc}</div>
+              <div className="text-[12px] font-medium mt-1.5 text-[#FF6900]">¥{rice.price}/斤</div>
             </button>
           );
         })}
