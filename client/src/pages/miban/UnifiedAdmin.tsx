@@ -737,12 +737,14 @@ function SalesPanel() {
           )}
         </div>
         <p className="text-[11px] text-gray-400">未单独设置的业务员均适用此比例</p>
-        <div className="flex gap-2">
-          <input placeholder="比例 % (如 5)" value={globalRate} onChange={e => setGlobalRate(e.target.value)} className="flex-1 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-300" />
-          <input placeholder="备注（选填）" value={globalNote} onChange={e => setGlobalNote(e.target.value)} className="flex-1 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-300" />
-          <button onClick={saveGlobal} disabled={setConfigMutation.isPending} className="px-4 py-2 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50 flex-shrink-0 active:scale-95 transition-transform" style={{ background: "#FF6900" }}>
-            保存
-          </button>
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <input placeholder="比例 % (如 5)" value={globalRate} onChange={e => setGlobalRate(e.target.value)} className="flex-1 min-w-0 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-300" />
+            <button onClick={saveGlobal} disabled={setConfigMutation.isPending} className="px-4 py-2 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50 flex-shrink-0 active:scale-95 transition-transform" style={{ background: "#FF6900" }}>
+              保存
+            </button>
+          </div>
+          <input placeholder="备注（选填）" value={globalNote} onChange={e => setGlobalNote(e.target.value)} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-300" />
         </div>
       </div>
 
@@ -755,7 +757,7 @@ function SalesPanel() {
           <input placeholder="比例 % (如 8)" value={agentRate} onChange={e => setAgentRate(e.target.value)} className="text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-300" />
         </div>
         <div className="flex gap-2">
-          <input placeholder="备注（选填）" value={agentNote} onChange={e => setAgentNote(e.target.value)} className="flex-1 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-300" />
+          <input placeholder="备注（选填）" value={agentNote} onChange={e => setAgentNote(e.target.value)} className="flex-1 min-w-0 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-300" />
           <button onClick={saveAgent} disabled={setConfigMutation.isPending} className="px-4 py-2 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50 flex-shrink-0 active:scale-95 transition-transform" style={{ background: "#FF6900" }}>
             保存
           </button>
