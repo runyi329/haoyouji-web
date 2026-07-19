@@ -22,9 +22,10 @@ const IMGS = {
 
 const SLIDES = [IMGS.hero, IMGS.juicy, IMGS.giftbox];
 
-const SPECS = [
-  { name: "12枚礼盒装", sub: "单果250–350g · 12个精选 · 精品礼盒", price: 128, weightJin: 7, featured: true },
-  { name: "10斤礼盒装", sub: "单果150–500g · 约20个 · 家庭实惠", price: 88, weightJin: 10 },
+// SPECS 已迁移至数据库，通过 mtrpc.pear.getSpecs 动态加载
+const SPECS_FALLBACK = [
+  { id: 1, name: "12枚礼盒装", sub: "单果250–350g · 12个精选 · 精品礼盒", price: 128, weightJin: 7, isFeatured: true },
+  { id: 2, name: "10斤礼盒装", sub: "单果150–500g · 约20个 · 家庭实惠", price: 88, weightJin: 10, isFeatured: false },
 ];
 
 
@@ -155,11 +156,11 @@ export default function TianguiPearDetail() {
   const totalAvailableCny = cnyBalanceNum + usdtBalanceNum * usdtCnyRate;
 
   const createOrder = mtrpc.order.create.useMutation({
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       setShowOrderDialog(false);
       setOrderSuccess({ orderNo: data.orderNo });
     },
-    onError: (err) => {
+    onError: (err: any) => {
       alert(err.message || "下单失败，请重试");
     },
   });
@@ -179,7 +180,10 @@ export default function TianguiPearDetail() {
     else if (dx > 40 && cur > 0) setCur(c => c - 1);
   };
 
-  const currentSpec = SPECS[spec];
+  // 从数据库动态加载规格
+  const { data: specsData } = mtrpc.pear.getSpecs.useQuery({ productKey: 'tiangui-pear' });
+  const SPECS = (specsData && specsData.length > 0) ? specsData : SPECS_FALLBACK;
+  const currentSpec = SPECS[spec] ?? SPECS[0];
 
   const handleBuy = () => {
     if (!isAuthenticated) {
@@ -211,7 +215,7 @@ export default function TianguiPearDetail() {
       receiverPhone: receiverPhone.trim(),
       receiverAddress: receiverAddress.trim(),
       userNote: userNote.trim() || undefined,
-      productImg: PEAR_IMGS.hero,
+      productImg: IMGS.hero,
     });
   };
 
@@ -308,12 +312,12 @@ export default function TianguiPearDetail() {
         <p className="text-sm text-gray-400 mb-3">江西广丰 · 夏日第一口清甜 · 糖度 &gt;13%</p>
         <div className="flex items-baseline gap-2 mb-1">
           <span className="text-xs font-semibold" style={{ color: "#FF6900" }}>¥</span>
-          <span className="text-3xl font-extrabold" style={{ color: "#FF6900" }}>{SPECS[0].price}</span>
+          <span className="text-3xl font-extrabold" style={{ color: "#FF6900" }}>{Math.min(...SPECS.map((s: any) => s.price))}</span>
           <span className="text-sm text-gray-400">起</span>
-          <span className="text-sm text-gray-300 line-through">¥{Math.round(SPECS[0].price * 1.35)}</span>
+          <span className="text-sm text-gray-300 line-through">¥{Math.round(Math.min(...SPECS.map((s: any) => s.price)) * 1.35)}</span>
         </div>
         <p className="text-xs text-gray-300 mb-1">顺丰冷链包邮 · 坏果包赔</p>
-        <p className="text-xs text-gray-400 mb-1">{SPECS.map(s => s.name).join(' / ')}</p>
+        <p className="text-xs text-gray-400 mb-1">{SPECS.map((s: any) => s.name).join(' / ')}</p>
       </div>
 
       {/* ── 卡片1：食用场景 + 极早熟稀缺 ── */}
@@ -448,13 +452,13 @@ export default function TianguiPearDetail() {
         <div className="text-xs text-gray-300 mb-4">自用送礼，均有合适之选</div>
         <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-pear/hero_giftbox_scene.webp" alt="天桂梨礼盒" className="w-full block rounded-xl mb-4" loading="lazy" />
         <div className="flex flex-col gap-2.5">
-          {SPECS.map((s, i) => (
+          {SPECS.map((s: any, i: number) => (
             <button
-              key={i}
+              key={s.id ?? i}
               onClick={() => setSpec(i)}
               className="flex items-center justify-between px-4 py-3.5 rounded-xl w-full text-left transition-all"
               style={{
-                background: spec === i ? "#FFF3E8" : (s.featured ? "#FFF8F2" : "#f8f7f5"),
+                background: spec === i ? "#FFF3E8" : (s.isFeatured ? "#FFF8F2" : "#f8f7f5"),
                 border: spec === i ? "1.5px solid rgba(255,105,0,0.4)" : "1.5px solid transparent",
               }}
             >
@@ -548,9 +552,9 @@ export default function TianguiPearDetail() {
             <div className="mb-3">
               <p className="text-xs font-bold text-gray-700 mb-2">选择规格</p>
               <div className="flex flex-col gap-2">
-                {SPECS.map((s, i) => (
+                {SPECS.map((s: any, i: number) => (
                   <button
-                    key={i}
+                    key={s.id ?? i}
                     onClick={() => setSpec(i)}
                     className="w-full rounded-xl border transition-all text-left"
                     style={spec === i
@@ -561,7 +565,7 @@ export default function TianguiPearDetail() {
                     <div className="flex items-center justify-between">
                       <div>
                         <span className="text-sm font-bold text-gray-900">{s.name}</span>
-                        {s.featured && (
+                        {s.isFeatured && (
                           <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: "#FF6900", color: "#fff" }}>推荐</span>
                         )}
                       </div>
@@ -643,7 +647,10 @@ export default function TianguiPearDetail() {
                       onSelect={(addr) => {
                         setReceiverName(addr.name);
                         setReceiverPhone(addr.phone);
-                        setReceiverAddress(`${addr.province}${addr.city}${addr.district ?? ""}${addr.detail}`);
+                        setReceiverProvince(addr.province);
+                        setReceiverCity(addr.city);
+                        setReceiverDistrict(addr.district ?? "");
+                        setReceiverDetail(addr.detail);
                         setShowAddressPicker(false);
                       }}
                     />

@@ -1931,3 +1931,72 @@ export const mibanFavoriteRouter = router({
       .orderBy(mibanFavorites.createdAt);
   }),
 });
+
+// ── 天桂梨规格路由 ──────────────────────────────────────────────────────────
+export const mibanPearRouter = router({
+  // 获取规格列表（公开接口，无需登录）
+  getSpecs: publicProcedure
+    .input(z.object({ productKey: z.string().default('tiangui-pear') }))
+    .query(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) return [];
+      try {
+        const [rows]: any = await (conn as any).execute(
+          `SELECT id, name, sub, price, weight_jin as weightJin, is_featured as isFeatured, sort_order as sortOrder
+           FROM miban_pear_specs
+           WHERE product_key = ? AND is_active = 1
+           ORDER BY sort_order ASC`,
+          [input.productKey]
+        );
+        return (Array.isArray(rows) ? rows : []).map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          sub: r.sub ?? '',
+          price: parseFloat(r.price),
+          weightJin: parseFloat(r.weightJin ?? 0),
+          isFeatured: r.isFeatured === 1,
+          sortOrder: r.sortOrder,
+        }));
+      } catch (e) {
+        console.error('[mibanPear.getSpecs]', e);
+        return [];
+      } finally {
+        try { await (conn as any).end(); } catch {}
+      }
+    }),
+
+  // 更新规格价格（管理员接口）
+  updateSpec: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      name: z.string().optional(),
+      sub: z.string().optional(),
+      price: z.number().optional(),
+      weightJin: z.number().optional(),
+      isFeatured: z.boolean().optional(),
+      sortOrder: z.number().optional(),
+      isActive: z.boolean().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!ctx.user?.isAdmin) throw new Error('无权限');
+      const conn = await getDbConnection();
+      if (!conn) throw new Error('数据库连接失败');
+      try {
+        const sets: string[] = [];
+        const vals: any[] = [];
+        if (input.name !== undefined) { sets.push('name = ?'); vals.push(input.name); }
+        if (input.sub !== undefined) { sets.push('sub = ?'); vals.push(input.sub); }
+        if (input.price !== undefined) { sets.push('price = ?'); vals.push(input.price); }
+        if (input.weightJin !== undefined) { sets.push('weight_jin = ?'); vals.push(input.weightJin); }
+        if (input.isFeatured !== undefined) { sets.push('is_featured = ?'); vals.push(input.isFeatured ? 1 : 0); }
+        if (input.sortOrder !== undefined) { sets.push('sort_order = ?'); vals.push(input.sortOrder); }
+        if (input.isActive !== undefined) { sets.push('is_active = ?'); vals.push(input.isActive ? 1 : 0); }
+        if (sets.length === 0) return { success: true };
+        vals.push(input.id);
+        await (conn as any).execute(`UPDATE miban_pear_specs SET ${sets.join(', ')} WHERE id = ?`, vals);
+        return { success: true };
+      } finally {
+        try { await (conn as any).end(); } catch {}
+      }
+    }),
+});

@@ -29,6 +29,21 @@ type RiceType = {
   categories: string[];
 };
 
+// 每种米对应的淡色背景色
+const RICE_BG_COLORS: Record<string, string> = {
+  white:  "#F5F0E8",  // 米白暖
+  black:  "#2A1F2E",  // 深紫色
+  red:    "#F5E8E8",  // 淡红
+  brown:  "#F0E8DC",  // 暖棕
+  purple: "#EDE8F5",  // 淡紫
+  millet: "#F5F0DC",  // 黄金色
+  mung:   "#E8F0E8",  // 淡绿
+  coix:   "#F0EDE8",  // 米白灰
+};
+const RICE_TEXT_COLORS: Record<string, string> = {
+  black: "#F5F0FF",
+};
+
 const RICE_TYPES: RiceType[] = [
   {
     id: "white", name: "白米", origin: "黑龙江五常", desc: "软糯香甜，日常主食", tag: "软糯香甜",
@@ -519,6 +534,12 @@ export default function Home() {
   );
   const recipeCount = recipes?.length ?? 0;
 
+  // 天桂梨规格（动态最低价）
+  const { data: pearSpecs } = mtrpc.pear.getSpecs.useQuery({ productKey: 'tiangui-pear' });
+  const pearMinPrice = pearSpecs && pearSpecs.length > 0
+    ? Math.min(...pearSpecs.map((s: any) => s.price))
+    : 88;
+
   // 从标准仓库动态加载米种数据
   const { data: catalogData, isLoading: catalogLoading } = mtrpc.rice.catalogList.useQuery(
     { onlyActive: true },
@@ -547,7 +568,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-white pb-20">
 
-      {/* ── Hero 区 ──────────────────────────────────────── */}
+      {/* ── Hero 区 ────────────────────────────────────── */}
       <section className="px-5 pt-8 pb-8">
         <p className="text-[11px] text-gray-400 tracking-widest uppercase mb-4 font-medium">
           精选产区 · 按需定配
@@ -565,139 +586,76 @@ export default function Home() {
         </Link>
       </section>
 
-      {/* ── 季节限定 ─────────────────────────────────────── */}
-      <section className="px-5 pb-6">
-        <Link href="/p/proj_hzxm2t/pear/tiangui">
-          <div
-            className="relative overflow-hidden rounded-2xl active:scale-[0.98] transition-transform cursor-pointer"
-            style={{ background: "linear-gradient(135deg,#FFF3E0 0%,#FFE0B2 60%,#FFF8F0 100%)" }}
-          >
-            <div className="flex items-center justify-between px-5 py-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span
-                    className="text-[10px] font-bold px-2 py-0.5 rounded-full tracking-wide"
-                    style={{ background: "#FF6900", color: "#fff" }}
-                  >
-                    季节限定
-                  </span>
-                  <span className="text-[10px] text-orange-400 font-medium">7月 · 限时供应</span>
-                </div>
-                <div className="text-[22px] font-extrabold text-gray-900 leading-tight mb-1">天桂梨</div>
-                <div className="text-[12px] text-gray-500 mb-3">江西广丰 · 糖度 13%+ · 细嫩无渣</div>
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-[20px] font-extrabold" style={{ color: "#FF6900" }}>¥58</span>
-                  <span className="text-[11px] text-gray-400">起 · 顺丰冷链</span>
-                </div>
-              </div>
-              <div className="flex-shrink-0 ml-3">
-                <img
-                  src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/bxCCxBmoQFldHQma.png"
-                  alt="天桂梨"
-                  className="w-24 h-24 object-cover rounded-xl shadow-sm"
-                />
-              </div>
-            </div>
+      {/* ── 大米竖向卡片轮播 ────────────────────────────── */}
+      <section className="pb-6">
+        <div
+          className="flex overflow-x-auto gap-3 px-5"
+          style={{ scrollSnapType: "x mandatory", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
+        >
+          {(catalogLoading && (!catalogData || catalogData.length === 0)
+            ? Array.from({ length: 8 }).map((_, i) => ({ id: `sk-${i}`, name: "", origin: "", desc: "", tag: "", img: "", nutrition: { protein: 0, fat: 0, carbs: 0, fiber: 0 }, categories: [], color: "" }))
+            : (() => {
+                // 深浅交替排序：把亮度高(浅色)和亮度低(深色/彩色)的米穿插排列
+                const getLum = (hex: string) => {
+                  const h = (hex || "#F5F0E8").replace("#", "");
+                  const rv = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+                  return (rv*299 + g*587 + b*114) / 1000;
+                };
+                const light = riceList.filter(r => getLum(r.color || "") >= 150);
+                const dark  = riceList.filter(r => getLum(r.color || "") <  150);
+                const result: typeof riceList = [];
+                const maxLen = Math.max(light.length, dark.length);
+                for (let i = 0; i < maxLen; i++) {
+                  if (i < light.length) result.push(light[i]);
+                  if (i < dark.length)  result.push(dark[i]);
+                }
+                return result;
+              })()
+          ).map((rice, i) => (
             <div
-              className="absolute bottom-0 left-0 right-0 rounded-b-2xl"
-              style={{ height: 3, background: "linear-gradient(90deg,#FF6900,#FFB347)" }}
-            />
-          </div>
-        </Link>
+              key={rice.id || i}
+              className="flex-shrink-0 cursor-pointer active:scale-[0.97] transition-transform"
+              style={{
+                scrollSnapAlign: "start",
+                width: "44vw",
+                maxWidth: 180,
+                minWidth: 150,
+              }}
+              onClick={() => rice.name && setActiveRice(rice)}
+            >
+              {catalogLoading && !rice.name ? (
+                <div className="w-full rounded-2xl bg-gray-100 animate-pulse" style={{ height: 240 }} />
+              ) : (
+                <div
+                  className="w-full rounded-2xl overflow-hidden bg-white flex flex-col"
+                  style={{ height: 240, border: "1px solid #F0F0F0" }}
+                >
+                  {/* 大米图片完整显示 */}
+                  <div className="flex items-center justify-center" style={{ height: 170 }}>
+                    <img
+                      src={cosImg(rice.img, 280)}
+                      alt={rice.name}
+                      style={{ width: "80%", height: "100%", objectFit: "contain" }}
+                    />
+                  </div>
+                  {/* 文字区 */}
+                  <div className="flex-1 flex flex-col justify-center px-4">
+                    <p className="text-[16px] font-bold text-black leading-none mb-1">{rice.name}</p>
+                    <p className="text-[10px] text-gray-400 tracking-wide">{rice.origin}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       </section>
 
-      {/* ── 分割线 ───────────────────────────────────────── */}
+      {/* ── 分割线 ─────────────────────────────────────────── */}
       <div className="h-px bg-gray-100 mx-5" />
 
-      {/* ── 米库展示 ─────────────────────────────────────── */}
-      <section className="pt-7 pb-8">
-        <div className="px-5 mb-5 flex items-center justify-between">
-          <div>
-            <h2 className="text-[18px] font-bold text-black">米库</h2>
-            <p className="text-[11px] text-gray-400 mt-0.5">
-              精选 {riceList.length} 种优质米 · 点击查看营养成分
-            </p>
-          </div>
-          <Link href="/p/proj_hzxm2t/encyclopedia">
-            <span className="text-[12px] text-gray-400 flex items-center gap-0.5">
-              全部 <span className="text-[10px]">›</span>
-            </span>
-          </Link>
-        </div>
-
-        {/* 分类筛选标签栏 */}
-        <div
-          className="flex gap-2 overflow-x-auto px-5 pb-4"
-          style={{ scrollbarWidth: "none" }}
-        >
-          {FILTER_TAGS.map((tag) => (
-            <button
-              key={tag}
-              onClick={() => setActiveFilter(tag)}
-              className="flex-shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-medium transition-all duration-200"
-              style={{
-                background: activeFilter === tag ? "#111" : "#F5F5F5",
-                color: activeFilter === tag ? "#fff" : "#666",
-              }}
-            >
-              {tag}
-            </button>
-          ))}
-        </div>
-
-        {/* 横向滚动 */}
-        <div
-          className="flex gap-3 overflow-x-auto px-5 pb-1"
-          style={{ scrollSnapType: "x mandatory", scrollbarWidth: "none" }}
-        >
-          {/* 加载骨架屏 */}
-          {catalogLoading && (!catalogData || catalogData.length === 0) && (
-            Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex-shrink-0 w-[110px]">
-                <div className="w-[110px] h-[110px] rounded-2xl bg-gray-100 mb-2.5 animate-pulse" />
-                <div className="h-3.5 w-16 bg-gray-100 rounded mb-1.5 animate-pulse" />
-                <div className="h-2.5 w-12 bg-gray-100 rounded animate-pulse" />
-              </div>
-            ))
-          )}
-          {filteredRice.map((rice) => (
-            <div
-              key={rice.id}
-              className="flex-shrink-0 w-[110px] cursor-pointer"
-              style={{ scrollSnapAlign: "start" }}
-              onClick={() => setActiveRice(rice)}
-            >
-              {/* 图片容器 */}
-              <div
-                className="w-[110px] h-[110px] rounded-2xl bg-[#F7F7F7] overflow-hidden mb-2.5 transition-all duration-200 active:scale-95"
-              >
-                <img
-                  src={cosImg(rice.img, 110)}
-                  alt={rice.name}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              {/* 文字信息 */}
-              <p className="text-[14px] font-semibold text-black mb-1">{rice.name}</p>
-              {/* 专业标签 */}
-              <div className="inline-block border border-gray-200 rounded px-1.5 py-[2px] mb-1.5">
-                <span className="text-[9px] text-gray-500 tracking-wide font-medium">{rice.tag}</span>
-              </div>
-              <p className="text-[9px] text-gray-300 leading-tight">{rice.origin}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-
-
-      {/* ── 热门捞法 ─────────────────────────────────────── */}
-      <section className="px-5 mb-8">
-        <div className="mb-5 flex items-center justify-between">
-          <div>
-
-          </div>
-        </div>
+      {/* ── 热门捩法 ─────────────────────────────────── */}
+      <section className="px-5 pt-6 mb-8">
+        <h2 className="text-[16px] font-bold text-black mb-4">热门捩法</h2>
         <div className="grid grid-cols-2 gap-3">
           {SCENE_PRESETS.map((scene) => (
             <Link key={scene.label} href={scene.href}>
@@ -713,20 +671,77 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── 品牌理念 ─────────────────────────────────────── */}
-      <section className="px-5 mb-4">
-        <div className="rounded-2xl bg-[#F7F7F7] px-5 py-5">
-          <p className="text-[13px] font-semibold text-black mb-1.5">
-            好米从产地来，健康从选择开始
-          </p>
-          <p className="text-[12px] text-gray-400 leading-relaxed mb-4">
-            每一种米都有它的故事。精选全国优质产区，让你吃到的每一口都有来源、有依据。
-          </p>
-          <Link href="/p/proj_hzxm2t/encyclopedia">
-            <span className="text-[12px] font-semibold text-black flex items-center gap-1 active:opacity-60 transition-opacity">
-              了解每种米的故事 <span className="text-[10px]">→</span>
+      {/* ── 分割线 ─────────────────────────────────────────── */}
+      <div className="h-px bg-gray-100 mx-5" />
+
+      {/* ── 时令上新 ─────────────────────────────────── */}
+      <section className="px-5 pt-6 pb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <span
+              className="text-[10px] font-bold px-2 py-0.5 rounded text-white"
+              style={{ background: "#FF6900" }}
+            >
+              上新
             </span>
-          </Link>
+            <h2 className="text-[16px] font-bold text-black">时令上新</h2>
+          </div>
+        </div>
+
+        {/* 天桂梨卡片 — 年轻时尚风格 */}
+        <Link href="/p/proj_hzxm2t/pear/tiangui">
+          <div
+            className="relative overflow-hidden rounded-2xl active:scale-[0.98] transition-transform"
+            style={{ background: "#FFF8F2", border: "1px solid rgba(255,105,0,0.10)" }}
+          >
+            <div className="flex items-stretch" style={{ minHeight: 110 }}>
+              {/* 左侧文字区 */}
+              <div className="flex flex-col justify-between px-5 py-4 flex-1">
+                <div>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span
+                      className="text-[9px] font-bold px-2 py-0.5 rounded-full text-white tracking-wide"
+                      style={{ background: "#FF6900" }}
+                    >
+                      季节限定
+                    </span>
+                    <span className="text-[9px] text-gray-400">7月 · 仅20天</span>
+                  </div>
+                  <h3 className="text-[22px] font-black text-gray-900 leading-none tracking-tight">天桂梨</h3>
+                  <p className="text-[10px] text-gray-400 mt-1">江西广丰 · 糖度 13%+ · 细嫩无渣</p>
+                </div>
+                <div className="flex items-baseline gap-1 mt-3">
+                  <span className="text-[11px] font-semibold" style={{ color: "#FF6900" }}>¥</span>
+                  <span className="text-[26px] font-black leading-none" style={{ color: "#FF6900" }}>{pearMinPrice}</span>
+                  <span className="text-[11px] text-gray-400">起</span>
+                  <span className="text-[10px] text-gray-300 ml-1">顺丰冷链</span>
+                </div>
+              </div>
+              {/* 右侧图片 */}
+              <div
+                className="flex-shrink-0 flex items-end justify-center"
+                style={{ width: 110 }}
+              >
+                <img
+                  src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/bxCCxBmoQFldHQma.png"
+                  alt="天桂梨"
+                  style={{ width: 100, height: 110, objectFit: "contain", objectPosition: "bottom" }}
+                />
+              </div>
+            </div>
+            {/* 底部箭头提示 */}
+            <div
+              className="flex items-center justify-end px-4 py-2"
+              style={{ borderTop: "1px solid rgba(255,105,0,0.08)" }}
+            >
+              <span className="text-[11px] font-semibold" style={{ color: "#FF6900" }}>查看详情 ›</span>
+            </div>
+          </div>
+        </Link>
+
+        {/* 占位提示 */}
+        <div className="py-6 text-center">
+          <p className="text-[12px] text-gray-300">更多时令产品即将上线</p>
         </div>
       </section>
 

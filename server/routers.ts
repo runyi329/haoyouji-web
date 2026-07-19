@@ -1,5 +1,5 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
-import { mibanRiceRouter, mibanPresetRouter, mibanHealthRouter, mibanDiyRouter, mibanRecipeRouter, mibanOrderRouter, mibanInviteRouter, mibanAgentRouter, mibanAdminUserRouter, mibanAdminCommissionRouter, mibanCartRouter, savedRecipesRouter, mibanImpersonateRouter, mibanInventoryRouter, mibanAddressRouter, mibanReviewRouter, mibanFavoriteRouter } from "./miban";
+import { mibanRiceRouter, mibanPresetRouter, mibanHealthRouter, mibanDiyRouter, mibanRecipeRouter, mibanOrderRouter, mibanInviteRouter, mibanAgentRouter, mibanAdminUserRouter, mibanAdminCommissionRouter, mibanCartRouter, savedRecipesRouter, mibanImpersonateRouter, mibanInventoryRouter, mibanAddressRouter, mibanReviewRouter, mibanFavoriteRouter, mibanPearRouter } from "./miban";
 import { mibanTeamRouter } from "./miban-teams";
 import { createHmac } from "crypto";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -27379,6 +27379,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
   address: mibanAddressRouter,
   review: mibanReviewRouter,
   favorite: mibanFavoriteRouter,
+  pear: mibanPearRouter,
   mibanTeam: mibanTeamRouter,
   mibanImpersonate: router({
     // 获取全部可切换账号列表（三个账号完全互切）
