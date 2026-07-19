@@ -126,6 +126,10 @@ export default function TianguiPearDetail() {
 
   const { isAuthenticated } = useAuth();
 
+  // 下架判断：截止北京时 2026-07-25 00:00:00
+  const PEAR_DEADLINE = new Date('2026-07-25T00:00:00+08:00').getTime();
+  const isPearExpired = Date.now() >= PEAR_DEADLINE;
+
   // 收藏功能
   const { data: favData, refetch: refetchFav } = mtrpc.favorite.isFavorited.useQuery(
     { productKey: 'tiangui-pear' },
@@ -524,11 +528,16 @@ export default function TianguiPearDetail() {
           </span>
         </button>
         <button
-          className="flex-1 h-14 rounded-xl border-none text-white text-base font-extrabold tracking-wide active:scale-[0.98] transition-transform"
-          style={{ background: "linear-gradient(90deg,#FF8C00 0%,#FF6900 100%)" }}
-          onClick={handleBuy}
+          className="flex-1 h-14 rounded-xl border-none text-base font-extrabold tracking-wide transition-transform"
+          style={{
+            background: isPearExpired ? "#ccc" : "linear-gradient(90deg,#FF8C00 0%,#FF6900 100%)",
+            color: "#fff",
+            cursor: isPearExpired ? "not-allowed" : "pointer",
+          }}
+          onClick={isPearExpired ? undefined : handleBuy}
+          disabled={isPearExpired}
         >
-          立即购买
+          {isPearExpired ? "已下架，暂停购买" : "立即购买"}
         </button>
       </div>
 
