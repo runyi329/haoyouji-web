@@ -317,7 +317,7 @@ export default function TianguiPearDetail() {
       </div>
 
       {/* ── 卡片1：食用场景 + 极早熟稀缺 ── */}
-      <img src="/pear-img-scene.jpg" alt="天桂梨食用场景" className="w-full block" loading="lazy" />
+      <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-pear/pear-img-scene.jpg" alt="天桂梨食用场景" className="w-full block" loading="lazy" />
       <div className="bg-white px-5 py-5" style={{ borderBottom: "1px solid #f3f3f3" }}>
         <div className="text-xl font-extrabold text-gray-900 mb-1">极早熟稀缺·双认证</div>
         <div className="text-xs text-gray-400 mb-3">7月限定上市，全年仅20天采摘期</div>
@@ -338,7 +338,7 @@ export default function TianguiPearDetail() {
       </div>
 
       {/* ── 卡片2：整果展示 + 糖度超高 ── */}
-      <img src="/pear-img-hero.jpg" alt="天桂梨整果" className="w-full block" loading="lazy" />
+      <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-pear/pear-img-hero.jpg" alt="天桂梨整果" className="w-full block" loading="lazy" />
       <div className="bg-white px-5 py-5" style={{ borderBottom: "1px solid #f3f3f3" }}>
         <div className="text-xl font-extrabold text-gray-900 mb-1">糖度超高·细嫩无渣</div>
         <div className="text-xs text-gray-400 mb-3">可溶性固形物高13%以上，石细胞极少入口即化</div>
@@ -404,7 +404,7 @@ export default function TianguiPearDetail() {
       </div>
 
       {/* ── 卡片3：果园产地 + 产地直发 ── */}
-      <img src="/pear-img-orchard.jpg" alt="天桂梨果园产地" className="w-full block" loading="lazy" />
+      <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-pear/pear-poster-orchard.jpg" alt="天桂梨果园产地" className="w-full block" loading="lazy" />
       <div className="bg-white px-5 py-5" style={{ borderBottom: "1px solid #f3f3f3" }}>
         <div className="text-xl font-extrabold text-gray-900 mb-1">产地直发·现摘现发</div>
         <div className="text-xs text-gray-400 mb-3">江西广丰核心产区，海拔300-600m，昼夜温差大</div>
@@ -446,7 +446,7 @@ export default function TianguiPearDetail() {
       <div className="bg-white px-5 py-6" style={{ borderTop: "1px solid #f3f3f3" }}>
         <div className="text-xl font-extrabold text-gray-900 mb-1">精选规格</div>
         <div className="text-xs text-gray-300 mb-4">自用送礼，均有合适之选</div>
-        <img src="/pear-giftbox.jpg" alt="天桂梨礼盒" className="w-full block rounded-xl mb-4" loading="lazy" />
+        <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-pear/hero_giftbox_scene.webp" alt="天桂梨礼盒" className="w-full block rounded-xl mb-4" loading="lazy" />
         <div className="flex flex-col gap-2.5">
           {SPECS.map((s, i) => (
             <button
@@ -486,12 +486,6 @@ export default function TianguiPearDetail() {
         </div>
       </div>
 
-      {/* ── 发货与物流配图 ── */}
-      <img src="/pear-logistics.jpg" alt="发货与物流" className="w-full block" loading="lazy" />
-      {/* ── 售后保障配图 ── */}
-      <img src="/pear-aftersale.jpg" alt="售后保障声明" className="w-full block" loading="lazy" />
-      {/* ── 规格对比配图 ── */}
-      <img src="/pear-specs.jpg" alt="精选规格" className="w-full block" loading="lazy" />
       {/* ── 温馨提示 ── */}
       <div className="bg-white px-5 pt-6 pb-8">
         <div className="text-xl font-extrabold text-gray-900 mb-1">温馨提示</div>
