@@ -377,7 +377,7 @@ async function triggerMultiLevelCommission(params: {
     const [parentRows] = await (dbConn as any).execute(
       `SELECT invited_by_user_id FROM users WHERE id = ? LIMIT 1`,
       [currentUserId]
-    );
+    ) as [any[], any];
     const parentId: number | null = (parentRows as any[])[0]?.invited_by_user_id ?? null;
     if (!parentId) break;
 
@@ -405,8 +405,8 @@ async function triggerMultiLevelCommission(params: {
         const [uRows] = await (dbConn as any).execute(
           `SELECT invited_by_user_id, COALESCE(miban_rank_index, 1) AS rank_idx FROM users WHERE id = ? LIMIT 1`,
           [cur]
-        );
-        const uRow = (uRows as any[])[0];
+        ) as [any[], any];
+        const uRow = (uRows as any[])[0] as any;
         if (!uRow) break;
         const parentId2: number | null = uRow.invited_by_user_id ?? null;
         if (!parentId2) break;
