@@ -1385,14 +1385,16 @@ export const mibanAdminUserRouter = router({
     .input(z.object({ userId: z.number(), role: z.enum(["parent", "baby"]) }))
     .mutation(({ input }) => updateUserMibanRole(input.userId, input.role)),
   // 设置米伴职级（1=米农 2=米商 3=米行 4=米庄 5=米王）
+  // 同时同步 miban_role：米农=baby（顾客），米商及以上=parent（经销商）
   setRank: mibanAdminProcedure
     .input(z.object({ userId: z.number(), rankIndex: z.number().int().min(1).max(10) }))
     .mutation(async ({ input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new Error("DB not available");
+      const mibanRole = input.rankIndex >= 2 ? 'parent' : 'baby';
       await (conn as any).execute(
-        `UPDATE users SET miban_rank_index = ? WHERE id = ?`,
-        [input.rankIndex, input.userId]
+        `UPDATE users SET miban_rank_index = ?, miban_role = ? WHERE id = ?`,
+        [input.rankIndex, mibanRole, input.userId]
       );
       return { ok: true };
     }),

@@ -621,10 +621,6 @@ function getRankInfo(rankIndex: number) {
 function UsersPanel() {
   const utils = mtrpc.useUtils();
   const { data: users, isLoading } = mtrpc.adminUser.list.useQuery();
-  const setRoleMutation = mtrpc.adminUser.setRole.useMutation({
-    onSuccess: () => { utils.adminUser.list.invalidate(); toast.success("角色已更新"); },
-    onError: (e: any) => toast.error(e.message),
-  });
   const setRankMutation = mtrpc.adminUser.setRank.useMutation({
     onSuccess: () => { utils.adminUser.list.invalidate(); toast.success("职级已更新"); },
     onError: (e: any) => toast.error(e.message),
@@ -697,18 +693,9 @@ function UsersPanel() {
                   <p className="text-[13px] font-bold text-black truncate">{u.name ?? "匿名用户"}</p>
                   <p className="text-[11px] text-gray-400 truncate">@{u.username}</p>
                 </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  {/* 职级标签（主要） */}
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${getRankInfo(u.mibanRankIndex ?? 1).color}`}>
-                    {getRankInfo(u.mibanRankIndex ?? 1).name}
-                  </span>
-                  {/* 角色标签（次要，仅米商/经销商才显示） */}
-                  {u.mibanRole === "parent" && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-400">
-                      经销商
-                    </span>
-                  )}
-                </div>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${getRankInfo(u.mibanRankIndex ?? 1).color}`}>
+                  {getRankInfo(u.mibanRankIndex ?? 1).name}
+                </span>
               </div>
               <div className="flex items-center gap-3 mb-2 flex-wrap">
                 <div className="flex items-center gap-1">
@@ -721,8 +708,8 @@ function UsersPanel() {
                 </div>
                 <span className="text-[11px] text-gray-300 ml-auto">积分 {u.points ?? 0}</span>
               </div>
-              {/* 职级设置 */}
-              <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+              {/* 职级设置（点击同步更新权限：米农=顾客，米商及以上=经销商） */}
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-[11px] text-gray-400">职级：</span>
                 {RANK_LEVELS.map(rank => (
                   <button
@@ -736,24 +723,6 @@ function UsersPanel() {
                     }`}
                   >
                     {rank.name}
-                  </button>
-                ))}
-              </div>
-              {/* 角色设置 */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[11px] text-gray-400">角色：</span>
-                {(["baby", "parent"] as const).map(role => (
-                  <button
-                    key={role}
-                    disabled={u.mibanRole === role || setRoleMutation.isPending}
-                    onClick={() => setRoleMutation.mutate({ userId: u.id, role })}
-                    className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${
-                      u.mibanRole === role
-                        ? "border-gray-100 text-gray-300 cursor-default"
-                        : "border-gray-200 text-gray-500 hover:border-orange-300 hover:text-orange-500 cursor-pointer"
-                    }`}
-                  >
-                    {ROLE_LABELS[role]}
                   </button>
                 ))}
                 <span className="ml-auto text-[11px] text-gray-300">
