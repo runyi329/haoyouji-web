@@ -516,6 +516,7 @@ export const mibanRiceRouter = router({
         const [rows]: any = await (conn as any).execute(sql2, params);
         return (Array.isArray(rows) ? rows : []).map((r: any) => ({
           ...r,
+          pricePerJin: parseFloat(r.price_per_jin ?? r.pricePerJin ?? '0'),
           nutritionJson: typeof r.nutritionJson === 'string' ? JSON.parse(r.nutritionJson) : (r.nutritionJson ?? null),
           tagsJson: typeof r.tagsJson === 'string' ? JSON.parse(r.tagsJson) : (r.tagsJson ?? []),
           isActive: Boolean(r.isActive),
@@ -543,12 +544,14 @@ export const mibanRiceRouter = router({
       tagsJson: z.array(z.string()).optional(),
       sortOrder: z.number().optional(),
       isActive: z.boolean().optional(),
+      pricePerJin: z.number().min(0).optional(),
     }))
     .mutation(async ({ input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
-      const { id, nutritionJson, tagsJson, ...rest } = input;
+      const { id, nutritionJson, tagsJson, pricePerJin, ...rest } = input;
       const fields: Record<string, any> = { ...rest };
+      if (pricePerJin !== undefined) fields.price_per_jin = pricePerJin;
       if (nutritionJson !== undefined) fields.nutritionJson = JSON.stringify(nutritionJson);
       if (tagsJson !== undefined) fields.tagsJson = JSON.stringify(tagsJson);
       if (id) {

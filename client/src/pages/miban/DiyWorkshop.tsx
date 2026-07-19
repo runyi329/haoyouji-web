@@ -234,7 +234,7 @@ export default function DiyWorkshop() {
         id: String(r.id),
         name: r.stdName,
         desc: r.description ?? "",
-        price: 0,
+        price: r.pricePerJin ?? 0,
         color: r.colorHex ?? "#C8A87A",
         img: r.img ?? "",
         nutrition: r.nutritionJson ?? null,

@@ -927,6 +927,41 @@ export async function initDatabase() {
       console.log('[DB Init] ✅ miban_rice_varieties catalogId/nutritionJson/tagsJson columns checked');
     }
 
+    // 给标准仓库加 price_per_jin 字段，并填入市场参考价
+    const dbConnMibanCatalog = await getDbConnection();
+    if (dbConnMibanCatalog) {
+      await safeAddColumn(dbConnMibanCatalog as any, 'miban_rice_catalog', 'price_per_jin', "DECIMAL(10,2) NOT NULL DEFAULT 0.00 COMMENT '每斤参考价格(元)'");
+      // 只更新价格为0的记录，避免覆盖已手动设置的价格
+      const prices: Record<string, number> = {
+        '粳米（东北大米）': 4.5,
+        '五常大米（稻花香2号）': 12.0,
+        '盘锦大米': 9.0,
+        '籼米（南方长粒米）': 3.8,
+        '泰国香米（茉莉香米）': 8.5,
+        '糯米（圆粒糯米）': 5.5,
+        '黑米': 8.0,
+        '红米': 7.5,
+        '糙米': 6.0,
+        '小米（粟米）': 6.5,
+        '薏米（薏苡仁）': 12.0,
+        '燕麦米': 10.0,
+        '荞麦米': 9.0,
+        '高粱米': 5.0,
+        '紫米（紫糯米）': 10.0,
+        '绿豆': 11.0,
+        '红豆（赤小豆）': 9.5,
+        '莲子': 25.0,
+        '藜麦': 28.0,
+      };
+      for (const [name, price] of Object.entries(prices)) {
+        await (dbConnMibanCatalog as any).execute(
+          'UPDATE `miban_rice_catalog` SET `price_per_jin` = ? WHERE `stdName` = ? AND `price_per_jin` = 0',
+          [price, name]
+        );
+      }
+      console.log('[DB Init] ✅ miban_rice_catalog price_per_jin initialized');
+    }
+
     console.log("[DB Init] Database initialization completed successfully");
   } catch (error) {
     console.error("[DB Init] Error during database initialization:", error);
