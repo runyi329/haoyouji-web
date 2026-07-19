@@ -2340,6 +2340,7 @@ export const mibanOrders = mysqlTable("miban_orders", {
   shippedAt: timestamp("shippedAt"),                          // 发货时间
   autoConfirmAt: timestamp("autoConfirmAt"),                    // 自动确认收货时间（发货后30天）
   confirmedAt: timestamp("confirmedAt"),                        // 用户主动确认收货时间
+  commissionTrigger: varchar("commission_trigger", { length: 32 }),  // 佣金触发时机快照：order_placed/order_confirmed
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

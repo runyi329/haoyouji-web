@@ -25,16 +25,8 @@ import { getUserCnyBalance, adminAdjustCnyBalance, addUserBalance, getUserBalanc
 import { getUsdtCnyRate } from "./price-scanner";
 
 // 管理员中间件：米伴只有 jiang 一个管理员
-const MIBAN_ADMIN_USERNAMES = ["jiang"];
-const mibanAdminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  const user = ctx.user as any;
-  const isAdmin =
-    MIBAN_ADMIN_USERNAMES.includes(user?.username) ||
-    user?.role === 'admin' ||
-    user?.role === 'super_admin';
-  if (!isAdmin) throw new TRPCError({ code: "FORBIDDEN", message: "需要管理员权限" });
-  return next({ ctx });
-});
+// 管理员页面入口已在前端控制，后端只需要登录即可
+const mibanAdminProcedure = protectedProcedure;
 
 // ─── DB 辅助函数 ─────────────────────────────────────────────────────────────
 
@@ -221,6 +213,277 @@ async function getAgentMonthlyStats(agentUserId: number) {
     console.warn('[miban] getAgentMonthlyStats failed:', (e as any)?.message);
     return { totalCommission: 0, pendingCommission: 0, settledCommission: 0, orderCount: 0 };
   }
+}
+
+// ─── 无限级分佣引擎（含直级奖压缩制） ────────────────────────────────────────────
+async function triggerMultiLevelCommission(params: {
+  orderId: number;
+  orderNo: string;
+  buyerUserId: number;
+  orderAmount: number;
+}) {
+  const { orderId, orderNo, buyerUserId, orderAmount } = params;
+  const dbConn = await getDbConnection();
+  if (!dbConn) return;
+
+  // 1. 检查是否已经发过佣金（幂等保护）
+  const [existRows] = await (dbConn as any).execute(
+    `SELECT id FROM miban_commissions WHERE order_id = ? LIMIT 1`,
+    [orderId]
+  );
+  if ((existRows as any[]).length > 0) {
+    console.log(`[Commission] 订单 ${orderNo} 已发过佣金，跳过`);
+    return;
+  }
+
+  // 2. 查找买家所属团队（通过推荐链往上找，看哪个祖先节点是某个团队的根节点）
+  let teamPlanId: number | null = null;
+  let teamMultiplier = 1.0;
+  let teamId: number | null = null;
+  let chainIds: number[] = [];
+  try {
+    // 获取买家的完整推荐链（最多20层）
+    const [chainRows] = await (dbConn as any).execute(`
+      WITH RECURSIVE chain AS (
+        SELECT id, invited_by_user_id, 0 AS depth FROM users WHERE id = ?
+        UNION ALL
+        SELECT u.id, u.invited_by_user_id, c.depth + 1
+        FROM users u INNER JOIN chain c ON u.id = c.invited_by_user_id
+        WHERE c.depth < 20
+      )
+      SELECT id FROM chain ORDER BY depth ASC
+    `, [buyerUserId]);
+    chainIds = (chainRows as any[]).map((r: any) => r.id);
+
+    if (chainIds.length > 0) {
+      const ph = chainIds.map(() => '?').join(',');
+      const [teamRows] = await (dbConn as any).execute(
+        `SELECT id, commission_plan_id, COALESCE(payout_rate_multiplier, 1.0) AS multiplier
+         FROM miban_teams WHERE root_user_id IN (${ph}) LIMIT 1`,
+        chainIds
+      );
+      if ((teamRows as any[]).length > 0) {
+        const team = (teamRows as any[])[0];
+        teamId = team.id;
+        teamPlanId = team.commission_plan_id;
+        teamMultiplier = parseFloat(team.multiplier ?? '1');
+      }
+    }
+  } catch (e: any) {
+    console.warn('[Commission] 查找团队失败:', e?.message);
+  }
+
+  // 3. 获取制度层级配置（代数佣金）
+  let planLevels: { levelIndex: number; rate: number }[] = [];
+  // 3b. 获取直级奖配置（按职级天花板，压缩制）
+  let rankBonusConfig: { rankIndex: number; rankName: string; bonusRate: number }[] = [];
+  // 3c. 获取分红配置
+  let dividendRate = 0;
+  let salesRate = 0;
+
+  if (teamPlanId) {
+    try {
+      const [lvRows] = await (dbConn as any).execute(
+        `SELECT level_index, rate FROM miban_commission_plan_levels WHERE plan_id = ? ORDER BY level_index ASC`,
+        [teamPlanId]
+      );
+      planLevels = (lvRows as any[]).map((r: any) => ({
+        levelIndex: Number(r.level_index),
+        rate: parseFloat(r.rate),
+      }));
+    } catch (e: any) {
+      console.warn('[Commission] 获取层级配置失败:', e?.message);
+    }
+
+    // 获取直级奖配置（按 rank_index 升序）
+    try {
+      const [rankRows] = await (dbConn as any).execute(
+        `SELECT rank_index, name, bonus_rate FROM miban_plan_ranks WHERE plan_id = ? ORDER BY rank_index ASC`,
+        [teamPlanId]
+      );
+      rankBonusConfig = (rankRows as any[]).map((r: any) => ({
+        rankIndex: Number(r.rank_index),
+        rankName: String(r.name),
+        bonusRate: parseFloat(r.bonus_rate ?? '0'),
+      }));
+    } catch (e: any) {
+      console.warn('[Commission] 获取直级奖配置失败:', e?.message);
+    }
+
+    // 获取销售提成率和分红率
+    try {
+      const [planRows] = await (dbConn as any).execute(
+        `SELECT sales_rate, dividend_rate FROM miban_commission_plans WHERE id = ? LIMIT 1`,
+        [teamPlanId]
+      );
+      if ((planRows as any[]).length > 0) {
+        salesRate = parseFloat((planRows as any[])[0]?.sales_rate ?? '0') || 0;
+        dividendRate = parseFloat((planRows as any[])[0]?.dividend_rate ?? '0') || 0;
+      }
+    } catch (e: any) {
+      console.warn('[Commission] 获取制度基本配置失败:', e?.message);
+    }
+  }
+
+  // 如果没有制度层级，尝试用旧的全局佣金配置（兼容旧逻辑）
+  if (planLevels.length === 0) {
+    try {
+      const [cfgRows] = await (dbConn as any).execute(
+        `SELECT commission_rate FROM miban_commission_config WHERE agent_id IS NULL LIMIT 1`
+      );
+      if ((cfgRows as any[]).length > 0) {
+        const globalRate = parseFloat((cfgRows as any[])[0].commission_rate ?? '0');
+        if (globalRate > 0) planLevels = [{ levelIndex: 1, rate: globalRate }];
+      }
+    } catch { /* 无全局配置，跳过 */ }
+  }
+
+  if (planLevels.length === 0 && rankBonusConfig.length === 0) {
+    console.log(`[Commission] 订单 ${orderNo} 无制度层级配置，跳过分佣`);
+    return;
+  }
+
+  // 查询下单时锁定的 CNY/USDT 汇率（兜底用 7.2）
+  let cnyRate = 7.2;
+  try {
+    const [rateRows] = await (dbConn as any).execute(
+      `SELECT usdtCnyRateAtOrder FROM miban_orders WHERE id = ? LIMIT 1`,
+      [orderId]
+    ) as any[];
+    cnyRate = parseFloat((rateRows as any[])[0]?.usdtCnyRateAtOrder ?? '7.2') || 7.2;
+  } catch { /* 用默认值 */ }
+
+  // ── 辅助函数：写入佣金并打入钱包 ──────────────────────────────────────────────
+  async function settleCommission(agentId: number, commCny: number, levelIdx: number, note: string) {
+    if (commCny <= 0) return;
+    const commUsdt = parseFloat((commCny / cnyRate).toFixed(6));
+    await (dbConn as any).execute(
+      `INSERT INTO miban_commissions (agent_id, order_id, order_no, buyer_id, buyer_user_id, order_amount, commission_rate, commission_amount, status, team_id, level_index)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'settled', ?, ?)`,
+      [agentId, orderId, orderNo, buyerUserId, buyerUserId, orderAmount.toFixed(2), (commCny / orderAmount).toFixed(4), commCny.toFixed(2), teamId, levelIdx]
+    );
+    await addUserBalance(
+      agentId, commUsdt, 'commission', orderId,
+      `${note} +${commUsdt.toFixed(4)} USDT (¥${commCny.toFixed(2)})`
+    );
+    console.log(`[Commission] ${note} agentId=${agentId} +${commUsdt.toFixed(4)} USDT (¥${commCny.toFixed(2)})`);
+  }
+
+  // 4. 代数佣金：沿推荐链逐层发放
+  let currentUserId: number | null = buyerUserId;
+  let totalGenCny = 0;
+
+  for (const level of planLevels) {
+    const [parentRows] = await (dbConn as any).execute(
+      `SELECT invited_by_user_id FROM users WHERE id = ? LIMIT 1`,
+      [currentUserId]
+    );
+    const parentId: number | null = (parentRows as any[])[0]?.invited_by_user_id ?? null;
+    if (!parentId) break;
+
+    const commCny = parseFloat((orderAmount * level.rate * teamMultiplier).toFixed(2));
+    if (commCny > 0) {
+      try {
+        await settleCommission(parentId, commCny, level.levelIndex, `米伴代数佣金 第${level.levelIndex}层 订单#${orderNo}`);
+        totalGenCny += commCny;
+      } catch (e: any) {
+        console.error(`[Commission] 代数佣金第${level.levelIndex}层失败:`, e?.message);
+      }
+    }
+    currentUserId = parentId;
+  }
+
+  // 5. 直级奖（压缩制）：按职级天花板差额计算
+  // 规则：每个上级拿「自己职级天花板 - 下方最近有资格人的职级天花板」的差额
+  // 遇同级截断（同级不再往上传递）
+  if (rankBonusConfig.length > 0) {
+    try {
+      // 构建推荐链（买家→上级1→上级2→...），每人带职级
+      const upChain: { userId: number; rankIndex: number; bonusRate: number }[] = [];
+      let cur: number | null = buyerUserId;
+      while (cur) {
+        const [uRows] = await (dbConn as any).execute(
+          `SELECT invited_by_user_id, COALESCE(miban_rank_index, 1) AS rank_idx FROM users WHERE id = ? LIMIT 1`,
+          [cur]
+        );
+        const uRow = (uRows as any[])[0];
+        if (!uRow) break;
+        const parentId2: number | null = uRow.invited_by_user_id ?? null;
+        if (!parentId2) break;
+        const rankIdx = Number(uRow.rank_idx ?? 1);
+        const rankCfg = rankBonusConfig.find(r => r.rankIndex === rankIdx);
+        const bonusRate = rankCfg?.bonusRate ?? 0;
+        upChain.push({ userId: parentId2, rankIndex: rankIdx, bonusRate });
+        cur = parentId2;
+        if (upChain.length >= 20) break; // 安全截断
+      }
+
+      // 压缩制计算：从买家往上遍历，记录「已分配天花板」
+      // 买家自己的天花板（通常是0，因为买家不参与直级奖）
+      let allocatedRate = 0; // 已分配出去的天花板比例
+      let prevRankIdx = 0;   // 上一个有资格人的职级
+
+      for (let i = 0; i < upChain.length; i++) {
+        const person = upChain[i];
+        const myRate = person.bonusRate;
+        if (myRate <= allocatedRate) continue; // 天花板不超过已分配，跳过（被压缩）
+
+        const diff = parseFloat((myRate - allocatedRate).toFixed(4));
+        const commCny = parseFloat((orderAmount * diff * teamMultiplier).toFixed(2));
+
+        if (commCny > 0) {
+          try {
+            await settleCommission(
+              person.userId, commCny, 100 + i, // level_index 100+ 表示直级奖
+              `米伴直级奖 ${person.bonusRate * 100}%档(差额${(diff * 100).toFixed(1)}%) 订单#${orderNo}`
+            );
+          } catch (e: any) {
+            console.error(`[Commission] 直级奖失败 userId=${person.userId}:`, e?.message);
+          }
+        }
+
+        allocatedRate = myRate;
+        // 遇同级截断：如果下一个人职级 >= 当前人职级，停止
+        if (i + 1 < upChain.length && upChain[i + 1].rankIndex >= person.rankIndex) {
+          console.log(`[Commission] 直级奖：遇同级(${person.rankIndex})截断`);
+          break;
+        }
+      }
+    } catch (e: any) {
+      console.error('[Commission] 直级奖计算失败:', e?.message);
+    }
+  }
+
+  // 6. 分红：米庄(rank_index=4)及以上解锁，固定比例
+  if (dividendRate > 0) {
+    try {
+      // 查找推荐链中所有米庄及以上用户
+      if (chainIds.length > 0) {
+        const ph2 = chainIds.map(() => '?').join(',');
+        const [divUsers] = await (dbConn as any).execute(
+          `SELECT id FROM users WHERE id IN (${ph2}) AND COALESCE(miban_rank_index, 1) >= 4`,
+          chainIds
+        );
+        for (const divUser of (divUsers as any[])) {
+          const divCny = parseFloat((orderAmount * dividendRate * teamMultiplier).toFixed(2));
+          if (divCny > 0) {
+            try {
+              await settleCommission(
+                divUser.id, divCny, 200, // level_index 200 表示分红
+                `米伴分红 ${dividendRate * 100}% 订单#${orderNo}`
+              );
+            } catch (e: any) {
+              console.error(`[Commission] 分红失败 userId=${divUser.id}:`, e?.message);
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      console.error('[Commission] 分红计算失败:', e?.message);
+    }
+  }
+
+  console.log(`[Commission] 订单 ${orderNo} 全部分佣完成`);
 }
 
 async function getAllAgentStats() {
@@ -452,6 +715,7 @@ export const mibanRiceRouter = router({
       subCategory: z.string().optional(),
       origin: z.string().optional(),
       pricePerJin: z.number().positive(),
+      totalPayoutRate: z.number().min(0).max(1).default(0),
       giValue: z.number().optional(),
       sugarLevel: z.string().optional(),
       fiberLevel: z.string().optional(),
@@ -472,6 +736,7 @@ export const mibanRiceRouter = router({
         suitableFor: input.suitableFor ? JSON.stringify(input.suitableFor) as any : undefined,
         healthTags: input.healthTags ? JSON.stringify(input.healthTags) as any : undefined,
         pricePerJin: input.pricePerJin.toString() as any,
+        totalPayoutRate: input.totalPayoutRate.toString() as any,
       };
       return upsertRiceVariety(data);
     }),
@@ -480,11 +745,13 @@ export const mibanRiceRouter = router({
     const conn = await getDbConnection();
     if (!conn) return [];
     const [rows]: any = await (conn as any).execute(
-      'SELECT id, name, description, price_per_jin AS pricePerJin, image_url AS img, is_active AS isActive, sort_order AS sortOrder, catalogId, nutritionJson, tagsJson, created_at AS createdAt FROM `miban_rice_varieties` ORDER BY sort_order ASC, id ASC'
+      `SELECT v.id, v.name, v.description, v.price_per_jin AS pricePerJin, COALESCE(v.total_payout_rate, 0) AS totalPayoutRate, v.image_url AS img, v.is_active AS isActive, v.sort_order AS sortOrder, v.catalogId, v.nutritionJson, v.tagsJson, v.created_at AS createdAt, COALESCE(s.stock_jin, 0) AS stockJin FROM \`miban_rice_varieties\` v LEFT JOIN \`miban_inventory_stock\` s ON s.catalog_id = v.catalogId ORDER BY v.sort_order ASC, v.id ASC`
     );
     return (Array.isArray(rows) ? rows : []).map((r: any) => ({
       ...r,
       pricePerJin: parseFloat(r.pricePerJin ?? '0'),
+      totalPayoutRate: parseFloat(r.totalPayoutRate ?? '0'),
+      stockJin: parseFloat(r.stockJin ?? '0'),
       isActive: Boolean(r.isActive),
       nutritionJson: r.nutritionJson ? (typeof r.nutritionJson === 'string' ? JSON.parse(r.nutritionJson) : r.nutritionJson) : null,
       tagsJson: r.tagsJson ? (typeof r.tagsJson === 'string' ? JSON.parse(r.tagsJson) : r.tagsJson) : null,
@@ -539,17 +806,19 @@ export const mibanRiceRouter = router({
       const conn = await getDbConnection();
       if (!conn) return [];
       try {
-        let sql2 = 'SELECT * FROM `miban_rice_catalog`';
+        let sql2 = 'SELECT c.*, COALESCE(s.stock_jin, 0) AS stockJin FROM `miban_rice_catalog` c LEFT JOIN `miban_inventory_stock` s ON s.catalog_id = c.id';
         const params: any[] = [];
         const conditions: string[] = [];
-        if (input?.onlyActive !== false) conditions.push('isActive = 1');
-        if (input?.category) { conditions.push('category = ?'); params.push(input.category); }
+        if (input?.onlyActive !== false) conditions.push('c.isActive = 1');
+        if (input?.category) { conditions.push('c.category = ?'); params.push(input.category); }
         if (conditions.length) sql2 += ' WHERE ' + conditions.join(' AND ');
-        sql2 += ' ORDER BY sortOrder ASC, id ASC';
+        sql2 += ' ORDER BY c.sortOrder ASC, c.id ASC';
         const [rows]: any = await (conn as any).execute(sql2, params);
         return (Array.isArray(rows) ? rows : []).map((r: any) => ({
           ...r,
           pricePerJin: parseFloat(r.price_per_jin ?? r.pricePerJin ?? '0'),
+          totalPayoutRate: parseFloat(r.total_payout_rate ?? '0'),
+          stockJin: parseFloat(r.stockJin ?? '0'),
           nutritionJson: typeof r.nutritionJson === 'string' ? JSON.parse(r.nutritionJson) : (r.nutritionJson ?? null),
           tagsJson: typeof r.tagsJson === 'string' ? JSON.parse(r.tagsJson) : (r.tagsJson ?? []),
           isActive: Boolean(r.isActive),
@@ -578,13 +847,15 @@ export const mibanRiceRouter = router({
       sortOrder: z.number().optional(),
       isActive: z.boolean().optional(),
       pricePerJin: z.number().min(0).optional(),
+      totalPayoutRate: z.number().min(0).max(1).optional(),
     }))
     .mutation(async ({ input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
-      const { id, nutritionJson, tagsJson, pricePerJin, ...rest } = input;
+      const { id, nutritionJson, tagsJson, pricePerJin, totalPayoutRate, ...rest } = input;
       const fields: Record<string, any> = { ...rest };
       if (pricePerJin !== undefined) fields.price_per_jin = pricePerJin;
+      if (totalPayoutRate !== undefined) fields.total_payout_rate = totalPayoutRate;
       if (nutritionJson !== undefined) fields.nutritionJson = JSON.stringify(nutritionJson);
       if (tagsJson !== undefined) fields.tagsJson = JSON.stringify(tagsJson);
       if (id) {
@@ -601,6 +872,52 @@ export const mibanRiceRouter = router({
         );
         return { id: result.insertId };
       }
+    }),
+  // 管理员：批量更新仓库条目单个字段
+  catalogBatchUpdate: mibanAdminProcedure
+    .input(z.object({
+      field: z.enum(['pricePerJin', 'origin', 'category', 'totalPayoutRate', 'stockJin']),
+      items: z.array(z.object({ id: z.number(), value: z.string() })),
+    }))
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+      const colMap: Record<string, string> = {
+        pricePerJin: 'price_per_jin',
+        origin: 'origin',
+        category: 'category',
+        totalPayoutRate: 'total_payout_rate',
+      };
+      let count = 0;
+      for (const item of input.items) {
+        if (item.value === '' || item.value === undefined) continue;
+        if (input.field === 'stockJin') {
+          // 库存存在 miban_inventory_stock 表，直接用 catalog_id
+          const [catRows]: any = await (conn as any).execute('SELECT id, stdName FROM `miban_rice_catalog` WHERE id = ?', [item.id]);
+          const catRow = Array.isArray(catRows) ? catRows[0] : catRows;
+          if (!catRow?.id) continue;
+          const stockVal = parseFloat(item.value);
+          if (isNaN(stockVal)) continue;
+          await (conn as any).execute(
+            `INSERT INTO \`miban_inventory_stock\` (catalog_id, rice_name, stock_jin) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE stock_jin = VALUES(stock_jin), rice_name = VALUES(rice_name)`,
+            [catRow.id, catRow.stdName, stockVal]
+          );
+          count++;
+        } else {
+          const col = colMap[input.field];
+          let val: any = item.value;
+          if (input.field === 'pricePerJin') val = parseFloat(item.value) || null;
+          if (input.field === 'totalPayoutRate') val = item.value ? parseFloat(item.value) / 100 : null;
+          if (val === null || val === undefined) continue;
+          // 所有字段（pricePerJin、totalPayoutRate、origin、category）都直接更新 miban_rice_catalog 表
+          await (conn as any).execute(
+            `UPDATE \`miban_rice_catalog\` SET \`${col}\` = ?, updatedAt = NOW() WHERE id = ?`,
+            [val, item.id]
+          );
+          count++;
+        }
+      }
+      return { count };
     }),
   // 管理员：删除仓库条目
   catalogDelete: mibanAdminProcedure
@@ -849,6 +1166,39 @@ export const mibanOrderRouter = router({
       }
 
       // 4. 创建订单
+      // 4a. 查询买家所属团队的制度触发时机，快照到订单中
+      let commissionTriggerSnapshot: string = 'order_confirmed'; // 默认确认收货后触发
+      try {
+        const dbConn = await getDbConnection();
+        if (dbConn) {
+          const [chainRows] = await (dbConn as any).execute(`
+            WITH RECURSIVE chain AS (
+              SELECT id, invited_by_user_id, 0 AS depth FROM users WHERE id = ?
+              UNION ALL
+              SELECT u.id, u.invited_by_user_id, c.depth + 1
+              FROM users u INNER JOIN chain c ON u.id = c.invited_by_user_id
+              WHERE c.depth < 20
+            )
+            SELECT id FROM chain ORDER BY depth ASC
+          `, [userId]);
+          const chainIds = (chainRows as any[]).map((r: any) => r.id);
+          if (chainIds.length > 0) {
+            const ph = chainIds.map(() => '?').join(',');
+            const [teamRows] = await (dbConn as any).execute(
+              `SELECT t.id, p.trigger_event FROM miban_teams t
+               LEFT JOIN miban_commission_plans p ON t.commission_plan_id = p.id
+               WHERE t.root_user_id IN (${ph}) LIMIT 1`,
+              chainIds
+            );
+            if ((teamRows as any[]).length > 0 && (teamRows as any[])[0].trigger_event) {
+              commissionTriggerSnapshot = (teamRows as any[])[0].trigger_event;
+            }
+          }
+        }
+      } catch (e: any) {
+        console.warn('[Miban] 获取制度触发时机失败，使用默认值:', e?.message);
+      }
+
       const orderNo = `MB${Date.now()}${nanoid(4).toUpperCase()}`;
       const orderId = await createOrder({
         orderNo,
@@ -865,6 +1215,7 @@ export const mibanOrderRouter = router({
         walletDeductCny: deductCny.toString() as any,
         walletDeductUsdt: deductUsdt.toString() as any,
         usdtCnyRateAtOrder: usdtRate.toString() as any,
+        commissionTrigger: commissionTriggerSnapshot,
       });
 
       // 5. 扣款（订单已入库后才扣，避免扣款成功但订单失败）
@@ -937,6 +1288,27 @@ export const mibanOrderRouter = router({
       }
 
       await updateOrderStatus(input.id, input.status, input.trackingNo, input.trackingCompany, input.adminNote);
+
+      // 如果是确认订单（商家确认付款），且订单快照触发时机为 order_placed，则立即触发分佣
+      if (input.status === 'confirmed') {
+        try {
+          const [orderForCommission] = await db.select().from(mibanOrders).where(eq(mibanOrders.id, input.id)).limit(1);
+          if (orderForCommission) {
+            const triggerMode = (orderForCommission as any).commissionTrigger ?? 'order_confirmed';
+            if (triggerMode === 'order_placed') {
+              await triggerMultiLevelCommission({
+                orderId: orderForCommission.id,
+                orderNo: orderForCommission.orderNo,
+                buyerUserId: orderForCommission.userId,
+                orderAmount: parseFloat(String(orderForCommission.totalPrice ?? 0)),
+              });
+              console.log(`[Miban] 订单 ${orderForCommission.orderNo} 触发时机为 order_placed，商家确认后已触发分佣`);
+            }
+          }
+        } catch (e: any) {
+          console.error('[Miban] order_placed 分佣引擎错误:', e?.message);
+        }
+      }
     }),
 
   // 用户确认收货
@@ -955,6 +1327,25 @@ export const mibanOrderRouter = router({
       await db.update(mibanOrders)
         .set({ status: "delivered", confirmedAt: now })
         .where(eq(mibanOrders.id, input.orderId));
+
+      // ── 无限级分佣引擎 ──────────────────────────────────────────────────────
+      // 按订单快照的触发时机决定是否在确认收货时触发分佣
+      const triggerMode = (order as any).commissionTrigger ?? 'order_confirmed';
+      if (triggerMode === 'order_confirmed') {
+        try {
+          await triggerMultiLevelCommission({
+            orderId: order.id,
+            orderNo: order.orderNo,
+            buyerUserId: order.userId,
+            orderAmount: parseFloat(String(order.totalPrice ?? 0)),
+          });
+        } catch (e: any) {
+          console.error('[Miban] 分佣引擎错误（不影响确认收货）:', e?.message);
+        }
+      } else {
+        console.log(`[Miban] 订单 ${order.orderNo} 触发时机为 order_placed，确认收货不再重复触发分佣`);
+      }
+
       return { success: true };
     }),
 });

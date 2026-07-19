@@ -53,16 +53,20 @@ function OrdersPanel() {
         const ingredients: any[] = (() => { try { return JSON.parse(order.ingredients ?? "[]"); } catch { return []; } })();
         const statusColor = STATUS_COLORS[order.status] ?? "text-gray-500 bg-gray-100";
         return (
-          <div key={order.id} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-            <div className="flex items-start justify-between gap-3 mb-2">
-              <div>
+          <div key={order.id} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm overflow-hidden">
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <div className="flex-1 min-w-0">
                 <h3 className="text-[14px] font-bold text-black">{order.recipeName || "定制米"}</h3>
                 <p className="text-[11px] text-gray-400">#{order.id} · {order.receiverName} · {order.receiverPhone}</p>
                 <p className="text-[11px] text-gray-400 truncate">{order.receiverAddress}</p>
               </div>
-              <span className={`px-2.5 py-1 rounded-full text-[11px] font-medium flex-shrink-0 ${statusColor}`}>
-                {ORDER_STATUS_OPTIONS.find(o => o.value === order.status)?.label ?? order.status}
-              </span>
+              <select
+                value={order.status}
+                onChange={(e) => updateMutation.mutate({ id: order.id, status: e.target.value as any })}
+                className={`text-[11px] border-0 rounded-full px-2.5 py-1 font-medium flex-shrink-0 focus:outline-none ${statusColor}`}
+              >
+                {ORDER_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
             </div>
             {ingredients.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mb-2">
@@ -74,36 +78,27 @@ function OrdersPanel() {
                 ))}
               </div>
             )}
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
               <span className="text-[14px] font-bold" style={{ color: "#FF6900" }}>¥{Number(order.totalPrice).toFixed(2)}</span>
               <span className="text-[11px] text-gray-400">· {order.totalWeightJin}斤</span>
-              <div className="ml-auto flex items-center gap-2">
-                <select
-                  value={order.status}
-                  onChange={(e) => updateMutation.mutate({ id: order.id, status: e.target.value as any })}
-                  className="text-[11px] border border-gray-200 rounded-lg px-2 py-1 bg-white focus:outline-none"
-                >
-                  {ORDER_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-                {order.status === "confirmed" && (
-                  <div className="flex items-center gap-1">
-                    <input
-                      value={trackingInputs[order.id] ?? ""}
-                      onChange={(e) => setTrackingInputs(p => ({ ...p, [order.id]: e.target.value }))}
-                      placeholder="快递单号"
-                      className="text-[11px] border border-gray-200 rounded-lg px-2 py-1 bg-white w-24 focus:outline-none"
-                    />
-                    <button
-                      onClick={() => updateMutation.mutate({ id: order.id, status: "shipped", trackingNo: trackingInputs[order.id] })}
-                      className="text-[11px] px-2 py-1 rounded-lg flex items-center gap-1 text-white"
-                      style={{ background: "#FF6900" }}
-                    >
-                      <Truck className="w-3 h-3" />发货
-                    </button>
-                  </div>
-                )}
-              </div>
             </div>
+            {order.status === "confirmed" && (
+              <div className="flex items-center gap-2 mt-2">
+                <input
+                  value={trackingInputs[order.id] ?? ""}
+                  onChange={(e) => setTrackingInputs(p => ({ ...p, [order.id]: e.target.value }))}
+                  placeholder="填写快递单号（可选）"
+                  className="flex-1 text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none"
+                />
+                <button
+                  onClick={() => updateMutation.mutate({ id: order.id, status: "shipped", trackingNo: trackingInputs[order.id] })}
+                  className="text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1 text-white flex-shrink-0"
+                  style={{ background: "#FF6900" }}
+                >
+                  <Truck className="w-3 h-3" />发货
+                </button>
+              </div>
+            )}
           </div>
         );
       })}
@@ -128,6 +123,9 @@ function CatalogPanel() {
   });
   const uploadImgMutation = mtrpc.rice.catalogUploadImg.useMutation({
     onSuccess: () => { toast.success('图片已上传'); refetch(); },
+  });
+  const batchUpdateMutation = mtrpc.rice.catalogBatchUpdate.useMutation({
+    onSuccess: (data) => { toast.success(`已批量更新 ${data.count} 条`); refetch(); setBatchMode(false); setBatchEdits({}); },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -146,12 +144,14 @@ function CatalogPanel() {
     tagsInput: string;
     // 价格
     pricePerJin: string;
+    // 总拨出率
+    totalPayoutRate: string;
   };
   const emptyForm = (): CatalogForm => ({
     id: undefined, stdName: '', category: '粳米', subCategory: '', origin: '',
     gbStandard: '', colorHex: '#C8A87A', description: '', sortOrder: 0,
     calories: '', protein: '', carbs: '', fat: '', fiber: '', tagsInput: '',
-    pricePerJin: '',
+    pricePerJin: '', totalPayoutRate: '',
   });
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState<CatalogForm>(emptyForm());
@@ -159,9 +159,8 @@ function CatalogPanel() {
   const [search, setSearch] = useState('');
   // 批量编辑模式
   const [batchMode, setBatchMode] = useState(false);
-  const [batchField, setBatchField] = useState<'pricePerJin' | 'origin' | 'category'>('pricePerJin');
+  const [batchField, setBatchField] = useState<'pricePerJin' | 'origin' | 'category' | 'totalPayoutRate' | 'stockJin'>('pricePerJin');
   const [batchEdits, setBatchEdits] = useState<Record<number, string>>({});
-  const [batchSaving, setBatchSaving] = useState(false);
 
   function enterBatchMode(field: typeof batchField) {
     setBatchField(field);
@@ -170,37 +169,20 @@ function CatalogPanel() {
       if (field === 'pricePerJin') init[c.id] = c.pricePerJin != null ? String(c.pricePerJin) : '';
       else if (field === 'origin') init[c.id] = c.origin ?? '';
       else if (field === 'category') init[c.id] = c.category ?? '';
+      else if (field === 'totalPayoutRate') init[c.id] = c.totalPayoutRate != null ? String(Math.round(Number(c.totalPayoutRate) * 100)) : '';
+      else if (field === 'stockJin') init[c.id] = c.stockJin != null ? String(c.stockJin) : '';
     });
     setBatchEdits(init);
     setBatchMode(true);
     setShowForm(false);
   }
 
-  async function saveBatch() {
-    setBatchSaving(true);
-    const items = catalog ?? [];
-    let count = 0;
-    for (const item of items) {
-      const val = batchEdits[item.id];
-      if (val === undefined) continue;
-      const current = batchField === 'pricePerJin' ? (item.pricePerJin != null ? String(item.pricePerJin) : '') : (item[batchField] ?? '');
-      if (val === current) continue;
-      try {
-        await upsertMutation.mutateAsync({
-          id: item.id,
-          stdName: item.stdName,
-          category: batchField === 'category' ? val : item.category,
-          origin: batchField === 'origin' ? (val || undefined) : (item.origin || undefined),
-          pricePerJin: batchField === 'pricePerJin' ? (val ? parseFloat(val) : undefined) : (item.pricePerJin ?? undefined),
-        });
-        count++;
-      } catch {}
-    }
-    setBatchSaving(false);
-    setBatchMode(false);
-    setBatchEdits({});
-    toast.success(`已批量更新 ${count} 条`);
-    refetch();
+  function saveBatch() {
+    const items = Object.entries(batchEdits)
+      .filter(([, v]) => v !== '' && v !== undefined)
+      .map(([id, value]) => ({ id: Number(id), value: String(value) }));
+    if (items.length === 0) { toast('没有需要保存的修改'); return; }
+    batchUpdateMutation.mutate({ field: batchField as any, items });
   }
 
 
@@ -233,6 +215,7 @@ function CatalogPanel() {
       fiber: n.fiber != null ? String(n.fiber) : '',
       tagsInput: tags.join('，'),
       pricePerJin: item.pricePerJin != null ? String(item.pricePerJin) : '',
+      totalPayoutRate: item.totalPayoutRate != null ? String(Math.round(Number(item.totalPayoutRate) * 100)) : '',
     });
     setShowForm(true);
   }
@@ -257,6 +240,7 @@ function CatalogPanel() {
       description: formData.description || undefined, sortOrder: formData.sortOrder,
       nutritionJson, tagsJson,
       pricePerJin: formData.pricePerJin ? parseFloat(formData.pricePerJin) : undefined,
+      totalPayoutRate: formData.totalPayoutRate ? parseFloat(formData.totalPayoutRate) / 100 : undefined,
     });
   }
 
@@ -316,6 +300,8 @@ function CatalogPanel() {
                   <option value="pricePerJin">批量改价格</option>
                   <option value="origin">批量改产地</option>
                   <option value="category">批量改分类</option>
+                  <option value="totalPayoutRate">批量改拨出率</option>
+                  <option value="stockJin">批量改库存</option>
                 </select>
                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-[10px]">▾</span>
               </div>
@@ -324,18 +310,42 @@ function CatalogPanel() {
                 style={{ background: '#FF6900' }}>+ 新增</button>
             </>
           ) : (
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-orange-500 font-medium">批量改{batchField === 'pricePerJin' ? '价格' : batchField === 'origin' ? '产地' : '分类'}</span>
-              <button onClick={saveBatch} disabled={batchSaving}
-                className="text-[12px] px-3 py-1.5 rounded-xl text-white font-semibold active:scale-95 flex items-center gap-1"
-                style={{ background: '#FF6900' }}>
-                {batchSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                保存
-              </button>
-              <button onClick={() => { setBatchMode(false); setBatchEdits({}); }}
-                className="text-[12px] px-3 py-1.5 rounded-xl text-gray-500 bg-gray-100 font-semibold active:scale-95">
-                取消
-              </button>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-orange-500 font-medium">批量改{batchField === 'pricePerJin' ? '价格' : batchField === 'origin' ? '产地' : batchField === 'category' ? '分类' : batchField === 'totalPayoutRate' ? '拨出率' : '库存'}</span>
+                <button onClick={saveBatch} disabled={batchUpdateMutation.isPending}
+                  className="text-[12px] px-3 py-1.5 rounded-xl text-white font-semibold active:scale-95 flex items-center gap-1"
+                  style={{ background: '#FF6900' }}>
+                  {batchUpdateMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                  保存
+                </button>
+                <button onClick={() => { setBatchMode(false); setBatchEdits({}); }}
+                  className="text-[12px] px-3 py-1.5 rounded-xl text-gray-500 bg-gray-100 font-semibold active:scale-95">
+                  取消
+                </button>
+              </div>
+              {/* 统一设为同一个值 */}
+              <div className="flex items-center gap-2">
+                {batchField === 'category' ? (
+                  <select
+                    onChange={e => { const v = e.target.value; if (v) setBatchEdits(prev => { const next = { ...prev }; Object.keys(next).forEach(k => { next[Number(k)] = v; }); return next; }); }}
+                    defaultValue=""
+                    className="flex-1 text-[12px] border border-orange-200 rounded-xl px-3 py-1.5 bg-orange-50 focus:outline-none"
+                  >
+                    <option value="" disabled>统一设为分类...</option>
+                    {RICE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                ) : (
+                  <input
+                    type={batchField === 'pricePerJin' || batchField === 'totalPayoutRate' ? 'number' : 'text'}
+                    placeholder={batchField === 'pricePerJin' ? '统一设为价格（元/斤）' : batchField === 'totalPayoutRate' ? '统一设为拨出率 %' : batchField === 'stockJin' ? '统一设为库存（斤）' : '统一设为产地'}
+                    className="flex-1 text-[12px] border border-orange-200 rounded-xl px-3 py-1.5 bg-orange-50 focus:outline-none"
+                    onBlur={e => { const v = e.target.value; if (!v) return; setBatchEdits(prev => { const next = { ...prev }; Object.keys(next).forEach(k => { next[Number(k)] = v; }); return next; }); e.target.value = ''; }}
+                    onKeyDown={e => { if (e.key === 'Enter') { const v = (e.target as HTMLInputElement).value; if (!v) return; setBatchEdits(prev => { const next = { ...prev }; Object.keys(next).forEach(k => { next[Number(k)] = v; }); return next; }); (e.target as HTMLInputElement).value = ''; } }}
+                  />
+                )}
+                <span className="text-[11px] text-gray-400 flex-shrink-0">回车应用全部</span>
+              </div>
             </div>
           )}
         </div>
@@ -392,6 +402,13 @@ function CatalogPanel() {
             <input type="number" value={formData.pricePerJin} onChange={e => setFormData(p => ({ ...p, pricePerJin: e.target.value }))}
               className="w-full mt-1 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none"
               placeholder="如：8.5" />
+          </div>
+          {/* 总拨出率 */}
+          <div>
+            <label className="text-[11px] text-gray-500 font-medium">总拨出率 %（分佣池子比例）</label>
+            <input type="number" value={formData.totalPayoutRate} onChange={e => setFormData(p => ({ ...p, totalPayoutRate: e.target.value }))}
+              className="w-full mt-1 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none"
+              placeholder="如：10（代表 10%）" />
           </div>
           <div className="flex gap-2">
             <button onClick={handleSave}
@@ -456,10 +473,10 @@ function CatalogPanel() {
                         </select>
                       ) : (
                         <input
-                          type={batchField === 'pricePerJin' ? 'number' : 'text'}
+                          type={batchField === 'pricePerJin' || batchField === 'totalPayoutRate' || batchField === 'stockJin' ? 'number' : 'text'}
                           value={batchEdits[item.id] ?? ''}
                           onChange={e => setBatchEdits(p => ({ ...p, [item.id]: e.target.value }))}
-                          placeholder={batchField === 'pricePerJin' ? '价格（元/斤）' : '产地'}
+                          placeholder={batchField === 'pricePerJin' ? '价格（元/斤）' : batchField === 'totalPayoutRate' ? '拨出率 %（如 10）' : batchField === 'stockJin' ? '库存（斤）' : '产地'}
                           className="w-full text-[12px] border border-orange-300 rounded-lg px-2 py-1.5 bg-orange-50 focus:outline-none"
                         />
                       )}
@@ -482,10 +499,31 @@ function CatalogPanel() {
                   </div>
                 )}
               </div>
-              {/* 价格显示 */}
-              {!batchMode && item.pricePerJin > 0 && (
-                <div className="mt-2 w-full text-[11px] py-1.5 rounded-xl bg-gray-50 text-gray-500 text-center">
-                  参考价 ¥{Number(item.pricePerJin).toFixed(1)}/斤
+              {/* 价格/拨出率/库存信息栏 */}
+              {!batchMode && (
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  {item.pricePerJin > 0 && (
+                    <span className="text-[11px] px-2 py-0.5 rounded-lg bg-orange-50 text-orange-600 font-medium">
+                      售价 ¥{Number(item.pricePerJin).toFixed(2)}/斤
+                    </span>
+                  )}
+                  {item.totalPayoutRate > 0 && (
+                    <span className="text-[11px] px-2 py-0.5 rounded-lg bg-green-50 text-green-600 font-medium">
+                      拨出 {(Number(item.totalPayoutRate) * 100).toFixed(1)}%
+                      {item.pricePerJin > 0 && (
+                        <span className="text-green-500">（¥{(Number(item.pricePerJin) * Number(item.totalPayoutRate)).toFixed(2)}/斤）</span>
+                      )}
+                    </span>
+                  )}
+                  {item.stockJin !== undefined && (
+                    <span className={`text-[11px] px-2 py-0.5 rounded-lg font-medium ${
+                      Number(item.stockJin) <= 0 ? 'bg-red-50 text-red-500' :
+                      Number(item.stockJin) < 50 ? 'bg-yellow-50 text-yellow-600' :
+                      'bg-blue-50 text-blue-600'
+                    }`}>
+                      库存 {Number(item.stockJin).toFixed(1)}斤
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -686,11 +724,13 @@ function UsersPanel() {
   );
 }
 
-// ─── 销售团队（佣金配置）─────────────────────────────────────────────────────
+// ─── 团队管理（佣金配置 + 制度 + 团队）─────────────────────────────────────────
 function SalesPanel() {
   const utils = mtrpc.useUtils();
+  // 佣金配置
   const { data: configs, isLoading } = mtrpc.adminCommission.configs.useQuery();
-  const { data: agentStats } = mtrpc.adminCommission.agentStats.useQuery();
+  const [showAgentStats, setShowAgentStats] = useState(false);
+  const { data: agentStats } = mtrpc.adminCommission.agentStats.useQuery(undefined, { enabled: showAgentStats });
   const setConfigMutation = mtrpc.adminCommission.setConfig.useMutation({
     onSuccess: () => { utils.adminCommission.configs.invalidate(); toast.success("佣金配置已保存"); },
     onError: (e: any) => toast.error(e.message),
@@ -699,9 +739,57 @@ function SalesPanel() {
     onSuccess: () => { utils.adminCommission.configs.invalidate(); toast.success("已删除"); },
     onError: (e: any) => toast.error(e.message),
   });
+  // 销售制度
+  const { data: plans = [], isLoading: plansLoading } = mtrpc.mibanTeam.listPlans.useQuery();
+  const createPlanMut = mtrpc.mibanTeam.createPlan.useMutation({ onSuccess: () => { utils.mibanTeam.listPlans.invalidate(); toast.success("制度已创建"); } });
+  const updatePlanMut = mtrpc.mibanTeam.updatePlan.useMutation({ onSuccess: () => { utils.mibanTeam.listPlans.invalidate(); toast.success("制度已更新"); setEditingPlanId(null); } });
+  const deletePlanMut = mtrpc.mibanTeam.deletePlan.useMutation({ onSuccess: () => { utils.mibanTeam.listPlans.invalidate(); toast.success("制度已删除"); } });
+  // 团队
+  const { data: teams = [], isLoading: teamsLoading } = mtrpc.mibanTeam.listTeams.useQuery();
+  const createTeamMut = mtrpc.mibanTeam.createTeam.useMutation({ onSuccess: () => { utils.mibanTeam.listTeams.invalidate(); toast.success("团队已创建"); } });
+  const updateTeamMut = mtrpc.mibanTeam.updateTeam.useMutation({ onSuccess: () => { utils.mibanTeam.listTeams.invalidate(); toast.success("团队已更新"); setEditingTeamId(null); } });
+  const deleteTeamMut = mtrpc.mibanTeam.deleteTeam.useMutation({ onSuccess: () => { utils.mibanTeam.listTeams.invalidate(); toast.success("团队已删除"); } });
+  // 编辑团队
+  const [editingTeamId, setEditingTeamId] = useState<number | null>(null);
+  const [editTeam, setEditTeam] = useState({ planId: "", multiplier: "100" });
+  // 成员树
+  const [selectedTeam, setSelectedTeam] = useState<number | null>(null);
+  const { data: teamMembersData, isLoading: membersLoading } = mtrpc.mibanTeam.getTeamMembers.useQuery(
+    { teamId: selectedTeam! }, { enabled: !!selectedTeam }
+  );
+  const members = teamMembersData?.members ?? [];
+  // 新建制度表单（无限级层级）
+  const [newPlan, setNewPlan] = useState({ name: "", trigger: "order_confirmed", settlement: "manual" });
+  const [planLevels, setPlanLevels] = useState<{ rate: string }[]>([{ rate: "50" }, { rate: "30" }]);
+  // 编辑制度
+  const [editingPlanId, setEditingPlanId] = useState<number | null>(null);
+  const [editPlan, setEditPlan] = useState({ name: "", trigger: "order_confirmed", settlement: "manual" });
+  const [editPlanSalesRate, setEditPlanSalesRate] = useState<string>("30");
+  const [editPlanLevels, setEditPlanLevels] = useState<{ rate: string }[]>([]);
+  const [editPlanGenBonus, setEditPlanGenBonus] = useState<{ rate: string }[]>([]);
+  const [editPlanRanks, setEditPlanRanks] = useState<{ name: string; bonusRate: string; unlockType: string; personalCumulativeMin: string; teamCumulativeMin: string }[]>([]);
+  const [editPlanDividendRate, setEditPlanDividendRate] = useState<string>("");
+  // 制度内展开的子面板：'sales' | 'levels' | 'genbonus' | 'dividend'
+  const [planEditTab, setPlanEditTab] = useState<'sales' | 'levels' | 'genbonus' | 'dividend'>('sales');
+  // 新建团队表单
+  const [newTeam, setNewTeam] = useState({ name: "", rootUserId: "", rootUserName: "", planId: "", multiplier: "100" });
+  const [showPlanForm, setShowPlanForm] = useState(false);
+  const [showPlanGuide, setShowPlanGuide] = useState(false);
+  const [showTeamForm, setShowTeamForm] = useState(false);
+  // 搜索用户（全量加载，本地过滤）
+  const [userSearch, setUserSearch] = useState("");
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const { data: allUsers = [] } = mtrpc.adminUser.list.useQuery(undefined, { enabled: showTeamForm });
+  const searchResults = userSearch
+    ? (allUsers as any[]).filter((u: any) =>
+        (u.name ?? "").includes(userSearch) ||
+        (u.username ?? "").includes(userSearch)
+      ).slice(0, 30)
+    : (allUsers as any[]).slice(0, 50);
 
   const [globalRate, setGlobalRate] = useState("");
   const [globalNote, setGlobalNote] = useState("");
+  const [globalPlanId, setGlobalPlanId] = useState("");
   const [agentId, setAgentId] = useState("");
   const [agentRate, setAgentRate] = useState("");
   const [agentNote, setAgentNote] = useState("");
@@ -711,8 +799,8 @@ function SalesPanel() {
   function saveGlobal() {
     const rate = parseFloat(globalRate) / 100;
     if (isNaN(rate) || rate < 0 || rate > 1) { toast.error("请输入0-100之间的百分比"); return; }
-    setConfigMutation.mutate({ agentId: null, rate, note: globalNote || undefined });
-    setGlobalRate(""); setGlobalNote("");
+    setConfigMutation.mutate({ agentId: null, rate, note: globalNote || undefined, planId: globalPlanId ? parseInt(globalPlanId) : undefined });
+    setGlobalRate(""); setGlobalNote(""); setGlobalPlanId("");
   }
 
   function saveAgent() {
@@ -724,260 +812,726 @@ function SalesPanel() {
     setAgentId(""); setAgentRate(""); setAgentNote("");
   }
 
+  // 展开的团队详情（null=全局默认，数字=团队id）
+  const [expandedCard, setExpandedCard] = useState<number | 'global' | null>(null);
+
   return (
-    <div className="space-y-4">
-      {/* 全局默认比例 */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-[13px] font-bold text-black">全局默认佣金比例</h3>
-          {globalConfig && (
-            <span className="text-[14px] font-bold" style={{ color: "#FF6900" }}>
-              当前：{(Number(globalConfig.commissionRate) * 100).toFixed(1)}%
-            </span>
-          )}
-        </div>
-        <p className="text-[11px] text-gray-400">未单独设置的业务员均适用此比例</p>
-        <div className="space-y-2">
-          <div className="flex gap-2">
-            <input placeholder="比例 % (如 5)" value={globalRate} onChange={e => setGlobalRate(e.target.value)} className="flex-1 min-w-0 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-300" />
-            <button onClick={saveGlobal} disabled={setConfigMutation.isPending} className="px-4 py-2 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50 flex-shrink-0 active:scale-95 transition-transform" style={{ background: "#FF6900" }}>
-              保存
-            </button>
+    <>
+    <div className="space-y-3">
+      {/* ── 所有人员（全局默认）卡片 ── */}
+      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+        <div
+          className="flex items-center gap-3 px-4 py-3.5 cursor-pointer active:bg-gray-50"
+          onClick={() => setExpandedCard(expandedCard === 'global' ? null : 'global')}
+        >
+          <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "#FF6900" }}>
+            <span className="text-white text-[13px] font-bold">全</span>
           </div>
-          <input placeholder="备注（选填）" value={globalNote} onChange={e => setGlobalNote(e.target.value)} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-300" />
+          <div className="flex-1">
+            <p className="text-[14px] font-bold text-black">所有人员</p>
+            <p className="text-[11px] text-gray-400">未单独分配团队的默认配置</p>
+          </div>
+          <div className="text-right flex-shrink-0">
+            {globalConfig && (
+              <p className="text-[13px] font-bold" style={{ color: "#FF6900" }}>{(Number(globalConfig.commissionRate) * 100).toFixed(1)}%</p>
+            )}
+            <p className="text-[11px] text-gray-400">全局佣金比例</p>
+          </div>
+          <span className="text-gray-300 text-[12px] ml-1">{expandedCard === 'global' ? '▲' : '▼'}</span>
         </div>
-      </div>
-
-      {/* 个人专属比例 */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm space-y-3">
-        <h3 className="text-[13px] font-bold text-black">单独设置业务员比例</h3>
-        <p className="text-[11px] text-gray-400">为特定业务员设置专属佣金比例，优先级高于全局</p>
-        <div className="grid grid-cols-2 gap-2">
-          <input placeholder="业务员用户ID" value={agentId} onChange={e => setAgentId(e.target.value)} className="text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-300" />
-          <input placeholder="比例 % (如 8)" value={agentRate} onChange={e => setAgentRate(e.target.value)} className="text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-300" />
-        </div>
-        <div className="flex gap-2">
-          <input placeholder="备注（选填）" value={agentNote} onChange={e => setAgentNote(e.target.value)} className="flex-1 min-w-0 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-300" />
-          <button onClick={saveAgent} disabled={setConfigMutation.isPending} className="px-4 py-2 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50 flex-shrink-0 active:scale-95 transition-transform" style={{ background: "#FF6900" }}>
-            保存
-          </button>
-        </div>
-      </div>
-
-      {/* 已有配置 */}
-      {isLoading ? (
-        <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
-      ) : configs && configs.length > 0 ? (
-        <div className="space-y-2">
-          <p className="text-[11px] text-gray-400 uppercase tracking-wider">已有配置</p>
-          {configs.map((c: any) => (
-            <div key={c.id} className="bg-white border border-gray-100 rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
-              <div className="flex-1">
-                <p className="text-[13px] font-medium text-black">
-                  {c.agentId === null ? "全局默认" : `业务员 ID: ${c.agentId}`}
-                </p>
-                {c.note && <p className="text-[11px] text-gray-400 mt-0.5">{c.note}</p>}
+        {expandedCard === 'global' && (
+          <div className="border-t border-gray-50 px-4 py-3 space-y-3 bg-gray-50/50">
+            {/* 全局总拨出率设置 */}
+            <div className="space-y-2">
+              <p className="text-[12px] font-semibold text-gray-600">全局总拨出率</p>
+              <p className="text-[11px] text-gray-400">订单成交后用于分佣的总池子比例</p>
+              <div className="flex gap-2">
+                <input placeholder="总拨出率 % (如 10)" value={globalRate} onChange={e => setGlobalRate(e.target.value)} className="flex-1 min-w-0 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-300" />
+                <button onClick={saveGlobal} disabled={setConfigMutation.isPending} className="px-4 py-2 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50 flex-shrink-0" style={{ background: "#FF6900" }}>保存</button>
               </div>
-              <span className="text-[16px] font-bold flex-shrink-0" style={{ color: "#FF6900" }}>
-                {(Number(c.commissionRate) * 100).toFixed(1)}%
-              </span>
-              <button onClick={() => deleteConfigMutation.mutate({ id: c.id })} disabled={deleteConfigMutation.isPending} className="text-gray-300 hover:text-red-400 transition-colors text-[12px] ml-1">
-                删除
+              <select
+                value={globalPlanId}
+                onChange={e => setGlobalPlanId(e.target.value)}
+                className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-300"
+              >
+                <option value="">选择销售制度（层级分配方式）</option>
+                {(plans as any[]).map((p: any) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              <input placeholder="备注（选填）" value={globalNote} onChange={e => setGlobalNote(e.target.value)} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-300" />
+            </div>
+
+            {/* 已有配置 */}
+            {configs && configs.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-[11px] text-gray-400">已有配置</p>
+                {configs.map((c: any) => (
+                  <div key={c.id} className="bg-white rounded-xl px-3 py-2 flex items-center gap-2">
+                    <div className="flex-1">
+                      <p className="text-[12px] font-medium text-black">{c.agentId === null ? "全局默认" : `业务员 ID: ${c.agentId}`}</p>
+                      {c.note && <p className="text-[11px] text-gray-400">{c.note}</p>}
+                    </div>
+                    <span className="text-[14px] font-bold" style={{ color: "#FF6900" }}>{(Number(c.commissionRate) * 100).toFixed(1)}%</span>
+                    <button onClick={() => deleteConfigMutation.mutate({ id: c.id })} className="text-gray-300 hover:text-red-400 text-[12px] ml-1">删除</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* 业务员业绩 */}
+            <div>
+              <button onClick={() => setShowAgentStats(v => !v)} className="text-[12px] text-orange-500 font-medium">
+                {showAgentStats ? '收起业务员业绩' : '查看业务员业绩汇总'}
               </button>
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {/* 业务员业绩汇总 */}
-      {agentStats && agentStats.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-[11px] text-gray-400 uppercase tracking-wider">业务员业绩汇总</p>
-          {agentStats.map((a: any) => (
-            <div key={a.id} className="bg-white border border-gray-100 rounded-xl px-4 py-3 flex items-center gap-3 shadow-sm">
-              <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-bold text-black truncate">{a.name ?? "匿名"}</p>
-                <p className="text-[11px] text-gray-400">ID: {a.id} · 推荐 {a.inviteCount} 人 · {a.orderCount} 单</p>
-              </div>
-              <div className="text-right flex-shrink-0">
-                <p className="text-[15px] font-bold" style={{ color: "#FF6900" }}>¥{Number(a.totalCommission).toFixed(2)}</p>
-                <p className="text-[11px] text-amber-500">待结算 ¥{Number(a.pendingCommission).toFixed(2)}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── 团队管理（管理员）─────────────────────────────────────────────────────────
-function TeamManagePanel() {
-  const utils = mtrpc.useUtils();
-  // 销售制度
-  const { data: plans = [], isLoading: plansLoading } = mtrpc.mibanTeam.listPlans.useQuery();
-  const createPlanMut = mtrpc.mibanTeam.createPlan.useMutation({ onSuccess: () => { utils.mibanTeam.listPlans.invalidate(); toast.success("制度已创建"); } });
-  const deletePlanMut = mtrpc.mibanTeam.deletePlan.useMutation({ onSuccess: () => { utils.mibanTeam.listPlans.invalidate(); toast.success("制度已删除"); } });
-  // 团队
-  const { data: teams = [], isLoading: teamsLoading } = mtrpc.mibanTeam.listTeams.useQuery();
-  const createTeamMut = mtrpc.mibanTeam.createTeam.useMutation({ onSuccess: () => { utils.mibanTeam.listTeams.invalidate(); toast.success("团队已创建"); } });
-  const deleteTeamMut = mtrpc.mibanTeam.deleteTeam.useMutation({ onSuccess: () => { utils.mibanTeam.listTeams.invalidate(); toast.success("团队已删除"); } });
-  // 成员树
-  const [selectedTeam, setSelectedTeam] = useState<number | null>(null);
-  const { data: members = [], isLoading: membersLoading } = mtrpc.mibanTeam.getTeamMembers.useQuery(
-    { teamId: selectedTeam! }, { enabled: !!selectedTeam }
-  );
-  // 搜索用户（创建团队时）
-  const [userSearch, setUserSearch] = useState("");
-  const { data: searchResults = [] } = mtrpc.mibanTeam.searchUsers.useQuery(
-    { keyword: userSearch }, { enabled: userSearch.length >= 1 }
-  );
-  // 新建制度表单
-  const [newPlan, setNewPlan] = useState({ name: "", level1Rate: "5", level2Rate: "2", level3Rate: "1", trigger: "confirmed", settlement: "manual" });
-  // 新建团队表单
-  const [newTeam, setNewTeam] = useState({ name: "", rootUserId: "", rootUserName: "", planId: "" });
-  const [showPlanForm, setShowPlanForm] = useState(false);
-  const [showTeamForm, setShowTeamForm] = useState(false);
-
-  return (
-    <div className="space-y-4">
-      {/* ── 销售制度 ── */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-[13px] font-bold text-black">销售制度</h3>
-          <button onClick={() => setShowPlanForm(v => !v)} className="text-[12px] font-semibold px-3 py-1 rounded-lg text-white" style={{ background: "#FF6900" }}>
-            {showPlanForm ? "收起" : "+ 新建制度"}
-          </button>
-        </div>
-        {showPlanForm && (
-          <div className="bg-orange-50 rounded-xl p-3 mb-3 space-y-2">
-            <input placeholder="制度名称（如：标准制度A）" value={newPlan.name} onChange={e => setNewPlan(p => ({ ...p, name: e.target.value }))} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" />
-            <div className="grid grid-cols-3 gap-2">
-              <div>
-                <p className="text-[11px] text-gray-400 mb-1">一级佣金 %</p>
-                <input type="number" value={newPlan.level1Rate} onChange={e => setNewPlan(p => ({ ...p, level1Rate: e.target.value }))} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" />
-              </div>
-              <div>
-                <p className="text-[11px] text-gray-400 mb-1">二级佣金 %</p>
-                <input type="number" value={newPlan.level2Rate} onChange={e => setNewPlan(p => ({ ...p, level2Rate: e.target.value }))} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" />
-              </div>
-              <div>
-                <p className="text-[11px] text-gray-400 mb-1">三级佣金 %</p>
-                <input type="number" value={newPlan.level3Rate} onChange={e => setNewPlan(p => ({ ...p, level3Rate: e.target.value }))} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <p className="text-[11px] text-gray-400 mb-1">触发时机</p>
-                <select value={newPlan.trigger} onChange={e => setNewPlan(p => ({ ...p, trigger: e.target.value }))} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none">
-                  <option value="order_placed">下单即触发</option>
-                  <option value="confirmed">确认收货后触发</option>
-                </select>
-              </div>
-              <div>
-                <p className="text-[11px] text-gray-400 mb-1">结算方式</p>
-                <select value={newPlan.settlement} onChange={e => setNewPlan(p => ({ ...p, settlement: e.target.value }))} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none">
-                  <option value="manual">管理员手动结算</option>
-                  <option value="auto">自动到账钱包</option>
-                </select>
-              </div>
-            </div>
-            <button onClick={() => createPlanMut.mutate({ name: newPlan.name, level1Rate: Number(newPlan.level1Rate) / 100, level2Rate: Number(newPlan.level2Rate) / 100, level3Rate: Number(newPlan.level3Rate) / 100, trigger: newPlan.trigger as any, settlement: newPlan.settlement as any })} disabled={!newPlan.name || createPlanMut.isPending} className="w-full py-2 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: "#FF6900" }}>
-              {createPlanMut.isPending ? "创建中..." : "确认创建"}
-            </button>
-          </div>
-        )}
-        {plansLoading ? <div className="text-center py-4 text-gray-300 text-[12px]">加载中...</div> : plans.length === 0 ? (
-          <div className="text-center py-4 text-gray-300 text-[12px]">暂无销售制度，点击「新建制度」开始</div>
-        ) : (
-          <div className="space-y-2">
-            {plans.map((p: any) => (
-              <div key={p.id} className="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2.5">
-                <div className="flex-1">
-                  <p className="text-[13px] font-semibold text-black">{p.name}</p>
-                  <p className="text-[11px] text-gray-400">一级 {(Number(p.level1Rate) * 100).toFixed(1)}% · 二级 {(Number(p.level2Rate) * 100).toFixed(1)}% · 三级 {(Number(p.level3Rate) * 100).toFixed(1)}% · {p.trigger === 'confirmed' ? '确认收货触发' : '下单触发'} · {p.settlement === 'auto' ? '自动到账' : '手动结算'}</p>
-                </div>
-                <button onClick={() => deletePlanMut.mutate({ id: p.id })} className="text-gray-300 hover:text-red-400 text-[12px] transition-colors">删除</button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ── 团队列表 ── */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-[13px] font-bold text-black">团队管理</h3>
-          <button onClick={() => setShowTeamForm(v => !v)} className="text-[12px] font-semibold px-3 py-1 rounded-lg text-white" style={{ background: "#FF6900" }}>
-            {showTeamForm ? "收起" : "+ 新建团队"}
-          </button>
-        </div>
-        {showTeamForm && (
-          <div className="bg-orange-50 rounded-xl p-3 mb-3 space-y-2">
-            <input placeholder="团队名称（如：北京团队）" value={newTeam.name} onChange={e => setNewTeam(t => ({ ...t, name: e.target.value }))} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" />
-            <div className="relative">
-              <input placeholder="搜索根节点用户（姓名/账号）" value={userSearch} onChange={e => setUserSearch(e.target.value)} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" />
-              {newTeam.rootUserName && <p className="text-[11px] text-orange-500 mt-1">已选：{newTeam.rootUserName}（ID: {newTeam.rootUserId}）</p>}
-              {searchResults.length > 0 && userSearch && !newTeam.rootUserId && (
-                <div className="absolute z-10 left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg mt-1 max-h-40 overflow-y-auto">
-                  {searchResults.map((u: any) => (
-                    <button key={u.id} onClick={() => { setNewTeam(t => ({ ...t, rootUserId: String(u.id), rootUserName: u.name || u.account })); setUserSearch(""); }} className="w-full text-left px-3 py-2 text-[13px] hover:bg-orange-50 border-b border-gray-50 last:border-0">
-                      {u.name || "匿名"} <span className="text-gray-400">@{u.account}</span>
-                    </button>
+              {showAgentStats && (
+                <div className="mt-2 space-y-1.5">
+                  {!agentStats ? <p className="text-[12px] text-gray-300">加载中...</p> : agentStats.length === 0 ? <p className="text-[12px] text-gray-300">暂无数据</p> : agentStats.map((a: any) => (
+                    <div key={a.id} className="bg-white rounded-xl px-3 py-2 flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] font-bold text-black truncate">{a.name ?? "匿名"}</p>
+                        <p className="text-[11px] text-gray-400">推荐 {a.inviteCount} 人 · {a.orderCount} 单</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[13px] font-bold" style={{ color: "#FF6900" }}>￥{Number(a.totalCommission).toFixed(2)}</p>
+                        <p className="text-[10px] text-amber-500">待结 ￥{Number(a.pendingCommission).toFixed(2)}</p>
+                      </div>
+                    </div>
                   ))}
                 </div>
               )}
             </div>
-            <select value={newTeam.planId} onChange={e => setNewTeam(t => ({ ...t, planId: e.target.value }))} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none">
-              <option value="">选择销售制度（可选）</option>
-              {plans.map((p: any) => <option key={p.id} value={String(p.id)}>{p.name}</option>)}
-            </select>
-            <button onClick={() => createTeamMut.mutate({ name: newTeam.name, rootUserId: Number(newTeam.rootUserId), commissionPlanId: newTeam.planId ? Number(newTeam.planId) : undefined })} disabled={!newTeam.name || !newTeam.rootUserId || createTeamMut.isPending} className="w-full py-2 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: "#FF6900" }}>
-              {createTeamMut.isPending ? "创建中..." : "确认创建"}
-            </button>
           </div>
         )}
-        {teamsLoading ? <div className="text-center py-4 text-gray-300 text-[12px]">加载中...</div> : teams.length === 0 ? (
-          <div className="text-center py-4 text-gray-300 text-[12px]">暂无团队，点击「新建团队」开始</div>
-        ) : (
-          <div className="space-y-2">
-            {teams.map((t: any) => (
-              <div key={t.id}>
-                <div className="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2.5 cursor-pointer" onClick={() => setSelectedTeam(selectedTeam === t.id ? null : t.id)}>
-                  <div className="flex-1">
-                    <p className="text-[13px] font-semibold text-black">{t.name}</p>
-                    <p className="text-[11px] text-gray-400">根节点: {t.rootUserName || `ID ${t.rootUserId}`} · {t.memberCount ?? 0} 人 · {t.planName || "无制度"}</p>
+      </div>
+
+      {/* ── 各团队卡片 ── */}
+      {teamsLoading ? (
+        <div className="space-y-2">{Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-2xl" />)}</div>
+      ) : (
+        teams.map((t: any) => (
+          <div key={t.id} className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+            <div
+              className="flex items-center gap-3 px-4 py-3.5 cursor-pointer active:bg-gray-50"
+              onClick={() => setExpandedCard(expandedCard === t.id ? null : t.id)}
+            >
+              <div className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 text-white text-[13px] font-bold" style={{ background: "#FF6900" }}>
+                {(t.name ?? '团').slice(0, 1)}
+              </div>
+              <div className="flex-1">
+                <p className="text-[14px] font-bold text-black">{t.name}</p>
+                <p className="text-[11px] text-gray-400">根节点: {t.rootUserName} · {t.planName || "无制度"}</p>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <p className="text-[13px] font-bold" style={{ color: "#FF6900" }}>{((t.payoutRateMultiplier ?? 1) * 100).toFixed(0)}%</p>
+                <p className="text-[11px] text-gray-400">拨出系数</p>
+              </div>
+              <span className="text-gray-300 text-[12px] ml-1">{expandedCard === t.id ? '▲' : '▼'}</span>
+            </div>
+            {expandedCard === t.id && (
+              <div className="border-t border-gray-50 px-4 py-3 space-y-3 bg-gray-50/50">
+                {/* 团队基本信息 + 编辑 */}
+                {editingTeamId === t.id ? (
+                  <div className="space-y-2">
+                    <p className="text-[12px] font-semibold text-gray-600">编辑奖金制度</p>
+                    <select value={editTeam.planId} onChange={e => setEditTeam(v => ({ ...v, planId: e.target.value }))} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none">
+                      <option value="">无制度</option>
+                      {(plans as any[]).map((p: any) => (
+                        <option key={p.id} value={String(p.id)}>{p.name}</option>
+                      ))}
+                    </select>
+                    <div className="flex items-center gap-2">
+                      <input type="number" min="0" max="1000" placeholder="拨出系数" value={editTeam.multiplier} onChange={e => setEditTeam(v => ({ ...v, multiplier: e.target.value }))} className="flex-1 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" />
+                      <span className="text-[12px] text-gray-400">% 拨出系数</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => updateTeamMut.mutate({ id: t.id, commissionPlanId: editTeam.planId ? Number(editTeam.planId) : null, payoutRateMultiplier: Number(editTeam.multiplier) / 100 })} disabled={updateTeamMut.isPending} className="flex-1 py-2 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: "#FF6900" }}>
+                        {updateTeamMut.isPending ? "保存中..." : "保存"}
+                      </button>
+                      <button onClick={() => setEditingTeamId(null)} className="px-4 py-2 rounded-xl text-[13px] text-gray-500 border border-gray-200">取消</button>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-[13px] font-bold" style={{ color: "#FF6900" }}>¥{Number(t.totalAmount ?? 0).toFixed(0)}</p>
-                    <p className="text-[11px] text-gray-400">{t.totalOrders ?? 0} 单</p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 text-[12px]">
+                    <div><span className="text-gray-400">销售制度：</span><span className="font-medium">{t.planName || "无"}</span></div>
+                    <div className="flex items-center gap-2"><span className="text-gray-400">拨出系数：</span><span className="font-medium">{((t.payoutRateMultiplier ?? 1) * 100).toFixed(0)}%</span>
+                      <button onClick={() => { setEditingTeamId(t.id); setEditTeam({ planId: t.commissionPlanId ? String(t.commissionPlanId) : "", multiplier: String(Math.round((t.payoutRateMultiplier ?? 1) * 100)) }); }} className="text-[12px] text-orange-400 font-medium ml-auto">编辑</button>
+                    </div>
                   </div>
-                  <button onClick={e => { e.stopPropagation(); deleteTeamMut.mutate({ id: t.id }); }} className="text-gray-300 hover:text-red-400 text-[12px] transition-colors ml-1">删除</button>
+                )}
+                {/* 成员树 */}
+                <div>
+                  <button onClick={() => setSelectedTeam(selectedTeam === t.id ? null : t.id)} className="flex items-center gap-1.5 mb-2">
+                    <p className="text-[12px] font-semibold text-gray-600">团队成员</p>
+                    {selectedTeam === t.id && !membersLoading && members.length > 1 && (
+                      <span className="text-[11px] text-orange-500 font-medium">（共 {members.length - 1} 人）</span>
+                    )}
+                    <span className="text-[12px] text-orange-400 ml-1">{selectedTeam === t.id ? '收起' : '查看'}</span>
+                  </button>
+                  {selectedTeam === t.id && (
+                    <div className="mt-1 space-y-3">
+                      {membersLoading ? <p className="text-[12px] text-gray-300">加载中...</p> : members.length === 0 ? (
+                        <p className="text-[12px] text-gray-300">暂无成员</p>
+                      ) : (() => {
+                        // depth=1 是根节点（团长），单独展示；其下级 depth-1 即为层级编号
+                        const root = members.find((m: any) => m.depth === 1);
+                        const subMembers = members.filter((m: any) => m.depth > 1);
+                        const maxDepth = subMembers.length ? Math.max(...subMembers.map((m: any) => m.depth)) : 1;
+                        return (
+                          <>
+                            {root && (
+                              <div className="flex items-center gap-2 py-0.5 mb-1">
+                                <div className="w-4 h-4 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                  <span className="text-[8px] font-bold text-gray-500">团</span>
+                                </div>
+                                <p className="text-[12px] text-gray-500 flex-1 truncate">{root.name || "匿名"} <span className="text-gray-400">@{root.username}</span> <span className="text-gray-300">（团长）</span></p>
+                                {(root.orderCount > 0) && <span className="text-[10px] text-gray-400 flex-shrink-0">{root.orderCount}单</span>}
+                              </div>
+                            )}
+                            {Array.from({ length: maxDepth - 1 }, (_, i) => i + 2).map(depth => {
+                              const levelMembers = subMembers.filter((m: any) => m.depth === depth);
+                              if (!levelMembers.length) return null;
+                              const displayLevel = depth - 1;
+                              return (
+                                <div key={depth}>
+                                  <p className="text-[11px] text-gray-400 font-medium mb-1">第 {displayLevel} 层 <span className="text-orange-400">{levelMembers.length} 人</span></p>
+                                  <div className="space-y-0.5">
+                                    {levelMembers.map((m: any) => (
+                                      <div key={m.id} className="flex items-center gap-2 py-0.5">
+                                        <div className="w-4 h-4 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
+                                          <span className="text-[8px] font-bold" style={{ color: "#FF6900" }}>{displayLevel}</span>
+                                        </div>
+                                        <p className="text-[12px] text-black flex-1 truncate">{m.name || "匿名"} <span className="text-gray-400">@{m.username}</span></p>
+                                        {(m.orderCount > 0) && <span className="text-[10px] text-gray-400 flex-shrink-0">{m.orderCount}单</span>}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
-                {/* 展开成员树 */}
-                {selectedTeam === t.id && (
-                  <div className="mt-1 ml-3 border-l-2 border-orange-100 pl-3 space-y-1">
-                    {membersLoading ? <p className="text-[12px] text-gray-300 py-2">加载成员...</p> : members.length === 0 ? (
-                      <p className="text-[12px] text-gray-300 py-2">暂无成员</p>
-                    ) : members.map((m: any) => (
-                      <div key={m.id} className="flex items-center gap-2 py-1.5">
-                        <div className="w-4 h-4 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
-                          <span className="text-[9px] font-bold" style={{ color: "#FF6900" }}>{m.depth}</span>
+                {/* 删除团队 */}
+                <button onClick={() => { if(confirm('确认删除团队「' + t.name + '」？')) deleteTeamMut.mutate({ id: t.id }); }} className="text-[12px] text-gray-300 hover:text-red-400 transition-colors">删除此团队</button>
+              </div>
+            )}
+          </div>
+        ))
+      )}
+
+      {/* ── 销售制度卡片 ── */}
+      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+        <div className="flex items-center gap-3 px-4 py-3.5 cursor-pointer active:bg-gray-50" onClick={() => setExpandedCard(expandedCard === -1 ? null : -1 as any)}>
+          <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+            <span className="text-gray-500 text-[13px] font-bold">制</span>
+          </div>
+          <div className="flex-1">
+            <p className="text-[14px] font-bold text-black">销售制度</p>
+            <p className="text-[11px] text-gray-400">配置各团队的层级分佣规则 · <span className="text-orange-400 cursor-pointer" onClick={e => { e.stopPropagation(); setShowPlanGuide(true); }}>参考说明</span></p>
+          </div>
+          <span className="text-gray-300 text-[12px]">{expandedCard === -1 ? '▲' : '▼'}</span>
+        </div>
+        {expandedCard === (-1 as any) && (
+          <div className="border-t border-gray-50 px-4 py-3 space-y-3 bg-gray-50/50">
+            <div className="flex items-center justify-between">
+              <p className="text-[12px] font-semibold text-gray-600">已有制度</p>
+              <button onClick={() => setShowPlanForm(v => !v)} className="text-[12px] text-orange-500 font-medium">{showPlanForm ? '收起' : '+ 新建制度'}</button>
+            </div>
+            {showPlanForm && (
+              <div className="bg-white rounded-xl p-3 space-y-2 border border-gray-100">
+                <input placeholder="制度名称" value={newPlan.name} onChange={e => setNewPlan(p => ({ ...p, name: e.target.value }))} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" />
+                <div className="space-y-1.5">
+                  <p className="text-[11px] text-gray-500">层级佣金分配（占总拨出率的比例）</p>
+                  {planLevels.map((lv, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <span className="text-[11px] text-gray-400 w-10 flex-shrink-0">第{idx + 1}层</span>
+                      <input type="number" min="0" max="100" placeholder="%" value={lv.rate} onChange={e => setPlanLevels(ls => ls.map((l, i) => i === idx ? { rate: e.target.value } : l))} className="flex-1 text-[13px] border border-gray-200 rounded-xl px-3 py-1.5 bg-white focus:outline-none" />
+                      <span className="text-[11px] text-gray-400">%</span>
+                      {planLevels.length > 1 && <button onClick={() => setPlanLevels(ls => ls.filter((_, i) => i !== idx))} className="text-gray-300 hover:text-red-400 text-[13px] w-5">✕</button>}
+                    </div>
+                  ))}
+                  <button onClick={() => setPlanLevels(ls => [...ls, { rate: "" }])} className="text-[12px] text-orange-500">+ 添加层级</button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <select value={newPlan.trigger} onChange={e => setNewPlan(p => ({ ...p, trigger: e.target.value }))} className="text-[12px] border border-gray-200 rounded-xl px-2 py-1.5 bg-white">
+                    <option value="order_placed">下单即触发</option>
+                    <option value="order_confirmed">确认收货触发</option>
+                  </select>
+                  <select value={newPlan.settlement} onChange={e => setNewPlan(p => ({ ...p, settlement: e.target.value }))} className="text-[12px] border border-gray-200 rounded-xl px-2 py-1.5 bg-white">
+                    <option value="manual">手动结算</option>
+                    <option value="auto">自动到账</option>
+                  </select>
+                </div>
+                <button onClick={() => {
+                  const levels = planLevels.map((l, i) => ({ levelIndex: i + 1, rate: Number(l.rate) / 100 })).filter(l => l.rate > 0);
+                  createPlanMut.mutate({ name: newPlan.name, triggerEvent: newPlan.trigger as any, settlement: newPlan.settlement as any, levels }, {
+                    onSuccess: () => { setShowPlanForm(false); setPlanLevels([{ rate: "50" }, { rate: "30" }]); setNewPlan({ name: "", trigger: "order_confirmed", settlement: "manual" }); }
+                  });
+                }} disabled={!newPlan.name || createPlanMut.isPending} className="w-full py-2 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: "#FF6900" }}>
+                  {createPlanMut.isPending ? "创建中..." : "确认创建"}
+                </button>
+              </div>
+            )}
+            {plansLoading ? <p className="text-[12px] text-gray-300">加载中...</p> : plans.length === 0 ? (
+              <p className="text-[12px] text-gray-300">暂无制度</p>
+            ) : plans.map((p: any) => (
+              <div key={p.id} className="bg-white rounded-xl px-3 py-2.5 border border-gray-100">
+                {editingPlanId === p.id ? (
+                  // 内联编辑表单
+                  <div className="space-y-2">
+                    <input placeholder="制度名称" value={editPlan.name} onChange={e => setEditPlan(v => ({ ...v, name: e.target.value }))} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <select value={editPlan.trigger} onChange={e => setEditPlan(v => ({ ...v, trigger: e.target.value }))} className="text-[12px] border border-gray-200 rounded-xl px-2 py-1.5 bg-white">
+                        <option value="order_placed">下单即触发</option>
+                        <option value="order_confirmed">确认收货触发</option>
+                      </select>
+                      <select value={editPlan.settlement} onChange={e => setEditPlan(v => ({ ...v, settlement: e.target.value }))} className="text-[12px] border border-gray-200 rounded-xl px-2 py-1.5 bg-white">
+                        <option value="manual">手动结算</option>
+                        <option value="auto">自动到账</option>
+                      </select>
+                    </div>
+                    {/* Tab 切换 - 四个模块 */}
+                    <div className="flex border border-gray-200 rounded-xl overflow-hidden">
+                      {(['sales', 'levels', 'genbonus', 'dividend'] as const).map((tab, i) => {
+                        const labels = ['销售提成', '代数佣金', '直级奖', '分红'];
+                        return (
+                          <button key={tab} onClick={() => setPlanEditTab(tab)}
+                            className={`flex-1 py-1.5 text-[11px] font-medium transition-colors ${planEditTab === tab ? 'text-white' : 'text-gray-500 bg-white'}`}
+                            style={planEditTab === tab ? { background: '#FF6900' } : {}}>
+                            {labels[i]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {/* 销售提成 Tab */}
+                    {planEditTab === 'sales' && (
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] text-gray-400">卖货人固定销售提成，不受职级影响</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[12px] text-gray-500 w-16 flex-shrink-0">销售提成</span>
+                          <input type="number" min="0" max="100" placeholder="30" value={editPlanSalesRate} onChange={e => setEditPlanSalesRate(e.target.value)} className="flex-1 text-[13px] border border-gray-200 rounded-xl px-3 py-1.5 bg-white focus:outline-none" />
+                          <span className="text-[11px] text-gray-400">%</span>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[12px] font-medium text-black truncate">{m.name || "匿名"} <span className="text-gray-400">@{m.account}</span></p>
-                          <p className="text-[11px] text-gray-400">第{m.depth}层 · {m.orderCount ?? 0}单 · ¥{Number(m.totalAmount ?? 0).toFixed(0)}</p>
-                        </div>
+                        <p className="text-[10px] text-gray-300">参考康宝莱：最高 30%，按个人业绩档位递增</p>
                       </div>
-                    ))}
+                    )}
+                    {/* 代数佣金 Tab - 固定前 N 代 */}
+                    {planEditTab === 'levels' && (
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] text-gray-400">固定前 N 代，每一代拿多少（对应康宝莱「佣金抽成 5% 三代」）</p>
+                        {editPlanLevels.map((lv, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <span className="text-[11px] text-gray-400 w-14 flex-shrink-0">第{idx + 1}代上级</span>
+                            <input type="number" min="0" max="100" placeholder="%" value={lv.rate} onChange={e => setEditPlanLevels(ls => ls.map((l, i) => i === idx ? { rate: e.target.value } : l))} className="flex-1 text-[13px] border border-gray-200 rounded-xl px-3 py-1.5 bg-white focus:outline-none" />
+                            <span className="text-[11px] text-gray-400">%</span>
+                            {editPlanLevels.length > 1 && <button onClick={() => setEditPlanLevels(ls => ls.filter((_, i) => i !== idx))} className="text-gray-300 hover:text-red-400 text-[13px] w-5">✕</button>}
+                          </div>
+                        ))}
+                        <button onClick={() => setEditPlanLevels(ls => [...ls, { rate: '' }])} className="text-[12px] text-orange-500">+ 添加一代</button>
+                      </div>
+                    )}
+                    {/* 直级奖 Tab - 按职级配置，无限代穿透，遇同级截断 */}
+                    {planEditTab === 'genbonus' && (
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] text-gray-400">设定每个职级的「累计天花板」，实际到手 = 自己天花板 − 下面最近有资格人的天花板。最高职级的天花板即为每笔订单直级奖最多支出多少</p>
+                        {['米商', '米行', '米庄'].map((rankName, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <span className={`text-[11px] font-medium w-14 flex-shrink-0 px-1.5 py-0.5 rounded-lg text-center ${
+                              idx === 0 ? 'bg-orange-50 text-orange-500' :
+                              idx === 1 ? 'bg-purple-50 text-purple-500' :
+                              'bg-yellow-50 text-yellow-600'
+                            }`}>{rankName}</span>
+                            <input type="number" min="0" max="100" placeholder="0" value={editPlanGenBonus[idx]?.rate ?? ''} onChange={e => setEditPlanGenBonus(gs => { const next = [...gs]; while (next.length <= idx) next.push({ rate: '' }); next[idx] = { rate: e.target.value }; return next; })} className="flex-1 text-[13px] border border-gray-200 rounded-xl px-3 py-1.5 bg-white focus:outline-none" />
+                            <span className="text-[11px] text-gray-400">%</span>
+                          </div>
+                        ))}
+                        <p className="text-[10px] text-gray-300">米农不参与直级奖。比例必须递增，否则计算会出负数。参考康宝莱：米商 2%、米行 4%、米庄 6%</p>
+                      </div>
+                    )}
+                    {/* 分红 Tab - 达到米庄职级后参与 */}
+                    {planEditTab === 'dividend' && (
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] text-gray-400">达到米庄职级后参与分红，按全平台总销售额的固定比例发放（对应康宝莱全球分红1%）</p>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[12px] text-gray-500 w-16 flex-shrink-0">分红比例</span>
+                          <input type="number" min="0" max="100" placeholder="1" value={editPlanDividendRate} onChange={e => setEditPlanDividendRate(e.target.value)} className="flex-1 text-[13px] border border-gray-200 rounded-xl px-3 py-1.5 bg-white focus:outline-none" />
+                          <span className="text-[11px] text-gray-400">%</span>
+                        </div>
+                        <p className="text-[10px] text-gray-300">参考康宝莱：全球分红1%，中国区分红1%</p>
+                      </div>
+                    )}
+                    {/* 分配汇总区域 */}
+                    {(() => {
+                      const salesRate = Number(editPlanSalesRate) || 0;
+                      const levelsTotal = editPlanLevels.reduce((s, l) => s + (Number(l.rate) || 0), 0);
+                      const genBonusMax = editPlanGenBonus.length > 0 ? Math.max(...editPlanGenBonus.map(g => Number(g.rate) || 0)) : 0;
+                      const ranksTotal = editPlanRanks.reduce((s, r) => s + (Number(r.bonusRate) || 0), 0);
+                      const dividendRate = Number(editPlanDividendRate) || 0;
+                      const allocated = salesRate + levelsTotal + genBonusMax + ranksTotal + dividendRate;
+                      const remaining = 100 - allocated;
+                      const isOver = allocated > 100;
+                      return (
+                        <div className="rounded-xl border border-gray-100 bg-white p-3 space-y-2">
+                          <p className="text-[11px] font-semibold text-gray-500">拨出率分配汇总（占总拨出率 100%）</p>
+                          <div className="w-full h-3 rounded-full bg-gray-100 overflow-hidden flex">
+                            <div className="h-full transition-all" style={{ width: `${Math.min(salesRate, 100)}%`, background: '#10B981' }} />
+                            <div className="h-full transition-all" style={{ width: `${Math.min(levelsTotal, 100 - salesRate)}%`, background: '#FF6900' }} />
+                            <div className="h-full transition-all" style={{ width: `${Math.min(genBonusMax, 100 - salesRate - levelsTotal)}%`, background: '#8B5CF6' }} />
+                            <div className="h-full transition-all" style={{ width: `${Math.min(ranksTotal, 100 - salesRate - levelsTotal - genBonusMax)}%`, background: '#3B82F6' }} />
+                            <div className="h-full transition-all" style={{ width: `${Math.min(dividendRate, 100 - salesRate - levelsTotal - genBonusMax - ranksTotal)}%`, background: '#EC4899' }} />
+                          </div>
+                          <div className="grid grid-cols-5 gap-1 text-center">
+                            <div className="rounded-lg bg-green-50 py-1.5">
+                              <p className="text-[13px] font-bold text-green-600">{salesRate.toFixed(1)}%</p>
+                              <p className="text-[10px] text-gray-400">销售提成</p>
+                            </div>
+                            <div className="rounded-lg bg-orange-50 py-1.5">
+                              <p className="text-[13px] font-bold" style={{ color: '#FF6900' }}>{levelsTotal.toFixed(1)}%</p>
+                              <p className="text-[10px] text-gray-400">代数佣金</p>
+                            </div>
+                            <div className="rounded-lg py-1.5" style={{ background: '#F5F3FF' }}>
+                              <p className="text-[13px] font-bold" style={{ color: '#7C3AED' }}>{genBonusMax.toFixed(1)}%</p>
+                              <p className="text-[10px] text-gray-400">直级奖</p>
+                            </div>
+                            <div className="rounded-lg bg-pink-50 py-1.5">
+                              <p className="text-[13px] font-bold text-pink-500">{dividendRate.toFixed(1)}%</p>
+                              <p className="text-[10px] text-gray-400">分红</p>
+                            </div>
+                            <div className={`rounded-lg py-1.5 ${isOver ? 'bg-red-50' : 'bg-gray-50'}`}>
+                              <p className={`text-[13px] font-bold ${isOver ? 'text-red-500' : 'text-gray-600'}`}>{remaining.toFixed(1)}%</p>
+                              <p className="text-[10px] text-gray-400">{isOver ? '超出！' : '入账'}</p>
+                            </div>
+                          </div>
+                          {genBonusMax > 0 && <p className="text-[10px]" style={{ color: '#7C3AED' }}>直级奖最高 {genBonusMax}%（米庄天花板，占拨出率额度）</p>}
+                          {isOver && <p className="text-[11px] text-red-400 text-center">分配比例已超过 100%，请调整后再保存</p>}
+                        </div>
+                      );
+                    })()}
+                    <div className="flex gap-2">
+                      <button onClick={() => {
+                        const levels = editPlanLevels.map((l, i) => ({ levelIndex: i + 1, rate: Number(l.rate) / 100 })).filter(l => l.rate > 0);
+                        const generationBonus = editPlanGenBonus.map((g, i) => ({ genIndex: i + 1, rate: Number(g.rate) / 100 })).filter(g => g.rate > 0);
+                        const ranks = editPlanRanks.map((r, i) => ({ rankIndex: i + 1, name: r.name, bonusRate: Number(r.bonusRate) / 100, conditionType: 'personal' as any, unlockType: r.unlockType as any, personalCumulativeMin: r.personalCumulativeMin ? Number(r.personalCumulativeMin) : null, teamCumulativeMin: r.teamCumulativeMin ? Number(r.teamCumulativeMin) : null, personalSalesMin: null, teamSizeMin: null, teamSalesMin: null })).filter(r => r.name);
+                        const salesRate = Number(editPlanSalesRate) / 100;
+                        const dividendRate = Number(editPlanDividendRate) / 100;
+                        updatePlanMut.mutate({ id: p.id, name: editPlan.name, triggerEvent: editPlan.trigger as any, settlement: editPlan.settlement as any, salesRate, dividendRate, levels, generationBonus, ranks });
+                      }} disabled={!editPlan.name || updatePlanMut.isPending} className="flex-1 py-2 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: '#FF6900' }}>
+                        {updatePlanMut.isPending ? '保存中...' : '保存制度'}
+                      </button>
+                      <button onClick={() => setEditingPlanId(null)} className="px-4 py-2 rounded-xl text-[13px] text-gray-500 border border-gray-200">取消</button>
+                    </div>
                   </div>
+                ) : (
+                  // 展示模式
+                  <>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <p className="text-[13px] font-semibold text-black">{p.name}</p>
+                        <p className="text-[11px] text-gray-400">{p.triggerEvent === 'order_confirmed' ? '确认收货触发' : '下单触发'} · {p.settlement === 'auto' ? '自动到账' : '手动结算'}</p>
+                      </div>
+                      <button onClick={() => {
+                        setEditingPlanId(p.id);
+                        setPlanEditTab('levels');
+                        setEditPlan({ name: p.name, trigger: p.triggerEvent ?? 'order_confirmed', settlement: p.settlement ?? 'manual' });
+                        setEditPlanSalesRate(p.salesRate != null ? String(Math.round(p.salesRate * 100)) : '30');
+                        setEditPlanDividendRate(p.dividendRate != null ? String(Math.round(p.dividendRate * 100)) : '');
+                        setEditPlanLevels((p.levels ?? []).length > 0 ? (p.levels as any[]).map((lv: any) => ({ rate: String(Math.round(lv.rate * 100)) })) : [{ rate: '' }]);
+                        setEditPlanGenBonus((p.generationBonus ?? []).length > 0 ? (p.generationBonus as any[]).map((gb: any) => ({ rate: String(Math.round(gb.rate * 100)) })) : [{ rate: '6' }, { rate: '4' }, { rate: '2' }]);
+                        setEditPlanRanks((p.ranks ?? []).length > 0 ? (p.ranks as any[]).map((rk: any) => ({ name: rk.name, bonusRate: String(Math.round(rk.bonusRate * 100)), unlockType: rk.unlockType ?? 'personal_cumulative', personalCumulativeMin: rk.personalCumulativeMin != null ? String(rk.personalCumulativeMin) : '', teamCumulativeMin: rk.teamCumulativeMin != null ? String(rk.teamCumulativeMin) : '' })) : []);
+                        setPlanEditTab('sales');
+                      }} className="text-[12px] text-orange-400 font-medium px-2">编辑</button>
+                      <button onClick={() => deletePlanMut.mutate({ id: p.id })} className="text-gray-300 hover:text-red-400 text-[12px]">删除</button>
+                    </div>
+                    {/* 奖金结构图 */}
+                    {(() => {
+                      const levels: any[] = p.levels ?? [];
+                      const ranks: any[] = p.ranks ?? [];
+                      if (!levels.length && !ranks.length) return null;
+                      const levelsTotal = levels.reduce((s: number, l: any) => s + l.rate, 0);
+                      const ranksTotal = ranks.reduce((s: number, r: any) => s + r.bonusRate, 0);
+                      const remaining = Math.max(0, 1 - levelsTotal - ranksTotal);
+                      return (
+                        <div className="mt-2 space-y-2">
+                          {/* 代数佣金链路 */}
+                          {levels.length > 0 && (
+                            <div>
+                              <p className="text-[10px] text-gray-400 mb-1">代数佣金</p>
+                              <div className="flex items-center gap-0.5 overflow-x-auto">
+                                {levels.map((lv: any, idx: number) => (
+                                  <div key={lv.levelIndex} className="flex items-center gap-0.5 flex-shrink-0">
+                                    <div className="flex flex-col items-center">
+                                      <div className="rounded-lg px-2 py-1 text-center" style={{ background: `rgba(255,105,0,${0.15 + idx * 0.08})` }}>
+                                        <p className="text-[11px] font-bold" style={{ color: '#FF6900' }}>{(lv.rate * 100).toFixed(0)}%</p>
+                                        <p className="text-[9px] text-gray-500">{idx === 0 ? '卖货人' : `第${idx}代`}</p>
+                                      </div>
+                                    </div>
+                                    {idx < levels.length - 1 && <span className="text-gray-300 text-[10px] flex-shrink-0">→</span>}
+                                  </div>
+                                ))}
+                                {remaining > 0 && (
+                                  <>
+                                    <span className="text-gray-200 text-[10px] flex-shrink-0 mx-0.5">|</span>
+                                    <div className="rounded-lg px-2 py-1 text-center bg-green-50 flex-shrink-0">
+                                      <p className="text-[11px] font-bold text-green-600">{(remaining * 100).toFixed(0)}%</p>
+                                      <p className="text-[9px] text-gray-400">入账</p>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          {/* 职级奖金 */}
+                          {ranks.length > 0 && (
+                            <div>
+                              <p className="text-[10px] text-gray-400 mb-1">职级奖金</p>
+                              <div className="flex flex-wrap gap-1">
+                                {ranks.map((rk: any) => {
+                                  const condLabel = rk.conditionType === 'personal' ? '个人' : rk.conditionType === 'team' ? '团队' : '两者';
+                                  const condDetail = [
+                                    rk.personalSalesMin ? `个人月销≥${rk.personalSalesMin}元` : null,
+                                    rk.teamSizeMin ? `团队≥${rk.teamSizeMin}人` : null,
+                                    rk.teamSalesMin ? `团月销≥${rk.teamSalesMin}元` : null,
+                                  ].filter(Boolean).join(' ');
+                                  return (
+                                    <div key={rk.rankIndex} className="rounded-lg px-2 py-1 bg-blue-50 flex items-center gap-1.5">
+                                      <div>
+                                        <p className="text-[11px] font-bold text-blue-600">{rk.name} <span className="text-blue-400">{(rk.bonusRate * 100).toFixed(0)}%</span></p>
+                                        {condDetail && <p className="text-[9px] text-gray-400">{condLabel}: {condDetail}</p>}
+                                        {!condDetail && <p className="text-[9px] text-gray-400">{condLabel}达标</p>}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </>
                 )}
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* ── 底部新建团队按鈕 ── */}
+      <div className="flex justify-center pt-1 pb-2">
+        <button
+          onClick={() => setShowTeamForm(v => !v)}
+          className="flex items-center gap-1.5 text-[12px] text-gray-400 hover:text-orange-500 transition-colors"
+        >
+          <span className="w-6 h-6 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center text-[16px] leading-none hover:border-orange-400">+</span>
+          添加团队
+        </button>
+      </div>
+      {showTeamForm && (
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm space-y-2">
+          <p className="text-[13px] font-bold text-black">新建团队</p>
+          <input placeholder="团队名称" value={newTeam.name} onChange={e => setNewTeam(t => ({ ...t, name: e.target.value }))} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" />
+          <div className="relative">
+            {newTeam.rootUserName ? (
+              <div className="flex items-center gap-2 border border-orange-300 rounded-xl px-3 py-2 bg-white">
+                <span className="flex-1 text-[13px] text-orange-600">{newTeam.rootUserName}（ID: {newTeam.rootUserId}）</span>
+                <button onClick={() => { setNewTeam(t => ({ ...t, rootUserId: "", rootUserName: "" })); setUserSearch(""); setUserDropdownOpen(true); }} className="text-[11px] text-gray-400 hover:text-red-400">重新选择</button>
+              </div>
+            ) : (
+              <input
+                placeholder="点击搜索或选择根节点用户"
+                value={userSearch}
+                onChange={e => { setUserSearch(e.target.value); setUserDropdownOpen(true); }}
+                onFocus={() => setUserDropdownOpen(true)}
+                onBlur={() => setTimeout(() => setUserDropdownOpen(false), 300)}
+                className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-300"
+              />
+            )}
+            {userDropdownOpen && !newTeam.rootUserId && searchResults.length > 0 && (
+              <div className="absolute z-20 left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg mt-1 max-h-48 overflow-y-auto">
+                {searchResults.map((u: any) => (
+                  <button key={u.id} onMouseDown={() => { setNewTeam(t => ({ ...t, rootUserId: String(u.id), rootUserName: u.name || u.username || String(u.id) })); setUserSearch(""); setUserDropdownOpen(false); }} className="w-full text-left px-3 py-2 text-[13px] hover:bg-orange-50 border-b border-gray-50 last:border-0">
+                    {u.name || "匿名"} <span className="text-gray-400">@{u.username}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <select value={newTeam.planId} onChange={e => setNewTeam(t => ({ ...t, planId: e.target.value }))} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none">
+            <option value="">选择销售制度（可选）</option>
+            {plans.map((p: any) => <option key={p.id} value={String(p.id)}>{p.name}</option>)}
+          </select>
+          <div className="flex items-center gap-2">
+            <input type="number" min="0" max="1000" placeholder="100" value={newTeam.multiplier} onChange={e => setNewTeam(t => ({ ...t, multiplier: e.target.value }))} className="flex-1 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" />
+            <span className="text-[13px] text-gray-400 flex-shrink-0">% 拨出系数</span>
+          </div>
+          <button onClick={() => createTeamMut.mutate({ name: newTeam.name, rootUserId: Number(newTeam.rootUserId), commissionPlanId: newTeam.planId ? Number(newTeam.planId) : undefined, payoutRateMultiplier: Number(newTeam.multiplier) / 100 }, {
+            onSuccess: () => { setShowTeamForm(false); setNewTeam({ name: "", rootUserId: "", rootUserName: "", planId: "", multiplier: "100" }); setUserSearch(""); }
+          })} disabled={!newTeam.name || !newTeam.rootUserId || createTeamMut.isPending} className="w-full py-2 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: "#FF6900" }}>
+            {createTeamMut.isPending ? "创建中..." : "确认创建"}
+          </button>
+        </div>
+      )}
     </div>
+
+    {/* ── 参考说明弹窗 ── */}
+    {showPlanGuide && (
+      <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.45)' }} onClick={() => setShowPlanGuide(false)}>
+        <div className="w-full bg-white rounded-t-3xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="sticky top-0 bg-white px-4 pt-4 pb-3 border-b border-gray-100 flex items-center justify-between z-10">
+            <div>
+              <p className="text-[16px] font-bold text-black">奖金制度参考说明</p>
+              <p className="text-[11px] text-gray-400">以康宝莱（贺宝芙）制度为参考范本</p>
+            </div>
+            <button onClick={() => setShowPlanGuide(false)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-[14px]">✕</button>
+          </div>
+          <div className="px-4 py-4 space-y-6">
+            {/* 概览 */}
+            <div>
+              <p className="text-[13px] font-bold text-black mb-2">一、制度概览</p>
+              <p className="text-[12px] text-gray-500 mb-3">康宝莱奖金池占产品销售额的 <span className="font-bold text-orange-500">72%</span>，共分五大类收入：</p>
+              <div className="space-y-2">
+                {[
+                  { name: '零售利润（销售提成）', rate: '15%～50%', desc: '自己卖货，批零差价直接赚', color: 'bg-green-50 text-green-600' },
+                  { name: '批发利润（直推奖）', rate: '8%～25%', desc: '直接下线进货时拿差价', color: 'bg-blue-50 text-blue-600' },
+                  { name: '佣金抽成（代数佣金）', rate: '5% × 3代', desc: '成为督导后，下线前3代各5%', color: 'bg-orange-50 text-orange-600' },
+                  { name: '绩效奖金（职级穿透奖）', rate: '2%/4%/6% 无限代', desc: '达到更高职级后解锁，遇同级截断', color: 'bg-purple-50 text-purple-600' },
+                  { name: '全球/中国区分红', rate: '各1%', desc: '达到总裁级别才能参与', color: 'bg-gray-100 text-gray-500' },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-start gap-2 bg-gray-50 rounded-xl p-2.5">
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-lg flex-shrink-0 ${item.color}`}>{item.rate}</span>
+                    <div>
+                      <p className="text-[12px] font-semibold text-gray-700">{item.name}</p>
+                      <p className="text-[11px] text-gray-400">{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* 销售提成 */}
+            <div>
+              <p className="text-[13px] font-bold text-black mb-1">二、零售利润（销售提成）</p>
+              <p className="text-[12px] text-gray-500 mb-2">卖货人自己赚的，批发价和零售价之间的差价，业绩越高档位越高。</p>
+              <div className="bg-green-50 rounded-xl p-3 space-y-1">
+                {[['月销¥1,200', '15%'],['月销¥6,000', '25%'],['月销¥30,000', '35%'],['月销¥48,000', '42%'],['督导级别', '50%（最高）']].map(([v,r])=>(
+                  <div key={v} className="flex justify-between text-[12px]"><span className="text-gray-600">{v}</span><span className="font-bold text-green-600">{r}</span></div>
+                ))}
+              </div>
+              <div className="mt-2 bg-gray-50 rounded-xl p-2.5">
+                <p className="text-[11px] text-gray-500">📌 案例：小王本月卖出¥10,000，处于25%档，销售提成 = ¥10,000 × 25% = <span className="font-bold text-green-600">¥2,500</span></p>
+              </div>
+            </div>
+            {/* 代数佣金 */}
+            <div>
+              <p className="text-[13px] font-bold text-black mb-1">三、佣金抽成（代数佣金）</p>
+              <p className="text-[12px] text-gray-500 mb-2">成为督导后，可以拿下线中<span className="font-semibold text-orange-500">前3代督导</span>的销售额各5%，固定不变，不受职级截断影响。</p>
+              <div className="bg-orange-50 rounded-xl p-3 font-mono text-[11px] text-gray-700 space-y-0.5">
+                <p>小王（督导）</p>
+                <p className="pl-3">└── 小李（督导）← 第1代，小王拿 <span className="font-bold text-orange-600">5%</span></p>
+                <p className="pl-8">└── 小张（督导）← 第2代，小王拿 <span className="font-bold text-orange-600">5%</span></p>
+                <p className="pl-12">└── 小赵（督导）← 第3代，小王拿 <span className="font-bold text-orange-600">5%</span></p>
+                <p className="pl-16">└── 小陈（督导）← 第4代，<span className="text-gray-400">拿不到了</span></p>
+              </div>
+              <div className="mt-2 bg-gray-50 rounded-xl p-2.5">
+                <p className="text-[11px] text-gray-500">📌 案例：小李月销¥20,000、小张¥15,000、小赵¥10,000</p>
+                <p className="text-[11px] text-gray-500 mt-1">小王代数佣金 = ¥1,000 + ¥750 + ¥500 = <span className="font-bold text-orange-600">¥2,250</span></p>
+              </div>
+            </div>
+            {/* 职级穿透奖 */}
+            <div>
+              <p className="text-[13px] font-bold text-black mb-1">四、绩效奖金（职级穿透奖）⭐ 核心</p>
+              <p className="text-[12px] text-gray-500 mb-2">无限代穿透，但<span className="font-bold text-red-500">遇到同级或更高级的人会被截断</span>，这是康宝莱制度的精髓。</p>
+              <div className="bg-purple-50 rounded-xl p-3 space-y-1 mb-2">
+                <div className="flex justify-between text-[12px]"><span className="text-gray-600">第1代下线督导</span><span className="font-bold text-purple-600">6%</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-gray-600">第2代下线督导</span><span className="font-bold text-purple-600">4%</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-gray-600">第3代及以后（无限代）</span><span className="font-bold text-purple-600">2%</span></div>
+              </div>
+              <p className="text-[12px] font-semibold text-gray-700 mb-1">案例1：下面无同级，无限穿透 ✅</p>
+              <div className="bg-gray-50 rounded-xl p-2.5 font-mono text-[11px] text-gray-700 space-y-0.5 mb-2">
+                <p>小王（总监级）</p>
+                <p className="pl-3">└── 小李（督导）← <span className="text-purple-600 font-bold">6%</span></p>
+                <p className="pl-8">└── 小张（督导）← <span className="text-purple-600 font-bold">4%</span></p>
+                <p className="pl-12">└── 小赵（督导）← <span className="text-purple-600 font-bold">2%</span></p>
+                <p className="pl-16">└── 小陈（督导）← <span className="text-purple-600 font-bold">2%</span>（无限代）</p>
+              </div>
+              <p className="text-[12px] font-semibold text-gray-700 mb-1">案例2：下面出现同级，被截断 ❌</p>
+              <div className="bg-red-50 rounded-xl p-2.5 font-mono text-[11px] text-gray-700 space-y-0.5 mb-2">
+                <p>小王（总监级）</p>
+                <p className="pl-3">└── 小李（<span className="text-red-500 font-bold">总监级，同级！</span>）← 小王拿6%，但被截断</p>
+                <p className="pl-8">└── 小张（督导）← <span className="text-gray-400">小王拿不到！</span></p>
+                <p className="pl-12">└── 小赵（督导）← <span className="text-gray-400">小王拿不到！</span></p>
+              </div>
+              <p className="text-[12px] font-semibold text-gray-700 mb-1">案例3：混合情况</p>
+              <div className="bg-gray-50 rounded-xl p-2.5 font-mono text-[11px] text-gray-700 space-y-0.5">
+                <p>小王（总监级）</p>
+                <p className="pl-3">├── 小李（督导，低于小王）← <span className="text-purple-600 font-bold">6%</span>，不截断</p>
+                <p className="pl-8">│   └── 小张（督导）← <span className="text-purple-600 font-bold">4%</span></p>
+                <p className="pl-12">│       └── 小赵（<span className="text-red-500 font-bold">总监级，同级！</span>）← <span className="text-purple-600 font-bold">2%</span>，被截断</p>
+                <p className="pl-16">│           └── 小陈（督导）← <span className="text-gray-400">拿不到！</span></p>
+                <p className="pl-3">└── 小刘（<span className="text-red-500 font-bold">总监级，同级！</span>）← <span className="text-purple-600 font-bold">6%</span>，被截断</p>
+                <p className="pl-8">    └── 小周（督导）← <span className="text-gray-400">拿不到！</span></p>
+              </div>
+              <div className="mt-2 bg-purple-50 rounded-xl p-2.5">
+                <p className="text-[11px] text-gray-600 font-semibold">💡 为什么要截断？</p>
+                <p className="text-[11px] text-gray-500 mt-0.5">压缩制的目的是激励上级帮助下级成长。当下级升到和你同级时，他就「独立」了，你不再能靠他的下线赚钱，这逼着你要么继续升级，要么去发展新的下线。</p>
+              </div>
+            </div>
+            {/* 综合案例 */}
+            <div>
+              <p className="text-[13px] font-bold text-black mb-1">五、综合案例：一笔¥100订单的完整分配</p>
+              <p className="text-[12px] text-gray-500 mb-2">假设总拨出率10%，奖金池 = ¥10</p>
+              <div className="bg-gray-50 rounded-xl p-2.5 font-mono text-[11px] text-gray-700 space-y-0.5 mb-3">
+                <p>老板（您）</p>
+                <p className="pl-3">└── 小王（米行级）</p>
+                <p className="pl-8">    └── 小李（米商级）</p>
+                <p className="pl-12">        └── 小张（米农，<span className="text-green-600 font-bold">卖货人</span>）← 卖出¥100</p>
+              </div>
+              <div className="space-y-1.5">
+                {[
+                  { who: '小张（卖货人）', rule: '销售提成 30%', amount: '¥3.00', color: 'text-green-600' },
+                  { who: '小李（第1代上级）', rule: '代数佣金 5%', amount: '¥0.50', color: 'text-orange-600' },
+                  { who: '小王（第2代上级）', rule: '代数佣金 5%', amount: '¥0.50', color: 'text-orange-600' },
+                  { who: '小李（米商级）', rule: '绩效奖 6%（第1代）', amount: '¥0.60', color: 'text-purple-600' },
+                  { who: '小王（米行级）', rule: '绩效奖 4%（第2代）', amount: '¥0.40', color: 'text-purple-600' },
+                  { who: '您（入账）', rule: '剩余 50%', amount: '¥5.00', color: 'text-gray-700 font-bold' },
+                ].map((row, i) => (
+                  <div key={i} className={`flex items-center gap-2 rounded-xl px-3 py-2 ${i === 5 ? 'bg-green-50' : 'bg-white border border-gray-100'}`}>
+                    <div className="flex-1">
+                      <p className="text-[11px] font-semibold text-gray-700">{row.who}</p>
+                      <p className="text-[10px] text-gray-400">{row.rule}</p>
+                    </div>
+                    <span className={`text-[13px] font-bold ${row.color}`}>{row.amount}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* 职级体系 */}
+            <div>
+              <p className="text-[13px] font-bold text-black mb-2">六、职级体系参考（米瓣版）</p>
+              <div className="space-y-1.5">
+                {[
+                  { rank: '米农', cond: '注册即有，无門槛', unlock: '销售提成', color: 'bg-gray-100 text-gray-600' },
+                  { rank: '米商', cond: '个人累计销售满¥X（可自定义）', unlock: '代数佣金', color: 'bg-orange-50 text-orange-600' },
+                  { rank: '米行', cond: '团队累计满¥X（可自定义）', unlock: '绩效奖（职级穿透）', color: 'bg-purple-50 text-purple-600' },
+                  { rank: '米庄', cond: '团队累计满¥X（可自定义）', unlock: '绩效奖（最高档）+分红', color: 'bg-yellow-50 text-yellow-700' },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-lg flex-shrink-0 ${item.color}`}>{item.rank}</span>
+                    <div className="flex-1"><p className="text-[11px] text-gray-500">{item.cond}</p></div>
+                    <span className="text-[10px] text-gray-400">{item.unlock}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-gray-400 mt-2 text-center">以上职级条件和比例均可在制度配置中自定义</p>
+            </div>
+            <div className="h-4" />
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
@@ -1101,7 +1655,7 @@ function AgentTeamPanel() {
 }
 
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
-type AdminTabKey = "orders" | "rice" | "inventory" | "warehouse" | "users" | "sales" | "teamManage" | "team" | "commission" | "referrals";
+type AdminTabKey = "orders" | "rice" | "inventory" | "warehouse" | "users" | "teamManage" | "team" | "commission" | "referrals";
 
 export default function UnifiedAdmin() {
   const { user, isAuthenticated } = useAuth();
@@ -1144,7 +1698,6 @@ export default function UnifiedAdmin() {
     { key: "rice",      label: "米库管理" },
     { key: "inventory", label: "库存管理" },
     { key: "users",     label: "用户管理" },
-    { key: "sales",     label: "销售团队" },
     { key: "teamManage", label: "团队管理" },
   ] : [
     // 业务员/团队长标签
@@ -1177,13 +1730,13 @@ export default function UnifiedAdmin() {
           </span>
         </div>
 
-        {/* 横向滚动标签栏 */}
-        <div className="flex gap-1 overflow-x-auto pb-0 scrollbar-hide -mx-4 px-4">
+        {/* Tab 标签栏：均分一屏，不滚动 */}
+        <div className="flex -mx-4">
           {adminTabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className="flex items-center px-4 py-2.5 text-[12px] font-semibold whitespace-nowrap transition-all flex-shrink-0 border-b-2"
+              className="flex-1 py-2.5 text-[11px] font-semibold transition-all border-b-2"
               style={{
                 color: activeTab === tab.key ? "#FF6900" : "#888",
                 borderBottomColor: activeTab === tab.key ? "#FF6900" : "transparent",
@@ -1202,8 +1755,7 @@ export default function UnifiedAdmin() {
         {activeTab === "inventory" && <InventoryPanel />}
         {activeTab === "warehouse" && <WarehousePanel />}
         {activeTab === "users"     && <UsersPanel />}
-        {activeTab === "sales"     && <SalesPanel />}
-        {activeTab === "teamManage" && <TeamManagePanel />}
+        {activeTab === "teamManage" && <SalesPanel />}
         {/* 业务员视图 */}
         {(activeTab === "team" || activeTab === "commission" || activeTab === "referrals") && <AgentTeamPanel />}
       </div>

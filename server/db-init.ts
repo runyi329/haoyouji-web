@@ -1145,13 +1145,6 @@ export async function initDatabase() {
       }
     }
 
-    console.log("[DB Init] Database initialization completed successfully");
-  } catch (error) {
-    console.error("[DB Init] Error during database initialization:", error);
-    // 不抛出错误，避免影响应用启动
-  }
-}
-
     // ─── 米伴销售制度表 ────────────────────────────────────────────────────────────
     {
       const dbConnPlan = await getDbConnection();
@@ -1215,3 +1208,58 @@ export async function initDatabase() {
         }
       }
     }
+
+    // ─── 米伴分佣体系V2：无限级制度 + 产品总拨出率 + 团队系数 ──────────────────────
+    {
+      const dbConnV2 = await getDbConnection();
+      if (dbConnV2) {
+        await initMibanCommissionV2(dbConnV2);
+      }
+    }
+
+    console.log("[DB Init] Database initialization completed successfully");
+  } catch (error) {
+    console.error("[DB Init] Error during database initialization:", error);
+    // 不抛出错误，避免影响应用启动
+  }
+}
+
+// ─── 米伴分佣体系升级：无限级制度 + 产品总拨出率 + 团队系数 ─────────────────────
+export async function initMibanCommissionV2(dbConn: any) {
+  if (!dbConn) return;
+
+  // 1. 产品表加总拨出率字段
+  await safeAddColumn(dbConn, 'miban_rice_varieties', 'total_payout_rate',
+    `DECIMAL(5,4) NOT NULL DEFAULT 0.0000 COMMENT '总拨出率：该产品订单金额中用于分佣的比例，如0.1000=10%'`);
+
+  // 2. 团队表加总拨出率系数字段
+  await safeAddColumn(dbConn, 'miban_teams', 'payout_rate_multiplier',
+    `DECIMAL(5,4) NOT NULL DEFAULT 1.0000 COMMENT '总拨出率系数：相对于产品默认拨出率的倍数，如0.8000=80%'`);
+
+  // 3. 新建制度层级表（无限级）
+  await dbConn.execute(`
+    CREATE TABLE IF NOT EXISTS miban_commission_plan_levels (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      plan_id INT NOT NULL COMMENT '所属制度ID',
+      level_index TINYINT UNSIGNED NOT NULL COMMENT '层级序号：1=直接推荐人，2=上一级，依此类推',
+      rate DECIMAL(5,4) NOT NULL DEFAULT 0.0000 COMMENT '该层级占总拨出率的比例，如0.5000=50%',
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_plan_level (plan_id, level_index),
+      INDEX idx_plan_id (plan_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='米伴销售制度层级配置（无限级）'
+  `);
+  console.log('[DB Init] ✅ miban_commission_plan_levels table ready');
+
+  // 4. 佣金记录表加 level_index 字段（替代原 level 字段，支持无限级）
+  await safeAddColumn(dbConn, 'miban_commissions', 'level_index',
+    `TINYINT UNSIGNED NOT NULL DEFAULT 1 COMMENT '佣金层级序号（无限级）'`);
+
+  // 5. 佣金记录表加 total_payout_rate 快照字段（记录下单时的拨出率）
+  await safeAddColumn(dbConn, 'miban_commissions', 'total_payout_rate_snapshot',
+    `DECIMAL(5,4) DEFAULT NULL COMMENT '下单时产品总拨出率快照'`);
+
+  // 6. 佣金记录表加 payout_multiplier_snapshot 快照字段（记录下单时的团队系数）
+  await safeAddColumn(dbConn, 'miban_commissions', 'payout_multiplier_snapshot',
+    `DECIMAL(5,4) DEFAULT NULL COMMENT '下单时团队系数快照'`);
+}

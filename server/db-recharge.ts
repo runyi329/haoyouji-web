@@ -685,7 +685,7 @@ export async function getUnmatchedTransactions() {
 export async function addUserBalance(
   userId: number,
   amount: number,
-  type: 'recharge' | 'consume' | 'refund' | 'reward' | 'withdraw',
+  type: 'recharge' | 'consume' | 'refund' | 'reward' | 'withdraw' | 'commission',
   relatedId?: number,
   description?: string,
   ledgerId?: number
@@ -693,6 +693,38 @@ export async function addUserBalance(
   const conn = await getDbConnection();
   if (!conn) throw new Error('数据库连接失败');
   const pool = conn as any;
+
+  // commission 类型：米伴佣金，直接写入 users.balance（全局统一钱包）
+  if (type === 'commission') {
+    // 确保 users.balance 字段存在
+    try {
+      const [cols] = await pool.execute(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'balance'`
+      ) as any[];
+      if (!cols || (cols as any[]).length === 0) {
+        await pool.execute(`ALTER TABLE users ADD COLUMN balance DECIMAL(20,8) NOT NULL DEFAULT 0`);
+      }
+    } catch (_) {}
+    // 写入 users.balance
+    await pool.execute(
+      `UPDATE users SET balance = COALESCE(balance, 0) + ? WHERE id = ?`,
+      [amount, userId]
+    );
+    const [balRows] = await pool.execute(
+      `SELECT balance FROM users WHERE id = ? LIMIT 1`,
+      [userId]
+    ) as any[];
+    const newBalance = parseFloat((balRows as any[])[0]?.balance ?? '0') || 0;
+    // 记录到 balance_history
+    try {
+      await pool.execute(
+        `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description) VALUES (?, ?, 'commission', ?, ?, ?)`,
+        [userId, amount.toString(), relatedId ?? null, newBalance.toString(), description ?? null]
+      );
+    } catch (_) {}
+    console.log(`[addUserBalance] commission 到账 userId=${userId}, amount=${amount} USDT, newBalance=${newBalance}`);
+    return newBalance;
+  }
 
   // reward 类型：写入 af_manual_balances（与竞猜扣款同源，余额计算自动生效）
   if (type === 'reward') {
