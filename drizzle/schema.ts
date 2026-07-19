@@ -2405,3 +2405,30 @@ export const mibanFavorites = mysqlTable("miban_favorites", {
   userProductIdx: index("miban_favorites_user_product_idx").on(table.userId, table.productKey),
   userIdx: index("miban_favorites_user_idx").on(table.userId),
 }));
+
+// ─── 米伴销售制度表 ────────────────────────────────────────────────────────────
+export const mibanCommissionPlans = mysqlTable("miban_commission_plans", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 64 }).notNull(),
+  triggerEvent: mysqlEnum("trigger_event", ["order_placed", "order_confirmed"]).notNull().default("order_confirmed"),
+  level1Rate: decimal("level1_rate", { precision: 5, scale: 4 }).notNull().default("0.0500"),
+  level2Rate: decimal("level2_rate", { precision: 5, scale: 4 }).notNull().default("0.0200"),
+  level3Rate: decimal("level3_rate", { precision: 5, scale: 4 }).notNull().default("0.0100"),
+  settlement: mysqlEnum("settlement", ["auto", "manual"]).notNull().default("manual"),
+  note: text("note"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+// ─── 米伴团队表 ────────────────────────────────────────────────────────────────
+export const mibanTeams = mysqlTable("miban_teams", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 64 }).notNull(),
+  rootUserId: int("root_user_id").notNull(),
+  commissionPlanId: int("commission_plan_id"),
+  description: text("description"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  rootUserIdx: index("miban_teams_root_user_idx").on(table.rootUserId),
+}));

@@ -1151,3 +1151,67 @@ export async function initDatabase() {
     // 不抛出错误，避免影响应用启动
   }
 }
+
+    // ─── 米伴销售制度表 ────────────────────────────────────────────────────────────
+    {
+      const dbConnPlan = await getDbConnection();
+      if (dbConnPlan) {
+        await dbConnPlan.execute(`
+          CREATE TABLE IF NOT EXISTS miban_commission_plans (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(64) NOT NULL COMMENT '制度名称，如「天桂梨标准制度」',
+            trigger_event ENUM('order_placed','order_confirmed') NOT NULL DEFAULT 'order_confirmed' COMMENT '触发时机：下单时/确认收货后',
+            level1_rate DECIMAL(5,4) NOT NULL DEFAULT 0.0500 COMMENT '一级推荐人佣金比例（直接推荐）',
+            level2_rate DECIMAL(5,4) NOT NULL DEFAULT 0.0200 COMMENT '二级推荐人佣金比例',
+            level3_rate DECIMAL(5,4) NOT NULL DEFAULT 0.0100 COMMENT '三级推荐人佣金比例',
+            settlement ENUM('auto','manual') NOT NULL DEFAULT 'manual' COMMENT '结算方式：自动到账/管理员手动结算',
+            note TEXT DEFAULT NULL COMMENT '制度说明',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='米伴销售佣金制度'
+        `);
+        console.log('[DB Init] ✅ miban_commission_plans table ready');
+      }
+    }
+
+    // ─── 米伴团队表 ────────────────────────────────────────────────────────────────
+    {
+      const dbConnTeam = await getDbConnection();
+      if (dbConnTeam) {
+        await dbConnTeam.execute(`
+          CREATE TABLE IF NOT EXISTS miban_teams (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(64) NOT NULL COMMENT '团队名称',
+            root_user_id INT NOT NULL COMMENT '团队根节点用户ID（人脉树起点）',
+            commission_plan_id INT DEFAULT NULL COMMENT '绑定的销售制度ID',
+            description TEXT DEFAULT NULL COMMENT '团队描述',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_root_user (root_user_id),
+            INDEX idx_plan (commission_plan_id)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='米伴销售团队'
+        `);
+        console.log('[DB Init] ✅ miban_teams table ready');
+
+        // miban_commissions 补充 team_id 和 level 字段
+        const dbConnCommAdd = await getDbConnection();
+        if (dbConnCommAdd) {
+          const cols = [
+            { name: 'team_id', def: 'INT DEFAULT NULL COMMENT \'所属团队ID\'' },
+            { name: 'level', def: 'TINYINT NOT NULL DEFAULT 1 COMMENT \'佣金层级：1直接推荐/2二级/3三级\'' },
+          ];
+          for (const col of cols) {
+            try {
+              const [rows] = await dbConnCommAdd.execute(
+                `SELECT COUNT(*) as cnt FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'miban_commissions' AND COLUMN_NAME = ?`,
+                [col.name]
+              );
+              if ((rows as any[])[0].cnt === 0) {
+                await dbConnCommAdd.execute(`ALTER TABLE miban_commissions ADD COLUMN \`${col.name}\` ${col.def}`);
+                console.log(`[DB Init] ✅ Added miban_commissions.${col.name}`);
+              }
+            } catch (e) { /* ignore */ }
+          }
+        }
+      }
+    }

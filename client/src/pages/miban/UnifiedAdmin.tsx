@@ -809,6 +809,176 @@ function SalesPanel() {
   );
 }
 
+// ─── 团队管理（管理员）─────────────────────────────────────────────────────────
+function TeamManagePanel() {
+  const utils = mtrpc.useUtils();
+  // 销售制度
+  const { data: plans = [], isLoading: plansLoading } = mtrpc.mibanTeam.listPlans.useQuery();
+  const createPlanMut = mtrpc.mibanTeam.createPlan.useMutation({ onSuccess: () => { utils.mibanTeam.listPlans.invalidate(); toast.success("制度已创建"); } });
+  const deletePlanMut = mtrpc.mibanTeam.deletePlan.useMutation({ onSuccess: () => { utils.mibanTeam.listPlans.invalidate(); toast.success("制度已删除"); } });
+  // 团队
+  const { data: teams = [], isLoading: teamsLoading } = mtrpc.mibanTeam.listTeams.useQuery();
+  const createTeamMut = mtrpc.mibanTeam.createTeam.useMutation({ onSuccess: () => { utils.mibanTeam.listTeams.invalidate(); toast.success("团队已创建"); } });
+  const deleteTeamMut = mtrpc.mibanTeam.deleteTeam.useMutation({ onSuccess: () => { utils.mibanTeam.listTeams.invalidate(); toast.success("团队已删除"); } });
+  // 成员树
+  const [selectedTeam, setSelectedTeam] = useState<number | null>(null);
+  const { data: members = [], isLoading: membersLoading } = mtrpc.mibanTeam.getTeamMembers.useQuery(
+    { teamId: selectedTeam! }, { enabled: !!selectedTeam }
+  );
+  // 搜索用户（创建团队时）
+  const [userSearch, setUserSearch] = useState("");
+  const { data: searchResults = [] } = mtrpc.mibanTeam.searchUsers.useQuery(
+    { keyword: userSearch }, { enabled: userSearch.length >= 1 }
+  );
+  // 新建制度表单
+  const [newPlan, setNewPlan] = useState({ name: "", level1Rate: "5", level2Rate: "2", level3Rate: "1", trigger: "confirmed", settlement: "manual" });
+  // 新建团队表单
+  const [newTeam, setNewTeam] = useState({ name: "", rootUserId: "", rootUserName: "", planId: "" });
+  const [showPlanForm, setShowPlanForm] = useState(false);
+  const [showTeamForm, setShowTeamForm] = useState(false);
+
+  return (
+    <div className="space-y-4">
+      {/* ── 销售制度 ── */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-[13px] font-bold text-black">销售制度</h3>
+          <button onClick={() => setShowPlanForm(v => !v)} className="text-[12px] font-semibold px-3 py-1 rounded-lg text-white" style={{ background: "#FF6900" }}>
+            {showPlanForm ? "收起" : "+ 新建制度"}
+          </button>
+        </div>
+        {showPlanForm && (
+          <div className="bg-orange-50 rounded-xl p-3 mb-3 space-y-2">
+            <input placeholder="制度名称（如：标准制度A）" value={newPlan.name} onChange={e => setNewPlan(p => ({ ...p, name: e.target.value }))} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" />
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <p className="text-[11px] text-gray-400 mb-1">一级佣金 %</p>
+                <input type="number" value={newPlan.level1Rate} onChange={e => setNewPlan(p => ({ ...p, level1Rate: e.target.value }))} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" />
+              </div>
+              <div>
+                <p className="text-[11px] text-gray-400 mb-1">二级佣金 %</p>
+                <input type="number" value={newPlan.level2Rate} onChange={e => setNewPlan(p => ({ ...p, level2Rate: e.target.value }))} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" />
+              </div>
+              <div>
+                <p className="text-[11px] text-gray-400 mb-1">三级佣金 %</p>
+                <input type="number" value={newPlan.level3Rate} onChange={e => setNewPlan(p => ({ ...p, level3Rate: e.target.value }))} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p className="text-[11px] text-gray-400 mb-1">触发时机</p>
+                <select value={newPlan.trigger} onChange={e => setNewPlan(p => ({ ...p, trigger: e.target.value }))} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none">
+                  <option value="order_placed">下单即触发</option>
+                  <option value="confirmed">确认收货后触发</option>
+                </select>
+              </div>
+              <div>
+                <p className="text-[11px] text-gray-400 mb-1">结算方式</p>
+                <select value={newPlan.settlement} onChange={e => setNewPlan(p => ({ ...p, settlement: e.target.value }))} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none">
+                  <option value="manual">管理员手动结算</option>
+                  <option value="auto">自动到账钱包</option>
+                </select>
+              </div>
+            </div>
+            <button onClick={() => createPlanMut.mutate({ name: newPlan.name, level1Rate: Number(newPlan.level1Rate) / 100, level2Rate: Number(newPlan.level2Rate) / 100, level3Rate: Number(newPlan.level3Rate) / 100, trigger: newPlan.trigger as any, settlement: newPlan.settlement as any })} disabled={!newPlan.name || createPlanMut.isPending} className="w-full py-2 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: "#FF6900" }}>
+              {createPlanMut.isPending ? "创建中..." : "确认创建"}
+            </button>
+          </div>
+        )}
+        {plansLoading ? <div className="text-center py-4 text-gray-300 text-[12px]">加载中...</div> : plans.length === 0 ? (
+          <div className="text-center py-4 text-gray-300 text-[12px]">暂无销售制度，点击「新建制度」开始</div>
+        ) : (
+          <div className="space-y-2">
+            {plans.map((p: any) => (
+              <div key={p.id} className="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2.5">
+                <div className="flex-1">
+                  <p className="text-[13px] font-semibold text-black">{p.name}</p>
+                  <p className="text-[11px] text-gray-400">一级 {(Number(p.level1Rate) * 100).toFixed(1)}% · 二级 {(Number(p.level2Rate) * 100).toFixed(1)}% · 三级 {(Number(p.level3Rate) * 100).toFixed(1)}% · {p.trigger === 'confirmed' ? '确认收货触发' : '下单触发'} · {p.settlement === 'auto' ? '自动到账' : '手动结算'}</p>
+                </div>
+                <button onClick={() => deletePlanMut.mutate({ id: p.id })} className="text-gray-300 hover:text-red-400 text-[12px] transition-colors">删除</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── 团队列表 ── */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-[13px] font-bold text-black">团队管理</h3>
+          <button onClick={() => setShowTeamForm(v => !v)} className="text-[12px] font-semibold px-3 py-1 rounded-lg text-white" style={{ background: "#FF6900" }}>
+            {showTeamForm ? "收起" : "+ 新建团队"}
+          </button>
+        </div>
+        {showTeamForm && (
+          <div className="bg-orange-50 rounded-xl p-3 mb-3 space-y-2">
+            <input placeholder="团队名称（如：北京团队）" value={newTeam.name} onChange={e => setNewTeam(t => ({ ...t, name: e.target.value }))} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" />
+            <div className="relative">
+              <input placeholder="搜索根节点用户（姓名/账号）" value={userSearch} onChange={e => setUserSearch(e.target.value)} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none" />
+              {newTeam.rootUserName && <p className="text-[11px] text-orange-500 mt-1">已选：{newTeam.rootUserName}（ID: {newTeam.rootUserId}）</p>}
+              {searchResults.length > 0 && userSearch && !newTeam.rootUserId && (
+                <div className="absolute z-10 left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg mt-1 max-h-40 overflow-y-auto">
+                  {searchResults.map((u: any) => (
+                    <button key={u.id} onClick={() => { setNewTeam(t => ({ ...t, rootUserId: String(u.id), rootUserName: u.name || u.account })); setUserSearch(""); }} className="w-full text-left px-3 py-2 text-[13px] hover:bg-orange-50 border-b border-gray-50 last:border-0">
+                      {u.name || "匿名"} <span className="text-gray-400">@{u.account}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <select value={newTeam.planId} onChange={e => setNewTeam(t => ({ ...t, planId: e.target.value }))} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none">
+              <option value="">选择销售制度（可选）</option>
+              {plans.map((p: any) => <option key={p.id} value={String(p.id)}>{p.name}</option>)}
+            </select>
+            <button onClick={() => createTeamMut.mutate({ name: newTeam.name, rootUserId: Number(newTeam.rootUserId), commissionPlanId: newTeam.planId ? Number(newTeam.planId) : undefined })} disabled={!newTeam.name || !newTeam.rootUserId || createTeamMut.isPending} className="w-full py-2 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50" style={{ background: "#FF6900" }}>
+              {createTeamMut.isPending ? "创建中..." : "确认创建"}
+            </button>
+          </div>
+        )}
+        {teamsLoading ? <div className="text-center py-4 text-gray-300 text-[12px]">加载中...</div> : teams.length === 0 ? (
+          <div className="text-center py-4 text-gray-300 text-[12px]">暂无团队，点击「新建团队」开始</div>
+        ) : (
+          <div className="space-y-2">
+            {teams.map((t: any) => (
+              <div key={t.id}>
+                <div className="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2.5 cursor-pointer" onClick={() => setSelectedTeam(selectedTeam === t.id ? null : t.id)}>
+                  <div className="flex-1">
+                    <p className="text-[13px] font-semibold text-black">{t.name}</p>
+                    <p className="text-[11px] text-gray-400">根节点: {t.rootUserName || `ID ${t.rootUserId}`} · {t.memberCount ?? 0} 人 · {t.planName || "无制度"}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[13px] font-bold" style={{ color: "#FF6900" }}>¥{Number(t.totalAmount ?? 0).toFixed(0)}</p>
+                    <p className="text-[11px] text-gray-400">{t.totalOrders ?? 0} 单</p>
+                  </div>
+                  <button onClick={e => { e.stopPropagation(); deleteTeamMut.mutate({ id: t.id }); }} className="text-gray-300 hover:text-red-400 text-[12px] transition-colors ml-1">删除</button>
+                </div>
+                {/* 展开成员树 */}
+                {selectedTeam === t.id && (
+                  <div className="mt-1 ml-3 border-l-2 border-orange-100 pl-3 space-y-1">
+                    {membersLoading ? <p className="text-[12px] text-gray-300 py-2">加载成员...</p> : members.length === 0 ? (
+                      <p className="text-[12px] text-gray-300 py-2">暂无成员</p>
+                    ) : members.map((m: any) => (
+                      <div key={m.id} className="flex items-center gap-2 py-1.5">
+                        <div className="w-4 h-4 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+                          <span className="text-[9px] font-bold" style={{ color: "#FF6900" }}>{m.depth}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] font-medium text-black truncate">{m.name || "匿名"} <span className="text-gray-400">@{m.account}</span></p>
+                          <p className="text-[11px] text-gray-400">第{m.depth}层 · {m.orderCount ?? 0}单 · ¥{Number(m.totalAmount ?? 0).toFixed(0)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── 团队长视图：我的团队业绩 ─────────────────────────────────────────────────
 function AgentTeamPanel() {
   const { data: stats, isLoading: statsLoading } = mtrpc.agent.myMonthlyStats.useQuery();
@@ -929,7 +1099,7 @@ function AgentTeamPanel() {
 }
 
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
-type AdminTabKey = "orders" | "rice" | "inventory" | "warehouse" | "users" | "sales" | "team" | "commission" | "referrals";
+type AdminTabKey = "orders" | "rice" | "inventory" | "warehouse" | "users" | "sales" | "teamManage" | "team" | "commission" | "referrals";
 
 export default function UnifiedAdmin() {
   const { user, isAuthenticated } = useAuth();
@@ -973,6 +1143,7 @@ export default function UnifiedAdmin() {
     { key: "inventory", label: "库存管理" },
     { key: "users",     label: "用户管理" },
     { key: "sales",     label: "销售团队" },
+    { key: "teamManage", label: "团队管理" },
   ] : [
     // 业务员/团队长标签
     { key: "team",       label: "团队业绩" },
@@ -1030,6 +1201,7 @@ export default function UnifiedAdmin() {
         {activeTab === "warehouse" && <WarehousePanel />}
         {activeTab === "users"     && <UsersPanel />}
         {activeTab === "sales"     && <SalesPanel />}
+        {activeTab === "teamManage" && <TeamManagePanel />}
         {/* 业务员视图 */}
         {(activeTab === "team" || activeTab === "commission" || activeTab === "referrals") && <AgentTeamPanel />}
       </div>
