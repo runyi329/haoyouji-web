@@ -5,8 +5,100 @@ import { trpc } from "@/lib/trpc";
 import { mtrpc } from "./mibanTrpc";
 import { saveToken } from "@/lib/tokenStorage";
 import { toast } from "sonner";
-import { Home, BookOpen, FlaskConical, User, ChevronDown, LogOut, Settings, Briefcase } from "lucide-react";
-import CartDrawer from "./CartDrawer";
+import { Home, BookOpen, FlaskConical, User, ChevronDown, LogOut, Settings, Briefcase, QrCode, X, Copy, Check } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+
+const SITE_URL = typeof window !== "undefined" ? window.location.origin : "";
+
+// ─── 邀请二维码按钮 ──────────────────────────────────────────────────────────
+function InviteQrButton({ isAuthenticated }: { isAuthenticated: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const { data: inviteInfo } = mtrpc.agent.myInviteInfo.useQuery(
+    undefined,
+    { enabled: isAuthenticated && open }
+  );
+
+  const inviteCode = inviteInfo?.inviteCode ?? "";
+  const inviteLink = inviteCode ? `${SITE_URL}/join?ref=${inviteCode}` : `${SITE_URL}/p/proj_hzxm2t/`;
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  function copyLink() {
+    navigator.clipboard.writeText(inviteLink).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-8 h-8 rounded-full flex items-center justify-center active:opacity-70"
+        style={{ background: open ? "#FFF3E8" : "transparent" }}
+        aria-label="邀请好友"
+      >
+        <QrCode className="w-5 h-5" style={{ color: open ? "#FF6900" : "#333" }} strokeWidth={1.8} />
+      </button>
+
+      {open && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.45)" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
+        >
+          <div className="bg-white rounded-3xl px-6 py-7 w-72 flex flex-col items-center shadow-2xl relative">
+            <button
+              onClick={() => setOpen(false)}
+              className="absolute top-4 right-4 w-7 h-7 rounded-full bg-black/5 flex items-center justify-center active:opacity-70"
+            >
+              <X className="w-4 h-4 text-black/40" />
+            </button>
+
+            <div className="text-[15px] font-bold text-gray-900 mb-1">邀请好友加入米伴</div>
+            <div className="text-[12px] text-gray-400 mb-5">扫码注册，共享健康饮食</div>
+
+            {/* 二维码 */}
+            <div className="p-3 rounded-2xl border border-gray-100 bg-white shadow-sm mb-4">
+              <QRCodeSVG
+                value={inviteLink}
+                size={180}
+                level="M"
+                fgColor="#1a1a1a"
+                bgColor="#ffffff"
+              />
+            </div>
+
+            {/* 邀请码 */}
+            {inviteCode && (
+              <div className="text-[12px] text-gray-400 mb-3">
+                邀请码：<span className="font-bold text-gray-700">{inviteCode}</span>
+              </div>
+            )}
+
+            {/* 复制链接按钮 */}
+            <button
+              onClick={copyLink}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-full text-[13px] font-semibold active:opacity-80 transition-all"
+              style={{ background: copied ? "#F0FAF4" : "#FF6900", color: copied ? "#2D7D46" : "#fff" }}
+            >
+              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copied ? "已复制链接" : "复制邀请链接"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const tabItems = [
   { href: "/p/proj_hzxm2t/", label: "首页", icon: Home },
@@ -333,9 +425,9 @@ export default function NavBar() {
             <IdentitySwitcherNav />
           </div>
 
-          {/* 右侧：购物车 + 用户头像 */}
+          {/* 右侧：邀请二维码 + 用户头像 */}
           <div className="flex items-center gap-2">
-            <CartDrawer />
+            <InviteQrButton isAuthenticated={isAuthenticated} />
             <UserMenu user={user} isAuthenticated={isAuthenticated} onLogout={() => logout.mutate()} />
           </div>
         </div>
