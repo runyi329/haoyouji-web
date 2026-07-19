@@ -16,6 +16,7 @@ import MyOrders from "./MyOrders";
 import UnifiedAdmin from "./UnifiedAdmin";
 import JoinPage from "./JoinPage";
 import BrandAssets from "./BrandAssets";
+import TianguiPearDetail from "./TianguiPearDetail";
 
 const BASE = "/p/proj_hzxm2t";
 
@@ -26,6 +27,7 @@ export default function MibanApp() {
       {/* 顶部 NavBar 占位 52px，底部 Tab 占位 56px */}
       <div style={{ paddingTop: "52px", paddingBottom: "56px" }}>
         <Switch>
+          <Route path={`${BASE}/pear/tiangui`} component={TianguiPearDetail} />
           <Route path={`${BASE}/rice/:id`} component={RiceDetail} />
           <Route path={`${BASE}/rice`} component={RiceEncyclopedia} />
           <Route path={`${BASE}/encyclopedia`} component={RiceEncyclopedia} />

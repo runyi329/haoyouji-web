@@ -565,6 +565,47 @@ export default function Home() {
         </Link>
       </section>
 
+      {/* ── 季节限定 ─────────────────────────────────────── */}
+      <section className="px-5 pb-6">
+        <Link href="/p/proj_hzxm2t/pear/tiangui">
+          <div
+            className="relative overflow-hidden rounded-2xl active:scale-[0.98] transition-transform cursor-pointer"
+            style={{ background: "linear-gradient(135deg,#FFF3E0 0%,#FFE0B2 60%,#FFF8F0 100%)" }}
+          >
+            <div className="flex items-center justify-between px-5 py-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-full tracking-wide"
+                    style={{ background: "#FF6900", color: "#fff" }}
+                  >
+                    季节限定
+                  </span>
+                  <span className="text-[10px] text-orange-400 font-medium">7月 · 限时供应</span>
+                </div>
+                <div className="text-[22px] font-extrabold text-gray-900 leading-tight mb-1">天桂梨</div>
+                <div className="text-[12px] text-gray-500 mb-3">江西广丰 · 糖度 13%+ · 细嫩无渣</div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-[20px] font-extrabold" style={{ color: "#FF6900" }}>¥58</span>
+                  <span className="text-[11px] text-gray-400">起 · 顺丰冷链</span>
+                </div>
+              </div>
+              <div className="flex-shrink-0 ml-3">
+                <img
+                  src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/bxCCxBmoQFldHQma.png"
+                  alt="天桂梨"
+                  className="w-24 h-24 object-cover rounded-xl shadow-sm"
+                />
+              </div>
+            </div>
+            <div
+              className="absolute bottom-0 left-0 right-0 rounded-b-2xl"
+              style={{ height: 3, background: "linear-gradient(90deg,#FF6900,#FFB347)" }}
+            />
+          </div>
+        </Link>
+      </section>
+
       {/* ── 分割线 ───────────────────────────────────────── */}
       <div className="h-px bg-gray-100 mx-5" />
 

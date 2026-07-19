@@ -781,7 +781,7 @@ export const mibanOrderRouter = router({
     .input(z.object({
       recipeName: z.string().optional(),
       ingredients: z.array(z.object({ riceId: z.number(), name: z.string(), percentage: z.number(), colorHex: z.string(), weightJin: z.number() })),
-      totalWeightJin: z.number().min(10, "最低起订10斤"),
+      totalWeightJin: z.number().min(1, "重量不能为0"),
       totalPrice: z.number(),
       receiverName: z.string().min(1),
       receiverPhone: z.string().min(11),

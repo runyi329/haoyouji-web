@@ -3,6 +3,29 @@ import { useRoute, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, GitBranch, ArrowUpDown, Settings, BarChart2, List, ChevronDown, ChevronUp } from "lucide-react";
 
+// 北京时间辅助函数（MySQL存储的是北京时间，服务端String()后UTC值即为北京时间值）
+const getBJDateOnly_Tree = (d: any): Date => {
+  if (!d) return new Date(0);
+  const dt = new Date(d);
+  return new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()));
+};
+const getTodayBJDateOnly_Tree = (): Date => {
+  const bjNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+  return new Date(Date.UTC(bjNow.getFullYear(), bjNow.getMonth(), bjNow.getDate()));
+};
+// 格式化北京时间（直接用UTC方法）
+const fmtBJTime_Tree = (d: any, withTime = true): string => {
+  if (!d) return '';
+  const dt = new Date(d);
+  if (isNaN(dt.getTime())) return '';
+  const mo = String(dt.getUTCMonth() + 1).padStart(2, '0');
+  const da = String(dt.getUTCDate()).padStart(2, '0');
+  if (!withTime) return `${mo}/${da}`;
+  const hh = String(dt.getUTCHours()).padStart(2, '0');
+  const mi = String(dt.getUTCMinutes()).padStart(2, '0');
+  return `${mo}/${da} ${hh}:${mi}`;
+};
+
 // ===== 家族树状图弹层组件（紧凑家谱样式）=====
 type TreeUser = { id: number; name: string; invitedByUserId: number | null; payoutRatio: number };
 
@@ -182,9 +205,8 @@ export default function AfInviteTreePage() {
       if (amount <= 0) continue;
       const tradeValue = o.isGift ? amount : amount * 5.25;
       const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-      const confirmedDate = new Date(o.confirmedAt || o.createdAt);
-      const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
-      const todayDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const confirmedDay = getBJDateOnly_Tree(o.confirmedAt || o.createdAt);
+      const todayDay = getTodayBJDateOnly_Tree();
       const holdDays = Math.max(1, Math.floor((todayDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
       const fee = dailyFee * holdDays - (o.prepaidFee ?? 0);
       if (!map[uid]) map[uid] = { pending: 0, balance: Number(o.userBalance ?? 0) };
@@ -427,8 +449,7 @@ export default function AfInviteTreePage() {
                       </thead>
                       <tbody>
                         {(recentRecharges as any[]).map((r: any, i: number) => {
-                          const t = r.eventTime ? new Date(r.eventTime) : null;
-                          const dateStr = t ? `${String(t.getMonth()+1).padStart(2,'0')}/${String(t.getDate()).padStart(2,'0')} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}` : '';
+                          const dateStr = fmtBJTime_Tree(r.eventTime, true);
                           return (
                           <tr key={r.id} style={{ borderTop: i === 0 ? 'none' : '1px solid #f3f4f6' }}>
                             <td style={{ padding: '7px 8px', color: '#9CA3AF', whiteSpace: 'nowrap', borderRight: '1px solid #e5e7eb', fontSize: 11 }}>{dateStr}</td>
@@ -458,8 +479,7 @@ export default function AfInviteTreePage() {
                       </thead>
                       <tbody>
                         {(recentPendingOrders as any[]).map((r: any, i: number) => {
-                          const t = r.eventTime ? new Date(r.eventTime) : null;
-                          const dateStr = t ? `${String(t.getMonth()+1).padStart(2,'0')}/${String(t.getDate()).padStart(2,'0')} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}` : '';
+                          const dateStr = fmtBJTime_Tree(r.eventTime, true);
                           return (
                           <tr key={r.id} style={{ borderTop: i === 0 ? 'none' : '1px solid #f3f4f6' }}>
                             <td style={{ padding: '7px 8px', color: '#9CA3AF', whiteSpace: 'nowrap', borderRight: '1px solid #e5e7eb', fontSize: 11 }}>{dateStr}</td>
@@ -490,8 +510,7 @@ export default function AfInviteTreePage() {
                       </thead>
                       <tbody>
                         {(recentCompletedOrders as any[]).map((r: any, i: number) => {
-                          const t = r.eventTime ? new Date(r.eventTime) : null;
-                          const dateStr = t ? `${String(t.getMonth()+1).padStart(2,'0')}/${String(t.getDate()).padStart(2,'0')}` : '';
+                          const dateStr = fmtBJTime_Tree(r.eventTime, false);
                           return (
                           <tr key={r.id} style={{ borderTop: i === 0 ? 'none' : '1px solid #f3f4f6' }}>
                             <td style={{ padding: '7px 8px', color: '#9CA3AF', whiteSpace: 'nowrap', borderRight: '1px solid #e5e7eb', fontSize: 11 }}>{dateStr}</td>
@@ -522,8 +541,7 @@ export default function AfInviteTreePage() {
                       </thead>
                       <tbody>
                         {(recentGiftOrders as any[]).map((r: any, i: number) => {
-                          const t = r.eventTime ? new Date(r.eventTime) : null;
-                          const dateStr = t ? `${String(t.getMonth()+1).padStart(2,'0')}/${String(t.getDate()).padStart(2,'0')} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}` : '';
+                          const dateStr = fmtBJTime_Tree(r.eventTime, true);
                           return (
                           <tr key={r.id} style={{ borderTop: i === 0 ? 'none' : '1px solid #f3f4f6' }}>
                             <td style={{ padding: '7px 8px', color: '#9CA3AF', whiteSpace: 'nowrap', borderRight: '1px solid #e5e7eb', fontSize: 11 }}>{dateStr}</td>
@@ -757,10 +775,11 @@ export default function AfInviteTreePage() {
                     ) : (
                       <div className="space-y-2">
                         {treeOrders.map((o: any) => {
+                          // 订单编号生成（用UTC方法，MySQL存的北京时间在UTC环境下UTC值=北京时间值）
                           const orderDate = new Date(o.createdAt);
-                          const yy = String(orderDate.getFullYear()).slice(2);
-                          const mm = String(orderDate.getMonth() + 1).padStart(2, '0');
-                          const dd = String(orderDate.getDate()).padStart(2, '0');
+                          const yy = String(orderDate.getUTCFullYear()).slice(2);
+                          const mm = String(orderDate.getUTCMonth() + 1).padStart(2, '0');
+                          const dd = String(orderDate.getUTCDate()).padStart(2, '0');
                           const orderNo = `AF${yy}${mm}${dd}${String(o.id).padStart(6, '0')}`;
                           return (
                             <div key={o.id} className="rounded-lg overflow-hidden" style={{ border: '1px solid #E5E7EB', backgroundColor: '#FAFAFA' }}>
@@ -807,8 +826,10 @@ export default function AfInviteTreePage() {
                                   <div style={{ fontSize: 9, color: '#9CA3AF' }}>天数</div>
                                   <div style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>{(() => {
                                     if (!o.createdAt) return '—';
-                                    const buyD = new Date(o.createdAt); buyD.setHours(0,0,0,0);
-                                    const endD = (o.status === 'completed' && o.sellConfirmedAt) ? new Date(o.sellConfirmedAt) : new Date(); endD.setHours(0,0,0,0);
+                                    const buyD = getBJDateOnly_Tree(o.createdAt);
+                                    const endD = (o.status === 'completed' && o.sellConfirmedAt)
+                                      ? getBJDateOnly_Tree(o.sellConfirmedAt)
+                                      : getTodayBJDateOnly_Tree();
                                     const d = Math.floor((endD.getTime() - buyD.getTime()) / 86400000) + 1;
                                     return `${d > 0 ? d : 1}天`;
                                   })()}</div>
@@ -842,7 +863,7 @@ export default function AfInviteTreePage() {
                                 ) : (
                                   <div>
                                     <div style={{ fontSize: 9, color: '#9CA3AF' }}>下单时间</div>
-                                    <div style={{ fontSize: 10, color: '#6B7280' }}>{o.createdAt ? new Date(o.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}</div>
+                                    <div style={{ fontSize: 10, color: '#6B7280' }}>{o.createdAt ? fmtBJTime_Tree(o.createdAt, true) : '—'}</div>
                                   </div>
                                 )}
                               </div>

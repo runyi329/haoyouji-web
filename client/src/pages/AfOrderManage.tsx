@@ -65,10 +65,23 @@ interface ProfitCalculation {
   dailyFee: number;
 }
 
+// 北京时间辅助函数（MySQL存储的是北京时间，服务端String()后UTC值即为北京时间值）
+// 获取北京时间的日期零点（用于天数计算）
+const getBJDateOnly = (d: any): Date => {
+  if (!d) return new Date(0);
+  const dt = new Date(d);
+  // MySQL DATETIME存的是北京时间，服务端UTC环境下String()后UTC值=北京时间值
+  // 所以直接用UTC方法取年月日即可
+  return new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()));
+};
+const getTodayBJDateOnly = (): Date => {
+  const bjNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+  return new Date(Date.UTC(bjNow.getFullYear(), bjNow.getMonth(), bjNow.getDate()));
+};
+
 // 管理费明细弹窗组件
 function FeeDetailModal({ orders, onClose }: { orders: any[], onClose: () => void }) {
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayStart = getTodayBJDateOnly();
 
   const feeItems = orders
     .filter((o: any) => o.side === 'buy' && o.status === 'completed')
@@ -77,13 +90,11 @@ function FeeDetailModal({ orders, onClose }: { orders: any[], onClose: () => voi
       const tradeValue = o.isGift ? amount : amount * 5.25;
       const dailyFee = tradeValue / 0.75 * 0.12 / 365;
       // 管理费从下单时间（created_at）开始计算，修改价格等操作不影响管理费
-      const confirmedDate = new Date(o.createdAt);
-      const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
+      const confirmedDay = getBJDateOnly(o.createdAt);
       let holdDays: number;
       let feeType: string;
       if (o.sellStatus === 'sold' && o.sellConfirmedAt) {
-        const sellDate = new Date(o.sellConfirmedAt);
-        const sellDay = new Date(sellDate.getFullYear(), sellDate.getMonth(), sellDate.getDate());
+        const sellDay = getBJDateOnly(o.sellConfirmedAt);
         holdDays = Math.max(1, Math.floor((sellDay.getTime() - confirmedDay.getTime()) / (1000*60*60*24)) + 1);
         feeType = '已结清';
       } else {
@@ -92,9 +103,9 @@ function FeeDetailModal({ orders, onClose }: { orders: any[], onClose: () => voi
       }
       const totalFee = dailyFee * holdDays;
       const orderDate = new Date(o.createdAt);
-      const yy = String(orderDate.getFullYear()).slice(2);
-      const mm = String(orderDate.getMonth()+1).padStart(2,'0');
-      const dd = String(orderDate.getDate()).padStart(2,'0');
+      const yy = String(orderDate.getUTCFullYear()).slice(2);
+      const mm = String(orderDate.getUTCMonth()+1).padStart(2,'0');
+      const dd = String(orderDate.getUTCDate()).padStart(2,'0');
       const orderNo = `AF${yy}${mm}${dd}${String(o.id).padStart(6,'0')}`;
       return { ...o, orderNo, holdDays, dailyFee, totalFee, feeType, tradeValue };
     })
@@ -175,22 +186,16 @@ function FeeRow({ order, ledgerId, viewAsUserId }: { order: any; ledgerId: numbe
   const amount = parseFloat(order.amount);
   const tradeValue = order.isGift ? amount : amount * 5.25;
   const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-  const startDate = new Date(order.createdAt);
-  const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-  const nowBJ = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
-  nowBJ.setHours(0,0,0,0);
-  let endDay: Date;
-  if (order.sellStatus === 'sold' && order.sellConfirmedAt) {
-    const sellDate = new Date(new Date(order.sellConfirmedAt).toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
-    endDay = new Date(sellDate.getFullYear(), sellDate.getMonth(), sellDate.getDate());
-  } else {
-    endDay = nowBJ;
-  }
+  const startDay = getBJDateOnly(order.createdAt);
+  const endDay = (order.sellStatus === 'sold' && order.sellConfirmedAt)
+    ? getBJDateOnly(order.sellConfirmedAt)
+    : getTodayBJDateOnly();
   const holdDays = Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
   const totalFee = dailyFee * holdDays;
   const isPending = order.status === 'pending';
   const isSold = order.sellStatus === 'sold';
-  const fmtDay = (d: Date) => `${d.getMonth()+1}/${d.getDate()}`;
+  // fmtDay: UTC日期即为北京时间日期
+  const fmtDay = (d: Date) => `${d.getUTCMonth()+1}/${d.getUTCDate()}`;
   const prepaidFee = order.prepaidFee || 0;
   const remainingFee = Math.max(0, totalFee - prepaidFee);
   return (
@@ -359,17 +364,11 @@ export default function AfOrderManage() {
     const tradeValue = isGiftOrder ? principal : principal * 5.25;
     const dailyFee = tradeValue / 0.75 * 0.12 / 365;
     // 开始日期：从下单时间（createdAt）算起，撤单则作废，成交后累计不重置
-    const confirmedDate = new Date(order.createdAt);
-    const confirmedDay = new Date(confirmedDate.getFullYear(), confirmedDate.getMonth(), confirmedDate.getDate());
-    // 结束日期：已卖出用 sellConfirmedAt，其他状态用今天
-    let endDay: Date;
-    if (order.sellStatus === 'sold' && order.sellConfirmedAt) {
-      const sellDate = new Date(order.sellConfirmedAt);
-      endDay = new Date(sellDate.getFullYear(), sellDate.getMonth(), sellDate.getDate());
-    } else {
-      endDay = new Date();
-      endDay.setHours(0, 0, 0, 0);
-    }
+    const confirmedDay = getBJDateOnly(order.createdAt);
+    // 结束日期：已卖出用 sellConfirmedAt，其他状态用北京时间今天
+    const endDay = (order.sellStatus === 'sold' && order.sellConfirmedAt)
+      ? getBJDateOnly(order.sellConfirmedAt)
+      : getTodayBJDateOnly();
     const holdDays = Math.max(1, Math.floor((endDay.getTime() - confirmedDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
     const managementFee = dailyFee * holdDays;
     const actualRefund = Math.max(0, totalRefund - managementFee);
@@ -471,18 +470,18 @@ export default function AfOrderManage() {
     const s = typeof d === 'string' ? d : new Date(d).toISOString();
     return s.replace('T', ' ').substring(0, 19);
   };
-  // 日期格式化：显示 YY-MM-DD HH:mm:ss（北京时间，用于开仓时间）
+  // 日期格式化：显示 YY-MM-DD HH:mm:ss（北京时间）
+  // MySQL存的是北京时间，服务端UTC环境String()后UTC值=北京时间值，直接用UTC方法即可
   const formatDate = (d: any) => {
     if (!d) return "-";
-    const dt = typeof d === 'string' ? new Date(d) : new Date(d);
-    // 转换为北京时间（UTC+8）
-    const bjTime = new Date(dt.getTime() + 8 * 60 * 60 * 1000);
-    const yy = String(bjTime.getUTCFullYear()).slice(2);
-    const mm = String(bjTime.getUTCMonth() + 1).padStart(2, '0');
-    const dd = String(bjTime.getUTCDate()).padStart(2, '0');
-    const hh = String(bjTime.getUTCHours()).padStart(2, '0');
-    const min = String(bjTime.getUTCMinutes()).padStart(2, '0');
-    const ss = String(bjTime.getUTCSeconds()).padStart(2, '0');
+    const dt = new Date(d);
+    if (isNaN(dt.getTime())) return "-";
+    const yy = String(dt.getUTCFullYear()).slice(2);
+    const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(dt.getUTCDate()).padStart(2, '0');
+    const hh = String(dt.getUTCHours()).padStart(2, '0');
+    const min = String(dt.getUTCMinutes()).padStart(2, '0');
+    const ss = String(dt.getUTCSeconds()).padStart(2, '0');
     return `${yy}-${mm}-${dd} ${hh}:${min}:${ss}`;
   };
 
@@ -546,8 +545,7 @@ export default function AfOrderManage() {
               const coinHolderSets: Record<string, Set<string>> = {}; // 每个币种的持仓人员
               const weightedPriceSum: Record<string, number> = {}; // 加权价格之和（价格×数量）
               const totalFeeUsdt: Record<string, number> = {}; // 每个币种累计管理费（USDT）
-              const todayBJ = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
-              const todayStart = new Date(todayBJ.getFullYear(), todayBJ.getMonth(), todayBJ.getDate());
+              const todayStart = getTodayBJDateOnly();
               holdingOrders.forEach((o: any) => {
                 if (!o.coin) return;
                 const qty = parseFloat(o.quantity) || 0;
@@ -572,8 +570,7 @@ export default function AfOrderManage() {
                 if (amount > 0) {
                   const tradeValue = o.isGift ? amount : amount * 5.25;
                   const dailyFee = tradeValue / 0.75 * 0.12 / 365;
-                  const createdDate = o.createdAt ? new Date(o.createdAt) : new Date();
-                  const createdDay = new Date(createdDate.getFullYear(), createdDate.getMonth(), createdDate.getDate());
+                  const createdDay = getBJDateOnly(o.createdAt);
                   const holdDays = Math.max(1, Math.floor((todayStart.getTime() - createdDay.getTime()) / (1000 * 60 * 60 * 24)) + 1);
                   totalFeeUsdt[o.coin] = (totalFeeUsdt[o.coin] || 0) + dailyFee * holdDays;
                 }
@@ -1518,8 +1515,9 @@ export default function AfOrderManage() {
               // - 持仓中（status=completed）：按登记时间 confirmedAt 分组
               // - 委托中（status=pending）：按开仓时间 createdAt 分组
               // 注：赠单嵌套在正单的 giftOrders 里，不单独分组
+              // 北京时间日期分组key（直接用UTC方法，因为MySQL存的就是北京时间）
               const toDateKey = (d: Date | null) => d
-                ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+                ? `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`
                 : '未知日期';
               const getOrderDateKey = (order: any): string => {
                 // 持仓中（completed）：用登记时间 confirmedAt
@@ -1696,11 +1694,11 @@ export default function AfOrderManage() {
                 }
               }
 
-              // 生成订单编号
+              // 生成订单编号（用UTC方法，因为MySQL存的北京时间在UTC环境下UTC值=北京时间值）
               const orderDate = new Date(order.createdAt);
-              const yy = String(orderDate.getFullYear()).slice(2);
-              const mm = String(orderDate.getMonth() + 1).padStart(2, '0');
-              const dd = String(orderDate.getDate()).padStart(2, '0');
+              const yy = String(orderDate.getUTCFullYear()).slice(2);
+              const mm = String(orderDate.getUTCMonth() + 1).padStart(2, '0');
+              const dd = String(orderDate.getUTCDate()).padStart(2, '0');
               const orderNo = `AF${yy}${mm}${dd}${String(order.id).padStart(6, '0')}`;
 
               return (
@@ -1992,12 +1990,12 @@ export default function AfOrderManage() {
                       const lowAt = (order as any).allTimeLowAt;
                       const lowDate = lowAt ? new Date(lowAt) : null;
                       const fmtLow = lowDate ? (() => {
-                        const bjLow = new Date(lowDate.getTime() + 8 * 60 * 60 * 1000);
-                        const mo = bjLow.getUTCMonth() + 1;
-                        const da = bjLow.getUTCDate();
-                        const hh = String(bjLow.getUTCHours()).padStart(2, '0');
-                        const mi = String(bjLow.getUTCMinutes()).padStart(2, '0');
-                        const sc = String(bjLow.getUTCSeconds()).padStart(2, '0');
+                        // MySQL存的北京时间，直接用UTC方法即可，不需要+8小时
+                        const mo = lowDate.getUTCMonth() + 1;
+                        const da = lowDate.getUTCDate();
+                        const hh = String(lowDate.getUTCHours()).padStart(2, '0');
+                        const mi = String(lowDate.getUTCMinutes()).padStart(2, '0');
+                        const sc = String(lowDate.getUTCSeconds()).padStart(2, '0');
                         return `${mo}/${da} ${hh}:${mi}:${sc}`;
                       })() : '';
                       return (
@@ -2184,7 +2182,8 @@ export default function AfOrderManage() {
                                 {tierHistory && tierHistory.length > 0 ? (
                                   tierHistory.map((t: any) => {
                                     const dt = new Date(t.triggeredAt);
-                                    const dateStr = `${dt.getMonth()+1}月${dt.getDate()}日 ${dt.getHours().toString().padStart(2,'0')}:${dt.getMinutes().toString().padStart(2,'0')}`;
+                                    // 直接用UTC方法，MySQL存的北京时间在UTC环境下UTC值=北京时间值
+                                    const dateStr = `${dt.getUTCMonth()+1}月${dt.getUTCDate()}日 ${dt.getUTCHours().toString().padStart(2,'0')}:${dt.getUTCMinutes().toString().padStart(2,'0')}`;
                                     return (
                                       <div key={t.tier} className="flex justify-between text-[10px] text-amber-700 py-0.5">
                                         <span>D{t.tier}档触发 · 第{t.scanCount}次扫描 · {dateStr}</span>
@@ -2198,7 +2197,7 @@ export default function AfOrderManage() {
                                 {lowestScan ? (
                                   <div className="mt-1.5 pt-1.5 border-t border-amber-200">
                                     <div className="flex justify-between text-[10px] text-gray-500 py-0.5">
-                                      <span>历史最低扫描价 · 第{lowestScan.scanCount}次扫描 · {(() => { const dt = new Date(lowestScan.scannedAt); return `${dt.getMonth()+1}月${dt.getDate()}日 ${dt.getHours().toString().padStart(2,'0')}:${dt.getMinutes().toString().padStart(2,'0')}`; })()}</span>
+                                      <span>历史最低扫描价 · 第{lowestScan.scanCount}次扫描 · {(() => { const dt = new Date(lowestScan.scannedAt); return `${dt.getUTCMonth()+1}月${dt.getUTCDate()}日 ${dt.getUTCHours().toString().padStart(2,'0')}:${dt.getUTCMinutes().toString().padStart(2,'0')}`; })()}</span>
                                       <span className="font-semibold text-gray-700">{parseFloat(lowestScan.price).toLocaleString()} USDT</span>
                                     </div>
                                   </div>
@@ -2232,12 +2231,12 @@ export default function AfOrderManage() {
                               </div>
                               <div className="text-[10px] text-red-400">
                                 {(() => {
+                                  // 直接用UTC方法，MySQL存的北京时间在UTC环境下UTC值=北京时间值
                                   const startDate = new Date(order.createdAt);
-                                  // 已卖出用 sellConfirmedAt，其他用今天
                                   const endDate = (order.sellStatus === 'sold' && order.sellConfirmedAt)
                                     ? new Date(order.sellConfirmedAt)
-                                    : new Date();
-                                  const fmt = (d: Date) => `${d.getMonth()+1}月${d.getDate()}日`;
+                                    : new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
+                                  const fmt = (d: Date) => `${d.getUTCMonth()+1}月${d.getUTCDate()}日`;
                                   return `计费区间：${fmt(startDate)} → ${fmt(endDate)}（共${calc.holdDays}天，${calc.dailyFee.toFixed(4)} USDT/天）`;
                                 })()}
                               </div>
