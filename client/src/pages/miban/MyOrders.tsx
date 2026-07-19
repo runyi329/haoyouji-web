@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { useState, useEffect } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { trpc } from "@/lib/trpc";
 import { mtrpc } from "./mibanTrpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -623,10 +624,6 @@ function TeamTab() {
   const { data: commissions, isLoading: commissionsLoading } = mtrpc.agent.myCommissions.useQuery();
   const { data: referrals, isLoading: referralsLoading } = mtrpc.agent.myReferrals.useQuery();
   const { data: inviteInfo } = mtrpc.invite.getMyInviteInfo.useQuery();
-  const { data: qrCodeData } = mtrpc.invite.generateQRCode.useQuery(
-    { inviteCode: inviteInfo?.inviteCode ?? "" },
-    { enabled: !!inviteInfo?.inviteCode }
-  );
 
   const inviteLink = inviteInfo?.inviteLink ?? (inviteInfo?.inviteCode ? `https://jiangyuchen.cn/login?invite=${inviteInfo.inviteCode}` : "");
 
@@ -667,10 +664,12 @@ function TeamTab() {
       {/* 邀请码 */}
       <div className="bg-white border border-gray-100 rounded-2xl p-4">
         <div className="flex items-start gap-4 mb-3">
-          {/* 二维码 */}
+          {/* 二维码 - 前端直接生成，无需后端请求 */}
           <div className="flex-shrink-0">
-            {qrCodeData?.qrCodeDataUrl ? (
-              <img src={qrCodeData.qrCodeDataUrl} alt="邀请二维码" className="w-20 h-20 rounded-xl border border-gray-100" />
+            {inviteLink ? (
+              <div className="w-20 h-20 rounded-xl border border-gray-100 overflow-hidden p-1 bg-white">
+                <QRCodeSVG value={inviteLink} size={68} level="M" />
+              </div>
             ) : (
               <div className="w-20 h-20 rounded-xl bg-gray-100 flex items-center justify-center">
                 <Skeleton className="w-20 h-20 rounded-xl" />

@@ -195,15 +195,32 @@ async function getAgentCommissions(agentUserId: number) {
 }
 
 async function getAgentMonthlyStats(agentUserId: number) {
-  const db = await getDb();
-  if (!db) return { totalCommission: 0, pendingCommission: 0, settledCommission: 0, orderCount: 0 };
+  const conn = await getDbConnection();
+  if (!conn) return { totalCommission: 0, pendingCommission: 0, settledCommission: 0, orderCount: 0 };
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const rows = await db.select().from(mibanCommissions).where(and(eq(mibanCommissions.agentId, agentUserId), sql`${mibanCommissions.createdAt} >= ${monthStart}`));
-  const total = rows.reduce((s, r) => s + Number(r.commissionAmount), 0);
-  const pending = rows.filter(r => r.status === "pending").reduce((s, r) => s + Number(r.commissionAmount), 0);
-  const settled = rows.filter(r => r.status === "settled").reduce((s, r) => s + Number(r.commissionAmount), 0);
-  return { totalCommission: total, pendingCommission: pending, settledCommission: settled, orderCount: rows.length };
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 19).replace('T', ' ');
+  try {
+    const [rows] = await (conn as any).execute(
+      `SELECT
+        COALESCE(SUM(commission_amount), 0) AS total,
+        COALESCE(SUM(CASE WHEN status='pending' THEN commission_amount ELSE 0 END), 0) AS pending,
+        COALESCE(SUM(CASE WHEN status='settled' THEN commission_amount ELSE 0 END), 0) AS settled,
+        COUNT(*) AS orderCount
+       FROM miban_commissions
+       WHERE agent_id = ? AND created_at >= ?`,
+      [agentUserId, monthStart]
+    ) as any[];
+    const r = Array.isArray(rows) ? rows[0] : rows;
+    return {
+      totalCommission: parseFloat(r?.total ?? '0'),
+      pendingCommission: parseFloat(r?.pending ?? '0'),
+      settledCommission: parseFloat(r?.settled ?? '0'),
+      orderCount: Number(r?.orderCount ?? 0),
+    };
+  } catch (e) {
+    console.warn('[miban] getAgentMonthlyStats failed:', (e as any)?.message);
+    return { totalCommission: 0, pendingCommission: 0, settledCommission: 0, orderCount: 0 };
+  }
 }
 
 async function getAllAgentStats() {

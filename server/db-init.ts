@@ -1119,6 +1119,32 @@ export async function initDatabase() {
       }
     }
 
+    // ─── 米伴佣金记录表 ────────────────────────────────────────────────────────────────────
+    {
+      const dbConnComm = await getDbConnection();
+      if (dbConnComm) {
+        await dbConnComm.execute(`
+          CREATE TABLE IF NOT EXISTS miban_commissions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            agent_id INT NOT NULL COMMENT '业务员用户ID',
+            order_id INT NOT NULL COMMENT '关联订单ID',
+            buyer_id INT NOT NULL COMMENT '购买者用户ID',
+            order_amount DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '订单金额(元)',
+            commission_rate DECIMAL(5,4) NOT NULL DEFAULT 0.05 COMMENT '佣金比例',
+            commission_amount DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT '佣金金额(元)',
+            status ENUM('pending','settled','cancelled') NOT NULL DEFAULT 'pending' COMMENT '状态',
+            note VARCHAR(256) DEFAULT NULL COMMENT '备注',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_agent_id (agent_id),
+            INDEX idx_order_id (order_id),
+            INDEX idx_agent_created (agent_id, created_at)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='米伴业务员佣金记录'
+        `);
+        console.log('[DB Init] ✅ miban_commissions table ready');
+      }
+    }
+
     console.log("[DB Init] Database initialization completed successfully");
   } catch (error) {
     console.error("[DB Init] Error during database initialization:", error);
