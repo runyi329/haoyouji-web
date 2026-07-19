@@ -23,7 +23,8 @@ function AnimatedNumber({ value }: { value: number }) {
   );
 }
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Check, Minus, Plus, ChevronRight, ChevronLeft, Shuffle, Sliders, Share2, X, Download, Sparkles, Loader2, ShoppingCart, Wallet, MapPin, Phone, User } from "lucide-react";
+import { Check, Minus, Plus, ChevronRight, ChevronLeft, Shuffle, Sliders, Share2, X, Download, Sparkles, Loader2, ShoppingCart, Wallet, MapPin, Phone, User, BookMarked } from "lucide-react";
+import AddressBook from "./AddressBook";
 import { toast } from "sonner";
 import html2canvas from "html2canvas";
 import { trpc } from "@/lib/trpc";
@@ -267,6 +268,10 @@ export default function DiyWorkshop() {
   const [receiverPhone, setReceiverPhone] = useState("");
   const [receiverAddress, setReceiverAddress] = useState("");
   const [userNote, setUserNote] = useState("");
+  const [showAddressPicker, setShowAddressPicker] = useState(false);
+  const [saveToBook, setSaveToBook] = useState(false);
+  const { data: savedAddresses } = mtrpc.address.list.useQuery(undefined, { enabled: isAuthenticated });
+  const addAddressMut = mtrpc.address.add.useMutation();
   const [aiNeed, setAiNeed] = useState("");
   const [aiResult, setAiResult] = useState<{ recommended: string[]; reason: string } | null>(null);
   // 余额查询
@@ -1062,7 +1067,33 @@ export default function DiyWorkshop() {
             </div>
             {/* 收货信息 */}
             <div className="space-y-3 mb-5">
-              <p className="text-[13px] font-semibold text-black">收货信息</p>
+              <div className="flex items-center justify-between">
+                <p className="text-[13px] font-semibold text-black">收货信息</p>
+                {savedAddresses && savedAddresses.length > 0 && (
+                  <button
+                    onClick={() => setShowAddressPicker(v => !v)}
+                    className="flex items-center gap-1 text-[12px] font-medium active:opacity-70 transition-opacity"
+                    style={{ color: "#FF6900" }}
+                  >
+                    <BookMarked className="w-3.5 h-3.5" />
+                    从地址簿选择
+                  </button>
+                )}
+              </div>
+              {/* 地址簿选择面板 */}
+              {showAddressPicker && (
+                <div className="border border-orange-200 rounded-2xl p-3 bg-orange-50/30">
+                  <AddressBook
+                    mode="select"
+                    onSelect={(addr) => {
+                      setReceiverName(addr.name);
+                      setReceiverPhone(addr.phone);
+                      setReceiverAddress(`${addr.province}${addr.city}${addr.district ?? ""}${addr.detail}`);
+                      setShowAddressPicker(false);
+                    }}
+                  />
+                </div>
+              )}
               <div className="flex items-center gap-3 border border-gray-200 rounded-xl px-4 py-3">
                 <User size={15} className="text-gray-400 flex-shrink-0" />
                 <input
@@ -1093,6 +1124,27 @@ export default function DiyWorkshop() {
                 rows={2}
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-[14px] text-black outline-none bg-transparent resize-none"
               />
+              {/* 保存到地址簿开关 */}
+              <button
+                onClick={() => setSaveToBook(v => !v)}
+                className="flex items-center gap-2.5 w-full px-4 py-3 rounded-xl transition-all active:scale-[0.99]"
+                style={{
+                  background: saveToBook ? "rgba(255,105,0,0.08)" : "#F8F8F8",
+                  border: saveToBook ? "1.5px solid rgba(255,105,0,0.3)" : "1.5px solid transparent",
+                }}
+              >
+                <div
+                  className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all"
+                  style={{ borderColor: saveToBook ? "#FF6900" : "#DDD", background: saveToBook ? "#FF6900" : "transparent" }}
+                >
+                  {saveToBook && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-[13px] font-semibold" style={{ color: saveToBook ? "#FF6900" : "#333" }}>保存到地址簿</p>
+                  <p className="text-[11px] text-gray-400">下次下单可直接选用，无需重新填写</p>
+                </div>
+                <BookMarked className="w-4 h-4 flex-shrink-0" style={{ color: saveToBook ? "#FF6900" : "#CCC" }} />
+              </button>
             </div>
             {/* 下单按钮 */}
             <button
@@ -1108,6 +1160,19 @@ export default function DiyWorkshop() {
                   const numId = id.startsWith("db_") ? parseInt(id.slice(3), 10) : 0;
                   return { riceId: numId, name: rice.name, percentage: pct, colorHex: rice.color, weightJin: w };
                 });
+                // 如果勾选了保存到地址簿，在下单同时保存地址
+                if (saveToBook && receiverName.trim() && receiverPhone.trim() && receiverAddress.trim()) {
+                  addAddressMut.mutate({
+                    name: receiverName.trim(),
+                    phone: receiverPhone.trim(),
+                    province: "",
+                    city: "",
+                    district: "",
+                    detail: receiverAddress.trim(),
+                    label: "其他",
+                    isDefault: false,
+                  });
+                }
                 createOrder.mutate({
                   recipeName: recipeName || "我的专属米",
                   ingredients,

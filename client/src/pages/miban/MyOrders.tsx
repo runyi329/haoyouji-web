@@ -3,15 +3,16 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { mtrpc } from "./mibanTrpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
   Package, BookOpen, Heart, Wallet, Users,
   ShoppingCart, Trash2, User, ChevronRight,
   TrendingUp, Copy, ArrowUpRight, ArrowDownLeft,
-  Settings
+  Settings, MapPin, Truck, ExternalLink
 } from "lucide-react";
+import AddressBook from "./AddressBook";
 
 // ─── 状态映射 ─────────────────────────────────────────────────────────────────
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -48,37 +49,163 @@ function OrdersTab() {
   );
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {(orders ?? []).map((order: any) => {
         const status = STATUS_MAP[order.status] ?? { label: order.status, color: "text-gray-500 bg-gray-100" };
         const ingredients: any[] = (() => { try { return JSON.parse(order.ingredients ?? "[]"); } catch { return []; } })();
+        const hasTracking = !!(order.trackingNo || order.trackingNumber);
+        const trackingNo = order.trackingNo || order.trackingNumber || "";
+        const trackingCompany = order.trackingCompany || "";
+        // 快递100公司代码映射
+        const companyCodeMap: Record<string, string> = {
+          "顺丰": "shunfeng", "SF": "shunfeng", "圆通": "yuantong", "中通": "zhongtong",
+          "韵达": "yunda", "申通": "shentong", "邮政": "youzhengguonei", "EMS": "ems",
+          "京东": "jd", "极兔": "jtexpress", "菜鸟": "cainiao",
+        };
+        const companyCode = Object.entries(companyCodeMap).find(([k]) => trackingCompany.includes(k))?.[1] ?? "";
+        const trackingUrl = companyCode
+          ? `https://www.kuaidi100.com/chaxun?com=${companyCode}&nu=${trackingNo}`
+          : `https://www.kuaidi100.com/chaxun?nu=${trackingNo}`;
+
         return (
-          <div key={order.id} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-            <div className="flex items-start justify-between gap-3 mb-3">
-              <div>
-                <h3 className="text-[15px] font-bold text-black">{order.recipeName || "定制米"}</h3>
-                <p className="text-[11px] text-gray-400 mt-0.5">
-                  订单 #{order.id} · {new Date(order.createdAt).toLocaleDateString("zh-CN")}
-                </p>
-              </div>
-              <span className={`px-2.5 py-1 rounded-full text-[11px] font-medium flex-shrink-0 ${status.color}`}>
+          <div key={order.id} className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
+            {/* ── 顶部状态栏 ── */}
+            <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+              <span className="text-[11px] text-gray-400 font-mono">订单号 {order.orderNo || `#${order.id}`}</span>
+              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${status.color}`}>
                 {status.label}
               </span>
             </div>
-            {ingredients.length > 0 && (
-              <div className="h-2 rounded-full overflow-hidden flex mb-2">
-                {ingredients.map((ing: any, i: number) => (
-                  <div key={i} style={{ width: `${(ing.weightJin / order.totalWeightJin) * 100}%`, backgroundColor: ing.colorHex ?? "#C8A87A" }} />
-                ))}
+
+            <div className="p-4 space-y-3">
+              {/* ── 配方名称 + 下单时间 ── */}
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-[15px] font-bold text-black leading-tight">{order.recipeName || "定制米"}</h3>
+                  <p className="text-[11px] text-gray-400 mt-0.5">
+                    {new Date(order.createdAt).toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-[18px] font-bold leading-tight" style={{ color: "#FF6900" }}>¥{Number(order.totalPrice).toFixed(2)}</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">{order.totalWeightJin} 斤</p>
+                </div>
               </div>
-            )}
-            <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
-              <span className="text-[12px] text-gray-400">{order.totalWeightJin} 斤</span>
-              <span className="text-[15px] font-bold" style={{ color: "#FF6900" }}>¥{Number(order.totalPrice).toFixed(2)}</span>
+
+              {/* ── 米种配比可视化 ── */}
+              {ingredients.length > 0 && (() => {
+                // 计算每种米的百分比
+                const totalW = ingredients.reduce((s: number, ing: any) => s + (ing.weightJin || 0), 0) || Number(order.totalWeightJin) || 1;
+                const slices = ingredients.map((ing: any) => ({
+                  ...ing,
+                  pct: ing.percentage ?? Math.round((ing.weightJin / totalW) * 100),
+                  color: ing.colorHex ?? "#C8A87A",
+                }));
+                // 生成SVG饼图路径
+                const R = 44; const cx = 52; const cy = 52;
+                let cumAngle = -Math.PI / 2;
+                const paths = slices.map((s: any) => {
+                  const angle = (s.pct / 100) * 2 * Math.PI;
+                  const x1 = cx + R * Math.cos(cumAngle);
+                  const y1 = cy + R * Math.sin(cumAngle);
+                  cumAngle += angle;
+                  const x2 = cx + R * Math.cos(cumAngle);
+                  const y2 = cy + R * Math.sin(cumAngle);
+                  const large = angle > Math.PI ? 1 : 0;
+                  const d = slices.length === 1
+                    ? `M ${cx} ${cy} m -${R} 0 a ${R} ${R} 0 1 1 ${R * 2} 0 a ${R} ${R} 0 1 1 -${R * 2} 0`
+                    : `M ${cx} ${cy} L ${x1} ${y1} A ${R} ${R} 0 ${large} 1 ${x2} ${y2} Z`;
+                  return { ...s, d };
+                });
+                return (
+                  <div className="flex items-center gap-4">
+                    {/* SVG 饼图 */}
+                    <div className="flex-shrink-0">
+                      <svg width="104" height="104" viewBox="0 0 104 104">
+                        {paths.map((p: any, i: number) => (
+                          <path key={i} d={p.d} fill={p.color} stroke="white" strokeWidth="1.5" />
+                        ))}
+                        {/* 中心白圆（甜甜圈效果） */}
+                        <circle cx={cx} cy={cy} r="22" fill="white" />
+                        <text x={cx} y={cy - 5} textAnchor="middle" fontSize="9" fill="#999" fontFamily="system-ui">总计</text>
+                        <text x={cx} y={cy + 8} textAnchor="middle" fontSize="11" fontWeight="bold" fill="#333" fontFamily="system-ui">{totalW}斤</text>
+                      </svg>
+                    </div>
+                    {/* 图例列表 */}
+                    <div className="flex-1 space-y-1.5 min-w-0">
+                      {slices.map((s: any, i: number) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: s.color }} />
+                          <span className="text-[12px] text-gray-700 flex-1 truncate">{s.name}</span>
+                          <span className="text-[11px] text-gray-400 flex-shrink-0">{s.weightJin}斤</span>
+                          <span className="text-[11px] font-bold flex-shrink-0 w-8 text-right" style={{ color: s.color }}>{s.pct}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── 收货信息 ── */}
+              {order.receiverName && (
+                <div className="bg-gray-50 rounded-xl p-3 space-y-1">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <MapPin className="w-3.5 h-3.5 text-gray-400" />
+                    <span className="text-[11px] font-semibold text-gray-500">收货信息</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[13px] font-semibold text-gray-800">{order.receiverName}</span>
+                    <span className="text-[12px] text-gray-500">{order.receiverPhone}</span>
+                  </div>
+                  <p className="text-[12px] text-gray-500 leading-relaxed">{order.receiverAddress}</p>
+                </div>
+              )}
+
+              {/* ── 备注 ── */}
+              {order.userNote && (
+                <div className="flex items-start gap-1.5">
+                  <span className="text-[11px] text-gray-400 flex-shrink-0 mt-0.5">备注：</span>
+                  <span className="text-[12px] text-gray-600">{order.userNote}</span>
+                </div>
+              )}
+
+              {/* ── 物流信息 ── */}
+              {hasTracking ? (
+                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                  <div className="flex items-center gap-1.5">
+                    <Truck className="w-3.5 h-3.5 text-green-500" />
+                    <div>
+                      <span className="text-[12px] font-medium text-gray-700">{trackingCompany || "快递"}</span>
+                      <span className="text-[11px] text-gray-400 ml-1.5 font-mono">{trackingNo}</span>
+                    </div>
+                  </div>
+                  <a
+                    href={trackingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white active:scale-95 transition-transform"
+                    style={{ background: "#FF6900" }}
+                  >
+                    查物流 <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              ) : (
+                order.status !== "cancelled" && order.status !== "delivered" && (
+                  <div className="flex items-center gap-1.5 pt-2 border-t border-gray-100">
+                    <Truck className="w-3.5 h-3.5 text-gray-300" />
+                    <span className="text-[11px] text-gray-400">暂无物流信息，配货完成后将更新</span>
+                  </div>
+                )
+              )}
+
+              {/* ── 管理员备注 ── */}
+              {order.adminNote && (
+                <div className="bg-amber-50 rounded-xl px-3 py-2 flex items-start gap-1.5">
+                  <span className="text-[11px] text-amber-600 font-semibold flex-shrink-0">客服备注：</span>
+                  <span className="text-[11px] text-amber-700">{order.adminNote}</span>
+                </div>
+              )}
             </div>
-            {order.trackingNumber && (
-              <p className="text-[11px] text-gray-400 mt-2">快递单号：{order.trackingNumber}</p>
-            )}
           </div>
         );
       })}
@@ -259,34 +386,54 @@ function FavoritesTab() {
 // ─── 我的钱包 Tab ─────────────────────────────────────────────────────────────
 function WalletTab() {
   const { isAuthenticated } = useAuth();
-  const { data: balance, isLoading: balanceLoading } = trpc.recharge.getBalance.useQuery(undefined, { enabled: isAuthenticated });
+  const { data: usdtBalance, isLoading: balanceLoading } = trpc.recharge.getBalance.useQuery(undefined, { enabled: isAuthenticated });
+  const { data: cnyBalance, isLoading: cnyLoading } = trpc.recharge.getCnyBalance.useQuery(undefined, { enabled: isAuthenticated });
   const { data: history, isLoading: historyLoading } = trpc.recharge.getBalanceHistory.useQuery({ limit: 20 }, { enabled: isAuthenticated });
+  const { data: cryptoPrices } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 10000, staleTime: 5000 });
 
-  const balanceNum = Number(balance?.balance ?? 0);
+  const usdtNum = Number(usdtBalance ?? 0);
+  const cnyNum = Number(cnyBalance ?? 0);
+  const usdtRate = cryptoPrices?.usdtCnyRate ?? 7.3;
+  const totalCny = cnyNum + usdtNum * usdtRate;
+  const isLoading = balanceLoading || cnyLoading;
 
   return (
     <div className="space-y-4">
       {/* 余额卡片 */}
       <div className="rounded-2xl p-5 text-white" style={{ background: "linear-gradient(135deg, #FF6900 0%, #FF8C00 100%)" }}>
-        <p className="text-[12px] text-white/70 mb-1">钱包余额</p>
-        {balanceLoading ? (
+        <p className="text-[12px] text-white/70 mb-1">钱包可用余额</p>
+        {isLoading ? (
           <div className="h-10 w-32 bg-white/20 rounded-xl animate-pulse" />
         ) : (
-          <p className="text-[36px] font-bold leading-none">
-            ¥<span>{balanceNum.toFixed(2)}</span>
-          </p>
+          <>
+            <p className="text-[36px] font-bold leading-none">
+              ¥<span>{totalCny.toFixed(2)}</span>
+            </p>
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              {usdtNum > 0 && (
+                <span className="text-[11px] text-white/80 bg-white/15 rounded-full px-2 py-0.5">
+                  {usdtNum.toFixed(4)} USDT × {usdtRate.toFixed(2)} = ¥{(usdtNum * usdtRate).toFixed(2)}
+                </span>
+              )}
+              {cnyNum > 0 && (
+                <span className="text-[11px] text-white/80 bg-white/15 rounded-full px-2 py-0.5">
+                  CNY ¥{cnyNum.toFixed(2)}
+                </span>
+              )}
+            </div>
+          </>
         )}
-        <p className="text-[11px] text-white/60 mt-2">脉动网共享钱包 · 可用于米伴下单</p>
+        <p className="text-[11px] text-white/50 mt-2">脉动网共享钱包 · 实时汇率折算 · 可用于米伴下单</p>
       </div>
 
       {/* 操作按钮 */}
       <div className="grid grid-cols-2 gap-3">
-        <Link href="/recharge">
+        <Link href={`/recharge?returnTo=${encodeURIComponent('/p/proj_hzxm2t/my-orders?tab=wallet')}`}>
           <button className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-[#FF6900] text-[13px] font-semibold active:scale-95 transition-transform" style={{ color: "#FF6900" }}>
             <ArrowDownLeft className="w-4 h-4" />充值
           </button>
         </Link>
-        <Link href="/recharge">
+        <Link href={`/recharge?returnTo=${encodeURIComponent('/p/proj_hzxm2t/my-orders?tab=wallet')}`}>
           <button className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gray-50 text-gray-600 text-[13px] font-semibold active:scale-95 transition-transform border border-gray-100">
             <ArrowUpRight className="w-4 h-4" />提现
           </button>
@@ -488,13 +635,15 @@ function TeamTab() {
 }
 
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
-type TabKey = "orders" | "recipes" | "favorites" | "wallet" | "team";
+type TabKey = "orders" | "recipes" | "favorites" | "wallet" | "team" | "address";
 
 
 export default function MyOrders() {
   const { isAuthenticated, user } = useAuth();
   const [, setLocation] = useLocation();
-  const [activeTab, setActiveTab] = useState<TabKey>("orders");
+  const search = useSearch();
+  const initialTab = (new URLSearchParams(search).get('tab') as TabKey) || 'orders';
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
   // 是否显示团队业绩 Tab（业务员/团队长/管理员）
   const showTeamTab = (user as any)?.mibanRole === "parent" || (user as any)?.username === "jiang";
   const isAdmin = (user as any)?.username === "jiang";
@@ -524,6 +673,7 @@ export default function MyOrders() {
     { key: "favorites", label: "收藏",   icon: <Heart className="w-4 h-4" /> },
     { key: "wallet",    label: "钱包",   icon: <Wallet className="w-4 h-4" /> },
     ...(showTeamTab ? [{ key: "team" as TabKey, label: "团队", icon: <Users className="w-4 h-4" /> }] : []),
+    { key: "address" as TabKey, label: "地址", icon: <MapPin className="w-4 h-4" /> },
   ];
 
   return (
@@ -556,6 +706,7 @@ export default function MyOrders() {
         {activeTab === "favorites" && <FavoritesTab />}
         {activeTab === "wallet"    && <WalletTab />}
         {activeTab === "team"      && showTeamTab && <TeamTab />}
+        {activeTab === "address"   && <AddressBook mode="manage" />}
       </div>
     </div>
   );

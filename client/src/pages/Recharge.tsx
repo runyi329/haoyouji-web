@@ -19,9 +19,12 @@ export default function Recharge({ hideHeader = false, hideBalance = false, them
   const fromLedger = searchParams.get('from') === 'ledger';
   const fromLedgerId = searchParams.get('ledgerId');
   const viewAsUserId = searchParams.get('viewAs');
+  const returnTo = searchParams.get('returnTo');
   const handleBack = () => {
     if (isYaban && onClose) { onClose(); return; }
-    if (fromLedger && fromLedgerId) {
+    if (returnTo) {
+      setLocation(decodeURIComponent(returnTo));
+    } else if (fromLedger && fromLedgerId) {
       setLocation(`/ledger/${fromLedgerId}${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`);
     } else {
       window.history.back();

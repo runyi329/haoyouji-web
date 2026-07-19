@@ -1627,16 +1627,26 @@ export async function deleteFeeRule(id: number): Promise<{ success: boolean }> {
 export async function getUserCnyBalance(userId: number): Promise<number> {
   const conn = await getDbConnection();
   if (!conn) return 0;
-  const [rows] = await conn.execute(
-    `SELECT
-       (SELECT COALESCE(balance_cny, 0) FROM users WHERE id = ?) AS baseCny,
-       (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ? AND note LIKE '[CNY]%') AS manualCny`,
-    [userId, userId]
+  // 尝试读取 users.balance_cny（新数据库有此字段），失败则降级为 0
+  let baseCny = 0;
+  try {
+    const [baseRows] = await conn.execute(
+      `SELECT COALESCE(balance_cny, 0) AS baseCny FROM users WHERE id = ?`,
+      [userId]
+    ) as any;
+    const baseRow = Array.isArray(baseRows) ? baseRows[0] : baseRows;
+    baseCny = parseFloat(baseRow?.baseCny?.toString() || '0');
+  } catch (_e) {
+    // balance_cny 字段不存在，忽略
+  }
+  // 查询 af_manual_balances 中 [CNY] 记录
+  const [manualRows] = await conn.execute(
+    `SELECT COALESCE(SUM(amount), 0) AS manualCny FROM af_manual_balances WHERE user_id = ? AND note LIKE '[CNY]%'`,
+    [userId]
   ) as any;
-  const row = Array.isArray(rows) ? rows[0] : rows;
-  const base = parseFloat(row?.baseCny?.toString() || '0');
-  const manual = parseFloat(row?.manualCny?.toString() || '0');
-  return base + manual;
+  const manualRow = Array.isArray(manualRows) ? manualRows[0] : manualRows;
+  const manual = parseFloat(manualRow?.manualCny?.toString() || '0');
+  return baseCny + manual;
 }
 
 /** 获取用户 CNY 流水记录（af_manual_balances WHERE note LIKE '[CNY]%'） */

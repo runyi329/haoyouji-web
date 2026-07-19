@@ -1,5 +1,5 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
-import { mibanRiceRouter, mibanPresetRouter, mibanHealthRouter, mibanDiyRouter, mibanRecipeRouter, mibanOrderRouter, mibanInviteRouter, mibanAgentRouter, mibanAdminUserRouter, mibanAdminCommissionRouter, mibanCartRouter, savedRecipesRouter, mibanImpersonateRouter } from "./miban";
+import { mibanRiceRouter, mibanPresetRouter, mibanHealthRouter, mibanDiyRouter, mibanRecipeRouter, mibanOrderRouter, mibanInviteRouter, mibanAgentRouter, mibanAdminUserRouter, mibanAdminCommissionRouter, mibanCartRouter, savedRecipesRouter, mibanImpersonateRouter, mibanInventoryRouter, mibanAddressRouter } from "./miban";
 import { createHmac } from "crypto";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -27335,6 +27335,8 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
   adminCommission: mibanAdminCommissionRouter,
   cart: mibanCartRouter,
   savedRecipes: savedRecipesRouter,
+  inventory: mibanInventoryRouter,
+  address: mibanAddressRouter,
   mibanImpersonate: router({
     // 获取全部可切换账号列表（三个账号完全互切）
     switchList: protectedProcedure.query(async ({ ctx }) => {

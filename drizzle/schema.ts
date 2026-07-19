@@ -2324,7 +2324,7 @@ export const mibanOrders = mysqlTable("miban_orders", {
   }>>().notNull(),
   totalWeightJin: decimal("totalWeightJin", { precision: 8, scale: 1 }).notNull(),
   totalPrice: decimal("totalPrice", { precision: 10, scale: 2 }).notNull(),
-  status: mysqlEnum("miban_order_status", ["pending", "confirmed", "packing", "shipped", "delivered", "cancelled"]).default("pending").notNull(),
+  status: mysqlEnum("status", ["pending", "confirmed", "packing", "shipped", "delivered", "cancelled"]).default("pending").notNull(),
   receiverName: varchar("receiverName", { length: 64 }),
   receiverPhone: varchar("receiverPhone", { length: 20 }),
   receiverAddress: text("receiverAddress"),

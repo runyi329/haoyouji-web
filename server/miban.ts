@@ -112,8 +112,14 @@ async function deleteUserRecipe(id: number, userId: number) {
 async function createOrder(data: typeof mibanOrders.$inferInsert) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  const result = await db.insert(mibanOrders).values(data);
-  return (result[0] as any).insertId as number;
+  try {
+    console.log('[Miban] createOrder data:', JSON.stringify(data));
+    const result = await db.insert(mibanOrders).values(data);
+    return (result[0] as any).insertId as number;
+  } catch (e: any) {
+    console.error('[Miban] createOrder ERROR:', e?.message);
+    throw e;
+  }
 }
 
 async function getUserOrders(userId: number) {
@@ -1077,5 +1083,233 @@ export const mibanImpersonateRouter = router({
         name: u.name || u.username || "",
       });
       return { token, userId: u.id, name: u.name, username: u.username };
+    }),
+});
+
+// ─── 库存管理路由 ─────────────────────────────────────────────────────────────
+export const mibanInventoryRouter = router({
+  // 查询所有米种的当前库存（含零库存）
+  stockList: mibanAdminProcedure.query(async () => {
+    const conn = await getDbConnection();
+    if (!conn) return [];
+    // 以 miban_rice_catalog 为基准，LEFT JOIN 库存快照
+    const [rows]: any = await (conn as any).execute(`
+      SELECT c.id AS catalogId, c.stdName AS riceName, c.category, c.colorHex,
+             COALESCE(s.stock_jin, 0) AS stockJin, c.price_per_jin AS pricePerJin
+      FROM \`miban_rice_catalog\` c
+      LEFT JOIN \`miban_inventory_stock\` s ON s.catalog_id = c.id
+      WHERE c.isActive = 1
+      ORDER BY c.sortOrder ASC, c.id ASC
+    `);
+    return (Array.isArray(rows) ? rows : []).map((r: any) => ({
+      catalogId: Number(r.catalogId),
+      riceName: String(r.riceName),
+      category: String(r.category),
+      colorHex: String(r.colorHex),
+      stockJin: parseFloat(String(r.stockJin ?? 0)),
+      pricePerJin: parseFloat(String(r.pricePerJin ?? 0)),
+    }));
+  }),
+
+  // 查询流水记录（最近200条）
+  logList: mibanAdminProcedure
+    .input(z.object({ catalogId: z.number().optional(), limit: z.number().min(1).max(500).default(100) }))
+    .query(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) return [];
+      let sql2 = `SELECT * FROM \`miban_inventory_logs\``;
+      const params: any[] = [];
+      if (input.catalogId) {
+        sql2 += ` WHERE catalog_id = ?`;
+        params.push(input.catalogId);
+      }
+      sql2 += ` ORDER BY created_at DESC LIMIT ?`;
+      params.push(input.limit);
+      const [rows]: any = await (conn as any).execute(sql2, params);
+      return (Array.isArray(rows) ? rows : []).map((r: any) => ({
+        id: Number(r.id),
+        catalogId: Number(r.catalog_id),
+        riceName: String(r.rice_name),
+        type: String(r.type) as 'in' | 'out',
+        qtyJin: parseFloat(String(r.qty_jin)),
+        costPerJin: r.cost_per_jin != null ? parseFloat(String(r.cost_per_jin)) : null,
+        note: r.note ?? null,
+        operator: r.operator ?? null,
+        createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
+      }));
+    }),
+
+  // 入库操作
+  stockIn: mibanAdminProcedure
+    .input(z.object({
+      catalogId: z.number(),
+      qtyJin: z.number().positive(),
+      costPerJin: z.number().min(0).optional(),
+      note: z.string().max(500).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+      // 获取米种名称
+      const [catRows]: any = await (conn as any).execute('SELECT stdName FROM `miban_rice_catalog` WHERE id = ?', [input.catalogId]);
+      const cat = Array.isArray(catRows) ? catRows[0] : catRows;
+      if (!cat) throw new TRPCError({ code: 'NOT_FOUND', message: '米种不存在' });
+      const operator = (ctx.user as any)?.username ?? 'admin';
+      // 写流水
+      await (conn as any).execute(
+        `INSERT INTO \`miban_inventory_logs\` (catalog_id, rice_name, type, qty_jin, cost_per_jin, note, operator) VALUES (?, ?, 'in', ?, ?, ?, ?)`,
+        [input.catalogId, cat.stdName, input.qtyJin, input.costPerJin ?? null, input.note ?? null, operator]
+      );
+      // 更新库存快照（INSERT ON DUPLICATE KEY UPDATE）
+      await (conn as any).execute(
+        `INSERT INTO \`miban_inventory_stock\` (catalog_id, rice_name, stock_jin) VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE stock_jin = stock_jin + VALUES(stock_jin), rice_name = VALUES(rice_name)`,
+        [input.catalogId, cat.stdName, input.qtyJin]
+      );
+      return { success: true };
+    }),
+
+  // 手动出库（管理员手动扣减，如损耗/盘点）
+  stockOut: mibanAdminProcedure
+    .input(z.object({
+      catalogId: z.number(),
+      qtyJin: z.number().positive(),
+      note: z.string().max(500).optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+      const [catRows]: any = await (conn as any).execute('SELECT stdName FROM `miban_rice_catalog` WHERE id = ?', [input.catalogId]);
+      const cat = Array.isArray(catRows) ? catRows[0] : catRows;
+      if (!cat) throw new TRPCError({ code: 'NOT_FOUND', message: '米种不存在' });
+      // 检查库存是否足够
+      const [stockRows]: any = await (conn as any).execute('SELECT stock_jin FROM `miban_inventory_stock` WHERE catalog_id = ?', [input.catalogId]);
+      const stock = Array.isArray(stockRows) ? stockRows[0] : stockRows;
+      const current = parseFloat(String(stock?.stock_jin ?? 0));
+      if (current < input.qtyJin) throw new TRPCError({ code: 'BAD_REQUEST', message: `库存不足，当前库存 ${current} 斤` });
+      const operator = (ctx.user as any)?.username ?? 'admin';
+      await (conn as any).execute(
+        `INSERT INTO \`miban_inventory_logs\` (catalog_id, rice_name, type, qty_jin, note, operator) VALUES (?, ?, 'out', ?, ?, ?)`,
+        [input.catalogId, cat.stdName, input.qtyJin, input.note ?? null, operator]
+      );
+      await (conn as any).execute(
+        `UPDATE \`miban_inventory_stock\` SET stock_jin = GREATEST(0, stock_jin - ?) WHERE catalog_id = ?`,
+        [input.qtyJin, input.catalogId]
+      );
+      return { success: true };
+    }),
+
+  // 删除流水记录（仅管理员）
+  logDelete: mibanAdminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+      // 先查出该记录，反向修正库存
+      const [logRows]: any = await (conn as any).execute('SELECT * FROM `miban_inventory_logs` WHERE id = ?', [input.id]);
+      const log = Array.isArray(logRows) ? logRows[0] : logRows;
+      if (!log) throw new TRPCError({ code: 'NOT_FOUND' });
+      const delta = log.type === 'in' ? -parseFloat(String(log.qty_jin)) : parseFloat(String(log.qty_jin));
+      await (conn as any).execute(
+        `UPDATE \`miban_inventory_stock\` SET stock_jin = GREATEST(0, stock_jin + ?) WHERE catalog_id = ?`,
+        [delta, log.catalog_id]
+      );
+      await (conn as any).execute('DELETE FROM `miban_inventory_logs` WHERE id = ?', [input.id]);
+      return { success: true };
+    }),
+});
+
+// ─── 收货地址路由 ─────────────────────────────────────────────────────────────
+export const mibanAddressRouter = router({
+
+  // 查询当前用户的地址列表
+  list: protectedProcedure
+    .query(async ({ ctx }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+      const userId = (ctx.user as any)?.openId ?? (ctx.user as any)?.id;
+      const [rows]: any = await (conn as any).execute(
+        'SELECT * FROM `miban_addresses` WHERE user_id = ? ORDER BY is_default DESC, created_at DESC',
+        [userId]
+      );
+      return (Array.isArray(rows) ? rows : []) as any[];
+    }),
+
+  // 新增地址
+  add: protectedProcedure
+    .input(z.object({
+      name: z.string().min(1).max(50),
+      phone: z.string().min(7).max(20),
+      province: z.string().min(1).max(30),
+      city: z.string().min(1).max(30),
+      district: z.string().max(30).optional(),
+      detail: z.string().min(1).max(200),
+      label: z.string().max(20).optional(),
+      isDefault: z.boolean().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+      const userId = (ctx.user as any)?.openId ?? (ctx.user as any)?.id;
+      if (input.isDefault) {
+        await (conn as any).execute('UPDATE `miban_addresses` SET is_default = 0 WHERE user_id = ?', [userId]);
+      }
+      await (conn as any).execute(
+        `INSERT INTO \`miban_addresses\` (user_id, name, phone, province, city, district, detail, label, is_default)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [userId, input.name, input.phone, input.province, input.city, input.district ?? '', input.detail, input.label ?? '家', input.isDefault ? 1 : 0]
+      );
+      return { success: true };
+    }),
+
+  // 更新地址
+  update: protectedProcedure
+    .input(z.object({
+      id: z.number(),
+      name: z.string().min(1).max(50),
+      phone: z.string().min(7).max(20),
+      province: z.string().min(1).max(30),
+      city: z.string().min(1).max(30),
+      district: z.string().max(30).optional(),
+      detail: z.string().min(1).max(200),
+      label: z.string().max(20).optional(),
+      isDefault: z.boolean().optional(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+      const userId = (ctx.user as any)?.openId ?? (ctx.user as any)?.id;
+      if (input.isDefault) {
+        await (conn as any).execute('UPDATE `miban_addresses` SET is_default = 0 WHERE user_id = ?', [userId]);
+      }
+      await (conn as any).execute(
+        `UPDATE \`miban_addresses\` SET name=?, phone=?, province=?, city=?, district=?, detail=?, label=?, is_default=?
+         WHERE id=? AND user_id=?`,
+        [input.name, input.phone, input.province, input.city, input.district ?? '', input.detail, input.label ?? '家', input.isDefault ? 1 : 0, input.id, userId]
+      );
+      return { success: true };
+    }),
+
+  // 删除地址
+  delete: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+      const userId = (ctx.user as any)?.openId ?? (ctx.user as any)?.id;
+      await (conn as any).execute('DELETE FROM `miban_addresses` WHERE id=? AND user_id=?', [input.id, userId]);
+      return { success: true };
+    }),
+
+  // 设为默认地址
+  setDefault: protectedProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+      const userId = (ctx.user as any)?.openId ?? (ctx.user as any)?.id;
+      await (conn as any).execute('UPDATE `miban_addresses` SET is_default = 0 WHERE user_id = ?', [userId]);
+      await (conn as any).execute('UPDATE `miban_addresses` SET is_default = 1 WHERE id=? AND user_id=?', [input.id, userId]);
+      return { success: true };
     }),
 });

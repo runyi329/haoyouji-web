@@ -6,6 +6,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import InventoryPanel from "./InventoryPanel";
 import {
   Package, Wheat, Users, BarChart3, Truck, Loader2,
   ChevronLeft, Settings, TrendingUp, Warehouse, Copy,
@@ -156,6 +157,51 @@ function CatalogPanel() {
   const [formData, setFormData] = useState<CatalogForm>(emptyForm());
   const [filterCat, setFilterCat] = useState<string>('全部');
   const [search, setSearch] = useState('');
+  // 批量编辑模式
+  const [batchMode, setBatchMode] = useState(false);
+  const [batchField, setBatchField] = useState<'pricePerJin' | 'origin' | 'category'>('pricePerJin');
+  const [batchEdits, setBatchEdits] = useState<Record<number, string>>({});
+  const [batchSaving, setBatchSaving] = useState(false);
+
+  function enterBatchMode(field: typeof batchField) {
+    setBatchField(field);
+    const init: Record<number, string> = {};
+    (catalog ?? []).forEach((c: any) => {
+      if (field === 'pricePerJin') init[c.id] = c.pricePerJin != null ? String(c.pricePerJin) : '';
+      else if (field === 'origin') init[c.id] = c.origin ?? '';
+      else if (field === 'category') init[c.id] = c.category ?? '';
+    });
+    setBatchEdits(init);
+    setBatchMode(true);
+    setShowForm(false);
+  }
+
+  async function saveBatch() {
+    setBatchSaving(true);
+    const items = catalog ?? [];
+    let count = 0;
+    for (const item of items) {
+      const val = batchEdits[item.id];
+      if (val === undefined) continue;
+      const current = batchField === 'pricePerJin' ? (item.pricePerJin != null ? String(item.pricePerJin) : '') : (item[batchField] ?? '');
+      if (val === current) continue;
+      try {
+        await upsertMutation.mutateAsync({
+          id: item.id,
+          stdName: item.stdName,
+          category: batchField === 'category' ? val : item.category,
+          origin: batchField === 'origin' ? (val || undefined) : (item.origin || undefined),
+          pricePerJin: batchField === 'pricePerJin' ? (val ? parseFloat(val) : undefined) : (item.pricePerJin ?? undefined),
+        });
+        count++;
+      } catch {}
+    }
+    setBatchSaving(false);
+    setBatchMode(false);
+    setBatchEdits({});
+    toast.success(`已批量更新 ${count} 条`);
+    refetch();
+  }
 
 
   // 已入库 catalogId 集合
@@ -257,9 +303,42 @@ function CatalogPanel() {
       </div>
       <div className="flex items-center justify-between mb-3">
         <span className="text-[12px] text-gray-400">仓库共 {filtered.length} 种</span>
-        <button onClick={() => { setFormData(emptyForm()); setShowForm(true); }}
-          className="text-[12px] px-3 py-1.5 rounded-xl text-white font-semibold active:scale-95"
-          style={{ background: '#FF6900' }}>+ 新增米种</button>
+        <div className="flex items-center gap-2">
+          {!batchMode ? (
+            <>
+              <div className="relative">
+                <select
+                  onChange={e => { if (e.target.value) enterBatchMode(e.target.value as any); e.target.value = ''; }}
+                  defaultValue=""
+                  className="text-[11px] pl-2 pr-6 py-1.5 rounded-xl border border-gray-200 bg-white text-gray-600 focus:outline-none appearance-none cursor-pointer"
+                >
+                  <option value="" disabled>批量编辑</option>
+                  <option value="pricePerJin">批量改价格</option>
+                  <option value="origin">批量改产地</option>
+                  <option value="category">批量改分类</option>
+                </select>
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none text-[10px]">▾</span>
+              </div>
+              <button onClick={() => { setFormData(emptyForm()); setShowForm(true); }}
+                className="text-[12px] px-3 py-1.5 rounded-xl text-white font-semibold active:scale-95"
+                style={{ background: '#FF6900' }}>+ 新增</button>
+            </>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-orange-500 font-medium">批量改{batchField === 'pricePerJin' ? '价格' : batchField === 'origin' ? '产地' : '分类'}</span>
+              <button onClick={saveBatch} disabled={batchSaving}
+                className="text-[12px] px-3 py-1.5 rounded-xl text-white font-semibold active:scale-95 flex items-center gap-1"
+                style={{ background: '#FF6900' }}>
+                {batchSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                保存
+              </button>
+              <button onClick={() => { setBatchMode(false); setBatchEdits({}); }}
+                className="text-[12px] px-3 py-1.5 rounded-xl text-gray-500 bg-gray-100 font-semibold active:scale-95">
+                取消
+              </button>
+            </div>
+          )}
+        </div>
       </div>
       {/* 编辑表单 */}
       {showForm && (
@@ -349,16 +428,13 @@ function CatalogPanel() {
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-[13px] font-bold text-black">{item.stdName}</span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-500">{item.category}</span>
-                    {/* 营养完整度指示 */}
                     <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
                       hasNutrition ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'
                     }`}>{hasNutrition ? '营养' : '无营养'}</span>
-                    {/* 已入库标识 */}
                     {isInStore && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-500 font-medium">已入库</span>}
                     {item.gbStandard && <span className="text-[10px] text-gray-400">{item.gbStandard}</span>}
                   </div>
                   {item.origin && <div className="text-[11px] text-gray-400">产地：{item.origin}</div>}
-                  {/* 标签气泡 */}
                   {tags.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1">
                       {tags.slice(0, 4).map((t: string) => (
@@ -367,24 +443,47 @@ function CatalogPanel() {
                       {tags.length > 4 && <span className="text-[9px] text-gray-400">+{tags.length - 4}</span>}
                     </div>
                   )}
+                  {/* 批量编辑输入框 */}
+                  {batchMode && (
+                    <div className="mt-2">
+                      {batchField === 'category' ? (
+                        <select
+                          value={batchEdits[item.id] ?? ''}
+                          onChange={e => setBatchEdits(p => ({ ...p, [item.id]: e.target.value }))}
+                          className="w-full text-[12px] border border-orange-300 rounded-lg px-2 py-1.5 bg-orange-50 focus:outline-none"
+                        >
+                          {RICE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      ) : (
+                        <input
+                          type={batchField === 'pricePerJin' ? 'number' : 'text'}
+                          value={batchEdits[item.id] ?? ''}
+                          onChange={e => setBatchEdits(p => ({ ...p, [item.id]: e.target.value }))}
+                          placeholder={batchField === 'pricePerJin' ? '价格（元/斤）' : '产地'}
+                          className="w-full text-[12px] border border-orange-300 rounded-lg px-2 py-1.5 bg-orange-50 focus:outline-none"
+                        />
+                      )}
+                    </div>
+                  )}
                 </div>
                 {/* 操作按钮 */}
-                <div className="flex flex-col gap-1 flex-shrink-0">
-                  <button onClick={() => openEdit(item)}
-                    className="text-[11px] px-2 py-1 rounded-lg bg-blue-50 text-blue-600 font-medium">编辑</button>
-                  <button onClick={() => { if (confirm(`确认删除「${item.stdName}」？`)) deleteMutation.mutate({ id: item.id }); }}
-                    className="text-[11px] px-2 py-1 rounded-lg bg-red-50 text-red-500 font-medium">删除</button>
-                  {/* 排序按钮 */}
-                  <div className="flex gap-0.5">
-                    <button onClick={() => handleSort(item, 'up')} disabled={idx === 0}
-                      className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 disabled:opacity-30">↑</button>
-                    <button onClick={() => handleSort(item, 'down')} disabled={idx === filtered.length - 1}
-                      className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 disabled:opacity-30">↓</button>
+                {!batchMode && (
+                  <div className="flex flex-col gap-1 flex-shrink-0">
+                    <button onClick={() => openEdit(item)}
+                      className="text-[11px] px-2 py-1 rounded-lg bg-blue-50 text-blue-600 font-medium">编辑</button>
+                    <button onClick={() => { if (confirm(`确认删除「${item.stdName}」？`)) deleteMutation.mutate({ id: item.id }); }}
+                      className="text-[11px] px-2 py-1 rounded-lg bg-red-50 text-red-500 font-medium">删除</button>
+                    <div className="flex gap-0.5">
+                      <button onClick={() => handleSort(item, 'up')} disabled={idx === 0}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 disabled:opacity-30">↑</button>
+                      <button onClick={() => handleSort(item, 'down')} disabled={idx === filtered.length - 1}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 disabled:opacity-30">↓</button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
               {/* 价格显示 */}
-              {item.pricePerJin > 0 && (
+              {!batchMode && item.pricePerJin > 0 && (
                 <div className="mt-2 w-full text-[11px] py-1.5 rounded-xl bg-gray-50 text-gray-500 text-center">
                   参考价 ¥{Number(item.pricePerJin).toFixed(1)}/斤
                 </div>
@@ -830,7 +929,7 @@ function AgentTeamPanel() {
 }
 
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
-type AdminTabKey = "orders" | "rice" | "warehouse" | "users" | "sales" | "team" | "commission" | "referrals";
+type AdminTabKey = "orders" | "rice" | "inventory" | "warehouse" | "users" | "sales" | "team" | "commission" | "referrals";
 
 export default function UnifiedAdmin() {
   const { user, isAuthenticated } = useAuth();
@@ -871,6 +970,7 @@ export default function UnifiedAdmin() {
   const adminTabs: Array<{ key: AdminTabKey; label: string }> = isAdmin ? [
     { key: "orders",    label: "订单管理" },
     { key: "rice",      label: "米库管理" },
+    { key: "inventory", label: "库存管理" },
     { key: "users",     label: "用户管理" },
     { key: "sales",     label: "销售团队" },
   ] : [
@@ -926,6 +1026,7 @@ export default function UnifiedAdmin() {
       <div className="px-4 py-4 pb-24">
         {activeTab === "orders"    && <OrdersPanel />}
         {activeTab === "rice"      && <RicePanel />}
+        {activeTab === "inventory" && <InventoryPanel />}
         {activeTab === "warehouse" && <WarehousePanel />}
         {activeTab === "users"     && <UsersPanel />}
         {activeTab === "sales"     && <SalesPanel />}

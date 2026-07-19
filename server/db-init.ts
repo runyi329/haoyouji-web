@@ -962,6 +962,79 @@ export async function initDatabase() {
       console.log('[DB Init] ✅ miban_rice_catalog price_per_jin initialized');
     }
 
+    // ─── 库存管理表 ────────────────────────────────────────────────────────────
+    {
+      const dbConnInv = await getDbConnection();
+      if (dbConnInv) {
+        await (dbConnInv as any).execute(`
+          CREATE TABLE IF NOT EXISTS \`miban_inventory_logs\` (
+            \`id\` INT NOT NULL AUTO_INCREMENT,
+            \`catalog_id\` INT NOT NULL COMMENT '关联 miban_rice_catalog.id',
+            \`rice_name\` VARCHAR(100) NOT NULL COMMENT '米种名称（冗余）',
+            \`type\` ENUM('in','out') NOT NULL COMMENT 'in=入库 out=出库',
+            \`qty_jin\` DECIMAL(10,2) NOT NULL COMMENT '数量（斤）',
+            \`cost_per_jin\` DECIMAL(10,2) DEFAULT NULL COMMENT '入库成本价（元/斤）',
+            \`note\` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+            \`operator\` VARCHAR(100) DEFAULT NULL COMMENT '操作人',
+            \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (\`id\`),
+            KEY \`idx_inv_catalog\` (\`catalog_id\`),
+            KEY \`idx_inv_created\` (\`created_at\`)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        `);
+        await (dbConnInv as any).execute(`
+          CREATE TABLE IF NOT EXISTS \`miban_inventory_stock\` (
+            \`catalog_id\` INT NOT NULL,
+            \`rice_name\` VARCHAR(100) NOT NULL,
+            \`stock_jin\` DECIMAL(10,2) NOT NULL DEFAULT 0.00 COMMENT '当前库存（斤）',
+            \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (\`catalog_id\`)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        `);
+        console.log('[DB Init] ✅ miban_inventory tables ready');
+      }
+    }
+
+    // ─── 收货地址表 ────────────────────────────────────────────────────────────
+    {
+      const dbConnAddr = await getDbConnection();
+      if (dbConnAddr) {
+        await (dbConnAddr as any).execute(`
+          CREATE TABLE IF NOT EXISTS \`miban_addresses\` (
+            \`id\` INT NOT NULL AUTO_INCREMENT,
+            \`user_id\` VARCHAR(100) NOT NULL COMMENT '用户 open_id',
+            \`name\` VARCHAR(50) NOT NULL COMMENT '收货人姓名',
+            \`phone\` VARCHAR(20) NOT NULL COMMENT '手机号',
+            \`province\` VARCHAR(30) NOT NULL COMMENT '省',
+            \`city\` VARCHAR(30) NOT NULL COMMENT '市',
+            \`district\` VARCHAR(30) DEFAULT '' COMMENT '区/县',
+            \`detail\` VARCHAR(200) NOT NULL COMMENT '详细地址',
+            \`label\` VARCHAR(20) DEFAULT '家' COMMENT '标签：家/公司/其他',
+            \`is_default\` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否默认地址',
+            \`created_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            \`updated_at\` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (\`id\`),
+            KEY \`idx_addr_user\` (\`user_id\`)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        `);
+        console.log('[DB Init] ✅ miban_addresses table ready');
+      }
+    }
+
+    // 确保 users 表有 balance_cny / balance_usdt 字段（兼容旧部署）
+    {
+      const dbConnBal = await getDbConnection();
+      if (dbConnBal) {
+        const balanceCols = [
+          { name: 'balance_cny', def: "DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT 'CNY余额'" },
+          { name: 'balance_usdt', def: "DECIMAL(18,8) NOT NULL DEFAULT 0 COMMENT 'USDT余额'" },
+        ];
+        for (const col of balanceCols) {
+          await safeAddColumn(dbConnBal as any, 'users', col.name, col.def);
+        }
+        console.log('[DB Init] \u2705 users balance columns checked');
+      }
+    }
     console.log("[DB Init] Database initialization completed successfully");
   } catch (error) {
     console.error("[DB Init] Error during database initialization:", error);
