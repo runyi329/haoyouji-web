@@ -23,7 +23,7 @@ function AnimatedNumber({ value }: { value: number }) {
   );
 }
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Check, Minus, Plus, ChevronRight, ChevronLeft, Shuffle, Sliders, Share2, X, Download, Sparkles, Loader2, ShoppingCart, Wallet, MapPin, Phone, User, BookMarked } from "lucide-react";
+import { Check, Minus, Plus, ChevronRight, ChevronLeft, Shuffle, Sliders, Share2, X, Download, Sparkles, Loader2, ShoppingCart, Wallet, MapPin, Phone, User, BookMarked, Heart } from "lucide-react";
 import AddressBook from "./AddressBook";
 import { toast } from "sonner";
 import html2canvas from "html2canvas";
@@ -224,6 +224,10 @@ function freshnessLevel(days: number) {
 
 export default function DiyWorkshop() {
   const { isAuthenticated } = useAuth();
+  // 收藏相关 hooks（组件顶层）
+  const { data: myFavList, refetch: refetchFavs } = mtrpc.favorite.myList.useQuery(undefined, { enabled: isAuthenticated });
+  const favToggle = mtrpc.favorite.toggle.useMutation({ onSuccess: () => refetchFavs() });
+  const favoritedIds = new Set((myFavList ?? []).map((f: any) => f.productKey));
 
   // 从标准仓库动态加载米种（fallback 到硬编码 RICE_TYPES）
   const { data: catalogRows } = mtrpc.rice.catalogList.useQuery(
@@ -503,33 +507,195 @@ export default function DiyWorkshop() {
     </div>
   );
 
+  // 口味引导标签配置
+  // 每种米的功效标签、口感标签和产地/别名标签（按名称匹配）
+  type RiceMetaItem = { tags: { label: string; color: string }[]; taste: { label: string; color: string }[]; origin: string[] };
+  const RICE_META_BY_NAME: Record<string, RiceMetaItem> = {
+    "白米":   { tags: [{ label: "软糯", color: "#FF6900" }, { label: "易消化", color: "#10B981" }], taste: [{ label: "老小皆宜", color: "#374151" }, { label: "日常主食", color: "#374151" }], origin: ["东北粳米", "五常产区", "稻花香"] },
+    "黑米":   { tags: [{ label: "补肾益气", color: "#4338CA" }, { label: "抗氧化", color: "#6D28D9" }], taste: [{ label: "略硬香浓", color: "#374151" }, { label: "需提前浸泡", color: "#F59E0B" }], origin: ["云南墨江", "紫糯米", "黑珍珠"] },
+    "红米":   { tags: [{ label: "补血", color: "#EF4444" }, { label: "养颜", color: "#DB2777" }], taste: [{ label: "略硬带韧", color: "#374151" }, { label: "女性首选", color: "#F472B6" }], origin: ["赣南红米", "高铁含量", "胭脂米"] },
+    "糙米":   { tags: [{ label: "控糖", color: "#065F46" }, { label: "高纤维", color: "#065F46" }], taste: [{ label: "口感粗糙", color: "#374151" }, { label: "需多嚼", color: "#374151" }], origin: ["全谷物", "低GI", "糙粳米"] },
+    "紫米":   { tags: [{ label: "美容", color: "#7C3AED" }, { label: "补血", color: "#EF4444" }], taste: [{ label: "糯香带甜", color: "#374151" }, { label: "颜色香艳", color: "#7C3AED" }], origin: ["云南紫糯", "花青素", "接骨糯"] },
+    "小米":   { tags: [{ label: "健脾", color: "#D97706" }, { label: "养胃", color: "#D97706" }], taste: [{ label: "糯软清香", color: "#374151" }, { label: "孕妇宝宝首选", color: "#10B981" }], origin: ["山西沁州", "粟米", "谷子"] },
+    "绿豆":   { tags: [{ label: "清热", color: "#059669" }, { label: "消暑", color: "#10B981" }], taste: [{ label: "清爽解腻", color: "#374151" }, { label: "夏天必备", color: "#059669" }], origin: ["东北绿豆", "明绿豆", "植物蛋白"] },
+    "薏米":   { tags: [{ label: "祛湿", color: "#0E7490" }, { label: "美白", color: "#DB2777" }], taste: [{ label: "略硬耐嚼", color: "#374151" }, { label: "需提前浸泡", color: "#F59E0B" }], origin: ["贵州薏仁", "川谷", "苡仁"] },
+  };
+  // 辅助函数：按名称模糊匹配（支持"五常大米"匹配"白米"等）
+  const getRiceMeta = (name: string): RiceMetaItem | undefined => {
+    if (RICE_META_BY_NAME[name]) return RICE_META_BY_NAME[name];
+    const key = Object.keys(RICE_META_BY_NAME).find(k => name.includes(k) || k.includes(name));
+    return key ? RICE_META_BY_NAME[key] : undefined;
+  };
+
+  const FLAVOR_TAGS = [
+    { key: "all",    label: "全部",   ids: [] },
+    { key: "soft",   label: "软糯香甜", ids: ["white", "millet", "purple"] },
+    { key: "blood",  label: "补血养颜", ids: ["red", "black", "purple"] },
+    { key: "diet",   label: "控糖减脂", ids: ["brown", "coix", "mung"] },
+    { key: "damp",   label: "祛湿清热", ids: ["coix", "mung", "brown"] },
+    { key: "spleen", label: "健脾养胃", ids: ["millet", "white", "coix"] },
+    { key: "kids",   label: "儿童成长", ids: ["white", "millet", "mung"] },
+  ];
+  const [flavorTag, setFlavorTag] = useState("all");
+
+  const handleFlavorTag = (tag: typeof FLAVOR_TAGS[0]) => {
+    setFlavorTag(tag.key);
+    if (tag.key !== "all" && tag.ids.length > 0) {
+      // 一键选中推荐组合（不清空已有选择，而是替换为推荐组合）
+      tag.ids.forEach((id) => {
+        if (!selected.includes(id)) toggleRice(id, { stopPropagation: () => {} } as any);
+      });
+      // 取消不在推荐中的已选
+      selected.filter((id) => !tag.ids.includes(id)).forEach((id) => {
+        toggleRice(id, { stopPropagation: () => {} } as any);
+      });
+    }
+  };
+
   const renderStep1 = () => { return (
-    <div className="px-4 pt-6 pb-4">
-      <button
-        onClick={() => { setShowAiDialog(true); setAiResult(null); setAiNeed(""); }}
-        className="w-full mb-4 flex items-center justify-center gap-2 rounded-2xl py-3 bg-[#FF6900] text-white text-[14px] font-semibold active:scale-95 transition-all shadow-sm"
-      >
-        <Sparkles size={16} />
-        <span>AI 智能推荐组合</span>
-      </button>
-      <div className="grid grid-cols-2 gap-3">
-        {allRiceList.map((rice) => {
+    <div className="pb-28">
+      {/* 标签栏：AI推荐 + 功效筛选标签并排 */}
+      <div className="px-4 pt-5 mb-4">
+        <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+          {/* AI 智能推荐胶囊 */}
+          <button
+            onClick={() => { setShowAiDialog(true); setAiResult(null); setAiNeed(""); }}
+            className="flex-shrink-0 flex items-center gap-1 px-3.5 py-1.5 rounded-full text-[12px] font-semibold active:scale-95 transition-all"
+            style={{ background: "#FF6900", color: "#fff", border: "none" }}
+          >
+            <Sparkles size={12} />
+            <span>AI 推荐</span>
+          </button>
+          {/* 功效筛选标签 */}
+          {FLAVOR_TAGS.map((tag) => (
+            <button
+              key={tag.key}
+              onClick={() => handleFlavorTag(tag)}
+              className="flex-shrink-0 px-3.5 py-1.5 rounded-full text-[12px] font-medium transition-all"
+              style={{
+                background: flavorTag === tag.key ? "#1A1A1A" : "#F3F3F3",
+                color: flavorTag === tag.key ? "#fff" : "#555",
+                border: flavorTag === tag.key ? "none" : "1px solid #E8E8E8",
+              }}
+            >
+              {tag.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 米种卡片 - 瀑布流 */}
+      <div className="px-4" style={{ columns: 2, columnGap: 12 }}>
+        {allRiceList.map((rice, idx) => {
           const isSel = selected.includes(rice.id);
+          // 奇偶列高度交错，让瀑布流更自然
+          const imgSize = idx % 3 === 0 ? 110 : idx % 3 === 1 ? 90 : 100;
           return (
-            <button key={rice.id} onClick={(e) => toggleRice(rice.id, e)} className={`relative rounded-2xl p-4 text-left border-2 transition-all active:scale-95 ${isSel ? "border-[#FF6900]" : "border-gray-100"} bg-gray-50 text-black`}>
+            <button
+              key={rice.id}
+              onClick={(e) => { setFlavorTag("all"); toggleRice(rice.id, e); }}
+              className="relative text-left rounded-2xl overflow-hidden transition-all active:scale-[0.97] w-full"
+              style={{
+                display: "inline-block",
+                marginBottom: 12,
+                breakInside: "avoid",
+                border: isSel ? "2px solid #FF6900" : "2px solid transparent",
+                background: "#F8F6F3",
+                boxShadow: isSel ? "0 4px 16px rgba(255,105,0,0.18)" : "0 2px 8px rgba(0,0,0,0.07)",
+              }}
+            >
+              {/* 收藏按钮（左上角） */}
+              {isAuthenticated && (
+                <button
+                  className="absolute top-2 left-2 z-20 p-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    favToggle.mutate({ productKey: `rice_${rice.id}`, productName: rice.name, productImg: rice.img });
+                  }}
+                >
+                  <Heart
+                    size={16}
+                    strokeWidth={2}
+                    className={favoritedIds.has(`rice_${rice.id}`) ? "fill-red-500 text-red-500" : "text-gray-300"}
+                  />
+                </button>
+              )}
+              {/* 选中勾 */}
               {isSel && (
-                <div className="absolute top-3 right-3 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: "#FF6900" }}>
+                <div className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full flex items-center justify-center z-10" style={{ background: "#FF6900" }}>
                   <Check size={12} className="text-white" strokeWidth={3} />
                 </div>
               )}
-              <img src={cosImg(rice.img, 40)} alt={rice.name} className="w-10 h-10 rounded-full object-cover mb-2" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }} />
-              <div className="font-semibold text-[15px] text-black">{rice.name}</div>
-              <div className="text-[11px] mt-0.5 text-gray-400">{rice.desc}</div>
-              <div className="text-[12px] font-medium mt-1.5 text-[#FF6900]">¥{rice.price}/斤</div>
+              {/* 图片区：和卡片同色，mix-blend-mode让白色背景透明融合 */}
+              <div className="w-full flex items-center justify-center" style={{ paddingTop: 16, paddingBottom: 8, background: "#F8F6F3" }}>
+                <img
+                  src={cosImg(rice.img, 140)}
+                  alt={rice.name}
+                  className="object-contain"
+                  style={{ width: imgSize, height: imgSize, mixBlendMode: "multiply" }}
+                />
+              </div>
+              {/* 信息区 */}
+              <div className="px-3 pb-3">
+                <div className="font-bold text-[15px] text-gray-900">{rice.name}</div>
+                {/* 所有标签统一样式：透明底+细描边+直角 */}
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {[
+                    ...(getRiceMeta(rice.name)?.origin ?? []).slice(0, 2).map(o => ({ label: o, color: "#8B7355" })),
+                    ...(getRiceMeta(rice.name)?.tags ?? []).map(t => ({ label: t.label, color: t.color })),
+                    ...(getRiceMeta(rice.name)?.taste ?? []).slice(0, 1).map(t => ({ label: t.label, color: t.color })),
+                  ].map((item) => (
+                    <span key={item.label} className="text-[9px] font-semibold px-1.5 py-0.5" style={{ background: item.color + "15", color: item.color, border: `1px solid ${item.color}`, borderRadius: 3 }}>{item.label}</span>
+                  ))}
+                </div>
+                <div className="mt-2">
+                  <span className="text-[13px] font-bold" style={{ color: "#FF6900" }}>¥{rice.price}<span className="text-[10px] font-normal text-gray-400">/斤</span></span>
+                </div>
+              </div>
             </button>
           );
         })}
       </div>
+
+      {/* 底部悬浮已选摘要栏 */}
+      {selected.length > 0 && (
+        <div
+          className="fixed bottom-16 left-0 right-0 z-40 flex items-center justify-between px-5 py-3"
+          style={{
+            background: "rgba(255,255,255,0.97)",
+            backdropFilter: "blur(12px)",
+            borderTop: "1px solid #F0F0F0",
+            maxWidth: 480,
+            margin: "0 auto",
+            boxShadow: "0 -4px 20px rgba(0,0,0,0.08)",
+          }}
+        >
+          <div className="flex items-center gap-3">
+            {/* 已选米种小图标 */}
+            <div className="flex -space-x-2">
+              {allRiceList.filter(r => selected.includes(r.id)).slice(0, 4).map(r => (
+                <img key={r.id} src={cosImg(r.img, 32)} alt={r.name}
+                  className="w-7 h-7 rounded-full object-cover border-2 border-white"
+                  style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.12)" }}
+                />
+              ))}
+            </div>
+            <div>
+              <span className="text-[13px] font-bold text-gray-900">已选 {selected.length} 种</span>
+              <span className="text-[11px] text-gray-400 ml-1.5">
+                {allRiceList.filter(r => selected.includes(r.id)).map(r => r.name).join("·")}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={() => { selected.forEach(id => toggleRice(id, { stopPropagation: () => {} } as any)); }}
+            className="text-[11px] text-gray-400 px-2 py-1 rounded-lg"
+            style={{ background: "#F5F5F5" }}
+          >
+            清空
+          </button>
+        </div>
+      )}
     </div>
   );
   }
@@ -872,7 +1038,7 @@ export default function DiyWorkshop() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col">
+    <div className="min-h-screen flex flex-col" style={{ background: "#F8F6F3" }}>
       <div className="px-4 pt-4 pb-2">
         <div className="flex items-center gap-1 mb-2">
           {STEP_LABELS.map((_, i) => (

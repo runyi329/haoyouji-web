@@ -162,6 +162,13 @@ export default function MyRecipes() {
     onSuccess: () => { toast.success("已取消收藏"); refetchSaved(); },
     onError: (e) => toast.error(e.message),
   });
+  // 收藏米种
+  const { data: favRiceList, refetch: refetchFavRice } = mtrpc.favorite.myList.useQuery(undefined, { enabled: isAuthenticated });
+  const toggleFavRice = mtrpc.favorite.toggle.useMutation({
+    onSuccess: () => { refetchFavRice(); toast.success("已取消收藏"); },
+  });
+  // 只取米种收藏（productKey 以 rice_ 开头）
+  const favRices = (favRiceList ?? []).filter((f: any) => f.productKey?.startsWith("rice_"));
   const addToCart = mtrpc.cart.addBatch.useMutation({
     onSuccess: () => toast.success("已加入购物车"),
     onError: (e) => toast.error(e.message),
@@ -311,6 +318,35 @@ export default function MyRecipes() {
         {/* 收藏配方 Tab */}
         {activeTab === "saved" && (
           <>
+            {/* 收藏米种区 */}
+            {favRices.length > 0 && (
+              <div className="mb-5">
+                <h3 className="text-[13px] font-bold text-gray-500 mb-2">收藏米种</h3>
+                <div className="space-y-2">
+                  {favRices.map((item: any) => (
+                    <div key={item.id} className="bg-white rounded-2xl p-3 flex items-center gap-3 shadow-sm border border-gray-50">
+                      {item.productImg ? (
+                        <img src={item.productImg} alt={item.productName} className="w-14 h-14 rounded-xl object-contain flex-shrink-0" style={{ mixBlendMode: "multiply", background: "#F8F6F3" }} />
+                      ) : (
+                        <div className="w-14 h-14 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+                          <Heart className="w-5 h-5 text-gray-300" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] font-bold text-black truncate">{item.productName}</p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">{new Date(item.createdAt).toLocaleDateString("zh-CN")} 收藏</p>
+                      </div>
+                      <button
+                        onClick={() => toggleFavRice.mutate({ productKey: item.productKey, productName: item.productName })}
+                        className="p-1.5 text-red-400 active:text-red-600 transition-colors flex-shrink-0"
+                      >
+                        <Heart className="w-4 h-4" style={{ fill: "#FF3B30", color: "#FF3B30" }} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <p className="text-[12px] text-gray-400 mb-4">从购物车收藏的配比方案，一键加购</p>
             {savedLoading ? (
               <div className="space-y-3">
