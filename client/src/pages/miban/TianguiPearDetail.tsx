@@ -325,7 +325,7 @@ export default function TianguiPearDetail() {
       </div>
 
       {/* ── 卡片1：食用场景 + 极早熟稀缺 ── */}
-      <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-pear/pear-img-scene.jpg" alt="天桂梨食用场景" className="w-full block" loading="lazy" />
+      <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-pear/pear-img-scene.webp" alt="天桂梨食用场景" className="w-full block" loading="lazy" />
       <div className="bg-white px-5 py-5" style={{ borderBottom: "1px solid #f3f3f3" }}>
         <div className="text-xl font-extrabold text-gray-900 mb-1">极早熟稀缺·双认证</div>
         <div className="text-xs text-gray-400 mb-3">7月限定上市，全年仅20天采摘期</div>
@@ -346,7 +346,7 @@ export default function TianguiPearDetail() {
       </div>
 
       {/* ── 卡片2：整果展示 + 糖度超高 ── */}
-      <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-pear/pear-img-hero.jpg" alt="天桂梨整果" className="w-full block" loading="lazy" />
+      <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-pear/pear-img-hero.webp" alt="天桂梨整果" className="w-full block" loading="lazy" />
       <div className="bg-white px-5 py-5" style={{ borderBottom: "1px solid #f3f3f3" }}>
         <div className="text-xl font-extrabold text-gray-900 mb-1">糖度超高·细嫩无渣</div>
         <div className="text-xs text-gray-400 mb-3">可溶性固形物高13%以上，石细胞极少入口即化</div>
@@ -412,7 +412,7 @@ export default function TianguiPearDetail() {
       </div>
 
       {/* ── 卡片3：果园产地 + 产地直发 ── */}
-      <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-pear/pear-poster-orchard.jpg" alt="天桂梨果园产地" className="w-full block" loading="lazy" />
+      <img src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-pear/pear-poster-orchard.webp" alt="天桂梨果园产地" className="w-full block" loading="lazy" />
       <div className="bg-white px-5 py-5" style={{ borderBottom: "1px solid #f3f3f3" }}>
         <div className="text-xl font-extrabold text-gray-900 mb-1">产地直发·现摘现发</div>
         <div className="text-xs text-gray-400 mb-3">江西广丰核心产区，海拔300-600m，昼夜温差大</div>

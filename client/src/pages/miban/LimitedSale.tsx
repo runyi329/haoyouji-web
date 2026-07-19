@@ -45,7 +45,7 @@ export default function LimitedSale() {
     >
       {/* 大图 */}
       <img
-        src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663279996243/bxCCxBmoQFldHQma.png"
+        src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-pear/pear_main.webp"
         alt="天桂梨"
         style={{
           position: "absolute",
