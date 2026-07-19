@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-19
+// 生成时间：2026-07-20
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8469,5 +8469,14 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-19T08:53:33Z", type: "perf", cleanMessage: "修复团队页卡顿和收藏慢问题" },
     { date: "2026-07-19T09:00:04Z", type: "feat", cleanMessage: "团队管理架构 - 销售制度+多团队+人脉树+管理员Tab" },
     { date: "2026-07-19T09:10:02Z", type: "fix", cleanMessage: "销售团队-全局佣金比例备注输入框溢出容器问题" },
+    { date: "2026-07-19T11:01:40Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-19T13:15:40Z", type: "feat", cleanMessage: "完善分佣引擎 - 直级奖压缩制+分红模块+数据库字段补全" },
+    { date: "2026-07-19T13:25:12Z", type: "fix", cleanMessage: "修复分佣引擎中的隐式 any 类型错误" },
+    { date: "2026-07-19T13:43:01Z", type: "feat", cleanMessage: "用户职级体系 - 显示米农/米商/米行/米庄/米王职级标签，管理后台支持设置职级" },
+    { date: "2026-07-19T13:53:33Z", type: "feat", cleanMessage: "用户管理合并职级与角色 - 只保留职级一行，点击自动同步权限" },
+    { date: "2026-07-19T14:42:13Z", type: "feat", cleanMessage: "重构首页 - 大米竖向卡片轮播+时令上新年轻化设计+天桂梨价格动态读取" },
+    { date: "2026-07-19T15:38:12Z", type: "feat", cleanMessage: "配米Tab改为限时页，首页删时令上新，天桂梨倒计时到期自动下架" },
+    { date: "2026-07-19T15:38:51Z", type: "feat", cleanMessage: "天桂梨详情页到期自动下架，购买按钮变灰不可点" },
+    { date: "2026-07-19T15:40:54Z", type: "feat", cleanMessage: "米种选中状态改为橙色勾，卡片不再变黑" },
   ],
 };
