@@ -606,11 +606,27 @@ const ROLE_COLORS: Record<string, string> = {
   parent: "bg-blue-50 text-blue-600",
 };
 
+// 米伴职级体系
+const RANK_LEVELS = [
+  { index: 1, name: "米农", color: "bg-gray-100 text-gray-500" },
+  { index: 2, name: "米商", color: "bg-blue-50 text-blue-600" },
+  { index: 3, name: "米行", color: "bg-purple-50 text-purple-600" },
+  { index: 4, name: "米庄", color: "bg-orange-50 text-orange-600" },
+  { index: 5, name: "米王", color: "bg-yellow-50 text-yellow-600" },
+];
+function getRankInfo(rankIndex: number) {
+  return RANK_LEVELS.find(r => r.index === rankIndex) ?? RANK_LEVELS[0];
+}
+
 function UsersPanel() {
   const utils = mtrpc.useUtils();
   const { data: users, isLoading } = mtrpc.adminUser.list.useQuery();
   const setRoleMutation = mtrpc.adminUser.setRole.useMutation({
     onSuccess: () => { utils.adminUser.list.invalidate(); toast.success("角色已更新"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const setRankMutation = mtrpc.adminUser.setRank.useMutation({
+    onSuccess: () => { utils.adminUser.list.invalidate(); toast.success("职级已更新"); },
     onError: (e: any) => toast.error(e.message),
   });
   const [search, setSearch] = useState("");
@@ -681,9 +697,18 @@ function UsersPanel() {
                   <p className="text-[13px] font-bold text-black truncate">{u.name ?? "匿名用户"}</p>
                   <p className="text-[11px] text-gray-400 truncate">@{u.username}</p>
                 </div>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${ROLE_COLORS[u.mibanRole] ?? "bg-gray-100 text-gray-500"}`}>
-                  {ROLE_LABELS[u.mibanRole] ?? u.mibanRole}
-                </span>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {/* 职级标签（主要） */}
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${getRankInfo(u.mibanRankIndex ?? 1).color}`}>
+                    {getRankInfo(u.mibanRankIndex ?? 1).name}
+                  </span>
+                  {/* 角色标签（次要，仅米商/经销商才显示） */}
+                  {u.mibanRole === "parent" && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-400">
+                      经销商
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="flex items-center gap-3 mb-2 flex-wrap">
                 <div className="flex items-center gap-1">
@@ -696,8 +721,27 @@ function UsersPanel() {
                 </div>
                 <span className="text-[11px] text-gray-300 ml-auto">积分 {u.points ?? 0}</span>
               </div>
+              {/* 职级设置 */}
+              <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
+                <span className="text-[11px] text-gray-400">职级：</span>
+                {RANK_LEVELS.map(rank => (
+                  <button
+                    key={rank.index}
+                    disabled={(u.mibanRankIndex ?? 1) === rank.index || setRankMutation.isPending}
+                    onClick={() => setRankMutation.mutate({ userId: u.id, rankIndex: rank.index })}
+                    className={`text-[11px] px-2 py-0.5 rounded-lg border transition-colors ${
+                      (u.mibanRankIndex ?? 1) === rank.index
+                        ? `${rank.color} border-transparent font-medium`
+                        : "border-gray-200 text-gray-400 hover:border-orange-300 hover:text-orange-500 cursor-pointer"
+                    }`}
+                  >
+                    {rank.name}
+                  </button>
+                ))}
+              </div>
+              {/* 角色设置 */}
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[11px] text-gray-400">设为：</span>
+                <span className="text-[11px] text-gray-400">角色：</span>
                 {(["baby", "parent"] as const).map(role => (
                   <button
                     key={role}

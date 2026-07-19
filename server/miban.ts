@@ -509,6 +509,7 @@ async function getAllUsers() {
       `SELECT
         u.id, u.name, u.username, u.openId, u.role,
         u.miban_role AS mibanRole,
+        COALESCE(u.miban_rank_index, 1) AS mibanRankIndex,
         u.invite_code AS inviteCode,
         u.invite_count AS inviteCount,
         u.invited_by_user_id AS invitedByUserId,
@@ -589,6 +590,7 @@ async function getAllUsers() {
       openId: u.openId,
       role: u.role,
       mibanRole: u.mibanRole ?? 'baby',
+      mibanRankIndex: Number(u.mibanRankIndex ?? 1),
       inviteCode: u.inviteCode,
       inviteCount: u.inviteCount ?? 0,
       invitedByUserId: u.invitedByUserId,
@@ -1382,6 +1384,18 @@ export const mibanAdminUserRouter = router({
   setRole: mibanAdminProcedure
     .input(z.object({ userId: z.number(), role: z.enum(["parent", "baby"]) }))
     .mutation(({ input }) => updateUserMibanRole(input.userId, input.role)),
+  // 设置米伴职级（1=米农 2=米商 3=米行 4=米庄 5=米王）
+  setRank: mibanAdminProcedure
+    .input(z.object({ userId: z.number(), rankIndex: z.number().int().min(1).max(10) }))
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error("DB not available");
+      await (conn as any).execute(
+        `UPDATE users SET miban_rank_index = ? WHERE id = ?`,
+        [input.rankIndex, input.userId]
+      );
+      return { ok: true };
+    }),
 });
 
 export const mibanAdminCommissionRouter = router({

@@ -308,7 +308,8 @@ function LogoWithVersionSwitch() {
 
 // ─── 用户菜单（角色感知） ─────────────────────────────────────────────────────
 function UserMenu({ user, isAuthenticated, onLogout }: {
-  user: { name?: string | null; role?: string; username?: string; mibanRole?: string } | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  user: any;
   isAuthenticated: boolean;
   onLogout: () => void;
 }) {
@@ -336,9 +337,14 @@ function UserMenu({ user, isAuthenticated, onLogout }: {
 
   const username = (user as any)?.username ?? "";
   const mibanRole = (user as any)?.mibanRole ?? "baby";
+  const mibanRankIndex = (user as any)?.mibanRankIndex ?? 1;
   const isMibanAdmin = username === "jiang";
   const isMibanAgent = mibanRole === "parent";
   const initial = (user?.name ?? "我").charAt(0).toUpperCase();
+
+  // 米伴职级名称映射
+  const RANK_NAMES: Record<number, string> = { 1: "米农", 2: "米商", 3: "米行", 4: "米庄", 5: "米王" };
+  const rankName = RANK_NAMES[mibanRankIndex] ?? "米农";
 
   return (
     <div ref={ref} className="relative">
@@ -357,7 +363,7 @@ function UserMenu({ user, isAuthenticated, onLogout }: {
           <div className="px-4 py-3 border-b border-black/5">
             <p className="text-sm font-semibold text-black truncate">{user?.name ?? "用户"}</p>
             <p className="text-xs text-black/40 mt-0.5">
-              {isMibanAdmin ? "管理员" : isMibanAgent ? "米商" : "顾客"}
+              {isMibanAdmin ? "管理员" : rankName}
             </p>
           </div>
 

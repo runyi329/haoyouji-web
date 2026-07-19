@@ -962,6 +962,7 @@ export const users = mysqlTable("users", {
 	versionSwitchEnabled: tinyint('version_switch_enabled').default(0).notNull(),
 	versionSwitchScope: varchar('version_switch_scope', { length: 255 }),
 	mibanRole: mysqlEnum('miban_role', ['parent', 'baby']).default('baby').notNull(),
+	mibanRankIndex: tinyint('miban_rank_index').default(1).notNull(),
 },
 (table) => [
 	index("users_openId_unique").on(table.openId),
