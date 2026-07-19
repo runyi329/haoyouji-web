@@ -792,6 +792,38 @@ async function startServer() {
     }, 60 * 1000); // 每分钟检查一次
     console.log('[GdEntrustScan] 谷底增筹委托扫描调度器已启动（每分钟检查 52 号账本新增委托单）');
 
+    // 米伴订单自动确认收货（每小时扫描一次，将autoConfirmAt已过期且状态为shipped的订单自动改为delivered）
+    const runMibanAutoConfirm = async () => {
+      try {
+        const { getDb } = await import('../db');
+        const { mibanOrders } = await import('../../drizzle/schema');
+        const { and, eq, lte } = await import('drizzle-orm');
+        const db = await getDb();
+        if (!db) return;
+        const now = new Date();
+        const expired = await db.select({ id: mibanOrders.id, orderNo: mibanOrders.orderNo })
+          .from(mibanOrders)
+          .where(and(
+            eq(mibanOrders.status, 'shipped'),
+            lte(mibanOrders.autoConfirmAt, now)
+          ));
+        if (expired.length > 0) {
+          for (const o of expired) {
+            await db.update(mibanOrders)
+              .set({ status: 'delivered', confirmedAt: now })
+              .where(eq(mibanOrders.id, o.id));
+            console.log(`[米伴自动确认] 订单 ${o.orderNo} 已自动确认收货`);
+          }
+          console.log(`[米伴自动确认] 共处理 ${expired.length} 单`);
+        }
+      } catch (e: any) {
+        console.error('[米伴自动确认] 扫描失败:', e.message);
+      }
+    };
+    runMibanAutoConfirm(); // 启动时立即扫描一次
+    setInterval(runMibanAutoConfirm, 60 * 60 * 1000); // 每小时扫描一次
+    console.log('[米伴自动确认] 定时任务已启动（每小时扫描一次）');
+
     // 启动股票日线数据定时扫描器（每个交易日 BJT 15:30 自动增量写入 ts_daily）
     const { startStockDailyScanner } = await import('../stock-daily-scanner');
     startStockDailyScanner();

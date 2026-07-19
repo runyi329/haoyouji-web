@@ -11,6 +11,8 @@ import {
   mibanOrders,
   mibanCommissionConfig,
   mibanCommissions,
+  mibanReviews,
+  mibanFavorites,
   users,
 } from "../drizzle/schema";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
@@ -143,7 +145,15 @@ async function updateOrderStatus(
 ) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  await db.update(mibanOrders).set({ status, trackingNo, trackingCompany, adminNote }).where(eq(mibanOrders.id, id));
+  const now = new Date();
+  const extra: Record<string, any> = {};
+  // 发货时自动记录shippedAt和autoConfirmAt（30天后）
+  if (status === "shipped") {
+    const autoConfirm = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    extra.shippedAt = now;
+    extra.autoConfirmAt = autoConfirm;
+  }
+  await db.update(mibanOrders).set({ status, trackingNo, trackingCompany, adminNote, ...extra }).where(eq(mibanOrders.id, id));
 }
 
 async function getAllCommissionConfigs() {
@@ -787,6 +797,7 @@ export const mibanOrderRouter = router({
       receiverPhone: z.string().min(11),
       receiverAddress: z.string().min(5),
       userNote: z.string().optional(),
+      productImg: z.string().url().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.user!.id;
@@ -833,6 +844,7 @@ export const mibanOrderRouter = router({
         receiverPhone: input.receiverPhone,
         receiverAddress: input.receiverAddress,
         userNote: input.userNote,
+        productImg: input.productImg,
         walletDeductCny: deductCny.toString() as any,
         walletDeductUsdt: deductUsdt.toString() as any,
         usdtCnyRateAtOrder: usdtRate.toString() as any,
@@ -880,7 +892,7 @@ export const mibanOrderRouter = router({
         if (order && order.status !== "cancelled") {
           const deductCny = parseFloat(String(order.walletDeductCny ?? 0));
           const deductUsdt = parseFloat(String(order.walletDeductUsdt ?? 0));
-          const usdtRate = parseFloat(String(order.usdtCnyRateAtOrder ?? 0)) || 7.0;
+          const usdtRate = parseFloat(String(order.usdtCnyRateAtOrder ?? 0)) || 6.75;
           const orderNo = order.orderNo;
           const userId = order.userId;
 
@@ -908,6 +920,25 @@ export const mibanOrderRouter = router({
       }
 
       await updateOrderStatus(input.id, input.status, input.trackingNo, input.trackingCompany, input.adminNote);
+    }),
+
+  // 用户确认收货
+  confirmReceipt: protectedProcedure
+    .input(z.object({ orderId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const userId = ctx.user!.id;
+      const [order] = await db.select().from(mibanOrders)
+        .where(and(eq(mibanOrders.id, input.orderId), eq(mibanOrders.userId, userId)))
+        .limit(1);
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
+      if (order.status !== "shipped") throw new TRPCError({ code: "BAD_REQUEST", message: "订单状态不允许确认收货" });
+      const now = new Date();
+      await db.update(mibanOrders)
+        .set({ status: "delivered", confirmedAt: now })
+        .where(eq(mibanOrders.id, input.orderId));
+      return { success: true };
     }),
 });
 
@@ -1312,4 +1343,167 @@ export const mibanAddressRouter = router({
       await (conn as any).execute('UPDATE `miban_addresses` SET is_default = 1 WHERE id=? AND user_id=?', [input.id, userId]);
       return { success: true };
     }),
+});
+
+// ─── 米伴评价路由 ──────────────────────────────────────────────────────────────
+export const mibanReviewRouter = router({
+  // 提交评价（确认收货后才能评价，每单只能评价一次）
+  submit: protectedProcedure
+    .input(z.object({
+      orderId: z.number(),
+      rating: z.number().min(1).max(5),
+      content: z.string().max(500).optional(),
+      images: z.array(z.string()).max(6).optional(), // base64图片数组，最多6张
+      isAnonymous: z.boolean().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const userId = ctx.user!.id;
+
+      // 验证订单归属且已确认收货
+      const [order] = await db.select().from(mibanOrders)
+        .where(and(eq(mibanOrders.id, input.orderId), eq(mibanOrders.userId, userId)))
+        .limit(1);
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
+      if (order.status !== "delivered") throw new TRPCError({ code: "BAD_REQUEST", message: "请先确认收货后再评价" });
+
+      // 检查是否已评价
+      const [existing] = await db.select({ id: mibanReviews.id }).from(mibanReviews)
+        .where(eq(mibanReviews.orderId, input.orderId)).limit(1);
+      if (existing) throw new TRPCError({ code: "BAD_REQUEST", message: "该订单已评价" });
+
+      // 上传图片到COS
+      let imageUrls: string[] = [];
+      if (input.images && input.images.length > 0) {
+        const { uploadImageToCOS } = await import('./cos-upload');
+        imageUrls = await Promise.all(
+          input.images.map(imgData => uploadImageToCOS(imgData, 'miban-reviews' as any))
+        );
+      }
+
+      await db.insert(mibanReviews).values({
+        orderId: input.orderId,
+        orderNo: order.orderNo,
+        userId,
+        productKey: 'tiangui-pear',
+        rating: input.rating,
+        content: input.content ?? null,
+        images: imageUrls,
+        isAnonymous: input.isAnonymous ? 1 : 0,
+      });
+
+      return { success: true };
+    }),
+
+  // 查询商品评价列表（公开接口，无需登录）
+  list: publicProcedure
+    .input(z.object({
+      productKey: z.string().default('tiangui-pear'),
+      limit: z.number().min(1).max(50).default(20),
+      offset: z.number().min(0).default(0),
+    }))
+    .query(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) return { reviews: [], total: 0, avgRating: 0 };
+      try {
+        const [rows]: any = await (conn as any).execute(
+          `SELECT r.id, r.rating, r.content, r.images, r.is_anonymous, r.createdAt,
+                  u.name as userName
+           FROM miban_reviews r
+           LEFT JOIN users u ON u.id = r.user_id
+           WHERE r.product_key = ?
+           ORDER BY r.createdAt DESC
+           LIMIT ? OFFSET ?`,
+          [input.productKey, input.limit, input.offset]
+        );
+        const [countRows]: any = await (conn as any).execute(
+          `SELECT COUNT(*) as total, AVG(rating) as avgRating FROM miban_reviews WHERE product_key = ?`,
+          [input.productKey]
+        );
+        const total = Number(countRows?.[0]?.total ?? 0);
+        const avgRating = parseFloat(countRows?.[0]?.avgRating ?? '0') || 0;
+        const reviews = (Array.isArray(rows) ? rows : []).map((r: any) => ({
+          id: r.id,
+          rating: r.rating,
+          content: r.content ?? '',
+          images: (() => { try { return JSON.parse(r.images ?? '[]'); } catch { return []; } })(),
+          isAnonymous: r.is_anonymous === 1,
+          userName: r.is_anonymous ? '匿名用户' : (r.userName ?? '用户'),
+          createdAt: r.createdAt,
+        }));
+        return { reviews, total, avgRating: Math.round(avgRating * 10) / 10 };
+      } catch (e) {
+        console.error('[mibanReview.list]', e);
+        return { reviews: [], total: 0, avgRating: 0 };
+      }
+    }),
+
+  // 查询当前用户某订单是否已评价
+  myReview: protectedProcedure
+    .input(z.object({ orderId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const [review] = await db.select().from(mibanReviews)
+        .where(and(eq(mibanReviews.orderId, input.orderId), eq(mibanReviews.userId, ctx.user!.id)))
+        .limit(1);
+      return review ?? null;
+    }),
+});
+
+// ─── 米伴商品收藏路由 ──────────────────────────────────────────────────────────
+export const mibanFavoriteRouter = router({
+  // 切换收藏状态（收藏/取消收藏）
+  toggle: protectedProcedure
+    .input(z.object({
+      productKey: z.string(),
+      productName: z.string(),
+      productImg: z.string().optional(),
+      productUrl: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const userId = ctx.user!.id;
+      const [existing] = await db.select({ id: mibanFavorites.id })
+        .from(mibanFavorites)
+        .where(and(eq(mibanFavorites.userId, userId), eq(mibanFavorites.productKey, input.productKey)))
+        .limit(1);
+      if (existing) {
+        await db.delete(mibanFavorites).where(eq(mibanFavorites.id, existing.id));
+        return { favorited: false };
+      } else {
+        await db.insert(mibanFavorites).values({
+          userId,
+          productKey: input.productKey,
+          productName: input.productName,
+          productImg: input.productImg ?? null,
+          productUrl: input.productUrl ?? null,
+        });
+        return { favorited: true };
+      }
+    }),
+
+  // 查询当前用户是否收藏了某商品
+  isFavorited: protectedProcedure
+    .input(z.object({ productKey: z.string() }))
+    .query(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) return { favorited: false };
+      const [existing] = await db.select({ id: mibanFavorites.id })
+        .from(mibanFavorites)
+        .where(and(eq(mibanFavorites.userId, ctx.user!.id), eq(mibanFavorites.productKey, input.productKey)))
+        .limit(1);
+      return { favorited: !!existing };
+    }),
+
+  // 查询当前用户的收藏列表
+  myList: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return [];
+    return db.select().from(mibanFavorites)
+      .where(eq(mibanFavorites.userId, ctx.user!.id))
+      .orderBy(mibanFavorites.createdAt);
+  }),
 });

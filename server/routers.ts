@@ -1,5 +1,5 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
-import { mibanRiceRouter, mibanPresetRouter, mibanHealthRouter, mibanDiyRouter, mibanRecipeRouter, mibanOrderRouter, mibanInviteRouter, mibanAgentRouter, mibanAdminUserRouter, mibanAdminCommissionRouter, mibanCartRouter, savedRecipesRouter, mibanImpersonateRouter, mibanInventoryRouter, mibanAddressRouter } from "./miban";
+import { mibanRiceRouter, mibanPresetRouter, mibanHealthRouter, mibanDiyRouter, mibanRecipeRouter, mibanOrderRouter, mibanInviteRouter, mibanAgentRouter, mibanAdminUserRouter, mibanAdminCommissionRouter, mibanCartRouter, savedRecipesRouter, mibanImpersonateRouter, mibanInventoryRouter, mibanAddressRouter, mibanReviewRouter, mibanFavoriteRouter } from "./miban";
 import { createHmac } from "crypto";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -16573,7 +16573,7 @@ ${klinesSummary}
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         await db.execute(
           sql`INSERT INTO ledger_order_payments (order_id, ledger_id, amount, currency, exchange_rate, pay_date, note, period_start, period_end, created_by)
-              VALUES (${input.orderId}, ${input.ledgerId}, ${input.amount}, ${input.currency || 'U'}, ${input.exchangeRate || 7.0}, ${input.payDate}, ${input.note || ''}, ${input.periodStart || null}, ${input.periodEnd || null}, ${ctx.user.id})`
+              VALUES (${input.orderId}, ${input.ledgerId}, ${input.amount}, ${input.currency || 'U'}, ${input.exchangeRate || 6.75}, ${input.payDate}, ${input.note || ''}, ${input.periodStart || null}, ${input.periodEnd || null}, ${ctx.user.id})`
         );
         return { success: true };
       }),
@@ -21007,11 +21007,41 @@ ${klinesSummary}
   // ==================== 汇率计算器 ====================
   exchange: router({
     // 多源汇率查询：主 API 失败依次尝试备用，全部失败返回缓存
+    // USD/CNY 查询优先走 CoinGecko USDT/CNY 场外市场价（与 price-scanner 保持一致）
     getRate: (() => {
       // 进程级缓存，key = "USD_CNY"
       const _cache: Record<string, { rate: string; updatedAt: number }> = {};
 
-      // 主 API：天行数据
+      // 场外主源：CoinGecko USDT/CNY（场外市场价，无需 API Key）
+      async function fetchCoinGeckoUsdtCny(money: number): Promise<string | null> {
+        const res = await fetch(
+          'https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=cny',
+          { signal: AbortSignal.timeout(6000) }
+        );
+        const j = await res.json() as { tether?: { cny?: number } };
+        const rate = j?.tether?.cny;
+        if (typeof rate === 'number' && rate > 5 && rate < 10) {
+          return String((rate * money).toFixed(6));
+        }
+        return null;
+      }
+
+      // 场外备用：OKX C2C USDT/CNY 场外买价
+      async function fetchOkxC2cUsdtCny(money: number): Promise<string | null> {
+        const res = await fetch(
+          'https://www.okx.com/v3/c2c/tradingOrders/books?quoteCurrency=CNY&baseCurrency=USDT&side=buy&paymentMethod=all&userType=all&showTrade=false&showFollow=false&showAlreadyTraded=false&isAbleFilter=false',
+          { signal: AbortSignal.timeout(6000) }
+        );
+        const j = await res.json() as { data?: { buy?: Array<{ price: string }> } };
+        const items = j?.data?.buy ?? [];
+        if (items.length > 0) {
+          const rate = parseFloat(items[0]?.price ?? '0');
+          if (rate > 5 && rate < 10) return String((rate * money).toFixed(6));
+        }
+        return null;
+      }
+
+      // 天行数据（已有 API Key，小额免费）
       async function fetchTianapi(from: string, to: string, money: number): Promise<string | null> {
         const key = '3878a89bed4728b65cc7d8dc0a644c07';
         const p = new URLSearchParams({ key, fromcoin: from, tocoin: to, money: String(money) });
@@ -21053,12 +21083,21 @@ ${klinesSummary}
         }))
         .query(async ({ input }) => {
           const cacheKey = `${input.fromcoin}_${input.tocoin}`;
-          const fetchers = [
-            () => fetchTianapi(input.fromcoin, input.tocoin, input.money),
-            () => fetchErApi(input.fromcoin, input.tocoin, input.money),
-            () => fetchFrankfurter(input.fromcoin, input.tocoin, input.money),
-            () => fetchFawaz(input.fromcoin, input.tocoin, input.money),
-          ];
+          // USD/CNY 或 USDT/CNY 查询：优先走场外 USDT/CNY 市场价
+          const isUsdCny = (input.fromcoin === 'USD' || input.fromcoin === 'USDT') && input.tocoin === 'CNY';
+          const fetchers = isUsdCny
+            ? [
+                () => fetchCoinGeckoUsdtCny(input.money),
+                () => fetchOkxC2cUsdtCny(input.money),
+                () => fetchTianapi(input.fromcoin, input.tocoin, input.money),
+                () => fetchErApi(input.fromcoin, input.tocoin, input.money),
+              ]
+            : [
+                () => fetchTianapi(input.fromcoin, input.tocoin, input.money),
+                () => fetchErApi(input.fromcoin, input.tocoin, input.money),
+                () => fetchFrankfurter(input.fromcoin, input.tocoin, input.money),
+                () => fetchFawaz(input.fromcoin, input.tocoin, input.money),
+              ];
           for (const fetcher of fetchers) {
             try {
               const result = await fetcher();
@@ -21068,7 +21107,7 @@ ${klinesSummary}
               }
             } catch { /* 继续下一个 */ }
           }
-          // 所有 API 失败：返回缓存值
+          // 所有 API 失败：返回缓存値
           const cached = _cache[cacheKey];
           if (cached) {
             console.warn(`[exchange.getRate] 所有API失败，使用缓存 ${cached.rate}（${Math.round((Date.now() - cached.updatedAt) / 60000)}分钟前）`);
@@ -27337,6 +27376,8 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
   savedRecipes: savedRecipesRouter,
   inventory: mibanInventoryRouter,
   address: mibanAddressRouter,
+  review: mibanReviewRouter,
+  favorite: mibanFavoriteRouter,
   mibanImpersonate: router({
     // 获取全部可切换账号列表（三个账号完全互切）
     switchList: protectedProcedure.query(async ({ ctx }) => {

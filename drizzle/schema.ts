@@ -2332,10 +2332,14 @@ export const mibanOrders = mysqlTable("miban_orders", {
   trackingCompany: varchar("trackingCompany", { length: 32 }),
   userNote: text("userNote"),
   adminNote: text("adminNote"),
+  productImg: varchar("productImg", { length: 512 }),
   // 钱包扣款记录（用于退款原路返还）
   walletDeductCny: decimal("walletDeductCny", { precision: 10, scale: 2 }).default("0"),
   walletDeductUsdt: decimal("walletDeductUsdt", { precision: 18, scale: 8 }).default("0"),
   usdtCnyRateAtOrder: decimal("usdtCnyRateAtOrder", { precision: 10, scale: 4 }).default("0"),
+  shippedAt: timestamp("shippedAt"),                          // 发货时间
+  autoConfirmAt: timestamp("autoConfirmAt"),                    // 自动确认收货时间（发货后30天）
+  confirmedAt: timestamp("confirmedAt"),                        // 用户主动确认收货时间
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
@@ -2367,3 +2371,37 @@ export const mibanCommissions = mysqlTable("miban_commissions", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
+
+// ─── 米伴评价表 ────────────────────────────────────────────────────────────────
+export const mibanReviews = mysqlTable("miban_reviews", {
+  id: int("id").autoincrement().primaryKey(),
+  orderId: int("order_id").notNull(),             // 关联订单ID
+  orderNo: varchar("order_no", { length: 32 }).notNull(),
+  userId: int("user_id").notNull(),               // 评价用户ID
+  productKey: varchar("product_key", { length: 64 }).notNull().default("tiangui-pear"), // 商品标识
+  rating: tinyint("rating").notNull(),            // 星级 1-5
+  content: text("content"),                       // 评价文字
+  images: json("images").$type<string[]>().default([]), // 评价图片URL数组
+  isAnonymous: tinyint("is_anonymous").default(0).notNull(), // 是否匿名
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  orderIdx: index("miban_reviews_order_idx").on(table.orderId),
+  userIdx: index("miban_reviews_user_idx").on(table.userId),
+  productIdx: index("miban_reviews_product_idx").on(table.productKey),
+}));
+
+
+// ─── 米伴商品收藏表 ────────────────────────────────────────────────────────────
+export const mibanFavorites = mysqlTable("miban_favorites", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull(),               // 收藏用户ID
+  productKey: varchar("product_key", { length: 64 }).notNull(), // 商品标识，如 "tiangui-pear"
+  productName: varchar("product_name", { length: 128 }).notNull(), // 商品名称
+  productImg: varchar("product_img", { length: 512 }),            // 商品图片URL
+  productUrl: varchar("product_url", { length: 256 }),            // 商品详情页路径
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  userProductIdx: index("miban_favorites_user_product_idx").on(table.userId, table.productKey),
+  userIdx: index("miban_favorites_user_idx").on(table.userId),
+}));

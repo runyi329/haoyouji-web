@@ -911,6 +911,7 @@ export async function initDatabase() {
         { name: 'walletDeductCny', def: "DECIMAL(10,2) NOT NULL DEFAULT 0 COMMENT 'CNY扣款金额'" },
         { name: 'walletDeductUsdt', def: "DECIMAL(18,8) NOT NULL DEFAULT 0 COMMENT 'USDT扣款金额'" },
         { name: 'usdtCnyRateAtOrder', def: "DECIMAL(10,4) NOT NULL DEFAULT 0 COMMENT '下单时USDT/CNY汇率'" },
+        { name: 'productImg', def: "VARCHAR(512) DEFAULT NULL COMMENT '商品缩略图URL'" },
       ];
       for (const col of mibanOrderCols) {
         await safeAddColumn(dbConnMibanOrders as any, 'miban_orders', col.name, col.def);
@@ -1035,6 +1036,89 @@ export async function initDatabase() {
         console.log('[DB Init] \u2705 users balance columns checked');
       }
     }
+    // ─── miban_orders 新增确认收货相关字段 ────────────────────────────────────
+    {
+      const dbConnConfirm = await getDbConnection();
+      if (dbConnConfirm) {
+        const confirmCols = [
+          { name: 'shippedAt',     def: "DATETIME DEFAULT NULL COMMENT '发货时间'" },
+          { name: 'autoConfirmAt', def: "DATETIME DEFAULT NULL COMMENT '自动确认收货时间（发货后30天）'" },
+          { name: 'confirmedAt',   def: "DATETIME DEFAULT NULL COMMENT '用户主动确认收货时间'" },
+        ];
+        for (const col of confirmCols) {
+          await safeAddColumn(dbConnConfirm as any, 'miban_orders', col.name, col.def);
+        }
+        // 老订单补填：shipped状态 → 用updatedAt作为shippedAt，autoConfirmAt = shippedAt + 30天
+        await (dbConnConfirm as any).execute(`
+          UPDATE \`miban_orders\`
+          SET
+            \`shippedAt\` = \`updatedAt\`,
+            \`autoConfirmAt\` = DATE_ADD(\`updatedAt\`, INTERVAL 30 DAY)
+          WHERE \`status\` = 'shipped'
+            AND \`shippedAt\` IS NULL
+        `);
+        // 老订单补填：delivered状态 → shippedAt用updatedAt，confirmedAt也用updatedAt，autoConfirmAt同
+        await (dbConnConfirm as any).execute(`
+          UPDATE \`miban_orders\`
+          SET
+            \`shippedAt\` = \`updatedAt\`,
+            \`autoConfirmAt\` = DATE_ADD(\`updatedAt\`, INTERVAL 30 DAY),
+            \`confirmedAt\` = \`updatedAt\`
+          WHERE \`status\` = 'delivered'
+            AND \`shippedAt\` IS NULL
+        `);
+        console.log('[DB Init] ✅ miban_orders confirm columns + legacy backfill done');
+      }
+    }
+
+    // ─── 创建 miban_reviews 评价表 ──────────────────────────────────────────────
+    {
+      const dbConnReviews = await getDbConnection();
+      if (dbConnReviews) {
+        await (dbConnReviews as any).execute(`
+          CREATE TABLE IF NOT EXISTS \`miban_reviews\` (
+            \`id\` INT NOT NULL AUTO_INCREMENT,
+            \`order_id\` INT NOT NULL COMMENT '关联订单ID',
+            \`order_no\` VARCHAR(32) NOT NULL COMMENT '订单号',
+            \`user_id\` INT NOT NULL COMMENT '评价用户ID',
+            \`product_key\` VARCHAR(64) NOT NULL DEFAULT 'tiangui-pear' COMMENT '商品标识',
+            \`rating\` TINYINT NOT NULL COMMENT '星级1-5',
+            \`content\` TEXT DEFAULT NULL COMMENT '评价文字',
+            \`images\` JSON DEFAULT NULL COMMENT '评价图片URL数组',
+            \`is_anonymous\` TINYINT NOT NULL DEFAULT 0 COMMENT '是否匿名',
+            \`createdAt\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            \`updatedAt\` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (\`id\`),
+            UNIQUE KEY \`uq_order_review\` (\`order_id\`),
+            KEY \`idx_user_id\` (\`user_id\`),
+            KEY \`idx_product_key\` (\`product_key\`)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        `);
+        console.log('[DB Init] ✅ miban_reviews table ready');
+      }
+    }
+
+    // ─── 米伴商品收藏表 ────────────────────────────────────────────────────────
+    {
+      const dbConnFav = await getDbConnection();
+      if (dbConnFav) {
+        await dbConnFav.execute(`
+          CREATE TABLE IF NOT EXISTS miban_favorites (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            product_key VARCHAR(64) NOT NULL,
+            product_name VARCHAR(128) NOT NULL,
+            product_img VARCHAR(512),
+            product_url VARCHAR(256),
+            createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_user_product (user_id, product_key),
+            INDEX miban_favorites_user_idx (user_id)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+        console.log('[DB Init] ✅ miban_favorites table ready');
+      }
+    }
+
     console.log("[DB Init] Database initialization completed successfully");
   } catch (error) {
     console.error("[DB Init] Error during database initialization:", error);

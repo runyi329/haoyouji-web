@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { mtrpc } from "./mibanTrpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -10,7 +10,7 @@ import {
   Package, BookOpen, Heart, Wallet, Users,
   ShoppingCart, Trash2, User, ChevronRight,
   TrendingUp, Copy, ArrowUpRight, ArrowDownLeft,
-  Settings, MapPin, Truck, ExternalLink
+  Settings, MapPin, Truck, ExternalLink, Clock, Star, CheckCircle2
 } from "lucide-react";
 import AddressBook from "./AddressBook";
 
@@ -28,7 +28,16 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
 // ─── 我的订单 Tab ─────────────────────────────────────────────────────────────
 function OrdersTab() {
   const { isAuthenticated } = useAuth();
-  const { data: orders, isLoading } = mtrpc.order.myOrders.useQuery(undefined, { enabled: isAuthenticated });
+  const { data: orders, isLoading, refetch: refetchOrders } = mtrpc.order.myOrders.useQuery(undefined, { enabled: isAuthenticated });
+  const confirmMutation = mtrpc.order.confirmReceipt.useMutation({
+    onSuccess: () => { toast.success("确认收货成功！"); refetchOrders(); },
+    onError: (e: any) => toast.error(e.message ?? "操作失败"),
+  });
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
 
   if (isLoading) return (
     <div className="space-y-3">
@@ -52,6 +61,23 @@ function OrdersTab() {
     <div className="space-y-4">
       {(orders ?? []).map((order: any) => {
         const status = STATUS_MAP[order.status] ?? { label: order.status, color: "text-gray-500 bg-gray-100" };
+        // 确认收货倒计时（最大30天，精确到分钟）
+        const autoConfirmAt = order.autoConfirmAt ? new Date(order.autoConfirmAt).getTime() : null;
+        const shippedAt = order.shippedAt ? new Date(order.shippedAt).getTime() : null;
+        // 如果没有autoConfirmAt但有shippedAt，用shippedAt+30天估算
+        const confirmDeadline = autoConfirmAt ?? (shippedAt ? shippedAt + 30 * 24 * 60 * 60 * 1000 : null);
+        const msLeft = confirmDeadline ? Math.max(0, confirmDeadline - now) : 0;
+        const totalMinutes = Math.floor(msLeft / (1000 * 60));
+        const daysLeft = Math.min(30, Math.floor(totalMinutes / (60 * 24)));
+        const hoursLeft = Math.floor((totalMinutes % (60 * 24)) / 60);
+        const minsLeft = totalMinutes % 60;
+        const countdownText = msLeft > 0
+          ? (daysLeft > 0
+              ? `${daysLeft}天${hoursLeft}小时${minsLeft}分后自动确认`
+              : hoursLeft > 0
+                ? `${hoursLeft}小时${minsLeft}分后自动确认`
+                : `${minsLeft}分钟后自动确认`)
+          : "即将自动确认收货";
         const ingredients: any[] = (() => { try { return JSON.parse(order.ingredients ?? "[]"); } catch { return []; } })();
         const hasTracking = !!(order.trackingNo || order.trackingNumber);
         const trackingNo = order.trackingNo || order.trackingNumber || "";
@@ -78,14 +104,26 @@ function OrdersTab() {
             </div>
 
             <div className="p-4 space-y-3">
-              {/* ── 配方名称 + 下单时间 ── */}
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <h3 className="text-[15px] font-bold text-black leading-tight">{order.recipeName || "定制米"}</h3>
+              {/* ── 商品信息行：[缩略图] 商品名+时间 | 价格+重量 ── */}
+              <div className="flex items-center gap-3">
+                {/* 缩略图（有productImg时显示） */}
+                {order.productImg && (
+                  <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-gray-100">
+                    <img
+                      src={order.productImg}
+                      alt={order.recipeName || "商品图片"}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+                {/* 商品名 + 时间 */}
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-[15px] font-bold text-black leading-tight truncate">{order.recipeName || "定制米"}</h3>
                   <p className="text-[11px] text-gray-400 mt-0.5">
                     {new Date(order.createdAt).toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
                   </p>
                 </div>
+                {/* 价格 + 重量 */}
                 <div className="text-right flex-shrink-0">
                   <p className="text-[18px] font-bold leading-tight" style={{ color: "#FF6900" }}>¥{Number(order.totalPrice).toFixed(2)}</p>
                   <p className="text-[11px] text-gray-400 mt-0.5">{order.totalWeightJin} 斤</p>
@@ -205,6 +243,47 @@ function OrdersTab() {
                   <span className="text-[11px] text-amber-700">{order.adminNote}</span>
                 </div>
               )}
+
+              {/* ── 确认收货（已发货状态） ── */}
+              {order.status === "shipped" && (
+                <div className="pt-2 border-t border-gray-100">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-amber-400" />
+                      <span className="text-[11px] text-amber-600">{countdownText}</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (window.confirm("确认已收到货物？")) {
+                          confirmMutation.mutate({ orderId: order.id });
+                        }
+                      }}
+                      disabled={confirmMutation.isPending}
+                      className="flex items-center gap-1 px-4 py-1.5 rounded-lg text-[12px] font-semibold text-white active:scale-95 transition-transform disabled:opacity-60"
+                      style={{ background: "#FF6900" }}
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      确认收货
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── 去评价（已送达状态） ── */}
+              {order.status === "delivered" && (
+                <div className="pt-2 border-t border-gray-100 flex justify-end">
+                  <button
+                    onClick={() => {
+                      // 跳转到评价页，带上orderId
+                      window.location.href = `/p/proj_hzxm2t/review?orderId=${order.id}`;
+                    }}
+                    className="flex items-center gap-1 px-4 py-1.5 rounded-lg text-[12px] font-semibold active:scale-95 transition-transform border border-amber-400 text-amber-600 bg-amber-50"
+                  >
+                    <Star className="w-3.5 h-3.5" />
+                    去评价
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         );
@@ -296,6 +375,15 @@ function RecipesTab() {
 // ─── 我的收藏 Tab ─────────────────────────────────────────────────────────────
 function FavoritesTab() {
   const { isAuthenticated } = useAuth();
+  const [, navigate] = useLocation();
+
+  // 商品收藏
+  const { data: favProducts, refetch: refetchFavProducts } = mtrpc.favorite.myList.useQuery(undefined, { enabled: isAuthenticated });
+  const toggleFav = mtrpc.favorite.toggle.useMutation({
+    onSuccess: () => { refetchFavProducts(); toast.success("已取消收藏"); },
+  });
+
+  // 配方收藏
   const { data: savedRecipes, isLoading, refetch } = mtrpc.savedRecipes.list.useQuery(undefined, { enabled: isAuthenticated });
   const deleteSaved = mtrpc.savedRecipes.delete.useMutation({
     onSuccess: () => { toast.success("已取消收藏"); refetch(); },
@@ -312,16 +400,62 @@ function FavoritesTab() {
     </div>
   );
 
-  if (!savedRecipes?.length) return (
-    <div className="flex flex-col items-center py-16 text-center">
-      <Heart className="w-10 h-10 mb-3 text-gray-200" />
-      <p className="text-[13px] text-gray-400 mb-5">还没有收藏任何配方</p>
-      <p className="text-[11px] text-gray-300">在购物车中点击收藏按钮保存配方</p>
-    </div>
-  );
-
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      {/* 商品收藏分区 */}
+      <div>
+        <h3 className="text-[13px] font-bold text-gray-500 mb-2">收藏商品</h3>
+        {(!favProducts || favProducts.length === 0) ? (
+          <div className="bg-white rounded-2xl p-5 text-center">
+            <Heart className="w-8 h-8 mb-2 text-gray-200 mx-auto" />
+            <p className="text-[12px] text-gray-400">还没有收藏任何商品</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {favProducts.map((item: any) => (
+              <div key={item.id} className="bg-white rounded-2xl p-3 flex items-center gap-3 shadow-sm">
+                {item.productImg ? (
+                  <img src={item.productImg} alt={item.productName} className="w-16 h-16 rounded-xl object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+                    <Heart className="w-6 h-6 text-gray-300" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[14px] font-bold text-black truncate">{item.productName}</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">{new Date(item.createdAt).toLocaleDateString('zh-CN')} 收藏</p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {item.productUrl && (
+                    <button
+                      onClick={() => navigate(item.productUrl)}
+                      className="px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white active:scale-95 transition-transform"
+                      style={{ background: '#FF6900' }}
+                    >查看</button>
+                  )}
+                  <button
+                    onClick={() => toggleFav.mutate({ productKey: item.productKey, productName: item.productName })}
+                    className="p-1.5 text-red-400 active:text-red-600 transition-colors"
+                  >
+                    <Heart className="w-4 h-4" style={{ fill: '#FF3B30', color: '#FF3B30' }} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 配方收藏分区 */}
+      <div>
+        <h3 className="text-[13px] font-bold text-gray-500 mb-2">收藏配方</h3>
+        {!savedRecipes?.length ? (
+          <div className="bg-white rounded-2xl p-5 text-center">
+            <p className="text-[12px] text-gray-400">还没有收藏任何配方</p>
+          </div>
+        ) : null}
+      </div>
+
       {(savedRecipes ?? []).map((recipe: any) => {
         const items: any[] = (() => { try { return JSON.parse(recipe.items ?? "[]"); } catch { return []; } })();
         const preferences: string[] = (() => { try { return JSON.parse(recipe.preferences ?? "[]"); } catch { return []; } })();

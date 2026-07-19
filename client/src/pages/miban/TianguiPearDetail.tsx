@@ -5,11 +5,12 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ChevronLeft, MapPin, Phone, User, Check, Loader2, BookMarked, X } from "lucide-react";
+import { ChevronLeft, MapPin, Phone, User, Check, Loader2, BookMarked, X, Star, Heart } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { mtrpc } from "./mibanTrpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import AddressBook from "./AddressBook";
+import { provinces, getCities, getDistricts } from "./regionData";
 
 const IMGS = {
   hero:    "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/miban-pear/hero_fresh.webp",
@@ -22,10 +23,81 @@ const IMGS = {
 const SLIDES = [IMGS.hero, IMGS.juicy, IMGS.giftbox];
 
 const SPECS = [
-  { name: "5斤 精品装", sub: "约8–10个 · 顺丰包邮", price: 58, weightJin: 5 },
-  { name: "8斤 家庭装", sub: "约14–16个 · 顺丰包邮", price: 88, weightJin: 8 },
-  { name: "12枚 礼盒装", sub: "精品礼盒 · 防撞网套 · 送礼首选", price: 128, weightJin: 12, featured: true },
+  { name: "12枚礼盒装", sub: "单果250–350g · 12个精选 · 精品礼盒", price: 128, weightJin: 7, featured: true },
+  { name: "10斤礼盒装", sub: "单果150–500g · 约20个 · 家庭实惠", price: 88, weightJin: 10 },
 ];
+
+
+// ─── 买家评价展示组件 ──────────────────────────────────────────────────────────
+function ReviewSection() {
+  const { data } = mtrpc.review.list.useQuery({ productKey: 'tiangui-pear', limit: 10, offset: 0 });
+  const reviews = data?.reviews ?? [];
+  const total = data?.total ?? 0;
+  const avgRating = data?.avgRating ?? 0;
+
+  return (
+    <div className="bg-white px-5 pt-6 pb-8">
+      {/* 标题行 */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <div className="text-xl font-extrabold text-gray-900 mb-0.5">买家评价</div>
+          {total > 0 && (
+            <div className="flex items-center gap-1.5">
+              <div className="flex">
+                {[1,2,3,4,5].map(s => (
+                  <Star key={s} className="w-3.5 h-3.5" fill={s <= Math.round(avgRating) ? "#FF6900" : "none"} stroke={s <= Math.round(avgRating) ? "#FF6900" : "#d1d5db"} strokeWidth={1.5} />
+                ))}
+              </div>
+              <span className="text-[12px] text-gray-400">{avgRating.toFixed(1)} · {total}条评价</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 评价列表 */}
+      {reviews.length === 0 ? (
+        <div className="text-center py-8">
+          <p className="text-[13px] text-gray-300">暂无评价，购买后快来分享吧</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {reviews.map((r: any) => (
+            <div key={r.id} className="border-b border-gray-50 pb-4 last:border-0 last:pb-0">
+              {/* 用户名 + 星级 + 时间 */}
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center">
+                    <span className="text-[11px] font-bold text-orange-500">{r.userName?.[0] ?? '匿'}</span>
+                  </div>
+                  <span className="text-[13px] font-semibold text-gray-700">{r.userName}</span>
+                </div>
+                <span className="text-[11px] text-gray-300">
+                  {new Date(r.createdAt).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })}
+                </span>
+              </div>
+              {/* 星级 */}
+              <div className="flex mb-2">
+                {[1,2,3,4,5].map(s => (
+                  <Star key={s} className="w-3 h-3" fill={s <= r.rating ? "#FF6900" : "none"} stroke={s <= r.rating ? "#FF6900" : "#d1d5db"} strokeWidth={1.5} />
+                ))}
+              </div>
+              {/* 评价内容 */}
+              {r.content && <p className="text-[13px] text-gray-600 leading-relaxed">{r.content}</p>}
+              {/* 评价图片 */}
+              {r.images?.length > 0 && (
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  {r.images.map((img: string, i: number) => (
+                    <img key={i} src={img} alt="" className="w-16 h-16 rounded-lg object-cover border border-gray-100" />
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function TianguiPearDetail() {
   const [cur, setCur] = useState(0);
@@ -39,18 +111,44 @@ export default function TianguiPearDetail() {
   const [showOrderDialog, setShowOrderDialog] = useState(false);
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
-  const [receiverAddress, setReceiverAddress] = useState("");
+  const [receiverProvince, setReceiverProvince] = useState("");
+  const [receiverCity, setReceiverCity] = useState("");
+  const [receiverDistrict, setReceiverDistrict] = useState("");
+  const [receiverDetail, setReceiverDetail] = useState("");
+  const isMunicipality = ["北京市", "天津市", "上海市", "重庆市"].includes(receiverProvince);
+  const effectiveReceiverCity = isMunicipality ? receiverProvince : receiverCity;
+  const receiverAddress = [receiverProvince, effectiveReceiverCity, receiverDistrict, receiverDetail].filter(Boolean).join("");
   const [userNote, setUserNote] = useState("");
   const [saveToBook, setSaveToBook] = useState(false);
   const [showAddressPicker, setShowAddressPicker] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<{ orderNo: string } | null>(null);
 
   const { isAuthenticated } = useAuth();
+
+  // 收藏功能
+  const { data: favData, refetch: refetchFav } = mtrpc.favorite.isFavorited.useQuery(
+    { productKey: 'tiangui-pear' },
+    { enabled: isAuthenticated }
+  );
+  const isFavorited = favData?.favorited ?? false;
+  const toggleFav = mtrpc.favorite.toggle.useMutation({
+    onSuccess: () => { refetchFav(); },
+    onError: () => { alert('操作失败，请重试'); },
+  });
+  const handleFavorite = () => {
+    if (!isAuthenticated) { alert('请先登录后收藏'); return; }
+    toggleFav.mutate({
+      productKey: 'tiangui-pear',
+      productName: '天桂梨',
+      productImg: IMGS.hero,
+      productUrl: '/p/proj_hzxm2t/pear/tiangui',
+    });
+  };
   const { data: savedAddresses } = mtrpc.address.list.useQuery(undefined, { enabled: isAuthenticated });
   const addAddressMut = mtrpc.address.add.useMutation();
   const { data: cnyBalance } = trpc.recharge.getCnyBalance.useQuery(undefined, { enabled: isAuthenticated });
   const { data: usdtBalance } = trpc.recharge.getBalance.useQuery(undefined, { enabled: isAuthenticated });
-  const { data: cryptoPrices } = trpc.getCryptoPrices.useQuery(undefined, { staleTime: 30000 });
+  const { data: cryptoPrices } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 5000, staleTime: 3000 });
   const cnyBalanceNum = Number(cnyBalance ?? 0);
   const usdtBalanceNum = Number(usdtBalance ?? 0);
   const usdtCnyRate = cryptoPrices?.usdtCnyRate ?? 7.3;
@@ -92,15 +190,15 @@ export default function TianguiPearDetail() {
   };
 
   const handleSubmitOrder = () => {
-    if (saveToBook && receiverName.trim() && receiverPhone.trim() && receiverAddress.trim()) {
+    if (saveToBook && receiverName.trim() && receiverPhone.trim() && receiverDetail.trim() && receiverProvince) {
       addAddressMut.mutate({
         name: receiverName.trim(),
         phone: receiverPhone.trim(),
-        province: "",
-        city: "",
-        district: "",
-        detail: receiverAddress.trim(),
-        label: "其他",
+        province: receiverProvince,
+        city: effectiveReceiverCity,
+        district: receiverDistrict,
+        detail: receiverDetail.trim(),
+        label: "家",
         isDefault: false,
       });
     }
@@ -113,6 +211,7 @@ export default function TianguiPearDetail() {
       receiverPhone: receiverPhone.trim(),
       receiverAddress: receiverAddress.trim(),
       userNote: userNote.trim() || undefined,
+      productImg: PEAR_IMGS.hero,
     });
   };
 
@@ -141,10 +240,10 @@ export default function TianguiPearDetail() {
   ];
 
   const logistics = [
-    { title: "顺丰冷链", desc: "全程冷链配送，锁住每一分新鲜" },
-    { title: "现摘现发", desc: "清晨采摘，严格分拣，当日发货" },
-    { title: "坏果包赔", desc: "签收24小时内坏果，拍照联系客服赔付" },
-    { title: "专业包装", desc: "防撞网套+珍珠棉，安全到达有保证" },
+    { title: "48小时内发货", desc: "工作日下单，48小时内安排发货" },
+    { title: "江西上饶直发", desc: "产地直发，全程顺丰冷链" },
+    { title: "免运费包邮", desc: "全国包邮（偏远地区除外）" },
+    { title: "坏果包赔", desc: "签收24小时内拍照联系客服，超时不受理" },
   ];
 
   const tips = [
@@ -156,7 +255,7 @@ export default function TianguiPearDetail() {
 
   const totalPrice = currentSpec.price * qty;
   const totalWeightJin = currentSpec.weightJin * qty;
-  const canSubmit = receiverName.trim() && receiverPhone.trim() && receiverAddress.trim() && !createOrder.isPending;
+  const canSubmit = receiverName.trim() && receiverPhone.trim() && receiverProvince && (isMunicipality || receiverCity) && receiverDetail.trim() && !createOrder.isPending;
   const balanceOk = totalAvailableCny >= totalPrice;
 
   return (
@@ -208,97 +307,60 @@ export default function TianguiPearDetail() {
         <h1 className="text-2xl font-extrabold text-gray-900 leading-tight mb-1">天桂梨</h1>
         <p className="text-sm text-gray-400 mb-3">江西广丰 · 夏日第一口清甜 · 糖度 &gt;13%</p>
         <div className="flex items-baseline gap-2 mb-1">
-          <span className="text-3xl font-extrabold" style={{ color: "#FF6900" }}>¥{currentSpec.price}</span>
-          <span className="text-sm text-gray-300 line-through">¥{Math.round(currentSpec.price * 1.35)}</span>
+          <span className="text-xs font-semibold" style={{ color: "#FF6900" }}>¥</span>
+          <span className="text-3xl font-extrabold" style={{ color: "#FF6900" }}>{SPECS[0].price}</span>
+          <span className="text-sm text-gray-400">起</span>
+          <span className="text-sm text-gray-300 line-through">¥{Math.round(SPECS[0].price * 1.35)}</span>
         </div>
-        <p className="text-xs text-gray-300 mb-4">{currentSpec.name} · 顺丰冷链包邮 · 坏果包赔</p>
-        <p className="text-xs font-bold text-gray-900 mb-2">选择规格</p>
-        <div className="flex flex-wrap gap-2">
-          {SPECS.map((s, i) => (
-            <button
-              key={i}
-              onClick={() => setSpec(i)}
-              className="px-4 py-2 rounded-xl text-sm font-semibold border transition-all"
-              style={spec === i
-                ? { borderColor: "#FF6900", color: "#FF6900", background: "#FFF3E8" }
-                : { borderColor: "#e8e8e8", color: "#333", background: "#fff" }
-              }
-            >
-              {s.name}
-            </button>
-          ))}
-        </div>
-        {/* 数量选择 */}
-        <div className="flex items-center justify-between mt-4">
-          <span className="text-xs font-bold text-gray-900">数量</span>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setQty(q => Math.max(1, q - 1))}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-lg font-bold border transition-all"
-              style={{ borderColor: qty <= 1 ? "#e8e8e8" : "#FF6900", color: qty <= 1 ? "#ccc" : "#FF6900", background: "#fff" }}
-            >−</button>
-            <span className="text-base font-extrabold text-gray-900 w-6 text-center">{qty}</span>
-            <button
-              onClick={() => setQty(q => q + 1)}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-lg font-bold border transition-all"
-              style={{ borderColor: "#FF6900", color: "#FF6900", background: "#fff" }}
-            >+</button>
+        <p className="text-xs text-gray-300 mb-1">顺丰冷链包邮 · 坏果包赔</p>
+        <p className="text-xs text-gray-400 mb-1">{SPECS.map(s => s.name).join(' / ')}</p>
+      </div>
+
+      {/* ── 卡片1：食用场景 + 极早熟稀缺 ── */}
+      <img src="/pear-img-scene.jpg" alt="天桂梨食用场景" className="w-full block" loading="lazy" />
+      <div className="bg-white px-5 py-5" style={{ borderBottom: "1px solid #f3f3f3" }}>
+        <div className="text-xl font-extrabold text-gray-900 mb-1">极早熟稀缺·双认证</div>
+        <div className="text-xs text-gray-400 mb-3">7月限定上市，全年仅20天采摘期</div>
+        <div className="flex gap-3">
+          <div className="flex-1 rounded-xl px-3 py-3" style={{ background: "#FFF3E8" }}>
+            <div className="text-2xl font-extrabold" style={{ color: "#FF6900" }}>20<span className="text-sm font-semibold">天</span></div>
+            <div className="text-xs text-gray-500 mt-0.5">黄金采摘期</div>
+          </div>
+          <div className="flex-1 rounded-xl px-3 py-3" style={{ background: "#F0FAF4" }}>
+            <div className="text-base font-extrabold" style={{ color: "#2D7D46" }}>地理标志</div>
+            <div className="text-xs text-gray-500 mt-0.5">保护产品</div>
+          </div>
+          <div className="flex-1 rounded-xl px-3 py-3" style={{ background: "#F0FAF4" }}>
+            <div className="text-base font-extrabold" style={{ color: "#2D7D46" }}>绿色食品</div>
+            <div className="text-xs text-gray-500 mt-0.5">国家认证</div>
           </div>
         </div>
       </div>
 
-      {/* ── 核心卖点 ── */}
-      <div style={{ background: "linear-gradient(135deg,#FFF8F0 0%,#FFF3E8 50%,#FFF8F0 100%)", padding: "28px 20px" }}>
-        <div className="text-center text-xl font-extrabold text-gray-900 mb-1">为什么选天桂梨</div>
-        <div className="text-center text-xs text-gray-400 mb-5">四大核心优势，一颗好梨的全部理由</div>
-        <div className="flex flex-col">
-          {features.map((f, i) => (
-            <div key={i} className="flex items-center py-3.5" style={{ borderBottom: i < features.length - 1 ? "1px solid rgba(255,105,0,0.08)" : "none" }}>
-              <div className="min-w-[72px] leading-none">
-                <span className="text-3xl font-extrabold" style={{ color: "#FF6900" }}>{f.num}</span>
-                <span className="text-sm font-semibold" style={{ color: "#FF6900" }}>{f.unit}</span>
-              </div>
-              <div>
-                <div className="text-sm font-bold text-gray-900 mb-0.5">{f.title}</div>
-                <div className="text-xs text-gray-400 leading-relaxed">{f.desc}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── 果肉展示 ── */}
-      <img src={IMGS.juicy} alt="天桂梨果肉微距" className="w-full block" loading="lazy" />
-      <div className="bg-white px-5 pt-4 pb-5">
-        <div className="text-lg font-extrabold text-gray-900 mb-1.5">极细嫩 · 爆汁甜</div>
-        <div className="text-sm text-gray-500 leading-relaxed">洁白如玉的果肉，几乎感受不到石细胞，每一口都是清甜汁水的爆发。冰镇后食用，清凉感翻倍。</div>
-      </div>
-
-      {/* ── 数字背书带 ── */}
-      <div style={{ background: "#f8f7f5", padding: "24px 20px" }}>
-        <div className="flex justify-around items-center">
+      {/* ── 卡片2：整果展示 + 糖度超高 ── */}
+      <img src="/pear-img-hero.jpg" alt="天桂梨整果" className="w-full block" loading="lazy" />
+      <div className="bg-white px-5 py-5" style={{ borderBottom: "1px solid #f3f3f3" }}>
+        <div className="text-xl font-extrabold text-gray-900 mb-1">糖度超高·细嫩无渣</div>
+        <div className="text-xs text-gray-400 mb-3">可溶性固形物高13%以上，石细胞极少入口即化</div>
+        <div className="flex justify-around items-center py-1">
           {[
-            { num: "20", unit: "年", label: "匠心培育" },
-            { num: "13%+", unit: "", label: "糖度保证", orange: true },
-            { num: "20", unit: "天", label: "黄金赏味期" },
+            { num: "13%+", label: "糖度保证", orange: true },
+            { num: "20年", label: "匠心培育" },
+            { num: "0渣", label: "细嫩无渣" },
           ].map((s, i) => (
-            <div key={i} className="flex items-center gap-0">
-              {i > 0 && <div style={{ width: 1, height: 36, background: "#e0e0e0", margin: "0 16px" }} />}
+            <div key={i} className="flex items-center">
+              {i > 0 && <div style={{ width: 1, height: 32, background: "#ebebeb", margin: "0 14px" }} />}
               <div className="text-center">
-                <div className="leading-none mb-1">
-                  <span className="text-3xl font-extrabold" style={{ color: s.orange ? "#FF6900" : "#111" }}>{s.num}</span>
-                  {s.unit && <sup className="text-sm font-semibold" style={{ color: s.orange ? "#FF6900" : "#111" }}>{s.unit}</sup>}
-                </div>
+                <div className="text-2xl font-extrabold leading-none mb-1" style={{ color: s.orange ? "#FF6900" : "#111" }}>{s.num}</div>
                 <div className="text-xs text-gray-400">{s.label}</div>
               </div>
             </div>
           ))}
         </div>
-        <div className="text-center text-xs text-gray-300 mt-4 tracking-widest">产地直发 · 现摘现发 · 健康有据</div>
       </div>
 
       {/* ── 品种对比 ── */}
-      <div className="bg-white px-5 py-7">
+      <div className="bg-white px-5 py-6">
         <div className="text-xl font-extrabold text-gray-900 mb-1">天桂梨 vs 普通梨</div>
         <div className="text-xs text-gray-300 mb-4">数据说话，差距一目了然</div>
         <table className="w-full text-sm border-collapse">
@@ -324,8 +386,8 @@ export default function TianguiPearDetail() {
       </div>
 
       {/* ── 营养成分 ── */}
-      <div style={{ background: "linear-gradient(180deg,#FFFAF5 0%,#fff 100%)", padding: "28px 20px" }}>
-        <div className="text-xl font-extrabold text-gray-900 mb-1">营养成分</div>
+      <div className="bg-white px-5 pb-6" style={{ borderTop: "1px solid #f3f3f3" }}>
+        <div className="text-xl font-extrabold text-gray-900 mb-1 pt-6">营养成分</div>
         <div className="text-xs text-gray-300 mb-4">每 100g 可食部分 · 数据来源：中国食物成分表</div>
         {nutrition.map((n, i) => (
           <div key={i} className="flex items-center justify-between py-2.5" style={{ borderBottom: i < nutrition.length - 1 ? "1px solid #f0ede8" : "none" }}>
@@ -341,46 +403,50 @@ export default function TianguiPearDetail() {
         <p className="text-xs text-gray-300 mt-2.5 leading-relaxed">实际营养成分因产地、品种、采摘时间略有差异，仅供参考。</p>
       </div>
 
-      {/* ── 产地溯源 ── */}
-      <div className="bg-white">
-        <img src={IMGS.orchard} alt="广丰天桂梨果园" className="w-full block" loading="lazy" />
-        <div className="px-5 pt-5 pb-6">
-          <div className="text-lg font-extrabold text-gray-900 mb-2">江西广丰 · 天桂梨之乡</div>
-          <div className="text-sm text-gray-500 leading-relaxed">
-            核心产区位于江西省上饶市广丰区吴村镇塘边村，地处闽浙赣交界低山丘陵区，气候湿润，昼夜温差大，土壤含磷丰富、土层深厚肥沃。自1999年引进培育，历经20余年匠心打磨，天桂梨已成为广丰区农业的支柱产业与乡村振兴的"致富果"。
-          </div>
-          <div className="flex flex-wrap gap-2 mt-3.5">
-            <span className="text-xs font-semibold px-3 py-1 rounded-full" style={{ background: "#F0FAF4", color: "#2D7D46" }}>国家地理标志保护产品</span>
-            <span className="text-xs font-semibold px-3 py-1 rounded-full" style={{ background: "#F0FAF4", color: "#2D7D46" }}>国家绿色食品认证</span>
-          </div>
+      {/* ── 卡片3：果园产地 + 产地直发 ── */}
+      <img src="/pear-img-orchard.jpg" alt="天桂梨果园产地" className="w-full block" loading="lazy" />
+      <div className="bg-white px-5 py-5" style={{ borderBottom: "1px solid #f3f3f3" }}>
+        <div className="text-xl font-extrabold text-gray-900 mb-1">产地直发·现摘现发</div>
+        <div className="text-xs text-gray-400 mb-3">江西广丰核心产区，海拔300-600m，昼夜温差大</div>
+        <div className="flex gap-2.5">
+          {[
+            { num: "300m+", label: "海拔高度" },
+            { num: "15°C", label: "昼夜温差" },
+            { num: "无农残", label: "绿色认证" },
+          ].map((s, i) => (
+            <div key={i} className="flex-1 rounded-xl px-3 py-3 text-center" style={{ background: "#f8f7f5" }}>
+              <div className="text-base font-extrabold text-gray-900">{s.num}</div>
+              <div className="text-xs text-gray-400 mt-0.5">{s.label}</div>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* ── 食用场景 ── */}
-      <div style={{ background: "#f8f7f5", padding: "28px 20px" }}>
+      {/* ── 百变吃法 ── */}
+      <div className="bg-white px-4 py-6">
         <div className="text-xl font-extrabold text-gray-900 mb-1">百变吃法</div>
-        <div className="text-xs text-gray-300 mb-4">清凉一夏，怎么吃都好吃</div>
-        <div className="grid grid-cols-2 gap-2.5">
+        <div className="text-xs text-gray-300 mb-3">清凉一夏，怎么吃都好吃</div>
+        <div className="grid grid-cols-2 gap-2">
           <div className="relative rounded-xl overflow-hidden" style={{ aspectRatio: "1/1" }}>
             <img src={IMGS.scene} alt="鲜切果盘" className="w-full h-full object-cover" loading="lazy" />
-            <div className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5 pt-6 text-sm font-bold text-white" style={{ background: "linear-gradient(to top,rgba(0,0,0,0.5) 0%,transparent 100%)" }}>鲜切果盘</div>
+            <div className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5 pt-6 text-sm font-bold text-white" style={{ background: "linear-gradient(to top,rgba(0,0,0,0.55) 0%,transparent 100%)" }}>鲜切果盘</div>
           </div>
           <div className="relative rounded-xl overflow-hidden" style={{ aspectRatio: "1/1" }}>
             <img src={IMGS.juicy} alt="冰镇鲜食" className="w-full h-full object-cover" loading="lazy" />
-            <div className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5 pt-6 text-sm font-bold text-white" style={{ background: "linear-gradient(to top,rgba(0,0,0,0.5) 0%,transparent 100%)" }}>冰镇鲜食</div>
+            <div className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5 pt-6 text-sm font-bold text-white" style={{ background: "linear-gradient(to top,rgba(0,0,0,0.55) 0%,transparent 100%)" }}>冰镇鲜食</div>
           </div>
           <div className="relative rounded-xl overflow-hidden col-span-2" style={{ aspectRatio: "2/1" }}>
             <img src={IMGS.hero} alt="鲜榨梨汁" className="w-full h-full object-cover" loading="lazy" />
-            <div className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5 pt-6 text-sm font-bold text-white" style={{ background: "linear-gradient(to top,rgba(0,0,0,0.5) 0%,transparent 100%)" }}>鲜榨梨汁 · 冰糖雪梨</div>
+            <div className="absolute bottom-0 left-0 right-0 px-2.5 pb-2.5 pt-6 text-sm font-bold text-white" style={{ background: "linear-gradient(to top,rgba(0,0,0,0.55) 0%,transparent 100%)" }}>鲜榨梨汁 · 冰糖雪梨</div>
           </div>
         </div>
       </div>
 
       {/* ── 精选规格 ── */}
-      <div className="bg-white px-5 py-7">
+      <div className="bg-white px-5 py-6" style={{ borderTop: "1px solid #f3f3f3" }}>
         <div className="text-xl font-extrabold text-gray-900 mb-1">精选规格</div>
         <div className="text-xs text-gray-300 mb-4">自用送礼，均有合适之选</div>
-        <img src={IMGS.giftbox} alt="天桂梨礼盒" className="w-full block rounded-xl mb-4" loading="lazy" />
+        <img src="/pear-giftbox.jpg" alt="天桂梨礼盒" className="w-full block rounded-xl mb-4" loading="lazy" />
         <div className="flex flex-col gap-2.5">
           {SPECS.map((s, i) => (
             <button
@@ -403,7 +469,7 @@ export default function TianguiPearDetail() {
       </div>
 
       {/* ── 物流保障 ── */}
-      <div style={{ background: "linear-gradient(180deg,#FFF8F0 0%,#FFF3E8 100%)", padding: "28px 20px" }}>
+      <div className="bg-white px-5 py-6" style={{ borderTop: "1px solid #f3f3f3" }}>
         <div className="text-xl font-extrabold text-gray-900 mb-1">物流与保障</div>
         <div className="text-xs text-gray-300 mb-4">从枝头到舌尖，每一步都有保障</div>
         <div className="grid grid-cols-2">
@@ -420,8 +486,14 @@ export default function TianguiPearDetail() {
         </div>
       </div>
 
+      {/* ── 发货与物流配图 ── */}
+      <img src="/pear-logistics.jpg" alt="发货与物流" className="w-full block" loading="lazy" />
+      {/* ── 售后保障配图 ── */}
+      <img src="/pear-aftersale.jpg" alt="售后保障声明" className="w-full block" loading="lazy" />
+      {/* ── 规格对比配图 ── */}
+      <img src="/pear-specs.jpg" alt="精选规格" className="w-full block" loading="lazy" />
       {/* ── 温馨提示 ── */}
-      <div className="bg-white px-5 pt-7 pb-8">
+      <div className="bg-white px-5 pt-6 pb-8">
         <div className="text-xl font-extrabold text-gray-900 mb-1">温馨提示</div>
         <div className="text-xs text-gray-300 mb-4">收到后请注意以下事项</div>
         {tips.map((t, i) => (
@@ -434,17 +506,31 @@ export default function TianguiPearDetail() {
         ))}
       </div>
 
+      {/* ── 买家评价区域 ── */}
+      <ReviewSection />
+
       {/* ── 底部购买栏 ── */}
       <div className="fixed bottom-0 left-0 right-0 z-50 flex gap-2.5 px-4 py-2.5 border-t border-gray-100" style={{ background: "rgba(255,255,255,0.97)", backdropFilter: "blur(10px)", maxWidth: 480, margin: "0 auto", paddingBottom: "calc(10px + env(safe-area-inset-bottom, 0px))" }}>
-        <button className="w-14 h-14 rounded-xl flex items-center justify-center text-xs font-semibold text-gray-500 border-none" style={{ background: "#f5f5f5", flexShrink: 0 }}>
-          收藏
+        <button
+          onClick={handleFavorite}
+          className="w-14 h-14 rounded-xl flex flex-col items-center justify-center gap-0.5 border-none transition-all active:scale-95"
+          style={{ background: isFavorited ? '#FFF0F0' : '#f5f5f5', flexShrink: 0 }}
+        >
+          <Heart
+            size={20}
+            className="transition-all"
+            style={{ color: isFavorited ? '#FF3B30' : '#888', fill: isFavorited ? '#FF3B30' : 'none', strokeWidth: 2 }}
+          />
+          <span className="text-[10px] font-medium" style={{ color: isFavorited ? '#FF3B30' : '#888' }}>
+            {isFavorited ? '已收藏' : '收藏'}
+          </span>
         </button>
         <button
           className="flex-1 h-14 rounded-xl border-none text-white text-base font-extrabold tracking-wide active:scale-[0.98] transition-transform"
           style={{ background: "linear-gradient(90deg,#FF8C00 0%,#FF6900 100%)" }}
           onClick={handleBuy}
         >
-          立即购买 · ¥{totalPrice}
+          立即购买
         </button>
       </div>
 
@@ -452,83 +538,199 @@ export default function TianguiPearDetail() {
       {showOrderDialog && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center" onClick={() => setShowOrderDialog(false)}>
           <div
-            className="w-full bg-white rounded-t-3xl p-6 pb-8"
-            style={{ maxWidth: 480, maxHeight: "85vh", overflowY: "auto" }}
+            className="w-full bg-white rounded-t-3xl overflow-hidden flex flex-col"
+            style={{ maxWidth: 480, maxHeight: "82vh", marginTop: "auto" }}
             onClick={e => e.stopPropagation()}
           >
+          <div className="p-6 pb-8 overflow-y-auto flex-1">
             {/* 标题栏 */}
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <div className="text-lg font-extrabold text-gray-900">确认订单</div>
-                <div className="text-xs text-gray-400 mt-0.5">天桂梨 · {currentSpec.name}{qty > 1 ? ` x${qty}` : ""} · ¥{totalPrice}</div>
-              </div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-lg font-extrabold text-gray-900">确认订单</div>
               <button onClick={() => setShowOrderDialog(false)} className="w-8 h-8 rounded-full flex items-center justify-center border-none" style={{ background: "#f5f5f5" }}>
                 <X size={16} className="text-gray-500" />
               </button>
             </div>
+            {/* 规格选择 */}
+            <div className="mb-3">
+              <p className="text-xs font-bold text-gray-700 mb-2">选择规格</p>
+              <div className="flex flex-col gap-2">
+                {SPECS.map((s, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setSpec(i)}
+                    className="w-full rounded-xl border transition-all text-left"
+                    style={spec === i
+                      ? { borderColor: "#FF6900", background: "#FFF3E8", padding: "10px 14px" }
+                      : { borderColor: "#e8e8e8", background: "#fff", padding: "10px 14px" }
+                    }
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-sm font-bold text-gray-900">{s.name}</span>
+                        {s.featured && (
+                          <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: "#FF6900", color: "#fff" }}>推荐</span>
+                        )}
+                      </div>
+                      <span className="text-base font-extrabold" style={{ color: "#FF6900" }}>¥{s.price}</span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-1.5">
+                      <div className="flex items-baseline gap-0.5">
+                        <span className="text-lg font-extrabold" style={{ color: spec === i ? "#FF6900" : "#333" }}>{s.sub.split('·')[0].trim()}</span>
+                        <span className="text-[10px] text-gray-400">单果重量</span>
+                      </div>
+                      <span className="text-[11px] text-gray-400">{s.sub.split('·').slice(1).join('·').trim()}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* 数量选择 */}
+            <div className="flex items-center justify-between mb-4 px-1">
+              <span className="text-xs font-bold text-gray-700">数量</span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setQty(q => Math.max(1, q - 1))}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-lg font-bold border transition-all"
+                  style={{ borderColor: qty <= 1 ? "#e8e8e8" : "#FF6900", color: qty <= 1 ? "#ccc" : "#FF6900", background: "#fff" }}
+                >−</button>
+                <span className="text-base font-extrabold text-gray-900 w-6 text-center">{qty}</span>
+                <button
+                  onClick={() => setQty(q => q + 1)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-lg font-bold border transition-all"
+                  style={{ borderColor: "#FF6900", color: "#FF6900", background: "#fff" }}
+                >+</button>
+              </div>
+            </div>
 
             {/* 余额提示 */}
-            {isAuthenticated && (
-              <div className="mb-4 px-4 py-3 rounded-xl text-sm" style={{ background: balanceOk ? "#F0FAF4" : "#FFF3E8" }}>
-                <span style={{ color: balanceOk ? "#2D7D46" : "#FF6900" }}>
-                  钱包余额 ¥{totalAvailableCny.toFixed(2)}
-                  {balanceOk ? " · 余额充足" : " · 余额不足，请先充值"}
-                </span>
-              </div>
-            )}
-
+            {isAuthenticated && (() => {
+              // 计算预计扣款明细
+              const deductCny = Math.min(cnyBalanceNum, totalPrice);
+              const remainCny = totalPrice - deductCny;
+              const deductUsdt = remainCny > 0.001 ? remainCny / usdtCnyRate : 0;
+              const totalDeductUsdt = deductUsdt + (deductCny > 0.001 ? deductCny / usdtCnyRate : 0);
+              return (
+                <div className="mb-4 px-4 py-2.5 rounded-xl" style={{ background: "#f8f7f5" }}>
+                  {totalPrice > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px] text-gray-500">预计扣款</span>
+                      <span className="text-[12px] text-gray-700">¥{totalPrice.toFixed(2)} = {(totalPrice / usdtCnyRate).toFixed(2)}U <span className="text-gray-400 text-[11px]">@{usdtCnyRate.toFixed(2)}</span></span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-[12px] text-gray-400">钱包余额</span>
+                    <span className="text-[12px] text-gray-500">{usdtBalanceNum.toFixed(2)}U</span>
+                  </div>
+                </div>
+              );
+            })()}
             <div className="flex flex-col gap-3">
-              {/* 地址簿快选 */}
-              {savedAddresses && savedAddresses.length > 0 && (
-                <button
-                  onClick={() => setShowAddressPicker(v => !v)}
-                  className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm text-gray-500 border-none"
-                  style={{ background: "#f8f7f5" }}
-                >
-                  <BookMarked size={15} className="text-gray-400" />
-                  从地址簿选择
-                </button>
-              )}
-              {showAddressPicker && (
-                <div className="rounded-xl overflow-hidden border border-gray-100">
-                  <AddressBook
-                    mode="select"
-                    onSelect={(addr) => {
-                      setReceiverName(addr.name);
-                      setReceiverPhone(addr.phone);
-                      setReceiverAddress(`${addr.province}${addr.city}${addr.district ?? ""}${addr.detail}`);
-                      setShowAddressPicker(false);
-                    }}
+              {/* 收货信息容器 */}
+              <div className="border border-gray-200 rounded-xl overflow-hidden">
+                {/* 容器标题行 */}
+                <div className="flex items-center justify-between px-4 py-2.5" style={{ background: "#fafafa", borderBottom: "1px solid #f0f0f0" }}>
+                  <span className="text-xs font-bold text-gray-500">收货信息</span>
+                  {savedAddresses && savedAddresses.length > 0 && (
+                    <button
+                      onClick={() => setShowAddressPicker(v => !v)}
+                      className="flex items-center gap-1 text-xs border-none bg-transparent"
+                      style={{ color: "#FF6900" }}
+                    >
+                      <BookMarked size={12} />
+                      从地址簿选择
+                    </button>
+                  )}
+                </div>
+                {/* 地址簿展开 */}
+                {showAddressPicker && (
+                  <div className="border-b border-gray-100">
+                    <AddressBook
+                      mode="select"
+                      onSelect={(addr) => {
+                        setReceiverName(addr.name);
+                        setReceiverPhone(addr.phone);
+                        setReceiverAddress(`${addr.province}${addr.city}${addr.district ?? ""}${addr.detail}`);
+                        setShowAddressPicker(false);
+                      }}
+                    />
+                  </div>
+                )}
+                {/* 收货人姓名 */}
+                <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: "1px solid #f5f5f5" }}>
+                  <User size={14} className="text-gray-300 flex-shrink-0" />
+                  <input
+                    type="text" value={receiverName} onChange={e => setReceiverName(e.target.value)}
+                    placeholder="收货人姓名"
+                    className="flex-1 text-[14px] text-black outline-none bg-transparent"
                   />
                 </div>
-              )}
-
-              {/* 收货人姓名 */}
-              <div className="flex items-center gap-3 border border-gray-200 rounded-xl px-4 py-3">
-                <User size={15} className="text-gray-400 flex-shrink-0" />
-                <input
-                  type="text" value={receiverName} onChange={e => setReceiverName(e.target.value)}
-                  placeholder="收货人姓名"
-                  className="flex-1 text-[14px] text-black outline-none bg-transparent"
-                />
-              </div>
-              {/* 手机号 */}
-              <div className="flex items-center gap-3 border border-gray-200 rounded-xl px-4 py-3">
-                <Phone size={15} className="text-gray-400 flex-shrink-0" />
-                <input
-                  type="tel" value={receiverPhone} onChange={e => setReceiverPhone(e.target.value)}
-                  placeholder="手机号"
-                  className="flex-1 text-[14px] text-black outline-none bg-transparent"
-                />
-              </div>
-              {/* 收货地址 */}
-              <div className="flex items-start gap-3 border border-gray-200 rounded-xl px-4 py-3">
-                <MapPin size={15} className="text-gray-400 flex-shrink-0 mt-0.5" />
-                <input
-                  type="text" value={receiverAddress} onChange={e => setReceiverAddress(e.target.value)}
-                  placeholder="收货地址（省市区+详细地址）"
-                  className="flex-1 text-[14px] text-black outline-none bg-transparent"
-                />
+                {/* 手机号 */}
+                <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: "1px solid #f5f5f5" }}>
+                  <Phone size={14} className="text-gray-300 flex-shrink-0" />
+                  <input
+                    type="tel" value={receiverPhone} onChange={e => setReceiverPhone(e.target.value)}
+                    placeholder="手机号"
+                    className="flex-1 text-[14px] text-black outline-none bg-transparent"
+                  />
+                </div>
+                {/* 收货地址 - 三级联动 */}
+                <div className="flex flex-col gap-2 px-4 py-3" style={{ borderBottom: "1px solid #f5f5f5" }}>
+                  <div className="flex items-center gap-2">
+                    <MapPin size={14} className="text-gray-300 flex-shrink-0" />
+                    <span className="text-[13px] text-gray-400">收货地址</span>
+                  </div>
+                  {/* 省 */}
+                  <select
+                    value={receiverProvince}
+                    onChange={e => { setReceiverProvince(e.target.value); setReceiverCity(""); setReceiverDistrict(""); }}
+                    className="w-full border border-gray-100 rounded-lg px-3 py-2 text-[14px] text-black outline-none bg-white"
+                  >
+                    <option value="">选择省/直辖市/自治区</option>
+                    {provinces.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                  {/* 市（直辖市跳过） */}
+                  {!isMunicipality && (
+                    <select
+                      value={receiverCity}
+                      onChange={e => { setReceiverCity(e.target.value); setReceiverDistrict(""); }}
+                      disabled={!receiverProvince}
+                      className="w-full border border-gray-100 rounded-lg px-3 py-2 text-[14px] text-black outline-none bg-white disabled:opacity-40"
+                    >
+                      <option value="">选择市/地区</option>
+                      {getCities(receiverProvince).map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  )}
+                  {/* 区县 */}
+                  <select
+                    value={receiverDistrict}
+                    onChange={e => setReceiverDistrict(e.target.value)}
+                    disabled={!isMunicipality && !receiverCity}
+                    className="w-full border border-gray-100 rounded-lg px-3 py-2 text-[14px] text-black outline-none bg-white disabled:opacity-40"
+                  >
+                    <option value="">选择区/县（可选）</option>
+                    {getDistricts(receiverProvince, isMunicipality ? receiverProvince : receiverCity).map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                  {/* 详细地址 */}
+                  <input
+                    type="text" value={receiverDetail} onChange={e => setReceiverDetail(e.target.value)}
+                    placeholder="详细地址（街道、楼号、门牌号等）"
+                    className="w-full border border-gray-100 rounded-lg px-3 py-2 text-[14px] text-black outline-none bg-transparent"
+                  />
+                </div>
+                {/* 保存到地址簿 */}
+                <button
+                  onClick={() => setSaveToBook(v => !v)}
+                  className="flex items-center gap-2.5 w-full px-4 py-3 transition-all active:scale-[0.99]"
+                  style={{ background: saveToBook ? "rgba(255,105,0,0.06)" : "transparent" }}
+                >
+                  <div
+                    className="w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all"
+                    style={{ borderColor: saveToBook ? "#FF6900" : "#DDD", background: saveToBook ? "#FF6900" : "transparent" }}
+                  >
+                    {saveToBook && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
+                  </div>
+                  <span className="text-[13px]" style={{ color: saveToBook ? "#FF6900" : "#888" }}>保存到地址簿</span>
+                </button>
               </div>
               {/* 备注 */}
               <textarea
@@ -537,27 +739,6 @@ export default function TianguiPearDetail() {
                 rows={2}
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-[14px] text-black outline-none bg-transparent resize-none"
               />
-              {/* 保存到地址簿 */}
-              <button
-                onClick={() => setSaveToBook(v => !v)}
-                className="flex items-center gap-2.5 w-full px-4 py-3 rounded-xl transition-all active:scale-[0.99]"
-                style={{
-                  background: saveToBook ? "rgba(255,105,0,0.08)" : "#F8F8F8",
-                  border: saveToBook ? "1.5px solid rgba(255,105,0,0.3)" : "1.5px solid transparent",
-                }}
-              >
-                <div
-                  className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all"
-                  style={{ borderColor: saveToBook ? "#FF6900" : "#DDD", background: saveToBook ? "#FF6900" : "transparent" }}
-                >
-                  {saveToBook && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
-                </div>
-                <div className="flex-1 text-left">
-                  <p className="text-[13px] font-semibold" style={{ color: saveToBook ? "#FF6900" : "#333" }}>保存到地址簿</p>
-                  <p className="text-[11px] text-gray-400">下次下单可直接选用</p>
-                </div>
-                <BookMarked className="w-4 h-4 flex-shrink-0" style={{ color: saveToBook ? "#FF6900" : "#CCC" }} />
-              </button>
             </div>
 
             {/* 确认下单按钮 */}
@@ -575,9 +756,9 @@ export default function TianguiPearDetail() {
               }
             </button>
           </div>
+          </div>
         </div>
       )}
-
       {/* ── 下单成功弹窗 ── */}
       {orderSuccess && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-6" onClick={() => setOrderSuccess(null)}>
