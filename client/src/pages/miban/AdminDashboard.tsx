@@ -116,7 +116,7 @@ function CommissionConfig() {
     onError: (e) => toast.error(e.message),
   });
 
-  const [globalRate, setGlobalRate] = useState("");
+  const [globalMultiplier, setGlobalMultiplier] = useState("");
   const [globalNote, setGlobalNote] = useState("");
   const [agentId, setAgentId] = useState("");
   const [agentRate, setAgentRate] = useState("");
@@ -125,10 +125,10 @@ function CommissionConfig() {
   const globalConfig = configs?.find(c => c.agentId === null);
 
   function saveGlobal() {
-    const rate = parseFloat(globalRate) / 100;
-    if (isNaN(rate) || rate < 0 || rate > 1) { toast.error("请输入0-100之间的百分比"); return; }
-    setConfigMutation.mutate({ agentId: null, rate, note: globalNote || undefined });
-    setGlobalRate(""); setGlobalNote("");
+    const multiplier = globalMultiplier ? parseFloat(globalMultiplier) / 100 : 1.0;
+    if (isNaN(multiplier) || multiplier < 0 || multiplier > 1) { toast.error("请输入0-100之间的百分比"); return; }
+    setConfigMutation.mutate({ agentId: null, payoutRateMultiplier: multiplier, note: globalNote || undefined });
+    setGlobalMultiplier(""); setGlobalNote("");
   }
 
   function saveAgent() {
@@ -142,22 +142,22 @@ function CommissionConfig() {
 
   return (
     <div className="space-y-5">
-      {/* 全局默认比例 */}
+      {/* 兜底配置 */}
       <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold">全局默认佣金比例</h3>
+          <h3 className="text-sm font-semibold">兜底配置</h3>
           {globalConfig && (
             <span className="text-[#FF6900] text-sm font-bold">
-              当前：{(Number(globalConfig.commissionRate) * 100).toFixed(1)}%
+              拨出系数：{(Number((globalConfig as any).payoutRateMultiplier ?? 1) * 100).toFixed(0)}%
             </span>
           )}
         </div>
-        <p className="text-xs text-white/40">未单独设置的业务员均适用此比例</p>
+        <p className="text-xs text-white/40">未单独分配团队的人员默认走此配置</p>
         <div className="flex gap-2">
           <Input
-            placeholder="比例 % (如 5)"
-            value={globalRate}
-            onChange={e => setGlobalRate(e.target.value)}
+            placeholder="拨出系数 % （不填则100%）"
+            value={globalMultiplier}
+            onChange={e => setGlobalMultiplier(e.target.value)}
             className="bg-black/30 border-white/10 text-white placeholder:text-white/30 rounded-xl"
           />
           <Input
@@ -221,12 +221,12 @@ function CommissionConfig() {
             <div key={c.id} className="bg-white/5 border border-white/10 rounded-xl px-4 py-3 flex items-center gap-3">
               <div className="flex-1">
                 <p className="text-sm font-medium">
-                  {c.agentId === null ? "全局默认" : `业务员 ID: ${c.agentId}`}
+                  {c.agentId === null ? "兜底默认" : `业务员 ID: ${c.agentId}`}
                 </p>
                 {c.note && <p className="text-xs text-white/40 mt-0.5">{c.note}</p>}
               </div>
               <span className="text-[#FF6900] font-bold text-base">
-                {(Number(c.commissionRate) * 100).toFixed(1)}%
+                {(Number((c as any).payoutRateMultiplier ?? 1) * 100).toFixed(0)}%
               </span>
               <button
                 onClick={() => deleteConfigMutation.mutate({ id: c.id })}
