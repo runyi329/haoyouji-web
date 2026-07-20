@@ -53,6 +53,7 @@ export default function CartDrawer() {
   const [pendingPrice, setPendingPrice] = useState(0);
 
   // 余额查询
+  const trpcUtils = trpc.useUtils();
   const { data: cnyBalance } = trpc.recharge.getCnyBalance.useQuery(undefined, { enabled: isAuthenticated });
   const { data: usdtBalance } = trpc.recharge.getBalance.useQuery(undefined, { enabled: isAuthenticated });
   // 实时 USDT/CNY 汇率（服务端缓存，每3秒刷新）
@@ -67,6 +68,9 @@ export default function CartDrawer() {
       setOrderSuccess({ orderId, price: pendingPrice });
       setShowOrderDialog(false);
       cartList.refetch();
+      // 下单扣款后立即刷新余额显示
+      trpcUtils.recharge.getBalance.invalidate();
+      trpcUtils.recharge.getCnyBalance.invalidate();
     },
     onError: (err: any) => {
       const msg = err?.message ?? "下单失败";

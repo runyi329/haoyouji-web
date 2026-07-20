@@ -49,6 +49,8 @@ export default function CustomACManager() {
     onSuccess: (data: any) => {
       toast.success(data?.message || "邀请成功，用户已加入账本");
       setInviteUsername("");
+      // 邀请成功后刷新账本列表（更新 memberCount 显示）
+      utils.ledger.listCustomAC.invalidate();
     },
     onError: (e) => toast.error(e.message),
   });

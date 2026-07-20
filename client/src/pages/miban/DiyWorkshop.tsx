@@ -283,6 +283,7 @@ export default function DiyWorkshop() {
   const [aiNeed, setAiNeed] = useState("");
   const [aiResult, setAiResult] = useState<{ recommended: string[]; reason: string } | null>(null);
   // 余额查询
+  const trpcUtils = trpc.useUtils();
   const { data: cnyBalance } = trpc.recharge.getCnyBalance.useQuery(undefined, { enabled: isAuthenticated });
   const { data: usdtBalance } = trpc.recharge.getBalance.useQuery(undefined, { enabled: isAuthenticated });
   // 实时 USDT/CNY 汇率（服务端缓存，每3秒刷新）
@@ -306,6 +307,9 @@ export default function DiyWorkshop() {
       setOrderSuccess({ orderId, orderNo, deductCny: pendingOrderPrice, deductUsdt: 0, subscriptionMonths: subMonths ?? undefined });
       setShowOrderDialog(false);
       cartList.refetch();
+      // 下单扣款后立即刷新余额显示
+      trpcUtils.recharge.getBalance.invalidate();
+      trpcUtils.recharge.getCnyBalance.invalidate();
     },
     onError: (err: any) => {
       const msg = err?.message ?? "下单失败";

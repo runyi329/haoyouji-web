@@ -161,10 +161,14 @@ export default function TianguiPearDetail() {
   const usdtCnyRate = cryptoPrices?.usdtCnyRate ?? 7.3;
   const totalAvailableCny = cnyBalanceNum + usdtBalanceNum * usdtCnyRate;
 
+  const trpcUtils = trpc.useUtils();
   const createOrder = mtrpc.order.create.useMutation({
     onSuccess: (data: any) => {
       setShowOrderDialog(false);
       setOrderSuccess({ orderNo: data.orderNo });
+      // 下单扣款后立即刷新余额显示
+      trpcUtils.recharge.getBalance.invalidate();
+      trpcUtils.recharge.getCnyBalance.invalidate();
     },
     onError: (err: any) => {
       alert(err.message || "下单失败，请重试");
