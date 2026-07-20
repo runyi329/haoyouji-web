@@ -158,44 +158,29 @@ function OrdersPanel() {
       });
 
   return (
-    <div className="space-y-3">
-      {/* 统计栏 */}
-      <div className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100">
-        {/* 总金额行 */}
-        <div className="flex items-center justify-between mb-2.5 px-0.5">
-          <span className="text-[12px] text-gray-500">订单总金额（不含取消）</span>
-          <span className="text-[16px] font-bold" style={{ color: '#FF6900' }}>¥{totalRevenue.toFixed(2)}</span>
+    <div className="space-y-2">
+      {/* 统计栏 - 紧凑单行 */}
+      <div className="bg-white rounded-xl px-3 py-2 shadow-sm border border-gray-100">
+        {/* 总金额小行 */}
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-[11px] text-gray-400">总金额（不含取消）</span>
+          <span className="text-[13px] font-bold" style={{ color: '#FF6900' }}>¥{totalRevenue.toFixed(2)}</span>
         </div>
-        {/* 状态卡片行 */}
-        <div className="grid grid-cols-4 gap-1.5">
-          {stats.slice(0, 4).map(s => (
+        {/* 状态按鈕单行横排 */}
+        <div className="flex gap-1 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
+          {stats.map(s => (
             <button
               key={s.key}
               onClick={() => setFilterStatus(s.key)}
-              className="rounded-xl py-2 px-1 text-center transition-all"
+              className="flex-shrink-0 rounded-lg px-2 py-1 text-center transition-all"
               style={{
                 background: filterStatus === s.key ? s.color : s.bg,
-                border: `1.5px solid ${filterStatus === s.key ? s.color : 'transparent'}`,
+                border: `1px solid ${filterStatus === s.key ? s.color : 'transparent'}`,
+                minWidth: '44px',
               }}
             >
-              <p className="text-[18px] font-bold leading-tight" style={{ color: filterStatus === s.key ? '#fff' : s.color }}>{s.count}</p>
-              <p className="text-[10px] mt-0.5" style={{ color: filterStatus === s.key ? 'rgba(255,255,255,0.85)' : '#9ca3af' }}>{s.label}</p>
-            </button>
-          ))}
-        </div>
-        <div className="grid grid-cols-3 gap-1.5 mt-1.5">
-          {stats.slice(4).map(s => (
-            <button
-              key={s.key}
-              onClick={() => setFilterStatus(s.key)}
-              className="rounded-xl py-2 px-1 text-center transition-all"
-              style={{
-                background: filterStatus === s.key ? s.color : s.bg,
-                border: `1.5px solid ${filterStatus === s.key ? s.color : 'transparent'}`,
-              }}
-            >
-              <p className="text-[18px] font-bold leading-tight" style={{ color: filterStatus === s.key ? '#fff' : s.color }}>{s.count}</p>
-              <p className="text-[10px] mt-0.5" style={{ color: filterStatus === s.key ? 'rgba(255,255,255,0.85)' : '#9ca3af' }}>{s.label}</p>
+              <p className="text-[13px] font-bold leading-tight" style={{ color: filterStatus === s.key ? '#fff' : s.color }}>{s.count}</p>
+              <p className="text-[9px]" style={{ color: filterStatus === s.key ? 'rgba(255,255,255,0.85)' : '#9ca3af' }}>{s.label}</p>
             </button>
           ))}
         </div>
