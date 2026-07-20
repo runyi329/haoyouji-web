@@ -2338,12 +2338,17 @@ export const mibanOrders = mysqlTable("miban_orders", {
   walletDeductCny: decimal("walletDeductCny", { precision: 10, scale: 2 }).default("0"),
   walletDeductUsdt: decimal("walletDeductUsdt", { precision: 18, scale: 8 }).default("0"),
   usdtCnyRateAtOrder: decimal("usdtCnyRateAtOrder", { precision: 10, scale: 4 }).default("0"),
-  shippedAt: timestamp("shippedAt"),                          // 发货时间
-  autoConfirmAt: timestamp("autoConfirmAt"),                    // 自动确认收货时间（发货后30天）
-  confirmedAt: timestamp("confirmedAt"),                        // 用户主动确认收货时间
+  shippedAt: timestamp("shippedAt", { mode: 'string' }),                          // 发货时间
+  autoConfirmAt: timestamp("autoConfirmAt", { mode: 'string' }),                    // 自动确认收货时间（发货后30天）
+  confirmedAt: timestamp("confirmedAt", { mode: 'string' }),                        // 用户主动确认收货时间
   commissionTrigger: varchar("commission_trigger", { length: 32 }),  // 佣金触发时机快照：order_placed/order_confirmed
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  // 订阅计划字段
+  subscriptionGroupId: varchar("subscriptionGroupId", { length: 32 }),   // 订阅组ID（同组多期订单共享）
+  subscriptionMonths: int("subscriptionMonths"),                          // 订阅总期数（3/6/12）
+  subscriptionIndex: int("subscriptionIndex"),                            // 当前是第几期（1-based）
+  scheduledShipDate: date("scheduledShipDate", { mode: 'string' }),        // 计划发货日期（YYYY-MM-DD 字符串）
+  createdAt: timestamp("createdAt", { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { mode: 'string' }).defaultNow().onUpdateNow().notNull(),
 });
 
 // ─── 佣金配置表 ──────────────────────────────────────────────────────────────

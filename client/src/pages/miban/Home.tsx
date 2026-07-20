@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { Link } from "wouter";
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
+
 import { trpc } from "@/lib/trpc";
 import { mtrpc, cosImg } from "./mibanTrpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -581,81 +582,50 @@ export default function Home() {
         </Link>
       </section>
 
-      {/* ── 大米卡片魔方（双轴自由滚动）────────────────── */}
-      <section className="pb-6">
-        <div
-          style={{
-            overflowX: "auto",
-            overflowY: "auto",
-            height: "calc(3 * 200px + 2 * 12px + 16px)",
-            paddingLeft: 20,
-            paddingRight: 20,
-            paddingBottom: 8,
-            scrollbarWidth: "none",
-            WebkitOverflowScrolling: "touch",
-            touchAction: "pan-x pan-y",
-          }}
-        >
-          <div
-            className="grid gap-3"
-            style={{
-              gridTemplateRows: "repeat(3, 200px)",
-              gridAutoFlow: "column",
-              gridAutoColumns: "44vw",
-              width: "max-content",
-            }}
-          >
+      {/* ── 大米卡片三列网格 ────────────────── */}
+      <section className="pb-6 px-4">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
           {(catalogLoading && (!catalogData || catalogData.length === 0)
-            ? Array.from({ length: 8 }).map((_, i) => ({ id: `sk-${i}`, name: "", origin: "", desc: "", tag: "", img: "", nutrition: { protein: 0, fat: 0, carbs: 0, fiber: 0 }, categories: [], color: "" }))
-            : (() => {
-                // 深浅交替排序：把亮度高(浅色)和亮度低(深色/彩色)的米穿插排列
-                const getLum = (hex: string) => {
-                  const h = (hex || "#F5F0E8").replace("#", "");
-                  const rv = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
-                  return (rv*299 + g*587 + b*114) / 1000;
-                };
-                const light = riceList.filter(r => getLum(r.color || "") >= 150);
-                const dark  = riceList.filter(r => getLum(r.color || "") <  150);
-                const result: typeof riceList = [];
-                const maxLen = Math.max(light.length, dark.length);
-                for (let i = 0; i < maxLen; i++) {
-                  if (i < light.length) result.push(light[i]);
-                  if (i < dark.length)  result.push(dark[i]);
-                }
-                return result;
-              })()
-          ).map((rice, i) => (
+            ? Array.from({ length: 12 }).map((_, i) => ({ id: `sk-${i}`, name: "", origin: "", img: "", color: "" }))
+            : riceList
+          ).map((rice) => (
             <div
-              key={rice.id || i}
-              className="cursor-pointer active:scale-[0.97] transition-transform"
-              style={{ width: "44vw", maxWidth: 180, minWidth: 140 }}
-              onClick={() => rice.name && setActiveRice(rice)}
+              key={rice.id}
+              onClick={() => { const r = riceList.find(x => x.id === rice.id); if (r) setActiveRice(r); }}
+              style={{
+                borderRadius: 16,
+                overflow: "hidden",
+                background: "#fff",
+                border: "1px solid #F0F0F0",
+                display: "flex",
+                flexDirection: "column",
+                height: 160,
+                cursor: "pointer",
+              }}
             >
-              {catalogLoading && !rice.name ? (
-                <div className="w-full rounded-2xl bg-gray-100 animate-pulse" style={{ height: 200 }} />
+              {!rice.name ? (
+                <div style={{ width: "100%", height: "100%", background: "#f5f5f5", borderRadius: 16 }} />
               ) : (
-                <div
-                  className="w-full rounded-2xl overflow-hidden bg-white flex flex-col"
-                  style={{ height: 200, border: "1px solid #F0F0F0" }}
-                >
-                  {/* 大米图片完整显示 */}
-                  <div className="flex items-center justify-center" style={{ height: 138 }}>
+                <>
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 4 }}>
                     <img
                       src={cosImg(rice.img, 280)}
                       alt={rice.name}
                       style={{ width: "80%", height: "100%", objectFit: "contain" }}
                     />
                   </div>
-                  {/* 文字区 */}
-                  <div className="flex-1 flex flex-col justify-center px-3">
-                    <p className="text-[14px] font-bold text-black leading-none mb-1">{rice.name}</p>
-                    <p className="text-[10px] text-gray-400 tracking-wide">{rice.origin}</p>
+                  <div style={{ padding: "0 8px 8px" }}>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: "#000", margin: 0, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {rice.name}
+                    </p>
+                    <p style={{ fontSize: 9, color: "#bbb", margin: 0, marginTop: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {rice.origin}
+                    </p>
                   </div>
-                </div>
+                </>
               )}
             </div>
           ))}
-          </div>
         </div>
       </section>
 

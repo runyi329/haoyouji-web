@@ -56,7 +56,7 @@ const RICE_NUTRITION: Record<string, { kcal: number; carb: number; protein: numb
   coix:   { kcal: 357, carb: 69.1, protein: 12.8, fat: 3.3, fiber: 2.0 },
 };
 
-const STEP_LABELS = ["选重量", "选米种", "调比例", "确认下单"];
+const STEP_LABELS = ["选重量", "选米种", "调比例"];
 
 // 模块级米种列表引用（由主组件在渲染时同步，供 RiceBowl/RecipePoster/AiRatioPoster 等子组件访问）
 let allRiceList: typeof RICE_TYPES = RICE_TYPES;
@@ -269,7 +269,7 @@ export default function DiyWorkshop() {
   const [showAiDialog, setShowAiDialog] = useState(false);
   // 下单相关状态
   const [showOrderDialog, setShowOrderDialog] = useState(false);
-  const [orderSuccess, setOrderSuccess] = useState<{ orderId: number; orderNo: string; deductCny: number; deductUsdt: number } | null>(null);
+  const [orderSuccess, setOrderSuccess] = useState<{ orderId: number; orderNo: string; deductCny: number; deductUsdt: number; subscriptionMonths?: number } | null>(null);
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
   const [receiverAddress, setReceiverAddress] = useState("");
@@ -291,6 +291,10 @@ export default function DiyWorkshop() {
   const usdtBalanceNum = Number(usdtBalance ?? 0);
   const usdtCnyRate = cryptoPrices?.usdtCnyRate ?? 6.7; // 备用汇率
   const totalAvailableCny = cnyBalanceNum + usdtBalanceNum * usdtCnyRate;
+  // 订阅计划状态（null=单次，3/6/12=订阅期数）
+  const [subscriptionPlan, setSubscriptionPlan] = useState<3 | 6 | 12 | null>(null);
+  // 每月发货日（null=未选）
+  const [shipDay, setShipDay] = useState<number | null>(null);
   // 下单 mutation
   const [pendingOrderPrice, setPendingOrderPrice] = useState(0);
   const createOrder = mtrpc.order.create.useMutation({
@@ -298,7 +302,8 @@ export default function DiyWorkshop() {
       console.log('[DiyWorkshop] order.create result:', JSON.stringify(result));
       const orderId = typeof result === 'object' ? (result.orderId ?? result.id ?? result) : result;
       const orderNo = typeof result === 'object' ? (result.orderNo ?? result.order_no ?? '') : '';
-      setOrderSuccess({ orderId, orderNo, deductCny: pendingOrderPrice, deductUsdt: 0 });
+      const subMonths = typeof result === 'object' ? (result.subscriptionMonths ?? null) : null;
+      setOrderSuccess({ orderId, orderNo, deductCny: pendingOrderPrice, deductUsdt: 0, subscriptionMonths: subMonths ?? undefined });
       setShowOrderDialog(false);
       cartList.refetch();
     },
@@ -674,10 +679,59 @@ export default function DiyWorkshop() {
     const selRices = allRiceList.filter((r) => selected.includes(r.id));
     return (
       <div className="overflow-y-auto px-4 pt-4 pb-28" style={{ flex: "1 1 0", minHeight: 0 }}>
-        <div className="text-center mb-4">
+        <div className="text-center mb-2">
           <div className="text-[13px] text-gray-400 mb-1">第三步</div>
           <h2 className="text-[22px] font-bold text-black">调整比例</h2>
         </div>
+
+        {/* 简版营养成分摘要（标题下方） */}
+        {(() => {
+          const totalGrams = cartWeight * 500;
+          let totalKcal = 0, totalCarb = 0, totalProtein = 0, totalFat = 0, totalFiber = 0;
+          selRices.forEach(r => {
+            const pct = ratios[r.id] ?? 0;
+            const grams = totalGrams * pct / 100;
+            const riceData = allRiceList.find(x => x.id === r.id) as any;
+            const nFromCatalog = riceData?.nutrition;
+            const nFromHardcode = RICE_NUTRITION[r.id];
+            const kcal    = nFromCatalog ? Number(nFromCatalog.calories ?? nFromCatalog.energy ?? 0) : (nFromHardcode?.kcal ?? 0);
+            const carb    = nFromCatalog ? Number(nFromCatalog.carbs   ?? 0) : (nFromHardcode?.carb    ?? 0);
+            const protein = nFromCatalog ? Number(nFromCatalog.protein ?? 0) : (nFromHardcode?.protein ?? 0);
+            const fat     = nFromCatalog ? Number(nFromCatalog.fat     ?? 0) : (nFromHardcode?.fat     ?? 0);
+            const fiber   = nFromCatalog ? Number(nFromCatalog.fiber   ?? 0) : (nFromHardcode?.fiber   ?? 0);
+            if (kcal || carb || protein || fat || fiber) {
+              totalKcal    += kcal    * grams / 100;
+              totalCarb    += carb    * grams / 100;
+              totalProtein += protein * grams / 100;
+              totalFat     += fat     * grams / 100;
+              totalFiber   += fiber   * grams / 100;
+            }
+          });
+          const hasNutrition = totalKcal > 0 || totalCarb > 0;
+          if (!hasNutrition) return null;
+          return (
+            <div className="bg-white rounded-2xl px-4 py-2.5 mb-4 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[12px] font-semibold text-gray-700">营养成分估算</span>
+                <span className="text-[10px] text-gray-400">基于 {cartWeight} 斤干米</span>
+              </div>
+              <div className="grid grid-cols-5 gap-1">
+                {[
+                  { label: "热量", value: Math.round(totalKcal).toLocaleString(), unit: "kcal", color: "#FF6900" },
+                  { label: "碳水", value: Math.round(totalCarb), unit: "g", color: "#F59E0B" },
+                  { label: "蛋白质", value: Math.round(totalProtein), unit: "g", color: "#10B981" },
+                  { label: "脂肪", value: Math.round(totalFat), unit: "g", color: "#6366F1" },
+                  { label: "纤维", value: Math.round(totalFiber), unit: "g", color: "#8B5CF6" },
+                ].map(n => (
+                  <div key={n.label} className="flex flex-col items-center gap-0.5">
+                    <span className="text-[13px] font-bold leading-tight" style={{ color: n.color }}>{n.value}<span className="text-[9px] font-normal text-gray-400 ml-0.5">{n.unit}</span></span>
+                    <span className="text-[10px] text-gray-500 leading-tight">{n.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* 米种图片 + 进度条列表（主体） */}
         <div className="flex flex-col gap-4 mb-5">
@@ -742,12 +796,36 @@ export default function DiyWorkshop() {
           <Plus size={16} />添加米种
         </button>
 
+        {/* ─── 订阅计划选择 ──────────────────────────────────────── */}
+        <div className="mb-5">
+          <div className="flex items-center gap-2 mb-2.5">
+            <span className="text-[13px] font-semibold text-black">长期计划</span>
+            <span className="text-[11px] text-gray-400">按月准时发货</span>
+          </div>
+          <div className="flex gap-2">
+            {([3, 6, 12] as const).map(n => (
+              <button
+                key={n}
+                onClick={() => { setSubscriptionPlan(subscriptionPlan === n ? null : n); setShipDay(null); }}
+                className={`flex-1 py-2 rounded-xl text-center transition-all active:scale-95 border-2 ${
+                  subscriptionPlan === n
+                    ? 'border-[#FF6900] bg-orange-50'
+                    : 'border-gray-200 bg-white'
+                }`}
+              >
+                <span className={`text-[13px] font-bold ${ subscriptionPlan === n ? 'text-[#FF6900]' : 'text-gray-700' }`}>{n}个月</span>
+              </button>
+            ))}
+          </div>
+
+        </div>
+
         {/* 小票风格订单明细 */}
         <div className="mb-5 relative" style={{ fontFamily: "'Courier New', Courier, monospace" }}>
           {/* 顶部齿形 */}
           <div className="w-full overflow-hidden" style={{ height: 12 }}>
-            <svg width="100%" height="12" preserveAspectRatio="none">
-              <path d={`M0,12 ${Array.from({ length: 40 }, (_, i) => `Q${i * 5 + 2.5},0 ${i * 5 + 5},12`).join(' ')}`} fill="white" />
+            <svg width="100%" height="12" viewBox="0 0 200 12" preserveAspectRatio="none">
+              <path d={`M0,12 ${Array.from({ length: 40 }, (_, i) => `Q${i * 5 + 2.5},0 ${i * 5 + 5},12`).join(' ')} L200,12 Z`} fill="white" />
             </svg>
           </div>
           <div className="bg-white px-4 py-3">
@@ -790,13 +868,34 @@ export default function DiyWorkshop() {
             {/* 合计行 */}
             <div className="flex items-center justify-between">
               <div>
-                <span className="text-[12px] text-gray-700">共 {selected.length} 种米 · {weight} 斤</span>
+                <span className={`${subscriptionPlan !== null ? 'text-[11px] text-gray-400' : 'text-[12px] text-gray-700'}`}>共 {selected.length} 种米 · {weight} 斤</span>
+                {subscriptionPlan !== null && (
+                  <span className="text-[10px] text-gray-400 ml-1">(单期)</span>
+                )}
               </div>
               <div className="text-right">
-                <span className="text-[11px] text-gray-600">合计 </span>
-                <span className="text-[22px] font-bold" style={{ color: "#FF6900" }}>¥{totalPrice().toFixed(2)}</span>
+                <span className={`${subscriptionPlan !== null ? 'text-[10px] text-gray-400' : 'text-[11px] text-gray-600'}`}>合计 </span>
+                <span className={`font-bold ${subscriptionPlan !== null ? 'text-[15px] text-gray-400' : 'text-[22px]'}`} style={subscriptionPlan === null ? { color: "#FF6900" } : {}}>¥{totalPrice().toFixed(2)}</span>
               </div>
             </div>
+            {/* 订阅计划信息（选了长期计划才显示） */}
+            {subscriptionPlan !== null && (
+              <>
+                <div className="border-t border-dashed border-gray-300 my-3" />
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-gray-500">长期计划</span>
+                  <span className="font-semibold text-gray-700">{subscriptionPlan}期，每期{weight}斤</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px] mt-1">
+                  <span className="text-gray-500">发货周期</span>
+                  <span className="font-semibold text-gray-700">从下单日起每月同日</span>
+                </div>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-[12px] text-gray-700 font-semibold">合计总价</span>
+                  <span className="text-[22px] font-bold" style={{ color: "#FF6900" }}>¥{(totalPrice() * subscriptionPlan).toFixed(2)}</span>
+                </div>
+              </>
+            )}
             {/* 底部感谢语 */}
             <div className="border-t border-dashed border-gray-300 mt-3 pt-2 text-center">
               <p className="text-[10px] text-gray-500">感谢您的订购</p>
@@ -804,13 +903,32 @@ export default function DiyWorkshop() {
           </div>
           {/* 底部齿形 */}
           <div className="w-full overflow-hidden" style={{ height: 12 }}>
-            <svg width="100%" height="12" preserveAspectRatio="none">
-              <path d={`M0,0 ${Array.from({ length: 40 }, (_, i) => `Q${i * 5 + 2.5},12 ${i * 5 + 5},0`).join(' ')}`} fill="white" />
+            <svg width="100%" height="12" viewBox="0 0 200 12" preserveAspectRatio="none">
+              <path d={`M0,0 ${Array.from({ length: 40 }, (_, i) => `Q${i * 5 + 2.5},12 ${i * 5 + 5},0`).join(' ')} L200,0 Z`} fill="white" />
             </svg>
           </div>
         </div>
 
-
+        {/* 下单按钮 */}
+        {isAuthenticated ? (
+          <button
+            onClick={() => setShowOrderDialog(true)}
+            className="w-full py-4 rounded-2xl text-[15px] font-bold text-white active:scale-[0.98] transition-transform mb-2"
+            style={{ background: "#FF6900" }}
+          >
+            {subscriptionPlan === null
+              ? `立即下单 · ¥${totalPrice().toFixed(1)}`
+              : `订阅 ${subscriptionPlan} 个月 · ¥${(totalPrice() * subscriptionPlan).toFixed(1)}`
+            }
+          </button>
+        ) : (
+          <div className="flex flex-col gap-3 mb-2">
+            <button onClick={() => window.location.href = "/login"} className="w-full py-4 rounded-2xl text-[15px] font-bold text-white" style={{ background: "#FF6900" }}>
+              登录后下单
+            </button>
+            <p className="text-center text-[12px] text-gray-400">登录后可保存配方并下单</p>
+          </div>
+        )}
 
       </div>
     );
@@ -918,13 +1036,16 @@ export default function DiyWorkshop() {
           );
         })()}
 
-                {isAuthenticated ? (
+        {isAuthenticated ? (
           <button
             onClick={() => setShowOrderDialog(true)}
             className="w-full py-4 rounded-2xl text-[15px] font-bold text-white active:scale-[0.98] transition-transform"
             style={{ background: "#FF6900" }}
           >
-            立即下单 · ¥{totalPrice().toFixed(1)}
+            {subscriptionPlan === null
+              ? `立即下单 · ¥${totalPrice().toFixed(1)}`
+              : `订阅 ${subscriptionPlan} 期 · ¥${(totalPrice() * subscriptionPlan).toFixed(1)}`
+            }
           </button>
         ) : (
           <div className="flex flex-col gap-3">
@@ -938,7 +1059,7 @@ export default function DiyWorkshop() {
     );
   };
 
-  const steps = [renderStep0, renderStep1, renderStep2, renderStep3];
+  const steps = [renderStep0, renderStep1, renderStep2];
 
   const canNext = () => {
     if (step === 0) return weight >= 10;
@@ -949,7 +1070,7 @@ export default function DiyWorkshop() {
 
   const goNext = () => {
     if (step === 1) applyEqual(selected);
-    setStep((s) => Math.min(3, s + 1));
+    setStep((s) => Math.min(2, s + 1));
   };
 
   return (
@@ -1005,7 +1126,7 @@ export default function DiyWorkshop() {
               <ChevronLeft size={20} />
             </button>
           )}
-          {step < 3 && (
+          {step < 2 && (
             <button ref={(el) => { if (step === 1) bowlTargetRef.current = el; }} onClick={goNext} disabled={!canNext()} className="flex-1 h-12 rounded-xl text-[15px] font-bold text-white flex items-center justify-center gap-1.5 disabled:opacity-40 active:scale-95 transition-all" style={{ background: "#FF6900" }}>
               下一步<ChevronRight size={18} />
             </button>
@@ -1143,8 +1264,15 @@ export default function DiyWorkshop() {
                 })}
               </div>
               <div className="flex items-center justify-between border-t border-orange-100 pt-2">
-                <span className="text-[12px] text-gray-500">应付金额</span>
-                <span className="text-[20px] font-bold text-black">¥{totalPrice().toFixed(2)}</span>
+                <span className="text-[12px] text-gray-500">
+                  {subscriptionPlan !== null ? `订阅 ${subscriptionPlan} 期·应付` : '应付金额'}
+                </span>
+                <div className="text-right">
+                  <span className="text-[20px] font-bold text-black">¥{(subscriptionPlan !== null ? totalPrice() * subscriptionPlan : totalPrice()).toFixed(2)}</span>
+                  {subscriptionPlan !== null && (
+                    <div className="text-[10px] text-gray-400">单期 ¥{totalPrice().toFixed(2)} × {subscriptionPlan}</div>
+                  )}
+                </div>
               </div>
               <div className="flex items-center justify-between pt-1.5 relative">
                 <button
@@ -1156,10 +1284,10 @@ export default function DiyWorkshop() {
                   <ChevronDown size={11} className={`text-gray-400 transition-transform ${showWalletDetail ? 'rotate-180' : ''}`} />
                 </button>
                 <div className="flex items-center gap-2">
-                  {totalAvailableCny < totalPrice() && (
+                  {totalAvailableCny < (subscriptionPlan !== null ? totalPrice() * subscriptionPlan : totalPrice()) && (
                     <button onClick={() => { setShowOrderDialog(false); window.location.href = "/recharge"; }} className="text-[11px] text-[#FF6900] font-semibold">去充値</button>
                   )}
-                  <span className={`text-[13px] font-semibold ${totalAvailableCny >= totalPrice() ? 'text-green-600' : 'text-red-500'}`}>¥{totalAvailableCny.toFixed(2)}</span>
+                  <span className={`text-[13px] font-semibold ${totalAvailableCny >= (subscriptionPlan !== null ? totalPrice() * subscriptionPlan : totalPrice()) ? 'text-green-600' : 'text-red-500'}`}>¥{totalAvailableCny.toFixed(2)}</span>
                 </div>
                 {/* 钉子弹出明细 */}
                 {showWalletDetail && (
@@ -1276,48 +1404,61 @@ export default function DiyWorkshop() {
               )}
             </div>
             {/* 下单按钮 */}
-            <button
-              disabled={createOrder.isPending || !receiverName.trim() || !receiverPhone.trim() || !receiverAddress.trim() || totalAvailableCny < totalPrice()}
-              onClick={() => {
-                const price = totalPrice();
-                setPendingOrderPrice(price);
-                const ingredients = selected.map((id) => {
-                  const rice = allRiceList.find(r => r.id === id)!;
-                  const pct = ratios[id] ?? Math.round(100 / selected.length);
-                  const w = Math.round(weight * pct / 100 * 10) / 10;
-                  // riceId: db_ 前缀去掉取数字，否则用 0
-                  const numId = id.startsWith("db_") ? parseInt(id.slice(3), 10) : 0;
-                  return { riceId: numId, name: rice.name, percentage: pct, colorHex: rice.color, weightJin: w };
-                });
-                // 如果勾选了保存到地址簿，在下单同时保存地址
-                if (saveToBook && receiverName.trim() && receiverPhone.trim() && receiverAddress.trim()) {
-                  addAddressMut.mutate({
-                    name: receiverName.trim(),
-                    phone: receiverPhone.trim(),
-                    province: "",
-                    city: "",
-                    district: "",
-                    detail: receiverAddress.trim(),
-                    label: "其他",
-                    isDefault: false,
-                  });
-                }
-                createOrder.mutate({
-                  recipeName: recipeName || "我的专属米",
-                  ingredients,
-                  totalWeightJin: weight,
-                  totalPrice: price,
-                  receiverName: receiverName.trim(),
-                  receiverPhone: receiverPhone.trim(),
-                  receiverAddress: receiverAddress.trim(),
-                  userNote: userNote.trim() || undefined,
-                });
-              }}
-              className="w-full py-4 rounded-2xl text-[15px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition-transform"
-              style={{ background: "#FF6900" }}
-            >
-              {createOrder.isPending ? <><Loader2 size={18} className="animate-spin" />提交中…</> : totalAvailableCny < totalPrice() ? "余额不足，请先充值" : `确认下单 · 扣款 ¥${totalPrice().toFixed(2)}`}
-            </button>
+            {(() => {
+              const finalPrice = subscriptionPlan !== null ? totalPrice() * subscriptionPlan : totalPrice();
+              const isInsufficient = totalAvailableCny < finalPrice;
+              return (
+                <button
+                  disabled={createOrder.isPending || !receiverName.trim() || !receiverPhone.trim() || !receiverAddress.trim() || isInsufficient}
+                  onClick={() => {
+                    const singlePrice = totalPrice();
+                    const totalPayPrice = subscriptionPlan !== null ? singlePrice * subscriptionPlan : singlePrice;
+                    setPendingOrderPrice(totalPayPrice);
+                    const ingredients = selected.map((id) => {
+                      const rice = allRiceList.find(r => r.id === id)!;
+                      const pct = ratios[id] ?? Math.round(100 / selected.length);
+                      const w = Math.round(weight * pct / 100 * 10) / 10;
+                      const numId = id.startsWith("db_") ? parseInt(id.slice(3), 10) : 0;
+                      return { riceId: numId, name: rice.name, percentage: pct, colorHex: rice.color, weightJin: w };
+                    });
+                    if (saveToBook && receiverName.trim() && receiverPhone.trim() && receiverAddress.trim()) {
+                      addAddressMut.mutate({
+                        name: receiverName.trim(),
+                        phone: receiverPhone.trim(),
+                        province: "",
+                        city: "",
+                        district: "",
+                        detail: receiverAddress.trim(),
+                        label: "其他",
+                        isDefault: false,
+                      });
+                    }
+                    createOrder.mutate({
+                      recipeName: recipeName || "我的专属米",
+                      ingredients,
+                      totalWeightJin: weight,
+                      totalPrice: singlePrice,
+                      receiverName: receiverName.trim(),
+                      receiverPhone: receiverPhone.trim(),
+                      receiverAddress: receiverAddress.trim(),
+                      userNote: userNote.trim() || undefined,
+                      subscriptionMonths: subscriptionPlan ?? undefined,
+                    });
+                  }}
+                  className="w-full py-4 rounded-2xl text-[15px] font-bold text-white flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98] transition-transform"
+                  style={{ background: "#FF6900" }}
+                >
+                  {createOrder.isPending
+                    ? <><Loader2 size={18} className="animate-spin" />提交中…</>
+                    : isInsufficient
+                      ? "余额不足，请先充值"
+                      : subscriptionPlan !== null
+                        ? `确认订阅 ${subscriptionPlan} 期 · 扣款 ¥${finalPrice.toFixed(2)}`
+                        : `确认下单 · 扣款 ¥${finalPrice.toFixed(2)}`
+                  }
+                </button>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -1329,11 +1470,21 @@ export default function DiyWorkshop() {
             <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
               <Check size={32} className="text-green-500" />
             </div>
-            <p className="text-[18px] font-bold text-black mb-1">下单成功！</p>
-            <p className="text-[13px] text-gray-400 mb-4">订单号 {orderSuccess.orderNo}</p>
+            <p className="text-[18px] font-bold text-black mb-1">
+              {orderSuccess.subscriptionMonths ? `订阅成功！` : '下单成功！'}
+            </p>
+            <p className="text-[13px] text-gray-400 mb-4">
+              {orderSuccess.subscriptionMonths
+                ? `已生成 ${orderSuccess.subscriptionMonths} 期订单`
+                : `订单号 ${orderSuccess.orderNo}`
+              }
+            </p>
             <div className="bg-orange-50 rounded-2xl px-5 py-4 mb-5">
-              <p className="text-[12px] text-gray-500 mb-1">已从钱包扣除</p>
-              <p className="text-[22px] font-bold text-[#FF6900]">¥{totalPrice().toFixed(2)}</p>
+              <p className="text-[12px] text-gray-500 mb-1">已从錢包扣除</p>
+              <p className="text-[22px] font-bold text-[#FF6900]">¥{orderSuccess.deductCny.toFixed(2)}</p>
+              {orderSuccess.subscriptionMonths && (
+                <p className="text-[11px] text-gray-500 mt-1">{orderSuccess.subscriptionMonths} 期 × 单期价，按月发货</p>
+              )}
               <p className="text-[11px] text-gray-400 mt-1">优先扣 CNY，不足部分按实时汇率扣 USDT</p>
             </div>
             <div className="flex gap-3">

@@ -116,16 +116,30 @@ async function createOrder(data: typeof mibanOrders.$inferInsert) {
   }
 }
 
+function serializeOrder(o: any) {
+  const dateToStr = (v: any) => v instanceof Date ? v.toISOString() : (v ?? null);
+  return {
+    ...o,
+    shippedAt: dateToStr(o.shippedAt),
+    autoConfirmAt: dateToStr(o.autoConfirmAt),
+    confirmedAt: dateToStr(o.confirmedAt),
+    createdAt: dateToStr(o.createdAt),
+    updatedAt: dateToStr(o.updatedAt),
+  };
+}
+
 async function getUserOrders(userId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(mibanOrders).where(eq(mibanOrders.userId, userId)).orderBy(desc(mibanOrders.createdAt));
+  const rows = await db.select().from(mibanOrders).where(eq(mibanOrders.userId, userId)).orderBy(desc(mibanOrders.createdAt));
+  return rows.map(serializeOrder);
 }
 
 async function getAllOrders() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(mibanOrders).orderBy(desc(mibanOrders.createdAt));
+  const rows = await db.select().from(mibanOrders).orderBy(desc(mibanOrders.createdAt));
+  return rows.map(serializeOrder);
 }
 
 async function updateOrderStatus(
@@ -1134,10 +1148,13 @@ export const mibanOrderRouter = router({
       receiverAddress: z.string().min(5),
       userNote: z.string().optional(),
       productImg: z.string().url().optional(),
+      subscriptionMonths: z.union([z.literal(3), z.literal(6), z.literal(12)]).optional(), // 订阅期数
     }))
     .mutation(async ({ input, ctx }) => {
       const userId = ctx.user!.id;
-      const totalCny = input.totalPrice; // 订单金额（人民币）
+      const singleCny = input.totalPrice; // 单期金额（人民币）
+      const subMonths = input.subscriptionMonths ?? null; // 订阅期数（null=单次）
+      const totalCny = subMonths !== null ? singleCny * subMonths : singleCny; // 本次实际扣款总额
 
       // 1. 查询用户钱包余额
       const cnyBalance = await getUserCnyBalance(userId);
@@ -1153,23 +1170,20 @@ export const mibanOrderRouter = router({
         });
       }
 
-      // 3. 确定扣款方案：优先扣 CNY
+      // 3. 确定扣款方案：优先扣 CNY（一次性扣全部期数）
       let deductCny = 0;
       let deductUsdt = 0;
       if (cnyBalance >= totalCny) {
-        // CNY 足够，全部扣 CNY
         deductCny = totalCny;
         deductUsdt = 0;
       } else {
-        // CNY 不够，先扣完 CNY，剩余按汇率扣 USDT
         deductCny = cnyBalance;
         const remainCny = totalCny - cnyBalance;
         deductUsdt = remainCny / usdtRate;
       }
 
-      // 4. 创建订单
-      // 4a. 查询买家所属团队的制度触发时机，快照到订单中
-      let commissionTriggerSnapshot: string = 'order_confirmed'; // 默认确认收货后触发
+      // 4. 查询买家所属团队的制度触发时机，快照到订单中
+      let commissionTriggerSnapshot: string = 'order_confirmed';
       try {
         const dbConn = await getDbConnection();
         if (dbConn) {
@@ -1201,33 +1215,65 @@ export const mibanOrderRouter = router({
         console.warn('[Miban] 获取制度触发时机失败，使用默认值:', e?.message);
       }
 
-      const letters = Array.from({length:2}, () => String.fromCharCode(65 + Math.floor(Math.random() * 26))).join("");
-      const digits = String(Math.floor(Math.random() * 9000) + 1000);
-      const orderNo = letters + digits;
-      const orderId = await createOrder({
-        orderNo,
-        userId,
-        recipeName: input.recipeName,
-        ingredients: JSON.stringify(input.ingredients) as any,
-        totalWeightJin: input.totalWeightJin.toString() as any,
-        totalPrice: totalCny.toString() as any,
-        receiverName: input.receiverName,
-        receiverPhone: input.receiverPhone,
-        receiverAddress: input.receiverAddress,
-        userNote: input.userNote,
-        productImg: input.productImg,
-        walletDeductCny: deductCny.toString() as any,
-        walletDeductUsdt: deductUsdt.toString() as any,
-        usdtCnyRateAtOrder: usdtRate.toString() as any,
-        commissionTrigger: commissionTriggerSnapshot,
-      });
+      // 5. 生成订单（订阅时生成多期，每期间隔一个月）
+      const totalPeriods = subMonths !== null ? subMonths : 1;
+      // 生成订阅组ID（订阅时使用，单次为null）
+      const subscriptionGroupId = subMonths !== null
+        ? `SUB${Date.now()}${userId}`
+        : null;
 
-      // 5. 扣款（订单已入库后才扣，避免扣款成功但订单失败）
+      const orderIds: number[] = [];
+      const orderNos: string[] = [];
+
+      for (let i = 0; i < totalPeriods; i++) {
+        const letters = Array.from({length:2}, () => String.fromCharCode(65 + Math.floor(Math.random() * 26))).join("");
+        const digits = String(Math.floor(Math.random() * 9000) + 1000);
+        const orderNo = letters + digits + (totalPeriods > 1 ? `P${i+1}` : '');
+
+        // 计划发货日期：第1期立即，后续每期+1个月
+        const shipDate = new Date();
+        shipDate.setMonth(shipDate.getMonth() + i);
+        const scheduledShipDateStr = shipDate.toISOString().slice(0, 10); // YYYY-MM-DD
+
+        // 每期分摊扣款金额（仅记录，实际一次性扣款）
+        const perPeriodDeductCny = deductCny / totalPeriods;
+        const perPeriodDeductUsdt = deductUsdt / totalPeriods;
+
+        const orderId = await createOrder({
+          orderNo,
+          userId,
+          recipeName: input.recipeName,
+          ingredients: JSON.stringify(input.ingredients) as any,
+          totalWeightJin: input.totalWeightJin.toString() as any,
+          totalPrice: singleCny.toString() as any,
+          receiverName: input.receiverName,
+          receiverPhone: input.receiverPhone,
+          receiverAddress: input.receiverAddress,
+          userNote: input.userNote,
+          productImg: input.productImg,
+          walletDeductCny: perPeriodDeductCny.toString() as any,
+          walletDeductUsdt: perPeriodDeductUsdt.toString() as any,
+          usdtCnyRateAtOrder: usdtRate.toString() as any,
+          commissionTrigger: commissionTriggerSnapshot,
+          subscriptionGroupId: subscriptionGroupId ?? undefined,
+          subscriptionMonths: subMonths ?? undefined,
+          subscriptionIndex: i + 1,
+          scheduledShipDate: subMonths !== null ? (scheduledShipDateStr as any) : undefined,
+        });
+        orderIds.push(orderId);
+        orderNos.push(orderNo);
+      }
+
+      // 6. 一次性扣款（所有订单入库后才扣）
+      const firstOrderNo = orderNos[0];
+      const deductNote = subMonths !== null
+        ? `米伴订阅${subMonths}期扣款 #${subscriptionGroupId}`
+        : `米伴订单扣款 #${firstOrderNo}`;
       if (deductCny > 0.001) {
         await adminAdjustCnyBalance({
           userId,
           amount: -deductCny,
-          note: `米伴订单扣款 #${orderNo}`,
+          note: deductNote,
           operatorId: userId,
         });
       }
@@ -1236,13 +1282,19 @@ export const mibanOrderRouter = router({
           userId,
           -deductUsdt,
           'reward',
-          orderId,
-          `米伴订单扣款 #${orderNo} (-${deductUsdt.toFixed(6)} USDT ≈ ¥${(deductUsdt * usdtRate).toFixed(2)})`,
+          orderIds[0],
+          `${deductNote} (-${deductUsdt.toFixed(6)} USDT ≈ ¥${(deductUsdt * usdtRate).toFixed(2)})`,
         );
       }
 
-      console.log(`[Miban] 订单创建并扣款成功: orderId=${orderId}, orderNo=${orderNo}, deductCny=${deductCny}, deductUsdt=${deductUsdt}, rate=${usdtRate}`);
-      return { orderId, orderNo };
+      console.log(`[Miban] 订单创建并扣款成功: orderIds=${orderIds.join(',')}, totalCny=${totalCny}, deductCny=${deductCny}, deductUsdt=${deductUsdt}, subMonths=${subMonths}`);
+      return {
+        orderId: orderIds[0],
+        orderNo: orderNos[0],
+        subscriptionMonths: subMonths ?? undefined,
+        subscriptionGroupId: subscriptionGroupId ?? undefined,
+        orderCount: totalPeriods,
+      };
     }),
   myOrders: protectedProcedure.query(({ ctx }) => getUserOrders(ctx.user!.id)),
   allOrders: mibanAdminProcedure.query(() => getAllOrders()),

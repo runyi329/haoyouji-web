@@ -59,12 +59,15 @@ queryClient.getMutationCache().subscribe(event => {
 
 // 共享 fetch：注入 token / viewAs 头，供 batch 与非 batch 两条 link 复用
 const trpcFetch: typeof globalThis.fetch = (input, init) => {
-  const token = localStorage.getItem('auth-token');
+  const rawToken = localStorage.getItem('auth-token');
+  // 只接受标准 JWT 格式（三段 base64url，不含控制字符/换行）
+  const JWT_RE = /^[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]+\.[A-Za-z0-9\-_]*$/;
+  const token = rawToken && JWT_RE.test(rawToken.trim()) ? rawToken.trim() : null;
   const headers = new Headers(init?.headers);
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
     try {
-      document.cookie = `app_session_id=${token}; path=/; max-age=${365 * 24 * 60 * 60}`;
+      document.cookie = `app_session_id=${token}; path=/; max-age=${365 * 24 * 60 * 60}; SameSite=Lax`;
     } catch (e) {}
   }
   const viewAsUserId = sessionStorage.getItem('view-as-user-id');

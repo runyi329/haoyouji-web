@@ -50,6 +50,8 @@ function OrdersTab() {
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editAddress, setEditAddress] = useState("");
+  // ⚠️ 必须在所有条件性 return 之前声明，否则违反 React hooks 规则
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(t);
@@ -73,266 +75,332 @@ function OrdersTab() {
     </div>
   );
 
-  return (
-    <div className="space-y-4">
-      {(orders ?? []).map((order: any) => {
-        const status = STATUS_MAP[order.status] ?? { label: order.status, color: "text-gray-500 bg-gray-100" };
-        // 确认收货倒计时（最大30天，精确到分钟）
-        const autoConfirmAt = order.autoConfirmAt ? new Date(order.autoConfirmAt).getTime() : null;
-        const shippedAt = order.shippedAt ? new Date(order.shippedAt).getTime() : null;
-        // 如果没有autoConfirmAt但有shippedAt，用shippedAt+30天估算
-        const confirmDeadline = autoConfirmAt ?? (shippedAt ? shippedAt + 30 * 24 * 60 * 60 * 1000 : null);
-        const msLeft = confirmDeadline ? Math.max(0, confirmDeadline - now) : 0;
-        const totalMinutes = Math.floor(msLeft / (1000 * 60));
-        const daysLeft = Math.min(30, Math.floor(totalMinutes / (60 * 24)));
-        const hoursLeft = Math.floor((totalMinutes % (60 * 24)) / 60);
-        const minsLeft = totalMinutes % 60;
-        const countdownText = msLeft > 0
-          ? (daysLeft > 0
-              ? `${daysLeft}天${hoursLeft}小时${minsLeft}分后自动确认`
-              : hoursLeft > 0
-                ? `${hoursLeft}小时${minsLeft}分后自动确认`
-                : `${minsLeft}分钟后自动确认`)
-          : "即将自动确认收货";
-        const ingredients: any[] = (() => { try { return JSON.parse(order.ingredients ?? "[]"); } catch { return []; } })();
-        const hasTracking = !!(order.trackingNo || order.trackingNumber);
-        const trackingNo = order.trackingNo || order.trackingNumber || "";
-        const trackingCompany = order.trackingCompany || "";
-        // 快递100公司代码映射
-        const companyCodeMap: Record<string, string> = {
-          "顺丰": "shunfeng", "SF": "shunfeng", "圆通": "yuantong", "中通": "zhongtong",
-          "韵达": "yunda", "申通": "shentong", "邮政": "youzhengguonei", "EMS": "ems",
-          "京东": "jd", "极兔": "jtexpress", "菜鸟": "cainiao",
-        };
-        const companyCode = Object.entries(companyCodeMap).find(([k]) => trackingCompany.includes(k))?.[1] ?? "";
-        const trackingUrl = companyCode
-          ? `https://www.kuaidi100.com/chaxun?com=${companyCode}&nu=${trackingNo}`
-          : `https://www.kuaidi100.com/chaxun?nu=${trackingNo}`;
+  // ─── 订阅分组：将同一 subscriptionGroupId 的订单合并 ───────────────────────
+  type OrderItem = (typeof orders)[0] & { subscriptionGroupId?: string; subscriptionMonths?: number; subscriptionIndex?: number; scheduledShipDate?: string };
 
-        return (
-          <div key={order.id} className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
-            {/* ── 顶部状态栏 ── */}
-            <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b border-gray-100">
-              <span className="text-[11px] text-gray-400 font-mono">订单号 {order.orderNo || `#${order.id}`}</span>
-              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${status.color}`}>
-                {status.label}
-              </span>
+  const { singleOrders, subscriptionGroups } = (() => {
+    const singles: OrderItem[] = [];
+    const groups: Map<string, OrderItem[]> = new Map();
+    for (const o of (orders ?? []) as OrderItem[]) {
+      if (o.subscriptionGroupId) {
+        const g = groups.get(o.subscriptionGroupId) ?? [];
+        g.push(o);
+        groups.set(o.subscriptionGroupId, g);
+      } else {
+        singles.push(o);
+      }
+    }
+    // 每组内按 subscriptionIndex 排序
+    for (const [k, v] of groups.entries()) {
+      groups.set(k, v.sort((a, b) => (a.subscriptionIndex ?? 0) - (b.subscriptionIndex ?? 0)));
+    }
+    return { singleOrders: singles, subscriptionGroups: groups };
+  })();
+
+  // 将订阅组和单次订单合并成一个渲染列表（订阅组按第1期的 createdAt 排序）
+  const renderList: Array<{ type: 'single'; order: OrderItem } | { type: 'group'; groupId: string; orders: OrderItem[] }> = [];
+  for (const [groupId, groupOrders] of subscriptionGroups.entries()) {
+    renderList.push({ type: 'group', groupId, orders: groupOrders });
+  }
+  for (const o of singleOrders) {
+    renderList.push({ type: 'single', order: o });
+  }
+  // 按最新时间排序（取第一条订单的 createdAt）
+  renderList.sort((a, b) => {
+    const aTime = a.type === 'single' ? new Date(a.order.createdAt).getTime() : new Date(a.orders[0].createdAt).getTime();
+    const bTime = b.type === 'single' ? new Date(b.order.createdAt).getTime() : new Date(b.orders[0].createdAt).getTime();
+    return bTime - aTime;
+  });
+
+  // 单个订单卡片渲染函数（提取出来供订阅展开时复用）
+  const renderOrderCard = (order: OrderItem, isSubChild = false) => {
+    const status = STATUS_MAP[order.status] ?? { label: order.status, color: "text-gray-500 bg-gray-100" };
+    const autoConfirmAt = order.autoConfirmAt ? new Date(order.autoConfirmAt).getTime() : null;
+    const shippedAt = order.shippedAt ? new Date(order.shippedAt).getTime() : null;
+    const confirmDeadline = autoConfirmAt ?? (shippedAt ? shippedAt + 30 * 24 * 60 * 60 * 1000 : null);
+    const msLeft = confirmDeadline ? Math.max(0, confirmDeadline - now) : 0;
+    const totalMinutes = Math.floor(msLeft / (1000 * 60));
+    const daysLeft = Math.min(30, Math.floor(totalMinutes / (60 * 24)));
+    const hoursLeft = Math.floor((totalMinutes % (60 * 24)) / 60);
+    const minsLeft = totalMinutes % 60;
+    const countdownText = msLeft > 0
+      ? (daysLeft > 0 ? `${daysLeft}天${hoursLeft}小时${minsLeft}分后自动确认` : hoursLeft > 0 ? `${hoursLeft}小时${minsLeft}分后自动确认` : `${minsLeft}分钟后自动确认`)
+      : "即将自动确认收货";
+    const ingredients: any[] = (() => { try { return JSON.parse(order.ingredients ?? "[]"); } catch { return []; } })();
+    const hasTracking = !!(order.trackingNo || order.trackingNumber);
+    const trackingNo = order.trackingNo || order.trackingNumber || "";
+    const trackingCompany = order.trackingCompany || "";
+    const companyCodeMap: Record<string, string> = {
+      "顺丰": "shunfeng", "SF": "shunfeng", "圆通": "yuantong", "中通": "zhongtong",
+      "韵达": "yunda", "申通": "shentong", "邮政": "youzhengguonei", "EMS": "ems",
+      "京东": "jd", "极兔": "jtexpress", "菜鸟": "cainiao",
+    };
+    const companyCode = Object.entries(companyCodeMap).find(([k]) => trackingCompany.includes(k))?.[1] ?? "";
+    const trackingUrl = companyCode
+      ? `https://www.kuaidi100.com/chaxun?com=${companyCode}&nu=${trackingNo}`
+      : `https://www.kuaidi100.com/chaxun?nu=${trackingNo}`;
+
+    return (
+      <div key={order.id} className={`bg-white overflow-hidden ${isSubChild ? 'border-l-2 border-orange-200 ml-2' : 'rounded-2xl shadow-sm border border-gray-100'}`}>
+        {/* ── 顶部状态栏 ── */}
+        <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-gray-400 font-mono">订单号 {order.orderNo || `#${order.id}`}</span>
+            {order.subscriptionIndex && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-600 font-semibold">第{order.subscriptionIndex}期</span>
+            )}
+          </div>
+          <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${status.color}`}>
+            {status.label}
+          </span>
+        </div>
+
+        <div className="p-4 space-y-3">
+          {/* ── 商品信息行 ── */}
+          <div className="flex items-center gap-3">
+            {order.productImg && (
+              <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-gray-100">
+                <img src={order.productImg} alt={order.recipeName || "商品图片"} className="w-full h-full object-cover" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <h3 className="text-[15px] font-bold text-black leading-tight truncate">{order.recipeName || "定制米"}</h3>
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                {new Date(order.createdAt).toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+              </p>
+              {order.scheduledShipDate && (
+                <p className="text-[10px] text-orange-500 mt-0.5">计划发货：{order.scheduledShipDate}</p>
+              )}
             </div>
+            <div className="text-right flex-shrink-0">
+              <p className="text-[18px] font-bold leading-tight" style={{ color: "#FF6900" }}>¥{Number(order.totalPrice).toFixed(2)}</p>
+              <p className="text-[11px] text-gray-400 mt-0.5">{order.totalWeightJin} 斤</p>
+            </div>
+          </div>
 
-            <div className="p-4 space-y-3">
-              {/* ── 商品信息行：[缩略图] 商品名+时间 | 价格+重量 ── */}
-              <div className="flex items-center gap-3">
-                {/* 缩略图（有productImg时显示） */}
-                {order.productImg && (
-                  <div className="flex-shrink-0 w-16 h-16 rounded-xl overflow-hidden border border-gray-100">
-                    <img
-                      src={order.productImg}
-                      alt={order.recipeName || "商品图片"}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                )}
-                {/* 商品名 + 时间 */}
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-[15px] font-bold text-black leading-tight truncate">{order.recipeName || "定制米"}</h3>
-                  <p className="text-[11px] text-gray-400 mt-0.5">
-                    {new Date(order.createdAt).toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                  </p>
+          {/* ── 米种配比可视化 ── */}
+          {ingredients.length > 0 && (() => {
+            const totalW = ingredients.reduce((s: number, ing: any) => s + (ing.weightJin || 0), 0) || Number(order.totalWeightJin) || 1;
+            const slices = ingredients.map((ing: any) => ({
+              ...ing,
+              pct: ing.percentage ?? Math.round((ing.weightJin / totalW) * 100),
+              color: ing.colorHex ?? "#C8A87A",
+            }));
+            const R = 44; const cx = 52; const cy = 52;
+            let cumAngle = -Math.PI / 2;
+            const paths = slices.map((s: any) => {
+              const angle = (s.pct / 100) * 2 * Math.PI;
+              const x1 = cx + R * Math.cos(cumAngle);
+              const y1 = cy + R * Math.sin(cumAngle);
+              cumAngle += angle;
+              const x2 = cx + R * Math.cos(cumAngle);
+              const y2 = cy + R * Math.sin(cumAngle);
+              const large = angle > Math.PI ? 1 : 0;
+              const d = slices.length === 1
+                ? `M ${cx} ${cy} m -${R} 0 a ${R} ${R} 0 1 1 ${R * 2} 0 a ${R} ${R} 0 1 1 -${R * 2} 0`
+                : `M ${cx} ${cy} L ${x1} ${y1} A ${R} ${R} 0 ${large} 1 ${x2} ${y2} Z`;
+              return { ...s, d };
+            });
+            return (
+              <div className="flex items-center gap-4">
+                <div className="flex-shrink-0">
+                  <svg width="104" height="104" viewBox="0 0 104 104">
+                    {paths.map((p: any, i: number) => (
+                      <path key={i} d={p.d} fill={p.color} stroke="white" strokeWidth="1.5" />
+                    ))}
+                    <circle cx={cx} cy={cy} r="22" fill="white" />
+                    <text x={cx} y={cy - 5} textAnchor="middle" fontSize="9" fill="#999" fontFamily="system-ui">总计</text>
+                    <text x={cx} y={cy + 8} textAnchor="middle" fontSize="11" fontWeight="bold" fill="#333" fontFamily="system-ui">{totalW}斤</text>
+                  </svg>
                 </div>
-                {/* 价格 + 重量 */}
-                <div className="text-right flex-shrink-0">
-                  <p className="text-[18px] font-bold leading-tight" style={{ color: "#FF6900" }}>¥{Number(order.totalPrice).toFixed(2)}</p>
-                  <p className="text-[11px] text-gray-400 mt-0.5">{order.totalWeightJin} 斤</p>
+                <div className="flex-1 space-y-1.5 min-w-0">
+                  {slices.map((s: any, i: number) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: s.color }} />
+                      <span className="text-[12px] text-gray-700 flex-1 truncate">{s.name}</span>
+                      <span className="text-[11px] text-gray-400 flex-shrink-0">{s.weightJin}斤</span>
+                      <span className="text-[11px] font-bold flex-shrink-0 w-8 text-right" style={{ color: s.color }}>{s.pct}%</span>
+                    </div>
+                  ))}
                 </div>
               </div>
+            );
+          })()}
 
-              {/* ── 米种配比可视化 ── */}
-              {ingredients.length > 0 && (() => {
-                // 计算每种米的百分比
-                const totalW = ingredients.reduce((s: number, ing: any) => s + (ing.weightJin || 0), 0) || Number(order.totalWeightJin) || 1;
-                const slices = ingredients.map((ing: any) => ({
-                  ...ing,
-                  pct: ing.percentage ?? Math.round((ing.weightJin / totalW) * 100),
-                  color: ing.colorHex ?? "#C8A87A",
-                }));
-                // 生成SVG饼图路径
-                const R = 44; const cx = 52; const cy = 52;
-                let cumAngle = -Math.PI / 2;
-                const paths = slices.map((s: any) => {
-                  const angle = (s.pct / 100) * 2 * Math.PI;
-                  const x1 = cx + R * Math.cos(cumAngle);
-                  const y1 = cy + R * Math.sin(cumAngle);
-                  cumAngle += angle;
-                  const x2 = cx + R * Math.cos(cumAngle);
-                  const y2 = cy + R * Math.sin(cumAngle);
-                  const large = angle > Math.PI ? 1 : 0;
-                  const d = slices.length === 1
-                    ? `M ${cx} ${cy} m -${R} 0 a ${R} ${R} 0 1 1 ${R * 2} 0 a ${R} ${R} 0 1 1 -${R * 2} 0`
-                    : `M ${cx} ${cy} L ${x1} ${y1} A ${R} ${R} 0 ${large} 1 ${x2} ${y2} Z`;
-                  return { ...s, d };
-                });
-                return (
-                  <div className="flex items-center gap-4">
-                    {/* SVG 饼图 */}
-                    <div className="flex-shrink-0">
-                      <svg width="104" height="104" viewBox="0 0 104 104">
-                        {paths.map((p: any, i: number) => (
-                          <path key={i} d={p.d} fill={p.color} stroke="white" strokeWidth="1.5" />
-                        ))}
-                        {/* 中心白圆（甜甜圈效果） */}
-                        <circle cx={cx} cy={cy} r="22" fill="white" />
-                        <text x={cx} y={cy - 5} textAnchor="middle" fontSize="9" fill="#999" fontFamily="system-ui">总计</text>
-                        <text x={cx} y={cy + 8} textAnchor="middle" fontSize="11" fontWeight="bold" fill="#333" fontFamily="system-ui">{totalW}斤</text>
-                      </svg>
-                    </div>
-                    {/* 图例列表 */}
-                    <div className="flex-1 space-y-1.5 min-w-0">
-                      {slices.map((s: any, i: number) => (
-                        <div key={i} className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: s.color }} />
-                          <span className="text-[12px] text-gray-700 flex-1 truncate">{s.name}</span>
-                          <span className="text-[11px] text-gray-400 flex-shrink-0">{s.weightJin}斤</span>
-                          <span className="text-[11px] font-bold flex-shrink-0 w-8 text-right" style={{ color: s.color }}>{s.pct}%</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* ── 收货信息 ── */}
-              {order.receiverName && (
-                <div className="bg-gray-50 rounded-xl p-3 space-y-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-gray-400" />
-                      <span className="text-[11px] font-semibold text-gray-500">收货信息</span>
-                    </div>
-                    <button
-                      onClick={() => setShowPrivacy(v => !v)}
-                      className="text-gray-400 active:opacity-70 transition-opacity"
-                    >
-                      {showPrivacy ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[13px] font-semibold text-gray-800">{order.receiverName}</span>
-                    <span className="text-[12px] text-gray-500">
-                      {showPrivacy
-                        ? (order.receiverPhone ?? '').replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')
-                        : order.receiverPhone}
-                    </span>
-                  </div>
-                  <p className="text-[12px] text-gray-500 leading-relaxed">
-                    {showPrivacy
-                      ? (() => { const a = dedupeAddress(order.receiverAddress ?? ''); if (a.length <= 10) return a; return a.slice(0, 8) + '***' + a.slice(-6); })()
-                      : dedupeAddress(order.receiverAddress ?? '')}
-                  </p>
+          {/* ── 收货信息 ── */}
+          {order.receiverName && (
+            <div className="bg-gray-50 rounded-xl p-3 space-y-1">
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-gray-400" />
+                  <span className="text-[11px] font-semibold text-gray-500">收货信息</span>
                 </div>
-              )}
-
-              {/* ── 备注 ── */}
-              {order.userNote && (
-                <div className="flex items-start gap-1.5">
-                  <span className="text-[11px] text-gray-400 flex-shrink-0 mt-0.5">备注：</span>
-                  <span className="text-[12px] text-gray-600">{order.userNote}</span>
-                </div>
-              )}
-
-              {/* ── 物流信息 ── */}
-              {hasTracking ? (
-                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                  <div className="flex items-center gap-1.5">
-                    <Truck className="w-3.5 h-3.5 text-green-500" />
-                    <div>
-                      <span className="text-[12px] font-medium text-gray-700">{trackingCompany || "快递"}</span>
-                      <span className="text-[11px] text-gray-400 ml-1.5 font-mono">{trackingNo}</span>
-                    </div>
-                  </div>
-                  <a
-                    href={trackingUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white active:scale-95 transition-transform"
-                    style={{ background: "#FF6900" }}
-                  >
-                    查物流 <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              ) : (
-                order.status !== "cancelled" && order.status !== "delivered" && (
-                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                    <div className="flex items-center gap-1.5">
-                      <Truck className="w-3.5 h-3.5 text-gray-300" />
-                      <span className="text-[11px] text-gray-400">
-                        {order.status === "pending" ? "待发货，订单已接收、正在备货中" : "配货完成后将更新物流信息"}
-                      </span>
-                    </div>
-                    {order.status === "pending" && (
-                      <button
-                        onClick={() => {
-                          setEditAddressOrderId(order.id);
-                          setEditName(order.receiverName ?? "");
-                          setEditPhone(order.receiverPhone ?? "");
-                          setEditAddress(order.receiverAddress ?? "");
-                        }}
-                        className="text-[11px] font-semibold px-2.5 py-1 rounded-lg"
-                        style={{ color: "#FF6900", background: "rgba(255,105,0,0.08)" }}
-                      >修改地址</button>
-                    )}
-                  </div>
-                )
-              )}
-
-              {/* ── 管理员备注 ── */}
-              {order.adminNote && (
-                <div className="bg-amber-50 rounded-xl px-3 py-2 flex items-start gap-1.5">
-                  <span className="text-[11px] text-amber-600 font-semibold flex-shrink-0">客服备注：</span>
-                  <span className="text-[11px] text-amber-700">{order.adminNote}</span>
-                </div>
-              )}
-
-              {/* ── 确认收货（已发货状态） ── */}
-              {order.status === "shipped" && (
-                <div className="pt-2 border-t border-gray-100">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-amber-400" />
-                      <span className="text-[11px] text-amber-600">{countdownText}</span>
-                    </div>
-                    <button
-                      onClick={() => {
-                        if (window.confirm("确认已收到货物？")) {
-                          confirmMutation.mutate({ orderId: order.id });
-                        }
-                      }}
-                      disabled={confirmMutation.isPending}
-                      className="flex items-center gap-1 px-4 py-1.5 rounded-lg text-[12px] font-semibold text-white active:scale-95 transition-transform disabled:opacity-60"
-                      style={{ background: "#FF6900" }}
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      确认收货
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* ── 去评价（已送达状态） ── */}
-              {order.status === "delivered" && (
-                <div className="pt-2 border-t border-gray-100 flex justify-end">
-                  <button
-                    onClick={() => {
-                      // 跳转到评价页，带上orderId
-                      window.location.href = `/p/proj_hzxm2t/review?orderId=${order.id}`;
-                    }}
-                    className="flex items-center gap-1 px-4 py-1.5 rounded-lg text-[12px] font-semibold active:scale-95 transition-transform border border-amber-400 text-amber-600 bg-amber-50"
-                  >
-                    <Star className="w-3.5 h-3.5" />
-                    去评价
-                  </button>
-                </div>
-              )}
+                <button onClick={() => setShowPrivacy(v => !v)} className="text-gray-400 active:opacity-70 transition-opacity">
+                  {showPrivacy ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[13px] font-semibold text-gray-800">{order.receiverName}</span>
+                <span className="text-[12px] text-gray-500">
+                  {showPrivacy ? (order.receiverPhone ?? '').replace(/(\d{3})\d{4}(\d{4})/, '$1****$2') : order.receiverPhone}
+                </span>
+              </div>
+              <p className="text-[12px] text-gray-500 leading-relaxed">
+                {showPrivacy
+                  ? (() => { const a = dedupeAddress(order.receiverAddress ?? ''); if (a.length <= 10) return a; return a.slice(0, 8) + '***' + a.slice(-6); })()
+                  : dedupeAddress(order.receiverAddress ?? '')}
+              </p>
             </div>
+          )}
+
+          {/* ── 备注 ── */}
+          {order.userNote && (
+            <div className="flex items-start gap-1.5">
+              <span className="text-[11px] text-gray-400 flex-shrink-0 mt-0.5">备注：</span>
+              <span className="text-[12px] text-gray-600">{order.userNote}</span>
+            </div>
+          )}
+
+          {/* ── 物流信息 ── */}
+          {hasTracking ? (
+            <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+              <div className="flex items-center gap-1.5">
+                <Truck className="w-3.5 h-3.5 text-green-500" />
+                <div>
+                  <span className="text-[12px] font-medium text-gray-700">{trackingCompany || "快递"}</span>
+                  <span className="text-[11px] text-gray-400 ml-1.5 font-mono">{trackingNo}</span>
+                </div>
+              </div>
+              <a href={trackingUrl} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white active:scale-95 transition-transform"
+                style={{ background: "#FF6900" }}>
+                查物流 <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+          ) : (
+            order.status !== "cancelled" && order.status !== "delivered" && (
+              <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                <div className="flex items-center gap-1.5">
+                  <Truck className="w-3.5 h-3.5 text-gray-300" />
+                  <span className="text-[11px] text-gray-400">
+                    {order.status === "pending" ? "待发货，订单已接收、正在备货中" : "配货完成后将更新物流信息"}
+                  </span>
+                </div>
+                {order.status === "pending" && (
+                  <button
+                    onClick={() => { setEditAddressOrderId(order.id); setEditName(order.receiverName ?? ""); setEditPhone(order.receiverPhone ?? ""); setEditAddress(order.receiverAddress ?? ""); }}
+                    className="text-[11px] font-semibold px-2.5 py-1 rounded-lg"
+                    style={{ color: "#FF6900", background: "rgba(255,105,0,0.08)" }}
+                  >修改地址</button>
+                )}
+              </div>
+            )
+          )}
+
+          {/* ── 管理员备注 ── */}
+          {order.adminNote && (
+            <div className="bg-amber-50 rounded-xl px-3 py-2 flex items-start gap-1.5">
+              <span className="text-[11px] text-amber-600 font-semibold flex-shrink-0">客服备注：</span>
+              <span className="text-[11px] text-amber-700">{order.adminNote}</span>
+            </div>
+          )}
+
+          {/* ── 确认收货（已发货状态） ── */}
+          {order.status === "shipped" && (
+            <div className="pt-2 border-t border-gray-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="text-[11px] text-amber-600">{countdownText}</span>
+                </div>
+                <button
+                  onClick={() => { if (window.confirm("确认已收到货物？")) { confirmMutation.mutate({ orderId: order.id }); } }}
+                  disabled={confirmMutation.isPending}
+                  className="flex items-center gap-1 px-4 py-1.5 rounded-lg text-[12px] font-semibold text-white active:scale-95 transition-transform disabled:opacity-60"
+                  style={{ background: "#FF6900" }}
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5" />确认收货
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── 去评价（已送达状态） ── */}
+          {order.status === "delivered" && (
+            <div className="pt-2 border-t border-gray-100 flex justify-end">
+              <button
+                onClick={() => { window.location.href = `/p/proj_hzxm2t/review?orderId=${order.id}`; }}
+                className="flex items-center gap-1 px-4 py-1.5 rounded-lg text-[12px] font-semibold active:scale-95 transition-transform border border-amber-400 text-amber-600 bg-amber-50"
+              >
+                <Star className="w-3.5 h-3.5" />去评价
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      {renderList.map((item) => {
+        if (item.type === 'single') {
+          return renderOrderCard(item.order);
+        }
+        // ── 订阅组卡片 ──
+        const { groupId, orders: groupOrders } = item;
+        const firstOrder = groupOrders[0];
+        const subMonths = firstOrder.subscriptionMonths ?? groupOrders.length;
+        const totalGroupPrice = groupOrders.reduce((s, o) => s + Number(o.totalPrice), 0);
+        const isExpanded = expandedGroups.has(groupId);
+        const completedCount = groupOrders.filter(o => o.status === 'delivered').length;
+        const shippedCount = groupOrders.filter(o => o.status === 'shipped').length;
+        const pendingCount = groupOrders.filter(o => o.status === 'pending').length;
+        return (
+          <div key={groupId} className="bg-white rounded-2xl shadow-sm border border-orange-200 overflow-hidden">
+            {/* 订阅组头部 */}
+            <div className="px-4 py-3 bg-orange-50 border-b border-orange-100">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px] font-bold text-[#FF6900]">订阅计划</span>
+                  <span className="text-[11px] px-2 py-0.5 rounded-full bg-orange-100 text-orange-600 font-semibold">{subMonths}期</span>
+                  <span className="text-[11px] text-gray-400">共{groupOrders.length}单</span>
+                </div>
+                <span className="text-[16px] font-bold text-black">¥{totalGroupPrice.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center gap-3 mt-1.5">
+                <span className="text-[11px] text-gray-500">{firstOrder.recipeName || "定制米"} · {firstOrder.totalWeightJin}斤/期</span>
+                <div className="flex items-center gap-1.5 ml-auto">
+                  {completedCount > 0 && <span className="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full">已完成{completedCount}</span>}
+                  {shippedCount > 0 && <span className="text-[10px] text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">运输中{shippedCount}</span>}
+                  {pendingCount > 0 && <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full">待发货{pendingCount}</span>}
+                </div>
+              </div>
+              {/* 进度条 */}
+              <div className="mt-2 h-1.5 bg-orange-100 rounded-full overflow-hidden">
+                <div className="h-full bg-[#FF6900] rounded-full transition-all" style={{ width: `${(completedCount / groupOrders.length) * 100}%` }} />
+              </div>
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-[10px] text-gray-400">进度 {completedCount}/{groupOrders.length}</span>
+                <button
+                  onClick={() => setExpandedGroups(prev => {
+                    const next = new Set(prev);
+                    if (next.has(groupId)) next.delete(groupId); else next.add(groupId);
+                    return next;
+                  })}
+                  className="flex items-center gap-1 text-[11px] text-[#FF6900] font-semibold active:opacity-70"
+                >
+                  {isExpanded ? '收起' : '展开明细'}
+                  <ChevronRight className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                </button>
+              </div>
+            </div>
+            {/* 展开的子订单列表 */}
+            {isExpanded && (
+              <div className="divide-y divide-gray-100">
+                {groupOrders.map(o => renderOrderCard(o, true))}
+              </div>
+            )}
           </div>
         );
       })}

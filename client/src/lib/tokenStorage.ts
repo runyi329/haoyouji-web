@@ -87,7 +87,7 @@ export function cookieGetToken(): string | null {
 
 export function cookieSetToken(token: string): void {
   try {
-    document.cookie = `${COOKIE_NAME}=${token}; path=/; max-age=${ONE_YEAR_SECONDS}`;
+    document.cookie = `${COOKIE_NAME}=${token}; path=/; max-age=${ONE_YEAR_SECONDS}; SameSite=Lax`;
   } catch {}
 }
 
