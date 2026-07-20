@@ -235,8 +235,9 @@ async function triggerMultiLevelCommission(params: {
   orderNo: string;
   buyerUserId: number;
   orderAmount: number;
+  ingredients?: { riceId: number; weightJin: number; percentage: number }[];
 }) {
-  const { orderId, orderNo, buyerUserId, orderAmount } = params;
+  const { orderId, orderNo, buyerUserId, orderAmount, ingredients } = params;
   const dbConn = await getDbConnection();
   if (!dbConn) return;
 
@@ -357,6 +358,43 @@ async function triggerMultiLevelCommission(params: {
     return;
   }
 
+  // ── 计算拨出池：按每种米的 total_payout_rate 加权 ──────────────────────────────
+  // 如果 ingredients 有效且有 riceId，则按产品拨出系数计算拨出池
+  // 否则 payoutPool = orderAmount（向后兼容，等同于拨出系数100%）
+  let payoutPool = orderAmount;
+  try {
+    if (ingredients && ingredients.length > 0) {
+      const riceIds = [...new Set(ingredients.filter(i => i.riceId > 0).map(i => i.riceId))];
+      if (riceIds.length > 0) {
+        const ph = riceIds.map(() => '?').join(',');
+        const [rateRows2] = await (dbConn as any).execute(
+          `SELECT id, COALESCE(total_payout_rate, 0) AS payout_rate FROM miban_rice_varieties WHERE id IN (${ph})`,
+          riceIds
+        ) as [any[], any];
+        const rateMap: Record<number, number> = {};
+        for (const r of (rateRows2 as any[])) rateMap[Number(r.id)] = parseFloat(r.payout_rate ?? '0');
+        // 按每种米的金额比例加权计算拨出池
+        let poolSum = 0;
+        for (const ing of ingredients) {
+          if (ing.riceId <= 0) continue;
+          const rate = rateMap[ing.riceId] ?? 0;
+          const ingAmount = orderAmount * (ing.percentage / 100);
+          poolSum += ingAmount * rate;
+        }
+        if (poolSum > 0) {
+          payoutPool = parseFloat(poolSum.toFixed(2));
+          console.log(`[Commission] 订单 ${orderNo} 拨出池: ¥${payoutPool} (订单总额 ¥${orderAmount})`);
+        } else {
+          // 所有米种拨出系数为0，不分佣
+          console.log(`[Commission] 订单 ${orderNo} 所有米种拨出系数为0，跳过分佣`);
+          return;
+        }
+      }
+    }
+  } catch (e: any) {
+    console.error('[Commission] 拨出池计算失败，使用订单全额:', e?.message);
+  }
+
   // 查询下单时锁定的 CNY/USDT 汇率（兜底用 7.2）
   let cnyRate = 6.7;
   try {
@@ -395,7 +433,7 @@ async function triggerMultiLevelCommission(params: {
     const parentId: number | null = (parentRows as any[])[0]?.invited_by_user_id ?? null;
     if (!parentId) break;
 
-    const commCny = parseFloat((orderAmount * level.rate * teamMultiplier).toFixed(2));
+    const commCny = parseFloat((payoutPool * level.rate * teamMultiplier).toFixed(2));
     if (commCny > 0) {
       try {
         await settleCommission(parentId, commCny, level.levelIndex, `米伴代数佣金 第${level.levelIndex}层 订单#${orderNo}`);
@@ -443,7 +481,7 @@ async function triggerMultiLevelCommission(params: {
         if (myRate <= allocatedRate) continue; // 天花板不超过已分配，跳过（被压缩）
 
         const diff = parseFloat((myRate - allocatedRate).toFixed(4));
-        const commCny = parseFloat((orderAmount * diff * teamMultiplier).toFixed(2));
+        const commCny = parseFloat((payoutPool * diff * teamMultiplier).toFixed(2));
 
         if (commCny > 0) {
           try {
@@ -479,7 +517,7 @@ async function triggerMultiLevelCommission(params: {
           chainIds
         );
         for (const divUser of (divUsers as any[])) {
-          const divCny = parseFloat((orderAmount * dividendRate * teamMultiplier).toFixed(2));
+          const divCny = parseFloat((payoutPool * dividendRate * teamMultiplier).toFixed(2));
           if (divCny > 0) {
             try {
               await settleCommission(
@@ -1357,6 +1395,7 @@ export const mibanOrderRouter = router({
                 orderNo: orderForCommission.orderNo,
                 buyerUserId: orderForCommission.userId,
                 orderAmount: parseFloat(String(orderForCommission.totalPrice ?? 0)),
+                ingredients: (() => { try { return JSON.parse(String(orderForCommission.ingredients ?? '[]')); } catch { return []; } })(),
               });
               console.log(`[Miban] 订单 ${orderForCommission.orderNo} 触发时机为 order_placed，商家确认后已触发分佣`);
             }
@@ -1394,6 +1433,7 @@ export const mibanOrderRouter = router({
             orderNo: order.orderNo,
             buyerUserId: order.userId,
             orderAmount: parseFloat(String(order.totalPrice ?? 0)),
+            ingredients: (() => { try { return JSON.parse(String(order.ingredients ?? '[]')); } catch { return []; } })(),
           });
         } catch (e: any) {
           console.error('[Miban] 分佣引擎错误（不影响确认收货）:', e?.message);
@@ -1440,16 +1480,40 @@ export const mibanOrderRouter = router({
 
       // 1. 查订单基本信息
       const [orderRows] = await (dbConn as any).execute(
-        `SELECT id, order_no, user_id, total_price, usdtCnyRateAtOrder FROM miban_orders WHERE id = ? LIMIT 1`,
+        `SELECT id, orderNo, userId, totalPrice, usdtCnyRateAtOrder FROM miban_orders WHERE id = ? LIMIT 1`,
         [input.orderId]
       ) as [any[], any];
       const order = (orderRows as any[])[0];
       if (!order) return { items: [], planName: null, teamName: null, isFallback: false, totalCny: 0 };
 
-      const buyerUserId = order.user_id;
-      const orderAmount = parseFloat(order.total_price ?? '0');
+            const buyerUserId = order.userId;
+      const orderAmount = parseFloat(order.totalPrice ?? '0');
       const cnyRate = parseFloat(order.usdtCnyRateAtOrder ?? '6.7') || 6.7;
-
+      // 计算拨出池：按每种米的 total_payout_rate 加权
+      let payoutPool = orderAmount;
+      try {
+        const ings = (() => { try { return JSON.parse(String(order.ingredients ?? '[]')); } catch { return []; } })();
+        if (Array.isArray(ings) && ings.length > 0) {
+          const riceIds2 = [...new Set((ings as any[]).filter((i: any) => i.riceId > 0).map((i: any) => i.riceId))] as number[];
+          if (riceIds2.length > 0) {
+            const ph2 = riceIds2.map(() => '?').join(',');
+            const [rateRows3] = await (dbConn as any).execute(
+              `SELECT id, COALESCE(total_payout_rate, 0) AS payout_rate FROM miban_rice_varieties WHERE id IN (${ph2})`,
+              riceIds2
+            ) as [any[], any];
+            const rateMap2: Record<number, number> = {};
+            for (const r of (rateRows3 as any[])) rateMap2[Number(r.id)] = parseFloat(r.payout_rate ?? '0');
+            let poolSum2 = 0;
+            for (const ing of (ings as any[])) {
+              if (!ing.riceId || ing.riceId <= 0) continue;
+              const rate2 = rateMap2[ing.riceId] ?? 0;
+              const ingAmt = orderAmount * ((ing.percentage ?? 0) / 100);
+              poolSum2 += ingAmt * rate2;
+            }
+            if (poolSum2 > 0) payoutPool = parseFloat(poolSum2.toFixed(2));
+          }
+        }
+      } catch { /* 使用订单全额 */ }
       // 2. 查找团队
       let teamPlanId: number | null = null;
       let teamMultiplier = 1.0;
@@ -1562,7 +1626,7 @@ export const mibanOrderRouter = router({
         const parentId: number | null = (parentRows as any[])[0]?.invited_by_user_id ?? null;
         const parentName: string = (parentRows as any[])[0]?.parent_name ?? `用户#${parentId}`;
         if (!parentId) break;
-        const commCny = parseFloat((orderAmount * level.rate * teamMultiplier).toFixed(2));
+        const commCny = parseFloat((payoutPool * level.rate * teamMultiplier).toFixed(2));
         if (commCny > 0) {
           items.push({ type: 'gen', userId: parentId, userName: parentName, levelLabel: `第${level.levelIndex}代佣金`, commCny, commUsdt: parseFloat((commCny / cnyRate).toFixed(4)) });
           totalCny += commCny;
@@ -1595,7 +1659,7 @@ export const mibanOrderRouter = router({
           const myRate = person.bonusRate;
           if (myRate <= allocatedRate) continue;
           const diff = parseFloat((myRate - allocatedRate).toFixed(4));
-          const commCny = parseFloat((orderAmount * diff * teamMultiplier).toFixed(2));
+          const commCny = parseFloat((payoutPool * diff * teamMultiplier).toFixed(2));
           if (commCny > 0) {
             items.push({ type: 'rank', userId: person.userId, userName: person.name, levelLabel: `直级奖(${(person.bonusRate*100).toFixed(0)}%档差额${(diff*100).toFixed(1)}%)`, commCny, commUsdt: parseFloat((commCny / cnyRate).toFixed(4)) });
             totalCny += commCny;
@@ -1604,7 +1668,52 @@ export const mibanOrderRouter = router({
         }
       }
 
-      return { items, planName, teamName, isFallback, totalCny: parseFloat(totalCny.toFixed(2)), noConfig: false };
+      const unallocatedCny = parseFloat((orderAmount - totalCny).toFixed(2));
+      return { items, planName, teamName, isFallback, totalCny: parseFloat(totalCny.toFixed(2)), orderAmount: parseFloat(orderAmount.toFixed(2)), unallocatedCny, noConfig: false };
+    }),
+
+  // 管理员取消订单（退款原路返回）
+  adminCancel: mibanAdminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB not available' });
+      const [order] = await db.select().from(mibanOrders).where(eq(mibanOrders.id, input.id)).limit(1);
+      if (!order) throw new TRPCError({ code: 'NOT_FOUND', message: '订单不存在' });
+      if (order.status === 'cancelled') throw new TRPCError({ code: 'BAD_REQUEST', message: '订单已取消' });
+      if (order.status === 'delivered') throw new TRPCError({ code: 'BAD_REQUEST', message: '已送达订单不可取消' });
+
+      const deductCny = parseFloat(String(order.walletDeductCny ?? 0));
+      const deductUsdt = parseFloat(String(order.walletDeductUsdt ?? 0));
+      const usdtRate = parseFloat(String(order.usdtCnyRateAtOrder ?? 0)) || 6.7;
+      const orderNo = order.orderNo;
+      const userId = order.userId;
+
+      if (deductCny > 0.001) {
+        await adminAdjustCnyBalance({ userId, amount: deductCny, note: `米伴订单退款 #${orderNo}`, operatorId: userId });
+      }
+      if (deductUsdt > 0.000001) {
+        await addUserBalance(userId, deductUsdt, 'reward', order.id,
+          `米伴订单退款 #${orderNo} (+${deductUsdt.toFixed(6)} USDT ≈ ¥${(deductUsdt * usdtRate).toFixed(2)})`);
+      }
+      await db.update(mibanOrders).set({ status: 'cancelled' }).where(eq(mibanOrders.id, input.id));
+      console.log(`[Miban] 管理员取消并退款: orderId=${order.id}, refundCny=${deductCny}, refundUsdt=${deductUsdt}`);
+      return { success: true, refundCny: deductCny, refundUsdt: deductUsdt };
+    }),
+
+  // 管理员删除订单（不退款，直接从数据库删除）
+  adminDelete: mibanAdminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB not available' });
+      const [order] = await db.select().from(mibanOrders).where(eq(mibanOrders.id, input.id)).limit(1);
+      if (!order) throw new TRPCError({ code: 'NOT_FOUND', message: '订单不存在' });
+      // 同时删除关联的佣金记录
+      await db.delete(mibanCommissions).where(eq(mibanCommissions.orderId, input.id));
+      await db.delete(mibanOrders).where(eq(mibanOrders.id, input.id));
+      console.log(`[Miban] 管理员删除订单: orderId=${order.id}, orderNo=${order.orderNo}（不退款）`);
+      return { success: true };
     }),
 });
 

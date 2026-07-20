@@ -1418,7 +1418,7 @@ export default function DiyWorkshop() {
                       const rice = allRiceList.find(r => r.id === id)!;
                       const pct = ratios[id] ?? Math.round(100 / selected.length);
                       const w = Math.round(weight * pct / 100 * 10) / 10;
-                      const numId = id.startsWith("db_") ? parseInt(id.slice(3), 10) : 0;
+                      const numId = id.startsWith("db_") ? parseInt(id.slice(3), 10) : (parseInt(id, 10) || 0);
                       return { riceId: numId, name: rice.name, percentage: pct, colorHex: rice.color, weightJin: w };
                     });
                     if (saveToBook && receiverName.trim() && receiverPhone.trim() && receiverAddress.trim()) {
