@@ -23,7 +23,7 @@ function AnimatedNumber({ value }: { value: number }) {
   );
 }
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Check, Minus, Plus, ChevronRight, ChevronLeft, Shuffle, Sliders, Share2, X, Download, Sparkles, Loader2, ShoppingCart, Wallet, MapPin, Phone, User, BookMarked, Heart } from "lucide-react";
+import { Check, Minus, Plus, ChevronRight, ChevronLeft, ChevronDown, Shuffle, Sliders, Share2, X, Download, Sparkles, Loader2, ShoppingCart, Wallet, MapPin, Phone, User, BookMarked, Heart, Eye, EyeOff } from "lucide-react";
 import AddressBook from "./AddressBook";
 import { toast } from "sonner";
 import html2canvas from "html2canvas";
@@ -32,14 +32,14 @@ import { mtrpc, cosImg } from "./mibanTrpc";
 import { useRiceFlyAnimation } from "@/hooks/useRiceFlyAnimation";
 
 const RICE_TYPES = [
-  { id: "white",  name: "白米",  desc: "软糯香甜，日常主食",   price: 4.8,  color: "#C8A87A", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_white_single.webp" },
-  { id: "black",  name: "黑米",  desc: "花青素丰富，补肾益气", price: 8.5,  color: "#2D1B2E", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_black_single.webp" },
+  { id: "white",  name: "白米",  desc: "软糯香甜，日常主食",   price: 4.8,  color: "#A07840", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_white_single.webp" },
+  { id: "black",  name: "黑米",  desc: "花青素丰富，补肾益气", price: 8.5,  color: "#5B3A6B", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_black_single.webp" },
   { id: "red",    name: "红米",  desc: "铁元素高，补血养颜",   price: 7.2,  color: "#8B2020", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_red_single.webp" },
-  { id: "brown",  name: "糙米",  desc: "膳食纤维高，控糖减脂", price: 6.0,  color: "#A0785A", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_brown_single.webp" },
+  { id: "brown",  name: "糙米",  desc: "膳食纤维高，控糖减脂", price: 6.0,  color: "#7A5230", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_brown_single.webp" },
   { id: "purple", name: "紫米",  desc: "花青素+铁，美容养颜",  price: 9.0,  color: "#4A2060", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_purple_single.webp" },
-  { id: "millet", name: "小米",  desc: "健脾养胃，易消化",     price: 5.5,  color: "#E8C840", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_millet_single.webp" },
+  { id: "millet", name: "小米",  desc: "健脾养胃，易消化",     price: 5.5,  color: "#C8960A", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_millet_single.webp" },
   { id: "mung",   name: "绿豆",  desc: "清热解毒，消暑降火",   price: 10.0, color: "#4A7C3F", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_mung_single.webp" },
-  { id: "coix",   name: "薏米",  desc: "祛湿消肿，美白润肤",   price: 12.0, color: "#C4956A", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_coix_single.webp" },
+  { id: "coix",   name: "薏米",  desc: "祛湿消肿，美白润肤",   price: 12.0, color: "#9A6030", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_coix_single.webp" },
 ];
 
 // 各米种营养数据（每100g干米）
@@ -240,7 +240,7 @@ export default function DiyWorkshop() {
         name: r.stdName,
         desc: r.description ?? "",
         price: r.pricePerJin ?? 0,
-        color: r.colorHex ?? "#C8A87A",
+        color: r.colorHex ?? "#A07840",
         img: r.img ?? "",
         nutrition: r.nutritionJson ?? null,
       }))
@@ -252,7 +252,7 @@ export default function DiyWorkshop() {
   const [weight, setWeight] = useState(10);
   const [selected, setSelected] = useState<string[]>([]);
   const [ratios, setRatios] = useState<Record<string, number>>({});
-  const [ratioMode, setRatioMode] = useState<"equal" | "custom">("equal");
+  const [ratioMode, setRatioMode] = useState<"equal" | "custom">("custom");
   const [recipeName, setRecipeName] = useState("");
   const [showPoster, setShowPoster] = useState(false);
   const [posterImg, setPosterImg] = useState<string | null>(null);
@@ -267,13 +267,15 @@ export default function DiyWorkshop() {
   const [showAiDialog, setShowAiDialog] = useState(false);
   // 下单相关状态
   const [showOrderDialog, setShowOrderDialog] = useState(false);
-  const [orderSuccess, setOrderSuccess] = useState<{ orderId: number; deductCny: number; deductUsdt: number } | null>(null);
+  const [orderSuccess, setOrderSuccess] = useState<{ orderId: number; orderNo: string; deductCny: number; deductUsdt: number } | null>(null);
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
   const [receiverAddress, setReceiverAddress] = useState("");
   const [userNote, setUserNote] = useState("");
   const [showAddressPicker, setShowAddressPicker] = useState(false);
+  const [showWalletDetail, setShowWalletDetail] = useState(false);
   const [saveToBook, setSaveToBook] = useState(false);
+  const [selectedFromBook, setSelectedFromBook] = useState(false);
   const { data: savedAddresses } = mtrpc.address.list.useQuery(undefined, { enabled: isAuthenticated });
   const addAddressMut = mtrpc.address.add.useMutation();
   const [aiNeed, setAiNeed] = useState("");
@@ -285,13 +287,16 @@ export default function DiyWorkshop() {
   const { data: cryptoPrices } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 5000, staleTime: 3000 });
   const cnyBalanceNum = Number(cnyBalance ?? 0);
   const usdtBalanceNum = Number(usdtBalance ?? 0);
-  const usdtCnyRate = cryptoPrices?.usdtCnyRate ?? 7.3; // 备用汇率
+  const usdtCnyRate = cryptoPrices?.usdtCnyRate ?? 6.7; // 备用汇率
   const totalAvailableCny = cnyBalanceNum + usdtBalanceNum * usdtCnyRate;
   // 下单 mutation
   const [pendingOrderPrice, setPendingOrderPrice] = useState(0);
   const createOrder = mtrpc.order.create.useMutation({
-    onSuccess: (orderId: number) => {
-      setOrderSuccess({ orderId, deductCny: pendingOrderPrice, deductUsdt: 0 });
+    onSuccess: (result: any) => {
+      console.log('[DiyWorkshop] order.create result:', JSON.stringify(result));
+      const orderId = typeof result === 'object' ? (result.orderId ?? result.id ?? result) : result;
+      const orderNo = typeof result === 'object' ? (result.orderNo ?? result.order_no ?? '') : '';
+      setOrderSuccess({ orderId, orderNo, deductCny: pendingOrderPrice, deductUsdt: 0 });
       setShowOrderDialog(false);
       cartList.refetch();
     },
@@ -359,7 +364,7 @@ export default function DiyWorkshop() {
   // 用量参考计算（按成年人每顿100g干米，早中晚3顿）
   const getUsageHints = (w: number) => {
     const totalGrams = w * 500;
-    const gramsPerPersonPerDay = 100 * 3;
+    const gramsPerPersonPerDay = 100;
     return [
       { people: 1, label: "1人" },
       { people: 2, label: "2人" },
@@ -393,7 +398,7 @@ export default function DiyWorkshop() {
     // 选中新米种时触发米粒飞入动画
     if (!wasSelected && e) {
       const rice = allRiceList.find(r => r.id === id);
-      flyToTarget(e, bowlTargetRef, rice?.color ?? "#C8A87A");
+      flyToTarget(e, bowlTargetRef, rice?.color ?? "#A07840");
     }
   };
 
@@ -485,7 +490,7 @@ export default function DiyWorkshop() {
   const ref2pF = freshnessLevel(ref2pDays);
 
   const renderStep0 = () => (
-    <div className="flex flex-col items-center px-6 pt-16 pb-6 gap-8">
+    <div className="flex flex-col items-center justify-center flex-1 px-6 gap-8">
       <div className="flex items-center gap-6">
         <button onClick={() => setWeight((w) => Math.max(10, w - 5))} disabled={weight <= 10} className="w-14 h-14 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-600 disabled:opacity-30 active:scale-95 transition-transform">
           <Minus size={22} />
@@ -499,10 +504,16 @@ export default function DiyWorkshop() {
         </button>
       </div>
 
-      {/* 用量参考胶囊 */}
-      <div className="flex flex-col items-center gap-1.5 px-6 py-4 rounded-full bg-gray-50">
-        <span className="text-[16px] font-semibold text-gray-700">约够 1 人吃 <AnimatedNumber value={Math.round(weight * 500 / 100)} /> 天</span>
-        <span className="text-[11px] text-gray-400 tracking-widest">一天一顿·每顿 100g</span>
+      {/* 用量参考 */}
+      <div className="flex flex-col items-center gap-4 w-full">
+        <div className="flex items-end justify-center gap-1">
+          <span className="text-[13px] text-gray-400">约够</span>
+          <span className="text-[13px] font-semibold text-gray-700">1 人</span>
+          <span className="text-[13px] text-gray-400">吃</span>
+          <span className="text-[28px] font-bold leading-none" style={{ color: "#FF6900" }}><AnimatedNumber value={Math.round(weight * 500 / 100)} /></span>
+          <span className="text-[13px] text-gray-400 mb-0.5">天</span>
+        </div>
+        <span className="text-[12px] text-gray-400">按每天一顿·每顿二两（100克）估算</span>
       </div>
     </div>
   );
@@ -553,7 +564,7 @@ export default function DiyWorkshop() {
   };
 
   const renderStep1 = () => { return (
-    <div className="pb-28">
+    <div className="overflow-y-auto pb-28" style={{ flex: "1 1 0", minHeight: 0 }}>
       {/* 标签栏：AI推荐 + 功效筛选标签并排 */}
       <div className="px-4 pt-5 mb-4">
         <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
@@ -584,118 +595,74 @@ export default function DiyWorkshop() {
         </div>
       </div>
 
-      {/* 米种卡片 - 瀑布流 */}
-      <div className="px-4" style={{ columns: 2, columnGap: 12 }}>
-        {allRiceList.map((rice, idx) => {
-          const isSel = selected.includes(rice.id);
-          // 奇偶列高度交错，让瀑布流更自然
-          const imgSize = idx % 3 === 0 ? 110 : idx % 3 === 1 ? 90 : 100;
-          return (
-            <button
-              key={rice.id}
-              onClick={(e) => { setFlavorTag("all"); toggleRice(rice.id, e); }}
-              className="relative text-left rounded-2xl overflow-hidden transition-all active:scale-[0.97] w-full"
-              style={{
-                display: "inline-block",
-                marginBottom: 12,
-                breakInside: "avoid",
-                border: isSel ? "2px solid #FF6900" : "2px solid transparent",
-                background: "#F8F6F3",
-                boxShadow: isSel ? "0 4px 16px rgba(255,105,0,0.18)" : "0 2px 8px rgba(0,0,0,0.07)",
-              }}
-            >
-              {/* 收藏按钮（左上角） */}
-              {isAuthenticated && (
+      {/* 米种卡片 - 双列布局（左右各从顶部往下） */}
+      <div className="px-4 flex gap-3">
+        {([allRiceList.filter((_, i) => i % 2 === 0), allRiceList.filter((_, i) => i % 2 === 1)] as typeof allRiceList[]).map((col, colIdx) => (
+          <div key={colIdx} className="flex-1 flex flex-col gap-3">
+            {col.map((rice, idx) => {
+              const isSel = selected.includes(rice.id);
+              const imgSize = (colIdx * col.length + idx) % 3 === 0 ? 110 : (colIdx * col.length + idx) % 3 === 1 ? 90 : 100;
+              return (
                 <button
-                  className="absolute top-2 left-2 z-20 p-1"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    favToggle.mutate({ productKey: `rice_${rice.id}`, productName: rice.name, productImg: rice.img });
+                  key={rice.id}
+                  onClick={(e) => { setFlavorTag("all"); toggleRice(rice.id, e); }}
+                  className="relative text-left rounded-2xl overflow-hidden transition-all active:scale-[0.97] w-full"
+                  style={{
+                    border: isSel ? "2px solid #FF6900" : "2px solid transparent",
+                    background: "#F8F6F3",
+                    boxShadow: isSel ? "0 4px 16px rgba(255,105,0,0.18)" : "0 2px 8px rgba(0,0,0,0.07)",
                   }}
                 >
-                  <Heart
-                    size={16}
-                    strokeWidth={2}
-                    className={favoritedIds.has(`rice_${rice.id}`) ? "fill-red-500 text-red-500" : "text-gray-300"}
-                  />
+                  {/* 收藏按钮（左上角） */}
+                  {isAuthenticated && (
+                    <button
+                      className="absolute top-2 left-2 z-20 p-1"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        favToggle.mutate({ productKey: `rice_${rice.id}`, productName: rice.name, productImg: rice.img });
+                      }}
+                    >
+                      <Heart
+                        size={16}
+                        strokeWidth={2}
+                        className={favoritedIds.has(`rice_${rice.id}`) ? "fill-red-500 text-red-500" : "text-gray-300"}
+                      />
+                    </button>
+                  )}
+                  {/* 选中勾 */}
+                  {isSel && (
+                    <div className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full flex items-center justify-center z-10" style={{ background: "#FF6900" }}>
+                      <Check size={12} className="text-white" strokeWidth={3} />
+                    </div>
+                  )}
+                  {/* 图片区：和卡片同色，mix-blend-mode让白色背景透明融合 */}
+                  <div className="w-full flex items-center justify-center" style={{ paddingTop: 16, paddingBottom: 8, background: "#F8F6F3" }}>
+                    <img
+                      src={cosImg(rice.img, 140)}
+                      alt={rice.name}
+                      className="object-contain"
+                      style={{ width: imgSize, height: imgSize, mixBlendMode: "multiply" }}
+                    />
+                  </div>
+                  {/* 信息区 */}
+                  <div className="px-3 pb-3">
+                    <div className="font-bold text-[15px] text-gray-900">{rice.name}</div>
+                    {/* 标签：最多2个功效标签，统一样式 */}
+                    <div className="flex gap-1 mt-1.5 overflow-hidden">
+                      {(getRiceMeta(rice.name)?.tags ?? []).slice(0, 2).map(t => (
+                        <span key={t.label} className="text-[10px] font-medium px-2 py-0.5 rounded-sm flex-shrink-0" style={{ background: "#F3F3F3", color: "#666", border: "1px solid #E8E8E8" }}>{t.label}</span>
+                      ))}
+                    </div>
+                    <div className="mt-2">
+                      <span className="text-[13px] font-bold" style={{ color: "#FF6900" }}>¥{rice.price}<span className="text-[10px] font-normal text-gray-400">/斤</span></span>
+                    </div>
+                  </div>
                 </button>
-              )}
-              {/* 选中勾 */}
-              {isSel && (
-                <div className="absolute top-2.5 right-2.5 w-5 h-5 rounded-full flex items-center justify-center z-10" style={{ background: "#FF6900" }}>
-                  <Check size={12} className="text-white" strokeWidth={3} />
-                </div>
-              )}
-              {/* 图片区：和卡片同色，mix-blend-mode让白色背景透明融合 */}
-              <div className="w-full flex items-center justify-center" style={{ paddingTop: 16, paddingBottom: 8, background: "#F8F6F3" }}>
-                <img
-                  src={cosImg(rice.img, 140)}
-                  alt={rice.name}
-                  className="object-contain"
-                  style={{ width: imgSize, height: imgSize, mixBlendMode: "multiply" }}
-                />
-              </div>
-              {/* 信息区 */}
-              <div className="px-3 pb-3">
-                <div className="font-bold text-[15px] text-gray-900">{rice.name}</div>
-                {/* 所有标签统一样式：透明底+细描边+直角 */}
-                <div className="flex flex-wrap gap-1 mt-1.5">
-                  {[
-                    ...(getRiceMeta(rice.name)?.origin ?? []).slice(0, 2).map(o => ({ label: o, color: "#8B7355" })),
-                    ...(getRiceMeta(rice.name)?.tags ?? []).map(t => ({ label: t.label, color: t.color })),
-                    ...(getRiceMeta(rice.name)?.taste ?? []).slice(0, 1).map(t => ({ label: t.label, color: t.color })),
-                  ].map((item) => (
-                    <span key={item.label} className="text-[9px] font-semibold px-1.5 py-0.5" style={{ background: item.color + "15", color: item.color, border: `1px solid ${item.color}`, borderRadius: 3 }}>{item.label}</span>
-                  ))}
-                </div>
-                <div className="mt-2">
-                  <span className="text-[13px] font-bold" style={{ color: "#FF6900" }}>¥{rice.price}<span className="text-[10px] font-normal text-gray-400">/斤</span></span>
-                </div>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* 底部悬浮已选摘要栏 */}
-      {selected.length > 0 && (
-        <div
-          className="fixed bottom-16 left-0 right-0 z-40 flex items-center justify-between px-5 py-3"
-          style={{
-            background: "rgba(255,255,255,0.97)",
-            backdropFilter: "blur(12px)",
-            borderTop: "1px solid #F0F0F0",
-            maxWidth: 480,
-            margin: "0 auto",
-            boxShadow: "0 -4px 20px rgba(0,0,0,0.08)",
-          }}
-        >
-          <div className="flex items-center gap-3">
-            {/* 已选米种小图标 */}
-            <div className="flex -space-x-2">
-              {allRiceList.filter(r => selected.includes(r.id)).slice(0, 4).map(r => (
-                <img key={r.id} src={cosImg(r.img, 32)} alt={r.name}
-                  className="w-7 h-7 rounded-full object-cover border-2 border-white"
-                  style={{ boxShadow: "0 1px 4px rgba(0,0,0,0.12)" }}
-                />
-              ))}
-            </div>
-            <div>
-              <span className="text-[13px] font-bold text-gray-900">已选 {selected.length} 种</span>
-              <span className="text-[11px] text-gray-400 ml-1.5">
-                {allRiceList.filter(r => selected.includes(r.id)).map(r => r.name).join("·")}
-              </span>
-            </div>
+              );
+            })}
           </div>
-          <button
-            onClick={() => { selected.forEach(id => toggleRice(id, { stopPropagation: () => {} } as any)); }}
-            className="text-[11px] text-gray-400 px-2 py-1 rounded-lg"
-            style={{ background: "#F5F5F5" }}
-          >
-            清空
-          </button>
-        </div>
-      )}
+        ))}
+      </div>
     </div>
   );
   }
@@ -703,153 +670,145 @@ export default function DiyWorkshop() {
   const renderStep2 = () => {
     const selRices = allRiceList.filter((r) => selected.includes(r.id));
     return (
-      <div className="px-4 pt-6 pb-4">
-        <div className="text-center mb-5">
+      <div className="overflow-y-auto px-4 pt-4 pb-28" style={{ flex: "1 1 0", minHeight: 0 }}>
+        <div className="text-center mb-4">
           <div className="text-[13px] text-gray-400 mb-1">第三步</div>
           <h2 className="text-[22px] font-bold text-black">调整比例</h2>
         </div>
-        {/* AI 智能推荐配比 */}
-        <div className="mb-4">
-          {aiRatioResult ? (
-            <div className="bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-100 rounded-2xl p-4">
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="flex items-center gap-1.5">
-                  <Sparkles size={13} className="text-[#FF6900] flex-shrink-0" />
-                  <span className="text-[13px] font-semibold text-[#FF6900]">AI 推荐配比</span>
-                  <span className="text-[11px] text-gray-400 ml-0.5">（已应用）</span>
-                </div>
-                <button onClick={() => setAiRatioResult(null)} className="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-                  <X size={10} className="text-gray-500" />
-                </button>
-              </div>
-              <p className="text-[12px] text-gray-600 leading-relaxed mb-3">{aiRatioResult.reason}</p>
-              <div className="flex flex-wrap gap-1.5 mb-3">
-                {Object.entries(aiRatioResult.ratios).map(([id, pct]) => {
-                  const rice = allRiceList.find(r => r.id === id);
-                  return rice ? (
-                    <span key={id} className="text-[11px] px-2 py-0.5 rounded-full bg-white border border-orange-100 text-gray-700">
-                      {rice.name} <span className="font-semibold text-[#FF6900]">{pct}%</span>
-                    </span>
-                  ) : null;
-                })}
-              </div>
-              <div className="flex gap-2 mt-0">
-                <button
-                  onClick={() => aiRatio.mutate({ selectedIds: selected, purpose: aiRatioPurpose, preferences: aiRatioPrefs })}
-                  disabled={aiRatio.isPending}
-                  className="flex-1 h-8 rounded-xl bg-white border border-orange-200 text-[12px] text-[#FF6900] font-medium flex items-center justify-center gap-1 active:scale-95 transition-transform disabled:opacity-50"
-                >
-                  {aiRatio.isPending ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                  重新推荐
-                </button>
-                <button
-                  onClick={generateAiPoster}
-                  className="flex-1 h-8 rounded-xl bg-black text-[12px] text-white font-medium flex items-center justify-center gap-1 active:scale-95 transition-transform"
-                >
-                  <Share2 size={12} />
-                  生成海报
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-gray-50 rounded-2xl p-3.5">
-              <div className="flex items-center gap-1.5 mb-3">
-                <Sparkles size={13} className="text-[#FF6900]" />
-                <span className="text-[13px] font-semibold text-black">AI 智能推荐配比</span>
-              </div>
-              {/* 用途选择 */}
-              <div className="flex gap-1.5 mb-3">
-                {[{ key: "rice", label: "🍚 蒸饭" }, { key: "porridge", label: "🥣 煮粥" }].map(({ key, label }) => (
-                  <button
-                    key={key}
-                    onClick={() => setAiRatioPurpose(key as "rice" | "porridge")}
-                    className={`flex-1 py-1.5 rounded-xl text-[12px] font-medium transition-all ${aiRatioPurpose === key ? "bg-black text-white" : "bg-white text-gray-500 border border-gray-200"}`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              {/* 口感偏好多选标签 */}
-              <p className="text-[11px] text-gray-400 mb-2">口感偏好（可多选）</p>
-              <div className="flex flex-wrap gap-1.5 mb-3">
-                {["软糯", "劲道", "低糖减脂", "高蛋白", "养胃", "美颜", "清热祛湿"].map(pref => (
-                  <button
-                    key={pref}
-                    onClick={() => toggleAiRatioPref(pref)}
-                    className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all active:scale-95 ${aiRatioPrefs.includes(pref) ? "bg-[#FF6900] text-white" : "bg-white text-gray-500 border border-gray-200"}`}
-                  >
-                    {pref}
-                  </button>
-                ))}
-              </div>
-              {/* 推荐按钮 */}
-              <button
-                onClick={() => aiRatio.mutate({ selectedIds: selected, purpose: aiRatioPurpose, preferences: aiRatioPrefs })}
-                disabled={aiRatio.isPending}
-                className="w-full h-10 rounded-xl text-[13px] font-semibold text-white flex items-center justify-center gap-1.5 active:scale-95 transition-transform disabled:opacity-70"
-                style={{ background: aiRatio.isPending ? "#ccc" : "linear-gradient(135deg, #FF6900, #FF9500)" }}
-              >
-                {aiRatio.isPending ? (
-                  <><Loader2 size={14} className="animate-spin" />AI 分析中...</>
-                ) : (
-                  <><Sparkles size={14} />生成推荐配比</>
-                )}
-              </button>
-            </div>
-          )}
-        </div>
 
-        <div className="flex justify-center mb-5">
-          <RiceBowl ratios={ratioList} />
-        </div>
-        <div className="flex gap-2 mb-5 bg-gray-100 rounded-xl p-1">
-          <button onClick={() => { setRatioMode("equal"); applyEqual(selected); }} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-medium transition-all ${ratioMode === "equal" ? "bg-white text-black shadow-sm" : "text-gray-500"}`}>
-            <Shuffle size={14} />平均分配
-          </button>
-          <button onClick={() => setRatioMode("custom")} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[13px] font-medium transition-all ${ratioMode === "custom" ? "bg-white text-black shadow-sm" : "text-gray-500"}`}>
-            <Sliders size={14} />自定义
-          </button>
-        </div>
-        <div className="flex flex-col gap-3">
+        {/* 米种图片 + 进度条列表（主体） */}
+        <div className="flex flex-col gap-4 mb-5">
           {selRices.map((rice) => {
             const pct = ratios[rice.id] ?? 0;
             return (
-              <div key={rice.id} className="flex items-center gap-3">
-                <img src={cosImg(rice.img, 32)} alt={rice.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[13px] font-medium text-black">{rice.name}</span>
-                    <span className="text-[13px] font-bold text-black">{pct}%</span>
-                  </div>
-                  {ratioMode === "custom" ? (
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => adjustRatio(rice.id, -5)} className="w-7 h-7 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 active:scale-95">
-                        <Minus size={12} />
-                      </button>
-                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: rice.color }} />
-                      </div>
-                      <button onClick={() => adjustRatio(rice.id, 5)} className="w-7 h-7 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 active:scale-95">
-                        <Plus size={12} />
-                      </button>
+              <div key={rice.id} className="bg-white rounded-2xl px-4 py-3 flex items-center gap-3 shadow-sm relative overflow-hidden">
+                {/* 删除斜三角角标 */}
+                <button
+                  onClick={() => { toggleRice(rice.id, { stopPropagation: () => {} } as any); applyEqual(selected.filter(id => id !== rice.id)); }}
+                  className="absolute top-0 left-0 active:opacity-70 transition-opacity z-10"
+                  style={{
+                    width: 40,
+                    height: 40,
+                    background: "linear-gradient(135deg, #d1d5db 50%, transparent 50%)",
+                    borderTopLeftRadius: 16,
+                  }}
+                >
+                  <X size={9} className="text-gray-600" style={{ position: 'absolute', top: 9, left: 9 }} />
+                </button>
+                <img src={cosImg(rice.img, 56)} alt={rice.name}
+                  className="w-14 h-14 object-contain flex-shrink-0 rounded-xl"
+                  style={{ mixBlendMode: "multiply", background: "#F8F6F3" }}
+                />
+                <div className="flex-1 min-w-0 pr-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[14px] font-semibold text-gray-900 truncate">{rice.name}</span>
+                    <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                      <span className="text-[15px] font-bold" style={{ color: rice.color }}>{((pct / 100) * weight).toFixed(1)}斤</span>
+                      <span className="text-[15px] font-bold text-gray-400">({pct}%)</span>
                     </div>
-                  ) : (
-                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => adjustRatio(rice.id, -Math.round(0.5 / weight * 100))}
+                      disabled={(pct / 100 * weight) <= 0.5}
+                      className="w-7 h-7 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 active:scale-95 flex-shrink-0 disabled:opacity-30"
+                    >
+                      <Minus size={12} />
+                    </button>
+                    <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
                       <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: rice.color }} />
                     </div>
-                  )}
+                    <button
+                      onClick={() => adjustRatio(rice.id, Math.round(0.5 / weight * 100))}
+                      className="w-7 h-7 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 active:scale-95 flex-shrink-0"
+                    >
+                      <Plus size={12} />
+                    </button>
+                  </div>
                 </div>
               </div>
             );
           })}
         </div>
-        <div className="mt-5 bg-gray-50 rounded-2xl p-4 flex items-center justify-between">
-          <div>
-            <p className="text-[12px] text-gray-400">{weight}斤 · {selected.length}种米</p>
-            <p className="text-[11px] text-gray-400 mt-0.5">预估总价</p>
+
+        {/* 添加米种快捷按鈕 */}
+        <button
+          onClick={() => setStep(1)}
+          className="w-full flex items-center justify-center gap-2 py-3 mb-5 rounded-2xl border-2 border-dashed border-gray-200 text-gray-400 text-[13px] font-medium active:scale-[0.98] transition-all"
+        >
+          <Plus size={16} />添加米种
+        </button>
+
+        {/* 小票风格订单明细 */}
+        <div className="mb-5 relative" style={{ fontFamily: "'Courier New', Courier, monospace" }}>
+          {/* 顶部齿形 */}
+          <div className="w-full overflow-hidden" style={{ height: 12 }}>
+            <svg width="100%" height="12" preserveAspectRatio="none">
+              <path d={`M0,12 ${Array.from({ length: 40 }, (_, i) => `Q${i * 5 + 2.5},0 ${i * 5 + 5},12`).join(' ')}`} fill="white" />
+            </svg>
           </div>
-          <span className="text-[24px] font-bold" style={{ color: "#FF6900" }}>¥{totalPrice().toFixed(1)}</span>
+          <div className="bg-white px-4 py-3">
+            {/* 小票标题 */}
+            <div className="text-center mb-3">
+              <p className="text-[11px] text-gray-700 tracking-widest font-bold">米伴订单</p>
+              <p className="text-[10px] text-gray-500 mt-0.5">{new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}</p>
+            </div>
+            {/* 虚线分隔 */}
+            <div className="border-t border-dashed border-gray-300 mb-3" />
+            {/* 表头 */}
+            <div className="flex text-[10px] text-gray-600 mb-2">
+              <span className="flex-1">品名</span>
+              <span className="w-10 text-right">重量</span>
+              <span className="w-16 text-right">单价</span>
+              <span className="w-14 text-right">小计</span>
+            </div>
+            {/* 明细行 */}
+            {(() => {
+              const selRices = allRiceList.filter(r => selected.includes(r.id));
+              return selRices.map(rice => {
+                const jin = parseFloat(((ratios[rice.id] ?? 0) / 100 * weight).toFixed(1));
+                const unitPrice = rice.price ?? 0;
+                const subtotal = parseFloat((jin * unitPrice).toFixed(2));
+                return (
+                  <div key={rice.id} className="flex items-baseline text-[12px] mb-1.5">
+                    <span className="flex-1 text-gray-800 truncate flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: rice.color }} />
+                      {rice.name}
+                    </span>
+                    <span className="w-10 text-right text-gray-700">{jin}斤</span>
+                    <span className="w-16 text-right text-gray-700">{unitPrice.toFixed(2)}</span>
+                    <span className="w-14 text-right font-semibold text-gray-800">{subtotal.toFixed(2)}</span>
+                  </div>
+                );
+              });
+            })()}
+            {/* 虚线分隔 */}
+            <div className="border-t border-dashed border-gray-300 my-3" />
+            {/* 合计行 */}
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[12px] text-gray-700">共 {selected.length} 种米 · {weight} 斤</span>
+              </div>
+              <div className="text-right">
+                <span className="text-[11px] text-gray-600">合计 </span>
+                <span className="text-[22px] font-bold" style={{ color: "#FF6900" }}>¥{totalPrice().toFixed(2)}</span>
+              </div>
+            </div>
+            {/* 底部感谢语 */}
+            <div className="border-t border-dashed border-gray-300 mt-3 pt-2 text-center">
+              <p className="text-[10px] text-gray-500">感谢您的订购</p>
+            </div>
+          </div>
+          {/* 底部齿形 */}
+          <div className="w-full overflow-hidden" style={{ height: 12 }}>
+            <svg width="100%" height="12" preserveAspectRatio="none">
+              <path d={`M0,0 ${Array.from({ length: 40 }, (_, i) => `Q${i * 5 + 2.5},12 ${i * 5 + 5},0`).join(' ')}`} fill="white" />
+            </svg>
+          </div>
         </div>
+
+
+
       </div>
     );
   };
@@ -857,12 +816,12 @@ export default function DiyWorkshop() {
   const renderStep3 = () => {
     const selRices = allRiceList.filter((r) => selected.includes(r.id));
     return (
-      <div className="px-4 pt-6 pb-4">
+      <div className="overflow-y-auto px-4 pt-6 pb-28" style={{ flex: "1 1 0", minHeight: 0 }}>
         <div className="text-center mb-6">
           <div className="text-[13px] text-gray-400 mb-1">第四步</div>
           <h2 className="text-[22px] font-bold text-black">你的专属配方</h2>
         </div>
-        <div className="bg-black rounded-3xl p-5 mb-4 text-white">
+        <div className="bg-white border border-gray-100 rounded-3xl p-5 mb-4 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <RiceBowl ratios={ratioList} size={120} />
             <div className="text-right">
@@ -870,17 +829,23 @@ export default function DiyWorkshop() {
               <p className="text-[28px] font-bold" style={{ color: "#FF6900" }}>¥{totalPrice().toFixed(1)}</p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2 mb-4">
+          <div className="grid gap-2 mb-4" style={{ gridTemplateColumns: `repeat(${Math.min(selRices.length, 3)}, 1fr)` }}>
             {selRices.map((rice) => (
-              <div key={rice.id} className="flex items-center gap-1.5 bg-white/10 rounded-full px-2.5 py-1">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: rice.color }} />
-                <span className="text-[12px]">{rice.name} {ratios[rice.id] ?? 0}%</span>
+              <div key={rice.id} className="flex flex-col items-center rounded-2xl py-2.5 px-1.5 gap-1" style={{ background: rice.color + "12", border: `1px solid ${rice.color}30` }}>
+                <img
+                  src={cosImg(rice.img, 80)}
+                  alt={rice.name}
+                  className="object-contain"
+                  style={{ width: 48, height: 48, mixBlendMode: "multiply" }}
+                />
+                <span className="text-[11px] font-semibold text-gray-800 text-center leading-tight">{rice.name}</span>
+                <span className="text-[11px] font-bold" style={{ color: rice.color }}>{ratios[rice.id] ?? 0}%</span>
               </div>
             ))}
           </div>
-          <div className="border-t border-white/10 pt-3">
+          <div className="border-t border-gray-100 pt-3">
             <p className="text-[11px] text-gray-400 mb-1.5">给这个配方起个名字</p>
-            <input type="text" value={recipeName} onChange={(e) => setRecipeName(e.target.value)} placeholder="例如：我的减脂米、妈妈的养生米…" className="w-full bg-white/10 rounded-xl px-3 py-2.5 text-[13px] text-white placeholder-gray-500 outline-none border border-white/10 focus:border-white/30" />
+            <input type="text" value={recipeName} onChange={(e) => setRecipeName(e.target.value)} placeholder="例如：我的减脂米、妈妈的养生米…" className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-[13px] text-gray-800 placeholder-gray-400 outline-none border border-gray-200 focus:border-gray-300" />
           </div>
         </div>
         {/* 营养成分估算 */}
@@ -909,23 +874,21 @@ export default function DiyWorkshop() {
             }
           });
           const nutrients = [
-            { label: "热量",     value: Math.round(totalKcal),    unit: "kcal", color: "#FF6900", icon: "🔥" },
-            { label: "碳水化合物", value: Math.round(totalCarb),    unit: "g",    color: "#F59E0B", icon: "🌾" },
-            { label: "蛋白质",   value: Math.round(totalProtein), unit: "g",    color: "#10B981", icon: "💪" },
-            { label: "脂肪",     value: Math.round(totalFat),     unit: "g",    color: "#6366F1", icon: "💧" },
-            { label: "膳食纤维", value: Math.round(totalFiber),   unit: "g",    color: "#8B5CF6", icon: "🌿" },
+            { label: "热量",     value: Math.round(totalKcal),    unit: "kcal", color: "#FF6900", icon: "" },
+            { label: "碳水化合物", value: Math.round(totalCarb),    unit: "g",    color: "#F59E0B", icon: "" },
+            { label: "蛋白质",   value: Math.round(totalProtein), unit: "g",    color: "#10B981", icon: "" },
+            { label: "脂肪",     value: Math.round(totalFat),     unit: "g",    color: "#6366F1", icon: "" },
+            { label: "膳食纤维", value: Math.round(totalFiber),   unit: "g",    color: "#8B5CF6", icon: "" },
           ];
           return (
             <div className="bg-white border border-gray-100 rounded-2xl p-4 mb-4 shadow-sm">
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-base">🧪</span>
                 <span className="text-[13px] font-semibold text-black">营养成分估算</span>
                 <span className="text-[11px] text-gray-400 ml-auto">基于 {cartWeight} 斤干米</span>
               </div>
               {/* 热量突出显示 */}
               <div className="flex items-center justify-between bg-orange-50 rounded-xl px-3 py-2.5 mb-3">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-lg">🔥</span>
                   <span className="text-[13px] text-gray-600">总热量</span>
                 </div>
                 <div className="flex items-baseline gap-0.5">
@@ -938,7 +901,6 @@ export default function DiyWorkshop() {
                 {nutrients.slice(1).map(n => (
                   <div key={n.label} className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2">
                     <div className="flex items-center gap-1">
-                      <span className="text-sm">{n.icon}</span>
                       <span className="text-[12px] text-gray-500">{n.label}</span>
                     </div>
                     <div className="flex items-baseline gap-0.5">
@@ -953,57 +915,7 @@ export default function DiyWorkshop() {
           );
         })()}
 
-                {/* 一键加入购物车 */}
-        <div className="bg-orange-50 border border-orange-100 rounded-2xl p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <ShoppingCart size={15} className="text-[#FF6900]" />
-            <span className="text-[13px] font-semibold text-black">加入购物车</span>
-            <span className="text-[11px] text-gray-400 ml-auto">按比例自动拆分</span>
-          </div>
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-[12px] text-gray-500 flex-shrink-0">购买总量</span>
-            <div className="flex items-center gap-1 flex-1">
-              <button onClick={() => setCartWeight(w => Math.max(1, w - 1))} className="w-7 h-7 rounded-lg bg-white border border-gray-200 flex items-center justify-center active:scale-95 transition-transform">
-                <Minus size={12} />
-              </button>
-              <input
-                type="number" min={1} max={999}
-                value={cartWeight}
-                onChange={(e) => setCartWeight(Math.max(1, Number(e.target.value)))}
-                className="flex-1 h-7 rounded-lg border border-gray-200 bg-white text-center text-[13px] font-semibold"
-              />
-              <button onClick={() => setCartWeight(w => w + 1)} className="w-7 h-7 rounded-lg bg-white border border-gray-200 flex items-center justify-center active:scale-95 transition-transform">
-                <Plus size={12} />
-              </button>
-              <span className="text-[12px] text-gray-500 flex-shrink-0">斤</span>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            {selected.map((id) => {
-              const rice = allRiceList.find(r => r.id === id)!;
-              const pct = ratios[id] ?? Math.round(100 / selected.length);
-              const w = Math.round(cartWeight * pct / 100 * 10) / 10;
-              return (
-                <span key={id} className="text-[11px] px-2 py-0.5 rounded-full bg-white border border-orange-100 text-gray-600">
-                  {rice.name} <span className="font-semibold text-[#FF6900]">{w}斤</span>
-                </span>
-              );
-            })}
-          </div>
-          <button
-            onClick={handleAddToCart}
-            disabled={addBatch.isPending}
-            className="w-full py-2.5 rounded-xl text-[13px] font-bold text-white flex items-center justify-center gap-1.5 active:scale-95 transition-transform disabled:opacity-50"
-            style={{ background: showCartSuccess ? "#22c55e" : "#FF6900" }}
-          >
-            {addBatch.isPending ? <Loader2 size={14} className="animate-spin" /> : <ShoppingCart size={14} />}
-            {showCartSuccess ? "已加入购物车 ✓" : `加入购物车 · ¥${selected.reduce((s, id) => { const rice = allRiceList.find(r => r.id === id)!; const pct = ratios[id] ?? Math.round(100 / selected.length); return s + cartWeight * pct / 100 * rice.price; }, 0).toFixed(1)}`}
-          </button>
-        </div>
-        <button onClick={generatePoster} className="w-full py-3.5 rounded-2xl text-[14px] font-semibold text-black bg-white border-2 border-black flex items-center justify-center gap-2 mb-3 active:scale-95 transition-transform">
-          <Share2 size={16} />生成配方海报
-        </button>
-        {isAuthenticated ? (
+                {isAuthenticated ? (
           <button
             onClick={() => setShowOrderDialog(true)}
             className="w-full py-4 rounded-2xl text-[15px] font-bold text-white active:scale-[0.98] transition-transform"
@@ -1038,7 +950,7 @@ export default function DiyWorkshop() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: "#F8F6F3" }}>
+    <div className="h-screen flex flex-col overflow-hidden" style={{ background: "#F8F6F3" }}>
       <div className="px-4 pt-4 pb-2">
         <div className="flex items-center gap-1 mb-2">
           {STEP_LABELS.map((_, i) => (
@@ -1052,11 +964,38 @@ export default function DiyWorkshop() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-32">
+      {/* 已选摘要栏：在滚动容器之外，始终固定在视口内，不随内容滚动 */}
+      {step === 1 && selected.length > 0 && (
+        <div
+          className="mx-4 mb-2 flex items-center justify-between px-4 py-2.5 rounded-xl"
+          style={{
+            background: "#fff",
+            border: "1px solid #F0F0F0",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+            flexShrink: 0,
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-bold text-gray-900">已选 {selected.length} 种</span>
+            <span className="text-[11px] text-gray-400">
+              {allRiceList.filter(r => selected.includes(r.id)).map(r => r.name).join("·") || selected.length + "种已选"}
+            </span>
+          </div>
+          <button
+            onClick={() => { [...selected].forEach(id => toggleRice(id, { stopPropagation: () => {} } as any)); }}
+            className="text-[11px] text-gray-400 px-2 py-1 rounded-lg"
+            style={{ background: "#F5F5F5" }}
+          >
+            清空
+          </button>
+        </div>
+      )}
+
+      <div className={step === 0 ? "flex-1 flex flex-col overflow-hidden" : "flex-1 flex flex-col overflow-hidden"}>
         {steps[step]()}
       </div>
 
-      <div className="fixed bottom-16 left-0 right-0 px-4 pb-4 pt-3 bg-white border-t border-gray-100">
+      <div className="fixed bottom-14 left-0 right-0 px-4 pb-4 pt-3 bg-white border-t border-gray-100 z-30">
         <div className="flex gap-3">
           {step > 0 && (
             <button onClick={() => setStep((s) => s - 1)} className="w-12 h-12 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 active:scale-95 transition-transform">
@@ -1204,31 +1143,48 @@ export default function DiyWorkshop() {
                 <span className="text-[12px] text-gray-500">应付金额</span>
                 <span className="text-[20px] font-bold text-black">¥{totalPrice().toFixed(2)}</span>
               </div>
-            </div>
-            {/* 钱包余额提示 */}
-            <div className="bg-gray-50 rounded-xl px-4 py-3 mb-5">
-              <div className="flex items-center gap-2 mb-2">
-                <Wallet size={15} className="text-[#FF6900] flex-shrink-0" />
-                <span className="text-[12px] text-gray-500 flex-1">脉动网钱包</span>
-                {totalAvailableCny < totalPrice() && (
-                  <button onClick={() => { setShowOrderDialog(false); window.location.href = "/recharge"; }} className="text-[12px] text-[#FF6900] font-semibold">去充值</button>
+              <div className="flex items-center justify-between pt-1.5 relative">
+                <button
+                  onClick={() => setShowWalletDetail(v => !v)}
+                  className="flex items-center gap-1.5 active:opacity-70 transition-opacity"
+                >
+                  <Wallet size={13} className="text-gray-400" />
+                  <span className="text-[12px] text-gray-400">可用余额</span>
+                  <ChevronDown size={11} className={`text-gray-400 transition-transform ${showWalletDetail ? 'rotate-180' : ''}`} />
+                </button>
+                <div className="flex items-center gap-2">
+                  {totalAvailableCny < totalPrice() && (
+                    <button onClick={() => { setShowOrderDialog(false); window.location.href = "/recharge"; }} className="text-[11px] text-[#FF6900] font-semibold">去充値</button>
+                  )}
+                  <span className={`text-[13px] font-semibold ${totalAvailableCny >= totalPrice() ? 'text-green-600' : 'text-red-500'}`}>¥{totalAvailableCny.toFixed(2)}</span>
+                </div>
+                {/* 钉子弹出明细 */}
+                {showWalletDetail && (
+                  <div className="absolute top-7 left-0 bg-white border border-gray-100 rounded-2xl shadow-lg p-4 z-40 w-64">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-[13px] font-semibold text-black">脉动网錢包</span>
+                      <button onClick={() => setShowWalletDetail(false)}><X size={14} className="text-gray-400" /></button>
+                    </div>
+                    <div className="space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[12px] text-gray-500">CNY 余额</span>
+                        <span className="text-[14px] font-bold text-black">¥{cnyBalanceNum.toFixed(2)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[12px] text-gray-500">USDT 余额</span>
+                        <div className="text-right">
+                          <span className="text-[14px] font-bold text-black">{usdtBalanceNum.toFixed(2)} U</span>
+                          <div className="text-[11px] text-gray-400 mt-0.5">= ¥{(usdtBalanceNum * usdtCnyRate).toFixed(2)}</div>
+                        </div>
+                      </div>
+                      <div className="border-t border-gray-100 pt-2 flex items-center justify-between">
+                        <span className="text-[12px] text-gray-500">可用总额</span>
+                        <span className={`text-[15px] font-bold ${totalAvailableCny >= totalPrice() ? 'text-green-600' : 'text-red-500'}`}>¥{totalAvailableCny.toFixed(2)}</span>
+                      </div>
+                      <p className="text-[10px] text-gray-400">1 USDT = ¥{usdtCnyRate.toFixed(2)}</p>
+                    </div>
+                  </div>
                 )}
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex flex-col">
-                  <span className="text-[11px] text-gray-400">CNY 余额</span>
-                  <span className="text-[15px] font-bold text-black">¥{cnyBalanceNum.toFixed(2)}</span>
-                </div>
-                <div className="text-gray-300 text-[18px]">+</div>
-                <div className="flex flex-col">
-                  <span className="text-[11px] text-gray-400">USDT 余额</span>
-                  <span className="text-[15px] font-bold text-black">{usdtBalanceNum.toFixed(4)}</span>
-                </div>
-                <div className="text-gray-300 text-[18px]">=</div>
-                <div className="flex flex-col items-end">
-                  <span className="text-[11px] text-gray-400">可用总额（1U≈¥{usdtCnyRate.toFixed(2)}）</span>
-                  <span className={`text-[15px] font-bold ${totalAvailableCny >= totalPrice() ? 'text-green-600' : 'text-red-500'}`}>¥{totalAvailableCny.toFixed(2)}</span>
-                </div>
               </div>
             </div>
             {/* 收货信息 */}
@@ -1256,6 +1212,8 @@ export default function DiyWorkshop() {
                       setReceiverPhone(addr.phone);
                       setReceiverAddress(`${addr.province}${addr.city}${addr.district ?? ""}${addr.detail}`);
                       setShowAddressPicker(false);
+                      setSelectedFromBook(true);
+                      setSaveToBook(false);
                     }}
                   />
                 </div>
@@ -1263,7 +1221,7 @@ export default function DiyWorkshop() {
               <div className="flex items-center gap-3 border border-gray-200 rounded-xl px-4 py-3">
                 <User size={15} className="text-gray-400 flex-shrink-0" />
                 <input
-                  type="text" value={receiverName} onChange={(e) => setReceiverName(e.target.value)}
+                  type="text" value={receiverName} onChange={(e) => { setReceiverName(e.target.value); setSelectedFromBook(false); }}
                   placeholder="收货人姓名"
                   className="flex-1 text-[14px] text-black outline-none bg-transparent"
                 />
@@ -1271,7 +1229,7 @@ export default function DiyWorkshop() {
               <div className="flex items-center gap-3 border border-gray-200 rounded-xl px-4 py-3">
                 <Phone size={15} className="text-gray-400 flex-shrink-0" />
                 <input
-                  type="tel" value={receiverPhone} onChange={(e) => setReceiverPhone(e.target.value)}
+                  type="tel" value={receiverPhone} onChange={(e) => { setReceiverPhone(e.target.value); setSelectedFromBook(false); }}
                   placeholder="手机号码"
                   className="flex-1 text-[14px] text-black outline-none bg-transparent"
                 />
@@ -1279,7 +1237,7 @@ export default function DiyWorkshop() {
               <div className="flex items-center gap-3 border border-gray-200 rounded-xl px-4 py-3">
                 <MapPin size={15} className="text-gray-400 flex-shrink-0" />
                 <input
-                  type="text" value={receiverAddress} onChange={(e) => setReceiverAddress(e.target.value)}
+                  type="text" value={receiverAddress} onChange={(e) => { setReceiverAddress(e.target.value); setSelectedFromBook(false); }}
                   placeholder="收货地址（省市区+详细地址）"
                   className="flex-1 text-[14px] text-black outline-none bg-transparent"
                 />
@@ -1290,27 +1248,29 @@ export default function DiyWorkshop() {
                 rows={2}
                 className="w-full border border-gray-200 rounded-xl px-4 py-3 text-[14px] text-black outline-none bg-transparent resize-none"
               />
-              {/* 保存到地址簿开关 */}
-              <button
-                onClick={() => setSaveToBook(v => !v)}
-                className="flex items-center gap-2.5 w-full px-4 py-3 rounded-xl transition-all active:scale-[0.99]"
-                style={{
-                  background: saveToBook ? "rgba(255,105,0,0.08)" : "#F8F8F8",
-                  border: saveToBook ? "1.5px solid rgba(255,105,0,0.3)" : "1.5px solid transparent",
-                }}
-              >
-                <div
-                  className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all"
-                  style={{ borderColor: saveToBook ? "#FF6900" : "#DDD", background: saveToBook ? "#FF6900" : "transparent" }}
+              {/* 保存到地址簿开关：仅新输入时显示 */}
+              {!selectedFromBook && (
+                <button
+                  onClick={() => setSaveToBook(v => !v)}
+                  className="flex items-center gap-2.5 w-full px-4 py-3 rounded-xl transition-all active:scale-[0.99]"
+                  style={{
+                    background: saveToBook ? "rgba(255,105,0,0.08)" : "#F8F8F8",
+                    border: saveToBook ? "1.5px solid rgba(255,105,0,0.3)" : "1.5px solid transparent",
+                  }}
                 >
-                  {saveToBook && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
-                </div>
-                <div className="flex-1 text-left">
-                  <p className="text-[13px] font-semibold" style={{ color: saveToBook ? "#FF6900" : "#333" }}>保存到地址簿</p>
-                  <p className="text-[11px] text-gray-400">下次下单可直接选用，无需重新填写</p>
-                </div>
-                <BookMarked className="w-4 h-4 flex-shrink-0" style={{ color: saveToBook ? "#FF6900" : "#CCC" }} />
-              </button>
+                  <div
+                    className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all"
+                    style={{ borderColor: saveToBook ? "#FF6900" : "#DDD", background: saveToBook ? "#FF6900" : "transparent" }}
+                  >
+                    {saveToBook && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+                  </div>
+                  <div className="flex-1 text-left">
+                    <p className="text-[13px] font-semibold" style={{ color: saveToBook ? "#FF6900" : "#333" }}>保存到地址簿</p>
+                    <p className="text-[11px] text-gray-400">下次下单可直接选用，无需重新填写</p>
+                  </div>
+                  <BookMarked className="w-4 h-4 flex-shrink-0" style={{ color: saveToBook ? "#FF6900" : "#CCC" }} />
+                </button>
+              )}
             </div>
             {/* 下单按钮 */}
             <button
@@ -1367,7 +1327,7 @@ export default function DiyWorkshop() {
               <Check size={32} className="text-green-500" />
             </div>
             <p className="text-[18px] font-bold text-black mb-1">下单成功！</p>
-            <p className="text-[13px] text-gray-400 mb-4">订单号 #{orderSuccess.orderId}</p>
+            <p className="text-[13px] text-gray-400 mb-4">订单号 {orderSuccess.orderNo}</p>
             <div className="bg-orange-50 rounded-2xl px-5 py-4 mb-5">
               <p className="text-[12px] text-gray-500 mb-1">已从钱包扣除</p>
               <p className="text-[22px] font-bold text-[#FF6900]">¥{totalPrice().toFixed(2)}</p>

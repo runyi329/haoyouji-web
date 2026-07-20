@@ -118,7 +118,9 @@ export default function TianguiPearDetail() {
   const [receiverDetail, setReceiverDetail] = useState("");
   const isMunicipality = ["北京市", "天津市", "上海市", "重庆市"].includes(receiverProvince);
   const effectiveReceiverCity = isMunicipality ? receiverProvince : receiverCity;
-  const receiverAddress = [receiverProvince, effectiveReceiverCity, receiverDistrict, receiverDetail].filter(Boolean).join("");
+  const receiverAddress = isMunicipality
+    ? [receiverProvince, receiverDistrict, receiverDetail].filter(Boolean).join("")
+    : [receiverProvince, effectiveReceiverCity, receiverDistrict, receiverDetail].filter(Boolean).join("");
   const [userNote, setUserNote] = useState("");
   const [saveToBook, setSaveToBook] = useState(false);
   const [showAddressPicker, setShowAddressPicker] = useState(false);

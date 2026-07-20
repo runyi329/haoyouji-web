@@ -11,13 +11,19 @@ import {
   Package, BookOpen, Heart, Wallet, Users,
   ShoppingCart, Trash2, User, ChevronRight,
   TrendingUp, Copy, ArrowUpRight, ArrowDownLeft,
-  Settings, MapPin, Truck, ExternalLink, Clock, Star, CheckCircle2
+  Settings, MapPin, Truck, ExternalLink, Clock, Star, CheckCircle2,
+  Eye, EyeOff
 } from "lucide-react";
 import AddressBook from "./AddressBook";
 
+
+function dedupeAddress(addr: string): string {
+  return (addr ?? '').replace(/(北京市|上海市|天津市|重庆市)\1/, '$1');
+}
+
 // ─── 状态映射 ─────────────────────────────────────────────────────────────────
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  pending:    { label: "待处理", color: "text-amber-600 bg-amber-50" },
+  pending:    { label: "待发货", color: "text-amber-600 bg-amber-50" },
   processing: { label: "处理中", color: "text-blue-600 bg-blue-50" },
   confirmed:  { label: "已确认", color: "text-blue-600 bg-blue-50" },
   packing:    { label: "打包中", color: "text-purple-600 bg-purple-50" },
@@ -34,7 +40,16 @@ function OrdersTab() {
     onSuccess: () => { toast.success("确认收货成功！"); refetchOrders(); },
     onError: (e: any) => toast.error(e.message ?? "操作失败"),
   });
+  const updateAddressMutation = mtrpc.order.updateAddress.useMutation({
+    onSuccess: () => { toast.success("地址修改成功！"); refetchOrders(); setEditAddressOrderId(null); },
+    onError: (e: any) => toast.error(e.message ?? "修改失败"),
+  });
   const [now, setNow] = useState(Date.now());
+  const [showPrivacy, setShowPrivacy] = useState(true);
+  const [editAddressOrderId, setEditAddressOrderId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editAddress, setEditAddress] = useState("");
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(t);
@@ -188,15 +203,31 @@ function OrdersTab() {
               {/* ── 收货信息 ── */}
               {order.receiverName && (
                 <div className="bg-gray-50 rounded-xl p-3 space-y-1">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <MapPin className="w-3.5 h-3.5 text-gray-400" />
-                    <span className="text-[11px] font-semibold text-gray-500">收货信息</span>
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-gray-400" />
+                      <span className="text-[11px] font-semibold text-gray-500">收货信息</span>
+                    </div>
+                    <button
+                      onClick={() => setShowPrivacy(v => !v)}
+                      className="text-gray-400 active:opacity-70 transition-opacity"
+                    >
+                      {showPrivacy ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[13px] font-semibold text-gray-800">{order.receiverName}</span>
-                    <span className="text-[12px] text-gray-500">{order.receiverPhone}</span>
+                    <span className="text-[12px] text-gray-500">
+                      {showPrivacy
+                        ? (order.receiverPhone ?? '').replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')
+                        : order.receiverPhone}
+                    </span>
                   </div>
-                  <p className="text-[12px] text-gray-500 leading-relaxed">{order.receiverAddress}</p>
+                  <p className="text-[12px] text-gray-500 leading-relaxed">
+                    {showPrivacy
+                      ? (() => { const a = dedupeAddress(order.receiverAddress ?? ''); if (a.length <= 10) return a; return a.slice(0, 8) + '***' + a.slice(-6); })()
+                      : dedupeAddress(order.receiverAddress ?? '')}
+                  </p>
                 </div>
               )}
 
@@ -230,9 +261,25 @@ function OrdersTab() {
                 </div>
               ) : (
                 order.status !== "cancelled" && order.status !== "delivered" && (
-                  <div className="flex items-center gap-1.5 pt-2 border-t border-gray-100">
-                    <Truck className="w-3.5 h-3.5 text-gray-300" />
-                    <span className="text-[11px] text-gray-400">暂无物流信息，配货完成后将更新</span>
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <div className="flex items-center gap-1.5">
+                      <Truck className="w-3.5 h-3.5 text-gray-300" />
+                      <span className="text-[11px] text-gray-400">
+                        {order.status === "pending" ? "待发货，订单已接收、正在备货中" : "配货完成后将更新物流信息"}
+                      </span>
+                    </div>
+                    {order.status === "pending" && (
+                      <button
+                        onClick={() => {
+                          setEditAddressOrderId(order.id);
+                          setEditName(order.receiverName ?? "");
+                          setEditPhone(order.receiverPhone ?? "");
+                          setEditAddress(order.receiverAddress ?? "");
+                        }}
+                        className="text-[11px] font-semibold px-2.5 py-1 rounded-lg"
+                        style={{ color: "#FF6900", background: "rgba(255,105,0,0.08)" }}
+                      >修改地址</button>
+                    )}
                   </div>
                 )
               )}
@@ -289,6 +336,38 @@ function OrdersTab() {
           </div>
         );
       })}
+
+      {/* 修改地址弹窗 */}
+      {editAddressOrderId !== null && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.4)' }} onClick={() => setEditAddressOrderId(null)}>
+          <div className="w-full max-w-md bg-white rounded-t-3xl p-5 pb-8 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-[16px] font-bold text-black">修改收货地址</h3>
+              <button onClick={() => setEditAddressOrderId(null)} className="text-gray-400 text-[20px] leading-none">×</button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[12px] text-gray-500 mb-1 block">收货人</label>
+                <input value={editName} onChange={e => setEditName(e.target.value)} placeholder="姓名" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-orange-400" />
+              </div>
+              <div>
+                <label className="text-[12px] text-gray-500 mb-1 block">手机号</label>
+                <input value={editPhone} onChange={e => setEditPhone(e.target.value)} placeholder="手机号" type="tel" className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-orange-400" />
+              </div>
+              <div>
+                <label className="text-[12px] text-gray-500 mb-1 block">收货地址</label>
+                <textarea value={editAddress} onChange={e => setEditAddress(e.target.value)} placeholder="请输入完整收货地址" rows={3} className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-orange-400 resize-none" />
+              </div>
+            </div>
+            <button
+              onClick={() => updateAddressMutation.mutate({ orderId: editAddressOrderId, receiverName: editName, receiverPhone: editPhone, receiverAddress: editAddress })}
+              disabled={updateAddressMutation.isPending || !editName.trim() || !editPhone.trim() || !editAddress.trim()}
+              className="w-full py-3 rounded-xl text-[15px] font-bold text-white active:scale-95 transition-transform disabled:opacity-50"
+              style={{ background: '#FF6900' }}
+            >{updateAddressMutation.isPending ? '提交中...' : '确认修改'}</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -373,10 +452,11 @@ function RecipesTab() {
   );
 }
 
-// ─── 我的收藏 Tab ─────────────────────────────────────────────────────────────
+// ─── 我的收藏 Tab（含喜欢的米 + 我的配方）─────────────────────────────────────
 function FavoritesTab() {
   const { isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
+  const [subTab, setSubTab] = useState<'rice' | 'recipe'>('rice');
 
   // 商品收藏
   const { data: favProducts, refetch: refetchFavProducts } = mtrpc.favorite.myList.useQuery(undefined, { enabled: isAuthenticated });
@@ -385,9 +465,16 @@ function FavoritesTab() {
   });
 
   // 配方收藏
-  const { data: savedRecipes, isLoading, refetch } = mtrpc.savedRecipes.list.useQuery(undefined, { enabled: isAuthenticated });
+  const { data: savedRecipes, isLoading: savedLoading, refetch: refetchSaved } = mtrpc.savedRecipes.list.useQuery(undefined, { enabled: isAuthenticated });
   const deleteSaved = mtrpc.savedRecipes.delete.useMutation({
-    onSuccess: () => { toast.success("已取消收藏"); refetch(); },
+    onSuccess: () => { toast.success("已取消斖藏"); refetchSaved(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  // 我的配方（DIY保存）
+  const { data: myRecipes, isLoading: recipesLoading, refetch: refetchRecipes } = mtrpc.recipe.list.useQuery(undefined, { enabled: isAuthenticated });
+  const deleteRecipe = mtrpc.recipe.delete.useMutation({
+    onSuccess: () => { toast.success("配方已删除"); refetchRecipes(); },
     onError: (e: any) => toast.error(e.message),
   });
   const addToCart = mtrpc.cart.addBatch.useMutation({
@@ -395,14 +482,23 @@ function FavoritesTab() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  if (isLoading) return (
-    <div className="space-y-3">
-      {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-2xl" />)}
-    </div>
-  );
-
   return (
     <div className="space-y-4">
+      {/* 子分类切换 */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setSubTab('rice')}
+          className="flex-1 py-2 rounded-xl text-[13px] font-semibold transition-all"
+          style={{ background: subTab === 'rice' ? '#FF6900' : '#F0F0F0', color: subTab === 'rice' ? '#fff' : '#888' }}
+        >❤️ 喜欢的米</button>
+        <button
+          onClick={() => setSubTab('recipe')}
+          className="flex-1 py-2 rounded-xl text-[13px] font-semibold transition-all"
+          style={{ background: subTab === 'recipe' ? '#FF6900' : '#F0F0F0', color: subTab === 'recipe' ? '#fff' : '#888' }}
+        >📝 我的配方</button>
+      </div>
+
+      {subTab === 'rice' && <div className="space-y-4">
       {/* 商品收藏分区 */}
       <div>
         <h3 className="text-[13px] font-bold text-gray-500 mb-2">收藏商品</h3>
@@ -447,73 +543,95 @@ function FavoritesTab() {
         )}
       </div>
 
-      {/* 配方收藏分区 */}
-      <div>
-        <h3 className="text-[13px] font-bold text-gray-500 mb-2">收藏配方</h3>
-        {!savedRecipes?.length ? (
-          <div className="bg-white rounded-2xl p-5 text-center">
-            <p className="text-[12px] text-gray-400">还没有收藏任何配方</p>
-          </div>
-        ) : null}
-      </div>
+      </div>}
 
-      {(savedRecipes ?? []).map((recipe: any) => {
-        const items: any[] = (() => { try { return JSON.parse(recipe.items ?? "[]"); } catch { return []; } })();
-        const preferences: string[] = (() => { try { return JSON.parse(recipe.preferences ?? "[]"); } catch { return []; } })();
-        return (
-          <div key={recipe.id} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-            <div className="flex items-start justify-between gap-2 mb-3">
-              <div>
-                <h3 className="text-[15px] font-bold text-black">{recipe.recipeName || "收藏配方"}</h3>
-                <p className="text-[11px] text-gray-400 mt-0.5">
-                  {new Date(recipe.savedAt).toLocaleDateString("zh-CN")} 收藏
-                </p>
+      {subTab === 'recipe' && (
+        <div className="space-y-3">
+          {(recipesLoading || savedLoading) && (
+            <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}</div>
+          )}
+          {/* DIY保存的配方 */}
+          {(myRecipes ?? []).map((recipe: any) => {
+            const ingredients: any[] = (() => { try { return JSON.parse(recipe.ingredients ?? "[]"); } catch { return []; } })();
+            return (
+              <div key={recipe.id} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div>
+                    <h3 className="text-[15px] font-bold text-black">{recipe.name}</h3>
+                    <p className="text-[11px] text-gray-400 mt-0.5">{new Date(recipe.createdAt).toLocaleDateString("zh-CN")} 保存</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => deleteRecipe.mutate({ id: recipe.id })} className="p-1.5 text-gray-300 active:text-red-500 transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                {ingredients.length > 0 && (
+                  <div>
+                    <div className="h-2 rounded-full overflow-hidden flex mb-2">
+                      {ingredients.map((ing: any, i: number) => (
+                        <div key={i} style={{ width: `${ing.percentage}%`, backgroundColor: ing.colorHex ?? "#C8A87A" }} />
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {ingredients.map((ing: any, i: number) => (
+                        <span key={i} className="flex items-center gap-1 text-[11px] text-gray-400">
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ing.colorHex ?? "#C8A87A" }} />
+                          {ing.name} {ing.percentage}%
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {recipe.totalPricePerJin && (
+                  <p className="text-[14px] font-bold mt-3" style={{ color: "#FF6900" }}>
+                    ¥{Number(recipe.totalPricePerJin).toFixed(2)}<span className="text-[11px] font-normal text-gray-400">/斤</span>
+                  </p>
+                )}
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    if (!items.length) return;
-                    addToCart.mutate({
-                      recipeName: recipe.recipeName,
-                      recipeId: recipe.recipeId,
-                      items: items.map((it: any) => ({
-                        riceId: it.riceId, riceName: it.riceName,
-                        weightJin: it.weightJin ?? 2, pricePerJin: it.pricePerJin ?? 8,
-                        ratio: it.ratio ?? 0,
-                      })),
-                    });
-                  }}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white active:scale-95 transition-transform"
-                  style={{ background: "#FF6900" }}
-                >
-                  <ShoppingCart className="w-3 h-3" />加购
-                </button>
-                <button onClick={() => deleteSaved.mutate({ id: recipe.id })} className="p-1.5 text-gray-300 active:text-red-500 transition-colors">
-                  <Trash2 className="w-4 h-4" />
-                </button>
+            );
+          })}
+          {/* 收藏的配方 */}
+          {(savedRecipes ?? []).map((recipe: any) => {
+            const items: any[] = (() => { try { return JSON.parse(recipe.items ?? "[]"); } catch { return []; } })();
+            return (
+              <div key={recipe.id} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-2 mb-3">
+                  <div>
+                    <h3 className="text-[15px] font-bold text-black">{recipe.recipeName || "收藏配方"}</h3>
+                    <p className="text-[11px] text-gray-400 mt-0.5">{new Date(recipe.savedAt).toLocaleDateString("zh-CN")} 收藏</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => { if (!items.length) return; addToCart.mutate({ recipeName: recipe.recipeName, recipeId: recipe.recipeId, items: items.map((it: any) => ({ riceId: it.riceId, riceName: it.riceName, weightJin: it.weightJin ?? 2, pricePerJin: it.pricePerJin ?? 8, ratio: it.ratio ?? 0 })) }); }}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-white active:scale-95 transition-transform"
+                      style={{ background: "#FF6900" }}
+                    ><ShoppingCart className="w-3 h-3" />加购</button>
+                    <button onClick={() => deleteSaved.mutate({ id: recipe.id })} className="p-1.5 text-gray-300 active:text-red-500 transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                {items.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {items.map((it: any, i: number) => (
+                      <span key={i} className="text-[11px] bg-gray-50 text-gray-500 px-2 py-0.5 rounded-full border border-gray-100">
+                        {it.riceName} {it.ratio}%
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
+            );
+          })}
+          {!recipesLoading && !savedLoading && !myRecipes?.length && !savedRecipes?.length && (
+            <div className="flex flex-col items-center py-16 text-center">
+              <BookOpen className="w-10 h-10 mb-3 text-gray-200" />
+              <p className="text-[13px] text-gray-400 mb-5">还没有保存任何配方</p>
             </div>
-            {items.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mb-2">
-                {items.map((it: any, i: number) => (
-                  <span key={i} className="text-[11px] bg-gray-50 text-gray-500 px-2 py-0.5 rounded-full border border-gray-100">
-                    {it.riceName} {it.ratio}%
-                  </span>
-                ))}
-              </div>
-            )}
-            {preferences.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {preferences.map((p: string, i: number) => (
-                  <span key={i} className="text-[10px] px-2 py-0.5 rounded-full font-medium" style={{ background: "rgba(255,105,0,0.08)", color: "#FF6900" }}>
-                    {p}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })}
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -802,7 +920,6 @@ export default function MyOrders() {
 
   const tabs: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
     { key: "orders",    label: "订单",   icon: <Package className="w-4 h-4" /> },
-    { key: "recipes",   label: "配方",   icon: <BookOpen className="w-4 h-4" /> },
     { key: "favorites", label: "收藏",   icon: <Heart className="w-4 h-4" /> },
     { key: "wallet",    label: "钱包",   icon: <Wallet className="w-4 h-4" /> },
     ...(showTeamTab ? [{ key: "team" as TabKey, label: "团队", icon: <Users className="w-4 h-4" /> }] : []),
@@ -835,7 +952,6 @@ export default function MyOrders() {
       {/* Tab 内容 */}
       <div className="px-4 py-4 pb-24">
         {activeTab === "orders"    && <OrdersTab />}
-        {activeTab === "recipes"   && <RecipesTab />}
         {activeTab === "favorites" && <FavoritesTab />}
         {activeTab === "wallet"    && <WalletTab />}
         {activeTab === "team"      && showTeamTab && <TeamTab />}

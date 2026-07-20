@@ -18,7 +18,7 @@ const CACHE_FILE = path.join(process.cwd(), 'price-cache.json');
 const latestPrices: Record<string, { price: number; todayOpen: number; changePercent: number; high24h: number; low24h: number; volume24h: number; quoteVolume24h: number; updatedAt: string }> = {};
 
 // USDT/CNY 实时汇率缓存（默认 7.0 兜底）
-let usdtCnyRate: number = 7.0;
+let usdtCnyRate: number = 6.7;
 
 /** 从 Gate.io 获取 USDT/CNY 实时汇率（USDT_CNY 交易对） */
 async function fetchUsdtCnyRate(): Promise<number | null> {

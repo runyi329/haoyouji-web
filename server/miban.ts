@@ -344,13 +344,13 @@ async function triggerMultiLevelCommission(params: {
   }
 
   // 查询下单时锁定的 CNY/USDT 汇率（兜底用 7.2）
-  let cnyRate = 7.2;
+  let cnyRate = 6.7;
   try {
     const [rateRows] = await (dbConn as any).execute(
       `SELECT usdtCnyRateAtOrder FROM miban_orders WHERE id = ? LIMIT 1`,
       [orderId]
     ) as any[];
-    cnyRate = parseFloat((rateRows as any[])[0]?.usdtCnyRateAtOrder ?? '7.2') || 7.2;
+    cnyRate = parseFloat((rateRows as any[])[0]?.usdtCnyRateAtOrder ?? '6.7') || 6.7;
   } catch { /* 用默认值 */ }
 
   // ── 辅助函数：写入佣金并打入钱包 ──────────────────────────────────────────────
@@ -1201,7 +1201,9 @@ export const mibanOrderRouter = router({
         console.warn('[Miban] 获取制度触发时机失败，使用默认值:', e?.message);
       }
 
-      const orderNo = `MB${Date.now()}${nanoid(4).toUpperCase()}`;
+      const letters = Array.from({length:2}, () => String.fromCharCode(65 + Math.floor(Math.random() * 26))).join("");
+      const digits = String(Math.floor(Math.random() * 9000) + 1000);
+      const orderNo = letters + digits;
       const orderId = await createOrder({
         orderNo,
         userId,
@@ -1240,7 +1242,7 @@ export const mibanOrderRouter = router({
       }
 
       console.log(`[Miban] 订单创建并扣款成功: orderId=${orderId}, orderNo=${orderNo}, deductCny=${deductCny}, deductUsdt=${deductUsdt}, rate=${usdtRate}`);
-      return orderId;
+      return { orderId, orderNo };
     }),
   myOrders: protectedProcedure.query(({ ctx }) => getUserOrders(ctx.user!.id)),
   allOrders: mibanAdminProcedure.query(() => getAllOrders()),
@@ -1262,7 +1264,7 @@ export const mibanOrderRouter = router({
         if (order && order.status !== "cancelled") {
           const deductCny = parseFloat(String(order.walletDeductCny ?? 0));
           const deductUsdt = parseFloat(String(order.walletDeductUsdt ?? 0));
-          const usdtRate = parseFloat(String(order.usdtCnyRateAtOrder ?? 0)) || 6.75;
+          const usdtRate = parseFloat(String(order.usdtCnyRateAtOrder ?? 0)) || 6.7;
           const orderNo = order.orderNo;
           const userId = order.userId;
 
@@ -1348,6 +1350,32 @@ export const mibanOrderRouter = router({
         console.log(`[Miban] 订单 ${order.orderNo} 触发时机为 order_placed，确认收货不再重复触发分佣`);
       }
 
+      return { success: true };
+    }),
+
+  updateAddress: protectedProcedure
+    .input(z.object({
+      orderId: z.number(),
+      receiverName: z.string().min(1),
+      receiverPhone: z.string().min(11),
+      receiverAddress: z.string().min(5),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+      const userId = ctx.user!.id;
+      const [order] = await db.select().from(mibanOrders)
+        .where(and(eq(mibanOrders.id, input.orderId), eq(mibanOrders.userId, userId)))
+        .limit(1);
+      if (!order) throw new TRPCError({ code: "NOT_FOUND", message: "订单不存在" });
+      if (order.status !== "pending") throw new TRPCError({ code: "BAD_REQUEST", message: "已发货的订单不能修改地址" });
+      await db.update(mibanOrders)
+        .set({
+          receiverName: input.receiverName,
+          receiverPhone: input.receiverPhone,
+          receiverAddress: input.receiverAddress,
+        })
+        .where(eq(mibanOrders.id, input.orderId));
       return { success: true };
     }),
 });
