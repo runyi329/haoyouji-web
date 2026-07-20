@@ -107,8 +107,20 @@ export default function WalletTransactions() {
         } else if (history.type === 'reward') {
           // 成本津贴已在 af_manual_balances（来源3）中展示，跳过避免重复
           if (desc.startsWith('成本津贴')) return;
+          // 米伴订单扣款/退款已在 af_manual_balances 中展示，跳过避免重复
+          if (desc.includes('米伴订单扣款') || desc.includes('米伴订单退款')) return;
+          // 根据金额正负决定类型：负数=扣费，正数=奖励
           transactions.push({
-            id: `bh-${history.id}`, type: 'reward',
+            id: `bh-${history.id}`, type: amt < 0 ? 'deduct' : 'reward',
+            amount: Math.abs(amt), status: 'completed',
+            description: desc, wcCode, createdAt: history.createdAt,
+            balanceAfter: history.balance != null ? Number(history.balance) : null,
+          });
+        } else if (history.type === 'commission') {
+          // 佣金/管理员调账：正数=奖励，负数=扣费
+          if (desc.includes('米伴订单扣款') || desc.includes('米伴订单退款')) return;
+          transactions.push({
+            id: `bh-${history.id}`, type: amt < 0 ? 'deduct' : 'reward',
             amount: Math.abs(amt), status: 'completed',
             description: desc, wcCode, createdAt: history.createdAt,
             balanceAfter: history.balance != null ? Number(history.balance) : null,

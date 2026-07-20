@@ -835,13 +835,12 @@ export async function getUserBalance(userId: number, ledgerId?: number): Promise
   return userBalance + manual;
 }
 
-// 获取用户余额变动记录
+// 获取用户余额变动记录（合并 balance_history + af_manual_balances，统一倒推余额快照）
 export async function getUserBalanceHistory(userId: number, limit: number = 50) {
-  const db = await getDb();
   const conn = await getDbConnection();
   const pool = conn as any;
 
-  // 获取当前真实余额： users.balance + af_manual_balances
+  // 获取当前真实余额：users.balance + af_manual_balances 全部合计
   const [balRows] = await pool.execute(
     `SELECT
        (SELECT COALESCE(balance, 0) FROM users WHERE id = ?) AS userBalance,
@@ -852,28 +851,68 @@ export async function getUserBalanceHistory(userId: number, limit: number = 50) 
   const manual = parseFloat((balRows as any[])[0]?.manual ?? '0') || 0;
   const currentBalance = parseFloat((userBalance + manual).toFixed(8));
 
-  // 按时间正序取所有 balance_history 记录（不限 limit）用于倒推
-  const allRows = await db
-    .select()
-    .from(balanceHistory)
-    .where(eq(balanceHistory.userId, userId))
-    .orderBy(sql`${balanceHistory.createdAt} ASC`);
+  // 来源1：balance_history（充值/提现/奖励/佣金等）
+  const [bhRows] = await pool.execute(
+    `SELECT id, amount, type, description, created_at AS createdAt FROM balance_history
+     WHERE user_id = ?
+     ORDER BY created_at ASC`,
+    [userId]
+  ) as any[];
+  const bhList: any[] = (Array.isArray(bhRows) ? bhRows : []).map((r: any) => ({
+    _src: 'bh',
+    id: `bh-${r.id}`,
+    amount: parseFloat(r.amount ?? '0'),
+    type: r.type,
+    description: r.description ?? '',
+    createdAt: r.createdAt,
+    balanceAfter: null as number | null,
+  }));
 
-  // 倒推余额：从当前真实余额开始，倒序遍历每条记录减去其 amount，得到该记录发生前的余额，
-  // 再加上该记录的 amount 得到该记录发生后的余额快照
+  // 来源2：af_manual_balances（手动调账/米伴扣款/退款等）
+  const [manualRows] = await pool.execute(
+    `SELECT id, amount, note, created_at AS createdAt FROM af_manual_balances
+     WHERE user_id = ? AND amount != 0
+     ORDER BY created_at ASC`,
+    [userId]
+  ) as any[];
+  const manualList: any[] = (Array.isArray(manualRows) ? manualRows : []).map((r: any) => ({
+    _src: 'manual',
+    id: `manual-${r.id}`,
+    amount: parseFloat(r.amount ?? '0'),
+    type: parseFloat(r.amount ?? '0') >= 0 ? 'reward' : 'deduct',
+    description: r.note ?? '',
+    createdAt: r.createdAt,
+    balanceAfter: null as number | null,
+  }));
+
+  // 去重：balance_history 里与 af_manual_balances 重复的米伴扣款/退款记录
+  const filteredBhList = bhList.filter((r) => {
+    const desc = r.description || '';
+    if (desc.includes('米伴订单扣款') || desc.includes('米伴订单退款')) return false;
+    return true;
+  });
+
+  // 合并并按时间正序排列
+  const allRows = [...filteredBhList, ...manualList].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+
+  // 倒推余额快照：从当前真实余额开始，倒序遍历
   const reversed = [...allRows].reverse();
   let running = currentBalance;
-  const balanceAfterMap = new Map<number, number>();
   for (const row of reversed) {
-    const amt = parseFloat(String(row.amount));
-    balanceAfterMap.set(row.id, parseFloat(running.toFixed(2)));
-    running -= amt; // 倒推：当前余额减去该笔金额 = 该笔发生前的余额
+    row.balanceAfter = parseFloat(running.toFixed(2));
+    running -= row.amount;
   }
 
-  // 返回时倒序（最新在前），并截取 limit 条
+  // 返回时倒序（最新在前），截取 limit 条
   return allRows.reverse().slice(0, limit).map((row) => ({
-    ...row,
-    balance: balanceAfterMap.get(row.id) ?? null as any,
+    id: row.id,
+    amount: row.amount,
+    type: row.type,
+    description: row.description,
+    createdAt: row.createdAt,
+    balance: row.balanceAfter,
   }));
 }
 
