@@ -1,11 +1,14 @@
 import { useState, useRef } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { ChevronLeft, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { mtrpc } from "../miban/mibanTrpc";
 
 export default function WalletAdjustPage() {
   const [, setLocation] = useLocation();
+  const searchStr = useSearch();
+  const fromLedgerId = new URLSearchParams(searchStr).get("from");
+  const backPath = fromLedgerId ? `/ledger/${fromLedgerId}/af-recharge-manage` : null;
 
   // 用户搜索
   const { data: allUsers = [] } = mtrpc.adminUser.list.useQuery();
@@ -74,7 +77,7 @@ export default function WalletAdjustPage() {
       {/* 顶部导航 */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
         <div className="flex items-center h-14 px-4 gap-3">
-          <button onClick={() => setLocation(-1 as any)} className="p-1 -ml-1">
+          <button onClick={() => backPath ? setLocation(backPath) : setLocation(-1 as any)} className="p-1 -ml-1">
             <ChevronLeft className="w-6 h-6 text-gray-700" />
           </button>
           <div>

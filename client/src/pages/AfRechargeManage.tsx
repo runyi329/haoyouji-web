@@ -151,7 +151,7 @@ export default function AfRechargeManage() {
             充值记录
           </button>
           <button
-            onClick={() => setLocation("/admin/wallet-adjust")}
+            onClick={() => setLocation(`/admin/wallet-adjust?from=${ledgerId}`)}
             className="flex-1 py-3 text-sm font-medium transition-colors text-gray-500"
           >
             手动调账
