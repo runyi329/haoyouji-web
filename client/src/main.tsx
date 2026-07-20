@@ -22,6 +22,9 @@ const queryClient = new QueryClient({
   },
 });
 
+// 防抖锁：防止多个 API 同时失败时触发多次跳转（如 batch 请求中多个接口同时返回 401）
+let _unauthorizedRedirectTimer: ReturnType<typeof setTimeout> | null = null;
+
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
   if (typeof window === "undefined") return;
@@ -31,14 +34,18 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
 
   // token 过期或失效，提示用户并跳转到登录页
   const loginUrl = getLoginUrl();
-  if (window.location.pathname !== loginUrl) {
-    console.log('[Auth] Token 失效，跳转登录页');
-    toast.error('登录已过期，请重新登录', { duration: 3000 });
-    setTimeout(() => {
-      window.history.pushState(null, '', loginUrl);
-      window.dispatchEvent(new PopStateEvent('popstate'));
-    }, 1500);
-  }
+  if (window.location.pathname === loginUrl) return;
+
+  // 防抖：已有跳转计划则不重复触发
+  if (_unauthorizedRedirectTimer) return;
+
+  console.log('[Auth] Token 失效，跳转登录页');
+  toast.error('登录已过期，请重新登录', { duration: 3000 });
+  _unauthorizedRedirectTimer = setTimeout(() => {
+    _unauthorizedRedirectTimer = null;
+    window.history.pushState(null, '', loginUrl);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }, 1500);
 };
 
 queryClient.getQueryCache().subscribe(event => {

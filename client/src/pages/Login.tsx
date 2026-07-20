@@ -122,13 +122,27 @@ export default function Login() {
   const [pressTimer, setPressTimer] = useState<NodeJS.Timeout | null>(null);
 
   const queryClient = useQueryClient();
+  const utils = trpc.useUtils();
 
-  // 切换用户时清空所有缓存，防止旧用户数据残留
+  // Bug修复：登录成功后不能 queryClient.clear()，否则会清空 auth.me 缓存，
+  // 导致跳转后 isAuthenticated=false，用户点「立即购买」被误判为未登录而踢回登录页。
+  // 修复方案：只清除业务数据缓存，保留 auth.me 缓存，让其在后台静默刷新。
   const clearAllCacheAndNavigate = (token?: string) => {
     if (token) {
       saveToken(token);
     }
-    queryClient.clear();
+    // 清除业务数据缓存（非 auth 相关），防止旧用户数据残留
+    queryClient.removeQueries({ predicate: (query) => {
+      const key = query.queryKey;
+      // 保留 auth.me 缓存，清除其他所有缓存
+      if (Array.isArray(key) && key[0] === 'trpc' && Array.isArray(key[1])) {
+        const path = key[1] as string[];
+        if (path[0] === 'auth' && path[1] === 'me') return false;
+      }
+      return true;
+    }});
+    // 让 auth.me 在后台静默刷新（不清除旧数据，不触发 isLoading=true）
+    utils.auth.me.invalidate();
     setTimeout(() => {
       setLocation("/");
     }, 200);

@@ -126,7 +126,7 @@ export default function TianguiPearDetail() {
   const [showAddressPicker, setShowAddressPicker] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<{ orderNo: string } | null>(null);
 
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading: authLoading } = useAuth();
 
   // 下架判断：截止北京时 2026-07-25 00:00:00
   const PEAR_DEADLINE = new Date('2026-07-25T00:00:00+08:00').getTime();
@@ -192,6 +192,9 @@ export default function TianguiPearDetail() {
   const currentSpec = SPECS[spec] ?? SPECS[0];
 
   const handleBuy = () => {
+    // Bug修复：登录状态加载中时 isAuthenticated=false，不能跳转登录页
+    // 应等待 auth 加载完成后再判断
+    if (authLoading) return;
     if (!isAuthenticated) {
       navigate("/login");
       return;
