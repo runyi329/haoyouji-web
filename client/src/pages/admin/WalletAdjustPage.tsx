@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useLocation, useSearch } from "wouter";
-import { ChevronLeft, Search, X } from "lucide-react";
+import { ChevronLeft, Search, X, ChevronLeft as PrevIcon, ChevronRight as NextIcon } from "lucide-react";
 import { toast } from "sonner";
 import { mtrpc } from "../miban/mibanTrpc";
 
@@ -23,11 +23,21 @@ export default function WalletAdjustPage() {
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
 
-  // 历史记录
+  // 单用户历史
   const { data: history = [], refetch: refetchHistory } = mtrpc.adminUser.walletHistory.useQuery(
     { userId: selectedUser?.id ?? 0 },
     { enabled: !!selectedUser }
   );
+
+  // 全局调账日志（分页）
+  const [logPage, setLogPage] = useState(1);
+  const PAGE_SIZE = 10;
+  const { data: globalLog, refetch: refetchGlobal } = mtrpc.adminUser.walletGlobalHistory.useQuery(
+    { page: logPage, pageSize: PAGE_SIZE }
+  );
+  const logItems = globalLog?.items ?? [];
+  const logTotal = globalLog?.total ?? 0;
+  const logTotalPages = Math.max(1, Math.ceil(logTotal / PAGE_SIZE));
 
   const adjustMut = mtrpc.adminUser.walletAdjust.useMutation({
     onSuccess: () => {
@@ -35,6 +45,8 @@ export default function WalletAdjustPage() {
       setAmount("");
       setNote("");
       refetchHistory();
+      setLogPage(1);
+      refetchGlobal();
     },
     onError: (e: any) => toast.error(e.message || "调账失败"),
   });
@@ -242,10 +254,10 @@ export default function WalletAdjustPage() {
           </button>
         </div>
 
-        {/* 第三步：调账历史 */}
+        {/* 第三步：当前用户调账历史 */}
         {selectedUser && (
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-            <p className="text-[13px] font-bold text-black mb-3">③ 调账历史（最近50条）</p>
+            <p className="text-[13px] font-bold text-black mb-3">③ {selectedUser.name || selectedUser.username} 的调账记录</p>
             {(history as any[]).length === 0 ? (
               <p className="text-center text-[12px] text-gray-300 py-6">暂无调账记录</p>
             ) : (
@@ -265,6 +277,57 @@ export default function WalletAdjustPage() {
             )}
           </div>
         )}
+
+        {/* 全局调账日志 */}
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[13px] font-bold text-black">全局调账日志</p>
+            <span className="text-[11px] text-gray-400">共 {logTotal} 条</span>
+          </div>
+
+          {logItems.length === 0 ? (
+            <p className="text-center text-[12px] text-gray-300 py-6">暂无调账记录</p>
+          ) : (
+            <div className="space-y-2">
+              {logItems.map((r: any, i: number) => (
+                <div key={r.id ?? i} className="flex items-start justify-between py-2.5 border-b border-gray-50 last:border-0">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="text-[12px] font-semibold text-black">{r.userName}</span>
+                      <span className="text-[10px] text-gray-400">@{r.username}</span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 truncate">{String(r.note ?? "").replace(/\[.*?\]/g, "").trim() || "—"}</p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">{new Date(r.createdAt).toLocaleString("zh-CN")} · {r.currency}</p>
+                  </div>
+                  <p className={`text-[14px] font-bold ml-3 flex-shrink-0 ${Number(r.amount) >= 0 ? "text-green-600" : "text-red-500"}`}>
+                    {Number(r.amount) >= 0 ? "+" : ""}{r.currency === "CNY" ? "¥" : ""}{Number(r.amount).toFixed(r.currency === "CNY" ? 2 : 4)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 翻页 */}
+          {logTotalPages > 1 && (
+            <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-100">
+              <button
+                onClick={() => setLogPage(p => Math.max(1, p - 1))}
+                disabled={logPage <= 1}
+                className="flex items-center gap-1 text-[12px] px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 disabled:opacity-30"
+              >
+                <PrevIcon className="w-3.5 h-3.5" />上一页
+              </button>
+              <span className="text-[12px] text-gray-400">{logPage} / {logTotalPages}</span>
+              <button
+                onClick={() => setLogPage(p => Math.min(logTotalPages, p + 1))}
+                disabled={logPage >= logTotalPages}
+                className="flex items-center gap-1 text-[12px] px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 disabled:opacity-30"
+              >
+                下一页<NextIcon className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

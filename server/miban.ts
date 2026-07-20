@@ -1856,6 +1856,41 @@ export const mibanAdminUserRouter = router({
         createdAt: r.created_at ? String(r.created_at) : '',
       }));
     }),
+  // 全局调账日志（不限用户，分页）
+  walletGlobalHistory: mibanAdminProcedure
+    .input(z.object({ page: z.number().optional(), pageSize: z.number().optional() }))
+    .query(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) return { items: [], total: 0 };
+      const page = input.page ?? 1;
+      const pageSize = input.pageSize ?? 10;
+      const offset = (page - 1) * pageSize;
+      const [[countRow]] = await (conn as any).execute(
+        `SELECT COUNT(*) as total FROM af_manual_balances WHERE note LIKE '%管理员调账%'`
+      ) as any[];
+      const [rows] = await (conn as any).execute(
+        `SELECT amb.id, amb.user_id, amb.amount, amb.note, amb.created_at,
+                u.name AS user_name, u.username
+         FROM af_manual_balances amb
+         LEFT JOIN users u ON u.id = amb.user_id
+         WHERE amb.note LIKE '%管理员调账%'
+         ORDER BY amb.created_at DESC LIMIT ? OFFSET ?`,
+        [pageSize, offset]
+      ) as any[];
+      return {
+        total: Number(countRow?.total ?? 0),
+        items: (Array.isArray(rows) ? rows : []).map((r: any) => ({
+          id: Number(r.id),
+          userId: Number(r.user_id),
+          userName: r.user_name ?? r.username ?? `用户${r.user_id}`,
+          username: r.username ?? '',
+          amount: parseFloat(r.amount ?? '0'),
+          note: String(r.note ?? ''),
+          currency: String(r.note ?? '').startsWith('[CNY]') ? 'CNY' : 'USDT',
+          createdAt: r.created_at ? String(r.created_at) : '',
+        })),
+      };
+    }),
 });
 
 export const mibanAdminCommissionRouter = router({

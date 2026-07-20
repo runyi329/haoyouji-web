@@ -862,6 +862,7 @@ function getRankInfo(rankIndex: number) {
 
 function UsersPanel() {
   const utils = mtrpc.useUtils();
+  const [, setLocation] = useLocation();
   const { data: users, isLoading } = mtrpc.adminUser.list.useQuery();
   const setRankMutation = mtrpc.adminUser.setRank.useMutation({
     onSuccess: () => { utils.adminUser.list.invalidate(); toast.success("职级已更新"); },
