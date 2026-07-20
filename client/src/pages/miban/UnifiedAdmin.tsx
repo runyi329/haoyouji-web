@@ -1085,24 +1085,30 @@ function SalesPanel() {
         </div>
         {expandedCard === 'global' && (
           <div className="border-t border-gray-50 px-4 py-3 space-y-3 bg-gray-50/50">
-            {/* 全局总拨出率设置 */}
+            {/* 兜底配置：选制度 + 拨出系数 */}
             <div className="space-y-2">
-              <p className="text-[12px] font-semibold text-gray-600">全局总拨出率</p>
-              <p className="text-[11px] text-gray-400">订单成交后用于分佣的总池子比例</p>
-              <div className="flex gap-2">
-                <input placeholder="总拨出率 % (如 10)" value={globalRate} onChange={e => setGlobalRate(e.target.value)} className="flex-1 min-w-0 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-300" />
-                <button onClick={saveGlobal} disabled={setConfigMutation.isPending} className="px-4 py-2 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50 flex-shrink-0" style={{ background: "#FF6900" }}>保存</button>
-              </div>
+              <p className="text-[12px] font-semibold text-gray-600">兜底配置</p>
+              {globalConfig && (
+                <div className="bg-white rounded-xl px-3 py-2 space-y-0.5">
+                  <p className="text-[12px] font-medium text-black">当前制度：{globalConfig.planId ? (plans as any[]).find((p: any) => p.id === globalConfig.planId)?.name ?? `ID ${globalConfig.planId}` : '未配置'}</p>
+                  <p className="text-[12px]" style={{ color: '#FF6900' }}>拨出系数：{(Number((globalConfig as any).payoutRateMultiplier ?? 1) * 100).toFixed(0)}%</p>
+                  {globalConfig.note && <p className="text-[11px] text-gray-400">{globalConfig.note}</p>}
+                </div>
+              )}
               <select
                 value={globalPlanId}
                 onChange={e => setGlobalPlanId(e.target.value)}
                 className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-300"
               >
-                <option value="">选择销售制度（层级分配方式）</option>
+                <option value="">选择销售制度（必选）</option>
                 {(plans as any[]).map((p: any) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
+              <div className="flex gap-2">
+                <input placeholder="拨出系数 % （不填则为100%）" value={globalMultiplier} onChange={e => setGlobalMultiplier(e.target.value)} className="flex-1 min-w-0 text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-300" />
+                <button onClick={saveGlobal} disabled={setConfigMutation.isPending} className="px-4 py-2 rounded-xl text-[13px] font-semibold text-white disabled:opacity-50 flex-shrink-0" style={{ background: "#FF6900" }}>保存</button>
+              </div>
               <input placeholder="备注（选填）" value={globalNote} onChange={e => setGlobalNote(e.target.value)} className="w-full text-[13px] border border-gray-200 rounded-xl px-3 py-2 bg-white focus:outline-none focus:border-orange-300" />
             </div>
 
