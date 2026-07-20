@@ -1828,7 +1828,7 @@ export default function Home() {
             <img
               src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/banners/miban-flagship-banner.webp"
               alt="米伴·我的饭碗我做主"
-              className="w-full h-full object-cover"
+              className="w-full h-full" style={{ objectFit: 'cover', objectPosition: 'center top' }}
             />
           </div>,
           // 页1：AI球伴世界杯海报（点击跳转世界杯页面）

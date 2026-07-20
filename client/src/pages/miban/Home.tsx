@@ -581,19 +581,28 @@ export default function Home() {
         </Link>
       </section>
 
-      {/* ── 大米竖向卡片轮播（双排横向滚动）────────────────── */}
+      {/* ── 大米卡片魔方（双轴自由滚动）────────────────── */}
       <section className="pb-6">
         <div
-          className="overflow-x-auto px-5"
-          style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
+          style={{
+            overflowX: "auto",
+            overflowY: "auto",
+            height: "calc(3 * 200px + 2 * 12px + 16px)",
+            paddingLeft: 20,
+            paddingRight: 20,
+            paddingBottom: 8,
+            scrollbarWidth: "none",
+            WebkitOverflowScrolling: "touch",
+            touchAction: "pan-x pan-y",
+          }}
         >
           <div
             className="grid gap-3"
             style={{
-              gridTemplateRows: "repeat(2, auto)",
+              gridTemplateRows: "repeat(3, 200px)",
               gridAutoFlow: "column",
               gridAutoColumns: "44vw",
-              maxWidth: "100%",
+              width: "max-content",
             }}
           >
           {(catalogLoading && (!catalogData || catalogData.length === 0)
