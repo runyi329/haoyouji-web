@@ -7,8 +7,12 @@ import { mtrpc } from "../miban/mibanTrpc";
 export default function WalletAdjustPage() {
   const [, setLocation] = useLocation();
   const searchStr = useSearch();
-  const fromLedgerId = new URLSearchParams(searchStr).get("from");
-  const backPath = fromLedgerId ? `/ledger/${fromLedgerId}/af-recharge-manage` : null;
+  const fromParam = new URLSearchParams(searchStr).get("from");
+  const backPath = fromParam === "miban"
+    ? "/p/proj_hzxm2t/admin"
+    : fromParam
+    ? `/ledger/${fromParam}/af-recharge-manage`
+    : null;
 
   // 用户搜索
   const { data: allUsers = [] } = mtrpc.adminUser.list.useQuery();

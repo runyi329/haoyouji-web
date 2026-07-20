@@ -899,7 +899,7 @@ function UsersPanel() {
           className="flex-1 text-[13px] border border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:outline-none focus:border-orange-300"
         />
         <button
-          onClick={() => setLocation("/admin/wallet-adjust")}
+          onClick={() => setLocation("/admin/wallet-adjust?from=miban")}
           className="flex-shrink-0 text-[12px] font-medium px-3 py-2.5 rounded-xl bg-orange-50 text-orange-500 border border-orange-200 hover:bg-orange-100 transition-colors"
         >
           调账
