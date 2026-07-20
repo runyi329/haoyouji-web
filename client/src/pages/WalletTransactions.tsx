@@ -39,10 +39,9 @@ export default function WalletTransactions() {
   const backTo = isYaban ? "/yaban/wallet" : "/wallet";
   const [activeType, setActiveType] = useState<TransactionType>("all");
 
-  // 三个接口：充值订单 + balance_history（含 withdraw/reward）+ AF 手动调账
+  // 两个接口：充值订单 + 统一流水（balance_history + af_manual_balances 合并，含余额快照）
   const rechargeQuery = trpc.recharge.getMyOrders.useQuery({ limit: 100 });
   const balanceHistoryQuery = trpc.recharge.getBalanceHistory.useQuery({ limit: 200 });
-  const manualBalancesQuery = trpc.recharge.getMyManualBalances.useQuery({ limit: 200 });
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -133,28 +132,25 @@ export default function WalletTransactions() {
             description: desc, wcCode, createdAt: history.createdAt,
             balanceAfter: history.balance != null ? Number(history.balance) : null,
           });
+        } else if (history.type === 'deduct') {
+          // af_manual_balances 来源的扣款记录（米伴订单扣款等）
+          transactions.push({
+            id: history.id,
+            type: 'deduct',
+            amount: Math.abs(amt), status: 'completed',
+            description: desc, wcCode, createdAt: history.createdAt,
+            balanceAfter: history.balance != null ? Number(history.balance) : null,
+          });
+        } else if (history.type === 'recharge') {
+          // 充值记录（如果在 balance_history 里也有充值类型）
+          // 已在来源1（rechargeQuery）展示，跳过避免重复
         }
       });
     }
 
-    // 来源3：AF 手动调账（af_manual_balances 表，含所有账本的手动调账/奖励）
-    if (manualBalancesQuery.data) {
-      (manualBalancesQuery.data as any[]).forEach((m: any) => {
-        const amt = Number(m.amount);
-        if (amt === 0) return;
-        const note = m.note || '';
-        const wcCode = extractWcTeamCode(note);
-        transactions.push({
-          id: `manual-${m.id}`,
-          type: amt > 0 ? 'reward' : 'deduct',
-          amount: Math.abs(amt),
-          status: 'completed',
-          description: note,
-          wcCode,
-          createdAt: m.created_at || m.createdAt,
-        });
-      });
-    }
+    // 来源3：来自 getBalanceHistory 统一接口中 manual- 前缀的记录（af_manual_balances，含余额快照）
+    // 注意：这些记录已在 balanceHistoryQuery 中处理，此处无需重复添加
+    // （后端已将 af_manual_balances 合并进 getBalanceHistory，并统一倒推余额快照）
 
     return transactions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   };
@@ -166,7 +162,7 @@ export default function WalletTransactions() {
     return all.filter(t => t.type === activeType);
   })();
 
-  const isLoading = rechargeQuery.isLoading || balanceHistoryQuery.isLoading || manualBalancesQuery.isLoading;
+  const isLoading = rechargeQuery.isLoading || balanceHistoryQuery.isLoading;
 
   // ============ 牙伴蓝白主题 ============
   if (isYaban) {
