@@ -129,7 +129,7 @@ export default function AfRechargeManage() {
       <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
         <div className="flex items-center justify-between h-14 px-4">
           <button
-            onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
+            onClick={() => setLocation(-1 as any)}
             className="p-2 -ml-2"
           >
             <ChevronLeft className="w-6 h-6 text-gray-700" />
