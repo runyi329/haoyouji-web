@@ -25,7 +25,12 @@ import { UserAvatar } from "@/components/UserAvatar";
 export default function AfRechargeManage() {
   const params = useParams();
   const [, setLocation] = useLocation();
-  const ledgerId = params?.id ? parseInt(params.id) : 1;
+  // 优先从路由参数取，fallback 从 URL 路径解析，确保 ledgerId 正确
+  const ledgerId = (() => {
+    if (params?.id) return parseInt(params.id);
+    const m = typeof window !== 'undefined' ? window.location.pathname.match(/\/ledger\/(\d+)\//) : null;
+    return m ? parseInt(m[1]) : 1;
+  })();
 
   // 当前 tab：recharge=充值记录 | manual=手动调账
   const [tab, setTab] = useState<"recharge" | "manual">("recharge");
@@ -129,7 +134,7 @@ export default function AfRechargeManage() {
       <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
         <div className="flex items-center justify-between h-14 px-4">
           <button
-            onClick={() => setLocation(-1 as any)}
+            onClick={() => setLocation(`/ledger/${ledgerId}/settings`)}
             className="p-2 -ml-2"
           >
             <ChevronLeft className="w-6 h-6 text-gray-700" />
