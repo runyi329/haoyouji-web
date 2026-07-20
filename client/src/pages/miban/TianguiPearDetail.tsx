@@ -299,7 +299,7 @@ export default function TianguiPearDetail() {
             />
           ))}
         </div>
-        <Link href="/p/proj_hzxm2t">
+        <Link href="/p/proj_hzxm2t/limited">
           <button className="absolute top-3 left-3 w-9 h-9 rounded-full flex items-center justify-center border-none cursor-pointer" style={{ background: "rgba(255,255,255,0.85)" }}>
             <ChevronLeft className="w-5 h-5 text-gray-700" />
           </button>
