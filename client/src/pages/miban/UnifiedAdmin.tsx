@@ -1077,9 +1077,13 @@ function SalesPanel() {
           </div>
           <div className="text-right flex-shrink-0">
             {globalConfig && (
-              <p className="text-[13px] font-bold" style={{ color: "#FF6900" }}>{(Number(globalConfig.commissionRate) * 100).toFixed(1)}%</p>
+              <>
+                <p className="text-[13px] font-bold" style={{ color: "#FF6900" }}>
+                  {(Number((globalConfig as any).payoutRateMultiplier ?? 1) * 100).toFixed(0)}%
+                </p>
+                <p className="text-[11px] text-gray-400">拨出系数</p>
+              </>
             )}
-            <p className="text-[11px] text-gray-400">全局佣金比例</p>
           </div>
           <span className="text-gray-300 text-[12px] ml-1">{expandedCard === 'global' ? '▲' : '▼'}</span>
         </div>
