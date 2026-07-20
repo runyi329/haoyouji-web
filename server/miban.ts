@@ -1815,14 +1815,8 @@ export const mibanAdminUserRouter = router({
            VALUES (52, ?, ?, ?, NOW(), NOW())`,
           [input.userId, input.amount.toFixed(6), `[管理员调账] ${input.note}`]
         );
-        // 同时写 balance_history 保证钱包流水可见
-        await addUserBalance(
-          input.userId,
-          input.amount,
-          'commission',
-          undefined,
-          `[管理员手动调账] ${input.note}`
-        );
+        // 注意：不再写 users.balance，因为余额 = users.balance + af_manual_balances 合计
+        // 只写 af_manual_balances 即可，避免双重计入
       } else {
         // CNY：写入 af_manual_balances，note 以 [CNY] 开头
         await (conn as any).execute(
