@@ -168,22 +168,24 @@ async function getAllCommissionConfigs() {
   return db.select().from(mibanCommissionConfig).orderBy(mibanCommissionConfig.agentId);
 }
 
-async function setCommissionConfig(agentId: number | null, rate: number, note: string | undefined, updatedBy: number, planId?: number) {
+async function setCommissionConfig(agentId: number | null, payoutRateMultiplier: number, note: string | undefined, updatedBy: number, planId?: number) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
+  // commissionRate 字段保留但固定为0（已由 plan_id + payout_rate_multiplier 替代）
+  const baseFields = { commissionRate: '0' as any, planId: planId ?? null, payoutRateMultiplier: payoutRateMultiplier.toString() as any, note, updatedBy };
   if (agentId === null) {
     const [existing] = await db.select({ id: mibanCommissionConfig.id }).from(mibanCommissionConfig).where(isNull(mibanCommissionConfig.agentId));
     if (existing) {
-      await db.update(mibanCommissionConfig).set({ commissionRate: rate.toString() as any, planId: planId ?? null, note, updatedBy }).where(eq(mibanCommissionConfig.id, existing.id));
+      await db.update(mibanCommissionConfig).set(baseFields).where(eq(mibanCommissionConfig.id, existing.id));
     } else {
-      await db.insert(mibanCommissionConfig).values({ agentId: null, commissionRate: rate.toString() as any, planId: planId ?? null, note, updatedBy });
+      await db.insert(mibanCommissionConfig).values({ agentId: null, ...baseFields });
     }
   } else {
     const [existing] = await db.select({ id: mibanCommissionConfig.id }).from(mibanCommissionConfig).where(eq(mibanCommissionConfig.agentId, agentId));
     if (existing) {
-      await db.update(mibanCommissionConfig).set({ commissionRate: rate.toString() as any, planId: planId ?? null, note, updatedBy }).where(eq(mibanCommissionConfig.id, existing.id));
+      await db.update(mibanCommissionConfig).set(baseFields).where(eq(mibanCommissionConfig.id, existing.id));
     } else {
-      await db.insert(mibanCommissionConfig).values({ agentId, commissionRate: rate.toString() as any, planId: planId ?? null, note, updatedBy });
+      await db.insert(mibanCommissionConfig).values({ agentId, ...baseFields });
     }
   }
 }
@@ -340,17 +342,37 @@ async function triggerMultiLevelCommission(params: {
     }
   }
 
-  // 如果没有制度层级，尝试用旧的全局佣金配置（兼容旧逻辑）
+  // 如果没有制度层级，走全局兜底配置
   if (planLevels.length === 0) {
+    // 兜底：读取全局配置的 plan_id + payout_rate_multiplier
     try {
       const [cfgRows] = await (dbConn as any).execute(
-        `SELECT commission_rate FROM miban_commission_config WHERE agent_id IS NULL LIMIT 1`
+        `SELECT plan_id, COALESCE(payout_rate_multiplier, 1.0) AS multiplier FROM miban_commission_config WHERE agent_id IS NULL LIMIT 1`
       );
       if ((cfgRows as any[]).length > 0) {
-        const globalRate = parseFloat((cfgRows as any[])[0].commission_rate ?? '0');
-        if (globalRate > 0) planLevels = [{ levelIndex: 1, rate: globalRate }];
+        const fallbackPlanId = (cfgRows as any[])[0].plan_id;
+        const fallbackMultiplier = parseFloat((cfgRows as any[])[0].multiplier ?? '1');
+        if (fallbackPlanId) {
+          // 用兜底制度的拨出系数覆盖 teamMultiplier
+          teamMultiplier = fallbackMultiplier;
+          // 读取制度层级
+          const [lvFb] = await (dbConn as any).execute(
+            `SELECT level_index, rate FROM miban_commission_plan_levels WHERE plan_id = ? ORDER BY level_index ASC`,
+            [fallbackPlanId]
+          );
+          planLevels = (lvFb as any[]).map((r: any) => ({ levelIndex: Number(r.level_index), rate: parseFloat(r.rate) }));
+          // 读取直级奖
+          const [rkFb] = await (dbConn as any).execute(
+            `SELECT rank_index, name, bonus_rate FROM miban_plan_ranks WHERE plan_id = ? ORDER BY rank_index ASC`,
+            [fallbackPlanId]
+          );
+          rankBonusConfig = (rkFb as any[]).map((r: any) => ({
+            rankIndex: Number(r.rank_index), rankName: String(r.name), bonusRate: parseFloat(r.bonus_rate ?? '0')
+          }));
+          console.log(`[Commission] 订单 ${orderNo} 走兜底制度 plan_id=${fallbackPlanId} multiplier=${fallbackMultiplier}`);
+        }
       }
-    } catch { /* 无全局配置，跳过 */ }
+    } catch (e: any) { console.warn('[Commission] 读取兜底配置失败:', e?.message); }
   }
 
   if (planLevels.length === 0 && rankBonusConfig.length === 0) {
@@ -1574,40 +1596,34 @@ export const mibanOrderRouter = router({
         }));
       }
 
-      // 尝试全局兆底配置
+      // 全局兜底配置：读取 plan_id + payout_rate_multiplier
       if (planLevels.length === 0) {
         const [cfgRows] = await (dbConn as any).execute(
-          `SELECT commission_rate, plan_id FROM miban_commission_config WHERE agent_id IS NULL LIMIT 1`
+          `SELECT plan_id, COALESCE(payout_rate_multiplier, 1.0) AS multiplier FROM miban_commission_config WHERE agent_id IS NULL LIMIT 1`
         ) as [any[], any];
         if ((cfgRows as any[]).length > 0) {
-          const globalRate = parseFloat((cfgRows as any[])[0].commission_rate ?? '0');
           const globalPlanId = (cfgRows as any[])[0].plan_id;
-          if (globalRate > 0) {
-            planLevels = [{ levelIndex: 1, rate: globalRate }];
+          const globalMultiplier = parseFloat((cfgRows as any[])[0].multiplier ?? '1');
+          if (globalPlanId) {
             isFallback = true;
             teamName = null;
-            // 如果兆底配置了制度，读取制度名称
-            if (globalPlanId) {
-              const [pRows] = await (dbConn as any).execute(
-                `SELECT name FROM miban_commission_plans WHERE id = ? LIMIT 1`, [globalPlanId]
-              ) as [any[], any];
-              planName = (pRows as any[])[0]?.name ?? null;
-              // 并读取层级配置，替换单一层兆底
-              const [lvRows2] = await (dbConn as any).execute(
-                `SELECT level_index, rate FROM miban_commission_plan_levels WHERE plan_id = ? ORDER BY level_index ASC`,
-                [globalPlanId]
-              ) as [any[], any];
-              if ((lvRows2 as any[]).length > 0) {
-                planLevels = (lvRows2 as any[]).map((r: any) => ({ levelIndex: Number(r.level_index), rate: parseFloat(r.rate) }));
-              }
-              const [rankRows2] = await (dbConn as any).execute(
-                `SELECT rank_index, name, bonus_rate FROM miban_plan_ranks WHERE plan_id = ? ORDER BY rank_index ASC`,
-                [globalPlanId]
-              ) as [any[], any];
-              rankBonusConfig = (rankRows2 as any[]).map((r: any) => ({
-                rankIndex: Number(r.rank_index), rankName: String(r.name), bonusRate: parseFloat(r.bonus_rate ?? '0')
-              }));
-            }
+            teamMultiplier = globalMultiplier;
+            const [pRows] = await (dbConn as any).execute(
+              `SELECT name FROM miban_commission_plans WHERE id = ? LIMIT 1`, [globalPlanId]
+            ) as [any[], any];
+            planName = (pRows as any[])[0]?.name ?? null;
+            const [lvRows2] = await (dbConn as any).execute(
+              `SELECT level_index, rate FROM miban_commission_plan_levels WHERE plan_id = ? ORDER BY level_index ASC`,
+              [globalPlanId]
+            ) as [any[], any];
+            planLevels = (lvRows2 as any[]).map((r: any) => ({ levelIndex: Number(r.level_index), rate: parseFloat(r.rate) }));
+            const [rankRows2] = await (dbConn as any).execute(
+              `SELECT rank_index, name, bonus_rate FROM miban_plan_ranks WHERE plan_id = ? ORDER BY rank_index ASC`,
+              [globalPlanId]
+            ) as [any[], any];
+            rankBonusConfig = (rankRows2 as any[]).map((r: any) => ({
+              rankIndex: Number(r.rank_index), rankName: String(r.name), bonusRate: parseFloat(r.bonus_rate ?? '0')
+            }));
           }
         }
       }
@@ -1771,8 +1787,8 @@ export const mibanAdminUserRouter = router({
 export const mibanAdminCommissionRouter = router({
   configs: mibanAdminProcedure.query(() => getAllCommissionConfigs()),
   setConfig: mibanAdminProcedure
-    .input(z.object({ agentId: z.number().nullable(), rate: z.number().min(0).max(1), note: z.string().optional(), planId: z.number().optional() }))
-    .mutation(({ input, ctx }) => setCommissionConfig(input.agentId, input.rate, input.note, ctx.user!.id, input.planId)),
+    .input(z.object({ agentId: z.number().nullable(), payoutRateMultiplier: z.number().min(0).max(1), note: z.string().optional(), planId: z.number().optional() }))
+    .mutation(({ input, ctx }) => setCommissionConfig(input.agentId, input.payoutRateMultiplier, input.note, ctx.user!.id, input.planId)),
   deleteConfig: mibanAdminProcedure
     .input(z.object({ id: z.number() }))
     .mutation(({ input }) => deleteCommissionConfig(input.id)),

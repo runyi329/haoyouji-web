@@ -67,9 +67,19 @@ function CommissionPreviewBadge({ orderId }: { orderId: number }) {
                 </div>
               )}
               {/* 合计 */}
-              <div className="flex items-center justify-between pt-1 border-t border-orange-100">
-                <span className="text-[11px] text-gray-500">预计总分佣</span>
-                <span className="text-[13px] font-bold" style={{ color: '#FF6900' }}>¥{(data.totalCny ?? 0).toFixed(2)}</span>
+              <div className="pt-1 border-t border-orange-100 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-gray-400">订单金额</span>
+                  <span className="text-[11px] text-gray-500">¥{(data.orderAmount ?? 0).toFixed(2)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-gray-500 font-medium">预计总分佣</span>
+                  <span className="text-[12px] font-bold" style={{ color: '#FF6900' }}>¥{(data.totalCny ?? 0).toFixed(2)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-gray-400">未分配（留存）</span>
+                  <span className="text-[11px] text-gray-400">¥{(data.unallocatedCny ?? 0).toFixed(2)}</span>
+                </div>
               </div>
             </>
           )}
@@ -103,9 +113,24 @@ function OrdersPanel() {
     onSuccess: () => { toast.success("状态已更新"); refetch(); },
     onError: (e: any) => toast.error(e.message),
   });
+  const cancelMutation = mtrpc.order.adminCancel.useMutation({
+    onSuccess: (res: any) => {
+      const parts = [];
+      if (res.refundCny > 0.001) parts.push(`¥${res.refundCny.toFixed(2)} CNY`);
+      if (res.refundUsdt > 0.000001) parts.push(`${res.refundUsdt.toFixed(4)} USDT`);
+      toast.success(parts.length ? `已取消并退款 ${parts.join(' + ')}` : '已取消（无退款）');
+      refetch();
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const deleteMutation = mtrpc.order.adminDelete.useMutation({
+    onSuccess: () => { toast.success('订单已删除（不退款）'); refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
   const [trackingInputs, setTrackingInputs] = useState<Record<number, string>>({});
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [searchText, setSearchText] = useState<string>('');
+  const [searchText, setSearchText] = useState<string>('');  
+  const [confirmAction, setConfirmAction] = useState<{ type: 'cancel' | 'delete'; orderId: number; orderNo: string } | null>(null);
 
   if (isLoading) return (
     <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
@@ -260,9 +285,65 @@ function OrdersPanel() {
               </div>
             )}
             <CommissionPreviewBadge orderId={order.id} />
+            {/* 取消 / 删除 按鈕 */}
+            {order.status !== 'delivered' && (
+              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-50">
+                {order.status !== 'cancelled' && (
+                  <button
+                    onClick={() => setConfirmAction({ type: 'cancel', orderId: order.id, orderNo: order.orderNo })}
+                    className="flex-1 text-[11px] py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors"
+                  >
+                    取消订单（退款）
+                  </button>
+                )}
+                <button
+                  onClick={() => setConfirmAction({ type: 'delete', orderId: order.id, orderNo: order.orderNo })}
+                  className="flex-1 text-[11px] py-1.5 rounded-lg border border-red-100 text-red-400 hover:bg-red-50 transition-colors"
+                >
+                  删除订单（不退）
+                </button>
+              </div>
+            )}
           </div>
         );
       })}
+
+      {/* 确认弹窗 */}
+      {confirmAction && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.4)' }}>
+          <div className="bg-white w-full max-w-sm rounded-t-2xl p-5 pb-8">
+            <p className="text-[15px] font-bold text-center mb-1">
+              {confirmAction.type === 'cancel' ? '取消订单' : '删除订单'}
+            </p>
+            <p className="text-[12px] text-gray-500 text-center mb-4">
+              {confirmAction.type === 'cancel'
+                ? `确认取消 #${confirmAction.orderNo}？钱包金额将原路退回。`
+                : `确认删除 #${confirmAction.orderNo}？此操作不退款且不可恢复。`
+              }
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmAction(null)}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-[13px] text-gray-500"
+              >再想想</button>
+              <button
+                onClick={() => {
+                  if (confirmAction.type === 'cancel') {
+                    cancelMutation.mutate({ id: confirmAction.orderId });
+                  } else {
+                    deleteMutation.mutate({ id: confirmAction.orderId });
+                  }
+                  setConfirmAction(null);
+                }}
+                className="flex-1 py-2.5 rounded-xl text-[13px] text-white font-medium"
+                style={{ background: confirmAction.type === 'cancel' ? '#FF6900' : '#ef4444' }}
+              >
+                {confirmAction.type === 'cancel' ? '确认取消' : '确认删除'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -961,29 +1042,18 @@ function SalesPanel() {
       ).slice(0, 30)
     : (allUsers as any[]).slice(0, 50);
 
-  const [globalRate, setGlobalRate] = useState("");
+  const [globalMultiplier, setGlobalMultiplier] = useState("");
   const [globalNote, setGlobalNote] = useState("");
   const [globalPlanId, setGlobalPlanId] = useState("");
-  const [agentId, setAgentId] = useState("");
-  const [agentRate, setAgentRate] = useState("");
-  const [agentNote, setAgentNote] = useState("");
 
   const globalConfig = configs?.find((c: any) => c.agentId === null);
 
   function saveGlobal() {
-    const rate = parseFloat(globalRate) / 100;
-    if (isNaN(rate) || rate < 0 || rate > 1) { toast.error("请输入0-100之间的百分比"); return; }
-    setConfigMutation.mutate({ agentId: null, rate, note: globalNote || undefined, planId: globalPlanId ? parseInt(globalPlanId) : undefined });
-    setGlobalRate(""); setGlobalNote(""); setGlobalPlanId("");
-  }
-
-  function saveAgent() {
-    const id = parseInt(agentId);
-    const rate = parseFloat(agentRate) / 100;
-    if (isNaN(id) || id <= 0) { toast.error("请输入有效的业务员用户ID"); return; }
-    if (isNaN(rate) || rate < 0 || rate > 1) { toast.error("请输入0-100之间的百分比"); return; }
-    setConfigMutation.mutate({ agentId: id, rate, note: agentNote || undefined });
-    setAgentId(""); setAgentRate(""); setAgentNote("");
+    if (!globalPlanId) { toast.error("请选择销售制度"); return; }
+    const multiplier = globalMultiplier ? parseFloat(globalMultiplier) / 100 : 1.0;
+    if (isNaN(multiplier) || multiplier < 0 || multiplier > 1) { toast.error("请输入0-100之间的百分比"); return; }
+    setConfigMutation.mutate({ agentId: null, payoutRateMultiplier: multiplier, note: globalNote || undefined, planId: parseInt(globalPlanId) });
+    setGlobalMultiplier(""); setGlobalNote(""); setGlobalPlanId("");
   }
 
   // 展开的团队详情（null=全局默认，数字=团队id）
@@ -1045,11 +1115,11 @@ function SalesPanel() {
                   return (
                   <div key={c.id} className="bg-white rounded-xl px-3 py-2 flex items-center gap-2">
                     <div className="flex-1">
-                      <p className="text-[12px] font-medium text-black">{c.agentId === null ? "全局默认" : `业务员 ID: ${c.agentId}`}</p>
+                      <p className="text-[12px] font-medium text-black">{c.agentId === null ? "兜底默认" : `业务员 ID: ${c.agentId}`}</p>
                       {planName && <p className="text-[11px] font-medium" style={{ color: '#FF6900' }}>制度：{planName}</p>}
                       {c.note && <p className="text-[11px] text-gray-400">{c.note}</p>}
                     </div>
-                    <span className="text-[14px] font-bold" style={{ color: "#FF6900" }}>{(Number(c.commissionRate) * 100).toFixed(1)}%</span>
+                    <span className="text-[14px] font-bold" style={{ color: "#FF6900" }}>{(Number(c.payoutRateMultiplier ?? 1) * 100).toFixed(0)}%</span>
                     <button onClick={() => deleteConfigMutation.mutate({ id: c.id })} className="text-gray-300 hover:text-red-400 text-[12px] ml-1">删除</button>
                   </div>
                 );})}
