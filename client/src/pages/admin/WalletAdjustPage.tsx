@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { ChevronLeft, Search, X, ChevronLeft as PrevIcon, ChevronRight as NextIcon } from "lucide-react";
 import { toast } from "sonner";
@@ -14,12 +14,24 @@ export default function WalletAdjustPage() {
     ? `/ledger/${fromParam}/af-recharge-manage`
     : null;
 
+  const utils = mtrpc.useUtils();
+
   // 用户搜索
   const { data: allUsers = [] } = mtrpc.adminUser.list.useQuery();
   const [search, setSearch] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Bug修复：当 allUsers 重新加载后，同步更新 selectedUser 的余额显示
+  // 否则调账成功后，页面上显示的余额不会更新（selectedUser 是静态快照）
+  useEffect(() => {
+    if (!selectedUser || !(allUsers as any[]).length) return;
+    const updated = (allUsers as any[]).find((u: any) => u.id === selectedUser.id);
+    if (updated) {
+      setSelectedUser(updated);
+    }
+  }, [allUsers]);
 
   // 调账表单
   const [currency, setCurrency] = useState<"USDT" | "CNY">("USDT");
@@ -48,6 +60,8 @@ export default function WalletAdjustPage() {
       toast.success("调账成功");
       setAmount("");
       setNote("");
+      // Bug修复：刷新用户列表，触发 useEffect 同步 selectedUser 的最新余额
+      utils.adminUser.list.invalidate();
       refetchHistory();
       setLogPage(1);
       refetchGlobal();
