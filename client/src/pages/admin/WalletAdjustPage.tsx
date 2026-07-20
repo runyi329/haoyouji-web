@@ -8,7 +8,7 @@ export default function WalletAdjustPage() {
   const [, setLocation] = useLocation();
 
   // 用户搜索
-  const { data: allUsers = [] } = mtrpc.mibanAdminUser.list.useQuery();
+  const { data: allUsers = [] } = mtrpc.adminUser.list.useQuery();
   const [search, setSearch] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -21,12 +21,12 @@ export default function WalletAdjustPage() {
   const [note, setNote] = useState("");
 
   // 历史记录
-  const { data: history = [], refetch: refetchHistory } = mtrpc.mibanAdminUser.walletHistory.useQuery(
+  const { data: history = [], refetch: refetchHistory } = mtrpc.adminUser.walletHistory.useQuery(
     { userId: selectedUser?.id ?? 0 },
     { enabled: !!selectedUser }
   );
 
-  const adjustMut = mtrpc.mibanAdminUser.walletAdjust.useMutation({
+  const adjustMut = mtrpc.adminUser.walletAdjust.useMutation({
     onSuccess: () => {
       toast.success("调账成功");
       setAmount("");
