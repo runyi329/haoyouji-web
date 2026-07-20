@@ -25,11 +25,12 @@ import { UserAvatar } from "@/components/UserAvatar";
 export default function AfRechargeManage() {
   const params = useParams();
   const [, setLocation] = useLocation();
-  // 优先从路由参数取，fallback 从 URL 路径解析，确保 ledgerId 正确
+  // 直接从 URL 路径解析 ledgerId，避免 wouter params 在嵌套路由中取值错误
   const ledgerId = (() => {
+    const m = typeof window !== 'undefined' ? window.location.pathname.match(/\/ledger\/(\d+)/) : null;
+    if (m) return parseInt(m[1]);
     if (params?.id) return parseInt(params.id);
-    const m = typeof window !== 'undefined' ? window.location.pathname.match(/\/ledger\/(\d+)\//) : null;
-    return m ? parseInt(m[1]) : 1;
+    return 1;
   })();
 
   // 当前 tab：recharge=充值记录 | manual=手动调账
