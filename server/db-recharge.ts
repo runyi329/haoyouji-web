@@ -825,7 +825,7 @@ export async function getUserBalance(userId: number, ledgerId?: number): Promise
   const result = await db.execute(
     sql`SELECT
       (SELECT COALESCE(balance, 0) FROM users WHERE id = ${userId}) as userBalance,
-      (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ${userId}) as manual`
+      (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ${userId} AND note NOT LIKE '[CNY]%') as manual`
   ) as any;
   
   const row = result[0]?.[0] ?? result[0];

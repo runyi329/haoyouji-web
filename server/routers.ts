@@ -1374,7 +1374,7 @@ ${klinesSummary}
         const placeholders = ids.map(() => '?').join(',');
         const [rows] = await (conn as any).execute(
           `SELECT u.id AS userId,
-                  (COALESCE(u.balance,0) + COALESCE((SELECT SUM(amount) FROM af_manual_balances WHERE user_id = u.id),0)) AS total
+                  (COALESCE(u.balance,0) + COALESCE((SELECT SUM(amount) FROM af_manual_balances WHERE user_id = u.id AND note NOT LIKE '[CNY]%'),0)) AS total
            FROM users u WHERE u.id IN (${placeholders})`,
           [...ids]
         ) as any[];
@@ -12834,7 +12834,7 @@ ${klinesSummary}
           db.execute(
             sql`SELECT
               (SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) FROM recharge_orders WHERE user_id = ${targetUserId} AND status = 'completed') as recharged,
-              (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ${targetUserId}) as manual,
+              (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ${targetUserId} AND note NOT LIKE '[CNY]%') as manual,
               (SELECT COALESCE(balance, 0) FROM users WHERE id = ${targetUserId} LIMIT 1) as userBalance`
           ).catch(() => [[{ recharged: '0', manual: '0', userBalance: '0' }]]),
 
@@ -13515,7 +13515,7 @@ ${klinesSummary}
         const balRow = await db.execute(
           sql`SELECT
             (SELECT COALESCE(balance, 0) FROM users WHERE id = ${targetUserId}) AS userBalance,
-            (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ${targetUserId}) AS manual`
+            (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ${targetUserId} AND note NOT LIKE '[CNY]%') AS manual`
         ) as any;
         const balData = (balRow[0]?.[0] ?? balRow[0]) as any;
         const currentBalance = parseFloat(

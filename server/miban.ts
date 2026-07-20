@@ -636,7 +636,7 @@ async function getAllUsers() {
          LEFT JOIN (
            SELECT user_id, SUM(amount) AS manualSum
            FROM af_manual_balances
-           WHERE user_id IN (${placeholders})
+           WHERE user_id IN (${placeholders}) AND note NOT LIKE '[CNY]%'
            GROUP BY user_id
          ) m ON m.user_id = u.id
          WHERE u.id IN (${placeholders})`,
