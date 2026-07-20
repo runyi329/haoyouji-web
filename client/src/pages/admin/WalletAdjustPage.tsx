@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useLocation } from "wouter";
-import { ChevronLeft } from "lucide-react";
+import { ChevronLeft, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { mtrpc } from "../miban/mibanTrpc";
 
@@ -10,7 +10,9 @@ export default function WalletAdjustPage() {
   // 用户搜索
   const { data: allUsers = [] } = mtrpc.mibanAdminUser.list.useQuery();
   const [search, setSearch] = useState("");
+  const [showDropdown, setShowDropdown] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // 调账表单
   const [currency, setCurrency] = useState<"USDT" | "CNY">("USDT");
@@ -34,15 +36,29 @@ export default function WalletAdjustPage() {
     onError: (e: any) => toast.error(e.message || "调账失败"),
   });
 
-  const filteredUsers = (allUsers as any[]).filter((u: any) => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return (
-      String(u.name ?? "").toLowerCase().includes(q) ||
-      String(u.username ?? "").toLowerCase().includes(q) ||
-      String(u.id).includes(q)
-    );
-  });
+  // 只有输入内容时才过滤并显示
+  const filteredUsers = search.trim().length > 0
+    ? (allUsers as any[]).filter((u: any) => {
+        const q = search.toLowerCase();
+        return (
+          String(u.name ?? "").toLowerCase().includes(q) ||
+          String(u.username ?? "").toLowerCase().includes(q) ||
+          String(u.id).includes(q)
+        );
+      }).slice(0, 20)
+    : [];
+
+  function selectUser(u: any) {
+    setSelectedUser(u);
+    setSearch("");
+    setShowDropdown(false);
+  }
+
+  function clearUser() {
+    setSelectedUser(null);
+    setSearch("");
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }
 
   function handleSubmit() {
     if (!selectedUser) { toast.error("请先选择用户"); return; }
@@ -72,44 +88,77 @@ export default function WalletAdjustPage() {
         {/* 第一步：选用户 */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
           <p className="text-[13px] font-bold text-black mb-3">① 选择用户</p>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜索姓名 / 账号 / ID"
-            className="w-full text-[13px] px-3 py-2 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:border-orange-400 mb-3"
-          />
+
           {/* 已选用户展示 */}
-          {selectedUser && (
-            <div className="flex items-center justify-between bg-orange-50 border border-orange-200 rounded-xl px-3 py-2 mb-2">
-              <div>
-                <p className="text-[13px] font-semibold text-black">{selectedUser.name || selectedUser.username}</p>
-                <p className="text-[10px] text-gray-400">ID: {selectedUser.id} · USDT: {Number(selectedUser.usdtBalance ?? 0).toFixed(2)} · CNY: ¥{Number(selectedUser.cnyBalance ?? 0).toFixed(2)}</p>
-              </div>
-              <button onClick={() => setSelectedUser(null)} className="text-[11px] text-orange-500 font-medium">更换</button>
-            </div>
-          )}
-          {/* 用户列表（未选时显示） */}
-          {!selectedUser && (
-            <div className="max-h-48 overflow-y-auto space-y-1">
-              {filteredUsers.slice(0, 30).map((u: any) => (
-                <button
-                  key={u.id}
-                  onClick={() => { setSelectedUser(u); setSearch(""); }}
-                  className="w-full text-left flex items-center justify-between px-3 py-2 rounded-xl hover:bg-gray-50 active:bg-gray-100 border border-transparent hover:border-gray-100"
-                >
-                  <div>
-                    <p className="text-[13px] font-medium text-black">{u.name || u.username}</p>
-                    <p className="text-[10px] text-gray-400">ID: {u.id} · @{u.username}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[11px] text-gray-500">USDT {Number(u.usdtBalance ?? 0).toFixed(2)}</p>
-                    <p className="text-[10px] text-gray-400">CNY ¥{Number(u.cnyBalance ?? 0).toFixed(2)}</p>
-                  </div>
+          {selectedUser ? (
+            <div className="bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-[14px] font-bold text-black">{selectedUser.name || selectedUser.username}</p>
+                  <p className="text-[11px] text-gray-400 mt-0.5">ID: {selectedUser.id} · @{selectedUser.username}</p>
+                </div>
+                <button onClick={clearUser} className="text-[11px] text-orange-500 font-semibold px-2 py-1 rounded-lg bg-orange-100 active:bg-orange-200">
+                  更换
                 </button>
-              ))}
-              {filteredUsers.length === 0 && (
-                <p className="text-center text-[12px] text-gray-300 py-4">未找到用户</p>
+              </div>
+              {/* 余额展示 */}
+              <div className="flex gap-3 mt-3">
+                <div className="flex-1 bg-white rounded-xl px-3 py-2 border border-orange-100">
+                  <p className="text-[10px] text-gray-400 mb-0.5">USDT 余额</p>
+                  <p className="text-[15px] font-bold text-orange-500">{Number(selectedUser.usdtBalance ?? 0).toFixed(4)}</p>
+                </div>
+                <div className="flex-1 bg-white rounded-xl px-3 py-2 border border-orange-100">
+                  <p className="text-[10px] text-gray-400 mb-0.5">CNY 余额</p>
+                  <p className="text-[15px] font-bold text-green-600">¥{Number(selectedUser.cnyBalance ?? 0).toFixed(2)}</p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* 搜索框 + 下拉 */
+            <div className="relative">
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-gray-200 bg-gray-50 focus-within:border-orange-400">
+                <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={search}
+                  onChange={(e) => { setSearch(e.target.value); setShowDropdown(true); }}
+                  onFocus={() => setShowDropdown(true)}
+                  onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+                  placeholder="输入姓名 / 账号 / ID 搜索用户"
+                  className="flex-1 text-[13px] bg-transparent focus:outline-none"
+                />
+                {search && (
+                  <button onClick={() => setSearch("")} className="p-0.5">
+                    <X className="w-4 h-4 text-gray-400" />
+                  </button>
+                )}
+              </div>
+
+              {/* 下拉结果 */}
+              {showDropdown && search.trim().length > 0 && (
+                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-2xl shadow-lg z-50 overflow-hidden max-h-60 overflow-y-auto">
+                  {filteredUsers.length === 0 ? (
+                    <p className="text-center text-[12px] text-gray-400 py-6">未找到匹配用户</p>
+                  ) : (
+                    filteredUsers.map((u: any) => (
+                      <button
+                        key={u.id}
+                        onMouseDown={() => selectUser(u)}
+                        className="w-full text-left flex items-center justify-between px-4 py-3 hover:bg-orange-50 active:bg-orange-100 border-b border-gray-50 last:border-0"
+                      >
+                        <div>
+                          <p className="text-[13px] font-semibold text-black">{u.name || u.username}</p>
+                          <p className="text-[10px] text-gray-400">ID: {u.id} · @{u.username}</p>
+                        </div>
+                        <div className="text-right flex-shrink-0 ml-3">
+                          <p className="text-[11px] text-orange-500 font-medium">USDT {Number(u.usdtBalance ?? 0).toFixed(2)}</p>
+                          <p className="text-[10px] text-gray-400">CNY ¥{Number(u.cnyBalance ?? 0).toFixed(2)}</p>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -198,14 +247,14 @@ export default function WalletAdjustPage() {
               <p className="text-center text-[12px] text-gray-300 py-6">暂无调账记录</p>
             ) : (
               <div className="space-y-2">
-                {(history as any[]).map((r: any) => (
-                  <div key={r.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                {(history as any[]).map((r: any, i: number) => (
+                  <div key={r.id ?? i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
                     <div className="min-w-0 flex-1">
-                      <p className="text-[12px] text-gray-600 truncate">{r.note.replace(/\[.*?\]/g, "").trim()}</p>
+                      <p className="text-[12px] text-gray-600 truncate">{String(r.note ?? "").replace(/\[.*?\]/g, "").trim() || "—"}</p>
                       <p className="text-[10px] text-gray-400">{new Date(r.createdAt).toLocaleString("zh-CN")} · {r.currency}</p>
                     </div>
-                    <p className={`text-[14px] font-bold ml-3 flex-shrink-0 ${r.amount >= 0 ? "text-green-600" : "text-red-500"}`}>
-                      {r.amount >= 0 ? "+" : ""}{r.currency === "CNY" ? "¥" : ""}{r.amount.toFixed(r.currency === "CNY" ? 2 : 4)}
+                    <p className={`text-[14px] font-bold ml-3 flex-shrink-0 ${Number(r.amount) >= 0 ? "text-green-600" : "text-red-500"}`}>
+                      {Number(r.amount) >= 0 ? "+" : ""}{r.currency === "CNY" ? "¥" : ""}{Number(r.amount).toFixed(r.currency === "CNY" ? 2 : 4)}
                     </p>
                   </div>
                 ))}
