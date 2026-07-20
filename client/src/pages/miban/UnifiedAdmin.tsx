@@ -890,12 +890,20 @@ function UsersPanel() {
 
   return (
     <div className="space-y-4">
-      <input
-        placeholder="搜索昵称或用户名…"
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        className="w-full text-[13px] border border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:outline-none focus:border-orange-300"
-      />
+      <div className="flex items-center gap-2">
+        <input
+          placeholder="搜索昵称或用户名…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="flex-1 text-[13px] border border-gray-200 rounded-xl px-4 py-2.5 bg-white focus:outline-none focus:border-orange-300"
+        />
+        <button
+          onClick={() => setLocation("/admin/wallet-adjust")}
+          className="flex-shrink-0 text-[12px] font-medium px-3 py-2.5 rounded-xl bg-orange-50 text-orange-500 border border-orange-200 hover:bg-orange-100 transition-colors"
+        >
+          调账
+        </button>
+      </div>
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-[11px] text-gray-400">排序：</span>
         {([
