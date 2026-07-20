@@ -10,7 +10,7 @@ import InventoryPanel from "./InventoryPanel";
 import {
   Package, Wheat, Users, BarChart3, Truck, Loader2,
   ChevronLeft, Settings, TrendingUp, Warehouse, Copy,
-  ShieldCheck, UserCog, Percent, Building2
+  ShieldCheck, UserCog, Percent, Building2, Search, X
 } from "lucide-react";
 
 // ─── 奖金预览子组件 ──────────────────────────────────────────────────────────
@@ -104,6 +104,8 @@ function OrdersPanel() {
     onError: (e: any) => toast.error(e.message),
   });
   const [trackingInputs, setTrackingInputs] = useState<Record<number, string>>({});
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [searchText, setSearchText] = useState<string>('');
 
   if (isLoading) return (
     <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
@@ -113,9 +115,116 @@ function OrdersPanel() {
     <div className="text-center py-16 text-gray-300 text-[13px]">暂无订单</div>
   );
 
+  // 统计数据
+  const total = orders.length;
+  const countPending   = orders.filter((o: any) => o.status === 'pending').length;
+  const countConfirmed = orders.filter((o: any) => o.status === 'confirmed').length;
+  const countPacking   = orders.filter((o: any) => o.status === 'packing').length;
+  const countShipped   = orders.filter((o: any) => o.status === 'shipped').length;
+  const countDelivered = orders.filter((o: any) => o.status === 'delivered').length;
+  const countCancelled = orders.filter((o: any) => o.status === 'cancelled').length;
+  const totalRevenue   = orders
+    .filter((o: any) => o.status !== 'cancelled')
+    .reduce((s: number, o: any) => s + Number(o.totalPrice ?? 0), 0);
+
+  const stats = [
+    { key: 'all',       label: '全部',   count: total,          color: '#FF6900', bg: '#fff5ee' },
+    { key: 'pending',   label: '待处理', count: countPending,   color: '#FF6900', bg: '#fff5ee' },
+    { key: 'confirmed', label: '已确认', count: countConfirmed, color: '#FF6900', bg: '#fff5ee' },
+    { key: 'packing',   label: '打包中', count: countPacking,   color: '#FF6900', bg: '#fff5ee' },
+    { key: 'shipped',   label: '已发货', count: countShipped,   color: '#FF6900', bg: '#fff5ee' },
+    { key: 'delivered', label: '已送达', count: countDelivered, color: '#6b7280', bg: '#f5f5f5' },
+    { key: 'cancelled', label: '已取消', count: countCancelled, color: '#6b7280', bg: '#f5f5f5' },
+  ];
+
+  const baseOrders = filterStatus === 'all'
+    ? (orders ?? [])
+    : (orders ?? []).filter((o: any) => o.status === filterStatus);
+
+  const filteredOrders = searchText.trim() === ''
+    ? baseOrders
+    : baseOrders.filter((o: any) => {
+        const kw = searchText.trim().toLowerCase();
+        return (
+          String(o.id).includes(kw) ||
+          (o.orderNo ?? '').toLowerCase().includes(kw) ||
+          (o.recipeName ?? '').toLowerCase().includes(kw) ||
+          (o.receiverName ?? '').toLowerCase().includes(kw) ||
+          (o.receiverPhone ?? '').toLowerCase().includes(kw) ||
+          (o.receiverAddress ?? '').toLowerCase().includes(kw) ||
+          (o.trackingNo ?? '').toLowerCase().includes(kw) ||
+          (o.userNote ?? '').toLowerCase().includes(kw)
+        );
+      });
+
   return (
     <div className="space-y-3">
-      {(orders ?? []).map((order: any) => {
+      {/* 统计栏 */}
+      <div className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100">
+        {/* 总金额行 */}
+        <div className="flex items-center justify-between mb-2.5 px-0.5">
+          <span className="text-[12px] text-gray-500">订单总金额（不含取消）</span>
+          <span className="text-[16px] font-bold" style={{ color: '#FF6900' }}>¥{totalRevenue.toFixed(2)}</span>
+        </div>
+        {/* 状态卡片行 */}
+        <div className="grid grid-cols-4 gap-1.5">
+          {stats.slice(0, 4).map(s => (
+            <button
+              key={s.key}
+              onClick={() => setFilterStatus(s.key)}
+              className="rounded-xl py-2 px-1 text-center transition-all"
+              style={{
+                background: filterStatus === s.key ? s.color : s.bg,
+                border: `1.5px solid ${filterStatus === s.key ? s.color : 'transparent'}`,
+              }}
+            >
+              <p className="text-[18px] font-bold leading-tight" style={{ color: filterStatus === s.key ? '#fff' : s.color }}>{s.count}</p>
+              <p className="text-[10px] mt-0.5" style={{ color: filterStatus === s.key ? 'rgba(255,255,255,0.85)' : '#9ca3af' }}>{s.label}</p>
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-3 gap-1.5 mt-1.5">
+          {stats.slice(4).map(s => (
+            <button
+              key={s.key}
+              onClick={() => setFilterStatus(s.key)}
+              className="rounded-xl py-2 px-1 text-center transition-all"
+              style={{
+                background: filterStatus === s.key ? s.color : s.bg,
+                border: `1.5px solid ${filterStatus === s.key ? s.color : 'transparent'}`,
+              }}
+            >
+              <p className="text-[18px] font-bold leading-tight" style={{ color: filterStatus === s.key ? '#fff' : s.color }}>{s.count}</p>
+              <p className="text-[10px] mt-0.5" style={{ color: filterStatus === s.key ? 'rgba(255,255,255,0.85)' : '#9ca3af' }}>{s.label}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 搜索框 */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-300 pointer-events-none" />
+        <input
+          value={searchText}
+          onChange={e => setSearchText(e.target.value)}
+          placeholder="搜索收件人、手机号、地址、单号…"
+          className="w-full pl-8 pr-8 py-2.5 text-[13px] bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-orange-300"
+        />
+        {searchText && (
+          <button
+            onClick={() => setSearchText('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+
+      {/* 订单列表 */}
+      {filteredOrders.length === 0 && (
+        <div className="text-center py-10 text-gray-300 text-[13px]">该状态暂无订单</div>
+      )}
+      {filteredOrders.map((order: any) => {
         const ingredients: any[] = (() => { try { return JSON.parse(order.ingredients ?? "[]"); } catch { return []; } })();
         const statusColor = STATUS_COLORS[order.status] ?? "text-gray-500 bg-gray-100";
         return (
