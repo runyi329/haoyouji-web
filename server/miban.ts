@@ -907,7 +907,10 @@ export const mibanRiceRouter = router({
       const conn = await getDbConnection();
       if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
       const { id, nutritionJson, tagsJson, pricePerJin, totalPayoutRate, ...rest } = input;
-      const fields: Record<string, any> = { ...rest };
+      // 将 undefined 替换为 null，避免 MySQL bind 参数报错
+      const fields: Record<string, any> = Object.fromEntries(
+        Object.entries(rest).map(([k, v]) => [k, v === undefined ? null : v])
+      );
       if (pricePerJin !== undefined) fields.price_per_jin = pricePerJin;
       if (totalPayoutRate !== undefined) fields.total_payout_rate = totalPayoutRate;
       if (nutritionJson !== undefined) fields.nutritionJson = JSON.stringify(nutritionJson);
