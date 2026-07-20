@@ -10,7 +10,8 @@ import InventoryPanel from "./InventoryPanel";
 import {
   Package, Wheat, Users, BarChart3, Truck, Loader2,
   ChevronLeft, Settings, TrendingUp, Warehouse, Copy,
-  ShieldCheck, UserCog, Percent, Building2, Search, X
+  ShieldCheck, UserCog, Percent, Building2, Search, X,
+  CheckSquare, Square, Trash2
 } from "lucide-react";
 
 // ─── 奖金预览子组件 ──────────────────────────────────────────────────────────
@@ -131,6 +132,49 @@ function OrdersPanel() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchText, setSearchText] = useState<string>('');  
   const [confirmAction, setConfirmAction] = useState<{ type: 'cancel' | 'delete'; orderId: number; orderNo: string } | null>(null);
+  // 批量操作
+  const [batchMode, setBatchMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [batchConfirm, setBatchConfirm] = useState<'cancel' | 'delete' | null>(null);
+  const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null);
+  function toggleSelect(id: number) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+  function toggleSelectAll() {
+    if (selectedIds.size === filteredOrders.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredOrders.map((o: any) => o.id)));
+    }
+  }
+  async function executeBatch(type: 'cancel' | 'delete') {
+    const ids = Array.from(selectedIds);
+    setBatchProgress({ done: 0, total: ids.length });
+    let done = 0;
+    for (const id of ids) {
+      try {
+        if (type === 'cancel') {
+          await cancelMutation.mutateAsync({ id });
+        } else {
+          await deleteMutation.mutateAsync({ id });
+        }
+      } catch (e: any) {
+        toast.error(`#${id} 操作失败: ${e?.message ?? ''}`);
+      }
+      done++;
+      setBatchProgress({ done, total: ids.length });
+    }
+    setBatchProgress(null);
+    setBatchConfirm(null);
+    setBatchMode(false);
+    setSelectedIds(new Set());
+    refetch();
+    toast.success(type === 'cancel' ? `已批量取消 ${done} 笔订单` : `已批量删除 ${done} 笔订单`);
+  }
 
   if (isLoading) return (
     <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
@@ -211,24 +255,50 @@ function OrdersPanel() {
         </div>
       </div>
 
-      {/* 搜索框 */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-300 pointer-events-none" />
-        <input
-          value={searchText}
-          onChange={e => setSearchText(e.target.value)}
-          placeholder="搜索收件人、手机号、地址、单号…"
-          className="w-full pl-8 pr-8 py-2.5 text-[13px] bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-orange-300"
-        />
-        {searchText && (
-          <button
-            onClick={() => setSearchText('')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        )}
+      {/* 搜索框 + 批量操作按钮 */}
+      <div className="flex gap-2 items-center">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-300 pointer-events-none" />
+          <input
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+            placeholder="搜索收件人、手机号、地址、单号…"
+            className="w-full pl-8 pr-8 py-2.5 text-[13px] bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-orange-300"
+          />
+          {searchText && (
+            <button
+              onClick={() => setSearchText('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+        <button
+          onClick={() => { setBatchMode(v => !v); setSelectedIds(new Set()); }}
+          className="flex-shrink-0 text-[12px] font-medium px-3 py-2.5 rounded-xl border transition-colors"
+          style={{
+            background: batchMode ? '#FF6900' : '#fff',
+            color: batchMode ? '#fff' : '#FF6900',
+            borderColor: '#FF6900',
+          }}
+        >
+          {batchMode ? '退出' : '批量'}
+        </button>
       </div>
+      {/* 批量模式：全选栏 */}
+      {batchMode && (
+        <div className="flex items-center justify-between bg-orange-50 rounded-xl px-3 py-2 border border-orange-100">
+          <button onClick={toggleSelectAll} className="flex items-center gap-1.5 text-[12px] text-orange-600 font-medium">
+            {selectedIds.size === filteredOrders.length && filteredOrders.length > 0
+              ? <CheckSquare className="w-4 h-4" />
+              : <Square className="w-4 h-4" />
+            }
+            {selectedIds.size === filteredOrders.length && filteredOrders.length > 0 ? '取消全选' : `全选（${filteredOrders.length}）`}
+          </button>
+          <span className="text-[11px] text-orange-400">已选 {selectedIds.size} 笔</span>
+        </div>
+      )}
 
       {/* 订单列表 */}
       {filteredOrders.length === 0 && (
@@ -237,8 +307,24 @@ function OrdersPanel() {
       {filteredOrders.map((order: any) => {
         const ingredients: any[] = (() => { try { return JSON.parse(order.ingredients ?? "[]"); } catch { return []; } })();
         const statusColor = STATUS_COLORS[order.status] ?? "text-gray-500 bg-gray-100";
+        const isSelected = selectedIds.has(order.id);
         return (
-          <div key={order.id} className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm overflow-hidden">
+          <div
+            key={order.id}
+            className="bg-white border rounded-2xl p-4 shadow-sm overflow-hidden transition-all"
+            style={{ borderColor: batchMode && isSelected ? '#FF6900' : '#f3f4f6', borderWidth: batchMode && isSelected ? 1.5 : 1 }}
+            onClick={batchMode ? () => toggleSelect(order.id) : undefined}
+          >
+            {/* 批量模式复选框行 */}
+            {batchMode && (
+              <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-50">
+                {isSelected
+                  ? <CheckSquare className="w-4 h-4 flex-shrink-0" style={{ color: '#FF6900' }} />
+                  : <Square className="w-4 h-4 flex-shrink-0 text-gray-300" />
+                }
+                <span className="text-[11px] text-gray-400">#{order.id} · {order.orderNo}</span>
+              </div>
+            )}
             <div className="flex items-start justify-between gap-2 mb-2">
               <div className="flex-1 min-w-0">
                 <h3 className="text-[14px] font-bold text-black">{order.recipeName || "定制米"}</h3>
@@ -285,8 +371,8 @@ function OrdersPanel() {
               </div>
             )}
             <CommissionPreviewBadge orderId={order.id} />
-            {/* 取消 / 删除 按鈕 */}
-            {order.status !== 'delivered' && (
+            {/* 取消 / 删除 按鈕（批量模式下隐藏） */}
+            {!batchMode && order.status !== 'delivered' && (
               <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-50">
                 {order.status !== 'cancelled' && (
                   <button
@@ -308,6 +394,69 @@ function OrdersPanel() {
         );
       })}
 
+      {/* 批量操作底部浮动栏 */}
+      {batchMode && selectedIds.size > 0 && !batchConfirm && (
+        <div className="fixed bottom-16 left-0 right-0 z-40 px-4 pb-2" style={{ maxWidth: 480, margin: '0 auto' }}>
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-3 flex gap-2">
+            <button
+              onClick={() => setBatchConfirm('cancel')}
+              className="flex-1 py-2.5 rounded-xl text-[13px] font-medium border border-orange-200 text-orange-500 hover:bg-orange-50 transition-colors"
+            >
+              批量取消（退款）
+            </button>
+            <button
+              onClick={() => setBatchConfirm('delete')}
+              className="flex-1 py-2.5 rounded-xl text-[13px] font-medium border border-red-200 text-red-500 hover:bg-red-50 transition-colors flex items-center justify-center gap-1"
+            >
+              <Trash2 className="w-3.5 h-3.5" />批量删除
+            </button>
+          </div>
+        </div>
+      )}
+      {/* 批量确认弹窗 */}
+      {batchConfirm && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.4)' }}>
+          <div className="bg-white w-full max-w-sm rounded-t-2xl p-5 pb-8">
+            {batchProgress ? (
+              <div className="text-center py-4">
+                <p className="text-[15px] font-bold mb-2">处理中…</p>
+                <p className="text-[13px] text-gray-500">{batchProgress.done} / {batchProgress.total}</p>
+                <div className="mt-3 h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{ width: `${Math.round(batchProgress.done / batchProgress.total * 100)}%`, background: '#FF6900' }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <>
+                <p className="text-[15px] font-bold text-center mb-1">
+                  {batchConfirm === 'cancel' ? '批量取消订单' : '批量删除订单'}
+                </p>
+                <p className="text-[12px] text-gray-500 text-center mb-4">
+                  {batchConfirm === 'cancel'
+                    ? `确认取消选中的 ${selectedIds.size} 笔订单？钱包金额将原路退回。`
+                    : `确认删除选中的 ${selectedIds.size} 笔订单？此操作不退款且不可恢复。`
+                  }
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setBatchConfirm(null)}
+                    className="flex-1 py-2.5 rounded-xl border border-gray-200 text-[13px] text-gray-500"
+                  >再想想</button>
+                  <button
+                    onClick={() => executeBatch(batchConfirm)}
+                    className="flex-1 py-2.5 rounded-xl text-[13px] text-white font-medium"
+                    style={{ background: batchConfirm === 'cancel' ? '#FF6900' : '#ef4444' }}
+                  >
+                    {batchConfirm === 'cancel' ? `确认取消 ${selectedIds.size} 笔` : `确认删除 ${selectedIds.size} 笔`}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
       {/* 确认弹窗 */}
       {confirmAction && (
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.4)' }}>
