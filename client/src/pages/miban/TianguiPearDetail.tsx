@@ -628,7 +628,12 @@ export default function TianguiPearDetail() {
                   )}
                   <div className="flex items-center justify-between mt-1">
                     <span className="text-[12px] text-gray-400">钱包余额</span>
-                    <span className="text-[12px] text-gray-500">{usdtBalanceNum.toFixed(2)}U</span>
+                    <div className="flex items-center gap-2">
+                      {usdtBalanceNum > 0 && <span className="text-[12px] text-gray-500">{usdtBalanceNum.toFixed(2)}U</span>}
+                      {usdtBalanceNum > 0 && cnyBalanceNum > 0 && <span className="text-[11px] text-gray-300">+</span>}
+                      {cnyBalanceNum > 0 && <span className="text-[12px] text-gray-500">¥{cnyBalanceNum.toFixed(2)}</span>}
+                      {usdtBalanceNum === 0 && cnyBalanceNum === 0 && <span className="text-[12px] text-gray-400">0.00U</span>}
+                    </div>
                   </div>
                 </div>
               );
