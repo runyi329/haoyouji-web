@@ -297,6 +297,8 @@ async function triggerMultiLevelCommission(params: {
   // 3c. 获取分红配置
   let dividendRate = 0;
   let salesRate = 0;
+  // 3d. 结算方式（auto=立即打款，manual=写pending等管理员确认）
+  let planSettlement: 'auto' | 'manual' = 'auto';
 
   if (teamPlanId) {
     try {
@@ -330,12 +332,13 @@ async function triggerMultiLevelCommission(params: {
     // 获取销售提成率和分红率
     try {
       const [planRows] = await (dbConn as any).execute(
-        `SELECT sales_rate, dividend_rate FROM miban_commission_plans WHERE id = ? LIMIT 1`,
+        `SELECT sales_rate, dividend_rate, settlement FROM miban_commission_plans WHERE id = ? LIMIT 1`,
         [teamPlanId]
       );
       if ((planRows as any[]).length > 0) {
         salesRate = parseFloat((planRows as any[])[0]?.sales_rate ?? '0') || 0;
         dividendRate = parseFloat((planRows as any[])[0]?.dividend_rate ?? '0') || 0;
+        planSettlement = (planRows as any[])[0]?.settlement ?? 'auto';
       }
     } catch (e: any) {
       console.warn('[Commission] 获取制度基本配置失败:', e?.message);
@@ -369,7 +372,13 @@ async function triggerMultiLevelCommission(params: {
           rankBonusConfig = (rkFb as any[]).map((r: any) => ({
             rankIndex: Number(r.rank_index), rankName: String(r.name), bonusRate: parseFloat(r.bonus_rate ?? '0')
           }));
-          console.log(`[Commission] 订单 ${orderNo} 走兜底制度 plan_id=${fallbackPlanId} multiplier=${fallbackMultiplier}`);
+          // 读取兜底制度的 settlement
+          const [planFb] = await (dbConn as any).execute(
+            `SELECT settlement FROM miban_commission_plans WHERE id = ? LIMIT 1`,
+            [fallbackPlanId]
+          );
+          planSettlement = (planFb as any[])[0]?.settlement ?? 'auto';
+          console.log(`[Commission] 订单 ${orderNo} 走兜底制度 plan_id=${fallbackPlanId} multiplier=${fallbackMultiplier} settlement=${planSettlement}`);
         }
       }
     } catch (e: any) { console.warn('[Commission] 读取兜底配置失败:', e?.message); }
@@ -427,20 +436,26 @@ async function triggerMultiLevelCommission(params: {
     cnyRate = parseFloat((rateRows as any[])[0]?.usdtCnyRateAtOrder ?? '6.7') || 6.7;
   } catch { /* 用默认值 */ }
 
-  // ── 辅助函数：写入佣金并打入钱包 ──────────────────────────────────────────────
+  // ── 辅助函数：写入佣金（manual时写pending不打款，auto时立即结算打款） ──────────
   async function settleCommission(agentId: number, commCny: number, levelIdx: number, note: string) {
     if (commCny <= 0) return;
+    const isManual = planSettlement === 'manual';
+    const status = isManual ? 'pending' : 'settled';
     const commUsdt = parseFloat((commCny / cnyRate).toFixed(6));
     await (dbConn as any).execute(
       `INSERT INTO miban_commissions (agent_id, order_id, order_no, buyer_id, buyer_user_id, order_amount, commission_rate, commission_amount, status, team_id, level_index)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'settled', ?, ?)`,
-      [agentId, orderId, orderNo, buyerUserId, buyerUserId, orderAmount.toFixed(2), (commCny / orderAmount).toFixed(4), commCny.toFixed(2), teamId, levelIdx]
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [agentId, orderId, orderNo, buyerUserId, buyerUserId, orderAmount.toFixed(2), (commCny / orderAmount).toFixed(4), commCny.toFixed(2), status, teamId, levelIdx]
     );
-    await addUserBalance(
-      agentId, commUsdt, 'commission', orderId,
-      `${note} +${commUsdt.toFixed(4)} USDT (¥${commCny.toFixed(2)})`
-    );
-    console.log(`[Commission] ${note} agentId=${agentId} +${commUsdt.toFixed(4)} USDT (¥${commCny.toFixed(2)})`);
+    if (!isManual) {
+      await addUserBalance(
+        agentId, commUsdt, 'commission', orderId,
+        `${note} +${commUsdt.toFixed(4)} USDT (¥${commCny.toFixed(2)})`
+      );
+      console.log(`[Commission] ${note} agentId=${agentId} +${commUsdt.toFixed(4)} USDT (¥${commCny.toFixed(2)})`);
+    } else {
+      console.log(`[Commission][待结算] ${note} agentId=${agentId} ¥${commCny.toFixed(2)} (需管理员手动结算)`);
+    }
   }
 
   // 4. 代数佣金：沿推荐链逐层发放
@@ -1793,6 +1808,69 @@ export const mibanAdminCommissionRouter = router({
     .input(z.object({ id: z.number() }))
     .mutation(({ input }) => deleteCommissionConfig(input.id)),
   agentStats: mibanAdminProcedure.query(() => getAllAgentStats()),
+  // 待结算佣金列表（管理员查看所有 pending 记录）
+  listPending: mibanAdminProcedure.query(async () => {
+    const conn = await getDbConnection();
+    if (!conn) return [];
+    const [rows] = await (conn as any).execute(
+      `SELECT mc.id, mc.agent_id, mc.order_id, mc.order_no, mc.commission_amount, mc.level_index,
+              mc.created_at, mc.note, u.name AS agent_name
+       FROM miban_commissions mc
+       LEFT JOIN users u ON u.id = mc.agent_id
+       WHERE mc.status = 'pending'
+       ORDER BY mc.created_at DESC`
+    );
+    return (rows as any[]).map((r: any) => ({
+      id: Number(r.id),
+      agentId: Number(r.agent_id),
+      agentName: r.agent_name ?? '未知',
+      orderId: Number(r.order_id),
+      orderNo: String(r.order_no),
+      commissionAmount: parseFloat(r.commission_amount ?? '0'),
+      levelIndex: Number(r.level_index ?? 0),
+      note: r.note ?? '',
+      createdAt: r.created_at ? String(r.created_at) : '',
+    }));
+  }),
+  // 批量手动结算（管理员确认，打款入账）
+  settleMany: mibanAdminProcedure
+    .input(z.object({ ids: z.array(z.number()).min(1) }))
+    .mutation(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error('DB not available');
+      const ph = input.ids.map(() => '?').join(',');
+      // 查出待结算记录
+      const [rows] = await (conn as any).execute(
+        `SELECT id, agent_id, commission_amount, order_id, note FROM miban_commissions WHERE id IN (${ph}) AND status = 'pending'`,
+        input.ids
+      );
+      if (!(rows as any[]).length) return { settled: 0 };
+      // 查汇率（取第一条订单的汇率，兜底7.2）
+      let cnyRate = 7.2;
+      try {
+        const firstOrderId = (rows as any[])[0].order_id;
+        const [rateRows] = await (conn as any).execute(
+          `SELECT usdtCnyRateAtOrder FROM miban_orders WHERE id = ? LIMIT 1`, [firstOrderId]
+        );
+        cnyRate = parseFloat((rateRows as any[])[0]?.usdtCnyRateAtOrder ?? '7.2') || 7.2;
+      } catch {}
+      let settled = 0;
+      for (const row of (rows as any[])) {
+        const commCny = parseFloat(row.commission_amount ?? '0');
+        const commUsdt = parseFloat((commCny / cnyRate).toFixed(6));
+        const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        await (conn as any).execute(
+          `UPDATE miban_commissions SET status='settled', settled_at=? WHERE id=? AND status='pending'`,
+          [now, row.id]
+        );
+        await addUserBalance(
+          Number(row.agent_id), commUsdt, 'commission', Number(row.order_id),
+          `[手动结算] ${row.note ?? ''} +${commUsdt.toFixed(4)} USDT (¥${commCny.toFixed(2)})`
+        );
+        settled++;
+      }
+      return { settled };
+    }),
 });
 
 export const mibanCartRouter = router({

@@ -1912,7 +1912,130 @@ function AgentTeamPanel() {
 }
 
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
-type AdminTabKey = "orders" | "rice" | "inventory" | "warehouse" | "users" | "teamManage" | "team" | "commission" | "referrals";
+type AdminTabKey = "orders" | "rice" | "inventory" | "warehouse" | "users" | "teamManage" | "team" | "commission" | "referrals" | "pending";
+
+// ─── 待结算佣金面板 ─────────────────────────────────────────────────────
+function PendingCommissionsPanel() {
+  const { data: pending, isLoading, refetch } = mtrpc.adminCommission.listPending.useQuery();
+  const settleMut = mtrpc.adminCommission.settleMany.useMutation({
+    onSuccess: (res: any) => { toast.success(`已结算 ${res.settled} 条佣金`); refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  function toggleSelect(id: number) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAll() {
+    if (!pending) return;
+    if (selected.size === pending.length) setSelected(new Set());
+    else setSelected(new Set(pending.map((r: any) => r.id)));
+  }
+
+  function settleSelected() {
+    if (!selected.size) return;
+    settleMut.mutate({ ids: Array.from(selected) });
+    setSelected(new Set());
+  }
+
+  function settleOne(id: number) {
+    settleMut.mutate({ ids: [id] });
+  }
+
+  const totalPending = (pending ?? []).reduce((s: number, r: any) => s + r.commissionAmount, 0);
+
+  return (
+    <div className="space-y-4">
+      {/* 汇总卡片 */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[11px] text-gray-400">待结算佣金总额</p>
+            <p className="text-[22px] font-bold" style={{ color: '#FF6900' }}>¥{totalPending.toFixed(2)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[11px] text-gray-400">共 {(pending ?? []).length} 条记录</p>
+            {selected.size > 0 && (
+              <p className="text-[11px] text-orange-500">已选 {selected.size} 条</p>
+            )}
+          </div>
+        </div>
+        {/* 批量操作按鈕 */}
+        {(pending ?? []).length > 0 && (
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={selectAll}
+              className="flex-1 text-[12px] font-medium py-2 rounded-xl border border-gray-200 text-gray-600 active:bg-gray-50"
+            >
+              {selected.size === (pending ?? []).length ? '取消全选' : '全选'}
+            </button>
+            <button
+              onClick={settleSelected}
+              disabled={selected.size === 0 || settleMut.isPending}
+              className="flex-1 text-[12px] font-semibold py-2 rounded-xl text-white disabled:opacity-40"
+              style={{ background: '#FF6900' }}
+            >
+              {settleMut.isPending ? '结算中...' : `确认结算选中 (${selected.size})`}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 列表 */}
+      {isLoading ? (
+        <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />)}</div>
+      ) : !(pending ?? []).length ? (
+        <div className="text-center py-16 text-gray-300 text-[13px]">暂无待结算佣金</div>
+      ) : (
+        <div className="space-y-2">
+          {(pending as any[]).map((r: any) => (
+            <div
+              key={r.id}
+              onClick={() => toggleSelect(r.id)}
+              className={`bg-white rounded-xl border px-4 py-3 shadow-sm transition-all ${
+                selected.has(r.id) ? 'border-orange-400 bg-orange-50/40' : 'border-gray-100'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center ${
+                    selected.has(r.id) ? 'border-orange-500 bg-orange-500' : 'border-gray-300'
+                  }`}>
+                    {selected.has(r.id) && <span className="text-white text-[10px] font-bold">✓</span>}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[12px] font-semibold text-black truncate">{r.agentName}</p>
+                    <p className="text-[10px] text-gray-400 font-mono">{r.orderNo}</p>
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-[15px] font-bold" style={{ color: '#FF6900' }}>¥{r.commissionAmount.toFixed(2)}</p>
+                  <p className="text-[10px] text-gray-400">{new Date(r.createdAt).toLocaleDateString('zh-CN')}</p>
+                </div>
+              </div>
+              {r.note && <p className="text-[10px] text-gray-400 mt-1.5 pl-6 truncate">{r.note}</p>}
+              <div className="flex justify-end mt-2">
+                <button
+                  onClick={(e) => { e.stopPropagation(); settleOne(r.id); }}
+                  disabled={settleMut.isPending}
+                  className="text-[11px] font-semibold px-3 py-1 rounded-lg text-white disabled:opacity-40"
+                  style={{ background: '#FF6900' }}
+                >
+                  立即结算
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function UnifiedAdmin() {
   const { user, isAuthenticated } = useAuth();
@@ -1952,6 +2075,7 @@ export default function UnifiedAdmin() {
   // 管理员标签
   const adminTabs: Array<{ key: AdminTabKey; label: string }> = isAdmin ? [
     { key: "orders",    label: "订单管理" },
+    { key: "pending",   label: "待结算" },
     { key: "rice",      label: "米库管理" },
     { key: "inventory", label: "库存管理" },
     { key: "users",     label: "用户管理" },
@@ -2008,6 +2132,7 @@ export default function UnifiedAdmin() {
       {/* 内容区域 */}
       <div className="px-4 py-4 pb-24">
         {activeTab === "orders"    && <OrdersPanel />}
+        {activeTab === "pending"    && <PendingCommissionsPanel />}
         {activeTab === "rice"      && <RicePanel />}
         {activeTab === "inventory" && <InventoryPanel />}
         {activeTab === "warehouse" && <WarehousePanel />}
