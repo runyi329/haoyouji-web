@@ -1830,11 +1830,6 @@ export default function Home() {
               alt="米伴·我的饭碗我做主"
               className="w-full h-full" style={{ objectFit: 'cover', objectPosition: 'left top' }}
             />
-            {/* 左上角文字叠加：主标题 + 副标题 */}
-            <div className="absolute top-0 left-0 px-3 pt-2.5 flex flex-col gap-0.5" style={{ pointerEvents: 'none' }}>
-              <span style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.2, textShadow: '0 1px 4px rgba(0,0,0,0.35)', letterSpacing: 0.5 }}>米伴</span>
-              <span style={{ fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.92)', lineHeight: 1.3, textShadow: '0 1px 3px rgba(0,0,0,0.3)', letterSpacing: 0.3 }}>AI 米伴 伴你健康</span>
-            </div>
           </div>,
           // 页1：AI球伴世界杯海报（点击跳转世界杯页面）
           <div
