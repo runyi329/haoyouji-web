@@ -581,12 +581,21 @@ export default function Home() {
         </Link>
       </section>
 
-      {/* ── 大米竖向卡片轮播 ────────────────────────────── */}
+      {/* ── 大米竖向卡片轮播（双排横向滚动）────────────────── */}
       <section className="pb-6">
         <div
-          className="flex overflow-x-auto gap-3 px-5"
-          style={{ scrollSnapType: "x mandatory", scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
+          className="overflow-x-auto px-5"
+          style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
         >
+          <div
+            className="grid gap-3"
+            style={{
+              gridTemplateRows: "repeat(2, auto)",
+              gridAutoFlow: "column",
+              gridAutoColumns: "44vw",
+              maxWidth: "100%",
+            }}
+          >
           {(catalogLoading && (!catalogData || catalogData.length === 0)
             ? Array.from({ length: 8 }).map((_, i) => ({ id: `sk-${i}`, name: "", origin: "", desc: "", tag: "", img: "", nutrition: { protein: 0, fat: 0, carbs: 0, fiber: 0 }, categories: [], color: "" }))
             : (() => {
@@ -609,24 +618,19 @@ export default function Home() {
           ).map((rice, i) => (
             <div
               key={rice.id || i}
-              className="flex-shrink-0 cursor-pointer active:scale-[0.97] transition-transform"
-              style={{
-                scrollSnapAlign: "start",
-                width: "44vw",
-                maxWidth: 180,
-                minWidth: 150,
-              }}
+              className="cursor-pointer active:scale-[0.97] transition-transform"
+              style={{ width: "44vw", maxWidth: 180, minWidth: 140 }}
               onClick={() => rice.name && setActiveRice(rice)}
             >
               {catalogLoading && !rice.name ? (
-                <div className="w-full rounded-2xl bg-gray-100 animate-pulse" style={{ height: 240 }} />
+                <div className="w-full rounded-2xl bg-gray-100 animate-pulse" style={{ height: 200 }} />
               ) : (
                 <div
                   className="w-full rounded-2xl overflow-hidden bg-white flex flex-col"
-                  style={{ height: 240, border: "1px solid #F0F0F0" }}
+                  style={{ height: 200, border: "1px solid #F0F0F0" }}
                 >
                   {/* 大米图片完整显示 */}
-                  <div className="flex items-center justify-center" style={{ height: 170 }}>
+                  <div className="flex items-center justify-center" style={{ height: 138 }}>
                     <img
                       src={cosImg(rice.img, 280)}
                       alt={rice.name}
@@ -634,14 +638,15 @@ export default function Home() {
                     />
                   </div>
                   {/* 文字区 */}
-                  <div className="flex-1 flex flex-col justify-center px-4">
-                    <p className="text-[16px] font-bold text-black leading-none mb-1">{rice.name}</p>
+                  <div className="flex-1 flex flex-col justify-center px-3">
+                    <p className="text-[14px] font-bold text-black leading-none mb-1">{rice.name}</p>
                     <p className="text-[10px] text-gray-400 tracking-wide">{rice.origin}</p>
                   </div>
                 </div>
               )}
             </div>
           ))}
+          </div>
         </div>
       </section>
 
