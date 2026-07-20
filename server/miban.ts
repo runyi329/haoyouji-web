@@ -368,7 +368,7 @@ async function triggerMultiLevelCommission(params: {
       if (riceIds.length > 0) {
         const ph = riceIds.map(() => '?').join(',');
         const [rateRows2] = await (dbConn as any).execute(
-          `SELECT id, COALESCE(total_payout_rate, 0) AS payout_rate FROM miban_rice_varieties WHERE id IN (${ph})`,
+          `SELECT id, COALESCE(total_payout_rate, 0) AS payout_rate FROM miban_rice_catalog WHERE id IN (${ph})`,
           riceIds
         ) as [any[], any];
         const rateMap: Record<number, number> = {};
@@ -1498,7 +1498,7 @@ export const mibanOrderRouter = router({
           if (riceIds2.length > 0) {
             const ph2 = riceIds2.map(() => '?').join(',');
             const [rateRows3] = await (dbConn as any).execute(
-              `SELECT id, COALESCE(total_payout_rate, 0) AS payout_rate FROM miban_rice_varieties WHERE id IN (${ph2})`,
+              `SELECT id, COALESCE(total_payout_rate, 0) AS payout_rate FROM miban_rice_catalog WHERE id IN (${ph2})`,
               riceIds2
             ) as [any[], any];
             const rateMap2: Record<number, number> = {};
