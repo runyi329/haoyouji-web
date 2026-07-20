@@ -2356,6 +2356,7 @@ export const mibanCommissionConfig = mysqlTable("miban_commission_config", {
   id: int("id").autoincrement().primaryKey(),
   agentId: int("agent_id"),
   commissionRate: decimal("commission_rate", { precision: 5, scale: 4 }).notNull(),
+  planId: int("plan_id"),
   note: text("note"),
   updatedBy: int("updated_by"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
