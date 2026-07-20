@@ -38,7 +38,8 @@ const RICE_TYPES = [
   { id: "brown",  name: "糙米",  desc: "膳食纤维高，控糖减脂", price: 6.0,  color: "#7A5230", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_brown_single.webp" },
   { id: "purple", name: "紫米",  desc: "花青素+铁，美容养颜",  price: 9.0,  color: "#4A2060", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_purple_single.webp" },
   { id: "millet", name: "小米",  desc: "健脾养胃，易消化",     price: 5.5,  color: "#C8960A", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_millet_single.webp" },
-  { id: "mung",   name: "绿豆",  desc: "清热解毒，消暑降火",   price: 10.0, color: "#4A7C3F", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_mung_single.webp" },
+  { id: "mung_bright", name: "明绿豆", desc: "皮薄粉多，清热消暑首选", price: 10.0, color: "#3A7A2A", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_mung_bright_single.webp" },
+  { id: "mung_hairy",  name: "毛绿豆", desc: "皮厚耐煮，祛湿解毒力强", price: 8.5,  color: "#6B7A3A", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_mung_hairy_single.webp" },
   { id: "coix",   name: "薏米",  desc: "祛湿消肿，美白润肤",   price: 12.0, color: "#9A6030", img: "https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/miban/rice_coix_single.webp" },
 ];
 
@@ -50,7 +51,8 @@ const RICE_NUTRITION: Record<string, { kcal: number; carb: number; protein: numb
   brown:  { kcal: 348, carb: 73.1, protein: 7.9, fat: 2.7, fiber: 3.4 },
   purple: { kcal: 343, carb: 71.1, protein: 8.3, fat: 1.7, fiber: 1.4 },
   millet: { kcal: 358, carb: 73.5, protein: 9.0, fat: 3.1, fiber: 1.6 },
-  mung:   { kcal: 316, carb: 55.6, protein: 21.6, fat: 0.8, fiber: 6.4 },
+  mung_bright: { kcal: 316, carb: 55.6, protein: 21.6, fat: 0.8, fiber: 6.4 },
+  mung_hairy:  { kcal: 314, carb: 54.8, protein: 22.1, fat: 0.7, fiber: 7.2 },
   coix:   { kcal: 357, carb: 69.1, protein: 12.8, fat: 3.3, fiber: 2.0 },
 };
 
@@ -490,14 +492,14 @@ export default function DiyWorkshop() {
   const ref2pF = freshnessLevel(ref2pDays);
 
   const renderStep0 = () => (
-    <div className="flex flex-col items-center justify-center flex-1 px-6 gap-8">
+    <div className="flex flex-col items-center justify-center flex-1 px-6 gap-2 overflow-hidden" style={{ paddingBottom: '20%' }}>
       <div className="flex items-center gap-6">
         <button onClick={() => setWeight((w) => Math.max(10, w - 5))} disabled={weight <= 10} className="w-14 h-14 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-600 disabled:opacity-30 active:scale-95 transition-transform">
           <Minus size={22} />
         </button>
         <div className="text-center min-w-[120px]">
-          <span className="text-[72px] font-bold text-black leading-none">{weight}</span>
-          <span className="text-[20px] font-medium text-gray-500 ml-1.5">斤</span>
+          <span className="text-[96px] font-bold text-black leading-none">{weight}</span>
+          <span className="text-[26px] font-medium text-gray-500 ml-1.5">斤</span>
         </div>
         <button onClick={() => setWeight((w) => w + 5)} className="w-14 h-14 rounded-full border-2 border-gray-200 flex items-center justify-center text-gray-600 active:scale-95 transition-transform">
           <Plus size={22} />
@@ -528,7 +530,8 @@ export default function DiyWorkshop() {
     "糙米":   { tags: [{ label: "控糖", color: "#065F46" }, { label: "高纤维", color: "#065F46" }], taste: [{ label: "口感粗糙", color: "#374151" }, { label: "需多嚼", color: "#374151" }], origin: ["全谷物", "低GI", "糙粳米"] },
     "紫米":   { tags: [{ label: "美容", color: "#7C3AED" }, { label: "补血", color: "#EF4444" }], taste: [{ label: "糯香带甜", color: "#374151" }, { label: "颜色香艳", color: "#7C3AED" }], origin: ["云南紫糯", "花青素", "接骨糯"] },
     "小米":   { tags: [{ label: "健脾", color: "#D97706" }, { label: "养胃", color: "#D97706" }], taste: [{ label: "糯软清香", color: "#374151" }, { label: "孕妇宝宝首选", color: "#10B981" }], origin: ["山西沁州", "粟米", "谷子"] },
-    "绿豆":   { tags: [{ label: "清热", color: "#059669" }, { label: "消暑", color: "#10B981" }], taste: [{ label: "清爽解腻", color: "#374151" }, { label: "夏天必备", color: "#059669" }], origin: ["东北绿豆", "明绿豆", "植物蛋白"] },
+    "明绿豆": { tags: [{ label: "清热消暑", color: "#059669" }, { label: "皮薄粉多", color: "#10B981" }], taste: [{ label: "易开花", color: "#374151" }, { label: "煮汤首选", color: "#059669" }], origin: ["东北洮南", "吉林白城", "明绿豆"] },
+    "毛绿豆": { tags: [{ label: "祛湿解毒", color: "#065F46" }, { label: "皮厚耐煮", color: "#0E7490" }], taste: [{ label: "久煮不烂", color: "#374151" }, { label: "绿豆沙首选", color: "#065F46" }], origin: ["华北黄淮", "毛绿豆", "油绿豆"] },
     "薏米":   { tags: [{ label: "祛湿", color: "#0E7490" }, { label: "美白", color: "#DB2777" }], taste: [{ label: "略硬耐嚼", color: "#374151" }, { label: "需提前浸泡", color: "#F59E0B" }], origin: ["贵州薏仁", "川谷", "苡仁"] },
   };
   // 辅助函数：按名称模糊匹配（支持"五常大米"匹配"白米"等）
@@ -542,10 +545,10 @@ export default function DiyWorkshop() {
     { key: "all",    label: "全部",   ids: [] },
     { key: "soft",   label: "软糯香甜", ids: ["white", "millet", "purple"] },
     { key: "blood",  label: "补血养颜", ids: ["red", "black", "purple"] },
-    { key: "diet",   label: "控糖减脂", ids: ["brown", "coix", "mung"] },
-    { key: "damp",   label: "祛湿清热", ids: ["coix", "mung", "brown"] },
+    { key: "diet",   label: "控糖减脂", ids: ["brown", "coix", "mung_bright"] },
+    { key: "damp",   label: "祛湿清热", ids: ["coix", "mung_hairy", "brown"] },
     { key: "spleen", label: "健脾养胃", ids: ["millet", "white", "coix"] },
-    { key: "kids",   label: "儿童成长", ids: ["white", "millet", "mung"] },
+    { key: "kids",   label: "儿童成长", ids: ["white", "millet", "mung_bright"] },
   ];
   const [flavorTag, setFlavorTag] = useState("all");
 
@@ -950,7 +953,7 @@ export default function DiyWorkshop() {
   };
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{ background: "#F8F6F3" }}>
+    <div className="flex flex-col overflow-hidden" style={{ background: "#F8F6F3", height: "calc(100vh - 108px)" }}>
       <div className="px-4 pt-4 pb-2">
         <div className="flex items-center gap-1 mb-2">
           {STEP_LABELS.map((_, i) => (
@@ -995,7 +998,7 @@ export default function DiyWorkshop() {
         {steps[step]()}
       </div>
 
-      <div className="fixed bottom-14 left-0 right-0 px-4 pb-4 pt-3 bg-white border-t border-gray-100 z-30">
+      <div className="fixed bottom-14 left-0 right-0 px-4 pb-4 pt-3 z-30" style={{ background: "#F8F6F3" }}>
         <div className="flex gap-3">
           {step > 0 && (
             <button onClick={() => setStep((s) => s - 1)} className="w-12 h-12 rounded-xl border border-gray-200 flex items-center justify-center text-gray-500 active:scale-95 transition-transform">
