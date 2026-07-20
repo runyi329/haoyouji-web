@@ -1654,7 +1654,7 @@ export default function Home() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   // AI 社交容器轮播 state
-  const SOCIAL_PAGES = 4;
+  const SOCIAL_PAGES = 5;
   const [socialPageIndex, setSocialPageIndex] = useState(1);
   const [socialTransition, setSocialTransition] = useState(true);
   const socialContainerRef = useRef<HTMLDivElement>(null);
@@ -1819,6 +1819,18 @@ export default function Home() {
       {(() => {
         const realDotIndex = ((socialPageIndex - 1 + SOCIAL_PAGES) % SOCIAL_PAGES);
         const socialPages = [
+          // 页0：米伴网旗舰店谷物海报（点击跳转米伴网首页）
+          <div
+            key="p0-miban"
+            className="w-full h-full relative cursor-pointer active:opacity-90 transition-opacity"
+            onClick={() => navigate('/p/proj_hzxm2t/')}
+          >
+            <img
+              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/banners/miban-flagship-banner.webp"
+              alt="米伴·我的饭碗我做主"
+              className="w-full h-full object-cover"
+            />
+          </div>,
           // 页1：AI球伴世界杯海报（点击跳转世界杯页面）
           <div
             key="p1"
