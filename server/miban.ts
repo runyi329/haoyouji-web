@@ -1483,7 +1483,7 @@ export const mibanAdminUserRouter = router({
 export const mibanAdminCommissionRouter = router({
   configs: mibanAdminProcedure.query(() => getAllCommissionConfigs()),
   setConfig: mibanAdminProcedure
-    .input(z.object({ agentId: z.number().nullable(), rate: z.number().min(0).max(1), note: z.string().optional() }))
+    .input(z.object({ agentId: z.number().nullable(), rate: z.number().min(0).max(1), note: z.string().optional(), planId: z.number().optional() }))
     .mutation(({ input, ctx }) => setCommissionConfig(input.agentId, input.rate, input.note, ctx.user!.id)),
   deleteConfig: mibanAdminProcedure
     .input(z.object({ id: z.number() }))
