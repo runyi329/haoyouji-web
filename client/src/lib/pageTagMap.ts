@@ -21,6 +21,7 @@ export const PAGE_TAG_MAP: Record<string, string> = {
   "/admin/recharge/unmatched": "A014",
   "/admin/recharge/orders": "A015",
   "/admin/cny-manage": "A016",
+  "/admin/wallet-adjust": "A016B",
   "/admin/migration": "A017",
   "/admin/super-view": "A018",
   "/admin/super-view/contacts": "A019",

@@ -432,6 +432,7 @@ function Router() {
         <Route path="/admin/recharge/unmatched" component={RechargeUnmatched} />
         <Route path="/admin/recharge/orders" component={RechargeOrders} />
         <Route path="/admin/cny-manage" component={lazy(() => import("./pages/admin/AdminCnyManage"))} />
+        <Route path="/admin/wallet-adjust" component={lazy(() => import("./pages/admin/WalletAdjustPage"))} />
         <Route path="/admin/migration" component={lazy(() => import("./pages/AdminMigration"))} />
         <Route path="/admin/super-view" component={SuperViewUserList} />
         <Route path="/admin/super-view/contacts" component={SuperViewContacts} />

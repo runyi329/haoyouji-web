@@ -1797,6 +1797,65 @@ export const mibanAdminUserRouter = router({
       );
       return { ok: true };
     }),
+  // ── 统一手动调账（USDT / CNY） ──────────────────────────────────────────────
+  walletAdjust: mibanAdminProcedure
+    .input(z.object({
+      userId: z.number(),
+      currency: z.enum(['USDT', 'CNY']),
+      amount: z.number(),   // 正数=充值，负数=扣款
+      note: z.string().min(1, '备注不能为空'),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new Error('DB not available');
+      if (input.currency === 'USDT') {
+        // USDT：写入 af_manual_balances（与 addUserBalance 一致，ledger_id 用52）
+        await (conn as any).execute(
+          `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+           VALUES (52, ?, ?, ?, NOW(), NOW())`,
+          [input.userId, input.amount.toFixed(6), `[管理员调账] ${input.note}`]
+        );
+        // 同时写 balance_history 保证钱包流水可见
+        await addUserBalance(
+          input.userId,
+          input.amount,
+          'commission',
+          undefined,
+          `[管理员手动调账] ${input.note}`
+        );
+      } else {
+        // CNY：写入 af_manual_balances，note 以 [CNY] 开头
+        await (conn as any).execute(
+          `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
+           VALUES (52, ?, ?, ?, NOW(), NOW())`,
+          [input.userId, input.amount.toFixed(2), `[CNY][管理员调账] ${input.note}`]
+        );
+      }
+      return { ok: true };
+    }),
+  // 查询指定用户的调账历史（USDT + CNY 合并，最新50条）
+  walletHistory: mibanAdminProcedure
+    .input(z.object({ userId: z.number(), limit: z.number().optional() }))
+    .query(async ({ input }) => {
+      const conn = await getDbConnection();
+      if (!conn) return [];
+      const limit = input.limit ?? 50;
+      const [rows] = await (conn as any).execute(
+        `SELECT id, user_id, amount, note, created_at
+         FROM af_manual_balances
+         WHERE user_id = ? AND note LIKE '%管理员调账%'
+         ORDER BY created_at DESC LIMIT ?`,
+        [input.userId, limit]
+      ) as any[];
+      return (Array.isArray(rows) ? rows : []).map((r: any) => ({
+        id: Number(r.id),
+        userId: Number(r.user_id),
+        amount: parseFloat(r.amount ?? '0'),
+        note: String(r.note ?? ''),
+        currency: String(r.note ?? '').startsWith('[CNY]') ? 'CNY' : 'USDT',
+        createdAt: r.created_at ? String(r.created_at) : '',
+      }));
+    }),
 });
 
 export const mibanAdminCommissionRouter = router({

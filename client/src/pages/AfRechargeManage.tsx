@@ -151,12 +151,8 @@ export default function AfRechargeManage() {
             充值记录
           </button>
           <button
-            onClick={() => setTab("manual")}
-            className={`flex-1 py-3 text-sm font-medium transition-colors ${
-              tab === "manual"
-                ? "text-red-600 border-b-2 border-red-600"
-                : "text-gray-500"
-            }`}
+            onClick={() => setLocation("/admin/wallet-adjust")}
+            className="flex-1 py-3 text-sm font-medium transition-colors text-gray-500"
           >
             手动调账
           </button>
