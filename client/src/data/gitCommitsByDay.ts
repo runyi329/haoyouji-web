@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-20
+// 生成时间：2026-07-21
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8518,5 +8518,18 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-20T11:35:53Z", type: "fix", cleanMessage: "walletAdjust USDT不再双写users.balance，避免余额翻倍" },
     { date: "2026-07-20T11:49:57Z", type: "fix", cleanMessage: "调账按钮带from=miban参数，返回正确跳回米伴管理后台" },
     { date: "2026-07-20T12:00:39Z", type: "fix", cleanMessage: "天桂梨下单ingredients补充colorHex和weightJin字段，修复zod校验失败" },
+    { date: "2026-07-20T12:07:02Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-20T12:09:51Z", type: "feat", cleanMessage: "订单管理增加批量取消和批量删除功能" },
+    { date: "2026-07-20T12:30:31Z", type: "fix", cleanMessage: "修复钱包流水展示三个问题 - 合并af_manual_balances统一倒推余额快照、米伴扣款不再显示为奖励、充值记录显示余额快照" },
+    { date: "2026-07-20T12:52:27Z", type: "fix", cleanMessage: "扣费明细余额快照 - 统一用getBalanceHistory接口，新增deduct类型处理，移除manualBalancesQuery独立接口" },
+    { date: "2026-07-20T13:04:55Z", type: "fix", cleanMessage: "过滤commission类型重复记录 - walletAdjust写入的commission与af_manual_balances完全重复，统一只展示af_manual_balances来源" },
+    { date: "2026-07-20T13:18:18Z", type: "fix", cleanMessage: "USDT余额计算错误将CNY调账计入USDT - 所有af_manual_balances的USDT余额查询加上NOT LIKE '[CNY]%'过滤条件，修复4处（db-recharge.ts×1, miban.ts×1, routers.ts×3）" },
+    { date: "2026-07-20T13:23:19Z", type: "fix", cleanMessage: "天桂梨详情页返回按钮改为跳回限时页面(/limited)而非首页" },
+    { date: "2026-07-20T13:34:07Z", type: "feat", cleanMessage: "余额实时刷新 - 钱包页和下单页余额每15秒自动轮询+切回App立即刷新，管理员调账后用户无需手动刷新" },
+    { date: "2026-07-20T13:38:12Z", type: "fix", cleanMessage: "确认订单弹窗钱包余额同时显示USDT和CNY两个币种" },
+    { date: "2026-07-20T14:47:13Z", type: "fix", cleanMessage: "修复米伴用户频繁被强制弹出登录页的问题" },
+  ],
+  "2026-07-21": [
+    { date: "2026-07-20T16:36:20Z", type: "fix", cleanMessage: "修复统一钱包扣款后余额显示不更新的问题" },
   ],
 };
