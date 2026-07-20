@@ -214,7 +214,7 @@ export default function TianguiPearDetail() {
     }
     createOrder.mutate({
       recipeName: `天桂梨 · ${currentSpec.name}${qty > 1 ? ` x${qty}` : ""}`,
-      ingredients: [],
+      ingredients: [{ riceId: 1, name: '天桂梨', percentage: 100 }],
       totalWeightJin: totalWeightJin,
       totalPrice: totalPrice,
       receiverName: receiverName.trim(),
