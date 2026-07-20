@@ -707,9 +707,9 @@ function FavoritesTab() {
 // ─── 我的钱包 Tab ─────────────────────────────────────────────────────────────
 function WalletTab() {
   const { isAuthenticated } = useAuth();
-  const { data: usdtBalance, isLoading: balanceLoading } = trpc.recharge.getBalance.useQuery(undefined, { enabled: isAuthenticated });
-  const { data: cnyBalance, isLoading: cnyLoading } = trpc.recharge.getCnyBalance.useQuery(undefined, { enabled: isAuthenticated });
-  const { data: history, isLoading: historyLoading } = trpc.recharge.getBalanceHistory.useQuery({ limit: 20 }, { enabled: isAuthenticated });
+  const { data: usdtBalance, isLoading: balanceLoading } = trpc.recharge.getBalance.useQuery(undefined, { enabled: isAuthenticated, refetchInterval: 15000, refetchOnWindowFocus: true });
+  const { data: cnyBalance, isLoading: cnyLoading } = trpc.recharge.getCnyBalance.useQuery(undefined, { enabled: isAuthenticated, refetchInterval: 15000, refetchOnWindowFocus: true });
+  const { data: history, isLoading: historyLoading } = trpc.recharge.getBalanceHistory.useQuery({ limit: 20 }, { enabled: isAuthenticated, refetchInterval: 15000, refetchOnWindowFocus: true });
   const { data: cryptoPrices } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 10000, staleTime: 5000 });
 
   const usdtNum = Number(usdtBalance ?? 0);

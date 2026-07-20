@@ -153,8 +153,8 @@ export default function TianguiPearDetail() {
   };
   const { data: savedAddresses } = mtrpc.address.list.useQuery(undefined, { enabled: isAuthenticated });
   const addAddressMut = mtrpc.address.add.useMutation();
-  const { data: cnyBalance } = trpc.recharge.getCnyBalance.useQuery(undefined, { enabled: isAuthenticated });
-  const { data: usdtBalance } = trpc.recharge.getBalance.useQuery(undefined, { enabled: isAuthenticated });
+  const { data: cnyBalance } = trpc.recharge.getCnyBalance.useQuery(undefined, { enabled: isAuthenticated, refetchInterval: 15000, refetchOnWindowFocus: true });
+  const { data: usdtBalance } = trpc.recharge.getBalance.useQuery(undefined, { enabled: isAuthenticated, refetchInterval: 15000, refetchOnWindowFocus: true });
   const { data: cryptoPrices } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 5000, staleTime: 3000 });
   const cnyBalanceNum = Number(cnyBalance ?? 0);
   const usdtBalanceNum = Number(usdtBalance ?? 0);
