@@ -1749,6 +1749,167 @@ export const mibanOrderRouter = router({
       console.log(`[Miban] 管理员删除订单: orderId=${order.id}, orderNo=${order.orderNo}（不退款）`);
       return { success: true };
     }),
+
+  // 导出订单CSV
+  exportOrders: mibanAdminProcedure
+    .input(z.object({
+      status: z.string().optional(),
+      startDate: z.string().optional(),
+      endDate: z.string().optional(),
+      keyword: z.string().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { csv: '', count: 0 };
+      let orders = await db.select().from(mibanOrders).orderBy(mibanOrders.createdAt);
+      if (input.status) orders = orders.filter((o: any) => o.status === input.status);
+      if (input.startDate) orders = orders.filter((o: any) => new Date(o.createdAt) >= new Date(input.startDate + 'T00:00:00'));
+      if (input.endDate) orders = orders.filter((o: any) => new Date(o.createdAt) <= new Date(input.endDate + 'T23:59:59'));
+      if (input.keyword) {
+        const kw = input.keyword.toLowerCase();
+        orders = orders.filter((o: any) =>
+          String(o.id).includes(kw) || (o.orderNo ?? '').toLowerCase().includes(kw) ||
+          (o.receiverName ?? '').toLowerCase().includes(kw) || (o.receiverPhone ?? '').toLowerCase().includes(kw)
+        );
+      }
+      const header = '订单ID,订单号,状态,收货人,手机号,收货地址,配方名,总重量(斤),总金额,快递公司,快递单号,管理员备注,下单时间';
+      const rows = orders.map((o: any) => [
+        o.id, o.orderNo, o.status, o.receiverName, o.receiverPhone,
+        '"' + (o.receiverAddress ?? '').replace(/"/g, '""') + '"',
+        o.recipeName, o.totalWeightJin, Number(o.totalPrice).toFixed(2),
+        o.trackingCompany ?? '', o.trackingNo ?? '',
+        '"' + (o.adminNote ?? '').replace(/"/g, '""') + '"',
+        new Date(o.createdAt).toLocaleString('zh-CN'),
+      ].join(','));
+      return { csv: [header, ...rows].join('\n'), count: orders.length };
+    }),
+
+  // 更新管理员备注
+  updateAdminNote: mibanAdminProcedure
+    .input(z.object({ id: z.number(), adminNote: z.string() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB not available' });
+      await db.update(mibanOrders).set({ adminNote: input.adminNote }).where(eq(mibanOrders.id, input.id));
+      return { success: true };
+    }),
+
+  // 团队订单（业务员视图）
+  teamOrders: protectedProcedure.query(async ({ ctx }) => {
+    const conn = await getDbConnection();
+    if (!conn) return [];
+    try {
+      const [memberRows]: any = await (conn as any).execute(
+        'SELECT id FROM users WHERE invited_by = ?',
+        [ctx.user!.id]
+      );
+      const memberIds: number[] = (Array.isArray(memberRows) ? memberRows : []).map((r: any) => r.id);
+      if (!memberIds.length) return [];
+      const placeholders = memberIds.map(() => '?').join(',');
+      const [orderRows]: any = await (conn as any).execute(
+        `SELECT o.*, u.name as memberName
+         FROM miban_orders o
+         LEFT JOIN users u ON o.user_id = u.id
+         WHERE o.user_id IN (${placeholders})
+         ORDER BY o.created_at DESC`,
+        memberIds
+      );
+      return Array.isArray(orderRows) ? orderRows : [];
+    } finally {
+      try { await (conn as any).end(); } catch {}
+    }
+  }),
+});
+
+// ─── 售后申请路由 ───────────────────────────────────────────────────────────────────────────────
+export const mibanAftersaleRouter = router({
+  // 用户提交售后申请
+  submit: protectedProcedure
+    .input(z.object({
+      orderId: z.number(),
+      orderNo: z.string(),
+      type: z.enum(['refund', 'exchange', 'complaint']),
+      reason: z.string().min(1, '请填写问题描述'),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB not available' });
+      try {
+        await (conn as any).execute(
+          `INSERT INTO miban_aftersale_requests (order_id, order_no, user_id, type, reason, status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 'pending', NOW(), NOW())`,
+          [input.orderId, input.orderNo, ctx.user!.id, input.type, input.reason]
+        );
+        return { success: true };
+      } finally {
+        try { await (conn as any).end(); } catch {}
+      }
+    }),
+
+  // 用户查询自己的售后申请
+  myRequests: protectedProcedure.query(async ({ ctx }) => {
+    const conn = await getDbConnection();
+    if (!conn) return [];
+    try {
+      const [rows]: any = await (conn as any).execute(
+        'SELECT * FROM miban_aftersale_requests WHERE user_id = ? ORDER BY created_at DESC',
+        [ctx.user!.id]
+      );
+      return Array.isArray(rows) ? rows.map((r: any) => ({
+        id: r.id, orderId: r.order_id, orderNo: r.order_no, type: r.type, reason: r.reason,
+        status: r.status, adminReply: r.admin_reply, refundAmount: r.refund_amount,
+        createdAt: r.created_at,
+      })) : [];
+    } finally {
+      try { await (conn as any).end(); } catch {}
+    }
+  }),
+
+  // 管理员查询所有售后申请
+  allRequests: mibanAdminProcedure.query(async () => {
+    const conn = await getDbConnection();
+    if (!conn) return [];
+    try {
+      const [rows]: any = await (conn as any).execute(
+        `SELECT a.*, u.name as userName
+         FROM miban_aftersale_requests a
+         LEFT JOIN users u ON a.user_id = u.id
+         ORDER BY a.created_at DESC`
+      );
+      return Array.isArray(rows) ? rows.map((r: any) => ({
+        id: r.id, orderId: r.order_id, orderNo: r.order_no, userId: r.user_id,
+        userName: r.userName, type: r.type, reason: r.reason, status: r.status,
+        adminReply: r.admin_reply, refundAmount: r.refund_amount,
+        createdAt: r.created_at,
+      })) : [];
+    } finally {
+      try { await (conn as any).end(); } catch {}
+    }
+  }),
+
+  // 管理员处理售后申请
+  process: mibanAdminProcedure
+    .input(z.object({
+      id: z.number(),
+      status: z.enum(['approved', 'rejected', 'completed']),
+      adminReply: z.string().optional(),
+      refundAmount: z.number().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const conn = await getDbConnection();
+      if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB not available' });
+      try {
+        await (conn as any).execute(
+          `UPDATE miban_aftersale_requests
+           SET status = ?, admin_reply = ?, refund_amount = ?, admin_id = ?, processed_at = NOW(), updated_at = NOW()
+           WHERE id = ?`,
+          [input.status, input.adminReply ?? null, input.refundAmount ?? null, ctx.user!.id, input.id]
+        );
+        return { success: true };
+      } finally {
+        try { await (conn as any).end(); } catch {}
+      }
+    }),
 });
 
 export const mibanInviteRouter = router({

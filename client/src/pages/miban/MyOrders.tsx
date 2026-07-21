@@ -44,12 +44,22 @@ function OrdersTab() {
     onSuccess: () => { toast.success("地址修改成功！"); refetchOrders(); setEditAddressOrderId(null); },
     onError: (e: any) => toast.error(e.message ?? "修改失败"),
   });
+  // 售后申请
+  const aftersaleMut = mtrpc.aftersale.submit.useMutation({
+    onSuccess: () => { toast.success('售后申请已提交，客服将尽快处理'); setAftersaleOrderId(null); },
+    onError: (e: any) => toast.error(e.message ?? '申请失败'),
+  });
   const [now, setNow] = useState(Date.now());
   const [showPrivacy, setShowPrivacy] = useState(true);
   const [editAddressOrderId, setEditAddressOrderId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editAddress, setEditAddress] = useState("");
+  // 售后申请弹窗
+  const [aftersaleOrderId, setAftersaleOrderId] = useState<number | null>(null);
+  const [aftersaleOrderNo, setAftersaleOrderNo] = useState<string>('');
+  const [aftersaleType, setAftersaleType] = useState<'refund' | 'exchange' | 'complaint'>('refund');
+  const [aftersaleReason, setAftersaleReason] = useState<string>('');
   // ⚠️ 必须在所有条件性 return 之前声明，否则违反 React hooks 规则
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   useEffect(() => {
@@ -336,6 +346,15 @@ function OrdersTab() {
               </button>
             </div>
           )}
+          {/* ── 申请售后（已发货/已送达状态） ── */}
+          {(order.status === "shipped" || order.status === "delivered") && (
+            <div className="flex justify-end pt-1">
+              <button
+                onClick={() => { setAftersaleOrderId(order.id); setAftersaleOrderNo(order.orderNo ?? ''); setAftersaleType('refund'); setAftersaleReason(''); }}
+                className="text-[11px] font-medium px-3 py-1 rounded-lg border border-gray-200 text-gray-400 hover:border-orange-300 hover:text-orange-500 transition-colors"
+              >申请售后</button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -433,6 +452,56 @@ function OrdersTab() {
               className="w-full py-3 rounded-xl text-[15px] font-bold text-white active:scale-95 transition-transform disabled:opacity-50"
               style={{ background: '#FF6900' }}
             >{updateAddressMutation.isPending ? '提交中...' : '确认修改'}</button>
+          </div>
+        </div>
+      )}
+      {/* 售后申请弹窗 */}
+      {aftersaleOrderId !== null && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setAftersaleOrderId(null)}>
+          <div className="w-full max-w-md bg-white rounded-t-3xl p-5 pb-8 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="text-[16px] font-bold text-black">申请售后</h3>
+              <button onClick={() => setAftersaleOrderId(null)} className="text-gray-400 text-[20px] leading-none">×</button>
+            </div>
+            <p className="text-[12px] text-gray-400">订单号：{aftersaleOrderNo}</p>
+            {/* 售后类型 */}
+            <div>
+              <label className="text-[12px] text-gray-500 mb-2 block">售后类型</label>
+              <div className="flex gap-2">
+                {([['refund','退款'],['exchange','换货'],['complaint','投诉']] as const).map(([k,l]) => (
+                  <button
+                    key={k}
+                    onClick={() => setAftersaleType(k)}
+                    className="flex-1 py-2 rounded-xl text-[13px] font-medium border transition-colors"
+                    style={{
+                      background: aftersaleType === k ? '#FF6900' : '#fff',
+                      color: aftersaleType === k ? '#fff' : '#6b7280',
+                      borderColor: aftersaleType === k ? '#FF6900' : '#e5e7eb',
+                    }}
+                  >{l}</button>
+                ))}
+              </div>
+            </div>
+            {/* 原因 */}
+            <div>
+              <label className="text-[12px] text-gray-500 mb-1 block">问题描述</label>
+              <textarea
+                value={aftersaleReason}
+                onChange={e => setAftersaleReason(e.target.value)}
+                placeholder="请详细描述您遇到的问题，以便我们尽快处理"
+                rows={4}
+                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-[13px] outline-none focus:border-orange-400 resize-none"
+              />
+            </div>
+            <button
+              onClick={() => {
+                if (!aftersaleReason.trim()) { toast.error('请填写问题描述'); return; }
+                aftersaleMut.mutate({ orderId: aftersaleOrderId, orderNo: aftersaleOrderNo, type: aftersaleType, reason: aftersaleReason });
+              }}
+              disabled={aftersaleMut.isPending}
+              className="w-full py-3 rounded-xl text-[15px] font-bold text-white active:scale-95 transition-transform disabled:opacity-50"
+              style={{ background: '#FF6900' }}
+            >{aftersaleMut.isPending ? '提交中...' : '提交申请'}</button>
           </div>
         </div>
       )}
@@ -805,6 +874,62 @@ function WalletTab() {
 }
 
 // ─── 团队业绩 Tab（仅团队长/业务员/管理员可见）─────────────────────────────
+
+// ─── 我的售后 Tab ─────────────────────────────────────────────────────────────
+const MY_AFTERSALE_STATUS_LABELS: Record<string, string> = { pending: '待处理', approved: '已审批', rejected: '已拒绝', completed: '已完成' };
+const MY_AFTERSALE_STATUS_COLORS: Record<string, string> = {
+  pending: 'text-amber-600 bg-amber-50',
+  approved: 'text-blue-600 bg-blue-50',
+  rejected: 'text-red-500 bg-red-50',
+  completed: 'text-green-600 bg-green-50',
+};
+const MY_AFTERSALE_TYPE_LABELS: Record<string, string> = { refund: '退款', exchange: '换货', complaint: '投诉' };
+
+function MyAftersaleTab() {
+  const { isAuthenticated } = useAuth();
+  const { data: requests, isLoading } = mtrpc.aftersale.myRequests.useQuery(undefined, { enabled: isAuthenticated });
+
+  if (isLoading) return (
+    <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />)}</div>
+  );
+
+  if (!requests?.length) return (
+    <div className="flex flex-col items-center py-16 text-center">
+      <ShoppingCart className="w-10 h-10 mb-3 text-gray-200" />
+      <p className="text-[13px] text-gray-400 mb-2">暂无售后申请记录</p>
+      <p className="text-[11px] text-gray-300">在已发货/已送达的订单中点"申请售后"</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-3">
+      {(requests as any[]).map((r: any) => (
+        <div key={r.id} className="bg-white border border-gray-100 rounded-2xl px-4 py-3 shadow-sm">
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-orange-50 text-orange-600">{MY_AFTERSALE_TYPE_LABELS[r.type] ?? r.type}</span>
+                <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${MY_AFTERSALE_STATUS_COLORS[r.status] ?? 'text-gray-500 bg-gray-100'}`}>{MY_AFTERSALE_STATUS_LABELS[r.status] ?? r.status}</span>
+              </div>
+              <p className="text-[12px] font-semibold text-black font-mono">{r.orderNo}</p>
+              <p className="text-[11px] text-gray-500 mt-0.5">{r.reason}</p>
+            </div>
+            <p className="text-[10px] text-gray-300 flex-shrink-0">{new Date(r.createdAt).toLocaleDateString('zh-CN')}</p>
+          </div>
+          {r.adminReply && (
+            <div className="bg-blue-50 rounded-xl px-3 py-2">
+              <p className="text-[11px] text-blue-600">客服回复：{r.adminReply}</p>
+            </div>
+          )}
+          {r.refundAmount && (
+            <p className="text-[11px] text-green-600 mt-1">退款金额：¥{Number(r.refundAmount).toFixed(2)}</p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function TeamTab() {
   const { data: stats, isLoading: statsLoading } = mtrpc.agent.myMonthlyStats.useQuery();
   const { data: commissions, isLoading: commissionsLoading } = mtrpc.agent.myCommissions.useQuery();
@@ -954,7 +1079,7 @@ function TeamTab() {
 }
 
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
-type TabKey = "orders" | "recipes" | "favorites" | "wallet" | "team" | "address";
+type TabKey = "orders" | "recipes" | "favorites" | "wallet" | "team" | "address" | "aftersale";
 
 
 export default function MyOrders() {
@@ -989,8 +1114,9 @@ export default function MyOrders() {
   const tabs: Array<{ key: TabKey; label: string; icon: React.ReactNode }> = [
     { key: "orders",    label: "订单",   icon: <Package className="w-4 h-4" /> },
     { key: "favorites", label: "收藏",   icon: <Heart className="w-4 h-4" /> },
-    { key: "wallet",    label: "钱包",   icon: <Wallet className="w-4 h-4" /> },
+    { key: "wallet",    label: "錢包",   icon: <Wallet className="w-4 h-4" /> },
     ...(showTeamTab ? [{ key: "team" as TabKey, label: "团队", icon: <Users className="w-4 h-4" /> }] : []),
+    { key: "aftersale" as TabKey, label: "售后", icon: <ShoppingCart className="w-4 h-4" /> },
     { key: "address" as TabKey, label: "地址", icon: <MapPin className="w-4 h-4" /> },
   ];
 
@@ -1023,6 +1149,7 @@ export default function MyOrders() {
         {activeTab === "favorites" && <FavoritesTab />}
         {activeTab === "wallet"    && <WalletTab />}
         {activeTab === "team"      && showTeamTab && <TeamTab />}
+        {activeTab === "aftersale" && <MyAftersaleTab />}
         {activeTab === "address"   && <AddressBook mode="manage" />}
       </div>
     </div>

@@ -11,7 +11,9 @@ import {
   Package, Wheat, Users, BarChart3, Truck, Loader2,
   ChevronLeft, Settings, TrendingUp, Warehouse, Copy,
   ShieldCheck, UserCog, Percent, Building2, Search, X,
-  CheckSquare, Square, Trash2
+  CheckSquare, Square, Trash2, Download, MessageSquare,
+  Calendar, Filter, ClipboardList, RotateCcw, AlertCircle,
+  ChevronDown, ChevronUp, Edit3, Check
 } from "lucide-react";
 
 // ─── 奖金预览子组件 ──────────────────────────────────────────────────────────
@@ -107,6 +109,10 @@ const STATUS_COLORS: Record<string, string> = {
   delivered:  "text-gray-500 bg-gray-100",
   cancelled:  "text-red-500 bg-red-50",
 };
+const COURIER_OPTIONS = [
+  '顺丰速运', '中通快递', '圆通速递', '韵达快递', '申通快递',
+  '极兔速递', '京东快递', '邮政EMS', '德邦快递', '丰网速运', '其他',
+];
 
 function OrdersPanel() {
   const { data: orders, isLoading, refetch } = mtrpc.order.allOrders.useQuery();
@@ -129,14 +135,57 @@ function OrdersPanel() {
     onError: (e: any) => toast.error(e.message),
   });
   const [trackingInputs, setTrackingInputs] = useState<Record<number, string>>({});
+  const [courierInputs, setCourierInputs] = useState<Record<number, string>>({});
+  const [adminNoteInputs, setAdminNoteInputs] = useState<Record<number, string>>({});
+  const [editingNoteId, setEditingNoteId] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [searchText, setSearchText] = useState<string>('');  
+  const [searchText, setSearchText] = useState<string>('');
+  const [showAdvFilter, setShowAdvFilter] = useState(false);
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
   const [confirmAction, setConfirmAction] = useState<{ type: 'cancel' | 'delete'; orderId: number; orderNo: string } | null>(null);
+  const [exportLoading, setExportLoading] = useState(false);
   // 批量操作
   const [batchMode, setBatchMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [batchConfirm, setBatchConfirm] = useState<'cancel' | 'delete' | null>(null);
   const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null);
+
+  // 导出CSV
+  const utils = mtrpc.useUtils();
+  async function handleExport() {
+    setExportLoading(true);
+    try {
+      const result = await utils.order.exportOrders.fetch({
+        status: filterStatus === 'all' ? undefined : filterStatus,
+        startDate: filterStartDate || undefined,
+        endDate: filterEndDate || undefined,
+        keyword: searchText.trim() || undefined,
+      });
+      if (!result?.csv) { toast.error('暂无可导出数据'); return; }
+      const bom = '\uFEFF';
+      const blob = new Blob([bom + result.csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `米伴订单_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`已导出 ${result.count} 笔订单`);
+    } catch(e: any) {
+      toast.error(e.message ?? '导出失败');
+    } finally {
+      setExportLoading(false);
+    }
+  }
+
+  // 保存管理员备注
+  function saveAdminNote(orderId: number, currentNote: string) {
+    const note = adminNoteInputs[orderId] ?? currentNote ?? '';
+    updateMutation.mutate({ id: orderId, status: orders?.find((o:any)=>o.id===orderId)?.status ?? 'pending', adminNote: note }, {
+      onSuccess: () => { setEditingNoteId(null); toast.success('备注已保存'); refetch(); },
+    });
+  }
   function toggleSelect(id: number) {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -210,9 +259,24 @@ function OrdersPanel() {
     ? (orders ?? [])
     : (orders ?? []).filter((o: any) => o.status === filterStatus);
 
+  // 日期筛选
+  let dateFilteredOrders = baseOrders;
+  if (filterStartDate) {
+    dateFilteredOrders = dateFilteredOrders.filter((o: any) => {
+      const d = new Date(o.createdAt);
+      return d >= new Date(filterStartDate + 'T00:00:00');
+    });
+  }
+  if (filterEndDate) {
+    dateFilteredOrders = dateFilteredOrders.filter((o: any) => {
+      const d = new Date(o.createdAt);
+      return d <= new Date(filterEndDate + 'T23:59:59');
+    });
+  }
+
   const filteredOrders = searchText.trim() === ''
-    ? baseOrders
-    : baseOrders.filter((o: any) => {
+    ? dateFilteredOrders
+    : dateFilteredOrders.filter((o: any) => {
         const kw = searchText.trim().toLowerCase();
         return (
           String(o.id).includes(kw) ||
@@ -222,9 +286,12 @@ function OrdersPanel() {
           (o.receiverPhone ?? '').toLowerCase().includes(kw) ||
           (o.receiverAddress ?? '').toLowerCase().includes(kw) ||
           (o.trackingNo ?? '').toLowerCase().includes(kw) ||
-          (o.userNote ?? '').toLowerCase().includes(kw)
+          (o.userNote ?? '').toLowerCase().includes(kw) ||
+          (o.adminNote ?? '').toLowerCase().includes(kw)
         );
       });
+
+  const hasAdvFilter = !!(filterStartDate || filterEndDate);
 
   return (
     <div className="space-y-2">
@@ -255,7 +322,7 @@ function OrdersPanel() {
         </div>
       </div>
 
-      {/* 搜索框 + 批量操作按钮 */}
+      {/* 搜索框 + 高级筛选 + 导出 + 批量 */}
       <div className="flex gap-2 items-center">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-300 pointer-events-none" />
@@ -274,6 +341,28 @@ function OrdersPanel() {
             </button>
           )}
         </div>
+        {/* 高级筛选按鈕 */}
+        <button
+          onClick={() => setShowAdvFilter(v => !v)}
+          className="flex-shrink-0 p-2.5 rounded-xl border transition-colors"
+          style={{
+            background: hasAdvFilter ? '#FF6900' : '#fff',
+            color: hasAdvFilter ? '#fff' : '#6b7280',
+            borderColor: hasAdvFilter ? '#FF6900' : '#e5e7eb',
+          }}
+          title="高级筛选"
+        >
+          <Filter className="w-3.5 h-3.5" />
+        </button>
+        {/* 导出按鈕 */}
+        <button
+          onClick={handleExport}
+          disabled={exportLoading}
+          className="flex-shrink-0 p-2.5 rounded-xl border border-gray-200 bg-white text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors"
+          title="导出 CSV"
+        >
+          {exportLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+        </button>
         <button
           onClick={() => { setBatchMode(v => !v); setSelectedIds(new Set()); }}
           className="flex-shrink-0 text-[12px] font-medium px-3 py-2.5 rounded-xl border transition-colors"
@@ -286,6 +375,37 @@ function OrdersPanel() {
           {batchMode ? '退出' : '批量'}
         </button>
       </div>
+      {/* 高级筛选展开面板 */}
+      {showAdvFilter && (
+        <div className="bg-white rounded-xl border border-orange-100 px-3 py-3 space-y-2">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[12px] font-medium text-gray-600 flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />日期筛选</span>
+            {hasAdvFilter && (
+              <button onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }} className="text-[11px] text-orange-400 flex items-center gap-0.5">
+                <RotateCcw className="w-3 h-3" />清除
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={filterStartDate}
+              onChange={e => setFilterStartDate(e.target.value)}
+              className="flex-1 text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-orange-300"
+            />
+            <span className="text-[11px] text-gray-400">至</span>
+            <input
+              type="date"
+              value={filterEndDate}
+              onChange={e => setFilterEndDate(e.target.value)}
+              className="flex-1 text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-orange-300"
+            />
+          </div>
+          {hasAdvFilter && (
+            <p className="text-[11px] text-orange-500">当前筛选显示 {filteredOrders.length} 笔订单，点导出可下载该时间段数据</p>
+          )}
+        </div>
+      )}
       {/* 批量模式：全选栏 */}
       {batchMode && (
         <div className="flex items-center justify-between bg-orange-50 rounded-xl px-3 py-2 border border-orange-100">
@@ -354,22 +474,79 @@ function OrdersPanel() {
               <span className="text-[11px] text-gray-400">· {order.totalWeightJin}斤</span>
             </div>
             {order.status === "confirmed" && (
-              <div className="flex items-center gap-2 mt-2">
-                <input
-                  value={trackingInputs[order.id] ?? ""}
-                  onChange={(e) => setTrackingInputs(p => ({ ...p, [order.id]: e.target.value }))}
-                  placeholder="填写快递单号（可选）"
-                  className="flex-1 text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none"
-                />
-                <button
-                  onClick={() => updateMutation.mutate({ id: order.id, status: "shipped", trackingNo: trackingInputs[order.id] })}
-                  className="text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1 text-white flex-shrink-0"
-                  style={{ background: "#FF6900" }}
+              <div className="mt-2 space-y-1.5">
+                {/* 快递公司下拉 */}
+                <select
+                  value={courierInputs[order.id] ?? ''}
+                  onChange={e => setCourierInputs(p => ({ ...p, [order.id]: e.target.value }))}
+                  className="w-full text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:border-orange-300 text-gray-600"
                 >
-                  <Truck className="w-3 h-3" />发货
-                </button>
+                  <option value="">选择快递公司（可选）</option>
+                  {COURIER_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                {/* 单号输入 + 发货按鈕 */}
+                <div className="flex items-center gap-2">
+                  <input
+                    value={trackingInputs[order.id] ?? ""}
+                    onChange={(e) => setTrackingInputs(p => ({ ...p, [order.id]: e.target.value }))}
+                    placeholder="填写快递单号（可选）"
+                    className="flex-1 text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none"
+                  />
+                  <button
+                    onClick={() => updateMutation.mutate({
+                      id: order.id,
+                      status: "shipped",
+                      trackingNo: trackingInputs[order.id],
+                      trackingCompany: courierInputs[order.id] || undefined,
+                    })}
+                    className="text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1 text-white flex-shrink-0"
+                    style={{ background: "#FF6900" }}
+                  >
+                    <Truck className="w-3 h-3" />发货
+                  </button>
+                </div>
               </div>
             )}
+            {/* 已发货时显示快递公司 */}
+            {order.status === "shipped" && order.trackingCompany && (
+              <p className="text-[11px] text-gray-400 mt-1">
+                <Truck className="w-3 h-3 inline mr-1" />{order.trackingCompany} · {order.trackingNo || '未填单号'}
+              </p>
+            )}
+            {/* 管理员备注区域 */}
+            <div className="mt-2 pt-2 border-t border-gray-50">
+              {editingNoteId === order.id ? (
+                <div className="flex items-center gap-1.5">
+                  <MessageSquare className="w-3 h-3 flex-shrink-0 text-orange-400" />
+                  <input
+                    autoFocus
+                    value={adminNoteInputs[order.id] ?? (order.adminNote ?? '')}
+                    onChange={e => setAdminNoteInputs(p => ({ ...p, [order.id]: e.target.value }))}
+                    placeholder="备注内容（仅管理员可见）"
+                    className="flex-1 text-[11px] border border-orange-200 rounded-lg px-2 py-1 bg-white focus:outline-none"
+                  />
+                  <button onClick={() => saveAdminNote(order.id, order.adminNote ?? '')} className="p-1 rounded-lg bg-orange-500 text-white flex-shrink-0">
+                    <Check className="w-3 h-3" />
+                  </button>
+                  <button onClick={() => setEditingNoteId(null)} className="p-1 rounded-lg border border-gray-200 text-gray-400 flex-shrink-0">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setEditingNoteId(order.id); setAdminNoteInputs(p => ({ ...p, [order.id]: order.adminNote ?? '' })); }}
+                  className="flex items-center gap-1.5 text-[11px] text-gray-400 hover:text-orange-500 transition-colors"
+                >
+                  <MessageSquare className="w-3 h-3" />
+                  {order.adminNote ? (
+                    <span className="text-gray-600">{order.adminNote}</span>
+                  ) : (
+                    <span>添加备注</span>
+                  )}
+                  <Edit3 className="w-2.5 h-2.5 ml-auto opacity-50" />
+                </button>
+              )}
+            </div>
             <CommissionPreviewBadge orderId={order.id} />
             {/* 取消 / 删除 按鈕（批量模式下隐藏） */}
             {!batchMode && order.status !== 'delivered' && (
@@ -2070,7 +2247,7 @@ function AgentTeamPanel() {
 }
 
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
-type AdminTabKey = "orders" | "rice" | "inventory" | "warehouse" | "users" | "teamManage" | "team" | "commission" | "referrals" | "pending";
+type AdminTabKey = "orders" | "rice" | "inventory" | "warehouse" | "users" | "teamManage" | "team" | "commission" | "referrals" | "pending" | "aftersale" | "teamOrders";
 
 // ─── 待结算佣金面板 ─────────────────────────────────────────────────────
 function PendingCommissionsPanel() {
@@ -2195,6 +2372,229 @@ function PendingCommissionsPanel() {
   );
 }
 
+// ─── 售后管理面板 ────────────────────────────────────────────────────────────
+const AFTERSALE_TYPE_LABELS: Record<string, string> = { refund: '退款', exchange: '换货', complaint: '投诉' };
+const AFTERSALE_STATUS_COLORS: Record<string, string> = {
+  pending: 'text-amber-600 bg-amber-50',
+  approved: 'text-blue-600 bg-blue-50',
+  rejected: 'text-red-500 bg-red-50',
+  completed: 'text-green-600 bg-green-50',
+};
+const AFTERSALE_STATUS_LABELS: Record<string, string> = { pending: '待处理', approved: '已审批', rejected: '已拒绝', completed: '已完成' };
+
+function AftersalePanel() {
+  const { data: requests, isLoading, refetch } = mtrpc.aftersale.allRequests.useQuery();
+  const processMut = mtrpc.aftersale.process.useMutation({
+    onSuccess: () => { toast.success('处理成功'); refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [replyInputs, setReplyInputs] = useState<Record<number, string>>({});
+  const [refundInputs, setRefundInputs] = useState<Record<number, string>>({});
+
+  const filtered = (requests ?? []).filter((r: any) => filterStatus === 'all' || r.status === filterStatus);
+  const countPending = (requests ?? []).filter((r: any) => r.status === 'pending').length;
+
+  return (
+    <div className="space-y-3">
+      {/* 汇总卡片 */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[11px] text-gray-400">售后申请总数</p>
+            <p className="text-[22px] font-bold text-black">{(requests ?? []).length}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[11px] text-gray-400">待处理</p>
+            <p className="text-[22px] font-bold" style={{ color: '#FF6900' }}>{countPending}</p>
+          </div>
+        </div>
+      </div>
+      {/* 状态筛选 */}
+      <div className="flex gap-1.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
+        {['all', 'pending', 'approved', 'rejected', 'completed'].map(s => (
+          <button
+            key={s}
+            onClick={() => setFilterStatus(s)}
+            className="flex-shrink-0 text-[11px] font-medium px-3 py-1.5 rounded-full border transition-colors"
+            style={{
+              background: filterStatus === s ? '#FF6900' : '#fff',
+              color: filterStatus === s ? '#fff' : '#6b7280',
+              borderColor: filterStatus === s ? '#FF6900' : '#e5e7eb',
+            }}
+          >
+            {s === 'all' ? '全部' : AFTERSALE_STATUS_LABELS[s]}
+          </button>
+        ))}
+      </div>
+      {/* 列表 */}
+      {isLoading ? (
+        <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-24 bg-gray-100 rounded-xl animate-pulse" />)}</div>
+      ) : !filtered.length ? (
+        <div className="text-center py-16 text-gray-300 text-[13px]">暂无售后申请</div>
+      ) : (
+        <div className="space-y-2">
+          {(filtered as any[]).map((r: any) => (
+            <div key={r.id} className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+              <div
+                className="px-4 py-3 cursor-pointer"
+                onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-orange-50 text-orange-600">{AFTERSALE_TYPE_LABELS[r.type] ?? r.type}</span>
+                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${AFTERSALE_STATUS_COLORS[r.status] ?? 'text-gray-500 bg-gray-100'}`}>{AFTERSALE_STATUS_LABELS[r.status] ?? r.status}</span>
+                    </div>
+                    <p className="text-[12px] font-semibold text-black truncate">{r.orderNo}</p>
+                    <p className="text-[11px] text-gray-400 truncate">{r.reason}</p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-[11px] text-gray-400">{r.userName ?? '用户'}</p>
+                    <p className="text-[10px] text-gray-300">{new Date(r.createdAt).toLocaleDateString('zh-CN')}</p>
+                  </div>
+                </div>
+              </div>
+              {/* 展开处理区 */}
+              {expandedId === r.id && (
+                <div className="border-t border-gray-50 px-4 py-3 bg-gray-50/50 space-y-2">
+                  {r.adminReply && (
+                    <p className="text-[11px] text-gray-500">审批回复：{r.adminReply}</p>
+                  )}
+                  <input
+                    value={replyInputs[r.id] ?? ''}
+                    onChange={e => setReplyInputs(p => ({ ...p, [r.id]: e.target.value }))}
+                    placeholder="回复内容（可选）"
+                    className="w-full text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:border-orange-300"
+                  />
+                  <input
+                    type="number"
+                    value={refundInputs[r.id] ?? ''}
+                    onChange={e => setRefundInputs(p => ({ ...p, [r.id]: e.target.value }))}
+                    placeholder="退款金额（可选）"
+                    className="w-full text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:border-orange-300"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => processMut.mutate({ id: r.id, status: 'approved', adminReply: replyInputs[r.id] || undefined, refundAmount: refundInputs[r.id] ? Number(refundInputs[r.id]) : undefined })}
+                      disabled={processMut.isPending}
+                      className="flex-1 text-[12px] font-semibold py-2 rounded-xl text-white disabled:opacity-40"
+                      style={{ background: '#FF6900' }}
+                    >审批</button>
+                    <button
+                      onClick={() => processMut.mutate({ id: r.id, status: 'completed', adminReply: replyInputs[r.id] || undefined, refundAmount: refundInputs[r.id] ? Number(refundInputs[r.id]) : undefined })}
+                      disabled={processMut.isPending}
+                      className="flex-1 text-[12px] font-semibold py-2 rounded-xl text-white disabled:opacity-40 bg-green-500"
+                    >完成</button>
+                    <button
+                      onClick={() => processMut.mutate({ id: r.id, status: 'rejected', adminReply: replyInputs[r.id] || undefined })}
+                      disabled={processMut.isPending}
+                      className="flex-1 text-[12px] font-semibold py-2 rounded-xl border border-red-200 text-red-500 disabled:opacity-40"
+                    >拒绝</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── 团队订单面板（业务员视图） ─────────────────────────────────────────────────
+function TeamOrdersPanel() {
+  const { data: orders, isLoading } = mtrpc.order.teamOrders.useQuery();
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [searchText, setSearchText] = useState<string>('');
+
+  const filtered = (orders ?? []).filter((o: any) => {
+    if (filterStatus !== 'all' && o.status !== filterStatus) return false;
+    if (searchText.trim()) {
+      const kw = searchText.trim().toLowerCase();
+      return (
+        String(o.id).includes(kw) ||
+        (o.orderNo ?? '').toLowerCase().includes(kw) ||
+        (o.receiverName ?? '').toLowerCase().includes(kw) ||
+        (o.memberName ?? '').toLowerCase().includes(kw)
+      );
+    }
+    return true;
+  });
+
+  const totalRevenue = (orders ?? []).filter((o: any) => o.status !== 'cancelled').reduce((s: number, o: any) => s + Number(o.totalPrice ?? 0), 0);
+
+  return (
+    <div className="space-y-3">
+      {/* 汇总 */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[11px] text-gray-400">团队订单总金额</p>
+            <p className="text-[22px] font-bold" style={{ color: '#FF6900' }}>￥{totalRevenue.toFixed(2)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-[11px] text-gray-400">共 {(orders ?? []).length} 笔</p>
+          </div>
+        </div>
+      </div>
+      {/* 搜索框 */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-300" />
+        <input
+          value={searchText}
+          onChange={e => setSearchText(e.target.value)}
+          placeholder="搜索订单号/收货人/成员名"
+          className="w-full pl-9 pr-4 py-2.5 text-[12px] bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-orange-300"
+        />
+      </div>
+      {/* 状态筛选 */}
+      <div className="flex gap-1 overflow-x-auto pb-0.5" style={{ scrollbarWidth: 'none' }}>
+        {[['all','全部'],['pending','待处理'],['confirmed','已确认'],['shipped','已发货'],['delivered','已送达'],['cancelled','已取消']].map(([k,l]) => (
+          <button
+            key={k}
+            onClick={() => setFilterStatus(k)}
+            className="flex-shrink-0 text-[11px] font-medium px-3 py-1.5 rounded-full border transition-colors"
+            style={{
+              background: filterStatus === k ? '#FF6900' : '#fff',
+              color: filterStatus === k ? '#fff' : '#6b7280',
+              borderColor: filterStatus === k ? '#FF6900' : '#e5e7eb',
+            }}
+          >{l}</button>
+        ))}
+      </div>
+      {/* 列表 */}
+      {isLoading ? (
+        <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <div key={i} className="h-20 bg-gray-100 rounded-xl animate-pulse" />)}</div>
+      ) : !filtered.length ? (
+        <div className="text-center py-16 text-gray-300 text-[13px]">暂无团队订单</div>
+      ) : (
+        <div className="space-y-2">
+          {(filtered as any[]).map((o: any) => (
+            <div key={o.id} className="bg-white border border-gray-100 rounded-2xl px-4 py-3 shadow-sm">
+              <div className="flex items-start justify-between gap-2 mb-1.5">
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-bold text-black truncate">{o.recipeName || '定制米'}</p>
+                  <p className="text-[11px] text-gray-400">#{o.id} · {o.receiverName}</p>
+                </div>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${STATUS_COLORS[o.status] ?? 'text-gray-500 bg-gray-100'}`}>
+                  {ORDER_STATUS_OPTIONS.find(s => s.value === o.status)?.label ?? o.status}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] text-gray-400">成员：{o.memberName ?? '未知'}</p>
+                <span className="text-[13px] font-bold" style={{ color: '#FF6900' }}>￥{Number(o.totalPrice).toFixed(2)}</span>
+              </div>
+              <p className="text-[10px] text-gray-300 mt-1">{new Date(o.createdAt).toLocaleDateString('zh-CN')}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function UnifiedAdmin() {
   const { user, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
@@ -2234,6 +2634,7 @@ export default function UnifiedAdmin() {
   const adminTabs: Array<{ key: AdminTabKey; label: string }> = isAdmin ? [
     { key: "orders",    label: "订单管理" },
     { key: "pending",   label: "待结算" },
+    { key: "aftersale", label: "售后" },
     { key: "rice",      label: "米库管理" },
     { key: "inventory", label: "库存管理" },
     { key: "users",     label: "用户管理" },
@@ -2241,6 +2642,7 @@ export default function UnifiedAdmin() {
   ] : [
     // 业务员/团队长标签
     { key: "team",       label: "团队业绩" },
+    { key: "teamOrders", label: "团队订单" },
     { key: "commission", label: "我的佣金" },
     { key: "referrals",  label: "我的推荐" },
   ];
@@ -2291,6 +2693,7 @@ export default function UnifiedAdmin() {
       <div className="px-4 py-4 pb-24">
         {activeTab === "orders"    && <OrdersPanel />}
         {activeTab === "pending"    && <PendingCommissionsPanel />}
+        {activeTab === "aftersale" && <AftersalePanel />}
         {activeTab === "rice"      && <RicePanel />}
         {activeTab === "inventory" && <InventoryPanel />}
         {activeTab === "warehouse" && <WarehousePanel />}
@@ -2298,6 +2701,7 @@ export default function UnifiedAdmin() {
         {activeTab === "teamManage" && <SalesPanel />}
         {/* 业务员视图 */}
         {(activeTab === "team" || activeTab === "commission" || activeTab === "referrals") && <AgentTeamPanel />}
+        {activeTab === "teamOrders" && <TeamOrdersPanel />}
       </div>
     </div>
   );
