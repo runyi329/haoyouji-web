@@ -14462,6 +14462,12 @@ ${klinesSummary}
           balanceAdjust = oldAmount;
           balanceNote = `撤单退回 委买 ${coin} ${oldAmount} USDT`;
         }
+        // 2b. 状态变化：已成交→已撤单（市价单撤销）
+        if (oldStatus === 'completed' && newStatus === 'cancelled' && !order.is_gift) {
+          // 市价单下单时已扣除余额，撤单时需退回
+          balanceAdjust = oldAmount;
+          balanceNote = `撤单退回 市价单 ${coin} ${oldAmount} USDT`;
+        }
         // 3. 金额参数修改（仅当状态为 pending 时）
         if (input.amount && newStatus === 'pending' && Math.abs(newAmount - oldAmount) > 0.001) {
           const diff = newAmount - oldAmount;
@@ -14533,13 +14539,13 @@ ${klinesSummary}
           }
           if (ratiosForUpdate.length > 0) console.log(`[拨比联动] 订单#${input.orderId}修改价格/金额，已同步更新${ratiosForUpdate.length}笔pending赠予订单`);
         }
-        // 如果管理员将订单改为已撤单，联动撤销关联的 pending 赠予订单
+        // 如果管理员将订单改为已撤单，联动撤销关联的所有赠予订单（包括pending和completed，市价单赠单直接是completed）
         if (newStatus === 'cancelled' && oldStatus !== 'cancelled') {
           await db.execute(
             sql`UPDATE af_orders SET status = 'cancelled', updated_at = NOW()
-                WHERE source_order_id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND is_gift = 1 AND status = 'pending'`
+                WHERE source_order_id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND is_gift = 1 AND status != 'cancelled'`
           );
-          console.log(`[拨比联动] 订单#${input.orderId}被撤单，已联动撤销关联的pending赠予订单`);
+          console.log(`[拨比联动] 订单#${input.orderId}被撤销，已联动关联的所有赠予订单（含completed）`);
         }
         // 如果订单变为已成交，立即触发一次扫描（不等四小时）
         if (newStatus === 'completed' && oldStatus !== 'completed' && order.side === 'buy') {
@@ -14698,12 +14704,12 @@ ${klinesSummary}
           sql`UPDATE af_orders SET status = 'cancelled', updated_at = NOW()
               WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND user_id = ${ctx.user.id}`
         );
-        // 联动撤销所有关联的 pending 赠予订单
+        // 联动撤销所有关联赠予订单（包括 pending 和 completed，市价单赠单直接是 completed）
         await db.execute(
           sql`UPDATE af_orders SET status = 'cancelled', updated_at = NOW()
-              WHERE source_order_id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND is_gift = 1 AND status = 'pending'`
+              WHERE source_order_id = ${input.orderId} AND ledger_id = ${input.ledgerId} AND is_gift = 1 AND status != 'cancelled'`
         );
-        console.log(`[afCancelOrder] 联动撤销订单#${input.orderId}的所有pending赠予订单`);
+        console.log(`[afCancelOrder] 联动撤销订单#${input.orderId}的所有关联赠予订单（含completed）`);
         return { success: true };
       }),
     // AF 管理员删除订单（含关联赠单和余额退回）
