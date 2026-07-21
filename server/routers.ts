@@ -13598,6 +13598,23 @@ ${klinesSummary}
         const orderType = input.orderType || '无损合约';
         // 市价单直接自动成交，无需管理员手工确认
         if (input.isMarketOrder) {
+          // ★ 安全校验：后端验证市价权限，防止前端绕过
+          const YJH_ID = 4957151;
+          const ADMIN_ID = 870413;
+          if (ctx.user.id !== YJH_ID && ctx.user.id !== ADMIN_ID) {
+            const connPerm = await (await import('./db')).getDbConnection();
+            if (connPerm) {
+              const [permRows] = await (connPerm as any).execute(
+                `SELECT enabled FROM af_market_order_permissions WHERE ledger_id=? AND user_id=?`,
+                [input.ledgerId, ctx.user.id]
+              );
+              const permRow = (permRows as any[])[0];
+              const hasPermission = permRow && (permRow.enabled === 1 || permRow.enabled === true);
+              if (!hasPermission) {
+                throw new TRPCError({ code: 'FORBIDDEN', message: '您没有市价单权限，请改用限价委托' });
+              }
+            }
+          }
           const connM = await (await import('./db')).getDbConnection();
           if (connM) {
             await (connM as any).execute(

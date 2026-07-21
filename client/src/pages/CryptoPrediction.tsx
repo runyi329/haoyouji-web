@@ -2266,6 +2266,16 @@ export default function CryptoPrediction() {
   );
   const canUseMarketOrder = isYJHOrAdmin || (myMarketPermData as any)?.enabled === true;
 
+  // 权限确认后：若无市价权限，强制重置 priceMode 为 limit，防止默认市价状态绕过审核
+  useEffect(() => {
+    // 已确认无权限（非 YJH/超管，且后端返回 false）
+    if (!isYJHOrAdmin && myMarketPermData !== undefined && !(myMarketPermData as any)?.enabled) {
+      setPriceMode('limit');
+      // 自动选中第一个限价档位（不设置 orderPrice，让用户自己选）
+      setOrderPrice('');
+    }
+  }, [isYJHOrAdmin, myMarketPermData]);
+
   // 可用余额（账本总资产）
   const { data: assetData } = trpc.ledger.afGetMyTotalAsset.useQuery(
     { ledgerId, ...(viewAsUserId ? { viewAsUserId } : {}) },
