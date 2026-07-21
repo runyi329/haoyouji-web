@@ -8531,5 +8531,15 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   ],
   "2026-07-21": [
     { date: "2026-07-20T16:36:20Z", type: "fix", cleanMessage: "修复统一钱包扣款后余额显示不更新的问题" },
+    { date: "2026-07-20T18:03:03Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-20T22:11:19Z", type: "fix", cleanMessage: "下单/邀请成功后立即刷新余额和账本列表显示" },
+    { date: "2026-07-21T00:41:55Z", type: "feat", cleanMessage: "米伴订单管理全面升级" },
+    { date: "2026-07-21T02:02:52Z", type: "feat", cleanMessage: "仓库管理Tab添加上架/下架按钮" },
+    { date: "2026-07-21T02:27:20Z", type: "feat", cleanMessage: "订单管理四维高级筛选" },
+    { date: "2026-07-21T02:54:22Z", type: "fix", cleanMessage: "修复React Error #300崩溃" },
+    { date: "2026-07-21T04:36:49Z", type: "feat", cleanMessage: "米伴卡片右上角添加刷新按钮" },
+    { date: "2026-07-21T04:42:30Z", type: "feat", cleanMessage: "下架世界杯滚动图片，SOCIAL_PAGES 5->4" },
+    { date: "2026-07-21T04:59:57Z", type: "fix", cleanMessage: "修复市价键安全漏洞 - 前端权限加载后重置priceMode，后端增加市价权限校验" },
+    { date: "2026-07-21T05:15:06Z", type: "fix", cleanMessage: "修复撤单联动漏洞 - 赠单联动撤销扩展到completed状态，补全市价单撤销退款逻辑" },
   ],
 };
