@@ -237,19 +237,16 @@ function OrdersPanel() {
     <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div>
   );
 
-  if (!orders?.length) return (
-    <div className="text-center py-16 text-gray-300 text-[13px]">暂无订单</div>
-  );
-
-  // 统计数据
-  const total = orders.length;
-  const countPending   = orders.filter((o: any) => o.status === 'pending').length;
-  const countConfirmed = orders.filter((o: any) => o.status === 'confirmed').length;
-  const countPacking   = orders.filter((o: any) => o.status === 'packing').length;
-  const countShipped   = orders.filter((o: any) => o.status === 'shipped').length;
-  const countDelivered = orders.filter((o: any) => o.status === 'delivered').length;
-  const countCancelled = orders.filter((o: any) => o.status === 'cancelled').length;
-  const totalRevenue   = orders
+  // 统计数据（不提前 return，用空数组兼容无订单情况）
+  const safeOrders = orders ?? [];
+  const total = safeOrders.length;
+  const countPending   = safeOrders.filter((o: any) => o.status === 'pending').length;
+  const countConfirmed = safeOrders.filter((o: any) => o.status === 'confirmed').length;
+  const countPacking   = safeOrders.filter((o: any) => o.status === 'packing').length;
+  const countShipped   = safeOrders.filter((o: any) => o.status === 'shipped').length;
+  const countDelivered = safeOrders.filter((o: any) => o.status === 'delivered').length;
+  const countCancelled = safeOrders.filter((o: any) => o.status === 'cancelled').length;
+  const totalRevenue   = safeOrders
     .filter((o: any) => o.status !== 'cancelled')
     .reduce((s: number, o: any) => s + Number(o.totalPrice ?? 0), 0);
 
@@ -264,8 +261,8 @@ function OrdersPanel() {
   ];
 
   const baseOrders = filterStatus === 'all'
-    ? (orders ?? [])
-    : (orders ?? []).filter((o: any) => o.status === filterStatus);
+    ? safeOrders
+    : safeOrders.filter((o: any) => o.status === filterStatus);
 
   // 日期筛选
   let dateFilteredOrders = baseOrders;
@@ -284,7 +281,7 @@ function OrdersPanel() {
 
   // 从所有订单中提取去重的米种名列表（用于下拉选项）
   const allRiceNames = Array.from(new Set(
-    (orders ?? []).flatMap((o: any) => {
+    safeOrders.flatMap((o: any) => {
       try {
         const items = JSON.parse(o.ingredients ?? '[]');
         return Array.isArray(items) ? items.map((i: any) => i.name).filter(Boolean) : [];
@@ -294,7 +291,7 @@ function OrdersPanel() {
 
   // 从所有订单中提取去重的下单人列表（用于下拉选项）
   const allUsers = Array.from(
-    (orders ?? []).reduce((map: Map<string, string>, o: any) => {
+    safeOrders.reduce((map: Map<string, string>, o: any) => {
       const key = String(o.userId);
       if (!map.has(key)) map.set(key, o.userName || o.receiverName || `用户${o.userId}`);
       return map;
