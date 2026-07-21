@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-21
+// 生成时间：2026-07-22
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8548,5 +8548,9 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-21T08:51:22Z", type: "fix", cleanMessage: "已卖出订单时间视图按卖出日期分组，卖出Tab禁用灰色效果" },
     { date: "2026-07-21T09:45:14Z", type: "feat", cleanMessage: "已卖出订单详情增加完整结算明细块（买入价/卖出价/权益档/管理费/实际到账）" },
     { date: "2026-07-21T09:55:08Z", type: "feat", cleanMessage: "正单赠单拆分独立显示，互相关联标注，卖出Tab只显示自身已卖出订单" },
+    { date: "2026-07-21T11:40:08Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+  ],
+  "2026-07-22": [
+    { date: "2026-07-21T16:00:23Z", type: "fix", cleanMessage: "修复卖出自动调账条件，改为查重优先不依赖sell_confirmed_at" },
   ],
 };
