@@ -700,6 +700,10 @@ function CatalogPanel() {
   const sortMutation = mtrpc.rice.catalogUpsert.useMutation({
     onSuccess: () => refetch(),
   });
+  const toggleActiveMutation = mtrpc.rice.catalogUpsert.useMutation({
+    onSuccess: () => { refetch(); },
+    onError: (e: any) => toast.error(e.message),
+  });
 
   type CatalogForm = {
     id?: number;
@@ -995,7 +999,7 @@ function CatalogPanel() {
           const tags: string[] = Array.isArray(item.tagsJson) ? item.tagsJson : [];
           const isInStore = inStoreCatalogIds.has(item.id);
           return (
-            <div key={item.id} className="bg-white border border-gray-100 rounded-2xl p-3 shadow-sm">
+            <div key={item.id} className={`bg-white border rounded-2xl p-3 shadow-sm transition-opacity ${item.isActive ? 'border-gray-100' : 'border-gray-200 opacity-50'}`}>
               <div className="flex items-center gap-3">
                 {/* 图片/色块 */}
                 <label className="relative flex-shrink-0 cursor-pointer group">
@@ -1013,6 +1017,7 @@ function CatalogPanel() {
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-[13px] font-bold text-black">{item.stdName}</span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-500">{item.category}</span>
+                    {!item.isActive && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-500 font-medium">已下架</span>}
                     <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
                       hasNutrition ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'
                     }`}>{hasNutrition ? '营养' : '无营养'}</span>
@@ -1058,6 +1063,11 @@ function CatalogPanel() {
                       className="text-[11px] px-2 py-1 rounded-lg bg-blue-50 text-blue-600 font-medium">编辑</button>
                     <button onClick={() => { if (confirm(`确认删除「${item.stdName}」？`)) deleteMutation.mutate({ id: item.id }); }}
                       className="text-[11px] px-2 py-1 rounded-lg bg-red-50 text-red-500 font-medium">删除</button>
+                    <button
+                      onClick={() => toggleActiveMutation.mutate({ id: item.id, stdName: item.stdName, category: item.category, isActive: !item.isActive })}
+                      disabled={toggleActiveMutation.isPending}
+                      className={`text-[11px] px-2 py-1 rounded-lg font-medium transition-colors ${item.isActive ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-400'}`}
+                    >{item.isActive ? '上架' : '下架'}</button>
                     <div className="flex gap-0.5">
                       <button onClick={() => handleSort(item, 'up')} disabled={idx === 0}
                         className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 disabled:opacity-30">↑</button>
