@@ -1830,6 +1830,14 @@ export default function Home() {
               alt="米伴·我的饭碗我做主"
               className="w-full h-full" style={{ objectFit: 'cover', objectPosition: 'left top' }}
             />
+            {/* 右上角刷新按鈕（与 AI 球半完全一致） */}
+            <button
+              className="absolute top-2 right-2 z-10 px-2.5 py-1 rounded-full text-xs font-semibold"
+              style={{ backgroundColor: 'rgba(0,0,0,0.45)', color: '#fff', lineHeight: 1.4 }}
+              onClick={(e) => { e.stopPropagation(); window.location.reload(); }}
+            >
+              刷新
+            </button>
           </div>,
           // 页1：AI球伴世界杯海报（点击跳转世界杯页面）
           <div
