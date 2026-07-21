@@ -1530,8 +1530,12 @@ export default function AfOrderManage() {
               };
               const dateGroups: Record<string, any[]> = {};
               (searchedOrders || []).forEach((order: any) => {
-                // 赠单嵌套在正单的 giftOrders 里展示，不单独加入日期分组
-                if (order.isGift === true || order.isGift === 1) return;
+                const isGift = order.isGift === true || order.isGift === 1;
+                if (isGift) {
+                  // 孤儿赠单：正单已卖出/撤销，但赠单还在 selling 状态，需要单独加入日期分组以便操作
+                  const isOrphan = order.sellStatus === 'selling' || order.sellStatus === 'sold';
+                  if (!isOrphan) return; // 普通赠单（持仓中）仍嵌套在正单里展示
+                }
                 const dateKey = getOrderDateKey(order);
                 if (!dateGroups[dateKey]) dateGroups[dateKey] = [];
                 dateGroups[dateKey].push(order);
