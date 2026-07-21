@@ -1535,12 +1535,7 @@ export default function AfOrderManage() {
               };
               const dateGroups: Record<string, any[]> = {};
               (searchedOrders || []).forEach((order: any) => {
-                const isGift = order.isGift === true || order.isGift === 1;
-                if (isGift) {
-                  // 孤儿赠单：正单已卖出/撤销，但赠单还在 selling 状态，需要单独加入日期分组以便操作
-                  const isOrphan = order.sellStatus === 'selling' || order.sellStatus === 'sold';
-                  if (!isOrphan) return; // 普通赠单（持仓中）仍嵌套在正单里展示
-                }
+                // 所有订单（正单+赠单）都作为独立行加入日期分组
                 const dateKey = getOrderDateKey(order);
                 if (!dateGroups[dateKey]) dateGroups[dateKey] = [];
                 dateGroups[dateKey].push(order);
@@ -1554,18 +1549,14 @@ export default function AfOrderManage() {
                 const isOpen = expandedDates[dateKey] ?? false;
                 // 是否该日期所有正单（含其嵌套赠与单）已全部卖出
                 // 在「卖出」 Tab 下所有订单本就是已卖出的，不需要用灰色标注
-                const allSold = statusFilter !== 'sold' && groupOrders.every((o: any) => {
-                  if (o.sellStatus !== 'sold') return false;
-                  const gifts: any[] = (o.giftOrders as any[]) || [];
-                  return gifts.every((g: any) => g.sellStatus === 'sold');
-                });
+                const allSold = statusFilter !== 'sold' && groupOrders.every((o: any) => o.sellStatus === 'sold');
                 // 统计：投入总额、各币种持仓数量（过滤掉已撤单）
                 const activeOrders = groupOrders.filter((o: any) => o.status !== 'cancelled');
                 const totalAmount = activeOrders.reduce((s: number, o: any) => s + (parseFloat(o.amount) || 0), 0);
                 const coinQty: Record<string, number> = {};
                 const coinQtyEffective: Record<string, number> = {}; // 折后数量
                 activeOrders.forEach((o: any) => {
-                  // 正单本身：排除已卖出的，不计入币种持仓统计
+                  // 赠单和正单均已作为独立行，直接统计本身（排除已卖出的）
                   if (o.sellStatus !== 'sold' && o.coin) {
                     const qty = parseFloat(o.quantity) || 0;
                     coinQty[o.coin] = (coinQty[o.coin] || 0) + qty;
@@ -1580,25 +1571,6 @@ export default function AfOrderManage() {
                     }
                     coinQtyEffective[o.coin] = (coinQtyEffective[o.coin] || 0) + qty * rate;
                   }
-                  // 嵌套赠与单：无论正单是否已卖出，都遍历赠单（排除已卖出的赠单）
-                  const gifts: any[] = (o.giftOrders as any[]) || [];
-                  gifts.forEach((g: any) => {
-                    if (g.sellStatus === 'sold') return;
-                    if (g.coin) {
-                      const gQty = parseFloat(g.quantity) || 0;
-                      coinQty[g.coin] = (coinQty[g.coin] || 0) + gQty;
-                      let gRate: number;
-                      if (g.tierMode === 'linear') {
-                        const gBuyPrice = parseFloat(g.limitPrice) || 0;
-                        const gLowPrice = parseFloat(g.allTimeLowPrice) || gBuyPrice;
-                        const gDropPct = gBuyPrice > 0 ? Math.max(0, (gBuyPrice - gLowPrice) / gBuyPrice) : 0;
-                        gRate = Math.max(0, 1 - gDropPct);
-                      } else {
-                        gRate = EQUITY_DISCOUNT_RATES[g.equityTier || 0] ?? 1.0;
-                      }
-                      coinQtyEffective[g.coin] = (coinQtyEffective[g.coin] || 0) + gQty * gRate;
-                    }
-                  });
                 });
                 const qtyStr = Object.entries(coinQty).map(([c, q]) => `${q.toFixed(4)} ${c}`).join(' / ');
                 return (
@@ -1610,10 +1582,10 @@ export default function AfOrderManage() {
                       const shortDate = dateParts.length === 3
                         ? `${parseInt(dateParts[1], 10)}月${parseInt(dateParts[2], 10)}日`
                         : dateKey;
-                      // 正单数量（groupOrders 已过滤掉赠单，直接取 activeOrders 长度）
-                      const normalCount = activeOrders.length;
-                      // 赠单数量：仅统计嵌套在正单 giftOrders 里的赠单（赠单不再独立分组）
-                      const giftCount = activeOrders.reduce((s: number, o: any) => s + ((o.giftOrders as any[] || []).length), 0);
+                      // 正单数量（排除赠单）
+                      const normalCount = activeOrders.filter((o: any) => !(o.isGift === true || o.isGift === 1)).length;
+                      // 赠单数量（赠单已作为独立行，直接统计）
+                      const giftCount = activeOrders.filter((o: any) => o.isGift === true || o.isGift === 1).length;
                       // 各币种简写和颜色：ETH→E(蓝色) BTC→B(橙色) SOL→S(紫色)
                       const COIN_CONFIG: Record<string, { short: string; color: string }> = {
                         ETH: { short: 'E', color: '#3b82f6' },
@@ -1641,8 +1613,7 @@ export default function AfOrderManage() {
                           const effStr = hasDiscount ? fmtCoinQty(c, effNum) : null;
                           // 判断该币种是否有线性模式订单（正单或赠单）
                           const hasLinear = activeOrders.some((o: any) =>
-                            (o.tierMode === 'linear' && o.coin === c && o.sellStatus !== 'sold') ||
-                            ((o.giftOrders as any[] || []).some((g: any) => g.tierMode === 'linear' && g.coin === c && g.sellStatus !== 'sold'))
+                            o.tierMode === 'linear' && o.coin === c && o.sellStatus !== 'sold'
                           );
                           // 线性模式保留两位小数，阶梯模式取整数
                           const pctStr = hasDiscount
@@ -2110,117 +2081,61 @@ export default function AfOrderManage() {
                     )}
                   </div>
 
-                  {/* 赠送订单来源信息 */}
-                  {order.isGift && order.sourceUsername && (() => {
+                  {/* 赠单来源信息 + 关联正单状态 */}
+                  {(order.isGift === true || order.isGift === 1) && (() => {
                     const srcAmt = parseFloat(order.sourceAmount || '0');
                     const giftAmt = parseFloat(order.amount || '0');
-                    const ratio = srcAmt > 0 ? (giftAmt / srcAmt) : 0;
-                    const ratioStr = ratio > 0 ? `赠送市值${ratio.toFixed(4)}倍` : '';
+                    // 在 orders 中找到关联正单
+                    const parentOrder = order.sourceOrderId
+                      ? (orders as any[] || []).find((o: any) => o.id === order.sourceOrderId)
+                      : null;
+                    const parentStatus = parentOrder
+                      ? (parentOrder.sellStatus === 'sold' ? '已卖出' :
+                         parentOrder.sellStatus === 'selling' ? '委卖中' :
+                         parentOrder.status === 'completed' ? '持仓中' :
+                         parentOrder.status === 'cancelled' ? '已撤单' : '委买中')
+                      : null;
+                    const parentStatusColor = parentOrder
+                      ? (parentOrder.sellStatus === 'sold' ? 'text-blue-500' :
+                         parentOrder.sellStatus === 'selling' ? 'text-red-500' :
+                         parentOrder.status === 'completed' ? 'text-green-500' : 'text-gray-400')
+                      : 'text-gray-400';
+                    const parentOrderNo = parentOrder ? (() => {
+                      const d = new Date(parentOrder.createdAt);
+                      return `AF${String(d.getUTCFullYear()).slice(2)}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}${String(parentOrder.id).padStart(6,'0')}`;
+                    })() : null;
                     return (
-                      <div className="mt-2 text-xs rounded-lg px-3 py-1.5 border text-gray-500 bg-gray-50 border-gray-100">
-                        推荐人奖励订单 · 来自 <span className="font-medium text-gray-700">{order.sourceUsername}</span>
+                      <div className="mt-2 text-xs rounded-lg px-3 py-2 border border-purple-100 bg-purple-50">
+                        <div className="flex items-center justify-between">
+                          <span className="text-purple-600 font-medium">推荐人奖励赠单</span>
+                          {order.sourceUsername && (
+                            <span className="text-gray-500">来自 <span className="font-medium text-gray-700">{order.sourceUsername}</span></span>
+                          )}
+                        </div>
+                        {parentOrder && (
+                          <div className="mt-1 flex items-center gap-1.5 text-gray-500">
+                            <span>关联正单</span>
+                            {parentOrderNo && <span className="font-mono text-gray-600">{parentOrderNo}</span>}
+                            <span className={`font-medium ${parentStatusColor}`}>{parentStatus}</span>
+                          </div>
+                        )}
                       </div>
                     );
                   })()}
 
-                  {/* 赠予订单折叠区块（仅对持仓中的非赠予正单显示；委卖中不嵌套，每单独立展示） */}
-                  {!order.isGift && statusFilter !== 'selling' && (() => {
+                  {/* 正单关联赠单状态标注 */}
+                  {!(order.isGift === true || order.isGift === 1) && (() => {
                     const giftOrders: any[] = (order as any).giftOrders || [];
                     if (giftOrders.length === 0) return null;
-                    const isExpanded = !!expandedGiftOrders[order.id];
-                    const totalQty = giftOrders.reduce((s: number, g: any) => s + parseFloat(g.quantity || '0'), 0);
+                    const soldCount = giftOrders.filter((g: any) => g.sellStatus === 'sold').length;
+                    const sellingCount = giftOrders.filter((g: any) => g.sellStatus === 'selling').length;
+                    const holdingCount = giftOrders.length - soldCount - sellingCount;
                     return (
-                      <div className="mt-2">
-                        {/* 折叠头部：汇总行 */}
-                        <button
-                          onClick={() => toggleGiftOrders(order.id)}
-                          className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-purple-50 border border-purple-100 text-xs text-purple-700 hover:bg-purple-100 transition-colors"
-                        >
-                          <div className="flex items-center gap-1.5">
-                            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-purple-200 text-purple-800 font-bold text-[10px]">赠</span>
-                            <span className="font-medium">已触发赠予订单</span>
-                            <span className="text-purple-500">共 {giftOrders.length} 笔 · 合计 {totalQty.toFixed(4)} {order.coin}</span>
-                          </div>
-                          <span className={`transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>▾</span>
-                        </button>
-                        {/* 展开内容 */}
-                        {isExpanded && (
-                          <div className="mt-1 border border-purple-100 rounded-lg overflow-hidden">
-                            {giftOrders.map((g: any, idx: number) => {
-                              const giftQty = parseFloat(g.quantity || '0');
-                              const giftAmt = parseFloat(g.amount || '0');
-                              const giftTier = g.equityTier || 0;
-                              let giftRate: number;
-                              if (g.tierMode === 'linear') {
-                                const buyP = parseFloat(g.limitPrice || '0');
-                                const allLow = g.allTimeLowPrice ? parseFloat(String(g.allTimeLowPrice)) : 0;
-                                giftRate = (buyP > 0 && allLow > 0) ? Math.max(0, 1 - (buyP - allLow) / buyP) : 1.0;
-                              } else {
-                                giftRate = EQUITY_DISCOUNT_RATES[giftTier] || 1.0;
-                              }
-                              const effectiveQty = giftQty * giftRate;
-                              // 优先用 payoutRatio（真实拨比%），fallback 不显示
-                              const ratioLabel = g.payoutRatio != null
-                                ? `${parseFloat(g.payoutRatio).toFixed(1)}%拨比`
-                                : '';
-                              // 状态显示
-                              let statusLabel = '委买中';
-                              let statusColor = 'text-yellow-500';
-                              if (g.sellStatus === 'sold') { statusLabel = '已卖出'; statusColor = 'text-blue-500'; }
-                              else if (g.sellStatus === 'selling') { statusLabel = '委卖中'; statusColor = 'text-red-500'; }
-                              else if (g.status === 'completed') { statusLabel = '持仓中'; statusColor = 'text-green-500'; }
-                              else if (g.status === 'cancelled') { statusLabel = '已撤单'; statusColor = 'text-gray-400'; }
-                              const giftPrice = parseFloat(g.limitPrice || '0');
-                              const orderValue = giftQty * giftPrice;
-                              return (
-                                <div key={g.id} className={`px-3 py-2.5 text-xs ${idx > 0 ? 'border-t border-purple-50' : ''} bg-white`}>
-                                  {/* 第一行：受益人 + 拨比 + 状态 */}
-                                  <div className="flex items-center justify-between mb-1.5">
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="font-medium text-gray-800">{g.username && g.nickname && g.username !== g.nickname ? `${g.username}/${g.nickname}` : g.nickname || g.username}</span>
-                                      {ratioLabel && <span className="text-purple-500 bg-purple-50 px-1.5 py-0.5 rounded">{ratioLabel}</span>}
-                                    </div>
-                                    <span className={`font-medium ${statusColor}`}>{statusLabel}</span>
-                                  </div>
-                                  {/* 第二行：订单编号 */}
-                                  {g.orderNo && (
-                                    <div className="mb-1 text-gray-400">
-                                      订单号 <span className="text-gray-600 font-mono">{g.orderNo}</span>
-                                      <span className="ml-2 text-gray-500">币种 <span className="text-gray-700 font-medium">{g.coin}</span></span>
-                                    </div>
-                                  )}
-                                  {/* 第三行：买入价 + 赠予数量 + 订单价值 */}
-                                  <div className="grid grid-cols-3 gap-1 text-gray-500 mb-1">
-                                    <div>买入价<br/><span className="text-gray-700 font-medium">{giftPrice > 0 ? giftPrice.toFixed(0) : '-'} USDT</span></div>
-                                    <div>赠予数量<br/><span className="text-gray-700 font-medium">{giftQty.toFixed(4)} {g.coin}</span></div>
-                                    <div>订单价值<br/><span className="text-gray-700 font-medium">{orderValue > 0 ? orderValue.toFixed(2) : giftAmt.toFixed(2)} USDT</span></div>
-                                  </div>
-                                  {/* 第四行：权益档位信息 */}
-                                  <div className="flex items-center gap-2">
-                                    {g.tierMode === 'linear' ? (
-                                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">
-                                        L · 权益{(giftRate * 100).toFixed(2)}%
-                                      </span>
-                                    ) : (
-                                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                                        giftTier === 0 ? 'bg-green-50 text-green-600' :
-                                        giftTier <= 3 ? 'bg-blue-50 text-blue-600' :
-                                        giftTier <= 6 ? 'bg-orange-50 text-orange-600' : 'bg-red-50 text-red-600'
-                                      }`}>
-                                        D{giftTier}档 · 权益{(giftRate * 100).toFixed(1)}%
-                                      </span>
-                                    )}
-                                    <span className="text-gray-400">实际有效数量</span>
-                                    <span className={`font-medium ${giftRate < 1.0 ? 'text-orange-500' : 'text-gray-700'}`}>
-                                      {effectiveQty.toFixed(4)} {g.coin}
-                                    </span>
-                                    {giftRate < 1.0 && <span className="text-gray-400 text-[10px]">(已折扣{((1 - giftRate) * 100).toFixed(1)}%)</span>}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
+                      <div className="mt-2 text-xs rounded-lg px-3 py-1.5 border border-purple-100 bg-purple-50 flex items-center gap-2 flex-wrap">
+                        <span className="text-purple-600 font-medium">关联赠单 {giftOrders.length}笔</span>
+                        {soldCount > 0 && <span className="text-blue-500">已卖出 {soldCount}</span>}
+                        {sellingCount > 0 && <span className="text-red-500">委卖中 {sellingCount}</span>}
+                        {holdingCount > 0 && <span className="text-green-500">持仓中 {holdingCount}</span>}
                       </div>
                     );
                   })()}
