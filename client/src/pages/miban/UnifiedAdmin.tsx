@@ -143,6 +143,10 @@ function OrdersPanel() {
   const [showAdvFilter, setShowAdvFilter] = useState(false);
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
+  const [filterRice, setFilterRice] = useState('');       // 按商品（米种名）筛选
+  const [filterMinPrice, setFilterMinPrice] = useState(''); // 按金额下限
+  const [filterMaxPrice, setFilterMaxPrice] = useState(''); // 按金额上限
+  const [filterUser, setFilterUser] = useState('');        // 按下单人员筛选
   const [confirmAction, setConfirmAction] = useState<{ type: 'cancel' | 'delete'; orderId: number; orderNo: string } | null>(null);
   const [exportLoading, setExportLoading] = useState(false);
   // 批量操作
@@ -161,6 +165,10 @@ function OrdersPanel() {
         startDate: filterStartDate || undefined,
         endDate: filterEndDate || undefined,
         keyword: searchText.trim() || undefined,
+        riceName: filterRice || undefined,
+        minPrice: filterMinPrice ? Number(filterMinPrice) : undefined,
+        maxPrice: filterMaxPrice ? Number(filterMaxPrice) : undefined,
+        userId: filterUser ? Number(filterUser) : undefined,
       });
       if (!result?.csv) { toast.error('暂无可导出数据'); return; }
       const bom = '\uFEFF';
@@ -274,9 +282,54 @@ function OrdersPanel() {
     });
   }
 
+  // 从所有订单中提取去重的米种名列表（用于下拉选项）
+  const allRiceNames = Array.from(new Set(
+    (orders ?? []).flatMap((o: any) => {
+      try {
+        const items = JSON.parse(o.ingredients ?? '[]');
+        return Array.isArray(items) ? items.map((i: any) => i.name).filter(Boolean) : [];
+      } catch { return []; }
+    })
+  )).sort() as string[];
+
+  // 从所有订单中提取去重的下单人列表（用于下拉选项）
+  const allUsers = Array.from(
+    (orders ?? []).reduce((map: Map<string, string>, o: any) => {
+      const key = String(o.userId);
+      if (!map.has(key)) map.set(key, o.userName || o.receiverName || `用户${o.userId}`);
+      return map;
+    }, new Map<string, string>())
+  ).map(([userId, name]) => ({ userId, name })).sort((a, b) => a.name.localeCompare(b.name, 'zh'));
+
+  // 商品筛选
+  let riceFilteredOrders = dateFilteredOrders;
+  if (filterRice) {
+    riceFilteredOrders = riceFilteredOrders.filter((o: any) => {
+      try {
+        const items = JSON.parse(o.ingredients ?? '[]');
+        return Array.isArray(items) && items.some((i: any) => i.name === filterRice);
+      } catch { return false; }
+    });
+  }
+
+  // 金额筛选
+  let priceFilteredOrders = riceFilteredOrders;
+  if (filterMinPrice) {
+    priceFilteredOrders = priceFilteredOrders.filter((o: any) => Number(o.totalPrice) >= Number(filterMinPrice));
+  }
+  if (filterMaxPrice) {
+    priceFilteredOrders = priceFilteredOrders.filter((o: any) => Number(o.totalPrice) <= Number(filterMaxPrice));
+  }
+
+  // 人员筛选
+  let userFilteredOrders = priceFilteredOrders;
+  if (filterUser) {
+    userFilteredOrders = userFilteredOrders.filter((o: any) => String(o.userId) === filterUser);
+  }
+
   const filteredOrders = searchText.trim() === ''
-    ? dateFilteredOrders
-    : dateFilteredOrders.filter((o: any) => {
+    ? userFilteredOrders
+    : userFilteredOrders.filter((o: any) => {
         const kw = searchText.trim().toLowerCase();
         return (
           String(o.id).includes(kw) ||
@@ -287,11 +340,12 @@ function OrdersPanel() {
           (o.receiverAddress ?? '').toLowerCase().includes(kw) ||
           (o.trackingNo ?? '').toLowerCase().includes(kw) ||
           (o.userNote ?? '').toLowerCase().includes(kw) ||
-          (o.adminNote ?? '').toLowerCase().includes(kw)
+          (o.adminNote ?? '').toLowerCase().includes(kw) ||
+          (o.userName ?? '').toLowerCase().includes(kw)
         );
       });
 
-  const hasAdvFilter = !!(filterStartDate || filterEndDate);
+  const hasAdvFilter = !!(filterStartDate || filterEndDate || filterRice || filterMinPrice || filterMaxPrice || filterUser);
 
   return (
     <div className="space-y-2">
@@ -377,32 +431,68 @@ function OrdersPanel() {
       </div>
       {/* 高级筛选展开面板 */}
       {showAdvFilter && (
-        <div className="bg-white rounded-xl border border-orange-100 px-3 py-3 space-y-2">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[12px] font-medium text-gray-600 flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />日期筛选</span>
+        <div className="bg-white rounded-xl border border-orange-100 px-3 py-3 space-y-3">
+          {/* 标题行 */}
+          <div className="flex items-center justify-between">
+            <span className="text-[12px] font-semibold text-gray-700 flex items-center gap-1.5"><Filter className="w-3.5 h-3.5 text-orange-400" />高级筛选</span>
             {hasAdvFilter && (
-              <button onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }} className="text-[11px] text-orange-400 flex items-center gap-0.5">
-                <RotateCcw className="w-3 h-3" />清除
+              <button onClick={() => { setFilterStartDate(''); setFilterEndDate(''); setFilterRice(''); setFilterMinPrice(''); setFilterMaxPrice(''); setFilterUser(''); }}
+                className="text-[11px] text-orange-400 flex items-center gap-0.5">
+                <RotateCcw className="w-3 h-3" />清除全部
               </button>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={filterStartDate}
-              onChange={e => setFilterStartDate(e.target.value)}
-              className="flex-1 text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-orange-300"
-            />
-            <span className="text-[11px] text-gray-400">至</span>
-            <input
-              type="date"
-              value={filterEndDate}
-              onChange={e => setFilterEndDate(e.target.value)}
-              className="flex-1 text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-orange-300"
-            />
+
+          {/* 日期区间 */}
+          <div>
+            <div className="text-[11px] text-gray-400 mb-1 flex items-center gap-1"><Calendar className="w-3 h-3" />下单日期</div>
+            <div className="flex items-center gap-2">
+              <input type="date" value={filterStartDate} onChange={e => setFilterStartDate(e.target.value)}
+                className="flex-1 text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-orange-300" />
+              <span className="text-[11px] text-gray-400">至</span>
+              <input type="date" value={filterEndDate} onChange={e => setFilterEndDate(e.target.value)}
+                className="flex-1 text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-orange-300" />
+            </div>
           </div>
+
+          {/* 商品（米种） */}
+          <div>
+            <div className="text-[11px] text-gray-400 mb-1 flex items-center gap-1"><Wheat className="w-3 h-3" />包含米种</div>
+            <select value={filterRice} onChange={e => setFilterRice(e.target.value)}
+              className="w-full text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:border-orange-300">
+              <option value="">全部米种</option>
+              {allRiceNames.map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 金额区间 */}
+          <div>
+            <div className="text-[11px] text-gray-400 mb-1 flex items-center gap-1"><TrendingUp className="w-3 h-3" />订单金额（元）</div>
+            <div className="flex items-center gap-2">
+              <input type="number" min="0" placeholder="最小金额" value={filterMinPrice} onChange={e => setFilterMinPrice(e.target.value)}
+                className="flex-1 text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-orange-300" />
+              <span className="text-[11px] text-gray-400">—</span>
+              <input type="number" min="0" placeholder="最大金额" value={filterMaxPrice} onChange={e => setFilterMaxPrice(e.target.value)}
+                className="flex-1 text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:border-orange-300" />
+            </div>
+          </div>
+
+          {/* 下单人员 */}
+          <div>
+            <div className="text-[11px] text-gray-400 mb-1 flex items-center gap-1"><Users className="w-3 h-3" />下单人员</div>
+            <select value={filterUser} onChange={e => setFilterUser(e.target.value)}
+              className="w-full text-[12px] border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:border-orange-300">
+              <option value="">全部人员</option>
+              {allUsers.map(u => (
+                <option key={u.userId} value={u.userId}>{u.name}</option>
+              ))}
+            </select>
+          </div>
+
           {hasAdvFilter && (
-            <p className="text-[11px] text-orange-500">当前筛选显示 {filteredOrders.length} 笔订单，点导出可下载该时间段数据</p>
+            <p className="text-[11px] text-orange-500 pt-1 border-t border-orange-50">当前筛选共 <strong>{filteredOrders.length}</strong> 笔订单，点导出可下载当前筛选结果</p>
           )}
         </div>
       )}

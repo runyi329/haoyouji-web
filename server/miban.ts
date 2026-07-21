@@ -136,10 +136,22 @@ async function getUserOrders(userId: number) {
 }
 
 async function getAllOrders() {
-  const db = await getDb();
-  if (!db) return [];
-  const rows = await db.select().from(mibanOrders).orderBy(desc(mibanOrders.createdAt));
-  return rows.map(serializeOrder);
+  const conn = await getDbConnection();
+  if (!conn) return [];
+  try {
+    const [rows]: any = await (conn as any).execute(
+      `SELECT o.*, u.name AS userName, u.username AS userUsername
+       FROM miban_orders o
+       LEFT JOIN users u ON u.id = o.userId
+       ORDER BY o.createdAt DESC`
+    );
+    return (Array.isArray(rows) ? rows : []).map((o: any) => ({
+      ...serializeOrder(o),
+      userName: o.userName ?? o.userUsername ?? null,
+    }));
+  } finally {
+    try { await (conn as any).end(); } catch {}
+  }
 }
 
 async function updateOrderStatus(
@@ -1757,31 +1769,56 @@ export const mibanOrderRouter = router({
       startDate: z.string().optional(),
       endDate: z.string().optional(),
       keyword: z.string().optional(),
+      riceName: z.string().optional(),
+      minPrice: z.number().optional(),
+      maxPrice: z.number().optional(),
+      userId: z.number().optional(),
     }))
     .query(async ({ input }) => {
-      const db = await getDb();
-      if (!db) return { csv: '', count: 0 };
-      let orders = await db.select().from(mibanOrders).orderBy(mibanOrders.createdAt);
-      if (input.status) orders = orders.filter((o: any) => o.status === input.status);
-      if (input.startDate) orders = orders.filter((o: any) => new Date(o.createdAt) >= new Date(input.startDate + 'T00:00:00'));
-      if (input.endDate) orders = orders.filter((o: any) => new Date(o.createdAt) <= new Date(input.endDate + 'T23:59:59'));
-      if (input.keyword) {
-        const kw = input.keyword.toLowerCase();
-        orders = orders.filter((o: any) =>
-          String(o.id).includes(kw) || (o.orderNo ?? '').toLowerCase().includes(kw) ||
-          (o.receiverName ?? '').toLowerCase().includes(kw) || (o.receiverPhone ?? '').toLowerCase().includes(kw)
+      const conn = await getDbConnection();
+      if (!conn) return { csv: '', count: 0 };
+      try {
+        const [rows]: any = await (conn as any).execute(
+          `SELECT o.*, u.name AS userName FROM miban_orders o LEFT JOIN users u ON u.id = o.userId ORDER BY o.createdAt ASC`
         );
+        let orders: any[] = Array.isArray(rows) ? rows : [];
+        if (input.status) orders = orders.filter((o: any) => o.status === input.status);
+        if (input.startDate) orders = orders.filter((o: any) => new Date(o.createdAt) >= new Date(input.startDate + 'T00:00:00'));
+        if (input.endDate) orders = orders.filter((o: any) => new Date(o.createdAt) <= new Date(input.endDate + 'T23:59:59'));
+        if (input.riceName) {
+          orders = orders.filter((o: any) => {
+            try {
+              const items = JSON.parse(String(o.ingredients ?? '[]'));
+              return Array.isArray(items) && items.some((i: any) => i.name === input.riceName);
+            } catch { return false; }
+          });
+        }
+        if (input.minPrice !== undefined) orders = orders.filter((o: any) => Number(o.totalPrice) >= input.minPrice!);
+        if (input.maxPrice !== undefined) orders = orders.filter((o: any) => Number(o.totalPrice) <= input.maxPrice!);
+        if (input.userId !== undefined) orders = orders.filter((o: any) => Number(o.userId) === input.userId);
+        if (input.keyword) {
+          const kw = input.keyword.toLowerCase();
+          orders = orders.filter((o: any) =>
+            String(o.id).includes(kw) || (o.orderNo ?? '').toLowerCase().includes(kw) ||
+            (o.receiverName ?? '').toLowerCase().includes(kw) || (o.receiverPhone ?? '').toLowerCase().includes(kw) ||
+            (o.userName ?? '').toLowerCase().includes(kw)
+          );
+        }
+        const header = '订单ID,订单号,状态,下单人,收货人,手机号,收货地址,配方名,总重量(斤),总金额,快递公司,快递单号,管理员备注,下单时间';
+        const exportRows = orders.map((o: any) => [
+          o.id, o.orderNo, o.status,
+          '"' + (o.userName ?? '').replace(/"/g, '""') + '"',
+          o.receiverName, o.receiverPhone,
+          '"' + (o.receiverAddress ?? '').replace(/"/g, '""') + '"',
+          o.recipeName, o.totalWeightJin, Number(o.totalPrice).toFixed(2),
+          o.trackingCompany ?? '', o.trackingNo ?? '',
+          '"' + (o.adminNote ?? '').replace(/"/g, '""') + '"',
+          new Date(o.createdAt).toLocaleString('zh-CN'),
+        ].join(','));
+        return { csv: [header, ...exportRows].join('\n'), count: orders.length };
+      } finally {
+        try { await (conn as any).end(); } catch {}
       }
-      const header = '订单ID,订单号,状态,收货人,手机号,收货地址,配方名,总重量(斤),总金额,快递公司,快递单号,管理员备注,下单时间';
-      const rows = orders.map((o: any) => [
-        o.id, o.orderNo, o.status, o.receiverName, o.receiverPhone,
-        '"' + (o.receiverAddress ?? '').replace(/"/g, '""') + '"',
-        o.recipeName, o.totalWeightJin, Number(o.totalPrice).toFixed(2),
-        o.trackingCompany ?? '', o.trackingNo ?? '',
-        '"' + (o.adminNote ?? '').replace(/"/g, '""') + '"',
-        new Date(o.createdAt).toLocaleString('zh-CN'),
-      ].join(','));
-      return { csv: [header, ...rows].join('\n'), count: orders.length };
     }),
 
   // 更新管理员备注
