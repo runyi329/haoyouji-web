@@ -8541,5 +8541,12 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-21T04:42:30Z", type: "feat", cleanMessage: "下架世界杯滚动图片，SOCIAL_PAGES 5->4" },
     { date: "2026-07-21T04:59:57Z", type: "fix", cleanMessage: "修复市价键安全漏洞 - 前端权限加载后重置priceMode，后端增加市价权限校验" },
     { date: "2026-07-21T05:15:06Z", type: "fix", cleanMessage: "修复撤单联动漏洞 - 赠单联动撤销扩展到completed状态，补全市价单撤销退款逻辑" },
+    { date: "2026-07-21T06:30:17Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-21T07:43:39Z", type: "fix", cleanMessage: "修复AfOrderManage委卖中Tab赠单不显示的bug（selling/sold状态优先于gift筛选）" },
+    { date: "2026-07-21T08:03:02Z", type: "fix", cleanMessage: "时间视图孤儿赠单（正单已卖出但赠单还在委卖中）单独加入日期分组显示操作按钮" },
+    { date: "2026-07-21T08:36:18Z", type: "fix", cleanMessage: "赠单卖出预览不含本金，UI明确标注纯收益（不含本金返还）" },
+    { date: "2026-07-21T08:51:22Z", type: "fix", cleanMessage: "已卖出订单时间视图按卖出日期分组，卖出Tab禁用灰色效果" },
+    { date: "2026-07-21T09:45:14Z", type: "feat", cleanMessage: "已卖出订单详情增加完整结算明细块（买入价/卖出价/权益档/管理费/实际到账）" },
+    { date: "2026-07-21T09:55:08Z", type: "feat", cleanMessage: "正单赠单拆分独立显示，互相关联标注，卖出Tab只显示自身已卖出订单" },
   ],
 };
