@@ -1522,6 +1522,10 @@ export default function AfOrderManage() {
                 ? `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${String(d.getUTCDate()).padStart(2,'0')}`
                 : '未知日期';
               const getOrderDateKey = (order: any): string => {
+                // 已卖出：优先用卖出时间 sellConfirmedAt 分组（让今天卖出的订单出现在今天日期组）
+                if (order.sellStatus === 'sold' && order.sellConfirmedAt) {
+                  return toDateKey(new Date(order.sellConfirmedAt));
+                }
                 // 持仓中（completed）：用登记时间 confirmedAt
                 if (order.status === 'completed' && order.confirmedAt) {
                   return toDateKey(new Date(order.confirmedAt));
@@ -1549,7 +1553,8 @@ export default function AfOrderManage() {
                 if (!hasActiveOrders) return null;
                 const isOpen = expandedDates[dateKey] ?? false;
                 // 是否该日期所有正单（含其嵌套赠与单）已全部卖出
-                const allSold = groupOrders.every((o: any) => {
+                // 在「卖出」 Tab 下所有订单本就是已卖出的，不需要用灰色标注
+                const allSold = statusFilter !== 'sold' && groupOrders.every((o: any) => {
                   if (o.sellStatus !== 'sold') return false;
                   const gifts: any[] = (o.giftOrders as any[]) || [];
                   return gifts.every((g: any) => g.sellStatus === 'sold');
