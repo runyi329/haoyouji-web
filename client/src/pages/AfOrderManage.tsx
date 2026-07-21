@@ -1974,6 +1974,91 @@ export default function AfOrderManage() {
                         <span className="text-gray-500">{formatDate(order.sellConfirmedAt)}</span>
                       </div>
                     )}
+                    {/* 已卖出结算详情展示块 */}
+                    {order.sellStatus === 'sold' && order.sellPrice && (() => {
+                      const calc = calculateProfit(order, order.sellPrice);
+                      if (!calc) return null;
+                      const isGift = order.isGift === true || order.isGift === 1;
+                      const startDate = new Date(order.createdAt);
+                      const endDate = new Date(order.sellConfirmedAt);
+                      const fmtD = (d: Date) => `${d.getUTCMonth()+1}月${d.getUTCDate()}日`;
+                      return (
+                        <div className="col-span-2 mt-1">
+                          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 space-y-1.5 text-xs">
+                            <p className="text-xs font-semibold text-blue-600 mb-2">结算明细</p>
+                            {/* 买卖价格 */}
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">持币数量</span>
+                              <span className="font-medium text-gray-800">{calc.coinQuantity.toFixed(6)} {order.coin}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">买入价</span>
+                              <span className="font-medium text-gray-800">{calc.buyPrice.toLocaleString()} USDT</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">卖出价</span>
+                              <span className="font-medium text-gray-800">{calc.sellPrice.toLocaleString()} USDT</span>
+                            </div>
+                            {/* 权益档位 */}
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">权益档位</span>
+                              <span className="font-medium text-amber-600">
+                                {(() => {
+                                  const rate = EQUITY_DISCOUNT_RATES[calc.equityTier] || 1.0;
+                                  const tierName = calc.equityTier === 0 ? 'D0档（基准档）' : `D${calc.equityTier}档（跌${calc.equityTier * 10}%）`;
+                                  return `${(rate * 100).toFixed(2)}% · ${tierName}`;
+                                })()}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">有效币数</span>
+                              <span className="font-medium text-gray-800">{calc.effectiveQuantity.toFixed(6)} {order.coin}</span>
+                            </div>
+                            {/* 收益计算 */}
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">单位收益</span>
+                              <span className={`font-medium ${calc.unitProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {calc.unitProfit >= 0 ? '+' : ''}{calc.unitProfit.toFixed(2)} USDT
+                              </span>
+                            </div>
+                            <div className="border-t border-blue-200 pt-1.5 mt-0.5 flex justify-between">
+                              <span className="text-gray-600 font-medium">总收益</span>
+                              <span className={`font-bold text-base ${calc.totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {calc.totalProfit >= 0 ? '+' : ''}{calc.totalProfit.toFixed(4)} USDT
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              {isGift ? (
+                                <span className="text-amber-600 font-medium">纯收益小计 <span className="text-[10px] font-normal text-amber-400">（赠单不含本金）</span></span>
+                              ) : (
+                                <span className="text-gray-600">本金+收益小计</span>
+                              )}
+                              <span className="font-medium text-gray-800">{calc.totalRefund.toFixed(4)} USDT</span>
+                            </div>
+                            {/* 管理费 */}
+                            <div className="flex justify-between">
+                              <span className="text-red-500">管理费扣除</span>
+                              <span className="font-medium text-red-500">- {calc.managementFee.toFixed(4)} USDT</span>
+                            </div>
+                            <div className="text-[10px] text-red-400">
+                              计费区间：{fmtD(startDate)} → {fmtD(endDate)}（共{calc.holdDays}天，{calc.dailyFee.toFixed(4)} USDT/天）
+                            </div>
+                            {/* 实际到账 */}
+                            <div className="flex justify-between bg-green-50 rounded-lg px-2 py-1.5 border border-green-200 mt-1">
+                              <span className="text-green-700 font-bold">实际到账</span>
+                              <span className="font-bold text-green-600 text-base">{calc.actualRefund.toFixed(4)} USDT</span>
+                            </div>
+                            <p className="text-[10px] text-blue-500 mt-1">
+                              {isGift
+                                ? `纯收益 - 管理费 = ${Math.max(0, calc.totalProfit).toFixed(4)} - ${calc.managementFee.toFixed(4)} = ${calc.actualRefund.toFixed(4)} USDT（赠单不含本金）`
+                                : `本金 + 收益 - 管理费 = ${calc.principal.toFixed(2)} + ${Math.max(0, calc.totalProfit).toFixed(4)} - ${calc.managementFee.toFixed(4)} = ${calc.actualRefund.toFixed(4)} USDT`
+                              }
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     {/* 当前权益 */}
                     {order.status === 'completed' && (() => {
                       let rate: number;
