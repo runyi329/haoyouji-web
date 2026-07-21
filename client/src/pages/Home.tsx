@@ -1654,7 +1654,7 @@ export default function Home() {
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   // AI 社交容器轮播 state
-  const SOCIAL_PAGES = 5;
+  const SOCIAL_PAGES = 4;
   const [socialPageIndex, setSocialPageIndex] = useState(1);
   const [socialTransition, setSocialTransition] = useState(true);
   const socialContainerRef = useRef<HTMLDivElement>(null);
@@ -1839,30 +1839,8 @@ export default function Home() {
               刷新
             </button>
           </div>,
-          // 页1：AI球伴世界杯海报（点击跳转世界杯页面）
-          <div
-            key="p1"
-            className="w-full h-full relative cursor-pointer active:opacity-90 transition-opacity"
-            onClick={() => navigate('/world-cup')}
-          >
-            <img
-              src="https://haoyouji-images-1396946788.cos.ap-shanghai.myqcloud.com/assets/ai-companion-banner-worldcup2026.webp"
-              alt="AI球伴·世界杯同行"
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                // 图片加载失败时回退到CDN备用地址
-                (e.target as HTMLImageElement).src = 'https://d2xsxph8kpxj0f.cloudfront.net/310519663279996243/ivirPqo3t2YCdg32vqitTK/ai-companion-banner-iXFfNP3mVNQj6sgUr4f9bG.png';
-              }}
-            />
-            {/* 右上角刷新按钮 */}
-            <button
-              className="absolute top-2 right-2 z-10 px-2.5 py-1 rounded-full text-xs font-semibold"
-              style={{ backgroundColor: 'rgba(0,0,0,0.45)', color: '#fff', lineHeight: 1.4 }}
-              onClick={(e) => { e.stopPropagation(); window.location.reload(); }}
-            >
-              刷新
-            </button>
-          </div>,
+          // 页1：AI球伴世界杯海报（已下架）
+          // <div key="p1" ...> 已隐藏，SOCIAL_PAGES=4 时不包含此页 </div>
           // 页2：AI环游世界旅行入口（点击跳转AI旅行页面）
           <div
             key="p5-ai-travel"
