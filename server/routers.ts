@@ -14336,7 +14336,10 @@ ${klinesSummary}
         // ========== 卖出成交处理（订单合并模型） ==========
         // 方案一：以 sell_confirmed_at 是否为空判断是否已结算，防止 sell_status 已是 sold 但未结算的漏记
         // 方案三：结算前查重，避免重复结算
-        if (input.sellStatus === 'sold' && !order.sell_confirmed_at) {
+        // 修复：不再依赖 sell_confirmed_at 判断是否已结算
+        // 原因：sell_confirmed_at 可能在余额写入前就已写入（事务异常/重启），导致余额永远不写入
+        // 改为：直接查 af_manual_balances 是否有该订单的结算记录，没有就写入
+        if (input.sellStatus === 'sold') {
           // 确认卖出成交：从同一订单取买入信息
           const actualSellPrice = input.sellPrice ? parseFloat(input.sellPrice) : parseFloat(order.sell_price || '0');
           const isGift = parseInt(order.is_gift || '0') === 1;
