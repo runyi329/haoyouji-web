@@ -357,10 +357,11 @@ export default function AfOrderManage() {
 
     const unitProfit = sellPrice - buyPrice;
     const totalProfit = effectiveQuantity * unitProfit;
-    const totalRefund = principal + Math.max(0, totalProfit);
+    // 赠单不含本金，只享受纯收益；正单含本金
+    const isGiftOrder = order.isGift === true || order.isGift === 1;
+    const totalRefund = isGiftOrder ? Math.max(0, totalProfit) : principal + Math.max(0, totalProfit);
 
     // 管理费计算：从下单时间（createdAt）开始，修改价格等操作不影响管理费
-    const isGiftOrder = order.isGift === true || order.isGift === 1;
     const tradeValue = isGiftOrder ? principal : principal * 5.25;
     const dailyFee = tradeValue / 0.75 * 0.12 / 365;
     // 开始日期：从下单时间（createdAt）算起，撤单则作废，成交后累计不重置
@@ -2227,7 +2228,11 @@ export default function AfOrderManage() {
                                 </span>
                               </div>
                               <div className="flex justify-between">
-                                <span className="text-gray-600">本金+收益小计</span>
+                                {order.isGift ? (
+                                  <span className="text-amber-600 font-medium">纯收益小计 <span className="text-[10px] font-normal text-amber-400">（赠单不含本金返还）</span></span>
+                                ) : (
+                                  <span className="text-gray-600">本金+收益小计</span>
+                                )}
                                 <span className="font-medium text-gray-800">{calc.totalRefund.toFixed(4)} USDT</span>
                               </div>
                               <div className="flex justify-between">
@@ -2251,13 +2256,18 @@ export default function AfOrderManage() {
                               </div>
                             </div>
                             <p className="text-[10px] text-blue-500 mt-2">
-                              本金 + 收益 - 管理费 = {calc.principal.toFixed(2)} + {Math.max(0, calc.totalProfit).toFixed(4)} - {calc.managementFee.toFixed(4)} = {calc.actualRefund.toFixed(4)} USDT
+                              {order.isGift
+                                ? `纯收益 - 管理费 = ${Math.max(0, calc.totalProfit).toFixed(4)} - ${calc.managementFee.toFixed(4)} = ${calc.actualRefund.toFixed(4)} USDT（赠单不含本金）`
+                                : `本金 + 收益 - 管理费 = ${calc.principal.toFixed(2)} + ${Math.max(0, calc.totalProfit).toFixed(4)} - ${calc.managementFee.toFixed(4)} = ${calc.actualRefund.toFixed(4)} USDT`
+                              }
                             </p>
                           </div>
                         );
                       })()}
 
-                      <p className="text-[10px] text-orange-400">系统将根据此价格计算收益并返还本金+收益到用户余额</p>
+                      <p className="text-[10px] text-orange-400">
+                        {order.isGift ? '系统将根据此价格计算纯收益到用户余额（赠单不返还本金）' : '系统将根据此价格计算收益并返还本金+收益到用户余额'}
+                      </p>
                     </div>
                   )}
                   
@@ -2267,7 +2277,7 @@ export default function AfOrderManage() {
                       <p>· 修改买入状态为「已撤单」：将退回已扣余额</p>
                       <p>· 数量 = 实际投入 × 5.25 / 价格（自动计算）</p>
                       {editState?.sellStatus === 'selling' && <p>· 当前为委卖中状态，可改为「已卖出」确认成交</p>}
-                      {editState?.sellStatus === 'sold' && <p>· 确认卖出成交：返还本金 + 实际收益到用户余额</p>}
+                      {editState?.sellStatus === 'sold' && <p>· 确认卖出成交：{order.isGift ? '返还纯收益到用户余额（赠单不含本金）' : '返还本金 + 实际收益到用户余额'}</p>}
                     </div>
                   )}
                 </div>
