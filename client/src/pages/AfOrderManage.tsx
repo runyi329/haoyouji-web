@@ -1050,9 +1050,10 @@ export default function AfOrderManage() {
                 });
                 // 根据勾选筛选
                 const visibleOrders = flatOrders.filter((o: any) => {
-                  if (o._isGift) return pFilter.has('gift');
-                  if (o.sellStatus === 'sold') return pFilter.has('sold');
+                  // 委卖中/已卖出状态优先于赠单筛选，确保赠单在委卖中/已卖出Tab下正常显示
                   if (o.sellStatus === 'selling') return pFilter.has('selling');
+                  if (o.sellStatus === 'sold') return pFilter.has('sold');
+                  if (o._isGift) return pFilter.has('gift');
                   if (o.status === 'completed') return pFilter.has('holding');
                   if (o.status === 'pending') return pFilter.has('pending');
                   return true;
