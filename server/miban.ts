@@ -1804,7 +1804,7 @@ export const mibanOrderRouter = router({
             (o.userName ?? '').toLowerCase().includes(kw)
           );
         }
-        const header = '订单ID,订单号,状态,下单人,收货人,手机号,收货地址,配方名,总重量(斤),总金额,快递公司,快递单号,管理员备注,下单时间';
+        const header = '订单ID,订单号,状态,下单人,收货人,手机号,收货地址,配方名,总重量(斤),总金额,快递公司（请填写）,快递单号（请填写）,管理员备注,下单时间';
         const exportRows = orders.map((o: any) => [
           o.id, o.orderNo, o.status,
           '"' + (o.userName ?? '').replace(/"/g, '""') + '"',
@@ -1819,6 +1819,49 @@ export const mibanOrderRouter = router({
       } finally {
         try { await (conn as any).end(); } catch {}
       }
+    }),
+
+  // 批量导入快递单号（回传CSV匹配更新）
+  importTrackingNumbers: mibanAdminProcedure
+    .input(z.object({
+      rows: z.array(z.object({
+        orderNo: z.string(),
+        trackingCompany: z.string().optional(),
+        trackingNo: z.string(),
+      }))
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'DB not available' });
+      let success = 0, notFound = 0, skipped = 0;
+      const results: Array<{ orderNo: string; status: 'updated' | 'not_found' | 'skipped' }> = [];
+      const now = new Date();
+      const nowStr = now.toISOString().slice(0, 19).replace('T', ' ');
+      const autoConfirmStr = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+      for (const row of input.rows) {
+        if (!row.orderNo || !row.trackingNo.trim()) {
+          skipped++;
+          results.push({ orderNo: row.orderNo ?? '', status: 'skipped' });
+          continue;
+        }
+        const existing = await db.select({ id: mibanOrders.id })
+          .from(mibanOrders).where(eq(mibanOrders.orderNo, row.orderNo.trim())).limit(1);
+        if (!existing.length) {
+          notFound++;
+          results.push({ orderNo: row.orderNo, status: 'not_found' });
+          continue;
+        }
+        await db.update(mibanOrders).set({
+          trackingNo: row.trackingNo.trim(),
+          trackingCompany: row.trackingCompany?.trim() || null,
+          status: 'shipped',
+          shippedAt: nowStr,
+          autoConfirmAt: autoConfirmStr,
+        }).where(eq(mibanOrders.orderNo, row.orderNo.trim()));
+        success++;
+        results.push({ orderNo: row.orderNo, status: 'updated' });
+      }
+      return { success, notFound, skipped, results };
     }),
 
   // 更新管理员备注

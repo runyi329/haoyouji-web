@@ -13,7 +13,7 @@ import {
   ShieldCheck, UserCog, Percent, Building2, Search, X,
   CheckSquare, Square, Trash2, Download, MessageSquare,
   Calendar, Filter, ClipboardList, RotateCcw, AlertCircle,
-  ChevronDown, ChevronUp, Edit3, Check
+  ChevronDown, ChevronUp, Edit3, Check, Upload
 } from "lucide-react";
 
 // ─── 奖金预览子组件 ──────────────────────────────────────────────────────────
@@ -154,6 +154,35 @@ function OrdersPanel() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [batchConfirm, setBatchConfirm] = useState<'cancel' | 'delete' | null>(null);
   const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null);
+
+  // 上传回传CSV快递单号
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importResult, setImportResult] = useState<{ success: number; notFound: number; skipped: number; results: any[] } | null>(null);
+  const importMutation = mtrpc.order.importTrackingNumbers.useMutation({
+    onSuccess: (res: any) => { setImportResult(res); setImportLoading(false); refetch(); },
+    onError: (e: any) => { toast.error(e.message ?? '导入失败'); setImportLoading(false); },
+  });
+  async function handleImportFile(file: File) {
+    setImportLoading(true);
+    setImportResult(null);
+    const text = await file.text();
+    const lines = text.split('\n').map((l: string) => l.trim()).filter(Boolean);
+    if (!lines.length) { toast.error('文件为空'); setImportLoading(false); return; }
+    let dataStart = 0;
+    if (lines[0].includes('订单号') || lines[0].includes('orderNo')) dataStart = 1;
+    const rows: { orderNo: string; trackingCompany?: string; trackingNo: string }[] = [];
+    for (let i = dataStart; i < lines.length; i++) {
+      const cols = lines[i].split(',').map((c: string) => c.replace(/^"|"$/g, '').trim());
+      const orderNo = cols[1];
+      const trackingCompany = cols[10];
+      const trackingNo = cols[11];
+      if (!orderNo || !trackingNo) continue;
+      rows.push({ orderNo, trackingCompany: trackingCompany || undefined, trackingNo });
+    }
+    if (!rows.length) { toast.error('未找到有效数据（快递单号列为空）'); setImportLoading(false); return; }
+    importMutation.mutate({ rows });
+  }
 
   // 导出CSV
   const utils = mtrpc.useUtils();
@@ -413,6 +442,14 @@ function OrdersPanel() {
           title="导出 CSV"
         >
           {exportLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+        </button>
+        {/* 上传快递单号按鈕 */}
+        <button
+          onClick={() => { setShowImportModal(true); setImportResult(null); }}
+          className="flex-shrink-0 p-2.5 rounded-xl border border-gray-200 bg-white text-gray-500 hover:border-orange-300 hover:text-orange-500 transition-colors"
+          title="上传快递单号"
+        >
+          <Upload className="w-3.5 h-3.5" />
         </button>
         <button
           onClick={() => { setBatchMode(v => !v); setSelectedIds(new Set()); }}
@@ -730,7 +767,7 @@ function OrdersPanel() {
             </p>
             <p className="text-[12px] text-gray-500 text-center mb-4">
               {confirmAction.type === 'cancel'
-                ? `确认取消 #${confirmAction.orderNo}？钱包金额将原路退回。`
+                ? `确认取消 #${confirmAction.orderNo}？錢包金额将原路退回。`
                 : `确认删除 #${confirmAction.orderNo}？此操作不退款且不可恢复。`
               }
             </p>
@@ -754,6 +791,134 @@ function OrdersPanel() {
                 {confirmAction.type === 'cancel' ? '确认取消' : '确认删除'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 上传快递单号弹窗 */}
+      {showImportModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.45)' }}
+          onClick={(e) => { if (e.target === e.currentTarget && !importLoading) { setShowImportModal(false); setImportResult(null); } }}
+        >
+          <div className="bg-white w-full max-w-sm mx-4 rounded-2xl shadow-2xl overflow-hidden">
+            {/* 弹窗标题 */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: '#FFF5EE' }}>
+                  <Upload className="w-4 h-4" style={{ color: '#FF6900' }} />
+                </div>
+                <div>
+                  <p className="text-[14px] font-bold text-gray-800">上传快递单号</p>
+                  <p className="text-[11px] text-gray-400">回传填写完快递信息的 CSV 文件</p>
+                </div>
+              </div>
+              {!importLoading && (
+                <button
+                  onClick={() => { setShowImportModal(false); setImportResult(null); }}
+                  className="w-7 h-7 rounded-full flex items-center justify-center bg-gray-100 hover:bg-gray-200 transition-colors"
+                >
+                  <X className="w-3.5 h-3.5 text-gray-500" />
+                </button>
+              )}
+            </div>
+
+            <div className="px-5 py-4 space-y-4">
+              {/* 说明文字 */}
+              {!importResult && !importLoading && (
+                <div className="rounded-xl bg-orange-50 border border-orange-100 px-3.5 py-3 space-y-1">
+                  <p className="text-[12px] font-medium text-orange-700">操作说明</p>
+                  <p className="text-[11px] text-orange-600 leading-relaxed">导出 CSV 后，填写「快递公司（请填写）」和「快递单号（请填写）」两列，回传此文件即可批量更新快递信息并自动标记「已发货」。</p>
+                </div>
+              )}
+
+              {/* 上传中状态 */}
+              {importLoading && (
+                <div className="flex flex-col items-center justify-center py-8 gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#FF6900' }} />
+                  <p className="text-[13px] text-gray-500">正在处理中，请稍候…</p>
+                </div>
+              )}
+
+              {/* 上传结果 */}
+              {importResult && (
+                <div className="space-y-3">
+                  {/* 汇总卡片 */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-xl bg-green-50 border border-green-100 px-2 py-2.5 text-center">
+                      <p className="text-[18px] font-bold text-green-600">{importResult.success}</p>
+                      <p className="text-[10px] text-green-500 mt-0.5">成功更新</p>
+                    </div>
+                    <div className="rounded-xl bg-orange-50 border border-orange-100 px-2 py-2.5 text-center">
+                      <p className="text-[18px] font-bold" style={{ color: '#FF6900' }}>{importResult.notFound}</p>
+                      <p className="text-[10px] text-orange-400 mt-0.5">未找到</p>
+                    </div>
+                    <div className="rounded-xl bg-gray-50 border border-gray-100 px-2 py-2.5 text-center">
+                      <p className="text-[18px] font-bold text-gray-400">{importResult.skipped}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">跳过</p>
+                    </div>
+                  </div>
+
+                  {/* 未找到订单号列表 */}
+                  {importResult.results.filter((r: any) => r.status === 'not_found').length > 0 && (
+                    <div className="rounded-xl border border-orange-100 overflow-hidden">
+                      <div className="px-3 py-2 bg-orange-50 border-b border-orange-100">
+                        <p className="text-[11px] font-semibold" style={{ color: '#FF6900' }}>未找到的订单号</p>
+                      </div>
+                      <div className="max-h-32 overflow-y-auto divide-y divide-gray-50">
+                        {importResult.results.filter((r: any) => r.status === 'not_found').map((r: any, i: number) => (
+                          <div key={i} className="px-3 py-1.5 flex items-center justify-between">
+                            <span className="text-[11px] text-gray-600 font-mono">{r.orderNo}</span>
+                            <span className="text-[10px] text-orange-400 bg-orange-50 px-1.5 py-0.5 rounded-full">未找到</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <p className="text-[11px] text-gray-400 text-center">订单列表已自动刷新</p>
+                </div>
+              )}
+
+              {/* 文件选择区域 */}
+              {!importLoading && (
+                <label
+                  className="flex flex-col items-center justify-center gap-2 w-full rounded-xl border-2 border-dashed cursor-pointer transition-colors py-6"
+                  style={{ borderColor: '#FF6900', background: '#FFFAF7' }}
+                >
+                  <input
+                    type="file"
+                    accept=".csv"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleImportFile(file);
+                      e.target.value = '';
+                    }}
+                  />
+                  <Upload className="w-6 h-6" style={{ color: '#FF6900' }} />
+                  <div className="text-center">
+                    <p className="text-[13px] font-medium" style={{ color: '#FF6900' }}>
+                      {importResult ? '重新上传' : '点击选择 CSV 文件'}
+                    </p>
+                    <p className="text-[11px] text-gray-400 mt-0.5">仅支持 .csv 格式</p>
+                  </div>
+                </label>
+              )}
+            </div>
+
+            {/* 底部按鈕 */}
+            {!importLoading && (
+              <div className="px-5 pb-5">
+                <button
+                  onClick={() => { setShowImportModal(false); setImportResult(null); }}
+                  className="w-full py-2.5 rounded-xl border border-gray-200 text-[13px] text-gray-500 hover:bg-gray-50 transition-colors"
+                >
+                  {importResult ? '关闭' : '取消'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
