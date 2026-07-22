@@ -1224,18 +1224,7 @@ export default function LedgerDetailAA({
     const effectiveCanEdit = canEdit && (!viewAsUserId || viewTargetCanEdit);
 
     if (!effectiveCanEdit) {
-      // 普通成员或观察非管理员视角：先检查暂停日期（仍需弹出提示），再查看图片/股票
-      const pauseDateRO = selectedTagPauseDate;
-      if (pauseDateRO) {
-        if (dateStr === pauseDateRO) {
-          alert(`暂停于 ${pauseDateRO}，此日期及之后无法添加新记录`);
-          return;
-        }
-        if (dateStr > pauseDateRO) {
-          alert(`暂停于 ${pauseDateRO}，此日期无法添加新记录`);
-          return;
-        }
-      }
+      // 普通成员或观察非管理员视角：暂停后仍可查看图片/股票，不拦截也不弹提示
       // 不可编辑，但可查看图片和股票
       if (existing && existing.records.length > 0) {
         // 收集当天所有记录的图片
@@ -1883,7 +1872,12 @@ export default function LedgerDetailAA({
                           }}
                         >
                           {isPauseDay ? (
-                            <PauseCircle style={{ width: '20px', height: '20px', color: '#FFFFFF' }} />
+                            <>
+                              <PauseCircle style={{ width: '16px', height: '16px', color: '#FFFFFF' }} />
+                              {hasRecord && (
+                                <span style={{ fontSize: '11px', fontWeight: 700, lineHeight: 1.1, color: '#FFFFFF', maxWidth: '100%', overflow: 'visible', whiteSpace: 'nowrap', display: 'block', textAlign: 'center', marginTop: '1px' }}>{cellValue}</span>
+                              )}
+                            </>
                           ) : isResumeDay ? (
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                               <polygon points="5,3 19,12 5,21" fill="#FFFFFF" />
