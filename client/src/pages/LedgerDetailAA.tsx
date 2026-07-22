@@ -2281,11 +2281,26 @@ export default function LedgerDetailAA({
                   }
                 }
               }
-              const latestPnl = tag.points[tag.points.length - 1]?.pnl ?? 0;
-              const latestDate = tag.points[tag.points.length - 1]?.date ?? null;
+              // 读取 pauseHistory 用于回报冻结
+              const pnlPauseHistoryRaw = initialBalancesData?.balances ? (initialBalancesData.balances as any)[`${tag.name}__pauseHistory`] : null;
+              let pnlPauseHistory: Array<{ pauseDate: string; resumeDate?: string }> = [];
+              if (pnlPauseHistoryRaw) { try { pnlPauseHistory = JSON.parse(String(pnlPauseHistoryRaw)); } catch { /* ignore */ } }
+              else if (configPauseDate) { pnlPauseHistory = [{ pauseDate: configPauseDate }]; }
+              // 计算有效截止日期：若当前处于暂停段，取最近一次暂停日；若重启后则取今天
+              const pnlLastItem = pnlPauseHistory[pnlPauseHistory.length - 1];
+              const pnlIsPaused = !!pnlLastItem && !pnlLastItem.resumeDate;
+              const pnlCutoffDate = pnlIsPaused && pnlLastItem.pauseDate ? pnlLastItem.pauseDate : null;
+              // latestPnl：暂停时取暂停日当天或之前的最后一条，否则取最新一条
+              const _effectivePoints = pnlCutoffDate
+                ? tag.points.filter((p: any) => p.date <= pnlCutoffDate)
+                : tag.points;
+              const _latestPoint = _effectivePoints[_effectivePoints.length - 1];
+              const _prevPoint = _effectivePoints.length >= 2 ? _effectivePoints[_effectivePoints.length - 2] : null;
+              const latestPnl = _latestPoint?.pnl ?? 0;
+              const latestDate = _latestPoint?.date ?? null;
               // 原始账户金额（日历格子里填的数字）
-              const latestBalance = (tag.points[tag.points.length - 1] as any)?.balance ?? null;
-              const prevBalance = tag.points.length >= 2 ? ((tag.points[tag.points.length - 2] as any)?.balance ?? null) : null;
+              const latestBalance = (_latestPoint as any)?.balance ?? null;
+              const prevBalance = (_prevPoint as any)?.balance ?? null;
               // 占比（用于今日变动计算）
               const _tagRatio = initialBalancesData?.balances ? Number(initialBalancesData.balances[`${tag.name}__ratio`] ?? 0) : 0;
               // 今日变动 = (昨日balance - 今日balance) × 占比%
@@ -2495,8 +2510,85 @@ export default function LedgerDetailAA({
                       })()}
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 回报 */}
-                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'normal', wordBreak: 'break-all', fontSize: 13, color: _isStale ? '#BDBDBD' : latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#BDBDBD' }}>
-                        {latestPnl !== 0 ? `${latestPnl < 0 ? '-' : ''}${Math.abs(latestPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--'}
+                      <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'normal', wordBreak: 'break-all', fontSize: 13 }}>
+                        {(() => {
+                          const pnlColor = _isStale ? '#BDBDBD' : latestPnl > 0 ? '#D32F2F' : latestPnl < 0 ? '#388E3C' : '#BDBDBD';
+                          const pnlText = latestPnl !== 0 ? `${latestPnl < 0 ? '-' : ''}${Math.abs(latestPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}` : '--';
+                          const fmt = (d: string) => { const [, m, dd] = d.split('-'); return `${Number(m)}月${Number(dd)}日`; };
+                          // 构建分段详情
+                          const pnlHistoryForAlert = (() => {
+                            const raw = initialBalancesData?.balances ? (initialBalancesData.balances as any)[`${tag.name}__pauseHistory`] : null;
+                            if (raw) { try { return JSON.parse(String(raw)); } catch { /* ignore */ } }
+                            const legacy = initialBalancesData?.balances ? String(initialBalancesData.balances[`${tag.name}__pauseDate`] ?? '') : '';
+                            if (legacy) return [{ pauseDate: legacy }];
+                            return [];
+                          })() as Array<{ pauseDate: string; resumeDate?: string }>;
+                          const canClick = !!firstDate;
+                          const handlePnlClick = () => {
+                            if (!firstDate) return;
+                            if (pnlHistoryForAlert.length === 0) {
+                              // 无暂停：单段
+                              const segStartPt = tag.points.find((p: any) => p.date >= firstDate);
+                              const segEndPt = tag.points[tag.points.length - 1];
+                              if (!segStartPt || !segEndPt) { alert('暂无数据'); return; }
+                              const startBal = (segStartPt as any).balance;
+                              const endBal = (segEndPt as any).balance;
+                              const segPnl = latestPnl;
+                              alert(`${fmt(segStartPt.date)} ~ ${fmt(segEndPt.date)}\n结束金额 ${endBal?.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} - 初始金额 ${startBal?.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}\n回报 ${segPnl < 0 ? '-' : ''}${Math.abs(segPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`);
+                            } else {
+                              const today3 = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+                              let lines: string[] = [];
+                              let segStart = firstDate;
+                              let totalPnlCalc = 0;
+                              for (const item of pnlHistoryForAlert) {
+                                if (!item.pauseDate || item.pauseDate <= segStart) continue;
+                                // 本段截止 = pauseDate 当天或之前的最后一条数据
+                                const segPts = tag.points.filter((p: any) => p.date >= segStart && p.date <= item.pauseDate);
+                                const segStartPt = segPts[0];
+                                const segEndPt = segPts[segPts.length - 1];
+                                if (segStartPt && segEndPt) {
+                                  const startBal = (segStartPt as any).balance;
+                                  const endBal = (segEndPt as any).balance;
+                                  const segPnl = segEndPt.pnl - (segPts.length > 0 ? (tag.points.find((p: any) => p.date < segStart) as any)?.pnl ?? 0 : 0);
+                                  // 用 pnl 差值表示本段回报
+                                  const prevSegPt = tag.points.filter((p: any) => p.date < segStart);
+                                  const prevSegPnl = prevSegPt.length > 0 ? prevSegPt[prevSegPt.length - 1].pnl : 0;
+                                  const thisSegPnl = segEndPt.pnl - prevSegPnl;
+                                  totalPnlCalc += thisSegPnl;
+                                  lines.push(`第${lines.length / 2 + 1}段：${fmt(segStartPt.date)} ~ ${fmt(segEndPt.date)}`);
+                                  lines.push(`  结束 ${endBal?.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} - 初始 ${startBal?.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} = ${thisSegPnl < 0 ? '-' : ''}${Math.abs(thisSegPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`);
+                                }
+                                lines.push(`  ⏸ 暂停${item.resumeDate ? ` → ▶ 重启 ${fmt(item.resumeDate)}` : '（暂停中）'}`);
+                                segStart = item.resumeDate ?? '';
+                              }
+                              // 最后一段（若已重启）
+                              const lastItem = pnlHistoryForAlert[pnlHistoryForAlert.length - 1];
+                              if (lastItem.resumeDate && lastItem.resumeDate <= today3 && segStart) {
+                                const segPts = tag.points.filter((p: any) => p.date >= segStart);
+                                const segStartPt = segPts[0];
+                                const segEndPt = segPts[segPts.length - 1];
+                                if (segStartPt && segEndPt) {
+                                  const startBal = (segStartPt as any).balance;
+                                  const endBal = (segEndPt as any).balance;
+                                  const prevSegPt = tag.points.filter((p: any) => p.date < segStart);
+                                  const prevSegPnl = prevSegPt.length > 0 ? prevSegPt[prevSegPt.length - 1].pnl : 0;
+                                  const thisSegPnl = segEndPt.pnl - prevSegPnl;
+                                  totalPnlCalc += thisSegPnl;
+                                  lines.push(`第${Math.floor(lines.length / 3) + 1}段：${fmt(segStartPt.date)} ~ ${fmt(segEndPt.date)}`);
+                                  lines.push(`  结束 ${endBal?.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} - 初始 ${startBal?.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} = ${thisSegPnl < 0 ? '-' : ''}${Math.abs(thisSegPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`);
+                                }
+                              }
+                              lines.push(`合计回报：${latestPnl < 0 ? '-' : ''}${Math.abs(latestPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`);
+                              alert(lines.join('\n'));
+                            }
+                          };
+                          return (
+                            <span
+                              style={{ color: pnlColor, cursor: canClick ? 'pointer' : 'default', textDecoration: canClick ? 'underline' : 'none', textDecorationStyle: 'dashed', textDecorationColor: pnlColor, textUnderlineOffset: '2px' }}
+                              onClick={canClick ? handlePnlClick : undefined}
+                            >{pnlText}</span>
+                          );
+                        })()}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 周期（移到回报后面） */}
