@@ -443,7 +443,9 @@ export default function AfOrderManage() {
     // 已撤销订单在所有Tab中均不显示
     if (statusFilter === 'cancelled') return order.status === 'cancelled';
     if (order.status === 'cancelled') return false;
-    if (statusFilter === 'all') return !(isGift && order.status === 'pending');
+    // 赠单按自身状态独立过滤，不再嵌套在主单下
+    // 全部Tab不含已撤单（已撤单单独一个Tab）
+    if (statusFilter === 'all') return true;
     if (statusFilter === 'pending') return order.status === 'pending' && !isGift;
     if (statusFilter === 'selling') return order.sellStatus === 'selling';
     if (statusFilter === 'sold') return order.sellStatus === 'sold';
@@ -899,7 +901,7 @@ export default function AfOrderManage() {
         <div className="px-3 pt-2 pb-1">
           <div className="flex rounded p-0.5 gap-0.5" style={{ background: '#f3f4f6' }}>
             {([
-              { key: 'all' as const, label: `全部(${(orders as any[])?.filter((o: any) => { const g = o.isGift === true || o.isGift === 1; return o.status !== 'cancelled' && !(g && o.status === 'pending'); }).length ?? 0})` },
+              { key: 'all' as const, label: `全部(${(orders as any[])?.filter((o: any) => o.status !== 'cancelled').length ?? 0})` },
               { key: 'pending' as const, label: `委买(${(orders as any[])?.filter((o: any) => { const g = o.isGift === true || o.isGift === 1; return o.status === 'pending' && !g; }).length ?? 0})` },
               { key: 'holding' as const, label: `持仓(${(orders as any[])?.filter((o: any) => o.status === 'completed' && o.sellStatus !== 'sold' && o.sellStatus !== 'selling').length ?? 0})` },
               { key: 'selling' as const, label: `委卖(${(orders as any[])?.filter((o: any) => o.sellStatus === 'selling').length ?? 0})` },
@@ -1031,21 +1033,11 @@ export default function AfOrderManage() {
                 // 展开后的筛选
                 const pFilter = getPersonFilter(group.uid);
                 // 展平所有订单（正单+嵌套赠单+孤儿赠单）并按时间从近到远排序
-                const orphanIdsInPerson = new Set<number>();
-                group.orders.forEach((o: any) => { if (o.isGift === true || o.isGift === 1) orphanIdsInPerson.add(o.id); });
-                const flatOrders: any[] = [];
-                group.orders.forEach((o: any) => {
-                  const isGift = o.isGift === true || o.isGift === 1;
-                  flatOrders.push({ ...o, _isGift: isGift });
-                  // 嵌套赠单也展平（跳过已作为孤儿赠单独立显示的）
-                  if (!isGift) {
-                    const gifts: any[] = (o.giftOrders as any[]) || [];
-                    gifts.forEach((g: any) => {
-                      if (orphanIdsInPerson.has(g.id)) return;
-                      flatOrders.push({ ...g, _isGift: true, _parentCoin: o.coin });
-                    });
-                  }
-                });
+                // 赠单已在顶层 orders 里，直接展平，不再从 giftOrders 重复展开
+                const flatOrders: any[] = group.orders.map((o: any) => ({
+                  ...o,
+                  _isGift: o.isGift === true || o.isGift === 1,
+                }));
                 flatOrders.sort((a, b) => {
                   const ta = new Date(a.createdAt || a.confirmedAt || 0).getTime();
                   const tb = new Date(b.createdAt || b.confirmedAt || 0).getTime();
