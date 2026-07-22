@@ -26,8 +26,8 @@ export default function MibanApp() {
   return (
     <div className="min-h-screen bg-[#F8F6F3]">
       <NavBar />
-      {/* 顶部 NavBar 占位 52px，底部 Tab 占位 56px */}
-      <div style={{ paddingTop: "52px", paddingBottom: "56px" }}>
+      {/* 顶部 NavBar 占位 52px，底部 Tab 占位 64px */}
+      <div style={{ paddingTop: "52px", paddingBottom: "64px" }}>
         <Switch>
           <Route path={`${BASE}/pear/tiangui`} component={TianguiPearDetail} />
           <Route path={`${BASE}/review`} component={ReviewPage} />

@@ -413,6 +413,8 @@ export default function NavBar() {
   });
 
   const isTabActive = (href: string) => {
+    // 首页精确匹配：必须是完全相等，防止其他页面路径以首页为前缀导致常亮
+    if (href === "/p/proj_hzxm2t/") return location === "/p/proj_hzxm2t/" || location === "/p/proj_hzxm2t";
     if (href === "/") return location === "/";
     return location.startsWith(href);
   };
@@ -447,7 +449,7 @@ export default function NavBar() {
           paddingBottom: "env(safe-area-inset-bottom, 0px)",
         }}
       >
-        <div className="max-w-[480px] mx-auto flex items-center h-14">
+        <div className="max-w-[480px] mx-auto flex items-center h-16">
           {tabItems.map((tab) => {
             const active = isTabActive(tab.href);
             const Icon = tab.icon;
@@ -455,16 +457,16 @@ export default function NavBar() {
               <Link
                 key={tab.href}
                 href={tab.href}
-                className="flex-1 flex flex-col items-center justify-center gap-0.5 h-full active:opacity-70"
+                className="flex-1 flex flex-col items-center justify-center gap-1 h-full active:opacity-70"
               >
                 <Icon
-                  className="w-5 h-5"
-                  style={{ color: active ? "#FF6900" : "#AAAAAA" }}
+                  className="w-6 h-6"
+                  style={{ color: active ? "#FF6900" : "#888888" }}
                   strokeWidth={active ? 2.5 : 1.8}
                 />
                 <span
-                  className="text-[10px] font-medium"
-                  style={{ color: active ? "#FF6900" : "#AAAAAA" }}
+                  className="text-[11px] font-medium"
+                  style={{ color: active ? "#FF6900" : "#888888" }}
                 >
                   {tab.label}
                 </span>
