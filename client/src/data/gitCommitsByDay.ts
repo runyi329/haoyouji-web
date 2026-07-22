@@ -8563,5 +8563,9 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-22T04:30:49Z", type: "fix", cleanMessage: "修复米拌项目频繁登录过期问题 - WalletTab轮询改60s去掉refetchOnWindowFocus - auth.me加staleTime 5分钟 - 登录跳转支持from参数跳回原页面" },
     { date: "2026-07-22T04:44:44Z", type: "feat", cleanMessage: "米拌订单导出预留快递列+批量上传快递单号功能" },
     { date: "2026-07-22T04:54:30Z", type: "fix", cleanMessage: "底部Tab放大+修复首页常亮bug" },
+    { date: "2026-07-22T06:30:35Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-22T07:33:12Z", type: "fix", cleanMessage: "修复标签alias被保证金管理全量覆盖的bug - updateMyInitialBalances改为增量合并写入，先读取数据库最新值再合并传入字段，防止并发写入互相覆盖" },
+    { date: "2026-07-22T07:41:30Z", type: "feat", cleanMessage: "A100订单视图新增已撤单Tab，赠单标注关联主单号" },
+    { date: "2026-07-22T07:50:14Z", type: "fix", cleanMessage: "赠单展平为独立卡片，全部Tab不含已撤单，人员分组去重" },
   ],
 };
