@@ -6109,8 +6109,9 @@ export async function updateMyInitialBalances(
   const db = await getLedgerDb();
   if (!db) throw new Error("Ledger database connection failed");
 
+  // 先读取现有数据，再增量合并，防止并发写入时互相覆盖（如保证金管理和 alias 同时写入）
   const rows = await db
-    .select({ id: ledgerMembers.id })
+    .select({ id: ledgerMembers.id, initialBalances: ledgerMembers.initialBalances })
     .from(ledgerMembers)
     .where(
       and(
@@ -6122,9 +6123,20 @@ export async function updateMyInitialBalances(
 
   if (rows.length === 0) throw new Error("您不是此账本的成员");
 
+  // 增量合并：以数据库最新值为基础，用传入的 balances 覆盖对应字段，保留其余字段
+  let existingBalances: Record<string, number | string> = {};
+  if (rows[0].initialBalances) {
+    try {
+      existingBalances = JSON.parse(rows[0].initialBalances) as Record<string, number | string>;
+    } catch {
+      existingBalances = {};
+    }
+  }
+  const mergedBalances = { ...existingBalances, ...balances };
+
   await db
     .update(ledgerMembers)
-    .set({ initialBalances: JSON.stringify(balances) })
+    .set({ initialBalances: JSON.stringify(mergedBalances) })
     .where(
       and(
         eq(ledgerMembers.ledgerId, ledgerId),
