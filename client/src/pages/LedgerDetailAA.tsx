@@ -525,6 +525,16 @@ export default function LedgerDetailAA({
   // 名称列 tooltip 用 fixed 定位，记录点击坐标
   const [tooltipTagPos, setTooltipTagPos] = useState<{ x: number; y: number } | null>(null);
 
+  // 自定义名称弹框
+  const [aliasEditTag, setAliasEditTag] = useState<string | null>(null); // 正在编辑的 tag.name
+  const [aliasEditValue, setAliasEditValue] = useState(''); // 输入框内容
+  const [aliasSaving, setAliasSaving] = useState(false);
+  const updateMyInitialBalancesMutation = (trpc as any).ledger.updateMyInitialBalances.useMutation({
+    onSuccess: () => {
+      trpcUtils.ledger.getMyInitialBalances.invalidate({ ledgerId });
+    },
+  });
+
   // 全局点击关闭所有 tooltip
   useEffect(() => {
     const closeAll = () => {
@@ -1591,7 +1601,7 @@ export default function LedgerDetailAA({
               className="w-full flex items-center justify-center gap-1 h-10 rounded-xl text-sm font-semibold transition-all bg-white shadow-sm"
               style={{ color: selectedTag ? '#D32F2F' : '#888888', border: '1px solid #E0E0E0' }}
             >
-              <span>{selectedTagId === null ? '全部' : (selectedTag?.name ?? '全部')}</span>
+              <span>{selectedTagId === null ? '全部' : (() => { const alias = (initialBalancesData?.balances as any)?.[`${selectedTag?.name}__alias`]; return alias || selectedTag?.name || '全部'; })()}</span>
               <ChevronDown className="w-3.5 h-3.5 flex-shrink-0" />
             </button>
             {showTagDropdown && (
@@ -1619,7 +1629,7 @@ export default function LedgerDetailAA({
                     }
                     return (
                       <button key={cat.id} onClick={() => { setSelectedTagId(cat.id); setShowTagDropdown(false); }} className="w-full px-4 py-2.5 text-left text-sm hover:bg-[#FFEBEE]" style={{ fontWeight: selectedTagId === cat.id ? 600 : 400, borderBottom: '1px solid #F5F5F5' }}>
-                        <span style={{ color: selectedTagId === cat.id ? '#D32F2F' : '#222222' }}>{cat.name}</span>
+                        <span style={{ color: selectedTagId === cat.id ? '#D32F2F' : '#222222' }}>{(initialBalancesData?.balances as any)?.[`${cat.name}__alias`] || cat.name}</span>
                         {isCatPaused && <span style={{ marginLeft: 4, fontSize: 11, color: '#1565C0' }}>{pauseInfo}</span>}
                       </button>
                     );
@@ -2310,28 +2320,29 @@ export default function LedgerDetailAA({
                   return (
                     <>
                       {/* 名称 */}
-                      <div key={`${tag.name}-name`} className="py-2 flex items-center justify-start gap-1" style={{ borderBottom: rowBorder, position: 'relative', paddingLeft: 6, paddingRight: 2, overflow: 'hidden' }}>
-                        <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
-                        <span
-                          style={{ fontSize: 13, fontWeight: 500, color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0, cursor: tag.name.length > 4 ? 'pointer' : 'default', textDecoration: tag.name.length > 4 ? 'underline' : 'none', textDecorationStyle: tag.name.length > 4 ? 'dashed' : undefined, textDecorationColor: tag.name.length > 4 ? '#999' : undefined, textUnderlineOffset: '2px' }}
-                          onClick={(e) => {
-                            if (tag.name.length > 4) {
-                              e.stopPropagation();
-                              if (tooltipTagName === tag.name) {
-                                setTooltipTagName(null); setTooltipTagPos(null);
-                              } else {
-                                setTooltipTagName(tag.name);
-                                setTooltipTagPos({ x: e.clientX, y: e.clientY });
-                              }
-                            }
-                          }}
-                        >{tag.name.length > 4 ? tag.name.slice(0, 4) + '\u2026' : tag.name}</span>
-                        {tooltipTagName === tag.name && tooltipTagPos && (
-                          <div style={{ position: 'fixed', left: tooltipTagPos.x + 8, top: tooltipTagPos.y - 36, zIndex: 9999, background: '#333', color: '#fff', borderRadius: 6, padding: '4px 10px', fontSize: 12, whiteSpace: 'nowrap', pointerEvents: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
-                            {tag.name}
+                      {(() => {
+                        const tagAlias = (initialBalancesData?.balances as any)?.[`${tag.name}__alias`] ?? '';
+                        const displayName = tagAlias || tag.name;
+                        const truncated = displayName.length > 4 ? displayName.slice(0, 4) + '\u2026' : displayName;
+                        return (
+                          <div key={`${tag.name}-name`} className="py-2 flex items-center justify-start gap-1" style={{ borderBottom: rowBorder, position: 'relative', paddingLeft: 6, paddingRight: 2, overflow: 'hidden' }}>
+                            <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
+                            <span
+                              style={{ fontSize: 13, fontWeight: 500, color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
+                              onPointerDown={(e) => {
+                                const t = setTimeout(() => {
+                                  e.stopPropagation();
+                                  setAliasEditTag(tag.name);
+                                  setAliasEditValue(tagAlias);
+                                }, 500);
+                                const cancel = () => clearTimeout(t);
+                                (e.target as HTMLElement).addEventListener('pointerup', cancel, { once: true });
+                                (e.target as HTMLElement).addEventListener('pointermove', cancel, { once: true });
+                              }}
+                            >{truncated}</span>
                           </div>
-                        )}
-                      </div>
+                        );
+                      })()}
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 今日变动：已更新彩色，未更新灰色显示数字；可点击展示计算过程 */}
                       {(() => {
@@ -3183,6 +3194,72 @@ export default function LedgerDetailAA({
           >
             切回我的视角
           </button>
+        </div>
+      )}
+
+      {/* ── 自定义名称编辑弹框 ── */}
+      {aliasEditTag !== null && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setAliasEditTag(null)}>
+          <div className="bg-white rounded-2xl shadow-xl mx-6 w-full max-w-sm" style={{ padding: '20px 20px 16px' }} onClick={(e) => e.stopPropagation()}>
+            {/* 标题 */}
+            <div className="text-base font-semibold mb-1" style={{ color: '#222' }}>自定义显示名称</div>
+            {/* 原始标签名 */}
+            <div className="text-xs mb-3" style={{ color: '#888' }}>原始标签：<span style={{ color: '#D32F2F', fontWeight: 600 }}>{aliasEditTag}</span></div>
+            {/* 已设置的自定义名称和时间 */}
+            {(initialBalancesData?.balances as any)?.[`${aliasEditTag}__alias`] && (
+              <div className="text-xs mb-2" style={{ color: '#888' }}>
+                当前自定义：<span style={{ color: '#1565C0', fontWeight: 600 }}>{(initialBalancesData?.balances as any)?.[`${aliasEditTag}__alias`]}</span>
+                {(initialBalancesData?.balances as any)?.[`${aliasEditTag}__aliasTime`] && (
+                  <span style={{ marginLeft: 6, color: '#BDBDBD' }}>上次修改：{(initialBalancesData?.balances as any)?.[`${aliasEditTag}__aliasTime`]}</span>
+                )}
+              </div>
+            )}
+            {/* 输入框 */}
+            <input
+              type="text"
+              className="w-full border rounded-xl px-3 py-2 text-sm mb-4"
+              style={{ borderColor: '#E0E0E0', outline: 'none', color: '#222' }}
+              placeholder={`输入自定义名称（留空则恢复原始标签）`}
+              value={aliasEditValue}
+              onChange={(e) => setAliasEditValue(e.target.value)}
+              autoFocus
+              maxLength={20}
+            />
+            {/* 按鈕 */}
+            <div className="flex gap-2">
+              <button
+                className="flex-1 py-2 rounded-xl text-sm"
+                style={{ background: '#F5F5F5', color: '#666' }}
+                onClick={() => setAliasEditTag(null)}
+              >取消</button>
+              <button
+                className="flex-1 py-2 rounded-xl text-sm font-semibold"
+                style={{ background: '#D32F2F', color: '#fff', opacity: aliasSaving ? 0.7 : 1 }}
+                disabled={aliasSaving}
+                onClick={async () => {
+                  setAliasSaving(true);
+                  try {
+                    const now = new Date();
+                    const timeStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+                    // 增量合并：先读取现有配置，再合并新的 alias 字段，避免全量覆盖
+                    const existingBalances = (initialBalancesData?.balances as Record<string, number | string>) ?? {};
+                    const mergedBalances = {
+                      ...existingBalances,
+                      [`${aliasEditTag}__alias`]: aliasEditValue.trim(),
+                      [`${aliasEditTag}__aliasTime`]: aliasEditValue.trim() ? timeStr : '',
+                    };
+                    await updateMyInitialBalancesMutation.mutateAsync({
+                      ledgerId,
+                      balances: mergedBalances,
+                    });
+                    setAliasEditTag(null);
+                  } finally {
+                    setAliasSaving(false);
+                  }
+                }}
+              >{aliasSaving ? '保存中...' : '保存'}</button>
+            </div>
+          </div>
         </div>
       )}
 
