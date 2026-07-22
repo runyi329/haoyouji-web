@@ -776,9 +776,9 @@ function FavoritesTab() {
 // ─── 我的钱包 Tab ─────────────────────────────────────────────────────────────
 function WalletTab() {
   const { isAuthenticated } = useAuth();
-  const { data: usdtBalance, isLoading: balanceLoading } = trpc.recharge.getBalance.useQuery(undefined, { enabled: isAuthenticated, refetchInterval: 15000, refetchOnWindowFocus: true });
-  const { data: cnyBalance, isLoading: cnyLoading } = trpc.recharge.getCnyBalance.useQuery(undefined, { enabled: isAuthenticated, refetchInterval: 15000, refetchOnWindowFocus: true });
-  const { data: history, isLoading: historyLoading } = trpc.recharge.getBalanceHistory.useQuery({ limit: 20 }, { enabled: isAuthenticated, refetchInterval: 15000, refetchOnWindowFocus: true });
+  const { data: usdtBalance, isLoading: balanceLoading } = trpc.recharge.getBalance.useQuery(undefined, { enabled: isAuthenticated, refetchInterval: 60000, refetchOnWindowFocus: false });
+  const { data: cnyBalance, isLoading: cnyLoading } = trpc.recharge.getCnyBalance.useQuery(undefined, { enabled: isAuthenticated, refetchInterval: 60000, refetchOnWindowFocus: false });
+  const { data: history, isLoading: historyLoading } = trpc.recharge.getBalanceHistory.useQuery({ limit: 20 }, { enabled: isAuthenticated, refetchInterval: 60000, refetchOnWindowFocus: false });
   const { data: cryptoPrices } = trpc.getCryptoPrices.useQuery(undefined, { refetchInterval: 10000, staleTime: 5000 });
 
   const usdtNum = Number(usdtBalance ?? 0);
@@ -1101,7 +1101,7 @@ export default function MyOrders() {
         <h1 className="text-[22px] font-bold text-black mb-2">我的</h1>
         <p className="text-[13px] text-gray-400 mb-8">登录后查看订单、配方、钱包等信息</p>
         <button
-          onClick={() => window.location.href = "/login"}
+          onClick={() => window.location.href = `/login?from=${encodeURIComponent(window.location.pathname)}`}
           className="flex items-center gap-2 px-8 py-3 rounded-xl text-[14px] font-semibold text-white active:scale-95 transition-transform"
           style={{ background: "#FF6900" }}
         >

@@ -43,7 +43,10 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   toast.error('登录已过期，请重新登录', { duration: 3000 });
   _unauthorizedRedirectTimer = setTimeout(() => {
     _unauthorizedRedirectTimer = null;
-    window.history.pushState(null, '', loginUrl);
+    // 带上 from 参数，登录后跳回原页面（米拌等子项目登录后可返回）
+    const from = encodeURIComponent(window.location.pathname);
+    const loginWithFrom = `${loginUrl}?from=${from}`;
+    window.history.pushState(null, '', loginWithFrom);
     window.dispatchEvent(new PopStateEvent('popstate'));
   }, 1500);
 };

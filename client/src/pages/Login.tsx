@@ -143,8 +143,11 @@ export default function Login() {
     }});
     // 让 auth.me 在后台静默刷新（不清除旧数据，不触发 isLoading=true）
     utils.auth.me.invalidate();
+    // 登录成功后跳回原页面（支持 ?from= 参数，用于米拌等子项目登录后返回）
+    const fromParam = new URLSearchParams(window.location.search).get('from');
+    const redirectTo = fromParam && fromParam.startsWith('/') ? fromParam : '/';
     setTimeout(() => {
-      setLocation("/");
+      setLocation(redirectTo);
     }, 200);
   };
 

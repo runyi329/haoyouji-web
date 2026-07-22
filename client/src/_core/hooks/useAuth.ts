@@ -23,6 +23,9 @@ export function useAuth(options?: UseAuthOptions) {
     refetchOnWindowFocus: false,
     // 微信环境下增加重试机制
     retryDelay: 1000,
+    // 5分钟内不重新请求，减少频繁验证触发"登录已过期"
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
   const logoutMutation = trpc.auth.logout.useMutation({
