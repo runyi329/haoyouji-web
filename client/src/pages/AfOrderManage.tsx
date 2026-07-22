@@ -257,7 +257,7 @@ export default function AfOrderManage() {
   const [selectedGiftIds, setSelectedGiftIds] = useState<number[]>([]);
   const [refundChecked, setRefundChecked] = useState(false);
   // 状态筛选：all / pending(委买中) / holding(持仓中) / selling(委卖中) / sold(已卖出)
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'holding' | 'selling' | 'sold'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'holding' | 'selling' | 'sold' | 'cancelled'>('all');
   // 分组维度：时间 / 人员
   const [groupMode, setGroupMode] = useState<'time' | 'person' | 'coin' | 'price'>('time');
   // 人员分组展开状态
@@ -441,6 +441,7 @@ export default function AfOrderManage() {
   const filteredOrders = (orders as any[] | undefined)?.filter((order: any) => {
     const isGift = order.isGift === true || order.isGift === 1;
     // 已撤销订单在所有Tab中均不显示
+    if (statusFilter === 'cancelled') return order.status === 'cancelled';
     if (order.status === 'cancelled') return false;
     if (statusFilter === 'all') return !(isGift && order.status === 'pending');
     if (statusFilter === 'pending') return order.status === 'pending' && !isGift;
@@ -903,6 +904,7 @@ export default function AfOrderManage() {
               { key: 'holding' as const, label: `持仓(${(orders as any[])?.filter((o: any) => o.status === 'completed' && o.sellStatus !== 'sold' && o.sellStatus !== 'selling').length ?? 0})` },
               { key: 'selling' as const, label: `委卖(${(orders as any[])?.filter((o: any) => o.sellStatus === 'selling').length ?? 0})` },
               { key: 'sold' as const, label: `卖出(${(orders as any[])?.filter((o: any) => o.sellStatus === 'sold').length ?? 0})` },
+              { key: 'cancelled' as const, label: `撤单(${(orders as any[])?.filter((o: any) => o.status === 'cancelled').length ?? 0})` },
             ]).map(tab => (
               <button
                 key={tab.key}
@@ -1543,9 +1545,14 @@ export default function AfOrderManage() {
               const sortedDates = Object.keys(dateGroups).sort((a, b) => b.localeCompare(a));
               return sortedDates.map(dateKey => {
                 const groupOrders = dateGroups[dateKey];
-                // 如果该日期下没有任何有效订单（全是撤销单），则不渲染该日期分组
-                const hasActiveOrders = groupOrders.some((o: any) => o.status !== 'cancelled');
-                if (!hasActiveOrders) return null;
+                // 已撤单 Tab 下只显示撤单；其他 Tab 下跳过全是撤销单的日期组
+                if (statusFilter === 'cancelled') {
+                  const hasCancelled = groupOrders.some((o: any) => o.status === 'cancelled');
+                  if (!hasCancelled) return null;
+                } else {
+                  const hasActiveOrders = groupOrders.some((o: any) => o.status !== 'cancelled');
+                  if (!hasActiveOrders) return null;
+                }
                 const isOpen = expandedDates[dateKey] ?? false;
                 // 是否该日期所有正单（含其嵌套赠与单）已全部卖出
                 // 在「卖出」 Tab 下所有订单本就是已卖出的，不需要用灰色标注
@@ -1734,6 +1741,28 @@ export default function AfOrderManage() {
                           赠
                         </span>
                       )}
+                      {/* 赠单关联主单标注 */}
+                      {(order.isGift === true || order.isGift === 1) && order.sourceOrderId && (() => {
+                        const parentOrder = (orders as any[] || []).find((o: any) => o.id === order.sourceOrderId);
+                        if (!parentOrder) return <span className="text-[10px] text-purple-400 bg-purple-50 px-1.5 py-0.5 rounded">关联#{order.sourceOrderId}</span>;
+                        const pd = new Date(parentOrder.createdAt);
+                        const parentOrderNo = `AF${String(pd.getUTCFullYear()).slice(2)}${String(pd.getUTCMonth()+1).padStart(2,'0')}${String(pd.getUTCDate()).padStart(2,'0')}${String(parentOrder.id).padStart(6,'0')}`;
+                        const parentStatusLabel = parentOrder.sellStatus === 'sold' ? '已卖出' :
+                          parentOrder.sellStatus === 'selling' ? '委卖中' :
+                          parentOrder.status === 'completed' ? '持仓中' :
+                          parentOrder.status === 'cancelled' ? '已撤单' : '委买中';
+                        const parentStatusColor = parentOrder.sellStatus === 'sold' ? '#3b82f6' :
+                          parentOrder.sellStatus === 'selling' ? '#ef4444' :
+                          parentOrder.status === 'completed' ? '#22c55e' :
+                          parentOrder.status === 'cancelled' ? '#9ca3af' : '#f59e0b';
+                        return (
+                          <span className="text-[10px] bg-purple-50 px-1.5 py-0.5 rounded flex items-center gap-1">
+                            <span className="text-purple-400">关联</span>
+                            <span className="font-mono text-purple-600">{parentOrderNo}</span>
+                            <span style={{ color: parentStatusColor }}>{parentStatusLabel}</span>
+                          </span>
+                        );
+                      })()}
                     </div>
                     {!isEditing ? (
                       <div className="flex gap-2">
