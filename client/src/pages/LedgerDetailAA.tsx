@@ -351,6 +351,18 @@ export default function LedgerDetailAA({
     if (!selectedTagName || !initialBalancesData?.balances) return null;
     return (initialBalancesData.balances as any)[`${selectedTagName}__pauseDate`] ?? null;
   }, [selectedTagName, initialBalancesData]);
+  // 多次暂停/重启历史（兑容旧 pauseDate）
+  const selectedTagPauseHistory: Array<{ pauseDate: string; resumeDate?: string }> = useMemo(() => {
+    if (!selectedTagName || !initialBalancesData?.balances) return [];
+    const raw = (initialBalancesData.balances as any)[`${selectedTagName}__pauseHistory`];
+    if (raw) {
+      try { return JSON.parse(String(raw)); } catch { /* fall through */ }
+    }
+    // 兑容旧字段
+    const legacy = (initialBalancesData.balances as any)[`${selectedTagName}__pauseDate`];
+    if (legacy) return [{ pauseDate: String(legacy) }];
+    return [];
+  }, [selectedTagName, initialBalancesData]);
   const selectedTagEndDate: string | null = useMemo(() => {
     if (!selectedTagName || !initialBalancesData?.balances) return null;
     return (initialBalancesData.balances as any)[`${selectedTagName}__endDate`] ?? null;
@@ -1150,6 +1162,38 @@ export default function LedgerDetailAA({
     }
     return selectedTagPauseDate;
   }, [selectedTagPauseDate]);
+  // 所有暂停标记日期集合（支持多次暂停）
+  const pauseMarkDatesSet: Set<string> = useMemo(() => {
+    const s = new Set<string>();
+    for (const item of selectedTagPauseHistory) {
+      if (!item.pauseDate) continue;
+      const [y, m, d] = item.pauseDate.split('-').map(Number);
+      if (!y || !m || !d) continue;
+      let cur = new Date(y, m - 1, d);
+      for (let i = 0; i < 30; i++) {
+        const ds = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+        if (!isNonTradingDateStr(ds)) { s.add(ds); break; }
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+    return s;
+  }, [selectedTagPauseHistory]);
+  // 所有重启标记日期集合（绿色）
+  const resumeMarkDatesSet: Set<string> = useMemo(() => {
+    const s = new Set<string>();
+    for (const item of selectedTagPauseHistory) {
+      if (!item.resumeDate) continue;
+      const [y, m, d] = item.resumeDate.split('-').map(Number);
+      if (!y || !m || !d) continue;
+      let cur = new Date(y, m - 1, d);
+      for (let i = 0; i < 30; i++) {
+        const ds = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+        if (!isNonTradingDateStr(ds)) { s.add(ds); break; }
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+    return s;
+  }, [selectedTagPauseHistory]);
 
   // 点击日历格子：已有记录则跳转编辑，否则跳转新增
   const handleDayClick = (day: number) => {
@@ -1211,20 +1255,7 @@ export default function LedgerDetailAA({
       return;
     }
 
-    // 暂停日期检查：暂停日期及之后禁止新增记录（管理员也不能新增，但可编辑已有记录）
-    const pauseDate = selectedTagPauseDate;
-    const isPauseDay = pauseDate && dateStr === pauseDate;
-    const isPausedAfterDay = pauseDate && dateStr > pauseDate;
-    // 点击暂停日期当天：弹出说明
-    if (isPauseDay) {
-      alert(`暂停于 ${pauseDate}，此日期及之后无法添加新记录`);
-      return;
-    }
-    // 点击暂停日期之后的日期：同样弹出说明
-    if (isPausedAfterDay) {
-      alert(`暂停于 ${pauseDate}，此日期无法添加新记录`);
-      return;
-    }
+    // 注意：管理员在暂停日期之后仍可继续登记（暂停只冻结周期/年化，不拦截日历登记）
     if (existing && existing.records.length > 0) {
       // 已有记录：跳转编辑第一条记录
       const recordId = existing.records[0].id;
@@ -1612,18 +1643,29 @@ export default function LedgerDetailAA({
                   <button onClick={() => { setSelectedTagId(null); setShowTagDropdown(false); }} className="w-full px-4 py-2.5 text-left text-sm hover:bg-[#FFEBEE]" style={{ color: selectedTagId === null ? '#D32F2F' : '#222222', fontWeight: selectedTagId === null ? 600 : 400, borderBottom: '1px solid #F5F5F5' }}>全部</button>
                   {[...categories].sort((a: any, b: any) => {
                     const balances = initialBalancesData?.balances ?? {};
-                    const aPaused = !!(balances as any)[`${a.name}__pauseDate`];
-                    const bPaused = !!(balances as any)[`${b.name}__pauseDate`];
+                    const getIsPaused = (name: string) => {
+                      const raw = (balances as any)[`${name}__pauseHistory`];
+                      if (raw) { try { const h = JSON.parse(String(raw)); const last = h[h.length-1]; return !!last && !last.resumeDate; } catch { /* ignore */ } }
+                      return !!(balances as any)[`${name}__pauseDate`];
+                    };
+                    const aPaused = getIsPaused(a.name);
+                    const bPaused = getIsPaused(b.name);
                     if (aPaused && !bPaused) return 1;
                     if (!aPaused && bPaused) return -1;
                     return 0;
                   }).map((cat: any) => {
+                    // 优先读 pauseHistory，兑容旧 pauseDate
+                    const catPauseHistoryRaw = initialBalancesData?.balances ? (initialBalancesData.balances as any)[`${cat.name}__pauseHistory`] : null;
+                    let catPauseHistory: Array<{pauseDate: string; resumeDate?: string}> = [];
+                    if (catPauseHistoryRaw) { try { catPauseHistory = JSON.parse(String(catPauseHistoryRaw)); } catch { /* ignore */ } }
                     const catPauseDate = initialBalancesData?.balances ? (initialBalancesData.balances as any)[`${cat.name}__pauseDate`] : null;
-                    const isCatPaused = !!catPauseDate;
+                    if (catPauseHistory.length === 0 && catPauseDate) catPauseHistory = [{ pauseDate: String(catPauseDate) }];
+                    const lastCatItem = catPauseHistory[catPauseHistory.length - 1];
+                    const isCatPaused = !!lastCatItem && !lastCatItem.resumeDate;
                     let pauseInfo = '';
-                    if (isCatPaused) {
-                      const [, m, d] = catPauseDate.split('-');
-                      const pauseD = new Date(catPauseDate);
+                    if (isCatPaused && lastCatItem) {
+                      const [, m, d] = lastCatItem.pauseDate.split('-');
+                      const pauseD = new Date(lastCatItem.pauseDate);
                       const today = new Date();
                       const diffDays = Math.floor((today.getTime() - pauseD.getTime()) / 86400000);
                       pauseInfo = `(${Number(m)}月${Number(d)}日暂停，已${diffDays}天)`;
@@ -1782,19 +1824,19 @@ export default function LedgerDetailAA({
                       const endDateStr = selectedTagEndDate;
                       const dayDateStr2 = getDateStr(day);
                       // 暂停标志显示在「暂停标志日」(暂停日，非交易日则顺延到下一交易日)那一格，即使该格本身是非交易日也强制显示蓝标
-                      const isPauseDay = pauseMarkDateStr && dayDateStr2 === pauseMarkDateStr;
-                      const isPausedAfter = !isPauseDay && !isNonTrading && pauseDateStr && dayDateStr2 > pauseDateStr;
+                      const isPauseDay = pauseMarkDatesSet.has(dayDateStr2);
+                      const isResumeDay = resumeMarkDatesSet.has(dayDateStr2);
+                      const isPausedAfter = false; // 暂停后不再灰色，管理员可继续登记
                       const cellBg = isPauseDay ? '#1565C0'
+                        : isResumeDay ? '#1B5E20'
                         : isNonTrading ? '#F0F0F0'
-                        : isPausedAfter ? '#F0F0F0'
                         : todayMark ? '#FFF3E0' : '#F9F9F9';
                       const cellBorder = isPauseDay ? '1.5px solid #1565C0'
+                        : isResumeDay ? '1.5px solid #1B5E20'
                         : isNonTrading ? '1px solid #E0E0E0'
-                        : isPausedAfter ? '1px solid #E0E0E0'
                         : todayMark ? '1.5px solid #D32F2F' : '1px solid #F0F0F0';
                       const dayNumColor = isNonTrading
                         ? '#BDBDBD'
-                        : isPausedAfter ? '#BDBDBD'
                         : todayMark ? '#D32F2F' : '#222222';
                       const dayDateStr = getDateStr(day);
                       const dayData = dayMap.get(dayDateStr);
@@ -1824,14 +1866,18 @@ export default function LedgerDetailAA({
                         >
                           {isPauseDay ? (
                             <PauseCircle style={{ width: '20px', height: '20px', color: '#FFFFFF' }} />
+                          ) : isResumeDay ? (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polygon points="5,3 19,12 5,21" fill="#FFFFFF" />
+                            </svg>
                           ) : (
                             <>
                               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '2px', marginBottom: '1px' }}>
                                 <span style={{ fontSize: '12px', fontWeight: 500, lineHeight: 1, color: dayNumColor }}>{day}</span>
-                                {!isPausedAfter && dotColor && (
+                                {dotColor && (
                                   <span style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: dotColor, flexShrink: 0, display: 'inline-block' }} />
                                 )}
-                                {!isPausedAfter && changeDates.has(dayDateStr) && (
+                                {changeDates.has(dayDateStr) && (
                                   <span style={{ width: '10px', height: '10px', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
                                     <svg width="10" height="10" viewBox="0 0 20 20">
                                       <polygon points="10,2 19,18 1,18" fill="#FBBF24" stroke="#222" strokeWidth="1.5" />
@@ -1844,8 +1890,17 @@ export default function LedgerDetailAA({
                                 <span style={{ fontSize: '9px', fontWeight: 400, lineHeight: 1.1, color: '#BDBDBD', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
                                   {nonTradingLabel}
                                 </span>
-                              ) : !isPausedAfter && hasRecord ? (
-                                <span style={{ fontSize: '12px', fontWeight: 700, lineHeight: 1.1, color: valueColor, maxWidth: '100%', overflow: 'visible', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
+                              ) : hasRecord ? (
+                                <span style={{ fontSize: '12px', fontWeight: 700, lineHeight: 1.1, color: (() => {
+                                  // 判断当前日期是否在某个暂停段内（暂停后、重启前）
+                                  const isInPausedSegment = selectedTagPauseHistory.some(item => {
+                                    if (!item.pauseDate) return false;
+                                    if (dayDateStr2 <= item.pauseDate) return false; // 暂停日当天不算在暂停段内
+                                    if (item.resumeDate && dayDateStr2 >= item.resumeDate) return false; // 重启日及之后不算
+                                    return true;
+                                  });
+                                  return isInPausedSegment ? '#222222' : valueColor;
+                                })(), maxWidth: '100%', overflow: 'visible', whiteSpace: 'nowrap', display: 'block', textAlign: 'center' }}>
                                   {cellValue}
                                 </span>
                               ) : null}
@@ -2183,16 +2238,49 @@ export default function LedgerDetailAA({
               const configStartDate = initialBalancesData?.balances ? String(initialBalancesData.balances[`${tag.name}__startDate`] ?? '') : '';
               const firstDate = configStartDate || tag.points[0]?.date;
               const configPauseDate = initialBalancesData?.balances ? String(initialBalancesData.balances[`${tag.name}__pauseDate`] ?? '') : '';
-              // 有暂停日期时，截止日期为暂停前一天；否则截止日期为今天（北京时间 UTC+8）
-              let endDate = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
-              let isPaused = false;
-              if (configPauseDate) {
-                const pauseD = new Date(configPauseDate);
-                pauseD.setDate(pauseD.getDate() - 1);
-                const dayBefore = pauseD.toISOString().slice(0, 10);
-                if (dayBefore <= endDate) { endDate = dayBefore; isPaused = true; }
+              // 读取 pauseHistory，兼容旧 pauseDate
+              const pauseHistoryRaw2 = initialBalancesData?.balances ? (initialBalancesData.balances as any)[`${tag.name}__pauseHistory`] : null;
+              let tagPauseHistory2: Array<{ pauseDate: string; resumeDate?: string }> = [];
+              if (pauseHistoryRaw2) {
+                try { tagPauseHistory2 = JSON.parse(String(pauseHistoryRaw2)); } catch { /* ignore */ }
+              } else if (configPauseDate) {
+                tagPauseHistory2 = [{ pauseDate: configPauseDate }];
               }
-              const days = firstDate ? Math.max(1, Math.round((new Date(endDate).getTime() - new Date(firstDate).getTime()) / 86400000) + 1) : 0;
+              // 分段合计天数
+              const today2 = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+              let endDate = today2;
+              let isPaused = false;
+              let days = 0;
+              if (firstDate) {
+                if (tagPauseHistory2.length === 0) {
+                  days = Math.max(1, Math.round((new Date(today2).getTime() - new Date(firstDate).getTime()) / 86400000) + 1);
+                } else {
+                  let segStart = firstDate;
+                  for (const item of tagPauseHistory2) {
+                    if (!item.pauseDate || item.pauseDate <= segStart) continue;
+                    const pauseD = new Date(item.pauseDate);
+                    pauseD.setDate(pauseD.getDate() - 1);
+                    const segEnd = pauseD.toISOString().slice(0, 10);
+                    if (segEnd >= segStart) {
+                      days += Math.round((new Date(segEnd).getTime() - new Date(segStart).getTime()) / 86400000) + 1;
+                    }
+                    segStart = item.resumeDate ?? '';
+                  }
+                  const lastItem2 = tagPauseHistory2[tagPauseHistory2.length - 1];
+                  if (lastItem2.resumeDate && lastItem2.resumeDate <= today2) {
+                    days += Math.max(1, Math.round((new Date(today2).getTime() - new Date(lastItem2.resumeDate).getTime()) / 86400000) + 1);
+                    isPaused = false;
+                  } else if (!lastItem2.resumeDate) {
+                    isPaused = true;
+                  }
+                  days = Math.max(1, days);
+                  if (isPaused && lastItem2.pauseDate) {
+                    const pauseD2 = new Date(lastItem2.pauseDate);
+                    pauseD2.setDate(pauseD2.getDate() - 1);
+                    endDate = pauseD2.toISOString().slice(0, 10);
+                  }
+                }
+              }
               const latestPnl = tag.points[tag.points.length - 1]?.pnl ?? 0;
               const latestDate = tag.points[tag.points.length - 1]?.date ?? null;
               // 原始账户金额（日历格子里填的数字）
@@ -2413,25 +2501,53 @@ export default function LedgerDetailAA({
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 周期（移到回报后面） */}
                       <div className={dataCellCls} style={{ borderBottom: rowBorder, whiteSpace: 'nowrap', fontSize: 13 }}>
-                        {isPaused ? (
-                          <span
-                            style={{ display: 'inline-block', backgroundColor: '#1565C0', color: '#FFFFFF', borderRadius: 3, padding: '1px 3px', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                            onClick={() => {
-                              if (!firstDate || !endDate) return;
-                              const fmt = (d: string) => { const [y, m, dd] = d.split('-'); return `${Number(m)}月${Number(dd)}日`; };
-                              alert(`${fmt(firstDate)} ~ ${fmt(endDate)}，共 ${days} 天`);
-                            }}
-                          >{days > 0 ? `${days}天` : '--'}</span>
-                        ) : (
-                          <span
-                            style={{ color: '#424242', whiteSpace: 'nowrap', fontSize: 13, cursor: firstDate ? 'pointer' : 'default', textDecoration: firstDate ? 'underline' : 'none', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
-                            onClick={() => {
-                              if (!firstDate) return;
-                              const fmt = (d: string) => { const [y, m, dd] = d.split('-'); return `${Number(m)}月${Number(dd)}日`; };
-                              alert(`${fmt(firstDate)} ~ ${fmt(endDate)}（今天），共 ${days} 天`);
-                            }}
-                          >{days > 0 ? `${days}天` : '--'}</span>
-                        )}
+                        {(() => {
+                          const fmt = (d: string) => { const [y, m, dd] = d.split('-'); return `${Number(m)}月${Number(dd)}日`; };
+                          const pauseHistoryForAlert = (() => {
+                            const raw = initialBalancesData?.balances ? (initialBalancesData.balances as any)[`${tag.name}__pauseHistory`] : null;
+                            if (raw) { try { return JSON.parse(String(raw)); } catch { /* ignore */ } }
+                            const legacy = initialBalancesData?.balances ? String(initialBalancesData.balances[`${tag.name}__pauseDate`] ?? '') : '';
+                            if (legacy) return [{ pauseDate: legacy }];
+                            return [];
+                          })();
+                          const handleClick = () => {
+                            if (!firstDate) return;
+                            if (pauseHistoryForAlert.length === 0) {
+                              alert(`${fmt(firstDate)} ~ 今天，共 ${days} 天`);
+                            } else {
+                              const today3 = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+                              let lines: string[] = [];
+                              let segStart = firstDate;
+                              for (const item of pauseHistoryForAlert) {
+                                if (!item.pauseDate || item.pauseDate <= segStart) continue;
+                                const pauseD = new Date(item.pauseDate); pauseD.setDate(pauseD.getDate() - 1);
+                                const segEnd = pauseD.toISOString().slice(0, 10);
+                                const segDays = segEnd >= segStart ? Math.round((new Date(segEnd).getTime() - new Date(segStart).getTime()) / 86400000) + 1 : 0;
+                                lines.push(`${fmt(segStart)} ~ ${fmt(segEnd)}（${segDays}天）`);
+                                lines.push(`  ⏸ 暂停 ${fmt(item.pauseDate)}${item.resumeDate ? ` → ▶ 重启 ${fmt(item.resumeDate)}` : '（暂停中）'}`);
+                                segStart = item.resumeDate ?? '';
+                              }
+                              const lastItem = pauseHistoryForAlert[pauseHistoryForAlert.length - 1];
+                              if (lastItem.resumeDate && lastItem.resumeDate <= today3) {
+                                const segDays2 = Math.max(1, Math.round((new Date(today3).getTime() - new Date(lastItem.resumeDate).getTime()) / 86400000) + 1);
+                                lines.push(`${fmt(lastItem.resumeDate)} ~ 今天（${segDays2}天）`);
+                              }
+                              lines.push(`合计 ${days} 天`);
+                              alert(lines.join('\n'));
+                            }
+                          };
+                          return isPaused ? (
+                            <span
+                              style={{ display: 'inline-block', backgroundColor: '#1565C0', color: '#FFFFFF', borderRadius: 3, padding: '1px 3px', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                              onClick={handleClick}
+                            >{days > 0 ? `${days}天` : '--'}</span>
+                          ) : (
+                            <span
+                              style={{ color: '#424242', whiteSpace: 'nowrap', fontSize: 13, cursor: firstDate ? 'pointer' : 'default', textDecoration: firstDate ? 'underline' : 'none', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
+                              onClick={handleClick}
+                            >{days > 0 ? `${days}天` : '--'}</span>
+                          );
+                        })()}
                       </div>
                       <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 金额（周期后面） */}

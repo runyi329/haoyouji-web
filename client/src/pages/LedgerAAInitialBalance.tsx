@@ -37,6 +37,10 @@ const CRYPTO_COINS = [
 
 const CNY_RATE_FALLBACK = 7.0; // 居底备用，实际汇率从接口实时获取
 
+interface PauseHistoryItem {
+  pauseDate: string;   // 暂停日期 YYYY-MM-DD
+  resumeDate?: string; // 重启日期 YYYY-MM-DD（空表示尚未重启）
+}
 interface TagEntry {
   amount: string;
   ratio: string;
@@ -47,6 +51,7 @@ interface TagEntry {
   endDate: string;
   visible: boolean;
   targetAmount: string; // 目标金额（用户级）
+  pauseHistory: PauseHistoryItem[]; // 多次暂停/重启历史
 }
 
 const defaultEntry = (): TagEntry => ({
@@ -59,6 +64,7 @@ const defaultEntry = (): TagEntry => ({
   endDate: "",
   visible: true,
   targetAmount: "",
+  pauseHistory: [],
 });
 
 export default function LedgerAAInitialBalance() {
@@ -134,6 +140,16 @@ export default function LedgerAAInitialBalance() {
               ? Number(balances[`${n}__visible`]) !== 0
               : true,
           targetAmount: balances[`${n}__targetAmount`] !== undefined ? String(balances[`${n}__targetAmount`]) : "",
+          pauseHistory: (() => {
+            // 优先读取 pauseHistory，如果没有则兼容旧 pauseDate 迁移
+            const raw = balances[`${n}__pauseHistory`];
+            if (raw) {
+              try { return JSON.parse(String(raw)) as PauseHistoryItem[]; } catch { /* fall through */ }
+            }
+            const legacyPause = balances[`${n}__pauseDate`];
+            if (legacyPause) return [{ pauseDate: String(legacyPause) }];
+            return [];
+          })(),
         };
       }
     }
@@ -208,7 +224,19 @@ export default function LedgerAAInitialBalance() {
       if (entry.startDate) {
         balances[`${n}__startDate`] = entry.startDate;
       }
-      if (entry.pauseDate) {
+      // 保存 pauseHistory（多次暂停/重启）
+      if (entry.pauseHistory && entry.pauseHistory.length > 0) {
+        balances[`${n}__pauseHistory`] = JSON.stringify(entry.pauseHistory);
+        // 同时更新旧字段 pauseDate 为最新一次暂停的日期（兼容旧逻辑）
+        const lastPause = entry.pauseHistory[entry.pauseHistory.length - 1];
+        const isCurrentlyPaused = !lastPause.resumeDate;
+        if (isCurrentlyPaused) {
+          balances[`${n}__pauseDate`] = lastPause.pauseDate;
+        } else {
+          // 已重启，清空旧字段
+          // （不写入 pauseDate，让它保持为空）
+        }
+      } else if (entry.pauseDate) {
         balances[`${n}__pauseDate`] = entry.pauseDate;
       }
       if (entry.endDate) {
@@ -1772,21 +1800,102 @@ export default function LedgerAAInitialBalance() {
                     />
                   </div>
                 </div>
-                {/* 暂停日期 */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs w-16 flex-shrink-0 font-medium" style={{ color: '#B45309' }}>暂停日期</span>
-                  <div className="flex-1 flex items-center gap-1">
-                    <input
-                      type="date"
-                      value={entry.pauseDate}
-                      onChange={e => updateEntry(userId, tagName, { pauseDate: e.target.value })}
-                      className="flex-1 text-sm border rounded-lg px-2 py-1.5 outline-none"
-                      style={{ borderColor: '#FDE68A', backgroundColor: '#FFFBEB', color: '#92400E' }}
-                    />
-                    {entry.pauseDate && (
-                      <button type="button" onClick={() => updateEntry(userId, tagName, { pauseDate: '' })} className="w-5 h-5 flex items-center justify-center rounded-full" style={{ fontSize: 12, color: '#B45309' }}>×</button>
-                    )}
+                {/* 暂停/重启历史 */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium" style={{ color: '#B45309' }}>暂停/重启历史</span>
+                    {/* 操作按钮：根据当前状态显示不同按钮 */}
+                    {(() => {
+                      const history = entry.pauseHistory ?? [];
+                      const lastItem = history[history.length - 1];
+                      const isCurrentlyPaused = lastItem && !lastItem.resumeDate;
+                      const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+                      if (isCurrentlyPaused) {
+                        // 当前已暂停：显示“添加重启”按钮
+                        return (
+                          <button
+                            type="button"
+                            className="text-xs px-2 py-1 rounded-lg"
+                            style={{ backgroundColor: '#E8F5E9', color: '#2E7D32', border: '1px solid #A5D6A7' }}
+                            onClick={() => {
+                              const newHistory = history.map((item, idx) =>
+                                idx === history.length - 1 ? { ...item, resumeDate: today } : item
+                              );
+                              updateEntry(userId, tagName, { pauseHistory: newHistory });
+                            }}
+                          >
+                            + 添加重启
+                          </button>
+                        );
+                      } else {
+                        // 当前未暂停（或无历史）：显示“添加暂停”按钮
+                        return (
+                          <button
+                            type="button"
+                            className="text-xs px-2 py-1 rounded-lg"
+                            style={{ backgroundColor: '#FFFBEB', color: '#92400E', border: '1px solid #FDE68A' }}
+                            onClick={() => {
+                              const newHistory = [...history, { pauseDate: today }];
+                              updateEntry(userId, tagName, { pauseHistory: newHistory });
+                            }}
+                          >
+                            + 添加暂停
+                          </button>
+                        );
+                      }
+                    })()}
                   </div>
+                  {/* 历史列表 */}
+                  {(entry.pauseHistory ?? []).length === 0 ? (
+                    <div className="text-xs text-gray-400 py-1">无暂停记录</div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {(entry.pauseHistory ?? []).map((item, idx) => (
+                        <div key={idx} className="flex items-center gap-1.5 rounded-lg px-2 py-1.5" style={{ backgroundColor: item.resumeDate ? '#F1F8E9' : '#FFFBEB', border: `1px solid ${item.resumeDate ? '#C5E1A5' : '#FDE68A'}` }}>
+                          {/* 暂停日期 */}
+                          <span className="text-xs font-medium" style={{ color: '#92400E', minWidth: 16 }}>暂</span>
+                          <input
+                            type="date"
+                            value={item.pauseDate}
+                            onChange={e => {
+                              const newHistory = (entry.pauseHistory ?? []).map((h, i) => i === idx ? { ...h, pauseDate: e.target.value } : h);
+                              updateEntry(userId, tagName, { pauseHistory: newHistory });
+                            }}
+                            className="text-xs border rounded px-1 py-0.5 outline-none"
+                            style={{ borderColor: '#FDE68A', backgroundColor: '#FFFBEB', color: '#92400E', width: 110 }}
+                          />
+                          {/* 重启日期 */}
+                          {item.resumeDate ? (
+                            <>
+                              <span className="text-xs font-medium" style={{ color: '#2E7D32', minWidth: 16 }}>启</span>
+                              <input
+                                type="date"
+                                value={item.resumeDate}
+                                onChange={e => {
+                                  const newHistory = (entry.pauseHistory ?? []).map((h, i) => i === idx ? { ...h, resumeDate: e.target.value } : h);
+                                  updateEntry(userId, tagName, { pauseHistory: newHistory });
+                                }}
+                                className="text-xs border rounded px-1 py-0.5 outline-none"
+                                style={{ borderColor: '#C5E1A5', backgroundColor: '#F1F8E9', color: '#2E7D32', width: 110 }}
+                              />
+                            </>
+                          ) : (
+                            <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: '#FEF3C7', color: '#92400E' }}>暂停中</span>
+                          )}
+                          {/* 删除按钮 */}
+                          <button
+                            type="button"
+                            className="ml-auto w-5 h-5 flex items-center justify-center rounded-full flex-shrink-0"
+                            style={{ color: '#9E9E9E', fontSize: 12 }}
+                            onClick={() => {
+                              const newHistory = (entry.pauseHistory ?? []).filter((_, i) => i !== idx);
+                              updateEntry(userId, tagName, { pauseHistory: newHistory });
+                            }}
+                          >×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {/* 结束日期 */}
                 <div className="flex items-center gap-2">
