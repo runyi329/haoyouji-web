@@ -8552,5 +8552,16 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   ],
   "2026-07-22": [
     { date: "2026-07-21T16:00:23Z", type: "fix", cleanMessage: "修复卖出自动调账条件，改为查重优先不依赖sell_confirmed_at" },
+    { date: "2026-07-21T17:19:59Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-22T00:55:01Z", type: "feat", cleanMessage: "LedgerDetailAA 自定义标签名功能，修复全量覆盖bug改为增量合并" },
+    { date: "2026-07-22T01:32:14Z", type: "feat", cleanMessage: "单击标签名显示信息弹框（原始名+自定义名+修改时间），长按才触发编辑" },
+    { date: "2026-07-22T03:00:04Z", type: "feat", cleanMessage: "多次暂停/重启分段周期功能（pauseHistory）- 日历图重启绿色标记、暂停后黑色数字、概览表周期合计天数" },
+    { date: "2026-07-22T03:12:25Z", type: "feat", cleanMessage: "回报列冻结到暂停日pnl + 点击显示分段详情弹框（虚线下划线）" },
+    { date: "2026-07-22T03:25:40Z", type: "feat", cleanMessage: "回报弹框美化 - 分段卡片式布局，含计算公式（初始×比例）、暂停/重启节点标记" },
+    { date: "2026-07-22T03:38:01Z", type: "feat", cleanMessage: "初始保证金管理标签维度-用户头像右下角加暂停/运行状态角标" },
+    { date: "2026-07-22T04:06:34Z", type: "fix", cleanMessage: "去掉暂停后的日历拦截alert，暂停当天格子显示数字（图标+数字叠加）" },
+    { date: "2026-07-22T04:30:49Z", type: "fix", cleanMessage: "修复米拌项目频繁登录过期问题 - WalletTab轮询改60s去掉refetchOnWindowFocus - auth.me加staleTime 5分钟 - 登录跳转支持from参数跳回原页面" },
+    { date: "2026-07-22T04:44:44Z", type: "feat", cleanMessage: "米拌订单导出预留快递列+批量上传快递单号功能" },
+    { date: "2026-07-22T04:54:30Z", type: "fix", cleanMessage: "底部Tab放大+修复首页常亮bug" },
   ],
 };
