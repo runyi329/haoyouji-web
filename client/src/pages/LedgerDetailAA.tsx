@@ -529,6 +529,7 @@ export default function LedgerDetailAA({
   const [aliasEditTag, setAliasEditTag] = useState<string | null>(null); // 正在编辑的 tag.name
   const [aliasEditValue, setAliasEditValue] = useState(''); // 输入框内容
   const [aliasSaving, setAliasSaving] = useState(false);
+  const [aliasInfoTag, setAliasInfoTag] = useState<string | null>(null); // 单击查看信息的 tag.name
   const updateMyInitialBalancesMutation = (trpc as any).ledger.updateMyInitialBalances.useMutation({
     onSuccess: () => {
       trpcUtils.ledger.getMyInitialBalances.invalidate({ ledgerId });
@@ -2330,14 +2331,22 @@ export default function LedgerDetailAA({
                             <span
                               style={{ fontSize: 13, fontWeight: 500, color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
                               onPointerDown={(e) => {
+                                let fired = false;
                                 const t = setTimeout(() => {
+                                  fired = true;
                                   e.stopPropagation();
                                   setAliasEditTag(tag.name);
                                   setAliasEditValue(tagAlias);
                                 }, 500);
-                                const cancel = () => clearTimeout(t);
+                                const cancel = () => {
+                                  clearTimeout(t);
+                                  if (!fired) {
+                                    // 单击：显示信息提示框
+                                    setAliasInfoTag(tag.name);
+                                  }
+                                };
                                 (e.target as HTMLElement).addEventListener('pointerup', cancel, { once: true });
-                                (e.target as HTMLElement).addEventListener('pointermove', cancel, { once: true });
+                                (e.target as HTMLElement).addEventListener('pointermove', () => clearTimeout(t), { once: true });
                               }}
                             >{truncated}</span>
                           </div>
@@ -3198,6 +3207,40 @@ export default function LedgerDetailAA({
       )}
 
       {/* ── 自定义名称编辑弹框 ── */}
+      {/* 单击标签名：信息提示弹框 */}
+      {aliasInfoTag !== null && (() => {
+        const _infoAlias = (initialBalancesData?.balances as any)?.[`${aliasInfoTag}__alias`] ?? '';
+        const _infoAliasTime = (initialBalancesData?.balances as any)?.[`${aliasInfoTag}__aliasTime`] ?? '';
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.45)' }} onClick={() => setAliasInfoTag(null)}>
+            <div className="bg-white rounded-2xl shadow-xl mx-6 w-full max-w-sm" style={{ padding: '20px 20px 16px' }} onClick={(e) => e.stopPropagation()}>
+              <div className="text-base font-semibold mb-3" style={{ color: '#222' }}>标签名称信息</div>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-xs" style={{ color: '#888', flexShrink: 0 }}>原始标签</span>
+                <span className="text-sm font-semibold" style={{ color: '#D32F2F' }}>{aliasInfoTag}</span>
+              </div>
+              {_infoAlias ? (
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs" style={{ color: '#888', flexShrink: 0 }}>自定义名称</span>
+                  <span className="text-sm font-semibold" style={{ color: '#1565C0' }}>{_infoAlias}</span>
+                </div>
+              ) : (
+                <div className="text-xs mb-2" style={{ color: '#BDBDBD' }}>尚未设置自定义名称</div>
+              )}
+              {_infoAliasTime && (
+                <div className="text-xs mb-3" style={{ color: '#BDBDBD' }}>上次修改：{_infoAliasTime}</div>
+              )}
+              <div className="text-xs mb-4" style={{ color: '#BDBDBD' }}>长按标签名可修改自定义名称</div>
+              <button
+                className="w-full py-2 rounded-xl text-sm font-semibold"
+                style={{ background: '#F5F5F5', color: '#666' }}
+                onClick={() => setAliasInfoTag(null)}
+              >关闭</button>
+            </div>
+          </div>
+        );
+      })()}
+
       {aliasEditTag !== null && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setAliasEditTag(null)}>
           <div className="bg-white rounded-2xl shadow-xl mx-6 w-full max-w-sm" style={{ padding: '20px 20px 16px' }} onClick={(e) => e.stopPropagation()}>
