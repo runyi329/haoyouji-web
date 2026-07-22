@@ -470,16 +470,32 @@ export default function LedgerAAInitialBalance() {
   // 标签视角：计算每个标签下各用户的占比
   const tagRatioView = useMemo(() => {
     if (!allBalancesData || categories.length === 0) return {};
-    const result: Record<string, Array<{ member: any; ratio: number; amount: string; visible: boolean }>> = {};
+    const result: Record<string, Array<{ member: any; ratio: number; amount: string; visible: boolean; pauseStatus: 'paused' | 'running' | 'none' }>> = {};
     for (const cat of categories) {
       const n = cat.name;
-      const rows: Array<{ member: any; ratio: number; amount: string; visible: boolean }> = [];
+      const rows: Array<{ member: any; ratio: number; amount: string; visible: boolean; pauseStatus: 'paused' | 'running' | 'none' }> = [];
       for (const member of (allBalancesData as any).members) {
         const balances = (allBalancesData as any).balancesMap[member.userId] ?? {};
         const ratio = balances[`${n}__ratio`] !== undefined ? parseFloat(String(balances[`${n}__ratio`])) : 0;
         const amount = balances[n] !== undefined ? String(balances[n]) : "";
         const visible = balances[`${n}__visible`] !== undefined ? Number(balances[`${n}__visible`]) !== 0 : true;
-        rows.push({ member, ratio: isNaN(ratio) ? 0 : ratio, amount, visible });
+        // 计算暂停状态
+        let pauseStatus: 'paused' | 'running' | 'none' = 'none';
+        const phRaw = balances[`${n}__pauseHistory`];
+        if (phRaw) {
+          try {
+            const ph = JSON.parse(String(phRaw));
+            if (Array.isArray(ph) && ph.length > 0) {
+              const last = ph[ph.length - 1];
+              pauseStatus = last.resumeDate ? 'running' : 'paused';
+            }
+          } catch { /* ignore */ }
+        } else if (balances[`${n}__pauseDate`]) {
+          pauseStatus = 'paused';
+        } else if (balances[`${n}__startDate`]) {
+          pauseStatus = 'running';
+        }
+        rows.push({ member, ratio: isNaN(ratio) ? 0 : ratio, amount, visible, pauseStatus });
       }
       result[n] = rows.sort((a, b) => {
         // 不可见的用户排到最后
@@ -734,7 +750,7 @@ export default function LedgerAAInitialBalance() {
 
                 {/* 各用户占比列表 */}
                 <div className="px-4 py-2 space-y-2">
-                  {rows.map(({ member, ratio, amount, visible }) => {
+                  {rows.map(({ member, ratio, amount, visible, pauseStatus }) => {
                     const pct = ratio;
                     // 每人独立计算：基准 = max(100, 自己的比例)
                     const base = Math.max(100, pct);
@@ -753,7 +769,7 @@ export default function LedgerAAInitialBalance() {
                         {/* 用户信息 - 点击头像触发编辑 */}
                         <div className="flex items-center gap-2 w-28 flex-shrink-0">
                           <div
-                            className="cursor-pointer active:opacity-70 flex-shrink-0"
+                            className="cursor-pointer active:opacity-70 flex-shrink-0 relative"
                             onClick={() => {
                               const savedTT = (tagConfigData as any)?.target_total ?? null;
                               setTagEditModal({ userId: member.userId, tagName: selectedTagName!, catColor: cat?.color || '#D32F2F' });
@@ -768,6 +784,19 @@ export default function LedgerAAInitialBalance() {
                               nickname={member.nickname}
                               size="sm"
                             />
+                            {/* 暂停/运行状态角标 */}
+                            {pauseStatus === 'paused' && (
+                              <span
+                                className="absolute bottom-0 right-0 flex items-center justify-center rounded-full"
+                                style={{ width: 14, height: 14, backgroundColor: '#1976D2', border: '1.5px solid #fff', fontSize: 7, color: '#fff', fontWeight: 900, letterSpacing: '-1px', lineHeight: 1 }}
+                              >&#10074;&#10074;</span>
+                            )}
+                            {pauseStatus === 'running' && (
+                              <span
+                                className="absolute bottom-0 right-0 flex items-center justify-center rounded-full"
+                                style={{ width: 14, height: 14, backgroundColor: '#388E3C', border: '1.5px solid #fff', fontSize: 8, color: '#fff', fontWeight: 900, lineHeight: 1 }}
+                              >&#9654;</span>
+                            )}
                           </div>
                           <span className="text-xs text-gray-700 truncate">
                             {member.nickname || member.username || "未知"}
