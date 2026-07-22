@@ -542,6 +542,24 @@ export default function LedgerDetailAA({
   const [aliasEditValue, setAliasEditValue] = useState(''); // 输入框内容
   const [aliasSaving, setAliasSaving] = useState(false);
   const [aliasInfoTag, setAliasInfoTag] = useState<string | null>(null); // 单击查看信息的 tag.name
+  // 回报分段详情弹框
+  const [pnlDetailModal, setPnlDetailModal] = useState<{
+    tagName: string;
+    tagAlias: string;
+    ratio: number;
+    segments: Array<{
+      segNo: number;
+      startDate: string;
+      endDate: string;
+      startBalance: number;
+      endBalance: number;
+      effectiveInitial: number;
+      pnl: number;
+      isPaused: boolean;
+      resumeDate?: string;
+    }>;
+    totalPnl: number;
+  } | null>(null);
   const updateMyInitialBalancesMutation = (trpc as any).ledger.updateMyInitialBalances.useMutation({
     onSuccess: () => {
       trpcUtils.ledger.getMyInitialBalances.invalidate({ ledgerId });
@@ -2526,39 +2544,54 @@ export default function LedgerDetailAA({
                           const canClick = !!firstDate;
                           const handlePnlClick = () => {
                             if (!firstDate) return;
+                            const _ratio = initialBalancesData?.balances ? Number(initialBalancesData.balances[`${tag.name}__ratio`] ?? 100) : 100;
+                            const _tagAlias = (initialBalancesData?.balances as any)?.[`${tag.name}__alias`] ?? tag.name;
+                            const _effectiveInitial = tag.initialBalance + (capitalByTag[tag.name] || 0);
+                            const today3 = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+                            const segments: typeof pnlDetailModal extends null ? never : NonNullable<typeof pnlDetailModal>['segments'] = [];
                             if (pnlHistoryForAlert.length === 0) {
                               // 无暂停：单段
                               const segStartPt = tag.points.find((p: any) => p.date >= firstDate);
-                              const segEndPt = tag.points[tag.points.length - 1];
-                              if (!segStartPt || !segEndPt) { alert('暂无数据'); return; }
-                              const startBal = (segStartPt as any).balance;
-                              const endBal = (segEndPt as any).balance;
-                              const segPnl = latestPnl;
-                              alert(`${fmt(segStartPt.date)} ~ ${fmt(segEndPt.date)}\n结束金额 ${endBal?.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} - 初始金额 ${startBal?.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}\n回报 ${segPnl < 0 ? '-' : ''}${Math.abs(segPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`);
+                              const _localCutoff = (() => { const _h = pnlHistoryForAlert; const _last = _h[_h.length - 1]; return (_last && !_last.resumeDate && _last.pauseDate) ? _last.pauseDate : null; })();
+                              const _localEffPts = _localCutoff ? tag.points.filter((p: any) => p.date <= _localCutoff) : tag.points;
+                              const segEndPt = _localEffPts[_localEffPts.length - 1];
+                              if (segStartPt && segEndPt) {
+                                segments.push({
+                                  segNo: 1,
+                                  startDate: segStartPt.date,
+                                  endDate: segEndPt.date,
+                                  startBalance: (segStartPt as any).balance ?? 0,
+                                  endBalance: (segEndPt as any).balance ?? 0,
+                                  effectiveInitial: _effectiveInitial,
+                                  pnl: latestPnl,
+                                  isPaused: false,
+                                });
+                              }
                             } else {
-                              const today3 = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
-                              let lines: string[] = [];
                               let segStart = firstDate;
-                              let totalPnlCalc = 0;
+                              let segNo = 1;
                               for (const item of pnlHistoryForAlert) {
                                 if (!item.pauseDate || item.pauseDate <= segStart) continue;
-                                // 本段截止 = pauseDate 当天或之前的最后一条数据
                                 const segPts = tag.points.filter((p: any) => p.date >= segStart && p.date <= item.pauseDate);
                                 const segStartPt = segPts[0];
                                 const segEndPt = segPts[segPts.length - 1];
                                 if (segStartPt && segEndPt) {
-                                  const startBal = (segStartPt as any).balance;
-                                  const endBal = (segEndPt as any).balance;
-                                  const segPnl = segEndPt.pnl - (segPts.length > 0 ? (tag.points.find((p: any) => p.date < segStart) as any)?.pnl ?? 0 : 0);
-                                  // 用 pnl 差值表示本段回报
-                                  const prevSegPt = tag.points.filter((p: any) => p.date < segStart);
-                                  const prevSegPnl = prevSegPt.length > 0 ? prevSegPt[prevSegPt.length - 1].pnl : 0;
+                                  const prevSegPts = tag.points.filter((p: any) => p.date < segStart);
+                                  const prevSegPnl = prevSegPts.length > 0 ? prevSegPts[prevSegPts.length - 1].pnl : 0;
                                   const thisSegPnl = segEndPt.pnl - prevSegPnl;
-                                  totalPnlCalc += thisSegPnl;
-                                  lines.push(`第${lines.length / 2 + 1}段：${fmt(segStartPt.date)} ~ ${fmt(segEndPt.date)}`);
-                                  lines.push(`  结束 ${endBal?.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} - 初始 ${startBal?.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} = ${thisSegPnl < 0 ? '-' : ''}${Math.abs(thisSegPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`);
+                                  segments.push({
+                                    segNo,
+                                    startDate: segStartPt.date,
+                                    endDate: segEndPt.date,
+                                    startBalance: (segStartPt as any).balance ?? 0,
+                                    endBalance: (segEndPt as any).balance ?? 0,
+                                    effectiveInitial: _effectiveInitial,
+                                    pnl: thisSegPnl,
+                                    isPaused: !item.resumeDate,
+                                    resumeDate: item.resumeDate,
+                                  });
+                                  segNo++;
                                 }
-                                lines.push(`  ⏸ 暂停${item.resumeDate ? ` → ▶ 重启 ${fmt(item.resumeDate)}` : '（暂停中）'}`);
                                 segStart = item.resumeDate ?? '';
                               }
                               // 最后一段（若已重启）
@@ -2568,19 +2601,23 @@ export default function LedgerDetailAA({
                                 const segStartPt = segPts[0];
                                 const segEndPt = segPts[segPts.length - 1];
                                 if (segStartPt && segEndPt) {
-                                  const startBal = (segStartPt as any).balance;
-                                  const endBal = (segEndPt as any).balance;
-                                  const prevSegPt = tag.points.filter((p: any) => p.date < segStart);
-                                  const prevSegPnl = prevSegPt.length > 0 ? prevSegPt[prevSegPt.length - 1].pnl : 0;
+                                  const prevSegPts = tag.points.filter((p: any) => p.date < segStart);
+                                  const prevSegPnl = prevSegPts.length > 0 ? prevSegPts[prevSegPts.length - 1].pnl : 0;
                                   const thisSegPnl = segEndPt.pnl - prevSegPnl;
-                                  totalPnlCalc += thisSegPnl;
-                                  lines.push(`第${Math.floor(lines.length / 3) + 1}段：${fmt(segStartPt.date)} ~ ${fmt(segEndPt.date)}`);
-                                  lines.push(`  结束 ${endBal?.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} - 初始 ${startBal?.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} = ${thisSegPnl < 0 ? '-' : ''}${Math.abs(thisSegPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`);
+                                  segments.push({
+                                    segNo,
+                                    startDate: segStartPt.date,
+                                    endDate: segEndPt.date,
+                                    startBalance: (segStartPt as any).balance ?? 0,
+                                    endBalance: (segEndPt as any).balance ?? 0,
+                                    effectiveInitial: _effectiveInitial,
+                                    pnl: thisSegPnl,
+                                    isPaused: false,
+                                  });
                                 }
                               }
-                              lines.push(`合计回报：${latestPnl < 0 ? '-' : ''}${Math.abs(latestPnl).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`);
-                              alert(lines.join('\n'));
                             }
+                            setPnlDetailModal({ tagName: tag.name, tagAlias: _tagAlias, ratio: _ratio, segments, totalPnl: latestPnl });
                           };
                           return (
                             <span
@@ -3416,6 +3453,99 @@ export default function LedgerDetailAA({
 
       {/* ── 自定义名称编辑弹框 ── */}
       {/* 单击标签名：信息提示弹框 */}
+      {pnlDetailModal !== null && (() => {
+        const { tagName, tagAlias, ratio, segments, totalPnl } = pnlDetailModal;
+        const fmtNum = (n: number) => `${n < 0 ? '-' : ''}${Math.abs(n).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`;
+        const fmtDate = (d: string) => { const [, m, dd] = d.split('-'); return `${Number(m)}月${Number(dd)}日`; };
+        const pnlColor = totalPnl > 0 ? '#D32F2F' : totalPnl < 0 ? '#388E3C' : '#BDBDBD';
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setPnlDetailModal(null)}>
+            <div className="bg-white rounded-2xl shadow-xl mx-4 w-full max-w-sm" style={{ maxHeight: '80vh', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
+              {/* 标题栏 */}
+              <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid #F0F0F0' }}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-base font-bold" style={{ color: '#1A1A1A' }}>{tagAlias !== tagName ? tagAlias : tagName}</span>
+                    {tagAlias !== tagName && <span className="text-xs ml-2" style={{ color: '#BDBDBD' }}>{tagName}</span>}
+                  </div>
+                  <div className="text-xs px-2 py-1 rounded-full" style={{ background: '#F5F5F5', color: '#888' }}>占比 {ratio}%</div>
+                </div>
+                <div className="text-xs mt-1" style={{ color: '#BDBDBD' }}>回报计算明细</div>
+              </div>
+              {/* 分段列表（可滚动） */}
+              <div style={{ overflowY: 'auto', flex: 1, padding: '12px 20px' }}>
+                {segments.map((seg, idx) => (
+                  <div key={idx}>
+                    {/* 分段标题 */}
+                    <div className="flex items-center gap-2 mb-2" style={{ marginTop: idx > 0 ? 12 : 0 }}>
+                      <div className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#EEF2FF', color: '#3949AB' }}>
+                        第 {seg.segNo} 段
+                      </div>
+                      <div className="text-xs" style={{ color: '#888' }}>
+                        {fmtDate(seg.startDate)} — {fmtDate(seg.endDate)}
+                      </div>
+                      {seg.isPaused && (
+                        <div className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: '#E3F2FD', color: '#1565C0' }}>暂停中</div>
+                      )}
+                    </div>
+                    {/* 计算过程卡片 */}
+                    <div className="rounded-xl" style={{ background: '#FAFAFA', padding: '12px 14px' }}>
+                      {/* 初始金额行 */}
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs" style={{ color: '#888' }}>初始金额</span>
+                        <span className="text-sm font-medium" style={{ color: '#1A1A1A' }}>{seg.effectiveInitial.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span>
+                      </div>
+                      {/* 结束金额行 */}
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs" style={{ color: '#888' }}>结束金额</span>
+                        <span className="text-sm font-medium" style={{ color: '#1A1A1A' }}>{seg.endBalance.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span>
+                      </div>
+                      {/* 分割线 */}
+                      <div style={{ borderTop: '1px dashed #E0E0E0', margin: '8px 0' }} />
+                      {/* 计算公式 */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs" style={{ color: '#888' }}>
+                          ({seg.effectiveInitial.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} − {seg.endBalance.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}) × {ratio}%
+                        </span>
+                        <span className="text-sm font-bold" style={{ color: seg.pnl > 0 ? '#D32F2F' : seg.pnl < 0 ? '#388E3C' : '#BDBDBD' }}>
+                          = {fmtNum(seg.pnl)}
+                        </span>
+                      </div>
+                    </div>
+                    {/* 暂停/重启节点 */}
+                    {idx < segments.length - 1 && (
+                      <div className="flex items-center gap-2 my-2 px-1">
+                        <div style={{ flex: 1, height: 1, background: '#E0E0E0' }} />
+                        <div className="text-xs px-2 py-0.5 rounded-full" style={{ background: seg.isPaused ? '#E3F2FD' : '#E8F5E9', color: seg.isPaused ? '#1565C0' : '#2E7D32', whiteSpace: 'nowrap' }}>
+                          {seg.isPaused ? '⏸ 暂停' : `▶ 重启 ${seg.resumeDate ? fmtDate(seg.resumeDate) : ''}`}
+                        </div>
+                        <div style={{ flex: 1, height: 1, background: '#E0E0E0' }} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {/* 底部合计 */}
+              {segments.length > 1 && (
+                <div style={{ padding: '12px 20px', borderTop: '1px solid #F0F0F0', background: '#FAFAFA', borderRadius: '0 0 16px 16px' }}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold" style={{ color: '#555' }}>合计回报</span>
+                    <span className="text-lg font-bold" style={{ color: pnlColor }}>{fmtNum(totalPnl)}</span>
+                  </div>
+                </div>
+              )}
+              {/* 关闭按钮 */}
+              <div style={{ padding: '10px 20px 16px', background: segments.length > 1 ? '#FAFAFA' : '#FFF', borderRadius: '0 0 16px 16px' }}>
+                <button
+                  className="w-full py-2 rounded-xl text-sm font-semibold"
+                  style={{ background: '#F5F5F5', color: '#666' }}
+                  onClick={() => setPnlDetailModal(null)}
+                >关闭</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {aliasInfoTag !== null && (() => {
         const _infoAlias = (initialBalancesData?.balances as any)?.[`${aliasInfoTag}__alias`] ?? '';
         const _infoAliasTime = (initialBalancesData?.balances as any)?.[`${aliasInfoTag}__aliasTime`] ?? '';
