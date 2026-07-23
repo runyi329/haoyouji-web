@@ -546,6 +546,7 @@ function FinanceOrderCard({
                 <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(order.coin === 'CNY' ? (qty / cnyRate) : (qty * liveP)).toLocaleString(undefined, { maximumFractionDigits: order.coin === 'CNY' ? 0 : 2 })} U</div>
               )
             )}
+          </div>
           {/* 多空方向标签（仅数字币） */}
           {order.asset_type === 'crypto' && order.trade_direction && (
             <div className="mt-1">
