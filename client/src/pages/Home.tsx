@@ -1893,7 +1893,7 @@ export default function Home() {
                         return;
                       }
                       if (cat.name === '企伴') {
-                        navigate('/qiban');
+                        window.open('https://qibanserv-rvsccqtf.manus.space', '_blank');
                         return;
                       }
                       if (cat.name === '健康养生') {
