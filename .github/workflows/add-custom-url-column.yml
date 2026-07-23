@@ -15,4 +15,4 @@ jobs:
       - name: 在生产数据库执行ALTER TABLE
         run: |
           ssh -i ~/.ssh/deploy_key -p ${{ secrets.DEPLOY_PORT }} ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            "mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e 'ALTER TABLE site_versions ADD COLUMN IF NOT EXISTS custom_url VARCHAR(500) DEFAULT NULL AFTER landing_path;' && echo 'ALTER TABLE OK'"
+            "mysql -h 127.0.0.1 -u root -pMiao@20190603 crm_db -e \"SET @exist := (SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='crm_db' AND TABLE_NAME='site_versions' AND COLUMN_NAME='custom_url'); SET @sql := IF(@exist=0, 'ALTER TABLE site_versions ADD COLUMN custom_url VARCHAR(500) DEFAULT NULL AFTER landing_path', 'SELECT 1'); PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;\" && echo 'ALTER TABLE OK'"
