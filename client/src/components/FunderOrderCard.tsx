@@ -975,6 +975,14 @@ export function FunderOrderCard({
               })()}
             </div>
           </div>
+          {/* 多空方向标签（仅数字币） */}
+          {order.asset_type === 'crypto' && (order as any).trade_direction && (
+            <div className="mt-1 mb-1">
+              <span className="text-[11px] px-2 py-0.5 font-bold rounded" style={{ color: '#fff', backgroundColor: (order as any).trade_direction === 'long' ? '#16A34A' : '#DC2626' }}>
+                {(order as any).trade_direction === 'long' ? '多 ↑' : '空 ↓'}
+              </span>
+            </div>
+          )}
           <div className="space-y-0.5 text-xs">
             {/* 期权专属：标的/方向/到期/行权价/权利金 */}
             {isOptionOrder && optionInfo && (

@@ -84,6 +84,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     commissionBase: '',
     commissionStartDate: '',
     assetType: '' as '' | 'stock' | 'crypto' | 'crypto_option',
+    tradeDirection: '' as '' | 'long' | 'short',
     ownerLabel: '',
     ownerLabelMode: 'member' as 'member' | 'manual',
     tags: [] as string[],
@@ -641,6 +642,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       commissionBase: '',
       commissionStartDate: '',
       assetType: '' as '' | 'stock' | 'crypto' | 'crypto_option',
+      tradeDirection: '' as '' | 'long' | 'short',
       ownerLabel: '',
       ownerLabelMode: 'member' as 'member' | 'manual',
       tags: [] as string[],
@@ -707,6 +709,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       commissionBase: order.participantInfo?.commissionBase ? String(order.participantInfo.commissionBase) : '',
       commissionStartDate: order.participantInfo?.commissionStartDate ? String(order.participantInfo.commissionStartDate).slice(0, 10) : '',
       assetType: (order.asset_type || '') as '' | 'stock' | 'crypto' | 'crypto_option',
+      tradeDirection: (order.trade_direction || '') as '' | 'long' | 'short',
       ownerLabel: order.owner_label || '',
       ownerLabelMode: (order.owner_label ? 'manual' : 'member') as 'member' | 'manual',
       tags: (() => { try { const t = order.tags; return Array.isArray(t) ? t : (typeof t === 'string' ? JSON.parse(t) : []); } catch { return []; } })(),
@@ -900,6 +903,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         rate_negative: formData.interestRateAnnual.startsWith('-'),
       } as Record<string, boolean | number>,
       assetType: formData.assetType || undefined,
+      tradeDirection: (formData.tradeDirection || null) as any,
       ownerLabel: formData.ownerLabel || undefined,
       tags: formData.tags.length > 0 ? formData.tags : undefined,
       collateralShareMode: collateralShareMode !== 'none' ? collateralShareMode : undefined,
@@ -1239,6 +1243,30 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         style={
                           formData.assetType === opt.value
                             ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
+                            : { backgroundColor: '#F3F4F6', color: '#6B7280' }
+                        }
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 做多/做空 — 仅数字币时显示 */}
+              {!editingOrder?.participantInfo && formData.assetType === 'crypto' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">方向<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，单选</span></label>
+                  <div className="flex gap-2">
+                    {([{ value: 'long', label: '做多 ↑', activeColor: '#16A34A' }, { value: 'short', label: '做空 ↓', activeColor: '#DC2626' }] as const).map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setFormData(d => ({ ...d, tradeDirection: d.tradeDirection === opt.value ? '' : opt.value }))}
+                        className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
+                        style={
+                          formData.tradeDirection === opt.value
+                            ? { backgroundColor: opt.activeColor, color: '#fff' }
                             : { backgroundColor: '#F3F4F6', color: '#6B7280' }
                         }
                       >
