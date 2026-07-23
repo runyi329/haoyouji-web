@@ -952,6 +952,11 @@ export function FunderOrderCard({
           <div className="flex items-center gap-0.5 mb-0.5">
             <span className="text-[10px] font-medium" style={{ color: isInvited ? '#16A34A' : '#3B82F6' }}>{isInvited ? '订单资产' : '持有资产'}</span>
             {(order.principal_lent_out === 1 || order.principal_lent_out === true) && <span className="text-[10px] text-gray-400">（借出）</span>}
+            {order.asset_type === 'crypto' && (order as any).trade_direction && show('showTradeDirection') && (
+              <span className="ml-1 text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#fff', backgroundColor: (order as any).trade_direction === 'long' ? '#DC2626' : '#16A34A' }}>
+                {(order as any).trade_direction === 'long' ? '多' : '空'}
+              </span>
+            )}
           </div>
           <div className="min-h-9 flex flex-col justify-center">
             <div className="flex items-baseline gap-1 flex-wrap">
@@ -975,14 +980,7 @@ export function FunderOrderCard({
               })()}
             </div>
           </div>
-          {/* 多空方向标签（仅数字币） */}
-          {order.asset_type === 'crypto' && (order as any).trade_direction && (
-            <div className="mt-1 mb-1">
-              <span className="text-[11px] px-2 py-0.5 font-bold rounded" style={{ color: '#fff', backgroundColor: (order as any).trade_direction === 'long' ? '#16A34A' : '#DC2626' }}>
-                {(order as any).trade_direction === 'long' ? '多 ↑' : '空 ↓'}
-              </span>
-            </div>
-          )}
+
           <div className="space-y-0.5 text-xs">
             {/* 期权专属：标的/方向/到期/行权价/权利金 */}
             {isOptionOrder && optionInfo && (

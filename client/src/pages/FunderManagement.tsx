@@ -151,6 +151,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     // 股票专属字段
     brokerName: true,
     brokerAccount: true,
+    // 多空方向标签显示开关
+    showTradeDirection: true,
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean | string>>(DEFAULT_DISPLAY_CONFIG);
   const [marginAlertThreshold, setMarginAlertThreshold] = useState<string>(''); // 保证金率预警阈值（%）
@@ -1258,7 +1260,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 <div>
                   <label className="block text-sm font-medium text-gray-600 mb-2">方向<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，单选</span></label>
                   <div className="flex gap-2">
-                    {([{ value: 'long', label: '做多 ↑', activeColor: '#16A34A' }, { value: 'short', label: '做空 ↓', activeColor: '#DC2626' }] as const).map(opt => (
+                    {([{ value: 'long', label: '做多', activeColor: '#DC2626' }, { value: 'short', label: '做空', activeColor: '#16A34A' }] as const).map(opt => (
                       <button
                         key={opt.value}
                         type="button"
@@ -2243,6 +2245,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       { key: 'aiIcon', label: 'AI图标（持有资产右上角）' },
                       { key: 'assetType', label: '资产类型标签（股票/数字币）' },
                       { key: 'showOwnerName', label: '显示订单所有者名字' },
+                      ...(formData.assetType === 'crypto' ? [
+                        { key: 'showTradeDirection', label: '多空方向标签（数字币专属）' },
+                      ] : []),
                       ...(formData.assetType === 'stock' ? [
                         { key: 'brokerName', label: '证券公司（股票专属）' },
                         { key: 'brokerAccount', label: '证券账号（股票专属）' },
