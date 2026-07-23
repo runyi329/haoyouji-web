@@ -16335,6 +16335,7 @@ ${klinesSummary}
           denomination: z.enum(['U', 'B']).optional(),
           buyQty: z.string().optional(),
         }).optional(),
+        tradeDirection: z.enum(['long', 'short']).nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -16370,7 +16371,7 @@ ${klinesSummary}
         }
         const insertResult = await db.execute(
           sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, show_profit_share, commission_share, collateral_assets, lent_out_assets, display_config, asset_type, tags, collateral_share_mode, principal_lent_out, option_info, created_by)
-              VALUES (${orderNo}, ${orderRole}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets && input.lentOutAssets.length > 0 ? JSON.stringify(input.lentOutAssets) : null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.principalLentOut ? 1 : 0}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${ctx.user.id})`
+              VALUES (${orderNo}, ${orderRole}, ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets && input.lentOutAssets.length > 0 ? JSON.stringify(input.lentOutAssets) : null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.principalLentOut ? 1 : 0}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${input.tradeDirection || null}, ${ctx.user.id})`
         ) as any;
         // 新订单创建后触发即时扫描
         const newOrderId = insertResult?.insertId || (insertResult?.[0] as any)?.insertId;
@@ -17118,6 +17119,7 @@ ${klinesSummary}
           direction: z.enum(['long_call', 'long_put', 'short_call', 'short_put']).optional(),
           targetPrice: z.string().optional(),
         }).optional(),
+        tradeDirection: z.enum(['long', 'short']).nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -17170,7 +17172,7 @@ ${klinesSummary}
         }
         await db.execute(
           sql`INSERT INTO ledger_orders (order_no, order_role, ledger_id, user_id, coin, amount, amount_currency, buy_price, buy_date, buy_quantity, storage_account, admin_note, public_note, interest_rate_annual, interest_payment_type, interest_base, interest_base_currency, interest_rate_currency, interest_start_date, collateral_coin, collateral_qty, finance_type, collateral_assets, lent_out_assets, show_profit_share, commission_share, display_config, asset_type, owner_label, tags, collateral_share_mode, principal_lent_out, broker_name, broker_account, option_info, trade_direction, created_by)
-              VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.amountCurrency || null}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets ? JSON.stringify(input.lentOutAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.principalLentOut ? 1 : 0}, ${input.brokerName || null}, ${input.brokerAccount || null}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${input.tradeDirection || null}, ${ctx.user.id})`
+              VALUES (${orderNo}, 'finance', ${input.ledgerId}, ${input.userId}, ${input.coin}, ${input.amount}, ${input.amountCurrency || null}, ${input.buyPrice || null}, ${input.buyDate || null}, ${input.buyQuantity || null}, ${input.storageAccount || null}, ${input.adminNote || null}, ${input.publicNote || null}, ${input.interestRateAnnual || null}, ${input.interestPaymentType || null}, ${input.interestBase || null}, ${input.interestBaseCurrency || 'USDT'}, ${input.interestRateCurrency || 'USDT'}, ${input.interestStartDate || null}, ${input.collateralCoin || null}, ${input.collateralQty || null}, ${input.financeType || '保本分成'}, ${input.collateralAssets ? JSON.stringify(input.collateralAssets) : null}, ${input.lentOutAssets ? JSON.stringify(input.lentOutAssets) : null}, ${input.showProfitShare !== false ? 1 : 0}, ${input.commissionShare || null}, ${input.displayConfig ? JSON.stringify(input.displayConfig) : null}, ${input.assetType || null}, ${input.ownerLabel || null}, ${input.tags && input.tags.length > 0 ? JSON.stringify(input.tags) : null}, ${input.collateralShareMode || 'none'}, ${input.principalLentOut ? 1 : 0}, ${input.brokerName || null}, ${input.brokerAccount || null}, ${input.optionInfo ? JSON.stringify(input.optionInfo) : null}, ${input.tradeDirection || null}, ${ctx.user.id})\`
         );
         return { success: true };
       }),
@@ -17229,6 +17231,7 @@ ${klinesSummary}
           direction: z.enum(['long_call', 'long_put', 'short_call', 'short_put']).optional(),
           targetPrice: z.string().optional(),
         }).nullable().optional(),
+        tradeDirection: z.enum(['long', 'short']).nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -17262,6 +17265,7 @@ ${klinesSummary}
         if (input.collateralShareMode !== undefined) { updateCols.push('collateral_share_mode = ?'); updateVals.push(input.collateralShareMode || 'none'); }
         if (input.principalLentOut !== undefined) { updateCols.push('principal_lent_out = ?'); updateVals.push(input.principalLentOut ? 1 : 0); }
         if (input.optionInfo !== undefined) { updateCols.push('option_info = ?'); updateVals.push(input.optionInfo ? JSON.stringify(input.optionInfo) : null); }
+        if (input.tradeDirection !== undefined) { updateCols.push('trade_direction = ?'); updateVals.push(input.tradeDirection || null); }
         // 特殊处理 collateralSource（JSON 序列化）
         if (input.collateralSource !== undefined) {
           updateCols.push('collateral_source = ?');

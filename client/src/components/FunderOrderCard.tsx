@@ -925,6 +925,19 @@ export function FunderOrderCard({
               {order.asset_type === 'stock' ? '股票' : order.asset_type === 'crypto_option' ? '期权' : '数字币'}
             </span>
           )}
+          {/* 数字币做多/做空方向标签 */}
+          {(order as any).trade_direction && order.asset_type !== 'stock' && order.asset_type !== 'crypto_option' && (
+            <span
+              className="text-[11px] font-bold px-1.5 py-0.5 rounded"
+              style={
+                (order as any).trade_direction === 'long'
+                  ? { backgroundColor: '#D1FAE5', color: '#059669' }
+                  : { backgroundColor: '#FEE2E2', color: '#DC2626' }
+              }
+            >
+              {(order as any).trade_direction === 'long' ? '做多' : '做空'}
+            </span>
+          )}
           {isInvited && (
             <span className="text-[11px] font-medium px-1.5 py-0.5 rounded" style={{ backgroundColor: '#D1FAE5', color: '#059669' }}>
               受邀

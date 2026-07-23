@@ -1677,3 +1677,10 @@
 - [ ] 前端：在 App.tsx 注册 /dxy 路由
 - [ ] 前端：首页美元指数入口点击跳转到 /dxy
 - [ ] 提交推送并等待 GitHub Actions 绿灯
+## 数字币订单做多/做空方向功能（当前任务）
+- [ ] 修改 FunderManagement.tsx：formData 添加 tradeDirection 字段，类型选数字币时显示做多/做空按钮
+- [ ] 修改 server/routers.ts：financeCreateOrder 和 financeUpdateOrder 支持 trade_direction 字段
+- [ ] 创建数据库迁移 workflow：ALTER TABLE ledger_orders ADD COLUMN trade_direction VARCHAR(10) DEFAULT NULL
+- [ ] 修改 FunderOrderCardV2.tsx（FunderOrderCardV2、FunderOrderCardV2Light、FunderOrderCardV2Silver）：数字币卡片持有资产后面显示做多（绿色）/做空（红色）标签
+- [ ] 修改 FunderOrderCard.tsx：数字币类型显示做多/做空标签
+- [ ] 提交推送并等待部署

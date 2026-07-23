@@ -91,6 +91,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     principalLentOut: false,
     brokerName: '',
     brokerAccount: '',
+    tradeDirection: null as null | 'long' | 'short',
   });
   // 期权专属表单数据
   const [optionFormData, setOptionFormData] = useState({
@@ -651,6 +652,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       principalLentOut: false,
       brokerName: '',
       brokerAccount: '',
+      tradeDirection: null as null | 'long' | 'short',
     });
     setTagInput('');
     setOptionFormData({ optionCurrency: 'BTC', direction: 'long_call', exerciseDate: '', deribitLabel: '', strikePrice: '', premium: '', premiumDenomination: 'U', buyQty: '' });
@@ -718,6 +720,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       principalLentOut: !!(order.principal_lent_out),
       brokerName: order.broker_name || '',
       brokerAccount: order.broker_account || '',
+      tradeDirection: (order.trade_direction as null | 'long' | 'short') || null,
     });
     setTagInput('');
     // 加载期权信息
@@ -915,6 +918,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       principalLentOut: formData.principalLentOut,
       brokerName: formData.brokerName || undefined,
       brokerAccount: formData.brokerAccount || undefined,
+      tradeDirection: (formData.assetType === 'crypto' || formData.assetType === '') && formData.tradeDirection ? formData.tradeDirection : null,
       optionInfo: formData.assetType === 'crypto_option' ? {
         coin: optionFormData.optionCurrency,
         direction: optionFormData.direction,
@@ -1256,25 +1260,35 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               )}
 
               {/* 做多/做空 — 仅数字币时显示 */}
-              {!editingOrder?.participantInfo && formData.assetType === 'crypto' && (
+              {!editingOrder?.participantInfo && (formData.assetType === 'crypto' || formData.assetType === '') && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-600 mb-2">方向<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，单选</span></label>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">方向<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，数字币专用</span></label>
                   <div className="flex gap-2">
-                    {([{ value: 'long', label: '做多', activeColor: '#DC2626' }, { value: 'short', label: '做空', activeColor: '#16A34A' }] as const).map(opt => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => setFormData(d => ({ ...d, tradeDirection: d.tradeDirection === opt.value ? '' : opt.value }))}
-                        className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
-                        style={
-                          formData.tradeDirection === opt.value
-                            ? { backgroundColor: opt.activeColor, color: '#fff' }
-                            : { backgroundColor: '#F3F4F6', color: '#6B7280' }
-                        }
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setFormData(d => ({ ...d, tradeDirection: d.tradeDirection === 'long' ? null : 'long' }))}
+                      className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
+                      style={formData.tradeDirection === 'long'
+                        ? { background: 'linear-gradient(135deg, #059669, #10B981)', color: '#fff' }
+                        : { backgroundColor: '#F0FDF4', color: '#059669', border: '1px solid #A7F3D0' }
+                      }
+                    >
+                      做多
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(d => ({ ...d, tradeDirection: d.tradeDirection === 'short' ? null : 'short' }))}
+                      className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
+                      style={formData.tradeDirection === 'short'
+                        ? { background: 'linear-gradient(135deg, #DC2626, #EF4444)', color: '#fff' }
+                        : { backgroundColor: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }
+                      }
+                    >
+                      做空
+                    </button>
+                  </div>
+                </div>
+              )}
                   </div>
                 </div>
               )}

@@ -466,6 +466,19 @@ export function FunderOrderCardV2Light({
         <span className="text-xs px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(0,0,0,0.04)", color: LT_TEXT_SEC }}>
           数字币
         </span>
+        {/* 数字币做多/做空方向标签 */}
+        {(order as any).trade_direction && (
+          <span
+            className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+            style={
+              (order as any).trade_direction === 'long'
+                ? { backgroundColor: '#D1FAE5', color: '#059669' }
+                : { backgroundColor: '#FEE2E2', color: '#DC2626' }
+            }
+          >
+            {(order as any).trade_direction === 'long' ? '做多' : '做空'}
+          </span>
+        )}
         <span className="text-[10px]" style={{ color: LT_TEXT_SEC }}>{holdDurationLabel}</span>
         {order.order_no && (
           <span className="ml-auto text-[10px] font-mono" style={{ color: LT_TEXT_DIM, letterSpacing: "0.05em" }}>
@@ -1065,6 +1078,21 @@ export function FunderOrderCardV2Silver({
                 </span>
               </div>
             </>
+          )}
+          {/* 数字币做多/做空方向标签（行2，持有资产下方） */}
+          {!isStockCard && (order as any).trade_direction && (
+            <div className="mt-1.5">
+              <span
+                className="text-[11px] font-bold px-2 py-0.5 rounded-md"
+                style={
+                  (order as any).trade_direction === 'long'
+                    ? { backgroundColor: 'rgba(16,185,129,0.15)', color: '#10B981', border: '1px solid rgba(16,185,129,0.35)' }
+                    : { backgroundColor: 'rgba(239,68,68,0.15)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.35)' }
+                }
+              >
+                {(order as any).trade_direction === 'long' ? '做多' : '做空'}
+              </span>
+            </div>
           )}
         </div>
 

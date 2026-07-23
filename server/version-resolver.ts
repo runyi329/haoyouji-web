@@ -84,6 +84,7 @@ async function getDefaultVersion(versions: SiteVersion[]): Promise<SiteVersion> 
     isDefault: true,
     enabled: true,
     sortOrder: 0,
+    customUrl: null,
   };
 }
 
