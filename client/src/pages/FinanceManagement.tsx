@@ -446,6 +446,11 @@ function FinanceOrderCard({
               {order.asset_type === 'stock' ? '股票' : '数字币'}
             </span>
           )}
+          {order.asset_type === 'crypto' && order.trade_direction && (
+            <span className="text-[10px] px-1.5 py-0.5 font-bold" style={{ borderRadius: '3px', color: '#fff', backgroundColor: order.trade_direction === 'long' ? '#16A34A' : '#DC2626' }}>
+              {order.trade_direction === 'long' ? '做多 ↑' : '做空 ↓'}
+            </span>
+          )}
           {order.owner_label && (
             <span className="text-[10px] px-1.5 py-0.5 font-medium" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A', backgroundColor: 'transparent' }}>
               {order.owner_label}
@@ -1332,6 +1337,7 @@ const emptyForm = {
   commissionBase: '',
   commissionStartDate: '',
   assetType: '' as '' | 'stock' | 'crypto',
+  tradeDirection: '' as '' | 'long' | 'short',
   ownerLabel: '',
   interestRateCurrency: 'USDT' as 'USDT' | 'CNY',
   tags: [] as string[],
@@ -1847,6 +1853,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
       showProfitShare: order.show_profit_share !== 0 && order.show_profit_share !== false,
       commissionShare: order.commission_share || '',
       assetType: (order.asset_type || '') as '' | 'stock' | 'crypto',
+      tradeDirection: (order.trade_direction || '') as '' | 'long' | 'short',
       ownerLabel: '',
       interestRateCurrency: (order.interest_rate_currency || 'USDT') as 'USDT' | 'CNY',
       commissionRate: order.participantInfo?.commissionRate || '',
@@ -1937,6 +1944,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         showProfitShare: formData.showProfitShare,
         commissionShare: formData.commissionShare || undefined,
         assetType: formData.assetType || undefined,
+        tradeDirection: (formData.tradeDirection || null) as any,
         ownerLabel: '',
         interestRateCurrency: formData.interestRateCurrency,
         tags: formData.tags.length > 0 ? formData.tags : [],
@@ -1974,6 +1982,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         showProfitShare: formData.showProfitShare,
         commissionShare: formData.commissionShare || undefined,
         assetType: formData.assetType || undefined,
+        tradeDirection: formData.tradeDirection || undefined,
         ownerLabel: undefined,
         interestRateCurrency: formData.interestRateCurrency,
         tags: formData.tags.length > 0 ? formData.tags : undefined,
@@ -2215,7 +2224,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                     <button
                       key={opt.value}
                       type="button"
-                      onClick={() => setFormData(d => ({ ...d, assetType: d.assetType === opt.value ? '' : opt.value }))}
+                      onClick={() => setFormData(d => ({ ...d, assetType: d.assetType === opt.value ? '' : opt.value, tradeDirection: d.assetType === opt.value ? '' : d.tradeDirection }))}
                       className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
                       style={
                         formData.assetType === opt.value
@@ -2228,6 +2237,30 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                   ))}
                 </div>
               </div>)}
+
+              {/* 做多/做空 — 仅数字币时显示 */}
+              {!editingOrder?.participantInfo && formData.assetType === 'crypto' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">方向<span className="ml-1.5 text-xs text-gray-400 font-normal">可选，单选</span></label>
+                  <div className="flex gap-2">
+                    {([{ value: 'long', label: '做多 ↑', activeColor: '#16A34A' }, { value: 'short', label: '做空 ↓', activeColor: '#DC2626' }] as const).map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setFormData(d => ({ ...d, tradeDirection: d.tradeDirection === opt.value ? '' : opt.value }))}
+                        className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
+                        style={
+                          formData.tradeDirection === opt.value
+                            ? { backgroundColor: opt.activeColor, color: '#fff' }
+                            : { backgroundColor: '#F3F4F6', color: '#6B7280' }
+                        }
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* 标签（可添加多个） */}
               {!editingOrder?.participantInfo && (<div>
