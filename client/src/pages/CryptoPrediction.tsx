@@ -1565,12 +1565,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
                   {isCancelledBuy ? '0 u（已撤单）' : `${dailyFee.toFixed(4)}u × ${holdDays}天 = ${totalFee.toFixed(4)}u`}
                 </span>
               </div>
-              {!isCancelledBuy && parseFloat(order.prepaidFee || '0') > 0 && (
-                <div className="flex justify-between items-center">
-                  <span className="text-[#9CA3AF]">已付管理费</span>
-                  <span className="font-medium" style={{ color: '#0EA56A' }}>{parseFloat(order.prepaidFee).toFixed(2)} u</span>
-                </div>
-              )}
+
             </>
           );
         })()}
@@ -1958,7 +1953,7 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
                     <span style={dimStyle} className="text-right">
                       {isCancelledBuy
                         ? <span className="font-semibold" style={{ color: '#1A2340' }}>0 u（已撤单）</span>
-                        : <>{dailyFee.toFixed(4)}u × {holdDays}天 = <span className="font-semibold" style={{ color: '#1A2340' }}>{totalFee.toFixed(4)}u</span></>
+                        : <>{dailyFee.toFixed(4)}u × {holdDays}天 = <span className="font-semibold" style={{ color: '#1A2340' }}>{totalFee.toFixed(4)}u</span>{parseFloat(order.prepaidFee || '0') > 0 && <span style={{ color: '#0EA56A' }}>（已付 {parseFloat(order.prepaidFee).toFixed(2)}u）</span>}</>
                       }
                     </span>
                   </div>
@@ -2196,7 +2191,7 @@ export default function CryptoPrediction() {
   // 谷底增筹建仓表单抽屉状态
   const [showOrderForm, setShowOrderForm] = useState(false);
   // 谷底增筹订单列表筛选
-  const [contractStatusFilter, setContractStatusFilter] = useState<'all'|'pending'|'holding'|'selling'|'sold'|'cancelled'>('all');
+  const [contractStatusFilter, setContractStatusFilter] = useState<'all'|'pending'|'holding'|'selling'|'sold'|'cancelled'>('holding');
   const [contractCoinFilter, setContractCoinFilter] = useState<'all'|'BTC'|'ETH'|'SOL'>('all');
 
   // 委托交易面板状态
@@ -2312,6 +2307,10 @@ export default function CryptoPrediction() {
       return statusMatch && coinMatch;
     });
     arr.sort((a, b) => {
+      // 已撤单永远排在最后
+      const aCancelled = a.status === 'cancelled' ? 1 : 0;
+      const bCancelled = b.status === 'cancelled' ? 1 : 0;
+      if (aCancelled !== bCancelled) return aCancelled - bCancelled;
       let va: any, vb: any;
       if (orderSortKey === 'time') { va = a.createdAt; vb = b.createdAt; }
       else if (orderSortKey === 'coin') { va = a.coin || ''; vb = b.coin || ''; }
