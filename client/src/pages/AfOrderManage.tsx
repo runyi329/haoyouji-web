@@ -339,6 +339,8 @@ export default function AfOrderManage() {
     onError: (e) => toast.error("删除失败：" + e.message),
   });
 
+
+
   // 计算卖出的实时利润（从同一订单取买入信息）
   const calculateProfit = (order: any, actualSellPrice: string): ProfitCalculation | null => {
     const sellPrice = parseFloat(actualSellPrice);
@@ -520,6 +522,7 @@ export default function AfOrderManage() {
               </button>
             ))}
           </div>
+
           <button
             onClick={() => window.location.reload()}
             className="text-xs px-3 py-1 rounded-full active:opacity-70"
