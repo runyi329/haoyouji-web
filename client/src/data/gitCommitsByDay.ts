@@ -8569,4 +8569,9 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-22T07:50:14Z", type: "fix", cleanMessage: "赠单展平为独立卡片，全部Tab不含已撤单，人员分组去重" },
     { date: "2026-07-22T11:40:08Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
   ],
+  "2026-07-23": [
+    { date: "2026-07-22T17:19:22Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-23T01:46:58Z", type: "feat", cleanMessage: "谷底增筹页面添加模拟订单 O/F 开关按钮" },
+    { date: "2026-07-23T04:00:05Z", type: "chore", cleanMessage: "移除模拟订单 O/F 开关按钮及后端接口" },
+  ],
 };
