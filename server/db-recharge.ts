@@ -887,10 +887,12 @@ export async function getUserBalanceHistory(userId: number, limit: number = 50) 
 
   // 去重：balance_history 里与 af_manual_balances 重复的记录
   // 1. 米伴订单扣款/退款：在 af_manual_balances 里已有对应条目
-  // 2. commission 类型：是 walletAdjust 额外写入的，与 af_manual_balances 里的调账记录完全重复
+  // 2. 米伴订阅扣款/退款：在 af_manual_balances 里已有对应条目
+  // 3. commission 类型：是 walletAdjust 额外写入的，与 af_manual_balances 里的调账记录完全重复
   const filteredBhList = bhList.filter((r) => {
     const desc = r.description || '';
     if (desc.includes('米伴订单扣款') || desc.includes('米伴订单退款')) return false;
+    if (desc.includes('米伴订阅') && (desc.includes('扣款') || desc.includes('退款'))) return false;
     if (r.type === 'commission') return false; // af_manual_balances 里已有对应调账记录
     return true;
   });
