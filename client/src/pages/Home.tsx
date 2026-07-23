@@ -1893,7 +1893,7 @@ export default function Home() {
                         return;
                       }
                       if (cat.name === '企伴') {
-                        window.open('https://qibanserv-rvsccqtf.manus.space', '_blank');
+                        window.open('https://qiban.jiangyuchen.cn', '_blank');
                         return;
                       }
                       if (cat.name === '健康养生') {
