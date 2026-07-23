@@ -44,6 +44,7 @@ import { workGroupsRouter } from "./work-groups-api";
 import { partnershipRouter } from "./partnership-router";
 import { posterFavoritesRouter } from "./poster-favorites-router";
 import { beautyRouter } from "./beauty-router";
+import { qibanRouter } from "./qiban-router";
 import { dietRouter } from "./diet-router";
 import { merchantRouter } from "./merchant-router";
 import { lotteryRouter } from "./lottery-router";
@@ -318,6 +319,7 @@ export const appRouter = router({
   equityTransfer: equityTransferRouter,
   partnership: partnershipRouter,
   beauty: beautyRouter,
+  qiban: qibanRouter,
   diet: dietRouter,
   merchant: merchantRouter,
   lottery: lotteryRouter,

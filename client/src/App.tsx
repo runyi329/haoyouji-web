@@ -853,6 +853,9 @@ function Router() {
         <Route path="/mlm-bonus" component={lazy(() => import("./pages/MlmBonusPage"))} />
         {/* ETH 期权监控工具（iframe嵌入，保持PWA沉浸式体验） */}
         <Route path="/eth-options" component={lazy(() => import("./pages/EthOptionsPage"))} />
+        {/* 企伴 - 企业合作与人脉管理平台 */}
+        <Route path="/qiban" component={lazy(() => import("./pages/qiban/QibanHome"))} />
+        <Route path="/qiban/:rest*" component={lazy(() => import("./pages/qiban/QibanHome"))} />
         {/* 桓仁大米商品详情页 */}
         <Route path="/rice-product" component={lazy(() => import("./pages/RiceProductPage"))} />
         {/* 404 */}

@@ -1892,6 +1892,10 @@ export default function Home() {
                         navigate('/yaban');
                         return;
                       }
+                      if (cat.name === '企伴') {
+                        navigate('/qiban');
+                        return;
+                      }
                       if (cat.name === '健康养生') {
                         const kfUrl = 'https://work.weixin.qq.com/kfid/kfc471067df4191a26b';
                         const ua = navigator.userAgent.toLowerCase();

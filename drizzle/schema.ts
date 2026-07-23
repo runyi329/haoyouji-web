@@ -2441,3 +2441,90 @@ export const mibanTeams = mysqlTable("miban_teams", {
 }, (table) => ({
   rootUserIdx: index("miban_teams_root_user_idx").on(table.rootUserId),
 }));
+
+// ─── 企伴：企业档案表 ──────────────────────────────────────────────────────────
+export const qibanCompanies = mysqlTable("qiban_companies", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  shortName: varchar("short_name", { length: 64 }),
+  unifiedCode: varchar("unified_code", { length: 32 }),
+  industry: varchar("industry", { length: 64 }),
+  province: varchar("province", { length: 32 }),
+  city: varchar("city", { length: 32 }),
+  address: text("address"),
+  contactName: varchar("contact_name", { length: 64 }),
+  contactPhone: varchar("contact_phone", { length: 20 }),
+  contactEmail: varchar("contact_email", { length: 128 }),
+  website: varchar("website", { length: 255 }),
+  logoUrl: text("logo_url"),
+  description: text("description"),
+  tags: json("tags"),
+  status: mysqlEnum("status", ["active", "inactive", "pending"]).default("active").notNull(),
+  createdBy: int("created_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  nameIdx: index("qiban_companies_name_idx").on(table.name),
+  createdByIdx: index("qiban_companies_created_by_idx").on(table.createdBy),
+}));
+
+// ─── 企伴：合作项目表 ──────────────────────────────────────────────────────────
+export const qibanPartnerships = mysqlTable("qiban_partnerships", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  companyAId: int("company_a_id").notNull(),
+  companyBId: int("company_b_id"),
+  type: mysqlEnum("type", ["supply", "distribution", "investment", "tech", "other"]).default("other").notNull(),
+  status: mysqlEnum("status", ["draft", "negotiating", "signed", "completed", "cancelled"]).default("draft").notNull(),
+  description: text("description"),
+  expectedAmount: decimal("expected_amount", { precision: 18, scale: 2 }),
+  startDate: varchar("start_date", { length: 20 }),
+  endDate: varchar("end_date", { length: 20 }),
+  createdBy: int("created_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  companyAIdx: index("qiban_partnerships_company_a_idx").on(table.companyAId),
+  statusIdx: index("qiban_partnerships_status_idx").on(table.status),
+}));
+
+// ─── 企伴：合同表 ──────────────────────────────────────────────────────────────
+export const qibanContracts = mysqlTable("qiban_contracts", {
+  id: int("id").autoincrement().primaryKey(),
+  partnershipId: int("partnership_id"),
+  title: varchar("title", { length: 255 }).notNull(),
+  partyA: varchar("party_a", { length: 255 }).notNull(),
+  partyB: varchar("party_b", { length: 255 }).notNull(),
+  amount: decimal("amount", { precision: 18, scale: 2 }),
+  signDate: varchar("sign_date", { length: 20 }),
+  expiryDate: varchar("expiry_date", { length: 20 }),
+  fileUrl: text("file_url"),
+  status: mysqlEnum("status", ["draft", "signed", "expired", "terminated"]).default("draft").notNull(),
+  note: text("note"),
+  createdBy: int("created_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  createdByIdx: index("qiban_contracts_created_by_idx").on(table.createdBy),
+  statusIdx: index("qiban_contracts_status_idx").on(table.status),
+}));
+
+// ─── 企伴：人脉联系人表 ────────────────────────────────────────────────────────
+export const qibanContacts = mysqlTable("qiban_contacts", {
+  id: int("id").autoincrement().primaryKey(),
+  companyId: int("company_id"),
+  name: varchar("name", { length: 64 }).notNull(),
+  title: varchar("title", { length: 64 }),
+  phone: varchar("phone", { length: 20 }),
+  email: varchar("email", { length: 128 }),
+  wechat: varchar("wechat", { length: 64 }),
+  avatarUrl: text("avatar_url"),
+  tags: json("tags"),
+  note: text("note"),
+  createdBy: int("created_by").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+}, (table) => ({
+  companyIdx: index("qiban_contacts_company_idx").on(table.companyId),
+  createdByIdx: index("qiban_contacts_created_by_idx").on(table.createdBy),
+}));
