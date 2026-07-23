@@ -446,11 +446,7 @@ function FinanceOrderCard({
               {order.asset_type === 'stock' ? '股票' : '数字币'}
             </span>
           )}
-          {order.asset_type === 'crypto' && order.trade_direction && (
-            <span className="text-[10px] px-1.5 py-0.5 font-bold" style={{ borderRadius: '3px', color: '#fff', backgroundColor: order.trade_direction === 'long' ? '#16A34A' : '#DC2626' }}>
-              {order.trade_direction === 'long' ? '做多 ↑' : '做空 ↓'}
-            </span>
-          )}
+          {/* 方向标签已移至左栏持币量下方 */}
           {order.owner_label && (
             <span className="text-[10px] px-1.5 py-0.5 font-medium" style={{ border: '1px solid #D1D5DB', borderRadius: '3px', color: '#1A1A1A', backgroundColor: 'transparent' }}>
               {order.owner_label}
@@ -550,7 +546,14 @@ function FinanceOrderCard({
                 <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(order.coin === 'CNY' ? (qty / cnyRate) : (qty * liveP)).toLocaleString(undefined, { maximumFractionDigits: order.coin === 'CNY' ? 0 : 2 })} U</div>
               )
             )}
-          </div>
+          {/* 多空方向标签（仅数字币） */}
+          {order.asset_type === 'crypto' && order.trade_direction && (
+            <div className="mt-1">
+              <span className="text-[11px] px-2 py-0.5 font-bold" style={{ borderRadius: '4px', color: '#fff', backgroundColor: order.trade_direction === 'long' ? '#16A34A' : '#DC2626' }}>
+                {order.trade_direction === 'long' ? '多 ↑' : '空 ↓'}
+              </span>
+            </div>
+          )}
           {/* 订单信息列表 */}
           <div className="space-y-0.5 text-xs">
             {orderDc.buyPrice !== false && price > 0 && (
@@ -1513,6 +1516,8 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   const [showPaymentPanel, setShowPaymentPanel] = useState<number | null>(null);
   // 用户 Tab 筛选（管理员可切换，普通成员固定看自己）
   const [activeUserTab, setActiveUserTab] = useState<number | 'all'>('all');
+  // 多空方向筛选（仅数字币）
+  const [filterDirection, setFilterDirection] = useState<'' | 'long' | 'short'>();
   const [paymentForm, setPaymentForm] = useState({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' });
   const [showPaymentDatePicker, setShowPaymentDatePicker] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
@@ -1762,6 +1767,13 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         }
         return o;
       });
+  // 多空方向筛选
+  const directionFilteredOrders = !filterDirection
+    ? displayOrders
+    : displayOrders.filter((o: any) => o.asset_type === 'crypto' && o.trade_direction === filterDirection);
+  // 是否存在数字币订单（决定是否显示多空筛选按钮）
+  const hasCryptoOrders = displayOrders.some((o: any) => o.asset_type === 'crypto');
+
   // 获取有订单的用户列表（用于 Tab 展示）
   // 跨角色订单（_isParticipant 且 order_role != 'finance'）只让参与方出现在Tab，不让订单所有者出现
   const usersWithOrders = realMembers.filter((m: any) =>
@@ -2079,19 +2091,42 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         </div>
 
         <div>
-          <h2 className="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">
-            订单列表 {displayOrders.length > 0 ? `· ${displayOrders.length} 笔` : ''}
-          </h2>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xs font-medium text-gray-400 uppercase tracking-wide">
+              订单列表 {directionFilteredOrders.length > 0 ? `· ${directionFilteredOrders.length} 笔` : ''}
+            </h2>
+            {hasCryptoOrders && (
+              <div className="flex items-center gap-1">
+                {(['', 'long', 'short'] as const).map(dir => (
+                  <button
+                    key={dir}
+                    onClick={() => setFilterDirection(dir === filterDirection ? '' : dir)}
+                    className="text-[11px] px-2 py-0.5 rounded-full font-medium transition-colors"
+                    style={{
+                      backgroundColor: filterDirection === dir && dir !== ''
+                        ? (dir === 'long' ? '#16A34A' : '#DC2626')
+                        : (filterDirection === '' && dir === '' ? '#E0E7FF' : '#F3F4F6'),
+                      color: filterDirection === dir && dir !== ''
+                        ? '#fff'
+                        : (filterDirection === '' && dir === '' ? '#1A56DB' : '#6B7280'),
+                    }}
+                  >
+                    {dir === '' ? '全部' : dir === 'long' ? '多 ↑' : '空 ↓'}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           {ordersLoading ? (
             <div className="text-center py-4 text-gray-400 text-sm">加载中...</div>
-          ) : displayOrders.length === 0 ? (
+          ) : directionFilteredOrders.length === 0 ? (
             <div className="text-center py-10 bg-white rounded-2xl shadow-sm">
               <TrendingUp className="w-10 h-10 text-gray-200 mx-auto mb-2" />
               <div className="text-gray-400 text-sm">暂无融资订单</div>
             </div>
           ) : (
             <div className="space-y-3">
-              {displayOrders.map((order: any) => {
+              {directionFilteredOrders.map((order: any) => {
                 const totalPaid = (interestPaymentSummary as any)?.[order.id] ?? 0;
                 return (
                   <FinanceOrderCard
