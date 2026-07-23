@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-27
+// 生成时间：2026-07-24
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8592,16 +8592,13 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-23T12:47:54Z", type: "fix", cleanMessage: "预览卡片补充 trade_direction 字段，联动多空方向开关" },
     { date: "2026-07-23T13:10:04Z", type: "feat", cleanMessage: "订单数字币新增做多/做空方向选项" },
     { date: "2026-07-23T15:03:48Z", type: "fix", cleanMessage: "修复卡片模式下数字币订单做多/做空标签不显示问题" },
+    { date: "2026-07-23T15:10:33Z", type: "fix", cleanMessage: "多空标签改为纯文字颜色，与持有资产同大小，多红空绿" },
+    { date: "2026-07-23T15:22:49Z", type: "fix", cleanMessage: "订单模式方向标签移至持有资产右边，做多红色做空绿色，去掉持币量下方重复标签" },
+    { date: "2026-07-23T15:33:35Z", type: "fix", cleanMessage: "订单模式V2卡片 - 去掉页眉方向标签，移至持有资产标题旁，做多红色做空绿色" },
+    { date: "2026-07-23T15:40:24Z", type: "fix", cleanMessage: "卡片模式 - 去掉页眉方向标签，持有资产旁改为背景色白字（多红空绿）" },
   ],
-  "2026-07-26": [
-    { date: "2026-07-26T04:41:41Z", type: "fix", cleanMessage: "订单模式做多/做空标签改为空壳+高亮样式" },
-    { date: "2026-07-26T06:38:11Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
-    { date: "2026-07-26T11:11:42Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
-    { date: "2026-07-26T15:49:49Z", type: "other", cleanMessage: "backup: 更新ETH期权监控工具代码 2026-07-26" },
-  ],
-  "2026-07-27": [
-    { date: "2026-07-26T16:50:41Z", type: "docs", cleanMessage: "合并迁移手册，补全数据库密码/云服务/环境变量完整信息（GitHub Token 已脱敏）" },
-    { date: "2026-07-26T16:53:12Z", type: "chore", cleanMessage: "同步最新代码到备份" },
-    { date: "2026-07-26T16:53:40Z", type: "docs", cleanMessage: "补充 GitHub Token 获取步骤说明" },
+  "2026-07-24": [
+    { date: "2026-07-23T16:08:35Z", type: "feat", cleanMessage: "谷底增稠管理费-订单详情加已付管理费行，弹窗改名+完整订单号+计费说明+历史记录+两位小数" },
+    { date: "2026-07-23T16:21:49Z", type: "feat", cleanMessage: "谷底增稠-订单详情管理费加已付括号/去单独行/已撤单排末尾/默认持仓中筛选" },
   ],
 };
