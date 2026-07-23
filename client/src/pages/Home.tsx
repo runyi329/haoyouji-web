@@ -1893,7 +1893,8 @@ export default function Home() {
                         return;
                       }
                       if (cat.name === '企伴') {
-                        window.open('https://qiban.jiangyuchen.cn', '_blank');
+                        // 跳转到脉动网内部路径，保持PWA沉浸式体验（iframe嵌入）
+                        navigate('/qiban');
                         return;
                       }
                       if (cat.name === '健康养生') {
