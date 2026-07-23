@@ -17231,7 +17231,6 @@ ${klinesSummary}
           direction: z.enum(['long_call', 'long_put', 'short_call', 'short_put']).optional(),
           targetPrice: z.string().optional(),
         }).nullable().optional(),
-        tradeDirection: z.enum(['long', 'short']).nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();

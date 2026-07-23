@@ -1289,9 +1289,6 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   </div>
                 </div>
               )}
-                  </div>
-                </div>
-              )}
 
               {/* 自定义标签 */}
               {!editingOrder?.participantInfo && (

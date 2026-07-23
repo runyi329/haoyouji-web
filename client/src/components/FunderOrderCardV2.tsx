@@ -2150,7 +2150,29 @@ export function FunderLenderCardSilver({
       {/* ── 行2：应收利息大字（左）+ 年化利率（右）── */}
       <div className="flex gap-0 px-5 py-3" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="text-[10px] mb-1" style={{ color: TXT_SEC }}>应收利息 ({interestUnit})</div>
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="text-[10px]" style={{ color: TXT_SEC }}>应收利息 ({interestUnit})</span>
+            {!isStock && !isOption && (
+              <>
+                <span
+                  className="text-[10px] font-bold px-1.5 rounded"
+                  style={
+                    (order as any).trade_direction === 'long'
+                      ? { backgroundColor: 'rgba(16,185,129,0.18)', color: '#10B981', border: '1px solid rgba(16,185,129,0.4)' }
+                      : { backgroundColor: 'rgba(156,163,175,0.12)', color: '#9CA3AF', border: '1px solid rgba(156,163,175,0.25)' }
+                  }
+                >多</span>
+                <span
+                  className="text-[10px] font-bold px-1.5 rounded"
+                  style={
+                    (order as any).trade_direction === 'short'
+                      ? { backgroundColor: 'rgba(239,68,68,0.18)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.4)' }
+                      : { backgroundColor: 'rgba(156,163,175,0.12)', color: '#9CA3AF', border: '1px solid rgba(156,163,175,0.25)' }
+                  }
+                >空</span>
+              </>
+            )}
+          </div>
           <div style={{ lineHeight: 1, display: 'flex', alignItems: 'baseline', gap: '6px' }}>
             <span style={{ fontSize: '1.6rem', fontWeight: 700, color: LN_EARN, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: TXT_SHADOW_LG }}>
               {displayAccrued > 0 ? '+' : ''}{fmt(displayAccrued, 2)}
@@ -2744,5 +2766,4 @@ export function FunderLenderCardSilver({
     </div>
   );
 }
-
 
