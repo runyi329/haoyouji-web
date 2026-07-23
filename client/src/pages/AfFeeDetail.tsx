@@ -97,18 +97,6 @@ export default function AfFeeDetail() {
   const [collectLoading, setCollectLoading] = useState(false);
   const collectMutation = trpc.ledger.afAdminCollectPrepaidFee.useMutation();
   const utils = trpc.useUtils();
-  // 模拟订单开关
-  const { data: mockStatus, refetch: refetchMockStatus } = trpc.ledger.afAdminGetMockOrderStatus.useQuery(
-    { ledgerId },
-    { enabled: !!ledgerId }
-  );
-  const toggleMockMutation = trpc.ledger.afAdminToggleMockOrders.useMutation({
-    onSuccess: (result) => {
-      alert(result.message);
-      refetchMockStatus();
-      utils.ledger.afAdminGetOrders.invalidate({ ledgerId });
-    },
-  });
   // 表格排序：点表头切换字段与正/倒序
   const [sortKey, setSortKey] = useState<'holdDays' | 'totalFee' | 'nominalApr' | 'actualApr' | null>(null);
   const [sortAsc, setSortAsc] = useState(false);
@@ -551,7 +539,7 @@ export default function AfFeeDetail() {
       {/* ── 筛选 Tab（仅谷底增筹） ── */}
       {mainTab === 'gujian' && (
       <div className="bg-white border-b border-gray-100 px-3 py-2 sticky top-0 z-10">
-        {/* 搜索框 + 模拟开关 */}
+        {/* 搜索框 */}
         <div className="flex items-center gap-2 mb-2">
         <div className="flex-1 flex items-center gap-2 bg-gray-50 rounded px-3 py-2 border border-gray-100">
           <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" /></svg>
@@ -568,19 +556,6 @@ export default function AfFeeDetail() {
             </button>
           )}
         </div>
-        {mockStatus?.hasMock && (
-          <button
-            onClick={() => toggleMockMutation.mutate({ ledgerId })}
-            disabled={toggleMockMutation.isPending}
-            className="flex-shrink-0 text-xs px-2.5 py-2 rounded font-medium active:opacity-70 transition-all whitespace-nowrap"
-            style={mockStatus.visibleCount > 0
-              ? { background: 'rgba(34,197,94,0.15)', color: '#16a34a', border: '1px solid rgba(34,197,94,0.4)' }
-              : { background: '#eff2f9', color: '#6b7280', border: '1px solid #e5e7eb' }
-            }
-          >
-            {toggleMockMutation.isPending ? '…' : (mockStatus.visibleCount > 0 ? 'O' : 'F')}
-          </button>
-        )}
         </div>
         {/* 分组筛选按钮（单行合并） */}
         {(() => {

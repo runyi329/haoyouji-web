@@ -14780,61 +14780,6 @@ ${klinesSummary}
         console.log(`[afAdminDeleteOrder] 管理员(${ctx.user.id})删除订单#${input.orderId} 范围:${input.deleteScope} 退款:${input.refund} 币种:${order.coin} 金额:${amount}`);
         return { success: true };
       }),
-    // 模拟订单开关：切换显示/隐藏
-    afAdminToggleMockOrders: protectedProcedure
-      .input(z.object({ ledgerId: z.number() }))
-      .mutation(async ({ ctx, input }) => {
-        const db = await getLedgerDb();
-        const roleRows = await db.execute(
-          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
-        ) as any;
-        const role = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
-        if (!role) throw new Error('无权限');
-        const countRows = await db.execute(
-          sql`SELECT COUNT(*) as cnt FROM af_orders WHERE ledger_id = ${input.ledgerId} AND order_type = 'MOCK'`
-        ) as any;
-        const visibleCount = parseInt((countRows[0]?.[0] ?? countRows[0])?.cnt || '0') || 0;
-        if (visibleCount > 0) {
-          await db.execute(
-            sql`UPDATE af_orders SET order_type = 'MOCK_HIDDEN' WHERE ledger_id = ${input.ledgerId} AND order_type = 'MOCK'`
-          );
-          const hiddenRows = await db.execute(
-            sql`SELECT COUNT(*) as cnt FROM af_orders WHERE ledger_id = ${input.ledgerId} AND order_type = 'MOCK_HIDDEN'`
-          ) as any;
-          const count = parseInt((hiddenRows[0]?.[0] ?? hiddenRows[0])?.cnt || '0') || 0;
-          return { action: 'hidden', count, message: `已隐藏 ${count} 笔模拟订单` };
-        } else {
-          await db.execute(
-            sql`UPDATE af_orders SET order_type = 'MOCK' WHERE ledger_id = ${input.ledgerId} AND order_type = 'MOCK_HIDDEN'`
-          );
-          const shownRows = await db.execute(
-            sql`SELECT COUNT(*) as cnt FROM af_orders WHERE ledger_id = ${input.ledgerId} AND order_type = 'MOCK'`
-          ) as any;
-          const count = parseInt((shownRows[0]?.[0] ?? shownRows[0])?.cnt || '0') || 0;
-          return { action: 'shown', count, message: `已显示 ${count} 笔模拟订单` };
-        }
-      }),
-    // 模拟订单状态查询
-    afAdminGetMockOrderStatus: protectedProcedure
-      .input(z.object({ ledgerId: z.number() }))
-      .query(async ({ ctx, input }) => {
-        const db = await getLedgerDb();
-        const roleRows = await db.execute(
-          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
-        ) as any;
-        const role = (roleRows[0]?.[0]?.role ?? roleRows[0]?.role ?? '');
-        if (!role) throw new Error('无权限');
-        const countRows = await db.execute(
-          sql`SELECT
-            SUM(CASE WHEN order_type = 'MOCK' THEN 1 ELSE 0 END) as visibleCount,
-            SUM(CASE WHEN order_type = 'MOCK_HIDDEN' THEN 1 ELSE 0 END) as hiddenCount
-          FROM af_orders WHERE ledger_id = ${input.ledgerId} AND order_type IN ('MOCK', 'MOCK_HIDDEN')`
-        ) as any;
-        const counts = (countRows[0]?.[0] ?? countRows[0]);
-        const visibleCount = parseInt(counts?.visibleCount || '0') || 0;
-        const hiddenCount = parseInt(counts?.hiddenCount || '0') || 0;
-        return { visibleCount, hiddenCount, hasMock: (visibleCount + hiddenCount) > 0 };
-      }),
     // AF 查询订单的收益权档位触发记录 + 扫描状态
     afGetTierData: protectedProcedure
       .input(z.object({ orderId: z.number(), ledgerId: z.number(), viewAsUserId: z.number().optional() }))
