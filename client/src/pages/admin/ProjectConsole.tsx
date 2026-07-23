@@ -73,6 +73,7 @@ type VersionRow = {
   name: string;
   loginUi: string;
   landingPath: string;
+  customUrl: string | null;
   isDefault: boolean;
   enabled: boolean;
   sortOrder: number;
@@ -100,6 +101,8 @@ export default function ProjectConsole() {
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draftName, setDraftName] = useState("");
+  const [editingCustomUrlId, setEditingCustomUrlId] = useState<number | null>(null);
+  const [draftCustomUrl, setDraftCustomUrl] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<VersionRow | null>(null);
   const [creating, setCreating] = useState(false);
@@ -119,6 +122,34 @@ export default function ProjectConsole() {
     setEditingId(null);
     setDraftName("");
   };
+  const startEditCustomUrl = (p: VersionRow) => {
+    setEditingCustomUrlId(p.id);
+    setDraftCustomUrl(p.customUrl || "");
+  };
+  const cancelEditCustomUrl = () => {
+    setEditingCustomUrlId(null);
+    setDraftCustomUrl("");
+  };
+  const saveCustomUrl = async (p: VersionRow) => {
+    const url = draftCustomUrl.trim();
+    try {
+      await saveMutation.mutateAsync({
+        id: p.id,
+        versionKey: p.versionKey,
+        name: p.name,
+        loginUi: p.loginUi || "maidong",
+        landingPath: p.landingPath || "/",
+        customUrl: url || null,
+        enabled: p.enabled,
+        sortOrder: p.sortOrder,
+      });
+      await refresh();
+      toast.success(url ? "自定义链接已保存" : "已清除自定义链接");
+      cancelEditCustomUrl();
+    } catch (e: any) {
+      toast.error(e?.message || "保存失败");
+    }
+  };
 
   const saveEdit = async (p: VersionRow) => {
     const name = draftName.trim();
@@ -137,6 +168,7 @@ export default function ProjectConsole() {
         name,
         loginUi: p.loginUi || "maidong",
         landingPath: p.landingPath || "/",
+        customUrl: p.customUrl ?? null,
         enabled: p.enabled,
         sortOrder: p.sortOrder,
       });
@@ -192,7 +224,7 @@ export default function ProjectConsole() {
   };
 
   const copyLink = async (p: VersionRow) => {
-    const url = fullUrl(p.landingPath);
+    const url = p.customUrl || fullUrl(p.landingPath);
     try {
       await navigator.clipboard.writeText(url);
     } catch {
@@ -331,7 +363,8 @@ export default function ProjectConsole() {
             <ul className="space-y-2.5">
               {projects.map((p) => {
                 const isEditing = editingId === p.id;
-                const url = fullUrl(p.landingPath);
+                const displayUrl = p.customUrl || fullUrl(p.landingPath);
+                const isEditingCustomUrl = editingCustomUrlId === p.id;
                 return (
                   <li key={p.id} className="p-3 rounded-xl border border-gray-100 bg-white">
                     {/* 第一行：logo（可点击进首页） + 名称 + 状态 + 操作 */}
@@ -424,10 +457,50 @@ export default function ProjectConsole() {
                       <div className="flex items-start gap-2">
                         <Link2 className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-0.5" />
                         <span className="flex-1 min-w-0 text-xs text-gray-500 break-all leading-relaxed">
-                          {url}
+                          {displayUrl}
+                          {p.customUrl && (
+                            <span className="ml-1.5 text-[10px] text-blue-500 bg-blue-50 px-1 py-0.5 rounded">手动绑定</span>
+                          )}
                         </span>
                       </div>
+                      {isEditingCustomUrl && (
+                        <div className="mt-2">
+                          <input
+                            autoFocus
+                            value={draftCustomUrl}
+                            onChange={(e) => setDraftCustomUrl(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") saveCustomUrl(p);
+                              if (e.key === "Escape") cancelEditCustomUrl();
+                            }}
+                            placeholder="输入自定义链接（留空则清除绑定）"
+                            className="w-full text-xs border border-blue-300 rounded-md px-2 py-1.5 outline-none focus:border-blue-500 bg-white"
+                          />
+                          <div className="mt-1.5 flex gap-1.5 justify-end">
+                            <button
+                              onClick={cancelEditCustomUrl}
+                              className="text-xs px-2.5 py-1 rounded-md bg-gray-100 text-gray-500 active:scale-95 transition-transform"
+                            >
+                              取消
+                            </button>
+                            <button
+                              onClick={() => saveCustomUrl(p)}
+                              disabled={saveMutation.isPending}
+                              className="text-xs px-2.5 py-1 rounded-md bg-blue-500 text-white active:scale-95 transition-transform disabled:opacity-60"
+                            >
+                              {saveMutation.isPending ? "保存中…" : "保存"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                       <div className="mt-2 flex justify-end">
+                        <button
+                          onClick={() => isEditingCustomUrl ? cancelEditCustomUrl() : startEditCustomUrl(p)}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-blue-500 bg-blue-50 px-2.5 py-1 rounded-md active:scale-95 transition-transform mr-1.5"
+                        >
+                          <Link2 className="w-3.5 h-3.5" />
+                          {p.customUrl ? "修改绑定" : "手动绑定"}
+                        </button>
                         <button
                           onClick={() => copyLink(p)}
                           className="inline-flex items-center gap-1 text-xs font-medium text-[#D32F2F] bg-[#FDECEC] px-2.5 py-1 rounded-md active:scale-95 transition-transform"

@@ -90,6 +90,7 @@ export const versionRouter = router({
         name: z.string().min(1).max(100),
         loginUi: z.string().min(1).max(50),
         landingPath: z.string().min(1).max(255),
+        customUrl: z.string().max(500).optional().nullable(),
         enabled: z.boolean().optional(),
         sortOrder: z.number().optional(),
       })
@@ -109,12 +110,13 @@ export const versionRouter = router({
           throw new TRPCError({ code: "BAD_REQUEST", message: "版本标识已存在" });
         }
         await conn.execute(
-          `UPDATE site_versions SET version_key = ?, name = ?, login_ui = ?, landing_path = ?, enabled = ?, sort_order = ? WHERE id = ?`,
+          `UPDATE site_versions SET version_key = ?, name = ?, login_ui = ?, landing_path = ?, custom_url = ?, enabled = ?, sort_order = ? WHERE id = ?`,
           [
             input.versionKey,
             input.name,
             input.loginUi,
             input.landingPath,
+            input.customUrl ?? null,
             input.enabled === false ? 0 : 1,
             input.sortOrder ?? 0,
             input.id,

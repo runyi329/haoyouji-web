@@ -21,6 +21,7 @@ export interface SiteVersion {
   name: string;
   loginUi: string;
   landingPath: string;
+  customUrl: string | null;
   isDefault: boolean;
   enabled: boolean;
   sortOrder: number;
@@ -49,7 +50,7 @@ export async function listSiteVersions(includeDisabled = false): Promise<SiteVer
   if (!conn) return [];
   const where = includeDisabled ? "" : "WHERE enabled = 1";
   const [rows]: any = await conn.execute(
-    `SELECT id, version_key, name, login_ui, landing_path, is_default, enabled, sort_order
+    `SELECT id, version_key, name, login_ui, landing_path, custom_url, is_default, enabled, sort_order
      FROM site_versions ${where} ORDER BY sort_order ASC, id ASC`
   );
   return (rows as any[]).map(mapVersionRow);
@@ -62,6 +63,7 @@ function mapVersionRow(r: any): SiteVersion {
     name: String(r.name),
     loginUi: String(r.login_ui || "maidong"),
     landingPath: String(r.landing_path || "/"),
+    customUrl: r.custom_url ? String(r.custom_url) : null,
     isDefault: Number(r.is_default) === 1,
     enabled: Number(r.enabled) === 1,
     sortOrder: Number(r.sort_order || 0),
