@@ -14947,9 +14947,14 @@ ${klinesSummary}
         const totalFee = dailyFee * holdDays;
         const alreadyPaid = parseFloat(order.prepaid_fee || '0');
         const remaining = totalFee - alreadyPaid;
-        if (input.amount > remaining + 0.0001) throw new Error(`预收金额(${input.amount.toFixed(4)})超过待付管理费(${remaining.toFixed(4)})`);
+        if (input.amount > remaining + 0.0001) throw new Error(`征收金额(${input.amount.toFixed(4)})超过待付管理费(${remaining.toFixed(4)})`);
         // 扣用户余额
-        const note = input.note || `预收管理费 订单#${input.orderId} ${order.coin}`;
+        const orderDate = new Date(order.created_at);
+        const yy = String(orderDate.getFullYear()).slice(2);
+        const mm = String(orderDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(orderDate.getDate()).padStart(2, '0');
+        const fullOrderNo = `AF${yy}${mm}${dd}${String(input.orderId).padStart(6, '0')}`;
+        const note = input.note || `谷底增稠管理费 ${fullOrderNo} ${order.coin}`;
         await db.execute(
           sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
               VALUES (${input.ledgerId}, ${order.user_id}, ${-input.amount}, ${note}, NOW(), NOW())`
@@ -14964,7 +14969,7 @@ ${klinesSummary}
           sql`UPDATE af_orders SET prepaid_fee = COALESCE(prepaid_fee, 0) + ${input.amount}, updated_at = NOW()
               WHERE id = ${input.orderId} AND ledger_id = ${input.ledgerId}`
         );
-        console.log(`[预收管理费] 订单#${input.orderId} 用户${order.user_id} 预收${input.amount} 已付合计${(alreadyPaid + input.amount).toFixed(4)}`);
+        console.log(`[谷底增稠管理费] 订单#${input.orderId} 用户${order.user_id} 征收${input.amount} 已付合计${(alreadyPaid + input.amount).toFixed(4)}`);
         return { success: true, totalFee: +totalFee.toFixed(4), alreadyPaid: +(alreadyPaid + input.amount).toFixed(4), remaining: +(remaining - input.amount).toFixed(4) };
       }),
     // 查询订单预收管理费日志

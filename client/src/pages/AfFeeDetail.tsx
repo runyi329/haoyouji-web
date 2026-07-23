@@ -90,12 +90,17 @@ export default function AfFeeDetail() {
   const [aprInfo, setAprInfo] = useState<any | null>(null);
   const [detailOrder, setDetailOrder] = useState<any | null>(null);
   const [finDetailOrder, setFinDetailOrder] = useState<any | null>(null);
-  // 预收管理费弹窗
+  // 谷底增稠管理费弹窗
   const [collectModal, setCollectModal] = useState<{ order: any; totalFee: number; prepaidFee: number } | null>(null);
   const [collectAmount, setCollectAmount] = useState('');
   const [collectNote, setCollectNote] = useState('');
   const [collectLoading, setCollectLoading] = useState(false);
   const collectMutation = trpc.ledger.afAdminCollectPrepaidFee.useMutation();
+  // 查询历史扣除记录
+  const { data: prepaidLogsData, refetch: refetchPrepaidLogs } = trpc.ledger.afGetPrepaidFeeLogs.useQuery(
+    { ledgerId, orderId: collectModal?.order?.id ?? 0 },
+    { enabled: !!collectModal?.order?.id }
+  );
   const utils = trpc.useUtils();
   // 表格排序：点表头切换字段与正/倒序
   const [sortKey, setSortKey] = useState<'holdDays' | 'totalFee' | 'nominalApr' | 'actualApr' | null>(null);
@@ -832,7 +837,7 @@ export default function AfFeeDetail() {
                                   onClick={e => { e.stopPropagation(); setCollectModal({ order: item, totalFee: item.totalFee, prepaidFee }); setCollectAmount(remainingFee.toFixed(4)); setCollectNote(''); }}
                                   className="text-xs font-semibold px-2 py-0.5 rounded"
                                   style={{ background: '#1e3a8a', color: '#fff' }}
-                                >收费</button>
+                                >征收</button>
                               </div>
                             </div>
                           );
@@ -2234,35 +2239,60 @@ export default function AfFeeDetail() {
         </div>
       )}
 
-      {/* 预收管理费弹窗 */}
+      {/* 谷底增稠管理费弹窗 */}
       {collectModal && (() => {
         const { order, totalFee, prepaidFee } = collectModal;
         const remaining = Math.max(0, totalFee - prepaidFee);
+        // 计费说明数据
+        const startDateStr = order.createdAt ? new Date(order.createdAt).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-') : '-';
+        const todayStr = new Date().toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
+        const holdDays = order.holdDays || 1;
+        const dailyFee = order.dailyFee || 0;
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center px-6" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setCollectModal(null)}>
             <div className="bg-white rounded w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-base font-bold text-gray-900">预收管理费</h3>
+                <h3 className="text-base font-bold text-gray-900">谷底增稠管理费</h3>
                 <button onClick={() => setCollectModal(null)} className="text-gray-400 text-xl">×</button>
               </div>
               <div className="mb-4 bg-gray-50 rounded p-3 space-y-1.5">
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-500">订单</span>
-                  <span className="font-medium">{order.coin} #{order.id}</span>
+                  <span className="font-medium font-mono">{order.orderNo || `${order.coin} #${order.id}`}</span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-500">累计管理费</span>
-                  <span className="font-bold text-gray-800">{totalFee.toFixed(4)} U</span>
+                  <span className="font-bold text-gray-800">{totalFee.toFixed(2)} U</span>
+                </div>
+                <div className="text-[10px] text-gray-400 leading-relaxed">
+                  {startDateStr} → {todayStr}，共 {holdDays} 天，{dailyFee.toFixed(2)} U/天
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-500">已付管理费</span>
-                  <span className="font-bold text-green-600">{prepaidFee.toFixed(4)} U</span>
+                  <span className="font-bold text-green-600">{prepaidFee.toFixed(2)} U</span>
                 </div>
                 <div className="flex justify-between text-xs border-t border-gray-200 pt-1.5">
                   <span className="text-gray-500">待付管理费</span>
-                  <span className="font-bold text-orange-500">{remaining.toFixed(4)} U</span>
+                  <span className="font-bold text-orange-500">{remaining.toFixed(2)} U</span>
                 </div>
               </div>
+              {/* 历史扣除记录 */}
+              {prepaidLogsData?.logs && prepaidLogsData.logs.length > 0 && (
+                <div className="mb-4">
+                  <div className="text-xs font-semibold text-gray-500 mb-1.5">历史扣除记录</div>
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                    {prepaidLogsData.logs.map((log: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between text-xs bg-gray-50 rounded px-2.5 py-1.5">
+                        <div className="flex flex-col">
+                          <span className="text-gray-400 text-[10px]">{log.createdAt?.slice(0, 16) || '-'}</span>
+                          {log.note && <span className="text-gray-500">{log.note}</span>}
+                        </div>
+                        <span className="font-bold text-green-600">-{log.amount.toFixed(2)} U</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="mb-3">
                 <label className="text-xs text-gray-500 mb-1 block">本次收取金额 (U)</label>
                 <input
@@ -2302,16 +2332,18 @@ export default function AfFeeDetail() {
                         note: collectNote || undefined,
                       });
                       await utils.ledger.afAdminGetOrders.invalidate({ ledgerId });
-                      setCollectModal(null);
-                      alert(`预收成功！已从用户余额扣除 ${amt.toFixed(4)} U`);
+                      await refetchPrepaidLogs();
+                      setCollectAmount('');
+                      setCollectNote('');
+                      alert(`征收成功！已从用户余额扣除 ${amt.toFixed(2)} U`);
                     } catch (e: any) {
-                      alert('预收失败：' + (e.message || '未知错误'));
+                      alert('征收失败：' + (e.message || '未知错误'));
                     } finally {
                       setCollectLoading(false);
                     }
                   }}
                   className="flex-1 py-2.5 rounded text-sm font-bold text-white bg-orange-500 disabled:opacity-50"
-                >{collectLoading ? '处理中...' : '确认收费'}</button>
+                >{collectLoading ? '处理中...' : '确认征收'}</button>
               </div>
             </div>
           </div>

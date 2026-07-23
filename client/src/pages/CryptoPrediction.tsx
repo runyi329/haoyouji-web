@@ -1558,12 +1558,20 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
           const holdDays = isCancelledBuy ? 0 : Math.max(1, Math.floor((endDay.getTime() - startDay.getTime()) / (1000*60*60*24)) + 1);
           const totalFee = isCancelledBuy ? 0 : dailyFee * holdDays;
           return (
-            <div className="flex justify-between items-center">
-              <span className="text-[#9CA3AF]">管理费</span>
-              <span className="text-[#1E293B] font-medium">
-                {isCancelledBuy ? '0 u（已撤单）' : `${dailyFee.toFixed(4)}u × ${holdDays}天 = ${totalFee.toFixed(4)}u`}
-              </span>
-            </div>
+            <>
+              <div className="flex justify-between items-center">
+                <span className="text-[#9CA3AF]">管理费</span>
+                <span className="text-[#1E293B] font-medium">
+                  {isCancelledBuy ? '0 u（已撤单）' : `${dailyFee.toFixed(4)}u × ${holdDays}天 = ${totalFee.toFixed(4)}u`}
+                </span>
+              </div>
+              {!isCancelledBuy && parseFloat(order.prepaidFee || '0') > 0 && (
+                <div className="flex justify-between items-center">
+                  <span className="text-[#9CA3AF]">已付管理费</span>
+                  <span className="font-medium" style={{ color: '#0EA56A' }}>{parseFloat(order.prepaidFee).toFixed(2)} u</span>
+                </div>
+              )}
+            </>
           );
         })()}
 
