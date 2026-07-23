@@ -1222,8 +1222,8 @@ export default function Home() {
   const { data: productCategories } = trpc.merchant.getCategories.useQuery(undefined, {
     staleTime: 300000,
   });
-  // 取所有活跃分类，按sortOrder排序，最多15个
-  const mainCategories = (productCategories || []).filter(c => c.isActive).sort((a, b) => a.sortOrder - b.sortOrder).slice(0, 15);
+  // 取所有活跃分类，按sortOrder排序，最多16个（企伴+更多各占一格）
+  const mainCategories = (productCategories || []).filter(c => c.isActive).sort((a, b) => a.sortOrder - b.sortOrder).slice(0, 16);
   const { data: categoryProducts, isLoading: isLoadingCategoryProducts } = trpc.merchant.getProductsByCategory.useQuery(
     selectedCategoryId ? { categoryId: selectedCategoryId, limit: 50 } : undefined,
     { enabled: categorySheetOpen && selectedCategoryId !== null, staleTime: 60000 }
