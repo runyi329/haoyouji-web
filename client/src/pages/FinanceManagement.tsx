@@ -2293,7 +2293,6 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                       </button>
                     ))}
                   </div>
-                  <div style={{color:'red',fontSize:11,marginTop:4}}>【调试】FinanceManagement · tradeDirection={String(formData.tradeDirection)}</div>
                 </div>
               )}
 

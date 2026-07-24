@@ -1253,7 +1253,6 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     ))}
                   </div>
                 </div>
-                <div style={{color:'red',fontSize:12,marginTop:4}}>【调试】FunderManagement.tsx · tradeDirection={String(formData.tradeDirection)}</div>
               )}
 
               {/* 做多/做空 — 仅数字币时显示 */}
@@ -1284,7 +1283,6 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       做空
                     </button>
                   </div>
-                  <div style={{color:'red',fontSize:11,marginTop:4}}>【调试】FunderManagement · tradeDirection={String(formData.tradeDirection)}</div>
                 </div>
               )}
 
