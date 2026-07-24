@@ -14954,7 +14954,8 @@ ${klinesSummary}
         const mm = String(orderDate.getMonth() + 1).padStart(2, '0');
         const dd = String(orderDate.getDate()).padStart(2, '0');
         const fullOrderNo = `AF${yy}${mm}${dd}${String(input.orderId).padStart(6, '0')}`;
-        const note = input.note || `谷底增稠管理费 ${fullOrderNo} ${order.coin}`;
+        const baseNote = `谷底增稠管理费 ${fullOrderNo} ${order.coin}`;
+        const note = input.note ? `${baseNote} ${input.note}` : baseNote;
         await db.execute(
           sql`INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
               VALUES (${input.ledgerId}, ${order.user_id}, ${-input.amount}, ${note}, NOW(), NOW())`
