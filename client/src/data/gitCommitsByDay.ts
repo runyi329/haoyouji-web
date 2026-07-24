@@ -8600,5 +8600,15 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   "2026-07-24": [
     { date: "2026-07-23T16:08:35Z", type: "feat", cleanMessage: "谷底增稠管理费-订单详情加已付管理费行，弹窗改名+完整订单号+计费说明+历史记录+两位小数" },
     { date: "2026-07-23T16:21:49Z", type: "feat", cleanMessage: "谷底增稠-订单详情管理费加已付括号/去单独行/已撤单排末尾/默认持仓中筛选" },
+    { date: "2026-07-23T17:23:10Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-24T00:26:26Z", type: "fix", cleanMessage: "谷底增稠管理费note强制前缀+备注追加，修复历史记录订单号" },
+    { date: "2026-07-24T01:45:10Z", type: "fix", cleanMessage: "修复订单保存时 tradeDirection 空字符串导致 zod 校验失败" },
+    { date: "2026-07-24T01:59:10Z", type: "fix", cleanMessage: "删除 financeCreateOrder zod schema 中重复的 tradeDirection（不允许null版本）" },
+    { date: "2026-07-24T02:40:06Z", type: "fix", cleanMessage: "FinanceManagement.tsx - 修复 tradeDirection 空字符串导致 zod 校验失败" },
+    { date: "2026-07-24T02:53:50Z", type: "fix", cleanMessage: "FunderManagement tradeDirection 加强防御，只允许 long/short，其余一律传 null" },
+    { date: "2026-07-24T03:07:46Z", type: "other", cleanMessage: "debug: FunderManagement 资产类型下方加调试文字，确认组件" },
+    { date: "2026-07-24T05:31:16Z", type: "other", cleanMessage: "debug: 做多做空按钮下方加调试文字（正确位置）" },
+    { date: "2026-07-24T05:33:16Z", type: "other", cleanMessage: "fix+debug: FinanceManagement tradeDirection 防御加强 + 两个组件加调试文字" },
+    { date: "2026-07-24T06:24:28Z", type: "other", cleanMessage: "测试：标签添加按钮改为红色，定位组件" },
   ],
 };
