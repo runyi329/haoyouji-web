@@ -21,7 +21,7 @@
  */
 import { useState, useMemo, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
-import { ChevronLeft, ChevronDown, Save, Tag, Users, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronDown, Save, Tag, Users, Trash2, CheckCircle2, EyeOff, Pause } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -272,8 +272,14 @@ export default function LedgerAAInitialBalance() {
   const [viewMode, setViewMode] = useState<"user" | "tag">("tag");
   const [selectedTagName, setSelectedTagName] = useState<string | null>(null);
   const [expandedUsers, setExpandedUsers] = useState<Set<number>>(new Set()); // 默认全部折叠
+  // 用户视图：每个用户下展开的标签，key = `${userId}__${catName}`
+  const [expandedUserTags, setExpandedUserTags] = useState<Set<string>>(new Set());
   // 标签维度双击编辑弹窗
   const [tagEditModal, setTagEditModal] = useState<{ userId: number; tagName: string; catColor: string } | null>(null);
+  // 批量选择模式
+  const [batchSelectMode, setBatchSelectMode] = useState(false);
+  const [batchSelectedUsers, setBatchSelectedUsers] = useState<Set<number>>(new Set());
+  const [batchSaving, setBatchSaving] = useState(false);
   // 标签下拉框开关
   const [tagDropOpenState, setTagDropOpenState] = useState(false);
   const [tagDropRect, setTagDropRect] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -365,6 +371,13 @@ export default function LedgerAAInitialBalance() {
     { ledgerId, tagName: selectedTagName ?? '' },
     { enabled: !!ledgerId && !!selectedTagName }
   );
+
+  // categories 加载完成后自动初始化 selectedTagName（防止标签页默认为空）
+  useEffect(() => {
+    if (categories.length > 0 && !selectedTagName) {
+      setSelectedTagName(categories[0].name);
+    }
+  }, [categories]);
 
   // 当标签配置数据加载时，同步到表单
   useEffect(() => {
@@ -736,15 +749,39 @@ export default function LedgerAAInitialBalance() {
                     />
                     <span className="text-sm font-semibold text-gray-800">{selectedTagName}</span>
                   </div>
-                  {/* 合计状态 */}
-                  <div
-                    className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
-                    style={{
-                      backgroundColor: isComplete ? "#E8F5E9" : isOver ? "#FFEBEE" : "#FFF3E0",
-                      color: isComplete ? "#2E7D32" : isOver ? "#C62828" : "#E65100",
-                    }}
-                  >
-                    <span>合计 {total.toFixed(2)}%{totalShareStr}</span>
+                  {/* 合计状态 + 批量按鈕 */}
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold"
+                      style={{
+                        backgroundColor: isComplete ? "#E8F5E9" : isOver ? "#FFEBEE" : "#FFF3E0",
+                        color: isComplete ? "#2E7D32" : isOver ? "#C62828" : "#E65100",
+                      }}
+                    >
+                      <span>合计 {total.toFixed(2)}%{totalShareStr}</span>
+                    </div>
+                    {/* 批量按鈕 */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (batchSelectMode) {
+                          // 退出批量模式，清空选中
+                          setBatchSelectMode(false);
+                          setBatchSelectedUsers(new Set());
+                        } else {
+                          setBatchSelectMode(true);
+                          setBatchSelectedUsers(new Set());
+                        }
+                      }}
+                      className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium transition-all"
+                      style={{
+                        backgroundColor: batchSelectMode ? '#D32F2F' : '#FFF0F0',
+                        color: batchSelectMode ? '#FFFFFF' : '#D32F2F',
+                      }}
+                    >
+                      <CheckCircle2 size={12} />
+                      <span>{batchSelectMode ? '退出' : '批量'}</span>
+                    </button>
                   </div>
                 </div>
 
@@ -766,38 +803,63 @@ export default function LedgerAAInitialBalance() {
                         className="flex items-center gap-3 py-2 rounded-xl"
                         style={{ WebkitTapHighlightColor: 'transparent' }}
                       >
-                        {/* 用户信息 - 点击头像触发编辑 */}
+                        {/* 用户信息 - 批量模式下点击头像切换选中，普通模式下点击头像触发编辑 */}
                         <div className="flex items-center gap-2 w-28 flex-shrink-0">
-                          <div
-                            className="cursor-pointer active:opacity-70 flex-shrink-0 relative"
-                            onClick={() => {
-                              const savedTT = (tagConfigData as any)?.target_total ?? null;
-                              setTagEditModal({ userId: member.userId, tagName: selectedTagName!, catColor: cat?.color || '#D32F2F' });
-                              setTagTargetTotalSaved(savedTT);
-                              setTagTargetTotalInput(savedTT ?? '');
-                            }}
-                            style={visible ? undefined : { filter: 'grayscale(100%)', opacity: 0.5 }}
-                          >
-                            <UserAvatar
-                              username={member.username}
-                              avatar={member.avatar}
-                              nickname={member.nickname}
-                              size="sm"
-                            />
-                            {/* 暂停/运行状态角标 */}
-                            {pauseStatus === 'paused' && (
-                              <span
-                                className="absolute bottom-0 right-0 flex items-center justify-center rounded-full"
-                                style={{ width: 14, height: 14, backgroundColor: '#1976D2', border: '1.5px solid #fff', fontSize: 7, color: '#fff', fontWeight: 900, letterSpacing: '-1px', lineHeight: 1 }}
-                              >&#10074;&#10074;</span>
-                            )}
-                            {pauseStatus === 'running' && (
-                              <span
-                                className="absolute bottom-0 right-0 flex items-center justify-center rounded-full"
-                                style={{ width: 14, height: 14, backgroundColor: '#388E3C', border: '1.5px solid #fff', fontSize: 8, color: '#fff', fontWeight: 900, lineHeight: 1 }}
-                              >&#9654;</span>
-                            )}
-                          </div>
+                          {(() => {
+                            // 批量模式下，展示 editState 中的实时 visible（已被点击修改的）
+                            const batchVisible = batchSelectMode
+                              ? (editState[member.userId]?.[selectedTagName!]?.visible ?? visible)
+                              : visible;
+                            return (
+                              <div
+                                className="cursor-pointer flex-shrink-0 relative"
+                                onClick={() => {
+                                  if (batchSelectMode) {
+                                    // 批量模式：直接切换该用户的 visible 状态
+                                    const currentVisible = editState[member.userId]?.[selectedTagName!]?.visible ?? visible;
+                                    updateEntry(member.userId, selectedTagName!, { visible: !currentVisible });
+                                    // 记录该用户已被修改（用于底部保存按鈕显示变动数）
+                                    setBatchSelectedUsers(prev => {
+                                      const next = new Set(prev);
+                                      next.add(member.userId);
+                                      return next;
+                                    });
+                                  } else {
+                                    // 普通模式：打开编辑弹窗
+                                    const savedTT = (tagConfigData as any)?.target_total ?? null;
+                                    setTagEditModal({ userId: member.userId, tagName: selectedTagName!, catColor: cat?.color || '#D32F2F' });
+                                    setTagTargetTotalSaved(savedTT);
+                                    setTagTargetTotalInput(savedTT ?? '');
+                                  }
+                                }}
+                                style={{
+                                  filter: batchVisible ? 'none' : 'grayscale(100%)',
+                                  opacity: batchVisible ? 1 : 0.45,
+                                  transition: 'all 0.15s ease',
+                                }}
+                              >
+                                <UserAvatar
+                                  username={member.username}
+                                  avatar={member.avatar}
+                                  nickname={member.nickname}
+                                  size="sm"
+                                />
+                                {/* 暂停/运行状态角标（批量模式下也正常显示） */}
+                                {pauseStatus === 'paused' && (
+                                  <span
+                                    className="absolute bottom-0 right-0 flex items-center justify-center rounded-full"
+                                    style={{ width: 14, height: 14, backgroundColor: '#1976D2', border: '1.5px solid #fff', fontSize: 7, color: '#fff', fontWeight: 900, letterSpacing: '-1px', lineHeight: 1 }}
+                                  >&#10074;&#10074;</span>
+                                )}
+                                {pauseStatus === 'running' && (
+                                  <span
+                                    className="absolute bottom-0 right-0 flex items-center justify-center rounded-full"
+                                    style={{ width: 14, height: 14, backgroundColor: '#388E3C', border: '1.5px solid #fff', fontSize: 8, color: '#fff', fontWeight: 900, lineHeight: 1 }}
+                                  >&#9654;</span>
+                                )}
+                              </div>
+                            );
+                          })()}
                           <span className="text-xs text-gray-700 truncate">
                             {member.nickname || member.username || "未知"}
                           </span>
@@ -881,6 +943,54 @@ export default function LedgerAAInitialBalance() {
                     {total.toFixed(2)}% / 100%
                   </span>
                 </div>
+
+                {/* 批量操作栏（批量模式且有选中时显示） */}
+                {batchSelectMode && (
+                  <div className="mx-4 mb-4 flex items-center gap-2">
+                    <div className="flex-1 text-xs text-gray-500">
+                      {batchSelectedUsers.size > 0 ? `已修改 ${batchSelectedUsers.size} 人` : '点击头像切换显示/隐藏'}
+                    </div>
+                    {batchSelectedUsers.size > 0 && (
+                      <button
+                        type="button"
+                        disabled={batchSaving}
+                        onClick={() => {
+                          if (!selectedTagName) return;
+                          setBatchSaving(true);
+                          const userIds = Array.from(batchSelectedUsers);
+                          // editState 已在点击头像时实时更新，直接逐一保存
+                          setTimeout(() => {
+                            for (const uid of userIds) {
+                              handleSaveMember(uid);
+                            }
+                            setBatchSaving(false);
+                            setBatchSelectMode(false);
+                            setBatchSelectedUsers(new Set());
+                            toast.success(`已保存 ${userIds.length} 人的显示设置`);
+                          }, 50);
+                        }}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold"
+                        style={{ backgroundColor: batchSaving ? '#BDBDBD' : '#D32F2F', color: '#FFFFFF' }}
+                      >
+                        <Save size={12} />
+                        <span>{batchSaving ? '保存中...' : '保存'}</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // 退出批量模式时恢复原始数据（放弃未保存的修改）
+                        refetch();
+                        setBatchSelectMode(false);
+                        setBatchSelectedUsers(new Set());
+                      }}
+                      className="px-3 py-1.5 rounded-xl text-xs font-medium"
+                      style={{ backgroundColor: '#F5F5F5', color: '#757575' }}
+                    >
+                      取消
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* ===== 标签配置框 ===== */}
@@ -1245,12 +1355,6 @@ export default function LedgerAAInitialBalance() {
                             <span className="text-xs font-medium" style={{ color: '#F59E0B' }}>{tagConfigForm.pauseDate}</span>
                           </div>
                         )}
-                        {tagConfigForm.endDate && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs text-gray-500">结束日期</span>
-                            <span className="text-xs text-gray-700">{tagConfigForm.endDate}</span>
-                          </div>
-                        )}
                         {tagConfigForm.interestMode === 'profit_only' && (
                           <div className="mt-1 text-xs text-gray-400">亏损时利息自动为 0%（依据盈亏汇总判断）</div>
                         )}
@@ -1321,16 +1425,6 @@ export default function LedgerAAInitialBalance() {
                           />
                           <div className="text-xs text-gray-400 mt-1">设置后，该日期及之后的日历格子显示暂停标志，无法新增记录</div>
                         </div>
-                        <div className="mt-2">
-                          <div className="text-xs text-gray-400 mb-1">结束日期</div>
-                          <input
-                            type="date"
-                            value={tagConfigForm.endDate}
-                            onChange={e => setTagConfigForm(prev => ({ ...prev, endDate: e.target.value }))}
-                            className="w-full rounded-xl px-3 py-2 text-sm border outline-none"
-                            style={{ borderColor: "#E0E0E0", backgroundColor: "#FAFAFA" }}
-                          />
-                        </div>
                         {tagConfigForm.interestMode === 'profit_only' && (
                           <div className="mt-1.5 text-xs text-gray-400">亏损时利息自动为 0%（依据盈亏汇总判断）</div>
                         )}
@@ -1394,8 +1488,16 @@ export default function LedgerAAInitialBalance() {
               const isDirty = dirtyUsers.has(userId);
               const isSaving = savingUsers.has(userId);
 
-              const isExpanded = expandedUsers.has(userId);
-              const toggleExpand = () => setExpandedUsers(prev => {
+              const toggleUserTag = (catName: string) => {
+                const key = `${userId}__${catName}`;
+                setExpandedUserTags(prev => {
+                  const s = new Set(prev);
+                  s.has(key) ? s.delete(key) : s.add(key);
+                  return s;
+                });
+              };
+              const isUserExpanded = expandedUsers.has(userId);
+              const toggleUserExpand = () => setExpandedUsers(prev => {
                 const s = new Set(prev);
                 s.has(userId) ? s.delete(userId) : s.add(userId);
                 return s;
@@ -1407,11 +1509,11 @@ export default function LedgerAAInitialBalance() {
                   className="mx-4 mt-3 rounded-2xl overflow-hidden shadow-sm"
                   style={{ backgroundColor: "#FFFFFF" }}
                 >
-                  {/* 成员头部 - 可点击展开/折叠 */}
+                  {/* 用户头部：可点击收起/展开所有标签 */}
                   <div
-                    className="flex items-center justify-between px-4 py-3 cursor-pointer"
-                    style={{ borderBottom: isExpanded ? "1px solid #F0E8E0" : "none" }}
-                    onClick={toggleExpand}
+                    className="flex items-center justify-between px-4 pt-3 pb-2 cursor-pointer"
+                    style={{ borderBottom: isUserExpanded ? '1px solid #F0E8E0' : 'none' }}
+                    onClick={toggleUserExpand}
                   >
                     <div className="flex items-center gap-2">
                       <UserAvatar
@@ -1421,20 +1523,36 @@ export default function LedgerAAInitialBalance() {
                         size="sm"
                       />
                       <div>
-                        <div className="text-sm font-medium text-gray-800">
+                        <div className="text-sm font-semibold text-gray-800">
                           {member.nickname || member.username || "未知用户"}
                         </div>
-                        <div className="text-xs text-gray-400">
-                          {member.role === "owner"
-                            ? "创建人"
-                            : member.role === "admin"
-                            ? "管理员"
-                            : "成员"}
-                        </div>
+                        {!isUserExpanded ? (() => {
+                          let running = 0, paused = 0;
+                          for (const cat of categories) {
+                            const e = userEdit[(cat as any).name] ?? defaultEntry();
+                            if (!e.visible) continue;
+                            let isPaused = false;
+                            if (e.pauseHistory && e.pauseHistory.length > 0) {
+                              const last = e.pauseHistory[e.pauseHistory.length - 1];
+                              isPaused = !last.resumeDate;
+                            } else if (e.pauseDate) {
+                              isPaused = true;
+                            }
+                            isPaused ? paused++ : running++;
+                          }
+                          const parts = [];
+                          if (running > 0) parts.push(`${running}个运行中`);
+                          if (paused > 0) parts.push(`${paused}个暂停`);
+                          return <div className="text-xs text-gray-400 mt-0.5">{parts.length > 0 ? parts.join('·') : '无活跃标签'}</div>;
+                        })() : (
+                          <div className="text-xs text-gray-400">
+                            {member.role === "owner" ? "创建人" : member.role === "admin" ? "管理员" : "成员"}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {isDirty && isExpanded && (
+                      {isDirty && (
                         <button
                           onClick={(e) => { e.stopPropagation(); handleSaveMember(userId); }}
                           disabled={isSaving}
@@ -1448,67 +1566,93 @@ export default function LedgerAAInitialBalance() {
                           {isSaving ? "保存中..." : "保存"}
                         </button>
                       )}
-                      {isDirty && !isExpanded && (
-                        <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" title="有未保存修改" />
-                      )}
                       <ChevronDown
                         size={16}
                         className="text-gray-400 transition-transform flex-shrink-0"
-                        style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                        style={{ transform: isUserExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
                       />
                     </div>
                   </div>
 
-                  {/* 标签行 - 只在展开时显示 */}
-                  {isExpanded && <div className="px-4 py-2 space-y-4">
-                    {categories.map((cat: any) => {
+                  {/* 标签列表：只在用户展开时显示 */}
+                  {isUserExpanded && <div className="pb-2">
+                    {[...categories].sort((a: any, b: any) => {
+                      const getOrder = (catName: string) => {
+                        const e = userEdit[catName] ?? defaultEntry();
+                        if (!e.visible) return 2; // 隐藏排最后
+                        // 判断暂停状态
+                        let isPaused = false;
+                        if (e.pauseHistory && e.pauseHistory.length > 0) {
+                          const last = e.pauseHistory[e.pauseHistory.length - 1];
+                          isPaused = !last.resumeDate;
+                        } else if (e.pauseDate) {
+                          isPaused = true;
+                        }
+                        return isPaused ? 1 : 0; // 暂停排中间，正常运行排最前
+                      };
+                      return getOrder(a.name) - getOrder(b.name);
+                    }).map((cat: any) => {
                       const entry = userEdit[cat.name] ?? defaultEntry();
                       const marginCNY = calcMarginCNY(entry.margin, entry.marginCoin);
+                      const tagKey = `${userId}__${cat.name}`;
+                      const isCatExpanded = expandedUserTags.has(tagKey);
+                      const hasRatio = entry.ratio !== '' && entry.ratio !== '0';
+                      const hasAmount = entry.amount !== '' && entry.amount !== '0';
+                      const amtNum = parseFloat(entry.amount);
+                      const amtStr = !isNaN(amtNum)
+                        ? amtNum >= 10000 ? `¥${(amtNum / 10000).toFixed(1)}万` : `¥${amtNum.toLocaleString('zh-CN')}`
+                        : '';
+                      // 计算暂停状态
+                      let catPauseStatus: 'paused' | 'running' | 'none' = 'none';
+                      if (entry.pauseHistory && entry.pauseHistory.length > 0) {
+                        const last = entry.pauseHistory[entry.pauseHistory.length - 1];
+                        catPauseStatus = last.resumeDate ? 'running' : 'paused';
+                      } else if (entry.pauseDate) {
+                        catPauseStatus = 'paused';
+                      } else if (entry.startDate) {
+                        catPauseStatus = 'running';
+                      }
                       return (
-                        <div
-                          key={cat.id}
-                          className="rounded-xl py-3 px-3 space-y-2"
-                          style={{ backgroundColor: "#FAF3ED" }}
-                        >
-                          {/* 行1：标签名 + 显示开关 */}
-                          <div className="flex items-center justify-between">
+                        <div key={cat.id} className="mx-3 mb-2 rounded-xl overflow-hidden" style={{ backgroundColor: "#FAF3ED" }}>
+                          {/* 标签行头部：可点击展开该标签 */}
+                          <div
+                            className="flex items-center justify-between px-3 py-2.5 cursor-pointer"
+                            onClick={() => toggleUserTag(cat.name)}
+                          >
                             <div className="flex items-center gap-2">
-                              <div
-                                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                                style={{
-                                  backgroundColor: cat.color || "#D32F2F",
-                                }}
-                              />
-                              <span className="text-sm font-semibold text-gray-800">
-                                {cat.name}
-                              </span>
+                              {catPauseStatus === 'paused'
+                                ? <Pause size={12} className="flex-shrink-0" style={{ color: '#F59E0B' }} />
+                                : <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color || '#D32F2F' }} />
+                              }
+                              <span className="text-sm font-medium text-gray-800">{cat.name}</span>
+                              {!entry.visible && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ backgroundColor: '#F5F5F5', color: '#9E9E9E' }}>隐藏</span>}
                             </div>
-                            {/* 显示开关 */}
                             <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-400">
-                                {entry.visible ? "显示" : "隐藏"}
-                              </span>
+                              {hasRatio && <span className="text-xs text-gray-500">{parseFloat(entry.ratio).toFixed(2)}%</span>}
+                              {hasAmount && amtStr && <span className="text-xs font-medium text-gray-700">{amtStr}</span>}
+                              <ChevronDown
+                                size={14}
+                                className="text-gray-400 transition-transform flex-shrink-0"
+                                style={{ transform: isCatExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                              />
+                            </div>
+                          </div>
+                          {/* 展开内容 */}
+                          {isCatExpanded && <div className="px-3 pb-3 space-y-2" style={{ borderTop: '1px solid #F0E8E0' }}>
+                          {/* 显示开关 */}
+                          <div className="flex items-center justify-between pt-2">
+                            <span className="text-xs text-gray-400">显示开关</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-400">{entry.visible ? "显示" : "隐藏"}</span>
                               <button
                                 type="button"
-                                onClick={() =>
-                                  updateEntry(userId, cat.name, {
-                                    visible: !entry.visible,
-                                  })
-                                }
+                                onClick={() => updateEntry(userId, cat.name, { visible: !entry.visible })}
                                 className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0"
-                                style={{
-                                  backgroundColor: entry.visible
-                                    ? "#D32F2F"
-                                    : "#D1D5DB",
-                                }}
+                                style={{ backgroundColor: entry.visible ? "#D32F2F" : "#D1D5DB" }}
                               >
                                 <span
                                   className="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform"
-                                  style={{
-                                    transform: entry.visible
-                                      ? "translateX(18px)"
-                                      : "translateX(2px)",
-                                  }}
+                                  style={{ transform: entry.visible ? "translateX(18px)" : "translateX(2px)" }}
                                 />
                               </button>
                             </div>
@@ -1578,92 +1722,53 @@ export default function LedgerAAInitialBalance() {
                             </div>
                           </div>
 
-                          {/* 行2c：结束日期 */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-400 w-16 flex-shrink-0">
-                              结束日期
-                            </span>
-                            <div className="flex-1 flex items-center gap-1">
-                              <input
-                                type="date"
-                                value={entry.endDate}
-                                onChange={(e) =>
-                                  updateEntry(userId, cat.name, {
-                                    endDate: e.target.value,
-                                  })
-                                }
-                                className="flex-1 text-sm border rounded-lg px-2 py-1 outline-none focus:border-red-400"
-                                style={{
-                                  borderColor: "#E0E0E0",
-                                  backgroundColor: "#FFFFFF",
-                                  color: "#222222",
-                                }}
-                              />
-                              {entry.endDate && (
-                                <button
-                                  type="button"
-                                  onClick={() => updateEntry(userId, cat.name, { endDate: '' })}
-                                  className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-                                  style={{ fontSize: 12 }}
-                                >×</button>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* 行3：初始比例 */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-400 w-16 flex-shrink-0">
-                              初始比例
-                            </span>
-                            <div className="flex items-center gap-1 flex-1">
-                              <input
-                                type="number"
-                                inputMode="decimal"
-                                placeholder="0"
-                                min={0}
-                                max={100}
-                                value={entry.ratio}
-                                onChange={(e) =>
-                                  updateEntry(userId, cat.name, {
-                                    ratio: e.target.value,
-                                  })
-                                }
-                                className="flex-1 text-right text-sm border rounded-lg px-2 py-1 outline-none focus:border-red-400"
-                                style={{
-                                  borderColor: "#E0E0E0",
-                                  backgroundColor: "#FFFFFF",
-                                  color: "#222222",
-                                }}
-                              />
-                              <span className="text-xs text-gray-400">%</span>
-                            </div>
-                          </div>
-
-                          {/* 行4：初始金额 */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-400 w-16 flex-shrink-0">
-                              初始金额
-                            </span>
-                            <div className="flex items-center gap-1 flex-1">
-                              <span className="text-xs text-gray-400">¥</span>
-                              <input
-                                type="number"
-                                inputMode="decimal"
-                                placeholder="0"
-                                value={entry.amount}
-                                onChange={(e) =>
-                                  updateEntry(userId, cat.name, {
-                                    amount: e.target.value,
-                                  })
-                                }
-                                className="flex-1 text-right text-sm border rounded-lg px-2 py-1 outline-none focus:border-red-400"
-                                style={{
-                                  borderColor: "#E0E0E0",
-                                  backgroundColor: "#FFFFFF",
-                                  color: "#222222",
-                                }}
-                              />
-                            </div>
+                          {/* 行3：初始比例 + 初始金额（同一行） */}
+                          <div className="flex items-center gap-1 w-full overflow-hidden">
+                            {/* 初始比例 */}
+                            <span className="text-xs text-gray-400 flex-shrink-0">比例</span>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              placeholder="0"
+                              min={0}
+                              max={100}
+                              value={entry.ratio}
+                              onChange={(e) =>
+                                updateEntry(userId, cat.name, {
+                                  ratio: e.target.value,
+                                })
+                              }
+                              className="text-right text-sm border rounded-lg px-1 py-1 outline-none focus:border-red-400"
+                              style={{
+                                borderColor: "#E0E0E0",
+                                backgroundColor: "#FFFFFF",
+                                color: "#222222",
+                                width: '52px',
+                                minWidth: 0,
+                              }}
+                            />
+                            <span className="text-xs text-gray-400 flex-shrink-0">%</span>
+                            {/* 分隔线 */}
+                            <div className="w-px h-4 bg-gray-200 flex-shrink-0 mx-1" />
+                            {/* 初始金额 */}
+                            <span className="text-xs text-gray-400 flex-shrink-0">金额¥</span>
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              placeholder="0"
+                              value={entry.amount}
+                              onChange={(e) =>
+                                updateEntry(userId, cat.name, {
+                                  amount: e.target.value,
+                                })
+                              }
+                              className="flex-1 min-w-0 text-right text-sm border rounded-lg px-1 py-1 outline-none focus:border-red-400"
+                              style={{
+                                borderColor: "#E0E0E0",
+                                backgroundColor: "#FFFFFF",
+                                color: "#222222",
+                              }}
+                            />
                           </div>
 
                           {/* 行5：初始保证金（支持数字币） */}
@@ -1738,12 +1843,11 @@ export default function LedgerAAInitialBalance() {
                               >保证金备注{(marginNoteCounts[`${userId}|${cat.name}`] ?? 0) > 0 ? ` (${marginNoteCounts[`${userId}|${cat.name}`]})` : ''}</button>
                             </div>
                           </div>
+                          </div>}
                         </div>
                       );
                     })}
                   </div>}
-
-                  {isExpanded && <div className="h-3" />}
                 </div>
               );
             })
@@ -1926,39 +2030,32 @@ export default function LedgerAAInitialBalance() {
                     </div>
                   )}
                 </div>
-                {/* 结束日期 */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400 w-16 flex-shrink-0">结束日期</span>
-                  <div className="flex-1 flex items-center gap-1">
-                    <input
-                      type="date"
-                      value={entry.endDate}
-                      onChange={e => updateEntry(userId, tagName, { endDate: e.target.value })}
-                      className="flex-1 text-sm border rounded-lg px-2 py-1.5 outline-none focus:border-red-400"
-                      style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: '#222222' }}
-                    />
-                    {entry.endDate && (
-                      <button type="button" onClick={() => updateEntry(userId, tagName, { endDate: '' })} className="w-5 h-5 flex items-center justify-center rounded-full text-gray-400" style={{ fontSize: 12 }}>×</button>
-                    )}
-                  </div>
-                </div>
-                {/* 初始比例 */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400 w-16 flex-shrink-0">初始比例</span>
-                  <div className="flex items-center gap-1 flex-1">
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      placeholder="0"
-                      min={0}
-                      max={100}
-                      value={entry.ratio}
-                      onChange={e => updateEntry(userId, tagName, { ratio: e.target.value })}
-                      className="flex-1 text-right text-sm border rounded-lg px-2 py-1.5 outline-none focus:border-red-400"
-                      style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: '#222222' }}
-                    />
-                    <span className="text-xs text-gray-400">%</span>
-                  </div>
+                {/* 初始比例 + 初始金额（同一行） */}
+                <div className="flex items-center gap-1 w-full overflow-hidden">
+                  <span className="text-xs text-gray-400 flex-shrink-0">比例</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="0"
+                    min={0}
+                    max={100}
+                    value={entry.ratio}
+                    onChange={e => updateEntry(userId, tagName, { ratio: e.target.value })}
+                    className="text-right text-sm border rounded-lg px-1 py-1.5 outline-none focus:border-red-400"
+                    style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: '#222222', width: '52px', minWidth: 0 }}
+                  />
+                  <span className="text-xs text-gray-400 flex-shrink-0">%</span>
+                  <div className="w-px h-4 bg-gray-200 flex-shrink-0 mx-1" />
+                  <span className="text-xs text-gray-400 flex-shrink-0">金额¥</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    placeholder="0"
+                    value={entry.amount}
+                    onChange={e => updateEntry(userId, tagName, { amount: e.target.value })}
+                    className="flex-1 min-w-0 text-right text-sm border rounded-lg px-1 py-1.5 outline-none focus:border-red-400"
+                    style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: '#222222' }}
+                  />
                 </div>
                 {/* 凑整工具：用目标金额计算剩余并填入比例 */}
                 {(() => {
@@ -2064,22 +2161,6 @@ export default function LedgerAAInitialBalance() {
                     </div>
                   );
                 })()}
-                {/* 初始金额 */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400 w-16 flex-shrink-0">初始金额</span>
-                  <div className="flex items-center gap-1 flex-1">
-                    <span className="text-xs text-gray-400">¥</span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      placeholder="0"
-                      value={entry.amount}
-                      onChange={e => updateEntry(userId, tagName, { amount: e.target.value })}
-                      className="flex-1 text-right text-sm border rounded-lg px-2 py-1.5 outline-none focus:border-red-400"
-                      style={{ borderColor: '#E0E0E0', backgroundColor: '#FFFFFF', color: '#222222' }}
-                    />
-                  </div>
-                </div>
                 {/* 初始保证金 */}
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-1.5 w-full overflow-hidden">

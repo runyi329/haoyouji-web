@@ -64,8 +64,9 @@ export default function LedgerSettings() {
  const [showTransferDialog, setShowTransferDialog] = useState(false);
  const [showTransferWarning, setShowTransferWarning] = useState(false);
  const [transferTarget, setTransferTarget] = useState<any>(null);
- const [showSecretKey, setShowSecretKey] = useState(false);
-
+  const [showSecretKey, setShowSecretKey] = useState(false);
+ // 37号账本成员列表展开/折叠
+ const [memberListExpanded, setMemberListExpanded] = useState(false);
  // mutation
  const utils = trpc.useUtils();
  const removeMemberMutation = trpc.ledger.removeMember.useMutation({
@@ -345,106 +346,128 @@ export default function LedgerSettings() {
  </h1>
  <div className="w-10"></div>
  </div>
- {/* 头像列表区域（与导航栏同一卡片） */}
- <div className="flex items-start gap-3 px-4 pb-4 overflow-x-auto">
- {members?.map((member, index) => (
- <div key={member.userId} className="flex flex-col items-center flex-shrink-0">
- {/* 头像容器：固定 64×64 */}
- <div className="relative w-16 h-16 flex-shrink-0">
- <div className="w-16 h-16 rounded-xl overflow-hidden">
+ {/* 头像列表区域 */}
+ {/* ===== 所有账本统一：紧凑圆形头像一排+展开 ===== */}
+ <div className="px-4 pb-3">
+ <div className="flex items-center gap-2 overflow-x-auto" style={{ flexWrap: memberListExpanded ? 'wrap' : 'nowrap' }}>
+ {/* 展开时显示所有成员，折叠时只显示前4个（确保+N、展开、添加、移除按鈕在同一行） */}
+ {(memberListExpanded ? (members ?? []) : (members ?? []).slice(0, 4)).map((member) => (
+ <div key={member.userId} className="relative flex-shrink-0" title={member.nickname || member.username || ''}>
+ <div className="relative">
+ <div className="w-10 h-10 rounded-full overflow-hidden">
  <UserAvatar
  username={member.username}
  avatar={member.avatar}
  nickname={member.nickname}
- size="lg"
- className="w-full h-full rounded-xl"
+ size="sm"
+ className="w-full h-full rounded-full"
  />
  </div>
- {/* 创建人标签：左上角 */}
+ {/* 创建人小点（右下角红点） */}
  {member.role === 'owner' && (
- <div
- className="absolute top-0 left-0 text-white font-semibold shadow-sm"
- style={{
- backgroundColor: '#D32F2F',
- fontSize: '9px',
- padding: '2px 5px',
- borderRadius: '6px 0 6px 0',
- lineHeight: '13px',
- letterSpacing: '0.5px',
- }}
- >
- 创建人
- </div>
+ <span
+ className="absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white"
+ style={{ backgroundColor: '#D32F2F' }}
+ />
  )}
- {/* AI 标签：底部居中悬浮 */}
+ {/* AI 小标签 */}
  {(member as any).memberType === 'ai' && (
- <div
- className="absolute -bottom-2 left-1/2 -translate-x-1/2 text-white font-bold shadow-sm"
+ <span
+ className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-white font-bold"
  style={{
  background: 'linear-gradient(135deg, #D32F2F, #FF5252)',
- fontSize: '9px',
- padding: '2px 7px',
- borderRadius: '8px',
- lineHeight: '14px',
- letterSpacing: '1px',
- border: '1.5px solid #fff',
+ fontSize: '8px',
+ padding: '1px 4px',
+ borderRadius: '4px',
+ lineHeight: '12px',
+ border: '1px solid #fff',
  whiteSpace: 'nowrap',
  }}
  >
  AI
- </div>
+ </span>
  )}
- </div>
- {/* 昵称：AI成员底部留出标签空间 */}
- <div
- className="text-xs text-gray-700 text-center w-16 truncate"
- style={{ marginTop: (member as any).memberType === 'ai' ? '14px' : '6px' }}
- >
- {member.nickname || member.username || ""}
  </div>
  </div>
  ))}
-
- {/* 加成员按钮 */}
+ {/* 未展开时显示剩余数量 */}
+ {!memberListExpanded && (members ?? []).length > 4 && (
+ <span className="text-xs text-gray-400 flex-shrink-0">+{(members ?? []).length - 4}</span>
+ )}
+ {/* 展开/折叠按鈕 */}
+ {(members ?? []).length > 4 && (
  <button
- onClick={() => setShowInviteDialog(true)}
- className="flex flex-col items-center flex-shrink-0 hover:opacity-75 transition-opacity"
+ type="button"
+ onClick={() => setMemberListExpanded(v => !v)}
+ className="flex-shrink-0 text-xs px-2 py-0.5 rounded-full"
+ style={{ backgroundColor: '#F5F5F5', color: '#757575' }}
  >
- <div
- className="w-16 h-16 rounded-xl flex items-center justify-center"
- style={{
- backgroundColor: '#FFF5F5',
- border: '1.5px solid #FFCDD2',
- }}
- >
- <span className="text-2xl font-light leading-none" style={{ color: '#D32F2F' }}>+</span>
- </div>
- <div className="text-xs mt-1.5 font-medium" style={{ color: '#D32F2F' }}>添加</div>
- </button>
-
- {/* 移除成员按钮（仅 owner/admin 可见） */}
- {(ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && members && members.some((m: any) => m.role !== 'owner') && (
- <button
- onClick={() => setShowRemovePicker(true)}
- className="flex flex-col items-center flex-shrink-0 hover:opacity-75 transition-opacity"
- >
- <div
- className="w-16 h-16 rounded-xl flex items-center justify-center"
- style={{
- backgroundColor: '#F5F5F5',
- border: '1.5px solid #E0E0E0',
- }}
- >
- <span className="text-2xl font-light leading-none" style={{ color: '#9E9E9E' }}>−</span>
- </div>
- <div className="text-xs mt-1.5 font-medium" style={{ color: '#9E9E9E' }}>移除</div>
+ {memberListExpanded ? '收起' : '展开'}
  </button>
  )}
+ {/* 添加按鈕 */}
+ <button
+ type="button"
+ onClick={() => setShowInviteDialog(true)}
+ className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
+ style={{ backgroundColor: '#FFF5F5', border: '1.5px solid #FFCDD2' }}
+ title="添加成员"
+ >
+ <span className="text-xl font-light leading-none" style={{ color: '#D32F2F' }}>+</span>
+ </button>
+ {/* 移除按鈕（仅 owner/admin 可见） */}
+ {(ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && members && members.some((m: any) => m.role !== 'owner') && (
+ <button
+ type="button"
+ onClick={() => setShowRemovePicker(true)}
+ className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center"
+ style={{ backgroundColor: '#F5F5F5', border: '1.5px solid #E0E0E0' }}
+ title="移除成员"
+ >
+ <span className="text-xl font-light leading-none" style={{ color: '#9E9E9E' }}>−</span>
+ </button>
+ )}
+ </div>
  </div>
  </div>
 
  {/* */}
  <div className="bg-white mt-3">
+ {/* 37号账本特定菜单：独立分组卡片，与下方其他设置隔开 */}
+ {ledgerId === 37 && (() => {
+   const myMemberRole = members?.find((m: any) => m.userId === user?.id)?.role;
+   const isOwnerOrAdmin = myMemberRole === 'owner' || myMemberRole === 'admin'
+     || ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin';
+   if (!isOwnerOrAdmin) return null;
+   return (
+     <>
+       <SettingItem
+         label="初始金额管理"
+         showIcon
+         onClick={() => setLocation(`/ledger/${ledgerId}/aa-initial-balance`)}
+       />
+       <SettingItem
+         label="保证金管理"
+         showIcon
+         onClick={() => setLocation(`/ledger/${ledgerId}/deposit-manage`)}
+       />
+       <SettingItem
+         label="利息管理"
+         showIcon
+         onClick={() => setLocation(`/ledger/${ledgerId}/interest-manage`)}
+       />
+       <SettingItem
+         label="分类管理"
+         showIcon
+         onClick={() => setLocation(`/ledger/${ledgerId}/categories`)}
+       />
+     </>
+   );
+ })()}
+ </div>
+ {/* 37号账本：分组间距 */}
+ {ledgerId === 37 && <div className="mt-3" />}
+ <div className="bg-white mt-0">
  {ledgerData?.type === 'custom_af' && (
    <SettingItem label="融资付息订单管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/finance-unified${_viewAsSuffix}`)} />
  )}
@@ -491,8 +514,8 @@ export default function LedgerSettings() {
  onClick={() => setLocation(`/ledger/${ledgerId}/${ledgerData?.type === 'diet' ? 'member-info' : 'approval-settings'}`)}
  />
  )}
- {/* (AA)owner/admin */}
- {ledgerData?.type === 'custom_aa' && (() => {
+ {/* (AA)owner/admin 初始金额管理：非37号账本才显示（37号已在顶部显示） */}
+ {ledgerData?.type === 'custom_aa' && ledgerId !== 37 && (() => {
    const myMemberRole = members?.find((m: any) => m.userId === user?.id)?.role;
    const isOwnerOrAdmin = myMemberRole === 'owner' || myMemberRole === 'admin'
      || ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin';
@@ -505,15 +528,6 @@ export default function LedgerSettings() {
       />
     );
   })()}
-
-{/* 保证金管理：仅 37 号账本 */}
-{ledgerId === 37 && (
-  <SettingItem
-    label="保证金管理"
-    showIcon
-    onClick={() => setLocation(`/ledger/${ledgerId}/deposit-manage`)}
-  />
-)}
  {/* (AA)分红管理：owner/admin可进入 */}
  {ledgerData?.type === 'custom_aa' && (() => {
    const myMemberRole = members?.find((m: any) => m.userId === user?.id)?.role;
@@ -565,13 +579,6 @@ export default function LedgerSettings() {
  label="拨比管理"
  showIcon
  onClick={() => setLocation(`/ledger/${ledgerId}/af-payout-manage`)}
- />
- )}
- {ledgerId === 37 && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
- <SettingItem
- label="利息管理"
- showIcon
- onClick={() => setLocation(`/ledger/${ledgerId}/interest-manage`)}
  />
  )}
  {ledgerId === 37 && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
@@ -695,7 +702,8 @@ export default function LedgerSettings() {
  {ledgerData?.type !== 'opinion_book' && ledgerId !== 37 && (
  <SettingItem label="功能管理" showIcon onClick={() => setLocation(`/ledger/${ledgerId}/features`)} />
  )}
- <SettingItem label={ledgerData?.type === 'opinion_book' ? '分店管理' : '分类管理'} showIcon onClick={() => setLocation(`/ledger/${ledgerId}/categories`)} />
+ {/* 分类管理：37号账本已在顶部显示，这里排除 */}
+ {ledgerId !== 37 && <SettingItem label={ledgerData?.type === 'opinion_book' ? '分店管理' : '分类管理'} showIcon onClick={() => setLocation(`/ledger/${ledgerId}/categories`)} />}
  {ledgerData?.type === 'opinion_book' && (
  <SettingItem label="前端面板设置" showIcon onClick={() => setLocation(`/ab/opinion/${ledgerId}`)} />
  )}
