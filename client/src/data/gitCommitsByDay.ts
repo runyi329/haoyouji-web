@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-24
+// 生成时间：2026-07-25
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8620,5 +8620,9 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-24T08:02:47Z", type: "other", cleanMessage: "Revert \"fix: 结息记录支持 U/元 币种选择，修复显示不一致问题\"" },
     { date: "2026-07-24T09:13:12Z", type: "fix", cleanMessage: "结息面板加 U/元 币种切换，默认跟订单利率币种一致，后端接收 currency 参数" },
     { date: "2026-07-24T09:39:25Z", type: "fix", cleanMessage: "自动赚费结算改为使用实时余额作为计息基数（不再锁定开启时快照）" },
+    { date: "2026-07-24T11:28:32Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-24T13:53:15Z", type: "feat", cleanMessage: "初始金额管理批量模式+用户视图重构+设置页面优化" },
+    { date: "2026-07-24T15:07:18Z", type: "feat", cleanMessage: "重写回报计算明细弹窗 - 逐段独立本金、逐笔追加记录、盈亏统计标签视角" },
+    { date: "2026-07-24T15:17:11Z", type: "feat", cleanMessage: "重写回报计算明细弹窗 - 逐段本金/逐笔追加/盈亏统计标签视角/持续天数/简洁UI" },
   ],
 };
