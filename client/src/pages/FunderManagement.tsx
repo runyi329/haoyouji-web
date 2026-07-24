@@ -1326,7 +1326,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                         setTagInput('');
                       }}
                       className="px-4 py-2.5 rounded-xl text-sm font-medium text-white"
-                      style={{ background: 'linear-gradient(135deg, #e53e3e, #fc8181)' }}
+                      style={{ background: 'linear-gradient(135deg, #1A56DB, #3B82F6)' }}
                     >
                       添加
                     </button>
