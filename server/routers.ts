@@ -16364,7 +16364,7 @@ ${klinesSummary}
           denomination: z.enum(['U', 'B']).optional(),
           buyQty: z.string().optional(),
         }).optional(),
-        tradeDirection: z.string().nullable().optional(),
+        tradeDirection: z.enum(['long', 'short']).nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -17147,7 +17147,7 @@ ${klinesSummary}
           direction: z.enum(['long_call', 'long_put', 'short_call', 'short_put']).optional(),
           targetPrice: z.string().optional(),
         }).optional(),
-        tradeDirection: z.string().nullable().optional(),
+        tradeDirection: z.enum(['long', 'short']).nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -17243,7 +17243,7 @@ ${klinesSummary}
         principalLentOut: z.boolean().optional(),
         brokerName: z.string().optional(),
         brokerAccount: z.string().optional(),
-        tradeDirection: z.string().nullable().optional(),
+        tradeDirection: z.enum(['long', 'short']).nullable().optional(),
         collateralSource: z.object({ ledgerId: z.number(), tagName: z.string() }).nullable().optional(),
         optionInfo: z.object({
           premium: z.string().optional(),
@@ -18188,7 +18188,6 @@ ${klinesSummary}
         ledgerId: z.number(),
         orderId: z.number(),
         amount: z.number().positive(),
-        currency: z.enum(['U', 'CNY']).default('U'),
         payDate: z.string(),
         note: z.string().optional(),
       }))
@@ -18201,7 +18200,7 @@ ${klinesSummary}
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         await db.execute(
           sql`INSERT INTO ledger_order_payments (order_id, ledger_id, amount, pay_date, note, currency, exchange_rate, created_by)
-              VALUES (${input.orderId}, ${input.ledgerId}, ${input.amount}, ${input.payDate}, ${input.note || ''}, ${input.currency || 'U'}, 7.0000, ${ctx.user.id})`
+              VALUES (${input.orderId}, ${input.ledgerId}, ${input.amount}, ${input.payDate}, ${input.note || ''}, 'U', 7.0000, ${ctx.user.id})`
         );
         return { success: true };
       }),
