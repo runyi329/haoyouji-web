@@ -1955,7 +1955,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         showProfitShare: formData.showProfitShare,
         commissionShare: formData.commissionShare || undefined,
         assetType: formData.assetType || undefined,
-        tradeDirection: (formData.tradeDirection || null),
+        tradeDirection: (['long', 'short'] as const).includes(formData.tradeDirection as any) ? (formData.tradeDirection as 'long' | 'short') : null,
         ownerLabel: '',
         interestRateCurrency: formData.interestRateCurrency,
         tags: formData.tags.length > 0 ? formData.tags : [],
@@ -1993,7 +1993,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         showProfitShare: formData.showProfitShare,
         commissionShare: formData.commissionShare || undefined,
         assetType: formData.assetType || undefined,
-        tradeDirection: formData.tradeDirection || null,
+        tradeDirection: (['long', 'short'] as const).includes(formData.tradeDirection as any) ? (formData.tradeDirection as 'long' | 'short') : null,
         ownerLabel: undefined,
         interestRateCurrency: formData.interestRateCurrency,
         tags: formData.tags.length > 0 ? formData.tags : undefined,
@@ -2293,6 +2293,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                       </button>
                     ))}
                   </div>
+                  <div style={{color:'red',fontSize:11,marginTop:4}}>【调试】FinanceManagement · tradeDirection={String(formData.tradeDirection)}</div>
                 </div>
               )}
 
