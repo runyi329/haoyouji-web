@@ -547,6 +547,10 @@ export default function LedgerDetailAA({
     tagName: string;
     tagAlias: string;
     ratio: number;
+    initialBalance: number;
+    capitalChange: number;
+    capitalRecords: Array<{ date: string; amount: number; isAdd: boolean }>;
+    tagWithdraw: number;
     segments: Array<{
       segNo: number;
       startDate: string;
@@ -687,9 +691,10 @@ export default function LedgerDetailAA({
       }
       const points = filteredTagDays.map((d: any) => {
         // 盈亏 = (初始本金 + 增减本金 - 当日余额 - 累计提现) * ratio
-        // 提现导致余额减少但不是亏损，需要扣除
-        // 增减本金是追加/减少的投入，不是盈利
+        // effectiveInitial = 当前本金（初始本金 + 中途追加/减少）
         const effectiveInitial = initialBalance + tagCapitalChange;
+        // 盈亏 = (当前本金 - 填写余额 - 累计提现) × ratio
+        // 日历余额 = 填写余额 + 提现，所以盈亏公式需要减去 tagWithdraw
         const pnl = (effectiveInitial - d.balance - tagWithdraw) * ratio;
         const pctInitial = effectiveInitial > 0 ? ((effectiveInitial - d.balance - tagWithdraw) / effectiveInitial) * 100 * ratio : 0;
         const pctMargin = marginCny > 0 ? ((effectiveInitial - d.balance - tagWithdraw) * ratio / marginCny) * 100 : 0;
@@ -770,7 +775,9 @@ export default function LedgerDetailAA({
       const filteredTagDaysStats = effectiveStartStr ? tagDays.filter(d => d.date >= effectiveStartStr!) : tagDays;
       if (filteredTagDaysStats.length > 0) {
         const last = filteredTagDaysStats[filteredTagDaysStats.length - 1];
+        // effectiveInitial = 当前本金（初始本金 + 中途追加/减少）
         const effectiveInitial = initialBalance + tagCapitalChange;
+        // 盈亏 = (当前本金 - 填写余额 - 累计提现) × ratio
         const tagPnl = effectiveInitial > 0 ? (effectiveInitial - last.balance - tagWithdraw) * ratio : 0;
         if (effectiveInitial > 0) {
           totalPnl += tagPnl;
@@ -786,7 +793,7 @@ export default function LedgerDetailAA({
           marginCny: coin2 && CRYPTO_COINS_AA.includes(coin2) ? marginNum * price2 : marginNum,
           initialBalance,
           capitalChange: tagCapitalChange,
-          effectiveInitial,
+          effectiveInitial: initialBalance + tagCapitalChange,
           latestBalance: last.balance,
           latestDate: last.date,
           tagWithdraw,
@@ -859,15 +866,13 @@ export default function LedgerDetailAA({
       const amt = Number(r.amount) || 0;
       return r.description?.startsWith('capital_add') ? sum + amt : sum - amt;
     }, 0);
-    // 当前本金 = 初始本金 + 本金净变动（用于卡片显示）
+    // 当前本金 = 初始本金 + 增减本金净额
     const currentCapital = initialBalance + capitalNetChange;
-    // 盈亏计算：三郎输赢 = (当前余额 + 累计提现) - (初始本金 + 增减本金)
-    // 增减本金是中途追加/减少的投入，不是盈利，必须加到本金基数中
-    // 客户盈亏 = -三郎输赢（三郎赢=客户输，三郎输=客户赢）
-    const traderPnl = (latestBalance + totalWithdraw) - (initialBalance + capitalNetChange); // 三郎赢的钱
-    const rawPnl = -traderPnl; // 客户盈亏（负债视角：三郎财客户就输）
+    // 盈亏 = (当前本金 - 填写余额 - 累计提现) × ratio
+    // 日历余额 = 填写余额 + 提现，所以盈亏公式需要减去 totalWithdraw
+    const rawPnl = currentCapital - latestBalance - totalWithdraw;
     const totalPnl = rawPnl * ratio;
-    const returnRate = (initialBalance + capitalNetChange) > 0 ? (rawPnl / (initialBalance + capitalNetChange)) * 100 : 0;
+    const returnRate = currentCapital > 0 ? (rawPnl / currentCapital) * 100 : 0;
     return { latestBalance, latestDate, returnRate, recordDays, totalPnl, initialBalance, currentCapital, startDate, capitalNetChange };
   }, [filteredTransactions, cumulativeMap, ledgerData, initialBalancesData, selectedTag, capitalHistory, totalWithdraw]);
 
@@ -2541,6 +2546,24 @@ export default function LedgerDetailAA({
                             const _ratio = initialBalancesData?.balances ? Number(initialBalancesData.balances[`${tag.name}__ratio`] ?? 100) : 100;
                             const _tagAlias = (initialBalancesData?.balances as any)?.[`${tag.name}__alias`] ?? tag.name;
                             const _effectiveInitial = tag.initialBalance + (capitalByTag[tag.name] || 0);
+                            const _capitalChange = capitalByTag[tag.name] || 0;
+                            const _tagWithdraw = withdrawByTag[tag.name] || 0;
+                            // 逐笔本金变动记录（从 transactionsData 中按标签名筛选）
+                            const _capitalRecords: Array<{ date: string; amount: number; isAdd: boolean }> = [];
+                            if (categories) {
+                              (transactionsData || []).forEach((day: any) => {
+                                (day.records || []).forEach((r: any) => {
+                                  if (r.type === 'transfer' && r.description?.startsWith('capital_') && r.category === tag.name) {
+                                    _capitalRecords.push({
+                                      date: r.recordDate || day.date || '',
+                                      amount: Math.abs(Number(r.amount) || 0),
+                                      isAdd: r.description?.startsWith('capital_add'),
+                                    });
+                                  }
+                                });
+                              });
+                              _capitalRecords.sort((a, b) => a.date.localeCompare(b.date));
+                            }
                             const today3 = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
                             const segments: typeof pnlDetailModal extends null ? never : NonNullable<typeof pnlDetailModal>['segments'] = [];
                             if (pnlHistoryForAlert.length === 0) {
@@ -2611,7 +2634,7 @@ export default function LedgerDetailAA({
                                 }
                               }
                             }
-                            setPnlDetailModal({ tagName: tag.name, tagAlias: _tagAlias, ratio: _ratio, segments, totalPnl: latestPnl });
+                            setPnlDetailModal({ tagName: tag.name, tagAlias: _tagAlias, ratio: _ratio, initialBalance: tag.initialBalance, capitalChange: _capitalChange, capitalRecords: _capitalRecords, tagWithdraw: _tagWithdraw, segments, totalPnl: latestPnl });
                           };
                           return (
                             <span
@@ -3448,10 +3471,12 @@ export default function LedgerDetailAA({
       {/* ── 自定义名称编辑弹框 ── */}
       {/* 单击标签名：信息提示弹框 */}
       {pnlDetailModal !== null && (() => {
-        const { tagName, tagAlias, ratio, segments, totalPnl } = pnlDetailModal;
-        const fmtNum = (n: number) => `${n < 0 ? '-' : ''}${Math.abs(n).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}`;
+        const { tagName, tagAlias, ratio, initialBalance, capitalChange, capitalRecords, tagWithdraw, segments, totalPnl } = pnlDetailModal;
+        const fmtAbs = (n: number) => '￥' + Math.abs(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const fmt = (n: number) => (n >= 0 ? '+' : '') + '￥' + Math.abs(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const fmtDate = (d: string) => { const [, m, dd] = d.split('-'); return `${Number(m)}月${Number(dd)}日`; };
         const pnlColor = totalPnl > 0 ? '#D32F2F' : totalPnl < 0 ? '#388E3C' : '#BDBDBD';
+        const currentCapital = initialBalance + capitalChange;
         return (
           <div className="fixed inset-0 z-[100] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setPnlDetailModal(null)}>
             <div className="bg-white rounded-2xl shadow-xl mx-4 w-full max-w-sm" style={{ maxHeight: '80vh', display: 'flex', flexDirection: 'column' }} onClick={(e) => e.stopPropagation()}>
@@ -3462,12 +3487,13 @@ export default function LedgerDetailAA({
                     <span className="text-base font-bold" style={{ color: '#1A1A1A' }}>{tagAlias !== tagName ? tagAlias : tagName}</span>
                     {tagAlias !== tagName && <span className="text-xs ml-2" style={{ color: '#BDBDBD' }}>{tagName}</span>}
                   </div>
-                  <div className="text-xs px-2 py-1 rounded-full" style={{ background: '#F5F5F5', color: '#888' }}>占比 {ratio}%</div>
+                  <div className="text-xs px-2 py-1 rounded-full" style={{ background: '#F5F5F5', color: '#888' }}>占比 {ratio.toFixed(2)}%</div>
                 </div>
                 <div className="text-xs mt-1" style={{ color: '#BDBDBD' }}>回报计算明细</div>
               </div>
               {/* 分段列表（可滚动） */}
               <div style={{ overflowY: 'auto', flex: 1, padding: '12px 20px' }}>
+                <div className="text-xs mb-2" style={{ color: '#BDBDBD' }}>公式：回报 = (本段本金 − 最新余额 − 累计提现) × 占比</div>
                 {segments.map((seg, idx) => (
                   <div key={idx}>
                     {/* 分段标题 */}
@@ -3483,28 +3509,93 @@ export default function LedgerDetailAA({
                       )}
                     </div>
                     {/* 计算过程卡片 */}
-                    <div className="rounded-xl" style={{ background: '#FAFAFA', padding: '12px 14px' }}>
-                      {/* 初始金额行 */}
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-xs" style={{ color: '#888' }}>初始金额</span>
-                        <span className="text-sm font-medium" style={{ color: '#1A1A1A' }}>{seg.effectiveInitial.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span>
+                    <div className="rounded-xl space-y-1" style={{ background: '#FAFAFA', padding: '10px 14px' }}>
+                      {/* 本段本金（第1段=初始本金，第2段及以后=开始本金） */}
+                      {idx === 0 ? (
+                        <>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs" style={{ color: '#888' }}>初始本金</span>
+                            <span className="text-sm font-medium font-mono" style={{ color: '#1A1A1A' }}>{fmtAbs(initialBalance)}</span>
+                          </div>
+                          {capitalRecords.length > 0 && segments.length === 1 && (
+                            capitalRecords.map((rec, ri) => (
+                              <div key={ri} className="flex items-center justify-between">
+                                <span className="text-xs" style={{ color: '#888' }}>{rec.isAdd ? '追加本金' : '减少本金'} <span style={{ color: '#BDBDBD' }}>({fmtDate(rec.date)})</span></span>
+                                <span className="text-sm font-medium font-mono" style={{ color: rec.isAdd ? '#1565C0' : '#E65100' }}>{rec.isAdd ? '+' : '−'}{fmtAbs(rec.amount)}</span>
+                              </div>
+                            ))
+                          )}
+                          {(capitalChange !== 0 && segments.length === 1) && (
+                            <div className="flex items-center justify-between" style={{ borderTop: '1px solid #E0E0E0', paddingTop: 4, marginTop: 2 }}>
+                              <span className="text-xs font-medium" style={{ color: '#555' }}>当前本金</span>
+                              <span className="text-sm font-bold font-mono" style={{ color: '#1A1A1A' }}>{fmtAbs(currentCapital)}</span>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs" style={{ color: '#888' }}>开始本金 <span style={{ color: '#BDBDBD', fontSize: 10 }}>(待设置)</span></span>
+                          <span className="text-sm font-medium font-mono" style={{ color: '#BDBDBD' }}>—</span>
+                        </div>
+                      )}
+                      {/* 分割线 */}
+                      <div style={{ borderTop: '1px solid #E0E0E0', margin: '4px 0' }} />
+                      {/* 最新余额行 */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs" style={{ color: '#888' }}>最新余额 <span style={{ color: '#BDBDBD' }}>({fmtDate(seg.endDate)})</span></span>
+                        <span className="text-sm font-medium font-mono" style={{ color: '#D32F2F' }}>−{fmtAbs(seg.endBalance)}</span>
                       </div>
-                      {/* 结束金额行 */}
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-xs" style={{ color: '#888' }}>结束金额</span>
-                        <span className="text-sm font-medium" style={{ color: '#1A1A1A' }}>{seg.endBalance.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span>
+                      {/* 累计提现行（仅当有提现时显示） */}
+                      {tagWithdraw > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs" style={{ color: '#888' }}>累计提现</span>
+                          <span className="text-sm font-medium font-mono" style={{ color: '#D32F2F' }}>−{fmtAbs(tagWithdraw)}</span>
+                        </div>
+                      )}
+                      {/* 盈亏统计（标签视角）= 余额 + 提现 − 本金（正数=标签赚了红色，负数=标签亏了绿色） */}
+                      {idx === 0 && (() => {
+                        const segCapital = segments.length === 1 ? currentCapital : initialBalance;
+                        const tagPnl = seg.endBalance + tagWithdraw - segCapital; // 标签盈亏：正=赚，负=亏
+                        return (
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs" style={{ color: '#888' }}>盈亏统计</span>
+                            <span className="text-sm font-medium font-mono" style={{ color: tagPnl > 0 ? '#D32F2F' : tagPnl < 0 ? '#388E3C' : '#BDBDBD' }}>{tagPnl > 0 ? '+' : tagPnl < 0 ? '−' : ''}{fmtAbs(tagPnl)}</span>
+                          </div>
+                        );
+                      })()}
+                      {/* 占比行 */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs" style={{ color: '#888' }}>占比</span>
+                        <span className="text-sm font-medium" style={{ color: '#555' }}>× {ratio.toFixed(2)}%</span>
                       </div>
                       {/* 分割线 */}
-                      <div style={{ borderTop: '1px dashed #E0E0E0', margin: '8px 0' }} />
-                      {/* 计算公式 */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs" style={{ color: '#888' }}>
-                          ({seg.effectiveInitial.toLocaleString('zh-CN', { maximumFractionDigits: 0 })} − {seg.endBalance.toLocaleString('zh-CN', { maximumFractionDigits: 0 })}) × {ratio}%
-                        </span>
-                        <span className="text-sm font-bold" style={{ color: seg.pnl > 0 ? '#D32F2F' : seg.pnl < 0 ? '#388E3C' : '#BDBDBD' }}>
-                          = {fmtNum(seg.pnl)}
-                        </span>
-                      </div>
+                      <div style={{ borderTop: '1px dashed #E0E0E0', margin: '6px 0' }} />
+                      {/* 计算式 + 本段回报 */}
+                      {idx === 0 && (() => {
+                        const segCapital = segments.length === 1 ? currentCapital : initialBalance;
+                        const tagPnl2 = seg.endBalance + tagWithdraw - segCapital;
+                        return (
+                          <>
+                            <div className="text-xs font-mono" style={{ color: '#BDBDBD', background: '#FFF', borderRadius: 6, padding: '4px 8px' }}>
+                              ({tagPnl2 > 0 ? '+' : tagPnl2 < 0 ? '−' : ''}{fmtAbs(tagPnl2)}) × {ratio.toFixed(2)}%
+                            </div>
+                            <div className="flex items-center justify-between" style={{ paddingTop: 2 }}>
+                              <span className="text-xs font-semibold" style={{ color: '#555' }}>本段回报</span>
+                              <span className="text-sm font-bold" style={{ color: seg.pnl > 0 ? '#D32F2F' : seg.pnl < 0 ? '#388E3C' : '#BDBDBD' }}>
+                                {seg.pnl > 0 ? '+' : seg.pnl < 0 ? '−' : ''}￥{Math.abs(seg.pnl).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          </>
+                        );
+                      })()}
+                      {idx > 0 && (
+                        <div className="flex items-center justify-between" style={{ paddingTop: 2 }}>
+                          <span className="text-xs font-semibold" style={{ color: '#555' }}>本段回报</span>
+                          <span className="text-sm font-bold" style={{ color: seg.pnl > 0 ? '#D32F2F' : seg.pnl < 0 ? '#388E3C' : '#BDBDBD' }}>
+                            {seg.pnl > 0 ? '+' : seg.pnl < 0 ? '−' : ''}￥{Math.abs(seg.pnl).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      )}
                     </div>
                     {/* 暂停/重启节点 */}
                     {idx < segments.length - 1 && (
@@ -3524,7 +3615,7 @@ export default function LedgerDetailAA({
                 <div style={{ padding: '12px 20px', borderTop: '1px solid #F0F0F0', background: '#FAFAFA', borderRadius: '0 0 16px 16px' }}>
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold" style={{ color: '#555' }}>合计回报</span>
-                    <span className="text-lg font-bold" style={{ color: pnlColor }}>{fmtNum(totalPnl)}</span>
+                    <span className="text-lg font-bold" style={{ color: pnlColor }}>{fmt(totalPnl)}</span>
                   </div>
                 </div>
               )}
@@ -3928,18 +4019,18 @@ export default function LedgerDetailAA({
         // 计算弹窗内需要的数据
         const initialBalance = stats.initialBalance;
         const latestBalance = stats.latestBalance;
+        const latestDate = stats.latestDate || '';
         const capitalNet = stats.capitalNetChange || 0;
         const ratioVal = selectedTag?.name && initialBalancesData?.balances
           ? Number(initialBalancesData.balances[`${selectedTag.name}__ratio`] ?? 100)
           : 100;
         const ratio = ratioVal / 100;
-        const effectiveCapital = initialBalance + capitalNet;
-        const traderPnl = (latestBalance + totalWithdraw) - effectiveCapital;
-        const rawPnl = -traderPnl;
+        const currentCapital = initialBalance + capitalNet;
+        // 盈亏 = (当前本金 - 最新余额 - 累计提现) × ratio
+        const rawPnl = currentCapital - latestBalance - totalWithdraw;
         const totalPnl = rawPnl * ratio;
-        // 获取当前查看的用户名
-        const viewTarget = viewAsUserId ? (membersData || []).find((m: any) => m.userId === viewAsUserId) : null;
-        const customerName = viewTarget ? (viewTarget.nickname || viewTarget.username) : (user?.nickname || user?.username || '用户');
+        const fmtAbs = (n: number) => '￥' + Math.abs(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const fmt = (n: number) => (n >= 0 ? '+' : '') + '￥' + Math.abs(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         return (
           <div className="fixed inset-0 z-[500] flex items-center justify-center" onClick={() => setShowPnlExplain(false)}>
             <div className="absolute inset-0 bg-black/50" />
@@ -3949,117 +4040,56 @@ export default function LedgerDetailAA({
             >
               {/* 头部 */}
               <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #F0F0F0' }}>
-                <div className="text-base font-bold text-gray-800">盈亏计算详情</div>
+                <div className="text-base font-bold text-gray-800">回报计算明细</div>
                 <button onClick={() => setShowPnlExplain(false)} className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
                   <X className="w-4 h-4 text-gray-500" />
                 </button>
               </div>
               {/* 内容 */}
-              <div className="px-5 py-4 overflow-y-auto max-h-[65vh] text-sm text-gray-700 space-y-4">
-                {/* 第1步 */}
-                <div>
-                  <div className="font-semibold text-gray-900 mb-1">1. 初始本金</div>
-                  <div className="pl-3 text-gray-600">
-                    开始时投入的本金金额
+              <div className="px-5 py-4 overflow-y-auto max-h-[65vh] text-sm text-gray-700">
+                <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2 mb-3">公式：回报 = (初始本金 + 增减本金 − 最新余额 − 累计提现) × 占比</div>
+                <div className="bg-gray-50 rounded-lg px-3 py-2 space-y-1">
+                  <div className="text-xs text-gray-600 flex justify-between">
+                    <span>初始本金</span>
+                    <span className="font-medium font-mono">{fmtAbs(initialBalance)}</span>
                   </div>
-                  <div className="pl-3 mt-1 font-mono text-gray-800">
-                    = ¥{initialBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-                {/* 第2步 - 增减本金（仅当有变动时显示） */}
-                {capitalNet !== 0 && (
-                  <div>
-                    <div className="font-semibold text-gray-900 mb-1">2. 增减本金</div>
-                    <div className="pl-3 text-gray-600">
-                      中途追加或减少的本金（与输赢无关）
+                  {capitalNet !== 0 && (
+                    <div className="text-xs text-gray-600 flex justify-between">
+                      <span>{capitalNet > 0 ? '追加本金' : '减少本金'}</span>
+                      <span className={`font-medium font-mono ${capitalNet > 0 ? 'text-blue-600' : 'text-orange-600'}`}>{capitalNet > 0 ? '+' : ''}{fmtAbs(capitalNet)}</span>
                     </div>
-                    <div className="pl-3 mt-1 font-mono text-gray-800">
-                      = {capitalNet >= 0 ? '+' : '-'}¥{Math.abs(capitalNet).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                  )}
+                  <div className="text-xs text-gray-800 flex justify-between border-t border-gray-200 pt-1">
+                    <span className="font-medium">当前本金</span>
+                    <span className="font-bold font-mono">{fmtAbs(currentCapital)}</span>
+                  </div>
+                  <div className="text-xs text-gray-600 flex justify-between">
+                    <span>最新余额 <span className="text-gray-400">({latestDate})</span></span>
+                    <span className="font-medium font-mono text-red-500">−{fmtAbs(latestBalance)}</span>
+                  </div>
+                  {totalWithdraw > 0 && (
+                    <div className="text-xs text-gray-600 flex justify-between">
+                      <span>累计提现</span>
+                      <span className="font-medium font-mono text-red-500">−{fmtAbs(totalWithdraw)}</span>
                     </div>
-                    <div className="pl-3 mt-1 text-gray-600 text-xs">
-                      实际本金基数 = 初始本金 + 增减本金 = ¥{effectiveCapital.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
-                    </div>
+                  )}
+                  <div className="text-xs text-gray-600 flex justify-between">
+                    <span>占比</span>
+                    <span className="font-medium">× {ratioVal.toFixed(2)}%</span>
                   </div>
-                )}
-                {/* 第3步 */}
-                <div>
-                  <div className="font-semibold text-gray-900 mb-1">{capitalNet !== 0 ? '3' : '2'}. 最新账户余额</div>
-                  <div className="pl-3 text-gray-600">
-                    登记员最后一次录入的账户余额
+                  <div className="text-xs font-mono text-gray-400 bg-white rounded px-2 py-1">
+                    ({fmtAbs(currentCapital)} − {fmtAbs(latestBalance)}{totalWithdraw > 0 ? ` − ${fmtAbs(totalWithdraw)}` : ''}) × {ratioVal.toFixed(2)}%
                   </div>
-                  <div className="pl-3 mt-1 font-mono text-gray-800">
-                    = ¥{latestBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
+                  <div className={`text-sm font-bold flex justify-between pt-1 border-t border-gray-200 ${totalPnl >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    <span>累计回报</span>
+                    <span>{fmt(totalPnl)}</span>
                   </div>
                 </div>
-                {/* 第4步 */}
-                <div>
-                  <div className="font-semibold text-gray-900 mb-1">{capitalNet !== 0 ? '4' : '3'}. 累计提现</div>
-                  <div className="pl-3 text-gray-600">
-                    历史上已提现的总金额（提现会导致余额减少，但不是亏损）
-                  </div>
-                  <div className="pl-3 mt-1 font-mono text-gray-800">
-                    = ¥{totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-                {/* 第5步 */}
-                <div>
-                  <div className="font-semibold text-gray-900 mb-1">{capitalNet !== 0 ? '5' : '4'}. <span className="text-red-600">{selectedTag?.name || '标签'}</span> 实际账户本金</div>
-                  <div className="pl-3 text-gray-600">
-                    = 最新余额 + 累计提现
-                  </div>
-                  <div className="pl-3 mt-1 font-mono text-gray-800">
-                    = ¥{latestBalance.toLocaleString('zh-CN', { minimumFractionDigits: 2 })} + ¥{totalWithdraw.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
-                  </div>
-                  <div className="pl-3 mt-1 font-mono font-semibold text-gray-900">
-                    = ¥{(latestBalance + totalWithdraw).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-                {/* 第6步 */}
-                <div>
-                  <div className="font-semibold text-gray-900 mb-1">{capitalNet !== 0 ? '6' : '5'}. {selectedTag?.name || '标签'}</div>
-                  <div className="pl-3 text-gray-600">
-                    = 标签实际资产 - {capitalNet !== 0 ? '实际本金基数' : '初始本金'}
-                  </div>
-                  <div className="pl-3 text-gray-600 text-xs">
-                    （正数=赢了，负数=输了）
-                  </div>
-                  <div className="pl-3 mt-1 font-mono text-gray-800">
-                    = ¥{(latestBalance + totalWithdraw).toLocaleString('zh-CN', { minimumFractionDigits: 2 })} - ¥{effectiveCapital.toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
-                  </div>
-                  <div className="pl-3 mt-1 font-mono font-semibold text-gray-900">
-                    = {traderPnl >= 0 ? '+' : '-'}¥{Math.abs(traderPnl).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-                {/* 客户盈亏步骤 */}
-                <div>
-                  <div className="font-semibold text-gray-900 mb-1">{capitalNet !== 0 ? '7' : '6'}. {customerName}</div>
-                  <div className="pl-3 text-gray-600">
-                    与标签方向相反，标签赢 = {customerName}亏
-                  </div>
-                  <div className="pl-3 text-gray-600">
-                    = -标签结果{ratio !== 1 ? ` × 占比(${ratioVal}%)` : ''}
-                  </div>
-                  <div className="pl-3 mt-1 font-mono text-gray-800">
-                    = -{traderPnl >= 0 ? '+' : '-'}¥{Math.abs(traderPnl).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}{ratio !== 1 ? ` × ${ratioVal}%` : ''}
-                  </div>
-                  <div className="pl-3 mt-1 font-mono font-semibold text-gray-900">
-                    = {totalPnl >= 0 ? '+' : '-'}¥{Math.abs(totalPnl).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
-                {/* 最终结果 */}
-                <div className="pt-3 mt-2" style={{ borderTop: '2px solid #F0F0F0' }}>
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-gray-900">累计盈亏</span>
-                    <span className={`text-lg font-bold ${totalPnl >= 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      {totalPnl > 0 ? '+' : totalPnl < 0 ? '-' : ''}¥{Math.abs(totalPnl).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between mt-1">
-                    <span className="text-xs text-gray-500">收益率</span>
-                    <span className={`text-sm font-semibold ${stats.returnRate >= 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      {stats.returnRate >= 0 ? '+' : ''}{stats.returnRate.toFixed(2)}%
-                    </span>
-                  </div>
+                <div className="flex items-center justify-between mt-3 px-1">
+                  <span className="text-xs text-gray-500">收益率</span>
+                  <span className={`text-sm font-semibold ${stats.returnRate >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {stats.returnRate >= 0 ? '+' : ''}{stats.returnRate.toFixed(2)}%
+                  </span>
                 </div>
               </div>
             </div>
@@ -4118,7 +4148,7 @@ export default function LedgerDetailAA({
                 if (showAllModeHelp === 'pnl') {
                   return (
                     <>
-                      <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">公式：客户盈亏 = −(最新余额 + 提现 − 实际本金) × 占比，标签赢 = 客户亏</div>
+                      <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">公式：回报 = (初始本金 + 增减本金 − 最新余额 − 累计提现) × 占比</div>
                       {perTag.map((t, i) => (
                         <div key={t.tagName} className="bg-gray-50 rounded-lg px-3 py-2 space-y-1">
                           <div className="font-semibold text-gray-900 text-xs">标签「{t.tagName}」</div>
@@ -4126,27 +4156,41 @@ export default function LedgerDetailAA({
                             <div className="text-xs text-gray-400">暂无余额记录，跳过</div>
                           ) : (
                             <>
-                              <div className="text-xs text-gray-600">
-                                实际本金：{fmtAbs(t.initialBalance)}
-                                {t.capitalChange !== 0 && <span className="text-gray-400"> + 增减本金{fmt(t.capitalChange)}</span>}
-                                {' = '}<span className="font-medium">{fmtAbs(t.effectiveInitial)}</span>
-                                <span className="text-gray-400 ml-1">(初始本金{t.capitalChange !== 0 ? '+中途变动' : ''})</span>
+                              <div className="text-xs text-gray-600 flex justify-between">
+                                <span>初始本金</span>
+                                <span className="font-medium font-mono">{fmtAbs(t.initialBalance)}</span>
                               </div>
-                              <div className="text-xs text-gray-600">
-                                最新余额：<span className="font-medium">{fmtAbs(t.latestBalance)}</span>
-                                <span className="text-gray-400 ml-1">({t.latestDate} 登记)</span>
+                              {t.capitalChange !== 0 && (
+                                <div className="text-xs text-gray-600 flex justify-between">
+                                  <span>{t.capitalChange > 0 ? '追加本金' : '减少本金'}</span>
+                                  <span className={`font-medium font-mono ${t.capitalChange > 0 ? 'text-blue-600' : 'text-orange-600'}`}>{t.capitalChange > 0 ? '+' : ''}{fmtAbs(t.capitalChange)}</span>
+                                </div>
+                              )}
+                              <div className="text-xs text-gray-800 flex justify-between border-t border-gray-200 pt-1">
+                                <span className="font-medium">当前本金</span>
+                                <span className="font-bold font-mono">{fmtAbs(t.effectiveInitial)}</span>
+                              </div>
+                              <div className="text-xs text-gray-600 flex justify-between">
+                                <span>最新余额 <span className="text-gray-400">({t.latestDate})</span></span>
+                                <span className="font-medium font-mono text-red-500">−{fmtAbs(t.latestBalance)}</span>
                               </div>
                               {t.tagWithdraw > 0 && (
-                                <div className="text-xs text-gray-600">累计提现：<span className="font-medium">{fmtAbs(t.tagWithdraw)}</span><span className="text-gray-400 ml-1">(历史提现总和)</span></div>
+                                <div className="text-xs text-gray-600 flex justify-between">
+                                  <span>累计提现</span>
+                                  <span className="font-medium font-mono text-red-500">−{fmtAbs(t.tagWithdraw)}</span>
+                                </div>
                               )}
-                              <div className="text-xs text-gray-600">
-                                占比：<span className="font-medium">{(t.ratio * 100).toFixed(0)}%</span>
-                                <span className="text-gray-400 ml-1">(客户承担比例)</span>
+                              <div className="text-xs text-gray-600 flex justify-between">
+                                <span>占比</span>
+                                <span className="font-medium">× {(t.ratio * 100).toFixed(2)}%</span>
                               </div>
-                              <div className="text-xs font-mono text-gray-500">
-                                = −({fmtAbs(t.latestBalance)} + {fmtAbs(t.tagWithdraw)} − {fmtAbs(t.effectiveInitial)}) × {(t.ratio*100).toFixed(0)}%
+                              <div className="text-xs font-mono text-gray-400 bg-white rounded px-2 py-1">
+                                ({fmtAbs(t.effectiveInitial)} − {fmtAbs(t.latestBalance)}{t.tagWithdraw > 0 ? ` − ${fmtAbs(t.tagWithdraw)}` : ''}) × {(t.ratio*100).toFixed(2)}%
                               </div>
-                              <div className={`text-xs font-bold ${t.tagPnl >= 0 ? 'text-red-600' : 'text-green-600'}`}>本标签盈亏 = {fmt(t.tagPnl)}</div>
+                              <div className={`text-sm font-bold flex justify-between pt-1 border-t border-gray-200 ${t.tagPnl >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                <span>本标签回报</span>
+                                <span>{fmt(t.tagPnl)}</span>
+                              </div>
                             </>
                           )}
                         </div>
@@ -4179,7 +4223,7 @@ export default function LedgerDetailAA({
                           {t.marginCoin && CRYPTO_COINS_AA.includes(t.marginCoin) && (
                             <div className="text-xs text-gray-400 mt-0.5">≈ {fmtAbs(t.marginCny)}（按实时价格折算）</div>
                           )}
-                          <div className="text-xs text-gray-400 mt-0.5">本金基数：{fmtAbs(t.initialBalance)}{t.capitalChange !== 0 ? `，增减${fmt(t.capitalChange)}，实际${fmtAbs(t.effectiveInitial)}` : ''}</div>
+                          <div className="text-xs text-gray-400 mt-0.5">有效本金：{fmtAbs(t.effectiveInitial)}</div>
                         </div>
                       ))}
                       <div className="pt-3" style={{ borderTop: '2px solid #F0F0F0' }}>
