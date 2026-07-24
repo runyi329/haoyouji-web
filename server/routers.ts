@@ -17133,7 +17133,6 @@ ${klinesSummary}
         principalLentOut: z.boolean().optional(),
         brokerName: z.string().optional(),
         brokerAccount: z.string().optional(),
-        tradeDirection: z.enum(['long', 'short']).optional(),
         optionInfo: z.object({
           premium: z.string().optional(),
           exerciseDate: z.string().optional(),
