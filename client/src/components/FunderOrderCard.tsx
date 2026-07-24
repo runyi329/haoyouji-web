@@ -1894,7 +1894,7 @@ export function FunderOrderCard({
             onClick={() => {
               const isOpening = $showPaymentPanel !== order.id;
               $setShowPaymentPanel(isOpening ? order.id : null);
-              $setPaymentForm(() => ({ amount: '', currency: (order.interest_rate_currency === 'CNY' ? 'CNY' : 'U') as 'U' | 'CNY', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' }));
+              $setPaymentForm(() => ({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' }));
               if (isOpening) {
                 // 初始化利息约等于配置
                 try {
@@ -2218,16 +2218,7 @@ export function FunderOrderCard({
           <div className="bg-blue-50 rounded-xl p-3 mb-3 space-y-2">
             <div className="flex gap-2">
               <div className="flex-1">
-                <label className="block text-xs text-gray-500 mb-1">结息金额 ({$paymentForm.currency === 'CNY' ? '元' : 'U'})</label>
-                <div className="flex gap-1 mb-1">
-                  {(['U', 'CNY'] as const).map(cur => (
-                    <button key={cur} type="button"
-                      onClick={() => $setPaymentForm((f: any) => ({ ...f, currency: cur }))}
-                      className="px-2 py-0.5 rounded text-xs font-medium border transition-colors"
-                      style={$paymentForm.currency === cur ? { background: '#1A56DB', color: '#fff', borderColor: '#1A56DB' } : { background: '#fff', color: '#6B7280', borderColor: '#D1D5DB' }}
-                    >{cur === 'CNY' ? '元' : 'U'}</button>
-                  ))}
-                </div>
+                <label className="block text-xs text-gray-500 mb-1">结息金额 ({interestUnit})</label>
                 <input
                   type="number"
                   inputMode="decimal"
