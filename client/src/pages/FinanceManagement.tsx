@@ -1339,7 +1339,7 @@ const emptyForm = {
   commissionBase: '',
   commissionStartDate: '',
   assetType: '' as '' | 'stock' | 'crypto',
-  tradeDirection: '' as '' | 'long' | 'short',
+  tradeDirection: null as null | 'long' | 'short',
   ownerLabel: '',
   interestRateCurrency: 'USDT' as 'USDT' | 'CNY',
   tags: [] as string[],
@@ -1864,7 +1864,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
       showProfitShare: order.show_profit_share !== 0 && order.show_profit_share !== false,
       commissionShare: order.commission_share || '',
       assetType: (order.asset_type || '') as '' | 'stock' | 'crypto',
-      tradeDirection: (order.trade_direction || '') as '' | 'long' | 'short',
+      tradeDirection: (order.trade_direction as null | 'long' | 'short') || null,
       ownerLabel: '',
       interestRateCurrency: (order.interest_rate_currency || 'USDT') as 'USDT' | 'CNY',
       commissionRate: order.participantInfo?.commissionRate || '',
@@ -1955,7 +1955,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         showProfitShare: formData.showProfitShare,
         commissionShare: formData.commissionShare || undefined,
         assetType: formData.assetType || undefined,
-        tradeDirection: (formData.tradeDirection || null) as any,
+        tradeDirection: (formData.tradeDirection || null),
         ownerLabel: '',
         interestRateCurrency: formData.interestRateCurrency,
         tags: formData.tags.length > 0 ? formData.tags : [],
@@ -1993,7 +1993,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         showProfitShare: formData.showProfitShare,
         commissionShare: formData.commissionShare || undefined,
         assetType: formData.assetType || undefined,
-        tradeDirection: formData.tradeDirection || undefined,
+        tradeDirection: formData.tradeDirection || null,
         ownerLabel: undefined,
         interestRateCurrency: formData.interestRateCurrency,
         tags: formData.tags.length > 0 ? formData.tags : undefined,
@@ -2258,7 +2258,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                     <button
                       key={opt.value}
                       type="button"
-                      onClick={() => setFormData(d => ({ ...d, assetType: d.assetType === opt.value ? '' : opt.value, tradeDirection: d.assetType === opt.value ? '' : d.tradeDirection }))}
+                      onClick={() => setFormData(d => ({ ...d, assetType: d.assetType === opt.value ? '' : opt.value, tradeDirection: d.assetType === opt.value ? null : d.tradeDirection }))}
                       className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
                       style={
                         formData.assetType === opt.value
@@ -2281,7 +2281,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                       <button
                         key={opt.value}
                         type="button"
-                        onClick={() => setFormData(d => ({ ...d, tradeDirection: d.tradeDirection === opt.value ? '' : opt.value }))}
+                        onClick={() => setFormData(d => ({ ...d, tradeDirection: d.tradeDirection === opt.value ? null : opt.value }))}
                         className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-all"
                         style={
                           formData.tradeDirection === opt.value
