@@ -28443,8 +28443,8 @@ async function runAfFundingRateSettlement() {
           [userId, ledgerId, ledgerId, userId]
         ) as any[];
         const currentBalance = parseFloat((balRows as any[])[0]?.balance ?? '0');
-        // 取开启时余额和当前余额的最小值作为结算基数
-        const baseBalance = Math.min(openBalance, currentBalance);
+        // 使用实时余额作为结算基数（余额增加时同步提高计息基数）
+        const baseBalance = currentBalance;
         if (baseBalance <= 0) continue;
         // 查询当前累计总额
         const [lastRows] = await dbConn.execute(
