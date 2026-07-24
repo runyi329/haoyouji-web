@@ -1284,6 +1284,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       做空
                     </button>
                   </div>
+                  <div style={{color:'red',fontSize:11,marginTop:4}}>【调试】FunderManagement · tradeDirection={String(formData.tradeDirection)}</div>
                 </div>
               )}
 
