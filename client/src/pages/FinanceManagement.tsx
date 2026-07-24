@@ -168,7 +168,7 @@ interface FinanceOrderCardProps {
   ledgerId: number;
   showPaymentPanel: number | null;
   setShowPaymentPanel: (v: number | null) => void;
-  paymentForm: { amount: string; payDate: string; note: string };
+  paymentForm: { amount: string; currency: 'U' | 'CNY'; payDate: string; note: string };
   setPaymentForm: (fn: (f: any) => any) => void;
   showPaymentDatePicker: boolean;
   setShowPaymentDatePicker: (v: boolean | ((v: boolean) => boolean)) => void;
@@ -989,7 +989,7 @@ function FinanceOrderCard({
           </span>
           {isAdmin && (
           <button
-            onClick={() => { setShowPaymentPanel(showPaymentPanel === order.id ? null : order.id); setPaymentForm(() => ({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' })); }}
+            onClick={() => { setShowPaymentPanel(showPaymentPanel === order.id ? null : order.id); setPaymentForm(() => ({ amount: '', currency: (order.interest_rate_currency === 'CNY' ? 'CNY' : 'U') as 'U' | 'CNY', payDate: new Date().toISOString().slice(0, 10), note: '' })); }}
             className="text-xs px-3 py-1 rounded-full font-medium"
             style={{ backgroundColor: '#EEF4FF', color: '#1A56DB' }}
           >
@@ -1002,7 +1002,16 @@ function FinanceOrderCard({
           <div className="bg-blue-50 rounded-xl p-3 mb-3 space-y-2">
             <div className="flex gap-2">
               <div className="flex-1">
-                <label className="block text-xs text-gray-500 mb-1">结息金额 ({interestUnit})</label>
+                <label className="block text-xs text-gray-500 mb-1">结息金额 ({paymentForm.currency === 'CNY' ? '元' : 'U'})</label>
+                <div className="flex gap-1 mb-1">
+                  {(['U', 'CNY'] as const).map(cur => (
+                    <button key={cur} type="button"
+                      onClick={() => setPaymentForm((f: any) => ({ ...f, currency: cur }))}
+                      className="px-2 py-0.5 rounded text-xs font-medium border transition-colors"
+                      style={paymentForm.currency === cur ? { background: '#1A56DB', color: '#fff', borderColor: '#1A56DB' } : { background: '#fff', color: '#6B7280', borderColor: '#D1D5DB' }}
+                    >{cur === 'CNY' ? '元' : 'U'}</button>
+                  ))}
+                </div>
                 <input
                   type="number"
                   inputMode="decimal"
@@ -1060,7 +1069,7 @@ function FinanceOrderCard({
             {openedPaymentList.map((p: any) => (
               <div key={p.id} className="flex items-center justify-between text-xs bg-gray-50 rounded-lg px-3 py-2">
                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                  <span className="font-medium" style={{ color: '#16A34A' }}>+{parseFloat(p.amount).toFixed(2)} {interestUnit}</span>
+                  <span className="font-medium" style={{ color: '#16A34A' }}>+{parseFloat(p.amount).toFixed(2)} {(p.currency || 'U') === 'CNY' ? '元' : 'U'}</span>
                   {p.note && <span className="text-gray-400 ml-1 truncate">{p.note}</span>}
                 </div>
                 <div className="flex items-center gap-2 ml-2 flex-shrink-0">
@@ -1517,7 +1526,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   const [activeUserTab, setActiveUserTab] = useState<number | 'all'>('all');
   // 多空方向筛选（仅数字币）
   const [filterDirection, setFilterDirection] = useState<'' | 'long' | 'short'>();
-  const [paymentForm, setPaymentForm] = useState({ amount: '', payDate: new Date().toISOString().slice(0, 10), note: '' });
+  const [paymentForm, setPaymentForm] = useState({ amount: '', currency: 'U' as 'U' | 'CNY', payDate: new Date().toISOString().slice(0, 10), note: '' });
   const [showPaymentDatePicker, setShowPaymentDatePicker] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [confirmSettleId, setConfirmSettleId] = useState<number | null>(null);
@@ -2012,6 +2021,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
       orderId,
       ledgerId,
       amount: parseFloat(paymentForm.amount),
+      currency: paymentForm.currency || 'U',
       payDate: paymentForm.payDate,
       note: paymentForm.note,
     });
