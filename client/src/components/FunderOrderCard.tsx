@@ -1894,7 +1894,7 @@ export function FunderOrderCard({
             onClick={() => {
               const isOpening = $showPaymentPanel !== order.id;
               $setShowPaymentPanel(isOpening ? order.id : null);
-              $setPaymentForm(() => ({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' }));
+              $setPaymentForm(() => ({ amount: '', currency: rateCur === 'CNY' ? 'CNY' : 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' }));
               if (isOpening) {
                 // 初始化利息约等于配置
                 try {
@@ -2216,9 +2216,22 @@ export function FunderOrderCard({
 
         {$showPaymentPanel === order.id && (
           <div className="bg-blue-50 rounded-xl p-3 mb-3 space-y-2">
+            <div className="flex gap-2 mb-1">
+              <span className="text-xs text-gray-500 self-center">结息币种：</span>
+              <button
+                onClick={() => $setPaymentForm((f: any) => ({ ...f, currency: 'U' }))}
+                className="px-3 py-1 rounded-full text-xs font-medium border transition-all"
+                style={{ backgroundColor: $paymentForm.currency === 'U' ? '#1A2340' : '#fff', color: $paymentForm.currency === 'U' ? '#fff' : '#6B7280', borderColor: $paymentForm.currency === 'U' ? '#1A2340' : '#D1D5DB' }}
+              >U</button>
+              <button
+                onClick={() => $setPaymentForm((f: any) => ({ ...f, currency: 'CNY' }))}
+                className="px-3 py-1 rounded-full text-xs font-medium border transition-all"
+                style={{ backgroundColor: $paymentForm.currency === 'CNY' ? '#1A2340' : '#fff', color: $paymentForm.currency === 'CNY' ? '#fff' : '#6B7280', borderColor: $paymentForm.currency === 'CNY' ? '#1A2340' : '#D1D5DB' }}
+              >元</button>
+            </div>
             <div className="flex gap-2">
               <div className="flex-1">
-                <label className="block text-xs text-gray-500 mb-1">结息金额 ({interestUnit})</label>
+                <label className="block text-xs text-gray-500 mb-1">结息金额 ({$paymentForm.currency === 'CNY' ? '元' : 'u'})</label>
                 <input
                   type="number"
                   inputMode="decimal"
