@@ -3487,27 +3487,32 @@ export default function LedgerDetailAA({
                     <span className="text-base font-bold" style={{ color: '#1A1A1A' }}>{tagAlias !== tagName ? tagAlias : tagName}</span>
                     {tagAlias !== tagName && <span className="text-xs ml-2" style={{ color: '#BDBDBD' }}>{tagName}</span>}
                   </div>
-                  <div className="text-xs px-2 py-1 rounded-full" style={{ background: '#F5F5F5', color: '#888' }}>占比 {ratio.toFixed(2)}%</div>
                 </div>
-                <div className="text-xs mt-1" style={{ color: '#BDBDBD' }}>回报计算明细</div>
               </div>
               {/* 分段列表（可滚动） */}
               <div style={{ overflowY: 'auto', flex: 1, padding: '12px 20px' }}>
-                <div className="text-xs mb-2" style={{ color: '#BDBDBD' }}>公式：回报 = (本段本金 − 最新余额 − 累计提现) × 占比</div>
                 {segments.map((seg, idx) => (
                   <div key={idx}>
                     {/* 分段标题 */}
-                    <div className="flex items-center gap-2 mb-2" style={{ marginTop: idx > 0 ? 12 : 0 }}>
-                      <div className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#EEF2FF', color: '#3949AB' }}>
-                        第 {seg.segNo} 段
-                      </div>
-                      <div className="text-xs" style={{ color: '#888' }}>
-                        {fmtDate(seg.startDate)} — {fmtDate(seg.endDate)}
-                      </div>
-                      {seg.isPaused && (
-                        <div className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: '#E3F2FD', color: '#1565C0' }}>暂停中</div>
-                      )}
-                    </div>
+                    {(() => {
+                      const days = seg.startDate && seg.endDate ? Math.round((new Date(seg.endDate).getTime() - new Date(seg.startDate).getTime()) / 86400000) + 1 : 0;
+                      return (
+                        <div className="flex items-center gap-2 mb-2" style={{ marginTop: idx > 0 ? 12 : 0 }}>
+                          <div className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: '#EEF2FF', color: '#3949AB' }}>
+                            第 {seg.segNo} 段
+                          </div>
+                          <div className="text-xs" style={{ color: '#888' }}>
+                            {fmtDate(seg.startDate)} — {fmtDate(seg.endDate)}
+                          </div>
+                          {days > 0 && (
+                            <div className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: '#F5F5F5', color: '#BDBDBD' }}>共 {days} 天</div>
+                          )}
+                          {seg.isPaused && (
+                            <div className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: '#E3F2FD', color: '#1565C0' }}>暂停中</div>
+                          )}
+                        </div>
+                      );
+                    })()}
                     {/* 计算过程卡片 */}
                     <div className="rounded-xl space-y-1" style={{ background: '#FAFAFA', padding: '10px 14px' }}>
                       {/* 本段本金（第1段=初始本金，第2段及以后=开始本金） */}
@@ -3521,7 +3526,7 @@ export default function LedgerDetailAA({
                             capitalRecords.map((rec, ri) => (
                               <div key={ri} className="flex items-center justify-between">
                                 <span className="text-xs" style={{ color: '#888' }}>{rec.isAdd ? '追加本金' : '减少本金'} <span style={{ color: '#BDBDBD' }}>({fmtDate(rec.date)})</span></span>
-                                <span className="text-sm font-medium font-mono" style={{ color: rec.isAdd ? '#1565C0' : '#E65100' }}>{rec.isAdd ? '+' : '−'}{fmtAbs(rec.amount)}</span>
+                                <span className="text-sm font-medium font-mono" style={{ color: rec.isAdd ? '#1565C0' : '#E65100' }}>{fmtAbs(rec.amount)}</span>
                               </div>
                             ))
                           )}
@@ -3543,13 +3548,13 @@ export default function LedgerDetailAA({
                       {/* 最新余额行 */}
                       <div className="flex items-center justify-between">
                         <span className="text-xs" style={{ color: '#888' }}>最新余额 <span style={{ color: '#BDBDBD' }}>({fmtDate(seg.endDate)})</span></span>
-                        <span className="text-sm font-medium font-mono" style={{ color: '#D32F2F' }}>−{fmtAbs(seg.endBalance)}</span>
+                        <span className="text-sm font-medium font-mono" style={{ color: '#1A1A1A' }}>{fmtAbs(seg.endBalance)}</span>
                       </div>
                       {/* 累计提现行（仅当有提现时显示） */}
                       {tagWithdraw > 0 && (
                         <div className="flex items-center justify-between">
                           <span className="text-xs" style={{ color: '#888' }}>累计提现</span>
-                          <span className="text-sm font-medium font-mono" style={{ color: '#D32F2F' }}>−{fmtAbs(tagWithdraw)}</span>
+                          <span className="text-sm font-medium font-mono" style={{ color: '#1A1A1A' }}>{fmtAbs(tagWithdraw)}</span>
                         </div>
                       )}
                       {/* 盈亏统计（标签视角）= 余额 + 提现 − 本金（正数=标签赚了红色，负数=标签亏了绿色） */}
@@ -3570,24 +3575,15 @@ export default function LedgerDetailAA({
                       </div>
                       {/* 分割线 */}
                       <div style={{ borderTop: '1px dashed #E0E0E0', margin: '6px 0' }} />
-                      {/* 计算式 + 本段回报 */}
-                      {idx === 0 && (() => {
-                        const segCapital = segments.length === 1 ? currentCapital : initialBalance;
-                        const tagPnl2 = seg.endBalance + tagWithdraw - segCapital;
-                        return (
-                          <>
-                            <div className="text-xs font-mono" style={{ color: '#BDBDBD', background: '#FFF', borderRadius: 6, padding: '4px 8px' }}>
-                              ({tagPnl2 > 0 ? '+' : tagPnl2 < 0 ? '−' : ''}{fmtAbs(tagPnl2)}) × {ratio.toFixed(2)}%
-                            </div>
-                            <div className="flex items-center justify-between" style={{ paddingTop: 2 }}>
-                              <span className="text-xs font-semibold" style={{ color: '#555' }}>本段回报</span>
-                              <span className="text-sm font-bold" style={{ color: seg.pnl > 0 ? '#D32F2F' : seg.pnl < 0 ? '#388E3C' : '#BDBDBD' }}>
-                                {seg.pnl > 0 ? '+' : seg.pnl < 0 ? '−' : ''}￥{Math.abs(seg.pnl).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </span>
-                            </div>
-                          </>
-                        );
-                      })()}
+                      {/* 本段回报 */}
+                      {idx === 0 && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold" style={{ color: '#555' }}>本段回报</span>
+                          <span className="text-sm font-bold" style={{ color: seg.pnl > 0 ? '#D32F2F' : seg.pnl < 0 ? '#388E3C' : '#BDBDBD' }}>
+                            {seg.pnl > 0 ? '+' : seg.pnl < 0 ? '−' : ''}￥{Math.abs(seg.pnl).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      )}
                       {idx > 0 && (
                         <div className="flex items-center justify-between" style={{ paddingTop: 2 }}>
                           <span className="text-xs font-semibold" style={{ color: '#555' }}>本段回报</span>
