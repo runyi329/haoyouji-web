@@ -92,6 +92,7 @@ export default function EthOptionsPage() {
   const [loadStage, setLoadStage] = useState<LoadStage>("auth");
   const [iframeReady, setIframeReady] = useState(false);
   const [fadeOut, setFadeOut] = useState(false);
+  const [showProjectMenu, setShowProjectMenu] = useState(false);
 
   const ethOptionsSsoLink = trpc.auth.ethOptionsSsoLink.useMutation({
     onSuccess: (data) => {
@@ -207,17 +208,72 @@ export default function EthOptionsPage() {
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
-        <span
-          style={{
-            flex: 1,
-            textAlign: "center",
-            fontSize: 15,
-            fontWeight: 600,
-            color: "#E6EDF3",
-          }}
-        >
-          ETH 期权监控工具
-        </span>
+        {/* ── 项目切换下拉 ── */}
+        <div style={{ flex: 1, display: "flex", justifyContent: "center", position: "relative" }}>
+          <button
+            onClick={() => setShowProjectMenu(m => !m)}
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              background: "transparent", border: "none",
+              color: "#E6EDF3", fontSize: 15, fontWeight: 600,
+              cursor: "pointer", padding: "4px 8px", borderRadius: 6,
+            }}
+          >
+            ETH 期权监控工具
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <polyline points={showProjectMenu ? "18 15 12 9 6 15" : "6 9 12 15 18 9"} />
+            </svg>
+          </button>
+          {showProjectMenu && (
+            <div
+              style={{
+                position: "absolute", top: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)",
+                background: "#161B22", border: "1px solid #30363D", borderRadius: 10,
+                boxShadow: "0 8px 32px rgba(0,0,0,0.5)", zIndex: 9999, minWidth: 200, overflow: "hidden",
+              }}
+            >
+              {/* 当前项目 */}
+              <div style={{
+                padding: "11px 16px", display: "flex", alignItems: "center", gap: 10,
+                background: "rgba(88,166,255,0.08)", borderBottom: "1px solid #30363D",
+              }}>
+                <span style={{ fontSize: 16 }}>₿</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#58A6FF" }}>ETH 期权监控工具</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 1 }}>当前项目</div>
+                </div>
+                <svg style={{ marginLeft: "auto" }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#58A6FF" strokeWidth="2.5">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              </div>
+              {/* A 股风控 */}
+              <a
+                href="/stock-risk"
+                onClick={() => setShowProjectMenu(false)}
+                style={{
+                  padding: "11px 16px", display: "flex", alignItems: "center", gap: 10,
+                  textDecoration: "none", color: "inherit",
+                  transition: "background 0.15s",
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
+                onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+              >
+                <span style={{ fontSize: 16 }}>📊</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#E6EDF3" }}>潤儀投資 A 股風控</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 1 }}>A 股融资风险利率参考</div>
+                </div>
+              </a>
+            </div>
+          )}
+          {/* 点击外部关闭 */}
+          {showProjectMenu && (
+            <div
+              style={{ position: "fixed", inset: 0, zIndex: 9998 }}
+              onClick={() => setShowProjectMenu(false)}
+            />
+          )}
+        </div>
         {isAuthenticated && user ? (
           <div
             style={{
