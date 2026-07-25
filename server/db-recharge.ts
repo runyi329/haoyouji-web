@@ -374,16 +374,38 @@ export async function findOrderByAmount(amount: number, txnHash?: string, blockT
       .orderBy(sql`${rechargeOrders.createdAt} ASC`)
       .limit(1);
     if (earliestOrder.length > 0) {
-      const earliestOrderTime = new Date(earliestOrder[0].createdAt);
-      // 给5分钟宽限（防止时钟偏差），如果区块链交易时间早于最早订单创建时间5分钟以上，拒绝
-      const toleranceMs = 5 * 60 * 1000;
+      // 数据库存储的是北京时间（UTC+8）字符串，new Date() 会误读为 UTC，需减去8小时偏移还原真实UTC时间
+      const earliestOrderTimeRaw = new Date(earliestOrder[0].createdAt);
+      const UTC8_OFFSET_MS = 8 * 60 * 60 * 1000;
+      const earliestOrderTime = new Date(earliestOrderTimeRaw.getTime() - UTC8_OFFSET_MS);
+      // 给30分钟宽限（覆盖网络延迟和时钟偏差），如果区块链交易时间早于最早订单创建时间30分钟以上，拒绝
+      const toleranceMs = 30 * 60 * 1000;
       if (txBlockTime.getTime() < earliestOrderTime.getTime() - toleranceMs) {
-        console.warn(`[Recharge] ⛔ STALE transaction rejected: block_time=${txBlockTime.toISOString()} is before earliest pending order created_at=${earliestOrderTime.toISOString()} (diff=${Math.round((earliestOrderTime.getTime() - txBlockTime.getTime()) / 60000)}min). Skipping.`);
+        console.warn(`[Recharge] ⛔ STALE transaction rejected: block_time=${txBlockTime.toISOString()} is before earliest pending order created_at(UTC)=${earliestOrderTime.toISOString()} (diff=${Math.round((earliestOrderTime.getTime() - txBlockTime.getTime()) / 60000)}min). Skipping.`);
         return null;
       }
     }
   }
   // ===== 双重防护结束 =====
+
+  // 防护3.5：已完成订单金额去重检查
+  // 如果过去24小时内已有金额相近（±1 USDT）的 completed 订单，说明这笔链上交易已被处理（手动或自动），拒绝再次匹配
+  {
+    const recentCompletedLimit = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace('T', ' ');
+    const recentCompleted = await db
+      .select({ id: rechargeOrders.id, orderNo: rechargeOrders.orderNo, amount: rechargeOrders.amount, userId: rechargeOrders.userId })
+      .from(rechargeOrders)
+      .where(and(
+        eq(rechargeOrders.status, 'completed'),
+        sql`ABS(CAST(${rechargeOrders.amount} AS DECIMAL(20,8)) - ${amount}) <= 1.0`,
+        sql`${rechargeOrders.completedAt} >= ${recentCompletedLimit}`
+      ))
+      .limit(1);
+    if (recentCompleted.length > 0) {
+      console.warn(`[Recharge] ⛔ ALREADY_COMPLETED: 过去24小时内已有金额相近的completed订单 (orderNo=${recentCompleted[0].orderNo}, amount=${recentCompleted[0].amount}, userId=${recentCompleted[0].userId})，拒绝再次匹配，防止重复入账。`);
+      return null;
+    }
+  }
   
   // 防护3：订单创建时间限制
   // 只匹配最近48小时内创建的订单，防止旧的过期订单被新的链上交易错误匹配
@@ -634,34 +656,30 @@ export async function adminDirectRecharge(
 
 // 获取所有待处理订单（管理员用）
 export async function getAllPendingOrders() {
-  const db = await getDb();
-  
-  return await db
-    .select({
-      id: rechargeOrders.id,
-      userId: rechargeOrders.userId,
-      orderNo: rechargeOrders.orderNo,
-      amount: rechargeOrders.amount,
-      currency: rechargeOrders.currency,
-      network: rechargeOrders.network,
-      status: rechargeOrders.status,
-      createdAt: rechargeOrders.createdAt,
-      expiresAt: rechargeOrders.expiresAt,
-    })
-    .from(rechargeOrders)
-    .where(eq(rechargeOrders.status, 'pending'))
-    .orderBy(sql`${rechargeOrders.createdAt} DESC`);
+  const conn = await getDbConnection();
+  if (!conn) return [];
+  const [rows] = await (conn as any).execute(`
+    SELECT r.*, u.username, u.name as userName, u.phone
+    FROM recharge_orders r
+    LEFT JOIN users u ON r.user_id = u.id
+    WHERE r.status = 'pending'
+    ORDER BY r.created_at DESC
+  `) as any[];
+  return rows as any[];
 }
 
 // 获取所有充值订单（管理员用）
 export async function getAllOrders(limit: number = 50) {
-  const db = await getDb();
-  
-  return await db
-    .select()
-    .from(rechargeOrders)
-    .orderBy(sql`${rechargeOrders.createdAt} DESC`)
-    .limit(limit);
+  const conn = await getDbConnection();
+  if (!conn) return [];
+  const [rows] = await (conn as any).execute(`
+    SELECT r.*, u.username, u.name as userName, u.phone
+    FROM recharge_orders r
+    LEFT JOIN users u ON r.user_id = u.id
+    ORDER BY r.created_at DESC
+    LIMIT ?
+  `, [limit]) as any[];
+  return rows as any[];
 }
 
 // 获取未匹配交易列表（管理员用）
@@ -1020,6 +1038,9 @@ export async function getSystemStats() {
       createdAt: rechargeOrders.createdAt,
       completedAt: rechargeOrders.completedAt,
       username: users.username,
+      realName: users.realName,
+      phone: users.phone,
+      name: users.name,
     })
     .from(rechargeOrders)
     .leftJoin(users, eq(rechargeOrders.userId, users.id))

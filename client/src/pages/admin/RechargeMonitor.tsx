@@ -391,11 +391,18 @@ export default function RechargeMonitor() {
                       <span>{formatDate(order.createdAt)}</span>
                     </div>
                     {/* 用户信息 */}
-                    {order.username && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        用户: {order.username} (ID: {order.userId})
+                    <div className="text-xs text-gray-500 mt-1 space-y-0.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-gray-400">用户:</span>
+                        {order.realName && <span className="font-medium text-gray-700">{order.realName}</span>}
+                        {order.name && !order.realName && <span className="font-medium text-gray-700">{order.name}</span>}
+                        {order.username && <span className="text-gray-400">@{order.username}</span>}
+                        <span className="text-gray-400">ID:{order.userId}</span>
                       </div>
-                    )}
+                      {order.phone && (
+                        <div className="text-gray-400">📱 {order.phone}</div>
+                      )}
+                    </div>
                     {/* 交易哈希和区块链浏览器链接 */}
                     {order.txnHash && (
                       <div className="text-xs mt-1">
