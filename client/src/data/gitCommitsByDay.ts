@@ -8628,5 +8628,10 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   "2026-07-25": [
     { date: "2026-07-24T17:37:41Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
     { date: "2026-07-24T23:07:59Z", type: "feat", cleanMessage: "回报弹窗重构+概览列表优化+细则页面" },
+    { date: "2026-07-25T06:19:33Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-25T07:42:55Z", type: "fix", cleanMessage: "充值系统三项修复 - 时区bug/防重复入账/充值管理显示用户信息" },
+    { date: "2026-07-25T07:48:03Z", type: "fix", cleanMessage: "充值系统监控返回按钮改为history.back()" },
+    { date: "2026-07-25T09:41:59Z", type: "feat", cleanMessage: "规则005新增I板块充值与调账规范 + AfRechargeManage调账Tab流水标签优化 + 账本统一(balance_history)" },
+    { date: "2026-07-25T10:18:15Z", type: "feat", cleanMessage: "充值订单与流水记录撤回功能（双模式：反向记录/直接删除）" },
   ],
 };
