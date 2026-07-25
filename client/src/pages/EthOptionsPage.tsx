@@ -219,7 +219,7 @@ export default function EthOptionsPage() {
               cursor: "pointer", padding: "4px 8px", borderRadius: 6,
             }}
           >
-            ETH 期权监控工具
+            以太坊期权风控工具
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <polyline points={showProjectMenu ? "18 15 12 9 6 15" : "6 9 12 15 18 9"} />
             </svg>
@@ -237,9 +237,8 @@ export default function EthOptionsPage() {
                 padding: "11px 16px", display: "flex", alignItems: "center", gap: 10,
                 background: "rgba(88,166,255,0.08)", borderBottom: "1px solid #30363D",
               }}>
-                <span style={{ fontSize: 16 }}>₿</span>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#58A6FF" }}>ETH 期权监控工具</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#58A6FF" }}>以太坊期权风控工具</div>
                   <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 1 }}>当前项目</div>
                 </div>
                 <svg style={{ marginLeft: "auto" }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#58A6FF" strokeWidth="2.5">
@@ -257,7 +256,6 @@ export default function EthOptionsPage() {
                 onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
                 onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
               >
-                <span style={{ fontSize: 16 }}>📊</span>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "#E6EDF3" }}>潤儀投資 A 股風控</div>
                   <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 1 }}>A 股融資風險利率參考</div>

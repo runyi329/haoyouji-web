@@ -235,7 +235,7 @@ export default function StockRiskPage() {
                 boxShadow: "0 8px 32px rgba(0,0,0,0.5)", zIndex: 9999, minWidth: 200, overflow: "hidden",
               }}
             >
-              {/* ETH 期权监控 */}
+              {/* ETH 期权风控 */}
               <div
                 onClick={() => { setShowProjectMenu(false); setLocation("/eth-options"); }}
                 style={{
@@ -245,9 +245,8 @@ export default function StockRiskPage() {
                 onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
                 onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
               >
-                <span style={{ fontSize: 16 }}>₿</span>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#E6EDF3" }}>ETH 期权监控工具</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#E6EDF3" }}>以太坊期权风控工具</div>
                   <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 1 }}>实时期权链分析</div>
                 </div>
               </div>
@@ -256,7 +255,6 @@ export default function StockRiskPage() {
                 padding: "11px 16px", display: "flex", alignItems: "center", gap: 10,
                 background: "rgba(240,165,0,0.08)", borderTop: "1px solid #30363D",
               }}>
-                <span style={{ fontSize: 16 }}>📊</span>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600, color: "#F0A500" }}>潤儀投資 A 股風控</div>
                   <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 1 }}>当前项目</div>
