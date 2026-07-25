@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
@@ -9,32 +9,36 @@ type LoadStage = "auth" | "sso" | "iframe" | "done";
 const STAGE_LABELS: Record<LoadStage, string> = {
   auth: "正在验证身份...",
   sso: "正在建立安全连接...",
-  iframe: "正在加载期权数据...",
+  iframe: "正在加载風控數據...",
   done: "加载完成",
 };
 
-// ETH 六边形 Logo SVG
-function EthHexLogo({ size = 48 }: { size?: number }) {
+// A 股风控 Logo SVG（K线图风格）
+function StockLogo({ size = 48 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" fill="none">
+      {/* 外框六边形 */}
       <polygon
         points="24,4 42,14 42,34 24,44 6,34 6,14"
         fill="none"
-        stroke="#58A6FF"
+        stroke="#F0A500"
         strokeWidth="1.5"
         opacity="0.3"
       />
       <polygon
         points="24,10 38,18 38,30 24,38 10,30 10,18"
         fill="none"
-        stroke="#58A6FF"
+        stroke="#F0A500"
         strokeWidth="1"
         opacity="0.5"
       />
-      {/* ETH 菱形 */}
-      <polygon points="24,13 31,24 24,28 17,24" fill="#58A6FF" opacity="0.9" />
-      <polygon points="24,28 31,24 24,35" fill="#1F6FEB" opacity="0.8" />
-      <polygon points="24,28 17,24 24,35" fill="#388BFD" opacity="0.6" />
+      {/* K 线图 */}
+      <line x1="16" y1="14" x2="16" y2="34" stroke="#F0A500" strokeWidth="1" opacity="0.4" />
+      <rect x="13" y="18" width="6" height="8" fill="#0ECB81" opacity="0.9" rx="0.5" />
+      <line x1="24" y1="12" x2="24" y2="36" stroke="#F0A500" strokeWidth="1" opacity="0.4" />
+      <rect x="21" y="20" width="6" height="10" fill="#F6465D" opacity="0.9" rx="0.5" />
+      <line x1="32" y1="16" x2="32" y2="32" stroke="#F0A500" strokeWidth="1" opacity="0.4" />
+      <rect x="29" y="19" width="6" height="7" fill="#0ECB81" opacity="0.9" rx="0.5" />
     </svg>
   );
 }
@@ -48,7 +52,7 @@ function PulseRing({ active }: { active: boolean }) {
         position: "absolute",
         inset: -12,
         borderRadius: "50%",
-        border: "2px solid #58A6FF",
+        border: "2px solid #F0A500",
         opacity: 0,
         animation: "pulse-ring 1.8s ease-out infinite",
         pointerEvents: "none",
@@ -73,7 +77,7 @@ function StepDots({ stage }: { stage: LoadStage }) {
               width: isActive ? 20 : 6,
               height: 6,
               borderRadius: 3,
-              background: isDone ? "#0ECB81" : isActive ? "#58A6FF" : "#21262D",
+              background: isDone ? "#0ECB81" : isActive ? "#F0A500" : "#21262D",
               transition: "all 0.4s cubic-bezier(0.23, 1, 0.32, 1)",
               opacity: isDone || isActive ? 1 : 0.4,
             }}
@@ -84,7 +88,7 @@ function StepDots({ stage }: { stage: LoadStage }) {
   );
 }
 
-export default function EthOptionsPage() {
+export default function StockRiskPage() {
   const { isAuthenticated, isLoading, user } = useAuth();
   const [, setLocation] = useLocation();
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -94,7 +98,7 @@ export default function EthOptionsPage() {
   const [fadeOut, setFadeOut] = useState(false);
   const [showProjectMenu, setShowProjectMenu] = useState(false);
 
-  const ethOptionsSsoLink = trpc.auth.ethOptionsSsoLink.useMutation({
+  const stockRiskSsoLink = trpc.auth.stockRiskSsoLink.useMutation({
     onSuccess: (data) => {
       setLoadStage("iframe");
       setIframeSrc(data.url);
@@ -102,7 +106,7 @@ export default function EthOptionsPage() {
     onError: () => {
       // 降级：直接加载（未登录状态）
       setLoadStage("iframe");
-      setIframeSrc("https://eth-options.jiangyuchen.cn");
+      setIframeSrc("https://eth-options.jiangyuchen.cn/stock-risk");
     },
   });
 
@@ -110,18 +114,17 @@ export default function EthOptionsPage() {
     if (isLoading) return;
     if (!isAuthenticated) {
       setLoadStage("iframe");
-      setIframeSrc("https://eth-options.jiangyuchen.cn");
+      setIframeSrc("https://eth-options.jiangyuchen.cn/stock-risk");
       return;
     }
     // 已登录：先进入 SSO 阶段
     setLoadStage("sso");
-    ethOptionsSsoLink.mutate();
+    stockRiskSsoLink.mutate();
   }, [isAuthenticated, isLoading]);
 
   // iframe 加载完成后触发淡出
   const handleIframeLoad = () => {
     setIframeReady(true);
-    // 短暂停留让用户看到"加载完成"，再淡出
     setTimeout(() => setFadeOut(true), 400);
     setTimeout(() => setLoadStage("done"), 900);
   };
@@ -166,7 +169,7 @@ export default function EthOptionsPage() {
           from { stroke-dashoffset: 24; }
           to   { stroke-dashoffset: 0; }
         }
-        .eth-float {
+        .stock-float {
           animation: float-y 2.4s ease-in-out infinite;
         }
         .stage-label {
@@ -219,7 +222,7 @@ export default function EthOptionsPage() {
               cursor: "pointer", padding: "4px 8px", borderRadius: 6,
             }}
           >
-            ETH 期权监控工具
+            潤儀投資 A 股風控
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <polyline points={showProjectMenu ? "18 15 12 9 6 15" : "6 9 12 15 18 9"} />
             </svg>
@@ -232,36 +235,35 @@ export default function EthOptionsPage() {
                 boxShadow: "0 8px 32px rgba(0,0,0,0.5)", zIndex: 9999, minWidth: 200, overflow: "hidden",
               }}
             >
-              {/* 当前项目 */}
-              <div style={{
-                padding: "11px 16px", display: "flex", alignItems: "center", gap: 10,
-                background: "rgba(88,166,255,0.08)", borderBottom: "1px solid #30363D",
-              }}>
-                <span style={{ fontSize: 16 }}>₿</span>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#58A6FF" }}>ETH 期权监控工具</div>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 1 }}>当前项目</div>
-                </div>
-                <svg style={{ marginLeft: "auto" }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#58A6FF" strokeWidth="2.5">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-              </div>
-              {/* A 股风控 */}
+              {/* ETH 期权监控 */}
               <div
-                onClick={() => { setShowProjectMenu(false); setLocation("/stock-risk-tool"); }}
+                onClick={() => { setShowProjectMenu(false); setLocation("/eth-options"); }}
                 style={{
                   padding: "11px 16px", display: "flex", alignItems: "center", gap: 10,
-                  cursor: "pointer",
-                  transition: "background 0.15s",
+                  cursor: "pointer", transition: "background 0.15s",
                 }}
                 onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
                 onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
               >
+                <span style={{ fontSize: 16 }}>₿</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#E6EDF3" }}>ETH 期权监控工具</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 1 }}>实时期权链分析</div>
+                </div>
+              </div>
+              {/* 当前项目：A 股风控 */}
+              <div style={{
+                padding: "11px 16px", display: "flex", alignItems: "center", gap: 10,
+                background: "rgba(240,165,0,0.08)", borderTop: "1px solid #30363D",
+              }}>
                 <span style={{ fontSize: 16 }}>📊</span>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#E6EDF3" }}>潤儀投資 A 股風控</div>
-                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 1 }}>A 股融資風險利率參考</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#F0A500" }}>潤儀投資 A 股風控</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 1 }}>当前项目</div>
                 </div>
+                <svg style={{ marginLeft: "auto" }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F0A500" strokeWidth="2.5">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
               </div>
             </div>
           )}
@@ -279,7 +281,7 @@ export default function EthOptionsPage() {
               width: 30,
               height: 30,
               borderRadius: "50%",
-              background: "#0ECB81",
+              background: "#F0A500",
               color: "#0D1117",
               display: "flex",
               alignItems: "center",
@@ -315,7 +317,7 @@ export default function EthOptionsPage() {
           transition: "opacity 0.5s ease",
         }}
         allow="fullscreen"
-        title="ETH 期权监控工具"
+        title="潤儀投資 A 股風控"
       />
 
       {/* ── 加载遮罩层 ── */}
@@ -344,7 +346,7 @@ export default function EthOptionsPage() {
               position: "absolute",
               inset: 0,
               background:
-                "radial-gradient(ellipse 60% 40% at 50% 45%, rgba(88,166,255,0.06) 0%, transparent 70%)",
+                "radial-gradient(ellipse 60% 40% at 50% 45%, rgba(240,165,0,0.06) 0%, transparent 70%)",
               pointerEvents: "none",
             }}
           />
@@ -358,8 +360,8 @@ export default function EthOptionsPage() {
                 inset: -16,
                 borderRadius: "50%",
                 border: "1.5px solid transparent",
-                borderTopColor: "#58A6FF",
-                borderRightColor: "rgba(88,166,255,0.3)",
+                borderTopColor: "#F0A500",
+                borderRightColor: "rgba(240,165,0,0.3)",
                 animation: "spin 1.2s linear infinite",
               }}
             />
@@ -370,17 +372,17 @@ export default function EthOptionsPage() {
                 inset: -8,
                 borderRadius: "50%",
                 border: "1px solid transparent",
-                borderBottomColor: "#388BFD",
-                borderLeftColor: "rgba(56,139,253,0.3)",
+                borderBottomColor: "#F6C548",
+                borderLeftColor: "rgba(246,197,72,0.3)",
                 animation: "spin 2s linear infinite reverse",
               }}
             />
             {/* 脉冲光环 */}
             <PulseRing active={loadStage === "sso" || loadStage === "iframe"} />
 
-            {/* ETH Logo */}
+            {/* Stock Logo */}
             <div
-              className="eth-float"
+              className="stock-float"
               style={{
                 width: 64,
                 height: 64,
@@ -390,7 +392,7 @@ export default function EthOptionsPage() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                boxShadow: "0 0 24px rgba(88,166,255,0.15)",
+                boxShadow: "0 0 24px rgba(240,165,0,0.15)",
               }}
             >
               {/* 加载完成时显示对勾 */}
@@ -409,7 +411,7 @@ export default function EthOptionsPage() {
                   />
                 </svg>
               ) : (
-                <EthHexLogo size={36} />
+                <StockLogo size={36} />
               )}
             </div>
           </div>
@@ -446,7 +448,7 @@ export default function EthOptionsPage() {
                     height: "100%",
                     borderRadius: 1,
                     background:
-                      "linear-gradient(90deg, transparent 0%, #58A6FF 40%, #79C0FF 50%, #58A6FF 60%, transparent 100%)",
+                      "linear-gradient(90deg, transparent 0%, #F0A500 40%, #F6C548 50%, #F0A500 60%, transparent 100%)",
                     backgroundSize: "200% 100%",
                     animation: "shimmer 1.6s ease-in-out infinite",
                   }}
@@ -468,7 +470,7 @@ export default function EthOptionsPage() {
               letterSpacing: "0.02em",
             }}
           >
-            由 Deribit 实时数据驱动
+            由 Tushare 实时数据驱动
           </p>
         </div>
       )}

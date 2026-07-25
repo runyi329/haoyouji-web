@@ -2873,6 +2873,19 @@ ${klinesSummary}
       const url = `${baseUrl}/api/auth/external-login?uid=${encodeURIComponent(uid)}&name=${encodeURIComponent(name)}&ts=${ts}&sign=${sign}&redirect=/`;
       return { url };
     }),
+    // A 股风控工具 SSO 跳转链接生成（redirect 到 /stock-risk）
+    stockRiskSsoLink: protectedProcedure.mutation(async ({ ctx }) => {
+      const user = ctx.user;
+      const uid = String(user.id);
+      const name = user.name || user.username || '';
+      const ts = String(Math.floor(Date.now() / 1000));
+      const sharedSecret = process.env.HAOYOUJI_SHARED_SECRET || 'mlm-bonus-shared-secret-2026';
+      const payload = `${uid}:${name}:${ts}`;
+      const sign = createHmac('sha256', sharedSecret).update(payload).digest('hex');
+      const baseUrl = 'https://eth-options.jiangyuchen.cn';
+      const url = `${baseUrl}/api/auth/external-login?uid=${encodeURIComponent(uid)}&name=${encodeURIComponent(name)}&ts=${ts}&sign=${sign}&redirect=/stock-risk`;
+      return { url };
+    }),
   }),
 
   // 通用文件上传API
