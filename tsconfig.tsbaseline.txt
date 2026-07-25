@@ -146,7 +146,7 @@ client/src/pages/ContactDetail.tsx :: error TS2464: A computed property name mus
 client/src/pages/ContactDetail.tsx :: error TS2464: A computed property name must be of type 'string', 'number', 'symbol', or 'any'.
 client/src/pages/ContactDetail.tsx :: error TS2464: A computed property name must be of type 'string', 'number', 'symbol', or 'any'.
 client/src/pages/ContactDetail.tsx :: error TS2464: A computed property name must be of type 'string', 'number', 'symbol', or 'any'.
-client/src/pages/ContactDetail.tsx :: error TS2551: Property 'reminderDate' does not exist on type '{ id: number; contactId: number; userId: number; reminderTypeId: number | null; title: string; description: string | null; reminderTime: string; reminderType: "normal" | "birthday"; isRecurring: number; ... 5 more ...; updatedAt: string; }'. Did you mean 'reminderTime'?
+client/src/pages/ContactDetail.tsx :: error TS2551: Property 'reminderDate' does not exist on type '{ id: number; contactId: number; userId: number; reminderTypeId: number | null; title: string; description: string | null; reminderTime: string; reminderType: "birthday" | "normal"; isRecurring: number; ... 5 more ...; updatedAt: string; }'. Did you mean 'reminderTime'?
 client/src/pages/ContactsList.tsx :: error TS2322: Type '"top"' is not assignable to type 'Position | undefined'.
 client/src/pages/ContactsList.tsx :: error TS2322: Type '(e: any) => void' is not assignable to type '() => void'.
 client/src/pages/ContactsList.tsx :: error TS2322: Type '(e: any) => void' is not assignable to type '() => void'.
@@ -176,7 +176,7 @@ client/src/pages/EquityHistoryArchive.tsx :: error TS2769: No overload matches t
 client/src/pages/EthOptionsPage.tsx :: error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
 client/src/pages/EthOptionsPage.tsx :: error TS2339: Property 'isLoading' does not exist on type '{ refresh: () => Promise<QueryObserverResult<{ id: number; openId: string | null; name: string | null; username: string | null; passwordHash: string | null; email: string | null; loginMethod: string | null; ... 29 more ...; mibanRankIndex: number; } | { ...; } | null, TRPCClientErrorLike<...>>>; ... 4 more ...; isAu...'.
 client/src/pages/FeedbackPage.tsx :: error TS2339: Property 'ledgerName' does not exist on type '{ book: any; branch: any; tableName: any; }'.
-client/src/pages/FinanceManagement.tsx :: error TS2741: Property 'MSTR' is missing in type '{ BTC: string; ETH: string; SOL: string; AAVE: string; SUI: string; ONDO: string; ASTER: string; LDO: string; ENA: string; ARKM: string; USDT: string; CNY: string; TSLA: string; NVDA: string; AAPL: string; MSFT: string; ... 14 more ...; MU: string; }' but required in type 'Record<"USDT" | "CNY" | "BTC" | "ETH" | "SOL" | "AAVE" | "SUI" | "ONDO" | "ASTER" | "LDO" | "ENA" | "ARKM" | "MSTR" | "TSLA" | "NVDA" | "AAPL" | "MSFT" | "GOOGL" | "META" | "AMZN" | "SPY" | ... 10 more ... | "SKHYNIX", string>'.
+client/src/pages/FinanceManagement.tsx :: error TS2741: Property 'MSTR' is missing in type '{ BTC: string; ETH: string; SOL: string; AAVE: string; SUI: string; ONDO: string; ASTER: string; LDO: string; ENA: string; ARKM: string; USDT: string; CNY: string; TSLA: string; NVDA: string; AAPL: string; MSFT: string; ... 14 more ...; MU: string; }' but required in type 'Record<"CNY" | "USDT" | "BTC" | "ETH" | "SOL" | "AAVE" | "SUI" | "ONDO" | "ASTER" | "LDO" | "ENA" | "ARKM" | "MSTR" | "TSLA" | "NVDA" | "AAPL" | "MSFT" | "GOOGL" | "META" | "AMZN" | "SPY" | ... 10 more ... | "SKHYNIX", string>'.
 client/src/pages/FunderManagement.tsx :: error TS2339: Property 'dateStr' does not exist on type '{ label: string; deribitLabel: string; ts: number; diffDays: number; }'.
 client/src/pages/GridTradeSimulator.tsx :: error TS18047: 'realKlineData' is possibly 'null'.
 client/src/pages/GridTradeSimulator.tsx :: error TS18048: 'realKlineData.klines.length' is possibly 'undefined'.
@@ -305,8 +305,8 @@ client/src/pages/OrderFlowPage.tsx :: error TS2769: No overload matches this cal
 client/src/pages/PointRulesManagement.tsx :: error TS2353: Object literal may only specify known properties, and 'ruleId' does not exist in type '{ actionType: string; points?: number | undefined; isActive?: boolean | undefined; description?: string | undefined; }'.
 client/src/pages/PointRulesManagement.tsx :: error TS2353: Object literal may only specify known properties, and 'ruleId' does not exist in type '{ actionType: string; points?: number | undefined; isActive?: boolean | undefined; description?: string | undefined; }'.
 client/src/pages/PositionCalc.tsx :: error TS2769: No overload matches this call.
-client/src/pages/PositionLevelEdit.tsx :: error TS2322: Type 'CostShareItem | { name: string; qty: string; dateFrom: string; dateTo: string; interest: string; interestCurrency: "USDT" | "CNY"; }' is not assignable to type 'CostShareItem'.
-client/src/pages/PositionLevelEdit.tsx :: error TS2741: Property 'strikeCost' is missing in type '{ name: string; qty: string; dateFrom: string; dateTo: string; interest: string; interestCurrency: "USDT" | "CNY"; }' but required in type 'CostShareItem'.
+client/src/pages/PositionLevelEdit.tsx :: error TS2322: Type 'CostShareItem | { name: string; qty: string; dateFrom: string; dateTo: string; interest: string; interestCurrency: "CNY" | "USDT"; }' is not assignable to type 'CostShareItem'.
+client/src/pages/PositionLevelEdit.tsx :: error TS2741: Property 'strikeCost' is missing in type '{ name: string; qty: string; dateFrom: string; dateTo: string; interest: string; interestCurrency: "CNY" | "USDT"; }' but required in type 'CostShareItem'.
 client/src/pages/PptPromptLibrary.tsx :: error TS2802: Type 'Map<number, { name: string; items: { id: number; categoryId: number; content: string; remark: string | null; sortOrder: number; createdAt: Date; }[]; }>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
 client/src/pages/QQOnlinePage.tsx :: error TS2339: Property 'trades' does not exist on type 'BacktestResult'.
 client/src/pages/QQSettings.tsx :: error TS2802: Type 'Set<number>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
@@ -513,14 +513,14 @@ server/ai-tools.ts :: error TS2769: No overload matches this call.
 server/ai-tools.ts :: error TS2769: No overload matches this call.
 server/ai-tools.ts :: error TS2769: No overload matches this call.
 server/ai-tools.ts :: error TS2769: No overload matches this call.
-server/beauty-router.ts :: error TS2345: Argument of type '"beauty-material"' is not assignable to parameter of type '"avatars" | "ledger-photos" | "payment-qrcodes" | "reimbursement-vouchers" | "posters" | "lottery-images" | "ag-prompts" | "beauty-showcase" | "signatures" | "yaban-shop" | "wecom-materials" | undefined'.
+server/beauty-router.ts :: error TS2345: Argument of type '"beauty-material"' is not assignable to parameter of type '"posters" | "avatars" | "ledger-photos" | "payment-qrcodes" | "reimbursement-vouchers" | "lottery-images" | "ag-prompts" | "beauty-showcase" | "signatures" | "yaban-shop" | "wecom-materials" | undefined'.
 server/beauty-router.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
 server/beauty-router.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
 server/blockchain-scanner.ts :: error TS18047: 'db' is possibly 'null'.
 server/blockchain-scanner.ts :: error TS18047: 'db' is possibly 'null'.
 server/blockchain-scanner.ts :: error TS18047: 'db' is possibly 'null'.
 server/blockchain-scanner.ts :: error TS2322: Type 'Date' is not assignable to type 'string | SQL<unknown> | undefined'.
-server/blockchain-scanner.ts :: error TS2345: Argument of type '"none" | "exact" | "fuzzy"' is not assignable to parameter of type '"exact" | "fuzzy" | undefined'.
+server/blockchain-scanner.ts :: error TS2345: Argument of type '"none" | "fuzzy" | "exact"' is not assignable to parameter of type '"fuzzy" | "exact" | undefined'.
 server/blockchain-scanner.ts :: error TS2769: No overload matches this call.
 server/company-reports.ts :: error TS18047: 'db' is possibly 'null'.
 server/company-reports.ts :: error TS18047: 'db' is possibly 'null'.
@@ -579,7 +579,7 @@ server/db-banks.ts :: error TS18047: 'db' is possibly 'null'.
 server/db-banks.ts :: error TS18047: 'db' is possibly 'null'.
 server/db-banks.ts :: error TS18047: 'db' is possibly 'null'.
 server/db-banks.ts :: error TS18047: 'db' is possibly 'null'.
-server/db-banks.ts :: error TS2339: Property 'id' does not exist on type '{} | { [x: string]: unknown; } | { [x: string]: never; } | { [x: string]: never; }'.
+server/db-banks.ts :: error TS2339: Property 'id' does not exist on type '{} | { [x: string]: never; } | { [x: string]: never; } | { [x: string]: unknown; }'.
 server/db-banks.ts :: error TS2339: Property 'onConflictDoNothing' does not exist on type 'MySqlInsertBase<MySqlTable<TableConfig>, MySql2QueryResultHKT, MySql2PreparedQueryHKT, undefined, false, never>'.
 server/db-banks.ts :: error TS2345: Argument of type 'PgTableWithColumns<{ name: "banks"; schema: undefined; columns: { id: PgColumn<{ name: "id"; tableName: "banks"; dataType: "number"; columnType: "PgSerial"; data: number; driverParam: number; notNull: true; hasDefault: true; ... 6 more ...; generated: undefined; }, {}, {}>; name: PgColumn<...>; usageCount: PgColumn<...' is not assignable to parameter of type 'MySqlTable<TableConfig>'.
 server/db-banks.ts :: error TS2345: Argument of type 'PgTableWithColumns<{ name: "banks"; schema: undefined; columns: { id: PgColumn<{ name: "id"; tableName: "banks"; dataType: "number"; columnType: "PgSerial"; data: number; driverParam: number; notNull: true; hasDefault: true; ... 6 more ...; generated: undefined; }, {}, {}>; name: PgColumn<...>; usageCount: PgColumn<...' is not assignable to parameter of type 'MySqlTable<TableConfig>'.
@@ -606,7 +606,7 @@ server/db-contacts.ts :: error TS2345: Argument of type 'string | null' is not a
 server/db-contacts.ts :: error TS2345: Argument of type 'string | null' is not assignable to parameter of type 'string'.
 server/db-contacts.ts :: error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
 server/db-contacts.ts :: error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
-server/db-contacts.ts :: error TS2345: Argument of type '{ isCompleted: boolean; }' is not assignable to parameter of type '{ title?: string | SQL<unknown> | undefined; userId?: number | SQL<unknown> | undefined; contactId?: number | SQL<unknown> | undefined; reminderTime?: string | SQL<unknown> | undefined; id?: number | ... 1 more ... | undefined; ... 9 more ...; isCompleted?: number | ... 1 more ... | undefined; }'.
+server/db-contacts.ts :: error TS2345: Argument of type '{ isCompleted: boolean; }' is not assignable to parameter of type '{ userId?: number | SQL<unknown> | undefined; title?: string | SQL<unknown> | undefined; contactId?: number | SQL<unknown> | undefined; reminderTime?: string | SQL<unknown> | undefined; id?: number | ... 1 more ... | undefined; ... 9 more ...; notificationMethod?: SQL<...> | ... 2 more ... | undefined; }'.
 server/db-contacts.ts :: error TS2358: The left-hand side of an 'instanceof' expression must be of type 'any', an object type or a type parameter.
 server/db-contacts.ts :: error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
 server/db-contacts.ts :: error TS2362: The left-hand side of an arithmetic operation must be of type 'any', 'number', 'bigint' or an enum type.
@@ -947,7 +947,7 @@ server/diet-router.ts :: error TS2339: Property 'content' does not exist on type
 server/diet-router.ts :: error TS2339: Property 'content' does not exist on type 'InvokeResult'.
 server/diet-router.ts :: error TS2339: Property 'content' does not exist on type 'InvokeResult'.
 server/diet-router.ts :: error TS2339: Property 'content' does not exist on type 'InvokeResult'.
-server/diet-router.ts :: error TS2345: Argument of type '"diet-meals"' is not assignable to parameter of type '"avatars" | "ledger-photos" | "payment-qrcodes" | "reimbursement-vouchers" | "posters" | "lottery-images" | "ag-prompts" | "beauty-showcase" | "signatures" | "yaban-shop" | "wecom-materials" | undefined'.
+server/diet-router.ts :: error TS2345: Argument of type '"diet-meals"' is not assignable to parameter of type '"posters" | "avatars" | "ledger-photos" | "payment-qrcodes" | "reimbursement-vouchers" | "lottery-images" | "ag-prompts" | "beauty-showcase" | "signatures" | "yaban-shop" | "wecom-materials" | undefined'.
 server/equity-router.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
 server/equity-router.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
 server/equity-router.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
@@ -1560,8 +1560,12 @@ server/routers.ts :: error TS2367: This comparison appears to be unintentional b
 server/routers.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
 server/routers.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
 server/routers.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
+server/routers.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
+server/routers.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
 server/routers.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"owner"' have no overlap.
 server/routers.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"owner"' have no overlap.
+server/routers.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
+server/routers.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
 server/routers.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
 server/routers.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
 server/routers.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
@@ -1829,56 +1833,49 @@ server/routers/recharge.ts :: error TS18047: 'db' is possibly 'null'.
 server/routers/recharge.ts :: error TS18047: 'db' is possibly 'null'.
 server/routers/recharge.ts :: error TS18047: 'db' is possibly 'null'.
 server/routers/recharge.ts :: error TS18047: 'db' is possibly 'null'.
-server/routers/recharge.ts :: error TS2307: Cannot find module './trpc' or its corresponding type declarations.
 server/routers/recharge.ts :: error TS2339: Property 'userId' does not exist on type 'MySqlTableWithColumns<{ name: "wallet_addresses"; schema: undefined; columns: { id: MySqlColumn<{ name: "id"; tableName: "wallet_addresses"; dataType: "number"; columnType: "MySqlInt"; data: number; driverParam: string | number; ... 8 more ...; generated: undefined; }, {}, {}>; ... 5 more ...; updatedAt: MySqlColumn...'.
 server/routers/recharge.ts :: error TS2339: Property 'userId' does not exist on type 'MySqlTableWithColumns<{ name: "wallet_addresses"; schema: undefined; columns: { id: MySqlColumn<{ name: "id"; tableName: "wallet_addresses"; dataType: "number"; columnType: "MySqlInt"; data: number; driverParam: string | number; ... 8 more ...; generated: undefined; }, {}, {}>; ... 5 more ...; updatedAt: MySqlColumn...'.
 server/routers/recharge.ts :: error TS2339: Property 'walletAddresses' does not exist on type '{}'.
 server/routers/recharge.ts :: error TS2339: Property 'walletAddresses' does not exist on type '{}'.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
+server/routers/recharge.ts :: error TS2367: This comparison appears to be unintentional because the types '"parent"' and '"super_admin"' have no overlap.
 server/routers/recharge.ts :: error TS2769: No overload matches this call.
 server/routers/recharge.ts :: error TS2769: No overload matches this call.
 server/routers/recharge.ts :: error TS2769: No overload matches this call.
 server/routers/recharge.ts :: error TS2769: No overload matches this call.
-server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly has an 'any' type.
-server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly has an 'any' type.
 server/routers/wcOdds.ts :: error TS2802: Type 'Set<number>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
-server/scanners/aptos-scanner.ts :: error TS2345: Argument of type '"none" | "exact" | "fuzzy"' is not assignable to parameter of type '"exact" | "fuzzy" | undefined'.
-server/scanners/bsc-scanner.ts :: error TS2551: Property 'orderNo' does not exist on type '{ order: any; matchType: "none" | "exact" | "fuzzy"; amountDiff: number; }'. Did you mean 'order'?
-server/scanners/erc20-scanner.ts :: error TS2551: Property 'orderNo' does not exist on type '{ order: any; matchType: "none" | "exact" | "fuzzy"; amountDiff: number; }'. Did you mean 'order'?
-server/scanners/solana-scanner.ts :: error TS2551: Property 'orderNo' does not exist on type '{ order: any; matchType: "none" | "exact" | "fuzzy"; amountDiff: number; }'. Did you mean 'order'?
+server/scanners/aptos-scanner.ts :: error TS2345: Argument of type '"none" | "fuzzy" | "exact"' is not assignable to parameter of type '"fuzzy" | "exact" | undefined'.
+server/scanners/bsc-scanner.ts :: error TS2551: Property 'orderNo' does not exist on type '{ order: any; matchType: "none" | "fuzzy" | "exact"; amountDiff: number; }'. Did you mean 'order'?
+server/scanners/erc20-scanner.ts :: error TS2551: Property 'orderNo' does not exist on type '{ order: any; matchType: "none" | "fuzzy" | "exact"; amountDiff: number; }'. Did you mean 'order'?
+server/scanners/solana-scanner.ts :: error TS2551: Property 'orderNo' does not exist on type '{ order: any; matchType: "none" | "fuzzy" | "exact"; amountDiff: number; }'. Did you mean 'order'?
 server/wecom-channel-extra.ts :: error TS1252: Function declarations are not allowed inside blocks in strict mode when targeting 'ES5'. Modules are automatically in strict mode.
 server/wecom-channel-extra.ts :: error TS18047: 'conn' is possibly 'null'.
 server/wecom-channel-extra.ts :: error TS18047: 'conn' is possibly 'null'.

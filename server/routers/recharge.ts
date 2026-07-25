@@ -1,4 +1,4 @@
-import { router, protectedProcedure } from "./trpc";
+import { router, protectedProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import * as dbRecharge from "../db-recharge";
@@ -325,11 +325,36 @@ export const rechargeRouter = router({
           success: false,
           message: "区块链扫描器修复失败",
           logs: results,
-        };
+                };
       }
     }),
-});
 
+  // 撤回已完成的充值订单
+  adminRevokeRecharge: protectedProcedure
+    .input(z.object({
+      orderId: z.number(),
+      mode: z.enum(['reverse', 'delete']),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      return await dbRecharge.adminRevokeRecharge(ctx.user.id, input.orderId, input.mode);
+    }),
+
+  // 撤回一条 balance_history 流水记录
+  adminRevokeBalanceHistory: protectedProcedure
+    .input(z.object({
+      historyId: z.number(),
+      mode: z.enum(['reverse', 'delete']),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+        throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+      }
+      return await dbRecharge.adminRevokeBalanceHistory(ctx.user.id, input.historyId, input.mode);
+    }),
+});
 // 区块链扫描器修复工具
 export const fixScannerHeartbeat = protectedProcedure
   .mutation(async ({ ctx }) => {

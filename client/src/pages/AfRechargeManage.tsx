@@ -52,6 +52,9 @@ export default function AfRechargeManage() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<any>(null);
   const [showBulkClearConfirm, setShowBulkClearConfirm] = useState(false);
+  // ===== 撤回相关状态 =====
+  const [showRevokeDialog, setShowRevokeDialog] = useState(false);
+  const [revokeTarget, setRevokeTarget] = useState<{ type: 'order'; orderId: number; amount: number } | { type: 'history'; historyId: number; amount: number; currency: string } | null>(null);
 
   // ===== 充值监控 Tab 状态 =====
   const [showFixLogs, setShowFixLogs] = useState(false);
@@ -175,6 +178,26 @@ export default function AfRechargeManage() {
       ordersQuery.refetch();
     },
     onError: (e) => toast.error(e.message || "清除失败"),
+  });
+  const revokeMutation = trpc.recharge.adminRevokeRecharge.useMutation({
+    onSuccess: () => {
+      toast.success('撤回成功，余额已还原');
+      setShowRevokeDialog(false);
+      setRevokeTarget(null);
+      ordersQuery.refetch();
+      statsQuery.refetch();
+    },
+    onError: (e: any) => toast.error(e.message || '撤回失败'),
+  });
+  const revokeHistoryMutation = trpc.recharge.adminRevokeBalanceHistory.useMutation({
+    onSuccess: () => {
+      toast.success('撤回成功，余额已还原');
+      setShowRevokeDialog(false);
+      setRevokeTarget(null);
+      refetchAdjHistory();
+      refetchAdjGlobal();
+    },
+    onError: (e: any) => toast.error(e.message || '撤回失败'),
   });
   const fixScannerMutation = trpc.recharge.adminFixScanner.useMutation();
   const triggerScanMutation = trpc.recharge.adminTriggerScan.useMutation();
@@ -342,6 +365,7 @@ export default function AfRechargeManage() {
     completed: { label: '已完成', color: 'text-green-700', bgColor: 'bg-green-100', icon: CheckCircle2 },
     expired: { label: '已过期', color: 'text-gray-500', bgColor: 'bg-gray-100', icon: XCircle },
     cancelled: { label: '已取消', color: 'text-red-600', bgColor: 'bg-red-100', icon: XCircle },
+    revoked: { label: '已撤回', color: 'text-purple-700', bgColor: 'bg-purple-100', icon: XCircle },
   };
 
   const stats = statsQuery.data;
@@ -579,6 +603,17 @@ export default function AfRechargeManage() {
                             取消
                           </button>
                         </div>
+                      )}
+                      {order.status === 'completed' && (
+                        <button
+                          onClick={() => {
+                            setRevokeTarget({ type: 'order', orderId: order.id, amount: Number(order.actual_amount ?? order.amount) });
+                            setShowRevokeDialog(true);
+                          }}
+                          className="w-full py-2 text-xs font-medium text-purple-700 border border-purple-200 rounded-xl hover:bg-purple-50 active:scale-[0.98] transition-all"
+                        >
+                          撤回此笔充值
+                        </button>
                       )}
                     </div>
                   );
@@ -1041,18 +1076,28 @@ export default function AfRechargeManage() {
                   {(adjHistory as any[]).map((r: any, i: number) => {
                     const typeLabel: Record<string, string> = { recharge: '充值', consume: '消费', refund: '退款', reward: '奖励', withdraw: '扣款', reward_clawback: '奖励回收', commission: '佣金' };
                     return (
-                      <div key={r.id ?? i} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 mb-0.5">
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${r.currency === 'CNY' ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'}`}>{r.currency}</span>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{typeLabel[r.type] ?? r.type}</span>
+                      <div key={r.id ?? i} className="py-2 border-b border-gray-50 last:border-0">
+                        <div className="flex items-center justify-between">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${r.currency === 'CNY' ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'}`}>{r.currency}</span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{typeLabel[r.type] ?? r.type}</span>
+                            </div>
+                            <p className="text-[12px] text-gray-600 truncate">{String(r.note ?? "").replace(/\[.*?\]/g, "").trim() || "—"}</p>
+                            <p className="text-[10px] text-gray-400">{new Date(r.createdAt).toLocaleString("zh-CN")}</p>
                           </div>
-                          <p className="text-[12px] text-gray-600 truncate">{String(r.note ?? "").replace(/\[.*?\]/g, "").trim() || "—"}</p>
-                          <p className="text-[10px] text-gray-400">{new Date(r.createdAt).toLocaleString("zh-CN")}</p>
+                          <div className="flex flex-col items-end gap-1 ml-3 flex-shrink-0">
+                            <p className={`text-[14px] font-bold ${Number(r.amount) >= 0 ? "text-green-600" : "text-red-500"}`}>
+                              {Number(r.amount) >= 0 ? "+" : ""}{r.currency === "CNY" ? "¥" : ""}{Number(r.amount).toFixed(r.currency === "CNY" ? 2 : 4)}
+                            </p>
+                            {!String(r.note ?? '').includes('撤回误操作') && (
+                              <button
+                                onClick={() => { setRevokeTarget({ type: 'history', historyId: r.id, amount: Math.abs(Number(r.amount)), currency: r.currency }); setShowRevokeDialog(true); }}
+                                className="text-[10px] text-purple-500 border border-purple-200 px-2 py-0.5 rounded-full hover:bg-purple-50"
+                              >撤回</button>
+                            )}
+                          </div>
                         </div>
-                        <p className={`text-[14px] font-bold ml-3 flex-shrink-0 ${Number(r.amount) >= 0 ? "text-green-600" : "text-red-500"}`}>
-                          {Number(r.amount) >= 0 ? "+" : ""}{r.currency === "CNY" ? "¥" : ""}{Number(r.amount).toFixed(r.currency === "CNY" ? 2 : 4)}
-                        </p>
                       </div>
                     );
                   })}
@@ -1074,20 +1119,30 @@ export default function AfRechargeManage() {
                 {adjLogItems.map((r: any, i: number) => {
                   const typeLabel: Record<string, string> = { recharge: '充值', consume: '消费', refund: '退款', reward: '奖励', withdraw: '扣款', reward_clawback: '奖励回收', commission: '佣金' };
                   return (
-                    <div key={r.id ?? i} className="flex items-start justify-between py-2.5 border-b border-gray-50 last:border-0">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 mb-0.5">
-                          <span className="text-[12px] font-semibold text-black">{r.userName}</span>
-                          <span className="text-[10px] text-gray-400">@{r.username}</span>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${r.currency === 'CNY' ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'}`}>{r.currency}</span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{typeLabel[r.type] ?? r.type}</span>
+                    <div key={r.id ?? i} className="py-2.5 border-b border-gray-50 last:border-0">
+                      <div className="flex items-start justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                            <span className="text-[12px] font-semibold text-black">{r.userName}</span>
+                            <span className="text-[10px] text-gray-400">@{r.username}</span>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${r.currency === 'CNY' ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'}`}>{r.currency}</span>
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">{typeLabel[r.type] ?? r.type}</span>
+                          </div>
+                          <p className="text-[11px] text-gray-500 truncate">{String(r.note ?? "").replace(/\[.*?\]/g, "").trim() || "—"}</p>
+                          <p className="text-[10px] text-gray-400 mt-0.5">{new Date(r.createdAt).toLocaleString("zh-CN")}</p>
                         </div>
-                        <p className="text-[11px] text-gray-500 truncate">{String(r.note ?? "").replace(/\[.*?\]/g, "").trim() || "—"}</p>
-                        <p className="text-[10px] text-gray-400 mt-0.5">{new Date(r.createdAt).toLocaleString("zh-CN")}</p>
+                        <div className="flex flex-col items-end gap-1 ml-3 flex-shrink-0">
+                          <p className={`text-[14px] font-bold ${Number(r.amount) >= 0 ? "text-green-600" : "text-red-500"}`}>
+                            {Number(r.amount) >= 0 ? "+" : ""}{r.currency === "CNY" ? "¥" : ""}{Number(r.amount).toFixed(r.currency === "CNY" ? 2 : 4)}
+                          </p>
+                          {!String(r.note ?? '').includes('撤回误操作') && (
+                            <button
+                              onClick={() => { setRevokeTarget({ type: 'history', historyId: r.id, amount: Math.abs(Number(r.amount)), currency: r.currency }); setShowRevokeDialog(true); }}
+                              className="text-[10px] text-purple-500 border border-purple-200 px-2 py-0.5 rounded-full hover:bg-purple-50"
+                            >撤回</button>
+                          )}
+                        </div>
                       </div>
-                      <p className={`text-[14px] font-bold ml-3 flex-shrink-0 ${Number(r.amount) >= 0 ? "text-green-600" : "text-red-500"}`}>
-                        {Number(r.amount) >= 0 ? "+" : ""}{r.currency === "CNY" ? "¥" : ""}{Number(r.amount).toFixed(r.currency === "CNY" ? 2 : 4)}
-                      </p>
                     </div>
                   );
                 })}
@@ -1389,6 +1444,58 @@ export default function AfRechargeManage() {
                 关闭
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== 撤回确认弹窗 ===== */}
+      {showRevokeDialog && revokeTarget && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center">
+          <div className="bg-white rounded-t-2xl w-full max-w-md p-6">
+            <h3 className="text-base font-semibold text-gray-900 mb-1">撤回误操作</h3>
+            <p className="text-sm text-gray-500 mb-1">
+              {revokeTarget.type === 'order'
+                ? `订单金额：${revokeTarget.amount.toFixed(4)} USDT`
+                : `流水金额：${revokeTarget.amount.toFixed(revokeTarget.currency === 'CNY' ? 2 : 4)} ${revokeTarget.currency}`
+              }
+            </p>
+            <p className="text-xs text-gray-400 mb-4">请选择撤回方式：</p>
+            <div className="space-y-3 mb-5">
+              <button
+                onClick={() => {
+                  if (revokeTarget.type === 'order') {
+                    revokeMutation.mutate({ orderId: revokeTarget.orderId, mode: 'reverse' });
+                  } else {
+                    revokeHistoryMutation.mutate({ historyId: revokeTarget.historyId, mode: 'reverse' });
+                  }
+                }}
+                disabled={revokeMutation.isPending || revokeHistoryMutation.isPending}
+                className="w-full py-3 text-sm font-medium text-green-700 border border-green-200 rounded-xl bg-green-50 hover:bg-green-100 active:scale-[0.98] transition-all text-left px-4"
+              >
+                <div className="font-semibold">✅ 写入反向记录（推荐）</div>
+                <div className="text-xs text-green-600 mt-0.5">余额扣回，保留原记录 + 新增一条退款流水，可审计</div>
+              </button>
+              <button
+                onClick={() => {
+                  if (revokeTarget.type === 'order') {
+                    revokeMutation.mutate({ orderId: revokeTarget.orderId, mode: 'delete' });
+                  } else {
+                    revokeHistoryMutation.mutate({ historyId: revokeTarget.historyId, mode: 'delete' });
+                  }
+                }}
+                disabled={revokeMutation.isPending || revokeHistoryMutation.isPending}
+                className="w-full py-3 text-sm font-medium text-red-700 border border-red-200 rounded-xl bg-red-50 hover:bg-red-100 active:scale-[0.98] transition-all text-left px-4"
+              >
+                <div className="font-semibold">❌ 直接删除原记录</div>
+                <div className="text-xs text-red-500 mt-0.5">余额扣回，删除原流水条目，不留痕迹</div>
+              </button>
+            </div>
+            <button
+              onClick={() => { setShowRevokeDialog(false); setRevokeTarget(null); }}
+              className="w-full py-2.5 text-sm text-gray-500 border border-gray-200 rounded-xl"
+            >
+              取消
+            </button>
           </div>
         </div>
       )}

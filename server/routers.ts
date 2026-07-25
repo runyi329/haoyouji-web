@@ -2140,10 +2140,35 @@ ${klinesSummary}
         if ((result as any).affectedRows === 0) {
           throw new Error('订单不存在或状态不允许取消');
         }
-        return { success: true };
+                return { success: true };
+      }),
+
+    // 撤回已完成的充值订单
+    adminRevokeRecharge: protectedProcedure
+      .input(z.object({
+        orderId: z.number(),
+        mode: z.enum(['reverse', 'delete']),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        }
+        return await dbRecharge.adminRevokeRecharge(ctx.user.id, input.orderId, input.mode);
+      }),
+
+    // 撤回一条 balance_history 流水记录
+    adminRevokeBalanceHistory: protectedProcedure
+      .input(z.object({
+        historyId: z.number(),
+        mode: z.enum(['reverse', 'delete']),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        }
+        return await dbRecharge.adminRevokeBalanceHistory(ctx.user.id, input.historyId, input.mode);
       }),
   }),
-
   // 卡券系统
   coupon: router({
     // 获取可发送卡券的用户列表

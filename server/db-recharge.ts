@@ -1780,3 +1780,123 @@ export async function getAllUsersCnyBalance(): Promise<any[]> {
   ) as any;
   return Array.isArray(rows) ? rows : [];
 }
+
+// ── 撤回充值订单 ────────────────────────────────────────────────────────────────
+/**
+ * 撤回一笔已完成的充值订单
+ * @param mode 'reverse' = 写反向记录（推荐）；'delete' = 直接删除原流水记录
+ */
+export async function adminRevokeRecharge(
+  adminId: number,
+  orderId: number,
+  mode: 'reverse' | 'delete'
+) {
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  const pool = conn as any;
+
+  // 查询订单
+  const [[orderRow]] = await pool.execute(
+    `SELECT * FROM recharge_orders WHERE id = ? LIMIT 1`,
+    [orderId]
+  ) as any[];
+  if (!orderRow) throw new Error('订单不存在');
+  if (orderRow.status !== 'completed') throw new Error('只能撤回已完成的订单');
+
+  const userId = Number(orderRow.user_id);
+  const amount = parseFloat(orderRow.actual_amount ?? orderRow.amount ?? '0');
+
+  if (mode === 'reverse') {
+    // 写一条反向退款记录，余额扣回
+    const desc = `撤回误操作（关联订单#${orderId}，操作人ID:${adminId}）`;
+    await addUserBalance(userId, -amount, 'refund', orderId, desc);
+  } else {
+    // 直接删除 balance_history 中该订单对应的那条充值记录，并扣回余额
+    await pool.execute(
+      `DELETE FROM balance_history WHERE related_id = ? AND user_id = ? AND type IN ('recharge','refund') ORDER BY id DESC LIMIT 1`,
+      [orderId, userId]
+    );
+    await pool.execute(
+      `UPDATE users SET balance = GREATEST(0, COALESCE(balance, 0) - ?) WHERE id = ?`,
+      [amount, userId]
+    );
+  }
+
+  // 把订单状态改回 pending（可重新处理）
+  await pool.execute(
+    `UPDATE recharge_orders SET status = 'revoked', completed_at = NULL WHERE id = ?`,
+    [orderId]
+  );
+
+  return { success: true, userId, amount, mode };
+}
+
+// ── 撤回一条 balance_history 流水记录 ──────────────────────────────────────────
+/**
+ * 撤回一条 balance_history 流水记录
+ * @param mode 'reverse' = 写反向记录；'delete' = 直接删除
+ */
+export async function adminRevokeBalanceHistory(
+  adminId: number,
+  historyId: number,
+  mode: 'reverse' | 'delete'
+) {
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  const pool = conn as any;
+
+  // 查询流水记录
+  const [[row]] = await pool.execute(
+    `SELECT * FROM balance_history WHERE id = ? LIMIT 1`,
+    [historyId]
+  ) as any[];
+  if (!row) throw new Error('流水记录不存在');
+
+  // 已经是撤回记录本身，不允许再撤回撤回
+  if (String(row.description ?? '').includes('撤回误操作')) {
+    throw new Error('该记录是撤回操作本身，不可再次撤回');
+  }
+
+  const userId = Number(row.user_id);
+  const amount = parseFloat(row.amount ?? '0');
+  const currency = String(row.currency ?? 'USDT');
+
+  if (mode === 'reverse') {
+    const desc = `撤回误操作（关联流水#${historyId}，操作人ID:${adminId}）`;
+    if (currency === 'CNY') {
+      // CNY 余额写 users.cny_balance
+      await pool.execute(
+        `UPDATE users SET cny_balance = GREATEST(0, COALESCE(cny_balance, 0) - ?) WHERE id = ?`,
+        [amount, userId]
+      );
+      const [[userRow]] = await pool.execute(
+        `SELECT cny_balance FROM users WHERE id = ? LIMIT 1`,
+        [userId]
+      ) as any[];
+      const newBalance = parseFloat(userRow?.cny_balance ?? '0');
+      await pool.execute(
+        `INSERT INTO balance_history (user_id, amount, type, currency, balance, description) VALUES (?, ?, 'refund', 'CNY', ?, ?)`,
+        [userId, -amount, newBalance, desc]
+      );
+    } else {
+      // USDT
+      await addUserBalance(userId, -amount, 'refund', historyId, desc);
+    }
+  } else {
+    // 直接删除该条流水，并扣回余额
+    await pool.execute(`DELETE FROM balance_history WHERE id = ?`, [historyId]);
+    if (currency === 'CNY') {
+      await pool.execute(
+        `UPDATE users SET cny_balance = GREATEST(0, COALESCE(cny_balance, 0) - ?) WHERE id = ?`,
+        [amount, userId]
+      );
+    } else {
+      await pool.execute(
+        `UPDATE users SET balance = GREATEST(0, COALESCE(balance, 0) - ?) WHERE id = ?`,
+        [amount, userId]
+      );
+    }
+  }
+
+  return { success: true, userId, amount, currency, mode };
+}

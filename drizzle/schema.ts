@@ -1403,7 +1403,7 @@ export const rechargeOrders = mysqlTable("recharge_orders", {
 	currency: varchar({ length: 10 }).default('USDT').notNull(),
 	network: varchar({ length: 20 }).default('TRC20').notNull(),
 	walletAddress: varchar("wallet_address", { length: 255 }), // 收款钱包地址
-	status: mysqlEnum(['pending', 'submitted', 'completed', 'expired', 'cancelled']).default('pending').notNull(),
+	status: mysqlEnum(['pending', 'submitted', 'completed', 'expired', 'cancelled', 'revoked']).default('pending').notNull(),
 	txnHash: varchar("txn_hash", { length: 100 }), // 交易哈希
 	ledgerId: int("ledger_id"), // 关联账本 ID，为空表示通用充値
 	createdAt: timestamp("created_at", { mode: 'string' }).default('CURRENT_TIMESTAMP').notNull(),
