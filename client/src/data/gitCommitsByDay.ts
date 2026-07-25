@@ -8625,4 +8625,8 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-24T15:07:18Z", type: "feat", cleanMessage: "重写回报计算明细弹窗 - 逐段独立本金、逐笔追加记录、盈亏统计标签视角" },
     { date: "2026-07-24T15:17:11Z", type: "feat", cleanMessage: "重写回报计算明细弹窗 - 逐段本金/逐笔追加/盈亏统计标签视角/持续天数/简洁UI" },
   ],
+  "2026-07-25": [
+    { date: "2026-07-24T17:37:41Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-24T23:07:59Z", type: "feat", cleanMessage: "回报弹窗重构+概览列表优化+细则页面" },
+  ],
 };
