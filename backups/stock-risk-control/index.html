@@ -1,0 +1,2750 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>私人委托操盘 · 风险参考手册</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html {
+      overflow-x: hidden;
+      max-width: 100%;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+      background: #f0f2f5;
+      color: #1a1a1a;
+      min-height: 100vh;
+      overflow-x: hidden;
+      max-width: 100%;
+      width: 100%;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      padding: 36px 20px 28px;
+      text-align: center;
+      color: white;
+    }
+
+    .header-tag {
+      display: inline-block;
+      background: rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.85);
+      font-size: 15px;
+      letter-spacing: 2px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-bottom: 14px;
+    }
+
+    .header h1 {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+    }
+
+    .header p {
+      font-size: 15px;
+      color: rgba(255,255,255,0.65);
+      line-height: 1.7;
+      max-width: 340px;
+      margin: 0 auto;
+    }
+
+    .container {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 20px 8px 40px;
+    }
+
+    .intro-card {
+      background: white;
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 24px;
+      border-left: 4px solid #e8a838;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+
+    .intro-card p {
+      font-size: 15.5px;
+      color: #444;
+      line-height: 1.8;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+      margin-top: 8px;
+    }
+
+    .section-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      flex-shrink: 0;
+    }
+
+    .icon-green { background: #f0fff6; color: #2d9e6b; }
+    .icon-red   { background: #fff0f0; color: #e05c5c; }
+    .icon-blue  { background: #f0f4ff; color: #4a90d9; }
+
+    .section-header-text h2 {
+      font-size: 19px;
+      font-weight: 700;
+      color: #1a1a1a;
+    }
+
+    .section-header-text p {
+      font-size: 16px;
+      color: #999;
+      margin-top: 2px;
+    }
+
+    .accordion-item {
+      background: white;
+      border-radius: 12px;
+      margin-bottom: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      overflow: hidden;
+      transition: box-shadow 0.2s;
+    }
+
+    .accordion-item.open {
+      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    }
+
+    .accordion-header {
+      display: flex;
+      align-items: center;
+      padding: 16px 18px;
+      cursor: pointer;
+      user-select: none;
+      gap: 12px;
+    }
+
+    .scenario-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 700;
+      flex-shrink: 0;
+      color: white;
+    }
+
+    .a1 .scenario-num { background: #2d9e6b; }
+    .a2 .scenario-num { background: #e8a838; }
+    .a3 .scenario-num { background: #e05c5c; }
+    .a4 .scenario-num { background: #7c5cbf; }
+    .a5 .scenario-num { background: #e05c5c; }
+
+    .c1 .scenario-num { background: #4a90d9; }
+    .c2 .scenario-num { background: #e8a838; }
+    .c3 .scenario-num { background: #e05c5c; }
+    .c4 .scenario-num { background: #7c5cbf; }
+    .c5 .scenario-num { background: #2d9e6b; }
+
+    .l1 .scenario-num { background: #e05c5c; }
+    .l2 .scenario-num { background: #4a90d9; }
+
+    .accordion-title-wrap { flex: 1; }
+
+    .accordion-label {
+      font-size: 15px;
+      color: #999;
+      margin-bottom: 3px;
+    }
+
+    .accordion-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #1a1a1a;
+      line-height: 1.3;
+    }
+
+    .grid-card .accordion-title {
+      font-size: 16px;
+    }
+
+    .grid-card .accordion-label {
+      font-size: 16px;
+    }
+
+    .accordion-arrow {
+      font-size: 16px;
+      color: #bbb;
+      transition: transform 0.3s;
+      flex-shrink: 0;
+    }
+
+    .accordion-item.open .accordion-arrow {
+      transform: rotate(180deg);
+    }
+
+    .accordion-body {
+      display: none;
+      padding: 0 18px 20px;
+      border-top: 1px solid #f0f0f0;
+    }
+
+    .accordion-item.open .accordion-body {
+      display: block;
+    }
+
+    .risk-block { margin-top: 16px; }
+
+    .risk-block-title {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: #888;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .risk-block-title::before {
+      content: '';
+      display: inline-block;
+      width: 3px;
+      height: 12px;
+      border-radius: 2px;
+    }
+
+    .block-a    .risk-block-title::before { background: #4a90d9; }
+    .block-b    .risk-block-title::before { background: #e05c5c; }
+    .block-result .risk-block-title::before { background: #2d9e6b; }
+    .block-def  .risk-block-title::before { background: #e8a838; }
+    .block-our  .risk-block-title::before { background: #4a90d9; }
+    .block-scene .risk-block-title::before { background: #7c5cbf; }
+
+    .risk-block p {
+      font-size: 15.5px;
+      color: #444;
+      line-height: 1.8;
+    }
+
+    .risk-block ul {
+      padding-left: 16px;
+      margin-top: 4px;
+    }
+
+    .risk-block ul li {
+      font-size: 15.5px;
+      color: #444;
+      line-height: 1.8;
+      margin-bottom: 4px;
+    }
+
+    .verdict-box {
+      background: #f8f8f8;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-top: 16px;
+    }
+
+    .verdict-box .verdict-label {
+      font-size: 15px;
+      font-weight: 700;
+      color: #888;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+
+    .verdict-box p {
+      font-size: 15.5px;
+      color: #333;
+      line-height: 1.8;
+      font-weight: 500;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 15px;
+    }
+
+    .data-table th {
+      background: #f5f5f5;
+      padding: 8px 10px;
+      text-align: left;
+      font-size: 15px;
+      color: #888;
+      font-weight: 600;
+    }
+
+    .data-table td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #f0f0f0;
+      color: #444;
+      vertical-align: top;
+      line-height: 1.6;
+    }
+
+    .tag-danger {
+      display: inline-block;
+      background: #fff0f0;
+      color: #e05c5c;
+      font-size: 15px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    .tag-safe {
+      display: inline-block;
+      background: #f0fff6;
+      color: #2d9e6b;
+      font-size: 15px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    .tag-warn {
+      display: inline-block;
+      background: #fff8ec;
+      color: #e8a838;
+      font-size: 15px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    .divider {
+      height: 1px;
+      background: #e8e8e8;
+      margin: 24px 0;
+    }
+
+    .bottom-card {
+      background: linear-gradient(135deg, #1a1a2e, #0f3460);
+      border-radius: 12px;
+      padding: 20px 18px;
+      margin-top: 20px;
+      color: white;
+    }
+
+    .bottom-card h3 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      color: rgba(255,255,255,0.9);
+    }
+
+    .bottom-card ol {
+      padding-left: 18px;
+    }
+
+    .bottom-card ol li {
+      font-size: 15px;
+      color: rgba(255,255,255,0.75);
+      line-height: 1.8;
+      margin-bottom: 6px;
+    }
+
+    .bottom-card ol li strong {
+      color: #e8c96a;
+    }
+
+    .footer {
+      text-align: center;
+      padding: 20px;
+      font-size: 15px;
+      color: #bbb;
+    }
+
+    .risk-grid {
+      display: grid;
+      grid-template-columns: calc(50% - 5px) calc(50% - 5px);
+      gap: 10px;
+      margin-bottom: 4px;
+    }
+
+
+
+    .grid-card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      overflow: hidden;
+      transition: box-shadow 0.2s;
+      cursor: pointer;
+    }
+
+    .grid-card.open {
+      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+      grid-column: span 2;
+    }
+
+    @media (max-width: 480px) {
+      .grid-card.open {
+        grid-column: span 1;
+      }
+    }
+
+    .grid-card-header {
+      display: flex;
+      align-items: center;
+      padding: 10px 10px;
+      gap: 8px;
+      user-select: none;
+      min-height: 64px;
+    }
+
+    .grid-card-body {
+      display: none;
+      padding: 0 16px 18px;
+      border-top: 1px solid #f0f0f0;
+    }
+
+    .grid-card.open .grid-card-body {
+      display: block;
+    }
+
+    .grid-card.open .accordion-arrow {
+      transform: rotate(180deg);
+    }
+
+    /* ===== AI检测工具高端样式 ===== */
+    /* ── AI检测工具动画 ── */
+    @keyframes ai-pulse {
+      0%,100% { opacity:0.5; transform:scale(1); }
+      50% { opacity:1; transform:scale(1.15); box-shadow:0 0 8px rgba(245,158,11,0.8); }
+    }
+    @keyframes dot-blink {
+      0%,80%,100% { opacity:0; } 40% { opacity:1; }
+    }
+    @keyframes fade-in-up {
+      from { opacity:0; transform:translateY(12px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+    @keyframes rate-count {
+      from { letter-spacing:4px; opacity:0; }
+      to   { letter-spacing:-1px; opacity:1; }
+    }
+    @keyframes spinner {
+      to { transform:rotate(360deg); }
+    }
+    /* 矩阵格子扫描 */
+    @keyframes cell-pulse {
+      0%,100% { opacity:0.15; }
+      50% { opacity:0.55; }
+    }
+    @keyframes cell-flash-amber {
+      0%   { box-shadow:inset 0 0 0 1px rgba(245,158,11,0.9); background:rgba(245,158,11,0.22); }
+      60%  { box-shadow:inset 0 0 0 1px rgba(245,158,11,0.4); background:rgba(245,158,11,0.08); }
+      100% { box-shadow:none; background:transparent; }
+    }
+    @keyframes cell-flash-red {
+      0%   { box-shadow:inset 0 0 0 1px rgba(252,129,129,0.9); background:rgba(252,129,129,0.22); }
+      60%  { box-shadow:inset 0 0 0 1px rgba(252,129,129,0.4); background:rgba(252,129,129,0.08); }
+      100% { box-shadow:none; background:transparent; }
+    }
+    @keyframes cell-flash-green {
+      0%   { box-shadow:inset 0 0 0 1px rgba(72,187,120,0.9); background:rgba(72,187,120,0.22); }
+      60%  { box-shadow:inset 0 0 0 1px rgba(72,187,120,0.4); background:rgba(72,187,120,0.08); }
+      100% { box-shadow:none; background:transparent; }
+    }
+    /* slot machine 数字滚动 */
+    @keyframes slot-out-up {
+      from { transform:translateY(0); opacity:1; }
+      to   { transform:translateY(-100%); opacity:0; }
+    }
+    @keyframes slot-in-up {
+      from { transform:translateY(100%); opacity:0; }
+      to   { transform:translateY(0); opacity:1; }
+    }
+    .slot-exit { animation:slot-out-up 0.22s cubic-bezier(0.23,1,0.32,1) forwards; }
+    .slot-enter { animation:slot-in-up 0.22s cubic-bezier(0.23,1,0.32,1) forwards; }
+    /* 结果气泡弹出 */
+    @keyframes bubble-enter {
+      0%   { opacity:0; transform:scale(0.88) translateY(6px); }
+      60%  { opacity:1; transform:scale(1.03) translateY(-1px); }
+      100% { opacity:1; transform:scale(1) translateY(0); }
+    }
+    @keyframes btn-shine {
+      to { left:200%; }
+    }
+    /* 扫描横线 */
+    @keyframes scan-sweep {
+      0%   { top:-2px; opacity:0; }
+      5%   { opacity:1; }
+      95%  { opacity:1; }
+      100% { top:100%; opacity:0; }
+    }
+    /* 顶部进度条 */
+    @keyframes progress-bar {
+      from { width:0%; }
+      to   { width:100%; }
+    }
+    /* 状态灯闪烁 */
+    @keyframes status-blink {
+      0%,100% { opacity:1; }
+      50%     { opacity:0.2; }
+    }
+    /* ── AI检测工具主容器 ── */
+    .ai-checker-wrap {
+      background:#0a0e1a;
+      border-radius:16px;
+      padding:0;
+      color:white;
+      border:1px solid rgba(245,158,11,0.2);
+      box-shadow:0 12px 48px rgba(0,0,0,0.7),0 0 0 1px rgba(245,158,11,0.05);
+      position:relative;
+      overflow:hidden;
+    }
+    /* 顶部金色进度条 */
+    .ai-checker-topbar {
+      height:3px;
+      background:linear-gradient(90deg,transparent,rgba(245,158,11,0.5),rgba(245,158,11,1),rgba(245,158,11,0.5),transparent);
+      position:relative;
+      overflow:hidden;
+    }
+    .ai-checker-topbar::after {
+      content:'';
+      position:absolute;
+      top:0;left:-60%;width:40%;height:100%;
+      background:linear-gradient(90deg,transparent,rgba(255,255,255,0.7),transparent);
+      animation:btn-shine 2s linear infinite;
+    }
+    /* 头部信息栏 */
+    .ai-checker-header {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:13px 18px 11px;
+      border-bottom:1px solid rgba(245,158,11,0.08);
+    }
+    .ai-badge {
+      display:inline-flex;
+      align-items:center;
+      gap:7px;
+      font-size:10px;
+      color:rgba(245,158,11,0.9);
+      letter-spacing:2px;
+      font-weight:700;
+      text-transform:uppercase;
+    }
+    .ai-badge-dot {
+      width:6px;height:6px;
+      border-radius:50%;
+      background:#f59e0b;
+      animation:ai-pulse 1.4s ease-in-out infinite;
+      box-shadow:0 0 8px rgba(245,158,11,0.9);
+    }
+    .ai-header-status {
+      font-size:9.5px;
+      color:rgba(255,255,255,0.2);
+      letter-spacing:1px;
+      font-variant-numeric:tabular-nums;
+    }
+    /* 内容区 */
+    .ai-checker-body { padding:18px 18px 20px; }
+    .ai-title {
+      font-size:17px;
+      font-weight:800;
+      color:white;
+      margin-bottom:3px;
+      letter-spacing:0.3px;
+    }
+    .ai-subtitle {
+      font-size:11.5px;
+      color:rgba(255,255,255,0.3);
+      margin-bottom:18px;
+      line-height:1.65;
+    }
+    /* 基础利率选择 */
+    .rate-selector { margin-bottom:16px; }
+    .rate-selector-label {
+      font-size:10px;
+      color:rgba(255,255,255,0.28);
+      letter-spacing:1.5px;
+      text-transform:uppercase;
+      margin-bottom:8px;
+    }
+    .rate-tabs { display:flex; gap:5px; }
+    .rate-tab {
+      flex:1;
+      padding:8px 0;
+      text-align:center;
+      border-radius:6px;
+      font-size:13px;
+      font-weight:700;
+      cursor:pointer;
+      border:1px solid rgba(255,255,255,0.07);
+      background:rgba(255,255,255,0.03);
+      color:rgba(255,255,255,0.3);
+      transition:all 0.18s cubic-bezier(0.23,1,0.32,1);
+      letter-spacing:0.5px;
+    }
+    .rate-tab.active {
+      background:rgba(245,158,11,0.14);
+      border-color:rgba(245,158,11,0.5);
+      color:#f59e0b;
+      box-shadow:0 0 14px rgba(245,158,11,0.15),inset 0 1px 0 rgba(245,158,11,0.1);
+    }
+    /* 输入区 */
+    .ai-input-row { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+    .ai-input {
+      flex:1;
+      background:rgba(255,255,255,0.04);
+      border:1px solid rgba(255,255,255,0.09);
+      border-radius:8px;
+      padding:10px 13px;
+      color:white;
+      font-size:14px;
+      outline:none;
+      transition:border-color 0.18s,box-shadow 0.18s;
+      font-family:inherit;
+      letter-spacing:0.5px;
+    }
+    .ai-input:focus {
+      border-color:rgba(245,158,11,0.5);
+      box-shadow:0 0 0 3px rgba(245,158,11,0.07);
+    }
+    .ai-input::placeholder { color:rgba(255,255,255,0.16); }
+    .ai-del-btn {
+      width:32px;height:32px;
+      border-radius:6px;
+      background:rgba(255,255,255,0.03);
+      border:1px solid rgba(255,255,255,0.07);
+      color:rgba(255,255,255,0.28);
+      font-size:16px;
+      cursor:pointer;
+      display:flex;align-items:center;justify-content:center;
+      flex-shrink:0;
+      transition:all 0.15s;
+    }
+    .ai-del-btn:hover { background:rgba(252,129,129,0.1); border-color:rgba(252,129,129,0.3); color:#fc8181; }
+    .ai-add-btn {
+      width:100%;
+      padding:9px;
+      background:transparent;
+      border:1px dashed rgba(255,255,255,0.09);
+      border-radius:8px;
+      color:rgba(255,255,255,0.22);
+      font-size:12px;
+      cursor:pointer;
+      margin-bottom:14px;
+      transition:all 0.18s;
+      letter-spacing:0.5px;
+    }
+    .ai-add-btn:hover { background:rgba(245,158,11,0.05); border-color:rgba(245,158,11,0.25); color:rgba(245,158,11,0.7); }
+    /* 检测按钮 - amber金色 */
+    .ai-detect-btn {
+      width:100%;
+      padding:13px;
+      background:linear-gradient(135deg,rgba(245,158,11,0.92),rgba(180,83,9,0.96));
+      border:none;
+      border-radius:10px;
+      color:#0a0e1a;
+      font-size:14px;
+      font-weight:800;
+      cursor:pointer;
+      letter-spacing:2px;
+      position:relative;
+      overflow:hidden;
+      transition:transform 0.12s,box-shadow 0.12s;
+      box-shadow:0 4px 20px rgba(245,158,11,0.35);
+    }
+    .ai-detect-btn:hover { box-shadow:0 6px 28px rgba(245,158,11,0.5); }
+    .ai-detect-btn:active { transform:scale(0.98); }
+    .ai-detect-btn::after {
+      content:'';
+      position:absolute;
+      top:0;left:-100%;
+      width:60%;height:100%;
+      background:linear-gradient(90deg,transparent,rgba(255,255,255,0.22),transparent);
+      animation:none;
+    }
+    .ai-detect-btn.scanning::after { animation:btn-shine 1.0s linear infinite; }
+    /* 扫描动画区域 */
+    .ai-scan-wrap { display:none; padding:20px 0 14px; }
+    /* 矩阵格子动画 */
+    .ai-matrix-grid {
+      display:grid;
+      grid-template-columns:repeat(8,1fr);
+      gap:3px;
+      margin-bottom:16px;
+    }
+    .ai-matrix-cell {
+      height:20px;
+      border-radius:2px;
+      background:rgba(245,158,11,0.07);
+      border:1px solid rgba(245,158,11,0.1);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      overflow:hidden;
+    }
+    .ai-matrix-cell .cell-val {
+      font-size:6.5px;
+      color:rgba(245,158,11,0.25);
+      font-variant-numeric:tabular-nums;
+      font-weight:700;
+      overflow:hidden;
+      height:1em;
+      line-height:1;
+    }
+    /* 扫描状态文字区 */
+    .ai-scan-status { text-align:center; }
+    .ai-scan-label {
+      font-size:10px;
+      color:rgba(245,158,11,0.55);
+      letter-spacing:2px;
+      text-transform:uppercase;
+      margin-bottom:6px;
+    }
+    .ai-scan-step-text {
+      font-size:12px;
+      color:rgba(255,255,255,0.4);
+      min-height:18px;
+    }
+    .ai-dot { display:inline-block; animation:dot-blink 1.4s infinite; }
+    .ai-dot:nth-child(2) { animation-delay:0.25s; }
+    .ai-dot:nth-child(3) { animation-delay:0.5s; }
+    /* 结果区 */
+    .ai-result-wrap { display:none; animation:bubble-enter 0.28s cubic-bezier(0.23,1,0.32,1) forwards; }
+    .ai-result-header {
+      text-align:center;
+      padding:20px 0 18px;
+      border-bottom:1px solid rgba(245,158,11,0.1);
+      margin-bottom:16px;
+    }
+    .ai-result-label {
+      font-size:10px;
+      color:rgba(255,255,255,0.28);
+      letter-spacing:2.5px;
+      text-transform:uppercase;
+      margin-bottom:8px;
+    }
+    .ai-result-rate {
+      font-size:52px;
+      font-weight:900;
+      line-height:1;
+      animation:rate-count 0.45s cubic-bezier(0.23,1,0.32,1);
+      letter-spacing:-2px;
+      font-variant-numeric:tabular-nums;
+    }
+    .ai-result-rate.safe { color:#48bb78; text-shadow:0 0 24px rgba(72,187,120,0.4); }
+    .ai-result-rate.warn { color:#f59e0b; text-shadow:0 0 24px rgba(245,158,11,0.4); }
+    .ai-result-rate.danger { color:#fc8181; text-shadow:0 0 24px rgba(252,129,129,0.4); }
+    .ai-result-desc {
+      font-size:11.5px;
+      color:rgba(255,255,255,0.32);
+      margin-top:7px;
+      letter-spacing:0.3px;
+    }
+    /* 股票卡片 */
+    .ai-stock-card {
+      border-radius:10px;
+      padding:14px;
+      margin-bottom:8px;
+      border:1px solid rgba(255,255,255,0.06);
+      animation:fade-in-up 0.35s cubic-bezier(0.23,1,0.32,1) both;
+      background:rgba(255,255,255,0.03);
+    }
+    .ai-stock-card.hit {
+      border-color:rgba(252,129,129,0.22);
+      background:rgba(252,129,129,0.04);
+    }
+    .ai-stock-card.safe {
+      border-color:rgba(72,187,120,0.18);
+      background:rgba(72,187,120,0.03);
+    }
+    .ai-stock-name { font-size:14px;font-weight:700;color:white;letter-spacing:0.3px; }
+    .ai-stock-code { font-size:10px;color:rgba(255,255,255,0.22);margin-left:6px;letter-spacing:1px; }
+    .ai-stock-rate { font-size:17px;font-weight:800;font-variant-numeric:tabular-nums; }
+    .ai-stock-rate.hit { color:#fc8181; }
+    .ai-stock-rate.safe { color:#48bb78; }
+    .ai-stock-rate-label { font-size:9px;color:rgba(255,255,255,0.22);margin-top:2px;letter-spacing:1px;text-transform:uppercase; }
+    .ai-hit-badge {
+      display:inline-block;
+      background:rgba(252,129,129,0.09);
+      color:rgba(252,129,129,0.85);
+      border:1px solid rgba(252,129,129,0.2);
+      border-radius:3px;
+      padding:2px 7px;
+      font-size:10.5px;
+      margin:3px 3px 0 0;
+      letter-spacing:0.3px;
+    }
+    .ai-safe-tag {
+      font-size:11.5px;
+      color:rgba(72,187,120,0.75);
+      margin-top:6px;
+      letter-spacing:0.3px;
+    }
+    .ai-recheck-btn {
+      width:100%;
+      padding:10px;
+      background:transparent;
+      border:1px solid rgba(245,158,11,0.14);
+      border-radius:8px;
+      color:rgba(245,158,11,0.45);
+      font-size:12px;
+      cursor:pointer;
+      margin-top:14px;
+      transition:all 0.18s;
+      letter-spacing:1px;
+    }
+    .ai-recheck-btn:hover { background:rgba(245,158,11,0.06); color:rgba(245,158,11,0.9); border-color:rgba(245,158,11,0.4); }
+
+    /* 逐项检测列表 */
+    .check-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin-bottom: 10px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.07);
+    }
+    .check-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 8px 10px;
+      background: rgba(0,0,0,0.2);
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      opacity: 0;
+      transform: translateX(-8px);
+      animation: check-slide-in 0.3s cubic-bezier(0.23,1,0.32,1) forwards;
+    }
+    .check-row:last-child { border-bottom: none; }
+    .check-row.hit-row { background: rgba(0,0,0,0.28); }
+    @keyframes check-slide-in {
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .check-icon {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .check-icon.pass {
+      background: rgba(72,187,120,0.15);
+      color: #48bb78;
+      border: 1px solid rgba(72,187,120,0.3);
+    }
+    .check-icon.hit {
+      background: rgba(252,129,129,0.15);
+      color: #fc8181;
+      border: 1px solid rgba(252,129,129,0.3);
+    }
+    .check-body {
+      flex: 1;
+      min-width: 0;
+    }
+    .check-name {
+      font-size: 12px;
+      color: rgba(255,255,255,0.75);
+      font-weight: 500;
+      line-height: 1.4;
+    }
+    .check-detail {
+      font-size: 10.5px;
+      color: rgba(255,255,255,0.4);
+      margin-top: 2px;
+      line-height: 1.4;
+    }
+    .check-add {
+      font-size: 11.5px;
+      font-weight: 700;
+      white-space: nowrap;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .check-add.pass {
+      color: rgba(72,187,120,0.6);
+      font-size: 11px;
+      font-weight: 400;
+    }
+
+    /* 利率汇总行 */
+    .rate-summary {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 10px;
+      border-radius: 7px;
+      margin-top: 2px;
+      gap: 8px;
+    }
+    .rate-summary.safe {
+      background: rgba(72,187,120,0.08);
+      border: 1px solid rgba(72,187,120,0.2);
+    }
+    .rate-summary.warn {
+      background: rgba(245,158,11,0.08);
+      border: 1px solid rgba(245,158,11,0.25);
+    }
+    .rate-summary.multi {
+      background: rgba(252,129,129,0.08);
+      border: 1px solid rgba(252,129,129,0.25);
+    }
+    .rate-formula {
+      font-size: 11px;
+      color: rgba(255,255,255,0.45);
+      flex: 1;
+      min-width: 0;
+    }
+    .rate-final {
+      font-size: 15px;
+      font-weight: 700;
+      color: #f59e0b;
+      white-space: nowrap;
+    }
+    .rate-final.safe { color: #48bb78; }
+
+    /* ===== 利息测算模块 ===== */
+    .calc-module {
+      background: #fff;
+      padding: 20px 18px 22px;
+      margin-bottom: 0;
+      border-bottom: 2px solid #f0f2f5;
+    }
+
+    .calc-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1a1a2e;
+      letter-spacing: 0.5px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .calc-title-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #e8a838;
+      display: inline-block;
+    }
+
+    .calc-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .calc-group {
+      flex: 1;
+    }
+
+    .calc-label {
+      font-size: 11px;
+      color: #999;
+      letter-spacing: 0.3px;
+      margin-bottom: 6px;
+    }
+
+    .calc-tabs {
+      display: flex;
+      gap: 5px;
+    }
+
+    .calc-tab {
+      flex: 1;
+      padding: 9px 0 10px;
+      text-align: center;
+      font-size: 17px;
+      font-weight: 800;
+      color: #1a1a1a;
+      background: #f5f6f8;
+      border: 1px solid #dde0e8;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+      user-select: none;
+      line-height: 1.2;
+    }
+
+    .calc-tab.active {
+      background: #e8a838;
+      border-color: #d4922a;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(232,168,56,0.45);
+    }
+
+    .tab-rate {
+      font-size: 17px;
+      font-weight: 800;
+      line-height: 1.3;
+      letter-spacing: -0.3px;
+    }
+
+    .tab-unit {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0;
+      opacity: 0.75;
+      margin-left: 1px;
+    }
+
+    .tab-period {
+      font-size: 11px;
+      font-weight: 400;
+      color: #bbb;
+      margin-top: 2px;
+      letter-spacing: 0.2px;
+    }
+
+    .calc-tab.active .tab-period {
+      color: rgba(255,255,255,0.8);
+      opacity: 1;
+    }
+
+    /* ===== 股票输入行 ===== */
+    .calc-stock-rows {
+      margin-bottom: 10px;
+    }
+
+    .calc-stock-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+      align-items: flex-start;
+    }
+
+    .calc-stock-cell {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .calc-stock-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      background: #f7f8fa;
+      border: 1px solid #dde0e8;
+      border-radius: 8px;
+      transition: border-color 0.18s, background 0.18s;
+      overflow: hidden;
+    }
+    .calc-stock-input-wrap:focus-within { border-color: #e8a838; background: #fff; }
+    .calc-stock-input-wrap.found { border-color: #27ae60; background: #f0fff4; }
+    .calc-stock-input-wrap.notfound { border-color: #e53935; background: #fff8f8; }
+
+    .calc-stock-input {
+      flex: 0 0 auto;
+      width: 90px;
+      padding: 9px 6px 9px 12px;
+      background: transparent;
+      border: none;
+      color: #1a1a2e;
+      font-size: 14px;
+      font-weight: 700;
+      outline: none;
+      box-sizing: border-box;
+    }
+
+    .calc-stock-input::placeholder { color: #bbb; font-weight: 400; }
+
+    .calc-stock-name {
+      flex: 1;
+      font-size: 13px;
+      font-weight: 600;
+      color: #bbb;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding-right: 10px;
+      transition: color 0.15s;
+    }
+    .calc-stock-input-wrap.found .calc-stock-name { color: #27ae60; }
+    .calc-stock-input-wrap.notfound .calc-stock-name { color: #e53935; }
+    .calc-stock-input-wrap .calc-stock-name.loading { color: #bbb; }
+
+    .calc-row-add {
+      width: 34px;
+      height: 34px;
+      flex-shrink: 0;
+      background: #f5f6f8;
+      border: 1px dashed #ccc;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: #aaa;
+      cursor: pointer;
+      transition: all 0.15s;
+      user-select: none;
+      margin-top: 1px;
+    }
+    .calc-row-add:hover { background: #fff8ec; border-color: #e8a838; color: #e8a838; }
+
+    .calc-row-del {
+      width: 34px;
+      height: 34px;
+      flex-shrink: 0;
+      background: #f5f6f8;
+      border: 1px solid #e8eaee;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      color: #ccc;
+      cursor: pointer;
+      transition: all 0.15s;
+      user-select: none;
+      margin-top: 1px;
+    }
+    .calc-row-del:hover { background: #fff0f0; border-color: #e53935; color: #e53935; }
+
+    .calc-btn {
+      padding: 9px 18px;
+      background: linear-gradient(135deg, #e8a838, #d4922a);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity 0.18s;
+      letter-spacing: 0.5px;
+    }
+
+    .calc-btn:active { opacity: 0.8; }
+
+    .calc-result {
+      display: none;
+      background: #f7f8fa;
+      border: 1px solid #e8eaee;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-top: 4px;
+    }
+
+    .calc-result-rate {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .calc-result-label {
+      font-size: 12px;
+      color: #999;
+    }
+
+    .calc-result-num {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+    }
+
+    .calc-result-num.safe { color: #27ae60; }
+    .calc-result-num.warn { color: #e8a838; }
+    .calc-result-num.danger { color: #e53935; }
+
+    .calc-result-sub {
+      font-size: 12px;
+      color: #bbb;
+      margin-left: auto;
+      text-align: right;
+    }
+
+    .calc-breakdown {
+      border-top: 1px solid #e8eaee;
+      padding-top: 10px;
+      margin-top: 4px;
+    }
+
+    .calc-breakdown-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 0;
+      font-size: 12px;
+      border-bottom: 1px solid #f0f1f4;
+    }
+
+    .calc-breakdown-row:last-child { border-bottom: none; }
+
+    .calc-breakdown-name { color: #555; flex: 1; }
+    .calc-breakdown-name.hit { color: #e53935; font-weight: 600; }
+    .calc-breakdown-name.pass { color: #bbb; }
+
+    .calc-breakdown-val { font-size: 12px; font-weight: 700; }
+    .calc-breakdown-val.hit { color: #e53935; }
+    .calc-breakdown-val.pass { color: #ccc; }
+
+    .calc-force-close {
+      margin-top: 10px;
+      padding: 8px 10px;
+      background: #fff5f5;
+      border: 1px solid #ffd0d0;
+      border-radius: 7px;
+      font-size: 11.5px;
+      color: #666;
+      line-height: 1.6;
+    }
+
+    .calc-force-close .fc-trigger {
+      color: #e53935;
+      font-weight: 700;
+    }
+
+    .calc-loading {
+      text-align: center;
+      padding: 12px 0;
+      color: #aaa;
+      font-size: 13px;
+    }
+
+    .calc-stock-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    .calc-stock-tag {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: #f0f2f7;
+      border: 1px solid #dde0e8;
+      border-radius: 20px;
+      padding: 4px 10px;
+      font-size: 12px;
+      color: #555;
+    }
+
+    .calc-stock-tag .tag-del {
+      color: #bbb;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      margin-left: 2px;
+    }
+
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>澳门潤儀投资风控管理 - B</h1>
+</div>
+
+<!-- 利息测算模块 -->
+<div class="calc-module" id="calc-module">
+  <div class="calc-title">
+    <span class="calc-title-dot"></span>
+    利息测算
+  </div>
+
+  <!-- 第一行：基础年化利率 -->
+  <div class="calc-row" style="margin-bottom:10px">
+    <div class="calc-group">
+      <div class="calc-label">基础月化利率</div>
+      <div class="calc-tabs" id="calc-rate-tabs">
+        <div class="calc-tab active" data-val="12" onclick="calcSelectRate(this)">
+          <div class="tab-rate">1%</div>
+          <div class="tab-period">使用一年</div>
+        </div>
+        <div class="calc-tab" data-val="18" onclick="calcSelectRate(this)">
+          <div class="tab-rate">1.5%</div>
+          <div class="tab-period">使用半年</div>
+        </div>
+        <div class="calc-tab" data-val="24" onclick="calcSelectRate(this)">
+          <div class="tab-rate">2%</div>
+          <div class="tab-period">使用三个月</div>
+        </div>
+        <div class="calc-tab" data-val="36" onclick="calcSelectRate(this)">
+          <div class="tab-rate">3%</div>
+          <div class="tab-period">小于三个月</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第二行：保证金比例 -->
+  <div class="calc-row">
+    <div class="calc-group">
+      <div class="calc-label">保证金比例</div>
+      <div class="calc-tabs" id="calc-margin-tabs">
+        <div class="calc-tab" data-val="5" onclick="calcSelectMargin(this)">5%</div>
+        <div class="calc-tab active" data-val="10" onclick="calcSelectMargin(this)">10%</div>
+        <div class="calc-tab" data-val="15" onclick="calcSelectMargin(this)">15%</div>
+        <div class="calc-tab" data-val="20" onclick="calcSelectMargin(this)">20%</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 输入股票 -->
+  <div class="calc-label" style="margin-bottom:8px">股票代码 <span style="font-size:11px;font-weight:400;color:#aaa">（选填，空着则按任意股票计算，含ST及科创/创业板）</span></div>
+  <div class="calc-stock-rows" id="calc-stock-rows">
+    <!-- 由JS动态渲染 -->
+  </div>
+  <button class="calc-btn" onclick="calcRun()" style="width:100%;margin-top:4px">&#9654; 开始测算</button>
+
+  <!-- 结果区 -->
+  <div class="calc-result" id="calc-result">
+    <div class="calc-loading" id="calc-loading" style="display:none">••• 正在计算中</div>
+    <div id="calc-result-body"></div>
+  </div>
+</div>
+
+<div class="container">
+
+
+
+  <!-- ===== 板块一：账户安全 ===== -->
+  <div class="section-header">
+    <div class="section-icon icon-green">I</div>
+    <div class="section-header-text">
+      <h2>保证金管理</h2>
+
+    </div>
+  </div>
+
+  <div class="risk-grid">
+
+    <div class="grid-card a2" onclick="showDetail('risk1')">
+      <div class="grid-card-header">
+        <div class="scenario-num">1</div>
+        <div class="accordion-title-wrap">
+          <div class="accordion-label">风险一</div>
+          <div class="accordion-title">跌停板封死</div>
+        </div>
+        <div class="accordion-arrow">›</div>
+      </div>
+      <div class="grid-card-body" style="display:none">
+        <div class="risk-block block-scene">
+          <div class="risk-block-title">风险描述</div>
+          <p>股票封死跌停时，大量卖单堆积但买盘极少，实际无法成交。B即便想止损也无法卖出。若B已穿仓宣告放弃，但股票仍封在跌停板上，次日开盘若继续跌停，损失持续叠加，保证金补足机制完全失效。A股历史上最长连续跌停记录为<strong>18个交易日</strong>，期间持仓者完全无法减仓。</p>
+        </div>
+        <div class="risk-block block-a">
+          <div class="risk-block-title">2025年真实数据（来源：Tushare/交易所）</div>
+          <table class="data-table">
+            <tr><th>指标</th><th>数据</th></tr>
+            <tr><td>全年跌停总股次</td><td><strong>4,945 次</strong></td></tr>
+            <tr><td>日均跌停数量</td><td><strong>22.2 只</strong></td></tr>
+            <tr><td>单日最多跌停</td><td><strong style="color:#e05c5c">2,804 只</strong>（2025/04/07 关税战）</td></tr>
+            <tr><td>跌停≥100只的交易日</td><td><strong>2 天</strong></td></tr>
+            <tr><td>跌停≥50只的交易日</td><td><strong>5 天</strong></td></tr>
+          </table>
+          <p style="margin-top:10px;font-size:13.5px;color:#888">2025年4月7日（关税战黑色星期一），全市场2,804只股票同日跌停，创A股历史单日跌停数量纪录，超过2020年2月3日的3,000只（彼时市场规模更小）。</p>
+        </div>
+        <div class="risk-block" style="background:#fff8f0;border-left:3px solid #e8a838;padding:12px 14px;border-radius:6px;margin-top:10px">
+          <div class="risk-block-title" style="color:#c07820">高风险触发场景</div>
+          <p>停牌复牌后的重大利空、业绩暴雷、监管处罚公告、实控人被查。这类情况下跌停板封死概率最高，且往往连续多日。</p>
+        </div>
+        <div class="verdict-box">
+          <div class="verdict-label">管控方案</div>
+          <ul style="margin:4px 0 0 16px;line-height:2;font-size:15.5px;color:#444">
+            <li>禁止持有<strong>小市值、高质押</strong>的高风险股票</li>
+            <li>禁止持有<strong>有历史连续跌停记录</strong>的股票</li>
+            <li>合作条款中应明确约定<strong>持仓品种白名单</strong>，超出范围即触发补足保证金义务</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-card a3" onclick="showDetail('risk2')">
+      <div class="grid-card-header">
+        <div class="scenario-num">2</div>
+        <div class="accordion-title-wrap">
+          <div class="accordion-label">风险二</div>
+          <div class="accordion-title">日内换仓叠加跌停</div>
+        </div>
+        <div class="accordion-arrow">›</div>
+      </div>
+      <div class="grid-card-body" style="display:none">
+        <div class="risk-block block-scene">
+          <div class="risk-block-title">风险描述</div>
+          <p>当日持仓股跌停，割肉卖出确认亏损。随后在同一天追入已涨停的新股票（以涨停价买入，溢价损失已包含其中）。由于A股T+1制度，当天买入的股票当天不能卖出。当天收盘时新买入的涨停股反转跌停，无法止损。三个涨跌幅叠加，当日账户实际亏损可达：</p>
+          <ul style="margin:8px 0 0 16px;line-height:2">
+            <li><strong>10cm票（主板普通股）</strong>：单日亏损约 <strong style="color:#e05c5c">-30%</strong></li>
+            <li><strong>20cm票（科创板/创业板）</strong>：单日亏损约 <strong style="color:#e05c5c">-60%</strong></li>
+          </ul>
+        </div>
+        <div class="risk-block block-a">
+          <div class="risk-block-title">保证金覆盖情况（以100万本金为例）</div>
+          <table class="data-table">
+            <tr><th>保证金</th><th>10cm结果</th><th>20cm结果</th></tr>
+            <tr><td>5%（5万）</td><td><span class="tag-danger">穿仓 -25万</span></td><td><span class="tag-danger">穿仓 -55万</span></td></tr>
+            <tr><td>10%（10万）</td><td><span class="tag-danger">穿仓 -20万</span></td><td><span class="tag-danger">穿仓 -50万</span></td></tr>
+            <tr><td>20%（20万）</td><td><span class="tag-danger">穿仓 -10万</span></td><td><span class="tag-danger">穿仓 -40万</span></td></tr>
+          </table>
+
+        </div>
+        <div class="verdict-box">
+          <div class="verdict-label">管控方案</div>
+          <ul style="margin:4px 0 0 16px;line-height:2;font-size:15.5px;color:#444">
+            <li><strong>禁止当日割肉后再追涨停板</strong>，该操作将导致单日亏损叠加</li>
+            <li>建议单日最大回撤不超过<strong>5%</strong>，达到阈值即停止操作并通知A方</li>
+            <li>科创板/创业板的高弹性股票需提高保证金比例，否则单日极端情景下保证金将完全失效</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-card a4" onclick="showDetail('risk3')">
+      <div class="grid-card-header">
+        <div class="scenario-num">3</div>
+        <div class="accordion-title-wrap">
+          <div class="accordion-label">风险三</div>
+          <div class="accordion-title">收盘后突然停牌</div>
+        </div>
+        <div class="accordion-arrow">›</div>
+      </div>
+      <div class="grid-card-body" style="display:none">
+        <div class="risk-block block-scene">
+          <div class="risk-block-title">风险描述</div>
+          <p>B正常持有某股票，公司在收盘后公告重大事项停牌（重组、被查、资金链断裂等）。停牌公告均为<strong>盘后发布</strong>，B当天操作完全正常，收盘后才知晓。停牌期间完全无法卖出。复牌后若遇重大利空，股票连续封死跌停，保证金补足机制在此期间完全失效。</p>
+          <table class="data-table" style="margin-top:10px">
+            <tr><th>指标</th><th>2025年真实数据</th></tr>
+            <tr><td>全年全天停牌总次数</td><td><strong>3,441 次</strong></td></tr>
+            <tr><td>日均停牌数量</td><td><strong>14.3 只</strong></td></tr>
+            <tr><td>单日最多停牌</td><td><strong style="color:#e05c5c">54 只</strong>（2025/04/29，年报披露高峰）</td></tr>
+            <tr><td>盘中临时停牌（科创/创业板）</td><td><strong>39 次</strong>，涉及37只股票</td></tr>
+            <tr><td>停牌最集中月份</td><td><strong>4、5月（年报季）</strong>，共505次</td></tr>
+          </table>
+          <p style="margin-top:8px;font-size:13.5px;color:#888">数据来源：Tushare Pro（上交所/深交所官方数据）</p>
+        </div>
+        <div class="risk-block block-a">
+          <div class="risk-block-title">保证金覆盖情况（连续三日跌停）</div>
+          <table class="data-table">
+            <tr><th>保证金</th><th>三日亏损</th><th>结果</th></tr>
+            <tr><td>10%（10万）</td><td>27万</td><td><span class="tag-danger">穿仓 -17万</span></td></tr>
+            <tr><td>20%（20万）</td><td>27万</td><td><span class="tag-danger">穿仓 -7万</span></td></tr>
+            <tr><td>30%（30万）</td><td>27万</td><td><span class="tag-safe">覆盖，剩余3万</span></td></tr>
+          </table>
+        </div>
+        <div class="verdict-box">
+          <div class="verdict-label">管控方案</div>
+          <p>停牌风险无法完全预防，但可通过以下持仓标准降低概率：</p>
+          <ul style="margin:8px 0 0 16px;line-height:2;font-size:15.5px;color:#444">
+            <li>禁止持有<strong>总市值低于30亿</strong>的小盘股过夜</li>
+            <li>禁止持有<strong>大股东质押比例超过70%</strong>的股票</li>
+            <li>禁止持有<strong>近期收到监管问询函或立案调查</strong>的股票</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-card a5" onclick="showDetail('risk4')">
+      <div class="grid-card-header">
+        <div class="scenario-num">4</div>
+        <div class="accordion-title-wrap">
+          <div class="accordion-label">风险四</div>
+          <div class="accordion-title">收盘后被转ST</div>
+        </div>
+        <div class="accordion-arrow">›</div>
+      </div>
+      <div class="grid-card-body" style="display:none">
+        <div class="risk-block block-scene">
+          <div class="risk-block-title">风险描述</div>
+          <p>公司因连续两年亏损、净资产为负等原因，在每年4月底年报披露截止日前后<strong>收盘后公告被转ST</strong>。B当天操作完全正常，收盘后才知晓次日起股票变ST。次日开盘即遇大量抛盘，股价大幅低开，B无法提前止损。</p>
+          <!-- 10年概率表 -->
+          <div style="margin-top:10px;margin-bottom:6px;font-size:12px;color:#666;font-weight:600;letter-spacing:0.5px">▶ 2015–2025年戴帽与退市概率（来源：Tushare Pro）</div>
+          <table class="data-table" style="width:100%;table-layout:fixed;font-size:12px">
+            <colgroup>
+              <col style="width:14%">
+              <col style="width:18%">
+              <col style="width:14%">
+              <col style="width:18%">
+              <col style="width:14%">
+              <col style="width:18%">
+            </colgroup>
+            <thead>
+              <tr style="background:#f5f5f5">
+                <th style="text-align:center;padding:5px 2px">年份</th>
+                <th style="text-align:center;padding:5px 2px">股票池</th>
+                <th style="text-align:center;padding:5px 2px">戴帽数</th>
+                <th style="text-align:center;padding:5px 2px">戴帽率</th>
+                <th style="text-align:center;padding:5px 2px">退市数</th>
+                <th style="text-align:center;padding:5px 2px">退市率</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="background:#fff3f3"><td style="text-align:center;padding:5px 2px"><strong>2025</strong></td><td style="text-align:center;padding:5px 2px">5,470</td><td style="text-align:center;padding:5px 2px"><strong>129</strong></td><td style="text-align:center;padding:5px 2px;color:#c0392b"><strong>2.36%</strong></td><td style="text-align:center;padding:5px 2px">29</td><td style="text-align:center;padding:5px 2px;color:#888">0.53%</td></tr>
+              <tr><td style="text-align:center;padding:5px 2px">2024</td><td style="text-align:center;padding:5px 2px">5,375</td><td style="text-align:center;padding:5px 2px">96</td><td style="text-align:center;padding:5px 2px;color:#c0392b">1.79%</td><td style="text-align:center;padding:5px 2px">52</td><td style="text-align:center;padding:5px 2px;color:#e05c5c"><strong>0.97%</strong></td></tr>
+              <tr><td style="text-align:center;padding:5px 2px">2023</td><td style="text-align:center;padding:5px 2px">5,342</td><td style="text-align:center;padding:5px 2px">66</td><td style="text-align:center;padding:5px 2px;color:#c0392b">1.24%</td><td style="text-align:center;padding:5px 2px">45</td><td style="text-align:center;padding:5px 2px;color:#e05c5c">0.84%</td></tr>
+              <tr><td style="text-align:center;padding:5px 2px">2022</td><td style="text-align:center;padding:5px 2px">4,909</td><td style="text-align:center;padding:5px 2px">60</td><td style="text-align:center;padding:5px 2px;color:#c0392b">1.22%</td><td style="text-align:center;padding:5px 2px">46</td><td style="text-align:center;padding:5px 2px;color:#e05c5c"><strong>0.94%</strong></td></tr>
+              <tr><td style="text-align:center;padding:5px 2px">2021</td><td style="text-align:center;padding:5px 2px">4,627</td><td style="text-align:center;padding:5px 2px">74</td><td style="text-align:center;padding:5px 2px;color:#c0392b">1.60%</td><td style="text-align:center;padding:5px 2px">20</td><td style="text-align:center;padding:5px 2px;color:#888">0.43%</td></tr>
+              <tr><td style="text-align:center;padding:5px 2px">2020</td><td style="text-align:center;padding:5px 2px">4,164</td><td style="text-align:center;padding:5px 2px">109</td><td style="text-align:center;padding:5px 2px;color:#c0392b"><strong>2.62%</strong></td><td style="text-align:center;padding:5px 2px">16</td><td style="text-align:center;padding:5px 2px;color:#888">0.38%</td></tr>
+              <tr><td style="text-align:center;padding:5px 2px">2019</td><td style="text-align:center;padding:5px 2px">3,769</td><td style="text-align:center;padding:5px 2px">86</td><td style="text-align:center;padding:5px 2px;color:#c0392b">2.28%</td><td style="text-align:center;padding:5px 2px">10</td><td style="text-align:center;padding:5px 2px;color:#888">0.27%</td></tr>
+              <tr><td style="text-align:center;padding:5px 2px">2018</td><td style="text-align:center;padding:5px 2px">3,576</td><td style="text-align:center;padding:5px 2px">54</td><td style="text-align:center;padding:5px 2px;color:#c0392b">1.51%</td><td style="text-align:center;padding:5px 2px">5</td><td style="text-align:center;padding:5px 2px;color:#888">0.14%</td></tr>
+              <tr><td style="text-align:center;padding:5px 2px">2017</td><td style="text-align:center;padding:5px 2px">3,477</td><td style="text-align:center;padding:5px 2px">58</td><td style="text-align:center;padding:5px 2px;color:#c0392b">1.67%</td><td style="text-align:center;padding:5px 2px">5</td><td style="text-align:center;padding:5px 2px;color:#888">0.14%</td></tr>
+              <tr><td style="text-align:center;padding:5px 2px">2016</td><td style="text-align:center;padding:5px 2px">3,071</td><td style="text-align:center;padding:5px 2px">60</td><td style="text-align:center;padding:5px 2px;color:#c0392b">1.95%</td><td style="text-align:center;padding:5px 2px">1</td><td style="text-align:center;padding:5px 2px;color:#888">0.03%</td></tr>
+              <tr><td style="text-align:center;padding:5px 2px">2015</td><td style="text-align:center;padding:5px 2px">2,827</td><td style="text-align:center;padding:5px 2px">46</td><td style="text-align:center;padding:5px 2px;color:#c0392b">1.63%</td><td style="text-align:center;padding:5px 2px">7</td><td style="text-align:center;padding:5px 2px;color:#888">0.25%</td></tr>
+              <tr style="background:#f0f4ff;font-weight:600">
+                <td style="text-align:center;padding:5px 2px">11年均</td>
+                <td style="text-align:center;padding:5px 2px">—</td>
+                <td style="text-align:center;padding:5px 2px">—</td>
+                <td style="text-align:center;padding:5px 2px;color:#c0392b">1.81%</td>
+                <td style="text-align:center;padding:5px 2px">—</td>
+                <td style="text-align:center;padding:5px 2px;color:#e05c5c">0.45%</td>
+              </tr>
+            </tbody>
+          </table>
+          <div style="margin-top:12px;padding:12px 14px;background:#fff8f0;border-radius:8px;border-left:3px solid #e8a838">
+            <div style="font-size:13px;color:#c07820;font-weight:700;margin-bottom:8px">ℹ️ A方实际承担的风险量化</div>
+
+            <p style="font-size:13px;color:#555;margin:0 0 6px;line-height:1.75">随机购买一只股票，年内被戴帽ST的概率平均为 <strong style="color:#c0392b">1.81%</strong>，退市概率平均为 <strong style="color:#c0392b">0.45%</strong>。两者叠加，A方每年面对“持仓股票出现戴帽或退市”的概率约为 <strong style="color:#c0392b">2.26%</strong>。</p>
+
+            <!-- 风险场景卡片列表 -->
+            <div style="display:flex;flex-direction:column;gap:8px;margin:10px 0">
+
+              <!-- 场景1 -->
+              <div style="background:#fff5f5;border:1px solid #f0c0c0;border-radius:7px;padding:10px 12px">
+                <div style="font-size:12.5px;color:#444;font-weight:600;margin-bottom:6px">B 全仓持某股 · 戴帽后连跌 3 日</div>
+                <div style="display:flex;gap:6px">
+                  <div style="flex:1;background:#fff;border-radius:5px;padding:7px 6px;text-align:center;border:1px solid #f5d5d5">
+                    <div style="font-size:10.5px;color:#999;margin-bottom:2px">命中概率</div>
+                    <div style="font-size:15px;font-weight:700;color:#c0392b">1.81%</div>
+                  </div>
+                  <div style="flex:1;background:#fff;border-radius:5px;padding:7px 6px;text-align:center;border:1px solid #f5d5d5">
+                    <div style="font-size:10.5px;color:#999;margin-bottom:2px">A单次损失</div>
+                    <div style="font-size:15px;font-weight:700;color:#c0392b">27%</div>
+                    <div style="font-size:10px;color:#aaa">本金</div>
+                  </div>
+                  <div style="flex:1.4;background:#fff;border-radius:5px;padding:7px 6px;text-align:center;border:1px solid #f5d5d5">
+                    <div style="font-size:10.5px;color:#999;margin-bottom:2px">年利12% 相当于</div>
+                    <div style="font-size:15px;font-weight:700;color:#c0392b">2.25年</div>
+                    <div style="font-size:10px;color:#aaa">利息才能弥补</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 场景2 -->
+              <div style="background:#fff5f5;border:1px solid #f0c0c0;border-radius:7px;padding:10px 12px">
+                <div style="font-size:12.5px;color:#444;font-weight:600;margin-bottom:6px">B 半仓持某股 · 戴帽后连跌 3 日</div>
+                <div style="display:flex;gap:6px">
+                  <div style="flex:1;background:#fff;border-radius:5px;padding:7px 6px;text-align:center;border:1px solid #f5d5d5">
+                    <div style="font-size:10.5px;color:#999;margin-bottom:2px">命中概率</div>
+                    <div style="font-size:15px;font-weight:700;color:#c0392b">1.81%</div>
+                  </div>
+                  <div style="flex:1;background:#fff;border-radius:5px;padding:7px 6px;text-align:center;border:1px solid #f5d5d5">
+                    <div style="font-size:10.5px;color:#999;margin-bottom:2px">A单次损失</div>
+                    <div style="font-size:15px;font-weight:700;color:#c0392b">13.5%</div>
+                    <div style="font-size:10px;color:#aaa">本金</div>
+                  </div>
+                  <div style="flex:1.4;background:#fff;border-radius:5px;padding:7px 6px;text-align:center;border:1px solid #f5d5d5">
+                    <div style="font-size:10.5px;color:#999;margin-bottom:2px">年利12% 相当于</div>
+                    <div style="font-size:15px;font-weight:700;color:#c0392b">1.13年</div>
+                    <div style="font-size:10px;color:#aaa">利息才能弥补</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 场景3 -->
+              <div style="background:#fff0f0;border:1px solid #e8a0a0;border-radius:7px;padding:10px 12px">
+                <div style="font-size:12.5px;color:#444;font-weight:600;margin-bottom:6px">B 全仓持某股 · 直接退市清盘</div>
+                <div style="display:flex;gap:6px">
+                  <div style="flex:1;background:#fff;border-radius:5px;padding:7px 6px;text-align:center;border:1px solid #f0c0c0">
+                    <div style="font-size:10.5px;color:#999;margin-bottom:2px">命中概率</div>
+                    <div style="font-size:15px;font-weight:700;color:#c0392b">0.45%</div>
+                  </div>
+                  <div style="flex:1;background:#fff;border-radius:5px;padding:7px 6px;text-align:center;border:1px solid #f0c0c0">
+                    <div style="font-size:10.5px;color:#999;margin-bottom:2px">A单次损失</div>
+                    <div style="font-size:15px;font-weight:700;color:#c0392b">80%+</div>
+                    <div style="font-size:10px;color:#aaa">本金</div>
+                  </div>
+                  <div style="flex:1.4;background:#fff;border-radius:5px;padding:7px 6px;text-align:center;border:1px solid #f0c0c0">
+                    <div style="font-size:10.5px;color:#999;margin-bottom:2px">年利12% 相当于</div>
+                    <div style="font-size:15px;font-weight:700;color:#c0392b">6.7年</div>
+                    <div style="font-size:10px;color:#aaa">利息才能弥补</div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <div style="margin-top:10px;padding:8px 10px;background:#fff3cd;border-radius:5px;font-size:12.5px;color:#7a5c00;line-height:1.7">
+              <strong>结论：</strong>A方收取的利息，实质上是在代B承担“戴帽ST与退市”这类不可预知的尾部风险。每年有近1.81%的概率遇到戴帽事件，一旦命中，A的单次损失可达本金的<strong>13–27%</strong>，远超全年利息收入。利息不是白收的，更不是任意提高的——它是对这种不对称风险的定价补偿，也正是影响利率、维持双方能长期稳定合作的重要原因。
+            </div>
+          </div>
+        </div>
+        <div class="verdict-box">
+          <div class="verdict-label">持有高风险品种的利率加成测算（期望损失补偿模型）</div>
+          <p style="font-size:12.5px;color:#888;margin:4px 0 10px">公式：加息幅度 = 命中概率 × 全仓损失率（使 A 方长期收支平衡的最低风险补偿）</p>
+          <!-- 动态渲染：数据来自 /rules 接口，修改后端 RULES 即自动更新 -->
+          <table class="data-table" style="font-size:13px" id="rate-table">
+            <thead>
+              <tr style="background:#f5f5f5">
+                <th style="text-align:left;padding:7px 8px">持仓品种</th>
+                <th style="text-align:center;padding:7px 4px">命中概率</th>
+                <th style="text-align:center;padding:7px 4px">全仓损失</th>
+                <th style="text-align:center;padding:7px 4px">需加息</th>
+                <th style="text-align:center;padding:7px 4px">建议利率</th>
+              </tr>
+            </thead>
+            <tbody id="rate-table-body">
+              <tr><td colspan="5" style="text-align:center;color:#aaa;padding:12px">加载中…</td></tr>
+            </tbody>
+          </table>
+          <p style="font-size:12px;color:#999;margin-top:8px;line-height:1.6">• 命中概率来源：Tushare Pro 2015–2025年实际数据推算。全仓损失率基于戴帽后连跌3日／退市清盘历史均值。建议利率为长期收支平衡的最低阈值，实际谈判可在此基础上加1–2%作为风险溢价缓冲。</p>
+
+        <!-- 查询工具标记：由JS在detail-overlay中动态注入，此处仅作占位标记 -->
+        <div id="stock-checker-placeholder" style="display:none">STOCK_CHECKER_HERE</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ===== 板块二：穿仓问题 ===== -->
+  <div class="section-header">
+    <div class="section-icon icon-red">II</div>
+    <div class="section-header-text">
+      <h2>穿仓问题</h2>
+
+    </div>
+  </div>
+
+  <div class="accordion-item c1" onclick="toggle(this)">
+    <div class="accordion-header">
+      <div class="scenario-num">1</div>
+      <div class="accordion-title-wrap">
+        <div class="accordion-label">穿仓处置</div>
+        <div class="accordion-title">A默认亏损，接受现实</div>
+      </div>
+      <div class="accordion-arrow">▼</div>
+    </div>
+    <div class="accordion-body">
+      <div class="risk-block block-a">
+        <div class="risk-block-title">A方处境</div>
+        <p>A承担了真实的财务损失。由于"输了补亏"的保底条款在法律上无效，A深知起诉追讨的胜算极低，且起诉将暴露自身违规出借账户的事实，因此选择财务止损，规避法律风险。</p>
+      </div>
+      <div class="risk-block block-b">
+        <div class="risk-block-title">B方处境</div>
+        <p>B损失全部保证金。但在此情景下，B的违规代客理财行为未被暴露于监管或司法视野，免于行政处罚（没收违法所得及罚款）或刑事追诉。</p>
+      </div>
+      <div class="verdict-box">
+        <div class="verdict-label">综合结论</div>
+        <p>这是穿仓发生后，对双方综合伤害最小的结局。A以财务损失换取合规安全，B以保证金损失换取免受法律制裁。<span class="tag-safe">双方损失最小</span></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="accordion-item c2" onclick="toggle(this)">
+    <div class="accordion-header">
+      <div class="scenario-num">2</div>
+      <div class="accordion-title-wrap">
+        <div class="accordion-label">穿仓处置</div>
+        <div class="accordion-title">A不认亏，选择民事起诉</div>
+      </div>
+      <div class="accordion-arrow">▼</div>
+    </div>
+    <div class="accordion-body">
+      <div class="risk-block block-a">
+        <div class="risk-block-title">A方处境</div>
+        <ul>
+          <li><strong>败诉风险：</strong>根据最高法《九民纪要》第92条，保底条款无效。法院认定A自身存在过错，大概率判决A自行承担损失。</li>
+          <li><strong>合规暴露：</strong>庭审将披露A出借账户的事实，A面临证监局行政罚款，实际执法中通常为 <strong>3万—10万元</strong>。</li>
+        </ul>
+      </div>
+      <div class="risk-block block-b">
+        <div class="risk-block-title">B方处境</div>
+        <ul>
+          <li><strong>民事层面：</strong>B大概率无需承担超出保证金的赔偿责任。</li>
+          <li><strong>致命代价：</strong>B代客理财的事实通过法庭记录被坐实，监管部门介入后：<br>
+            — 之前所有分成收益被<strong>全额没收</strong><br>
+            — 并处违法所得1至5倍<strong>罚款</strong><br>
+            — 情节严重者，触犯《刑法》第225条，面临<strong>刑事追诉</strong>
+          </li>
+        </ul>
+      </div>
+      <div class="verdict-box">
+        <div class="verdict-label">综合结论</div>
+        <p>B赢了官司，输了人生。民事胜诉的代价是暴露违规经营事实，引发灾难性的行政与刑事后果。<span class="tag-danger">B高风险</span></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="accordion-item c3" onclick="toggle(this)">
+    <div class="accordion-header">
+      <div class="scenario-num">3</div>
+      <div class="accordion-title-wrap">
+        <div class="accordion-label">穿仓处置</div>
+        <div class="accordion-title">A不认亏，选择刑事报案</div>
+      </div>
+      <div class="accordion-arrow">▼</div>
+    </div>
+    <div class="accordion-body">
+      <div class="risk-block block-a">
+        <div class="risk-block-title">A方处境</div>
+        <p>A的报案行为等同于自首出借账户，必将面临证监局行政罚款。B被查处后，其财产将优先用于缴纳国家罚金和没收违法所得，A的亏损极难追回。A付出巨大时间精力，面临"交了罚款、钱没追回"的双输局面。</p>
+      </div>
+      <div class="risk-block block-b">
+        <div class="risk-block-title">B方处境</div>
+        <p>公安机关一旦立案，B将直接面临刑事强制措施（拘留、逮捕）。B的全部银行流水将被倒查，所有代客操盘的盈利将被定性为违法所得。B面临的不再是赔不赔钱的问题，而是量刑轻重的问题。</p>
+      </div>
+      <div class="verdict-box">
+        <div class="verdict-label">综合结论</div>
+        <p>最极端的双输情景。B必须通过严格的仓位控制，极力避免亏损逼近A的心理防线，绝不给A走极端的理由。<span class="tag-danger">极高风险</span></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="accordion-item c4" onclick="toggle(this)">
+    <div class="accordion-header">
+      <div class="scenario-num">4</div>
+      <div class="accordion-title-wrap">
+        <div class="accordion-label">B方主动出击</div>
+        <div class="accordion-title">B主张保证金系借款，要求返还</div>
+      </div>
+      <div class="accordion-arrow">▼</div>
+    </div>
+    <div class="accordion-body">
+      <div class="risk-block block-b">
+        <div class="risk-block-title">B方处境</div>
+        <ul>
+          <li><strong>举证失败：</strong>若微信记录中存在"合作"、"保证金"等字眼，且转账备注为"合作保证金"，法院将驳回B的诉讼请求。</li>
+          <li><strong>自曝其短：</strong>起诉行为同样将合作细节暴露于司法程序，引发与情景二相同的行政及刑事后果。</li>
+        </ul>
+      </div>
+      <div class="verdict-box">
+        <div class="verdict-label">综合结论</div>
+        <p>在铁证面前，主张借款不仅无法挽回财务损失，反而主动引爆自身的法律地雷。这是一条走不通且极其危险的死胡同。<span class="tag-danger">高风险</span></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="accordion-item c5" onclick="toggle(this)">
+    <div class="accordion-header">
+      <div class="scenario-num">5</div>
+      <div class="accordion-title-wrap">
+        <div class="accordion-label">B方主动出击</div>
+        <div class="accordion-title">B故意违规操作，损害账户资产</div>
+      </div>
+      <div class="accordion-arrow">▼</div>
+    </div>
+    <div class="accordion-body">
+      <div class="risk-block block-b">
+        <div class="risk-block-title">B方处境</div>
+        <p>B通过故意重仓垃圾股、对倒交易等方式恶意造成账户亏损，此举已跨越民事纠纷边界。A可凭借交易流水、操作时间戳及异常持仓记录向公安机关报案。</p>
+        <ul style="margin-top:8px">
+          <li>涉嫌《刑法》第275条 <strong>故意毁坏财物罪</strong></li>
+          <li>若涉及利益输送，涉嫌 <strong>诈骗罪</strong> 或 <strong>操纵证券市场罪</strong></li>
+          <li>公安可通过调取远程登录IP及操作日志锁定证据</li>
+        </ul>
+      </div>
+      <div class="verdict-box">
+        <div class="verdict-label">综合结论</div>
+        <p>用键盘报复，换来的是刑事制裁。B的技术优势绝不能用于恶意破坏，否则性质将发生根本性恶化。<span class="tag-danger">极高风险</span></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- ===== 板块三：法律问题 ===== -->
+  <div class="section-header">
+    <div class="section-icon icon-blue">III</div>
+    <div class="section-header-text">
+      <h2>法律问题</h2>
+
+    </div>
+  </div>
+
+  <div class="accordion-item l1" onclick="toggle(this)">
+    <div class="accordion-header">
+      <div class="scenario-num">1</div>
+      <div class="accordion-title-wrap">
+        <div class="accordion-label">法律界定</div>
+        <div class="accordion-title">非法集资的认定与本合作的边界</div>
+      </div>
+      <div class="accordion-arrow">▼</div>
+    </div>
+    <div class="accordion-body">
+      <div class="risk-block block-def">
+        <div class="risk-block-title">非法集资的法定构成要件</div>
+        <p>根据《防范和处置非法集资条例》，非法集资须同时满足以下四个要件，缺一不可：</p>
+        <table class="data-table" style="margin-top:10px">
+          <tr><th>要件</th><th>说明</th></tr>
+          <tr><td><strong>非法性</strong></td><td>未经批准，擅自向社会募集资金</td></tr>
+          <tr><td><strong>公开性</strong></td><td>通过媒体、推介会、传单等方式公开宣传</td></tr>
+          <tr><td><strong>利诱性</strong></td><td>承诺在一定期限内还本付息或给予固定回报</td></tr>
+          <tr><td><strong>社会性</strong></td><td>向不特定多数人募集资金</td></tr>
+        </table>
+      </div>
+      <div class="risk-block block-our" style="margin-top:18px">
+        <div class="risk-block-title">本合作模式的法律边界</div>
+        <p>本合作模式中，A的资金始终存放于A本人的证券账户内，B仅持有账户操作权限，并无任何资金归集行为。以下为本合作与非法集资的逐项对比：</p>
+        <table class="data-table" style="margin-top:10px">
+          <tr><th>认定要件</th><th>非法集资</th><th>本合作模式</th></tr>
+          <tr><td>资金归集</td><td>资金汇入B处，由B统一管理</td><td><span class="tag-safe">资金始终在A账户</span>，B无法提取</td></tr>
+          <tr><td>公开宣传</td><td>主动向公众推介，招募投资人</td><td><span class="tag-safe">私下一对一协议</span>，无公开宣传</td></tr>
+          <tr><td>保底承诺</td><td>承诺固定收益或保本</td><td><span class="tag-safe">无保底承诺</span>，盈亏依市场结果分配</td></tr>
+          <tr><td>募集对象</td><td>面向不特定社会公众</td><td><span class="tag-safe">特定个人</span>，双方系私人合作关系</td></tr>
+        </table>
+      </div>
+      <div class="verdict-box">
+        <div class="verdict-label">综合结论</div>
+        <p>非法集资的核心在于"集资"二字——资金必须归集到募集方处。本合作模式中，A的资金始终在A自己的证券账户内，B不持有、不控制任何资金，四项构成要件均不满足，<strong>不构成非法集资</strong>。<span class="tag-safe">风险极低</span></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 底部建议 -->
+  <div class="bottom-card">
+    <h3>核心操作建议</h3>
+    <ol>
+      <li><strong>理解定价：</strong>充分认知A承担的裸露风险，认可A在保证金及分成上的定价逻辑。</li>
+      <li><strong>严控回撤：</strong>将账户亏损牢牢控制在保证金范围内，是阻断一切法律风险的物理隔离墙。</li>
+      <li><strong>协商解决：</strong>遇任何争议，协商是成本最低、唯一安全的路径。任何诉诸外部程序的方式，均会将B的违规经营事实暴露于法律程序，引发远超当前争议金额的连带风险。</li>
+    </ol>
+  </div>
+
+</div>
+
+
+<div class="footer">本文件仅供合作双方参考，不构成正式法律意见</div>
+
+<!-- 详情页覆盖层 -->
+<div id="detail-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#f0f2f5;z-index:1000;overflow-y:auto;overflow-x:hidden">
+  <div style="background:linear-gradient(135deg,#1a1a2e,#0f3460);padding:16px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10">
+    <button onclick="closeDetail()" style="background:rgba(255,255,255,0.15);border:none;color:white;font-size:18px;width:36px;height:36px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center">←</button>
+    <span id="detail-title" style="color:white;font-size:16px;font-weight:600"></span>
+  </div>
+  <div id="detail-content" style="padding:20px 16px 40px;max-width:680px;margin:0 auto"></div>
+</div>
+
+<script>
+  const riskData = {
+    risk1: {
+      title: '风险一 · 跌停板封死',
+      content: document.querySelector('.grid-card.a2 .grid-card-body')
+    },
+    risk2: {
+      title: '风险二 · 日内换仓叠加跌停',
+      content: document.querySelector('.grid-card.a3 .grid-card-body')
+    },
+    risk3: {
+      title: '风险三 · 收盘后突然停牌',
+      content: document.querySelector('.grid-card.a4 .grid-card-body')
+    },
+    risk4: {
+      title: '风险四 · 收盘后被转ST',
+      content: document.querySelector('.grid-card.a5 .grid-card-body')
+    }
+  };
+
+  function showDetail(id) {
+    const data = riskData[id];
+    if (!data) return;
+    document.getElementById('detail-title').textContent = data.title;
+    const container = document.getElementById('detail-content');
+    container.innerHTML = data.content.innerHTML;
+    document.getElementById('detail-overlay').style.display = 'block';
+    document.getElementById('detail-overlay').scrollTop = 0;
+    // risk4时，在detail-content末尾直接注入查询工具（独立新DOM，不依赖克隆）
+    if (id === 'risk4') {
+      // 重置状态
+      widgetInputCount = 1;
+      selectedBaseRate = 12;
+      selectedMarginPct = 10;
+      const checker = document.createElement('div');
+      checker.id = 'stock-checker-widget';
+      checker.style.cssText = 'margin-top:20px';
+      checker.innerHTML = buildCheckerHTML();
+      container.appendChild(checker);
+      checker.querySelector('#btn-add-stock').onclick = () => addStockInputInWidget();
+      checker.querySelector('#btn-check-stocks').onclick = () => checkStocksInWidget();
+      // 加载全局查询历史
+      loadHistoryWidget();
+    }
+  }
+
+  function closeDetail() {
+    document.getElementById('detail-overlay').style.display = 'none';
+  }
+
+  function toggle(el) {
+    el.classList.toggle('open');
+  }
+
+  // ============================================================
+  // 动态规则渲染 + 股票查询工具
+  // API 地址：修改下方 API_BASE 即可
+  // ============================================================
+  const API_BASE = 'https://5050-ij4f6ndd8oakkja4us6xd-fd1fbfab.sg1.manus.computer';
+
+  // 居全局缓存规则
+  let _rulesCache = null;
+
+  async function fetchRules() {
+    if (_rulesCache) return _rulesCache;
+    const res = await fetch(API_BASE + '/rules');
+    _rulesCache = await res.json();
+    return _rulesCache;
+  }
+
+  // 居层色映射
+  const levelStyle = {
+    base:    { bg: '', color: '#888', bold: false },
+    mid:     { bg: '#fff8f8', color: '#c0392b', bold: true },
+    high:    { bg: '#fff5f5', color: '#c0392b', bold: true },
+    extreme: { bg: '#ffe8e8', color: '#c0392b', bold: true },
+  };
+
+  // 动态渲染利率加成表
+  async function renderRateTable() {
+    const tbody = document.getElementById('rate-table-body');
+    if (!tbody) return;
+    try {
+      const data = await fetchRules();
+      const rows = data.rules.map(r => {
+        const s = levelStyle[r.level] || levelStyle.base;
+        const wrap = s.bold ? (v) => `<strong>${v}</strong>` : (v) => v;
+        const nameCell = r.threshold_label
+          ? `${r.name}<br><span style="font-size:11px;color:#aaa">${r.threshold_label}</span>`
+          : r.name;
+        // 动态规则（保证金覆盖不足）特殊处理
+        if (r.is_dynamic) {
+          const descCell = `${r.name}<br><span style="font-size:11px;color:#aaa">${r.desc}</span>`;
+          return `<tr style="background:${s.bg}">
+            <td style="padding:7px 8px;color:#444">${descCell}</td>
+            <td style="text-align:center;padding:7px 4px;color:#aaa;font-size:11px">随保证金<br>比例变化</td>
+            <td style="text-align:center;padding:7px 4px;color:${s.color}">${wrap('本金100%')}</td>
+            <td style="text-align:center;padding:7px 4px;color:${s.color};font-size:11px">
+              <span style="color:#ff6b6b">10cm+5%: +3.12%</span><br>
+              <span style="color:#ff9800">10cm+10%: +1.56%</span><br>
+              <span style="color:#ff6b6b">20cm+5%: +6.24%</span><br>
+              <span style="color:#ff9800">20cm+10%: +3.12%</span>
+            </td>
+            <td style="text-align:center;padding:7px 4px;color:#aaa;font-size:11px">随选择<br>动态计算</td>
+          </tr>`;
+        }
+        return `<tr style="background:${s.bg}">
+          <td style="padding:7px 8px;color:#444">${nameCell}</td>
+          <td style="text-align:center;padding:7px 4px;color:${s.color}">${wrap(r.prob + '%')}</td>
+          <td style="text-align:center;padding:7px 4px;color:${s.color}">${wrap(r.loss + '%')}</td>
+          <td style="text-align:center;padding:7px 4px;color:${s.color}">${wrap('+' + r.add_rate + '%')}</td>
+          <td style="text-align:center;padding:7px 4px;color:${s.color}">${wrap(r.suggest_rate + '%')}</td>
+        </tr>`;
+      });
+      tbody.innerHTML = rows.join('');
+    } catch(e) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#e05c5c;padding:12px">加载失败，请刷新页面重试</td></tr>';
+    }
+  }
+
+  // ============================================================
+  // 股票查询工具（独立注入到detail-overlay，避免ID冲突）
+  // ============================================================
+  function buildCheckerHTML() {
+    // 生成矩阵格子HTML
+    const cells = Array.from({length:32}, (_,i) => {
+      const v = (Math.random()*99+1).toFixed(1);
+      return `<div class="ai-matrix-cell" id="mc-${i}"><span class="cell-val">${v}</span></div>`;
+    }).join('');
+    return `
+    <div class="ai-checker-wrap">
+      <!-- 顶部金色进度条 -->
+      <div class="ai-checker-topbar"></div>
+      <!-- 头部信息栏 -->
+      <div class="ai-checker-header">
+        <div class="ai-badge"><span class="ai-badge-dot"></span>AI RISK ENGINE</div>
+        <div class="ai-header-status" id="widget-header-time">READY</div>
+      </div>
+      <!-- 内容区 -->
+      <div class="ai-checker-body">
+        <div class="ai-title">持仓股票利率测算</div>
+        <div class="ai-subtitle">输入持仓股票代码，系统自动分析风险特征并输出应执行利率。不管持几只，只要有一只命中，全账按最高利率执行。</div>
+
+        <!-- 基础利率选择 -->
+        <div class="rate-selector">
+          <div class="rate-selector-label">基础年化利率</div>
+          <div class="rate-tabs">
+            <div class="rate-tab active" data-rate="12" onclick="selectRateTab(this)">12%</div>
+            <div class="rate-tab" data-rate="18" onclick="selectRateTab(this)">18%</div>
+            <div class="rate-tab" data-rate="24" onclick="selectRateTab(this)">24%</div>
+            <div class="rate-tab" data-rate="36" onclick="selectRateTab(this)">36%</div>
+          </div>
+        </div>
+
+        <!-- 保证金比例选择 -->
+        <div class="rate-selector" style="margin-top:10px">
+          <div class="rate-selector-label">保证金比例</div>
+          <div class="rate-tabs" id="widget-margin-tabs">
+            <div class="rate-tab" data-margin="5" onclick="selectMarginTab(this)">5%</div>
+            <div class="rate-tab active" data-margin="10" onclick="selectMarginTab(this)">10%</div>
+            <div class="rate-tab" data-margin="15" onclick="selectMarginTab(this)">15%</div>
+            <div class="rate-tab" data-margin="20" onclick="selectMarginTab(this)">20%</div>
+          </div>
+        </div>
+
+        <!-- 输入区 -->
+        <div id="widget-stock-inputs" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">
+          <div class="ai-input-row">
+            <input type="text" placeholder="输入股票代码，如 600519" id="widget-stock-0" class="ai-input" />
+          </div>
+        </div>
+        <button id="btn-add-stock" class="ai-add-btn">+ 添加更多股票</button>
+
+        <!-- 检测按钮 -->
+        <button id="btn-check-stocks" class="ai-detect-btn">开始检测</button>
+
+        <!-- 查询历史 -->
+        <div id="widget-history-wrap" style="margin-top:14px;margin-bottom:4px">
+          <div style="font-size:11px;color:rgba(255,255,255,0.3);letter-spacing:0.08em;margin-bottom:6px">RECENT QUERIES · 最近查询</div>
+          <div id="widget-history-list" style="display:flex;flex-wrap:wrap;gap:6px">
+            <div style="font-size:11px;color:rgba(255,255,255,0.2);padding:4px 0">加载中…</div>
+          </div>
+        </div>
+
+
+        <!-- 扫描动画 -->
+        <div class="ai-scan-wrap" id="widget-loading">
+          <!-- 矩阵格子 -->
+          <div class="ai-matrix-grid" id="widget-matrix">${cells}</div>
+          <!-- 状态文字 -->
+          <div class="ai-scan-status">
+            <div class="ai-scan-label">ANALYZING<span class="ai-dot"> ·</span><span class="ai-dot">·</span><span class="ai-dot">·</span></div>
+            <div class="ai-scan-step-text" id="widget-scan-step">正在读取市场数据…</div>
+          </div>
+        </div>
+
+        <!-- 结果区 -->
+        <div class="ai-result-wrap" id="widget-result">
+          <div class="ai-result-header">
+            <div class="ai-result-label">ACCOUNT RATE · 账户应执行年化利率</div>
+            <div class="ai-result-rate" id="widget-rate-num">—</div>
+            <div class="ai-result-desc" id="widget-rate-desc"></div>
+          </div>
+          <div id="widget-stock-cards"></div>
+          <button class="ai-recheck-btn" onclick="resetCheckerWidget()">↻ 重新检测</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  let widgetInputCount = 1;
+  let selectedBaseRate = 12;   // 默认基础利率
+  let selectedMarginPct = 10;  // 默认保证金10%
+
+  function selectRateTab(el) {
+    el.closest('.rate-tabs').querySelectorAll('.rate-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    selectedBaseRate = parseInt(el.dataset.rate);
+  }
+
+  function selectMarginTab(el) {
+    el.closest('.rate-tabs').querySelectorAll('.rate-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    selectedMarginPct = parseInt(el.dataset.margin);
+  }
+
+  // 加载并渲染全局查询历史
+  async function loadHistoryWidget() {
+    const listEl = document.getElementById('widget-history-list');
+    if (!listEl) return;
+    try {
+      const res = await fetch(API_BASE + '/history');
+      const data = await res.json();
+      const history = data.history || [];
+      if (!history.length) {
+        listEl.innerHTML = '<div style="font-size:11px;color:rgba(255,255,255,0.2);padding:4px 0">暂无历史记录</div>';
+        return;
+      }
+      listEl.innerHTML = history.map(h => {
+        const hasRisk = h.hits && h.hits.length > 0;
+        const rateColor = hasRisk ? 'rgba(252,129,129,0.85)' : 'rgba(72,187,120,0.85)';
+        const bgColor = hasRisk ? 'rgba(252,129,129,0.08)' : 'rgba(72,187,120,0.06)';
+        const borderColor = hasRisk ? 'rgba(252,129,129,0.25)' : 'rgba(72,187,120,0.2)';
+        return `<div onclick="quickQueryFromHistory('${h.ts_code}')" style="
+          cursor:pointer;
+          padding:5px 9px;
+          background:${bgColor};
+          border:1px solid ${borderColor};
+          border-radius:6px;
+          display:flex;
+          flex-direction:column;
+          gap:1px;
+          transition:all 0.15s;
+        " onmouseover="this.style.borderColor='rgba(245,158,11,0.5)';this.style.background='rgba(245,158,11,0.08)'" onmouseout="this.style.borderColor='${borderColor}';this.style.background='${bgColor}'">
+          <div style="display:flex;align-items:center;gap:5px">
+            <span style="font-size:12px;color:rgba(255,255,255,0.85);font-weight:600">${h.name}</span>
+            <span style="font-size:10px;color:rgba(255,255,255,0.3)">${h.ts_code}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:11px;color:${rateColor};font-weight:700">${h.account_rate}%</span>
+            <span style="font-size:10px;color:rgba(255,255,255,0.25)">${h.queried_at}</span>
+          </div>
+        </div>`;
+      }).join('');
+    } catch(e) {
+      listEl.innerHTML = '<div style="font-size:11px;color:rgba(255,255,255,0.2)">历史加载失败</div>';
+    }
+  }
+
+  // 点击历史条目快速查询
+  function quickQueryFromHistory(tsCode) {
+    // 将代码填入第一个输入框
+    const firstInput = document.getElementById('widget-stock-0');
+    if (firstInput) {
+      firstInput.value = tsCode.split('.')[0]; // 只填数字部分
+      // 删除多余输入行
+      const rows = document.querySelectorAll('#widget-stock-inputs .ai-input-row');
+      rows.forEach((r, idx) => { if (idx > 0) r.remove(); });
+      widgetInputCount = 1;
+      // 直接触发检测
+      checkStocksInWidget();
+    }
+  }
+
+  function addStockInputInWidget() {
+    if (widgetInputCount >= 10) return;
+    const container = document.getElementById('widget-stock-inputs');
+    if (!container) return;
+    const div = document.createElement('div');
+    div.className = 'ai-input-row';
+    div.innerHTML = `<input type="text" placeholder="输入股票代码" id="widget-stock-${widgetInputCount}" class="ai-input" />
+      <button onclick="this.parentElement.remove();" class="ai-del-btn">×</button>`;
+    container.appendChild(div);
+    widgetInputCount++;
+  }
+
+  function resetCheckerWidget() {
+    const loadingEl = document.getElementById('widget-loading');
+    const resultEl = document.getElementById('widget-result');
+    const inputsEl = document.getElementById('widget-stock-inputs');
+    const addBtn = document.getElementById('btn-add-stock');
+    const checkBtn = document.getElementById('btn-check-stocks');
+    if (loadingEl) loadingEl.style.display = 'none';
+    if (resultEl) resultEl.style.display = 'none';
+    if (inputsEl) inputsEl.style.display = 'flex';
+    if (addBtn) addBtn.style.display = 'block';
+    if (checkBtn) { checkBtn.style.display = 'block'; checkBtn.classList.remove('scanning'); }
+    // 清空输入框
+    const inputs = document.querySelectorAll('#widget-stock-inputs input');
+    inputs.forEach(i => { i.value = ''; });
+    // 只保留第一个输入框
+    const rows = document.querySelectorAll('#widget-stock-inputs .ai-input-row');
+    rows.forEach((r, idx) => { if (idx > 0) r.remove(); });
+    widgetInputCount = 1;
+  }
+
+  async function checkStocksInWidget() {
+    const inputs = document.querySelectorAll('#widget-stock-inputs input');
+    const stocks = Array.from(inputs).map(i => i.value.trim()).filter(v => v);
+    if (!stocks.length) { alert('请先输入股票代码'); return; }
+
+    const loadingEl = document.getElementById('widget-loading');
+    const resultEl = document.getElementById('widget-result');
+    const rateNumEl = document.getElementById('widget-rate-num');
+    const rateDescEl = document.getElementById('widget-rate-desc');
+    const cardsEl = document.getElementById('widget-stock-cards');
+    const stepEl = document.getElementById('widget-scan-step');
+    const checkBtn = document.getElementById('btn-check-stocks');
+    const inputsEl = document.getElementById('widget-stock-inputs');
+    const addBtn = document.getElementById('btn-add-stock');
+
+    // 隐藏输入区，显示扫描动画
+    inputsEl.style.display = 'none';
+    addBtn.style.display = 'none';
+    checkBtn.style.display = 'none';
+    loadingEl.style.display = 'block';
+    resultEl.style.display = 'none';
+    checkBtn.classList.add('scanning');
+
+    // 矩阵格子随机闪烁动画（模拟数据扫描）
+    const matrixEl = document.getElementById('widget-matrix');
+    let matrixTimer = null;
+    if (matrixEl) {
+      matrixTimer = setInterval(() => {
+        // 随机选3-5个格子更新数字并闪烁
+        const count = 3 + Math.floor(Math.random() * 3);
+        for (let k = 0; k < count; k++) {
+          const idx = Math.floor(Math.random() * 32);
+          const cell = document.getElementById('mc-' + idx);
+          if (!cell) continue;
+          const valEl = cell.querySelector('.cell-val');
+          if (!valEl) continue;
+          // slot machine效果：先退出，更新数字，再进入
+          valEl.classList.remove('slot-enter');
+          valEl.classList.add('slot-exit');
+          setTimeout(() => {
+            valEl.textContent = (Math.random()*99+1).toFixed(1);
+            valEl.classList.remove('slot-exit');
+            valEl.classList.add('slot-enter');
+            // 根据值决定颜色
+            const v = parseFloat(valEl.textContent);
+            if (v > 80) {
+              cell.style.animation = 'cell-flash-red 600ms cubic-bezier(0.23,1,0.32,1) forwards';
+              valEl.style.color = 'rgba(252,129,129,0.7)';
+            } else if (v > 50) {
+              cell.style.animation = 'cell-flash-amber 600ms cubic-bezier(0.23,1,0.32,1) forwards';
+              valEl.style.color = 'rgba(245,158,11,0.6)';
+            } else {
+              cell.style.animation = 'cell-flash-green 600ms cubic-bezier(0.23,1,0.32,1) forwards';
+              valEl.style.color = 'rgba(72,187,120,0.5)';
+            }
+            setTimeout(() => { cell.style.animation = ''; }, 650);
+          }, 110);
+        }
+      }, 280);
+    }
+
+    // 扫描步骤文字
+    const steps = [
+      '正在读取公司基本面数据…',
+      '正在核查总市值与流通盘…',
+      '正在比对大股东质押比例…',
+      '正在追踪连续亏损财务指标…',
+      '正在评估ST风险等级…',
+      '正在计算风险补偿利率…'
+    ];
+    let stepIdx = 0;
+    const stepTimer = setInterval(() => {
+      if (stepEl) {
+        stepEl.style.opacity = '0';
+        setTimeout(() => {
+          stepEl.textContent = steps[stepIdx % steps.length];
+          stepEl.style.opacity = '1';
+        }, 150);
+      }
+      stepIdx++;
+    }, 900);
+
+    try {
+      const [checkRes, rulesData] = await Promise.all([
+        fetch(API_BASE + '/check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stocks, base_rate: selectedBaseRate, margin_pct: selectedMarginPct })
+        }).then(r => r.json()),
+        fetchRules()
+      ]);
+
+      clearInterval(stepTimer);
+      if (matrixTimer) clearInterval(matrixTimer);
+      loadingEl.style.display = 'none';
+      resultEl.style.display = 'block';
+
+      // 利率 = 基础利率 + 最高加息
+      const maxAdd = checkRes.account_add || 0;
+      const finalRate = selectedBaseRate + maxAdd;
+      rateNumEl.textContent = finalRate.toFixed(2) + '%';
+      rateNumEl.className = 'ai-result-rate ' + (maxAdd === 0 ? 'safe' : maxAdd <= 1.5 ? 'warn' : 'danger');
+
+      if (maxAdd === 0) {
+        rateDescEl.textContent = '持仓品种无风险项命中，按基础利率执行';
+      } else {
+        rateDescEl.textContent = `基础 ${selectedBaseRate}% ＋ 风险加息 +${maxAdd.toFixed(2)}%`;
+      }
+
+      const rulesMap = {};
+      rulesData.rules.forEach(r => rulesMap[r.id] = r);
+
+      const rulesAll = rulesData.rules.filter(r => r.id !== 'normal'); // 所有可检测规则
+
+      const cardsHtml = checkRes.results.map((stock, stockIdx) => {
+        if (stock.error) {
+          return `<div class="ai-stock-card" style="animation-delay:${stockIdx*0.1}s">
+            <div style="color:#fc8181;font-size:13px">⚠️ ${stock.error || stock.ts_code}</div>
+          </div>`;
+        }
+        const hasHit = stock.hits && stock.hits.length > 0;
+        const isMulti = stock.is_multi || false;
+        const totalAdd = stock.total_add || 0;
+        const accountRate = stock.account_rate || selectedBaseRate;
+        const mvText = stock.market_cap_yi ? `市値 ${stock.market_cap_yi}亿` : '';
+        const pledgeText = stock.pledge_ratio ? `质押 ${stock.pledge_ratio}%` : '';
+        const infoText = [mvText, pledgeText].filter(Boolean).join('｜');
+
+        // 构建命中项的详情映射
+        const hitMap = {};
+        (stock.rate_breakdown || []).forEach(item => { hitMap[item.id] = item; });
+
+        // 逐项检测列表：所有规则都展示
+        const checkRows = rulesAll.map((rule, rIdx) => {
+          const hit = hitMap[rule.id];
+          const delay = (stockIdx * rulesAll.length + rIdx) * 80; // 逐行延迟动画
+          if (hit) {
+            // 命中：红叉，显示具体数据和加息
+            const levelColor = rule.level === 'high' || rule.level === 'extreme'
+              ? '#fc8181' : '#f59e0b';
+            return `<div class="check-row hit-row" style="animation-delay:${delay}ms">
+              <div class="check-icon hit">✗</div>
+              <div class="check-body">
+                <div class="check-name" style="color:${levelColor}">${rule.name}</div>
+                ${hit.detail ? `<div class="check-detail">${hit.detail}</div>` : ''}
+              </div>
+              <div class="check-add" style="color:${levelColor}">+${hit.add_rate}%</div>
+            </div>`;
+          } else {
+            // 通过：绿勾
+            return `<div class="check-row pass-row" style="animation-delay:${delay}ms">
+              <div class="check-icon pass">✓</div>
+              <div class="check-body">
+                <div class="check-name">${rule.name}</div>
+              </div>
+              <div class="check-add pass">通过</div>
+            </div>`;
+          }
+        }).join('');
+
+        // 利率汇总行
+        let summaryHtml = '';
+        if (hasHit) {
+          if (isMulti) {
+            const addParts = (stock.rate_breakdown || []).map(i => `+${i.add_rate}%`).join(' + ');
+            summaryHtml = `<div class="rate-summary multi">
+              <span class="rate-formula">基础 ${selectedBaseRate}% ＋ ${addParts}</span>
+              <span class="rate-final">${accountRate.toFixed(2)}%</span>
+            </div>`;
+          } else {
+            summaryHtml = `<div class="rate-summary warn">
+              <span class="rate-formula">基础 ${selectedBaseRate}% ＋ 风险加息 +${totalAdd}%</span>
+              <span class="rate-final">${accountRate.toFixed(2)}%</span>
+            </div>`;
+          }
+        } else {
+          summaryHtml = `<div class="rate-summary safe">
+            <span class="rate-formula">所有风险项均通过检测</span>
+            <span class="rate-final safe">${accountRate.toFixed(2)}%</span>
+          </div>`;
+        }
+
+        // 强平规则展示区块
+        const fc = stock.force_close_info;
+        let forceCloseHtml = '';
+        if (fc) {
+          const fcColor = fc.risk_level === 'high' ? '#fc8181' : fc.risk_level === 'medium' ? '#f59e0b' : '#68d391';
+          const fcBg = fc.risk_level === 'high' ? 'rgba(252,129,129,0.08)' : fc.risk_level === 'medium' ? 'rgba(245,158,11,0.08)' : 'rgba(104,211,145,0.06)';
+          const fcIcon = fc.risk_level === 'high' ? '⚠️' : fc.risk_level === 'medium' ? '⚠️' : 'ℹ️';
+          forceCloseHtml = `
+          <div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:${fcBg};border:1px solid ${fcColor}33">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+              <span style="font-size:12px">${fcIcon}</span>
+              <span style="font-size:12px;font-weight:600;color:${fcColor}">强平规则警示</span>
+              <span style="margin-left:auto;font-size:10px;color:rgba(255,255,255,0.35)">保证金${fc.margin_pct}% · ${fc.stock_type}票</span>
+            </div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.75);line-height:1.7">
+              当日跌幅达到 <span style="color:${fcColor};font-weight:700">${fc.trigger_pct}%</span>，
+              A方有权强制平仓，不待收盘。
+            </div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.75);line-height:1.7;margin-top:4px">
+              B方可在盘中主动补仓保证金避免强平；不补仓则强平即刻执行。
+            </div>
+            ${fc.risk_level === 'high' ? `
+            <div style="margin-top:8px;padding:6px 10px;background:rgba(252,129,129,0.12);border-radius:6px;font-size:11px;color:#fc8181">
+              ⚠ 该股每日最大跌幅${fc.daily_limit}%，一个跌停即可触发强平。保证金不足时风险极高。
+            </div>` : ''}
+          </div>`;
+        }
+
+        return `<div class="ai-stock-card ${hasHit ? 'hit' : 'safe'}" style="animation-delay:${stockIdx*0.12}s">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+            <div>
+              <span class="ai-stock-name">${stock.name}</span>
+              <span class="ai-stock-code">${stock.ts_code}</span>
+              ${infoText ? `<div style="font-size:11px;color:rgba(255,255,255,0.3);margin-top:3px">${infoText}</div>` : ''}
+            </div>
+            <div style="text-align:right">
+              <div class="ai-stock-rate ${hasHit ? 'hit' : 'safe'}">${accountRate.toFixed(2)}%</div>
+              <div class="ai-stock-rate-label">应执行利率</div>
+            </div>
+          </div>
+          <div class="check-list">${checkRows}</div>
+          ${summaryHtml}
+          ${forceCloseHtml}
+        </div>`;
+      }).join('');
+      cardsEl.innerHTML = cardsHtml;
+
+      // 刷新历史记录
+      setTimeout(() => loadHistoryWidget(), 300);
+
+    } catch(e) {
+      clearInterval(stepTimer);
+      if (matrixTimer) clearInterval(matrixTimer);
+      loadingEl.style.display = 'none';
+      resultEl.style.display = 'block';
+      cardsEl.innerHTML = `<div style="color:#fc8181;font-size:13px;padding:10px">检测失败：${e.message}，请稍后重试</div>`;
+    }
+  }
+
+  // 下面保留旧的addStockInput/checkStocks（备用，当前未使用）
+  // 动态渲染查询工具的输入框数量
+  let stockInputCount = 1;
+  function addStockInput() {
+    if (stockInputCount >= 10) return;
+    const container = document.getElementById('stock-inputs');
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex;gap:8px;align-items:center';
+    div.innerHTML = `<input type="text" placeholder="输入股票代码" id="stock-${stockInputCount}"
+      style="flex:1;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:8px;padding:10px 12px;color:white;font-size:14px;outline:none" />
+      <button onclick="this.parentElement.remove();" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:8px 10px;color:rgba(255,255,255,0.6);cursor:pointer;font-size:13px">×</button>`;
+    container.appendChild(div);
+    stockInputCount++;
+  }
+
+  async function checkStocks() {
+    const inputs = document.querySelectorAll('#stock-inputs input');
+    const stocks = Array.from(inputs).map(i => i.value.trim()).filter(v => v);
+    if (!stocks.length) { alert('请先输入股票代码'); return; }
+
+    document.getElementById('check-loading').style.display = 'block';
+    document.getElementById('check-result').style.display = 'none';
+
+    try {
+      const [checkRes, rulesData] = await Promise.all([
+        fetch(API_BASE + '/check', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stocks })
+        }).then(r => r.json()),
+        fetchRules()
+      ]);
+
+      document.getElementById('check-loading').style.display = 'none';
+      document.getElementById('check-result').style.display = 'block';
+
+      // 账户整体利率
+      const rateNum = document.getElementById('account-rate-num');
+      const rateDesc = document.getElementById('account-rate-desc');
+      const ar = checkRes.account_rate;
+      const add = checkRes.account_add;
+      rateNum.textContent = ar.toFixed(2) + '%';
+      if (add <= 0.5) {
+        rateNum.style.color = '#4caf50';
+        rateDesc.textContent = '持仓品种正常，按基础利率收取';
+      } else {
+        rateNum.style.color = '#ff6b6b';
+        rateDesc.textContent = `比基础利率 ${rulesData.base_rate}% 高 +${add.toFixed(2)}%，因持仓高风险品种`;
+      }
+
+      // 每只股票卡片
+      const rulesMap = {};
+      rulesData.rules.forEach(r => rulesMap[r.id] = r);
+
+      const cardsHtml = checkRes.results.map(stock => {
+        if (stock.error) {
+          return `<div style="background:rgba(255,255,255,0.06);border-radius:8px;padding:12px;margin-bottom:8px">
+            <div style="color:#ff6b6b;font-size:13px">⚠️ ${stock.ts_code}：${stock.error}</div>
+          </div>`;
+        }
+        const hasHit = stock.hits && stock.hits.length > 0;
+        const hitBadges = (stock.hits || []).map(hid => {
+          const rule = rulesMap[hid];
+          if (!rule) return '';
+          return `<span style="display:inline-block;background:rgba(224,92,92,0.2);color:#ff8a8a;border:1px solid rgba(224,92,92,0.4);border-radius:4px;padding:2px 7px;font-size:11px;margin:2px 3px 2px 0">⚠️ ${rule.name}</span>`;
+        }).join('');
+
+        const mvText = stock.market_cap_yi ? `市値 ${stock.market_cap_yi}亿` : '';
+        const pledgeText = stock.pledge_ratio ? `质押 ${stock.pledge_ratio}%` : '';
+        const infoText = [mvText, pledgeText].filter(Boolean).join('｜');
+
+        return `<div style="background:rgba(255,255,255,0.06);border-radius:8px;padding:12px;margin-bottom:8px;border-left:3px solid ${hasHit ? '#e05c5c' : '#4caf50'}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+            <div>
+              <span style="font-size:14px;font-weight:700;color:white">${stock.name}</span>
+              <span style="font-size:11px;color:rgba(255,255,255,0.4);margin-left:6px">${stock.ts_code}</span>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:16px;font-weight:800;color:${hasHit ? '#ff6b6b' : '#4caf50'}">${stock.suggest_rate.toFixed(2)}%</div>
+              <div style="font-size:10px;color:rgba(255,255,255,0.4)">建议利率</div>
+            </div>
+          </div>
+          ${infoText ? `<div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:6px">${infoText}</div>` : ''}
+          ${hasHit
+            ? `<div style="margin-top:4px">${hitBadges}</div>`
+            : `<div style="font-size:12px;color:#4caf50;margin-top:4px">✅ 未命中任何风险规则</div>`
+          }
+        </div>`;
+      }).join('');
+
+      document.getElementById('stock-cards').innerHTML = cardsHtml;
+
+    } catch(e) {
+      document.getElementById('check-loading').style.display = 'none';
+      document.getElementById('check-result').style.display = 'block';
+      document.getElementById('stock-cards').innerHTML = `<div style="color:#ff6b6b;font-size:13px;padding:10px">查询失败：${e.message}，请稍后重试</div>`;
+    }
+  }
+
+  // 页面加载时自动渲染利率表
+  document.addEventListener('DOMContentLoaded', renderRateTable);
+
+  // ===== 利息测算模块 =====
+  let calcBaseRate = 12;
+  let calcMarginPct = 10;
+
+  // 行数据结构：[{left:{code,name,tsCode}, right:{code,name,tsCode}}]
+  let calcRows = [{left:{code:'',name:'',tsCode:''},right:{code:'',name:'',tsCode:''}}];
+
+  const API = 'https://5050-ij4f6ndd8oakkja4us6xd-fd1fbfab.sg1.manus.computer';
+  let _searchTimers = {};
+
+  function calcSelectRate(el) {
+    document.querySelectorAll('#calc-rate-tabs .calc-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    calcBaseRate = parseInt(el.dataset.val);
+  }
+
+  function calcSelectMargin(el) {
+    document.querySelectorAll('#calc-margin-tabs .calc-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    calcMarginPct = parseInt(el.dataset.val);
+  }
+
+  function renderStockRows() {
+    const container = document.getElementById('calc-stock-rows');
+    let html = '';
+    calcRows.forEach((row, ri) => {
+      const isLast = ri === calcRows.length - 1;
+      html += `<div class="calc-stock-row" data-row="${ri}">`;
+      // 左格
+      const lState = row.left.code && row.left.name ? ' found' : row.left.code && row.left.name===null ? ' notfound' : '';
+      html += `<div class="calc-stock-cell">
+        <div class="calc-stock-input-wrap${lState}" id="wrap-${ri}-left">
+          <input class="calc-stock-input"
+            id="inp-${ri}-left"
+            placeholder="股票代码"
+            value="${row.left.code}"
+            oninput="onStockInput(${ri},'left',this.value)"
+          />
+          <span class="calc-stock-name${row.left.name ? '' : row.left.name===null ? ' notfound' : ' loading'}" id="name-${ri}-left">${row.left.name ? row.left.name : row.left.name===null ? '未找到' : ''}</span>
+        </div>
+      </div>`;
+      // 右格
+      const rState = row.right.code && row.right.name ? ' found' : row.right.code && row.right.name===null ? ' notfound' : '';
+      html += `<div class="calc-stock-cell">
+        <div class="calc-stock-input-wrap${rState}" id="wrap-${ri}-right">
+          <input class="calc-stock-input"
+            id="inp-${ri}-right"
+            placeholder="股票代码"
+            value="${row.right.code}"
+            oninput="onStockInput(${ri},'right',this.value)"
+          />
+          <span class="calc-stock-name${row.right.name ? '' : row.right.name===null ? ' notfound' : ' loading'}" id="name-${ri}-right">${row.right.name ? row.right.name : row.right.name===null ? '未找到' : ''}</span>
+        </div>
+      </div>`;
+      // 加号（最后一行显示）或删除号
+      if (isLast) {
+        html += `<div class="calc-row-add" onclick="calcAddRow()" title="添加一行">+</div>`;
+      } else {
+        html += `<div class="calc-row-del" onclick="calcDelRow(${ri})" title="删除这一行">−</div>`;
+      }
+      html += `</div>`;
+    });
+    container.innerHTML = html;
+  }
+
+  function onStockInput(ri, side, val) {
+    const code = val.trim().replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
+    calcRows[ri][side].code = code;
+    calcRows[ri][side].name = '';
+    calcRows[ri][side].tsCode = '';
+    // 更新输入框状态
+    const wrap = document.getElementById(`wrap-${ri}-${side}`);
+    const nameEl = document.getElementById(`name-${ri}-${side}`);
+    wrap.className = 'calc-stock-input-wrap';
+    nameEl.className = 'calc-stock-name';
+    nameEl.textContent = '';
+    if (code.length < 4) return;
+    // 数据库查询极快，直接请求无需防抖
+    const key = `${ri}-${side}`;
+    clearTimeout(_searchTimers[key]);
+    _searchTimers[key] = setTimeout(async () => {
+      try {
+        const resp = await fetch(`${API}/search?code=${code}`);
+        const data = await resp.json();
+        // 校验是否仍是当前输入
+        if (calcRows[ri][side].code !== code) return;
+        if (data.name) {
+          calcRows[ri][side].name = data.name;
+          calcRows[ri][side].tsCode = data.ts_code;
+          wrap.className = 'calc-stock-input-wrap found';
+          nameEl.className = 'calc-stock-name';
+          nameEl.textContent = data.name;
+        } else {
+          calcRows[ri][side].name = null;
+          wrap.className = 'calc-stock-input-wrap notfound';
+          nameEl.className = 'calc-stock-name notfound';
+          nameEl.textContent = '未找到';
+        }
+      } catch(e) {
+        wrap.className = 'calc-stock-input-wrap';
+        nameEl.textContent = '';
+      }
+    }, 150);
+  }
+
+  function calcAddRow() {
+    calcRows.push({left:{code:'',name:'',tsCode:''},right:{code:'',name:'',tsCode:''}});
+    renderStockRows();
+    // 自动聚焦新行左格
+    setTimeout(() => {
+      const inp = document.getElementById(`inp-${calcRows.length-1}-left`);
+      if (inp) inp.focus();
+    }, 50);
+  }
+
+  function calcDelRow(ri) {
+    if (calcRows.length <= 1) {
+      calcRows[0] = {left:{code:'',name:'',tsCode:''},right:{code:'',name:'',tsCode:''}};
+    } else {
+      calcRows.splice(ri, 1);
+    }
+    renderStockRows();
+  }
+
+  // 页面加载时初始化
+  document.addEventListener('DOMContentLoaded', () => renderStockRows());
+
+  async function calcRun() {
+    // 从 calcRows 收集所有有效股票代码
+    const stockCodes = [];
+    for (const row of calcRows) {
+      if (row.left.code) stockCodes.push(row.left.code);
+      if (row.right.code) stockCodes.push(row.right.code);
+    }
+    const uniqueCodes = [...new Set(stockCodes.filter(c => c.length >= 4))];
+    // 空股票时按最高风险（任意股票含ST/科创/创业板）计算，不弹窗
+
+    const resultBox = document.getElementById('calc-result');
+    const loading = document.getElementById('calc-loading');
+    const body = document.getElementById('calc-result-body');
+    resultBox.style.display = 'block';
+    loading.style.display = 'block';
+    body.innerHTML = '';
+
+    try {
+      const resp = await fetch(`${API}/check`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ stocks: uniqueCodes, base_rate: calcBaseRate, margin_pct: calcMarginPct })
+      });
+      const data = await resp.json();
+      loading.style.display = 'none';
+
+      // 找出风险最高的那只股票
+      const worstStock = data.results.reduce((a, b) =>
+        (b.account_rate || calcBaseRate) > (a.account_rate || calcBaseRate) ? b : a
+      );
+      const maxRate = worstStock.account_rate || calcBaseRate;
+      const totalAdd = Math.round((maxRate - calcBaseRate) * 100) / 100;
+      const rateClass = totalAdd === 0 ? 'safe' : totalAdd <= 3 ? 'warn' : 'danger';
+
+      // 按风险降序排序所有股票
+      const sorted = [...data.results].sort((a,b) =>
+        (b.account_rate||calcBaseRate) - (a.account_rate||calcBaseRate)
+      );
+
+      let html = `
+        <div class="calc-result-rate">
+          <div>
+            <div class="calc-label" style="margin-bottom:2px">应执行年化利率</div>
+            <div class="calc-result-num ${rateClass}">${maxRate.toFixed(2)}%</div>
+          </div>
+          <div class="calc-result-sub">
+            基础 ${calcBaseRate}% ${totalAdd > 0 ? `+ 风险加息 +${totalAdd}%` : '· 无风险加息'}
+          </div>
+        </div>`;
+
+      // 如果多只股票，显示标注
+      if (data.results.length > 1) {
+        html += `<div style="font-size:11px;color:#e53935;font-weight:600;margin-bottom:8px;padding:5px 8px;background:#fff5f5;border-radius:5px;border-left:3px solid #e53935">
+          以风险最高的 <strong>${worstStock.name || worstStock.ts_code}</strong> 为准，共测算 ${data.results.length} 只股票
+        </div>`;
+      }
+
+      html += `<div class="calc-breakdown">`;
+
+      // 主展示：风险最高的股票详情
+      const r = worstStock;
+      const stockAdd = Math.round((r.account_rate - calcBaseRate) * 100) / 100;
+      html += `
+        <div style="margin-bottom:6px">
+          <div style="font-size:12px;color:#555;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+            <span style="font-weight:600">${r.name || r.ts_code} <span style="color:#bbb;font-weight:400">${r.ts_code}</span></span>
+            <span style="color:${stockAdd>0?'#e53935':'#27ae60'};font-weight:700">${stockAdd>0?'+'+stockAdd+'%':'无加息'}</span>
+          </div>`;
+
+      if (r.all_rules) {
+        for (const rule of r.all_rules) {
+          const isHit = rule.hit;
+          html += `
+            <div class="calc-breakdown-row">
+              <span class="calc-breakdown-name ${isHit?'hit':'pass'}">
+                ${isHit ? '✗' : '✓'} ${rule.name}
+                ${isHit && rule.detail ? `<br><span style="font-size:10.5px;font-weight:400;color:#e53935">${rule.detail}</span>` : ''}
+              </span>
+              <span class="calc-breakdown-val ${isHit?'hit':'pass'}">${isHit ? '+'+rule.add_rate+'%' : '通过'}</span>
+            </div>`;
+        }
+      }
+
+      if (r.force_close) {
+        const fc = r.force_close;
+        html += `
+          <div class="calc-force-close">
+            ⚡ 强平触发线：跌幅达 <span class="fc-trigger">${fc.trigger_pct}%</span> 时 A 方有权强制平仓，不待收盘。
+            B 方可盘中补仓保证金避免强平，否则强平即刻执行。
+            ${fc.risk_level === 'HIGH' ? '<br>⚠ 该股'+fc.stock_type+'，保证金'+calcMarginPct+'%，<strong style="color:#e53935">一个跌停即可触发强平</strong>。' : ''}
+          </div>`;
+      }
+
+      html += `</div>`;
+
+      // 其他股票汇总列表（如果有多只）
+      if (sorted.length > 1) {
+        html += `<div style="margin-top:10px;padding-top:8px;border-top:1px solid #e8eaee">
+          <div style="font-size:11px;color:#999;margin-bottom:6px">全部股票风险排序</div>`;
+        for (const s of sorted) {
+          const add = Math.round((s.account_rate - calcBaseRate)*100)/100;
+          const isWorst = s.ts_code === worstStock.ts_code;
+          html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px;border-bottom:1px solid #f0f1f4">
+            <span style="color:${isWorst?'#e53935':'#555'};font-weight:${isWorst?700:400}">
+              ${isWorst?'⚠️ ':''} ${s.name||s.ts_code} <span style="color:#bbb">${s.ts_code}</span>
+            </span>
+            <span style="font-weight:700;color:${add>0?'#e53935':'#27ae60'}">${add>0?'+'+add+'%':'无加息'}</span>
+          </div>`;
+        }
+        html += `</div>`;
+      }
+
+      html += `</div>`;
+      body.innerHTML = html;
+
+    } catch(e) {
+      loading.style.display = 'none';
+      body.innerHTML = `<div style="color:#fc8181;font-size:13px">查询失败，请稍后重试</div>`;
+    }
+  }
+</script>
+
+</body>
+</html>
