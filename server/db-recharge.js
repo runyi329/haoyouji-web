@@ -568,7 +568,7 @@ function adminDirectRecharge(adminId, userId, amount, description) {
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
-                    desc = description || "\u7BA1\u7406\u5458\u624B\u52A8\u5145\u503C\uFF08\u64CD\u4F5C\u4EBAID:".concat(adminId, "\uFF09");
+                    desc = description || (amount >= 0 ? "\u7ba1\u7406\u5458\u624b\u52a8\u589e\u52a0\u4f59\u989d\uff08\u64cd\u4f5c\u4ebaID:".concat(adminId, "\uff09") : "\u7ba1\u7406\u5458\u624b\u52a8\u6263\u51cf\u4f59\u989d\uff08\u64cd\u4f5c\u4ebaID:".concat(adminId, "\uff09"));
                     return [4 /*yield*/, addUserBalance(userId, amount, 'recharge', undefined, desc)];
                 case 1:
                     newBalance = _a.sent();
@@ -580,28 +580,17 @@ function adminDirectRecharge(adminId, userId, amount, description) {
 // 获取所有待处理订单（管理员用）
 function getAllPendingOrders() {
     return __awaiter(this, void 0, void 0, function () {
-        var db;
+        var conn, rows;
         return __generator(this, function (_a) {
             switch (_a.label) {
-                case 0: return [4 /*yield*/, (0, db_1.getDb)()];
+                case 0: return [4 /*yield*/, (0, db_1.getDbConnection)()];
                 case 1:
-                    db = _a.sent();
-                    return [4 /*yield*/, db
-                            .select({
-                            id: schema_1.rechargeOrders.id,
-                            userId: schema_1.rechargeOrders.userId,
-                            orderNo: schema_1.rechargeOrders.orderNo,
-                            amount: schema_1.rechargeOrders.amount,
-                            currency: schema_1.rechargeOrders.currency,
-                            network: schema_1.rechargeOrders.network,
-                            status: schema_1.rechargeOrders.status,
-                            createdAt: schema_1.rechargeOrders.createdAt,
-                            expiresAt: schema_1.rechargeOrders.expiresAt,
-                        })
-                            .from(schema_1.rechargeOrders)
-                            .where((0, drizzle_orm_1.eq)(schema_1.rechargeOrders.status, 'pending'))
-                            .orderBy((0, drizzle_orm_1.sql)(templateObject_12 || (templateObject_12 = __makeTemplateObject(["", " DESC"], ["", " DESC"])), schema_1.rechargeOrders.createdAt))];
-                case 2: return [2 /*return*/, _a.sent()];
+                    conn = _a.sent();
+                    if (!conn) return [2 /*return*/, []];
+                    return [4 /*yield*/, conn.execute("SELECT r.*, u.username, u.name as userName, u.real_name as realName, u.phone FROM recharge_orders r LEFT JOIN users u ON r.user_id = u.id WHERE r.status IN ('pending', 'submitted') ORDER BY r.created_at DESC")];
+                case 2:
+                    rows = (_a.sent())[0];
+                    return [2 /*return*/, rows];
             }
         });
     });
@@ -609,19 +598,19 @@ function getAllPendingOrders() {
 // 获取所有充值订单（管理员用）
 function getAllOrders() {
     return __awaiter(this, arguments, void 0, function (limit) {
-        var db;
-        if (limit === void 0) { limit = 50; }
+        var conn, safeLimit, rows;
+        if (limit === void 0) { limit = 200; }
         return __generator(this, function (_a) {
             switch (_a.label) {
-                case 0: return [4 /*yield*/, (0, db_1.getDb)()];
+                case 0: return [4 /*yield*/, (0, db_1.getDbConnection)()];
                 case 1:
-                    db = _a.sent();
-                    return [4 /*yield*/, db
-                            .select()
-                            .from(schema_1.rechargeOrders)
-                            .orderBy((0, drizzle_orm_1.sql)(templateObject_13 || (templateObject_13 = __makeTemplateObject(["", " DESC"], ["", " DESC"])), schema_1.rechargeOrders.createdAt))
-                            .limit(limit)];
-                case 2: return [2 /*return*/, _a.sent()];
+                    conn = _a.sent();
+                    if (!conn) return [2 /*return*/, []];
+                    safeLimit = Math.min(Math.max(1, Math.floor(limit)), 1000);
+                    return [4 /*yield*/, conn.execute("SELECT r.*, u.username, u.name as userName, u.real_name as realName, u.phone FROM recharge_orders r LEFT JOIN users u ON r.user_id = u.id ORDER BY r.created_at DESC LIMIT " + safeLimit)];
+                case 2:
+                    rows = (_a.sent())[0];
+                    return [2 /*return*/, rows];
             }
         });
     });

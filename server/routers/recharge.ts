@@ -91,7 +91,7 @@ export const rechargeRouter = router({
       if (ctx.user.role !== "super_admin" && ctx.user.role !== "admin") {
         throw new Error("无权限");
       }
-      return await dbRecharge.getAllOrders(input.limit);
+      return await dbRecharge.getAllOrders(input.limit ?? 200);
     }),
   // 获取未匹配交易列表
   adminGetUnmatchedTransactions: protectedProcedure
@@ -122,7 +122,7 @@ export const rechargeRouter = router({
   adminDirectRecharge: protectedProcedure
     .input(z.object({
       userId: z.number(),
-      amount: z.number().min(0.01),
+      amount: z.number().refine(v => v !== 0, { message: '金额不能为0' }),
       description: z.string().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
@@ -132,6 +132,26 @@ export const rechargeRouter = router({
       return await dbRecharge.adminDirectRecharge(
         ctx.user.id, input.userId, input.amount, input.description
       );
+    }),
+
+  // 管理员查询指定用户余额
+  adminGetUserBalance: protectedProcedure
+    .input(z.object({ userId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user.role !== "super_admin" && ctx.user.role !== "admin") {
+        throw new Error("无权限");
+      }
+      return await dbRecharge.getUserBalance(input.userId);
+    }),
+
+  // 管理员查询指定用户流水记录
+  adminGetUserBalanceHistory: protectedProcedure
+    .input(z.object({ userId: z.number(), limit: z.number().optional() }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.user.role !== "super_admin" && ctx.user.role !== "admin") {
+        throw new Error("无权限");
+      }
+      return await dbRecharge.getUserBalanceHistory(input.userId, input.limit ?? 50);
     }),
 
   // 获取系统统计信息
@@ -149,17 +169,25 @@ export const rechargeRouter = router({
         throw new Error("无权限");
       }
       const db = await getDb();
-      const heartbeat = await db
+      // 优先返回 multi-chain 记录（主扫描器，每分钟更新）
+      // 如果没有，回退到 blockchain 记录
+      const multiChain = await db
+        .select()
+        .from(schema.scannerHeartbeat)
+        .where(eq(schema.scannerHeartbeat.scannerType, "multi-chain"))
+        .limit(1);
+
+      if (multiChain.length > 0) {
+        return multiChain[0];
+      }
+
+      const blockchain = await db
         .select()
         .from(schema.scannerHeartbeat)
         .where(eq(schema.scannerHeartbeat.scannerType, "blockchain"))
         .limit(1);
 
-      if (heartbeat.length === 0) {
-        return null;
-      }
-
-      return heartbeat[0];
+      return blockchain.length > 0 ? blockchain[0] : null;
     }),
 
   // 管理员添加收款地址

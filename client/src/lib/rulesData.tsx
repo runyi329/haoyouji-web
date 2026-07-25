@@ -50,6 +50,9 @@ import {
   Fingerprint,
   BookMarked,
   Boxes,
+  CreditCard,
+  Wallet,
+  ArrowUpDown,
   type LucideIcon,
 } from "lucide-react";
 
@@ -572,6 +575,11 @@ function ProjectCreationRuleContent() {
           <li className="flex items-center gap-2">
             <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-[#5A2E1C] text-white text-[10px] font-bold shrink-0">H</span>
             <span className="font-medium text-gray-900">Manus 子项目创建规范</span>
+            <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">已定</span>
+          </li>
+          <li className="flex items-center gap-2">
+            <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-[#5A2E1C] text-white text-[10px] font-bold shrink-0">I</span>
+            <span className="font-medium text-gray-900">充值与调账规范</span>
             <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">已定</span>
           </li>
         </ol>
@@ -1435,6 +1443,177 @@ function ProjectCreationRuleContent() {
         </div>
       </RuleSection>
 
+      {/* ===== 板块 I：充值与调账规范 ===== */}
+      <div className="flex items-center gap-2 pt-1">
+        <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-[#5A2E1C] text-white text-[10px] font-bold">I</span>
+        <span className="text-[13px] font-bold text-[#5A2E1C]">充值与调账规范</span>
+      </div>
+
+      {/* I-0 总则 */}
+      <RuleSection icon={CreditCard} title="总则：全局统一账本，所有项目复用同一套">
+        <p className="text-[12.5px] text-gray-700 leading-relaxed">
+          脉动网平台下的所有项目（包括子项目）充值与调账均复用同一套实现，不单独建账本系统。充值采用数字币收款（USDT），调账支持 USDT 和 CNY 双货币。
+        </p>
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 mt-2">
+          <p className="text-[12px] font-semibold text-amber-800">典型应用场景</p>
+          <ul className="text-[12px] text-amber-700 space-y-1 mt-1">
+            <li>• 当前已在脉动网主站（haoyouji-web）与米伴子项目（miban）之间共享账本</li>
+            <li>• 将来新项目接入时，直接复用这套充值模块，不需重新开发</li>
+          </ul>
+        </div>
+      </RuleSection>
+
+      {/* I-1 数字币充值 */}
+      <RuleSection icon={CreditCard} title="I-1 数字币充值模块（可复用）">
+        <p className="text-[12px] font-semibold text-gray-900 mb-2">架构概述</p>
+        <p className="text-[12.5px] text-gray-700 leading-relaxed mb-3">
+          用户在前端创建充值订单，系统生成收款地址和订单号；后端多链扫描器定期扫描区块链交易，自动匹配到账并写入流水记录。管理员也可手动确认充值。
+        </p>
+        <table className="w-full text-[12px] border-collapse mb-3">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">模块</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">位置</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="p-1.5 border border-gray-200 font-medium">充值订单表</td>
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">recharge_orders</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">存储所有充值订单，含状态、金额、网络、收款地址、到期时间</td>
+            </tr>
+            <tr className="bg-gray-50">
+              <td className="p-1.5 border border-gray-200 font-medium">流水记录表</td>
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">balance_history</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">全局唯一账本表，充值和调账均写入此表</td>
+            </tr>
+            <tr>
+              <td className="p-1.5 border border-gray-200 font-medium">用户余额字段</td>
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">users.balance / users.cny_balance</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">USDT 和 CNY 双余额字段，充值确认后直接更新</td>
+            </tr>
+            <tr className="bg-gray-50">
+              <td className="p-1.5 border border-gray-200 font-medium">扫描器</td>
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">server/price-scanner.ts</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">多链扫描器，支持 TRC20/ERC20/BEP20/APTOS/SOLANA</td>
+            </tr>
+          </tbody>
+        </table>
+        <p className="text-[12px] font-semibold text-gray-900 mb-1">充值订单生命周期</p>
+        <div className="flex flex-col gap-1.5 mb-3">
+          {[
+            { status: '待支付 pending', color: 'bg-orange-100 text-orange-700', desc: '用户创建订单后的初始状态，等待用户转账' },
+            { status: '确认中 submitted', color: 'bg-blue-100 text-blue-700', desc: '用户已转账并提交凭证，等待管理员确认' },
+            { status: '已完成 completed', color: 'bg-green-100 text-green-700', desc: '充值已到账，用户余额已更新，流水已写入 balance_history' },
+            { status: '已过期 expired', color: 'bg-gray-100 text-gray-600', desc: '订单过期，用户未在有效期内完成支付' },
+            { status: '已取消 cancelled', color: 'bg-red-100 text-red-600', desc: '管理员手动取消或用户取消' },
+          ].map((s) => (
+            <div key={s.status} className="flex items-start gap-2">
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${s.color}`}>{s.status}</span>
+              <span className="text-[11px] text-gray-500">{s.desc}</span>
+            </div>
+          ))}
+        </div>
+        <p className="text-[12px] font-semibold text-gray-900 mb-1">充值到账写入规则</p>
+        <ul className="list-disc pl-5 space-y-1.5 text-[12px] text-gray-700">
+          <li>自动扫描到账：<span className="font-mono text-[11px] bg-gray-100 px-1 rounded">adminDirectRecharge</span> 接口 → 更新 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">users.balance</span> + 写入 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">balance_history</span>（type=recharge, currency=USDT）</li>
+          <li>手动确认到账：管理员在充值管理页面点击「手动确认充值」按钮，输入实际到账金额和交易哈希，同样调用 adminDirectRecharge</li>
+          <li>充值订单的 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">status</span> 字段在到账后更新为 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">completed</span></li>
+        </ul>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-2.5 mt-3">
+          <p className="text-[12px] font-semibold text-blue-800">充值管理页面入口</p>
+          <p className="text-[12px] text-blue-700 mt-1">路径：<span className="font-mono">/ledger/:id/recharge-manage</span>，包含三个 Tab：「记录」（充值订单列表）、「监控」（扫描器状态）、「手动调账」（手动调账功能）。</p>
+        </div>
+      </RuleSection>
+
+      {/* I-2 手动调账 */}
+      <RuleSection icon={ArrowUpDown} title="I-2 手动调账模块（可复用）">
+        <p className="text-[12.5px] text-gray-700 leading-relaxed mb-3">
+          管理员可对任意用户手动增减余额，支持 USDT 和 CNY 双货币，所有调账操作均直接修改 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">users.balance</span> / <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">users.cny_balance</span> 并写入 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">balance_history</span>。
+        </p>
+        <p className="text-[12px] font-semibold text-gray-900 mb-1">调账接口规范</p>
+        <table className="w-full text-[12px] border-collapse mb-3">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">tRPC 接口</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">路由命名空间</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">功能</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">walletAdjust</td>
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">mtrpc.adminUser.*</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">调账：修改余额 + 写入流水</td>
+            </tr>
+            <tr className="bg-gray-50">
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">walletHistory</td>
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">mtrpc.adminUser.*</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">查询指定用户的全部流水记录</td>
+            </tr>
+            <tr>
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">walletGlobalHistory</td>
+              <td className="p-1.5 border border-gray-200 font-mono text-[11px]">mtrpc.adminUser.*</td>
+              <td className="p-1.5 border border-gray-200 text-gray-500">全局流水日志（分页），含充值+调账所有记录</td>
+            </tr>
+          </tbody>
+        </table>
+        <p className="text-[12px] font-semibold text-gray-900 mb-1">调账入参规范</p>
+        <div className="bg-gray-50 rounded-xl p-3 font-mono text-[12px] space-y-1 mb-3">
+          <div className="text-gray-500">// walletAdjust 入参</div>
+          <div>{`{ userId: number, currency: 'USDT' | 'CNY', amount: number, note: string }`}</div>
+          <div className="text-gray-500 mt-1">// amount 为正数则增加余额，负数则减少余额</div>
+        </div>
+        <p className="text-[12px] font-semibold text-gray-900 mb-1">调账写入规则</p>
+        <ul className="list-disc pl-5 space-y-1.5 text-[12px] text-gray-700">
+          <li>调账必须同时完成两件事：更新 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">users.balance</span>/<span className="font-mono text-[11px] bg-gray-100 px-1 rounded">cny_balance</span> + 写入 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">balance_history</span>，不允许只写一个</li>
+          <li>调账 type 字段规范：充值到账用 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">recharge</span>，手动调账用 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">reward</span>（奖励）或 <span className="font-mono text-[11px] bg-gray-100 px-1 rounded">withdraw</span>（扣款）</li>
+          <li>note 字段必填，不允许为空，方便事后审计</li>
+          <li>支持负数调账（即减少余额），但前端展示时应明确标注扣款原因</li>
+        </ul>
+        <p className="text-[12px] font-semibold text-gray-900 mt-3 mb-1">账本统一原则</p>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-2.5">
+          <p className="text-[12px] font-semibold text-red-800">❗ 唯一账本表：<span className="font-mono">balance_history</span></p>
+          <ul className="text-[12px] text-red-700 space-y-1 mt-1">
+            <li>• 充值到账和手动调账均写入 <span className="font-mono">balance_history</span>，不再使用 <span className="font-mono">af_manual_balances</span></li>
+            <li>• 查询流水时一律查 <span className="font-mono">balance_history</span>，不分充值表和调账表</li>
+            <li>• <span className="font-mono">af_manual_balances</span> 中的历史数据已于 2026年7月全量迁移到 <span className="font-mono">balance_history</span></li>
+          </ul>
+        </div>
+      </RuleSection>
+
+      {/* I-3 充值字段规范 */}
+      <RuleSection icon={Wallet} title="I-3 balance_history 表字段规范">
+        <table className="w-full text-[12px] border-collapse">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">字段</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">类型</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">允许的值</th>
+              <th className="text-left p-1.5 font-semibold text-gray-700 border border-gray-200">说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td className="p-1.5 border border-gray-200 font-mono text-[11px]">type</td><td className="p-1.5 border border-gray-200 text-gray-500">ENUM</td><td className="p-1.5 border border-gray-200 font-mono text-[11px]">recharge / consume / refund / reward / withdraw / reward_clawback / commission</td><td className="p-1.5 border border-gray-200 text-gray-500">流水类型</td></tr>
+            <tr className="bg-gray-50"><td className="p-1.5 border border-gray-200 font-mono text-[11px]">currency</td><td className="p-1.5 border border-gray-200 text-gray-500">ENUM</td><td className="p-1.5 border border-gray-200 font-mono text-[11px]">USDT / CNY</td><td className="p-1.5 border border-gray-200 text-gray-500">货币类型</td></tr>
+            <tr><td className="p-1.5 border border-gray-200 font-mono text-[11px]">amount</td><td className="p-1.5 border border-gray-200 text-gray-500">DECIMAL(20,8)</td><td className="p-1.5 border border-gray-200 text-gray-500">正数=入账，负数=出账</td><td className="p-1.5 border border-gray-200 text-gray-500">变动金额</td></tr>
+            <tr className="bg-gray-50"><td className="p-1.5 border border-gray-200 font-mono text-[11px]">balance</td><td className="p-1.5 border border-gray-200 text-gray-500">DECIMAL(20,8)</td><td className="p-1.5 border border-gray-200 text-gray-500">写入时的当前余额快照</td><td className="p-1.5 border border-gray-200 text-gray-500">操作后余额</td></tr>
+            <tr><td className="p-1.5 border border-gray-200 font-mono text-[11px]">description</td><td className="p-1.5 border border-gray-200 text-gray-500">VARCHAR</td><td className="p-1.5 border border-gray-200 text-gray-500">必填，不允许为空</td><td className="p-1.5 border border-gray-200 text-gray-500">备注/原因</td></tr>
+            <tr className="bg-gray-50"><td className="p-1.5 border border-gray-200 font-mono text-[11px]">user_id</td><td className="p-1.5 border border-gray-200 text-gray-500">INT</td><td className="p-1.5 border border-gray-200 text-gray-500">关联 users.id</td><td className="p-1.5 border border-gray-200 text-gray-500">归属用户</td></tr>
+          </tbody>
+        </table>
+        <div className="bg-green-50 border border-green-200 rounded-lg p-2.5 mt-3">
+          <p className="text-[12px] font-semibold text-green-800">前端展示规范</p>
+          <ul className="text-[12px] text-green-700 space-y-1 mt-1">
+            <li>• currency 标签：USDT 展示蓝色胶囊，CNY 展示橙色胶囊</li>
+            <li>• type 标签：充值/消费/退款/奖励/扣款/奖励回收/佣金</li>
+            <li>• 金额正数用绿色展示，负数用红色展示</li>
+            <li>• USDT 保留 4 位小数，CNY 保留 2 位小数</li>
+          </ul>
+        </div>
+      </RuleSection>
+
       <p className="text-center text-[11px] text-gray-300 pt-1">
         规则 005 · 项目创建规则 · 仅超级管理员可见
       </p>
@@ -1476,7 +1655,7 @@ export const RULES: Rule[] = [
     id: "005",
     title: "项目创建规则",
     summary:
-      "新建项目总规范：A角色与归属权限 B会员权限 C项目骨架 D初始化清单 E多项目登录皮肤路由 F图片/视频/文件上传规范 G金融数据获取规则 H Manus子项目创建规范（独立项目+SSO单点登录+自定义域名+代码备份+说明文档+沙箱恢复+合并路径，以奖金平台bonus.jiangyuchen.cn为举例）。",
+      "新建项目总规范：A角色与归属权限 B会员权限 C项目骨架 D初始化清单 E多项目登录皮肤路由 F图片/视频/文件上传规范 G金融数据获取规则 H Manus子项目创建规范（独立项目+SSO单点登录+自定义域名+代码备份+说明文档+沙箱恢复+合并路径，以奖金平台bonus.jiangyuchen.cn为举例）I 充值与调账规范（数字币USDT充值+多链扫描器+手动调账+balance_history统一账本，所有项目复用同一套）。",
     content: <ProjectCreationRuleContent />,
   },
   {

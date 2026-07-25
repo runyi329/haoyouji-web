@@ -2046,24 +2046,40 @@ export const mibanAdminUserRouter = router({
       amount: z.number(),   // 正数=充值，负数=扣款
       note: z.string().min(1, '备注不能为空'),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       const conn = await getDbConnection();
       if (!conn) throw new Error('DB not available');
+      const type = input.amount >= 0 ? 'recharge' : 'withdraw';
+      const desc = input.note || null;
       if (input.currency === 'USDT') {
-        // USDT：写入 af_manual_balances（与 addUserBalance 一致，ledger_id 用52）
+        // 1. 更新 users.balance
         await (conn as any).execute(
-          `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
-           VALUES (52, ?, ?, ?, NOW(), NOW())`,
-          [input.userId, input.amount.toFixed(6), `[管理员调账] ${input.note}`]
+          `UPDATE users SET balance = balance + ? WHERE id = ?`,
+          [input.amount, input.userId]
         );
-        // 注意：不再写 users.balance，因为余额 = users.balance + af_manual_balances 合计
-        // 只写 af_manual_balances 即可，避免双重计入
-      } else {
-        // CNY：写入 af_manual_balances，note 以 [CNY] 开头
+        // 2. 查询更新后的余额
+        const [[userRow]] = await (conn as any).execute(
+          `SELECT balance FROM users WHERE id = ?`, [input.userId]
+        ) as any[];
+        const newBalance = parseFloat(userRow?.balance ?? '0');
+        // 3. 写入 balance_history（统一账本）
         await (conn as any).execute(
-          `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at)
-           VALUES (52, ?, ?, ?, NOW(), NOW())`,
-          [input.userId, input.amount.toFixed(2), `[CNY][管理员调账] ${input.note}`]
+          `INSERT INTO balance_history (user_id, amount, type, currency, balance, description) VALUES (?, ?, ?, 'USDT', ?, ?)`,
+          [input.userId, input.amount, type, newBalance, desc]
+        );
+      } else {
+        // CNY：更新 users.cny_balance
+        await (conn as any).execute(
+          `UPDATE users SET cny_balance = cny_balance + ? WHERE id = ?`,
+          [input.amount, input.userId]
+        );
+        const [[userRow]] = await (conn as any).execute(
+          `SELECT cny_balance FROM users WHERE id = ?`, [input.userId]
+        ) as any[];
+        const newBalance = parseFloat(userRow?.cny_balance ?? '0');
+        await (conn as any).execute(
+          `INSERT INTO balance_history (user_id, amount, type, currency, balance, description) VALUES (?, ?, ?, 'CNY', ?, ?)`,
+          [input.userId, input.amount, type, newBalance, desc]
         );
       }
       return { ok: true };
@@ -2076,41 +2092,40 @@ export const mibanAdminUserRouter = router({
       if (!conn) return [];
       const limit = input.limit ?? 50;
       const [rows] = await (conn as any).execute(
-        `SELECT id, user_id, amount, note, created_at
-         FROM af_manual_balances
-         WHERE user_id = ? AND note LIKE '%管理员调账%'
-         ORDER BY created_at DESC LIMIT ?`,
-        [input.userId, limit]
+        `SELECT id, user_id, amount, type, currency, balance, description, created_at
+         FROM balance_history
+         WHERE user_id = ${input.userId}
+         ORDER BY created_at DESC LIMIT ${limit}`
       ) as any[];
       return (Array.isArray(rows) ? rows : []).map((r: any) => ({
         id: Number(r.id),
         userId: Number(r.user_id),
         amount: parseFloat(r.amount ?? '0'),
-        note: String(r.note ?? ''),
-        currency: String(r.note ?? '').startsWith('[CNY]') ? 'CNY' : 'USDT',
+        type: String(r.type ?? 'recharge'),
+        note: String(r.description ?? ''),
+        currency: String(r.currency ?? 'USDT') as 'USDT' | 'CNY',
+        balance: parseFloat(r.balance ?? '0'),
         createdAt: r.created_at ? String(r.created_at) : '',
       }));
     }),
-  // 全局调账日志（不限用户，分页）
+  // 全局流水日志（不限用户，分页，包含充值+调账所有记录）
   walletGlobalHistory: mibanAdminProcedure
     .input(z.object({ page: z.number().optional(), pageSize: z.number().optional() }))
     .query(async ({ input }) => {
       const conn = await getDbConnection();
       if (!conn) return { items: [], total: 0 };
       const page = input.page ?? 1;
-      const pageSize = input.pageSize ?? 10;
+      const pageSize = input.pageSize ?? 20;
       const offset = (page - 1) * pageSize;
       const [[countRow]] = await (conn as any).execute(
-        `SELECT COUNT(*) as total FROM af_manual_balances WHERE note LIKE '%管理员调账%'`
+        `SELECT COUNT(*) as total FROM balance_history`
       ) as any[];
       const [rows] = await (conn as any).execute(
-        `SELECT amb.id, amb.user_id, amb.amount, amb.note, amb.created_at,
+        `SELECT bh.id, bh.user_id, bh.amount, bh.type, bh.currency, bh.balance, bh.description, bh.created_at,
                 u.name AS user_name, u.username
-         FROM af_manual_balances amb
-         LEFT JOIN users u ON u.id = amb.user_id
-         WHERE amb.note LIKE '%管理员调账%'
-         ORDER BY amb.created_at DESC LIMIT ? OFFSET ?`,
-        [pageSize, offset]
+         FROM balance_history bh
+         LEFT JOIN users u ON u.id = bh.user_id
+         ORDER BY bh.created_at DESC LIMIT ${pageSize} OFFSET ${offset}`
       ) as any[];
       return {
         total: Number(countRow?.total ?? 0),
@@ -2120,8 +2135,10 @@ export const mibanAdminUserRouter = router({
           userName: r.user_name ?? r.username ?? `用户${r.user_id}`,
           username: r.username ?? '',
           amount: parseFloat(r.amount ?? '0'),
-          note: String(r.note ?? ''),
-          currency: String(r.note ?? '').startsWith('[CNY]') ? 'CNY' : 'USDT',
+          type: String(r.type ?? 'recharge'),
+          note: String(r.description ?? ''),
+          currency: String(r.currency ?? 'USDT') as 'USDT' | 'CNY',
+          balance: parseFloat(r.balance ?? '0'),
           createdAt: r.created_at ? String(r.created_at) : '',
         })),
       };

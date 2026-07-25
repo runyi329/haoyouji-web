@@ -146,7 +146,7 @@ client/src/pages/ContactDetail.tsx :: error TS2464: A computed property name mus
 client/src/pages/ContactDetail.tsx :: error TS2464: A computed property name must be of type 'string', 'number', 'symbol', or 'any'.
 client/src/pages/ContactDetail.tsx :: error TS2464: A computed property name must be of type 'string', 'number', 'symbol', or 'any'.
 client/src/pages/ContactDetail.tsx :: error TS2464: A computed property name must be of type 'string', 'number', 'symbol', or 'any'.
-client/src/pages/ContactDetail.tsx :: error TS2551: Property 'reminderDate' does not exist on type '{ id: number; contactId: number; userId: number; reminderTypeId: number | null; title: string; description: string | null; reminderTime: string; reminderType: "birthday" | "normal"; isRecurring: number; ... 5 more ...; updatedAt: string; }'. Did you mean 'reminderTime'?
+client/src/pages/ContactDetail.tsx :: error TS2551: Property 'reminderDate' does not exist on type '{ id: number; contactId: number; userId: number; reminderTypeId: number | null; title: string; description: string | null; reminderTime: string; reminderType: "normal" | "birthday"; isRecurring: number; ... 5 more ...; updatedAt: string; }'. Did you mean 'reminderTime'?
 client/src/pages/ContactsList.tsx :: error TS2322: Type '"top"' is not assignable to type 'Position | undefined'.
 client/src/pages/ContactsList.tsx :: error TS2322: Type '(e: any) => void' is not assignable to type '() => void'.
 client/src/pages/ContactsList.tsx :: error TS2322: Type '(e: any) => void' is not assignable to type '() => void'.
@@ -176,7 +176,7 @@ client/src/pages/EquityHistoryArchive.tsx :: error TS2769: No overload matches t
 client/src/pages/EthOptionsPage.tsx :: error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
 client/src/pages/EthOptionsPage.tsx :: error TS2339: Property 'isLoading' does not exist on type '{ refresh: () => Promise<QueryObserverResult<{ id: number; openId: string | null; name: string | null; username: string | null; passwordHash: string | null; email: string | null; loginMethod: string | null; ... 29 more ...; mibanRankIndex: number; } | { ...; } | null, TRPCClientErrorLike<...>>>; ... 4 more ...; isAu...'.
 client/src/pages/FeedbackPage.tsx :: error TS2339: Property 'ledgerName' does not exist on type '{ book: any; branch: any; tableName: any; }'.
-client/src/pages/FinanceManagement.tsx :: error TS2741: Property 'MSTR' is missing in type '{ BTC: string; ETH: string; SOL: string; AAVE: string; SUI: string; ONDO: string; ASTER: string; LDO: string; ENA: string; ARKM: string; USDT: string; CNY: string; TSLA: string; NVDA: string; AAPL: string; MSFT: string; ... 14 more ...; MU: string; }' but required in type 'Record<"CNY" | "USDT" | "BTC" | "ETH" | "SOL" | "AAVE" | "SUI" | "ONDO" | "ASTER" | "LDO" | "ENA" | "ARKM" | "MSTR" | "TSLA" | "NVDA" | "AAPL" | "MSFT" | "GOOGL" | "META" | "AMZN" | "SPY" | ... 10 more ... | "SKHYNIX", string>'.
+client/src/pages/FinanceManagement.tsx :: error TS2741: Property 'MSTR' is missing in type '{ BTC: string; ETH: string; SOL: string; AAVE: string; SUI: string; ONDO: string; ASTER: string; LDO: string; ENA: string; ARKM: string; USDT: string; CNY: string; TSLA: string; NVDA: string; AAPL: string; MSFT: string; ... 14 more ...; MU: string; }' but required in type 'Record<"USDT" | "CNY" | "BTC" | "ETH" | "SOL" | "AAVE" | "SUI" | "ONDO" | "ASTER" | "LDO" | "ENA" | "ARKM" | "MSTR" | "TSLA" | "NVDA" | "AAPL" | "MSFT" | "GOOGL" | "META" | "AMZN" | "SPY" | ... 10 more ... | "SKHYNIX", string>'.
 client/src/pages/FunderManagement.tsx :: error TS2339: Property 'dateStr' does not exist on type '{ label: string; deribitLabel: string; ts: number; diffDays: number; }'.
 client/src/pages/GridTradeSimulator.tsx :: error TS18047: 'realKlineData' is possibly 'null'.
 client/src/pages/GridTradeSimulator.tsx :: error TS18048: 'realKlineData.klines.length' is possibly 'undefined'.
@@ -305,8 +305,8 @@ client/src/pages/OrderFlowPage.tsx :: error TS2769: No overload matches this cal
 client/src/pages/PointRulesManagement.tsx :: error TS2353: Object literal may only specify known properties, and 'ruleId' does not exist in type '{ actionType: string; points?: number | undefined; isActive?: boolean | undefined; description?: string | undefined; }'.
 client/src/pages/PointRulesManagement.tsx :: error TS2353: Object literal may only specify known properties, and 'ruleId' does not exist in type '{ actionType: string; points?: number | undefined; isActive?: boolean | undefined; description?: string | undefined; }'.
 client/src/pages/PositionCalc.tsx :: error TS2769: No overload matches this call.
-client/src/pages/PositionLevelEdit.tsx :: error TS2322: Type 'CostShareItem | { name: string; qty: string; dateFrom: string; dateTo: string; interest: string; interestCurrency: "CNY" | "USDT"; }' is not assignable to type 'CostShareItem'.
-client/src/pages/PositionLevelEdit.tsx :: error TS2741: Property 'strikeCost' is missing in type '{ name: string; qty: string; dateFrom: string; dateTo: string; interest: string; interestCurrency: "CNY" | "USDT"; }' but required in type 'CostShareItem'.
+client/src/pages/PositionLevelEdit.tsx :: error TS2322: Type 'CostShareItem | { name: string; qty: string; dateFrom: string; dateTo: string; interest: string; interestCurrency: "USDT" | "CNY"; }' is not assignable to type 'CostShareItem'.
+client/src/pages/PositionLevelEdit.tsx :: error TS2741: Property 'strikeCost' is missing in type '{ name: string; qty: string; dateFrom: string; dateTo: string; interest: string; interestCurrency: "USDT" | "CNY"; }' but required in type 'CostShareItem'.
 client/src/pages/PptPromptLibrary.tsx :: error TS2802: Type 'Map<number, { name: string; items: { id: number; categoryId: number; content: string; remark: string | null; sortOrder: number; createdAt: Date; }[]; }>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
 client/src/pages/QQOnlinePage.tsx :: error TS2339: Property 'trades' does not exist on type 'BacktestResult'.
 client/src/pages/QQSettings.tsx :: error TS2802: Type 'Set<number>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
@@ -754,7 +754,6 @@ server/db-poster-favorites.ts :: error TS2339: Property 'rows' does not exist on
 server/db-poster-favorites.ts :: error TS2339: Property 'rows' does not exist on type 'MySqlRawQueryResult'.
 server/db-poster-favorites.ts :: error TS2554: Expected 1 arguments, but got 2.
 server/db-profile-features.ts :: error TS2740: Type '{}' is missing the following properties from type 'string[]': length, pop, push, concat, and 35 more.
-server/db-recharge.ts :: error TS18047: 'db' is possibly 'null'.
 server/db-recharge.ts :: error TS18047: 'db' is possibly 'null'.
 server/db-recharge.ts :: error TS18047: 'db' is possibly 'null'.
 server/db-recharge.ts :: error TS18047: 'db' is possibly 'null'.
@@ -1829,6 +1828,7 @@ server/routers/recharge.ts :: error TS18047: 'db' is possibly 'null'.
 server/routers/recharge.ts :: error TS18047: 'db' is possibly 'null'.
 server/routers/recharge.ts :: error TS18047: 'db' is possibly 'null'.
 server/routers/recharge.ts :: error TS18047: 'db' is possibly 'null'.
+server/routers/recharge.ts :: error TS18047: 'db' is possibly 'null'.
 server/routers/recharge.ts :: error TS2307: Cannot find module './trpc' or its corresponding type declarations.
 server/routers/recharge.ts :: error TS2339: Property 'userId' does not exist on type 'MySqlTableWithColumns<{ name: "wallet_addresses"; schema: undefined; columns: { id: MySqlColumn<{ name: "id"; tableName: "wallet_addresses"; dataType: "number"; columnType: "MySqlInt"; data: number; driverParam: string | number; ... 8 more ...; generated: undefined; }, {}, {}>; ... 5 more ...; updatedAt: MySqlColumn...'.
 server/routers/recharge.ts :: error TS2339: Property 'userId' does not exist on type 'MySqlTableWithColumns<{ name: "wallet_addresses"; schema: undefined; columns: { id: MySqlColumn<{ name: "id"; tableName: "wallet_addresses"; dataType: "number"; columnType: "MySqlInt"; data: number; driverParam: string | number; ... 8 more ...; generated: undefined; }, {}, {}>; ... 5 more ...; updatedAt: MySqlColumn...'.
@@ -1857,6 +1857,10 @@ server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has
 server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
 server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
 server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
+server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
+server/routers/recharge.ts :: error TS7031: Binding element 'ctx' implicitly has an 'any' type.
+server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly has an 'any' type.
+server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly has an 'any' type.
 server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly has an 'any' type.
 server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly has an 'any' type.
 server/routers/recharge.ts :: error TS7031: Binding element 'input' implicitly has an 'any' type.

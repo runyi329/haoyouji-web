@@ -649,7 +649,7 @@ export async function adminDirectRecharge(
   amount: number,
   description?: string
 ) {
-  const desc = description || `管理员手动充值（操作人ID:${adminId}）`;
+  const desc = description || (amount >= 0 ? `管理员手动增加余额（操作人ID:${adminId}）` : `管理员手动扣减余额（操作人ID:${adminId}）`);
   const newBalance = await addUserBalance(userId, amount, 'recharge', undefined, desc);
   return { success: true, userId, amount, newBalance };
 }
@@ -659,7 +659,7 @@ export async function getAllPendingOrders() {
   const conn = await getDbConnection();
   if (!conn) return [];
   const [rows] = await (conn as any).execute(`
-    SELECT r.*, u.username, u.name as userName, u.phone
+    SELECT r.*, u.username, u.name as userName, u.real_name as realName, u.phone
     FROM recharge_orders r
     LEFT JOIN users u ON r.user_id = u.id
     WHERE r.status = 'pending'
@@ -669,16 +669,17 @@ export async function getAllPendingOrders() {
 }
 
 // 获取所有充值订单（管理员用）
-export async function getAllOrders(limit: number = 50) {
+export async function getAllOrders(limit: number = 200) {
   const conn = await getDbConnection();
   if (!conn) return [];
+  const safeLimit = Math.min(Math.max(1, Math.floor(limit)), 1000);
   const [rows] = await (conn as any).execute(`
-    SELECT r.*, u.username, u.name as userName, u.phone
+    SELECT r.*, u.username, u.name as userName, u.real_name as realName, u.phone
     FROM recharge_orders r
     LEFT JOIN users u ON r.user_id = u.id
     ORDER BY r.created_at DESC
-    LIMIT ?
-  `, [limit]) as any[];
+    LIMIT ${safeLimit}
+  `) as any[];
   return rows as any[];
 }
 
