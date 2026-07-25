@@ -156,7 +156,7 @@ export default function RechargeMonitor() {
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center">
-            <button onClick={() => setLocation("/admin")} className="mr-3">
+            <button onClick={() => window.history.back()} className="mr-3">
               <ArrowLeft className="w-6 h-6" />
             </button>
             <h1 className="text-lg font-semibold">充值系统监控</h1>
