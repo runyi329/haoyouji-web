@@ -48,3 +48,51 @@ export const buyRecords = mysqlTable("buy_records", {
 
 export type BuyRecord = typeof buyRecords.$inferSelect;
 export type InsertBuyRecord = typeof buyRecords.$inferInsert;
+
+/**
+ * A 股风控查询历史表
+ */
+export const stockRiskHistory = mysqlTable("stock_risk_history", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId"),
+  symbols: text("symbols").notNull(),         // JSON 数组，如 ["600519","301228"]
+  names: text("names").notNull(),             // JSON 数组，如 ["贵州茅台","实朴检测"]
+  baseRate: double("baseRate").notNull(),
+  totalRate: double("totalRate").notNull(),
+  highestSymbol: varchar("highestSymbol", { length: 10 }),
+  highestName: varchar("highestName", { length: 50 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type StockRiskHistory = typeof stockRiskHistory.$inferSelect;
+export type InsertStockRiskHistory = typeof stockRiskHistory.$inferInsert;
+
+/**
+ * A 股全量股票代码表（用于前端实时查询名称）
+ */
+export const stockRiskStocks = mysqlTable("stock_risk_stocks", {
+  symbol: varchar("symbol", { length: 10 }).primaryKey(),  // 6位数字代码
+  name: varchar("name", { length: 50 }).notNull(),
+  tsCode: varchar("ts_code", { length: 12 }).notNull(),    // 如 600519.SH
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type StockRiskStock = typeof stockRiskStocks.$inferSelect;
+
+/**
+ * A 股风控方案表：用户保存的利率/保证金/板块/股票代码配置
+ */
+export const stockRiskPlans = mysqlTable("stock_risk_plans", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 50 }).notNull(),          // 方案名称
+  baseRate: double("baseRate").notNull(),                   // 月化利率
+  marginPct: int("marginPct").notNull(),                    // 保证金比例
+  boardTypes: text("boardTypes").notNull(),                 // JSON 数组，如 ["main","gem"]
+  stocks: text("stocks").notNull(),                        // JSON 数组，如 [{"code":"600519","name":"贵州茅台"}]
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type StockRiskPlan = typeof stockRiskPlans.$inferSelect;
+export type InsertStockRiskPlan = typeof stockRiskPlans.$inferInsert;

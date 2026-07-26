@@ -4,6 +4,7 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { getBuyRecordsByClientId, insertBuyRecord, deleteBuyRecord } from "./db";
+import { stockRiskRouter } from "./stockRisk";
 
 export const appRouter = router({
   system: systemRouter,
@@ -67,6 +68,7 @@ export const appRouter = router({
         return { success: true };
       }),
   }),
+  // ─── A 股风控接口 ─────────────────────────────────────────
+  stockRisk: stockRiskRouter,
 });
-
 export type AppRouter = typeof appRouter;

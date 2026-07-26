@@ -8,6 +8,7 @@
  * 区分两种空状态：「—」= 加载中，「此处无」= 该行权价无合约
  */
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { usePullToRefresh } from "../hooks/usePullToRefresh";
 import { Link } from "wouter";
 import { toast } from "sonner";
 
@@ -493,7 +494,7 @@ function HistoryChart({ instrumentName, expireDate, onRange, optionType, strike 
   // dateRange 在组件内部渲染，不依赖父组件 state
 
   // 手动绘制 SVG 折线图（不依赖额外库）
-  const W = 280, H = 80, PL = 32, PR = 8, PT = 8, PB = 20;
+  const W = 280, H = 160, PL = 32, PR = 8, PT = 16, PB = 24;
   const cw = W - PL - PR, ch = H - PT - PB;
   const vals = points.map(p => p.ann);
   const minV = Math.min(...vals), maxV = Math.max(...vals);
@@ -1008,156 +1009,97 @@ function GreeksHistoryChart({ instrumentName, strike, expireDate, metric, color,
   );
 }
 
-// ─── Payoff 图（卖方视角，SVG 实现）──────────────────────────
-function PayoffChart({
-  strike, premium, ethPrice, optionType
-}: {
-  strike: number;
-  premium: number;    // USD
-  ethPrice: number;  // 当前 ETH 现价
-  optionType: 'C' | 'P';
-}) {
-  const W = 320, H = 110, PAD = { t: 10, r: 12, b: 22, l: 44 };
-  const chartW = W - PAD.l - PAD.r;
-  const chartH = H - PAD.t - PAD.b;
+// ─── Greeks 迷你走势图（嵌入 Greeks 网格按钮内）────────────────────────
+// 一次性拉取所有 Greeks 历史数据，供 6 个迷你图共享
+type MiniSeriesMap = Partial<Record<GreekKey, number[]>>;
 
-  // X 轴范围：行权价 ±30%
-  const xMin = strike * 0.70;
-  const xMax = strike * 1.30;
+function useGreeksMiniData(instrumentName: string, strike: number, expireDate: string, optionType: 'C' | 'P') {
+  const [seriesMap, setSeriesMap] = useState<MiniSeriesMap>({});
+  const [loaded, setLoaded] = useState(false);
 
-  // 卖方到期损益函数（USD）
-  // CALL 卖方：收权利金，ETH > K 时亏损无限
-  // PUT  卖方：收权利金，ETH < K 时亏损（最大亏损 = K - premium）
-  const payoff = (s: number) =>
-    optionType === 'C'
-      ? premium - Math.max(0, s - strike)   // 卖 CALL
-      : premium - Math.max(0, strike - s);  // 卖 PUT
-
-  // 采样 80 个点
-  const N = 80;
-  const xs = Array.from({ length: N }, (_, i) => xMin + (xMax - xMin) * i / (N - 1));
-  const ys = xs.map(payoff);
-
-  // Y 轴范围
-  const yMin = Math.min(...ys) * 1.15;
-  const yMax = Math.max(...ys) * 1.15 + premium * 0.05;
-
-  const toX = (v: number) => PAD.l + ((v - xMin) / (xMax - xMin)) * chartW;
-  const toY = (v: number) => PAD.t + ((yMax - v) / (yMax - yMin)) * chartH;
-
-  // 盈亏平衡点
-  const bePrice = optionType === 'C' ? strike + premium : strike - premium;
-  const beInRange = bePrice >= xMin && bePrice <= xMax;
-
-  // 构建折线 polyline points
-  const pts = xs.map((x, i) => `${toX(x).toFixed(1)},${toY(ys[i]).toFixed(1)}`).join(' ');
-
-  // 构建填充区域（分盈利段绿色、亏损段红色）
-  const buildArea = (positive: boolean) => {
-    const zeroY = toY(0);
-    const segments: string[] = [];
-    let inSeg = false;
-    let segPts: string[] = [];
-
-    const flush = () => {
-      if (segPts.length > 1) {
-        // 闭合到 y=0 线
-        const first = segPts[0].split(',');
-        const last = segPts[segPts.length - 1].split(',');
-        segments.push(`M ${segPts.join(' L ')} L ${last[0]},${zeroY.toFixed(1)} L ${first[0]},${zeroY.toFixed(1)} Z`);
-      }
-      segPts = [];
-      inSeg = false;
+  useEffect(() => {
+    if (!instrumentName) return;
+    const ws = new WebSocket('wss://www.deribit.com/ws/api/v2');
+    const results: Record<number, { ticks: number[]; close: number[] }> = {};
+    ws.onopen = () => {
+      const now = Date.now();
+      const start = now - 60 * 24 * 3600 * 1000; // 最近 60 天
+      ws.send(JSON.stringify({ jsonrpc: '2.0', id: 9901,
+        method: 'public/get_tradingview_chart_data',
+        params: { instrument_name: instrumentName, start_timestamp: start, end_timestamp: now, resolution: '1D' }
+      }));
+      ws.send(JSON.stringify({ jsonrpc: '2.0', id: 9902,
+        method: 'public/get_tradingview_chart_data',
+        params: { instrument_name: 'ETH-PERPETUAL', start_timestamp: start, end_timestamp: now, resolution: '1D' }
+      }));
     };
+    ws.onmessage = (e) => {
+      try {
+        const d = JSON.parse(e.data);
+        if (d.id === 9901 || d.id === 9902) {
+          results[d.id] = d.result || {};
+          if (results[9901] && results[9902]) {
+            const opt = results[9901]; const eth = results[9902];
+            const expireMs = new Date(expireDate).getTime();
+            const K = strike;
+            const toMs = (t: number) => t < 10_000_000_000 ? t * 1000 : t;
+            const ethMap = new Map<number, number>();
+            (eth.ticks || []).forEach((t: number, i: number) => ethMap.set(toMs(t), (eth.close || [])[i]));
+            const isPutOpt = optionType === 'P';
+            const map: MiniSeriesMap = { iv: [], delta: [], gamma: [], theta: [], vega: [], rho: [] };
+            (opt.ticks || []).forEach((t: number, i: number) => {
+              const tMs = toMs(t);
+              const S = ethMap.get(tMs) ?? 0;
+              if (S <= 0) return;
+              const optPriceUsd = ((opt.close || [])[i] ?? 0) * S;
+              const T = Math.max(0.001, (expireMs - tMs) / (365 * 24 * 3600 * 1000));
+              const sigma = isPutOpt ? impliedVolPut(optPriceUsd, S, K, T) : impliedVol(optPriceUsd, S, K, T);
+              if (!sigma) return;
+              const sqrtT = Math.sqrt(T);
+              const d1 = (Math.log(S / K) + 0.5 * sigma * sigma * T) / (sigma * sqrtT);
+              const d2v = d1 - sigma * sqrtT;
+              const nd1 = normCdf(d1);
+              const phi_d1 = Math.exp(-0.5 * d1 * d1) / Math.sqrt(2 * Math.PI);
+              map.iv!.push(sigma * 100);
+              map.delta!.push(isPutOpt ? nd1 - 1 : nd1);
+              map.gamma!.push(phi_d1 / (S * sigma * sqrtT));
+              map.theta!.push(-(S * phi_d1 * sigma) / (2 * sqrtT) / 365);
+              map.vega!.push(S * phi_d1 * sqrtT / 100);
+              map.rho!.push(isPutOpt ? -K * T * normCdf(-d2v) / 100 : K * T * normCdf(d2v) / 100);
+            });
+            setSeriesMap(map);
+            setLoaded(true);
+            ws.close();
+          }
+        }
+      } catch { /* ignore */ }
+    };
+    ws.onerror = () => { setLoaded(true); };
+    return () => { try { ws.close(); } catch { /* ignore */ } };
+  }, [instrumentName, strike, expireDate, optionType]);
 
-    xs.forEach((x, i) => {
-      const y = ys[i];
-      const isPos = positive ? y >= 0 : y < 0;
-      if (isPos) {
-        if (!inSeg) inSeg = true;
-        segPts.push(`${toX(x).toFixed(1)},${toY(y).toFixed(1)}`);
-      } else if (inSeg) {
-        flush();
-      }
-    });
-    if (inSeg) flush();
-    return segments.join(' ');
-  };
+  return { seriesMap, loaded };
+}
 
-  // Y 轴刻度
-  const yTicks = (() => {
-    const range = yMax - yMin;
-    const step = range > 2000 ? 1000 : range > 500 ? 200 : range > 100 ? 50 : 20;
-    const ticks: number[] = [];
-    const start = Math.ceil(yMin / step) * step;
-    for (let v = start; v <= yMax; v += step) ticks.push(v);
-    return ticks;
-  })();
-
-  const fmtUsd = (v: number) => {
-    if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`;
-    return v.toFixed(0);
-  };
-
+/** 极小的 SVG 折线迷你图，宽 44px × 高 14px */
+function GreeksMiniChart({ values, color }: { values: number[]; color: string }) {
+  if (!values || values.length < 2) return <div className="h-3.5" />;
+  const W2 = 44, H2 = 14;
+  const minV = Math.min(...values), maxV = Math.max(...values);
+  const range = maxV - minV || 1;
+  const toX2 = (i: number) => (i / (values.length - 1)) * W2;
+  const toY2 = (v: number) => H2 - ((v - minV) / range) * (H2 - 1) - 0.5;
+  const pts = values.map((v, i) => `${toX2(i).toFixed(1)},${toY2(v).toFixed(1)}`).join(' ');
+  const last = values[values.length - 1];
+  const prev = values[values.length - 2];
+  const trend = last >= prev ? 1 : -1;
+  const dotColor = trend >= 0 ? '#4ade80' : '#f87171';
   return (
-    <div className="px-2 py-2">
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}>
-        {/* 零线 */}
-        <line x1={PAD.l} y1={toY(0)} x2={W - PAD.r} y2={toY(0)}
-          stroke="#374151" strokeWidth="1" strokeDasharray="3,3" />
-        {/* 盈利区域（绿色填充） */}
-        <path d={buildArea(true)} fill="rgba(74,222,128,0.12)" />
-        {/* 亏损区域（红色填充） */}
-        <path d={buildArea(false)} fill="rgba(248,113,113,0.12)" />
-        {/* 折线 */}
-        <polyline points={pts} fill="none" stroke="#60a5fa" strokeWidth="1.5"
-          strokeLinejoin="round" strokeLinecap="round" />
-        {/* 当前 ETH 价格竖线 */}
-        {ethPrice >= xMin && ethPrice <= xMax && (
-          <>
-            <line x1={toX(ethPrice)} y1={PAD.t} x2={toX(ethPrice)} y2={H - PAD.b}
-              stroke="#f59e0b" strokeWidth="1" strokeDasharray="2,2" />
-            <text x={toX(ethPrice) + 3} y={PAD.t + 8} fontSize="7" fill="#f59e0b">现价</text>
-          </>
-        )}
-        {/* 盈亏平衡线 */}
-        {beInRange && (
-          <>
-            <line x1={toX(bePrice)} y1={PAD.t} x2={toX(bePrice)} y2={H - PAD.b}
-              stroke="#a78bfa" strokeWidth="1" strokeDasharray="2,2" />
-            <text x={toX(bePrice) + 3} y={PAD.t + 16} fontSize="7" fill="#a78bfa">BE</text>
-          </>
-        )}
-        {/* 行权价竖线 */}
-        <line x1={toX(strike)} y1={PAD.t} x2={toX(strike)} y2={H - PAD.b}
-          stroke="#6b7280" strokeWidth="1" strokeDasharray="2,2" />
-        {/* Y 轴刻度 */}
-        {yTicks.map(v => (
-          <g key={v}>
-            <line x1={PAD.l - 3} y1={toY(v)} x2={PAD.l} y2={toY(v)} stroke="#374151" strokeWidth="0.5" />
-            <text x={PAD.l - 5} y={toY(v) + 3} fontSize="7" fill={v >= 0 ? '#4ade80' : '#f87171'}
-              textAnchor="end">{fmtUsd(v)}</text>
-          </g>
-        ))}
-        {/* X 轴标签：左中右 */}
-        {[xMin, strike, xMax].map((v, i) => (
-          <text key={i} x={toX(v)} y={H - 4} fontSize="7" fill="#6b7280"
-            textAnchor={i === 0 ? 'start' : i === 2 ? 'end' : 'middle'}>
-            {v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v.toFixed(0)}
-          </text>
-        ))}
-        {/* 权利金标注 */}
-        <text x={W - PAD.r} y={toY(premium) - 3} fontSize="7" fill="#4ade80"
-          textAnchor="end">+{premium.toFixed(0)}</text>
-      </svg>
-      {/* 图例 */}
-      <div className="flex items-center gap-3 px-1 mt-0.5 text-[length:var(--ac-fs-xs)] font-sans text-[var(--ac-text-muted)]">
-        <span className="flex items-center gap-1"><span className="inline-block w-3 h-0.5 bg-[#60a5fa]" />损益</span>
-        <span className="flex items-center gap-1"><span className="inline-block w-3 h-0.5 bg-[#f59e0b]" />现价</span>
-        <span className="flex items-center gap-1"><span className="inline-block w-3 h-0.5 bg-[#a78bfa]" />盈亏平衡</span>
-        <span className="flex items-center gap-1"><span className="inline-block w-3 h-0.5 bg-[#6b7280]" />行权价</span>
-      </div>
-    </div>
+    <svg width={W2} height={H2} viewBox={`0 0 ${W2} ${H2}`} style={{ display: 'block', overflow: 'visible' }}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1" strokeOpacity="0.7"
+        strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={toX2(values.length - 1).toFixed(1)} cy={toY2(last).toFixed(1)} r="1.5" fill={dotColor} />
+    </svg>
   );
 }
 
@@ -1174,10 +1116,14 @@ function ThetaPopupModal({ info, onClose, optionType }: { info: ThetaPopupCell; 
   const daysLeft = calcDaysLeft(expiry.expireDate);
 
   // ── 基础数据 ──
+  // 内在价値（ETH单位）= max(0, 内在价値USD) / ethPrice
+  // CALL内在价値USD = max(0, ethPrice - strike)
+  // PUT内在价値USD = max(0, strike - ethPrice)
   const intrinsicEth = ethPrice > 0 && cell.markUsd !== null
-    ? Math.max(0, optionType === 'C' ? (ethPrice - strike) / ethPrice : (strike - ethPrice) / ethPrice)
+    ? Math.max(0, optionType === 'C' ? (ethPrice - strike) : (strike - ethPrice)) / ethPrice
     : null;
   const markEth = cell.markUsd;
+  // 时间价値 = 权利金 - 内在价値，两者之和正好等于权利金
   const timeValueEth = markEth !== null && intrinsicEth !== null ? Math.max(0, markEth - intrinsicEth) : null;
   const timeValueUsd = timeValueEth !== null && ethPrice > 0 ? timeValueEth * ethPrice : null;
   const thetaDayUsd = cell.theta !== null && ethPrice > 0 ? Math.abs(cell.theta / 365 * ethPrice) : null;
@@ -1266,16 +1212,68 @@ function ThetaPopupModal({ info, onClose, optionType }: { info: ThetaPopupCell; 
         </div>
 
         <div className="px-4 pb-6 space-y-4">
-          {/* 当前状态：4格并排 */}
-          <div className="grid grid-cols-4 gap-2">
+          {/* 当前状态：两行布局 */}
+          {/* 第一行：生命周期三格 */}
+          <div className="grid grid-cols-3 gap-2">
             <div className="bg-[var(--ac-bg-cell-empty)]/80 rounded px-2 py-2">
-              <div className="text-[10px] text-[var(--ac-text-secondary)] font-sans">剩余天数</div>
-              <div className="text-white font-bold text-sm">{daysLeft}D</div>
+              <div className="text-[10px] text-[var(--ac-text-secondary)] font-sans">总天数</div>
+              <div className="text-[var(--ac-text-primary)] font-bold text-sm">{totalDays}D</div>
             </div>
             <div className="bg-[var(--ac-bg-cell-empty)]/80 rounded px-2 py-2">
-              <div className="text-[10px] text-[var(--ac-text-secondary)] font-sans">已消耗</div>
+              <div className="text-[10px] text-[var(--ac-text-secondary)] font-sans">已过</div>
               <div className="text-[var(--ac-text-primary)] font-bold text-sm">{consumedDays}D</div>
             </div>
+            <div className="bg-[var(--ac-bg-cell-empty)]/80 rounded px-2 py-2">
+              <div className="text-[10px] text-[var(--ac-text-secondary)] font-sans">剩余</div>
+              <div className="text-white font-bold text-sm">{daysLeft}D</div>
+            </div>
+          </div>
+          {/* 生命周期进度条 */}
+          {totalDays > 0 && (
+            <div>
+              <div className="relative h-4 rounded overflow-hidden bg-[var(--ac-bg-cell-empty)]">
+                {/* 已过部分 */}
+                <div
+                  className="absolute left-0 top-0 h-full"
+                  style={{
+                    width: `${Math.min((consumedDays / totalDays) * 100, 100)}%`,
+                    background: daysLeft < 30
+                      ? 'linear-gradient(90deg, #374151, #6b7280)'
+                      : 'linear-gradient(90deg, #1e3a5f, #2563eb44)'
+                  }}
+                />
+                {/* 剩余部分 */}
+                <div
+                  className="absolute top-0 h-full"
+                  style={{
+                    left: `${Math.min((consumedDays / totalDays) * 100, 100)}%`,
+                    width: `${Math.max((daysLeft / totalDays) * 100, 0)}%`,
+                    background: daysLeft < 30
+                      ? 'linear-gradient(90deg, #f43f5e, #fb923c)'
+                      : daysLeft < 60
+                      ? 'linear-gradient(90deg, #fb7185, #fda4af)'
+                      : 'linear-gradient(90deg, #22d3ee55, #06b6d4aa)'
+                  }}
+                />
+                {/* 当前位置分割线 */}
+                <div
+                  className="absolute top-0 h-full w-0.5 bg-white/70"
+                  style={{ left: `${Math.min((consumedDays / totalDays) * 100, 100)}%` }}
+                />
+                {/* 当前位置小三角指针 */}
+                <div
+                  className="absolute top-0 h-full flex items-center justify-center"
+                  style={{ left: `calc(${Math.min((consumedDays / totalDays) * 100, 100)}% - 5px)`, width: 10 }}
+                >
+                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                    <polygon points="4,1 7,7 1,7" fill="white" opacity="0.9"/>
+                  </svg>
+                </div>
+              </div>
+            </div>
+          )}
+          {/* 第二行：价值两格 */}
+          <div className="grid grid-cols-2 gap-2">
             <div className="bg-[var(--ac-bg-cell-empty)]/80 rounded px-2 py-2">
               <div className="text-[10px] text-[var(--ac-text-secondary)] font-sans">时间价值</div>
               <div className="font-bold text-sm" style={{ color: '#fb7185' }}>
@@ -1312,11 +1310,91 @@ function ThetaPopupModal({ info, onClose, optionType }: { info: ThetaPopupCell; 
                   }}
                 />
                 <div className="absolute top-0 h-full w-0.5 bg-white/60" style={{ left: `${(1 - tvRatioNow) * 100}%` }} />
-                <div className="absolute inset-0 flex items-center justify-between px-2">
-                  <span className="text-[10px] text-[var(--ac-text-muted)] font-sans">已消耗</span>
-                  <span className="text-[10px] text-[var(--ac-text-secondary)] font-sans">剩余</span>
+                {/* 当前位置小三角指针 */}
+                <div
+                  className="absolute top-0 h-full flex items-center justify-center"
+                  style={{ left: `calc(${(1 - tvRatioNow) * 100}% - 5px)`, width: 10 }}
+                >
+                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                    <polygon points="4,1 7,7 1,7" fill="white" opacity="0.9"/>
+                  </svg>
                 </div>
               </div>
+              {/* 堆叠进度条：内在价值 + 时间价值 = 总价値 */}
+              {(() => {
+                const intrinsicUsd = intrinsicEth !== null && ethPrice > 0 ? intrinsicEth * ethPrice : 0;
+                const totalUsd = markEth !== null && ethPrice > 0 ? markEth * ethPrice : null;
+                const tvUsd = timeValueUsd ?? 0;
+                const maxVal = totalUsd && totalUsd > 0 ? totalUsd : 1;
+                const intrinsicPct = Math.min((intrinsicUsd / maxVal) * 100, 100);
+                const tvPct = Math.min((tvUsd / maxVal) * 100, 100 - intrinsicPct);
+                return (
+                  <div className="mt-2">
+                    {/* 标签行 */}
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1">
+                          <div className="w-2 h-2 rounded-sm" style={{ background: '#64748b' }} />
+                          <span className="text-[9px] text-[var(--ac-text-muted)] font-sans">内在 ${intrinsicUsd.toFixed(1)}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <div className="w-2 h-2 rounded-sm" style={{ background: '#fb7185' }} />
+                          <span className="text-[9px] text-[var(--ac-text-muted)] font-sans">时间 ${tvUsd.toFixed(1)}</span>
+                        </div>
+                      </div>
+                      <span className="text-[9px] text-[var(--ac-text-secondary)] font-sans">总 ${totalUsd !== null ? totalUsd.toFixed(1) : '—'}</span>
+                    </div>
+                    {/* 堆叠条 */}
+                    <div className="relative h-4 rounded overflow-hidden bg-[var(--ac-bg-cell-empty)]">
+                      {/* 内在价值段：深灰蓝 */}
+                      <div
+                        className="absolute left-0 top-0 h-full"
+                        style={{
+                          width: `${intrinsicPct}%`,
+                          background: 'linear-gradient(90deg, #1e293b, #64748b)',
+                          transition: 'width 0.4s cubic-bezier(0.23,1,0.32,1)'
+                        }}
+                      />
+                      {/* 时间价値段：玫瑰红 */}
+                      <div
+                        className="absolute top-0 h-full"
+                        style={{
+                          left: `${intrinsicPct}%`,
+                          width: `${tvPct}%`,
+                          background: 'linear-gradient(90deg, #fb7185, #fda4af)',
+                          transition: 'left 0.4s cubic-bezier(0.23,1,0.32,1), width 0.4s cubic-bezier(0.23,1,0.32,1)'
+                        }}
+                      />
+                      {/* 内在/时间分界线 */}
+                      {intrinsicPct > 0 && intrinsicPct < 100 && (
+                        <div className="absolute top-0 h-full w-px bg-white/50" style={{ left: `${intrinsicPct}%` }} />
+                      )}
+                      {/* 小三角指针（时间价値结束处） */}
+                      <div
+                        className="absolute top-0 h-full flex items-center justify-center"
+                        style={{ left: `calc(${intrinsicPct + tvPct}% - 5px)`, width: 10 }}
+                      >
+                        <svg width="7" height="7" viewBox="0 0 8 8" fill="none">
+                          <polygon points="4,1 7,7 1,7" fill="white" opacity="0.85"/>
+                        </svg>
+                      </div>
+                      {/* 百分比标注 */}
+                      <div className="absolute inset-0 flex items-center px-1.5 gap-1 pointer-events-none">
+                        {intrinsicPct > 8 && (
+                          <span className="text-[8px] text-white/70 font-sans" style={{ width: `${intrinsicPct}%`, textAlign: 'center' }}>
+                            {intrinsicPct.toFixed(0)}%
+                          </span>
+                        )}
+                        {tvPct > 8 && (
+                          <span className="text-[8px] text-white/80 font-sans" style={{ width: `${tvPct}%`, textAlign: 'center' }}>
+                            {tvPct.toFixed(0)}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="text-[10px] text-[var(--ac-text-muted)] font-sans mt-1">基于 √(剩余DTE/总DTE) · 前段消耗慢，临近到期加速</div>
               {/* Theta 衰减曲线 */}
               {cell.iv !== null && ethPrice > 0 && (
@@ -1386,6 +1464,89 @@ function ThetaPopupModal({ info, onClose, optionType }: { info: ThetaPopupCell; 
               {thetaVegaLabel && <span className="text-xs text-[var(--ac-text-muted)] font-sans">· {thetaVegaLabel}</span>}
             </div>
           )}
+          {/* Delta 中性对冲 */}
+          {cell.delta !== null && (
+            <div className="pt-2 border-t border-[var(--ac-border)]/20">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs text-[var(--ac-text-secondary)] font-sans tracking-wide">Δ 中性对冲</span>
+                <span className="text-[10px] text-[var(--ac-text-muted)] font-sans">卖出 1 手期权</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {/* 对冲数量 */}
+                <div className="bg-[var(--ac-bg-cell-empty)] rounded px-2.5 py-2">
+                  <div className="text-[9px] text-[var(--ac-text-muted)] font-sans mb-0.5">需买入 ETH</div>
+                  <div className="text-sm font-semibold font-sans" style={{ color: '#60a5fa' }}>
+                    {Math.abs(cell.delta).toFixed(4)}
+                    <span className="text-[10px] text-[var(--ac-text-muted)] ml-1">ETH</span>
+                  </div>
+                  <div className="text-[9px] text-[var(--ac-text-muted)] font-sans mt-0.5">
+                    ≈ ${(Math.abs(cell.delta) * ethPrice).toFixed(0)} USD
+                  </div>
+                </div>
+                {/* Delta 值与方向 */}
+                <div className="bg-[var(--ac-bg-cell-empty)] rounded px-2.5 py-2">
+                  <div className="text-[9px] text-[var(--ac-text-muted)] font-sans mb-0.5">当前 Delta</div>
+                  <div className="text-sm font-semibold font-sans" style={{ color: cell.delta > 0 ? '#34d399' : '#f87171' }}>
+                    {cell.delta > 0 ? '+' : ''}{cell.delta.toFixed(4)}
+                  </div>
+                  <div className="text-[9px] font-sans mt-0.5" style={{ color: cell.delta > 0 ? '#34d399' : '#f87171' }}>
+                    {optionType === 'C'
+                      ? (cell.delta >= 0.5 ? '深度实值' : cell.delta >= 0.3 ? '轻度实值' : cell.delta >= 0.1 ? '虚值' : '深度虚值')
+                      : (cell.delta <= -0.5 ? '深度实值' : cell.delta <= -0.3 ? '轻度实值' : cell.delta <= -0.1 ? '虚值' : '深度虚值')
+                    }
+                  </div>
+                </div>
+              </div>
+              <div className="text-[9px] text-[var(--ac-text-muted)] font-sans mt-1.5">
+                对冲后持仓 Delta ≈ 0 · ETH 现价 ${ethPrice.toFixed(0)} · 随价格变动需动态调整
+              </div>
+            </div>
+          )}
+          {/* Gamma 对冲频率 */}
+          {cell.gamma !== null && cell.gamma !== 0 && (() => {
+            // Deribit gamma 单位：每 1 ETH 价格变动时的 delta 变化量
+            // ETH 涨跌 1% 时 delta 变化 = gamma × (ethPrice × 0.01)
+            const gammaDeltaChange = Math.abs(cell.gamma) * ethPrice * 0.01;
+            const gammaDeltaUsd = gammaDeltaChange * ethPrice;
+            // Gamma 强度分级
+            const gammaLevel = gammaDeltaChange > 0.05 ? 'high' : gammaDeltaChange > 0.02 ? 'mid' : 'low';
+            const gammaColor = gammaLevel === 'high' ? '#f87171' : gammaLevel === 'mid' ? '#fbbf24' : '#34d399';
+            const gammaLabel = gammaLevel === 'high' ? '高频调仓' : gammaLevel === 'mid' ? '中频调仓' : '低频调仓';
+            return (
+              <div className="pt-2 border-t border-[var(--ac-border)]/20">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs text-[var(--ac-text-secondary)] font-sans tracking-wide">Γ 动态对冲频率</span>
+                  <span className="text-[10px] font-sans" style={{ color: gammaColor }}>{gammaLabel}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {/* 每 1% 需调整 ETH */}
+                  <div className="bg-[var(--ac-bg-cell-empty)] rounded px-2.5 py-2">
+                    <div className="text-[9px] text-[var(--ac-text-muted)] font-sans mb-0.5">每涨跌 1% 调整</div>
+                    <div className="text-sm font-semibold font-sans" style={{ color: gammaColor }}>
+                      {gammaDeltaChange.toFixed(4)}
+                      <span className="text-[10px] text-[var(--ac-text-muted)] ml-1">ETH</span>
+                    </div>
+                    <div className="text-[9px] text-[var(--ac-text-muted)] font-sans mt-0.5">
+                      ≈ ${gammaDeltaUsd.toFixed(0)} USD
+                    </div>
+                  </div>
+                  {/* Gamma 原始值 */}
+                  <div className="bg-[var(--ac-bg-cell-empty)] rounded px-2.5 py-2">
+                    <div className="text-[9px] text-[var(--ac-text-muted)] font-sans mb-0.5">Gamma 值</div>
+                    <div className="text-sm font-semibold font-sans" style={{ color: gammaColor }}>
+                      {cell.gamma.toFixed(6)}
+                    </div>
+                    <div className="text-[9px] text-[var(--ac-text-muted)] font-sans mt-0.5">
+                      Δ/ETH 变动
+                    </div>
+                  </div>
+                </div>
+                <div className="text-[9px] text-[var(--ac-text-muted)] font-sans mt-1.5">
+                  Gamma 越大对冲频率越高 · 调仓产生滑点与手续费 · 近 ATM 及临近到期时 Gamma 最大
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
     </div>
@@ -1393,7 +1554,16 @@ function ThetaPopupModal({ info, onClose, optionType }: { info: ThetaPopupCell; 
 }
 
 // ─── 详情弹窗 ──────────────────────────────────────────────────
-function DetailModal({ cell, onClose, optionType }: { cell: DetailCell; onClose: () => void; optionType: 'C' | 'P' }) {
+function DetailModal({ cell, onClose, optionType, onSwitchType, allStrikes, onStrikeChange, allExpiries, onExpiryChange }: {
+  cell: DetailCell;
+  onClose: () => void;
+  optionType: 'C' | 'P';
+  onSwitchType?: () => void;
+  allStrikes?: number[];
+  onStrikeChange?: (newStrike: number) => void;
+  allExpiries?: ExpiryConfig[];
+  onExpiryChange?: (newExpiry: ExpiryConfig) => void;
+}) {
   const { strike, expiry, data, ethPrice } = cell;
   const daysLeft = calcDaysLeft(expiry.expireDate);
   const yearsLeft = daysLeft / 365;
@@ -1415,6 +1585,24 @@ function DetailModal({ cell, onClose, optionType }: { cell: DetailCell; onClose:
   // 点击同一个指标再次点击则关闭图表
   const toggleMetric = (m: GreekKey) => setActiveMetric(prev => prev === m ? null : m);
 
+  // Greeks 迷你走势图数据（一次性拉取，共享给 6 个按钮）
+  const { seriesMap: miniSeries } = useGreeksMiniData(
+    data.instrumentName, strike, expiry.expireDate, optionType
+  );
+
+  // 切换行权价 / 到期日时的淡入淡出动画
+  const [fadeIn, setFadeIn] = useState(true);
+  const prevCellKey = useRef(`${strike}-${expiry.code}`);
+  useEffect(() => {
+    const key = `${strike}-${expiry.code}`;
+    if (key !== prevCellKey.current) {
+      prevCellKey.current = key;
+      setFadeIn(false);
+      const t = setTimeout(() => setFadeIn(true), 80);
+      return () => clearTimeout(t);
+    }
+  }, [strike, expiry.code]);
+
   // ── 派生指标 ──
   const markUsdDollar = data.markUsd !== null && ethPrice > 0 ? data.markUsd * ethPrice : null;
   // λ Lambda = delta × (ETH现价 / 标记价USD)
@@ -1424,7 +1612,7 @@ function DetailModal({ cell, onClose, optionType }: { cell: DetailCell; onClose:
   const breakEven = markUsdDollar !== null
     ? (optionType === 'C' ? strike + markUsdDollar : strike - markUsdDollar) : null;
   // Theta/日 USD（Deribit API 返回的是年化值，除以365得日化，再×ETH现价得USD/天）
-  const thetaDaily = data.theta !== null ? data.theta / 365 : null;
+  const thetaDaily = data.theta !== null ? data.theta / 365 : null; // Deribit theta 已是日化値，不需除 365
   const thetaUsd = thetaDaily !== null && ethPrice > 0 ? thetaDaily * ethPrice : null;
   // Vega/1%IV USD（Deribit Vega 已是 IV 变动 1% 的敏感度，×ETH现价得USD）
   const vegaUsd = data.vega !== null && ethPrice > 0 ? data.vega * ethPrice : null;
@@ -1477,15 +1665,112 @@ function DetailModal({ cell, onClose, optionType }: { cell: DetailCell; onClose:
             style={{ width: dragY > 20 ? 48 : 36, height: 4, opacity: dragY > 0 ? 1 : 0.5 }}
           />
         </div>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--ac-border-subtle)] sticky top-0 bg-[var(--ac-bg-card)]/95 backdrop-blur">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-white font-bold text-base font-sans">${strike.toLocaleString()}</span>
-              <span className="text-[length:var(--ac-fs-sm)] font-sans text-[var(--ac-text-secondary)]">{optionType === 'C' ? 'CALL' : 'PUT'}</span>
+
+        {/* 内容区域淡入淡出动画包裹层 */}
+        <div style={{ opacity: fadeIn ? 1 : 0, transition: fadeIn ? 'opacity 160ms cubic-bezier(0.23,1,0.32,1)' : 'none' }}>
+
+        {/* ── 顶部 Header：合约身份 + 关键快览 ── */}
+        <div className="border-b border-[var(--ac-border-subtle)]">
+          {/* 第一行：合约名 + 关闭按钮 */}
+          <div className="flex items-start justify-between px-4 pt-3 pb-1">
+            <div className="flex-1 min-w-0">
+              {/* 合约全名（最显眼） */}
+              <div className="text-[length:var(--ac-fs-xs)] font-mono text-[var(--ac-text-muted)] tracking-wider truncate mb-0.5">
+                {data.instrumentName || '—'}
+              </div>
+              {/* 行权价 + 类型 + 到期 */}
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <span className="text-white font-bold font-sans" style={{ fontSize: 'clamp(17px,4.5vw,22px)' }}>
+                  ${strike.toLocaleString()}
+                </span>
+                <span
+                  className="text-xs font-bold px-1.5 py-0.5 rounded font-sans"
+                  style={{
+                    background: optionType === 'C' ? 'rgba(52,211,153,0.15)' : 'rgba(251,113,133,0.15)',
+                    color: optionType === 'C' ? '#34D399' : '#FB7185',
+                    border: `1px solid ${optionType === 'C' ? 'rgba(52,211,153,0.4)' : 'rgba(251,113,133,0.4)'}`,
+                  }}
+                >
+                  {optionType === 'C' ? 'CALL' : 'PUT'}
+                </span>
+                <span className="text-[length:var(--ac-fs-sm)] text-[var(--ac-text-secondary)] font-sans">
+                  {expiry.fullLabel}
+                </span>
+                <span className="text-[length:var(--ac-fs-xs)] font-mono px-1 py-0.5 rounded bg-[var(--ac-bg-cell-empty)] text-amber-400 border border-amber-500/30">
+                  {daysLeft}D
+                </span>
+                {daysLeft < 30 && (
+                  <span className="text-[length:var(--ac-fs-xs)] font-sans px-1 py-0.5 rounded bg-red-900/50 text-red-300 border border-red-500/30">⚡临期</span>
+                )}
+              </div>
             </div>
-            <div className="text-[var(--ac-text-secondary)] text-[length:var(--ac-fs-sm)] font-sans mt-0.5">{expiry.fullLabel} · {daysLeft}D</div>
+            <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+              {/* 左右到期日切换 */}
+              {allExpiries && allExpiries.length > 1 && onExpiryChange && (() => {
+                const idx = allExpiries.findIndex(e => e.code === expiry.code);
+                const prevExpiry = idx > 0 ? allExpiries[idx - 1] : null;
+                const nextExpiry = idx < allExpiries.length - 1 ? allExpiries[idx + 1] : null;
+                return (
+                  <div className="flex items-center rounded overflow-hidden border border-[var(--ac-border)]/60">
+                    <button
+                      onClick={() => prevExpiry && onExpiryChange(prevExpiry)}
+                      disabled={prevExpiry === null}
+                      className="w-6 h-6 flex items-center justify-center text-[var(--ac-text-secondary)] hover:text-white hover:bg-[var(--ac-bg-cell-empty)] disabled:opacity-30 disabled:cursor-not-allowed text-xs transition-colors"
+                      title={prevExpiry ? `上一到期日 ${prevExpiry.label}` : undefined}
+                    >←</button>
+                    <span className="px-1 text-[10px] font-mono text-[var(--ac-text-muted)] border-l border-r border-[var(--ac-border)]/60 leading-6 select-none">
+                      {idx + 1}/{allExpiries.length}
+                    </span>
+                    <button
+                      onClick={() => nextExpiry && onExpiryChange(nextExpiry)}
+                      disabled={nextExpiry === null}
+                      className="w-6 h-6 flex items-center justify-center text-[var(--ac-text-secondary)] hover:text-white hover:bg-[var(--ac-bg-cell-empty)] disabled:opacity-30 disabled:cursor-not-allowed text-xs transition-colors"
+                      title={nextExpiry ? `下一到期日 ${nextExpiry.label}` : undefined}
+                    >→</button>
+                  </div>
+                );
+              })()}
+              {/* 上下行权价切换 */}
+              {allStrikes && allStrikes.length > 1 && onStrikeChange && (() => {
+                const idx = allStrikes.indexOf(strike);
+                const prevStrike = idx > 0 ? allStrikes[idx - 1] : null;
+                const nextStrike = idx < allStrikes.length - 1 ? allStrikes[idx + 1] : null;
+                return (
+                  <div className="flex rounded overflow-hidden border border-[var(--ac-border)]/60">
+                    <button
+                      onClick={() => prevStrike !== null && onStrikeChange(prevStrike)}
+                      disabled={prevStrike === null}
+                      className="w-6 h-6 flex items-center justify-center text-[var(--ac-text-secondary)] hover:text-white hover:bg-[var(--ac-bg-cell-empty)] disabled:opacity-30 disabled:cursor-not-allowed text-xs transition-colors"
+                      title={prevStrike !== null ? `上一档 $${prevStrike.toLocaleString()}` : undefined}
+                    >↑</button>
+                    <button
+                      onClick={() => nextStrike !== null && onStrikeChange(nextStrike)}
+                      disabled={nextStrike === null}
+                      className="w-6 h-6 flex items-center justify-center text-[var(--ac-text-secondary)] hover:text-white hover:bg-[var(--ac-bg-cell-empty)] disabled:opacity-30 disabled:cursor-not-allowed text-xs transition-colors border-l border-[var(--ac-border)]/60"
+                      title={nextStrike !== null ? `下一档 $${nextStrike.toLocaleString()}` : undefined}
+                    >↓</button>
+                  </div>
+                );
+              })()}
+              {/* C/P 切换 */}
+              {onSwitchType && (
+                <button
+                  onClick={onSwitchType}
+                  className="flex items-center gap-0.5 px-2 py-1 rounded text-[length:var(--ac-fs-xs)] font-bold font-sans transition-colors duration-150 border"
+                  style={{
+                    background: optionType === 'C' ? 'rgba(251,113,133,0.12)' : 'rgba(52,211,153,0.12)',
+                    color: optionType === 'C' ? '#FB7185' : '#34D399',
+                    borderColor: optionType === 'C' ? 'rgba(251,113,133,0.35)' : 'rgba(52,211,153,0.35)',
+                  }}
+                  title={`切换到 ${optionType === 'C' ? 'PUT' : 'CALL'}`}
+                >
+                  ⇄ {optionType === 'C' ? 'PUT' : 'CALL'}
+                </button>
+              )}
+              <button onClick={onClose} className="text-[var(--ac-text-secondary)] hover:text-white w-7 h-7 flex items-center justify-center rounded hover:bg-[var(--ac-bg-cell-empty)] text-base leading-none">×</button>
+            </div>
           </div>
-          <button onClick={onClose} className="text-[var(--ac-text-secondary)] hover:text-white w-7 h-7 flex items-center justify-center rounded-[1.5px] hover:bg-[var(--ac-bg-cell-empty)] text-base leading-none">×</button>
+
         </div>
         <div className="px-4 py-4 space-y-3">
           {/* ===== 价格卡片（最顶部，重点展示）===== */}
@@ -1535,6 +1820,27 @@ function DetailModal({ cell, onClose, optionType }: { cell: DetailCell; onClose:
                 {data.markUsd !== null && ethPrice > 0 && (
                   <span className="text-[length:var(--ac-fs-sm)] text-[var(--ac-text-secondary)] font-sans ml-2">≈ ${(data.markUsd * ethPrice).toFixed(2)}</span>
                 )}
+              </div>
+            </div>
+            {/* 持仓量 / 24h成交量 / 盈亏平衡 */}
+            <div className="grid grid-cols-3 divide-x divide-[var(--ac-border)]/40 border-t border-[var(--ac-border)]/60">
+              <div className="px-3 py-2 text-center">
+                <div className="text-[length:var(--ac-fs-xs)] text-[var(--ac-text-muted)] font-sans mb-0.5">持仓量 OI</div>
+                <div className="text-[var(--ac-text-primary)] font-mono font-semibold" style={{ fontSize: 'clamp(10px,2.8vw,13px)' }}>
+                  {data.openInterest !== null ? data.openInterest.toLocaleString() : '—'}
+                </div>
+              </div>
+              <div className="px-3 py-2 text-center">
+                <div className="text-[length:var(--ac-fs-xs)] text-[var(--ac-text-muted)] font-sans mb-0.5">24h 成交量</div>
+                <div className="text-[var(--ac-text-primary)] font-mono font-semibold" style={{ fontSize: 'clamp(10px,2.8vw,13px)' }}>
+                  {data.volume !== null ? data.volume.toLocaleString() : '—'}
+                </div>
+              </div>
+              <div className="px-3 py-2 text-center">
+                <div className="text-[length:var(--ac-fs-xs)] text-[var(--ac-text-muted)] font-sans mb-0.5">盈亏平衡</div>
+                <div className="text-amber-300 font-mono font-semibold" style={{ fontSize: 'clamp(10px,2.8vw,13px)' }}>
+                  {breakEven !== null ? `$${breakEven.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'}
+                </div>
               </div>
             </div>
           </div>
@@ -1966,6 +2272,7 @@ function DetailModal({ cell, onClose, optionType }: { cell: DetailCell; onClose:
               >
                 <div className="text-[length:var(--ac-fs-xs)] text-[var(--ac-text-secondary)] font-sans">σ IV{ivRank !== null ? ` · IVR ${ivRank}%` : ''}</div>
                 <div className="text-cyan-400 font-sans font-medium text-xs">{data.iv !== null ? `${(data.iv * 100).toFixed(1)}%` : '—'}</div>
+                {miniSeries.iv && <GreeksMiniChart values={miniSeries.iv} color="#22d3ee" />}
               </button>
               {/* 2. Delta */}
               <button
@@ -1974,6 +2281,7 @@ function DetailModal({ cell, onClose, optionType }: { cell: DetailCell; onClose:
               >
                 <div className="text-[length:var(--ac-fs-xs)] text-[var(--ac-text-secondary)] font-sans">δ Delta</div>
                 <div className="text-blue-400 font-sans font-medium text-xs">{fmt(data.delta, 4)}</div>
+                {miniSeries.delta && <GreeksMiniChart values={miniSeries.delta} color="#60a5fa" />}
               </button>
               {/* 3. Gamma */}
               <button
@@ -1982,6 +2290,7 @@ function DetailModal({ cell, onClose, optionType }: { cell: DetailCell; onClose:
               >
                 <div className="text-[length:var(--ac-fs-xs)] text-[var(--ac-text-secondary)] font-sans">γ Gamma</div>
                 <div className="text-violet-400 font-sans font-medium text-xs">{data.gamma !== null ? data.gamma.toFixed(6) : '—'}</div>
+                {miniSeries.gamma && <GreeksMiniChart values={miniSeries.gamma} color="#a78bfa" />}
               </button>
               {/* 4. Theta */}
               <button
@@ -1990,6 +2299,7 @@ function DetailModal({ cell, onClose, optionType }: { cell: DetailCell; onClose:
               >
                 <div className="text-[length:var(--ac-fs-xs)] text-[var(--ac-text-secondary)] font-sans">θ Theta</div>
                 <div className="text-rose-400 font-sans font-medium text-xs">{thetaDaily !== null ? thetaDaily.toFixed(6) : '—'}</div>
+                {miniSeries.theta && <GreeksMiniChart values={miniSeries.theta.map(v => Math.abs(v))} color="#fb7185" />}
               </button>
               {/* 5. Vega */}
               <button
@@ -1998,6 +2308,7 @@ function DetailModal({ cell, onClose, optionType }: { cell: DetailCell; onClose:
               >
                 <div className="text-[length:var(--ac-fs-xs)] text-[var(--ac-text-secondary)] font-sans">ν Vega</div>
                 <div className="text-emerald-400 font-sans font-medium text-xs">{data.vega !== null ? data.vega.toFixed(6) : '—'}</div>
+                {miniSeries.vega && <GreeksMiniChart values={miniSeries.vega} color="#34d399" />}
               </button>
               {/* 6. Rho */}
               <button
@@ -2006,6 +2317,7 @@ function DetailModal({ cell, onClose, optionType }: { cell: DetailCell; onClose:
               >
                 <div className="text-[length:var(--ac-fs-xs)] text-[var(--ac-text-secondary)] font-sans">ρ Rho</div>
                 <div className="text-amber-400 font-sans font-medium text-xs">{data.rho !== null ? data.rho.toFixed(5) : '—'}</div>
+                {miniSeries.rho && <GreeksMiniChart values={miniSeries.rho} color="#fbbf24" />}
               </button>
               {/* 7. OI */}
               <div className="px-1.5 py-1"><div className="text-[length:var(--ac-fs-xs)] text-[var(--ac-text-secondary)] font-sans">持仓量 OI</div><div className="text-[var(--ac-text-primary)] font-sans text-xs">{data.openInterest !== null ? data.openInterest.toLocaleString() : '—'}</div></div>
@@ -2026,8 +2338,8 @@ function DetailModal({ cell, onClose, optionType }: { cell: DetailCell; onClose:
           {markUsdDollar !== null && (
             <div className="bg-[var(--ac-bg-cell-empty)] rounded-[1.5px] border border-[var(--ac-border)] overflow-hidden">
               <div className="flex items-center justify-between px-3 pt-2 pb-1.5 border-b border-[var(--ac-border)]/40">
-                <span className="text-[length:var(--ac-fs-sm)] text-[var(--ac-text-secondary)] font-sans tracking-widest uppercase">Payoff 图（卖方到期损益）</span>
-                <span className="text-[length:var(--ac-fs-xs)] text-[var(--ac-text-muted)] font-sans">收入 = 权利金 | 上方 = 盈利</span>
+                <span className="text-[length:var(--ac-fs-sm)] text-[var(--ac-text-secondary)] font-sans tracking-widest uppercase">四方向到期损益对比</span>
+                <span className="text-[length:var(--ac-fs-xs)] text-[var(--ac-text-muted)] font-sans">买卖 × CALL/PUT | 上方 = 盈利</span>
               </div>
               <PayoffChart
                 strike={strike}
@@ -2037,6 +2349,29 @@ function DetailModal({ cell, onClose, optionType }: { cell: DetailCell; onClose:
               />
             </div>
           )}
+
+          {/* ===== Theta 衰减曲线 ===== */}
+          {data.iv !== null && ethPrice > 0 && (() => {
+            const totalDays = (() => {
+              const candidates = [30, 60, 90, 120, 180, 270, 365, 450, 540];
+              return candidates.find(c => c >= daysLeft) ?? daysLeft;
+            })();
+            return (
+              <div className="bg-[var(--ac-bg-cell-empty)] rounded-[1.5px] border border-[var(--ac-border)] overflow-hidden">
+                <div className="px-3 pt-2 pb-0.5">
+                  <ThetaDecayCurve
+                    strike={strike}
+                    expireDate={expiry.expireDate}
+                    iv={data.iv}
+                    ethPrice={ethPrice}
+                    daysLeft={daysLeft}
+                    totalDays={totalDays}
+                    isCall={optionType === 'C'}
+                  />
+                </div>
+              </div>
+            );
+          })()}
 
           <div className="rounded-[1.5px] p-3 border border-[var(--ac-border-subtle)]/60">
             <div className="text-[length:var(--ac-fs-sm)] text-[var(--ac-text-secondary)] font-sans tracking-widest uppercase mb-1.5">合约信息</div>
@@ -2049,6 +2384,7 @@ function DetailModal({ cell, onClose, optionType }: { cell: DetailCell; onClose:
             </div>
           </div>
         </div>
+        </div>{/* /fade wrapper */}
       </div>
     </div>
   );
@@ -2061,7 +2397,8 @@ function useExpiryWs(
   onEthPrice: ((p: number) => void) | null,
   onCellUpdate: (strike: number, expiryCode: string, name: string, data: Record<string, unknown>, ep: number) => void,
   onInstrumentsLoaded: (expiryCode: string, strikes: number[], instrumentNames: string[]) => void,
-  optionType: 'C' | 'P'
+  optionType: 'C' | 'P',
+  _refreshKey?: number
 ) {
   const wsRef = useRef<WebSocket | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2173,7 +2510,7 @@ function useExpiryWs(
       }, delayRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expiryCode, optionType]);
+  }, [expiryCode, optionType, _refreshKey]);
 
   useEffect(() => {
     connect();
@@ -2189,6 +2526,25 @@ function useExpiryWs(
 // ─── localStorage 缓存工具 ────────────────────────────────────
 const LS_KEY = 'eth-ann-matrix-cache-v2';
 const LS_KEY_IVR = 'eth-ann-ivr-cache-v1';
+const LS_KEY_PREFS = 'eth-ann-filter-prefs-v1';
+
+interface FilterPrefs {
+  selectedMatrixExpiries: string[];
+  activeDims: string[];
+  viewMode?: 'matrix' | 'byStrike' | 'byExpiry';
+  optionType?: 'C' | 'P';
+  payoffDisplayMode?: 'usd' | 'pct';
+}
+function loadFilterPrefs(): FilterPrefs | null {
+  try {
+    const raw = localStorage.getItem(LS_KEY_PREFS);
+    if (!raw) return null;
+    return JSON.parse(raw) as FilterPrefs;
+  } catch { return null; }
+}
+function saveFilterPrefs(prefs: FilterPrefs) {
+  try { localStorage.setItem(LS_KEY_PREFS, JSON.stringify(prefs)); } catch { /* ignore */ }
+}
 
 interface IvrEntry { ivr: number; savedAt: number; }
 function loadIvrCache(): Map<string, IvrEntry> {
@@ -2239,8 +2595,14 @@ function saveCache(snap: CacheSnapshot) {
 // ─── 主组件 ────────────────────────────────────────────────────
 export default function AnnualizedChain() {
   const [ethPrice, setEthPrice] = useState(0); // 币本位年化不需要，但弹窗折算USD需要
-  const [optionType, setOptionType] = useState<'C' | 'P'>('C');
+  // 提前加载偏好，为后续多个 state 初始化提供数据
+  const _earlyPrefs = loadFilterPrefs();
+  const [optionType, setOptionType] = useState<'C' | 'P'>(_earlyPrefs?.optionType ?? 'C');
+  // 下拉刷新：通过递增 refreshKey 触发 useExpiryWs 重连
+  const [refreshKey, setRefreshKey] = useState(0);
   const [showTypeMenu, setShowTypeMenu] = useState(false);
+  const [showProductMenu, setShowProductMenu] = useState(false);
+
   // 年化区间筛选：null = 全部显示
   const [annFilter, setAnnFilter] = useState<[number, number] | null>(null);
   const colorMode = 'mono'; // 热力图功能已移除
@@ -2278,8 +2640,6 @@ export default function AnnualizedChain() {
   // 记录哪些到期日已经完成合约列表加载
   const [loadedExpiries, setLoadedExpiries] = useState<Set<string>>(new Set());
   const [ivrReady, setIvrReady] = useState(false); // IVR加载完成标记（保留供后续使用）
-  // 三视图切换：matrix=全量矩阵, byStrike=按价位卡片, byExpiry=按到期日卡片
-  const [viewMode, setViewMode] = useState<'matrix' | 'byStrike' | 'byExpiry'>('matrix');
   // 按价位：多选行权价（Set）
   const [selectedStrikes, setSelectedStrikes] = useState<Set<number>>(new Set());
   const toggleStrike = (s: number) => setSelectedStrikes(prev => {
@@ -2290,9 +2650,16 @@ export default function AnnualizedChain() {
   });
   // 全量到期日列表（从 Deribit 动态拉取，远期在前）
   const [allExpiries, setAllExpiries] = useState<ExpiryConfig[]>(DEFAULT_EXPIRIES);
-  // 矩阵视图已选中的到期日（默认最近4个）
+  // 矩阵视图已选中的到期日（默认最近4个，优先从 localStorage 恢复）
+  const _savedPrefs = loadFilterPrefs();
+  // 三视图切换——优先从 localStorage 恢复
+  const [viewMode, setViewMode] = useState<'matrix' | 'byStrike' | 'byExpiry'>(
+    _savedPrefs?.viewMode ?? 'matrix'
+  );
   const [selectedMatrixExpiries, setSelectedMatrixExpiries] = useState<Set<string>>(
-    new Set(DEFAULT_EXPIRIES.slice(-4).map(e => e.code))
+    _savedPrefs?.selectedMatrixExpiries?.length
+      ? new Set(_savedPrefs.selectedMatrixExpiries)
+      : new Set(DEFAULT_EXPIRIES.slice(-4).map(e => e.code))
   );
   const toggleMatrixExpiry = (code: string) => setSelectedMatrixExpiries(prev => {
     const next = new Set(prev);
@@ -2308,14 +2675,46 @@ export default function AnnualizedChain() {
     else next.add(code);
     return next;
   });
-  // 维度选择器：控制各视图显示哪些字段
-  const [activeDims, setActiveDims] = useState<Set<DimKey>>(new Set<DimKey>(['ann','ivr','theta','delta','iv','oi']));
+  // 维度选择器：控制各视图显示哪些字段（优先从 localStorage 恢复）
+  const ALL_DIM_KEYS: DimKey[] = ['ann','ivr','theta','delta','iv','oi'];
+  const [activeDims, setActiveDims] = useState<Set<DimKey>>(
+    _savedPrefs?.activeDims?.length
+      ? new Set(_savedPrefs.activeDims.filter((d): d is DimKey => ALL_DIM_KEYS.includes(d as DimKey)))
+      : new Set<DimKey>(['ann','ivr','theta','delta','iv','oi'])
+  );
   const toggleDim = (d: DimKey) => setActiveDims(prev => {
     const next = new Set(prev);
     if (next.has(d)) { if (next.size > 1) next.delete(d); } // 至少保留1个
     else next.add(d);
     return next;
   });
+  // 全量模式下折叠面板：到期日面板 & 指标面板
+  const [showExpiryPanel, setShowExpiryPanel] = useState(false);
+  const [showDimPanel, setShowDimPanel] = useState(false);
+  // 面板向下滑动收起手势
+  const panelSwipeStartY = useRef(0);
+  const panelSwipeDelta = useRef(0);
+  const PANEL_SWIPE_THRESHOLD = 40; // 向下滑动超过 40px 收起
+  function makePanelSwipeHandlers(onDismiss: () => void) {
+    return {
+      onTouchStart: (e: React.TouchEvent) => {
+        panelSwipeStartY.current = e.touches[0].clientY;
+        panelSwipeDelta.current = 0;
+      },
+      onTouchMove: (e: React.TouchEvent) => {
+        const dy = e.touches[0].clientY - panelSwipeStartY.current;
+        panelSwipeDelta.current = dy;
+        // 向下滑动时阻止页面滚动
+        if (dy > 8) e.stopPropagation();
+      },
+      onTouchEnd: () => {
+        if (panelSwipeDelta.current >= PANEL_SWIPE_THRESHOLD) {
+          onDismiss();
+        }
+        panelSwipeDelta.current = 0;
+      },
+    };
+  }
 
   const ethPriceRef = useRef(0);
   // IVR 全量历史缓存：key=instrumentName, value={ivr, points}
@@ -2363,12 +2762,11 @@ export default function AnnualizedChain() {
     const daysLeft = expiry ? calcDaysLeft(expiry.expireDate) : 0;
     const yearsLeft = daysLeft / 365;
     const ep = ethPriceRef.current;
-    // CALL 年化 = mark_price(ETH) / yearsLeft（币本位，ETH 现价约掉）
-    // PUT  年化 = mark_price(ETH) × ETH现价 / 行权价(USD) / yearsLeft（权利金占行权价年化）
-    const annualized = markEth !== null && markEth > 0 && yearsLeft > 0
-      ? (optionType === 'P' && ep > 0 && strike > 0
-          ? (markEth * ep / strike) / yearsLeft
-          : markEth / yearsLeft)
+    // 保证金年化 = mark_price(ETH) × ETH现价 / 行权价(USD) / yearsLeft
+    // 即：权利金占行权价的比例 ÷ 剩余年数
+    // 分母统一为行权价（保证金占用），远月年化低于近月，符合实际投资逻辑
+    const annualized = markEth !== null && markEth > 0 && yearsLeft > 0 && ep > 0 && strike > 0
+      ? (markEth * ep / strike) / yearsLeft
       : null;
 
     const key = `${strike}-${expiryCode}`;
@@ -2515,6 +2913,16 @@ export default function AnnualizedChain() {
     return () => clearTimeout(timer);
   }, [matrix, existMap, allStrikes, lastUpdate, optionType]);
 
+  // 筛选偏好变化时实时写入 localStorage
+  useEffect(() => {
+    saveFilterPrefs({
+      selectedMatrixExpiries: Array.from(selectedMatrixExpiries),
+      activeDims: Array.from(activeDims),
+      viewMode,
+      optionType,
+    });
+  }, [selectedMatrixExpiries, activeDims, viewMode, optionType]);
+
   // 矩阵视图当前激活的到期日列表（按 allExpiries 顺序过滤）
   const activeMatrixExpiries = allExpiries.filter(e => selectedMatrixExpiries.has(e.code));
 
@@ -2570,11 +2978,21 @@ export default function AnnualizedChain() {
     setEthPrice(p);
   }, []);
 
+  // 下拉刷新回调：清空矩阵并重连所有 WebSocket
+  const handleRefresh = useCallback(() => {
+    setMatrix(new Map());
+    setExistMap(new Map());
+    setAllStrikes([]);
+    setLoadedExpiries(new Set());
+    setDetail(null);
+    setRefreshKey(k => k + 1);
+  }, []);
+  const { pullState, pullDistance, progress } = usePullToRefresh({ onRefresh: handleRefresh });
   // 4个独立 WebSocket，每个到期日一个
-  const statusA = useExpiryWs("25SEP26", ethPriceRef, onEthPrice, updateCell, onInstrumentsLoaded, optionType);
-  const statusB = useExpiryWs("25DEC26", ethPriceRef, null, updateCell, onInstrumentsLoaded, optionType);
-  const statusC = useExpiryWs("26MAR27", ethPriceRef, null, updateCell, onInstrumentsLoaded, optionType);
-  const statusD = useExpiryWs("25JUN27", ethPriceRef, null, updateCell, onInstrumentsLoaded, optionType);
+  const statusA = useExpiryWs("25SEP26", ethPriceRef, onEthPrice, updateCell, onInstrumentsLoaded, optionType, refreshKey);
+  const statusB = useExpiryWs("25DEC26", ethPriceRef, null, updateCell, onInstrumentsLoaded, optionType, refreshKey);
+  const statusC = useExpiryWs("26MAR27", ethPriceRef, null, updateCell, onInstrumentsLoaded, optionType, refreshKey);
+  const statusD = useExpiryWs("25JUN27", ethPriceRef, null, updateCell, onInstrumentsLoaded, optionType, refreshKey);
 
   const statuses = [statusA, statusB, statusC, statusD];
   const allConnected = statuses.every(s => s === "connected");
@@ -2611,41 +3029,58 @@ export default function AnnualizedChain() {
 
   // ATM 行自动滚动到视口中心
   const atmRowRef = useRef<HTMLTableRowElement | null>(null);
-  // 记录上一次滞动定位时的 ATM 行权价，用于检测 ATM 切换
+  // 记录上一次自动居中时的 ATM 行权价，用于检测 ATM 切换
   const lastScrolledAtmRef = useRef<number | null>(null);
-  // 防抖定时器：ATM 切换后延迟滞动，避免价格微小波动时频繁触发
+  // 防抖定时器
   const atmScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── 触发条件：所有选中到期日都已完成合约列表加载，且 ATM 已确定 ──
+  const allSelectedLoaded = selectedMatrixExpiries.size > 0 &&
+    Array.from(selectedMatrixExpiries).every(code => loadedExpiries.has(code));
+
   useEffect(() => {
-    if (atmStrike === null || !atmRowRef.current) return;
-    // 已经对这个行权价滞动过，不重复滞动（但首次加载 lastScrolledAtmRef 为 null 时强制执行）
+    // 必须：数据真正加载完成 + ATM 已确定 + 行元素已挂载
+    if (!allSelectedLoaded || atmStrike === null) return;
+    // ATM 未变化时不重复滚动
     if (lastScrolledAtmRef.current !== null && lastScrolledAtmRef.current === atmStrike) return;
-
-    // 清除上一个待执行的延迟
     if (atmScrollTimerRef.current) clearTimeout(atmScrollTimerRef.current);
-
-    // 首次加载（lastScrolledAtmRef 为 null）延迟 400ms 等待渲染完成；后续 ATM 切换延迟 1.5s（防抖）
-    const delay = lastScrolledAtmRef.current === null ? 400 : 1500;
+    // 数据刚加载完：等待 React 渲染完毕（两帧 + 100ms 余量）
+    const delay = lastScrolledAtmRef.current === null ? 150 : 1500;
     atmScrollTimerRef.current = setTimeout(() => {
       if (!atmRowRef.current) return;
       lastScrolledAtmRef.current = atmStrike;
-      // 手动计算 ATM 行相对页面的位置，用 window.scrollTo 确保居中显示
       const rect = atmRowRef.current.getBoundingClientRect();
       const rowCenter = rect.top + rect.height / 2;
       const viewportCenter = window.innerHeight / 2;
       const scrollTarget = window.scrollY + rowCenter - viewportCenter;
       window.scrollTo({ top: scrollTarget, behavior: 'smooth' });
     }, delay);
-
     return () => {
       if (atmScrollTimerRef.current) clearTimeout(atmScrollTimerRef.current);
     };
-  }, [atmStrike]);
+  }, [allSelectedLoaded, atmStrike]);
 
-  // 切换 CALL/PUT 时重置滞动记录，下次数据加载完成后再次自动定位
+  // 切换 CALL/PUT 或下拉刷新时重置，下次加载完成后重新定位
   useEffect(() => {
     lastScrolledAtmRef.current = null;
-  }, [optionType]);
+  }, [optionType, refreshKey]);
+
+  // ATM 行是否远离视口（超过半屏高度），用于触发悬浮按鈕脉冲动画
+  const [atmFar, setAtmFar] = useState(false);
+  useEffect(() => {
+    if (viewMode !== 'matrix') { setAtmFar(false); return; }
+    const THRESHOLD = window.innerHeight * 0.5;
+    const check = () => {
+      if (!atmRowRef.current) { setAtmFar(false); return; }
+      const rect = atmRowRef.current.getBoundingClientRect();
+      const rowCenter = rect.top + rect.height / 2;
+      const viewportCenter = window.innerHeight / 2;
+      setAtmFar(Math.abs(rowCenter - viewportCenter) > THRESHOLD);
+    };
+    check();
+    window.addEventListener('scroll', check, { passive: true });
+    return () => window.removeEventListener('scroll', check);
+  }, [viewMode, atmStrike]);
 
   // 动态骨架屏行数：根据屏幕可用高度计算，每行约 40px，最少 8 行
   const skeletonRows = Math.max(8, Math.floor((window.innerHeight - 120) / 40));
@@ -2694,7 +3129,33 @@ export default function AnnualizedChain() {
         <div className="flex items-center justify-between px-4 pt-2.5 pb-1.5">
           {/* 左：品种 + CALL/PUT 切换 */}
           <div className="flex items-center gap-2">
-            <span className="text-[length:var(--ac-fs-md)] font-sans font-semibold text-[var(--ac-text-primary)] tracking-widest">ETH</span>
+            {/* 品种切换下拉：ETH / A股 */}
+            <div className="relative">
+              <button
+                className="flex items-center gap-0.5 text-[length:var(--ac-fs-md)] font-sans font-semibold text-[var(--ac-text-primary)] tracking-widest hover:text-[var(--ac-text-bright)] transition-colors"
+                onClick={() => setShowProductMenu(v => !v)}
+              >
+                ETH ▾
+              </button>
+              {showProductMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowProductMenu(false)} />
+                  <div className="absolute left-0 top-full mt-1 z-50 bg-[var(--ac-bg-card)] border border-[var(--ac-border)] rounded-[1.5px] overflow-hidden shadow-xl min-w-[120px]">
+                    <button
+                      className="block w-full px-4 py-2 text-left text-[length:var(--ac-fs-md)] font-sans tracking-widest bg-[var(--ac-text-primary)]/10 text-[var(--ac-text-primary)] cursor-default"
+                    >
+                      以太坊
+                    </button>
+                    <button
+                      className="block w-full px-4 py-2 text-left text-[length:var(--ac-fs-md)] font-sans tracking-widest text-[var(--ac-text-secondary)] hover:bg-[var(--ac-bg-cell-empty)] hover:text-[var(--ac-text-bright)] transition-colors"
+                      onClick={() => { setShowProductMenu(false); window.location.href = '/stock-risk'; }}
+                    >
+                      A 股风控
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
             <span className="text-[var(--ac-text-muted)]">/</span>
             <div className="relative">
               <button
@@ -2727,8 +3188,9 @@ export default function AnnualizedChain() {
             <span className="text-[var(--ac-text-muted)] text-[length:var(--ac-fs-md)]">·</span>
             <span className="text-[length:var(--ac-fs-md)] font-sans text-[var(--ac-text-secondary)]">DERIBIT</span>
           </div>
-          {/* 右：ETH价格 + 状态指示 */}
+          {/* 右：以太坊 + ETH价格 + 状态指示 */}
           <div className="flex items-center gap-3">
+            <span className="text-[length:var(--ac-fs-md)] font-sans font-semibold text-[var(--ac-text-secondary)]">以太坊</span>
             {ethPrice > 0 && (
               <span className="text-[length:var(--ac-fs-md)] font-sans font-semibold text-[var(--ac-text-bright)]">
                 ETH {ethPrice.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
@@ -2755,13 +3217,16 @@ export default function AnnualizedChain() {
             <div className="text-[length:var(--ac-fs-xs)] font-sans text-[var(--ac-text-dim)]">{lastUpdate}</div>
           </div>
         </div>
-        {/* 第三行：视图切换3按钮（固定） */}
+        {/* 第三行：视图切换3按钮 + 全量模式下的到期/指标折叠按钮 */}
         <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-[var(--ac-border-subtle)]/40">
           {(['matrix', 'byStrike', 'byExpiry'] as const).map(mode => {
             const label = mode === 'matrix' ? '全量' : mode === 'byStrike' ? '按价位' : '按到期日';
             const active = viewMode === mode;
             return (
-              <button key={mode} onClick={() => setViewMode(mode)}
+              <button key={mode} onClick={() => {
+                setViewMode(mode);
+                if (mode !== 'matrix') { setShowExpiryPanel(false); setShowDimPanel(false); }
+              }}
                 className={`text-[length:var(--ac-fs-sm)] font-sans px-3 py-0.5 rounded-[2px] border transition-all duration-150 shrink-0 ${
                   active
                     ? 'bg-amber-400/20 border-amber-400/60 text-amber-300 font-semibold'
@@ -2771,59 +3236,130 @@ export default function AnnualizedChain() {
               </button>
             );
           })}
-        </div>
-        {/* 第四行：随视图变化的筛选栏 */}
-        {viewMode === 'matrix' && (
-          /* 全量模式：到期日选择器 + 维度选择 */
-          <div>
-            {/* 到期日选择器：横向滚动，远期在前，默认选最近4个 */}
-            <div className="flex items-center gap-0 px-3 py-1.5 border-b border-[var(--ac-border-subtle)]/30 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-              <span className="text-[length:var(--ac-fs-xs)] font-sans text-[var(--ac-text-dim)] shrink-0 mr-2">到期</span>
-              {allExpiries.map(ex => {
-                const active = selectedMatrixExpiries.has(ex.code);
-                return (
-                  <button
-                    key={ex.code}
-                    onClick={() => {
-                      setSelectedMatrixExpiries(prev => {
-                        const next = new Set(prev);
-                        if (next.has(ex.code)) {
-                          if (next.size > 1) next.delete(ex.code);
-                        } else {
-                          if (next.size >= 4) {
-                            toast.warning('最多同时选择 4 个到期日');
-                            return prev;
-                          }
-                          next.add(ex.code);
-                        }
-                        return next;
-                      });
-                    }}
-                    className={`text-[length:var(--ac-fs-xs)] font-sans px-2 py-0.5 rounded-[2px] border transition-all duration-150 shrink-0 mr-1 ${
-                      active ? 'bg-cyan-400/15 border-cyan-400/50 text-cyan-300' : 'bg-transparent border-[var(--ac-border-subtle)]/50 text-[var(--ac-text-dim)] hover:border-[var(--ac-border)]/80 hover:text-[var(--ac-text-secondary)]'
-                    }`}>
-                    {ex.label}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 flex-wrap">
-            <span className="text-[length:var(--ac-fs-xs)] font-sans text-[var(--ac-text-dim)] shrink-0">格内显示</span>
-            {(['ann', 'ivr', 'theta', 'delta', 'iv', 'oi'] as DimKey[]).map(d => {
-              const active = activeDims.has(d);
-              return (
-                <button key={d} onClick={() => toggleDim(d)}
-                  className={`text-[length:var(--ac-fs-xs)] font-sans px-2 py-0.5 rounded-[2px] border transition-all duration-150 shrink-0 ${
-                    active ? 'bg-emerald-400/15 border-emerald-400/50 text-emerald-300' : 'bg-transparent border-[var(--ac-border-subtle)]/50 text-[var(--ac-text-dim)] hover:border-[var(--ac-border)]/80 hover:text-[var(--ac-text-secondary)]'
+          {viewMode === 'matrix' && (() => {
+            // 到期日：非全选（默认4个）时显示角标
+            const totalExpiries = allExpiries.length;
+            const selectedExpiryCount = selectedMatrixExpiries.size;
+            // 默认选中4个，若总数<=4则全选为默认；若总数>4则4个为默认
+            const defaultExpiryCount = Math.min(4, totalExpiries);
+            const expiryBadge = !showExpiryPanel && selectedExpiryCount !== defaultExpiryCount;
+            // 指标：非全选（默认6个全选）时显示角标
+            const totalDims = 6;
+            const selectedDimCount = activeDims.size;
+            const dimBadge = !showDimPanel && selectedDimCount !== totalDims;
+            return (
+              <>
+                <span className="text-[var(--ac-divider)] text-[length:var(--ac-fs-xs)] mx-0.5">|</span>
+                <button
+                  onClick={() => { setShowExpiryPanel(v => !v); setShowDimPanel(false); }}
+                  className={`relative text-[length:var(--ac-fs-xs)] font-sans px-2 py-0.5 rounded-[2px] border transition-all duration-150 shrink-0 flex items-center gap-0.5 ${
+                    showExpiryPanel
+                      ? 'bg-cyan-400/20 border-cyan-400/60 text-cyan-300'
+                      : expiryBadge
+                        ? 'bg-transparent border-red-400/60 text-[var(--ac-text-dim)]'
+                        : 'bg-transparent border-[var(--ac-border-subtle)]/50 text-[var(--ac-text-dim)] hover:border-[var(--ac-border)]/80 hover:text-[var(--ac-text-secondary)]'
                   }`}>
-                  {DIM_LABELS[d].zh}
+                  到期 <span style={{ fontSize: '8px', opacity: 0.7 }}>{showExpiryPanel ? '▲' : '▼'}</span>
+                  {expiryBadge && (
+                    <span className="ac-badge-pop absolute -top-1 -right-1 min-w-[14px] h-[14px] bg-red-500 text-white rounded-full flex items-center justify-center font-sans font-bold" style={{ fontSize: '9px', lineHeight: 1, padding: '0 2px' }}>
+                      {selectedExpiryCount}
+                    </span>
+                  )}
                 </button>
-              );
-            })}
-            </div>
+                <button
+                  onClick={() => { setShowDimPanel(v => !v); setShowExpiryPanel(false); }}
+                  className={`relative text-[length:var(--ac-fs-xs)] font-sans px-2 py-0.5 rounded-[2px] border transition-all duration-150 shrink-0 flex items-center gap-0.5 ${
+                    showDimPanel
+                      ? 'bg-emerald-400/20 border-emerald-400/60 text-emerald-300'
+                      : dimBadge
+                        ? 'bg-transparent border-red-400/60 text-[var(--ac-text-dim)]'
+                        : 'bg-transparent border-[var(--ac-border-subtle)]/50 text-[var(--ac-text-dim)] hover:border-[var(--ac-border)]/80 hover:text-[var(--ac-text-secondary)]'
+                  }`}>
+                  指标 <span style={{ fontSize: '8px', opacity: 0.7 }}>{showDimPanel ? '▲' : '▼'}</span>
+                  {dimBadge && (
+                    <span className="ac-badge-pop absolute -top-1 -right-1 min-w-[14px] h-[14px] bg-red-500 text-white rounded-full flex items-center justify-center font-sans font-bold" style={{ fontSize: '9px', lineHeight: 1, padding: '0 2px' }}>
+                      {selectedDimCount}
+                    </span>
+                  )}
+                </button>
+              </>
+            );
+          })()}
+        </div>
+        {/* 第四行：全量模式下的折叠面板 */}
+        {viewMode === 'matrix' && (
+          <div>
+            {showExpiryPanel && (
+              <div className="ac-panel-enter flex items-center gap-0 px-3 py-1.5 border-b border-[var(--ac-border-subtle)]/30 overflow-x-auto" style={{ scrollbarWidth: 'none' }} {...makePanelSwipeHandlers(() => setShowExpiryPanel(false))}>
+                <span className="text-[length:var(--ac-fs-xs)] font-sans text-[var(--ac-text-dim)] shrink-0 mr-2">到期</span>
+                {allExpiries.map(ex => {
+                  const active = selectedMatrixExpiries.has(ex.code);
+                  return (
+                    <button
+                      key={ex.code}
+                      onClick={() => {
+                        setSelectedMatrixExpiries(prev => {
+                          const next = new Set(prev);
+                          if (next.has(ex.code)) {
+                            if (next.size > 1) next.delete(ex.code);
+                          } else {
+                            if (next.size >= 4) {
+                              toast.warning('最多同时选择 4 个到期日');
+                              return prev;
+                            }
+                            next.add(ex.code);
+                          }
+                          return next;
+                        });
+                      }}
+                      className={`text-[length:var(--ac-fs-xs)] font-sans px-2 py-0.5 rounded-[2px] border transition-all duration-150 shrink-0 mr-1 flex items-center gap-0.5 ${
+                        active
+                          ? 'bg-cyan-500/25 border-cyan-400/70 text-cyan-200 font-semibold shadow-[0_0_6px_rgba(34,211,238,0.2)]'
+                          : 'bg-transparent border-[var(--ac-border-subtle)]/40 text-[var(--ac-text-dim)] hover:border-[var(--ac-border)]/80 hover:text-[var(--ac-text-secondary)]'
+                      }`}>
+                      {active && <span style={{ fontSize: '8px', lineHeight: 1 }}>✓</span>}
+                      {ex.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {showDimPanel && (
+              <div className="ac-panel-enter flex items-center gap-1.5 px-3 py-1.5 flex-wrap border-b border-[var(--ac-border-subtle)]/30" {...makePanelSwipeHandlers(() => setShowDimPanel(false))}>
+                <span className="text-[length:var(--ac-fs-xs)] font-sans text-[var(--ac-text-dim)] shrink-0">格内显示</span>
+                <button
+                  onClick={() => setActiveDims(new Set<DimKey>(['ann','ivr','theta','delta','iv','oi']))}
+                  className="text-[length:var(--ac-fs-xs)] font-sans px-1.5 py-0.5 rounded-[2px] border border-[var(--ac-border-subtle)]/40 text-[var(--ac-text-dim)] hover:border-emerald-400/50 hover:text-emerald-300 transition-all duration-150 shrink-0">
+                  全选
+                </button>
+                <button
+                  onClick={() => {
+                    // 清空时保留年化（至少一个）
+                    setActiveDims(new Set<DimKey>(['ann']));
+                  }}
+                  className="text-[length:var(--ac-fs-xs)] font-sans px-1.5 py-0.5 rounded-[2px] border border-[var(--ac-border-subtle)]/40 text-[var(--ac-text-dim)] hover:border-red-400/50 hover:text-red-300 transition-all duration-150 shrink-0">
+                  清空
+                </button>
+                <span className="flex-1" />
+                {(['ann', 'ivr', 'theta', 'delta', 'iv', 'oi'] as DimKey[]).map(d => {
+                  const active = activeDims.has(d);
+                  return (
+                    <button key={d} onClick={() => toggleDim(d)}
+                      className={`text-[length:var(--ac-fs-xs)] font-sans px-2 py-0.5 rounded-[2px] border transition-all duration-150 shrink-0 flex items-center gap-0.5 ${
+                        active
+                          ? 'bg-emerald-500/25 border-emerald-400/70 text-emerald-200 font-semibold shadow-[0_0_6px_rgba(52,211,153,0.2)]'
+                          : 'bg-transparent border-[var(--ac-border-subtle)]/40 text-[var(--ac-text-dim)] hover:border-[var(--ac-border)]/80 hover:text-[var(--ac-text-secondary)]'
+                      }`}>
+                      {active && <span style={{ fontSize: '8px', lineHeight: 1 }}>✓</span>}
+                      {DIM_LABELS[d].zh}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
-        {viewMode === 'byStrike' && (
+                {viewMode === 'byStrike' && (
           /* 按价位模式：价位Tag行 + 字段Tag行 */
           <div>
             <div className="flex items-center gap-1.5 px-3 py-1.5 flex-wrap border-b border-[var(--ac-border-subtle)]/20">
@@ -2893,6 +3429,53 @@ export default function AnnualizedChain() {
 
       {/* ── 顶部栏占位，防止 fixed 导航栏遮住内容 ── */}
       <div style={{ height: headerHeight || 120 }} />
+      {/* ── 下拉刷新指示器 ── */}
+      {pullState !== 'idle' && (
+        <div
+          className="fixed left-0 z-40 flex items-center justify-center pointer-events-none"
+          style={{
+            top: headerHeight || 120,
+            width: '100vw',
+            height: Math.max(pullDistance, pullState === 'refreshing' ? 38 : 0),
+            transition: pullState === 'refreshing' ? 'height 0.25s cubic-bezier(0.23,1,0.32,1)' : 'none',
+            background: 'var(--ac-bg-base)',
+          }}
+        >
+          <div
+            className="flex flex-col items-center gap-1"
+            style={{
+              opacity: Math.min(progress * 2, 1),
+              transform: `scale(${0.7 + progress * 0.3})`,
+              transition: pullState === 'refreshing' ? 'opacity 0.2s' : 'none',
+            }}
+          >
+            {pullState === 'refreshing' ? (
+              <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                <circle cx="11" cy="11" r="9" stroke="var(--ac-border)" strokeWidth="2" />
+                <path d="M11 2 A9 9 0 0 1 20 11" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round">
+                  <animateTransform attributeName="transform" type="rotate" from="0 11 11" to="360 11 11" dur="0.7s" repeatCount="indefinite" />
+                </path>
+              </svg>
+            ) : (
+              <svg
+                width="20" height="20" viewBox="0 0 20 20" fill="none"
+                style={{
+                  transform: pullState === 'ready' ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s cubic-bezier(0.23,1,0.32,1)',
+                }}
+              >
+                <path d="M10 3 L10 14 M5 10 L10 15 L15 10" stroke={pullState === 'ready' ? '#f59e0b' : 'var(--ac-text-muted)'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+            <span
+              className="text-[10px] font-sans"
+              style={{ color: pullState === 'ready' ? '#f59e0b' : 'var(--ac-text-muted)' }}
+            >
+              {pullState === 'refreshing' ? '刷新中...' : pullState === 'ready' ? '松开刷新' : '下拉刷新'}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* ── 按价位列表视图 ── */}
       {viewMode === 'byStrike' && (() => {
@@ -3126,6 +3709,48 @@ export default function AnnualizedChain() {
         );
       })()}
 
+      {/* ── 矩阵表列头固定覆盖层（fixed）── */}
+      {viewMode === 'matrix' && headerHeight > 0 && (
+        <div
+          style={{
+            position: 'fixed',
+            top: headerHeight,
+            left: 0,
+            right: 0,
+            zIndex: 25,
+            background: 'var(--ac-bg-base)',
+            borderBottom: '1px solid var(--ac-border-subtle)',
+          }}
+        >
+          <table
+            className="border-collapse"
+            style={{
+              tableLayout: 'fixed',
+              width: activeMatrixExpiries.length > 4 ? `${40 + activeMatrixExpiries.length * 155}px` : '100%',
+            }}
+          >
+            <colgroup>
+              <col style={{ width: '44px' }} />
+              {activeMatrixExpiries.map((_, i) => <col key={i} />)}
+            </colgroup>
+            <tbody>
+              <tr>
+                <td className="text-[length:var(--ac-fs-sm)] text-[var(--ac-text-secondary)] font-sans py-1 px-1 text-left tracking-wider">行权价</td>
+                {activeMatrixExpiries.map(e => {
+                  const days = calcDaysLeft(e.expireDate);
+                  return (
+                    <td key={e.code} className="text-center py-1 px-0.5">
+                      <div className="text-[length:var(--ac-fs-sm)] font-semibold text-[var(--ac-text-bright)]">{e.label}</div>
+                      <div className="text-[length:var(--ac-fs-xs)] text-[var(--ac-text-secondary)] font-sans">{days}D</div>
+                    </td>
+                  );
+                })}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* ── 矩阵表 ── */}
       {viewMode === 'matrix' && <div
         ref={tableContainerRef}
@@ -3162,18 +3787,16 @@ export default function AnnualizedChain() {
             <col style={{ width: '44px' }} />
             {activeMatrixExpiries.map((_, i) => <col key={i} />)}
           </colgroup>
-          <thead>
-            <tr className="border-b border-[var(--ac-border-subtle)]">
-              <th
-                className="text-[length:var(--ac-fs-sm)] text-[var(--ac-text-secondary)] font-sans py-1 px-1 text-left tracking-wider"
-              >行权价</th>
+          {/* thead 作为占位擑开列头高度，内容透明（真实列头由 fixed 覆盖层渲染） */}
+          <thead style={{ visibility: 'hidden' }}>
+            <tr>
+              <th className="py-1 px-1">行权价</th>
               {activeMatrixExpiries.map(e => {
                 const days = calcDaysLeft(e.expireDate);
                 return (
                   <th key={e.code} className="text-center py-1 px-0.5">
-                    <div className="text-[length:var(--ac-fs-sm)] font-semibold text-[var(--ac-text-bright)]">{e.label}</div>
-                    <div className="text-[length:var(--ac-fs-xs)] text-[var(--ac-text-secondary)] font-sans">{days}D</div>
-
+                    <div className="text-[length:var(--ac-fs-sm)]">{e.label}</div>
+                    <div className="text-[length:var(--ac-fs-xs)]">{days}D</div>
                   </th>
                 );
               })}
@@ -3212,7 +3835,8 @@ export default function AnnualizedChain() {
                 <tr
                   key={strike}
                   ref={isAtm ? atmRowRef : undefined}
-                  className={`border-b border-[var(--ac-border-subtle)]/50 ${isAtm ? "bg-amber-500/[0.07] ring-1 ring-inset ring-amber-500/20" : ""}`}
+                  className={`border-b border-[var(--ac-border-subtle)]/50 ${isAtm ? 'bg-amber-500/[0.07] ring-1 ring-inset ring-amber-500/20' : ''}`}
+                  style={isAtm ? { boxShadow: 'inset 3px 0 0 0 rgba(245,158,11,0.85)' } : undefined}
                 >
                     <td
                       className="py-0.5 px-1 text-center"
@@ -3481,7 +4105,38 @@ export default function AnnualizedChain() {
 
 
 
-      {detail && <DetailModal cell={detail} onClose={() => setDetail(null)} optionType={optionType} />}
+      {detail && <DetailModal
+        cell={detail}
+        onClose={() => setDetail(null)}
+        optionType={optionType}
+        allStrikes={allStrikes}
+        onStrikeChange={(newStrike) => {
+          const key = `${newStrike}-${detail.expiry.code}`;
+          const newCell = matrix.get(key) ?? null;
+          if (newCell) {
+            setDetail({ strike: newStrike, expiry: detail.expiry, data: newCell, ethPrice: detail.ethPrice });
+          }
+        }}
+        allExpiries={allExpiries}
+        onExpiryChange={(newExpiry) => {
+          const key = `${detail.strike}-${newExpiry.code}`;
+          const newCell = matrix.get(key) ?? null;
+          if (newCell) {
+            setDetail({ strike: detail.strike, expiry: newExpiry, data: newCell, ethPrice: detail.ethPrice });
+          }
+        }}
+        onSwitchType={() => {
+          const newType: 'C' | 'P' = optionType === 'C' ? 'P' : 'C';
+          const altCache = loadCache(newType);
+          const altMatrix: MatrixData = altCache ? new Map(altCache.matrix) : new Map();
+          const key = `${detail.strike}-${detail.expiry.code}`;
+          const altCell = altMatrix.get(key) ?? null;
+          if (altCell) {
+            setDetail({ strike: detail.strike, expiry: detail.expiry, data: altCell, ethPrice: detail.ethPrice });
+          }
+          setOptionType(newType);
+        }}
+      />}
       {thetaPopup && <ThetaPopupModal info={thetaPopup} onClose={() => setThetaPopup(null)} optionType={optionType} />}
 
       {/* 触摸预览气泡 */}
@@ -3556,6 +4211,622 @@ export default function AnnualizedChain() {
           </div>
         );
       })()}
+
+      {/* 回到 ATM 悬浮按鈕：矩阵视图且 ATM 已确定时显示，详情弹窗打开时隐藏 */}
+      {viewMode === 'matrix' && atmStrike !== null && !detail && (
+        <button
+          onClick={() => {
+            if (!atmRowRef.current) return;
+            const rect = atmRowRef.current.getBoundingClientRect();
+            const rowCenter = rect.top + rect.height / 2;
+            const viewportCenter = window.innerHeight / 2;
+            const scrollTarget = window.scrollY + rowCenter - viewportCenter;
+            window.scrollTo({ top: scrollTarget, behavior: 'smooth' });
+          }}
+          className={`fixed z-50 flex flex-col items-center justify-center shadow-lg transition-all duration-200 active:scale-95 ${atmFar ? 'atm-fab-pulse' : ''}`}
+          style={{
+            bottom: '24px',
+            right: '16px',
+            width: '44px',
+            height: '44px',
+            borderRadius: '50%',
+            background: atmFar ? 'rgba(245,158,11,0.25)' : 'rgba(245,158,11,0.15)',
+            border: atmFar ? '1px solid rgba(245,158,11,0.8)' : '1px solid rgba(245,158,11,0.5)',
+            color: '#F59E0B',
+            backdropFilter: 'blur(8px)',
+            boxShadow: atmFar ? '0 0 12px rgba(245,158,11,0.35)' : undefined,
+          }}
+          aria-label="回到 ATM"
+        >
+          {/* 靶心图标 */}
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <circle cx="7" cy="7" r="3" stroke="currentColor" strokeWidth="1.5" />
+            <line x1="7" y1="1" x2="7" y2="3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            <line x1="7" y1="11" x2="7" y2="13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            <line x1="1" y1="7" x2="3" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            <line x1="11" y1="7" x2="13" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          <span style={{ fontSize: '8px', lineHeight: 1, marginTop: '2px', fontWeight: 600, letterSpacing: '0.02em' }}>ATM</span>
+        </button>
+      )}
+    </div>
+  );
+}// ─── Payoff 图（四象限：买卖 × CALL/PUT，SVG 实现）──────────────
+function SinglePayoffChart({
+  strike, premium, ethPrice, optionType, isBuyer, displayMode = 'usd', xRange = 0.30
+}: {
+  strike: number;
+  premium: number;
+  ethPrice: number;
+  optionType: 'C' | 'P';
+  isBuyer: boolean;
+  displayMode?: 'usd' | 'pct';
+  xRange?: number;
+}) {
+  const W = 300, H = 120, PAD = { t: 46, r: 8, b: 22, l: 40 }; // t=46 为三行标注框留出空间
+  const chartW = W - PAD.l - PAD.r;
+  const chartH = H - PAD.t - PAD.b;
+
+  const xMin = strike * (1 - xRange);
+  const xMax = strike * (1 + xRange);
+
+  const payoff = (s: number) => {
+    if (isBuyer) {
+      return optionType === 'C'
+        ? Math.max(0, s - strike) - premium
+        : Math.max(0, strike - s) - premium;
+    } else {
+      return optionType === 'C'
+        ? premium - Math.max(0, s - strike)
+        : premium - Math.max(0, strike - s);
+    }
+  };
+
+  const N = 80;
+  const xs = Array.from({ length: N }, (_, i) => xMin + (xMax - xMin) * i / (N - 1));
+  const ys = xs.map(payoff);
+
+  const rawYMin = Math.min(...ys);
+  const rawYMax = Math.max(...ys);
+  const yPad = (rawYMax - rawYMin) * 0.15 || premium * 0.1;
+  const yMin = rawYMin - yPad;
+  const yMax = rawYMax + yPad;
+
+  const toX = (v: number) => PAD.l + ((v - xMin) / (xMax - xMin)) * chartW;
+  const toY = (v: number) => PAD.t + ((yMax - v) / (yMax - yMin)) * chartH;
+
+  const bePrice = optionType === 'C' ? strike + premium : strike - premium;
+  const beInRange = bePrice >= xMin && bePrice <= xMax;
+
+  const pts = xs.map((x, i) => `${toX(x).toFixed(1)},${toY(ys[i]).toFixed(1)}`).join(' ');
+
+  const buildArea = (positive: boolean) => {
+    const zeroY = toY(0);
+    const segments: string[] = [];
+    let inSeg = false;
+    let segPts: string[] = [];
+    const flush = () => {
+      if (segPts.length > 1) {
+        const first = segPts[0].split(',');
+        const last = segPts[segPts.length - 1].split(',');
+        segments.push(`M ${segPts.join(' L ')} L ${last[0]},${zeroY.toFixed(1)} L ${first[0]},${zeroY.toFixed(1)} Z`);
+      }
+      segPts = []; inSeg = false;
+    };
+    xs.forEach((x, i) => {
+      const y = ys[i];
+      const isPos = positive ? y >= 0 : y < 0;
+      if (isPos) { if (!inSeg) inSeg = true; segPts.push(`${toX(x).toFixed(1)},${toY(y).toFixed(1)}`); }
+      else if (inSeg) flush();
+    });
+    if (inSeg) flush();
+    return segments.join(' ');
+  };
+
+  const yTicks = (() => {
+    const range = yMax - yMin;
+    const step = range > 2000 ? 1000 : range > 500 ? 200 : range > 100 ? 50 : 20;
+    const ticks: number[] = [];
+    const start = Math.ceil(yMin / step) * step;
+    for (let v = start; v <= yMax; v += step) ticks.push(v);
+    return ticks;
+  })();
+
+  const fmtUsd = (v: number) => Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0);
+
+  // 极值点坐标（最大盈利 / 最大亏损）
+  const maxProfitIdx = ys.indexOf(rawYMax);
+  const maxLossIdx = ys.indexOf(rawYMin);
+  const maxProfitX = toX(xs[maxProfitIdx]);
+  const maxProfitY = toY(rawYMax);
+  const maxLossX = toX(xs[maxLossIdx]);
+  const maxLossY = toY(rawYMin);
+
+  // 根据 displayMode 格式化 Y 轴和标注
+  const fmtVal = (v: number) => {
+    if (displayMode === 'pct') {
+      const pct = premium > 0 ? (v / premium) * 100 : 0;
+      return (pct >= 0 ? '+' : '') + pct.toFixed(0) + '%';
+    }
+    return (v >= 0 ? '' : '') + fmtUsd(v);
+  };
+  const fmtValLabel = (v: number) => {
+    if (displayMode === 'pct') {
+      const pct = premium > 0 ? (v / premium) * 100 : 0;
+      return (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%';
+    }
+    return (v >= 0 ? '+' : '') + fmtUsd(v) + ' USD';
+  };
+  const lineColor = isBuyer ? '#34d399' : '#60a5fa';
+
+  // 悬停交互状态
+  const [hoverX, setHoverX] = useState<number | null>(null);
+
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const svg = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    const svgX = ((e.clientX - rect.left) / rect.width) * W;
+    if (svgX < PAD.l || svgX > W - PAD.r) { setHoverX(null); return; }
+    setHoverX(svgX);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<SVGSVGElement>) => {
+    const svg = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    const touch = e.touches[0];
+    const svgX = ((touch.clientX - rect.left) / rect.width) * W;
+    if (svgX < PAD.l || svgX > W - PAD.r) { setHoverX(null); return; }
+    setHoverX(svgX);
+    e.stopPropagation();
+  };
+
+  // 根据 hoverX 计算对应的 ETH 价格和损益
+  const hoverData = hoverX !== null ? (() => {
+    const hoverPrice = xMin + ((hoverX - PAD.l) / chartW) * (xMax - xMin);
+    const hoverPnl = payoff(hoverPrice);
+    const hoverY = toY(hoverPnl);
+    // 标注框位置：防止超出边界
+    const labelX = hoverX > W * 0.65 ? hoverX - 52 : hoverX + 4;
+    const labelY = Math.max(PAD.t + 14, Math.min(H - PAD.b - 4, hoverY - 8));
+    return { hoverPrice, hoverPnl, hoverY, labelX, labelY };
+  })() : null;
+
+  return (
+    <svg
+      width="100%"
+      viewBox={`0 0 ${W} ${H}`}
+      style={{ display: 'block', cursor: 'crosshair', overflow: 'visible' }}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => setHoverX(null)}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={() => setHoverX(null)}
+    >
+      {/* ITM/OTM 区间背景色：CALL=行权价右侧ITM绿/左侧OTM红；PUT=行权价左侧ITM绿/右侧OTM红 */}
+      {(() => {
+        const sx = Math.max(PAD.l, Math.min(W - PAD.r, toX(strike)));
+        const chartTop = PAD.t;
+        const chartBot = H - PAD.b;
+        const chartH2 = chartBot - chartTop;
+        // 标注文字展示条件：区间宽度足够时才显示
+        const otmW = optionType === 'C' ? sx - PAD.l : W - PAD.r - sx;
+        const itmW = optionType === 'C' ? W - PAD.r - sx : sx - PAD.l;
+        const showOtmLabel = otmW > 18;
+        const showItmLabel = itmW > 18;
+        // 文字位置：各区内居中，靠近底部
+        const textY = chartBot - 3;
+        if (optionType === 'C') {
+          const otmCx = PAD.l + (sx - PAD.l) / 2;
+          const itmCx = sx + (W - PAD.r - sx) / 2;
+          return (
+            <g>
+              {/* OTM 区（行权价左侧）极淡红 */}
+              <rect x={PAD.l} y={chartTop} width={sx - PAD.l} height={chartH2}
+                fill="rgba(248,113,113,0.06)" />
+              {showOtmLabel && <text x={otmCx} y={textY} fontSize="4.5" fill="rgba(156,163,175,0.7)" textAnchor="middle" fontWeight="500">OTM</text>}
+              {/* ITM 区（行权价右侧）极淡绿 */}
+              <rect x={sx} y={chartTop} width={W - PAD.r - sx} height={chartH2}
+                fill="rgba(74,222,128,0.06)" />
+              {showItmLabel && <text x={itmCx} y={textY} fontSize="4.5" fill="rgba(156,163,175,0.7)" textAnchor="middle" fontWeight="500">ITM</text>}
+            </g>
+          );
+        } else {
+          const itmCx = PAD.l + (sx - PAD.l) / 2;
+          const otmCx = sx + (W - PAD.r - sx) / 2;
+          return (
+            <g>
+              {/* ITM 区（行权价左侧）极淡绿 */}
+              <rect x={PAD.l} y={chartTop} width={sx - PAD.l} height={chartH2}
+                fill="rgba(74,222,128,0.06)" />
+              {showItmLabel && <text x={itmCx} y={textY} fontSize="4.5" fill="rgba(156,163,175,0.7)" textAnchor="middle" fontWeight="500">ITM</text>}
+              {/* OTM 区（行权价右侧）极淡红 */}
+              <rect x={sx} y={chartTop} width={W - PAD.r - sx} height={chartH2}
+                fill="rgba(248,113,113,0.06)" />
+              {showOtmLabel && <text x={otmCx} y={textY} fontSize="4.5" fill="rgba(156,163,175,0.7)" textAnchor="middle" fontWeight="500">OTM</text>}
+            </g>
+          );
+        }
+      })()}
+      <line x1={PAD.l} y1={toY(0)} x2={W - PAD.r} y2={toY(0)} stroke="#374151" strokeWidth="0.8" strokeDasharray="3,3" />
+      <path d={buildArea(true)} fill="rgba(74,222,128,0.12)" />
+      <path d={buildArea(false)} fill="rgba(248,113,113,0.12)" />
+      <polyline points={pts} fill="none" stroke={lineColor} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+      {/* ===== 垂直线标注：三条线固定分配不同 Y 行，单行显示标签+价格 ===== */}
+      {(() => {
+        const LH = 10;   // 框高
+        const GAP = 2;   // 框与线的水平间距
+        const ROW0 = PAD.t - LH - 2;   // 第 1 行 Y
+        const ROW1 = PAD.t - LH * 2 - 5; // 第 2 行 Y
+
+        // 格式化价格：直接写完整整数
+        const fmtPx = (v: number) => Math.round(v).toLocaleString('en-US');
+        // 计算标注框宽度
+        const calcBw = (text: string) => Math.max(28, text.length * 4 + 6);
+
+        const strikeInRange = strike >= xMin && strike <= xMax;
+        const ethInRange = ethPrice >= xMin && ethPrice <= xMax;
+        const sx = strikeInRange ? toX(strike) : null;
+        const ex = ethInRange ? toX(ethPrice) : null;
+
+        // 判断行权价和现价是否靠近（两线间距 < 40px）
+        const CLOSE_THRESH = 40;
+        const bothClose = sx !== null && ex !== null && Math.abs(sx - ex) < CLOSE_THRESH;
+
+        // 计算现价盈亏数据
+        const payoffAtEth = ethInRange ? (() => {
+          const idx = Math.round((ethPrice - xMin) / (xMax - xMin) * (N - 1));
+          if (idx < 0 || idx >= ys.length) return 0;
+          return ys[idx];
+        })() : 0;
+        const isProfit = payoffAtEth >= 0;
+
+        // 计算行权价和现价标注框的 X 位置
+        // 靠近时：左侧的线标注框向左展开，右侧的向右展开
+        // 远离时：各自靠近自己的线展开
+        const getStrikeBox = () => {
+          if (!sx) return null;
+          const label = `行权价 ${fmtPx(strike)}`;
+          const bw = calcBw(label);
+          if (bothClose && ex !== null) {
+            // 行权价在右侧（或左侧），展开方向取决于与现价的相对位置
+            if (sx >= ex) {
+              // 行权价在右，向右展开
+              const rx = Math.min(sx + GAP, W - PAD.r - bw);
+              return { rx, bw, row: ROW0 };
+            } else {
+              // 行权价在左，向左展开
+              const rx = Math.max(PAD.l, sx - bw - GAP);
+              return { rx, bw, row: ROW0 };
+            }
+          } else {
+            // 远离：线右侧优先
+            const rx = sx + GAP + bw > W - PAD.r ? sx - bw - GAP : sx + GAP;
+            return { rx, bw, row: ROW0 };
+          }
+        };
+
+        const getEthBox = () => {
+          if (!ex) return null;
+          const label = `现价 ${fmtPx(ethPrice)}`;
+          const bw = calcBw(label);
+          if (bothClose && sx !== null) {
+            if (ex <= sx) {
+              // 现价在左，向左展开
+              const rx = Math.max(PAD.l, ex - bw - GAP);
+              return { rx, bw, row: ROW0 }; // 同行
+            } else {
+              // 现价在右，向右展开
+              const rx = Math.min(ex + GAP, W - PAD.r - bw);
+              return { rx, bw, row: ROW0 };
+            }
+          } else {
+            // 远离：线右侧优先
+            const rx = ex + GAP + bw > W - PAD.r ? ex - bw - GAP : ex + GAP;
+            // 如果行权价也在范围内，现价用第 2 行；否则用第 1 行
+            return { rx, bw, row: strikeInRange ? ROW1 : ROW0 };
+          }
+        };
+
+        const strikeBox = getStrikeBox();
+        const ethBox = getEthBox();
+
+        // BE 标注框：如果行权价和现价同行，则 BE 用第 2 行；否则用第 2 行
+        const beRowY = ROW1;
+
+        return (
+          <g>
+            {/* 行权价线 */}
+            {strikeInRange && sx !== null && (() => {
+              return (
+                <g>
+                  <line x1={sx} y1={PAD.t} x2={sx} y2={H - PAD.b} stroke="#6b7280" strokeWidth="0.8" strokeDasharray="4,3" />
+                  {strikeBox && (
+                    <>
+                      <rect x={strikeBox.rx} y={strikeBox.row} width={strikeBox.bw} height={LH} rx="1.5" fill="rgba(55,65,81,0.92)" stroke="#6b7280" strokeWidth="0.5" />
+                      <text x={strikeBox.rx + strikeBox.bw/2} y={strikeBox.row + LH*0.72} fontSize="5" fill="#d1d5db" fontWeight="600" textAnchor="middle">行权价 {fmtPx(strike)}</text>
+                    </>
+                  )}
+                </g>
+              );
+            })()}
+            {/* 现价线 */}
+            {ethInRange && ex !== null && (() => {
+              return (
+                <g>
+                  <line x1={ex} y1={PAD.t} x2={ex} y2={H - PAD.b} stroke="rgba(245,158,11,0.15)" strokeWidth="4" />
+                  <line x1={ex} y1={PAD.t} x2={ex} y2={H - PAD.b} stroke="#f59e0b" strokeWidth="1.2" strokeDasharray="3,2" />
+                  <circle cx={ex} cy={toY(payoffAtEth)} r="2.5" fill={isProfit ? '#4ade80' : '#f87171'} stroke="#f59e0b" strokeWidth="0.8" />
+                  {/* 盈亏标注 */}
+                  {(() => {
+                    const pnlVal = displayMode === 'pct'
+                      ? `${payoffAtEth >= 0 ? '+' : ''}${((payoffAtEth / premium) * 100).toFixed(0)}%`
+                      : `${payoffAtEth >= 0 ? '+' : ''}${Math.round(payoffAtEth)}`;
+                    const cy = toY(payoffAtEth);
+                    const above = cy > PAD.t + 18;
+                    const ry = above ? cy - 14 : cy + 4;
+                    const prx = ex + GAP + 4;
+                    const clampedRx = Math.max(PAD.l, Math.min(W - PAD.r - 22, prx));
+                    return (
+                      <g>
+                        <rect x={clampedRx} y={ry} width="22" height="10" rx="1.5"
+                          fill={isProfit ? 'rgba(20,83,45,0.85)' : 'rgba(127,29,29,0.85)'}
+                          stroke={isProfit ? '#4ade80' : '#f87171'} strokeWidth="0.5" />
+                        <text x={clampedRx + 11} y={ry + 7} fontSize="5.5"
+                          fill={isProfit ? '#4ade80' : '#f87171'} fontWeight="bold" textAnchor="middle">{pnlVal}</text>
+                      </g>
+                    );
+                  })()}
+                  {ethBox && (
+                    <>
+                      <rect x={ethBox.rx} y={ethBox.row} width={ethBox.bw} height={LH} rx="1.5" fill="rgba(180,83,9,0.92)" stroke="#f59e0b" strokeWidth="0.5" />
+                      <text x={ethBox.rx + ethBox.bw/2} y={ethBox.row + LH*0.72} fontSize="5" fill="#fde68a" fontWeight="600" textAnchor="middle">现价 {fmtPx(ethPrice)}</text>
+                    </>
+                  )}
+                </g>
+              );
+            })()}
+            {/* BE 线 */}
+            {beInRange && (() => {
+              const lx = toX(bePrice);
+              const beLabel = displayMode === 'pct' ? 'BE 0%' : `BE ${fmtPx(bePrice)}`;
+              const bw = calcBw(beLabel);
+              const rx = lx + GAP + bw > W - PAD.r ? lx - bw - GAP : lx + GAP;
+              return (
+                <g>
+                  <line x1={lx} y1={PAD.t} x2={lx} y2={H - PAD.b} stroke="#c4b5fd" strokeWidth="1.2" strokeDasharray="3,2" />
+                  <circle cx={lx} cy={toY(0)} r="2.8" fill="#7c3aed" stroke="#c4b5fd" strokeWidth="1" />
+                  <rect x={rx} y={beRowY} width={bw} height={LH} rx="1.5" fill="rgba(109,40,217,0.85)" stroke="#c4b5fd" strokeWidth="0.5" />
+                  <text x={rx + bw/2} y={beRowY + LH*0.72} fontSize="5" fill="#e9d5ff" fontWeight="600" textAnchor="middle">{beLabel}</text>
+                </g>
+              );
+            })()}
+          </g>
+        );
+      })()}
+
+      {yTicks.map(v => (
+        <g key={v}>
+          <line x1={PAD.l - 2} y1={toY(v)} x2={PAD.l} y2={toY(v)} stroke="#374151" strokeWidth="0.5" />
+          <text x={PAD.l - 3} y={toY(v) + 3} fontSize="6" fill={v >= 0 ? '#4ade80' : '#f87171'} textAnchor="end">{fmtVal(v)}</text>
+        </g>
+      ))}
+      {/* X 轴关键价格刻度：xMin、BE（若在范围内）、行权价、现价（若在范围内）、xMax */}
+      {(() => {
+        const fmtPrice = (v: number) => v >= 1000 ? `${(v/1000).toFixed(1)}k` : v.toFixed(0);
+        // 收集候选刻度，去重后按价格排序
+        const candidates: { v: number; color: string; anchor: 'start'|'middle'|'end' }[] = [];
+        const seen = new Set<number>();
+        const add = (v: number, color: string) => {
+          const rounded = Math.round(v);
+          if (!seen.has(rounded) && v >= xMin && v <= xMax) {
+            seen.add(rounded);
+            candidates.push({ v, color, anchor: 'middle' });
+          }
+        };
+        add(xMin, '#6b7280');
+        if (beInRange) add(bePrice, '#a78bfa');
+        add(strike, '#9ca3af');
+        if (ethPrice >= xMin && ethPrice <= xMax) add(ethPrice, '#f59e0b');
+        add(xMax, '#6b7280');
+        // 按价格排序，两端改为 start/end 对齐
+        candidates.sort((a, b) => a.v - b.v);
+        if (candidates.length > 0) candidates[0].anchor = 'start';
+        if (candidates.length > 1) candidates[candidates.length - 1].anchor = 'end';
+        // 过滤掉 X 轴位置过近的刻度（最小间距 20px），保留重要标注
+        const filtered: typeof candidates = [];
+        for (const c of candidates) {
+          const cx = toX(c.v);
+          const tooClose = filtered.some(f => Math.abs(toX(f.v) - cx) < 20);
+          if (!tooClose) filtered.push(c);
+        }
+        return filtered.map((c, i) => (
+          <g key={i}>
+            <line x1={toX(c.v)} y1={H - PAD.b} x2={toX(c.v)} y2={H - PAD.b + 2} stroke={c.color} strokeWidth="0.5" />
+            <text x={toX(c.v)} y={H - PAD.b + 8} fontSize="6" fill={c.color} textAnchor={c.anchor}>
+              {fmtPrice(c.v)}
+            </text>
+          </g>
+        ));
+      })()}
+      {/* 极值点标注 */}
+      {rawYMax > 0 && (() => {
+        const label = displayMode === 'pct'
+          ? `+${((rawYMax / premium) * 100).toFixed(0)}%`
+          : `+${fmtUsd(rawYMax)}`;
+        const lx = maxProfitX > W * 0.7 ? maxProfitX - 26 : maxProfitX + 3;
+        const ly = Math.max(PAD.t + 2, maxProfitY - 2);
+        return (
+          <g>
+            <circle cx={maxProfitX} cy={maxProfitY} r="2" fill="#4ade80" opacity="0.9" />
+            <text x={lx} y={ly + 5} fontSize="5.5" fill="#4ade80" fontWeight="bold">{label}</text>
+          </g>
+        );
+      })()}
+      {rawYMin < 0 && (() => {
+        const label = displayMode === 'pct'
+          ? `${((rawYMin / premium) * 100).toFixed(0)}%`
+          : `${fmtUsd(rawYMin)}`;
+        const lx = maxLossX > W * 0.7 ? maxLossX - 26 : maxLossX + 3;
+        const ly = Math.min(H - PAD.b - 8, maxLossY + 2);
+        return (
+          <g>
+            <circle cx={maxLossX} cy={maxLossY} r="2" fill="#f87171" opacity="0.9" />
+            <text x={lx} y={ly + 5} fontSize="5.5" fill="#f87171" fontWeight="bold">{label}</text>
+          </g>
+        );
+      })()}
+      {/* 买方无限盈利方向箭头 */}
+      {isBuyer && (() => {
+        // 买入CALL：右端无限涨；买入PUT：左端无限跌
+        const arrowX = optionType === 'C' ? W - PAD.r : PAD.l;
+        const arrowY = PAD.t + 4;
+        // 箭头朝右（CALL）或朝左（PUT）
+        const arrowPath = optionType === 'C'
+          ? `M ${arrowX - 8},${arrowY} L ${arrowX},${arrowY} L ${arrowX - 3},${arrowY - 2.5} M ${arrowX},${arrowY} L ${arrowX - 3},${arrowY + 2.5}`
+          : `M ${arrowX + 8},${arrowY} L ${arrowX},${arrowY} L ${arrowX + 3},${arrowY - 2.5} M ${arrowX},${arrowY} L ${arrowX + 3},${arrowY + 2.5}`;
+        const textX = optionType === 'C' ? arrowX - 18 : arrowX + 3;
+        return (
+          <g opacity="0.85">
+            <path d={arrowPath} stroke="#4ade80" strokeWidth="1.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            <text x={textX} y={arrowY + 4} fontSize="7" fill="#4ade80" fontWeight="bold">∞</text>
+          </g>
+        );
+      })()}
+      {/* 卖方有限盈利标签 */}
+      {!isBuyer && rawYMax > 0 && (() => {
+        // 卖出 CALL：最大盈利在左端（价格越低盈利越大）；卖出 PUT：最大盈利在右端
+        const lx = optionType === 'C' ? PAD.l + 2 : W - PAD.r - 28;
+        const ly = PAD.t + 2;
+        return (
+          <g opacity="0.8">
+            <rect x={lx - 1} y={ly} width="30" height="10" rx="1.5"
+              fill="rgba(251,191,36,0.12)" stroke="rgba(251,191,36,0.4)" strokeWidth="0.5" />
+            <text x={lx + 1} y={ly + 7} fontSize="5" fill="#fbbf24" fontWeight="bold">有限盈利</text>
+          </g>
+        );
+      })()}
+      {/* 卖方无限亏损方向箭头 */}
+      {!isBuyer && (() => {
+        // 卖出 CALL：右端无限涨亏损；卖出 PUT：左端无限跌亏损
+        const arrowX = optionType === 'C' ? W - PAD.r : PAD.l;
+        const arrowY = H - PAD.b - 4;
+        const arrowPath = optionType === 'C'
+          ? `M ${arrowX - 8},${arrowY} L ${arrowX},${arrowY} L ${arrowX - 3},${arrowY - 2.5} M ${arrowX},${arrowY} L ${arrowX - 3},${arrowY + 2.5}`
+          : `M ${arrowX + 8},${arrowY} L ${arrowX},${arrowY} L ${arrowX + 3},${arrowY - 2.5} M ${arrowX},${arrowY} L ${arrowX + 3},${arrowY + 2.5}`;
+        const textX = optionType === 'C' ? arrowX - 18 : arrowX + 3;
+        return (
+          <g opacity="0.85">
+            <path d={arrowPath} stroke="#f87171" strokeWidth="1.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            <text x={textX} y={arrowY + 4} fontSize="7" fill="#f87171" fontWeight="bold">−∞</text>
+          </g>
+        );
+      })()}
+      {/* 悬停交互层 */}
+      {hoverData && hoverX !== null && (
+        <g>
+          {/* 垂直导线 */}
+          <line x1={hoverX} y1={PAD.t} x2={hoverX} y2={H - PAD.b}
+            stroke="rgba(255,255,255,0.25)" strokeWidth="0.8" strokeDasharray="2,2" />
+          {/* 曲线上的圆点 */}
+          <circle cx={hoverX} cy={hoverData.hoverY} r="2.5"
+            fill={lineColor} stroke="#0d1117" strokeWidth="1" />
+          {/* 标注框 */}
+          <rect x={hoverData.labelX} y={hoverData.labelY - 10} width="48" height="18"
+            rx="2" fill="rgba(13,17,23,0.88)" stroke="rgba(255,255,255,0.15)" strokeWidth="0.5" />
+          <text x={hoverData.labelX + 4} y={hoverData.labelY - 2} fontSize="5.5" fill="#9ca3af">
+            ETH {hoverData.hoverPrice >= 1000 ? `${(hoverData.hoverPrice/1000).toFixed(2)}k` : hoverData.hoverPrice.toFixed(0)}
+          </text>
+          <text x={hoverData.labelX + 4} y={hoverData.labelY + 6} fontSize="6" fontWeight="bold"
+            fill={hoverData.hoverPnl >= 0 ? '#4ade80' : '#f87171'}>
+            {fmtValLabel(hoverData.hoverPnl)}
+          </text>
+        </g>
+      )}
+      {/* 透明截取层，确保整个图表区域可以响应鼠标事件 */}
+      <rect x={PAD.l} y={PAD.t} width={chartW} height={chartH} fill="transparent" />
+    </svg>
+  );
+}
+
+// 四象限 Payoff 图组合
+function PayoffChart({
+  strike, premium, ethPrice, optionType
+}: {
+  strike: number;
+  premium: number;
+  ethPrice: number;
+  optionType: 'C' | 'P';
+}) {
+  const [displayMode, setDisplayMode] = useState<'usd' | 'pct'>(() => {
+    try { const p = localStorage.getItem('eth-ann-filter-prefs-v1'); if (p) { const v = JSON.parse(p)?.payoffDisplayMode; if (v === 'usd' || v === 'pct') return v; } } catch { /* ignore */ }
+    return 'usd';
+  });
+  const [xRange, setXRange] = useState<number>(() => {
+    try { const p = localStorage.getItem('eth-ann-filter-prefs-v1'); if (p) { const v = JSON.parse(p)?.payoffXRange; if (v === 0.20 || v === 0.30 || v === 0.40) return v; } } catch { /* ignore */ }
+    return 0.30;
+  });
+  // payoffDisplayMode / xRange 变化时写入 localStorage
+  useEffect(() => {
+    try { const p = localStorage.getItem('eth-ann-filter-prefs-v1'); const obj = p ? JSON.parse(p) : {}; obj.payoffDisplayMode = displayMode; obj.payoffXRange = xRange; localStorage.setItem('eth-ann-filter-prefs-v1', JSON.stringify(obj)); } catch { /* ignore */ }
+  }, [displayMode, xRange]);
+  const otherType = optionType === 'C' ? 'P' : 'C';
+  const quadrants = [
+    { label: `买入 ${optionType === 'C' ? 'CALL' : 'PUT'}`, isBuyer: true,  ot: optionType as 'C'|'P', color: '#34d399', desc: optionType === 'C' ? '涨幅盈利无限' : '跌幅盈利无限' },
+    { label: `卖出 ${optionType === 'C' ? 'CALL' : 'PUT'}`, isBuyer: false, ot: optionType as 'C'|'P', color: '#60a5fa', desc: optionType === 'C' ? '涨幅亏损无限' : '跌幅亏损无限' },
+    { label: `买入 ${optionType === 'C' ? 'PUT' : 'CALL'}`,  isBuyer: true,  ot: otherType as 'C'|'P', color: '#34d399', desc: optionType === 'C' ? '跌幅盈利无限' : '涨幅盈利无限' },
+    { label: `卖出 ${optionType === 'C' ? 'PUT' : 'CALL'}`,  isBuyer: false, ot: otherType as 'C'|'P', color: '#60a5fa', desc: optionType === 'C' ? '跌幅亏损无限' : '涨幅亏损无限' },
+  ];
+
+  return (
+    <div className="px-2 py-2">
+      {/* 顶部切换按钮 */}
+      <div className="flex items-center justify-between mb-1.5">
+        {/* 价格范围切换 */}
+        <div className="flex rounded-[2px] overflow-hidden border border-[var(--ac-border)]/60 text-[length:var(--ac-fs-xs)] font-sans">
+          {([0.20, 0.30, 0.40] as const).map(r => (
+            <button key={r}
+              onClick={() => setXRange(r)}
+              className={`px-2 py-0.5 transition-colors duration-150 ${xRange === r ? 'bg-[#0e7490] text-white' : 'bg-transparent text-[var(--ac-text-muted)] hover:text-[var(--ac-text-secondary)]'}`}
+            >±{(r * 100).toFixed(0)}%</button>
+          ))}
+        </div>
+        {/* 数据维度切换 */}
+        <div className="flex rounded-[2px] overflow-hidden border border-[var(--ac-border)]/60 text-[length:var(--ac-fs-xs)] font-sans">
+          <button
+            onClick={() => setDisplayMode('usd')}
+            className={`px-2 py-0.5 transition-colors duration-150 ${displayMode === 'usd' ? 'bg-[#3b82f6] text-white' : 'bg-transparent text-[var(--ac-text-muted)] hover:text-[var(--ac-text-secondary)]'}`}
+          >$ USD</button>
+          <button
+            onClick={() => setDisplayMode('pct')}
+            className={`px-2 py-0.5 transition-colors duration-150 ${displayMode === 'pct' ? 'bg-[#8b5cf6] text-white' : 'bg-transparent text-[var(--ac-text-muted)] hover:text-[var(--ac-text-secondary)]'}`}
+          >% 收益率</button>
+        </div>
+      </div>
+      <div className="flex flex-col gap-2">
+        {quadrants.map((q) => (
+          <div key={q.label} className="rounded-[1.5px] border border-[var(--ac-border)]/40 bg-[var(--ac-bg-base)] overflow-hidden">
+            <div className="flex items-center justify-between px-1.5 pt-1 pb-0.5">
+              <span className="text-[length:var(--ac-fs-xs)] font-sans font-semibold" style={{ color: q.color }}>{q.label}</span>
+              <span className="text-[8px] font-sans text-[var(--ac-text-muted)] leading-tight text-right">{q.desc}</span>
+            </div>
+            <SinglePayoffChart
+              strike={strike}
+              premium={premium}
+              ethPrice={ethPrice}
+              optionType={q.ot}
+              isBuyer={q.isBuyer}
+              displayMode={displayMode}
+              xRange={xRange}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center gap-3 px-1 mt-1 text-[length:var(--ac-fs-xs)] font-sans text-[var(--ac-text-muted)]">
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-0.5 bg-[#34d399]" />买方损益</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-0.5 bg-[#60a5fa]" />卖方损益</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-0.5 bg-[#f59e0b]" />现价</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 h-0.5 bg-[#a78bfa]" />BE</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-3 border-t border-dashed border-[#6b7280]" />行权价</span>
+      </div>
     </div>
   );
 }

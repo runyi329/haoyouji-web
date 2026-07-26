@@ -10,6 +10,7 @@ import ProductDesign from "@/pages/ProductDesign";
 import AnnualizedChain from "@/pages/AnnualizedChain";
 import IVSmile from "@/pages/IVSmile";
 import SsoLogin from "@/pages/SsoLogin";
+import StockRisk from "@/pages/StockRisk";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -21,6 +22,7 @@ function Router() {
       <Route path={"/product-design"} component={ProductDesign} />
       <Route path={"/annualized"} component={AnnualizedChain} />
       <Route path={"/iv-smile"} component={IVSmile} />
+      <Route path={"/stock-risk"} component={StockRisk} />
       {/* 脉动网 SSO 单点登录入口 */}
       <Route path={"/sso"} component={SsoLogin} />
       <Route path={"/404"} component={NotFound} />

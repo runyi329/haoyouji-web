@@ -8,6 +8,60 @@ import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
 
+// ─── 品种切换下拉（左上角）────────────────────────────────────────
+function ProductSwitcher() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: "relative", display: "inline-block" }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        style={{
+          display: "flex", alignItems: "center", gap: 4,
+          fontSize: 13, fontWeight: 700, letterSpacing: 1,
+          color: "rgba(255,255,255,0.75)", background: "transparent",
+          border: "none", cursor: "pointer", padding: "2px 0",
+        }}
+      >
+        A 股 ▾
+      </button>
+      {open && (
+        <>
+          <div style={{ position: "fixed", inset: 0, zIndex: 40 }} onClick={() => setOpen(false)} />
+          <div style={{
+            position: "absolute", left: 0, top: "100%", marginTop: 4, zIndex: 50,
+            background: "#1e2a45", border: "1px solid rgba(255,255,255,0.15)",
+            borderRadius: 3, overflow: "hidden", boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+            minWidth: 110,
+          }}>
+            <div style={{
+              display: "block", width: "100%", padding: "8px 16px",
+              fontSize: 13, fontWeight: 600, letterSpacing: 0.5,
+              color: "rgba(255,255,255,0.4)", background: "rgba(255,255,255,0.06)",
+              cursor: "default", textAlign: "left",
+            }}>
+              A 股风控
+            </div>
+            <button
+              onClick={() => { setOpen(false); window.location.href = '/annualized'; }}
+              style={{
+                display: "block", width: "100%", padding: "8px 16px",
+                fontSize: 13, fontWeight: 600, letterSpacing: 0.5,
+                color: "rgba(255,255,255,0.75)", background: "transparent",
+                border: "none", cursor: "pointer", textAlign: "left",
+                transition: "background 0.15s",
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.08)")}
+              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+            >
+              以太坊期权
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── 类型 ─────────────────────────────────────────────────────────
 
 interface StockInput {
@@ -362,11 +416,11 @@ export default function StockRisk() {
       {/* ── Header ── */}
       <div style={{
         background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
-        padding: "36px 20px 28px",
-        textAlign: "center",
+        padding: "14px 20px 24px",
         color: "white",
       }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: 1, marginBottom: 10 }}>
+        <ProductSwitcher />
+        <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: 1, marginTop: 10, marginBottom: 0, textAlign: "center" }}>
           澳门潤儀A股业务风控管理 - B
         </h1>
       </div>
