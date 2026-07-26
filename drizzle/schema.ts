@@ -2528,3 +2528,50 @@ export const qibanContacts = mysqlTable("qiban_contacts", {
   companyIdx: index("qiban_contacts_company_idx").on(table.companyId),
   createdByIdx: index("qiban_contacts_created_by_idx").on(table.createdBy),
 }));
+
+// ─── 企伴代理记账：客户端企业表（与 qiban-web 同库同表） ──────────────────────
+// 注意：此表与企伴客户端（qiban-web）的 companies 表是同一张表
+// 脉动后台通过此表审核企业申请，企伴客户端通过此表展示企业状态
+export const qibanClientCompanies = mysqlTable("companies", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  name: varchar("name", { length: 200 }).notNull(),
+  creditCode: varchar("creditCode", { length: 50 }).notNull(),
+  legalPerson: varchar("legalPerson", { length: 100 }),
+  licenseImageKey: varchar("licenseImageKey", { length: 500 }),
+  status: mysqlEnum("status", ["pending", "active", "rejected"]).default("pending").notNull(),
+  rejectReason: text("rejectReason"),
+  healthScore: int("healthScore"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+// ─── 企伴代理记账：申报表记录（与 qiban-web 同库同表） ──────────────────────────
+// 注意：此表与企伴客户端（qiban-web）的 declarations 表是同一张表
+export const qibanDeclarations = mysqlTable("declarations", {
+  id: int("id").autoincrement().primaryKey(),
+  companyId: int("companyId").notNull(),
+  period: varchar("period", { length: 10 }).notNull(),
+  declarationType: varchar("declarationType", { length: 50 }),
+  fileKey: varchar("fileKey", { length: 500 }),
+  revenue: decimal("revenue", { precision: 18, scale: 2 }),
+  cost: decimal("cost", { precision: 18, scale: 2 }),
+  profit: decimal("profit", { precision: 18, scale: 2 }),
+  taxAmount: decimal("taxAmount", { precision: 18, scale: 2 }),
+  taxPaid: decimal("taxPaid", { precision: 18, scale: 2 }),
+  status: mysqlEnum("status", ["draft", "submitted", "accepted", "rejected"]).default("submitted").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+// ─── 企伴代理记账：成本票建议（与 qiban-web 同库同表） ──────────────────────────
+export const qibanInvoiceSuggestions = mysqlTable("invoice_suggestions", {
+  id: int("id").autoincrement().primaryKey(),
+  companyId: int("companyId").notNull(),
+  period: varchar("period", { length: 10 }).notNull(),
+  category: varchar("category", { length: 100 }),
+  suggestedAmount: decimal("suggestedAmount", { precision: 18, scale: 2 }),
+  reason: text("reason"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});

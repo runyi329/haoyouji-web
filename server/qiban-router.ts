@@ -7,13 +7,16 @@
  */
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, protectedProcedure, publicProcedure } from "./_core/trpc";
+import { router, protectedProcedure, publicProcedure, adminProcedure } from "./_core/trpc";
 import { getDb } from "./db";
 import {
   qibanCompanies,
   qibanPartnerships,
   qibanContracts,
   qibanContacts,
+  qibanClientCompanies,
+  qibanDeclarations,
+  qibanInvoiceSuggestions,
 } from "../drizzle/schema";
 import { eq, desc, and, like, sql } from "drizzle-orm";
 
@@ -364,5 +367,307 @@ export const qibanRouter = router({
         createdBy: ctx.user.id,
       });
       return { id: (result as any).insertId };
+    }),
+
+  // ─── 代理记账管理（adminProcedure，仅超级管理员可用） ─────────────────────────
+
+  /** 获取企伴客户端企业列表（含审核状态筛选） */
+  adminListClientCompanies: adminProcedure
+    .input(
+      z.object({
+        status: z.enum(["pending", "active", "rejected"]).optional(),
+        keyword: z.string().optional(),
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(1).max(50).default(20),
+      })
+    )
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { rows: [], total: 0 };
+      const offset = (input.page - 1) * input.pageSize;
+      const conditions: any[] = [];
+      if (input.status) conditions.push(eq(qibanClientCompanies.status, input.status));
+      if (input.keyword) conditions.push(like(qibanClientCompanies.name, `%${input.keyword}%`));
+      const where = conditions.length > 0 ? and(...conditions) : undefined;
+      const rows = await db
+        .select()
+        .from(qibanClientCompanies)
+        .where(where)
+        .orderBy(desc(qibanClientCompanies.createdAt))
+        .limit(input.pageSize)
+        .offset(offset);
+      const [total] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(qibanClientCompanies)
+        .where(where);
+      return { rows, total: Number(total?.count ?? 0) };
+    }),
+
+  /** 审核企业：通过或拒绝 */
+  adminReviewCompany: adminProcedure
+    .input(
+      z.object({
+        companyId: z.number(),
+        action: z.enum(["approve", "reject"]),
+        rejectReason: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const [existing] = await db
+        .select()
+        .from(qibanClientCompanies)
+        .where(eq(qibanClientCompanies.id, input.companyId));
+      if (!existing) throw new TRPCError({ code: "NOT_FOUND", message: "企业不存在" });
+      await db
+        .update(qibanClientCompanies)
+        .set({
+          status: input.action === "approve" ? "active" : "rejected",
+          rejectReason: input.action === "reject" ? (input.rejectReason ?? "审核未通过") : null,
+        })
+        .where(eq(qibanClientCompanies.id, input.companyId));
+      return { ok: true };
+    }),
+
+  /** 获取某企业的申报表列表 */
+  adminListDeclarations: adminProcedure
+    .input(
+      z.object({
+        companyId: z.number().optional(),
+        period: z.string().optional(),
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(1).max(50).default(20),
+      })
+    )
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { rows: [], total: 0 };
+      const offset = (input.page - 1) * input.pageSize;
+      const conditions: any[] = [];
+      if (input.companyId) conditions.push(eq(qibanDeclarations.companyId, input.companyId));
+      if (input.period) conditions.push(eq(qibanDeclarations.period, input.period));
+      const where = conditions.length > 0 ? and(...conditions) : undefined;
+      const rows = await db
+        .select()
+        .from(qibanDeclarations)
+        .where(where)
+        .orderBy(desc(qibanDeclarations.createdAt))
+        .limit(input.pageSize)
+        .offset(offset);
+      const [total] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(qibanDeclarations)
+        .where(where);
+      return { rows, total: Number(total?.count ?? 0) };
+    }),
+
+  /**
+   * 上传申报表并用 AI 解析财税数据，写入 declarations 表
+   * 支持图片（base64）或文本内容直接传入
+   */
+  adminUploadDeclaration: adminProcedure
+    .input(
+      z.object({
+        companyId: z.number(),
+        period: z.string().min(1).max(10),
+        declarationType: z.string().optional().default("增值税申报表"),
+        /** base64 编码的文件内容（图片/PDF），或直接传入文本内容 */
+        fileData: z.string().optional(),
+        fileName: z.string().optional(),
+        fileMime: z.string().optional(),
+        /** 直接传入的文本内容（优先于 fileData） */
+        textContent: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+
+      // 1. 确认企业存在
+      const [company] = await db
+        .select()
+        .from(qibanClientCompanies)
+        .where(eq(qibanClientCompanies.id, input.companyId));
+      if (!company) throw new TRPCError({ code: "NOT_FOUND", message: "企业不存在" });
+
+      // 2. 上传文件到 COS（如有）
+      let fileKey: string | null = null;
+      if (input.fileData && input.fileName && input.fileMime) {
+        try {
+          const { uploadFileToCOS } = await import('./cos-upload');
+          const url = await uploadFileToCOS(
+            input.fileData,
+            'qiban-declarations',
+            input.fileName,
+            input.fileMime
+          );
+          fileKey = url;
+        } catch (e) {
+          console.error('[qiban] 文件上传失败:', e);
+        }
+      }
+
+      // 3. 用 LLM 解析财税数据
+      let revenue: string | null = null;
+      let cost: string | null = null;
+      let profit: string | null = null;
+      let taxAmount: string | null = null;
+      let taxPaid: string | null = null;
+      let notes: string | null = null;
+
+      const contentToAnalyze = input.textContent || (fileKey ? `文件已上传：${fileKey}` : null);
+      if (contentToAnalyze) {
+        try {
+          const { invokeLLM } = await import('./_core/llm');
+          const prompt = `你是一名专业的财税数据提取助手。请从以下申报表内容中提取关键财务数据，以 JSON 格式返回。
+
+申报表内容：
+${contentToAnalyze}
+
+请提取并返回以下字段（金额单位：元，无法提取的字段返回 null）：
+{
+  "revenue": 收入总额（数字或null）,
+  "cost": 成本总额（数字或null）,
+  "profit": 利润总额（数字或null）,
+  "taxAmount": 应纳税额（数字或null）,
+  "taxPaid": 已缴税额（数字或null）,
+  "notes": 备注说明（字符串，简述申报表类型和关键信息）
+}
+
+只返回 JSON，不要其他文字。`;
+
+          const result = await invokeLLM({
+            messages: [{ role: 'user', content: prompt }],
+            model: 'claude-3-5-haiku',
+            temperature: 0,
+          });
+
+          const rawContent = result.content || '';
+          const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            revenue = parsed.revenue != null ? String(parsed.revenue) : null;
+            cost = parsed.cost != null ? String(parsed.cost) : null;
+            profit = parsed.profit != null ? String(parsed.profit) : null;
+            taxAmount = parsed.taxAmount != null ? String(parsed.taxAmount) : null;
+            taxPaid = parsed.taxPaid != null ? String(parsed.taxPaid) : null;
+            notes = parsed.notes || null;
+          }
+        } catch (e) {
+          console.error('[qiban] AI 解析失败:', e);
+          notes = '文件已上传，AI 解析失败，请手动填写数据';
+        }
+      }
+
+      // 4. 写入 declarations 表
+      const [result] = await db.insert(qibanDeclarations).values({
+        companyId: input.companyId,
+        period: input.period,
+        declarationType: input.declarationType,
+        fileKey: fileKey,
+        revenue: revenue as any,
+        cost: cost as any,
+        profit: profit as any,
+        taxAmount: taxAmount as any,
+        taxPaid: taxPaid as any,
+        status: 'submitted',
+        notes: notes,
+      });
+
+      // 5. 更新企业健康评分（简单算法：根据利润率计算）
+      if (revenue && profit) {
+        const rev = parseFloat(revenue);
+        const pro = parseFloat(profit);
+        if (rev > 0) {
+          const margin = pro / rev;
+          const score = Math.min(100, Math.max(0, Math.round(50 + margin * 100)));
+          await db
+            .update(qibanClientCompanies)
+            .set({ healthScore: score })
+            .where(eq(qibanClientCompanies.id, input.companyId));
+        }
+      }
+
+      return {
+        id: (result as any).insertId,
+        revenue,
+        cost,
+        profit,
+        taxAmount,
+        taxPaid,
+        notes,
+        fileKey,
+      };
+    }),
+
+  /** 手动更新申报表数据（管理员手动修正 AI 解析结果） */
+  adminUpdateDeclaration: adminProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        revenue: z.string().optional(),
+        cost: z.string().optional(),
+        profit: z.string().optional(),
+        taxAmount: z.string().optional(),
+        taxPaid: z.string().optional(),
+        status: z.enum(["draft", "submitted", "accepted", "rejected"]).optional(),
+        notes: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const { id, ...rest } = input;
+      await db
+        .update(qibanDeclarations)
+        .set(rest as any)
+        .where(eq(qibanDeclarations.id, id));
+      return { ok: true };
+    }),
+
+  /** 添加成本票建议 */
+  adminAddInvoiceSuggestion: adminProcedure
+    .input(
+      z.object({
+        companyId: z.number(),
+        period: z.string().min(1).max(10),
+        category: z.string().optional(),
+        suggestedAmount: z.string().optional(),
+        reason: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      const [result] = await db.insert(qibanInvoiceSuggestions).values({
+        companyId: input.companyId,
+        period: input.period,
+        category: input.category,
+        suggestedAmount: input.suggestedAmount as any,
+        reason: input.reason,
+      });
+      return { id: (result as any).insertId };
+    }),
+
+  /** 获取某企业的成本票建议列表 */
+  adminListInvoiceSuggestions: adminProcedure
+    .input(
+      z.object({
+        companyId: z.number(),
+        period: z.string().optional(),
+      })
+    )
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { rows: [] };
+      const conditions: any[] = [eq(qibanInvoiceSuggestions.companyId, input.companyId)];
+      if (input.period) conditions.push(eq(qibanInvoiceSuggestions.period, input.period));
+      const rows = await db
+        .select()
+        .from(qibanInvoiceSuggestions)
+        .where(and(...conditions))
+        .orderBy(desc(qibanInvoiceSuggestions.createdAt));
+      return { rows };
     }),
 });

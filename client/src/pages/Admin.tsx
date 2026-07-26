@@ -76,6 +76,7 @@ import CustomAIManager from "./admin/CustomAIManager";
 import CustomAJManager from "./admin/CustomAJManager";
 import ProductLibraryManager from "./admin/ProductLibraryManager";
 import AdminRedeemOrders from "./admin/AdminRedeemOrders";
+import QibanAdminManager from "./admin/QibanAdminManager";
 
 // 定制账本类型配置表（新增类型只需在此添加）
 const CUSTOM_LEDGER_TYPES = [
@@ -490,6 +491,10 @@ export default function Admin() {
             <TabsTrigger value="redeemOrders" className="text-xs sm:text-sm">
               <ShoppingCart className="w-4 h-4 mr-1 hidden sm:inline" />
               兑换订单
+            </TabsTrigger>
+            <TabsTrigger value="qibanAdmin" className="text-xs sm:text-sm">
+              <Briefcase className="w-4 h-4 mr-1 hidden sm:inline" />
+              企伴管理
             </TabsTrigger>
 
           </TabsList>
