@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-26
+// 生成时间：2026-07-27
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8596,5 +8596,12 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   "2026-07-26": [
     { date: "2026-07-26T04:41:41Z", type: "fix", cleanMessage: "订单模式做多/做空标签改为空壳+高亮样式" },
     { date: "2026-07-26T06:38:11Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-26T11:11:42Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-26T15:49:49Z", type: "other", cleanMessage: "backup: 更新ETH期权监控工具代码 2026-07-26" },
+  ],
+  "2026-07-27": [
+    { date: "2026-07-26T16:50:41Z", type: "docs", cleanMessage: "合并迁移手册，补全数据库密码/云服务/环境变量完整信息（GitHub Token 已脱敏）" },
+    { date: "2026-07-26T16:53:12Z", type: "chore", cleanMessage: "同步最新代码到备份" },
+    { date: "2026-07-26T16:53:40Z", type: "docs", cleanMessage: "补充 GitHub Token 获取步骤说明" },
   ],
 };
