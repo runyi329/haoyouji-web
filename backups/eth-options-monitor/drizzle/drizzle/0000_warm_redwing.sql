@@ -1,0 +1,1 @@
+DROP TABLE `buy_records`;
