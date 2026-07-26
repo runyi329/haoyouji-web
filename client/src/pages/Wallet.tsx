@@ -511,7 +511,7 @@ export default function Wallet() {
           {/* 右侧：明细 + 刷新 */}
           <div className="flex items-center space-x-1">
             <button
-              onClick={() => setLocation(activeTab === "usdt" ? "/wallet/transactions" : "/wallet/cny-transactions")}
+              onClick={() => setLocation(activeTab === "usdt" ? "/recharge/history" : "/wallet/cny-transactions")}
               className="px-2.5 h-6 rounded-full text-xs font-medium"
               style={{ background: G.whiteFaint, color: G.goldDim }}
             >
@@ -542,7 +542,7 @@ export default function Wallet() {
               <span className="text-xs">≈ ¥{usdtToCny.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 人民币</span>
             </div>
           )}
-          txPath="/wallet/transactions"
+          txPath="/recharge/history"
           onRefresh={() => balanceQuery.refetch()}
           onRecharge={() => setModal("recharge")}
           onWithdraw={() => setModal("withdraw")}

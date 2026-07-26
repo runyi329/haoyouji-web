@@ -451,7 +451,7 @@ export default function YabanWallet() {
 
           {/* 右侧：明细 */}
           <button
-            onClick={() => setLocation(activeTab === "usdt" ? "/wallet/transactions?from=yaban" : "/wallet/cny-transactions?from=yaban")}
+            onClick={() => setLocation(activeTab === "usdt" ? "/recharge/history" : "/wallet/cny-transactions?from=yaban")}
             className="px-2.5 h-7 rounded-md text-xs font-medium text-white"
             style={{ background: "rgba(255,255,255,0.2)" }}
           >

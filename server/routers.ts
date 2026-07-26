@@ -13418,20 +13418,31 @@ ${klinesSummary}
         return { success: true };
       }),
     // AF 充値记录 + 手动调账记录合并（供用户查看）
-    afGetMyRechargeHistory: protectedProcedure
-      .input(z.object({ ledgerId: z.number(), viewAsUserId: z.number().optional() }))
+        afGetMyRechargeHistory: protectedProcedure
+      .input(z.object({ ledgerId: z.number().optional(), viewAsUserId: z.number().optional() }))
       .query(async ({ ctx, input }) => {
-        
         const db = await getLedgerDb();
-        // 视角切换
+        // 视角切换（ledgerId 为可选，不传时走全局口径）
         let targetUserId = ctx.user.id;
         if (input.viewAsUserId) {
-          const memberCheck = await db.execute(
-            sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
-          ) as any;
-          const myRole = (memberCheck as any)[0]?.[0]?.role || (memberCheck as any)[0]?.role;
-          if (myRole === 'owner' || myRole === 'admin') {
-            targetUserId = input.viewAsUserId;
+          if (input.ledgerId) {
+            // 有账本 ID：校验当前用户在该账本的角色
+            const memberCheck = await db.execute(
+              sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+            ) as any;
+            const myRole = (memberCheck as any)[0]?.[0]?.role || (memberCheck as any)[0]?.role;
+            if (myRole === 'owner' || myRole === 'admin') {
+              targetUserId = input.viewAsUserId;
+            }
+          } else {
+            // 无账本 ID：仅系统管理员可切换视角
+            const adminCheck = await db.execute(
+              sql`SELECT role FROM users WHERE id = ${ctx.user.id} LIMIT 1`
+            ) as any;
+            const role = (adminCheck as any)[0]?.[0]?.role || (adminCheck as any)[0]?.role;
+            if (role === 'admin' || role === 'super_admin') {
+              targetUserId = input.viewAsUserId;
+            }
           }
         }
         // 1. 充値订单（recharge_orders，只显示已完成的充値到账记录，不显示待支付/确认中/过期/取消）
