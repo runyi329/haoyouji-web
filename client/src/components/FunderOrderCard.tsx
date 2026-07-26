@@ -965,10 +965,31 @@ export function FunderOrderCard({
           <div className="flex items-center gap-0.5 mb-0.5">
             <span className="text-[10px] font-medium" style={{ color: isInvited ? '#16A34A' : '#3B82F6' }}>{isInvited ? '订单资产' : '持有资产'}</span>
             {(order.principal_lent_out === 1 || order.principal_lent_out === true) && <span className="text-[10px] text-gray-400">（借出）</span>}
-            {order.asset_type === 'crypto' && (order as any).trade_direction && show('showTradeDirection') && (
-              <span className="ml-1 text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#fff', backgroundColor: (order as any).trade_direction === 'long' ? '#DC2626' : '#16A34A' }}>
-                {(order as any).trade_direction === 'long' ? '多' : '空'}
-              </span>
+            {order.asset_type === 'crypto' && show('showTradeDirection') && (
+              <>
+                <span
+                  className="ml-1 text-[10px] font-bold px-1.5 py-0"
+                  style={{
+                    borderRadius: '4px',
+                    ...(
+                      (order as any).trade_direction === 'long'
+                        ? { color: '#fff', backgroundColor: '#10B981', border: '1px solid #10B981' }
+                        : { color: '#9CA3AF', backgroundColor: 'rgba(156,163,175,0.10)', border: '1px solid rgba(156,163,175,0.3)' }
+                    )
+                  }}
+                >多</span>
+                <span
+                  className="text-[10px] font-bold px-1.5 py-0"
+                  style={{
+                    borderRadius: '4px',
+                    ...(
+                      (order as any).trade_direction === 'short'
+                        ? { color: '#fff', backgroundColor: '#EF4444', border: '1px solid #EF4444' }
+                        : { color: '#9CA3AF', backgroundColor: 'rgba(156,163,175,0.10)', border: '1px solid rgba(156,163,175,0.3)' }
+                    )
+                  }}
+                >空</span>
+              </>
             )}
           </div>
           <div className="min-h-9 flex flex-col justify-center">
@@ -2645,7 +2666,6 @@ function CollateralLogSection({ orderId, ledgerId, refreshKey }: { orderId: numb
     </div>
   );
 }
-
 
 
 
