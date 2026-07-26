@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-23
+// 生成时间：2026-07-26
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8583,5 +8583,17 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-23T09:41:01Z", type: "feat", cleanMessage: "项目总控台新增手动绑定链接功能，customUrl优先于自动生成地址" },
     { date: "2026-07-23T09:55:36Z", type: "chore", cleanMessage: "添加workflow用于执行site_versions表custom_url字段迁移" },
     { date: "2026-07-23T09:57:17Z", type: "fix", cleanMessage: "修复ALTER TABLE兼容MySQL 5.x，去掉IF NOT EXISTS" },
+    { date: "2026-07-23T11:44:01Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-23T11:45:29Z", type: "feat", cleanMessage: "融资付息订单添加做多/做空方向字段（数字币类型专用）" },
+    { date: "2026-07-23T12:03:09Z", type: "feat", cleanMessage: "融资付息订单管理 - 添加多空方向筛选按钮，方向标签移至卡片左侧" },
+    { date: "2026-07-23T12:22:03Z", type: "fix", cleanMessage: "修复FinanceOrderCard JSX结构缺少</div>导致的语法错误" },
+    { date: "2026-07-23T12:32:21Z", type: "feat", cleanMessage: "FunderManagement/FunderOrderCard 添加数字币多空方向选择和标签显示" },
+    { date: "2026-07-23T12:41:32Z", type: "feat", cleanMessage: "多空标签调整 - 去箭头/多红空绿/移至持有资产后/新增显示开关" },
+    { date: "2026-07-23T12:47:54Z", type: "fix", cleanMessage: "预览卡片补充 trade_direction 字段，联动多空方向开关" },
+    { date: "2026-07-23T13:10:04Z", type: "feat", cleanMessage: "订单数字币新增做多/做空方向选项" },
+    { date: "2026-07-23T15:03:48Z", type: "fix", cleanMessage: "修复卡片模式下数字币订单做多/做空标签不显示问题" },
+  ],
+  "2026-07-26": [
+    { date: "2026-07-26T04:41:41Z", type: "fix", cleanMessage: "订单模式做多/做空标签改为空壳+高亮样式" },
   ],
 };
