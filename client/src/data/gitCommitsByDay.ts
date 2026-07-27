@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-27
+// 生成时间：2026-07-28
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8660,5 +8660,9 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-27T07:34:31Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
     { date: "2026-07-27T07:44:58Z", type: "feat", cleanMessage: "企伴SSO自动登录 - 新增qibanSsoLink接口，QibanPage改为SSO跳转" },
     { date: "2026-07-27T08:52:40Z", type: "feat", cleanMessage: "企业审核列表增加营业执照图片预览功能" },
+    { date: "2026-07-27T12:47:08Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+  ],
+  "2026-07-28": [
+    { date: "2026-07-27T16:55:39Z", type: "perf", cleanMessage: "InterestManagePage 加 staleTime 30s 减少重复请求; fix: getTagInterestManualLogs u.name 字段名; fix: FeeRow 恢复按需加载避免大量并发" },
   ],
 };
