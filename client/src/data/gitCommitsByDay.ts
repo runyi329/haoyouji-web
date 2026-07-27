@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-26
+// 生成时间：2026-07-27
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8634,5 +8634,28 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-25T09:41:59Z", type: "feat", cleanMessage: "规则005新增I板块充值与调账规范 + AfRechargeManage调账Tab流水标签优化 + 账本统一(balance_history)" },
     { date: "2026-07-25T10:18:15Z", type: "feat", cleanMessage: "充值订单与流水记录撤回功能（双模式：反向记录/直接删除）" },
     { date: "2026-07-25T10:59:12Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+  ],
+  "2026-07-26": [
+    { date: "2026-07-26T04:41:41Z", type: "fix", cleanMessage: "订单模式做多/做空标签改为空壳+高亮样式" },
+    { date: "2026-07-26T06:38:11Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-26T11:11:42Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-26T15:49:49Z", type: "other", cleanMessage: "backup: 更新ETH期权监控工具代码 2026-07-26" },
+    { date: "2026-07-25T16:57:39Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-25T17:50:42Z", type: "other", cleanMessage: "backup: 新增澳门潤儀A股风控工具备份 2026-07-25" },
+    { date: "2026-07-25T18:24:37Z", type: "feat", cleanMessage: "顶部标题添加项目切换下拉菜单，新增「潤儀投資 A 股風控」入口跳转 /stock-risk" },
+    { date: "2026-07-25T18:30:14Z", type: "feat", cleanMessage: "新增 StockRiskPage.tsx A股风控 SSO iframe 页面，更新路由和下拉菜单跳转" },
+    { date: "2026-07-25T18:39:38Z", type: "fix", cleanMessage: "下拉菜单去掉图标，ETH改名为以太坊期权风控工具" },
+    { date: "2026-07-26T06:32:14Z", type: "feat", cleanMessage: "在脉动后台添加企伴代理记账管理功能" },
+  ],
+  "2026-07-27": [
+    { date: "2026-07-26T16:50:41Z", type: "docs", cleanMessage: "合并迁移手册，补全数据库密码/云服务/环境变量完整信息（GitHub Token 已脱敏）" },
+    { date: "2026-07-26T16:53:12Z", type: "chore", cleanMessage: "同步最新代码到备份" },
+    { date: "2026-07-26T16:53:40Z", type: "docs", cleanMessage: "补充 GitHub Token 获取步骤说明" },
+    { date: "2026-07-26T17:01:21Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-26T23:55:44Z", type: "fix", cleanMessage: "统一充值明细入口，全局钱包与账本充值记录走同一 afGetMyRechargeHistory 接口" },
+    { date: "2026-07-27T00:23:15Z", type: "fix", cleanMessage: "afGetMyRechargeHistory 加入 balance_history recharge 类型，修复 adminDirectRecharge 手动充值不显示在明细的问题" },
+    { date: "2026-07-27T01:50:09Z", type: "refactor", cleanMessage: "统一资金入口——addUserBalance 所有 type 同步写 af_manual_balances，afGetMyRechargeHistory 去重兼容历史数据，充值明细入口统一走 /recharge/history" },
+    { date: "2026-07-27T05:45:30Z", type: "docs", cleanMessage: "添加企伴沙箱迁移说明" },
+    { date: "2026-07-27T07:23:05Z", type: "feat", cleanMessage: "新增企伴客户端用户接口 getMyCompanies/submitCompany/getDeclarations/getInvoiceSuggestions" },
   ],
 };
