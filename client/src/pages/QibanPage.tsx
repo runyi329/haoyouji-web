@@ -1,12 +1,29 @@
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
+import { trpc } from "@/lib/trpc";
 
 export default function QibanPage() {
   const [, setLocation] = useLocation();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const { isAuthenticated, user } = useAuth();
+  const [iframeSrc, setIframeSrc] = useState<string | null>(null);
   const avatarText = user?.name ? user.name.charAt(0).toUpperCase() : "?";
+
+  // 获取 SSO 跳转链接（已登录时自动触发，完成后 iframe 加载）
+  const ssoMutation = trpc.tools.qibanSsoLink.useMutation({
+    onSuccess: (data) => setIframeSrc(data.url),
+    onError: () => setIframeSrc("https://qiban.jiangyuchen.cn"), // 降级：直接打开
+  });
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      ssoMutation.mutate();
+    } else {
+      setIframeSrc("https://qiban.jiangyuchen.cn/login");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   return (
     <div
@@ -31,7 +48,6 @@ export default function QibanPage() {
           flexShrink: 0,
         }}
       >
-        {/* 左侧：返回按钮 */}
         <button
           onClick={() => setLocation("/")}
           style={{
@@ -52,7 +68,6 @@ export default function QibanPage() {
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
-        {/* 中间：标题 */}
         <span
           style={{
             flex: 1,
@@ -64,7 +79,6 @@ export default function QibanPage() {
         >
           企伴
         </span>
-        {/* 右侧占位 */}
         {isAuthenticated && user ? (
           <div
             style={{
@@ -96,19 +110,26 @@ export default function QibanPage() {
           <div style={{ width: 30 }} />
         )}
       </div>
+
+      {/* 加载中状态 */}
+      {!iframeSrc && (
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 12 }}>
+          <div style={{ width: 28, height: 28, border: "3px solid #BFDBFE", borderTopColor: "#2563EB", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+          <p style={{ fontSize: 14, color: "#9ca3af" }}>正在进入企伴...</p>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
+
       {/* 全屏 iframe */}
-      <iframe
-        ref={iframeRef}
-        src="https://qiban.jiangyuchen.cn"
-        style={{
-          flex: 1,
-          width: "100%",
-          border: "none",
-          display: "block",
-        }}
-        allow="fullscreen"
-        title="企伴"
-      />
+      {iframeSrc && (
+        <iframe
+          ref={iframeRef}
+          src={iframeSrc}
+          style={{ flex: 1, width: "100%", border: "none", display: "block" }}
+          allow="fullscreen"
+          title="企伴"
+        />
+      )}
     </div>
   );
 }
