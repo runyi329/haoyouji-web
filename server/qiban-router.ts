@@ -667,6 +667,116 @@ ${contentToAnalyze}
         .select()
         .from(qibanInvoiceSuggestions)
         .where(and(...conditions))
+      .orderBy(desc(qibanInvoiceSuggestions.createdAt));
+      return { rows };
+    }),
+
+  // ─── 企伴客户端用户接口（protectedProcedure，按 userId 隔离） ─────────────────
+
+  /** 获取当前用户名下的企业列表（含状态和健康评分） */
+  getMyCompanies: protectedProcedure.query(async ({ ctx }) => {
+    const db = await getDb();
+    if (!db) return { rows: [] };
+    const rows = await db
+      .select()
+      .from(qibanClientCompanies)
+      .where(eq(qibanClientCompanies.userId, ctx.user.id))
+      .orderBy(desc(qibanClientCompanies.createdAt));
+    return { rows };
+  }),
+
+  /** 提交新企业审核申请 */
+  submitCompany: protectedProcedure
+    .input(
+      z.object({
+        name: z.string().min(1).max(200),
+        creditCode: z.string().min(1).max(50),
+        legalPerson: z.string().max(100).optional(),
+        licenseImageKey: z.string().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "数据库连接失败" });
+      // 检查是否已存在相同信用代码
+      const [existing] = await db
+        .select({ id: qibanClientCompanies.id })
+        .from(qibanClientCompanies)
+        .where(eq(qibanClientCompanies.creditCode, input.creditCode));
+      if (existing) {
+        throw new TRPCError({ code: "CONFLICT", message: "该统一社会信用代码已存在，请勿重复提交" });
+      }
+      const [result] = await db.insert(qibanClientCompanies).values({
+        userId: ctx.user.id,
+        name: input.name,
+        creditCode: input.creditCode,
+        legalPerson: input.legalPerson ?? null,
+        licenseImageKey: input.licenseImageKey ?? null,
+        status: "pending",
+      });
+      return { id: (result as any).insertId };
+    }),
+
+  /** 获取指定企业的申报明细（仅限本人企业） */
+  getDeclarations: protectedProcedure
+    .input(
+      z.object({
+        companyId: z.number(),
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(1).max(50).default(20),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { rows: [], total: 0 };
+      // 校验企业归属
+      const [company] = await db
+        .select({ userId: qibanClientCompanies.userId })
+        .from(qibanClientCompanies)
+        .where(eq(qibanClientCompanies.id, input.companyId));
+      if (!company || company.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无权访问该企业数据" });
+      }
+      const offset = (input.page - 1) * input.pageSize;
+      const rows = await db
+        .select()
+        .from(qibanDeclarations)
+        .where(eq(qibanDeclarations.companyId, input.companyId))
+        .orderBy(desc(qibanDeclarations.period))
+        .limit(input.pageSize)
+        .offset(offset);
+      const [total] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(qibanDeclarations)
+        .where(eq(qibanDeclarations.companyId, input.companyId));
+      return { rows, total: Number(total?.count ?? 0) };
+    }),
+
+  /** 获取指定企业的成本票建议（仅限本人企业） */
+  getInvoiceSuggestions: protectedProcedure
+    .input(
+      z.object({
+        companyId: z.number(),
+        period: z.string().optional(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const db = await getDb();
+      if (!db) return { rows: [] };
+      // 校验企业归属
+      const [company] = await db
+        .select({ userId: qibanClientCompanies.userId })
+        .from(qibanClientCompanies)
+        .where(eq(qibanClientCompanies.id, input.companyId));
+      if (!company || company.userId !== ctx.user.id) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "无权访问该企业数据" });
+      }
+      const conditions: any[] = [eq(qibanInvoiceSuggestions.companyId, input.companyId)];
+      if (input.period) conditions.push(eq(qibanInvoiceSuggestions.period, input.period));
+      const rows = await db
+        .select()
+        .from(qibanInvoiceSuggestions)
+        .where(and(...conditions))
         .orderBy(desc(qibanInvoiceSuggestions.createdAt));
       return { rows };
     }),
