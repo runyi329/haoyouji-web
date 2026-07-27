@@ -681,7 +681,21 @@ export async function getUnmatchedTransactions() {
   }
 }
 
-// 给用户添加余额
+// type 标签映射（用于 af_manual_balances note 前缀）
+const TYPE_LABEL: Record<string, string> = {
+  recharge:   '[充值]',
+  commission: '[佣金]',
+  reward:     '[奖励]',
+  consume:    '[扣款]',
+  refund:     '[退款]',
+  withdraw:   '[提现]',
+};
+
+// 给用户添加余额 —— 全局统一资金入口
+// 所有类型均同时写入 af_manual_balances（全局流水账本），保证任何入口的钱包明细完整一致。
+// 余额计算公式：users.balance + SUM(af_manual_balances WHERE note NOT LIKE '[CNY]%')
+// - recharge/commission/withdraw：写 users.balance（影响余额基数）+ af_manual_balances（流水展示）
+// - reward/consume/refund：只写 af_manual_balances（余额通过 SUM 自动生效）
 export async function addUserBalance(
   userId: number,
   amount: number,
@@ -694,8 +708,28 @@ export async function addUserBalance(
   if (!conn) throw new Error('数据库连接失败');
   const pool = conn as any;
 
-  // commission 类型：米伴佣金，直接写入 users.balance（全局统一钱包）
-  if (type === 'commission') {
+  // 确定写入 af_manual_balances 的 ledger_id
+  // 优先使用传入值，否则查用户最近账本，最终 fallback 到 52（谷底增筹全局账本）
+  const getTargetLedgerId = async (): Promise<number> => {
+    if (ledgerId) return ledgerId;
+    try {
+      const [rows] = await pool.execute(
+        `SELECT ledger_id FROM af_manual_balances WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
+        [userId]
+      ) as any[];
+      return (rows as any[])[0]?.ledger_id ?? 52;
+    } catch (_) { return 52; }
+  };
+
+  // 构造 af_manual_balances 的 note
+  const buildNote = (t: string, desc?: string): string => {
+    const label = TYPE_LABEL[t] ?? `[${t}]`;
+    return desc ? `${label} ${desc}` : label;
+  };
+
+  // ── recharge / commission / withdraw ──────────────────────────────────────
+  // 这三种类型需要更新 users.balance（影响余额基数）
+  if (type === 'recharge' || type === 'commission' || type === 'withdraw') {
     // 确保 users.balance 字段存在
     try {
       const [cols] = await pool.execute(
@@ -705,7 +739,7 @@ export async function addUserBalance(
         await pool.execute(`ALTER TABLE users ADD COLUMN balance DECIMAL(20,8) NOT NULL DEFAULT 0`);
       }
     } catch (_) {}
-    // 写入 users.balance
+    // 更新 users.balance
     await pool.execute(
       `UPDATE users SET balance = COALESCE(balance, 0) + ? WHERE id = ?`,
       [amount, userId]
@@ -715,105 +749,47 @@ export async function addUserBalance(
       [userId]
     ) as any[];
     const newBalance = parseFloat((balRows as any[])[0]?.balance ?? '0') || 0;
-    // 记录到 balance_history
+    // 写 balance_history（辅助日志）
     try {
       await pool.execute(
-        `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description) VALUES (?, ?, 'commission', ?, ?, ?)`,
-        [userId, amount.toString(), relatedId ?? null, newBalance.toString(), description ?? null]
+        `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description) VALUES (?, ?, ?, ?, ?, ?)`,
+        [userId, amount.toString(), type, relatedId ?? null, newBalance.toString(), description ?? null]
       );
     } catch (_) {}
-    console.log(`[addUserBalance] commission 到账 userId=${userId}, amount=${amount} USDT, newBalance=${newBalance}`);
+    // 写 af_manual_balances（全局流水，统一展示层）
+    // 注意：这三种类型已经写入了 users.balance，为避免余额 SUM 公式双重计入，
+    // note 加 [BALANCE_BASE] 标记，所有余额 SUM 语句均排除此标记的条目
+    try {
+      const targetLedgerId = await getTargetLedgerId();
+      const note = `[BALANCE_BASE]${buildNote(type, description)}`;
+      await pool.execute(
+        `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())`,
+        [targetLedgerId, userId, amount.toFixed(6), note]
+      );
+    } catch (e: any) {
+      console.error(`[addUserBalance] af_manual_balances 写入失败 type=${type}:`, e?.message);
+    }
+    console.log(`[addUserBalance] ${type} userId=${userId}, amount=${amount}, newBalance=${newBalance}`);
     return newBalance;
   }
 
-  // reward 类型：写入 af_manual_balances（与竞猜扣款同源，余额计算自动生效）
-  if (type === 'reward') {
-    // ledgerId 优先使用传入值，否则查询该用户最近使用的账本
-    let targetLedgerId = ledgerId;
-    if (!targetLedgerId) {
-      const [rows] = await pool.execute(
-        `SELECT ledger_id FROM af_manual_balances WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
-        [userId]
-      ) as any[];
-      targetLedgerId = (rows as any[])[0]?.ledger_id ?? 52; // fallback 到默认账本 52（谷底增筹）
-    }
-    const note = description ?? `AJ账本报销奖励 +${amount} USDT`;
+  // ── reward / consume / refund ──────────────────────────────────────────────
+  // 这三种类型只写 af_manual_balances（余额通过 SUM 自动生效，不写 users.balance 避免双重计入）
+  const targetLedgerId = await getTargetLedgerId();
+  const note = buildNote(type, description);
+  await pool.execute(
+    `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())`,
+    [targetLedgerId, userId, amount, note]
+  );
+  // 写 balance_history（辅助日志）
+  try {
     await pool.execute(
-      `INSERT INTO af_manual_balances (ledger_id, user_id, amount, note, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())`,
-      [targetLedgerId, userId, amount, note]
+      `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description) VALUES (?, ?, ?, ?, 0, ?)`,
+      [userId, amount.toString(), type, relatedId ?? null, description ?? null]
     );
-    // 同时记录到 balance_history 便于日志追踪
-    try {
-      await pool.execute(
-        `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description) VALUES (?, ?, 'reward', ?, 0, ?)`,
-        [userId, amount.toString(), relatedId ?? null, note]
-      );
-    } catch (_) { /* balance_history 写失败不影响主流程 */ }
-    console.log(`[addUserBalance] reward 写入 af_manual_balances 成功 userId=${userId}, amount=${amount}, ledgerId=${targetLedgerId}`);
-    return amount;
-  }
-
-  // 其他类型（recharge/consume/refund/withdraw）：保持原有逻辑写 users.balance
-  // 检查 users.balance 字段是否存在（兼容 MySQL 5.7，不用 IF NOT EXISTS）
-  try {
-    const [cols] = await pool.execute(
-      `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'balance'`
-    ) as any[];
-    if (!cols || (cols as any[]).length === 0) {
-      await pool.execute(`ALTER TABLE users ADD COLUMN balance DECIMAL(20,8) NOT NULL DEFAULT 0`);
-      console.log('[addUserBalance] 已自动添加 users.balance 字段');
-    }
-  } catch (e: any) {
-    console.error('[addUserBalance] 检查/添加 users.balance 字段失败:', e?.message);
-  }
-
-  // 检查 balance_history 表是否存在（兼容 MySQL 5.7）
-  try {
-    const [tables] = await pool.execute(
-      `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'balance_history'`
-    ) as any[];
-    if (!tables || (tables as any[]).length === 0) {
-      await pool.execute(`
-        CREATE TABLE balance_history (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          user_id INT NOT NULL,
-          amount DECIMAL(20,8) NOT NULL,
-          type ENUM('recharge','consume','refund','reward','withdraw') NOT NULL,
-          related_id INT DEFAULT NULL,
-          balance DECIMAL(20,8) NOT NULL DEFAULT 0,
-          description TEXT DEFAULT NULL,
-          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-          INDEX idx_bh_user (user_id),
-          INDEX idx_bh_type (type)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-      `);
-      console.log('[addUserBalance] 已自动创建 balance_history 表');
-    }
-  } catch (e: any) {
-    console.error('[addUserBalance] 检查/创建 balance_history 表失败:', e?.message);
-  }
-
-  // 更新用户余额
-  await pool.execute(
-    `UPDATE users SET balance = COALESCE(balance, 0) + ? WHERE id = ?`,
-    [amount, userId]
-  );
-
-  // 获取更新后的余额
-  const [balRows] = await pool.execute(
-    `SELECT balance FROM users WHERE id = ? LIMIT 1`,
-    [userId]
-  ) as any[];
-  const newBalance = parseFloat((balRows as any[])[0]?.balance ?? '0') || 0;
-
-  // 记录余额变动到 balance_history 表
-  await pool.execute(
-    `INSERT INTO balance_history (user_id, amount, type, related_id, balance, description) VALUES (?, ?, ?, ?, ?, ?)`,
-    [userId, amount.toString(), type, relatedId ?? null, newBalance.toString(), description ?? null]
-  );
-
-  console.log(`[addUserBalance] 成功 userId=${userId}, amount=${amount}, type=${type}, newBalance=${newBalance}`);
-  return newBalance;
+  } catch (_) {}
+  console.log(`[addUserBalance] ${type} 写入 af_manual_balances userId=${userId}, amount=${amount}, ledgerId=${targetLedgerId}`);
+  return amount;
 }
 
 // 获取用户统一余额
@@ -844,7 +820,7 @@ export async function getUserBalanceHistory(userId: number, limit: number = 50) 
   const [balRows] = await pool.execute(
     `SELECT
        (SELECT COALESCE(balance, 0) FROM users WHERE id = ?) AS userBalance,
-       (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ?) AS manual`,
+       (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ? AND note NOT LIKE '[CNY]%' AND note NOT LIKE '[BALANCE_BASE]%') AS manual`,
     [userId, userId]
   ) as any[];
   const userBalance = parseFloat((balRows as any[])[0]?.userBalance ?? '0') || 0;

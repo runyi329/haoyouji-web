@@ -1376,7 +1376,7 @@ ${klinesSummary}
         const placeholders = ids.map(() => '?').join(',');
         const [rows] = await (conn as any).execute(
           `SELECT u.id AS userId,
-                  (COALESCE(u.balance,0) + COALESCE((SELECT SUM(amount) FROM af_manual_balances WHERE user_id = u.id AND note NOT LIKE '[CNY]%'),0)) AS total
+                  (COALESCE(u.balance,0) + COALESCE((SELECT SUM(amount) FROM af_manual_balances WHERE user_id = u.id AND note NOT LIKE '[CNY]%' AND note NOT LIKE '[BALANCE_BASE]%'),0)) AS total
            FROM users u WHERE u.id IN (${placeholders})`,
           [...ids]
         ) as any[];
@@ -12836,7 +12836,7 @@ ${klinesSummary}
           db.execute(
             sql`SELECT
               (SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,8))), 0) FROM recharge_orders WHERE user_id = ${targetUserId} AND status = 'completed') as recharged,
-              (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ${targetUserId} AND note NOT LIKE '[CNY]%') as manual,
+              (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ${targetUserId} AND note NOT LIKE '[CNY]%' AND note NOT LIKE '[BALANCE_BASE]%') as manual,
               (SELECT COALESCE(balance, 0) FROM users WHERE id = ${targetUserId} LIMIT 1) as userBalance`
           ).catch(() => [[{ recharged: '0', manual: '0', userBalance: '0' }]]),
 
@@ -13499,19 +13499,19 @@ ${klinesSummary}
         } catch (_) {
           // 表不存在时忽略
         }
-        // 3. 从 balance_history 取 recharge/consume/refund 记录
-        // recharge：adminDirectRecharge 写入（直接更新 users.balance，不写 af_manual_balances）
-        // consume/refund：竞猜扣款/退款
+        // 3. balance_history 作为历史兼容层（处理改造前的旧数据）
+        // 改造后 addUserBalance 已统一写入 af_manual_balances，新记录不再依赖 balance_history
+        // 只保留 af_manual_balances 里找不到对应条目的旧记录（按时间窗口±2s+金额去重）
         let bhList: any[] = [];
         try {
           const bhRows = await db.execute(
             sql`SELECT id, amount, type, description, created_at
                 FROM balance_history
                 WHERE user_id = ${targetUserId}
-                  AND type IN ('recharge', 'consume', 'refund')
+                  AND type IN ('recharge', 'consume', 'refund', 'commission', 'reward')
                 ORDER BY created_at ASC`
           ) as any;
-          bhList = ((bhRows[0] || bhRows) as any[]).map((r: any) => ({
+          const allBh = ((bhRows[0] || bhRows) as any[]).map((r: any) => ({
             id: `bh_${r.id}`,
             amount: parseFloat(r.amount),
             sourceType: 'balance_history' as const,
@@ -13519,6 +13519,16 @@ ${klinesSummary}
             type: r.type,
             createdAt: r.created_at,
           }));
+          // 去重：如果 manualList 里已有相同时间（±2s）且金额相同的条目，说明是改造后的新记录，跳过
+          const manualTimes = manualList.map(m => ({
+            t: new Date(m.createdAt).getTime(),
+            amt: Math.abs(m.amount),
+          }));
+          bhList = allBh.filter(bh => {
+            const bhT = new Date(bh.createdAt).getTime();
+            const bhAmt = Math.abs(bh.amount);
+            return !manualTimes.some(m => Math.abs(m.t - bhT) <= 2000 && Math.abs(m.amt - bhAmt) < 0.001);
+          });
         } catch (_) { /* 忽略 */ }
 
         // 4. 合并并按时间正序排列（从旧到新）
@@ -13530,7 +13540,7 @@ ${klinesSummary}
         const balRow = await db.execute(
           sql`SELECT
             (SELECT COALESCE(balance, 0) FROM users WHERE id = ${targetUserId}) AS userBalance,
-            (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ${targetUserId} AND note NOT LIKE '[CNY]%') AS manual`
+            (SELECT COALESCE(SUM(amount), 0) FROM af_manual_balances WHERE user_id = ${targetUserId} AND note NOT LIKE '[CNY]%' AND note NOT LIKE '[BALANCE_BASE]%') AS manual`
         ) as any;
         const balData = (balRow[0]?.[0] ?? balRow[0]) as any;
         const currentBalance = parseFloat(
