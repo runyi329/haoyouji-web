@@ -12615,7 +12615,7 @@ ${klinesSummary}
         if (input.tagName) {
           rows = await db.execute(
             sql`SELECT p.id, p.ledger_id, p.tag_name, p.principal as amount, p.manual_remark as remark,
-                p.created_by, p.created_at, u.username, u.nickname as user_nickname
+                p.created_by, p.created_at, u.username, u.name as user_nickname
                 FROM tag_interest_periods p
                 LEFT JOIN users u ON u.id = p.created_by
                 WHERE p.ledger_id = ${input.ledgerId} AND p.tag_name = ${input.tagName} AND p.is_manual = 1
@@ -12624,7 +12624,7 @@ ${klinesSummary}
         } else {
           rows = await db.execute(
             sql`SELECT p.id, p.ledger_id, p.tag_name, p.principal as amount, p.manual_remark as remark,
-                p.created_by, p.created_at, u.username, u.nickname as user_nickname
+                p.created_by, p.created_at, u.username, u.name as user_nickname
                 FROM tag_interest_periods p
                 LEFT JOIN users u ON u.id = p.created_by
                 WHERE p.ledger_id = ${input.ledgerId} AND p.is_manual = 1

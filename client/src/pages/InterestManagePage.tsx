@@ -70,26 +70,26 @@ export default function InterestManagePage() {
   // 账本分类（标签）
   const { data: rawCategories = [] } = trpc.ledger.getCategories.useQuery(
     { ledgerId: lid, parentId: null },
-    { enabled: lid > 0 }
+    { enabled: lid > 0, staleTime: 30_000 }
   );
   const categories = useMemo(() => rawCategories.filter((c: any) => !c.isDefault), [rawCategories]);
 
   // 所有分段
   const { data: allPeriods = [], refetch: refetchPeriods } = trpc.ledger.getTagInterestPeriods.useQuery(
     { ledgerId: lid },
-    { enabled: lid > 0 }
+    { enabled: lid > 0, staleTime: 30_000 }
   );
 
   // 手工调息日志
   const { data: allLogs = [], refetch: refetchLogs } = trpc.ledger.getTagInterestManualLogs.useQuery(
     { ledgerId: lid },
-    { enabled: lid > 0 }
+    { enabled: lid > 0, staleTime: 30_000 }
   );
 
   // 所有标签配置（用于读取 pause_date）
   const { data: allTagsConfig = {}, refetch: refetchTagsConfig } = trpc.ledger.getAllTagsConfigByLedger.useQuery(
     { ledgerId: lid },
-    { enabled: lid > 0 }
+    { enabled: lid > 0, staleTime: 30_000 }
   );
 
   // 暂停 / 恢复 mutation

@@ -200,44 +200,41 @@ function FeeRow({ order, ledgerId, viewAsUserId }: { order: any; ledgerId: numbe
   const remainingFee = Math.max(0, totalFee - prepaidFee);
   return (
     <div className="col-span-2">
-      <div className="flex items-center gap-1 cursor-pointer" onClick={() => setFeeExpanded(v => !v)}>
+      <div className="flex items-center gap-1">
         <span className="text-gray-400 w-16 shrink-0">待付管理费</span>
         <span className={`font-medium ${isPending ? 'text-gray-400' : isSold ? 'text-gray-500' : 'text-orange-500'}`}>
           {remainingFee.toFixed(4)} <span className="text-gray-400">u</span>
         </span>
         <span className="text-gray-400 ml-1 text-[10px]">({fmtDay(startDay)}→{fmtDay(endDay)} {holdDays}天{isPending ? ' 撤单则作废' : ''}{isSold ? ' ✓已停计' : ''})</span>
-        <span className="ml-auto text-gray-400 text-xs">{feeExpanded ? '▲' : '▼'}</span>
       </div>
-      {feeExpanded && (
-        <div className="mt-2 bg-gray-50 rounded-xl p-3 text-xs space-y-1.5">
-          <div className="flex justify-between">
-            <span className="text-gray-500">实际管理费</span>
-            <span className="font-medium text-gray-700">{totalFee.toFixed(4)} u
-              <span className="text-gray-400 ml-1">({dailyFee.toFixed(4)}/天×{holdDays}天)</span>
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-500">已付管理费</span>
-            <span className="font-medium text-green-600">{prepaidFee.toFixed(4)} u</span>
-          </div>
-          <div className="flex justify-between border-t border-gray-200 pt-1.5">
-            <span className="text-gray-500">待付管理费</span>
-            <span className="font-bold text-orange-500">{remainingFee.toFixed(4)} u</span>
-          </div>
-          {prepaidLogs && prepaidLogs.logs.length > 0 && (
-            <div className="mt-2 border-t border-gray-200 pt-2">
-              <div className="text-gray-400 mb-1">已付记录</div>
-              {prepaidLogs.logs.map((log: any, i: number) => (
-                <div key={i} className="flex justify-between text-[10px] py-0.5">
-                  <span className="text-gray-400">{log.createdAt?.slice(0,10)}</span>
-                  <span className="text-green-600 font-medium">+{log.amount.toFixed(4)} u</span>
-                  {log.note && <span className="text-gray-400 ml-1 truncate max-w-[80px]">{log.note}</span>}
-                </div>
-              ))}
-            </div>
-          )}
+      <div className="mt-2 bg-gray-50 rounded-xl p-3 text-xs space-y-1.5">
+        <div className="flex justify-between">
+          <span className="text-gray-500">实际管理费</span>
+          <span className="font-medium text-gray-700">{totalFee.toFixed(4)} u
+            <span className="text-gray-400 ml-1">({dailyFee.toFixed(4)}/天×{holdDays}天)</span>
+          </span>
         </div>
-      )}
+        <div className="flex justify-between">
+          <span className="text-gray-500">已付管理费</span>
+          <span className="font-medium text-green-600">{prepaidFee.toFixed(4)} u</span>
+        </div>
+        <div className="flex justify-between border-t border-gray-200 pt-1.5">
+          <span className="text-gray-500">待付管理费</span>
+          <span className="font-bold text-orange-500">{remainingFee.toFixed(4)} u</span>
+        </div>
+        {prepaidLogs && prepaidLogs.logs.length > 0 && (
+          <div className="mt-2 border-t border-gray-200 pt-2">
+            <div className="text-gray-400 mb-1">已付记录</div>
+            {prepaidLogs.logs.map((log: any, i: number) => (
+              <div key={i} className="flex justify-between text-[10px] py-0.5">
+                <span className="text-gray-400">{log.createdAt?.slice(0,10)}</span>
+                <span className="text-green-600 font-medium">+{log.amount.toFixed(4)} u</span>
+                {log.note && <span className="text-gray-400 ml-1 truncate max-w-[80px]">{log.note}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1118,59 +1115,74 @@ export default function AfOrderManage() {
                             </label>
                           ))}
                         </div>
-                        {/* 订单列表：每行一张订单 */}
-                        <div className="divide-y divide-gray-50">
+                        {/* 订单列表：完整卡片 */}
+                        <div className="pt-2">
                           {visibleOrders.length === 0 ? (
                             <div className="text-center py-3 text-[11px] text-gray-400">无匹配订单</div>
                           ) : visibleOrders.map((order: any) => {
-                            const isGift = order._isGift;
+                            const isEditing = editingId === order.id;
                             const statusDisplay = getStatusDisplay(order);
-                            const qty = parseFloat(order.quantity || 0);
-                            const coin = order.coin || order._parentCoin || '';
-                            const tier = order.equityTier || 0;
-                            let rate: number;
-                            if (order.tierMode === 'linear') {
-                              const buyPrice = parseFloat(order.limitPrice) || 0;
-                              const lowPrice = parseFloat(order.allTimeLowPrice) || buyPrice;
-                              const dropPct = buyPrice > 0 ? Math.max(0, (buyPrice - lowPrice) / buyPrice) : 0;
-                              rate = Math.max(0, 1 - dropPct);
-                            } else {
-                              rate = EQUITY_DISCOUNT_RATES[tier] ?? 1.0;
+                            let previewQuantity = editState?.quantity ?? "";
+                            if (isEditing && editState) {
+                              const p = parseFloat(order.limitPrice);
+                              const a = parseFloat(editState.amount);
+                              if (!isNaN(p) && !isNaN(a) && p > 0 && a > 0) {
+                                previewQuantity = (a * 5.25 / p).toFixed(8);
+                              }
                             }
-                            const effQty = qty * rate;
-                            const hasDiscount = Math.abs(effQty - qty) > 0.00005;
-                            const amount = parseFloat(order.amount || 0);
-                            const dateStr = formatDate(order.confirmedAt || order.createdAt);
+                            const orderDate = new Date(order.createdAt);
+                            const yy = String(orderDate.getUTCFullYear()).slice(2);
+                            const mm2 = String(orderDate.getUTCMonth() + 1).padStart(2, '0');
+                            const dd2 = String(orderDate.getUTCDate()).padStart(2, '0');
+                            const orderNo = `AF${yy}${mm2}${dd2}${String(order.id).padStart(6, '0')}`;
                             return (
-                              <div
-                                key={order.id}
-                                className={`flex items-center px-2.5 py-1.5 gap-1 min-h-[28px] ${isGift ? 'bg-amber-50/40' : ''}`}
-                              >
-                                {/* 币种+赠标记 */}
-                                <span className="text-[11px] font-medium text-gray-800 w-8 shrink-0">{coin}</span>
-                                {isGift ? (
-                                  <span className="text-[9px] px-1 py-0 rounded bg-amber-100 text-amber-600 shrink-0">赠</span>
-                                ) : (
-                                  <span className="text-[9px] px-1 py-0 rounded bg-blue-50 text-blue-500 shrink-0">正</span>
-                                )}
-                                {/* 数量 */}
-                                <span className="text-[11px] text-gray-700 flex-1 text-right font-mono">
-                                  {qty.toFixed(COIN_DECIMALS[coin] ?? 4)}
-                                </span>
-                                {/* 档位+折后 */}
-                                {!isGift && tier > 0 && hasDiscount ? (
-                                  <span className="text-[9px] text-purple-500 shrink-0 w-16 text-right">
-                                    T{tier}→{effQty.toFixed(COIN_DECIMALS[coin] ?? 4)}
-                                  </span>
-                                ) : (
-                                  <span className="w-16 shrink-0" />
-                                )}
-                                {/* 金额 */}
-                                <span className="text-[10px] text-gray-400 w-10 text-right shrink-0">{amount > 0 ? amount.toFixed(0)+'U' : ''}</span>
-                                {/* 状态 */}
-                                <span className={`text-[9px] w-8 text-center shrink-0 ${statusDisplay.color}`}>{statusDisplay.label}</span>
-                                {/* 日期 */}
-                                <span className="text-[9px] text-gray-400 w-14 text-right shrink-0">{dateStr}</span>
+                              <div key={order.id} className="rounded-2xl p-4 shadow-sm mb-3 bg-white">
+                                <div className="flex items-start justify-between mb-3 gap-3">
+                                  <div className="flex flex-col gap-1 min-w-0">
+                                    <span className="text-[11px] font-mono text-gray-400 tracking-wide">{orderNo}</span>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="text-xs font-medium text-gray-700 shrink-0">
+                                        {order.username && order.nickname && order.username !== order.nickname ? `${order.username}/${order.nickname}` : order.nickname || order.username || `用户${order.userId}`}
+                                      </span>
+                                      {order.isGift && (<span className="inline-flex items-center justify-center font-black select-none shrink-0" style={{width:18,height:18,borderRadius:'50%',fontSize:10,color:'#FFD700',background:'radial-gradient(circle at 35% 30%, #5a1a1a 0%, #1a0a00 55%, #3d0000 100%)',boxShadow:'0 1px 4px rgba(0,0,0,0.4)',border:'1.5px solid #8B4513',textShadow:'0 1px 2px rgba(255,180,0,0.8)'}}>赠</span>)}
+                                      {order.status === 'completed' && (order.tierMode === 'linear' ? <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{backgroundColor:'#EFF6FF',color:'#3B82F6',border:'1px solid #BFDBFE'}}>线性</span> : <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{backgroundColor:'#FFF7ED',color:'#D97706',border:'1px solid #FED7AA'}}>阶梯</span>)}
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                    <div className="flex flex-col items-end gap-0.5">
+                                      <span className="text-[10px] text-gray-400"><span className="text-gray-300 mr-1">开仓</span>{formatDate(order.createdAt)}</span>
+                                      {order.confirmedAt && <span className="text-[10px] text-blue-400"><span className="text-blue-300 mr-1">登记</span>{formatDate(order.confirmedAt)}</span>}
+                                    </div>
+                                    {!isEditing ? (
+                                      <div className="flex items-center gap-1.5">
+                                        <button onClick={() => startEdit(order)} className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"><Pencil className="w-3 h-3" /> 编辑</button>
+                                        <button onClick={() => { setDeleteTarget(order); const ig = order.isGift===true||order.isGift===1; setDeleteScope('all'); setSelectedGiftIds([]); setRefundChecked(order.status==='pending'&&!ig); }} className="inline-flex items-center gap-1 text-[11px] font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded-lg px-2.5 py-1 transition-colors"><Trash2 className="w-3 h-3" /> 删除</button>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-1.5">
+                                        <button onClick={saveEdit} disabled={updateMutation.isPending} className="inline-flex items-center gap-1 text-[11px] font-medium text-white bg-green-500 hover:bg-green-600 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-50"><Check className="w-3 h-3" /> 保存</button>
+                                        <button onClick={cancelEdit} className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"><X className="w-3 h-3" /> 取消</button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-y-2 gap-x-2 text-xs">
+                                  <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">币种</span><span className="font-medium">{order.coin}</span></div>
+                                  <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">状态</span>{isEditing ? (<div className="flex flex-col gap-1"><select value={editState!.status} onChange={(e)=>setEditState({...editState!,status:e.target.value as any})} className="border border-gray-300 rounded px-2 py-0.5 text-xs"><option value="pending">委买中</option><option value="completed">买入成交</option><option value="cancelled">已撤单</option></select>{editState!.status==='completed'&&<select value={editState!.sellStatus||''} onChange={(e)=>setEditState({...editState!,sellStatus:e.target.value||null})} className="border border-gray-300 rounded px-2 py-0.5 text-xs"><option value="">持仓中</option><option value="selling">委卖中</option><option value="sold">已卖出</option></select>}</div>) : (<span className={`font-medium ${statusDisplay.color}`}>{statusDisplay.label}</span>)}</div>
+                                  {isEditing&&editState!.status==='completed'&&<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">档位模式</span><div className="flex rounded overflow-hidden border border-gray-300 text-xs"><button type="button" onClick={()=>setEditState({...editState!,tierMode:'step'})} className={`px-2 py-0.5 transition-colors ${editState!.tierMode==='step'?'bg-blue-500 text-white':'bg-white text-gray-600 hover:bg-gray-50'}`}>阶梯</button><button type="button" onClick={()=>setEditState({...editState!,tierMode:'linear'})} className={`px-2 py-0.5 transition-colors ${editState!.tierMode==='linear'?'bg-blue-500 text-white':'bg-white text-gray-600 hover:bg-gray-50'}`}>线性</button></div></div>}
+                                  <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">买入价</span>{isEditing&&editState!.status==='pending'?<input type="number" value={editState!.limitPrice} onChange={(e)=>setEditState({...editState!,limitPrice:e.target.value})} className="border border-gray-300 rounded px-2 py-0.5 text-sm w-24" />:<span className="font-medium text-gray-900">{parseFloat(order.limitPrice).toLocaleString()} <span className="text-gray-400">u</span></span>}</div>
+                                  <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">数量</span><span className="font-medium text-gray-900">{(()=>{const raw=isEditing?(previewQuantity||editState!.quantity):order.quantity;const num=parseFloat(raw);const trimmed=isNaN(num)?raw:num.toFixed(8).replace(/\.?0+$/,'');return `${trimmed} ${order.coin}`;})()}</span></div>
+                                  {order.status==='completed'&&(()=>{const raw=order.quantity;const num=parseFloat(raw);let rate:number;if(order.tierMode==='linear'){const buyP=parseFloat(order.limitPrice||'0');const allLow=order.allTimeLowPrice?parseFloat(String(order.allTimeLowPrice)):0;rate=(buyP>0&&allLow>0)?Math.max(0,1-(buyP-allLow)/buyP):1.0;}else{rate=EQUITY_DISCOUNT_RATES[order.equityTier]||1.0;}if(rate>=1.0)return null;const effectiveNum=num*rate;const pct=(rate*100).toFixed(2);return(<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">实际持仓</span><span className="text-xs text-orange-500">{effectiveNum.toFixed(8).replace(/\.?0+$/,'')} {order.coin} ({pct}%)</span></div>);})()}
+                                  {(()=>{const srcAmt=parseFloat(order.sourceAmount||'0');const selfAmt=parseFloat(order.amount||'0');const investAmt=order.isGift?srcAmt:selfAmt;return(<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">实际投入</span><span className="font-medium text-gray-900">{investAmt.toFixed(2)} <span className="text-gray-400">u</span></span></div>);})()}
+                                  {(()=>{const amount=parseFloat(order.amount);const tradeValue=order.isGift?amount:amount*5.25;return(<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">订单价値</span><span className="text-gray-900 font-medium">{tradeValue.toFixed(2)} <span className="text-gray-400">u</span></span></div>);})()}
+                                  {order.isGift&&(()=>{const srcAmt=parseFloat(order.sourceAmount||'0');const giftAmt=parseFloat(order.amount||'0');const ratio=srcAmt>0?(giftAmt/srcAmt):0;return(<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">赠送市値</span><span className="font-medium text-gray-900">{giftAmt.toFixed(2)} <span className="text-gray-400">u</span>{ratio>0&&<span className="font-normal text-gray-400 ml-1">({ratio.toFixed(4)}倍)</span>}</span></div>);})()}
+                                  {(order.sellStatus==='selling'||order.sellStatus==='sold')&&<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">卖出价</span><span className="font-medium text-gray-900">{parseFloat(order.sellPrice).toLocaleString()} <span className="text-gray-400">u</span></span></div>}
+                                  {order.sellStatus==='sold'&&order.sellConfirmedAt&&<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">卖出时间</span><span className="text-gray-500">{formatDate(order.sellConfirmedAt)}</span></div>}
+                                  {order.status==='completed'&&(()=>{let rate:number;let tierLabel:string;if(order.tierMode==='linear'){const buyP=parseFloat(order.limitPrice||'0');const allLow=order.allTimeLowPrice?parseFloat(String(order.allTimeLowPrice)):0;rate=(buyP>0&&allLow>0)?Math.max(0,1-(buyP-allLow)/buyP):1.0;tierLabel='L';}else{rate=EQUITY_DISCOUNT_RATES[order.equityTier]||1.0;tierLabel=order.equityTier===0?'D0档':`D${order.equityTier}档`;}const pct=(rate*100).toFixed(2);return(<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">当前权益</span><span className={`font-medium ${rate>=1.0?'text-gray-900':'text-orange-500'}`}>{pct}% <span className="text-gray-400">({tierLabel})</span></span></div>);})()}
+                                  {(order.status==='completed'||order.status==='pending')&&<FeeRow order={order} ledgerId={ledgerId} />}
+                                </div>
+                                {(order.isGift===true||order.isGift===1)&&(()=>{const parentOrder=order.sourceOrderId?(orders as any[]||[]).find((o:any)=>o.id===order.sourceOrderId):null;const parentStatus=parentOrder?(parentOrder.sellStatus==='sold'?'已卖出':parentOrder.sellStatus==='selling'?'委卖中':parentOrder.status==='completed'?'持仓中':parentOrder.status==='cancelled'?'已撤单':'委买中'):null;const parentStatusColor=parentOrder?(parentOrder.sellStatus==='sold'?'text-blue-500':parentOrder.sellStatus==='selling'?'text-red-500':parentOrder.status==='completed'?'text-green-500':'text-gray-400'):'text-gray-400';const parentOrderNo=parentOrder?(()=>{const d=new Date(parentOrder.createdAt);return `AF${String(d.getUTCFullYear()).slice(2)}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}${String(parentOrder.id).padStart(6,'0')}`;})():null;return(<div className="mt-2 text-xs rounded-lg px-3 py-2 border border-purple-100 bg-purple-50"><div className="flex items-center justify-between"><span className="text-purple-600 font-medium">推荐人奖励赠单</span>{order.sourceUsername&&<span className="text-gray-500">来自 <span className="font-medium text-gray-700">{order.sourceUsername}</span></span>}</div>{parentOrder&&<div className="mt-1 flex items-center gap-1.5 text-gray-500"><span>关联正单</span>{parentOrderNo&&<span className="font-mono text-gray-600">{parentOrderNo}</span>}<span className={`font-medium ${parentStatusColor}`}>{parentStatus}</span></div>}</div>);})()}
+                                {!(order.isGift===true||order.isGift===1)&&(()=>{const giftOrders:any[]=(order as any).giftOrders||[];if(giftOrders.length===0)return null;const soldCount=giftOrders.filter((g:any)=>g.sellStatus==='sold').length;const sellingCount=giftOrders.filter((g:any)=>g.sellStatus==='selling').length;const holdingCount=giftOrders.length-soldCount-sellingCount;return(<div className="mt-2 text-xs rounded-lg px-3 py-1.5 border border-purple-100 bg-purple-50 flex items-center gap-2 flex-wrap"><span className="text-purple-600 font-medium">关联赠单 {giftOrders.length}笔</span>{soldCount>0&&<span className="text-blue-500">已卖出 {soldCount}</span>}{sellingCount>0&&<span className="text-red-500">委卖中 {sellingCount}</span>}{holdingCount>0&&<span className="text-green-500">持仓中 {holdingCount}</span>}</div>);})()}
                               </div>
                             );
                           })}
@@ -1257,59 +1269,56 @@ export default function AfOrderManage() {
                       <span className={`transition-transform duration-200 shrink-0 ml-1 text-gray-400 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
                     </button>
                     {isOpen && (
-                      <div className="mt-1 mb-2 rounded-xl bg-white border border-gray-100 shadow-sm overflow-hidden">
-                        <div className="divide-y divide-gray-50">
-                          {flatOrders.map((order: any) => {
-                            const isGift = order._isGift;
-                            const statusDisplay = getStatusDisplay(order);
-                            const qty = parseFloat(order.quantity || 0);
-                            const oCoin = order.coin || order._parentCoin || coin;
-                            const tier = order.equityTier || 0;
-                            let rate: number;
-                            if (order.tierMode === 'linear') {
-                              const buyPrice = parseFloat(order.limitPrice) || 0;
-                              const lowPrice = parseFloat(order.allTimeLowPrice) || buyPrice;
-                              const dropPct = buyPrice > 0 ? Math.max(0, (buyPrice - lowPrice) / buyPrice) : 0;
-                              rate = Math.max(0, 1 - dropPct);
-                            } else {
-                              rate = EQUITY_DISCOUNT_RATES[tier] ?? 1.0;
-                            }
-                            const effQty = qty * rate;
-                            const hasDiscount = Math.abs(effQty - qty) > 0.00005;
-                            const amount = parseFloat(order.amount || 0);
-                            const price = parseFloat(order.limitPrice || 0);
-                            const dateStr = formatDate(order.confirmedAt || order.createdAt);
-                            const nickname = order.nickname || order.username || '';
-                            return (
-                              <div key={order.id} className={`flex items-center px-2.5 py-1.5 gap-1 min-h-[28px] ${isGift ? 'bg-amber-50/40' : ''}`}>
-                                {isGift ? (
-                                  <span className="text-[9px] px-1 py-0 rounded bg-amber-100 text-amber-600 shrink-0">赠</span>
-                                ) : (
-                                  <span className="text-[9px] px-1 py-0 rounded bg-blue-50 text-blue-500 shrink-0">正</span>
-                                )}
-                                <span className="text-[11px] text-gray-700 flex-1 text-right font-mono">
-                                  {qty.toFixed(COIN_DECIMALS[oCoin] ?? 4)}
-                                </span>
-                                {!isGift && tier > 0 && hasDiscount ? (
-                                  <span className="text-[9px] text-purple-500 shrink-0 w-16 text-right">T{tier}→{effQty.toFixed(COIN_DECIMALS[oCoin] ?? 4)}</span>
-                                ) : (
-                                  <span className="w-16 shrink-0" />
-                                )}
-                                {price > 0 && <span className="text-[9px] text-gray-500 shrink-0">${price.toFixed(2)}</span>}
-                                <span className="text-[10px] text-gray-400 w-10 text-right shrink-0">{amount > 0 ? amount.toFixed(0)+'U' : ''}</span>
-                                <span className={`text-[9px] w-8 text-center shrink-0 ${statusDisplay.color}`}>{statusDisplay.label}</span>
-                                <span className="text-[9px] text-gray-400 w-14 text-right shrink-0">{dateStr}</span>
-                                {(order.username || order.nickname) && (
-                                  <span className="text-[9px] text-gray-400 shrink-0 ml-0.5 max-w-[56px] truncate">
-                                    {order.username && order.nickname && order.username !== order.nickname
-                                      ? `${order.username}/${order.nickname}`
-                                      : order.username || order.nickname}
-                                  </span>
-                                )}
+                      <div className="mt-1 mb-2 pt-2">
+                        {flatOrders.map((order: any) => {
+                          const isEditing = editingId === order.id;
+                          const statusDisplay = getStatusDisplay(order);
+                          let previewQuantity = editState?.quantity ?? "";
+                          if (isEditing && editState) { const p = parseFloat(order.limitPrice); const a = parseFloat(editState.amount); if (!isNaN(p) && !isNaN(a) && p > 0 && a > 0) { previewQuantity = (a * 5.25 / p).toFixed(8); } }
+                          const orderDate = new Date(order.createdAt);
+                          const yy = String(orderDate.getUTCFullYear()).slice(2);
+                          const mm2 = String(orderDate.getUTCMonth() + 1).padStart(2, '0');
+                          const dd2 = String(orderDate.getUTCDate()).padStart(2, '0');
+                          const orderNo = `AF${yy}${mm2}${dd2}${String(order.id).padStart(6, '0')}`;
+                          return (
+                            <div key={order.id} className="rounded-2xl p-4 shadow-sm mb-3 bg-white">
+                              <div className="flex items-start justify-between mb-3 gap-3">
+                                <div className="flex flex-col gap-1 min-w-0">
+                                  <span className="text-[11px] font-mono text-gray-400 tracking-wide">{orderNo}</span>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-xs font-medium text-gray-700 shrink-0">{order.username && order.nickname && order.username !== order.nickname ? `${order.username}/${order.nickname}` : order.nickname || order.username || `用户${order.userId}`}</span>
+                                    {order.isGift && (<span className="inline-flex items-center justify-center font-black select-none shrink-0" style={{width:18,height:18,borderRadius:'50%',fontSize:10,color:'#FFD700',background:'radial-gradient(circle at 35% 30%, #5a1a1a 0%, #1a0a00 55%, #3d0000 100%)',boxShadow:'0 1px 4px rgba(0,0,0,0.4)',border:'1.5px solid #8B4513',textShadow:'0 1px 2px rgba(255,180,0,0.8)'}}>赠</span>)}
+                                    {order.status === 'completed' && (order.tierMode === 'linear' ? <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{backgroundColor:'#EFF6FF',color:'#3B82F6',border:'1px solid #BFDBFE'}}>线性</span> : <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{backgroundColor:'#FFF7ED',color:'#D97706',border:'1px solid #FED7AA'}}>阶梯</span>)}
+                                  </div>
+                                </div>
+                                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                  <div className="flex flex-col items-end gap-0.5">
+                                    <span className="text-[10px] text-gray-400"><span className="text-gray-300 mr-1">开仓</span>{formatDate(order.createdAt)}</span>
+                                    {order.confirmedAt && <span className="text-[10px] text-blue-400"><span className="text-blue-300 mr-1">登记</span>{formatDate(order.confirmedAt)}</span>}
+                                  </div>
+                                  {!isEditing ? (<div className="flex items-center gap-1.5"><button onClick={() => startEdit(order)} className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"><Pencil className="w-3 h-3" /> 编辑</button><button onClick={() => { setDeleteTarget(order); const ig = order.isGift===true||order.isGift===1; setDeleteScope('all'); setSelectedGiftIds([]); setRefundChecked(order.status==='pending'&&!ig); }} className="inline-flex items-center gap-1 text-[11px] font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded-lg px-2.5 py-1 transition-colors"><Trash2 className="w-3 h-3" /> 删除</button></div>) : (<div className="flex items-center gap-1.5"><button onClick={saveEdit} disabled={updateMutation.isPending} className="inline-flex items-center gap-1 text-[11px] font-medium text-white bg-green-500 hover:bg-green-600 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-50"><Check className="w-3 h-3" /> 保存</button><button onClick={cancelEdit} className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"><X className="w-3 h-3" /> 取消</button></div>)}
+                                </div>
                               </div>
-                            );
-                          })}
-                        </div>
+                              <div className="grid grid-cols-2 gap-y-2 gap-x-2 text-xs">
+                                <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">币种</span><span className="font-medium">{order.coin}</span></div>
+                                <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">状态</span>{isEditing ? (<div className="flex flex-col gap-1"><select value={editState!.status} onChange={(e)=>setEditState({...editState!,status:e.target.value as any})} className="border border-gray-300 rounded px-2 py-0.5 text-xs"><option value="pending">委买中</option><option value="completed">买入成交</option><option value="cancelled">已撤单</option></select>{editState!.status==='completed'&&<select value={editState!.sellStatus||''} onChange={(e)=>setEditState({...editState!,sellStatus:e.target.value||null})} className="border border-gray-300 rounded px-2 py-0.5 text-xs"><option value="">持仓中</option><option value="selling">委卖中</option><option value="sold">已卖出</option></select>}</div>) : (<span className={`font-medium ${statusDisplay.color}`}>{statusDisplay.label}</span>)}</div>
+                                {isEditing&&editState!.status==='completed'&&<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">档位模式</span><div className="flex rounded overflow-hidden border border-gray-300 text-xs"><button type="button" onClick={()=>setEditState({...editState!,tierMode:'step'})} className={`px-2 py-0.5 transition-colors ${editState!.tierMode==='step'?'bg-blue-500 text-white':'bg-white text-gray-600 hover:bg-gray-50'}`}>阶梯</button><button type="button" onClick={()=>setEditState({...editState!,tierMode:'linear'})} className={`px-2 py-0.5 transition-colors ${editState!.tierMode==='linear'?'bg-blue-500 text-white':'bg-white text-gray-600 hover:bg-gray-50'}`}>线性</button></div></div>}
+                                <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">买入价</span>{isEditing&&editState!.status==='pending'?<input type="number" value={editState!.limitPrice} onChange={(e)=>setEditState({...editState!,limitPrice:e.target.value})} className="border border-gray-300 rounded px-2 py-0.5 text-sm w-24" />:<span className="font-medium text-gray-900">{parseFloat(order.limitPrice).toLocaleString()} <span className="text-gray-400">u</span></span>}</div>
+                                <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">数量</span><span className="font-medium text-gray-900">{(()=>{const raw=isEditing?(previewQuantity||editState!.quantity):order.quantity;const num=parseFloat(raw);const trimmed=isNaN(num)?raw:num.toFixed(8).replace(/\.?0+$/,'');return `${trimmed} ${order.coin}`;})()}</span></div>
+                                {order.status==='completed'&&(()=>{const raw=order.quantity;const num=parseFloat(raw);let rate:number;if(order.tierMode==='linear'){const buyP=parseFloat(order.limitPrice||'0');const allLow=order.allTimeLowPrice?parseFloat(String(order.allTimeLowPrice)):0;rate=(buyP>0&&allLow>0)?Math.max(0,1-(buyP-allLow)/buyP):1.0;}else{rate=EQUITY_DISCOUNT_RATES[order.equityTier]||1.0;}if(rate>=1.0)return null;const effectiveNum=num*rate;const pct=(rate*100).toFixed(2);return(<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">实际持仓</span><span className="text-xs text-orange-500">{effectiveNum.toFixed(8).replace(/\.?0+$/,'')} {order.coin} ({pct}%)</span></div>);})()}
+                                {(()=>{const srcAmt=parseFloat(order.sourceAmount||'0');const selfAmt=parseFloat(order.amount||'0');const investAmt=order.isGift?srcAmt:selfAmt;return(<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">实际投入</span><span className="font-medium text-gray-900">{investAmt.toFixed(2)} <span className="text-gray-400">u</span></span></div>);})()}
+                                {(()=>{const amount=parseFloat(order.amount);const tradeValue=order.isGift?amount:amount*5.25;return(<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">订单价値</span><span className="text-gray-900 font-medium">{tradeValue.toFixed(2)} <span className="text-gray-400">u</span></span></div>);})()}
+                                {order.isGift&&(()=>{const srcAmt=parseFloat(order.sourceAmount||'0');const giftAmt=parseFloat(order.amount||'0');const ratio=srcAmt>0?(giftAmt/srcAmt):0;return(<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">赠送市値</span><span className="font-medium text-gray-900">{giftAmt.toFixed(2)} <span className="text-gray-400">u</span>{ratio>0&&<span className="font-normal text-gray-400 ml-1">({ratio.toFixed(4)}倍)</span>}</span></div>);})()}
+                                {(order.sellStatus==='selling'||order.sellStatus==='sold')&&<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">卖出价</span><span className="font-medium text-gray-900">{parseFloat(order.sellPrice).toLocaleString()} <span className="text-gray-400">u</span></span></div>}
+                                {order.sellStatus==='sold'&&order.sellConfirmedAt&&<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">卖出时间</span><span className="text-gray-500">{formatDate(order.sellConfirmedAt)}</span></div>}
+                                {order.status==='completed'&&(()=>{let rate:number;let tierLabel:string;if(order.tierMode==='linear'){const buyP=parseFloat(order.limitPrice||'0');const allLow=order.allTimeLowPrice?parseFloat(String(order.allTimeLowPrice)):0;rate=(buyP>0&&allLow>0)?Math.max(0,1-(buyP-allLow)/buyP):1.0;tierLabel='L';}else{rate=EQUITY_DISCOUNT_RATES[order.equityTier]||1.0;tierLabel=order.equityTier===0?'D0档':`D${order.equityTier}档`;}const pct=(rate*100).toFixed(2);return(<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">当前权益</span><span className={`font-medium ${rate>=1.0?'text-gray-900':'text-orange-500'}`}>{pct}% <span className="text-gray-400">({tierLabel})</span></span></div>);})()}
+                                {(order.status==='completed'||order.status==='pending')&&<FeeRow order={order} ledgerId={ledgerId} />}
+                              </div>
+                              {(order.isGift===true||order.isGift===1)&&(()=>{const parentOrder=order.sourceOrderId?(orders as any[]||[]).find((o:any)=>o.id===order.sourceOrderId):null;const parentStatus=parentOrder?(parentOrder.sellStatus==='sold'?'已卖出':parentOrder.sellStatus==='selling'?'委卖中':parentOrder.status==='completed'?'持仓中':parentOrder.status==='cancelled'?'已撤单':'委买中'):null;const parentStatusColor=parentOrder?(parentOrder.sellStatus==='sold'?'text-blue-500':parentOrder.sellStatus==='selling'?'text-red-500':parentOrder.status==='completed'?'text-green-500':'text-gray-400'):'text-gray-400';const parentOrderNo=parentOrder?(()=>{const d=new Date(parentOrder.createdAt);return `AF${String(d.getUTCFullYear()).slice(2)}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}${String(parentOrder.id).padStart(6,'0')}`;})():null;return(<div className="mt-2 text-xs rounded-lg px-3 py-2 border border-purple-100 bg-purple-50"><div className="flex items-center justify-between"><span className="text-purple-600 font-medium">推荐人奖励赠单</span>{order.sourceUsername&&<span className="text-gray-500">来自 <span className="font-medium text-gray-700">{order.sourceUsername}</span></span>}</div>{parentOrder&&<div className="mt-1 flex items-center gap-1.5 text-gray-500"><span>关联正单</span>{parentOrderNo&&<span className="font-mono text-gray-600">{parentOrderNo}</span>}<span className={`font-medium ${parentStatusColor}`}>{parentStatus}</span></div>}</div>);})()}
+                              {!(order.isGift===true||order.isGift===1)&&(()=>{const giftOrders:any[]=(order as any).giftOrders||[];if(giftOrders.length===0)return null;const soldCount=giftOrders.filter((g:any)=>g.sellStatus==='sold').length;const sellingCount=giftOrders.filter((g:any)=>g.sellStatus==='selling').length;const holdingCount=giftOrders.length-soldCount-sellingCount;return(<div className="mt-2 text-xs rounded-lg px-3 py-1.5 border border-purple-100 bg-purple-50 flex items-center gap-2 flex-wrap"><span className="text-purple-600 font-medium">关联赠单 {giftOrders.length}笔</span>{soldCount>0&&<span className="text-blue-500">已卖出 {soldCount}</span>}{sellingCount>0&&<span className="text-red-500">委卖中 {sellingCount}</span>}{holdingCount>0&&<span className="text-green-500">持仓中 {holdingCount}</span>}</div>);})()}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -1439,58 +1448,56 @@ export default function AfOrderManage() {
                       <span className={`transition-transform duration-200 shrink-0 ml-1 text-gray-400 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
                     </button>
                     {isOpen && (
-                      <div className="mt-1 mb-2 rounded-xl bg-white border border-gray-100 shadow-sm overflow-hidden">
-                        {/* 表头 */}
-                        <div className="grid text-[9px] font-semibold text-gray-400 bg-gray-50 border-b border-gray-100 px-2.5 py-1" style={{gridTemplateColumns:'20px 1fr 60px 36px 52px 44px'}}>
-                          <span></span>
-                          <span className="text-right">数量</span>
-                          <span className="text-right">投入</span>
-                          <span className="text-center">状态</span>
-                          <span className="text-right">日期</span>
-                          <span className="text-right">用户</span>
-                        </div>
-                        <div className="divide-y divide-gray-50">
-                          {flatOrders.map((order: any) => {
-                            const isGift = order._isGift;
-                            const statusDisplay = getStatusDisplay(order);
-                            const qty = parseFloat(order.quantity || 0);
-                            const oCoin = order.coin || order._parentCoin || group.coin;
-                            const tier = order.equityTier || 0;
-                            const rate = EQUITY_DISCOUNT_RATES[tier] ?? 1.0;
-                            const effQty = qty * rate;
-                            const hasDiscount = !isGift && tier > 0 && Math.abs(effQty - qty) > 0.00005;
-                            const amount = parseFloat(order.amount || 0);
-                            const dateStr = formatDate(order.confirmedAt || order.createdAt);
-                            const nickname = order.nickname || order.username || '';
-                            return (
-                              <div key={order.id} className={`grid items-center px-2.5 py-1.5 min-h-[28px] ${isGift ? 'bg-amber-50/40' : ''}`} style={{gridTemplateColumns:'20px 1fr 60px 36px 52px 44px'}}>
-                                {/* 列1: 标签 */}
-                                {isGift ? (
-                                  <span className="text-[9px] px-1 py-0 rounded bg-amber-100 text-amber-600 w-fit">赠</span>
-                                ) : (
-                                  <span className="text-[9px] px-1 py-0 rounded bg-blue-50 text-blue-500 w-fit">正</span>
-                                )}
-                                {/* 列2: 数量（含折后） */}
-                                <span className="text-[11px] text-gray-700 text-right font-mono">
-                                  {qty.toFixed(COIN_DECIMALS[oCoin] ?? 4)}
-                                  {hasDiscount && <span className="text-green-600 text-[9px]">({effQty.toFixed(COIN_DECIMALS[oCoin] ?? 4)})</span>}
-                                </span>
-                                {/* 列3: 投入金额 */}
-                                <span className="text-[10px] text-gray-400 text-right">{amount > 0 ? amount.toFixed(0)+'u' : ''}</span>
-                                {/* 列4: 状态 */}
-                                <span className={`text-[9px] text-center ${statusDisplay.color}`}>{statusDisplay.label}</span>
-                                {/* 列5: 日期 */}
-                                <span className="text-[9px] text-gray-400 text-right">{dateStr}</span>
-                                {/* 列6: 用户名/昵称 */}
-                                <span className="text-[9px] text-gray-400 text-right truncate">
-                                  {order.username && order.nickname && order.username !== order.nickname
-                                    ? `${order.username}/${order.nickname}`
-                                    : order.username || order.nickname || ''}
-                                </span>
+                      <div className="mt-1 mb-2 pt-2">
+                        {flatOrders.map((order: any) => {
+                          const isEditing = editingId === order.id;
+                          const statusDisplay = getStatusDisplay(order);
+                          let previewQuantity = editState?.quantity ?? "";
+                          if (isEditing && editState) { const p = parseFloat(order.limitPrice); const a = parseFloat(editState.amount); if (!isNaN(p) && !isNaN(a) && p > 0 && a > 0) { previewQuantity = (a * 5.25 / p).toFixed(8); } }
+                          const orderDate = new Date(order.createdAt);
+                          const yy = String(orderDate.getUTCFullYear()).slice(2);
+                          const mm2 = String(orderDate.getUTCMonth() + 1).padStart(2, '0');
+                          const dd2 = String(orderDate.getUTCDate()).padStart(2, '0');
+                          const orderNo = `AF${yy}${mm2}${dd2}${String(order.id).padStart(6, '0')}`;
+                          return (
+                            <div key={order.id} className="rounded-2xl p-4 shadow-sm mb-3 bg-white">
+                              <div className="flex items-start justify-between mb-3 gap-3">
+                                <div className="flex flex-col gap-1 min-w-0">
+                                  <span className="text-[11px] font-mono text-gray-400 tracking-wide">{orderNo}</span>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-xs font-medium text-gray-700 shrink-0">{order.username && order.nickname && order.username !== order.nickname ? `${order.username}/${order.nickname}` : order.nickname || order.username || `用户${order.userId}`}</span>
+                                    {order.isGift && (<span className="inline-flex items-center justify-center font-black select-none shrink-0" style={{width:18,height:18,borderRadius:'50%',fontSize:10,color:'#FFD700',background:'radial-gradient(circle at 35% 30%, #5a1a1a 0%, #1a0a00 55%, #3d0000 100%)',boxShadow:'0 1px 4px rgba(0,0,0,0.4)',border:'1.5px solid #8B4513',textShadow:'0 1px 2px rgba(255,180,0,0.8)'}}>赠</span>)}
+                                    {order.status === 'completed' && (order.tierMode === 'linear' ? <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{backgroundColor:'#EFF6FF',color:'#3B82F6',border:'1px solid #BFDBFE'}}>线性</span> : <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{backgroundColor:'#FFF7ED',color:'#D97706',border:'1px solid #FED7AA'}}>阶梯</span>)}
+                                  </div>
+                                </div>
+                                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                  <div className="flex flex-col items-end gap-0.5">
+                                    <span className="text-[10px] text-gray-400"><span className="text-gray-300 mr-1">开仓</span>{formatDate(order.createdAt)}</span>
+                                    {order.confirmedAt && <span className="text-[10px] text-blue-400"><span className="text-blue-300 mr-1">登记</span>{formatDate(order.confirmedAt)}</span>}
+                                  </div>
+                                  {!isEditing ? (<div className="flex items-center gap-1.5"><button onClick={() => startEdit(order)} className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"><Pencil className="w-3 h-3" /> 编辑</button><button onClick={() => { setDeleteTarget(order); const ig = order.isGift===true||order.isGift===1; setDeleteScope('all'); setSelectedGiftIds([]); setRefundChecked(order.status==='pending'&&!ig); }} className="inline-flex items-center gap-1 text-[11px] font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded-lg px-2.5 py-1 transition-colors"><Trash2 className="w-3 h-3" /> 删除</button></div>) : (<div className="flex items-center gap-1.5"><button onClick={saveEdit} disabled={updateMutation.isPending} className="inline-flex items-center gap-1 text-[11px] font-medium text-white bg-green-500 hover:bg-green-600 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-50"><Check className="w-3 h-3" /> 保存</button><button onClick={cancelEdit} className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"><X className="w-3 h-3" /> 取消</button></div>)}
+                                </div>
                               </div>
-                            );
-                          })}
-                        </div>
+                              <div className="grid grid-cols-2 gap-y-2 gap-x-2 text-xs">
+                                <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">币种</span><span className="font-medium">{order.coin}</span></div>
+                                <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">状态</span>{isEditing ? (<div className="flex flex-col gap-1"><select value={editState!.status} onChange={(e)=>setEditState({...editState!,status:e.target.value as any})} className="border border-gray-300 rounded px-2 py-0.5 text-xs"><option value="pending">委买中</option><option value="completed">买入成交</option><option value="cancelled">已撤单</option></select>{editState!.status==='completed'&&<select value={editState!.sellStatus||''} onChange={(e)=>setEditState({...editState!,sellStatus:e.target.value||null})} className="border border-gray-300 rounded px-2 py-0.5 text-xs"><option value="">持仓中</option><option value="selling">委卖中</option><option value="sold">已卖出</option></select>}</div>) : (<span className={`font-medium ${statusDisplay.color}`}>{statusDisplay.label}</span>)}</div>
+                                {isEditing&&editState!.status==='completed'&&<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">档位模式</span><div className="flex rounded overflow-hidden border border-gray-300 text-xs"><button type="button" onClick={()=>setEditState({...editState!,tierMode:'step'})} className={`px-2 py-0.5 transition-colors ${editState!.tierMode==='step'?'bg-blue-500 text-white':'bg-white text-gray-600 hover:bg-gray-50'}`}>阶梯</button><button type="button" onClick={()=>setEditState({...editState!,tierMode:'linear'})} className={`px-2 py-0.5 transition-colors ${editState!.tierMode==='linear'?'bg-blue-500 text-white':'bg-white text-gray-600 hover:bg-gray-50'}`}>线性</button></div></div>}
+                                <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">买入价</span>{isEditing&&editState!.status==='pending'?<input type="number" value={editState!.limitPrice} onChange={(e)=>setEditState({...editState!,limitPrice:e.target.value})} className="border border-gray-300 rounded px-2 py-0.5 text-sm w-24" />:<span className="font-medium text-gray-900">{parseFloat(order.limitPrice).toLocaleString()} <span className="text-gray-400">u</span></span>}</div>
+                                <div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">数量</span><span className="font-medium text-gray-900">{(()=>{const raw=isEditing?(previewQuantity||editState!.quantity):order.quantity;const num=parseFloat(raw);const trimmed=isNaN(num)?raw:num.toFixed(8).replace(/\.?0+$/,'');return `${trimmed} ${order.coin}`;})()}</span></div>
+                                {order.status==='completed'&&(()=>{const raw=order.quantity;const num=parseFloat(raw);let rate:number;if(order.tierMode==='linear'){const buyP=parseFloat(order.limitPrice||'0');const allLow=order.allTimeLowPrice?parseFloat(String(order.allTimeLowPrice)):0;rate=(buyP>0&&allLow>0)?Math.max(0,1-(buyP-allLow)/buyP):1.0;}else{rate=EQUITY_DISCOUNT_RATES[order.equityTier]||1.0;}if(rate>=1.0)return null;const effectiveNum=num*rate;const pct=(rate*100).toFixed(2);return(<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">实际持仓</span><span className="text-xs text-orange-500">{effectiveNum.toFixed(8).replace(/\.?0+$/,'')} {order.coin} ({pct}%)</span></div>);})()}
+                                {(()=>{const srcAmt=parseFloat(order.sourceAmount||'0');const selfAmt=parseFloat(order.amount||'0');const investAmt=order.isGift?srcAmt:selfAmt;return(<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">实际投入</span><span className="font-medium text-gray-900">{investAmt.toFixed(2)} <span className="text-gray-400">u</span></span></div>);})()}
+                                {(()=>{const amount=parseFloat(order.amount);const tradeValue=order.isGift?amount:amount*5.25;return(<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">订单价値</span><span className="text-gray-900 font-medium">{tradeValue.toFixed(2)} <span className="text-gray-400">u</span></span></div>);})()}
+                                {order.isGift&&(()=>{const srcAmt=parseFloat(order.sourceAmount||'0');const giftAmt=parseFloat(order.amount||'0');const ratio=srcAmt>0?(giftAmt/srcAmt):0;return(<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">赠送市値</span><span className="font-medium text-gray-900">{giftAmt.toFixed(2)} <span className="text-gray-400">u</span>{ratio>0&&<span className="font-normal text-gray-400 ml-1">({ratio.toFixed(4)}倍)</span>}</span></div>);})()}
+                                {(order.sellStatus==='selling'||order.sellStatus==='sold')&&<div className="flex items-center gap-1"><span className="text-gray-400 w-12 shrink-0">卖出价</span><span className="font-medium text-gray-900">{parseFloat(order.sellPrice).toLocaleString()} <span className="text-gray-400">u</span></span></div>}
+                                {order.sellStatus==='sold'&&order.sellConfirmedAt&&<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">卖出时间</span><span className="text-gray-500">{formatDate(order.sellConfirmedAt)}</span></div>}
+                                {order.status==='completed'&&(()=>{let rate:number;let tierLabel:string;if(order.tierMode==='linear'){const buyP=parseFloat(order.limitPrice||'0');const allLow=order.allTimeLowPrice?parseFloat(String(order.allTimeLowPrice)):0;rate=(buyP>0&&allLow>0)?Math.max(0,1-(buyP-allLow)/buyP):1.0;tierLabel='L';}else{rate=EQUITY_DISCOUNT_RATES[order.equityTier]||1.0;tierLabel=order.equityTier===0?'D0档':`D${order.equityTier}档`;}const pct=(rate*100).toFixed(2);return(<div className="flex items-center gap-1 col-span-2"><span className="text-gray-400 w-12 shrink-0">当前权益</span><span className={`font-medium ${rate>=1.0?'text-gray-900':'text-orange-500'}`}>{pct}% <span className="text-gray-400">({tierLabel})</span></span></div>);})()}
+                                {(order.status==='completed'||order.status==='pending')&&<FeeRow order={order} ledgerId={ledgerId} />}
+                              </div>
+                              {(order.isGift===true||order.isGift===1)&&(()=>{const parentOrder=order.sourceOrderId?(orders as any[]||[]).find((o:any)=>o.id===order.sourceOrderId):null;const parentStatus=parentOrder?(parentOrder.sellStatus==='sold'?'已卖出':parentOrder.sellStatus==='selling'?'委卖中':parentOrder.status==='completed'?'持仓中':parentOrder.status==='cancelled'?'已撤单':'委买中'):null;const parentStatusColor=parentOrder?(parentOrder.sellStatus==='sold'?'text-blue-500':parentOrder.sellStatus==='selling'?'text-red-500':parentOrder.status==='completed'?'text-green-500':'text-gray-400'):'text-gray-400';const parentOrderNo=parentOrder?(()=>{const d=new Date(parentOrder.createdAt);return `AF${String(d.getUTCFullYear()).slice(2)}${String(d.getUTCMonth()+1).padStart(2,'0')}${String(d.getUTCDate()).padStart(2,'0')}${String(parentOrder.id).padStart(6,'0')}`;})():null;return(<div className="mt-2 text-xs rounded-lg px-3 py-2 border border-purple-100 bg-purple-50"><div className="flex items-center justify-between"><span className="text-purple-600 font-medium">推荐人奖励赠单</span>{order.sourceUsername&&<span className="text-gray-500">来自 <span className="font-medium text-gray-700">{order.sourceUsername}</span></span>}</div>{parentOrder&&<div className="mt-1 flex items-center gap-1.5 text-gray-500"><span>关联正单</span>{parentOrderNo&&<span className="font-mono text-gray-600">{parentOrderNo}</span>}<span className={`font-medium ${parentStatusColor}`}>{parentStatus}</span></div>}</div>);})()}
+                              {!(order.isGift===true||order.isGift===1)&&(()=>{const giftOrders:any[]=(order as any).giftOrders||[];if(giftOrders.length===0)return null;const soldCount=giftOrders.filter((g:any)=>g.sellStatus==='sold').length;const sellingCount=giftOrders.filter((g:any)=>g.sellStatus==='selling').length;const holdingCount=giftOrders.length-soldCount-sellingCount;return(<div className="mt-2 text-xs rounded-lg px-3 py-1.5 border border-purple-100 bg-purple-50 flex items-center gap-2 flex-wrap"><span className="text-purple-600 font-medium">关联赠单 {giftOrders.length}笔</span>{soldCount>0&&<span className="text-blue-500">已卖出 {soldCount}</span>}{sellingCount>0&&<span className="text-red-500">委卖中 {sellingCount}</span>}{holdingCount>0&&<span className="text-green-500">持仓中 {holdingCount}</span>}</div>);})()}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -1687,117 +1694,88 @@ export default function AfOrderManage() {
 
               return (
                 <div key={order.id} className="rounded-2xl p-4 shadow-sm mb-3 bg-white">
-                  {/* 订单编号行 */}
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[11px] font-mono text-gray-400 tracking-wide">{orderNo}</span>
-                    {/* 两行时间：开仓时间 + 登记时间 */}
-                    <div className="flex flex-col items-end gap-0.5">
-                      <span className="text-[10px] text-gray-400">
-                        <span className="text-gray-300 mr-1">开仓</span>{formatDate(order.createdAt)}
-                      </span>
-                      {order.confirmedAt && (
-                        <span className="text-[10px] text-blue-400">
-                          <span className="text-blue-300 mr-1">登记</span>{formatDate(order.confirmedAt)}
+                  {/* 卡片头部：左信息 + 右时间按钮 */}
+                  <div className="flex items-start justify-between mb-3 gap-3">
+                    {/* 左侧：订单号 + 用户名 + 标签 */}
+                    <div className="flex flex-col gap-1 min-w-0">
+                      <span className="text-[11px] font-mono text-gray-400 tracking-wide">{orderNo}</span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs font-medium text-gray-700 shrink-0">
+                          {order.username && order.nickname && order.username !== order.nickname
+                            ? `${order.username}/${order.nickname}`
+                            : order.nickname || order.username || `用户${order.userId}`}
                         </span>
-                      )}
+                        {order.isGift && (
+                          <span
+                            className="inline-flex items-center justify-center font-black select-none shrink-0"
+                            style={{
+                              width: 18, height: 18, borderRadius: '50%', fontSize: 10,
+                              color: '#FFD700',
+                              background: 'radial-gradient(circle at 35% 30%, #5a1a1a 0%, #1a0a00 55%, #3d0000 100%)',
+                              boxShadow: '0 1px 4px rgba(0,0,0,0.4)',
+                              border: '1.5px solid #8B4513',
+                              textShadow: '0 1px 2px rgba(255,180,0,0.8)',
+                            }}
+                          >赠</span>
+                        )}
+                        {order.status === 'completed' && (
+                          order.tierMode === 'linear'
+                            ? <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{ backgroundColor: '#EFF6FF', color: '#3B82F6', border: '1px solid #BFDBFE' }}>线性</span>
+                            : <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium shrink-0" style={{ backgroundColor: '#FFF7ED', color: '#D97706', border: '1px solid #FED7AA' }}>阶梯</span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  {/* 用户信息行 */}
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                        {order.username && order.nickname && order.username !== order.nickname
-                          ? `${order.username}/${order.nickname}`
-                          : order.nickname || order.username || `用户${order.userId}`}
-                      </span>
-                      {/* 档位模式标签 */}
-                      {order.status === 'completed' && (
-                        order.tierMode === 'linear'
-                          ? <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#EFF6FF', color: '#3B82F6', border: '1px solid #BFDBFE' }}>线性档位</span>
-                          : <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: '#FFF7ED', color: '#D97706', border: '1px solid #FED7AA' }}>阶梯档位</span>
-                      )}
-                      {order.isGift && (
-                        <span
-                          className="inline-flex items-center justify-center font-black select-none"
-                          style={{
-                            width: 22,
-                            height: 22,
-                            borderRadius: '50%',
-                            fontSize: 11,
-                            letterSpacing: 0,
-                            color: '#FFD700',
-                            background: 'radial-gradient(circle at 35% 30%, #5a1a1a 0%, #1a0a00 55%, #3d0000 100%)',
-                            boxShadow: '0 2px 6px rgba(0,0,0,0.5), inset 0 1px 2px rgba(255,200,50,0.35), inset 0 -1px 2px rgba(0,0,0,0.6)',
-                            border: '1.5px solid #8B4513',
-                            textShadow: '0 1px 3px rgba(255,180,0,0.8), 0 0 6px rgba(255,100,0,0.5)',
-                            flexShrink: 0,
-                          }}
-                        >
-                          赠
+                    {/* 右侧：时间 + 按钮 */}
+                    <div className="flex flex-col items-end gap-1.5 shrink-0">
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span className="text-[10px] text-gray-400">
+                          <span className="text-gray-300 mr-1">开仓</span>{formatDate(order.createdAt)}
                         </span>
-                      )}
-                      {/* 赠单关联主单标注 */}
-                      {(order.isGift === true || order.isGift === 1) && order.sourceOrderId && (() => {
-                        const parentOrder = (orders as any[] || []).find((o: any) => o.id === order.sourceOrderId);
-                        if (!parentOrder) return <span className="text-[10px] text-purple-400 bg-purple-50 px-1.5 py-0.5 rounded">关联#{order.sourceOrderId}</span>;
-                        const pd = new Date(parentOrder.createdAt);
-                        const parentOrderNo = `AF${String(pd.getUTCFullYear()).slice(2)}${String(pd.getUTCMonth()+1).padStart(2,'0')}${String(pd.getUTCDate()).padStart(2,'0')}${String(parentOrder.id).padStart(6,'0')}`;
-                        const parentStatusLabel = parentOrder.sellStatus === 'sold' ? '已卖出' :
-                          parentOrder.sellStatus === 'selling' ? '委卖中' :
-                          parentOrder.status === 'completed' ? '持仓中' :
-                          parentOrder.status === 'cancelled' ? '已撤单' : '委买中';
-                        const parentStatusColor = parentOrder.sellStatus === 'sold' ? '#3b82f6' :
-                          parentOrder.sellStatus === 'selling' ? '#ef4444' :
-                          parentOrder.status === 'completed' ? '#22c55e' :
-                          parentOrder.status === 'cancelled' ? '#9ca3af' : '#f59e0b';
-                        return (
-                          <span className="text-[10px] bg-purple-50 px-1.5 py-0.5 rounded flex items-center gap-1">
-                            <span className="text-purple-400">关联</span>
-                            <span className="font-mono text-purple-600">{parentOrderNo}</span>
-                            <span style={{ color: parentStatusColor }}>{parentStatusLabel}</span>
+                        {order.confirmedAt && (
+                          <span className="text-[10px] text-blue-400">
+                            <span className="text-blue-300 mr-1">登记</span>{formatDate(order.confirmedAt)}
                           </span>
-                        );
-                      })()}
+                        )}
+                      </div>
+                      {!isEditing ? (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => startEdit(order)}
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"
+                          >
+                            <Pencil className="w-3 h-3" /> 编辑
+                          </button>
+                          <button
+                            onClick={() => {
+                              setDeleteTarget(order);
+                              const isGift = order.isGift === true || order.isGift === 1;
+                              setDeleteScope(isGift ? 'all' : 'all');
+                              setSelectedGiftIds([]);
+                              setRefundChecked(order.status === 'pending' && !isGift);
+                            }}
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-red-500 bg-red-50 hover:bg-red-100 rounded-lg px-2.5 py-1 transition-colors"
+                          >
+                            <Trash2 className="w-3 h-3" /> 删除
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={saveEdit}
+                            disabled={updateMutation.isPending}
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-white bg-green-500 hover:bg-green-600 rounded-lg px-2.5 py-1 transition-colors disabled:opacity-50"
+                          >
+                            <Check className="w-3 h-3" /> 保存
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 rounded-lg px-2.5 py-1 transition-colors"
+                          >
+                            <X className="w-3 h-3" /> 取消
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    {!isEditing ? (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => startEdit(order)}
-                          className="flex items-center gap-1 text-xs text-gray-700 border border-gray-300 rounded-lg px-2 py-1"
-                        >
-                          <Pencil className="w-3 h-3" /> 编辑
-                        </button>
-                        <button
-                          onClick={() => {
-                            setDeleteTarget(order);
-                            const isGift = order.isGift === true || order.isGift === 1;
-                            setDeleteScope(isGift ? 'all' : 'all');
-                            setSelectedGiftIds([]);
-                            // 默认退款逻辑：pending自动勾选，其他不勾选
-                            setRefundChecked(order.status === 'pending' && !isGift);
-                          }}
-                          className="flex items-center gap-1 text-xs text-red-500 border border-red-200 rounded-lg px-2 py-1"
-                        >
-                          <Trash2 className="w-3 h-3" /> 删除
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={saveEdit}
-                          disabled={updateMutation.isPending}
-                          className="flex items-center gap-1 text-xs text-white bg-green-500 rounded-lg px-2 py-1"
-                        >
-                          <Check className="w-3 h-3" /> 保存
-                        </button>
-                        <button
-                          onClick={cancelEdit}
-                          className="flex items-center gap-1 text-xs text-gray-500 border border-gray-200 rounded-lg px-2 py-1"
-                        >
-                          <X className="w-3 h-3" /> 取消
-                        </button>
-                      </div>
-                    )}
                   </div>
 
                   {/* 订单信息 */}
