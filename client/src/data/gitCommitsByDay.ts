@@ -8657,5 +8657,8 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-27T01:50:09Z", type: "refactor", cleanMessage: "统一资金入口——addUserBalance 所有 type 同步写 af_manual_balances，afGetMyRechargeHistory 去重兼容历史数据，充值明细入口统一走 /recharge/history" },
     { date: "2026-07-27T05:45:30Z", type: "docs", cleanMessage: "添加企伴沙箱迁移说明" },
     { date: "2026-07-27T07:23:05Z", type: "feat", cleanMessage: "新增企伴客户端用户接口 getMyCompanies/submitCompany/getDeclarations/getInvoiceSuggestions" },
+    { date: "2026-07-27T07:34:31Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-27T07:44:58Z", type: "feat", cleanMessage: "企伴SSO自动登录 - 新增qibanSsoLink接口，QibanPage改为SSO跳转" },
+    { date: "2026-07-27T08:52:40Z", type: "feat", cleanMessage: "企业审核列表增加营业执照图片预览功能" },
   ],
 };
