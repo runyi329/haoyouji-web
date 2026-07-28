@@ -67,7 +67,7 @@ export default function Af525SwitchPage() {
             <span className="font-semibold">功能说明：</span>开启后，52号账本谷底增筹每笔新订单成交时，将额外生成一张 <span className="font-semibold">0.25 倍</span>赠单给 <span className="font-semibold">大饼江湖（YJH）</span>。
           </p>
           <p className="text-xs text-amber-600 mt-2">
-            赠单金额 = 用户投入 × 0.25 × 0.75（D0档权益系数）。关闭后恢复原逻辑，已产生的赠单不受影响。
+            赠单金额 = 用户投入 × 0.25（与正单 5.25 倍计算方式一致）。关闭后恢复原逻辑，已产生的赠单不受影响。
           </p>
         </div>
 
