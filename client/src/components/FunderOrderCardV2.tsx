@@ -2223,7 +2223,14 @@ export function FunderLenderCardSilver({
           </div>
         </div>
         <div className="text-right">
-          {showField('collateral') ? (
+          {!isNegRate ? (
+            <>
+              <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>已收利息 ({interestUnit})</div>
+              <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
+                {displayPaid > 0 ? fmt(displayPaid) : '--'}
+              </div>
+            </>
+          ) : showField('collateral') ? (
             <>
               <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>担保缺口</div>
               <div className="text-sm font-semibold" style={{ textShadow: TXT_SHADOW, color: TXT_PRI }}>
