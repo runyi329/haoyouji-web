@@ -595,6 +595,13 @@ export default function LedgerSettings() {
  onClick={() => setLocation(`/ledger/${ledgerId}/market-eval-settings`)}
  />
  )}
+ {ledgerId === 52 && (ledgerData?.userRole === 'owner' || ledgerData?.userRole === 'admin') && (
+ <SettingItem
+ label="5.25定向开关"
+ showIcon
+ onClick={() => setLocation(`/ledger/${ledgerId}/af-525-switch`)}
+ />
+ )}
  {/* BE数据：BTC/ETH历史K线，custom_af 所有成员可见 */}
  {ledgerData?.type === 'custom_af' && (
  <SettingItem

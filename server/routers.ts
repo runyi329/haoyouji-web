@@ -14737,6 +14737,62 @@ ${klinesSummary}
             }
           }, 200);
         }
+        // ========== 5.25 定向开关逻辑 ==========
+        // 当52号账本非赠单买入订单从 pending 变为 completed，检查开关是否开启
+        if (newStatus === 'completed' && oldStatus !== 'completed' && order.side === 'buy' && !order.is_gift && input.ledgerId === 52) {
+          setTimeout(async () => {
+            try {
+              const conn525 = await (await import('./db')).getDbConnection();
+              if (!conn525) return;
+              // 查询开关状态
+              const [switchRows] = await (conn525 as any).execute(
+                `SELECT enabled, target_user_id, gift_ratio FROM af_525_switch WHERE ledger_id = 52 LIMIT 1`
+              );
+              const sw = (switchRows as any[])[0];
+              if (!sw || !sw.enabled) return;
+              const targetUserId525 = sw.target_user_id;
+              const giftRatio525 = parseFloat(sw.gift_ratio); // 0.25
+              const actualSpend525 = parseFloat(order.amount || '0');
+              const actualPrice525 = parseFloat(order.limit_price || '0');
+              if (actualSpend525 <= 0 || actualPrice525 <= 0) return;
+              // 赠单金额 = 用户投入 × 0.25 × 0.75（D0档权益系数）
+              const giftAmount525 = (actualSpend525 * giftRatio525 * 0.75).toFixed(8);
+              const giftQty525 = (parseFloat(giftAmount525) / actualPrice525).toFixed(8);
+              if (parseFloat(giftQty525) <= 0) return;
+              // 检查是否已存在该正单的 525 赠单（防重复）
+              const [existRows] = await (conn525 as any).execute(
+                `SELECT id FROM af_525_gift_records WHERE source_order_id = ? LIMIT 1`,
+                [input.orderId]
+              );
+              if ((existRows as any[]).length > 0) {
+                console.log(`[5.25定向] 订单#${input.orderId} 已存在赠单记录，跳过`);
+                return;
+              }
+              // 生成赠单
+              await (conn525 as any).execute(
+                `INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, source_user_id, source_amount, confirmed_at, created_at, updated_at)
+                 VALUES (?, ?, ?, 'buy', ?, ?, ?, 'completed', 1, '0.2500', ?, ?, ?, NOW(), NOW(), NOW())`,
+                [input.ledgerId, targetUserId525, order.coin, order.limit_price, giftAmount525, giftQty525, input.orderId, userId, actualSpend525.toFixed(8)]
+              );
+              // 查询刚插入的赠单 ID
+              const [newGiftRows] = await (conn525 as any).execute(
+                `SELECT id FROM af_orders WHERE source_order_id = ? AND user_id = ? AND is_gift = 1 ORDER BY id DESC LIMIT 1`,
+                [input.orderId, targetUserId525]
+              );
+              const newGiftId = (newGiftRows as any[])[0]?.id;
+              // 记录到 af_525_gift_records
+              if (newGiftId) {
+                await (conn525 as any).execute(
+                  `INSERT INTO af_525_gift_records (ledger_id, source_order_id, source_user_id, gift_order_id, gift_amount, gift_quantity, coin) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                  [input.ledgerId, input.orderId, userId, newGiftId, giftAmount525, giftQty525, order.coin]
+                );
+              }
+              console.log(`[5.25定向] 订单#${input.orderId} 下单人(${userId}) → YJH(${targetUserId525}) 赠单金额:${giftAmount525} 数量:${giftQty525}`);
+            } catch (e) {
+              console.error('[5.25定向] 生成赠单失败:', e);
+            }
+          }, 400);
+        }
         return { success: true };
       }),
     // AF 用户自助撤单（委托买撤单 或 委托卖撤单）
@@ -20818,6 +20874,100 @@ ${klinesSummary}
           [input.ledgerId, input.sourceUserId, input.beneficiaryUserId, input.newRatio, input.newRatio]
         );
         return { success: true, newRatio: input.newRatio, othersTotal, remaining: 100 - input.newRatio - othersTotal };
+      }),
+    // ===== 5.25 定向开关：查询开关状态 =====
+    af525GetSwitch: protectedProcedure
+      .input(z.object({ ledgerId: z.number() }))
+      .query(async ({ ctx, input }) => {
+        const YJH_USER_ID = 4957151;
+        const JIANG_USER_ID = 870413;
+        if (ctx.user.id !== YJH_USER_ID && ctx.user.id !== JIANG_USER_ID) throw new TRPCError({ code: 'FORBIDDEN', message: '无权操作' });
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        const [rows] = await (conn as any).execute(
+          `SELECT enabled, target_user_id, gift_ratio, updated_by, updated_at FROM af_525_switch WHERE ledger_id = ? LIMIT 1`,
+          [input.ledgerId]
+        );
+        const sw = (rows as any[])[0];
+        return {
+          enabled: sw ? (sw.enabled === 1 || sw.enabled === true) : false,
+          targetUserId: sw?.target_user_id ?? YJH_USER_ID,
+          giftRatio: sw ? parseFloat(sw.gift_ratio) : 0.25,
+          updatedBy: sw?.updated_by ?? 0,
+          updatedAt: sw?.updated_at ? String(sw.updated_at) : null,
+        };
+      }),
+    // ===== 5.25 定向开关：设置开关状态 =====
+    af525SetSwitch: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), enabled: z.boolean() }))
+      .mutation(async ({ ctx, input }) => {
+        const YJH_USER_ID = 4957151;
+        const JIANG_USER_ID = 870413;
+        if (ctx.user.id !== YJH_USER_ID && ctx.user.id !== JIANG_USER_ID) throw new TRPCError({ code: 'FORBIDDEN', message: '无权操作' });
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        await (conn as any).execute(
+          `INSERT INTO af_525_switch (ledger_id, enabled, target_user_id, gift_ratio, updated_by)
+           VALUES (?, ?, 4957151, 0.2500, ?)
+           ON DUPLICATE KEY UPDATE enabled=?, updated_by=?, updated_at=NOW()`,
+          [input.ledgerId, input.enabled ? 1 : 0, ctx.user.id, input.enabled ? 1 : 0, ctx.user.id]
+        );
+        await (conn as any).execute(
+          `INSERT INTO af_525_switch_logs (ledger_id, action, operated_by) VALUES (?, ?, ?)`,
+          [input.ledgerId, input.enabled ? 'enable' : 'disable', ctx.user.id]
+        );
+        console.log(`[5.25定向开关] 账本${input.ledgerId} 操作人(${ctx.user.id}) 设置为: ${input.enabled ? '开启' : '关闭'}`);
+        return { success: true };
+      }),
+    // ===== 5.25 定向开关：查询历史记录 =====
+    af525GetLogs: protectedProcedure
+      .input(z.object({ ledgerId: z.number(), page: z.number().optional() }))
+      .query(async ({ ctx, input }) => {
+        const YJH_USER_ID = 4957151;
+        const JIANG_USER_ID = 870413;
+        if (ctx.user.id !== YJH_USER_ID && ctx.user.id !== JIANG_USER_ID) throw new TRPCError({ code: 'FORBIDDEN', message: '无权操作' });
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        const page = input.page || 1;
+        const pageSize = 20;
+        const offset = (page - 1) * pageSize;
+        const [logRows] = await (conn as any).execute(
+          `SELECT l.id, l.action, l.operated_by, l.operated_at, l.note, u.name, u.username
+           FROM af_525_switch_logs l LEFT JOIN users u ON u.id=l.operated_by
+           WHERE l.ledger_id=?
+           ORDER BY l.operated_at DESC LIMIT ? OFFSET ?`,
+          [input.ledgerId, pageSize, offset]
+        );
+        const [giftRows] = await (conn as any).execute(
+          `SELECT r.id, r.source_order_id, r.source_user_id, r.gift_order_id, r.gift_amount, r.gift_quantity, r.coin, r.created_at,
+                  su.name as source_name, su.username as source_username
+           FROM af_525_gift_records r
+           LEFT JOIN users su ON su.id=r.source_user_id
+           WHERE r.ledger_id=?
+           ORDER BY r.created_at DESC LIMIT 50`,
+          [input.ledgerId]
+        );
+        return {
+          switchLogs: (logRows as any[]).map((l: any) => ({
+            id: l.id,
+            action: l.action,
+            operatedBy: l.operated_by,
+            operatorName: l.name || l.username || `用户${l.operated_by}`,
+            operatedAt: String(l.operated_at),
+            note: l.note || null,
+          })),
+          giftRecords: (giftRows as any[]).map((r: any) => ({
+            id: r.id,
+            sourceOrderId: r.source_order_id,
+            sourceUserId: r.source_user_id,
+            sourceName: r.source_name || r.source_username || `用户${r.source_user_id}`,
+            giftOrderId: r.gift_order_id,
+            giftAmount: parseFloat(r.gift_amount),
+            giftQuantity: parseFloat(r.gift_quantity),
+            coin: r.coin,
+            createdAt: String(r.created_at),
+          })),
+        };
       }),
     // ===== 快捷按钮管理（重构版，使用 drizzle ORM） =====
     getShortcutButtons: protectedProcedure
