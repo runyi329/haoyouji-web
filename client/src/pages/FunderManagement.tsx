@@ -100,7 +100,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     deribitLabel: '',      // Deribit 格式如 "8JUL26"，用于查行权价
     strikePrice: '',
     premium: '',
-    premiumDenomination: 'U' as 'U' | 'B',
+    premiumDenomination: 'USDT' as 'USDT' | 'BTC' | 'ETH',
     buyQty: '',
   });
   // 标签输入状态
@@ -136,8 +136,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     collateralValue: true,
     collateral: true,
     marginRate: true,
-    profitShare: true,
-    commissionShare: true,
+    profitShare: false,
+    commissionShare: false,
     aiIcon: false,
     assetType: true,
     showOwnerName: true,
@@ -147,12 +147,14 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     approxHolding: 'U',
     approxInterest: 'U',
     approxCollateralItem: 'U',
-    approxCollateralValue: 'U',
+    approxCollateralValue: 'hidden',
     // 股票专属字段
     brokerName: true,
     brokerAccount: true,
     // 多空方向标签显示开关
     showTradeDirection: true,
+    // 期权 Greeks 面板
+    showGreeks: false,
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean | string>>(DEFAULT_DISPLAY_CONFIG);
   const [marginAlertThreshold, setMarginAlertThreshold] = useState<string>(''); // 保证金率预警阈值（%）
@@ -160,6 +162,59 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const [showPreviewMarginInfo, setShowPreviewMarginInfo] = useState(false); // 预览卡片-保证金率说明
   const [showPreviewInterestTip, setShowPreviewInterestTip] = useState(false); // 预览卡片-利息说明
   const COLLATERAL_COINS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY'];
+
+  // ===== 订单参与者 =====
+  type ParticipantForm = {
+    userId: number;
+    userName: string;
+    avatar?: string;
+    // 完整参数（与主订单一一对应）
+    coin: string;
+    amount: string;
+    amountCurrency: string;
+    interestRateAnnual: string;
+    interestBase: string;
+    interestBaseCurrency: string;
+    interestRateCurrency: string;
+    interestPaymentType: string;
+    interestStartDate: string;
+    displayConfig: Record<string, boolean | string>;
+    marginAlertThreshold: string;
+    expanded: boolean; // UI 折叠状态
+  };
+  const [participants, setParticipants] = useState<ParticipantForm[]>([]);
+  const [participantUserSearch, setParticipantUserSearch] = useState('');
+  const saveParticipantsMutation = trpc.ledger.funderSaveParticipantFullConfig.useMutation();
+  // 编辑已有订单时加载现有参与者
+  const editingOrderId = editingOrder?.id ?? null;
+  const { data: existingParticipantsData } = trpc.ledger.funderGetOrderParticipants.useQuery(
+    { orderId: editingOrderId ?? 0, ledgerId },
+    { enabled: !!editingOrderId && ledgerId > 0, staleTime: 0 }
+  );
+  // 加载已有参与者到 state
+  const participantsLoadedRef = useRef<number | null>(null);
+  React.useEffect(() => {
+    if (!existingParticipantsData || participantsLoadedRef.current === editingOrderId) return;
+    participantsLoadedRef.current = editingOrderId;
+    const loaded = (existingParticipantsData.participants as any[]).map((p: any) => ({
+      userId: p.user_id,
+      userName: p.nickname || p.username || p.userName || String(p.user_id),
+      avatar: p.avatar,
+      coin: p.coin || formData.coin,
+      amount: p.amount || '',
+      amountCurrency: p.amount_currency || formData.amountCurrency || 'USDT',
+      interestRateAnnual: p.interest_rate || formData.interestRateAnnual || '',
+      interestBase: p.interest_base || formData.interestBase || '',
+      interestBaseCurrency: p.interest_base_currency || formData.interestBaseCurrency || 'USDT',
+      interestRateCurrency: p.interest_rate_currency || formData.interestRateCurrency || 'USDT',
+      interestPaymentType: p.interest_payment_type || formData.interestPaymentType || '',
+      interestStartDate: p.interest_start_date || formData.interestStartDate || '',
+      displayConfig: (() => { try { return p.display_config ? (typeof p.display_config === 'string' ? JSON.parse(p.display_config) : p.display_config) : { ...DEFAULT_DISPLAY_CONFIG }; } catch { return { ...DEFAULT_DISPLAY_CONFIG }; } })(),
+      marginAlertThreshold: '',
+      expanded: false,
+    }));
+    setParticipants(loaded);
+  }, [existingParticipantsData, editingOrderId]);
 
   // 融资金额输入状态：编辑时用本地值，非编辑时显示计算值
   const [amountEditing, setAmountEditing] = useState(false);
@@ -298,7 +353,6 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const allOrders: any[] = (allOrdersData as any)?.orders ?? allOrdersData ?? [];
 
   // 强制转成数字，避免 MySQL 返回字符串导致 tRPC z.number() 校验失败
-  const editingOrderId: number | null = editingOrder?.id ? Number(editingOrder.id) : null;
   // 编辑面板专用：查询当前编辑订单的结息记录列表
   // enabled 只依赖 editingOrderId，不加 participantInfo 限制，确保管理员编辑任何订单都能查到
   const { data: editingOrderPayments, refetch: refetchEditingPayments } = trpc.ledger.funderGetInterestPayments.useQuery(
@@ -418,12 +472,37 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     onError: (err) => toast.error(err.message),
   });
   const updateMutation = trpc.ledger.financeUpdateOrder.useMutation({
-    onSuccess: () => {
+    onSuccess: (_, vars) => {
+      // 保存参与者（如果有）
+      const orderId = (vars as any).id;
+      if (orderId && participants.length > 0) {
+        saveParticipantsMutation.mutate({
+          orderId: Number(orderId),
+          ledgerId,
+          participants: participants.map((p, i) => ({
+            userId: p.userId,
+            sortOrder: i,
+            amount: p.amount || undefined,
+            amountCurrency: p.amountCurrency || undefined,
+            interestRate: p.interestRateAnnual || undefined,
+            interestBase: p.interestBase || undefined,
+            interestBaseCurrency: p.interestBaseCurrency || undefined,
+            interestPaymentType: p.interestPaymentType || undefined,
+            interestStartDate: p.interestStartDate || undefined,
+            interestRateCurrency: p.interestRateCurrency || undefined,
+            displayConfig: JSON.stringify({ ...p.displayConfig, marginAlertThreshold: p.marginAlertThreshold || undefined }),
+          })),
+        });
+      } else if (orderId && participants.length === 0 && existingParticipantsData?.participants?.length) {
+        // 删除所有参与者
+        saveParticipantsMutation.mutate({ orderId: Number(orderId), ledgerId, participants: [] });
+      }
       toast.success('更新成功');
       setShowForm(false);
       setEditingOrder(null);
+      setParticipants([]);
+      participantsLoadedRef.current = null;
       refetchOrders();
-      // 使 LedgerDetail 中的担保缺口数据同步更新
       trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId });
     },
     onError: (err) => toast.error(err.message),
@@ -653,7 +732,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       brokerAccount: '',
     });
     setTagInput('');
-    setOptionFormData({ optionCurrency: 'BTC', direction: 'long_call', exerciseDate: '', deribitLabel: '', strikePrice: '', premium: '', premiumDenomination: 'U', buyQty: '' });
+    setOptionFormData({ optionCurrency: 'BTC', direction: 'long_call', exerciseDate: '', deribitLabel: '', strikePrice: '', premium: '', premiumDenomination: 'USDT', buyQty: '' });
     interestBaseTouchedRef.current = false; // 新建订单：允许融资金额(U)自动带入计息基数
     setCollateralAssets([]);
     setCollateralEditMode(true); // 新建订单：担保货币恒为可编辑
@@ -732,13 +811,13 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
           deribitLabel: parsed.deribitLabel || '',
           strikePrice: parsed.strikePrice ? String(parsed.strikePrice) : '',
           premium: parsed.premium || '',
-          premiumDenomination: (parsed.denomination || 'U') as 'U' | 'B',
+          premiumDenomination: (['USDT','BTC','ETH'].includes(parsed.denomination) ? parsed.denomination : (parsed.denomination === 'B' ? 'BTC' : 'USDT')) as 'USDT' | 'BTC' | 'ETH',
           buyQty: parsed.buyQty || '',
         });
       } else {
-        setOptionFormData({ optionCurrency: 'BTC', direction: 'long_call', exerciseDate: '', deribitLabel: '', strikePrice: '', premium: '', premiumDenomination: 'U', buyQty: '' });
+        setOptionFormData({ optionCurrency: 'BTC', direction: 'long_call', exerciseDate: '', deribitLabel: '', strikePrice: '', premium: '', premiumDenomination: 'USDT', buyQty: '' });
       }
-    } catch { setOptionFormData({ optionCurrency: 'BTC', direction: 'long_call', exerciseDate: '', deribitLabel: '', strikePrice: '', premium: '', premiumDenomination: 'U', buyQty: '' }); }
+    } catch { setOptionFormData({ optionCurrency: 'BTC', direction: 'long_call', exerciseDate: '', deribitLabel: '', strikePrice: '', premium: '', premiumDenomination: 'USDT', buyQty: '' }); }
     // 加载担保货币
     try {
       const ca = order.collateral_assets;
@@ -1703,14 +1782,16 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       )}
                     </div>
                     <div className="flex-1">
-                      <label className="block text-xs font-medium text-gray-500 mb-1.5">权利金/张</label>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                        权利金（{optionFormData.premiumDenomination}）
+                      </label>
                       <input
                         type="number"
                         inputMode="decimal"
                         value={optionFormData.premium}
                         onChange={e => setOptionFormData(d => ({ ...d, premium: e.target.value }))}
-                        className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-200"
-                        placeholder="如：0.05"
+                        className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-200 bg-white"
+                        placeholder={optionFormData.premiumDenomination === 'USDT' ? '如：500' : optionFormData.premiumDenomination === 'BTC' ? '如：0.005' : '如：0.05'}
                       />
                     </div>
                   </div>
@@ -1718,27 +1799,24 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   <div className="flex gap-2">
                     <div style={{ width: '40%' }}>
                       <label className="block text-xs font-medium text-gray-500 mb-1.5">权利金计价</label>
-                      <div className="flex gap-1">
-                        {(['U', 'B'] as const).map(d => (
-                          <button key={d} type="button"
-                            onClick={() => setOptionFormData(prev => ({ ...prev, premiumDenomination: d }))}
-                            className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all ${
-                              optionFormData.premiumDenomination === d
-                                ? 'bg-purple-600 text-white'
-                                : 'bg-white text-gray-500 border border-gray-200'
-                            }`}
-                          >{d === 'U' ? 'USDT' : 'BTC/ETH'}</button>
-                        ))}
-                      </div>
+                      <select
+                        value={optionFormData.premiumDenomination}
+                        onChange={e => setOptionFormData(prev => ({ ...prev, premiumDenomination: e.target.value as 'USDT' | 'BTC' | 'ETH' }))}
+                        className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-200 appearance-none bg-white"
+                      >
+                        <option value="USDT">USDT</option>
+                        <option value="BTC">BTC</option>
+                        <option value="ETH">ETH</option>
+                      </select>
                     </div>
                     <div className="flex-1">
-                      <label className="block text-xs font-medium text-gray-500 mb-1.5">张数</label>
+                      <label className="block text-xs font-medium text-gray-500 mb-1.5">数量</label>
                       <input
                         type="number"
                         inputMode="decimal"
                         value={optionFormData.buyQty}
                         onChange={e => setOptionFormData(d => ({ ...d, buyQty: e.target.value }))}
-                        className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-200"
+                        className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-200 bg-white"
                         placeholder="如：1"
                       />
                     </div>
@@ -2188,44 +2266,9 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               </div>
               )}
 
-              {/* 分隔线：备注 - 受邀订单隐藏 */}
-              {!editingOrder?.participantInfo && <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-gray-100" />
-                <span className="text-xs text-gray-400 shrink-0">备注</span>
-                <div className="flex-1 h-px bg-gray-100" />
-              </div>}
 
-              {/* 公开备注（资金方可见） - 受邀订单隐藏 */}
-              {!editingOrder?.participantInfo && <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">
-                  公开备注
-                  <span className="ml-1.5 text-xs text-green-500 font-normal">资金方可见</span>
-                </label>
-                <textarea
-                  value={formData.publicNote}
-                  onChange={e => setFormData(d => ({ ...d, publicNote: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  rows={2}
-                  placeholder="填写资金方可见的说明或备注"
-                  style={{ display: 'block', boxSizing: 'border-box', resize: 'none' }}
-                />
-              </div>}
 
-              {/* 内部备注（资金方不可见） - 受邀订单隐藏 */}
-              {!editingOrder?.participantInfo && <div>
-                <label className="block text-sm font-medium text-gray-600 mb-1">
-                  内部备注
-                  <span className="ml-1.5 text-xs text-gray-400 font-normal">仅管理员可见</span>
-                </label>
-                <textarea
-                  value={formData.adminNote}
-                  onChange={e => setFormData(d => ({ ...d, adminNote: e.target.value }))}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  rows={2}
-                  placeholder="内部管理备注（资金方不可见）"
-                  style={{ display: 'block', boxSizing: 'border-box', resize: 'none' }}
-                />
-              </div>}
+
 
               {/* 分隔线：字段展示控制 */}
               <div className="flex items-center gap-3">
@@ -2389,6 +2432,29 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   </div>
                 </div>
                 <div className="mx-4 h-px bg-gray-100 my-2" />
+                {/* Greeks 开关（仅期权类型显示） */}
+                {formData.assetType === 'crypto_option' && (
+                  <div className="px-4 pb-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-sm font-medium text-gray-700">Greeks 面板</span>
+                        <p className="text-xs text-gray-400 mt-0.5">开启后显示 Delta / Gamma / Vega / Theta 等期权参数</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setDisplayConfig(c => ({ ...c, showGreeks: !c.showGreeks }))}
+                        className={`relative inline-flex h-6 w-10 items-center rounded-full transition-colors duration-200 focus:outline-none ${
+                          displayConfig.showGreeks !== false ? 'bg-purple-500' : 'bg-gray-200'
+                        }`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                          displayConfig.showGreeks !== false ? 'translate-x-5' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <div className="mx-4 h-px bg-gray-100 my-2" />
                 {/* 右栏下半：收益分成区 */}
                 <div className="px-4 pb-3">
                   <div className="text-xs font-medium text-blue-500 mb-2">右栏下半：收益分成区</div>
@@ -2533,6 +2599,121 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 );
               })()}
             </div>
+
+            {/* ===== 订单参与者管理 ===== */}
+            {editingOrder && (
+              <div className="px-5 pb-4">
+                {/* 分隔线 */}
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="flex-1 h-px bg-gray-100" />
+                  <span className="text-xs text-gray-400 shrink-0">订单参与者</span>
+                  <div className="flex-1 h-px bg-gray-100" />
+                </div>
+
+                {/* 参与者列表 */}
+                {participants.map((p, idx) => (
+                  <div key={p.userId} className="mb-3 rounded-xl border border-indigo-100 bg-indigo-50 overflow-hidden">
+                    {/* 参与者头部 */}
+                    <div className="flex items-center gap-2 px-3 py-2.5 cursor-pointer" onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, expanded: !pp.expanded } : pp))}>
+                      {p.avatar ? <img src={p.avatar} className="w-7 h-7 rounded-full object-cover shrink-0" /> : <div className="w-7 h-7 rounded-full bg-indigo-200 flex items-center justify-center text-xs font-bold text-indigo-700 shrink-0">{p.userName.slice(0,1).toUpperCase()}</div>}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-800 truncate">{p.userName}</div>
+                        <div className="text-xs text-gray-400">参与者 {idx + 1}</div>
+                      </div>
+                      <button type="button" onClick={e => { e.stopPropagation(); setParticipants(prev => prev.filter((_, i) => i !== idx)); }} className="p-1 rounded-lg text-red-400 hover:bg-red-50">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" style={{ transform: p.expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }}><polyline points="6 9 12 15 18 9"/></svg>
+                    </div>
+
+                    {/* 参与者完整参数面板 */}
+                    {p.expanded && (
+                      <div className="px-3 pb-3 space-y-3 border-t border-indigo-100">
+                        {/* 融资金额 */}
+                        <div className="pt-2">
+                          <label className="block text-xs font-medium text-gray-500 mb-1">融资金额 (USDT)</label>
+                          <input type="number" inputMode="decimal" value={p.amount} onChange={e => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, amount: e.target.value } : pp))} className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white" placeholder="如：10000" />
+                        </div>
+                        {/* 年利率 */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">年利率 (%)</label>
+                          <input type="text" value={p.interestRateAnnual} onChange={e => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestRateAnnual: e.target.value } : pp))} className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white" placeholder="如：18" />
+                        </div>
+                        {/* 计息基数 */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">计息基数</label>
+                          <input type="number" inputMode="decimal" value={p.interestBase} onChange={e => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestBase: e.target.value } : pp))} className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white" placeholder="如：10000" />
+                        </div>
+                        {/* 付息方式 */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">付息方式</label>
+                          <select value={p.interestPaymentType} onChange={e => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestPaymentType: e.target.value } : pp))} className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white appearance-none">
+                            <option value="">请选择</option>
+                            {INTEREST_PAYMENT_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                          </select>
+                        </div>
+                        {/* 起息日 */}
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">起息日</label>
+                          <input type="date" value={p.interestStartDate} onChange={e => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestStartDate: e.target.value } : pp))} className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {/* 添加参与者区域 */}
+                <div className="rounded-xl border border-dashed border-gray-300 p-3">
+                  <div className="text-xs text-gray-400 mb-2">搜索并添加参与者</div>
+                  <input
+                    type="text"
+                    value={participantUserSearch}
+                    onChange={e => setParticipantUserSearch(e.target.value)}
+                    placeholder="输入姓名 / 账号搜索成员"
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white mb-2"
+                  />
+                  {participantUserSearch.trim() && (
+                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                      {((ledgerData as any)?.members || funderUsers || []).filter((m: any) => {
+                        const q = participantUserSearch.toLowerCase();
+                        const name = (m.nickname || m.username || m.userName || '').toLowerCase();
+                        return name.includes(q) && !participants.some(pp => pp.userId === (m.userId || m.id));
+                      }).map((m: any) => (
+                        <button
+                          key={m.userId || m.id}
+                          type="button"
+                          onClick={() => {
+                            const newP: ParticipantForm = {
+                              userId: m.userId || m.id,
+                              userName: m.nickname || m.username || m.userName || String(m.userId || m.id),
+                              avatar: m.avatar,
+                              coin: formData.coin,
+                              amount: formData.assetType === 'stock' ? amountInputValue : (computedAmount || ''),
+                              amountCurrency: formData.amountCurrency || 'USDT',
+                              interestRateAnnual: formData.interestRateAnnual || '',
+                              interestBase: formData.interestBase || '',
+                              interestBaseCurrency: formData.interestBaseCurrency || 'USDT',
+                              interestRateCurrency: formData.interestRateCurrency || 'USDT',
+                              interestPaymentType: formData.interestPaymentType || '',
+                              interestStartDate: formData.interestStartDate || '',
+                              displayConfig: { ...displayConfig },
+                              marginAlertThreshold: marginAlertThreshold || '',
+                              expanded: true,
+                            };
+                            setParticipants(prev => [...prev, newP]);
+                            setParticipantUserSearch('');
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-gray-100 hover:bg-indigo-50 text-left"
+                        >
+                          {m.avatar ? <img src={m.avatar} className="w-6 h-6 rounded-full object-cover shrink-0" /> : <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-500 shrink-0">{(m.nickname || m.username || '?').slice(0,1).toUpperCase()}</div>}
+                          <span className="text-sm text-gray-700">{m.nickname || m.username || m.userName}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* 提交按钮 */}
             <div className="flex-shrink-0 bg-white px-5 py-4 border-t border-gray-100">

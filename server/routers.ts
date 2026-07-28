@@ -17800,6 +17800,72 @@ ${klinesSummary}
         }
         return { success: true };
       }),
+    // 保存参与者完整参数（管理员在编辑订单时设置）
+    funderSaveParticipantFullConfig: protectedProcedure
+      .input(z.object({
+        orderId: z.number(),
+        ledgerId: z.number(),
+        participants: z.array(z.object({
+          userId: z.number(),
+          sortOrder: z.number().optional(),
+          // 完整订单参数（与主订单字段一一对应）
+          amount: z.string().optional(),
+          amountCurrency: z.string().optional(),
+          interestRate: z.string().optional(),
+          interestBase: z.string().optional(),
+          interestBaseCurrency: z.string().optional(),
+          interestPaymentType: z.string().optional(),
+          interestStartDate: z.string().optional(),
+          interestRateCurrency: z.string().optional(),
+          displayConfig: z.string().optional(),
+          note: z.string().optional(),
+        })),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getLedgerDb();
+        const roleRows = await db.execute(
+          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+        ) as any;
+        const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
+        const isManager = role === 'owner' || role === 'admin';
+        if (!isManager) throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可配置参与方' });
+        const { getDbConnection } = await import('./db');
+        const conn = await getDbConnection();
+        if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
+        // 幂等补齐新字段
+        const newCols = [
+          'amount_currency varchar(20) NULL',
+          'interest_rate varchar(20) NULL',
+          'interest_base varchar(50) NULL',
+          'interest_base_currency varchar(20) NULL',
+          'interest_payment_type varchar(30) NULL',
+          'interest_start_date varchar(20) NULL',
+          'interest_rate_currency varchar(20) NULL',
+          'display_config text NULL',
+        ];
+        for (const col of newCols) {
+          try { await conn.execute(`ALTER TABLE ledger_order_participants ADD COLUMN ${col}`); } catch {}
+        }
+        // 先删除旧记录，再批量插入
+        await conn.execute('DELETE FROM ledger_order_participants WHERE order_id = ? AND ledger_id = ?', [input.orderId, input.ledgerId]);
+        for (let i = 0; i < input.participants.length; i++) {
+          const p = input.participants[i];
+          await conn.execute(
+            `INSERT INTO ledger_order_participants
+              (order_id, ledger_id, user_id, role, amount, amount_currency, interest_rate, interest_base, interest_base_currency, interest_payment_type, interest_start_date, interest_rate_currency, display_config, note, sort_order)
+             VALUES (?, ?, ?, 'funder', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              input.orderId, input.ledgerId, p.userId,
+              p.amount || null, p.amountCurrency || null,
+              p.interestRate || null, p.interestBase || null, p.interestBaseCurrency || null,
+              p.interestPaymentType || null, p.interestStartDate || null, p.interestRateCurrency || null,
+              p.displayConfig || null, p.note || null,
+              p.sortOrder ?? i,
+            ]
+          );
+        }
+        return { success: true };
+      }),
     // 更新参与方佣金配置（owner 在编辑页设置）
     funderUpdateParticipantConfig: protectedProcedure
       .input(z.object({

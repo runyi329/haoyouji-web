@@ -22,6 +22,7 @@ export const STATUS_OPTIONS = [
 
 export const INTEREST_PAYMENT_OPTIONS = [
   { value: 'profit_post', label: '盈利后付' },
+  { value: 'daily_post', label: '日付' },
   { value: 'monthly_pre', label: '月付先付' },
   { value: 'monthly_post', label: '月付后付' },
   { value: 'semi_pre', label: '半年付先付' },
@@ -1814,7 +1815,7 @@ export function FunderOrderCard({
             )}
 
             {/* 期权 Greeks 面板 */}
-            {isOptionOrder && optionInfo && (
+            {isOptionOrder && optionInfo && show('showGreeks') && (
               <div className="border-t mt-1 pt-1" style={{ borderColor: '#E8EFFF' }}>
                 <div className="h-4 flex items-center justify-between">
                   <span className="text-xs font-medium" style={{ color: '#7C3AED' }}>Greeks</span>
