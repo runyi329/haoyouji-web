@@ -20481,6 +20481,38 @@ ${klinesSummary}
         // 批量查询正单对应的赠单，嵌套在 giftOrders 里
         const mainOrderIds = (rows as any[]).map((r: any) => r.id);
         let giftMap: Record<number, any[]> = {};
+        // 持仓中筛选时，额外补充「正单处于委卖中」的赠单（正单被排除但赠单仍在持仓）
+        let extraGiftRows: any[] = [];
+        if (input.status === 'holding' && ids.length > 0) {
+          const ph2 = ids.map(() => '?').join(',');
+          const [extraRows] = await (conn as any).execute(
+            `SELECT g.id, g.source_order_id, g.coin, g.amount, g.quantity, g.limit_price, g.sell_price,
+                    g.status, g.sell_status, g.is_gift, g.tier_mode, g.created_at, g.confirmed_at, g.sell_confirmed_at,
+                    g.all_time_low_price, COALESCE(gt.max_tier,0) as equity_tier,
+                    gu.name as userName, gu.username,
+                    src.id as src_id, src.coin as src_coin, src.amount as src_amount, src.quantity as src_quantity,
+                    src.limit_price as src_limit_price, src.sell_price as src_sell_price, src.status as src_status,
+                    src.sell_status as src_sell_status, src.order_type as src_order_type,
+                    src.created_at as src_created_at, src.confirmed_at as src_confirmed_at,
+                    src.sell_confirmed_at as src_sell_confirmed_at, src.tier_mode as src_tier_mode,
+                    COALESCE(st.max_tier,0) as src_equity_tier, src.all_time_low_price as src_all_time_low_price,
+                    su.name as src_userName, su.username as src_username
+             FROM af_orders g
+             LEFT JOIN users gu ON gu.id=g.user_id
+             LEFT JOIN (SELECT order_id, MAX(tier) as max_tier FROM af_order_tier_triggers GROUP BY order_id) gt ON gt.order_id=g.id
+             LEFT JOIN af_orders src ON src.id=g.source_order_id
+             LEFT JOIN (SELECT order_id, MAX(tier) as max_tier FROM af_order_tier_triggers GROUP BY order_id) st ON st.order_id=src.id
+             LEFT JOIN users su ON su.id=src.user_id
+             WHERE g.ledger_id=${input.ledgerId} AND g.is_gift=1
+               AND g.user_id IN (${ph2})
+               AND g.status='completed'
+               AND (g.sell_status IS NULL OR g.sell_status='' OR g.sell_status='sell_cancelled')
+               AND g.source_order_id NOT IN (${mainOrderIds.length > 0 ? mainOrderIds.map(() => '?').join(',') : '0'})
+             ORDER BY g.created_at DESC`,
+            [...ids, ...mainOrderIds]
+          );
+          extraGiftRows = extraRows as any[];
+        }
         if (mainOrderIds.length > 0) {
           const gph = mainOrderIds.map(() => '?').join(',');
           const [giftRows] = await (conn as any).execute(
@@ -20519,8 +20551,50 @@ ${klinesSummary}
             });
           }
         }
+        // 将 extraGiftRows（正单委卖中但赠单仍持仓）作为独立订单条目追加到结果
+        const extraOrders = extraGiftRows.map((g: any) => ({
+          id: g.id,
+          coin: g.coin || '',
+          side: 'buy',
+          amount: parseFloat(g.amount || 0),
+          limitPrice: g.limit_price ? parseFloat(g.limit_price) : null,
+          sellPrice: g.sell_price ? parseFloat(g.sell_price) : null,
+          sellStatus: g.sell_status || null,
+          status: g.status || '',
+          orderType: '',
+          createdAt: g.created_at ? String(g.created_at) : '',
+          confirmedAt: g.confirmed_at ? String(g.confirmed_at) : '',
+          sellConfirmedAt: g.sell_confirmed_at ? String(g.sell_confirmed_at) : '',
+          isGift: true,
+          tierMode: g.tier_mode || 'step',
+          equityTier: Number(g.equity_tier || 0),
+          allTimeLowPrice: g.all_time_low_price ? parseFloat(g.all_time_low_price) : null,
+          effectiveQty: parseFloat(g.quantity || 0),
+          userName: g.userName || g.username || '新用户',
+          username: g.username || '',
+          giftOrders: [],
+          // 附带正单信息供前端展示
+          sourceOrder: g.src_id ? {
+            id: g.src_id,
+            coin: g.src_coin || '',
+            amount: parseFloat(g.src_amount || 0),
+            limitPrice: g.src_limit_price ? parseFloat(g.src_limit_price) : null,
+            sellPrice: g.src_sell_price ? parseFloat(g.src_sell_price) : null,
+            status: g.src_status || '',
+            sellStatus: g.src_sell_status || null,
+            orderType: g.src_order_type || '',
+            createdAt: g.src_created_at ? String(g.src_created_at) : '',
+            confirmedAt: g.src_confirmed_at ? String(g.src_confirmed_at) : '',
+            sellConfirmedAt: g.src_sell_confirmed_at ? String(g.src_sell_confirmed_at) : '',
+            tierMode: g.src_tier_mode || 'step',
+            equityTier: Number(g.src_equity_tier || 0),
+            allTimeLowPrice: g.src_all_time_low_price ? parseFloat(g.src_all_time_low_price) : null,
+            userName: g.src_userName || g.src_username || '',
+            username: g.src_username || '',
+          } : null,
+        }));
         return {
-          orders: (rows as any[]).map((r: any) => ({
+          orders: [...(rows as any[]).map((r: any) => ({
             id: r.id,
             coin: r.coin || '',
             side: r.side || '',
@@ -20541,8 +20615,8 @@ ${klinesSummary}
             userName: r.userName || r.username || '新用户',
             username: r.username || '',
             giftOrders: giftMap[r.id] || [],
-          })),
-          total,
+          })), ...extraOrders],
+          total: total + extraOrders.length,
         };
       }),
 
