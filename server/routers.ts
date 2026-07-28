@@ -13765,6 +13765,55 @@ ${klinesSummary}
             }
           }, 300);
         }
+        // ========== 5.25 定向开关逻辑（下单路径：市价单直接 completed + 委托单 pending）==========
+        // 仅 52 号账本非赠单买入订单触发；市价单直接生成 completed 赠单，委托单等管理员确认时再生成
+        if (input.ledgerId === 52 && input.isMarketOrder && newOrderId2) {
+          setTimeout(async () => {
+            try {
+              const conn525s = await (await import('./db')).getDbConnection();
+              if (!conn525s) return;
+              const [sw525sRows] = await (conn525s as any).execute(
+                `SELECT enabled, target_user_id, gift_ratio FROM af_525_switch WHERE ledger_id = 52 LIMIT 1`
+              );
+              const sw525s = (sw525sRows as any[])[0];
+              if (!sw525s || !sw525s.enabled) return;
+              const targetUserId525s = sw525s.target_user_id;
+              const giftRatio525s = parseFloat(sw525s.gift_ratio);
+              const actualSpend525s = parseFloat(input.amount);
+              const actualPrice525s = parseFloat(input.limitPrice);
+              if (actualSpend525s <= 0 || actualPrice525s <= 0) return;
+              const giftAmount525s = (actualSpend525s * giftRatio525s).toFixed(8);
+              const giftQty525s = (parseFloat(giftAmount525s) / actualPrice525s).toFixed(8);
+              if (parseFloat(giftQty525s) <= 0) return;
+              // 防重复
+              const [exist525sRows] = await (conn525s as any).execute(
+                `SELECT id FROM af_525_gift_records WHERE source_order_id = ? LIMIT 1`,
+                [newOrderId2]
+              );
+              if ((exist525sRows as any[]).length > 0) return;
+              // 生成赠单（市价单直接 completed）
+              await (conn525s as any).execute(
+                `INSERT INTO af_orders (ledger_id, user_id, coin, side, limit_price, amount, quantity, status, is_gift, gift_multiplier, source_order_id, source_user_id, source_amount, confirmed_at, created_at, updated_at)
+                 VALUES (?, ?, ?, 'buy', ?, ?, ?, 'completed', 1, '0.2500', ?, ?, ?, NOW(), NOW(), NOW())`,
+                [input.ledgerId, targetUserId525s, input.coin, input.limitPrice, giftAmount525s, giftQty525s, newOrderId2, ctx.user.id, actualSpend525s.toFixed(8)]
+              );
+              const [newGift525sRows] = await (conn525s as any).execute(
+                `SELECT id FROM af_orders WHERE source_order_id = ? AND user_id = ? AND is_gift = 1 ORDER BY id DESC LIMIT 1`,
+                [newOrderId2, targetUserId525s]
+              );
+              const newGift525sId = (newGift525sRows as any[])[0]?.id;
+              if (newGift525sId) {
+                await (conn525s as any).execute(
+                  `INSERT INTO af_525_gift_records (ledger_id, source_order_id, source_user_id, gift_order_id, gift_amount, gift_quantity, coin) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                  [input.ledgerId, newOrderId2, ctx.user.id, newGift525sId, giftAmount525s, giftQty525s, input.coin]
+                );
+              }
+              console.log(`[5.25定向-市价] 订单#${newOrderId2} 下单人(${ctx.user.id}) → YJH(${targetUserId525s}) 赠单金额:${giftAmount525s}`);
+            } catch (e) {
+              console.error('[5.25定向-市价] 生成赠单失败:', e);
+            }
+          }, 500);
+        }
         return { success: true };
       }),
     // AF 查询委托订单（该账本所有币种）
