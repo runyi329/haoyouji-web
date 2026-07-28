@@ -14755,8 +14755,8 @@ ${klinesSummary}
               const actualSpend525 = parseFloat(order.amount || '0');
               const actualPrice525 = parseFloat(order.limit_price || '0');
               if (actualSpend525 <= 0 || actualPrice525 <= 0) return;
-              // 赠单金额 = 用户投入 × 0.25 × 0.75（D0档权益系数）
-              const giftAmount525 = (actualSpend525 * giftRatio525 * 0.75).toFixed(8);
+              // 赠单金额 = 用户投入 × 0.25（与正单 5.25 倍计算方式一致，不乘权益系数）
+              const giftAmount525 = (actualSpend525 * giftRatio525).toFixed(8);
               const giftQty525 = (parseFloat(giftAmount525) / actualPrice525).toFixed(8);
               if (parseFloat(giftQty525) <= 0) return;
               // 检查是否已存在该正单的 525 赠单（防重复）
