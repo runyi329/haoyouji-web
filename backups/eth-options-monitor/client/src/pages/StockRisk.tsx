@@ -7,10 +7,12 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
+import { saveProductPref } from "@/App";
 
 // ─── 品种切换下拉（左上角）────────────────────────────────────────
 function ProductSwitcher() {
   const [open, setOpen] = useState(false);
+  useEffect(() => { saveProductPref('stock'); }, []);
   return (
     <div style={{ position: "relative", display: "inline-block" }}>
       <button
@@ -42,7 +44,7 @@ function ProductSwitcher() {
               A 股风控
             </div>
             <button
-              onClick={() => { setOpen(false); window.location.href = '/annualized'; }}
+              onClick={() => { setOpen(false); saveProductPref('eth'); window.location.href = '/annualized'; }}
               style={{
                 display: "block", width: "100%", padding: "8px 16px",
                 fontSize: 13, fontWeight: 600, letterSpacing: 0.5,

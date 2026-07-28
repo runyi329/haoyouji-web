@@ -13,14 +13,14 @@ import { Link } from "wouter";
 import { toast } from "sonner";
 
 // ─── 到期日配置 ────────────────────────────────────────────────
-interface ExpiryConfig { code: string; label: string; fullLabel: string; expireDate: string; }
+interface ExpiryConfig { code: string; label: string; fullLabel: string; expireDate: string; year: number; }
 
 // 静态兜底（首次渲染前使用）
 const DEFAULT_EXPIRIES: ExpiryConfig[] = [
-  { code: "25SEP26", label: "9月",  fullLabel: "2026/9/25",  expireDate: "2026-09-25" },
-  { code: "25DEC26", label: "12月", fullLabel: "2026/12/25", expireDate: "2026-12-25" },
-  { code: "26MAR27", label: "3月",  fullLabel: "2027/3/26",  expireDate: "2027-03-26" },
-  { code: "25JUN27", label: "6月",  fullLabel: "2027/6/25",  expireDate: "2027-06-25" },
+  { code: "25SEP26", label: "9/25",  fullLabel: "2026/9/25",  expireDate: "2026-09-25", year: 2026 },
+  { code: "25DEC26", label: "12/25", fullLabel: "2026/12/25", expireDate: "2026-12-25", year: 2026 },
+  { code: "26MAR27", label: "3/26",  fullLabel: "2027/3/26",  expireDate: "2027-03-26", year: 2027 },
+  { code: "25JUN27", label: "6/25",  fullLabel: "2027/6/25",  expireDate: "2027-06-25", year: 2027 },
 ];
 
 // 解析 Deribit 到期日 code（如 "25SEP26"）→ ExpiryConfig
@@ -40,14 +40,13 @@ function parseExpiryCode(code: string): ExpiryConfig | null {
   const monthNum = parseInt(mm);
   const dayNum = parseInt(dd);
   const now = new Date();
-  const expire = new Date(expireDate);
+  // Deribit 期权到期时间固定为 UTC 08:00（北京时间 16:00）
+  const expire = new Date(`${expireDate}T08:00:00Z`);
   const daysLeft = Math.ceil((expire.getTime() - now.getTime()) / 86400000);
-  // 30天以内：显示 月/日（精确到日）；否则：显示 年后2位/月
-  const label = daysLeft <= 30
-    ? `${monthNum}/${dayNum}`
-    : `${String(year).slice(2)}/${monthNum}月`;
+  // 统一显示为 月/日 格式，直观清晰
+  const label = `${monthNum}/${dayNum}`;
   const fullLabel = `${year}/${monthNum}/${dayNum}`;
-  return { code, label, fullLabel, expireDate };
+  return { code, label, fullLabel, expireDate, year };
 }
 
 const MAX_STRIKE = 5000;
@@ -71,7 +70,8 @@ export const DIM_LABELS: Record<DimKey, { zh: string; en: string }> = {
 
 function calcDaysLeft(expireDate: string): number {
   const now = new Date();
-  const exp = new Date(expireDate);
+  // Deribit 期权到期时间固定为 UTC 08:00（北京时间 16:00）
+  const exp = new Date(`${expireDate}T08:00:00Z`);
   return Math.max(0, Math.round((exp.getTime() - now.getTime()) / 86400000));
 }
 
@@ -146,6 +146,373 @@ function buildThetaSeries(
   return result;
 }
 
+// ─── Black-Scholes 期权价格计算 ───────────────────────────────────────────
+/** 计算 Black-Scholes 期权价格（USD） */
+function bsPrice(S: number, K: number, T: number, iv: number, r: number, isCall: boolean): number {
+  if (T <= 0 || iv <= 0 || S <= 0) {
+    // 到期时：CALL = max(S-K,0)，PUT = max(K-S,0)
+    return isCall ? Math.max(0, S - K) : Math.max(0, K - S);
+  }
+  const d1 = (Math.log(S / K) + (r + 0.5 * iv * iv) * T) / (iv * Math.sqrt(T));
+  const d2 = d1 - iv * Math.sqrt(T);
+  if (isCall) {
+    return S * normCDF(d1) - K * Math.exp(-r * T) * normCDF(d2);
+  } else {
+    return K * Math.exp(-r * T) * normCDF(-d2) - S * normCDF(-d1);
+  }
+}
+
+// ─── 价值分解历史 Hook ─────────────────────────────────────────────────────
+interface VdcPoint {
+  dateLabel: string;
+  tMs: number;
+  total: number;
+  intrinsic: number;
+  tv: number;
+  isFuture: boolean;
+}
+
+function useValueDecompositionHistory(
+  instrumentName: string,
+  expireDate: string,
+  strike: number,
+  isCall: boolean,
+  iv: number | null,
+  ethPrice: number,
+  daysLeft: number,
+) {
+  const [points, setPoints] = useState<VdcPoint[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (!instrumentName || ethPrice <= 0) return;
+    setLoading(true);
+    setError(false);
+
+    const ws = new WebSocket('wss://www.deribit.com/ws/api/v2');
+    const results: Record<number, { ticks: number[]; close: number[] }> = {};
+    let listingTs = 0;
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ jsonrpc: '2.0', id: 8001,
+        method: 'public/get_instrument',
+        params: { instrument_name: instrumentName }
+      }));
+    };
+
+    ws.onmessage = (e) => {
+      try {
+        const d = JSON.parse(e.data);
+
+        if (d.id === 8001) {
+          const now = Date.now();
+          listingTs = d.result?.creation_timestamp ?? (now - 365 * 24 * 3600 * 1000);
+          ws.send(JSON.stringify({ jsonrpc: '2.0', id: 8002,
+            method: 'public/get_tradingview_chart_data',
+            params: { instrument_name: instrumentName, start_timestamp: listingTs, end_timestamp: now, resolution: '1D' }
+          }));
+          ws.send(JSON.stringify({ jsonrpc: '2.0', id: 8003,
+            method: 'public/get_tradingview_chart_data',
+            params: { instrument_name: 'ETH-PERPETUAL', start_timestamp: listingTs, end_timestamp: now, resolution: '1D' }
+          }));
+          return;
+        }
+
+        if (d.id === 8002 || d.id === 8003) {
+          results[d.id] = d.result || { ticks: [], close: [] };
+          if (!results[8002] || !results[8003]) return;
+
+          const optData = results[8002];
+          const ethData = results[8003];
+          const expMs = new Date(expireDate).getTime();
+          const nowMs = Date.now();
+
+          // 构建 ETH 历史价格映射（按天对齐）
+          const ethMap = new Map<number, number>();
+          (ethData.ticks || []).forEach((t: number, i: number) => {
+            const tMs = t < 10_000_000_000 ? t * 1000 : t;
+            const dayKey = Math.floor(tMs / 86400000) * 86400000;
+            ethMap.set(dayKey, (ethData.close || [])[i]);
+          });
+
+          // ── 历史段：用真实数据 ──
+          const histPoints: VdcPoint[] = [];
+          (optData.ticks || []).forEach((t: number, i: number) => {
+            const tMs = t < 10_000_000_000 ? t * 1000 : t;
+            const dayKey = Math.floor(tMs / 86400000) * 86400000;
+            const optMarkEth = (optData.close || [])[i];
+            if (!optMarkEth || optMarkEth <= 0) return;
+
+            const S = ethMap.get(dayKey)
+              ?? ethMap.get(dayKey - 86400000)
+              ?? ethMap.get(dayKey + 86400000)
+              ?? 0;
+            if (S <= 0) return;
+
+            const totalUsd = optMarkEth * S;
+            const intrinsicUsd = isCall
+              ? Math.max(0, S - strike)
+              : Math.max(0, strike - S);
+            const tvUsd = Math.max(0, totalUsd - intrinsicUsd);
+
+            const d2 = new Date(tMs);
+            histPoints.push({
+              dateLabel: `${d2.getMonth() + 1}/${d2.getDate()}`,
+              tMs,
+              total: totalUsd,
+              intrinsic: intrinsicUsd,
+              tv: tvUsd,
+              isFuture: false,
+            });
+          });
+
+          // ── 未来段：BS 估算（固定当前 IV 和 ETH 价格）──
+          const futurePoints: VdcPoint[] = [];
+          if (iv !== null && iv > 0 && daysLeft > 0) {
+            const r = 0.05;
+            const step = daysLeft <= 60 ? 1 : daysLeft <= 180 ? 2 : 3;
+            for (let daysAhead = 1; daysAhead <= daysLeft; daysAhead += step) {
+              const tMs = nowMs + daysAhead * 86400000;
+              const dteRemaining = Math.max(0, daysLeft - daysAhead);
+              const T = dteRemaining / 365;
+              const totalUsd = bsPrice(ethPrice, strike, T, iv, r, isCall);
+              const intrinsicUsd = isCall
+                ? Math.max(0, ethPrice - strike)
+                : Math.max(0, strike - ethPrice);
+              const tvUsd = Math.max(0, totalUsd - intrinsicUsd);
+              const d2 = new Date(tMs);
+              futurePoints.push({
+                dateLabel: `${d2.getMonth() + 1}/${d2.getDate()}`,
+                tMs,
+                total: totalUsd,
+                intrinsic: intrinsicUsd,
+                tv: tvUsd,
+                isFuture: true,
+              });
+            }
+            futurePoints.push({
+              dateLabel: '到期',
+              tMs: expMs,
+              total: isCall ? Math.max(0, ethPrice - strike) : Math.max(0, strike - ethPrice),
+              intrinsic: isCall ? Math.max(0, ethPrice - strike) : Math.max(0, strike - ethPrice),
+              tv: 0,
+              isFuture: true,
+            });
+          }
+
+          setPoints([...histPoints, ...futurePoints]);
+          setLoading(false);
+          ws.close();
+        }
+      } catch { /* ignore */ }
+    };
+
+    ws.onerror = () => { setError(true); setLoading(false); };
+    return () => { try { ws.close(); } catch { /* ignore */ } };
+  }, [instrumentName, expireDate, strike, isCall, iv, ethPrice, daysLeft]);
+
+  return { points, loading, error };
+}
+
+/**
+ * 价值分解曲线图（动态版）
+ * 历史段：真实标记价 × 当日 ETH 价格 → 真实内在价值 + 时间价值（实线）
+ * 未来段：BS 估算，假设价格/IV 不变（虚线）
+ */
+function ValueDecompositionChart({
+  instrumentName, expireDate, strike, isCall, iv, ethPrice, daysLeft, markUsd,
+}: {
+  instrumentName: string; expireDate: string; strike: number; isCall: boolean;
+  iv: number | null; ethPrice: number; daysLeft: number; markUsd: number;
+}) {
+  const { points, loading, error } = useValueDecompositionHistory(
+    instrumentName, expireDate, strike, isCall, iv, ethPrice, daysLeft
+  );
+
+  // ── 单位切换（必须在所有条件 return 之前声明，遵守 React Hooks 规则）──
+  const [unit, setUnit] = useState<'usd' | 'eth'>('usd');
+  const isEth = unit === 'eth';
+  const divisor = isEth && ethPrice > 0 ? ethPrice : 1;
+  const fmtVal = (v: number) => isEth
+    ? `${(v / divisor).toFixed(4)} Ξ`
+    : `$${v.toFixed(0)}`;
+  const fmtShort = (v: number) => isEth
+    ? `${(v / divisor).toFixed(3)}Ξ`
+    : `$${v.toFixed(0)}`;
+  const conv = (v: number) => v / divisor;
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-6 gap-2 text-[var(--ac-text-muted)] text-xs">
+      <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="10" strokeOpacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round"/>
+      </svg>
+      正在加载真实历史数据...
+    </div>
+  );
+  if (error || points.length < 2) return (
+    <div className="text-center text-[var(--ac-text-muted)] text-xs py-4">暂无历史数据</div>
+  );
+
+  const histPts = points.filter(p => !p.isFuture);
+  const futurePts = points.filter(p => p.isFuture);
+  const totalCount = points.length;
+  const histCount = histPts.length;
+
+  const W = 320, H = 140, PL = 46, PR = 10, PT = 10, PB = 30;
+  const cW = W - PL - PR, cH = H - PT - PB;
+
+  const maxVal = Math.max(...points.map(p => conv(p.total)), conv(markUsd) * 1.05, 0.001);
+
+  const toX = (i: number) => PL + (i / Math.max(1, totalCount - 1)) * cW;
+  const toY = (v: number) => PT + cH - Math.min(1, Math.max(0, conv(v) / maxVal)) * cH;
+
+  const todayX = histCount > 0 ? toX(histCount - 1) : PL;
+  const todayPt = histPts[histCount - 1];
+
+  const makeArea = (
+    pts: VdcPoint[], startIdx: number,
+    getTop: (p: VdcPoint) => number,
+    getBase: (p: VdcPoint) => number
+  ) => {
+    if (pts.length < 2) return '';
+    const top = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${toX(i + startIdx).toFixed(1)},${toY(getTop(p)).toFixed(1)}`).join(' ');
+    const bottom = [...pts].reverse().map((p, i, arr) =>
+      `L ${toX(startIdx + arr.length - 1 - i).toFixed(1)},${toY(getBase(p)).toFixed(1)}`
+    ).join(' ');
+    return `${top} ${bottom} Z`;
+  };
+
+  const yTicks = [0, 0.33, 0.67, 1.0].map(r => ({
+    y: PT + cH - r * cH,
+    label: isEth
+      ? `${(r * maxVal).toFixed(3)}Ξ`
+      : `$${(r * maxVal).toFixed(0)}`,
+  }));
+
+  const xStep = Math.max(1, Math.floor(totalCount / 4));
+  const xLabels = points
+    .map((p, i) => ({ i, label: p.dateLabel, isFuture: p.isFuture }))
+    .filter((_, i) => i % xStep === 0 || i === totalCount - 1 || i === histCount - 1);
+
+  const markY = toY(markUsd);
+
+  return (
+    <div className="mt-1">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] text-[var(--ac-text-secondary)] font-sans tracking-widest uppercase">
+          价值分解 · 真实历史
+        </span>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {/* 单位切换按钮 */}
+          <div className="flex rounded overflow-hidden border border-[var(--ac-border)]/60 text-[9px] font-mono">
+            <button
+              onClick={() => setUnit('usd')}
+              className="px-1.5 py-0.5 transition-colors"
+              style={{
+                background: !isEth ? 'rgba(251,191,36,0.18)' : 'transparent',
+                color: !isEth ? '#fbbf24' : 'rgba(255,255,255,0.35)',
+              }}
+            >$ USD</button>
+            <button
+              onClick={() => setUnit('eth')}
+              className="px-1.5 py-0.5 border-l border-[var(--ac-border)]/60 transition-colors"
+              style={{
+                background: isEth ? 'rgba(96,165,250,0.18)' : 'transparent',
+                color: isEth ? '#60a5fa' : 'rgba(255,255,255,0.35)',
+              }}
+            >Ξ ETH</button>
+          </div>
+          <span className="flex items-center gap-1 text-[9px] font-sans" style={{ color: '#60a5fa' }}>
+            <span style={{ display:'inline-block', width:8, height:8, background:'rgba(96,165,250,0.5)', borderRadius:1 }} />
+            内在价值
+          </span>
+          <span className="flex items-center gap-1 text-[9px] font-sans" style={{ color: '#fb923c' }}>
+            <span style={{ display:'inline-block', width:8, height:8, background:'rgba(251,146,60,0.5)', borderRadius:1 }} />
+            时间价值
+          </span>
+        </div>
+      </div>
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', overflow: 'visible' }}>
+        <defs>
+          <linearGradient id="vdc2-iv-hist" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.60" />
+            <stop offset="100%" stopColor="#60a5fa" stopOpacity="0.15" />
+          </linearGradient>
+          <linearGradient id="vdc2-tv-hist" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#fb923c" stopOpacity="0.65" />
+            <stop offset="100%" stopColor="#fb923c" stopOpacity="0.20" />
+          </linearGradient>
+          <linearGradient id="vdc2-iv-fut" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#60a5fa" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="#60a5fa" stopOpacity="0.05" />
+          </linearGradient>
+          <linearGradient id="vdc2-tv-fut" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#fb923c" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="#fb923c" stopOpacity="0.06" />
+          </linearGradient>
+        </defs>
+        {yTicks.map((t, i) => (
+          <line key={i} x1={PL} y1={t.y} x2={PL + cW} y2={t.y} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+        ))}
+        {yTicks.map((t, i) => (
+          <text key={i} x={PL - 3} y={t.y + 3} textAnchor="end" fontSize="8" fill="rgba(255,255,255,0.3)" fontFamily="monospace">{t.label}</text>
+        ))}
+        {histPts.length > 1 && <>
+          <path d={makeArea(histPts, 0, p => p.intrinsic, () => 0)} fill="url(#vdc2-iv-hist)" />
+          <path d={makeArea(histPts, 0, p => p.total, p => p.intrinsic)} fill="url(#vdc2-tv-hist)" />
+          <polyline points={histPts.map((p, i) => `${toX(i).toFixed(1)},${toY(p.intrinsic).toFixed(1)}`).join(' ')}
+            fill="none" stroke="#60a5fa" strokeWidth="1" strokeOpacity="0.7" />
+          <polyline points={histPts.map((p, i) => `${toX(i).toFixed(1)},${toY(p.total).toFixed(1)}`).join(' ')}
+            fill="none" stroke="#fb923c" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </>}
+        {futurePts.length > 1 && <>
+          <path d={makeArea(futurePts, histCount - 1, p => p.intrinsic, () => 0)} fill="url(#vdc2-iv-fut)" />
+          <path d={makeArea(futurePts, histCount - 1, p => p.total, p => p.intrinsic)} fill="url(#vdc2-tv-fut)" />
+          <polyline points={futurePts.map((p, i) => `${toX(i + histCount - 1).toFixed(1)},${toY(p.intrinsic).toFixed(1)}`).join(' ')}
+            fill="none" stroke="#60a5fa" strokeWidth="1" strokeOpacity="0.3" strokeDasharray="3 3" />
+          <polyline points={futurePts.map((p, i) => `${toX(i + histCount - 1).toFixed(1)},${toY(p.total).toFixed(1)}`).join(' ')}
+            fill="none" stroke="#fb923c" strokeWidth="1.5" strokeDasharray="4 3" strokeLinecap="round" strokeLinejoin="round" strokeOpacity="0.55" />
+        </>}
+        <line x1={PL} y1={markY} x2={PL + cW} y2={markY} stroke="#fbbf24" strokeWidth="1" strokeDasharray="3 2" strokeOpacity="0.55" />
+        <text x={PL + cW + 2} y={markY + 3} fontSize="7" fill="#fbbf24" fontFamily="monospace" opacity="0.65">Mark</text>
+        <line x1={todayX} y1={PT} x2={todayX} y2={PT + cH} stroke="#fbbf24" strokeWidth="1" strokeDasharray="2 2" />
+        {todayPt && <>
+          <circle cx={todayX} cy={toY(todayPt.total)} r="3" fill="#fb923c" />
+          {todayPt.intrinsic > 0 && <circle cx={todayX} cy={toY(todayPt.intrinsic)} r="2.5" fill="#60a5fa" />}
+          <text x={todayX + 4} y={toY(todayPt.total) - 3} fontSize="8" fill="#fb923c" fontFamily="monospace">{fmtShort(todayPt.total)}</text>
+          {todayPt.intrinsic > 1 && (
+            <text x={todayX + 4} y={toY(todayPt.intrinsic) + 9} fontSize="8" fill="#60a5fa" fontFamily="monospace">IV {fmtShort(todayPt.intrinsic)}</text>
+          )}
+          {todayPt.tv > 1 && (
+            <text x={todayX + 4} y={toY(todayPt.intrinsic + todayPt.tv / 2)} fontSize="7" fill="#fb923c" fontFamily="monospace" opacity="0.8">TV {fmtShort(todayPt.tv)}</text>
+          )}
+        </>}
+        {xLabels.map(({ i, label, isFuture }) => (
+          <text key={i} x={toX(i)} y={H - 14} textAnchor="middle" fontSize="7.5"
+            fill={i === histCount - 1 ? '#fbbf24' : isFuture ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.4)'}
+            fontFamily="sans-serif">{label}</text>
+        ))}
+        <text x={todayX} y={H - 4} textAnchor="middle" fontSize="7.5" fill="#fbbf24" fontFamily="sans-serif">今</text>
+        {futurePts.length > 1 && (
+          <text x={toX(histCount - 1 + Math.floor(futurePts.length * 0.45))} y={H - 4}
+            textAnchor="middle" fontSize="7" fill="rgba(255,255,255,0.22)" fontFamily="sans-serif" fontStyle="italic">
+            虚线=BS估算(价格/IV不变)
+          </text>
+        )}
+      </svg>
+      {/* 今日数值文字摘要（切换单位时同步更新） */}
+      {todayPt && (
+        <div className="flex items-center gap-3 mt-1 px-1 text-[9px] font-mono">
+          <span style={{ color: '#fb923c' }}>总 {fmtVal(todayPt.total)}</span>
+          <span style={{ color: '#60a5fa' }}>内在 {fmtVal(todayPt.intrinsic)}</span>
+          <span style={{ color: '#fb923c', opacity: 0.75 }}>时间 {fmtVal(todayPt.tv)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Theta 衰减曲线 SVG 组件 */
 function ThetaDecayCurve({ strike, expireDate, iv, ethPrice, daysLeft, totalDays, isCall }: {
   strike: number; expireDate: string; iv: number; ethPrice: number; daysLeft: number; totalDays: number; isCall: boolean;
@@ -154,12 +521,22 @@ function ThetaDecayCurve({ strike, expireDate, iv, ethPrice, daysLeft, totalDays
     () => buildThetaSeries(strike, expireDate, iv, ethPrice, isCall, totalDays),
     [strike, expireDate, iv, ethPrice, isCall, totalDays]
   );
+
+  // ── 单位切换（必须在所有条件 return 之前声明，遵守 React Hooks 规则）──
+  const [unit, setUnit] = useState<'usd' | 'eth'>('usd');
+  const isEth = unit === 'eth';
+  const divisor = isEth && ethPrice > 0 ? ethPrice : 1;
+  const convTheta = (v: number) => v / divisor;
+  const fmtTheta = (v: number) => isEth
+    ? `${convTheta(v).toFixed(5)}Ξ`
+    : `$${v.toFixed(2)}`;
+
   if (series.length < 2) return null;
 
-  const W = 320, H = 110, PL = 36, PR = 8, PT = 8, PB = 24;
+  const W = 320, H = 110, PL = 42, PR = 8, PT = 8, PB = 24;
   const cW = W - PL - PR, cH = H - PT - PB;
 
-  const maxTheta = Math.max(...series.map((p: { date: Date; dte: number; theta: number }) => p.theta), 0.01);
+  const maxTheta = Math.max(...series.map((p: { date: Date; dte: number; theta: number }) => convTheta(p.theta)), 0.0001);
   // 找最接近 daysLeft 的点（避免精确匹配失败）
   const todayIdx = series.reduce((best, p, i) => {
     const prev = series[best];
@@ -168,7 +545,7 @@ function ThetaDecayCurve({ strike, expireDate, iv, ethPrice, daysLeft, totalDays
   const todayX = (todayIdx / (series.length - 1)) * cW;
 
   const toX = (i: number) => PL + (i / (series.length - 1)) * cW;
-  const toY = (theta: number) => PT + cH - (theta / maxTheta) * cH;
+  const toY = (theta: number) => PT + cH - Math.min(1, Math.max(0, convTheta(theta) / maxTheta)) * cH;
 
   // 历史段（上市日→今天）
   const histPts = series.slice(0, todayIdx + 1);
@@ -182,7 +559,9 @@ function ThetaDecayCurve({ strike, expireDate, iv, ethPrice, daysLeft, totalDays
   // Y轴刻度
   const yTicks = [0, 0.25, 0.5, 0.75, 1.0].map(r => ({
     y: PT + cH - r * cH,
-    label: r === 0 ? '0' : `$${(r * maxTheta).toFixed(0)}`
+    label: r === 0 ? '0' : isEth
+      ? `${(r * maxTheta).toFixed(4)}Ξ`
+      : `$${(r * maxTheta).toFixed(1)}`
   }));
 
   // X轴刻度（上市日、今天、到期日）
@@ -193,14 +572,38 @@ function ThetaDecayCurve({ strike, expireDate, iv, ethPrice, daysLeft, totalDays
   ];
 
   const pastDays = totalDays - daysLeft;
+  const todayTheta = series[todayIdx]?.theta ?? 0;
 
   return (
     <div className="mt-3">
       <div className="flex items-center justify-between mb-1">
-        <span className="text-[10px] text-[var(--ac-text-secondary)] font-sans tracking-widest uppercase">Theta 衰减曲线（$USD/天）</span>
-        <span className="text-[10px] font-sans" style={{ color: '#fb7185' }}>
-          已过 {pastDays}天 · 剩余 {daysLeft}天
+        <span className="text-[10px] text-[var(--ac-text-secondary)] font-sans tracking-widest uppercase">
+          Theta 衰减曲线（{isEth ? 'Ξ ETH' : '$ USD'}/天）
         </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-sans" style={{ color: '#fb7185' }}>
+            已过 {pastDays}天 · 剩余 {daysLeft}天
+          </span>
+          {/* 单位切换按钮 */}
+          <div className="flex rounded overflow-hidden border border-[var(--ac-border)]/60 text-[9px] font-mono">
+            <button
+              onClick={() => setUnit('usd')}
+              className="px-1.5 py-0.5 transition-colors"
+              style={{
+                background: !isEth ? 'rgba(251,191,36,0.18)' : 'transparent',
+                color: !isEth ? '#fbbf24' : 'rgba(255,255,255,0.35)',
+              }}
+            >$ USD</button>
+            <button
+              onClick={() => setUnit('eth')}
+              className="px-1.5 py-0.5 border-l border-[var(--ac-border)]/60 transition-colors"
+              style={{
+                background: isEth ? 'rgba(96,165,250,0.18)' : 'transparent',
+                color: isEth ? '#60a5fa' : 'rgba(255,255,255,0.35)',
+              }}
+            >Ξ ETH</button>
+          </div>
+        </div>
       </div>
       <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', overflow: 'visible' }}>
         {/* 网格线 */}
@@ -224,6 +627,12 @@ function ThetaDecayCurve({ strike, expireDate, iv, ethPrice, daysLeft, totalDays
         {/* 今日圆点 */}
         {todayIdx >= 0 && (
           <circle cx={PL+todayX} cy={toY(series[todayIdx].theta)} r="3" fill="#fbbf24" />
+        )}
+        {/* 今日 Theta 数值标注 */}
+        {todayTheta > 0 && (
+          <text x={PL + todayX + 4} y={toY(todayTheta) - 3} fontSize="8" fill="#fbbf24" fontFamily="monospace">
+            {fmtTheta(todayTheta)}
+          </text>
         )}
         {/* X轴标签 */}
         {xLabels.map((l, i) => (
@@ -1200,7 +1609,7 @@ function ThetaPopupModal({ info, onClose, optionType }: { info: ThetaPopupCell; 
               )}
             </div>
             <div className="text-xs text-[var(--ac-text-muted)] font-sans mt-0.5">
-              {optionType === 'C' ? 'CALL' : 'PUT'} · 行权价 ${strike.toLocaleString()} · {expiry.fullLabel} 到期
+              {optionType === 'C' ? 'CALL' : 'PUT'} · 行权价 ${strike.toLocaleString()} · {expiry.year}年{parseInt(expiry.expireDate.slice(5,7))}月{parseInt(expiry.expireDate.slice(8,10))}日到期
             </div>
           </div>
           <button onClick={onClose} className="text-[var(--ac-text-muted)] hover:text-[var(--ac-text-secondary)] p-1">
@@ -1620,6 +2029,14 @@ function DetailModal({ cell, onClose, optionType, onSwitchType, allStrikes, onSt
   const premiumRatio = markUsdDollar !== null && strike > 0
     ? (markUsdDollar / strike) * 100 : null;
 
+  // ── 时间进度 ──
+  const _listingDate = estimateListingDate(expiry.expireDate, daysLeft);
+  const _expireMs = new Date(`${expiry.expireDate}T08:00:00Z`).getTime();
+  const _totalDays = Math.round((_expireMs - _listingDate.getTime()) / 86400000);
+  const _consumedDays = Math.max(0, _totalDays - daysLeft);
+  const _elapsedPct = _totalDays > 0 ? Math.min(100, (_consumedDays / _totalDays) * 100) : 0;
+  const _remainPct = _totalDays > 0 ? Math.max(0, (daysLeft / _totalDays) * 100) : 0;
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center"
@@ -1694,7 +2111,7 @@ function DetailModal({ cell, onClose, optionType, onSwitchType, allStrikes, onSt
                   {optionType === 'C' ? 'CALL' : 'PUT'}
                 </span>
                 <span className="text-[length:var(--ac-fs-sm)] text-[var(--ac-text-secondary)] font-sans">
-                  {expiry.fullLabel}
+                  {expiry.year}年{parseInt(expiry.expireDate.slice(5,7))}月{parseInt(expiry.expireDate.slice(8,10))}日
                 </span>
                 <span className="text-[length:var(--ac-fs-xs)] font-mono px-1 py-0.5 rounded bg-[var(--ac-bg-cell-empty)] text-amber-400 border border-amber-500/30">
                   {daysLeft}D
@@ -1703,6 +2120,46 @@ function DetailModal({ cell, onClose, optionType, onSwitchType, allStrikes, onSt
                   <span className="text-[length:var(--ac-fs-xs)] font-sans px-1 py-0.5 rounded bg-red-900/50 text-red-300 border border-red-500/30">⚡临期</span>
                 )}
               </div>
+              {/* ── 时间进度条 ── */}
+              {_totalDays > 0 && (
+                <div className="mt-2 mb-0.5">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[9px] font-sans text-[var(--ac-text-muted)]">上市</span>
+                    <span className="text-[9px] font-sans text-[var(--ac-text-muted)]">
+                      已流失&nbsp;<span className={`font-semibold ${_elapsedPct >= 80 ? "text-red-400" : _elapsedPct >= 50 ? "text-amber-400" : "text-emerald-400"}`}>{_elapsedPct.toFixed(1)}%</span>
+                      &nbsp;·&nbsp;剩余&nbsp;<span className="text-[var(--ac-text-secondary)]">{daysLeft}D</span>
+                    </span>
+                    <span className="text-[9px] font-sans text-[var(--ac-text-muted)]">到期</span>
+                  </div>
+                  <div className="relative h-2 rounded-full overflow-hidden bg-[var(--ac-bg-cell-empty)]">
+                    <div
+                      className="absolute left-0 top-0 h-full"
+                      style={{
+                        width: `${_elapsedPct}%`,
+                        background: _elapsedPct >= 80
+                          ? "linear-gradient(90deg,#374151,#6b7280)"
+                          : "linear-gradient(90deg,#1e3a5f,#3b82f6aa)",
+                      }}
+                    />
+                    <div
+                      className="absolute top-0 h-full"
+                      style={{
+                        left: `${_elapsedPct}%`,
+                        width: `${_remainPct}%`,
+                        background: _elapsedPct >= 80
+                          ? "linear-gradient(90deg,#ef4444aa,#ef4444)"
+                          : daysLeft <= 30
+                            ? "linear-gradient(90deg,#f59e0b,#fbbf24)"
+                            : "linear-gradient(90deg,#10b981,#34d399)",
+                      }}
+                    />
+                    <div
+                      className="absolute top-0 h-full w-0.5 bg-white/70"
+                      style={{ left: `${_elapsedPct}%`, transform: "translateX(-50%)" }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-1 ml-2 flex-shrink-0">
               {/* 左右到期日切换 */}
@@ -2335,6 +2792,39 @@ function DetailModal({ cell, onClose, optionType, onSwitchType, allStrikes, onSt
           </div>
 
           {/* ===== Payoff 图（卖方视角）===== */}
+
+          {/* ===== 价值分解曲线图 ===== */}
+          {data.iv !== null && ethPrice > 0 && data.markUsd !== null && (() => {
+            const markUsdDollarVal = data.markUsd * ethPrice;
+            return (
+              <div className="bg-[var(--ac-bg-cell-empty)] rounded-[1.5px] border border-[var(--ac-border)] overflow-hidden">
+                <div className="flex items-center justify-between px-3 pt-2 pb-1 border-b border-[var(--ac-border)]/40">
+                  <span className="text-[length:var(--ac-fs-sm)] text-[var(--ac-text-secondary)] font-sans tracking-widest uppercase">价值分解</span>
+                  <div className="flex items-center gap-3 text-[length:var(--ac-fs-xs)] font-sans">
+                    <span style={{ color: '#60a5fa' }}>
+                      内在 ${Math.max(0, optionType === 'C' ? ethPrice - strike : strike - ethPrice).toFixed(0)}
+                    </span>
+                    <span style={{ color: '#fb923c' }}>
+                      时间 ${Math.max(0, markUsdDollarVal - Math.max(0, optionType === 'C' ? ethPrice - strike : strike - ethPrice)).toFixed(0)}
+                    </span>
+                  </div>
+                </div>
+                <div className="px-2 pb-2">
+                  <ValueDecompositionChart
+                    instrumentName={data.instrumentName}
+                    expireDate={expiry.expireDate}
+                    strike={strike}
+                    isCall={optionType === 'C'}
+                    iv={data.iv}
+                    ethPrice={ethPrice}
+                    daysLeft={daysLeft}
+                    markUsd={markUsdDollarVal}
+                  />
+                </div>
+              </div>
+            );
+          })()}
+
           {markUsdDollar !== null && (
             <div className="bg-[var(--ac-bg-cell-empty)] rounded-[1.5px] border border-[var(--ac-border)] overflow-hidden">
               <div className="flex items-center justify-between px-3 pt-2 pb-1.5 border-b border-[var(--ac-border)]/40">
@@ -2524,6 +3014,8 @@ function useExpiryWs(
 }
 
 // ─── localStorage 缓存工具 ────────────────────────────────────
+import { saveProductPref } from "@/App";
+
 const LS_KEY = 'eth-ann-matrix-cache-v2';
 const LS_KEY_IVR = 'eth-ann-ivr-cache-v1';
 const LS_KEY_PREFS = 'eth-ann-filter-prefs-v1';
@@ -3024,6 +3516,8 @@ export default function AnnualizedChain() {
     setHeaderHeight(headerRef.current.getBoundingClientRect().height);
     return () => ro.disconnect();
   }, []);
+  // 记录用户当前在以太坊页面
+  useEffect(() => { saveProductPref('eth'); }, []);
   // 存储所有行权价和到期日的当前数据，供触摸滑动时快速查找
   const matrixDataRef = useRef<{ allStrikes: number[]; matrix: MatrixData; ethPrice: number }>({ allStrikes: [], matrix: new Map(), ethPrice: 0 });
 
@@ -3148,7 +3642,7 @@ export default function AnnualizedChain() {
                     </button>
                     <button
                       className="block w-full px-4 py-2 text-left text-[length:var(--ac-fs-md)] font-sans tracking-widest text-[var(--ac-text-secondary)] hover:bg-[var(--ac-bg-cell-empty)] hover:text-[var(--ac-text-bright)] transition-colors"
-                      onClick={() => { setShowProductMenu(false); window.location.href = '/stock-risk'; }}
+                      onClick={() => { setShowProductMenu(false); saveProductPref('stock'); window.location.href = '/stock-risk'; }}
                     >
                       A 股风控
                     </button>
@@ -3741,6 +4235,7 @@ export default function AnnualizedChain() {
                   return (
                     <td key={e.code} className="text-center py-1 px-0.5">
                       <div className="text-[length:var(--ac-fs-sm)] font-semibold text-[var(--ac-text-bright)]">{e.label}</div>
+                      <div className="text-[8px] text-[var(--ac-text-muted)] font-sans leading-none">{String(e.year).slice(2)}年</div>
                       <div className="text-[length:var(--ac-fs-xs)] text-[var(--ac-text-secondary)] font-sans">{days}D</div>
                     </td>
                   );
@@ -3796,6 +4291,7 @@ export default function AnnualizedChain() {
                 return (
                   <th key={e.code} className="text-center py-1 px-0.5">
                     <div className="text-[length:var(--ac-fs-sm)]">{e.label}</div>
+                    <div className="text-[8px]">{String(e.year).slice(2)}年</div>
                     <div className="text-[length:var(--ac-fs-xs)]">{days}D</div>
                   </th>
                 );
