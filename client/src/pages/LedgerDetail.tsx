@@ -3540,69 +3540,6 @@ export default function LedgerDetail() {
                   )}
                 </div>
               )}
-              {/* 资方视角：合作资金总额汇总 */}
-              {isCustomAF && effectiveIsFunder && (() => {
-                const activeOrders: any[] = (funderAssetOrders as any[] || []).filter((o: any) => o.status !== 'settled');
-                const usdtTotal = activeOrders.reduce((sum: number, o: any) => {
-                  if ((o.interest_base_currency || 'USDT') === 'CNY') return sum;
-                  // 期权订单：用持有数量 × 实时价格（当前市值）
-                  if (o.asset_type === 'crypto_option') {
-                    try {
-                      const oi = typeof o.option_info === 'string' ? JSON.parse(o.option_info) : (o.option_info || {});
-                      const qty = parseFloat(oi.buyQty || '0');
-                      const coin = (oi.coin || o.coin || 'ETH') as string;
-                      const price = (funderLivePrices as any)?.[coin] ?? null;
-                      if (qty > 0 && price !== null) return sum + qty * price;
-                    } catch {}
-                    // fallback 到 amount
-                    return sum + parseFloat(o.amount || '0');
-                  }
-                  const amt = parseFloat(o.interest_base || o.amount || '0');
-                  return sum + (isNaN(amt) ? 0 : amt);
-                }, 0);
-                const cnyTotal = activeOrders.reduce((sum: number, o: any) => {
-                  if ((o.interest_base_currency || 'USDT') !== 'CNY') return sum;
-                  const amt = parseFloat(o.interest_base || o.amount || '0');
-                  return sum + (isNaN(amt) ? 0 : amt);
-                }, 0);
-                const effectiveCnyRate = (cnyRate && cnyRate > 0) ? cnyRate : 7.25;
-                const usdtInCny = usdtTotal * effectiveCnyRate;
-                const totalInCny = cnyTotal + usdtInCny;
-                if (totalInCny <= 0) return null;
-                const fmtCny = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                const fmtU = (v: number) => v >= 10000
-                  ? (v / 10000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '万'
-                  : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                return (
-                  <div className="mt-3 rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(4px)' }}>
-                    {/* 主标题：TOTAL 和金额同一行 */}
-                    <div className="flex items-baseline gap-2 mb-1.5">
-                      <span className="text-2xl font-bold tracking-tight" style={{ color: 'rgba(255,255,255,0.55)', letterSpacing: '0.05em' }}>TTL</span>
-                      <span className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.7)' }}>￥</span>
-                      <span className="text-2xl font-bold tracking-tight" style={{ color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{fmtCny(totalInCny)}</span>
-                    </div>
-                    {/* 副标题：占比进度条 */}
-                    {(() => {
-                      const cnyPct = totalInCny > 0 ? Math.round(cnyTotal / totalInCny * 100) : 0;
-                      const usdtPct = 100 - cnyPct;
-                      return (
-                        <>
-                          {/* 进度条 */}
-                          <div className="flex rounded-full overflow-hidden mb-1.5" style={{ height: '4px', background: 'rgba(255,255,255,0.15)' }}>
-                            {cnyPct > 0 && <div style={{ width: `${cnyPct}%`, background: '#FFD700', transition: 'width 0.4s' }} />}
-                            {usdtPct > 0 && <div style={{ width: `${usdtPct}%`, background: 'rgba(255,255,255,0.5)', transition: 'width 0.4s' }} />}
-                          </div>
-                          {/* 占比标签 */}
-                          <div className="flex justify-between text-[10px]" style={{ color: 'rgba(255,255,255,0.6)' }}>
-                            <span style={{ color: '#FFD700' }}>人民币 <span style={{ fontVariantNumeric: 'tabular-nums' }}>{cnyPct}%</span> <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '9px' }}>￥{fmtCny(cnyTotal)}</span></span>
-                            <span>数字币 <span style={{ fontVariantNumeric: 'tabular-nums' }}>{usdtPct}%</span> <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '9px' }}>{fmtU(usdtTotal)} USDT</span></span>
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-                );
-              })()}
               {/* 网格交易模拟测算入口已移至 GTO 策略下方 */}
               {isCustomAH && (isOwner || isAdmin) && (
                 <button

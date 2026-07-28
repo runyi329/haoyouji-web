@@ -208,13 +208,8 @@ export default defineConfig({
     port: 5173,
     hmr: true,
     proxy: {
-      "/api/trpc": {
-        target: "http://124.223.54.69",
-        changeOrigin: true,
-        secure: false,
-      },
-      "/api/log-client-error": {
-        target: "http://124.223.54.69",
+      "/api": {
+        target: "http://localhost:4000",
         changeOrigin: true,
         secure: false,
       },
