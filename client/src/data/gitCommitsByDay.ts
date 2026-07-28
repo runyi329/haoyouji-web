@@ -8673,5 +8673,12 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-28T03:57:53Z", type: "fix", cleanMessage: "修复 saveParticipantsMutation 变量名冲突（重命名为 saveParticipantFullConfigMutation）" },
     { date: "2026-07-28T04:04:04Z", type: "feat", cleanMessage: "恢复 TTL合作资金汇总(人民币+数字币占比进度条); feat: 已收利息显示; feat: 权利金计价下拉框; feat: 日付选项" },
     { date: "2026-07-28T06:27:54Z", type: "fix", cleanMessage: "持仓中筛选补充正单委卖中但赠单仍持仓的情况（修复YJH 6月5日赠单不显示问题）" },
+    { date: "2026-07-28T06:28:41Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-28T08:10:48Z", type: "fix", cleanMessage: "持仓中筛选包含 sell_cancelled 状态（修复撤销委卖后订单不显示问题）" },
+    { date: "2026-07-28T08:50:36Z", type: "feat", cleanMessage: "5.25定向开关 - 52号账本谷底增筹订单成交时可额外赠给YJH 0.25倍赠单，含管理页面和历史记录" },
+    { date: "2026-07-28T09:51:36Z", type: "fix", cleanMessage: "5.25定向开关赠单金额去掉错误的0.75权益系数，与正单5.25倍计算方式一致" },
+    { date: "2026-07-28T10:01:22Z", type: "fix", cleanMessage: "5.25定向开关页面说明文字去掉0.75系数描述" },
+    { date: "2026-07-28T10:39:33Z", type: "feat", cleanMessage: "5.25定向开关联动正单倍数 - 前端下单预览/提交/订单详情 + 后端确认成交重算均按开关状态动态切换5倍或5.25倍" },
+    { date: "2026-07-28T10:56:45Z", type: "fix", cleanMessage: "5.25定向开关补充市价单路径 - 市价单下单时也触发0.25倍赠单给YJH" },
   ],
 };
