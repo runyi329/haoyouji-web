@@ -184,7 +184,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   };
   const [participants, setParticipants] = useState<ParticipantForm[]>([]);
   const [participantUserSearch, setParticipantUserSearch] = useState('');
-  const saveParticipantsMutation = trpc.ledger.funderSaveParticipantFullConfig.useMutation();
+  const saveParticipantFullConfigMutation = trpc.ledger.funderSaveParticipantFullConfig.useMutation();
   // 编辑已有订单时加载现有参与者
   const editingOrderId = editingOrder?.id ?? null;
   const { data: existingParticipantsData } = trpc.ledger.funderGetOrderParticipants.useQuery(
@@ -476,7 +476,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       // 保存参与者（如果有）
       const orderId = (vars as any).id;
       if (orderId && participants.length > 0) {
-        saveParticipantsMutation.mutate({
+        saveParticipantFullConfigMutation.mutate({
           orderId: Number(orderId),
           ledgerId,
           participants: participants.map((p, i) => ({
@@ -495,7 +495,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         });
       } else if (orderId && participants.length === 0 && existingParticipantsData?.participants?.length) {
         // 删除所有参与者
-        saveParticipantsMutation.mutate({ orderId: Number(orderId), ledgerId, participants: [] });
+        saveParticipantFullConfigMutation.mutate({ orderId: Number(orderId), ledgerId, participants: [] });
       }
       toast.success('更新成功');
       setShowForm(false);
