@@ -2298,7 +2298,7 @@ export default function CryptoPrediction() {
     const arr = orders.filter((o: any) => {
       const statusMatch = contractStatusFilter === 'all' ? true
         : contractStatusFilter === 'pending' ? (o.status === 'pending' && !o.sellStatus)
-        : contractStatusFilter === 'holding' ? (o.status === 'completed' && !o.sellStatus)
+        : contractStatusFilter === 'holding' ? (o.status === 'completed' && (!o.sellStatus || o.sellStatus === 'sell_cancelled'))
         : contractStatusFilter === 'selling' ? (o.sellStatus === 'selling')
         : contractStatusFilter === 'sold' ? (o.sellStatus === 'sold')
         : contractStatusFilter === 'cancelled' ? (o.status === 'cancelled')
