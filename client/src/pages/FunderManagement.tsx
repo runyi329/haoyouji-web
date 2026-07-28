@@ -184,7 +184,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   };
   const [participants, setParticipants] = useState<ParticipantForm[]>([]);
   const [participantUserSearch, setParticipantUserSearch] = useState('');
-  const saveParticipantsMutation = trpc.ledger.funderSaveParticipantFullConfig.useMutation();
+  const saveParticipantFormMutation = trpc.ledger.funderSaveParticipantFullConfig.useMutation();
   // 编辑已有订单时加载现有参与者
   const editingOrderId = editingOrder?.id ?? null;
   const { data: existingParticipantsData } = trpc.ledger.funderGetOrderParticipants.useQuery(
@@ -476,7 +476,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       // 保存参与者（如果有）
       const orderId = (vars as any).id;
       if (orderId && participants.length > 0) {
-        saveParticipantsMutation.mutate({
+        saveParticipantFormMutation.mutate({
           orderId: Number(orderId),
           ledgerId,
           participants: participants.map((p, i) => ({
@@ -495,7 +495,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         });
       } else if (orderId && participants.length === 0 && existingParticipantsData?.participants?.length) {
         // 删除所有参与者
-        saveParticipantsMutation.mutate({ orderId: Number(orderId), ledgerId, participants: [] });
+        saveParticipantFormMutation.mutate({ orderId: Number(orderId), ledgerId, participants: [] });
       }
       toast.success('更新成功');
       setShowForm(false);
@@ -1053,6 +1053,27 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
             </button>
           )}
         </div>
+        {/* 合作资金总额 */}
+        {(() => {
+          const activeOrders: any[] = (assetOrders as any[]).filter((o: any) => o.status === 'active');
+          const totalAmount = activeOrders.reduce((sum: number, o: any) => {
+            const amt = parseFloat(o.amount || '0');
+            return sum + (isNaN(amt) ? 0 : amt);
+          }, 0);
+          if (totalAmount <= 0) return null;
+          const fmt = (v: number) => v >= 10000
+            ? (v / 10000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '万'
+            : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          return (
+            <div className="mx-4 mb-3 rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(4px)' }}>
+              <div className="text-[11px] mb-0.5" style={{ color: 'rgba(255,255,255,0.65)' }}>目前合作资金总额</div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-bold tracking-tight" style={{ color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{fmt(totalAmount)}</span>
+                <span className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.7)' }}>USDT</span>
+              </div>
+            </div>
+          );
+        })()}
         {/* 第二行：持币统计 */}
         {(() => {
           const activeOrders: any[] = (assetOrders as any[]).filter((o: any) => o.status === 'active');
