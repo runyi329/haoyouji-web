@@ -833,7 +833,7 @@ const ChipRow: React.FC<ChipRowProps> = ({ item, index, color, accentRgb, onChan
               : (item.pending ? 'rgba(176,106,255,0.2)' : `rgba(${accentRgb},0.2)`)}`,
           }}
           title="成本分摊"
-        >¥</button>
+        >¥{(item.costShares ?? []).length > 0 && <span style={{ marginLeft: 2, fontSize: 9, fontWeight: 700 }}>{(item.costShares ?? []).length}</span>}</button>
 
         {/* 删除 */}
         <button
