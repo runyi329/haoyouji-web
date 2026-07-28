@@ -8664,5 +8664,14 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   ],
   "2026-07-28": [
     { date: "2026-07-27T16:55:39Z", type: "perf", cleanMessage: "InterestManagePage 加 staleTime 30s 减少重复请求; fix: getTagInterestManualLogs u.name 字段名; fix: FeeRow 恢复按需加载避免大量并发" },
+    { date: "2026-07-27T17:42:06Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-28T02:11:43Z", type: "other", cleanMessage: "sync: eth-options-monitor 最新代码（品种切换/时间进度条/中文日期/年份标注/Hooks修复）" },
+    { date: "2026-07-28T02:23:42Z", type: "feat", cleanMessage: "订单参与者管理、UI优化、充值记录修复、Greeks开关、日付选项等" },
+    { date: "2026-07-28T03:19:59Z", type: "fix", cleanMessage: "修复 saveParticipantsMutation 变量名冲突导致的无限循环; feat: TTL合作资金汇总(人民币+数字币占比进度条); feat: 已收利息显示; fix: 权利金计价下拉框; feat: 日付选项; fix: 期权归类数字币" },
+    { date: "2026-07-28T03:31:51Z", type: "other", cleanMessage: "Revert \"fix: 修复 saveParticipantsMutation 变量名冲突导致的无限循环; feat: TTL合作资金汇总(人民币+数字币占比进度条); feat: 已收利息显示; fix: 权利金计价下拉框; feat: 日付选项; fix: 期权归类数字币\"" },
+    { date: "2026-07-28T03:42:33Z", type: "chore", cleanMessage: "触发重新部署恢复服务器" },
+    { date: "2026-07-28T03:57:53Z", type: "fix", cleanMessage: "修复 saveParticipantsMutation 变量名冲突（重命名为 saveParticipantFullConfigMutation）" },
+    { date: "2026-07-28T04:04:04Z", type: "feat", cleanMessage: "恢复 TTL合作资金汇总(人民币+数字币占比进度条); feat: 已收利息显示; feat: 权利金计价下拉框; feat: 日付选项" },
+    { date: "2026-07-28T06:27:54Z", type: "fix", cleanMessage: "持仓中筛选补充正单委卖中但赠单仍持仓的情况（修复YJH 6月5日赠单不显示问题）" },
   ],
 };
