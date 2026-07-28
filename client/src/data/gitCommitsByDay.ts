@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-28
+// 生成时间：2026-07-29
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8680,5 +8680,6 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-28T10:01:22Z", type: "fix", cleanMessage: "5.25定向开关页面说明文字去掉0.75系数描述" },
     { date: "2026-07-28T10:39:33Z", type: "feat", cleanMessage: "5.25定向开关联动正单倍数 - 前端下单预览/提交/订单详情 + 后端确认成交重算均按开关状态动态切换5倍或5.25倍" },
     { date: "2026-07-28T10:56:45Z", type: "fix", cleanMessage: "5.25定向开关补充市价单路径 - 市价单下单时也触发0.25倍赠单给YJH" },
+    { date: "2026-07-28T11:48:47Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
   ],
 };
