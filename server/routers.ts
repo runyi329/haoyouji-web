@@ -14570,7 +14570,21 @@ ${klinesSummary}
           updates.push(`limit_price = '${input.limitPrice.replace(/'/g, '')}' `);
           const newPrice = parseFloat(input.limitPrice);
           if (!isNaN(newPrice) && newPrice > 0) {
-            const recalcQty = (oldAmount * 5.25 / newPrice).toFixed(8);
+            // 52号账本且非赠单：查询 5.25 定向开关状态，开启时用 5 倍，否则用 5.25 倍
+            let recalcMultiplier = 5.25;
+            if (input.ledgerId === 52 && !order.is_gift) {
+              try {
+                const conn525chk = await (await import('./db')).getDbConnection();
+                if (conn525chk) {
+                  const [sw525rows] = await (conn525chk as any).execute(
+                    `SELECT enabled FROM af_525_switch WHERE ledger_id = 52 LIMIT 1`
+                  );
+                  const sw525 = (sw525rows as any[])[0];
+                  if (sw525 && (sw525.enabled === 1 || sw525.enabled === true)) recalcMultiplier = 5;
+                }
+              } catch (e) { /* 查询失败时保安5.25 */ }
+            }
+            const recalcQty = (oldAmount * recalcMultiplier / newPrice).toFixed(8);
             updates.push(`quantity = '${recalcQty}'`);
           }
         } else if (input.quantity !== undefined) {

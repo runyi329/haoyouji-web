@@ -1523,21 +1523,32 @@ function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
               <span className="text-[#1E293B]">{parseFloat(order.amount).toFixed(2)} USDT</span>
             </div>
             {/* 成交价値：移到持仓数量上方 */}
-            <div className="flex justify-between items-center">
-              <span className="text-[#9CA3AF]">成交价値</span>
-              <span className="font-semibold text-[#1A56DB]">
-                {(parseFloat(order.amount) * 5.25).toFixed(2)} USDT
-                <span className="ml-1 text-[11px] font-normal opacity-60">(×5.25)</span>
-              </span>
-            </div>
-            {/* 持仓数量：计算过程小灰字 + 等号和结果同行显示 */}
-            <div className="flex justify-between items-center">
-              <span className="text-[#9CA3AF]">持仓数量</span>
-              <span>
-                <span className="text-[11px] text-[#9CA3AF]">{(parseFloat(order.amount) * 5.25).toFixed(2)} ÷ {parseFloat(order.limitPrice).toLocaleString()} = </span>
-                <span className="text-[#1E293B] font-medium">{parseFloat(order.quantity).toFixed(8).replace(/\.?0+$/, '')} {order.coin}</span>
-              </span>
-            </div>
+            {(() => {
+              const _amt = parseFloat(order.amount);
+              const _qty = parseFloat(order.quantity);
+              const _prc = parseFloat(order.limitPrice);
+              // 从 quantity*price/amount 反推实际倍数（历史订单可能是5.25，开关开启后是5）
+              const _multiplier = (_qty > 0 && _prc > 0 && _amt > 0) ? parseFloat((_qty * _prc / _amt).toFixed(2)) : 5.25;
+              const _tradeVal = _amt * _multiplier;
+              return (
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[#9CA3AF]">成交价値</span>
+                    <span className="font-semibold text-[#1A56DB]">
+                      {_tradeVal.toFixed(2)} USDT
+                      <span className="ml-1 text-[11px] font-normal opacity-60">(×{_multiplier})</span>
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[#9CA3AF]">持仓数量</span>
+                    <span>
+                      <span className="text-[11px] text-[#9CA3AF]">{_tradeVal.toFixed(2)} ÷ {_prc.toLocaleString()} = </span>
+                      <span className="text-[#1E293B] font-medium">{_qty.toFixed(8).replace(/\.?0+$/, '')} {order.coin}</span>
+                    </span>
+                  </div>
+                </>
+              );
+            })()}
           </>
         )}
 
@@ -2261,6 +2272,14 @@ export default function CryptoPrediction() {
   const currentUserId = (meData as any)?.id;
   const canSeeQQ = currentUserId === 870413 || currentUserId === 4957151;
 
+  // 5.25 定向开关：仅 52 号账本查询（其他账本不查，默认开关关闭即 5.25 倍）
+  const { data: switch525Data } = trpc.ledger.af525GetSwitch.useQuery(
+    { ledgerId },
+    { enabled: ledgerId === 52 && isCustomAF, staleTime: 30000, refetchOnWindowFocus: false }
+  );
+  // 当前有效倍数：52号账本开关开启时用 5，其他情况用 5.25
+  const orderMultiplier = (ledgerId === 52 && (switch525Data as any)?.enabled) ? 5 : 5.25;
+
   // 试驾单权限：是否允许下市价单（YJH 和超管始终允许，其他人查后端权限）
   const isYJHOrAdmin = currentUserId === 4957151 || currentUserId === 870413;
   const { data: myMarketPermData } = trpc.ledger.afGetMyMarketOrderPermission.useQuery(
@@ -2775,11 +2794,11 @@ export default function CryptoPrediction() {
                     const price = parseFloat(orderPrice);
                     const hasAmt = !isNaN(amt) && amt > 0;
                     const hasPrice = !isNaN(price) && price > 0;
-                    const qty = hasAmt && hasPrice ? ((amt / price) * 5.25) : null;
+                    const qty = hasAmt && hasPrice ? ((amt / price) * orderMultiplier) : null;
                     return (
                       <>
                         <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-xs font-semibold" style={{ color: '#1A56DB' }}>可买数量（5.25倍收益）</span>
+                          <span className="text-xs font-semibold" style={{ color: '#1A56DB' }}>可买数量（{orderMultiplier}倍收益）</span>
                           <span className="text-sm font-bold" style={{ color: qty !== null ? '#1A2340' : '#9CA3AF' }}>
                             {qty !== null ? `${qty.toFixed(6)} ${coin.name}` : `-- ${coin.name}`}
                           </span>
@@ -2787,7 +2806,7 @@ export default function CryptoPrediction() {
                         <div className="text-xs" style={{ color: '#6B7A9A' }}>
                           {hasAmt && hasPrice ? (
                             <span>
-                              {amt.toLocaleString('en-US', { maximumFractionDigits: 2 })} ÷ {price.toLocaleString()} × 5.25 = <span className="font-semibold" style={{ color: '#1A56DB' }}>{qty!.toFixed(6)} {coin.name}</span>
+                              {amt.toLocaleString('en-US', { maximumFractionDigits: 2 })} ÷ {price.toLocaleString()} × {orderMultiplier} = <span className="font-semibold" style={{ color: '#1A56DB' }}>{qty!.toFixed(6)} {coin.name}</span>
                             </span>
                           ) : hasAmt && !hasPrice ? (
                             <span style={{ color: '#EF4444' }}>请先选择委托价格</span>
@@ -2898,7 +2917,7 @@ export default function CryptoPrediction() {
                     toast.error('市价单最高 3,000 USDT，请改用限价委托');
                     return;
                   }
-                  const qty = ((amt / price) * 5.25).toFixed(8);
+                  const qty = ((amt / price) * orderMultiplier).toFixed(8);
                   submitOrderMutation.mutate({
                     ledgerId,
                     coin: coin.name,
