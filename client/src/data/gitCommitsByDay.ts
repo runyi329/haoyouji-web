@@ -8682,4 +8682,10 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-28T10:56:45Z", type: "fix", cleanMessage: "5.25定向开关补充市价单路径 - 市价单下单时也触发0.25倍赠单给YJH" },
     { date: "2026-07-28T11:48:47Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
   ],
+  "2026-07-29": [
+    { date: "2026-07-28T17:27:18Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-28T23:18:13Z", type: "feat", cleanMessage: "成本分摊按钮显示条数角标，有数据时在¥旁边显示数字" },
+    { date: "2026-07-29T00:04:31Z", type: "feat", cleanMessage: "成本分摊表格横向滑动+列宽自适应+长期选项+订单号列+年化移至末列" },
+    { date: "2026-07-29T00:22:02Z", type: "fix", cleanMessage: "赠单 confirmed_at 改为使用正单时间，修复日期分组错位问题" },
+  ],
 };
