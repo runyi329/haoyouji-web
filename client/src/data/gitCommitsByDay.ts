@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-29
+// 生成时间：2026-07-30
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8688,5 +8688,10 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-29T00:04:31Z", type: "feat", cleanMessage: "成本分摊表格横向滑动+列宽自适应+长期选项+订单号列+年化移至末列" },
     { date: "2026-07-29T00:22:02Z", type: "fix", cleanMessage: "赠单 confirmed_at 改为使用正单时间，修复日期分组错位问题" },
     { date: "2026-07-29T06:32:48Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-29T11:51:40Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-29T15:34:02Z", type: "fix", cleanMessage: "委买 Tab 包含赠单，日期分组行正确统计赠单数量和币种数量" },
+  ],
+  "2026-07-30": [
+    { date: "2026-07-29T16:19:17Z", type: "fix", cleanMessage: "委买 Tab 恢复只显示正单，赠单不出现在委买；修复孤儿赠单 #382 状态" },
   ],
 };
