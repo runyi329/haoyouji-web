@@ -445,7 +445,7 @@ export default function AfOrderManage() {
     // 赠单按自身状态独立过滤，不再嵌套在主单下
     // 全部Tab不含已撤单（已撤单单独一个Tab）
     if (statusFilter === 'all') return true;
-    if (statusFilter === 'pending') return order.status === 'pending';
+    if (statusFilter === 'pending') return order.status === 'pending' && !isGift;
     if (statusFilter === 'selling') return order.sellStatus === 'selling';
     if (statusFilter === 'sold') return order.sellStatus === 'sold';
     if (statusFilter === 'holding') {
@@ -902,7 +902,7 @@ export default function AfOrderManage() {
           <div className="flex rounded p-0.5 gap-0.5" style={{ background: '#f3f4f6' }}>
             {([
               { key: 'all' as const, label: `全部(${(orders as any[])?.filter((o: any) => o.status !== 'cancelled').length ?? 0})` },
-              { key: 'pending' as const, label: `委买(${(orders as any[])?.filter((o: any) => o.status === 'pending').length ?? 0})` },
+              { key: 'pending' as const, label: `委买(${(orders as any[])?.filter((o: any) => { const g = o.isGift === true || o.isGift === 1; return o.status === 'pending' && !g; }).length ?? 0})` },
               { key: 'holding' as const, label: `持仓(${(orders as any[])?.filter((o: any) => o.status === 'completed' && o.sellStatus !== 'sold' && o.sellStatus !== 'selling').length ?? 0})` },
               { key: 'selling' as const, label: `委卖(${(orders as any[])?.filter((o: any) => o.sellStatus === 'selling').length ?? 0})` },
               { key: 'sold' as const, label: `卖出(${(orders as any[])?.filter((o: any) => o.sellStatus === 'sold').length ?? 0})` },
