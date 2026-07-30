@@ -2609,7 +2609,8 @@ export default function LedgerDetailAA({
                                 if (segStartPt && segEndPt) {
                                   const prevSegPts = tag.points.filter((p: any) => p.date < segStart);
                                   const prevSegPnl = prevSegPts.length > 0 ? prevSegPts[prevSegPts.length - 1].pnl : 0;
-                                  const thisSegPnl = segEndPt.pnl - prevSegPnl;
+                                  // 第一段且无前段时，直接用 latestPnl（已按当前有效本金正确计算），避免本金变动导致偏差
+                                  const thisSegPnl = (segNo === 1 && prevSegPnl === 0) ? latestPnl : (segEndPt.pnl - prevSegPnl);
                                   segments.push({
                                     segNo,
                                     startDate: segStartPt.date,
