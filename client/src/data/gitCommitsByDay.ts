@@ -8694,5 +8694,9 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   "2026-07-30": [
     { date: "2026-07-29T16:19:17Z", type: "fix", cleanMessage: "委买 Tab 恢复只显示正单，赠单不出现在委买；修复孤儿赠单 #382 状态" },
     { date: "2026-07-29T17:15:02Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-30T06:30:24Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-30T09:45:43Z", type: "fix", cleanMessage: "弹框本段回报第一段直接用 latestPnl，修复本金变动导致的计算偏差" },
+    { date: "2026-07-30T10:25:13Z", type: "chore", cleanMessage: "trigger redeploy after clearing build cache" },
+    { date: "2026-07-30T10:42:28Z", type: "fix", cleanMessage: "弹框本段回报第一段直接用 latestPnl，修复 startDate 前基准数据导致的偏差" },
   ],
 };
