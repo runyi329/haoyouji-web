@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-07-31
+// 生成时间：2026-08-01
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8704,5 +8704,13 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-07-30T17:26:57Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
     { date: "2026-07-31T06:45:20Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
     { date: "2026-07-31T10:48:05Z", type: "feat", cleanMessage: "手动调账记录支持编辑备注（多条、自动高度输入框）" },
+    { date: "2026-07-31T11:50:32Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-31T12:25:22Z", type: "fix", cleanMessage: "概览表格合计行名称列加 sticky 冻结" },
+    { date: "2026-07-31T12:37:24Z", type: "fix", cleanMessage: "概览表格第一列改为 borderRight 冻结，合计行同步修复" },
+    { date: "2026-07-31T15:02:03Z", type: "fix", cleanMessage: "概览表格重构为左右分栏布局，实现名称列和合计行真正冻结" },
+    { date: "2026-07-31T15:26:55Z", type: "fix", cleanMessage: "概览表格右侧列改为max-content宽度，内容不换行自动撑开" },
+  ],
+  "2026-08-01": [
+    { date: "2026-07-31T17:32:44Z", type: "fix", cleanMessage: "实时价值弹窗盈亏总和与概览合计保持一致（useRef方案）" },
   ],
 };
