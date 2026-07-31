@@ -1503,6 +1503,10 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [userSearchText, setUserSearchText] = useState('');
   const [showUserDropdown, setShowUserDropdown] = useState(false);
+  // 用户选择历史记忆（localStorage，按最近使用排序）
+  const USER_HISTORY_KEY = `finance_order_user_history_${ledgerId}`;
+  const getUserHistory = (): number[] => { try { return JSON.parse(localStorage.getItem(USER_HISTORY_KEY) || '[]'); } catch { return []; } };
+  const recordUserHistory = (userId: number) => { const h = getUserHistory().filter(id => id !== userId); localStorage.setItem(USER_HISTORY_KEY, JSON.stringify([userId, ...h].slice(0, 20))); };
   const [tagInput, setTagInput] = useState('');
   // 列表筛选下拉框
   const [showListDropdown, setShowListDropdown] = useState(false);
@@ -1786,12 +1790,23 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     })
   );
 
-  const filteredMembers = realMembers.filter((m: any) => {
-    // 右侧借方页面不显示资方(funder)角色的用户
-    if (m.role === 'funder') return false;
-    const searchStr = ((m.username || '') + ' ' + (m.realName || '') + ' ' + (m.nickname || '')).toLowerCase();
-    return searchStr.includes(userSearchText.toLowerCase());
-  });
+  const filteredMembers = (() => {
+    const history = getUserHistory();
+    return realMembers
+      .filter((m: any) => {
+        if (m.role === 'funder') return false;
+        const searchStr = ((m.username || '') + ' ' + (m.realName || '') + ' ' + (m.nickname || '')).toLowerCase();
+        return searchStr.includes(userSearchText.toLowerCase());
+      })
+      .sort((a: any, b: any) => {
+        const ai = history.indexOf(a.userId);
+        const bi = history.indexOf(b.userId);
+        if (ai === -1 && bi === -1) return 0;
+        if (ai === -1) return 1;
+        if (bi === -1) return -1;
+        return ai - bi;
+      });
+  })();
 
   const selectedUser = realMembers.find((m: any) => m.userId === selectedUserId);
 
@@ -2395,7 +2410,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                         ) : filteredMembers.map((m: any) => (
                           <button
                             key={m.userId}
-                            onClick={() => { setSelectedUserId(m.userId); setUserSearchText(m.username || ''); setShowUserDropdown(false); }}
+                            onClick={() => { setSelectedUserId(m.userId); setUserSearchText(m.username || ''); setShowUserDropdown(false); recordUserHistory(m.userId); }}
                             className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 text-left"
                           >
                             <div

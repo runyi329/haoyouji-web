@@ -16203,7 +16203,7 @@ ${klinesSummary}
         // 附带实时价格
         const { getLatestPrice } = await import('./price-scanner');
         const livePrices: Record<string, number> = {};
-        for (const coin of ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'ASTER', 'SUI', 'SKHYNIX']) {
+        for (const coin of ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'ASTER', 'SUI', 'SKHYNIX', 'BZ']) {
           const p = getLatestPrice(coin);
           if (p) livePrices[coin] = p;
         }
@@ -16513,7 +16513,7 @@ ${klinesSummary}
       .input(z.object({
         ledgerId: z.number(),
         userId: z.number(),
-        coin: z.enum(['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'SKHYNIX']),
+        coin: z.enum(['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'SKHYNIX', 'BZ']),
         amount: z.string(),
         buyPrice: z.string().optional(),
         buyDate: z.string().optional(),
@@ -17273,7 +17273,7 @@ ${klinesSummary}
         // 附带实时价格（全部10种币）
         const { getLatestPrice } = await import('./price-scanner');
         const livePrices: Record<string, number> = {};
-        for (const coin of ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'ASTER', 'SUI', 'SKHYNIX']) {
+        for (const coin of ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'ASTER', 'SUI', 'SKHYNIX', 'BZ']) {
           const p = getLatestPrice(coin);
           if (p) livePrices[coin] = p;
         }
@@ -17285,7 +17285,7 @@ ${klinesSummary}
       .input(z.object({
         ledgerId: z.number(),
         userId: z.number(),
-        coin: z.enum(['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'SKHYNIX']),
+        coin: z.enum(['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'SKHYNIX', 'BZ']),
         amount: z.string(),
         amountCurrency: z.string().optional(),
         buyPrice: z.string().optional(),
@@ -17394,7 +17394,7 @@ ${klinesSummary}
         id: z.number(),
         ledgerId: z.number(),
         userId: z.number().optional(),
-        coin: z.enum(['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'SKHYNIX']).optional(),
+        coin: z.enum(['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'SKHYNIX', 'BZ']).optional(),
         amount: z.string().optional(),
         amountCurrency: z.string().optional(),
         buyPrice: z.string().optional(),
