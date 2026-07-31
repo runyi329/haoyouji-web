@@ -2775,7 +2775,7 @@ export default function LedgerDetailAA({
                 {visibleTags.length > 0 && (
                   <>
                     {/* 合计-名称 */}
-                    <div className="px-1 py-2 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 0 16px' }}>
+                    <div className="px-1 py-2 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 0 16px', position: 'sticky', left: 0, zIndex: 2 }}>
                       <span style={{ fontSize: 12, fontWeight: 600, color: '#9E9E9E' }}>合计</span>
                     </div>
                     {/* 站线要用 background 而非 border，这样才能覆盖 borderTop */}
