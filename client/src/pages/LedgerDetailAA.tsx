@@ -2383,9 +2383,9 @@ export default function LedgerDetailAA({
             // 名称列 sticky 固定左边，前4列平分屏幕宽度，其余列溢出到右侧
             // 列定义：名称(90px) | 今日(1fr) | 回报(1fr) | 周期(1fr) | 金额(70px溢出) | 年化(64px溢出) | 分红(64px溢出) | 占比(52px最右溢出)
             // 右侧滚动区 grid 列定义（去掉第一列 104px 名称列）
-            const rightGridCols = 'minmax(0,1fr) 1px minmax(0,1fr) 1px minmax(0,1fr) 1px minmax(64px,max-content) 1px minmax(64px,max-content) 1px 64px 1px 52px';
-            // 右侧滚动区最小宽度：前3个1fr列 + 分隔线 + 后5列固定宽度
-            const rightMinWidth = 'calc(100% - 104px + 253px)';
+            const rightGridCols = 'minmax(52px,max-content) 1px minmax(52px,max-content) 1px minmax(52px,max-content) 1px minmax(64px,max-content) 1px minmax(64px,max-content) 1px 64px 1px 52px';
+            // 右侧滚动区最小宽度：内容自动撑开，不换行
+            const rightMinWidth = 'max-content';
             // 列标题日期：取所有 tag 中最新一条数据的日期（不管是不是当天）
             const _latestDataDate = visibleTags.reduce((maxDate, t) => {
               const d = t.points[t.points.length - 1]?.date ?? '';
