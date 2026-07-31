@@ -2382,7 +2382,10 @@ export default function LedgerDetailAA({
             // 横向可滑动概览表：名称(sticky)/今日/回报/周期 第一屏平分；金额/年化/分红/占比全部溢出右侧可滑动
             // 名称列 sticky 固定左边，前4列平分屏幕宽度，其余列溢出到右侧
             // 列定义：名称(90px) | 今日(1fr) | 回报(1fr) | 周期(1fr) | 金额(70px溢出) | 年化(64px溢出) | 分红(64px溢出) | 占比(52px最右溢出)
-            const gridCols = '104px minmax(0,1fr) 1px minmax(0,1fr) 1px minmax(0,1fr) 1px minmax(64px,max-content) 1px minmax(64px,max-content) 1px 64px 1px 52px';
+            // 右侧滚动区 grid 列定义（去掉第一列 104px 名称列）
+            const rightGridCols = 'minmax(0,1fr) 1px minmax(0,1fr) 1px minmax(0,1fr) 1px minmax(64px,max-content) 1px minmax(64px,max-content) 1px 64px 1px 52px';
+            // 右侧滚动区最小宽度：前3个1fr列 + 分隔线 + 后5列固定宽度
+            const rightMinWidth = 'calc(100% - 104px + 253px)';
             // 列标题日期：取所有 tag 中最新一条数据的日期（不管是不是当天）
             const _latestDataDate = visibleTags.reduce((maxDate, t) => {
               const d = t.points[t.points.length - 1]?.date ?? '';
@@ -2394,7 +2397,6 @@ export default function LedgerDetailAA({
             // 内容宽度：前4列占满屏幕，金额/年化/分红/占比全部溢出到右侧
             // 前4列占满屏幕：104px名称 + 3个1px分隔线 + 3个1fr内容列 = 100%
             // 溢出列：金额(70px)+分隔(1px)+年化(64px)+分隔(1px)+分红(64px)+分隔(1px)+占比(52px) = 253px
-            const overviewInnerWidth = 'calc(100% + 253px)';
             // 表头行高与数据行一致：py-2
             const cellCls = 'px-1 py-2 font-medium text-center flex items-center justify-center';
             const dataCellCls = 'px-1 py-2 text-center flex items-center justify-center';
@@ -2408,36 +2410,70 @@ export default function LedgerDetailAA({
             const sortHeaderCls = cellCls + ' cursor-pointer select-none';
             return (
               <>
-              {/* 表头+数据行共用一个横向滚动容器，横向原生同步零延迟 */}
-              <div
-                style={{
-                  overflowX: 'auto',
-                  WebkitOverflowScrolling: 'touch',
-                  scrollbarWidth: 'none',
-                  msOverflowStyle: 'none',
-                  touchAction: 'pan-x pan-y',
-                }}
-              >
-              {/* 表头+数据行共用同一个grid容器，列宽统一计算；去掉中间层让sticky对滚动容器生效 */}
-              <div style={{ display: 'grid', gridTemplateColumns: gridCols, backgroundColor: '#fff', minWidth: overviewInnerWidth }}>
-                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5', borderRight: '1px solid #F0F0F0', position: 'sticky', left: 0, zIndex: 2, background: '#fff' }}><span style={{ color: '#9E9E9E', fontSize: 12 }}>名称</span></div>
-                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }}><span style={{ color: '#9E9E9E' }}>{todayColTitle}</span></div>
-                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('pnl')}><span style={{ color: overviewSort?.col === 'pnl' ? '#1565C0' : '#9E9E9E' }}>回报￥</span><SortArrow col="pnl" /></div>
-                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('days')}><span style={{ color: overviewSort?.col === 'days' ? '#1565C0' : '#9E9E9E' }}>周期</span><SortArrow col="days" /></div>
-                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('amount')}><span style={{ color: overviewSort?.col === 'amount' ? '#1565C0' : '#9E9E9E' }}>金额￥</span><SortArrow col="amount" /></div>
-                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('annualized')}><span style={{ color: overviewSort?.col === 'annualized' ? '#1565C0' : '#9E9E9E' }}>年化</span><SortArrow col="annualized" /></div>
-                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('dividend')}>
-                  <span style={{ color: '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px' }} onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`); }}>分红￥</span><SortArrow col="dividend" />
+              {/* 左右分栏布局：左侧固定104px名称列 + 右侧横向滚动区 */}
+              <div style={{ display: 'flex', alignItems: 'stretch' }}>
+                {/* ── 左侧固定名称列 ── */}
+                <div style={{ width: 104, flexShrink: 0, borderRight: '1px solid #F0F0F0', position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column' }}>
+                  {/* 表头名称格 */}
+                  <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5', background: '#fff', flex: '0 0 auto' }}>
+                    <span style={{ color: '#9E9E9E', fontSize: 12 }}>名称</span>
+                  </div>
+                  {/* 数据行名称格 */}
+                  {sortedTagData.map(({ tag, isLast }) => {
+                    const rowBorder2 = isLast ? 'none' : '1px solid #F9F9F9';
+                    const tagAlias2 = (initialBalancesData?.balances as any)?.[`${tag.name}__alias`] ?? '';
+                    const displayName2 = tagAlias2 || tag.name;
+                    return (
+                      <div key={`${tag.name}-name-left`} className="py-2 flex items-center justify-start gap-1" style={{ borderBottom: rowBorder2, flex: '0 0 auto', paddingLeft: 6, paddingRight: 2, overflow: 'hidden' }}>
+                        <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
+                        <span
+                          style={{ fontSize: 13, fontWeight: 500, color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
+                          onPointerDown={(e) => {
+                            let fired = false;
+                            const t = setTimeout(() => {
+                              fired = true;
+                              e.stopPropagation();
+                              setAliasEditTag(tag.name);
+                              setAliasEditValue(tagAlias2);
+                            }, 500);
+                            const cancel = () => {
+                              clearTimeout(t);
+                              if (!fired) setAliasInfoTag(tag.name);
+                            };
+                            (e.target as HTMLElement).addEventListener('pointerup', cancel, { once: true });
+                            (e.target as HTMLElement).addEventListener('pointermove', () => clearTimeout(t), { once: true });
+                          }}
+                        >{displayName2}</span>
+                      </div>
+                    );
+                  })}
+                  {/* 合计名称格 */}
+                  {visibleTags.length > 0 && (
+                    <div className="px-1 py-2 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 0 16px', flex: '0 0 auto' }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: '#9E9E9E' }}>合计</span>
+                    </div>
+                  )}
                 </div>
-                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
-                <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('ratio')}><span style={{ color: overviewSort?.col === 'ratio' ? '#1565C0' : '#9E9E9E' }}>占比</span><SortArrow col="ratio" /></div>
-              {/* 数据行（与表头同一grid容器，无需新开grid） */}
-                {/* 数据行 */}
+                {/* ── 右侧横向滚动区 ── */}
+                <div style={{ flex: 1, overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none', touchAction: 'pan-x pan-y' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: rightGridCols, backgroundColor: '#fff', minWidth: rightMinWidth }}>
+                  {/* 表头右侧各列 */}
+                  <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }}><span style={{ color: '#9E9E9E' }}>{todayColTitle}</span></div>
+                  <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                  <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('pnl')}><span style={{ color: overviewSort?.col === 'pnl' ? '#1565C0' : '#9E9E9E' }}>回报￥</span><SortArrow col="pnl" /></div>
+                  <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                  <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('days')}><span style={{ color: overviewSort?.col === 'days' ? '#1565C0' : '#9E9E9E' }}>周期</span><SortArrow col="days" /></div>
+                  <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                  <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('amount')}><span style={{ color: overviewSort?.col === 'amount' ? '#1565C0' : '#9E9E9E' }}>金额￥</span><SortArrow col="amount" /></div>
+                  <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                  <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('annualized')}><span style={{ color: overviewSort?.col === 'annualized' ? '#1565C0' : '#9E9E9E' }}>年化</span><SortArrow col="annualized" /></div>
+                  <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                  <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('dividend')}>
+                    <span style={{ color: '#1565C0', textDecoration: 'underline', textDecorationStyle: 'dashed', textUnderlineOffset: '2px' }} onClick={(e) => { e.stopPropagation(); setLocation(`/ledger/${ledgerId}/aa-dividend-manage${viewAsUserId ? `?viewAs=${viewAsUserId}` : ''}`); }}>分红￥</span><SortArrow col="dividend" />
+                  </div>
+                  <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                  <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('ratio')}><span style={{ color: overviewSort?.col === 'ratio' ? '#1565C0' : '#9E9E9E' }}>占比</span><SortArrow col="ratio" /></div>
+                  {/* 数据行右侧各列 */}
                 {sortedTagData.map(({ tag, days, latestPnl, latestDate, todayPnl, prevPnl, latestBalance, prevBalance, annualized, divAmt, isLast, isPaused, firstDate, endDate }) => {
                       // 判断是否需要灰色：北京时间交易日 15:00后且最新数据不是今天
                       const _nowBJ = new Date(Date.now() + 8 * 3600 * 1000);
@@ -2453,38 +2489,6 @@ export default function LedgerDetailAA({
                   const rowBorder = isLast ? 'none' : '1px solid #F9F9F9';
                   return (
                     <>
-                      {/* 名称 */}
-                      {(() => {
-                        const tagAlias = (initialBalancesData?.balances as any)?.[`${tag.name}__alias`] ?? '';
-                        const displayName = tagAlias || tag.name;
-                        const truncated = displayName;
-                        return (
-                          <div key={`${tag.name}-name`} className="py-2 flex items-center justify-start gap-1" style={{ borderBottom: rowBorder, borderRight: '1px solid #F0F0F0', position: 'sticky', left: 0, zIndex: 1, backgroundColor: '#fff', paddingLeft: 6, paddingRight: 2, overflow: 'hidden' }}>
-                            <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
-                            <span
-                              style={{ fontSize: 13, fontWeight: 500, color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
-                              onPointerDown={(e) => {
-                                let fired = false;
-                                const t = setTimeout(() => {
-                                  fired = true;
-                                  e.stopPropagation();
-                                  setAliasEditTag(tag.name);
-                                  setAliasEditValue(tagAlias);
-                                }, 500);
-                                const cancel = () => {
-                                  clearTimeout(t);
-                                  if (!fired) {
-                                    // 单击：显示信息提示框
-                                    setAliasInfoTag(tag.name);
-                                  }
-                                };
-                                (e.target as HTMLElement).addEventListener('pointerup', cancel, { once: true });
-                                (e.target as HTMLElement).addEventListener('pointermove', () => clearTimeout(t), { once: true });
-                              }}
-                            >{truncated}</span>
-                          </div>
-                        );
-                      })()}
                       {/* 今日变动：已更新彩色，未更新灰色显示数字；可点击展示计算过程 */}
                       {(() => {
                         const _todayPnlColor = !_showTodayPnl || todayPnl === null ? '#BDBDBD'
@@ -2769,15 +2773,10 @@ export default function LedgerDetailAA({
                     </>
                   );
                 })}
-                {/* 汇总行 */}
+                  {/* 汇总行右侧各列 */}
                 {visibleTags.length > 0 && (
                   <>
-                    {/* 合计-名称 */}
-                    <div className="px-1 py-2 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', borderRight: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 0 16px', position: 'sticky', left: 0, zIndex: 2 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: '#9E9E9E' }}>合计</span>
-                    </div>
-
-                    {/* 今日变动合计（第2列，对应表头"当天X/X"）*/}
+                    {/* 今日变动合计（第1列，对应表头"当天X/X"）*/}
                     {(() => {
                       // 只统计有彩色数字的标签：已更新（latestDate === _latestDataDate）且 todayPnl 非零非空
                       const updatedTagsData = tagData.filter(td => td.latestDate === _latestDataDate && td.todayPnl !== null && td.todayPnl !== 0);
@@ -2860,7 +2859,8 @@ export default function LedgerDetailAA({
                     </div>
                   </>
                 )}
-              </div>
+                </div>
+                </div>
               </div>
               </>
             );
