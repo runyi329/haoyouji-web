@@ -2382,7 +2382,7 @@ export default function LedgerDetailAA({
             // 横向可滑动概览表：名称(sticky)/今日/回报/周期 第一屏平分；金额/年化/分红/占比全部溢出右侧可滑动
             // 名称列 sticky 固定左边，前4列平分屏幕宽度，其余列溢出到右侧
             // 列定义：名称(90px) | 今日(1fr) | 回报(1fr) | 周期(1fr) | 金额(70px溢出) | 年化(64px溢出) | 分红(64px溢出) | 占比(52px最右溢出)
-            const gridCols = '104px 1px minmax(0,1fr) 1px minmax(0,1fr) 1px minmax(0,1fr) 1px minmax(64px,max-content) 1px minmax(64px,max-content) 1px 64px 1px 52px';
+            const gridCols = '104px minmax(0,1fr) 1px minmax(0,1fr) 1px minmax(0,1fr) 1px minmax(64px,max-content) 1px minmax(64px,max-content) 1px 64px 1px 52px';
             // 列标题日期：取所有 tag 中最新一条数据的日期（不管是不是当天）
             const _latestDataDate = visibleTags.reduce((maxDate, t) => {
               const d = t.points[t.points.length - 1]?.date ?? '';
@@ -2420,8 +2420,7 @@ export default function LedgerDetailAA({
               >
               {/* 表头+数据行共用同一个grid容器，列宽统一计算；去掉中间层让sticky对滚动容器生效 */}
               <div style={{ display: 'grid', gridTemplateColumns: gridCols, backgroundColor: '#fff', minWidth: overviewInnerWidth }}>
-                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5', position: 'sticky', left: 0, zIndex: 2, background: '#fff' }}><span style={{ color: '#9E9E9E', fontSize: 12 }}>名称</span></div>
-                <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
+                <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5', borderRight: '1px solid #F0F0F0', position: 'sticky', left: 0, zIndex: 2, background: '#fff' }}><span style={{ color: '#9E9E9E', fontSize: 12 }}>名称</span></div>
                 <div className={cellCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }}><span style={{ color: '#9E9E9E' }}>{todayColTitle}</span></div>
                 <div style={{ ...dividerStyle, borderBottom: '1px solid #F5F5F5' }} />
                 <div className={sortHeaderCls} style={{ borderBottom: '1px solid #F5F5F5', fontSize: 12 }} onClick={() => handleOverviewSort('pnl')}><span style={{ color: overviewSort?.col === 'pnl' ? '#1565C0' : '#9E9E9E' }}>回报￥</span><SortArrow col="pnl" /></div>
@@ -2460,7 +2459,7 @@ export default function LedgerDetailAA({
                         const displayName = tagAlias || tag.name;
                         const truncated = displayName;
                         return (
-                          <div key={`${tag.name}-name`} className="py-2 flex items-center justify-start gap-1" style={{ borderBottom: rowBorder, position: 'sticky', left: 0, zIndex: 1, backgroundColor: '#fff', paddingLeft: 6, paddingRight: 2, overflow: 'hidden' }}>
+                          <div key={`${tag.name}-name`} className="py-2 flex items-center justify-start gap-1" style={{ borderBottom: rowBorder, borderRight: '1px solid #F0F0F0', position: 'sticky', left: 0, zIndex: 1, backgroundColor: '#fff', paddingLeft: 6, paddingRight: 2, overflow: 'hidden' }}>
                             <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', backgroundColor: tag.color, flexShrink: 0 }} />
                             <span
                               style={{ fontSize: 13, fontWeight: 500, color: '#1A1A1A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0, cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dashed', textDecorationColor: '#999', textUnderlineOffset: '2px' }}
@@ -2486,7 +2485,6 @@ export default function LedgerDetailAA({
                           </div>
                         );
                       })()}
-                      <div style={{ ...dividerStyle, borderBottom: rowBorder }} />
                       {/* 今日变动：已更新彩色，未更新灰色显示数字；可点击展示计算过程 */}
                       {(() => {
                         const _todayPnlColor = !_showTodayPnl || todayPnl === null ? '#BDBDBD'
@@ -2775,11 +2773,10 @@ export default function LedgerDetailAA({
                 {visibleTags.length > 0 && (
                   <>
                     {/* 合计-名称 */}
-                    <div className="px-1 py-2 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 0 16px', position: 'sticky', left: 0, zIndex: 2 }}>
+                    <div className="px-1 py-2 flex items-center justify-center" style={{ borderTop: '1px solid #F0F0F0', borderRight: '1px solid #F0F0F0', backgroundColor: '#FAFAFA', borderRadius: '0 0 0 16px', position: 'sticky', left: 0, zIndex: 2 }}>
                       <span style={{ fontSize: 12, fontWeight: 600, color: '#9E9E9E' }}>合计</span>
                     </div>
-                    {/* 站线要用 background 而非 border，这样才能覆盖 borderTop */}
-                    <div style={{ backgroundColor: '#E0E0E0', width: 1, borderTop: '1px solid #F0F0F0' }} />
+
                     {/* 今日变动合计（第2列，对应表头"当天X/X"）*/}
                     {(() => {
                       // 只统计有彩色数字的标签：已更新（latestDate === _latestDataDate）且 todayPnl 非零非空
