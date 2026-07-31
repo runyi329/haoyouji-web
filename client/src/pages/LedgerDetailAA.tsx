@@ -4300,7 +4300,7 @@ export default function LedgerDetailAA({
                         <span className="ml-1 text-xs font-normal text-gray-400">(客户投入的本金基数)</span>
                       </div>
                       <div className="font-semibold text-gray-900">② 盈亏总和
-                        <span className={`ml-2 font-mono ${overviewTotalPnlRef.current >= 0 ? 'text-red-600' : 'text-green-600'}`}>{fmt(overviewTotalPnlRef.current)}</span>
+                        <span className="ml-2 font-mono" style={{ color: overviewTotalPnlRef.current >= 0 ? '#D32F2F' : '#388E3C' }}>{fmt(overviewTotalPnlRef.current)}</span>
                         <span className="ml-1 text-xs font-normal text-gray-400">(全部标签客户盈亏加总)</span>
                       </div>
                       <div className="font-semibold text-gray-900">③ 已分红总金额
