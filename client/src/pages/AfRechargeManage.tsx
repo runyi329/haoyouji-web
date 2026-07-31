@@ -55,6 +55,10 @@ export default function AfRechargeManage() {
   // ===== 撤回相关状态 =====
   const [showRevokeDialog, setShowRevokeDialog] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<{ type: 'order'; orderId: number; amount: number } | { type: 'history'; historyId: number; amount: number; currency: string } | null>(null);
+  // ===== 编辑备注相关状态 =====
+  const [showNoteDialog, setShowNoteDialog] = useState(false);
+  const [noteTarget, setNoteTarget] = useState<{ historyId?: number; manualId?: number; currentNote: string } | null>(null);
+  const [noteLines, setNoteLines] = useState<string[]>(['']);
 
   // ===== 充值监控 Tab 状态 =====
   const [showFixLogs, setShowFixLogs] = useState(false);
@@ -198,6 +202,17 @@ export default function AfRechargeManage() {
       refetchAdjGlobal();
     },
     onError: (e: any) => toast.error(e.message || '撤回失败'),
+  });
+  const updateNoteMutation = trpc.recharge.adminUpdateNote.useMutation({
+    onSuccess: () => {
+      toast.success('备注已更新');
+      setShowNoteDialog(false);
+      setNoteTarget(null);
+      setNoteLines(['']);
+      refetchAdjHistory();
+      refetchAdjGlobal();
+    },
+    onError: (e: any) => toast.error(e.message || '更新失败'),
   });
   const fixScannerMutation = trpc.recharge.adminFixScanner.useMutation();
   const triggerScanMutation = trpc.recharge.adminTriggerScan.useMutation();
@@ -1096,6 +1111,15 @@ export default function AfRechargeManage() {
                                 className="text-[10px] text-purple-500 border border-purple-200 px-2 py-0.5 rounded-full hover:bg-purple-50"
                               >撤回</button>
                             )}
+                            <button
+                              onClick={() => {
+                                const raw = String(r.note ?? '').replace(/\[.*?\]/g, '').trim();
+                                setNoteTarget({ historyId: r.id, currentNote: raw });
+                                setNoteLines(raw ? raw.split('\n') : ['']);
+                                setShowNoteDialog(true);
+                              }}
+                              className="text-[10px] text-blue-500 border border-blue-200 px-2 py-0.5 rounded-full hover:bg-blue-50"
+                            >编辑备注</button>
                           </div>
                         </div>
                       </div>
@@ -1141,6 +1165,15 @@ export default function AfRechargeManage() {
                               className="text-[10px] text-purple-500 border border-purple-200 px-2 py-0.5 rounded-full hover:bg-purple-50"
                             >撤回</button>
                           )}
+                          <button
+                            onClick={() => {
+                              const raw = String(r.note ?? '').replace(/\[.*?\]/g, '').trim();
+                              setNoteTarget({ historyId: r.id, currentNote: raw });
+                              setNoteLines(raw ? raw.split('\n') : ['']);
+                              setShowNoteDialog(true);
+                            }}
+                            className="text-[10px] text-blue-500 border border-blue-200 px-2 py-0.5 rounded-full hover:bg-blue-50"
+                          >编辑备注</button>
                         </div>
                       </div>
                     </div>
@@ -1496,6 +1529,62 @@ export default function AfRechargeManage() {
             >
               取消
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ===== 编辑备注弹窗 ===== */}
+      {showNoteDialog && noteTarget && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end justify-center z-50">
+          <div className="bg-white rounded-t-2xl w-full max-w-lg p-5 pb-8">
+            <h3 className="text-[15px] font-bold text-gray-900 mb-3">编辑备注</h3>
+            <div className="space-y-2 mb-3">
+              {noteLines.map((line, idx) => (
+                <textarea
+                  key={idx}
+                  value={line}
+                  onChange={e => {
+                    const next = [...noteLines];
+                    next[idx] = e.target.value;
+                    setNoteLines(next);
+                    // 自动高度
+                    e.target.style.height = 'auto';
+                    e.target.style.height = e.target.scrollHeight + 'px';
+                  }}
+                  onInput={e => {
+                    const t = e.target as HTMLTextAreaElement;
+                    t.style.height = 'auto';
+                    t.style.height = t.scrollHeight + 'px';
+                  }}
+                  placeholder={`备注第 ${idx + 1} 条`}
+                  rows={1}
+                  className="w-full resize-none overflow-hidden border border-gray-200 rounded-lg px-3 py-2 text-[13px] text-gray-800 focus:outline-none focus:border-blue-400"
+                  style={{ minHeight: '38px' }}
+                />
+              ))}
+            </div>
+            <button
+              onClick={() => setNoteLines(prev => [...prev, ''])}
+              className="text-[12px] text-blue-500 mb-4 flex items-center gap-1"
+            >+ 添加一条备注</button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowNoteDialog(false); setNoteTarget(null); setNoteLines(['']); }}
+                className="flex-1 py-2.5 rounded-xl border border-gray-200 text-[13px] text-gray-600"
+              >取消</button>
+              <button
+                onClick={() => {
+                  if (!noteTarget) return;
+                  updateNoteMutation.mutate({
+                    historyId: noteTarget.historyId,
+                    manualId: noteTarget.manualId,
+                    notes: noteLines,
+                  });
+                }}
+                disabled={updateNoteMutation.isPending}
+                className="flex-1 py-2.5 rounded-xl bg-blue-500 text-white text-[13px] font-medium disabled:opacity-50"
+              >{updateNoteMutation.isPending ? '保存中...' : '保存'}</button>
+            </div>
           </div>
         </div>
       )}

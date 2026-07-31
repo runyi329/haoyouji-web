@@ -1900,3 +1900,48 @@ export async function adminRevokeBalanceHistory(
 
   return { success: true, userId, amount, currency, mode };
 }
+
+// ── 编辑备注（不涉及金额，只更新 description/note 字段）────────────────────────
+export async function adminUpdateNote(
+  adminId: number,
+  historyId: number | undefined,
+  manualId: number | undefined,
+  notes: string[]
+) {
+  const conn = await getDbConnection();
+  if (!conn) throw new Error('数据库连接失败');
+  const pool = conn as any;
+  const combined = notes.filter((n: string) => n.trim()).join('\n');
+  const suffix = `[编辑人:${adminId}]`;
+  if (historyId) {
+    const [[row]] = await pool.execute(
+      `SELECT id FROM balance_history WHERE id = ? LIMIT 1`,
+      [historyId]
+    ) as any[];
+    if (!row) throw new Error('流水记录不存在');
+    await pool.execute(
+      `UPDATE balance_history SET description = ? WHERE id = ?`,
+      [combined ? `${combined} ${suffix}` : null, historyId]
+    );
+  }
+  if (manualId) {
+    const [[row]] = await pool.execute(
+      `SELECT id FROM af_manual_balances WHERE id = ? LIMIT 1`,
+      [manualId]
+    ) as any[];
+    if (!row) throw new Error('调账记录不存在');
+    const [[orig]] = await pool.execute(
+      `SELECT note FROM af_manual_balances WHERE id = ? LIMIT 1`,
+      [manualId]
+    ) as any[];
+    const origNote = String(orig?.note ?? '');
+    const tagMatch = origNote.match(/^(\[[^\]]+\])+/);
+    const prefix = tagMatch ? tagMatch[0] : '';
+    const newNote = `${prefix}${combined ? combined + ' ' + suffix : ''}`.trim();
+    await pool.execute(
+      `UPDATE af_manual_balances SET note = ? WHERE id = ?`,
+      [newNote, manualId]
+    );
+  }
+  return { success: true };
+}

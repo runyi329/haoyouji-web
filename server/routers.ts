@@ -2168,6 +2168,19 @@ ${klinesSummary}
         }
         return await dbRecharge.adminRevokeBalanceHistory(ctx.user.id, input.historyId, input.mode);
       }),
+    // 编辑备注（不涉及金额，只更新 description/note 字段）
+    adminUpdateNote: protectedProcedure
+      .input(z.object({
+        historyId: z.number().optional(),
+        manualId: z.number().optional(),
+        notes: z.array(z.string()),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (ctx.user.role !== 'super_admin' && ctx.user.role !== 'admin') {
+          throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
+        }
+        return await dbRecharge.adminUpdateNote(ctx.user.id, input.historyId, input.manualId, input.notes);
+      }),
   }),
   // 卡券系统
   coupon: router({
