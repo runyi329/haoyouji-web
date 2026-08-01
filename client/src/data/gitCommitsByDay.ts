@@ -8720,5 +8720,13 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-08-01T02:10:42Z", type: "fix", cleanMessage: "人员视图缺口计算 - 钱包余额为null时也正确显示缺口" },
     { date: "2026-08-01T02:45:34Z", type: "fix", cleanMessage: "融资付息人员视图缺口计算 - walletBal为null时也正确显示缺口，并补充融资用户到余额查询" },
     { date: "2026-08-01T02:54:07Z", type: "fix", cleanMessage: "强制重新打包AfFeeDetail - 融资付息缺口计算修复" },
+    { date: "2026-08-01T06:30:40Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-08-01T09:40:54Z", type: "feat", cleanMessage: "订单列表显示进行中/已结束笔数；BZ布伦特原油加入价格扫描(Yahoo BZ=F)" },
+    { date: "2026-08-01T10:12:04Z", type: "fix", cleanMessage: "BZ布伦特原油价格 - 改用新浪财经nf_OIL_Brent(GBK编码)，Yahoo兜底" },
+    { date: "2026-08-01T10:25:13Z", type: "fix", cleanMessage: "BZ布伦特原油改用新浪财经hf_OIL(美元计价，实时可用)" },
+    { date: "2026-08-01T10:37:25Z", type: "fix", cleanMessage: "共享订单缺口汇总CNY订单汇率折算修复（FunderOrderCard + FunderOrderCardV2，使用实时cnyRate）" },
+    { date: "2026-08-01T10:47:10Z", type: "perf", cleanMessage: "git fetch 加镜像加速（gh-proxy.com），避免国内服务器直连GitHub超时导致部署变慢" },
+    { date: "2026-08-01T10:59:06Z", type: "fix", cleanMessage: "CNY订单约等于U显示改用实时cnyRate，修复硬编码汇率7的问题" },
+    { date: "2026-08-01T11:06:02Z", type: "fix", cleanMessage: "部署脚本改为只重启root PM2进程，清除ubuntu双进程抢端口问题" },
   ],
 };
