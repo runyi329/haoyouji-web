@@ -91,6 +91,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     principalLentOut: false,
     brokerName: '',
     brokerAccount: '',
+    orderFillStatus: 'filled' as 'pending' | 'filled',
   });
   // 期权专属表单数据
   const [optionFormData, setOptionFormData] = useState({
@@ -799,6 +800,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       principalLentOut: !!(order.principal_lent_out),
       brokerName: order.broker_name || '',
       brokerAccount: order.broker_account || '',
+      orderFillStatus: (order.order_fill_status === 'pending' ? 'pending' : 'filled') as 'pending' | 'filled',
     });
     setTagInput('');
     // 加载期权信息
@@ -994,6 +996,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         ? { ...collateralSource, interestTagName: interestTagName || collateralSource.tagName }
         : null,
       principalLentOut: formData.principalLentOut,
+      orderFillStatus: formData.orderFillStatus,
       brokerName: formData.brokerName || undefined,
       brokerAccount: formData.brokerAccount || undefined,
       optionInfo: formData.assetType === 'crypto_option' ? {
@@ -1384,6 +1387,32 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     >
                       做空
                     </button>
+                  </div>
+                </div>
+              )}
+
+              {/* 成交状态 */}
+              {!editingOrder?.participantInfo && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">成交状态</label>
+                  <div className="flex gap-3">
+                    {([{ value: 'filled', label: '已成交' }, { value: 'pending', label: '挂单中' }] as const).map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setFormData(d => ({ ...d, orderFillStatus: opt.value }))}
+                        className="flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-colors"
+                        style={
+                          formData.orderFillStatus === opt.value
+                            ? opt.value === 'filled'
+                              ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff', borderColor: 'transparent' }
+                              : { background: 'linear-gradient(135deg, #EA580C, #F97316)', color: '#fff', borderColor: 'transparent' }
+                            : { backgroundColor: '#F3F4F6', color: '#6B7280', borderColor: 'transparent' }
+                        }
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}

@@ -958,6 +958,9 @@ export function FunderOrderCard({
           <div className="flex items-center gap-0.5 mb-0.5">
             <span className="text-[10px] font-medium" style={{ color: isInvited ? '#16A34A' : '#3B82F6' }}>{isInvited ? '订单资产' : '持有资产'}</span>
             {(order.principal_lent_out === 1 || order.principal_lent_out === true) && <span className="text-[10px] text-gray-400">（借出）</span>}
+            {(order as any).order_fill_status === 'pending' && (
+              <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5" style={{ borderRadius: '4px', color: '#fff', backgroundColor: '#F97316' }}>挂单中</span>
+            )}
             {order.asset_type === 'crypto' && show('showTradeDirection') && (
               <>
                 <span
@@ -1089,7 +1092,7 @@ export function FunderOrderCard({
                 })()}
               </div>
             )}
-            {show('floatPnl') && floatPnl !== null && (
+            {show('floatPnl') && floatPnl !== null && (order as any).order_fill_status !== 'pending' && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">浮动盈亏</span>
                 <span className="font-medium tabular-nums" style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>
