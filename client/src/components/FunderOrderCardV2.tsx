@@ -184,7 +184,12 @@ export function FunderOrderCardV2({
       >
         {/* 持有数量 */}
         <div>
-          <div className="text-[10px] mb-1" style={{ color: OKX_TEXT_SEC }}>持有数量</div>
+          <div className="text-[10px] mb-1 flex items-center gap-1" style={{ color: OKX_TEXT_SEC }}>
+            <span>持有数量</span>
+            {(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? (
+              <span className="text-[10px] font-bold px-1 py-0" style={{ borderRadius: '3px', color: '#fff', backgroundColor: '#6B7280' }}>借出</span>
+            ) : null}
+          </div>
           <div className="flex items-baseline gap-1" style={{ lineHeight: 1 }}>
             <span
               style={{
@@ -493,7 +498,12 @@ export function FunderOrderCardV2Light({
       {/* 行2：主数据行（4列） */}
       <div className="grid grid-cols-4 gap-0 px-3 py-3" style={{ borderTop: `1px solid ${LT_BORDER}` }}>
         <div>
-          <div className="text-[10px] mb-1" style={{ color: LT_TEXT_SEC }}>持有数量</div>
+          <div className="text-[10px] mb-1 flex items-center gap-1" style={{ color: LT_TEXT_SEC }}>
+            <span>持有数量</span>
+            {(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? (
+              <span className="text-[10px] font-bold px-1 py-0" style={{ borderRadius: '3px', color: '#fff', backgroundColor: '#9CA3AF' }}>借出</span>
+            ) : null}
+          </div>
           <div className="flex items-baseline gap-1" style={{ lineHeight: 1 }}>
             <span style={{ fontSize: "1.15rem", fontWeight: 800, color: LT_TEXT_PRI, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>
               {fmt(qty, 2)}
@@ -1075,7 +1085,12 @@ export function FunderOrderCardV2Silver({
           {isStockCard ? (
             // 股票类：显示持有资产（计息基数，单位元）
             <>
-              <div className="text-[10px] mb-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>仓位额度 (元)</div>
+              <div className="text-[10px] mb-1 flex items-center gap-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
+                <span>仓位额度 (元)</span>
+                {(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? (
+                  <span className="text-[10px] font-bold px-1 py-0" style={{ borderRadius: '3px', color: '#fff', backgroundColor: 'rgba(255,255,255,0.35)' }}>借出</span>
+                ) : null}
+              </div>
               <div style={{ lineHeight: 1 }}>
                 <span style={{ fontSize: '1.6rem', fontWeight: 700, color: TXT_PRI, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: TXT_SHADOW_LG }}>
                   {order.interest_base ? parseFloat(order.interest_base).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '--'}
@@ -1087,6 +1102,9 @@ export function FunderOrderCardV2Silver({
             <>
               <div className="text-[10px] mb-1 flex items-center gap-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
                 <span>持有资产 ({coin})</span>
+                {(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? (
+                  <span className="text-[10px] font-bold px-1 py-0" style={{ borderRadius: '3px', color: '#fff', backgroundColor: 'rgba(255,255,255,0.35)' }}>借出</span>
+                ) : null}
                 {(order as any).trade_direction && (
                   <span
                     className="text-[10px] font-bold px-1 py-0"
