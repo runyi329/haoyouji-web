@@ -209,7 +209,7 @@ export default defineConfig({
     hmr: true,
     proxy: {
       "/api": {
-        target: "http://localhost:4000",
+        target: "http://124.223.54.69:80",
         changeOrigin: true,
         secure: false,
       },

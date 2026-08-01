@@ -1696,7 +1696,7 @@ async function sendKfMaterial(openKfid: string, toUser: string, matType: string,
       try {
         // 用原生Node.js的Buffer操作：尝试调用服务器上的sharp
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const sharpMod = require("/root/haoyouji-web/node_modules/sharp");
+        const sharpMod = require("sharp");
         uploadBuffer = await sharpMod(fileBuffer).jpeg({ quality: 90 }).toBuffer();
         uploadContentType = "image/jpeg";
         console.log(`[KF-MAT] WebP转JPG成功 size=${uploadBuffer.length}`);
