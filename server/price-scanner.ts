@@ -61,10 +61,11 @@ const COINS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA'
 // 股票类合约（优先 OKX SWAP，兜底新浪财经）
 const STOCK_COINS = ['TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG'];
 // 优先 Yahoo Finance，兜底新浪财经
-const YAHOO_STOCKS = ['CRCL', 'DRAM', 'MU', 'MSTR', 'SKHYNIX'];
+const YAHOO_STOCKS = ['CRCL', 'DRAM', 'MU', 'MSTR', 'SKHYNIX', 'BZ'];
 // Yahoo Finance 代码映射（内部代码 → Yahoo symbol，用于非美股）
 const YAHOO_CODE_MAP: Record<string, string> = {
   SKHYNIX: '000660.KS', // SK海力士（韩国交易所 KRX，韩元计价，需除以 USDKRW 汇率换算成美元）
+  BZ: 'BZ=F',          // 布伦特原油期货（Yahoo Finance）
 };
 // 韩元计价的股票（Yahoo Finance 返回 KRW，需除以 USD/KRW 汇率换算）
 const KRW_COINS = new Set(['SKHYNIX']);

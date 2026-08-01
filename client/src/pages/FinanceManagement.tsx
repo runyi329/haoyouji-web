@@ -2106,8 +2106,15 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
 
         <div>
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-xs font-medium text-gray-400 uppercase tracking-wide">
-              订单列表 {directionFilteredOrders.length > 0 ? `· ${directionFilteredOrders.length} 笔` : ''}
+            <h2 className="text-xs font-medium uppercase tracking-wide" style={{color:'#000'}}>
+              {(() => {
+                const activeCount = directionFilteredOrders.filter((o: any) => o.status === 'active').length;
+                const settledCount = directionFilteredOrders.filter((o: any) => o.status === 'settled').length;
+                const parts = [];
+                if (activeCount > 0) parts.push(`进行中 ${activeCount} 笔`);
+                if (settledCount > 0) parts.push(`已结束 ${settledCount} 笔`);
+                return `订单列表${parts.length > 0 ? ' · ' + parts.join(' · ') : ''}`;
+              })()}
             </h2>
             {hasCryptoOrders && (
               <div className="flex items-center gap-1">
