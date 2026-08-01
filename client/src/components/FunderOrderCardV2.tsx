@@ -186,8 +186,8 @@ export function FunderOrderCardV2({
         <div>
           <div className="text-[10px] mb-1 flex items-center gap-1" style={{ color: OKX_TEXT_SEC }}>
             <span>持有数量</span>
-            {(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? (
-              <span className="text-[10px] font-bold px-1 py-0" style={{ borderRadius: '3px', color: '#fff', backgroundColor: '#6B7280' }}>借出</span>
+{(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? (
+              <span>（借出）</span>
             ) : null}
           </div>
           <div className="flex items-baseline gap-1" style={{ lineHeight: 1 }}>
@@ -500,8 +500,8 @@ export function FunderOrderCardV2Light({
         <div>
           <div className="text-[10px] mb-1 flex items-center gap-1" style={{ color: LT_TEXT_SEC }}>
             <span>持有数量</span>
-            {(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? (
-              <span className="text-[10px] font-bold px-1 py-0" style={{ borderRadius: '3px', color: '#fff', backgroundColor: '#9CA3AF' }}>借出</span>
+{(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? (
+              <span>（借出）</span>
             ) : null}
           </div>
           <div className="flex items-baseline gap-1" style={{ lineHeight: 1 }}>
@@ -1088,7 +1088,7 @@ export function FunderOrderCardV2Silver({
               <div className="text-[10px] mb-1 flex items-center gap-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
                 <span>仓位额度 (元)</span>
                 {(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? (
-                  <span className="text-[10px] font-bold px-1 py-0" style={{ borderRadius: '3px', color: '#fff', backgroundColor: 'rgba(255,255,255,0.35)' }}>借出</span>
+                  <span>（借出）</span>
                 ) : null}
               </div>
               <div style={{ lineHeight: 1 }}>
@@ -1103,7 +1103,7 @@ export function FunderOrderCardV2Silver({
               <div className="text-[10px] mb-1 flex items-center gap-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
                 <span>持有资产 ({coin})</span>
                 {(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? (
-                  <span className="text-[10px] font-bold px-1 py-0" style={{ borderRadius: '3px', color: '#fff', backgroundColor: 'rgba(255,255,255,0.35)' }}>借出</span>
+                  <span>（借出）</span>
                 ) : null}
                 {(order as any).trade_direction && (
                   <span
