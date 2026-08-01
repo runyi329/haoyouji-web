@@ -526,7 +526,13 @@ function FinanceOrderCard({
         <div className="flex-1 p-4 pr-3">
           <div className="flex items-center gap-0.5 mb-0.5">
             <span className="text-[10px] font-medium" style={{ color: isGreenOrder ? '#16A34A' : '#3B82F6' }}>
-              {(order.principal_lent_out === 1 || order.principal_lent_out === true) ? '借出资产' : (isGreenOrder ? '持有资产' : '融资资产')}
+              {(order.principal_lent_out === 1 || order.principal_lent_out === true)
+                ? (() => {
+                    const optInfo = (() => { try { const oi = order.option_info; return typeof oi === 'string' ? JSON.parse(oi) : oi; } catch { return null; } })();
+                    const unit = order.asset_type === 'crypto_option' ? (optInfo?.coin || 'ETH') : order.asset_type === 'stock' ? (baseCur === 'CNY' ? '元' : 'U') : order.coin;
+                    return `借出资产 (${unit})`;
+                  })()
+                : (isGreenOrder ? '持有资产' : '融资资产')}
             </span>
             {!isGreenOrder && !(order.principal_lent_out === 1 || order.principal_lent_out === true) && <span className="text-[10px] text-gray-400">({order.finance_type === '自负盈亏' ? '自负盈亏 100%部分' : '保本分成 50%部分'})</span>}
             {order.asset_type === 'crypto' && order.trade_direction && (

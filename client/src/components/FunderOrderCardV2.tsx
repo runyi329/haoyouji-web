@@ -185,7 +185,7 @@ export function FunderOrderCardV2({
         {/* 持有数量 */}
         <div>
           <div className="text-[10px] mb-1" style={{ color: OKX_TEXT_SEC }}>
-            {(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? '借出资产' : '持有数量'}
+            {(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? `借出资产 (${coin})` : '持有数量'}
           </div>
           <div className="flex items-baseline gap-1" style={{ lineHeight: 1 }}>
             <span
@@ -496,7 +496,7 @@ export function FunderOrderCardV2Light({
       <div className="grid grid-cols-4 gap-0 px-3 py-3" style={{ borderTop: `1px solid ${LT_BORDER}` }}>
         <div>
           <div className="text-[10px] mb-1" style={{ color: LT_TEXT_SEC }}>
-            {(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? '借出资产' : '持有数量'}
+            {(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? `借出资产 (${coin})` : '持有数量'}
           </div>
           <div className="flex items-baseline gap-1" style={{ lineHeight: 1 }}>
             <span style={{ fontSize: "1.15rem", fontWeight: 800, color: LT_TEXT_PRI, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>
@@ -1080,7 +1080,9 @@ export function FunderOrderCardV2Silver({
             // 股票类：显示持有资产（计息基数，单位元）
             <>
               <div className="text-[10px] mb-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
-                {(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? '借出资产' : '仓位额度 (元)'}
+                {(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true
+                  ? `借出资产 (${baseCur === 'CNY' ? '元' : 'U'})`
+                  : '仓位额度 (元)'}
               </div>
               <div style={{ lineHeight: 1 }}>
                 <span style={{ fontSize: '1.6rem', fontWeight: 700, color: TXT_PRI, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: TXT_SHADOW_LG }}>
@@ -1092,7 +1094,7 @@ export function FunderOrderCardV2Silver({
             // 数字币：显示持有数量
             <>
               <div className="text-[10px] mb-1 flex items-center gap-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
-                <span>{(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? '借出资产' : `持有资产 (${coin})`}</span>
+                <span>{(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? `借出资产 (${coin})` : `持有资产 (${coin})`}</span>
                 {(order as any).trade_direction && (
                   <span
                     className="text-[10px] font-bold px-1 py-0"
