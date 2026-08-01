@@ -259,8 +259,15 @@ export default function AfFeeDetail() {
   })).filter(g => g.orders.length > 0);
 
   // 批量查询各成员的【全局】钱包余额（口径与钱包页一致）
+  // 同时包含谷底增筹用户和融资付息用户
+  const financeUserIds = financeOrders
+    .map((o: any) => parseInt(o.user_id || o.userId || '0'))
+    .filter(n => Number.isFinite(n) && n > 0);
   const memberUserIds = Array.from(
-    new Set(userGroups.map(g => parseInt(g.userId)).filter(n => Number.isFinite(n) && n > 0))
+    new Set([
+      ...userGroups.map(g => parseInt(g.userId)).filter(n => Number.isFinite(n) && n > 0),
+      ...financeUserIds,
+    ])
   );
   const { data: memberBalances } = trpc.recharge.getMembersBalance.useQuery(
     { userIds: memberUserIds },
@@ -1710,7 +1717,7 @@ export default function AfFeeDetail() {
                                 return s + Math.max(0, calcDaily2(o) * accD - prepaid);
                               }, 0);
                             const finWalletBal = (p.userId > 0 && memberBalances) ? (memberBalances[p.userId] ?? null) : null;
-                            const finShortfall = finWalletBal !== null && finWalletBal < finPendingFee;
+                            const finShortfall = finPendingFee > 0 && (finWalletBal === null || finWalletBal < finPendingFee);
                             const walBal = finWalletBal !== null ? finWalletBal : 0;
                             const shortfallAmt = finShortfall ? (finPendingFee - walBal) : 0;
                             const row1 = [
