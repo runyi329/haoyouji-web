@@ -1061,30 +1061,15 @@ export function FunderOrderCardV2Silver({
             );
           })()}
         </div>
-        {/* 右侧：期权剩余天数 + 进度条（仅期权卡片） */}
-        {isOptionCard && _optInfo?.exerciseDate ? (() => {
-          const now = Date.now();
-          const expiry = new Date(_optInfo.exerciseDate + 'T08:00:00+08:00').getTime();
-          const start = order.buy_date ? new Date(order.buy_date + 'T00:00:00+08:00').getTime() : null;
-          const daysLeft = Math.max(0, Math.ceil((expiry - now) / 86400000));
-          const totalDays = start ? Math.max(1, Math.ceil((expiry - start) / 86400000)) : null;
-          const pct = totalDays ? Math.min(100, Math.max(0, ((totalDays - daysLeft) / totalDays) * 100)) : null;
-          const urgentColor = daysLeft <= 7 ? '#DC2626' : daysLeft <= 30 ? '#F97316' : TXT_SEC;
-          return (
-            <div className="ml-auto flex flex-col items-end gap-0.5" style={{ minWidth: 60 }}>
-              <span style={{ color: urgentColor, fontSize: '0.6rem', fontWeight: 600 }}>剩 {daysLeft} 天</span>
-              {pct !== null && (
-                <div style={{ width: 56, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.15)', overflow: 'hidden' }}>
-                  <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, backgroundColor: urgentColor, transition: 'width 0.3s' }} />
-                </div>
-              )}
-            </div>
-          );
-        })() : order.order_no ? (
-          <span className="ml-auto text-[10px] font-mono" style={{ color: TXT_DIM, letterSpacing: '0.05em' }}>
+        {/* 右侧：订单号 */}
+        {order.order_no && (
+          <span
+            className="ml-auto text-[10px] font-mono"
+            style={{ color: TXT_DIM, letterSpacing: '0.05em' }}
+          >
             {order.order_no}
           </span>
-        ) : null}
+        )}
       </div>
 
       {/* ── 行2：主数据行（持有数量占宽，其侙3列均分）── */}
@@ -1226,7 +1211,22 @@ export function FunderOrderCardV2Silver({
                     const nowBJStr = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
                     const nowDay = new Date(nowBJStr + 'T00:00:00+08:00').getTime();
                     const daysLeft = Math.ceil((expDay - nowDay) / (1000 * 60 * 60 * 24));
-                    return daysLeft > 0 ? `${daysLeft}天` : daysLeft === 0 ? '今天到期' : '已到期';
+                    const start = order.buy_date ? new Date(order.buy_date + 'T00:00:00+08:00').getTime() : null;
+                    const totalDays = start ? Math.max(1, Math.ceil((expDay - start) / (1000 * 60 * 60 * 24))) : null;
+                    const pct = totalDays ? Math.min(100, Math.max(0, ((totalDays - Math.max(0, daysLeft)) / totalDays) * 100)) : null;
+                    const urgentColor = daysLeft <= 7 ? '#DC2626' : daysLeft <= 30 ? '#F97316' : TXT_PRI;
+                    return (
+                      <>
+                        <span style={{ color: urgentColor }}>
+                          {daysLeft > 0 ? `剩 ${daysLeft} 天` : daysLeft === 0 ? '今天到期' : '已到期'}
+                        </span>
+                        {pct !== null && (
+                          <div style={{ width: '100%', height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.15)', overflow: 'hidden', marginTop: 3 }}>
+                            <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, backgroundColor: urgentColor, transition: 'width 0.3s' }} />
+                          </div>
+                        )}
+                      </>
+                    );
                   })() : '--'}
                 </div>
               </>
