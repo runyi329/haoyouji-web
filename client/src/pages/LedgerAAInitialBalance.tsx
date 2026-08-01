@@ -35,7 +35,7 @@ const CRYPTO_COINS = [
   { name: "USDT", label: "USDT" },
 ];
 
-const CNY_RATE_FALLBACK = 7.0; // 居底备用，实际汇率从接口实时获取
+const CNY_RATE_FALLBACK = 6.8; // 居底备用，实际汇率从接口实时获取
 
 interface PauseHistoryItem {
   pauseDate: string;   // 暂停日期 YYYY-MM-DD

@@ -298,7 +298,7 @@ export async function fetchUsdCnyRate(): Promise<number> {
       }
     }
   } catch { /* 兜底 */ }
-  return _rateCacheValue?.rate || 7.25; // 最终兜底
+  return _rateCacheValue?.rate || 6.8; // 最终兜底
 }
 
 // ===== React Hooks =====
@@ -343,7 +343,7 @@ export function useCryptoPrices(intervalMs = 3000) {
     changes: Record<string, number>;
     opens: Record<string, number>;
     usdtCnyRate: number;
-  }>({ prices: {}, changes: {}, opens: {}, usdtCnyRate: 7.25 });
+  }>({ prices: {}, changes: {}, opens: {}, usdtCnyRate: 6.8 });
 
   const BUILTIN_COINS_LIST = ['BTC', 'ETH', 'SOL', 'BNB', 'AAVE', 'SUI', 'ONDO', 'LDO', 'ENA', 'ARKM', 'SEI', 'PLUME', 'ASTER', 'DRAM', 'MU'];
 
@@ -371,7 +371,7 @@ export function useCryptoPrices(intervalMs = 3000) {
 
 /** Hook：USD/CNY 汇率（替换 trpc.exchange.getRate.useQuery） */
 export function useUsdCnyRate(intervalMs = 60000) {
-  const [rate, setRate] = useState<number>(7.25);
+  const [rate, setRate] = useState<number>(6.8);
 
   useEffect(() => {
     fetchUsdCnyRate().then(r => { if (r > 0) setRate(r); });

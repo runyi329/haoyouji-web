@@ -198,7 +198,7 @@ export default function AfFeeDetail() {
   );
   // 实时 CNY/USDT 汇率 — 走服务器tRPC，60秒刷新
   const { data: cnyRateData } = trpc.exchange.getRate.useQuery(undefined, { refetchInterval: 60000, staleTime: 30000 });
-  const cnyRate = parseFloat((cnyRateData as any)?.money ?? '7.25') || 7.25;
+  const cnyRate = parseFloat((cnyRateData as any)?.money ?? '6.8') || 6.8;
 
   // 已付利息汇总（按订单聚合）
   const finOrderIds = useMemo(

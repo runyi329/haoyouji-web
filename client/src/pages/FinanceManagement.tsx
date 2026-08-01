@@ -1640,7 +1640,8 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     { fromcoin: 'USD', tocoin: 'CNY', money: 1 },
     { staleTime: 1000, refetchInterval: 3000 }
   );
-  const cnyRate = (cnyRateData?.success && cnyRateData?.money) ? parseFloat(cnyRateData.money) : 7.2;
+  // 汇率未加载时用 null，避免用默认値 7.2 先渲染错误数字
+  const cnyRate = (cnyRateData?.success && cnyRateData?.money) ? parseFloat(cnyRateData.money) : null;
 
   const createMutation = trpc.ledger.financeCreateOrder.useMutation({
     onSuccess: () => { toast.success('订单已创建'); refetchOrders(); closeForm(); },
@@ -1729,7 +1730,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     let total = 0;
     for (const a of validAssets) {
       if (a.coin === 'USDT') { total += parseFloat(a.qty); }
-      else if (a.coin === 'CNY') { const cnyR = formLivePrices['CNY'] || 7.2; total += parseFloat(a.qty) / cnyR; }
+      else if (a.coin === 'CNY') { const cnyR = formLivePrices['CNY'] || 6.8; total += parseFloat(a.qty) / cnyR; }
       else {
         const p = formLivePrices[a.coin];
         if (p) { total += p * parseFloat(a.qty); }

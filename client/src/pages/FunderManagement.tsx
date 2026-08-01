@@ -264,7 +264,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     { ledgerId: 37 },
     { enabled: collateralSourceMode === 'external', staleTime: 30000 }
   );
-  const cnyRate = parseFloat((cnyRateData as any)?.money ?? "7.2") || 7.2;
+  const cnyRate = parseFloat((cnyRateData as any)?.money ?? "6.8") || 6.8;
   // 通用折算：任一币种数额 -> USDT 基准（CNY 用 cnyRate，USDT=1，其余按实时价 USDT/枚）
   const toUsdtBase = (val: number, cur: string): number | null => {
     if (isNaN(val)) return null;

@@ -578,7 +578,7 @@ export function FunderOrderCard({
   ];
   // ===== END 内部 fallback =====
   const { data: _cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: "USD", tocoin: "CNY", money: 1 }, { staleTime: 3000, refetchInterval: 3000 });
-  const cnyRate = parseFloat((_cnyRateData as any)?.money ?? "7.2") || 7.2;
+  const cnyRate = parseFloat((_cnyRateData as any)?.money ?? "6.8") || 6.8;
   // 共享担保池查询（仅当订单开启了本人订单共享时才查询）
   const orderShareMode = (order as any).collateral_share_mode;
   const { data: sharedPoolInfo } = trpc.ledger.funderGetSharedCollateralPool.useQuery(

@@ -540,7 +540,7 @@ function FunderOrderCardLegacy({
 }: FunderOrderCardLegacyProps) {
   // 走服务器tRPC获取汇率，60秒刷新
   const { data: _cnyRateData } = trpc.exchange.getRate.useQuery(undefined, { refetchInterval: 60000, staleTime: 30000 });
-  const cnyRate = parseFloat((_cnyRateData as any)?.money ?? "7.2") || 7.2;
+  const cnyRate = parseFloat((_cnyRateData as any)?.money ?? "6.8") || 6.8;
 
 
 
@@ -2530,7 +2530,7 @@ export default function LedgerDetail() {
     : (Object.keys(userLivePrices).length > 0 ? userLivePrices : cachedPrices);
   // 实时 USD/CNY 汇率 — 走服务器tRPC，60秒刷新
   const { data: cnyRateData } = trpc.exchange.getRate.useQuery(undefined, { refetchInterval: 60000, staleTime: 30000 });
-  const cnyRate = (cnyRateData?.success && cnyRateData?.money) ? parseFloat(cnyRateData.money) : 7.2;
+  const cnyRate = (cnyRateData?.success && cnyRateData?.money) ? parseFloat(cnyRateData.money) : 6.8;
 
 
 
@@ -3565,7 +3565,7 @@ export default function LedgerDetail() {
                   const amt = parseFloat(o.interest_base || o.amount || '0');
                   return sum + (isNaN(amt) ? 0 : amt);
                 }, 0);
-                const effectiveCnyRate = (cnyRate && cnyRate > 0) ? cnyRate : 7.25;
+                const effectiveCnyRate = (cnyRate && cnyRate > 0) ? cnyRate : 6.8;
                 const usdtInCny = usdtTotal * effectiveCnyRate;
                 const totalInCny = cnyTotal + usdtInCny;
                 if (totalInCny <= 0) return null;

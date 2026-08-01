@@ -7,7 +7,7 @@
 import React, { useMemo } from "react";
 import { trpc } from "@/lib/trpc";
 
-const CNY_RATE_FALLBACK = 7.0;
+const CNY_RATE_FALLBACK = 6.8;
 
 function toCNY(margin: string | number, coin: string, prices: Record<string, number>): number {
   const num = typeof margin === "number" ? margin : parseFloat(margin);

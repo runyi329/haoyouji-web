@@ -32,7 +32,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 
 const CRYPTO_COINS = ["BTC", "ETH", "SOL", "LDO", "USDT", "元"];
 const normalizeCoin = (coin: string) => (!coin || coin === "人民币") ? "元" : coin;
-const CNY_RATE_FALLBACK = 7.0; // 居底备用，实际汇率从接口实时获取
+const CNY_RATE_FALLBACK = 6.8; // 居底备用，实际汇率从接口实时获取
 
 interface DepositEntry {
   margin: string;

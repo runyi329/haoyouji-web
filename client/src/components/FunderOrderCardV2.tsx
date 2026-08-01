@@ -32,7 +32,7 @@ const OKX_GREEN = "#F6465D";       // 涨 = 红（中国习惯）
 const OKX_RED = "#0ECB81";         // 跌 = 绿（中国习惯）
 const FONT = "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Arial, 'PingFang SC', sans-serif";
 
-const DEFAULT_CNY_RATE = 7.25;
+const DEFAULT_CNY_RATE = 6.8;
 
 // 读取利率字符串，当利率为0时从 display_config.rate_negative 判断符号
 function getRateStr(order: any): string {
@@ -1978,7 +1978,7 @@ export function FunderLenderCardSilver({
     : null;
   // 担保缺口 = 担保价值 + 浮动盈亏 - 待收利息(U) + 已结利息(U)（与老订单模式一致）
   // 利息如果是元，需先除以cnyRate换算成U
-  const effectiveCnyRate = cnyRate && cnyRate > 0 ? cnyRate : 7.25;
+  const effectiveCnyRate = cnyRate && cnyRate > 0 ? cnyRate : 6.8;
   const accruedInU = interestUnit === '元' ? displayAccrued / effectiveCnyRate : displayAccrued;
   const paidInU = interestUnit === '元' ? displayPaid / effectiveCnyRate : displayPaid;
   // 正数=充足，负数=缺口

@@ -265,7 +265,7 @@ export default function GoldAIPage() {
 
   const xau = goldData?.xau;
   const cny = goldData?.cny;
-  const usdCny = goldData?.usdCny || 7.25;
+  const usdCny = goldData?.usdCny || 6.8;
 
   return (
     <div className="min-h-screen pb-8" style={{ background: BG, color: TEXT }}>

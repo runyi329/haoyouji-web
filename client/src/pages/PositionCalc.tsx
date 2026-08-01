@@ -2655,7 +2655,7 @@ export default function PositionCalc() {
       {/* ===== 盈利路径分析：联动滑块 ===== */}
       {(() => {
         // 基础数据
-        const profitUsdt = (parseFloat(targetProfitCny) || 0) / (cnyRate || 7.28);
+        const profitUsdt = (parseFloat(targetProfitCny) || 0) / (cnyRate || 6.8);
         const curPrice = currentPrice || 0;
         // 实际均价
         let _actCost2 = 0, _actQty2 = 0;
@@ -2877,7 +2877,7 @@ function ProfitPathPanel({
           setSliderRise(rise);
           sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
         } else if (lockedField === 'rise') {
-          const targetUsdt = val / (cnyRate || 7.2);
+          const targetUsdt = val / (cnyRate || 6.8);
           if (sliderRise > 0 && curPrice > 0 && avgPrice > 0) {
             const exitP = curPrice * (1 + sliderRise / 100);
             const qty = exitP > avgPrice ? Math.min(targetUsdt / (exitP - avgPrice), ETH_MAX) : ETH_MAX;
@@ -2901,7 +2901,7 @@ function ProfitPathPanel({
           if (sliderRise > 0 && curPrice > 0 && avgPrice > 0) {
             const exitP = curPrice * (1 + sliderRise / 100);
             const targetUsdt = val * (exitP - avgPrice);
-            const targetCny = Math.max(CNY_MIN, Math.min(CNY_MAX, Math.round(targetUsdt * (cnyRate || 7.2))));
+            const targetCny = Math.max(CNY_MIN, Math.min(CNY_MAX, Math.round(targetUsdt * (cnyRate || 6.8))));
             setSliderTarget(targetCny);
             sessionStorage.setItem(SESSION_KEY_TARGET, String(targetCny));
           }
@@ -2921,7 +2921,7 @@ function ProfitPathPanel({
           if (curPrice > 0 && avgPrice > 0) {
             const exitP = curPrice * (1 + val / 100);
             const targetUsdt = sliderQty * (exitP - avgPrice);
-            const targetCny = Math.max(CNY_MIN, Math.min(CNY_MAX, Math.round(targetUsdt * (cnyRate || 7.2))));
+            const targetCny = Math.max(CNY_MIN, Math.min(CNY_MAX, Math.round(targetUsdt * (cnyRate || 6.8))));
             setSliderTarget(targetCny);
             sessionStorage.setItem(SESSION_KEY_TARGET, String(targetCny));
           }
@@ -3002,7 +3002,7 @@ function ProfitPathPanel({
         sessionStorage.setItem(SESSION_KEY_RISE, String(rise));
       } else if (lockedField === 'rise') {
         // 涨幅锁定：止盈变 → 持仓联动
-        const targetUsdt = target / (cnyRate || 7.2);
+        const targetUsdt = target / (cnyRate || 6.8);
         if (sliderRise > 0 && curPrice > 0 && avgPrice > 0) {
           const exitP = curPrice * (1 + sliderRise / 100);
           const qty = exitP > avgPrice ? Math.min(targetUsdt / (exitP - avgPrice), ETH_MAX) : ETH_MAX;
@@ -3031,7 +3031,7 @@ function ProfitPathPanel({
         if (sliderRise > 0 && curPrice > 0 && avgPrice > 0) {
           const exitP = curPrice * (1 + sliderRise / 100);
           const targetUsdt = qty * (exitP - avgPrice);
-          const targetCny = Math.max(CNY_MIN, Math.min(CNY_MAX, Math.round(targetUsdt * (cnyRate || 7.2))));
+          const targetCny = Math.max(CNY_MIN, Math.min(CNY_MAX, Math.round(targetUsdt * (cnyRate || 6.8))));
           setSliderTarget(targetCny);
           sessionStorage.setItem(SESSION_KEY_TARGET, String(targetCny));
         }
@@ -3054,7 +3054,7 @@ function ProfitPathPanel({
         if (curPrice > 0 && avgPrice > 0) {
           const exitP = curPrice * (1 + rise / 100);
           const targetUsdt = sliderQty * (exitP - avgPrice);
-          const targetCny = Math.max(CNY_MIN, Math.min(CNY_MAX, Math.round(targetUsdt * (cnyRate || 7.2))));
+          const targetCny = Math.max(CNY_MIN, Math.min(CNY_MAX, Math.round(targetUsdt * (cnyRate || 6.8))));
           setSliderTarget(targetCny);
           sessionStorage.setItem(SESSION_KEY_TARGET, String(targetCny));
         }
@@ -3844,7 +3844,7 @@ function ProfitPathPanel({
                 {/* 第三行：市值 + 占用比 */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <span style={{ fontSize: 11, color: 'rgba(192,200,210,0.5)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                    市值&nbsp;<span style={{ color: 'rgba(192,200,210,0.75)', fontWeight: 600 }}>¥{fmtCny(positionUsdt * (cnyRate || 7.2))}</span>
+                    市值&nbsp;<span style={{ color: 'rgba(192,200,210,0.75)', fontWeight: 600 }}>¥{fmtCny(positionUsdt * (cnyRate || 6.8))}</span>
                   </span>
                   <span style={{ fontSize: 11, color: 'rgba(192,200,210,0.35)' }}>·</span>
                   <span style={{ fontSize: 11, color: 'rgba(192,200,210,0.5)', whiteSpace: 'nowrap' }}>
