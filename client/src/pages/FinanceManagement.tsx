@@ -581,6 +581,14 @@ function FinanceOrderCard({
                 <span className="font-medium" style={{ color: '#4B5563' }}>{liveP != null ? liveP.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' U' : '---'}</span>
               </div>
             )}
+            {orderDc.floatPnl && floatPnl !== null && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400 shrink-0">浮动盈亏</span>
+                <span className="font-medium tabular-nums" style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>
+                  {floatPnl >= 0 ? '+' : ''}{floatPnl.toLocaleString(undefined, { maximumFractionDigits: 2 })} U
+                </span>
+              </div>
+            )}
             {orderDc.buyDate !== false && order.buy_date && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">开仓时间</span>
@@ -1491,6 +1499,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
     assetType: true,
     showOwnerName: true,
     interestPaymentType: true,
+    floatPnl: false,
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean | number>>(DEFAULT_DISPLAY_CONFIG);
   const [marginAlertThreshold, setMarginAlertThreshold] = useState<string>(''); // 保证金率预警阈值（%）
@@ -3013,6 +3022,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                           { key: 'interestBase', label: '计息基数' },
                           { key: 'buyDate', label: '开仓时间' },
                           { key: 'todayPrice', label: '当前币价' },
+                          { key: 'floatPnl', label: '浮动盈亏' },
                           { key: 'holdDuration', label: '持有时长' },
                           { key: 'orderNo', label: '订单编号' },
                           { key: 'interestPaymentType', label: '付息方式' },
