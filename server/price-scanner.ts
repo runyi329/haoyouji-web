@@ -62,8 +62,8 @@ const COINS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA'
 const STOCK_COINS = ['TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG'];
 // 优先 Yahoo Finance，兜底新浪财经
 const YAHOO_STOCKS = ['CRCL', 'DRAM', 'MU', 'MSTR', 'SKHYNIX'];
-// BZ 布伦特原油：用新浪财经 nf_OIL_Brent（GBK编码，需带Referer），失败时用 Yahoo BZ=F 兜底
-const BZ_SINA_CODE = 'nf_OIL_Brent';
+// BZ 布伦特原油：用新浪财经 hf_OIL（直接美元计价，无需汇率换算），失败时用 Yahoo BZ=F 兜底
+const BZ_SINA_CODE = 'hf_OIL';
 // Yahoo Finance 代码映射（内部代码 → Yahoo symbol，用于非美股）
 const YAHOO_CODE_MAP: Record<string, string> = {
   SKHYNIX: '000660.KS', // SK海力士（韩国交易所 KRX，韩元计价，需除以 USDKRW 汇率换算成美元）
@@ -429,16 +429,16 @@ async function scanPrices() {
     const bzMatch = bzText.match(/"([^"]+)"/);
     if (bzMatch && bzMatch[1]) {
       const bzParts = bzMatch[1].split(',');
-      // 格式: 名称,时间,昨收,今开,最高,最低,最新价,...
-      const bzPriceCny = parseFloat(bzParts[6]) || parseFloat(bzParts[3]) || 0;
-      if (bzPriceCny > 0) {
-        // 新浪布伦特原油是人民币计价，除以 CNY/USD 汇率换算成美元
-        const cnyRate = usdtCnyRate > 0 ? usdtCnyRate : 7.25;
-        const bzPriceUsd = parseFloat((bzPriceCny / cnyRate).toFixed(2));
+      // hf_OIL 格式: 最新价,?,开盘,最高,最低,昨收,...,名称
+      // 第0个字段是最新价（直接美元计价）
+      const bzPriceUsd = parseFloat(bzParts[0]) || 0;
+      if (bzPriceUsd > 0) {
         const prevChange = latestPrices['BZ']?.changePercent ?? 0;
-        latestPrices['BZ'] = { price: bzPriceUsd, todayOpen: bzPriceUsd, changePercent: prevChange, high24h: 0, low24h: 0, volume24h: 0, quoteVolume24h: 0, updatedAt: new Date().toISOString() };
+        const prevClose = parseFloat(bzParts[7]) || bzPriceUsd;
+        const changePercent = prevClose > 0 ? ((bzPriceUsd - prevClose) / prevClose * 100) : prevChange;
+        latestPrices['BZ'] = { price: bzPriceUsd, todayOpen: parseFloat(bzParts[2]) || bzPriceUsd, changePercent, high24h: parseFloat(bzParts[3]) || 0, low24h: parseFloat(bzParts[4]) || 0, volume24h: 0, quoteVolume24h: 0, updatedAt: new Date().toISOString() };
         updated = true;
-        console.log(`[价格扫描] BZ 布伦特原油: ${bzPriceCny} CNY ÷ ${cnyRate} = ${bzPriceUsd} USD`);
+        console.log(`[价格扫描] BZ 布伦特原油(hf_OIL): ${bzPriceUsd} USD`);
       }
     }
   } catch {
