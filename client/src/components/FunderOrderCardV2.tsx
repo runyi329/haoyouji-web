@@ -1221,8 +1221,8 @@ export function FunderOrderCardV2Silver({
                           {daysLeft > 0 ? `剩 ${daysLeft} 天` : daysLeft === 0 ? '今天到期' : '已到期'}
                         </span>
                         {pct !== null && (
-                          <div style={{ width: '100%', height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.15)', overflow: 'hidden', marginTop: 3 }}>
-                            <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, backgroundColor: urgentColor, transition: 'width 0.3s' }} />
+                          <div style={{ width: '100%', height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.25)', overflow: 'hidden', marginTop: 4 }}>
+                            <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, background: daysLeft <= 7 ? '#DC2626' : daysLeft <= 30 ? '#F97316' : 'linear-gradient(90deg, #a855f7, #c084fc)', transition: 'width 0.3s' }} />
                           </div>
                         )}
                       </>
