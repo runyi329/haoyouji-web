@@ -914,9 +914,9 @@ export function FunderOrderCardV2Silver({
     ? parseFloat(_optInfo.premium) * qty
     : null;
   const optMarkPrice = greeksResult.data?.markPrice ?? null;
-  // markPrice 是以标的资产计价（如 ETH），需乘以当前价转换为 U
-  const optCurrentValue = optMarkPrice != null && liveP != null && qty > 0
-    ? optMarkPrice * liveP * qty
+  // Gate.io 返回的 markPrice 单位已是 USDT，直接乘以张数
+  const optCurrentValue = optMarkPrice != null && qty > 0
+    ? optMarkPrice * qty
     : null;
   const optFloatPnl = optCurrentValue !== null && optPremiumTotal !== null
     ? optCurrentValue - optPremiumTotal
@@ -1061,15 +1061,30 @@ export function FunderOrderCardV2Silver({
             );
           })()}
         </div>
-        {/* 右侧：订单号 */}
-        {order.order_no && (
-          <span
-            className="ml-auto text-[10px] font-mono"
-            style={{ color: TXT_DIM, letterSpacing: '0.05em' }}
-          >
+        {/* 右侧：期权剩余天数 + 进度条（仅期权卡片） */}
+        {isOptionCard && _optInfo?.exerciseDate ? (() => {
+          const now = Date.now();
+          const expiry = new Date(_optInfo.exerciseDate + 'T08:00:00+08:00').getTime();
+          const start = order.buy_date ? new Date(order.buy_date + 'T00:00:00+08:00').getTime() : null;
+          const daysLeft = Math.max(0, Math.ceil((expiry - now) / 86400000));
+          const totalDays = start ? Math.max(1, Math.ceil((expiry - start) / 86400000)) : null;
+          const pct = totalDays ? Math.min(100, Math.max(0, ((totalDays - daysLeft) / totalDays) * 100)) : null;
+          const urgentColor = daysLeft <= 7 ? '#DC2626' : daysLeft <= 30 ? '#F97316' : TXT_SEC;
+          return (
+            <div className="ml-auto flex flex-col items-end gap-0.5" style={{ minWidth: 60 }}>
+              <span style={{ color: urgentColor, fontSize: '0.6rem', fontWeight: 600 }}>剩 {daysLeft} 天</span>
+              {pct !== null && (
+                <div style={{ width: 56, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.15)', overflow: 'hidden' }}>
+                  <div style={{ width: `${pct}%`, height: '100%', borderRadius: 2, backgroundColor: urgentColor, transition: 'width 0.3s' }} />
+                </div>
+              )}
+            </div>
+          );
+        })() : order.order_no ? (
+          <span className="ml-auto text-[10px] font-mono" style={{ color: TXT_DIM, letterSpacing: '0.05em' }}>
             {order.order_no}
           </span>
-        )}
+        ) : null}
       </div>
 
       {/* ── 行2：主数据行（持有数量占宽，其侙3列均分）── */}
@@ -1165,7 +1180,7 @@ export function FunderOrderCardV2Silver({
             <div className="text-right" style={{ flex: 1 }}>
               <div className="text-[10px] mb-1" style={{ color: TXT_SEC }}>{isOptionCard ? '期权价 (U)' : '当前价 (U)'}</div>
               <div style={{ lineHeight: 1 }}>
-                <span className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
+                <span className="text-sm font-semibold" style={{ color: isOptionCard ? (optMarkPrice != null && _optInfo?.premium ? (optMarkPrice > parseFloat(_optInfo.premium) ? SL_RED : optMarkPrice < parseFloat(_optInfo.premium) ? SL_GREEN : TXT_PRI) : TXT_PRI) : TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
                   {isOptionCard
                     ? (optMarkPrice != null ? fmt(optMarkPrice, 2) : (greeksResult.loading ? '...' : '--'))
                     : (liveP != null ? fmt(liveP, 2) : '--')}
@@ -1364,7 +1379,7 @@ export function FunderOrderCardV2Silver({
               </div>
               <div className="flex justify-between" style={{ borderTop: `1px solid ${DIVIDER}`, paddingTop: 4, marginTop: 4 }}>
                 <span style={{ color: TXT_SEC }}>期权标记价</span>
-                <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{d?.markPrice != null ? `${fmtG(d.markPrice, 4)} ${_optInfo?.coin || 'ETH'}` : loadingVal}</span>
+                <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{d?.markPrice != null ? `${fmtG(d.markPrice, 2)} U` : loadingVal}</span>
               </div>
             </div>
           );
