@@ -3372,11 +3372,15 @@ export default function CryptoPrediction() {
               // 用 user_id 判断归属，避免「自己创建的订单同时也是参与方」导致重复计算
               const effectiveUserId = viewAsUserId ?? currentUserId;
               const mineOrders = activeOrders.filter((o: any) => {
+                // order_perspective === 'other' 的订单强制归到「他人」 Tab
+                if (o.order_perspective === 'other') return false;
                 if (effectiveUserId) return Number(o.user_id) === Number(effectiveUserId);
                 // 无法确定当前用户 ID 时，退回原逻辑
                 return !(o._isParticipant || o._fromFunder);
               });
               const sharedOrders = activeOrders.filter((o: any) => {
+                // order_perspective === 'other' 的订单强制归到「他人」 Tab
+                if (o.order_perspective === 'other') return true;
                 if (effectiveUserId) return Number(o.user_id) !== Number(effectiveUserId) && !!(o._isParticipant || o._fromFunder || o.participantInfo);
                 return !!(o._isParticipant || o._fromFunder);
               });

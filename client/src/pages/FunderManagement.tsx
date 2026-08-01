@@ -92,6 +92,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     brokerName: '',
     brokerAccount: '',
     orderFillStatus: 'filled' as 'pending' | 'filled',
+    orderPerspective: 'self' as 'self' | 'other',
   });
   // 期权专属表单数据
   const [optionFormData, setOptionFormData] = useState({
@@ -801,6 +802,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
       brokerName: order.broker_name || '',
       brokerAccount: order.broker_account || '',
       orderFillStatus: (order.order_fill_status === 'pending' ? 'pending' : 'filled') as 'pending' | 'filled',
+      orderPerspective: (order.order_perspective === 'other' ? 'other' : 'self') as 'self' | 'other',
     });
     setTagInput('');
     // 加载期权信息
@@ -997,6 +999,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         : null,
       principalLentOut: formData.principalLentOut,
       orderFillStatus: formData.orderFillStatus,
+      orderPerspective: formData.orderPerspective,
       brokerName: formData.brokerName || undefined,
       brokerAccount: formData.brokerAccount || undefined,
       optionInfo: formData.assetType === 'crypto_option' ? {
@@ -1407,6 +1410,32 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                             ? opt.value === 'filled'
                               ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff', borderColor: 'transparent' }
                               : { background: 'linear-gradient(135deg, #EA580C, #F97316)', color: '#fff', borderColor: 'transparent' }
+                            : { backgroundColor: '#F3F4F6', color: '#6B7280', borderColor: 'transparent' }
+                        }
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 归属分类 */}
+              {!editingOrder?.participantInfo && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-600 mb-2">归属分类</label>
+                  <div className="flex gap-3">
+                    {([{ value: 'self', label: '本人' }, { value: 'other', label: '他人' }] as const).map(opt => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setFormData(d => ({ ...d, orderPerspective: opt.value }))}
+                        className="flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-colors"
+                        style={
+                          formData.orderPerspective === opt.value
+                            ? opt.value === 'self'
+                              ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff', borderColor: 'transparent' }
+                              : { background: 'linear-gradient(135deg, #7C3AED, #8B5CF6)', color: '#fff', borderColor: 'transparent' }
                             : { backgroundColor: '#F3F4F6', color: '#6B7280', borderColor: 'transparent' }
                         }
                       >
