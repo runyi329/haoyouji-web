@@ -1163,10 +1163,12 @@ export function FunderOrderCardV2Silver({
 
             {/* 当前价：靠右对齐 */}
             <div className="text-right" style={{ flex: 1 }}>
-              <div className="text-[10px] mb-1" style={{ color: TXT_SEC }}>当前价 (U)</div>
+              <div className="text-[10px] mb-1" style={{ color: TXT_SEC }}>{isOptionCard ? '期权价 (U)' : '当前价 (U)'}</div>
               <div style={{ lineHeight: 1 }}>
                 <span className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
-                  {liveP != null ? fmt(liveP, 2) : '--'}
+                  {isOptionCard
+                    ? (optMarkPrice != null ? fmt(optMarkPrice, 2) : (greeksResult.loading ? '...' : '--'))
+                    : (liveP != null ? fmt(liveP, 2) : '--')}
                 </span>
               </div>
             </div>

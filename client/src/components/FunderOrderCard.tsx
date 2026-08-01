@@ -1036,6 +1036,12 @@ export function FunderOrderCard({
                     <span className="font-medium" style={{ color: '#4B5563' }}>{optionInfo.premium} {optionInfo.denomination === 'B' ? (optionInfo.coin || 'BTC') : 'USDT'}</span>
                   </div>
                 )}
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400 shrink-0">期权价</span>
+                  <span className="font-medium" style={{ color: greeksResult.data?.markPrice != null ? '#7C3AED' : '#9CA3AF' }}>
+                    {greeksResult.loading && !greeksResult.data ? '加载中...' : greeksResult.data?.markPrice != null ? `${greeksResult.data.markPrice.toFixed(2)} U` : '--'}
+                  </span>
+                </div>
               </>
             )}
             {show('buyPrice') && price > 0 && !isStockOrder && !isOptionOrder && (

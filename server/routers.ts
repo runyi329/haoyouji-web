@@ -17804,7 +17804,7 @@ ${klinesSummary}
         const ddStr = String(dt.getUTCDate()).padStart(2, '0');
         const gateSymbol = `${input.currency}_USDT-${yyyy}${mm}${ddStr}-${input.strikePrice}-${optionType}`;
         const cacheKey = `greeks:${instrumentName}`;
-        const ONE_HOUR_MS = 3600 * 1000;
+        const ONE_HOUR_MS = 5 * 60 * 1000; // 5 分钟缓存
         // 先读数据库缓存
         const cached = await deribitDbGet(cacheKey);
         const now = Date.now();
