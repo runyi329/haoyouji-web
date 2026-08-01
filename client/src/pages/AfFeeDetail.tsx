@@ -764,7 +764,7 @@ export default function AfFeeDetail() {
                   return s + Math.max(0, o.totalFee - prepaid);
                 }, 0);
                 const walletBal = (person.userId > 0 && memberBalances) ? (memberBalances[person.userId] ?? null) : null;
-                const isShortfall = walletBal !== null && walletBal < pendingFee;
+                const isShortfall = pendingFee > 0 && (walletBal === null || walletBal < pendingFee);
                 return (
                   <div key={uid} className="bg-white rounded shadow-sm overflow-hidden">
                     {/* 收缩行：两行4格表格 */}
