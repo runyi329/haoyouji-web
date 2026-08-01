@@ -961,31 +961,11 @@ export function FunderOrderCard({
             {(order as any).order_fill_status === 'pending' && (
               <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5" style={{ borderRadius: '4px', color: '#fff', backgroundColor: '#F97316' }}>挂单中</span>
             )}
-            {order.asset_type === 'crypto' && show('showTradeDirection') && (
-              <>
-                <span
-                  className="ml-1 text-[10px] font-bold px-1.5 py-0"
-                  style={{
-                    borderRadius: '4px',
-                    ...(
-                      (order as any).trade_direction === 'long'
-                        ? { color: '#fff', backgroundColor: '#10B981', border: '1px solid #10B981' }
-                        : { color: '#9CA3AF', backgroundColor: 'rgba(156,163,175,0.10)', border: '1px solid rgba(156,163,175,0.3)' }
-                    )
-                  }}
-                >多</span>
-                <span
-                  className="text-[10px] font-bold px-1.5 py-0"
-                  style={{
-                    borderRadius: '4px',
-                    ...(
-                      (order as any).trade_direction === 'short'
-                        ? { color: '#fff', backgroundColor: '#EF4444', border: '1px solid #EF4444' }
-                        : { color: '#9CA3AF', backgroundColor: 'rgba(156,163,175,0.10)', border: '1px solid rgba(156,163,175,0.3)' }
-                    )
-                  }}
-                >空</span>
-              </>
+            {order.asset_type === 'crypto' && show('showTradeDirection') && (order as any).trade_direction === 'long' && (
+              <span className="ml-1 text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#fff', backgroundColor: '#DC2626', border: '1px solid #DC2626' }}>多</span>
+            )}
+            {order.asset_type === 'crypto' && show('showTradeDirection') && (order as any).trade_direction === 'short' && (
+              <span className="ml-1 text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#fff', backgroundColor: '#16A34A', border: '1px solid #16A34A' }}>空</span>
             )}
           </div>
           <div className="min-h-9 flex flex-col justify-center">
