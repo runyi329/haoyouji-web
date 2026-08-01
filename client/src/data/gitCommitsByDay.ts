@@ -8712,5 +8712,13 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   ],
   "2026-08-01": [
     { date: "2026-07-31T17:32:44Z", type: "fix", cleanMessage: "实时价值弹窗盈亏总和与概览合计保持一致（useRef方案）" },
+    { date: "2026-07-31T17:36:56Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-07-31T17:51:23Z", type: "fix", cleanMessage: "实时价值弹窗盈亏总和与概览合计保持一致，修复暂停标签截断逻辑" },
+    { date: "2026-07-31T18:11:33Z", type: "feat", cleanMessage: "融资/复息订单管理币种列表新增 BZ" },
+    { date: "2026-07-31T18:19:38Z", type: "feat", cleanMessage: "融资订单BZ币种后端枚举补全 + 添加订单用户选择历史记忆功能" },
+    { date: "2026-07-31T18:48:40Z", type: "fix", cleanMessage: "FinanceManagement 本地 COIN_OPTIONS 补充 BZ 币种" },
+    { date: "2026-08-01T02:10:42Z", type: "fix", cleanMessage: "人员视图缺口计算 - 钱包余额为null时也正确显示缺口" },
+    { date: "2026-08-01T02:45:34Z", type: "fix", cleanMessage: "融资付息人员视图缺口计算 - walletBal为null时也正确显示缺口，并补充融资用户到余额查询" },
+    { date: "2026-08-01T02:54:07Z", type: "fix", cleanMessage: "强制重新打包AfFeeDetail - 融资付息缺口计算修复" },
   ],
 };
