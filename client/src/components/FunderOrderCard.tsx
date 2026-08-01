@@ -961,6 +961,9 @@ export function FunderOrderCard({
             {(order as any).order_fill_status === 'pending' && (
               <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5" style={{ borderRadius: '4px', color: '#fff', backgroundColor: '#F97316' }}>挂单中</span>
             )}
+            {(order as any).order_perspective === 'other' && (
+              <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5" style={{ borderRadius: '4px', color: '#fff', backgroundColor: '#7C3AED' }}>他人</span>
+            )}
             {order.asset_type === 'crypto' && show('showTradeDirection') && (order as any).trade_direction === 'long' && (
               <span className="ml-1 text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#fff', backgroundColor: '#DC2626', border: '1px solid #DC2626' }}>多</span>
             )}
