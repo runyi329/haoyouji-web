@@ -28,7 +28,16 @@ jobs:
           echo "[$(date '+%Y-%m-%d %H:%M:%S')] === DEPLOY START ===" > $LOG
           cd /root/haoyouji-web || { echo "cd failed" >> $LOG; exit 1; }
           echo "[$(date '+%Y-%m-%d %H:%M:%S')] git fetch..." >> $LOG
-          git fetch origin >> $LOG 2>&1
+          # 优先用 gh-proxy.com 镜像加速，避免国内服务器直连 GitHub 超时卡顿
+          PROXY_URL="https://gh-proxy.com/https://github.com/runyi329/haoyouji-web.git"
+          DIRECT_URL="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/runyi329/haoyouji-web.git"
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] 尝试镜像拉取..." >> $LOG
+          if timeout 30 git fetch "$PROXY_URL" main:refs/remotes/origin/main >> $LOG 2>&1; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] 镜像拉取成功" >> $LOG
+          else
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] 镜像失败，回退直连 GitHub..." >> $LOG
+            timeout 60 git fetch origin >> $LOG 2>&1 || echo "[$(date '+%Y-%m-%d %H:%M:%S')] 直连也失败，用本地缓存继续" >> $LOG
+          fi
           git reset --hard origin/main >> $LOG 2>&1
           git clean -fd >> $LOG 2>&1
           echo "[$(date '+%Y-%m-%d %H:%M:%S')] pnpm install..." >> $LOG
