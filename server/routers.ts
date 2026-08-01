@@ -17780,7 +17780,7 @@ ${klinesSummary}
         if (!afterFetch || !Array.isArray(afterFetch.data)) return { strikes: [], fromCache: false };
         return { strikes: afterFetch.data, fromCache: false };
       }),
-    // 获取 Deribit 期权希腊字母（Delta/Gamma/Theta/Vega/IV）
+    // 获取期权希腊字母（Delta/Gamma/Theta/Vega/IV）——优先 Gate.io（国内可访），备用 Deribit
     deribitGetGreeks: protectedProcedure
       .input(z.object({
         currency: z.enum(['BTC', 'ETH']),
@@ -17791,13 +17791,18 @@ ${klinesSummary}
       .query(async ({ input }) => {
         const isCall = input.direction === 'long_call' || input.direction === 'short_call';
         const optionType = isCall ? 'C' : 'P';
-        // 转换日期为 Deribit 格式：YYYY-MM-DD -> 8JUL26
+        // Deribit 格式：ETH-25DEC26-1800-C
         const dt = new Date(input.exerciseDate + 'T08:00:00Z');
         const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
         const dd = dt.getUTCDate();
         const mon = months[dt.getUTCMonth()];
         const yy = String(dt.getUTCFullYear()).slice(2);
         const instrumentName = `${input.currency}-${dd}${mon}${yy}-${input.strikePrice}-${optionType}`;
+        // Gate.io 格式：ETH_USDT-20261225-1800-C
+        const yyyy = dt.getUTCFullYear();
+        const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+        const ddStr = String(dt.getUTCDate()).padStart(2, '0');
+        const gateSymbol = `${input.currency}_USDT-${yyyy}${mm}${ddStr}-${input.strikePrice}-${optionType}`;
         const cacheKey = `greeks:${instrumentName}`;
         const ONE_HOUR_MS = 3600 * 1000;
         // 先读数据库缓存
@@ -17807,30 +17812,48 @@ ${klinesSummary}
         if (cacheValid) {
           return { ...cached.data, fromCache: true };
         }
-        // 缓存过期或不存在，尝试拉取最新数据
+        // 优先尝试 Gate.io（国内可访）
         try {
-          const res = await fetch(`https://www.deribit.com/api/v2/public/get_order_book?instrument_name=${instrumentName}&depth=1`);
-          const data = await res.json() as any;
-          if (data.error) throw new Error(data.error.message || '合约不存在');
-          const r = data.result;
+          const gateRes = await fetch(`https://api.gateio.ws/api/v4/options/tickers?underlying=${input.currency}_USDT`, { signal: AbortSignal.timeout(8000) });
+          const gateData = await gateRes.json() as any[];
+          const ticker = gateData.find((t: any) => t.name === gateSymbol);
+          if (!ticker) throw new Error(`Gate.io 未找到合约: ${gateSymbol}`);
           const result = {
             instrumentName,
-            delta: r.greeks?.delta ?? null,
-            gamma: r.greeks?.gamma ?? null,
-            theta: r.greeks?.theta ?? null,
-            vega: r.greeks?.vega ?? null,
-            iv: r.mark_iv ?? null,
-            markPrice: r.mark_price ?? null,
+            delta: ticker.delta != null ? parseFloat(ticker.delta) : null,
+            gamma: ticker.gamma != null ? parseFloat(ticker.gamma) : null,
+            theta: ticker.theta != null ? parseFloat(ticker.theta) : null,
+            vega: ticker.vega != null ? parseFloat(ticker.vega) : null,
+            iv: ticker.mark_iv != null ? parseFloat(ticker.mark_iv) : null,
+            markPrice: ticker.mark_price != null ? parseFloat(ticker.mark_price) : null,
+            indexPrice: ticker.index_price != null ? parseFloat(ticker.index_price) : null,
+            source: 'gateio',
           };
-          // 写入数据库缓存
           await deribitDbSet(cacheKey, result);
           return { ...result, fromCache: false };
-        } catch (e: any) {
-          // 拉取失败：fallback 到旧缓存（即使超过1小时也返回，加 cacheStale 标记）
-          if (cached) {
-            return { ...cached.data, fromCache: true, cacheStale: true };
+        } catch (gateErr: any) {
+          // Gate.io 失败，备用 Deribit
+          try {
+            const res = await fetch(`https://www.deribit.com/api/v2/public/get_order_book?instrument_name=${instrumentName}&depth=1`, { signal: AbortSignal.timeout(8000) });
+            const data = await res.json() as any;
+            if (data.error) throw new Error(data.error.message || '合约不存在');
+            const r = data.result;
+            const result = {
+              instrumentName,
+              delta: r.greeks?.delta ?? null,
+              gamma: r.greeks?.gamma ?? null,
+              theta: r.greeks?.theta ?? null,
+              vega: r.greeks?.vega ?? null,
+              iv: r.mark_iv ?? null,
+              markPrice: r.mark_price ?? null,
+              source: 'deribit',
+            };
+            await deribitDbSet(cacheKey, result);
+            return { ...result, fromCache: false };
+          } catch (e: any) {
+            if (cached) return { ...cached.data, fromCache: true, cacheStale: true };
+            return { instrumentName, delta: null, gamma: null, theta: null, vega: null, iv: null, markPrice: null, error: `Gate.io: ${gateErr.message}; Deribit: ${e.message}`, fromCache: false };
           }
-          return { instrumentName, delta: null, gamma: null, theta: null, vega: null, iv: null, markPrice: null, error: e.message, fromCache: false };
         }
       }),
 
