@@ -992,7 +992,7 @@ export function FunderOrderCard({
                 if (approxHolding === 'hidden') return null;
                 if (order.asset_type === 'stock') {
                   if (!(totalU > 0 && order.coin === 'CNY')) return null;
-                  if (approxHolding === 'U') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(totalU / 7).toLocaleString(undefined, { maximumFractionDigits: 0 })} u</span>;
+                  if (approxHolding === 'U') return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(totalU / cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} u</span>;
                   return <span className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{totalU.toLocaleString(undefined, { maximumFractionDigits: 0 })} 元</span>;
                 } else {
                   if (!liveP || !(qty > 0)) return null;

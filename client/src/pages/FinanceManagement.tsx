@@ -544,7 +544,7 @@ function FinanceOrderCard({
             </div>
             {isGreenOrder && order.asset_type === 'stock' ? (
               totalU > 0 && order.coin === 'CNY' && (
-                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(totalU / 7).toLocaleString(undefined, { maximumFractionDigits: 0 })} U</div>
+                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(totalU / cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} U</div>
               )
             ) : (
               liveP && qty > 0 && (
