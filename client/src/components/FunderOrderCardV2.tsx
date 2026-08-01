@@ -1476,9 +1476,13 @@ export function FunderOrderCardV2Silver({
                                   const oPrincipal = Number(o.principal ?? 0);
                                   const oCoin = (o.coin || '').toUpperCase();
                                   const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null ? Number(o.currentPrice) : null);
-                                  const oCurrentValue = oLiveP !== null ? oLiveP * oQty : null;
-                                  const oFloatPnl = oCurrentValue !== null ? oCurrentValue - oPrincipal : null;
-                                  const oPendingInterest = Number(o.pendingInterest ?? 0);
+                                  // CNY 订单：金额单位是人民币，除以汇率换算成 U
+                                  const isCNY = oCoin === 'CNY';
+                                  const oCurrentValue = isCNY ? oQty / cnyRate : (oLiveP !== null ? oLiveP * oQty : null);
+                                  const oPrincipalU = isCNY ? oPrincipal / cnyRate : oPrincipal;
+                                  const oFloatPnl = oCurrentValue !== null ? oCurrentValue - oPrincipalU : null;
+                                  const oPendingInterestRaw = Number(o.pendingInterest ?? 0);
+                                  const oPendingInterest = isCNY ? oPendingInterestRaw / cnyRate : oPendingInterestRaw;
                                   const gap = oFloatPnl !== null ? oFloatPnl - oPendingInterest : null;
                                   return (
                                     <div key={o.orderId} className="flex justify-between items-center">
@@ -1501,9 +1505,13 @@ export function FunderOrderCardV2Silver({
                                 for (const o of orders) {
                                   const oQty = Number(o.quantity ?? 0); const oPrincipal = Number(o.principal ?? 0);
                                   const oCoin = (o.coin || '').toUpperCase();
+                                  const isCNYt = oCoin === 'CNY';
                                   const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null ? Number(o.currentPrice) : null);
-                                  if (oLiveP === null) { allKnown = false; continue; }
-                                  totalGapLive += oLiveP * oQty - oPrincipal - Number(o.pendingInterest ?? 0);
+                                  if (!isCNYt && oLiveP === null) { allKnown = false; continue; }
+                                  const oCurrentValueT = isCNYt ? oQty / cnyRate : oLiveP! * oQty;
+                                  const oPrincipalUT = isCNYt ? oPrincipal / cnyRate : oPrincipal;
+                                  const oPendingInterestT = isCNYt ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
+                                  totalGapLive += oCurrentValueT - oPrincipalUT - oPendingInterestT;
                                 }
                                 return (
                                   <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
@@ -1546,9 +1554,13 @@ export function FunderOrderCardV2Silver({
                           for (const o of orders) {
                             const oQty = Number(o.quantity ?? 0); const oPrincipal = Number(o.principal ?? 0);
                             const oCoin = (o.coin || '').toUpperCase();
+                            const isCNYr = oCoin === 'CNY';
                             const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null ? Number(o.currentPrice) : null);
-                            if (oLiveP === null) { allHaveGap = false; continue; }
-                            totalRequired += oLiveP * oQty - oPrincipal - Number(o.pendingInterest ?? 0);
+                            if (!isCNYr && oLiveP === null) { allHaveGap = false; continue; }
+                            const oCurrentValueR = isCNYr ? oQty / cnyRate : oLiveP! * oQty;
+                            const oPrincipalUR = isCNYr ? oPrincipal / cnyRate : oPrincipal;
+                            const oPendingInterestR = isCNYr ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
+                            totalRequired += oCurrentValueR - oPrincipalUR - oPendingInterestR;
                           }
                           const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
                           const totalBuyValue = (sharedPoolInfo as any).totalBuyValue ?? 0;
@@ -2443,9 +2455,13 @@ export function FunderLenderCardSilver({
                                         const oPrincipal = Number(o.principal ?? 0);
                                         const oCoin = (o.coin || '').toUpperCase();
                                         const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null ? Number(o.currentPrice) : null);
-                                        const oCurrentValue = oLiveP !== null ? oLiveP * oQty : null;
-                                        const oFloatPnl = oCurrentValue !== null ? oCurrentValue - oPrincipal : null;
-                                        const oPendingInterest = Number(o.pendingInterest ?? 0);
+                                        // CNY 订单：金额单位是人民币，除以汇率换算成 U
+                                        const isCNY = oCoin === 'CNY';
+                                        const oCurrentValue = isCNY ? oQty / cnyRate : (oLiveP !== null ? oLiveP * oQty : null);
+                                        const oPrincipalU = isCNY ? oPrincipal / cnyRate : oPrincipal;
+                                        const oFloatPnl = oCurrentValue !== null ? oCurrentValue - oPrincipalU : null;
+                                        const oPendingInterestRaw = Number(o.pendingInterest ?? 0);
+                                        const oPendingInterest = isCNY ? oPendingInterestRaw / cnyRate : oPendingInterestRaw;
                                         const gap = oFloatPnl !== null ? oFloatPnl - oPendingInterest : null;
                                         return (
                                           <div key={o.orderId} className="flex justify-between items-center">
@@ -2468,9 +2484,13 @@ export function FunderLenderCardSilver({
                                       for (const o of orders) {
                                         const oQty = Number(o.quantity ?? 0); const oPrincipal = Number(o.principal ?? 0);
                                         const oCoin = (o.coin || '').toUpperCase();
+                                        const isCNYt = oCoin === 'CNY';
                                         const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null ? Number(o.currentPrice) : null);
-                                        if (oLiveP === null) { allKnown = false; continue; }
-                                        totalGapLive += oLiveP * oQty - oPrincipal - Number(o.pendingInterest ?? 0);
+                                        if (!isCNYt && oLiveP === null) { allKnown = false; continue; }
+                                        const oCurrentValueT = isCNYt ? oQty / cnyRate : oLiveP! * oQty;
+                                        const oPrincipalUT = isCNYt ? oPrincipal / cnyRate : oPrincipal;
+                                        const oPendingInterestT = isCNYt ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
+                                        totalGapLive += oCurrentValueT - oPrincipalUT - oPendingInterestT;
                                       }
                                       return (
                                         <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
@@ -2513,9 +2533,13 @@ export function FunderLenderCardSilver({
                                 for (const o of orders) {
                                   const oQty = Number(o.quantity ?? 0); const oPrincipal = Number(o.principal ?? 0);
                                   const oCoin = (o.coin || '').toUpperCase();
+                                  const isCNYr = oCoin === 'CNY';
                                   const oLiveP = livePrices[oCoin as CoinType] ?? (o.currentPrice !== null ? Number(o.currentPrice) : null);
-                                  if (oLiveP === null) { allHaveGap = false; continue; }
-                                  totalRequired += oLiveP * oQty - oPrincipal - Number(o.pendingInterest ?? 0);
+                                  if (!isCNYr && oLiveP === null) { allHaveGap = false; continue; }
+                                  const oCurrentValueR = isCNYr ? oQty / cnyRate : oLiveP! * oQty;
+                                  const oPrincipalUR = isCNYr ? oPrincipal / cnyRate : oPrincipal;
+                                  const oPendingInterestR = isCNYr ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
+                                  totalRequired += oCurrentValueR - oPrincipalUR - oPendingInterestR;
                                 }
                                 const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
                                 const totalBuyValue = (sharedPoolInfo as any).totalBuyValue ?? 0;
