@@ -1149,13 +1149,13 @@ export function FunderOrderCardV2Silver({
         {!isStockCard && (
           <>
 
-            {/* 开仓价/行权价：靠右对齐 */}
+            {/* 开仓价/权利金单价：靠右对齐 */}
             <div className="text-right" style={{ flex: 1 }}>
-              <div className="text-[10px] mb-1" style={{ color: TXT_SEC }}>{isOptionCard ? '行权价 (U)' : '开仓价 (U)'}</div>
+              <div className="text-[10px] mb-1" style={{ color: TXT_SEC }}>{isOptionCard ? '权利金/张 (U)' : '开仓价 (U)'}</div>
               <div style={{ lineHeight: 1 }}>
                 <span className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
                   {isOptionCard
-                    ? (_optInfo?.strikePrice ? fmt(Number(_optInfo.strikePrice), 0) : (buyPrice > 0 ? fmt(buyPrice, 0) : '--'))
+                    ? (_optInfo?.premium ? fmt(parseFloat(_optInfo.premium), 2) : '--')
                     : (buyPrice > 0 ? fmt(buyPrice, 2) : '--')}
                 </span>
               </div>
@@ -1234,11 +1234,11 @@ export function FunderOrderCardV2Silver({
           </div>
         )}
         {!isStockCard && isOptionCard && (
-          // 期权卡片：权利金靠右对齐（对齐行权价列）
+          // 期权卡片：总投入（权利金单价xd7张数）
           <div className="text-right" style={{ flex: 1 }}>
-            <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>权利金 (U)</div>
+            <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>总投入 (U)</div>
             <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW, whiteSpace: 'nowrap' }}>
-              {optPremiumTotal !== null ? fmt(optPremiumTotal, 0) : (_optInfo?.premium ? fmt(parseFloat(_optInfo.premium), 2) : '--')}
+              {optPremiumTotal !== null ? fmt(optPremiumTotal, 0) : '--'}
             </div>
           </div>
         )}
@@ -1246,11 +1246,11 @@ export function FunderOrderCardV2Silver({
           // 数字币类：浮动盈亏居右（期权对齐当前价列）
           <div className="text-right" style={{ flex: 1, minWidth: 0 }}>
             <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
-              {isOptionCard ? '内在价值 (U)' : '浮动盈亏 (U)'}
+              {isOptionCard ? '行权价 (U)' : '浮动盈亏 (U)'}
             </div>
             {isOptionCard ? (
-              <div className="text-sm font-semibold" style={{ color: optIntrinsic === null ? TXT_SEC : optIntrinsic > 0 ? SL_GREEN : TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW, whiteSpace: 'nowrap' }}>
-                {optIntrinsic !== null ? fmt(optIntrinsic, 0) : (liveP === null ? '加载中...' : '--')}
+              <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW, whiteSpace: 'nowrap' }}>
+                {_optInfo?.strikePrice ? fmt(Number(_optInfo.strikePrice), 0) : '--'}
               </div>
             ) : (order as any).order_fill_status === 'pending' ? (
               <div className="text-sm font-semibold" style={{ color: '#F97316', textShadow: TXT_SHADOW, whiteSpace: 'nowrap' }}>挂单中</div>
