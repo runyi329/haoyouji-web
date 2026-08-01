@@ -61,7 +61,9 @@ const COINS = ['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA'
 // 股票类合约（优先 OKX SWAP，兜底新浪财经）
 const STOCK_COINS = ['TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG'];
 // 优先 Yahoo Finance，兜底新浪财经
-const YAHOO_STOCKS = ['CRCL', 'DRAM', 'MU', 'MSTR', 'SKHYNIX', 'BZ'];
+const YAHOO_STOCKS = ['CRCL', 'DRAM', 'MU', 'MSTR', 'SKHYNIX'];
+// BZ 布伦特原油：用新浪财经 nf_OIL_Brent（GBK编码，需带Referer），失败时用 Yahoo BZ=F 兜底
+const BZ_SINA_CODE = 'nf_OIL_Brent';
 // Yahoo Finance 代码映射（内部代码 → Yahoo symbol，用于非美股）
 const YAHOO_CODE_MAP: Record<string, string> = {
   SKHYNIX: '000660.KS', // SK海力士（韩国交易所 KRX，韩元计价，需除以 USDKRW 汇率换算成美元）
@@ -414,6 +416,41 @@ async function scanPrices() {
     } catch (err) {
       console.error('[价格扫描] 新浪财经Yahoo兜底失败:', err);
     }
+  }
+
+  // BZ 布伦特原油：专用新浪财经 nf_OIL_Brent（GBK编码）
+  try {
+    const bzRes = await fetch(
+      `https://hq.sinajs.cn/list=${BZ_SINA_CODE}`,
+      { headers: { 'Referer': 'https://finance.sina.com.cn', 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000) }
+    );
+    const bzBuf = await bzRes.arrayBuffer();
+    const bzText = new TextDecoder('gbk').decode(bzBuf);
+    const bzMatch = bzText.match(/"([^"]+)"/);
+    if (bzMatch && bzMatch[1]) {
+      const bzParts = bzMatch[1].split(',');
+      // 格式: 名称,时间,昨收,今开,最高,最低,最新价,...
+      const bzPriceCny = parseFloat(bzParts[6]) || parseFloat(bzParts[3]) || 0;
+      if (bzPriceCny > 0) {
+        // 新浪布伦特原油是人民币计价，除以 CNY/USD 汇率换算成美元
+        const cnyRate = usdtCnyRate > 0 ? usdtCnyRate : 7.25;
+        const bzPriceUsd = parseFloat((bzPriceCny / cnyRate).toFixed(2));
+        const prevChange = latestPrices['BZ']?.changePercent ?? 0;
+        latestPrices['BZ'] = { price: bzPriceUsd, todayOpen: bzPriceUsd, changePercent: prevChange, high24h: 0, low24h: 0, volume24h: 0, quoteVolume24h: 0, updatedAt: new Date().toISOString() };
+        updated = true;
+        console.log(`[价格扫描] BZ 布伦特原油: ${bzPriceCny} CNY ÷ ${cnyRate} = ${bzPriceUsd} USD`);
+      }
+    }
+  } catch {
+    // 新浪失败，尝试 Yahoo Finance BZ=F
+    try {
+      const bzYahoo = await fetchYahooStockPrice('BZ=F');
+      if (bzYahoo && bzYahoo > 0) {
+        const prevChange = latestPrices['BZ']?.changePercent ?? 0;
+        latestPrices['BZ'] = { price: bzYahoo, todayOpen: bzYahoo, changePercent: prevChange, high24h: 0, low24h: 0, volume24h: 0, quoteVolume24h: 0, updatedAt: new Date().toISOString() };
+        updated = true;
+      }
+    } catch {}
   }
 
   // 有更新时持久化到文件
