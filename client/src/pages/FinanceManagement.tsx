@@ -525,9 +525,10 @@ function FinanceOrderCard({
         {/* 左栏：持有资产 */}
         <div className="flex-1 p-4 pr-3">
           <div className="flex items-center gap-0.5 mb-0.5">
-            <span className="text-[10px] font-medium" style={{ color: isGreenOrder ? '#16A34A' : '#3B82F6' }}>{isGreenOrder ? '持有资产' : '融资资产'}</span>
-            {!isGreenOrder && <span className="text-[10px] text-gray-400">({order.finance_type === '自负盈亏' ? '自负盈亏 100%部分' : '保本分成 50%部分'})</span>}
-            {(order.principal_lent_out === 1 || order.principal_lent_out === true) && <span className="text-[10px] text-gray-400">（借出）</span>}
+            <span className="text-[10px] font-medium" style={{ color: isGreenOrder ? '#16A34A' : '#3B82F6' }}>
+              {(order.principal_lent_out === 1 || order.principal_lent_out === true) ? '借出资产' : (isGreenOrder ? '持有资产' : '融资资产')}
+            </span>
+            {!isGreenOrder && !(order.principal_lent_out === 1 || order.principal_lent_out === true) && <span className="text-[10px] text-gray-400">({order.finance_type === '自负盈亏' ? '自负盈亏 100%部分' : '保本分成 50%部分'})</span>}
             {order.asset_type === 'crypto' && order.trade_direction && (
               <span className="ml-1 text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#fff', backgroundColor: order.trade_direction === 'long' ? '#DC2626' : '#16A34A' }}>
                 {order.trade_direction === 'long' ? '多' : '空'}
