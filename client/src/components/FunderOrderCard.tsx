@@ -1051,7 +1051,7 @@ export function FunderOrderCard({
                 <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(order.buy_price).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} u</span>
               </div>
             )}
-            {show('todayPrice') && order.coin !== 'CNY' && order.coin !== 'USDT' && !isStockOrder && !isOptionOrder && (
+            {show('todayPrice') && order.coin !== 'CNY' && order.coin !== 'USDT' && !isOptionOrder && liveP != null && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">当前币价</span>
                 {(() => {

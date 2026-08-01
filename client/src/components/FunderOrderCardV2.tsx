@@ -251,29 +251,37 @@ export function FunderOrderCardV2({
         {/* 浮动盈亏 */}
         <div className="text-right">
           <div className="text-[10px] mb-1" style={{ color: OKX_TEXT_SEC }}>浮动盈亏</div>
-          <div className="flex items-baseline justify-end gap-1" style={{ lineHeight: 1 }}>
-            <span
-              style={{
-                fontSize: "0.9rem",
-                fontWeight: 800,
-                color: pnlColor,
-                fontVariantNumeric: "tabular-nums",
-                letterSpacing: "-0.02em",
-              }}
-            >
-              {floatPnl != null
-                ? `${floatPnl >= 0 ? "+" : ""}${fmt(floatPnl, 0)}`
-                : "--"}
-            </span>
-            {floatPnl != null && <span style={{ fontSize: "0.6rem", color: OKX_TEXT_SEC }}>U</span>}
-          </div>
-          {floatPct != null && (
-            <div
-              className="text-[9px] mt-0.5"
-              style={{ color: pnlColor, fontVariantNumeric: "tabular-nums" }}
-            >
-              {floatPct >= 0 ? "+" : ""}{floatPct.toFixed(2)}%
+          {(order as any).order_fill_status === 'pending' ? (
+            <div className="flex items-baseline justify-end" style={{ lineHeight: 1 }}>
+              <span style={{ fontSize: "0.85rem", fontWeight: 800, color: '#F97316', letterSpacing: "-0.01em" }}>挂单中</span>
             </div>
+          ) : (
+            <>
+              <div className="flex items-baseline justify-end gap-1" style={{ lineHeight: 1 }}>
+                <span
+                  style={{
+                    fontSize: "0.9rem",
+                    fontWeight: 800,
+                    color: pnlColor,
+                    fontVariantNumeric: "tabular-nums",
+                    letterSpacing: "-0.02em",
+                  }}
+                >
+                  {floatPnl != null
+                    ? `${floatPnl >= 0 ? "+" : ""}${fmt(floatPnl, 0)}`
+                    : "--"}
+                </span>
+                {floatPnl != null && <span style={{ fontSize: "0.6rem", color: OKX_TEXT_SEC }}>U</span>}
+              </div>
+              {floatPct != null && (
+                <div
+                  className="text-[9px] mt-0.5"
+                  style={{ color: pnlColor, fontVariantNumeric: "tabular-nums" }}
+                >
+                  {floatPct >= 0 ? "+" : ""}{floatPct.toFixed(2)}%
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -518,16 +526,24 @@ export function FunderOrderCardV2Light({
         </div>
         <div className="text-right">
           <div className="text-[10px] mb-1" style={{ color: LT_TEXT_SEC }}>浮动盈亏</div>
-          <div className="flex items-baseline justify-end gap-1" style={{ lineHeight: 1 }}>
-            <span style={{ fontSize: "0.9rem", fontWeight: 800, color: pnlColor, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>
-              {floatPnl != null ? `${floatPnl >= 0 ? "+" : ""}${fmt(floatPnl, 0)}` : "--"}
-            </span>
-            {floatPnl != null && <span style={{ fontSize: "0.6rem", color: LT_TEXT_SEC }}>U</span>}
-          </div>
-          {floatPct != null && (
-            <div className="text-[9px] mt-0.5" style={{ color: pnlColor, fontVariantNumeric: "tabular-nums" }}>
-              {floatPct >= 0 ? "+" : ""}{floatPct.toFixed(2)}%
+          {(order as any).order_fill_status === 'pending' ? (
+            <div className="flex items-baseline justify-end" style={{ lineHeight: 1 }}>
+              <span style={{ fontSize: "0.85rem", fontWeight: 800, color: '#F97316', letterSpacing: "-0.01em" }}>挂单中</span>
             </div>
+          ) : (
+            <>
+              <div className="flex items-baseline justify-end gap-1" style={{ lineHeight: 1 }}>
+                <span style={{ fontSize: "0.9rem", fontWeight: 800, color: pnlColor, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>
+                  {floatPnl != null ? `${floatPnl >= 0 ? "+" : ""}${fmt(floatPnl, 0)}` : "--"}
+                </span>
+                {floatPnl != null && <span style={{ fontSize: "0.6rem", color: LT_TEXT_SEC }}>U</span>}
+              </div>
+              {floatPct != null && (
+                <div className="text-[9px] mt-0.5" style={{ color: pnlColor, fontVariantNumeric: "tabular-nums" }}>
+                  {floatPct >= 0 ? "+" : ""}{floatPct.toFixed(2)}%
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -1226,6 +1242,8 @@ export function FunderOrderCardV2Silver({
               <div className="text-sm font-semibold" style={{ color: optIntrinsic === null ? TXT_SEC : optIntrinsic > 0 ? SL_GREEN : TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW, whiteSpace: 'nowrap' }}>
                 {optIntrinsic !== null ? fmt(optIntrinsic, 0) : (liveP === null ? '加载中...' : '--')}
               </div>
+            ) : (order as any).order_fill_status === 'pending' ? (
+              <div className="text-sm font-semibold" style={{ color: '#F97316', textShadow: TXT_SHADOW, whiteSpace: 'nowrap' }}>挂单中</div>
             ) : (
               <div className="text-sm font-semibold" style={{ color: pnlColor, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW, whiteSpace: 'nowrap' }}>
                 {floatPnl !== null
