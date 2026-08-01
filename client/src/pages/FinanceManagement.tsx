@@ -533,6 +533,9 @@ function FinanceOrderCard({
                 {order.trade_direction === 'long' ? '多' : '空'}
               </span>
             )}
+            {order.order_fill_status === 'pending' && (
+              <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5" style={{ borderRadius: '4px', color: '#fff', backgroundColor: '#F97316' }}>挂单中</span>
+            )}
           </div>
           {/* 持币量大数字 */}
           <div className="min-h-9 flex flex-col justify-center">
@@ -584,7 +587,7 @@ function FinanceOrderCard({
                 <span className="font-medium" style={{ color: '#4B5563' }}>{liveP != null ? liveP.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' U' : '---'}</span>
               </div>
             )}
-            {orderDc.floatPnl && floatPnl !== null && (
+            {orderDc.floatPnl && floatPnl !== null && order.order_fill_status !== 'pending' && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">浮动盈亏</span>
                 <span className="font-medium tabular-nums" style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>
@@ -1355,6 +1358,7 @@ const emptyForm = {
   interestRateCurrency: 'USDT' as 'USDT' | 'CNY',
   tags: [] as string[],
   principalLentOut: false,
+  orderFillStatus: 'filled' as 'pending' | 'filled',
 };
 
 // ===== 订单公开备注组件 =====
@@ -1910,6 +1914,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         } catch { return order.owner_label ? [order.owner_label] : []; }
       })(),
       principalLentOut: !!(order.principal_lent_out),
+      orderFillStatus: (order.order_fill_status === 'pending' ? 'pending' : 'filled') as 'pending' | 'filled',
     });
     // 加载字段展示配置
     if (order.display_config) {
@@ -1989,6 +1994,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         tags: formData.tags.length > 0 ? formData.tags : [],
         counterparty: formData.counterparty,
         principalLentOut: formData.principalLentOut,
+        orderFillStatus: formData.orderFillStatus,
         displayConfig: {
           ...Object.fromEntries(Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')),
           ...(marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? { marginAlertThreshold: parseFloat(marginAlertThreshold) } : {}),
@@ -2026,6 +2032,7 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
         interestRateCurrency: formData.interestRateCurrency,
         tags: formData.tags.length > 0 ? formData.tags : undefined,
         principalLentOut: formData.principalLentOut,
+        orderFillStatus: formData.orderFillStatus,
         displayConfig: {
           ...Object.fromEntries(Object.entries(displayConfig).filter(([, v]) => typeof v === 'boolean')),
           ...(marginAlertThreshold && parseFloat(marginAlertThreshold) > 0 ? { marginAlertThreshold: parseFloat(marginAlertThreshold) } : {}),
@@ -2660,6 +2667,32 @@ export default function FinanceManagement({ ledgerIdProp, hideHeader }: FinanceM
                       {type === '保本分成' ? '保本分成（50%）' : '自负盈亏（100%）'}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* 成交状态 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-600 mb-2">成交状态</label>
+                <div className="flex gap-3">
+                  {(['已成交', '挂单中'] as const).map(label => {
+                    const val = label === '已成交' ? 'filled' : 'pending';
+                    return (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => setFormData(d => ({ ...d, orderFillStatus: val as 'filled' | 'pending' }))}
+                        className={`flex-1 py-3 rounded-xl text-sm font-semibold border-2 transition-colors ${
+                          formData.orderFillStatus === val
+                            ? val === 'filled'
+                              ? 'bg-blue-600 border-blue-600 text-white'
+                              : 'bg-orange-500 border-orange-500 text-white'
+                            : 'bg-white border-gray-200 text-gray-500'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
