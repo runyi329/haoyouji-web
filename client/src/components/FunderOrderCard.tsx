@@ -1524,7 +1524,10 @@ export function FunderOrderCard({
                                     const oFloatPnl = oCurrentValue !== null ? oCurrentValue - oPrincipalU : null;
                                     const oPendingInterestRaw = Number(o.pendingInterest ?? 0);
                                     const oPendingInterest = isCNY ? oPendingInterestRaw / cnyRate : oPendingInterestRaw;
-                                    const gap = oFloatPnl !== null ? oFloatPnl - oPendingInterest : null;
+                                    // 借出本金：若勾选了「借出本金」，需从缺口中扣除本金（CNY 订单折算成 U）
+                                    const oPrincipalLentOut = o.principalLentOut === true || o.principalLentOut === 1;
+                                    const oPrincipalDeduct = oPrincipalLentOut ? oPrincipalU : 0;
+                                    const gap = oFloatPnl !== null ? oFloatPnl - oPendingInterest - oPrincipalDeduct : null;
                                     return (
                                       <div key={o.orderId} className="flex justify-between items-center">
                                         <div>
@@ -1557,7 +1560,9 @@ export function FunderOrderCard({
                                     const oPrincipalUT = isCNYt ? oPrincipal / cnyRate : oPrincipal;
                                     const oPendingInterestT = isCNYt ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
                                     const oFloatPnlT = oCurrentValueT - oPrincipalUT;
-                                    totalGapLive += oFloatPnlT - oPendingInterestT;
+                                    const oPrincipalLentOutT = o.principalLentOut === true || o.principalLentOut === 1;
+                                    const oPrincipalDeductT = oPrincipalLentOutT ? oPrincipalUT : 0;
+                                    totalGapLive += oFloatPnlT - oPendingInterestT - oPrincipalDeductT;
                                   }
                                   return (
                                     <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>

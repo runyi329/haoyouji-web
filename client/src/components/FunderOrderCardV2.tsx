@@ -1483,7 +1483,9 @@ export function FunderOrderCardV2Silver({
                                   const oFloatPnl = oCurrentValue !== null ? oCurrentValue - oPrincipalU : null;
                                   const oPendingInterestRaw = Number(o.pendingInterest ?? 0);
                                   const oPendingInterest = isCNY ? oPendingInterestRaw / cnyRate : oPendingInterestRaw;
-                                  const gap = oFloatPnl !== null ? oFloatPnl - oPendingInterest : null;
+                                  const oPrincipalLentOut = o.principalLentOut === true || o.principalLentOut === 1;
+                                  const oPrincipalDeduct = oPrincipalLentOut ? oPrincipalU : 0;
+                                  const gap = oFloatPnl !== null ? oFloatPnl - oPendingInterest - oPrincipalDeduct : null;
                                   return (
                                     <div key={o.orderId} className="flex justify-between items-center">
                                       <div>
@@ -1511,7 +1513,8 @@ export function FunderOrderCardV2Silver({
                                   const oCurrentValueT = isCNYt ? oQty / cnyRate : oLiveP! * oQty;
                                   const oPrincipalUT = isCNYt ? oPrincipal / cnyRate : oPrincipal;
                                   const oPendingInterestT = isCNYt ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
-                                  totalGapLive += oCurrentValueT - oPrincipalUT - oPendingInterestT;
+                                  const oPrincipalLentOutT = o.principalLentOut === true || o.principalLentOut === 1;
+                                  totalGapLive += oCurrentValueT - oPrincipalUT - oPendingInterestT - (oPrincipalLentOutT ? oPrincipalUT : 0);
                                 }
                                 return (
                                   <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
@@ -1560,7 +1563,8 @@ export function FunderOrderCardV2Silver({
                             const oCurrentValueR = isCNYr ? oQty / cnyRate : oLiveP! * oQty;
                             const oPrincipalUR = isCNYr ? oPrincipal / cnyRate : oPrincipal;
                             const oPendingInterestR = isCNYr ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
-                            totalRequired += oCurrentValueR - oPrincipalUR - oPendingInterestR;
+                            const oPrincipalLentOutR = o.principalLentOut === true || o.principalLentOut === 1;
+                            totalRequired += oCurrentValueR - oPrincipalUR - oPendingInterestR - (oPrincipalLentOutR ? oPrincipalUR : 0);
                           }
                           const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
                           const totalBuyValue = (sharedPoolInfo as any).totalBuyValue ?? 0;
@@ -2462,7 +2466,9 @@ export function FunderLenderCardSilver({
                                         const oFloatPnl = oCurrentValue !== null ? oCurrentValue - oPrincipalU : null;
                                         const oPendingInterestRaw = Number(o.pendingInterest ?? 0);
                                         const oPendingInterest = isCNY ? oPendingInterestRaw / cnyRate : oPendingInterestRaw;
-                                        const gap = oFloatPnl !== null ? oFloatPnl - oPendingInterest : null;
+                                        const oPrincipalLentOut = o.principalLentOut === true || o.principalLentOut === 1;
+                                        const oPrincipalDeduct = oPrincipalLentOut ? oPrincipalU : 0;
+                                        const gap = oFloatPnl !== null ? oFloatPnl - oPendingInterest - oPrincipalDeduct : null;
                                         return (
                                           <div key={o.orderId} className="flex justify-between items-center">
                                             <div>
@@ -2490,7 +2496,8 @@ export function FunderLenderCardSilver({
                                         const oCurrentValueT = isCNYt ? oQty / cnyRate : oLiveP! * oQty;
                                         const oPrincipalUT = isCNYt ? oPrincipal / cnyRate : oPrincipal;
                                         const oPendingInterestT = isCNYt ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
-                                        totalGapLive += oCurrentValueT - oPrincipalUT - oPendingInterestT;
+                                        const oPrincipalLentOutT = o.principalLentOut === true || o.principalLentOut === 1;
+                                        totalGapLive += oCurrentValueT - oPrincipalUT - oPendingInterestT - (oPrincipalLentOutT ? oPrincipalUT : 0);
                                       }
                                       return (
                                         <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
@@ -2539,7 +2546,8 @@ export function FunderLenderCardSilver({
                                   const oCurrentValueR = isCNYr ? oQty / cnyRate : oLiveP! * oQty;
                                   const oPrincipalUR = isCNYr ? oPrincipal / cnyRate : oPrincipal;
                                   const oPendingInterestR = isCNYr ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
-                                  totalRequired += oCurrentValueR - oPrincipalUR - oPendingInterestR;
+                                  const oPrincipalLentOutR = o.principalLentOut === true || o.principalLentOut === 1;
+                                  totalRequired += oCurrentValueR - oPrincipalUR - oPendingInterestR - (oPrincipalLentOutR ? oPrincipalUR : 0);
                                 }
                                 const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
                                 const totalBuyValue = (sharedPoolInfo as any).totalBuyValue ?? 0;

@@ -16337,7 +16337,8 @@ ${klinesSummary}
           const [sharedRows] = await conn.execute(
             `SELECT fo.id, fo.order_no, fo.coin, fo.amount, fo.buy_price, fo.buy_quantity, fo.interest_base, fo.interest_rate_annual,
                     fo.interest_start_date, fo.collateral_assets, fo.collateral_share_mode,
-                    fo.interest_base_currency, fo.interest_rate_currency, fo.interest_payment_type
+                    fo.interest_base_currency, fo.interest_rate_currency, fo.interest_payment_type,
+                    fo.principal_lent_out
              FROM ledger_orders fo
              WHERE fo.ledger_id = ? AND fo.user_id = ? AND fo.status = 'active'
                AND fo.deleted_at IS NULL AND fo.collateral_share_mode = 'self'`,
@@ -16404,6 +16405,7 @@ ${klinesSummary}
             console.log('[BuyPrice Debug]', o.order_no, 'buy_price raw:', o.buy_price, 'type:', typeof o.buy_price, 'constructor:', o.buy_price?.constructor?.name, 'string:', String(o.buy_price ?? 0));
             const buyPrice = parseFloat(String(o.buy_price ?? 0)) || 0;
             const buyValue = buyPrice * quantity;
+            const principalLentOut = o.principal_lent_out === 1 || o.principal_lent_out === true;
             return {
               orderId: Number(o.id),
               orderNo: o.order_no,
@@ -16421,6 +16423,8 @@ ${klinesSummary}
               collateralGap: collateralValue - collateralRequired,
               collateralAssets,
               shareMode: o.collateral_share_mode,
+              principalLentOut,
+              interestBaseCurrency: o.interest_base_currency || 'USDT',
             };
           });
 
