@@ -371,8 +371,11 @@ function FinanceOrderCard({
   const interestBaseNum = baseCur === 'CNY' ? interestBaseRaw / cnyRate : interestBaseRaw;
   const liveP = livePrices[order.coin] ?? null;
   const currentValue = liveP !== null ? (order.coin === 'CNY' ? qty / cnyRate : liveP * qty) : null;
-  // 浮动盈亏 = 当前持仓市值(U) - 计息基数(U)
-  const floatPnl = currentValue !== null ? currentValue - interestBaseNum : null;
+  const isShort = (order as any).trade_direction === 'short';
+  // 浮动盈亏 = 当前持仓市値(U) - 计息基数(U)；做空时取反（跌了是盈，涨了是亏）
+  const floatPnl = currentValue !== null
+    ? (isShort ? interestBaseNum - currentValue : currentValue - interestBaseNum)
+    : null;
   // 将利息统一折算为U（accrued单位跟interest_base一致，totalPaid单位也interest_base一致）
   const accruedInU = baseCur === 'CNY' ? accrued / cnyRate : accrued;
   const totalPaidInU = baseCur === 'CNY' ? totalPaid / cnyRate : totalPaid;

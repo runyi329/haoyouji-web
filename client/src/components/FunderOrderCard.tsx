@@ -837,7 +837,11 @@ export function FunderOrderCard({
     : (order.interest_base ? Number(order.interest_base) : totalU);
   const liveP = livePrices[order.coin] ?? null;
   const currentValue = liveP !== null ? liveP * qty : null;
-  const floatPnl = currentValue !== null ? currentValue - interestBaseNum : null;
+  const isShort = (order as any).trade_direction === 'short';
+  // 做空盈亏取反：跌了是盈，涨了是亏
+  const floatPnl = currentValue !== null
+    ? (isShort ? interestBaseNum - currentValue : currentValue - interestBaseNum)
+    : null;
   const principalLentOut = order.principal_lent_out === 1 || order.principal_lent_out === true;
   const exposure = floatPnl !== null
     ? collateralValue + floatPnl - accrued + totalPaid - (principalLentOut ? interestBaseNum : 0)

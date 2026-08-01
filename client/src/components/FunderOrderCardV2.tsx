@@ -77,7 +77,11 @@ export function FunderOrderCardV2({
   // 当前市值 & 浮盈
   const currentValue = liveP !== null && qty > 0 ? liveP * qty : null;
   const buyValue = qty > 0 && buyPrice > 0 ? qty * buyPrice : parseFloat(order.amount || "0");
-  const floatPnl = currentValue !== null && buyValue > 0 ? currentValue - buyValue : null;
+  const _isShort = (order as any).trade_direction === 'short';
+  // 做空时取反：跌了是盈，涨了是亏
+  const floatPnl = currentValue !== null && buyValue > 0
+    ? (_isShort ? buyValue - currentValue : currentValue - buyValue)
+    : null;
   const floatPct = floatPnl !== null && buyValue > 0 ? (floatPnl / buyValue) * 100 : null;
   const pnlColor = floatPnl === null ? OKX_TEXT_SEC : floatPnl >= 0 ? OKX_GREEN : OKX_RED;
 
@@ -397,7 +401,10 @@ export function FunderOrderCardV2Light({
 
   const currentValue = liveP !== null && qty > 0 ? liveP * qty : null;
   const buyValue = qty > 0 && buyPrice > 0 ? qty * buyPrice : parseFloat(order.amount || "0");
-  const floatPnl = currentValue !== null && buyValue > 0 ? currentValue - buyValue : null;
+  const _isShortLt = (order as any).trade_direction === 'short';
+  const floatPnl = currentValue !== null && buyValue > 0
+    ? (_isShortLt ? buyValue - currentValue : currentValue - buyValue)
+    : null;
   const floatPct = floatPnl !== null && buyValue > 0 ? (floatPnl / buyValue) * 100 : null;
   const pnlColor = floatPnl === null ? LT_TEXT_SEC : floatPnl >= 0 ? LT_GREEN : LT_RED;
 
@@ -722,7 +729,10 @@ export function FunderOrderCardV2Silver({
 
   const currentValue = liveP !== null && qty > 0 ? liveP * qty : null;
   const buyValue = qty > 0 && buyPrice > 0 ? qty * buyPrice : parseFloat(order.amount || '0');
-  const floatPnl = currentValue !== null && buyValue > 0 ? currentValue - buyValue : null;
+  const _isShortSl = (order as any).trade_direction === 'short';
+  const floatPnl = currentValue !== null && buyValue > 0
+    ? (_isShortSl ? buyValue - currentValue : currentValue - buyValue)
+    : null;
   const floatPct = floatPnl !== null && buyValue > 0 ? (floatPnl / buyValue) * 100 : null;
   const dir = priceDirection?.[coin] ?? 'same';
   const pnlColor = floatPnl === null ? (_isOptCard ? OPT_TEXT_SEC : SL_TEXT_SEC) : floatPnl >= 0 ? SL_GREEN : SL_RED;
