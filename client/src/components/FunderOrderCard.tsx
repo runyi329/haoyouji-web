@@ -1085,6 +1085,14 @@ export function FunderOrderCard({
                 })()}
               </div>
             )}
+            {show('floatPnl') && floatPnl !== null && (
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400 shrink-0">浮动盈亏</span>
+                <span className="font-medium tabular-nums" style={{ color: floatPnl >= 0 ? '#DC2626' : '#16A34A' }}>
+                  {floatPnl >= 0 ? '+' : ''}{floatPnl.toLocaleString(undefined, { maximumFractionDigits: 2 })} u
+                </span>
+              </div>
+            )}
             {show('buyDate') && order.buy_date && (
               <div className="flex items-center justify-between">
                 <span className="text-gray-400 shrink-0">开仓时间</span>

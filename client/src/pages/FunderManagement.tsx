@@ -155,6 +155,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     showTradeDirection: true,
     // 期权 Greeks 面板
     showGreeks: false,
+    // 浮动盈亏（默认关闭）
+    floatPnl: false,
   };
   const [displayConfig, setDisplayConfig] = useState<Record<string, boolean | string>>(DEFAULT_DISPLAY_CONFIG);
   const [marginAlertThreshold, setMarginAlertThreshold] = useState<string>(''); // 保证金率预警阈值（%）
@@ -2310,6 +2312,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                       { key: 'buyDate', label: '开仓时间' },
                       { key: 'openPrice', label: '开仓币价' },
                       { key: 'todayPrice', label: '当前币价' },
+                      { key: 'floatPnl', label: '浮动盈亏' },
                       // 当前价値已移至持有资产括号显示，不再单独作为开关
                       { key: 'holdDuration', label: '持有时长' },
                       { key: 'orderNo', label: '订单编号' },
