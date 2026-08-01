@@ -1717,6 +1717,7 @@ export default function AfFeeDetail() {
                                 return s + Math.max(0, calcDaily2(o) * accD - prepaid);
                               }, 0);
                             const finWalletBal = (p.userId > 0 && memberBalances) ? (memberBalances[p.userId] ?? null) : null;
+                            // 缺口 = 应付 - 钱包，钱包为null时视为0
                             const finShortfall = finPendingFee > 0 && (finWalletBal === null || finWalletBal < finPendingFee);
                             const walBal = finWalletBal !== null ? finWalletBal : 0;
                             const shortfallAmt = finShortfall ? (finPendingFee - walBal) : 0;
