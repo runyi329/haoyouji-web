@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-08-01
+// 生成时间：2026-08-02
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8728,5 +8728,21 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-08-01T10:47:10Z", type: "perf", cleanMessage: "git fetch 加镜像加速（gh-proxy.com），避免国内服务器直连GitHub超时导致部署变慢" },
     { date: "2026-08-01T10:59:06Z", type: "fix", cleanMessage: "CNY订单约等于U显示改用实时cnyRate，修复硬编码汇率7的问题" },
     { date: "2026-08-01T11:06:02Z", type: "fix", cleanMessage: "部署脚本改为只重启root PM2进程，清除ubuntu双进程抢端口问题" },
+    { date: "2026-08-01T11:08:48Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-08-01T11:13:37Z", type: "fix", cleanMessage: "全局统一CNY汇率兜底值从7.2/7.25改为6.8，与当前实际汇率接近，避免页面初始化时显示错误数字" },
+    { date: "2026-08-01T11:45:09Z", type: "fix", cleanMessage: "共享订单缺口汇总加入借出本金扣除逻辑（后端补充principal_lent_out字段，前端三处计算均修复）" },
+    { date: "2026-08-01T11:57:44Z", type: "feat", cleanMessage: "订单模式左侧加入浮动盈亏字段，支持通过字段开关面板控制显示/隐藏" },
+    { date: "2026-08-01T12:09:20Z", type: "feat", cleanMessage: "FunderOrderCard 和 FunderManagement 加入浮动盈亏字段开关，显示在当前币价下方" },
+    { date: "2026-08-01T12:16:13Z", type: "fix", cleanMessage: "做空订单浮动盈亏取反（跌了是盈，涨了是亏），修复三个组件共5处计算" },
+    { date: "2026-08-01T12:25:54Z", type: "feat", cleanMessage: "融资订单加入挂单中/已成交状态切换，挂单中显示橙色标识且不显示浮动盈亏" },
+    { date: "2026-08-01T12:34:29Z", type: "feat", cleanMessage: "FunderManagement 和 FunderOrderCard 加入挂单中/已成交状态切换和标识" },
+    { date: "2026-08-01T12:40:57Z", type: "fix", cleanMessage: "financeUpdateOrder 中 ALTER TABLE order_fill_status 移到 UPDATE 之前，修复字段不存在错误" },
+    { date: "2026-08-01T12:47:17Z", type: "fix", cleanMessage: "多空标签只显示选中的，多=红色，空=绿色，未选中不显示" },
+    { date: "2026-08-01T12:54:25Z", type: "fix", cleanMessage: "BZ当前币价显示修复；卡片模式挂单中时浮动盈亏显示橙色挂单中文字" },
+    { date: "2026-08-01T13:08:10Z", type: "feat", cleanMessage: "新增归属分类（本人/他人）字段，order_perspective=other 的订单显示在他人Tab" },
+    { date: "2026-08-01T13:15:53Z", type: "feat", cleanMessage: "order_perspective=other 时在持有资产旁显示紫色他人标签" },
+    { date: "2026-08-01T13:24:48Z", type: "feat", cleanMessage: "卡片模式三种样式的持有资产/仓位额度旁加借出标签" },
+    { date: "2026-08-01T13:29:41Z", type: "fix", cleanMessage: "卡片模式借出改为灰色括号文字（借出）" },
+    { date: "2026-08-01T13:35:53Z", type: "feat", cleanMessage: "借出开关开启时统一显示借出资产，关闭时显示持有资产/仓位额度" },
   ],
 };
