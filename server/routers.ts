@@ -17457,8 +17457,9 @@ ${klinesSummary}
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
-        // 确保 principal_lent_out 字段存在
+        // 确保字段存在
         await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS principal_lent_out TINYINT(1) DEFAULT 0`).catch(() => {});
+        await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS order_fill_status VARCHAR(20) DEFAULT 'filled'`).catch(() => {});
         // 动态构建 UPDATE，直接使用 mysql2 连接执行带占位符的原始 SQL
         const updateCols: string[] = [];
         const updateVals: any[] = [];
@@ -17484,8 +17485,6 @@ ${klinesSummary}
         if (input.optionInfo !== undefined) { updateCols.push('option_info = ?'); updateVals.push(input.optionInfo ? JSON.stringify(input.optionInfo) : null); }
         if (input.tradeDirection !== undefined) { updateCols.push('trade_direction = ?'); updateVals.push(input.tradeDirection || null); }
         if (input.orderFillStatus !== undefined) { updateCols.push('order_fill_status = ?'); updateVals.push(input.orderFillStatus || 'filled'); }
-        // 确保 order_fill_status 字段存在
-        await db.execute(`ALTER TABLE ledger_orders ADD COLUMN IF NOT EXISTS order_fill_status VARCHAR(20) DEFAULT 'filled'`).catch(() => {});
         // 特殊处理 collateralSource（JSON 序列化）
         if (input.collateralSource !== undefined) {
           updateCols.push('collateral_source = ?');
