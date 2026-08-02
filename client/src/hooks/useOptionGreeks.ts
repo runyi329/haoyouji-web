@@ -32,8 +32,8 @@ export function useOptionGreeks({
     { currency, exerciseDate, strikePrice, direction },
     {
       enabled: enabled && !!exerciseDate && !!strikePrice,
-      staleTime: 5 * 60 * 1000,   // 5 分钟内不重新请求
-      refetchInterval: 5 * 60 * 1000, // 每 5 分钟自动刷新
+      staleTime: 30 * 1000,   // 30 秒内不重新请求
+      refetchInterval: 30 * 1000, // 每 30 秒自动刷新
       retry: 1,
     }
   );

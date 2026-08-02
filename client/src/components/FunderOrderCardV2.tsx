@@ -77,9 +77,11 @@ function OptionPnlCanvas({
     const minP = Math.min(...prices), maxP = Math.max(...prices);
     const rawMinV = Math.min(...pnls, 0);
     const rawMaxV = Math.max(...pnls, 0);
-    const margin = Math.max((rawMaxV - rawMinV) * 0.15, 50);
-    const minV = rawMinV - margin;
-    const maxV = rawMaxV + margin;
+    // Y 轴：固定上限 50k，分五档，亏损区下方留白 35%
+    const maxLossAbs = Math.abs(rawMinV) || 1000;
+    const bottomMargin = Math.max(maxLossAbs * 0.35, 500);
+    const minV = rawMinV - bottomMargin;
+    const maxV = 52000; // 固定上限，稍大于 50k 让标签不被截断
     const vRange = maxV - minV || 1;
     const logMinP = Math.log(Math.max(minP, 1));
     const logMaxP = Math.log(Math.max(maxP, 1));
@@ -89,12 +91,12 @@ function OptionPnlCanvas({
     const zeroY = toY(0);
     priceRangeRef.current = { minP, maxP, W, padL: pad.left, padR: pad.right };
 
-    // 背景
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    // 背景：半透明深色覆盖，继承卡片紫色渐变背景
+    ctx.fillStyle = 'rgba(30, 10, 60, 0.55)';
     ctx.fillRect(0, 0, W, H);
 
     // 网格线
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.10)';
     ctx.lineWidth = 0.5;
     for (let i = 0; i <= 3; i++) {
       const y = pad.top + (i / 3) * (H - pad.top - pad.bottom);
@@ -162,42 +164,45 @@ function OptionPnlCanvas({
     ctx.fill();
 
     // 零轴线
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-    ctx.lineWidth = 0.8;
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+    ctx.lineWidth = 1.2;
     ctx.setLineDash([]);
     ctx.beginPath();
     ctx.moveTo(pad.left, zeroY);
     ctx.lineTo(W - pad.right, zeroY);
     ctx.stroke();
 
-    // Y 轴标注
+    // Y 轴：固定 10k 步长，与期权分析总览一致
     ctx.font = 'bold 10px Inter, -apple-system, sans-serif';
-    if (rawMinV < 0) {
-      const maxLossY = toY(rawMinV);
-      const clampedY = Math.max(pad.top + 14, Math.min(H - pad.bottom - 4, maxLossY));
-      ctx.fillStyle = 'rgba(14,203,129,0.9)';
-      ctx.textAlign = 'left';
-      ctx.fillText(`${Math.round(rawMinV * 10) / 10}`, pad.left + 2, clampedY - 4);
-    }
-    const yStep = rawMaxV > 50000 ? 20000 : rawMaxV > 10000 ? 10000 : rawMaxV > 1000 ? 2000 : 500;
-    const firstYTick = Math.ceil(0 / yStep) * yStep;
-    for (let v = firstYTick; v <= maxV; v += yStep) {
+    const yStep = 10000;
+    const yTickStart = Math.ceil(minV / yStep) * yStep;
+    let lastYBottom = Infinity;
+    for (let v = yTickStart; v <= maxV; v += yStep) {
       const rawY = toY(v);
       if (rawY < pad.top + 4 || rawY > H - pad.bottom - 4) continue;
+      // 每个刻度画分割线
       if (v !== 0) {
         ctx.strokeStyle = 'rgba(255,255,255,0.08)';
         ctx.lineWidth = 0.5;
-        ctx.setLineDash([]);
+        ctx.setLineDash([2, 4]);
         ctx.beginPath();
         ctx.moveTo(pad.left, rawY);
         ctx.lineTo(W - pad.right, rawY);
         ctx.stroke();
+        ctx.setLineDash([]);
       }
+      // 负値（亏损区）不显示数字标签
+      if (v < 0) continue;
+      // 避免标签与上一个重叠
+      if (rawY > lastYBottom - 12) continue;
       const absV = Math.abs(v);
-      const label = v === 0 ? '0' : absV >= 1000 ? `+${Math.round(v / 1000)}k` : `+${Math.round(v)}`;
+      const label = v === 0 ? '0'
+        : absV >= 1000 ? `+${Math.round(v / 1000)}k`
+        : `+${Math.round(v)}`;
       ctx.fillStyle = v > 0 ? 'rgba(246,70,93,0.9)' : 'rgba(255,255,255,0.6)';
       ctx.textAlign = 'left';
       ctx.fillText(label, pad.left + 2, v === 0 ? rawY - 4 : rawY + 3.5);
+      lastYBottom = rawY;
     }
 
     // P&L 曲线（分段着色）
@@ -248,16 +253,20 @@ function OptionPnlCanvas({
     }
 
     // X 轴刻度（动态生成）
+    // X 轴：固定稀疏刻度，与期权分析总览一致
     ctx.font = '9px Inter, -apple-system, sans-serif';
     ctx.fillStyle = 'rgba(132,142,156,0.8)';
     ctx.textAlign = 'center';
-    const range = maxP - minP;
-    const tickStep = range > 3000 ? 500 : range > 1000 ? 200 : range > 400 ? 100 : 50;
-    const firstTick = Math.ceil(minP / tickStep) * tickStep;
-    for (let p = firstTick; p <= maxP; p += tickStep) {
+    const xTicks = [1400, 1600, 1800, 2000, 2500, 3000, 3500];
+    let lastXRight = -Infinity;
+    for (const p of xTicks) {
+      if (p < minP || p > maxP) continue;
       const x = toX(p);
       if (x < pad.left + 10 || x > W - pad.right - 10) continue;
-      ctx.fillText(`${p}`, x, H - pad.bottom + 10);
+      const tw = ctx.measureText(String(p)).width;
+      if (x - tw / 2 < lastXRight + 4) continue; // 避免重叠
+      ctx.fillText(String(p), x, H - pad.bottom + 10);
+      lastXRight = x + tw / 2;
     }
 
     // 行权价竖线
@@ -1410,7 +1419,7 @@ export function FunderOrderCardV2Silver({
       </div>
 
       {/* ── 行2：主数据行（持有数量占宽，其侙3列均分）── */}
-      <div className="flex gap-0 px-5 py-3" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
+      <div className="flex gap-0 px-5" style={{ borderBottom: `1px solid ${DIVIDER}`, paddingTop: isOptionCard ? '8px' : '12px', paddingBottom: isOptionCard ? '8px' : '12px' }}>
         {/* 持有数量/持有资产：占 40% */}
         <div style={{ flex: '0 0 40%' }}>
           {isStockCard ? (
@@ -1514,7 +1523,7 @@ export function FunderOrderCardV2Silver({
       </div>
 
       {/* ── 行3：次要数据行（3列）── */}
-      <div className="flex gap-0 px-5 py-2" style={{ fontFamily: SL_NUM_FONT }}>
+      <div className="flex gap-0 px-5" style={{ fontFamily: SL_NUM_FONT, paddingTop: isOptionCard ? '6px' : '8px', paddingBottom: isOptionCard ? '6px' : '8px' }}>
         {isStockCard ? (
           // 股票类：交易周期居左（开仓日期 ~ 今天北京时间，单行显示）
           <div style={{ flex: '0 0 60%' }}>
@@ -1642,6 +1651,59 @@ export function FunderOrderCardV2Silver({
         )}
       </div>
 
+      {/* ── 行4：期权专属——时间价值 / 内在价值 / 总价值 ── */}
+      {isOptionCard && (() => {
+        const optQty = qty > 0 ? qty : 0;
+        // 单张内在价值
+        const intrinsicPerUnit = optStrike !== null && liveP !== null
+          ? Math.max(0, optIsCall ? (liveP - optStrike) : (optStrike - liveP))
+          : null;
+        // 单张时间价值
+        const timeValuePerUnit = optMarkPrice != null && intrinsicPerUnit != null
+          ? optMarkPrice - intrinsicPerUnit
+          : null;
+        // 单张总价值
+        const totalPerUnit = optMarkPrice;
+        // 总计
+        const intrinsicTotal = intrinsicPerUnit !== null && optQty > 0 ? intrinsicPerUnit * optQty : null;
+        const timeValueTotal = timeValuePerUnit !== null && optQty > 0 ? timeValuePerUnit * optQty : null;
+        const totalValue = totalPerUnit !== null && optQty > 0 ? totalPerUnit * optQty : null;
+        return (
+          <div className="flex gap-0 px-5" style={{ fontFamily: SL_NUM_FONT, paddingTop: '5px', paddingBottom: '6px', borderTop: `1px solid ${DIVIDER}` }}>
+            {/* 时间价值 */}
+            <div style={{ flex: '0 0 40%' }}>
+              <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>时间价值 (U)</div>
+              <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
+                {timeValuePerUnit !== null ? fmt(timeValuePerUnit, 2) : '--'}
+              </div>
+              <div className="text-[10px]" style={{ color: TXT_DIM, fontVariantNumeric: 'tabular-nums' }}>
+                {timeValueTotal !== null ? `×${fmt(optQty, 2)}=${fmt(timeValueTotal, 0)}` : ''}
+              </div>
+            </div>
+            {/* 内在价值 */}
+            <div className="text-right" style={{ flex: 1 }}>
+              <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>内在价值 (U)</div>
+              <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
+                {intrinsicPerUnit !== null ? fmt(intrinsicPerUnit, 2) : '--'}
+              </div>
+              <div className="text-[10px]" style={{ color: TXT_DIM, fontVariantNumeric: 'tabular-nums' }}>
+                {intrinsicTotal !== null ? `×${fmt(optQty, 2)}=${fmt(intrinsicTotal, 0)}` : ''}
+              </div>
+            </div>
+            {/* 总价值 */}
+            <div className="text-right" style={{ flex: 1 }}>
+              <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>总价值 (U)</div>
+              <div className="text-sm font-semibold" style={{ color: totalValue != null && optPremiumTotal != null ? (totalValue >= optPremiumTotal ? SL_GREEN : SL_RED) : TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
+                {totalPerUnit !== null ? fmt(totalPerUnit, 2) : '--'}
+              </div>
+              <div className="text-[10px]" style={{ color: totalValue != null && optPremiumTotal != null ? (totalValue >= optPremiumTotal ? SL_GREEN : SL_RED) : TXT_DIM, fontVariantNumeric: 'tabular-nums' }}>
+                {totalValue !== null ? `×${fmt(optQty, 2)}=${fmt(totalValue, 0)}` : ''}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Tab栏：详情 | 备注 ── */}
       <div className="flex" style={{ borderTop: `1px solid ${DIVIDER}` }}>
         <button
@@ -1701,12 +1763,13 @@ export function FunderOrderCardV2Silver({
 
           const payoffData = (() => {
             if (!optStrikeNum || !optPremiumNum) return [];
-            const minP = Math.round(optStrikeNum * 0.4);
-            const maxP = Math.round(optStrikeNum * 1.8);
+            // X轴范围：与期权分析总览完全一致，固定 1200~4000
+            const minP = 1200;
+            const maxP = 4000;
             return calcExpiryPnL([{
               id: 0, label: '', color: '#a855f7',
               strikePrice: optStrikeNum,
-              entryPrice: optPremiumNum / optQtyNum,
+              entryPrice: optPremiumNum, // 权利金单价（U/张）
               quantity: optQtyNum,
               contractType: optContractType,
               direction: optDirection,
@@ -1726,67 +1789,62 @@ export function FunderOrderCardV2Silver({
           }
 
           return (
-            <div className="pb-3 text-[10px]">
+            <div className="text-[10px]">
 
-              {/* 最大亏损 / 最大盈利 */}
-              {(maxLoss !== null || maxProfit !== null) && (
-                <div className="grid grid-cols-2 gap-0 px-4 py-2" style={{ borderBottom: `1px solid ${DIVIDER}`, background: 'rgba(0,0,0,0.15)' }}>
-                  <div>
-                    <div className="text-[9px] mb-0.5" style={{ color: TXT_SEC }}>最大亏损</div>
-                    <div className="text-xs font-medium" style={{ color: '#0ECB81', fontVariantNumeric: 'tabular-nums' }}>
-                      {isLong ? (maxLoss != null ? `-${maxLoss.toLocaleString()} U` : '--') : <span style={{ fontSize: '0.65rem' }}>理论无限</span>}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-[9px] mb-0.5" style={{ color: TXT_SEC }}>最大盈利</div>
-                    <div className="text-xs font-medium" style={{ color: '#F6465D', fontVariantNumeric: 'tabular-nums' }}>
-                      {maxProfit === '无限' ? <span style={{ fontSize: '0.65rem' }}>理论无限</span> : maxProfit != null ? `+${(maxProfit as number).toLocaleString()} U` : '--'}
-                    </div>
+              {/* 第1行：最大亏损 / 最大盈利 / IV —— 3列网格 */}
+              <div className="grid grid-cols-3 gap-0 px-4 py-2" style={{ borderBottom: `1px solid ${DIVIDER}`, background: 'rgba(0,0,0,0.15)' }}>
+                <div>
+                  <div className="text-[9px] mb-0.5" style={{ color: TXT_SEC }}>最大亏损</div>
+                  <div className="text-xs font-semibold" style={{ color: '#0ECB81', fontVariantNumeric: 'tabular-nums' }}>
+                    {isLong ? (maxLoss != null ? `-${maxLoss.toLocaleString()}` : '--') : <span style={{ fontSize: '0.65rem' }}>无限</span>}
                   </div>
                 </div>
-              )}
+                <div className="text-center">
+                  <div className="text-[9px] mb-0.5" style={{ color: TXT_SEC }}>最大盈利</div>
+                  <div className="text-xs font-semibold" style={{ color: '#F6465D', fontVariantNumeric: 'tabular-nums' }}>
+                    {maxProfit === '无限' ? <span style={{ fontSize: '0.65rem' }}>无限</span> : maxProfit != null ? `+${(maxProfit as number).toLocaleString()}` : '--'}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[9px] mb-0.5" style={{ color: TXT_SEC }}>IV 波动率</div>
+                  <div className="text-xs font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>
+                    {d?.iv != null ? `${(Number(d.iv) * 100).toFixed(1)}%` : '--'}
+                  </div>
+                </div>
+              </div>
+
+              {/* 第2行： Delta / Gamma / Theta / Vega —— 4列网格 */}
+              <div className="grid grid-cols-4 gap-0 px-4 py-2" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
+                <div>
+                  <div className="text-[9px] mb-0.5" style={{ color: TXT_SEC }}>Delta</div>
+                  <div className="text-xs font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{d ? fmtG(d.delta) : '--'}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-[9px] mb-0.5" style={{ color: TXT_SEC }}>Gamma</div>
+                  <div className="text-xs font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{d ? fmtG(d.gamma) : '--'}</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-[9px] mb-0.5" style={{ color: TXT_SEC }}>Theta</div>
+                  <div className="text-xs font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{d ? fmtG(d.theta) : '--'}</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-[9px] mb-0.5" style={{ color: TXT_SEC }}>Vega</div>
+                  <div className="text-xs font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{d ? fmtG(d.vega) : '--'}</div>
+                </div>
+              </div>
 
               {/* P&L 曲线图 */}
               {payoffData.length > 1 && optStrikeNum && (
-                <div style={{ borderBottom: `1px solid ${DIVIDER}` }}>
-                  <OptionPnlCanvas
-                    data={payoffData}
-                    strikePrice={optStrikeNum}
-                    currentPrice={liveP ?? undefined}
-                  />
-                </div>
+                <OptionPnlCanvas
+                  data={payoffData}
+                  strikePrice={optStrikeNum}
+                  currentPrice={liveP ?? undefined}
+                />
               )}
 
-              {/* 希腊字母 */}
-              <div className="px-4 pt-2 space-y-1.5">
               {greeksResult.error && (
-                <div style={{ color: '#DC2626', fontSize: '0.65rem', marginBottom: 4 }}>获取失败</div>
+                <div className="px-4 pt-1" style={{ color: '#DC2626', fontSize: '0.65rem' }}>数据获取失败</div>
               )}
-              <div className="flex justify-between">
-                <span style={{ color: TXT_SEC }}>Delta</span>
-                <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{d ? fmtG(d.delta) : loadingVal}</span>
-              </div>
-              <div className="flex justify-between">
-                <span style={{ color: TXT_SEC }}>Gamma</span>
-                <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{d ? fmtG(d.gamma) : loadingVal}</span>
-              </div>
-              <div className="flex justify-between">
-                <span style={{ color: TXT_SEC }}>Vega</span>
-                <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{d ? fmtG(d.vega) : loadingVal}</span>
-              </div>
-              <div className="flex justify-between">
-                <span style={{ color: TXT_SEC }}>Theta</span>
-                <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{d ? fmtG(d.theta) : loadingVal}</span>
-              </div>
-              <div className="flex justify-between">
-                <span style={{ color: TXT_SEC }}>IV (隐含波动率)</span>
-                <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{d?.iv != null ? `${(Number(d.iv) * 100).toFixed(1)}%` : loadingVal}</span>
-              </div>
-              <div className="flex justify-between" style={{ borderTop: `1px solid ${DIVIDER}`, paddingTop: 4, marginTop: 4 }}>
-                <span style={{ color: TXT_SEC }}>期权标记价</span>
-                <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{d?.markPrice != null ? `${fmtG(d.markPrice, 2)} U` : loadingVal}</span>
-              </div>
-              </div>{/* end 希腊字母 wrapper */}
             </div>
           );
         }

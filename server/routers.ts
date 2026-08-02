@@ -17804,7 +17804,7 @@ ${klinesSummary}
         const ddStr = String(dt.getUTCDate()).padStart(2, '0');
         const gateSymbol = `${input.currency}_USDT-${yyyy}${mm}${ddStr}-${input.strikePrice}-${optionType}`;
         const cacheKey = `greeks:${instrumentName}`;
-        const ONE_HOUR_MS = 5 * 60 * 1000; // 5 分钟缓存
+        const ONE_HOUR_MS = 30 * 1000; // 30 秒缓存
         // 先读数据库缓存
         const cached = await deribitDbGet(cacheKey);
         const now = Date.now();
@@ -17838,6 +17838,12 @@ ${klinesSummary}
             const data = await res.json() as any;
             if (data.error) throw new Error(data.error.message || '合约不存在');
             const r = data.result;
+            // Deribit mark_price 单位是标的资产（ETH/BTC），需乘以 index_price 换算成 USDT
+            const deribitMarkRaw = r.mark_price != null ? parseFloat(r.mark_price) : null;
+            const deribitIndexPrice = r.index_price != null ? parseFloat(r.index_price) : null;
+            const deribitMarkUsdt = (deribitMarkRaw != null && deribitIndexPrice != null && deribitIndexPrice > 0)
+              ? parseFloat((deribitMarkRaw * deribitIndexPrice).toFixed(4))
+              : deribitMarkRaw;
             const result = {
               instrumentName,
               delta: r.greeks?.delta ?? null,
@@ -17845,7 +17851,8 @@ ${klinesSummary}
               theta: r.greeks?.theta ?? null,
               vega: r.greeks?.vega ?? null,
               iv: r.mark_iv ?? null,
-              markPrice: r.mark_price ?? null,
+              markPrice: deribitMarkUsdt,
+              indexPrice: deribitIndexPrice,
               source: 'deribit',
             };
             await deribitDbSet(cacheKey, result);
