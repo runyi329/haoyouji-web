@@ -451,7 +451,7 @@ export function FunderOrderCard({
   const trpcUtils = trpc.useUtils();
   // 结息面板
   const [_intShowPayment, _intSetShowPayment] = useState<number | null>(null);
-  const [_intPaymentForm, _intSetPaymentForm] = useState({ amount: '', currency: 'U' as 'CNY' | 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' });
+  const [_intPaymentForm, _intSetPaymentForm] = useState({ amount: '', currency: 'U' as 'CNY' | 'U', exchangeRate: '6.75', payDate: new Date().toISOString().slice(0, 10), note: '' });
   const [_intEditingPaymentId, _intSetEditingPaymentId] = useState<number | null>(null);
   const [_intShowPaymentDatePicker, _intSetShowPaymentDatePicker] = useState(false);
   const [showPeriodStartPicker, setShowPeriodStartPicker] = useState(false);
@@ -496,7 +496,7 @@ export function FunderOrderCard({
     { enabled: interestPayments === undefined && _activeShowPaymentPanelForQuery === order.id }
   );
   const _intAddPaymentMutation = trpc.ledger.funderAddInterestPayment.useMutation({
-    onSuccess: () => { toast.success('结息记录已添加'); _intSetPaymentForm({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' }); _intRefetchPayments(); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
+    onSuccess: () => { toast.success('结息记录已添加'); _intSetPaymentForm({ amount: '', currency: 'U', exchangeRate: String(cnyRate || 6.75), payDate: new Date().toISOString().slice(0, 10), note: '' }); _intRefetchPayments(); trpcUtils.ledger.funderGetAssetOrders.invalidate({ ledgerId }); },
     onError: (err) => toast.error(err.message),
   });
   const _intDeletePaymentMutation = trpc.ledger.funderDeleteInterestPayment.useMutation({
@@ -509,7 +509,7 @@ export function FunderOrderCard({
   });
   // 编辑结息记录的内联表单状态
   const [editPaymentId, setEditPaymentId] = useState<number | null>(null);
-  const [editPaymentForm, setEditPaymentForm] = useState<{ amount: string; currency: 'CNY' | 'U'; exchangeRate: string; payDate: string; note: string; periodStart: string; periodEnd: string }>({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: '', note: '', periodStart: '', periodEnd: '' });
+  const [editPaymentForm, setEditPaymentForm] = useState<{ amount: string; currency: 'CNY' | 'U'; exchangeRate: string; payDate: string; note: string; periodStart: string; periodEnd: string }>({ amount: '', currency: 'U', exchangeRate: '6.75', payDate: '', note: '', periodStart: '', periodEnd: '' });
   const [showEditStartPicker, setShowEditStartPicker] = useState(false);
   const [showEditEndPicker, setShowEditEndPicker] = useState(false);
   const [showEditDatePicker, setShowEditDatePicker] = useState(false);
@@ -1936,7 +1936,7 @@ export function FunderOrderCard({
             onClick={() => {
               const isOpening = $showPaymentPanel !== order.id;
               $setShowPaymentPanel(isOpening ? order.id : null);
-              $setPaymentForm(() => ({ amount: '', currency: rateCur === 'CNY' ? 'CNY' : 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' }));
+              $setPaymentForm(() => ({ amount: '', currency: rateCur === 'CNY' ? 'CNY' : 'U', exchangeRate: String(cnyRate || 7.0), payDate: new Date().toISOString().slice(0, 10), note: '' }));
               if (isOpening) {
                 // 初始化利息约等于配置
                 try {
@@ -2261,15 +2261,18 @@ export function FunderOrderCard({
             <div className="flex gap-2 mb-1">
               <span className="text-xs text-gray-500 self-center">结息币种：</span>
               <button
-                onClick={() => $setPaymentForm((f: any) => ({ ...f, currency: 'U' }))}
+                onClick={() => $setPaymentForm((f: any) => ({ ...f, currency: 'U', exchangeRate: String(cnyRate || 7.0) }))}
                 className="px-3 py-1 rounded-full text-xs font-medium border transition-all"
                 style={{ backgroundColor: $paymentForm.currency === 'U' ? '#1A2340' : '#fff', color: $paymentForm.currency === 'U' ? '#fff' : '#6B7280', borderColor: $paymentForm.currency === 'U' ? '#1A2340' : '#D1D5DB' }}
               >U</button>
               <button
-                onClick={() => $setPaymentForm((f: any) => ({ ...f, currency: 'CNY' }))}
+                onClick={() => $setPaymentForm((f: any) => ({ ...f, currency: 'CNY', exchangeRate: String(cnyRate || 7.0) }))}
                 className="px-3 py-1 rounded-full text-xs font-medium border transition-all"
                 style={{ backgroundColor: $paymentForm.currency === 'CNY' ? '#1A2340' : '#fff', color: $paymentForm.currency === 'CNY' ? '#fff' : '#6B7280', borderColor: $paymentForm.currency === 'CNY' ? '#1A2340' : '#D1D5DB' }}
               >元</button>
+              {$paymentForm.currency === 'CNY' && cnyRate && (
+                <span className="text-[10px] self-center" style={{ color: '#94a3b8' }}>汇率 {cnyRate.toFixed(4)}</span>
+              )}
             </div>
             <div className="flex gap-2">
               <div className="flex-1">
@@ -2359,7 +2362,7 @@ export function FunderOrderCard({
             <button
               onClick={() => {
                 if (!$paymentForm.amount || parseFloat($paymentForm.amount) <= 0) { toast.error('请填写结息金额'); return; }
-                $addPaymentMutation.mutate({ ledgerId, orderId: order.id, amount: parseFloat($paymentForm.amount), currency: $paymentForm.currency || 'U', exchangeRate: parseFloat($paymentForm.exchangeRate || '7.0'), payDate: $paymentForm.payDate || new Date().toISOString().slice(0, 10), note: $paymentForm.note || undefined, periodStart: ($paymentForm as any).periodStart || undefined, periodEnd: ($paymentForm as any).periodEnd || undefined });
+                $addPaymentMutation.mutate({ ledgerId, orderId: order.id, amount: parseFloat($paymentForm.amount), currency: $paymentForm.currency || 'U', exchangeRate: parseFloat($paymentForm.exchangeRate || String(cnyRate || 6.75)), payDate: $paymentForm.payDate || new Date().toISOString().slice(0, 10), note: $paymentForm.note || undefined, periodStart: ($paymentForm as any).periodStart || undefined, periodEnd: ($paymentForm as any).periodEnd || undefined });
               }}
               disabled={$addPaymentMutation.isPending}
               className="w-full py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50"
@@ -2471,7 +2474,7 @@ export function FunderOrderCard({
                       <button
                         onClick={() => {
                           if (!editPaymentForm.amount || parseFloat(editPaymentForm.amount) <= 0) { toast.error('请填写金额'); return; }
-                          _intUpdatePaymentMutation.mutate({ ledgerId, paymentId: p.id, orderId: order.id, amount: parseFloat(editPaymentForm.amount), currency: editPaymentForm.currency, exchangeRate: parseFloat(editPaymentForm.exchangeRate || '7.0'), payDate: editPaymentForm.payDate, note: editPaymentForm.note || undefined, periodStart: editPaymentForm.periodStart || undefined, periodEnd: editPaymentForm.periodEnd || undefined });
+                          _intUpdatePaymentMutation.mutate({ ledgerId, paymentId: p.id, orderId: order.id, amount: parseFloat(editPaymentForm.amount), currency: editPaymentForm.currency, exchangeRate: parseFloat(editPaymentForm.exchangeRate || String(cnyRate || 6.75)), payDate: editPaymentForm.payDate, note: editPaymentForm.note || undefined, periodStart: editPaymentForm.periodStart || undefined, periodEnd: editPaymentForm.periodEnd || undefined });
                         }}
                         disabled={_intUpdatePaymentMutation.isPending}
                         className="flex-1 py-1.5 rounded-lg text-white text-xs font-medium disabled:opacity-50"

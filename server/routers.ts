@@ -18521,15 +18521,19 @@ ${klinesSummary}
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
         if (!input.orderIds.length) return {};
+        // 按订单汇总已付金额，将 CNY 按 exchange_rate 折算成 U
         const rows = await db.execute(
-          sql`SELECT order_id, SUM(amount) as total_paid
+          sql`SELECT order_id,
+                SUM(CASE WHEN currency = 'CNY' AND exchange_rate > 0
+                         THEN amount / exchange_rate
+                         ELSE amount END) as total_paid_u
               FROM ledger_order_payments
               WHERE ledger_id = ${input.ledgerId} AND order_id IN (${sql.raw(input.orderIds.join(','))})
               GROUP BY order_id`
         ) as any;
         const result: Record<number, number> = {};
         for (const row of ((rows[0] || rows) as any[])) {
-          result[row.order_id] = parseFloat(row.total_paid || '0');
+          result[row.order_id] = parseFloat(row.total_paid_u || '0');
         }
         return result;
       }),

@@ -538,9 +538,9 @@ function FunderOrderCardLegacy({
   participantsEditMode,
   setParticipantsEditMode,
 }: FunderOrderCardLegacyProps) {
-  // 走服务器tRPC获取汇率，60秒刷新
-  const { data: _cnyRateData } = trpc.exchange.getRate.useQuery(undefined, { refetchInterval: 60000, staleTime: 30000 });
-  const cnyRate = parseFloat((_cnyRateData as any)?.money ?? "6.8") || 6.8;
+  // 走服务器tRPC获取汇率，3秒刷新（与订单卡片保持一致）
+  const { data: _cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: 'USD', tocoin: 'CNY', money: 1 }, { refetchInterval: 3000, staleTime: 1000 });
+  const cnyRate = parseFloat((_cnyRateData as any)?.money ?? "6.75") || 6.75;
 
 
 
@@ -784,7 +784,7 @@ function FunderOrderCardLegacy({
             </div>
             {order.asset_type === 'stock' ? (
               totalU > 0 && order.coin === 'CNY' && (
-                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(totalU / 7).toLocaleString(undefined, { maximumFractionDigits: 0 })} U</div>
+                <div className="text-xs font-medium leading-tight" style={{ color: '#4B5563' }}>≈{(totalU / cnyRate).toLocaleString(undefined, { maximumFractionDigits: 0 })} U</div>
               )
             ) : (
               liveP && qty > 0 && (
@@ -1477,7 +1477,7 @@ function FunderOrderCardLegacy({
             {isInvited ? '已结佣金' : '已结利息'}：<span style={{ color: '#16A34A' }}>{displayPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {interestUnit}</span>
           </span>
           <button
-            onClick={() => { setShowPaymentPanel?.(showPaymentPanel === order.id ? null : order.id); setPaymentForm?.(() => ({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' })); }}
+            onClick={() => { setShowPaymentPanel?.(showPaymentPanel === order.id ? null : order.id); setPaymentForm?.(() => ({ amount: '', currency: 'U', exchangeRate: String(cnyRate || 6.75), payDate: new Date().toISOString().slice(0, 10), note: '' })); }}
             className="text-xs px-3 py-1 rounded-full font-medium"
             style={{ backgroundColor: '#EEF4FF', color: '#1A56DB' }}
           >
@@ -1534,7 +1534,7 @@ function FunderOrderCardLegacy({
             <button
               onClick={() => {
                 if (!paymentForm.amount || parseFloat(paymentForm.amount) <= 0) { toast.error('请填写结息金额'); return; }
-                addPaymentMutation?.mutate({ ledgerId, orderId: order.id, amount: parseFloat(paymentForm.amount), currency: paymentForm.currency || 'U', exchangeRate: parseFloat(paymentForm.exchangeRate || '7.0'), payDate: paymentForm.payDate || new Date().toISOString().slice(0, 10), note: paymentForm.note || undefined });
+                addPaymentMutation?.mutate({ ledgerId, orderId: order.id, amount: parseFloat(paymentForm.amount), currency: paymentForm.currency || 'U', exchangeRate: parseFloat(paymentForm.exchangeRate || String(cnyRate || 6.75)), payDate: paymentForm.payDate || new Date().toISOString().slice(0, 10), note: paymentForm.note || undefined });
               }}
               disabled={addPaymentMutation?.isPending}
               className="w-full py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50"
@@ -2528,9 +2528,9 @@ export default function LedgerDetail() {
   const equityLivePrices: Record<string, number> = effectiveIsFunder
     ? funderLivePrices
     : (Object.keys(userLivePrices).length > 0 ? userLivePrices : cachedPrices);
-  // 实时 USD/CNY 汇率 — 走服务器tRPC，60秒刷新
-  const { data: cnyRateData } = trpc.exchange.getRate.useQuery(undefined, { refetchInterval: 60000, staleTime: 30000 });
-  const cnyRate = (cnyRateData?.success && cnyRateData?.money) ? parseFloat(cnyRateData.money) : 6.8;
+  // 实时 USD/CNY 汇率 — 走服务器tRPC，3秒刷新（与订单卡片保持一致）
+  const { data: cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: 'USD', tocoin: 'CNY', money: 1 }, { refetchInterval: 3000, staleTime: 1000 });
+  const cnyRate = (cnyRateData?.success && cnyRateData?.money) ? parseFloat(cnyRateData.money) : 6.75;
 
 
 
@@ -3565,7 +3565,7 @@ export default function LedgerDetail() {
                   const amt = parseFloat(o.interest_base || o.amount || '0');
                   return sum + (isNaN(amt) ? 0 : amt);
                 }, 0);
-                const effectiveCnyRate = (cnyRate && cnyRate > 0) ? cnyRate : 6.8;
+                const effectiveCnyRate = (cnyRate && cnyRate > 0) ? cnyRate : 6.75;
                 const usdtInCny = usdtTotal * effectiveCnyRate;
                 const totalInCny = cnyTotal + usdtInCny;
                 if (totalInCny <= 0) return null;

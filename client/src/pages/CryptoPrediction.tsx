@@ -1410,7 +1410,7 @@ const TIER_LABELS = [
   { tier: 9, drop: '-90%', ratio: '1/10', pct: '13.3%' },
 ];
 
-function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
+export function OrderDetail({ order, timeStr, ledgerId, viewAsUserId }: {
   order: any; timeStr: string; ledgerId: number; viewAsUserId?: number;
 }) {
   const { data: tierData, isLoading: tierLoading } = trpc.ledger.afGetTierData.useQuery(

@@ -94,7 +94,7 @@ const TIER_LABELS = [
 ];
 
 // ─── 谷底增筹订单展开详情子组件（与 CryptoPrediction OrderDetail 一致）────
-function GudizengchouDetail({ order, ledgerId }: { order: any; ledgerId: number }) {
+export function GudizengchouDetail({ order, ledgerId }: { order: any; ledgerId: number }) {
   const { data: tierData, isLoading: tierLoading } = trpc.ledger.afGetTierData.useQuery(
     { orderId: order.id, ledgerId },
     { enabled: order.side === 'buy', staleTime: 8000, refetchInterval: 3000, refetchOnWindowFocus: false }

@@ -45,7 +45,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   ];
   // 结息记录相关 state
   const [showPaymentPanel, setShowPaymentPanel] = useState<number | null>(null); // 当前展开结息面板的订单id
-  const [paymentForm, setPaymentForm] = useState({ amount: '', currency: 'U' as 'CNY' | 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' });
+  const [paymentForm, setPaymentForm] = useState({ amount: '', currency: 'U' as 'CNY' | 'U', exchangeRate: '6.75', payDate: new Date().toISOString().slice(0, 10), note: '' });
   const [editingPaymentId, setEditingPaymentId] = useState<number | null>(null); // 正在编辑的结息记录id
   const [showPaymentDatePicker, setShowPaymentDatePicker] = useState(false);
   const [showRecycleBin, setShowRecycleBin] = useState(false);
@@ -665,7 +665,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     const addPaymentMutation = trpc.ledger.funderAddInterestPayment.useMutation({
     onSuccess: () => {
       toast.success('结息记录已添加');
-      setPaymentForm({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' });
+      setPaymentForm({ amount: '', currency: 'U', exchangeRate: String(cnyRate || 6.75), payDate: new Date().toISOString().slice(0, 10), note: '' });
       refetchPayments();
       refetchEditingPayments();
       refetchAllPaidSummary();
@@ -677,7 +677,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     onSuccess: () => {
       toast.success('结息记录已更新');
       setEditingPaymentId(null);
-      setPaymentForm({ amount: '', currency: 'U', exchangeRate: '7.0', payDate: new Date().toISOString().slice(0, 10), note: '' });
+      setPaymentForm({ amount: '', currency: 'U', exchangeRate: String(cnyRate || 6.75), payDate: new Date().toISOString().slice(0, 10), note: '' });
       refetchPayments();
       refetchEditingPayments();
       refetchAllPaidSummary();

@@ -4,6 +4,7 @@ import { ArrowLeft, ChevronDown, ChevronRight, DollarSign } from "lucide-react";
 import Tooltip from "@/components/Tooltip";
 import { trpc } from "@/lib/trpc";
 import { FunderOrderCard } from "@/components/FunderOrderCard";
+import { OrderDetail as GdOrderDetail } from "@/pages/CryptoPrediction";
 
 // 持币量格式化：整数位数 + 小数位数 = 5位，不足补0
 function formatQty(val: string | number): string {
@@ -92,6 +93,8 @@ export default function AfFeeDetail() {
   const [finDetailOrder, setFinDetailOrder] = useState<any | null>(null);
   // 谷底增稠管理费弹窗
   const [collectModal, setCollectModal] = useState<{ order: any; totalFee: number; prepaidFee: number } | null>(null);
+  // 谷底增稠订单详情弹窗
+  const [gjDetailOrder, setGjDetailOrder] = useState<any | null>(null);
   const [collectAmount, setCollectAmount] = useState('');
   const [collectNote, setCollectNote] = useState('');
   const [collectLoading, setCollectLoading] = useState(false);
@@ -125,7 +128,13 @@ export default function AfFeeDetail() {
   // 融资付息分组筛选：列表/按日期/按人员/按币种
   const [finGroupFilter, setFinGroupFilter] = useState<'byDate' | 'byPerson' | 'byDirection' | 'byType'>('byDate');
   // 按人员视图订单排序
-  const [finPersonOrderSort, setFinPersonOrderSort] = useState<'date' | 'rate' | 'daily'>('daily');
+  const [finPersonOrderSort, setFinPersonOrderSort] = useState<'date' | 'rate' | 'daily' | 'coin'>('daily');
+  const [finPersonOrderSortAsc, setFinPersonOrderSortAsc] = useState(true);
+  // 谷底增稠人员视图订单排序
+  const [gjPersonOrderSort, setGjPersonOrderSort] = useState<'days' | 'acc' | 'paid' | 'pending' | 'amount' | 'coin'>('days');
+  const [gjPersonOrderSortAsc, setGjPersonOrderSortAsc] = useState(true);
+  // 按人员视图人员列表排序：default=付息在前+日息, payable=应付从高到低
+  const [finPersonListSort, setFinPersonListSort] = useState<'default' | 'payable'>('default');
   const [gujianPersonSort, setGujianPersonSort] = useState<'daily' | 'amount' | 'days'>('daily');
   // 融资付息收/付方向筛选：全部/我方收息/我方付息
   const [finDirectionFilter, setFinDirectionFilter] = useState<'all' | 'collect' | 'pay'>('all');
@@ -140,6 +149,7 @@ export default function AfFeeDetail() {
   // 已付利息记录弹窗
   const [finPaidDetailOrderId, setFinPaidDetailOrderId] = useState<number | null>(null);
   const [finChargeAmount, setFinChargeAmount] = useState('');
+  const [finChargeCurrency, setFinChargeCurrency] = useState<'U' | 'CNY'>('U');
   const [finChargeDate, setFinChargeDate] = useState(new Date().toISOString().slice(0, 10));
   const [finChargeNote, setFinChargeNote] = useState('');
   const [finChargeLoading, setFinChargeLoading] = useState(false);
@@ -204,8 +214,8 @@ export default function AfFeeDetail() {
       }
       return o;
     });
-  // 实时 CNY/USDT 汇率 — 走服务器tRPC，60秒刷新
-  const { data: cnyRateData } = trpc.exchange.getRate.useQuery(undefined, { refetchInterval: 60000, staleTime: 30000 });
+  // 实时 CNY/USDT 汇率 — 走服务器tRPC，3秒刷新（与订单卡片、FinanceManagement 保持一致）
+  const { data: cnyRateData } = trpc.exchange.getRate.useQuery({ fromcoin: 'USD', tocoin: 'CNY', money: 1 }, { refetchInterval: 3000, staleTime: 1000 });
   const cnyRate = parseFloat((cnyRateData as any)?.money ?? '6.8') || 6.8;
 
   // 已付利息汇总（按订单聚合）
@@ -458,9 +468,9 @@ export default function AfFeeDetail() {
                       </div>
                     </div>
                     {[
-                      { label: '收息本金(U)', value: collectBaseTotal.toFixed(0), color: '#16a34a' },
-                      { label: '付息本金(U)', value: payBaseTotal.toFixed(0), color: '#dc2626' },
-                      { label: '净本金(U)', value: (collectBaseTotal - payBaseTotal).toFixed(0), color: collectBaseTotal >= payBaseTotal ? '#16a34a' : '#dc2626', bold: true },
+                      { label: '收息本金(U)', value: '+' + collectBaseTotal.toFixed(0), color: '#dc2626' },
+                      { label: '付息本金(U)', value: '-' + payBaseTotal.toFixed(0), color: '#16a34a' },
+                      { label: '净本金(U)', value: (collectBaseTotal - payBaseTotal >= 0 ? '+' : '') + (collectBaseTotal - payBaseTotal).toFixed(0), color: collectBaseTotal >= payBaseTotal ? '#dc2626' : '#16a34a', bold: true },
                     ].map((row, i, arr) => (
                       <div key={i} className="flex" style={{ borderBottom: i < arr.length - 1 ? BORDER : 'none' }}>
                         <div className="flex items-center px-2 py-1.5" style={{ width: '80px', flexShrink: 0, borderRight: BORDER, background: CELL_BG }}>
@@ -514,10 +524,10 @@ export default function AfFeeDetail() {
                 {/* 收息行 */}
                 <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr', borderBottom: '1px solid rgba(0,0,0,0.07)' }}>
                   {[
-                    { v: '收息', color: '#374151', bold: false },
-                    { v: `+${collectDailyTotal.toFixed(2)}`, color: '#16a34a', bold: true },
-                    { v: `+${Math.round(collectDailyTotal * 30)}`, color: '#16a34a', bold: true },
-                    { v: `+${Math.round(collectDailyTotal * 365)}`, color: '#16a34a', bold: true },
+                    { v: '收息(应收)', color: '#374151', bold: false },
+                    { v: `+${collectDailyTotal.toFixed(2)}`, color: '#dc2626', bold: true },
+                    { v: `+${Math.round(collectDailyTotal * 30)}`, color: '#dc2626', bold: true },
+                    { v: `+${Math.round(collectDailyTotal * 365)}`, color: '#dc2626', bold: true },
                   ].map((col, i) => (
                     <div key={i} className="flex items-center justify-center py-1.5 px-1" style={{ borderRight: i < 3 ? '1px solid rgba(0,0,0,0.07)' : 'none', background: 'rgba(255,255,255,0.75)' }}>
                       <span className={`text-xs tabular-nums ${col.bold ? 'font-semibold' : ''}`} style={{ color: col.color }}>{col.v}</span>
@@ -527,10 +537,10 @@ export default function AfFeeDetail() {
                 {/* 付息行 */}
                 <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr', borderBottom: '1px solid rgba(0,0,0,0.10)' }}>
                   {[
-                    { v: '付息', color: '#374151', bold: false },
-                    { v: `-${payDailyTotal.toFixed(2)}`, color: '#dc2626', bold: true },
-                    { v: `-${Math.round(payDailyTotal * 30)}`, color: '#dc2626', bold: true },
-                    { v: `-${Math.round(payDailyTotal * 365)}`, color: '#dc2626', bold: true },
+                    { v: '付息(应付)', color: '#374151', bold: false },
+                    { v: `-${payDailyTotal.toFixed(2)}`, color: '#16a34a', bold: true },
+                    { v: `-${Math.round(payDailyTotal * 30)}`, color: '#16a34a', bold: true },
+                    { v: `-${Math.round(payDailyTotal * 365)}`, color: '#16a34a', bold: true },
                   ].map((col, i) => (
                     <div key={i} className="flex items-center justify-center py-1.5 px-1" style={{ borderRight: i < 3 ? '1px solid rgba(0,0,0,0.07)' : 'none', background: 'rgba(255,255,255,0.75)' }}>
                       <span className={`text-xs tabular-nums ${col.bold ? 'font-semibold' : ''}`} style={{ color: col.color }}>{col.v}</span>
@@ -541,9 +551,9 @@ export default function AfFeeDetail() {
                 <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
                   {[
                     { v: '汇总', color: '#111827', bold: true },
-                    { v: `${netDaily >= 0 ? '+' : ''}${netDaily.toFixed(2)}`, color: netDaily >= 0 ? '#16a34a' : '#dc2626', bold: true },
-                    { v: `${netDaily >= 0 ? '+' : ''}${Math.round(netDaily * 30)}`, color: netDaily >= 0 ? '#16a34a' : '#dc2626', bold: true },
-                    { v: `${netDaily >= 0 ? '+' : ''}${Math.round(netDaily * 365)}`, color: netDaily >= 0 ? '#16a34a' : '#dc2626', bold: true },
+                    { v: `${netDaily >= 0 ? '+' : ''}${netDaily.toFixed(2)}`, color: netDaily > 0 ? '#dc2626' : netDaily < 0 ? '#16a34a' : '#94a3b8', bold: true },
+                    { v: `${netDaily >= 0 ? '+' : ''}${Math.round(netDaily * 30)}`, color: netDaily > 0 ? '#dc2626' : netDaily < 0 ? '#16a34a' : '#94a3b8', bold: true },
+                    { v: `${netDaily >= 0 ? '+' : ''}${Math.round(netDaily * 365)}`, color: netDaily > 0 ? '#dc2626' : netDaily < 0 ? '#16a34a' : '#94a3b8', bold: true },
                   ].map((col, i) => (
                     <div key={i} className="flex items-center justify-center py-2 px-1" style={{ borderRight: i < 3 ? '1px solid rgba(0,0,0,0.07)' : 'none', background: 'rgba(255,255,255,0.90)' }}>
                       <span className={`text-xs tabular-nums ${col.bold ? 'font-bold' : ''}`} style={{ color: col.color }}>{col.v}</span>
@@ -774,29 +784,32 @@ export default function AfFeeDetail() {
               {persons.map((person) => {
                 const uid = person.nickname;
                 const isOpen = expandedPersons.has(uid);
-                const pendingFee = person.orders.reduce((s, o) => {
+                // 应收待收之和：负数=还没收，正数=多收（与展开订单口径一致）
+                const gjPendingFee = person.orders.reduce((s, o) => {
                   const prepaid = parseFloat((o as any).prepaidFee || '0');
-                  return s + Math.max(0, o.totalFee - prepaid);
+                  // accInterestSigned = -totalFee， remainingFee = -totalFee + prepaid
+                  return s + (-o.totalFee + prepaid);
                 }, 0);
                 const walletBal = (person.userId > 0 && memberBalances) ? (memberBalances[person.userId] ?? null) : null;
-                const isShortfall = pendingFee > 0 && (walletBal === null || walletBal < pendingFee);
+                const wBal = walletBal !== null ? walletBal : 0;
+                // 还没收时（负数），用绝对值与錢包比较缺口
+                const isShortfall = gjPendingFee < 0 && (walletBal === null || wBal < Math.abs(gjPendingFee));
+                const shortfall = isShortfall ? (Math.abs(gjPendingFee) - wBal) : 0;
                 return (
                   <div key={uid} className="bg-white rounded shadow-sm overflow-hidden">
                     {/* 收缩行：两行4格表格 */}
                     {(() => {
-                      const wBal = walletBal !== null ? walletBal : 0;
-                      const shortfall = isShortfall ? (pendingFee - wBal) : 0;
                       const gjRow1 = [
                         { label: '姓名', value: person.nickname, color: '#0f172a', bold: true, bg: undefined },
-                        { label: '钱包', value: wBal.toFixed(2) + ' U', color: isShortfall ? '#dc2626' : '#16a34a', bg: undefined },
-                        { label: '应付', value: pendingFee.toFixed(2) + ' U', color: '#1e40af', bg: undefined },
-                        { label: '缺口', value: isShortfall ? '-' + shortfall.toFixed(2) + ' U' : '0 U', color: isShortfall ? '#dc2626' : '#94a3b8', bg: isShortfall ? '#fee2e2' : undefined },
+                        { label: '錢包(U)', value: wBal.toFixed(2), color: isShortfall ? '#dc2626' : '#16a34a', bg: undefined },
+                        { label: '应收(U)', value: (gjPendingFee === 0 ? '0.00' : (gjPendingFee > 0 ? '+' : '') + gjPendingFee.toFixed(2)), color: gjPendingFee > 0 ? '#dc2626' : gjPendingFee < 0 ? '#16a34a' : '#94a3b8', bg: undefined },
+                        { label: '缺口(U)', value: isShortfall ? '-' + shortfall.toFixed(2) : '0.00', color: isShortfall ? '#16a34a' : '#94a3b8', bg: isShortfall ? '#fee2e2' : undefined },
                       ];
                       const gjRow2 = [
                         { label: '单数', value: person.orders.length + '单', color: '#475569', bg: undefined },
-                        { label: '日费', value: person.dailyTotal.toFixed(2) + ' U', color: '#334155', bg: undefined },
-                        { label: '月预测', value: Math.round(person.dailyTotal * 30) + ' U', color: '#475569', bg: undefined },
-                        { label: '年预测', value: Math.round(person.dailyTotal * 365) + ' U', color: '#475569', bg: undefined },
+                        { label: '日费(U)', value: person.dailyTotal.toFixed(2), color: '#334155', bg: undefined },
+                        { label: '月预测(U)', value: Math.round(person.dailyTotal * 30).toString(), color: '#475569', bg: undefined },
+                        { label: '年预测(U)', value: Math.round(person.dailyTotal * 365).toString(), color: '#475569', bg: undefined },
                       ];
                       return (
                         <button onClick={() => togglePerson(uid)} className="w-full">
@@ -819,49 +832,103 @@ export default function AfFeeDetail() {
                         </button>
                       );
                     })()}
-                    {/* 展开：每条订单单行布局 */}
+                    {/* 展开：每条订单 8格网格布局 */}
                     {isOpen && (
-                      <div className="border-t border-gray-100">
-                        {person.orders.map((item, i) => {
+                      <div className="border-t border-gray-100" style={{ background: '#dce6f0' }}>
+                        {/* 排序按鈕栏 */}
+                        <div className="flex items-center gap-1.5 px-4 py-2" style={{ borderBottom: '1px solid #c8d6e5', background: '#cfdcea' }}>
+                          <span className="text-[11px]" style={{ color: '#94a3b8' }}>排序：</span>
+                          {(['days', 'amount', 'acc', 'paid', 'pending', 'coin'] as const).map(k => {
+                            const isKActive = gjPersonOrderSort === k;
+                            const arrow = isKActive ? (gjPersonOrderSortAsc ? '↑' : '↓') : '';
+                            const label = k === 'days' ? '持有' : k === 'amount' ? '本金' : k === 'acc' ? '应收' : k === 'paid' ? '已收' : k === 'pending' ? '待收' : '币种';
+                            return (
+                              <button key={k} onClick={() => {
+                                if (gjPersonOrderSort === k) { setGjPersonOrderSortAsc(v => !v); }
+                                else { setGjPersonOrderSort(k); setGjPersonOrderSortAsc(true); }
+                              }}
+                                className="text-[11px] px-2 py-0.5 rounded"
+                                style={{ background: isKActive ? '#1e293b' : '#e2e8f0', color: isKActive ? '#fff' : '#475569', fontWeight: isKActive ? 600 : 400 }}>
+                                {label + arrow}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {[...person.orders].sort((a: any, b: any) => {
+                          const dir = gjPersonOrderSortAsc ? 1 : -1;
+                          if (gjPersonOrderSort === 'days') return ((a.holdDays || 0) - (b.holdDays || 0)) * dir;
+                          if (gjPersonOrderSort === 'amount') return ((a.tradeValue || parseFloat(a.amount||'0')*5.25) - (b.tradeValue || parseFloat(b.amount||'0')*5.25)) * dir;
+                          if (gjPersonOrderSort === 'acc') return (a.totalFee - b.totalFee) * dir;
+                          if (gjPersonOrderSort === 'paid') return ((parseFloat(a.prepaidFee||'0')) - (parseFloat(b.prepaidFee||'0'))) * dir;
+                          if (gjPersonOrderSort === 'pending') return ((-a.totalFee + parseFloat(a.prepaidFee||'0')) - (-b.totalFee + parseFloat(b.prepaidFee||'0'))) * dir;
+                          return (a.coin || '').localeCompare(b.coin || '') * dir;
+                        }).map((item, i) => {
                           const prepaidFee = parseFloat(item.prepaidFee || '0');
-                          const remainingFee = Math.max(0, item.totalFee - prepaidFee);
-                          // 开仓日期：优先用 createdAt（订单确认日），startDate 字段在 af_orders 中不存在
+                          const accInterestSigned = -item.totalFee; // 负数：客户要付出去的（绿色）
+                          const remainingFee = accInterestSigned + prepaidFee; // 待收：负数=还没收，正数=多收
                           const createdAtStr = item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-CA', { timeZone: 'Asia/Shanghai' }) : '';
                           const stShort = createdAtStr ? (() => { const p2 = createdAtStr.split('-'); return p2.length===3 ? `${parseInt(p2[1])}/${parseInt(p2[2])}` : createdAtStr.slice(5,10); })() : '-';
-                          const todayNow = new Date(); const todayStrNow = `${todayNow.getFullYear()}-${String(todayNow.getMonth()+1).padStart(2,'0')}-${String(todayNow.getDate()).padStart(2,'0')}`;
-                          const st = createdAtStr || '';
-                          const accDays = st ? Math.max(0, Math.round((new Date(todayStrNow).getTime() - new Date(st.slice(0,10)).getTime()) / 86400000) + 1) : 0;
-                          const accInterest = item.dailyFee * accDays;
                           const coinColor = item.coin === 'BTC' ? '#d97706' : item.coin === 'ETH' ? '#2563eb' : item.coin === 'SOL' ? '#7c3aed' : '#334155';
+                          const orderNo = String(item.id).padStart(4, '0');
+                          const dailyDisplay = item.dailyFee > 0 ? '-' + item.dailyFee.toFixed(2) + '/天' : '-';
+                          const startLabel = '开仓' + (stShort !== '-' ? ' ' + stShort : '');
+                          const numColor = (v: number) => v > 0 ? '#dc2626' : v < 0 ? '#16a34a' : '#94a3b8';
+                          const numDisplay = (v: number) => v === 0 ? '0.00' : (v > 0 ? '+' : '') + v.toFixed(2);
+                          const qty = parseFloat((item as any).quantity || '0');
+                          const discountRate = (item as any).discountRate ?? 1.0;
+                          const qtyDiscounted = qty * discountRate;
+                          const fmtQty = (v: number) => v.toFixed(2);
+                          const qtyDisplay = qty > 0 ? (fmtQty(qty) + '→' + fmtQty(qtyDiscounted)) : '-';
+                          const gjOrdRow1 = [
+                            { label: '币种 ' + (item.coin || '-'), value: qtyDisplay, color: coinColor, bold: false },
+                            { label: '订单号', value: orderNo, color: '#2563eb', isDetail: true, isGift: !!(item as any).isGift },
+                            { label: startLabel, value: dailyDisplay, color: '#16a34a' },
+                            { label: '持有', value: (item.holdDays || 0) + '天', color: '#475569' },
+                          ];
+                          const gjOrdRow2 = [
+                            { label: '本金(U)', value: Math.round((item as any).isGift ? parseFloat(item.amount||'0') : (item as any).tradeValue || parseFloat(item.amount||'0') * 5.25).toString(), color: '#334155' },
+                            { label: '累计应收', value: numDisplay(accInterestSigned), color: numColor(accInterestSigned) },
+                            { label: '已收(U)', value: prepaidFee > 0 ? prepaidFee.toFixed(2) : '0.00', color: prepaidFee > 0 ? '#dc2626' : '#94a3b8' }, // 已收是正数红色（收进来的）
+                            { label: '待收(U)', value: numDisplay(remainingFee), color: numColor(remainingFee), isCharge: true },
+                          ];
                           return (
-                            <div key={item.id ?? i} className="px-4 py-3" style={{ borderBottom: '1px solid #f1f5f9' }}>
-                              {/* 第一行：币种 · 订单金额 · 编号 · 开仓日 · 共X天 */}
-                              <div className="flex items-center gap-2 flex-wrap mb-1">
-                                <span className="text-sm font-bold" style={{ color: coinColor }}>{item.coin || '-'}</span>
-                                <span className="text-sm font-semibold tabular-nums" style={{ color: '#334155' }}>{Math.round(parseFloat(item.amount||'0'))} U</span>
-                                <span className="text-xs" style={{ color: '#64748b' }}>订单编号 {String(item.id).padStart(4, '0')}</span>
-                                <span className="text-xs" style={{ color: '#94a3b8' }}>开仓 {stShort}</span>
-                                <span className="text-xs tabular-nums" style={{ color: '#94a3b8' }}>共 {item.holdDays} 天</span>
+                            <div key={item.id ?? i} className="px-2 py-2" style={{ borderBottom: '1px solid #b8cfe8' }}>
+                              <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', borderLeft: '1px solid #b8cfe8', borderRight: '1px solid #b8cfe8', borderTop: '1px solid #b8cfe8', borderBottom: 'none', borderRadius: '3px 3px 0 0', overflow: 'hidden' }}>
+                                {gjOrdRow1.map((col, ci) => (
+                                  <div key={ci}
+                                    className={`flex flex-col items-center px-1 py-1${ci === 1 ? ' cursor-pointer active:opacity-70' : ''}`}
+                                    style={{ borderRight: ci < 3 ? '1px solid #b8cfe8' : 'none', background: '#eaf1f8' }}
+                                    onClick={ci === 1 ? (e) => { e.stopPropagation(); setGjDetailOrder(item); } : undefined}
+                                  >
+                                    <span className="text-[9px] leading-tight mb-0.5 flex items-center gap-0.5" style={{ color: ci === 1 ? '#2563eb' : '#7a9ab8' }}>
+                                      {col.label}{ci === 1 && (col as any).isGift && <span style={{ color: '#dc2626' }}>赠</span>}
+                                    </span>
+                                    <span className={`text-[11px] leading-tight w-full text-center truncate ${col.bold ? 'font-bold' : 'font-medium'}${ci === 1 ? ' underline decoration-dotted underline-offset-1' : ''}`} style={{ color: col.color }}>{col.value}</span>
+                                  </div>
+                                ))}
                               </div>
-                              {/* 第二行：日费 · 累积 · 待付 · 收费按钮 */}
-                              <div className="flex items-center gap-2.5 flex-wrap">
-                                <span className="text-xs tabular-nums" style={{ color: '#64748b' }}>{item.dailyFee.toFixed(2)} U/天</span>
-                                <span className="text-xs font-semibold tabular-nums" style={{ color: '#1e40af' }}>累积 {accInterest.toFixed(2)} U</span>
-                                {remainingFee > 0 && <span className="text-xs font-semibold tabular-nums" style={{ color: '#ea580c' }}>待付 {remainingFee.toFixed(2)} U</span>}
-                                <button
-                                  onClick={e => { e.stopPropagation(); setCollectModal({ order: item, totalFee: item.totalFee, prepaidFee }); setCollectAmount(remainingFee.toFixed(4)); setCollectNote(''); }}
-                                  className="text-xs font-semibold px-2 py-0.5 rounded"
-                                  style={{ background: '#1e3a8a', color: '#fff' }}
-                                >征收</button>
+                              <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', border: '1px solid #b8cfe8', borderRadius: '0 0 3px 3px', overflow: 'hidden' }}>
+                                {gjOrdRow2.map((col, ci) => (
+                                  <div key={ci} className="flex flex-col items-center px-1 py-1" style={{ borderRight: ci < 3 ? '1px solid #b8cfe8' : 'none', background: '#eaf1f8' }}>
+                                    {ci === 3 ? (
+                                      <div className="flex items-center gap-0.5 mb-0.5">
+                                        <span className="text-[9px] leading-tight" style={{ color: '#7a9ab8' }}>{col.label}</span>
+                                        <button
+                                          onClick={e => { e.stopPropagation(); setCollectModal({ order: item, totalFee: item.totalFee, prepaidFee }); setCollectAmount(Math.max(0, remainingFee).toFixed(4)); setCollectNote(''); }}
+                                          className="text-[8px] font-semibold px-0.5 rounded leading-tight"
+                                          style={{ background: '#1e3a8a', color: '#fff' }}
+                                        >收</button>
+                                      </div>
+                                    ) : (
+                                      <span className="text-[9px] leading-tight mb-0.5" style={{ color: '#7a9ab8' }}>{col.label}</span>
+                                    )}
+                                    <span className="text-[11px] font-semibold tabular-nums leading-tight w-full text-center" style={{ color: col.color }}>{col.value}</span>
+                                  </div>
+                                ))}
                               </div>
                             </div>
                           );
                         })}
-                        {/* 底部合计 */}
-                        <div className="flex items-center justify-between px-4 py-2" style={{ background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
-                          <span className="text-xs font-semibold" style={{ color: '#475569' }}>日费合计</span>
-                          <span className="text-sm font-bold tabular-nums" style={{ color: '#1e40af' }}>{person.dailyTotal.toFixed(2)} U/天</span>
-                        </div>
                       </div>
                     )}
                   </div>
@@ -1538,17 +1605,33 @@ export default function AfFeeDetail() {
                       { dir: 'collect' as const, grp: null, label: `收息(${collectCnt})` },
                       { dir: 'pay' as const, grp: null, label: `付息(${payCnt})` },
                       { dir: null, grp: 'byDate' as const, label: '日期' },
-                      { dir: null, grp: 'byPerson' as const, label: '人员' },
-                      { dir: null, grp: 'byDirection' as const, label: '方向' },
-                      { dir: null, grp: 'byType' as const, label: '类型' },
-                    ]).map((t, i) => {
-                      const isActive = t.dir ? finDirectionFilter === t.dir : finGroupFilter === t.grp;
-                      return (
-                        <button key={i} onClick={() => { if (t.dir) setFinDirectionFilter(t.dir); else if (t.grp) setFinGroupFilter(t.grp); }}
-                          className="flex-1 py-1.5 rounded text-xs font-medium transition-all"
-                          style={isActive ? ACTIVE : INACTIVE}>{t.label}</button>
-                      );
-                    })}
+      { dir: null, grp: 'byPerson' as const, label: '人员' },
+      { dir: null, grp: 'byDirection' as const, label: '方向' },
+      { dir: null, grp: 'byType' as const, label: '类型' },
+    ]).map((t, i) => {
+      const isActive = t.dir ? finDirectionFilter === t.dir : finGroupFilter === t.grp;
+      const isPersonTab = t.grp === 'byPerson';
+      return (
+        <button
+          key={i}
+          onClick={() => {
+            if (isPersonTab) {
+              if (isActive) {
+                // 已在人员视图，再次单击切换排序
+                setFinPersonListSort(s => s === 'default' ? 'payable' : 'default');
+              } else {
+                setFinGroupFilter('byPerson');
+              }
+            } else if (t.dir) {
+              setFinDirectionFilter(t.dir);
+            } else if (t.grp) {
+              setFinGroupFilter(t.grp);
+            }
+          }}
+          className="flex-1 py-1.5 rounded text-xs font-medium transition-all"
+          style={isActive ? ACTIVE : INACTIVE}>{t.label}</button>
+      );
+    })}
                   </div>
                 );
               })()}
@@ -1695,11 +1778,28 @@ export default function AfFeeDetail() {
                   p.orders.push(o);
                   if (isCollect(o)) p.collectDaily += d; else p.payDaily += d;
                 }
+                // 计算每个人的应付金额（用于排序）
+                const calcPersonPendingFee = (pOrders: any[]) => pOrders
+                  .filter((o: any) => !isCollect(o))
+                  .reduce((s: number, o: any) => {
+                    const paidAmt2 = finPaidMap[Number(o.id)] != null ? Number(finPaidMap[Number(o.id)]) : 0;
+                    const st2 = o.interest_start_date || o.buy_date || '';
+                    if (!st2) return s;
+                    const todayNow2 = new Date();
+                    const todayStr2 = `${todayNow2.getFullYear()}-${String(todayNow2.getMonth()+1).padStart(2,'0')}-${String(todayNow2.getDate()).padStart(2,'0')}`;
+                    const accD2 = Math.max(0, Math.round((new Date(todayStr2).getTime() - new Date(st2.slice(0,10)).getTime()) / 86400000) + 1);
+                    return s + Math.max(0, calcDaily2(o) * accD2 - paidAmt2);
+                  }, 0);
                 const persons = Array.from(personMap.values()).sort((a, b) => {
+                  if (finPersonListSort === 'payable') {
+                    // 按应付从高到低排序
+                    return calcPersonPendingFee(b.orders) - calcPersonPendingFee(a.orders);
+                  }
+                  // 默认：付息在前，同类内日息从小到大
                   const aIsPay = a.payDaily > 0 && a.collectDaily === 0;
                   const bIsPay = b.payDaily > 0 && b.collectDaily === 0;
-                  if (aIsPay !== bIsPay) return aIsPay ? -1 : 1; // 付息在前
-                  return (a.collectDaily + a.payDaily) - (b.collectDaily + b.payDaily); // 同类内日息从小到大
+                  if (aIsPay !== bIsPay) return aIsPay ? -1 : 1;
+                  return (a.collectDaily + a.payDaily) - (b.collectDaily + b.payDaily);
                 });
                 if (persons.length === 0) return <div className="text-center py-8 text-gray-400 text-sm">暂无记录</div>;
                 return (
@@ -1710,11 +1810,13 @@ export default function AfFeeDetail() {
                         <div key={p.name} className="bg-white rounded shadow-sm overflow-hidden">
                           {(() => {
                             const netD = p.collectDaily - p.payDaily;
-                            // 应付：付息订单的累计应付利息
+                            // 应付：所有付息订单的待付之和
+                            // 与展开订单“待付”保持相同口径：负数=还欠，正数=多付
+                            // remainingPayable = signedAcc - (-paidAmt) = -accInterest + paidAmt
                             const finPendingFee = p.orders
                               .filter((o: any) => !isCollect(o))
                               .reduce((s: number, o: any) => {
-                                const prepaid = parseFloat((o as any).prepaidFee || o.prepaid_fee || '0');
+                                const paidAmt = finPaidMap[Number(o.id)] != null ? Number(finPaidMap[Number(o.id)]) : 0;
                                 const accD = (() => {
                                   const st2 = o.interest_start_date || o.buy_date || '';
                                   if (!st2) return 0;
@@ -1722,24 +1824,26 @@ export default function AfFeeDetail() {
                                   const todayStr2 = `${todayNow2.getFullYear()}-${String(todayNow2.getMonth()+1).padStart(2,'0')}-${String(todayNow2.getDate()).padStart(2,'0')}`;
                                   return Math.max(0, Math.round((new Date(todayStr2).getTime() - new Date(st2.slice(0,10)).getTime()) / 86400000) + 1);
                                 })();
-                                return s + Math.max(0, calcDaily2(o) * accD - prepaid);
+                                // 付息订单： signedAcc = -daily*accD， remainingPayable = signedAcc - (-paidAmt) = -daily*accD + paidAmt
+                                return s + (-calcDaily2(o) * accD + paidAmt);
                               }, 0);
                             const finWalletBal = (p.userId > 0 && memberBalances) ? (memberBalances[p.userId] ?? null) : null;
-                            // 缺口 = 应付 - 钱包，钱包为null时视为0
-                            const finShortfall = finPendingFee > 0 && (finWalletBal === null || finWalletBal < finPendingFee);
+                            // finPendingFee 负数=还欠，正数=多付；缺口在还欠时触发
                             const walBal = finWalletBal !== null ? finWalletBal : 0;
-                            const shortfallAmt = finShortfall ? (finPendingFee - walBal) : 0;
+                            const pendingAbs = Math.abs(finPendingFee);
+                            const finShortfall = finPendingFee < 0 && (finWalletBal === null || walBal < pendingAbs);
+                            const shortfallAmt = finShortfall ? (pendingAbs - walBal) : 0;
                             const row1 = [
                               { label: '姓名', value: p.name, color: '#0f172a', bold: true, bg: undefined },
-                              { label: '钱包', value: walBal.toFixed(2) + ' U', color: finShortfall ? '#dc2626' : '#16a34a', bg: undefined },
-                              { label: '应付', value: finPendingFee.toFixed(2) + ' U', color: '#1e40af', bg: undefined },
-                              { label: '缺口', value: finShortfall ? '-' + shortfallAmt.toFixed(2) + ' U' : '0 U', color: finShortfall ? '#dc2626' : '#94a3b8', bg: finShortfall ? '#fee2e2' : undefined },
+                              { label: '錢包(U)', value: walBal.toFixed(2), color: finShortfall ? '#dc2626' : '#16a34a', bg: undefined },
+                              { label: '应付(U)', value: (finPendingFee === 0 ? '0.00' : (finPendingFee > 0 ? '+' : '') + finPendingFee.toFixed(2)), color: finPendingFee > 0 ? '#dc2626' : finPendingFee < 0 ? '#16a34a' : '#94a3b8', bg: undefined },
+                              { label: '缺口(U)', value: finShortfall ? '-' + shortfallAmt.toFixed(2) : '0.00', color: finShortfall ? '#16a34a' : '#94a3b8', bg: finShortfall ? '#fee2e2' : undefined },
                             ];
                             const row2 = [
                               { label: '单数', value: p.orders.length + '单', color: '#475569', bg: undefined },
-                              { label: '收息/天', value: p.collectDaily > 0 ? '+' + p.collectDaily.toFixed(2) : '0', color: p.collectDaily > 0 ? '#dc2626' : '#94a3b8', bg: undefined },
-                              { label: '付息/天', value: p.payDaily > 0 ? '-' + p.payDaily.toFixed(2) : '0', color: p.payDaily > 0 ? '#16a34a' : '#94a3b8', bg: undefined },
-                              { label: '净日息', value: (netD >= 0 ? '+' : '') + netD.toFixed(2), color: netD >= 0 ? '#dc2626' : '#16a34a', bg: undefined },
+                              { label: '收息/天(U)', value: p.collectDaily > 0 ? '+' + p.collectDaily.toFixed(2) : '0', color: p.collectDaily > 0 ? '#dc2626' : '#94a3b8', bg: undefined },
+                              { label: '付息/天(U)', value: p.payDaily > 0 ? '-' + p.payDaily.toFixed(2) : '0', color: p.payDaily > 0 ? '#16a34a' : '#94a3b8', bg: undefined },
+                              { label: '净日息(U)', value: (netD >= 0 ? '+' : '') + netD.toFixed(2), color: netD >= 0 ? '#dc2626' : '#16a34a', bg: undefined },
                             ];
                             return (
                               <button onClick={() => togglePerson('fin_' + p.name)} className="w-full">
@@ -1769,23 +1873,38 @@ export default function AfFeeDetail() {
                               {/* 排序按鈕栏 */}
                               <div className="flex items-center gap-1.5 px-4 py-2" style={{ borderBottom: '1px solid #c8d6e5', background: '#cfdcea' }}>
                                 <span className="text-[11px]" style={{ color: '#94a3b8' }}>排序：</span>
-                                {(['date', 'rate', 'daily'] as const).map(k => (
-                                  <button key={k} onClick={e => { e.stopPropagation(); setFinPersonOrderSort(k); }}
-                                    className="text-[11px] px-2 py-0.5 rounded"
-                                    style={{ background: finPersonOrderSort === k ? '#1e293b' : '#e2e8f0', color: finPersonOrderSort === k ? '#fff' : '#475569', fontWeight: finPersonOrderSort === k ? 600 : 400 }}>
-                                    {k === 'date' ? '日期' : k === 'rate' ? '利率' : '日息'}
-                                  </button>
-                                ))}
+                                {(['date', 'rate', 'daily', 'coin'] as const).map(k => {
+                                  const isKActive = finPersonOrderSort === k;
+                                  const arrow = isKActive ? (finPersonOrderSortAsc ? '↑' : '↓') : '';
+                                  return (
+                                    <button key={k} onClick={e => {
+                                      e.stopPropagation();
+                                      if (isKActive) {
+                                        setFinPersonOrderSortAsc(v => !v);
+                                      } else {
+                                        setFinPersonOrderSort(k);
+                                        setFinPersonOrderSortAsc(true);
+                                      }
+                                    }}
+                                      className="text-[11px] px-2 py-0.5 rounded"
+                                      style={{ background: isKActive ? '#1e293b' : '#e2e8f0', color: isKActive ? '#fff' : '#475569', fontWeight: isKActive ? 600 : 400 }}>
+                                      {(k === 'date' ? '日期' : k === 'rate' ? '利率' : k === 'daily' ? '日息' : '币种') + arrow}
+                                    </button>
+                                  );
+                                })}
                               </div>
                               {[...p.orders].sort((a: any, b: any) => {
+                                const dir = finPersonOrderSortAsc ? 1 : -1;
                                 if (finPersonOrderSort === 'date') {
                                   const da = a.interest_start_date || a.buy_date || '';
                                   const db = b.interest_start_date || b.buy_date || '';
-                                  return da.localeCompare(db);
+                                  return da.localeCompare(db) * dir;
                                 } else if (finPersonOrderSort === 'rate') {
-                                  return (Math.abs(Number(a.interest_rate_annual) || 0)) - (Math.abs(Number(b.interest_rate_annual) || 0));
+                                  return ((Math.abs(Number(a.interest_rate_annual) || 0)) - (Math.abs(Number(b.interest_rate_annual) || 0))) * dir;
+                                } else if (finPersonOrderSort === 'coin') {
+                                  return (a.coin || '').localeCompare(b.coin || '') * dir;
                                 } else {
-                                  return calcDaily2(a) - calcDaily2(b);
+                                  return (calcDaily2(a) - calcDaily2(b)) * dir;
                                 }
                               }).map((o, i) => {
                                 const raw = o.interest_base != null ? Number(o.interest_base) : (o.amount != null ? Number(o.amount) : 0);
@@ -1799,21 +1918,36 @@ export default function AfFeeDetail() {
                                 const accDaysP = st ? Math.max(0, Math.round((new Date(todayStrNow).getTime() - new Date(st.slice(0,10)).getTime()) / 86400000) + 1) : 0;
                                 const accInterestP = daily * accDaysP;
                                 const accentColor = collect ? '#dc2626' : '#16a34a';
-                                const typeLabel = o.asset_type === 'stock' ? '股票' : o.asset_type === 'crypto_option' ? '期权' : '数字币';
+                                const typeLabel = o.asset_type === 'stock' ? '股' : o.asset_type === 'crypto_option' ? '权' : '币';
                                 const orderNo = o.order_no || String(o.id || '').padStart(4, '0');
+                                const paidForOrder = finPaidMap[Number(o.id)] != null ? Number(finPaidMap[Number(o.id)]) : 0;
+                                // 待付 = 累计应付 - 已付
+                                // 付息订单：累计应付是负数（要付出去），待付也是负数（还没付的部分）
+                                // 收息订单：累计应付是正数（要收进来），待付也是正数
+                                // 累计应付已带符号（collect ? + : -），待付同理
+                                const signedAcc = collect ? accInterestP : -accInterestP;
+                                const remainingPayable = signedAcc - (collect ? paidForOrder : -paidForOrder);
+                                const dirLabel = collect ? '(收)' : '(付)';
+                                // 起息格：标签显示“起息 MM/DD”，值显示“X.XX/天”
+                                const dailyVal = daily.toFixed(2);
+                                const startLabel = '起息' + (stShort !== '-' ? ' ' + stShort : '');
+                                const dailyDisplay = daily > 0 ? (collect ? '+' : '-') + dailyVal + '/天' : '-';
+                                const accVal = accInterestP.toFixed(2);
                                 const finOrdRow1 = [
-                                  { label: '币种', value: o.coin || '-', color: '#0f172a', bold: true },
-                                  { label: '订单号', value: orderNo, color: '#334155' },
-                                  { label: '起息', value: stShort, color: '#64748b' },
+                                  { label: '币种' + dirLabel, value: o.coin || '-', color: collect ? '#dc2626' : '#16a34a', bold: true },
+                                  { label: '订单号(' + typeLabel + ')', value: orderNo, color: '#334155' },
+                                  { label: startLabel, value: dailyDisplay, color: accentColor },
                                   { label: '持有', value: accDaysP + '天', color: '#475569' },
                                 ];
-                                const dailyVal = daily.toFixed(2);
-                                const accVal = accInterestP.toFixed(2);
+                                // 统一颜色规则：负数绿色，正数红色，零灰色
+                                const numColor = (v: number) => v > 0 ? '#dc2626' : v < 0 ? '#16a34a' : '#94a3b8';
+                                const numDisplay = (v: number) => v === 0 ? '0.00' : (v > 0 ? '+' : '') + v.toFixed(2);
+                                const remainingDisplay = numDisplay(remainingPayable);
                                 const finOrdRow2 = [
                                   { label: '本金(U)', value: base2 > 0 ? base2.toFixed(2) : '-', color: '#334155' },
-                                  { label: '方向', value: collect ? '收息' : '付息', color: accentColor },
-                                  { label: '日息(U)', value: daily === 0 ? '0.00' : (collect ? '+' : '-') + dailyVal, color: daily === 0 ? '#334155' : accentColor },
-                                  { label: '累计(U)', value: accInterestP === 0 ? '0.00' : (collect ? '+' : '-') + accVal, color: accInterestP === 0 ? '#334155' : accentColor },
+                                  { label: '累计应付', value: numDisplay(signedAcc), color: numColor(signedAcc) },
+                                  { label: '已付(U)', value: paidForOrder > 0 ? paidForOrder.toFixed(2) : '0.00', color: paidForOrder > 0 ? '#dc2626' : '#94a3b8' },
+                                  { label: '待付(U)', value: remainingDisplay, color: numColor(remainingPayable) },
                                 ];
                                 return (
                                 <div key={o.id ?? i} className="px-2 py-2" style={{ borderBottom: '1px solid #b8cfe8', background: '#dce6f0' }}>
@@ -2251,6 +2385,21 @@ export default function AfFeeDetail() {
               isAdmin={false}
               previewMode={true}
             />
+          </div>
+        </div>
+      )}
+
+      {/* 谷底增稠订单详情弹窗 */}
+      {gjDetailOrder && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto py-8 px-3" style={{ background: 'rgba(0,0,0,0.55)' }} onClick={() => setGjDetailOrder(null)}>
+          <div className="bg-white rounded-2xl w-full shadow-2xl overflow-hidden" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3" style={{ background: '#FFF7ED', borderBottom: '1px solid #FED7AA' }}>
+              <div className="font-semibold text-gray-800 text-base">谷底增笹订单详情</div>
+              <button type="button" onClick={() => setGjDetailOrder(null)} className="text-gray-400 hover:text-gray-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <GdOrderDetail order={gjDetailOrder} timeStr={gjDetailOrder?.createdAt ? new Date(gjDetailOrder.createdAt).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : ''} ledgerId={ledgerId} viewAsUserId={gjDetailOrder?.userId || undefined} />
           </div>
         </div>
       )}
