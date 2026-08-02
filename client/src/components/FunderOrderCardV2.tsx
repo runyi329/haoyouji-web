@@ -1,6 +1,7 @@
 // FunderOrderCardV2 —— OKX 深色风格订单卡片（资产感优先，服务费弱化）
 // 仅用于对比展示，不影响原有 FunderOrderCard
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { calcExpiryPnL } from '../../../shared/blackScholes';
 import { useOptionGreeks } from "@/hooks/useOptionGreeks";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -18,6 +19,342 @@ import {
   formatNoteTime,
   NoteAvatar,
 } from "./FunderOrderCard";
+
+// ===== P&L 曲线图组件（复用自 OptionAnalysisPage）=====
+function OptionPnlCanvas({
+  data,
+  strikePrice,
+  currentPrice,
+}: {
+  data: { price: number; pnl: number }[];
+  strikePrice: number;
+  currentPrice?: number;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [dragPrice, setDragPrice] = React.useState<number | null>(null);
+  const isDraggingRef = useRef(false);
+  const priceRangeRef = useRef<{ minP: number; maxP: number; W: number; padL: number; padR: number } | null>(null);
+  const displayPrice = dragPrice ?? currentPrice;
+
+  const xToPrice = useCallback((clientX: number) => {
+    const range = priceRangeRef.current;
+    const canvas = canvasRef.current;
+    if (!range || !canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const { minP, maxP, W, padL, padR } = range;
+    const logMin = Math.log(Math.max(minP, 1));
+    const logMax = Math.log(Math.max(maxP, 1));
+    const ratio = (x - padL) / (W - padL - padR);
+    const p = Math.exp(logMin + ratio * (logMax - logMin));
+    return Math.max(minP, Math.min(maxP, p));
+  }, []);
+
+  const toggleDragMode = useCallback(() => {
+    if (isDraggingRef.current || dragPrice !== null) {
+      isDraggingRef.current = false;
+      setDragPrice(null);
+    } else {
+      isDraggingRef.current = true;
+      if (currentPrice != null) setDragPrice(currentPrice);
+    }
+  }, [dragPrice, currentPrice]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || data.length < 2) return;
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.offsetWidth;
+    const H = canvas.offsetHeight;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.scale(dpr, dpr);
+    const pad = { top: 24, right: 10, bottom: 28, left: 8 };
+    const prices = data.map(d => d.price);
+    const pnls = data.map(d => d.pnl);
+    const minP = Math.min(...prices), maxP = Math.max(...prices);
+    const rawMinV = Math.min(...pnls, 0);
+    const rawMaxV = Math.max(...pnls, 0);
+    const margin = Math.max((rawMaxV - rawMinV) * 0.15, 50);
+    const minV = rawMinV - margin;
+    const maxV = rawMaxV + margin;
+    const vRange = maxV - minV || 1;
+    const logMinP = Math.log(Math.max(minP, 1));
+    const logMaxP = Math.log(Math.max(maxP, 1));
+    const logPRange = logMaxP - logMinP || 1;
+    const toX = (p: number) => pad.left + ((Math.log(Math.max(p, 1)) - logMinP) / logPRange) * (W - pad.left - pad.right);
+    const toY = (v: number) => pad.top + ((maxV - v) / vRange) * (H - pad.top - pad.bottom);
+    const zeroY = toY(0);
+    priceRangeRef.current = { minP, maxP, W, padL: pad.left, padR: pad.right };
+
+    // 背景
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(0, 0, W, H);
+
+    // 网格线
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i <= 3; i++) {
+      const y = pad.top + (i / 3) * (H - pad.top - pad.bottom);
+      ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+    }
+
+    // 行权价处 P&L 插値
+    const strikeInterp = (() => {
+      for (let i = 1; i < data.length; i++) {
+        const a = data[i - 1], b = data[i];
+        if (a.price <= strikePrice && b.price >= strikePrice) {
+          const t = (strikePrice - a.price) / (b.price - a.price);
+          return a.pnl + t * (b.pnl - a.pnl);
+        }
+      }
+      return data.find(d => d.price <= strikePrice)?.pnl ?? 0;
+    })();
+    const sX = toX(strikePrice);
+    const sY = toY(strikeInterp);
+
+    // 盈利区（红色）
+    const profitGrad = ctx.createLinearGradient(0, pad.top, 0, zeroY);
+    profitGrad.addColorStop(0, 'rgba(246,70,93,0.42)');
+    profitGrad.addColorStop(1, 'rgba(246,70,93,0.05)');
+    ctx.fillStyle = profitGrad;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, zeroY);
+    data.forEach(d => ctx.lineTo(toX(d.price), toY(d.pnl)));
+    ctx.lineTo(W - pad.right, zeroY);
+    ctx.closePath();
+    ctx.fill();
+
+    // 亏损区（绿色）
+    const lossGrad = ctx.createLinearGradient(0, zeroY, 0, H - pad.bottom);
+    lossGrad.addColorStop(0, 'rgba(14,203,129,0.05)');
+    lossGrad.addColorStop(1, 'rgba(14,203,129,0.42)');
+    ctx.fillStyle = lossGrad;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, zeroY);
+    data.filter(d => d.price <= strikePrice).forEach(d => ctx.lineTo(toX(d.price), toY(d.pnl)));
+    ctx.lineTo(sX, sY);
+    ctx.lineTo(sX, zeroY);
+    ctx.closePath();
+    ctx.fill();
+
+    // 过渡区（灰色）
+    const grayGrad = ctx.createLinearGradient(0, zeroY, 0, H - pad.bottom);
+    grayGrad.addColorStop(0, 'rgba(160,160,160,0.05)');
+    grayGrad.addColorStop(1, 'rgba(160,160,160,0.35)');
+    ctx.fillStyle = grayGrad;
+    ctx.beginPath();
+    ctx.moveTo(sX, zeroY);
+    ctx.lineTo(sX, sY);
+    const negAfter = data.filter(d => d.price >= strikePrice && d.pnl < 0);
+    negAfter.forEach(d => ctx.lineTo(toX(d.price), toY(d.pnl)));
+    const beIdx = data.findIndex((d, i) => i > 0 && data[i-1].pnl < 0 && d.pnl >= 0);
+    if (beIdx > 0) {
+      const prev = data[beIdx - 1], curr = data[beIdx];
+      const ratio = Math.abs(prev.pnl) / (Math.abs(prev.pnl) + Math.abs(curr.pnl));
+      ctx.lineTo(toX(prev.price + ratio * (curr.price - prev.price)), zeroY);
+    } else if (negAfter.length > 0) {
+      ctx.lineTo(toX(negAfter[negAfter.length - 1].price), zeroY);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // 零轴线
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 0.8;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(pad.left, zeroY);
+    ctx.lineTo(W - pad.right, zeroY);
+    ctx.stroke();
+
+    // Y 轴标注
+    ctx.font = 'bold 10px Inter, -apple-system, sans-serif';
+    if (rawMinV < 0) {
+      const maxLossY = toY(rawMinV);
+      const clampedY = Math.max(pad.top + 14, Math.min(H - pad.bottom - 4, maxLossY));
+      ctx.fillStyle = 'rgba(14,203,129,0.9)';
+      ctx.textAlign = 'left';
+      ctx.fillText(`${Math.round(rawMinV * 10) / 10}`, pad.left + 2, clampedY - 4);
+    }
+    const yStep = rawMaxV > 50000 ? 20000 : rawMaxV > 10000 ? 10000 : rawMaxV > 1000 ? 2000 : 500;
+    const firstYTick = Math.ceil(0 / yStep) * yStep;
+    for (let v = firstYTick; v <= maxV; v += yStep) {
+      const rawY = toY(v);
+      if (rawY < pad.top + 4 || rawY > H - pad.bottom - 4) continue;
+      if (v !== 0) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+        ctx.lineWidth = 0.5;
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(pad.left, rawY);
+        ctx.lineTo(W - pad.right, rawY);
+        ctx.stroke();
+      }
+      const absV = Math.abs(v);
+      const label = v === 0 ? '0' : absV >= 1000 ? `+${Math.round(v / 1000)}k` : `+${Math.round(v)}`;
+      ctx.fillStyle = v > 0 ? 'rgba(246,70,93,0.9)' : 'rgba(255,255,255,0.6)';
+      ctx.textAlign = 'left';
+      ctx.fillText(label, pad.left + 2, v === 0 ? rawY - 4 : rawY + 3.5);
+    }
+
+    // P&L 曲线（分段着色）
+    ctx.lineWidth = 2;
+    for (let i = 0; i < data.length - 1; i++) {
+      const a = data[i], b = data[i + 1];
+      if (a.pnl < 0 && b.pnl >= 0) {
+        const ratio = Math.abs(a.pnl) / (Math.abs(a.pnl) + Math.abs(b.pnl));
+        const cx = toX(a.price + ratio * (b.price - a.price));
+        const segColorA = a.price > strikePrice ? 'rgba(160,160,160,0.85)' : '#0ECB81';
+        ctx.strokeStyle = segColorA; ctx.beginPath(); ctx.moveTo(toX(a.price), toY(a.pnl)); ctx.lineTo(cx, zeroY); ctx.stroke();
+        ctx.strokeStyle = '#F6465D'; ctx.beginPath(); ctx.moveTo(cx, zeroY); ctx.lineTo(toX(b.price), toY(b.pnl)); ctx.stroke();
+        continue;
+      }
+      let segColor: string;
+      if (a.pnl >= 0) segColor = '#F6465D';
+      else if (a.price > strikePrice) segColor = 'rgba(160,160,160,0.85)';
+      else segColor = '#0ECB81';
+      ctx.strokeStyle = segColor;
+      ctx.beginPath();
+      ctx.moveTo(toX(a.price), toY(a.pnl));
+      ctx.lineTo(toX(b.price), toY(b.pnl));
+      ctx.stroke();
+    }
+
+    // BE 点
+    ctx.font = 'bold 10px Inter, -apple-system, sans-serif';
+    for (let i = 1; i < data.length; i++) {
+      const prev = data[i - 1], curr = data[i];
+      if ((prev.pnl < 0 && curr.pnl >= 0) || (prev.pnl >= 0 && curr.pnl < 0)) {
+        const ratio = Math.abs(prev.pnl) / (Math.abs(prev.pnl) + Math.abs(curr.pnl));
+        const bePrice = prev.price + ratio * (curr.price - prev.price);
+        const bx = toX(bePrice);
+        ctx.fillStyle = '#F0B90B';
+        ctx.beginPath();
+        ctx.arc(bx, zeroY, 3, 0, Math.PI * 2);
+        ctx.fill();
+        const label = `${Math.round(bePrice)}U`;
+        const tw = ctx.measureText(label).width;
+        const lx = Math.min(bx + 5, W - pad.right - tw - 4);
+        const ly = Math.min(zeroY + 14, H - pad.bottom - 2);
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(lx - 2, ly - 10, tw + 6, 13);
+        ctx.fillStyle = '#F0B90B';
+        ctx.textAlign = 'left';
+        ctx.fillText(label, lx, ly);
+      }
+    }
+
+    // X 轴刻度（动态生成）
+    ctx.font = '9px Inter, -apple-system, sans-serif';
+    ctx.fillStyle = 'rgba(132,142,156,0.8)';
+    ctx.textAlign = 'center';
+    const range = maxP - minP;
+    const tickStep = range > 3000 ? 500 : range > 1000 ? 200 : range > 400 ? 100 : 50;
+    const firstTick = Math.ceil(minP / tickStep) * tickStep;
+    for (let p = firstTick; p <= maxP; p += tickStep) {
+      const x = toX(p);
+      if (x < pad.left + 10 || x > W - pad.right - 10) continue;
+      ctx.fillText(`${p}`, x, H - pad.bottom + 10);
+    }
+
+    // 行权价竖线
+    if (strikePrice >= minP && strikePrice <= maxP) {
+      const kx = toX(strikePrice);
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 0.8;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(kx, pad.top);
+      ctx.lineTo(kx, H - pad.bottom);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font = '9px Inter, -apple-system, sans-serif';
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      const klabel = `K${Math.round(strikePrice)}`;
+      const ktw = ctx.measureText(klabel).width;
+      const klx = Math.min(kx - ktw / 2, W - pad.right - ktw - 2);
+      ctx.fillRect(klx - 2, pad.top + 2, ktw + 6, 12);
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.textAlign = 'left';
+      ctx.fillText(klabel, klx, pad.top + 12);
+    }
+
+    // 黄色竖线（实时价格）
+    if (displayPrice != null && displayPrice >= minP && displayPrice <= maxP) {
+      const cx = toX(displayPrice);
+      ctx.strokeStyle = '#F0B90B';
+      ctx.lineWidth = 0.8;
+      ctx.setLineDash([]);
+      const gap = 3;
+      if (zeroY - gap > pad.top) {
+        ctx.beginPath(); ctx.moveTo(cx, pad.top); ctx.lineTo(cx, zeroY - gap); ctx.stroke();
+      }
+      if (zeroY + gap < H - pad.bottom) {
+        ctx.beginPath(); ctx.moveTo(cx, zeroY + gap); ctx.lineTo(cx, H - pad.bottom); ctx.stroke();
+      }
+      ctx.font = 'bold 9px Inter, -apple-system, sans-serif';
+      const clabel = `${Math.round(displayPrice)}U`;
+      const ctw = ctx.measureText(clabel).width;
+      const clx = Math.min(cx - ctw / 2, W - pad.right - ctw - 2);
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(clx - 2, H - pad.bottom - 14, ctw + 6, 12);
+      ctx.fillStyle = '#F0B90B';
+      ctx.textAlign = 'left';
+      ctx.fillText(clabel, clx, H - pad.bottom - 4);
+
+      if (dragPrice !== null) {
+        let pnlAtDrag = 0;
+        for (let i = 1; i < data.length; i++) {
+          if (data[i - 1].price <= displayPrice && data[i].price >= displayPrice) {
+            const t = (displayPrice - data[i - 1].price) / (data[i].price - data[i - 1].price);
+            pnlAtDrag = data[i - 1].pnl + t * (data[i].pnl - data[i - 1].pnl);
+            break;
+          }
+        }
+        const pnlLabel = pnlAtDrag >= 0 ? `+${Math.round(pnlAtDrag)}U` : `${Math.round(pnlAtDrag)}U`;
+        const pnlColor = pnlAtDrag >= 0 ? '#F6465D' : '#0ECB81';
+        ctx.font = 'bold 10px Inter, -apple-system, sans-serif';
+        const ptw = ctx.measureText(pnlLabel).width;
+        const plx = Math.max(pad.left + 2, Math.min(cx - ptw / 2, W - pad.right - ptw - 4));
+        ctx.fillStyle = 'rgba(0,0,0,0.75)';
+        ctx.fillRect(plx - 3, pad.top + 4, ptw + 8, 15);
+        ctx.fillStyle = pnlColor;
+        ctx.textAlign = 'left';
+        ctx.fillText(pnlLabel, plx, pad.top + 15);
+      }
+    }
+  }, [data, strikePrice, displayPrice]);
+
+  const isDragMode = dragPrice !== null;
+  return (
+    <div style={{ position: 'relative', width: '100%', height: 260 }}>
+      <canvas
+        ref={canvasRef}
+        style={{ width: '100%', height: 260, display: 'block', touchAction: isDragMode ? 'none' : 'auto' }}
+        onTouchMove={isDragMode ? (e) => { e.preventDefault(); const p = xToPrice(e.touches[0].clientX); if (p !== null) setDragPrice(p); } : undefined}
+        onTouchEnd={isDragMode ? () => { isDraggingRef.current = false; } : undefined}
+        onMouseMove={isDragMode ? (e) => { const p = xToPrice(e.clientX); if (p !== null) setDragPrice(p); } : undefined}
+        onMouseUp={isDragMode ? () => { isDraggingRef.current = false; } : undefined}
+        onMouseLeave={isDragMode ? () => { isDraggingRef.current = false; } : undefined}
+      />
+      <button
+        onClick={toggleDragMode}
+        style={{
+          position: 'absolute', bottom: 28, right: 6, width: 28, height: 28,
+          borderRadius: '50%',
+          border: isDragMode ? '1.5px solid #F6C90E' : '1.5px solid rgba(255,255,255,0.25)',
+          background: isDragMode ? 'rgba(246,201,14,0.18)' : 'rgba(0,0,0,0.45)',
+          color: isDragMode ? '#F6C90E' : 'rgba(255,255,255,0.5)',
+          fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', zIndex: 10, lineHeight: 1, padding: 0,
+        }}
+      >⇔</button>
+    </div>
+  );
+}
 
 // OKX 风格颜色系统
 const OKX_BG = "#0B0E11";
@@ -1347,13 +1684,79 @@ export function FunderOrderCardV2Silver({
           return Math.max(0, Math.floor((endDay - startDay) / (1000 * 60 * 60 * 24)) + 1);
         };
         if (isOptionCard) {
-          // 期权卡片详情：展示5个希腊字母
+          // 期权卡片详情：展示 P&L 曲线 + 最大亏损/盈利 + 希腊字母
           const d = greeksResult.data;
           const fmtG = (v: any, dp = 4) => v != null && !isNaN(Number(v)) ? Number(v).toFixed(dp) : '--';
           const loadingVal = <span style={{ color: TXT_DIM }}>--</span>;
-          return (
-            <div className="px-4 pb-3 space-y-1.5 text-[10px]">
 
+          // 计算 P&L 曲线数据
+          const optStrikeNum = _optInfo?.strikePrice ? Number(_optInfo.strikePrice) : null;
+          const optPremiumNum = _optInfo?.premium ? parseFloat(_optInfo.premium) : null;
+          const optQtyNum = _optInfo?.buyQty ? parseFloat(_optInfo.buyQty) : 1;
+          const optDirRaw = _optInfo?.direction || 'long_call';
+          const optContractType: 'call' | 'put' = optDirRaw.includes('put') ? 'put' : 'call';
+          const optDirection: 'long' | 'short' = optDirRaw.startsWith('short') ? 'short' : 'long';
+          const isLong = optDirection === 'long';
+          const isCall = optContractType === 'call';
+
+          const payoffData = (() => {
+            if (!optStrikeNum || !optPremiumNum) return [];
+            const minP = Math.round(optStrikeNum * 0.4);
+            const maxP = Math.round(optStrikeNum * 1.8);
+            return calcExpiryPnL([{
+              id: 0, label: '', color: '#a855f7',
+              strikePrice: optStrikeNum,
+              entryPrice: optPremiumNum / optQtyNum,
+              quantity: optQtyNum,
+              contractType: optContractType,
+              direction: optDirection,
+              expiryDate: _optInfo?.exerciseDate || '',
+            }], [minP, maxP], 100);
+          })();
+
+          // 最大亏损 / 最大盈利
+          const maxLoss = isLong ? (optPremiumNum != null ? Math.round(optPremiumNum) : null) : null;
+          let maxProfit: number | null | '无限' = null;
+          if (isLong && optStrikeNum != null && optPremiumNum != null) {
+            maxProfit = isCall ? '无限' : Math.round(optStrikeNum * optQtyNum - optPremiumNum);
+          } else if (!isLong && optPremiumNum != null) {
+            maxProfit = Math.round(optPremiumNum);
+          }
+
+          return (
+            <div className="pb-3 text-[10px]">
+
+              {/* 最大亏损 / 最大盈利 */}
+              {(maxLoss !== null || maxProfit !== null) && (
+                <div className="grid grid-cols-2 gap-0 px-4 py-2" style={{ borderBottom: `1px solid ${DIVIDER}`, background: 'rgba(0,0,0,0.15)' }}>
+                  <div>
+                    <div className="text-[9px] mb-0.5" style={{ color: TXT_SEC }}>最大亏损</div>
+                    <div className="text-xs font-medium" style={{ color: '#0ECB81', fontVariantNumeric: 'tabular-nums' }}>
+                      {isLong ? (maxLoss != null ? `-${maxLoss.toLocaleString()} U` : '--') : <span style={{ fontSize: '0.65rem' }}>理论无限</span>}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-[9px] mb-0.5" style={{ color: TXT_SEC }}>最大盈利</div>
+                    <div className="text-xs font-medium" style={{ color: '#F6465D', fontVariantNumeric: 'tabular-nums' }}>
+                      {maxProfit === '无限' ? <span style={{ fontSize: '0.65rem' }}>理论无限</span> : maxProfit != null ? `+${(maxProfit as number).toLocaleString()} U` : '--'}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* P&L 曲线图 */}
+              {payoffData.length > 1 && optStrikeNum && (
+                <div style={{ borderBottom: `1px solid ${DIVIDER}` }}>
+                  <OptionPnlCanvas
+                    data={payoffData}
+                    strikePrice={optStrikeNum}
+                    currentPrice={liveP ?? undefined}
+                  />
+                </div>
+              )}
+
+              {/* 希腊字母 */}
+              <div className="px-4 pt-2 space-y-1.5">
               {greeksResult.error && (
                 <div style={{ color: '#DC2626', fontSize: '0.65rem', marginBottom: 4 }}>获取失败</div>
               )}
@@ -1381,6 +1784,7 @@ export function FunderOrderCardV2Silver({
                 <span style={{ color: TXT_SEC }}>期权标记价</span>
                 <span style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums' }}>{d?.markPrice != null ? `${fmtG(d.markPrice, 2)} U` : loadingVal}</span>
               </div>
+              </div>{/* end 希腊字母 wrapper */}
             </div>
           );
         }
