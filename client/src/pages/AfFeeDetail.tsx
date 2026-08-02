@@ -192,9 +192,18 @@ export default function AfFeeDetail() {
     : (Array.isArray(financeOrdersData) ? (financeOrdersData as any) : []);
   // 保留 finance 和 funder 主订单（均为管理员在 ledger_orders 表开的单），不过滤 _isParticipant
   // 谷底增筹是 af_orders 表，与此处完全不同的数据源，不会重叠
-  const financeOrders: any[] = financeOrdersRaw.filter(
-    (o: any) => (o.order_role == null || o.order_role === 'finance' || o.order_role === 'funder')
-  );
+  const financeOrders: any[] = financeOrdersRaw
+    .filter((o: any) => (o.order_role == null || o.order_role === 'finance' || o.order_role === 'funder'))
+    .map((o: any) => {
+      // 期权订单： coin 字段存的是 BTC（历史遗留），实际币种应读取 option_info.coin
+      if (o.asset_type === 'crypto_option' && o.option_info) {
+        try {
+          const optInfo = typeof o.option_info === 'string' ? JSON.parse(o.option_info) : o.option_info;
+          if (optInfo?.coin) return { ...o, coin: optInfo.coin };
+        } catch {}
+      }
+      return o;
+    });
   // 实时 CNY/USDT 汇率 — 走服务器tRPC，60秒刷新
   const { data: cnyRateData } = trpc.exchange.getRate.useQuery(undefined, { refetchInterval: 60000, staleTime: 30000 });
   const cnyRate = parseFloat((cnyRateData as any)?.money ?? '6.8') || 6.8;
