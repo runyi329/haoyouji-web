@@ -400,7 +400,7 @@ export default function AfFeeDetail() {
                     </div>
                     {/* 金额行 */}
                     <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr 1fr' }}>
-                      <div className="py-1.5 px-2 text-[10px] text-gray-400 text-center" style={{ borderRight: '1px solid #e5e7eb' }}>金额</div>
+                      <div className="py-1.5 px-2 text-[10px] text-gray-400 text-center" style={{ borderRight: '1px solid #e5e7eb' }}>应收(U)</div>
                       <div className="py-1.5 px-2 text-xs text-center tabular-nums font-medium" style={{ color: '#d97706', borderRight: '1px solid #e5e7eb' }}>{totalOngoing.toFixed(2)}</div>
                       <div className="py-1.5 px-2 text-xs text-center tabular-nums font-medium" style={{ color: '#16a34a', borderRight: '1px solid #e5e7eb' }}>{totalSettled.toFixed(2)}</div>
                       <div className="py-1.5 px-2 text-xs text-center tabular-nums font-bold" style={{ color: '#1e3a8a' }}>{totalAll.toFixed(2)}</div>
@@ -801,7 +801,7 @@ export default function AfFeeDetail() {
                     {(() => {
                       const gjRow1 = [
                         { label: '姓名', value: person.nickname, color: '#0f172a', bold: true, bg: undefined },
-                        { label: '錢包(U)', value: wBal.toFixed(2), color: isShortfall ? '#dc2626' : '#16a34a', bg: undefined },
+                        { label: '錢包(U)', value: wBal.toFixed(2), color: wBal > 0 ? '#dc2626' : '#94a3b8', bg: undefined },
                         { label: '应收(U)', value: (gjPendingFee === 0 ? '0.00' : (gjPendingFee > 0 ? '+' : '') + gjPendingFee.toFixed(2)), color: gjPendingFee > 0 ? '#dc2626' : gjPendingFee < 0 ? '#16a34a' : '#94a3b8', bg: undefined },
                         { label: '缺口(U)', value: isShortfall ? '-' + shortfall.toFixed(2) : '0.00', color: isShortfall ? '#16a34a' : '#94a3b8', bg: isShortfall ? '#fee2e2' : undefined },
                       ];
