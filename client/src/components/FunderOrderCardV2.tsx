@@ -1715,12 +1715,14 @@ export function FunderOrderCardV2Silver({
           })();
 
           // 最大亏损 / 最大盈利
-          const maxLoss = isLong ? (optPremiumNum != null ? Math.round(optPremiumNum) : null) : null;
+          // 最大亏损 = 权利金总额（单价 xd7 张数）
+          const optPremiumTotal2 = optPremiumNum != null ? optPremiumNum * optQtyNum : null;
+          const maxLoss = isLong ? (optPremiumTotal2 != null ? Math.round(optPremiumTotal2) : null) : null;
           let maxProfit: number | null | '无限' = null;
-          if (isLong && optStrikeNum != null && optPremiumNum != null) {
-            maxProfit = isCall ? '无限' : Math.round(optStrikeNum * optQtyNum - optPremiumNum);
-          } else if (!isLong && optPremiumNum != null) {
-            maxProfit = Math.round(optPremiumNum);
+          if (isLong && optStrikeNum != null && optPremiumTotal2 != null) {
+            maxProfit = isCall ? '无限' : Math.round(optStrikeNum * optQtyNum - optPremiumTotal2);
+          } else if (!isLong && optPremiumTotal2 != null) {
+            maxProfit = Math.round(optPremiumTotal2);
           }
 
           return (
