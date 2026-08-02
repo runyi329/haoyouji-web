@@ -194,7 +194,6 @@ export default function AfFeeDetail() {
   // 谷底增筹是 af_orders 表，与此处完全不同的数据源，不会重叠
   const financeOrders: any[] = financeOrdersRaw.filter(
     (o: any) => (o.order_role == null || o.order_role === 'finance' || o.order_role === 'funder')
-      && o.asset_type !== 'crypto_option'  // 期权订单一次性付权利金，不参与融资付息计算
   );
   // 实时 CNY/USDT 汇率 — 走服务器tRPC，60秒刷新
   const { data: cnyRateData } = trpc.exchange.getRate.useQuery(undefined, { refetchInterval: 60000, staleTime: 30000 });
