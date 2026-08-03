@@ -90,6 +90,7 @@ export const stockRiskPlans = mysqlTable("stock_risk_plans", {
   marginPct: int("marginPct").notNull(),                    // 保证金比例
   boardTypes: text("boardTypes").notNull(),                 // JSON 数组，如 ["main","gem"]
   stocks: text("stocks").notNull(),                        // JSON 数组，如 [{"code":"600519","name":"贵州茅台"}]
+  monthlyRate: double("monthlyRate"),                      // 保存时的综合月化利率（含所有乘数）
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

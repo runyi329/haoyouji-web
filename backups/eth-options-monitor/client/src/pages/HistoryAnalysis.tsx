@@ -5,7 +5,7 @@
  * 高亮"甜蜜窗口"：年化≤24% 且 距平衡点≤100 同时满足的时段
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   ComposedChart,
   Line,
@@ -18,10 +18,231 @@ import {
   ReferenceLine,
   ResponsiveContainer,
   ReferenceArea,
+  Area,
+  AreaChart,
 } from "recharts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
+
+// ─── 已过期合约查询 ──────────────────────────────────────────────────────────
+
+interface ExpiredInstrument {
+  instrument_name: string;
+  strike: number;
+  option_type: 'call' | 'put';
+  expiration_timestamp: number;
+  expiryLabel: string; // e.g. "2026/8/2"
+  expiryCode: string;  // e.g. "2AUG26"
+}
+
+interface HistoryPoint {
+  date: string;
+  markUsd: number;
+  ethPrice: number;
+}
+
+function useExpiredInstruments(optionType: 'C' | 'P') {
+  const [instruments, setInstruments] = useState<ExpiredInstrument[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch('https://www.deribit.com/api/v2/public/get_instruments?currency=ETH&kind=option&expired=true')
+      .then(r => r.json())
+      .then(data => {
+        const list: ExpiredInstrument[] = (data.result || [])
+          .filter((i: any) => i.option_type === (optionType === 'C' ? 'call' : 'put'))
+          .map((i: any) => {
+            const d = new Date(i.expiration_timestamp);
+            return {
+              instrument_name: i.instrument_name,
+              strike: i.strike,
+              option_type: i.option_type,
+              expiration_timestamp: i.expiration_timestamp,
+              expiryLabel: `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`,
+              expiryCode: i.instrument_name.split('-')[1],
+            };
+          })
+          .sort((a: ExpiredInstrument, b: ExpiredInstrument) => b.expiration_timestamp - a.expiration_timestamp);
+        setInstruments(list);
+      })
+      .catch(() => setInstruments([]))
+      .finally(() => setLoading(false));
+  }, [optionType]);
+
+  return { instruments, loading };
+}
+
+function useInstrumentHistory(instrumentName: string | null) {
+  const [points, setPoints] = useState<HistoryPoint[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!instrumentName) { setPoints([]); return; }
+    setLoading(true); setError(null);
+    const now = Date.now();
+    const twoYearsAgo = now - 2 * 365 * 24 * 3600 * 1000;
+    Promise.all([
+      fetch(`https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=${instrumentName}&start_timestamp=${twoYearsAgo}&end_timestamp=${now}&resolution=1D`).then(r => r.json()),
+      fetch(`https://www.deribit.com/api/v2/public/get_tradingview_chart_data?instrument_name=ETH-PERPETUAL&start_timestamp=${twoYearsAgo}&end_timestamp=${now}&resolution=1D`).then(r => r.json()),
+    ]).then(([optData, ethData]) => {
+      const optResult = optData.result || {};
+      const ethResult = ethData.result || {};
+      if (optResult.status !== 'ok' || !optResult.ticks?.length) {
+        setError('暂无历史数据'); setPoints([]); return;
+      }
+      // 构建 ETH 价格映射（按天）
+      const ethMap = new Map<string, number>();
+      (ethResult.ticks || []).forEach((t: number, i: number) => {
+        const d = new Date(t);
+        const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        ethMap.set(key, ethResult.close[i]);
+      });
+      const pts: HistoryPoint[] = optResult.ticks.map((t: number, i: number) => {
+        const d = new Date(t);
+        const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const ethPrice = ethMap.get(key) ?? 0;
+        const markEth = optResult.close[i];
+        return { date: key, markUsd: Math.round(markEth * ethPrice), ethPrice: Math.round(ethPrice) };
+      });
+      setPoints(pts);
+    }).catch(() => setError('加载失败')).finally(() => setLoading(false));
+  }, [instrumentName]);
+
+  return { points, loading, error };
+}
+
+function ExpiredContractExplorer() {
+  const [optionType, setOptionType] = useState<'C' | 'P'>('C');
+  const [search, setSearch] = useState('');
+  const [selectedExpiry, setSelectedExpiry] = useState<string | null>(null);
+  const [selectedInstrument, setSelectedInstrument] = useState<string | null>(null);
+  const { instruments, loading: listLoading } = useExpiredInstruments(optionType);
+  const { points, loading: histLoading, error: histError } = useInstrumentHistory(selectedInstrument);
+
+  // 按到期日分组
+  const grouped = useMemo(() => {
+    const filtered = instruments.filter(i =>
+      search === '' ||
+      i.instrument_name.toLowerCase().includes(search.toLowerCase()) ||
+      String(i.strike).includes(search)
+    );
+    const map = new Map<string, ExpiredInstrument[]>();
+    filtered.forEach(i => {
+      const key = i.expiryLabel;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(i);
+    });
+    return Array.from(map.entries());
+  }, [instruments, search]);
+
+  // 当前选中到期日的合约列表
+  const currentExpiryInstruments = useMemo(() => {
+    if (!selectedExpiry) return [];
+    return instruments.filter(i => i.expiryLabel === selectedExpiry);
+  }, [instruments, selectedExpiry]);
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+      {/* 标题栏 */}
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-800">
+        <div className="flex items-center gap-2">
+          <span className="text-white font-semibold text-sm">已过期合约查询</span>
+          {listLoading && <span className="text-xs text-gray-500">加载中...</span>}
+          {!listLoading && <span className="text-xs text-gray-500">{instruments.length} 个合约</span>}
+        </div>
+        {/* CALL/PUT 切换 */}
+        <div className="flex gap-1">
+          {(['C', 'P'] as const).map(t => (
+            <button key={t} onClick={() => { setOptionType(t); setSelectedInstrument(null); setSelectedExpiry(null); }}
+              className={`text-xs px-2.5 py-0.5 rounded border transition-all ${
+                optionType === t ? 'bg-amber-400/20 border-amber-400/60 text-amber-300' : 'bg-transparent border-gray-700 text-gray-400'
+              }`}>
+              {t === 'C' ? 'CALL' : 'PUT'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 搜索框 */}
+      <div className="px-3 py-2 border-b border-gray-800/60">
+        <input
+          type="text" value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="搜索合约名称或行权价，如 2000 或 ETH-2AUG26-1800-C"
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-gray-200 placeholder-gray-600 outline-none focus:border-amber-500/60"
+        />
+      </div>
+
+      {/* 到期日 Tag 列表 */}
+      <div className="px-3 py-2 flex flex-wrap gap-1.5 border-b border-gray-800/60 max-h-24 overflow-y-auto">
+        {grouped.map(([expiry, list]) => (
+          <button key={expiry} onClick={() => { setSelectedExpiry(expiry === selectedExpiry ? null : expiry); setSelectedInstrument(null); }}
+            className={`text-xs px-2 py-0.5 rounded border transition-all ${
+              selectedExpiry === expiry
+                ? 'bg-cyan-400/20 border-cyan-400/60 text-cyan-300'
+                : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500'
+            }`}>
+            {expiry} <span className="opacity-60">({list.length})</span>
+          </button>
+        ))}
+        {grouped.length === 0 && !listLoading && (
+          <span className="text-xs text-gray-600">无匹配合约</span>
+        )}
+      </div>
+
+      {/* 选中到期日后的合约行权价列表 */}
+      {selectedExpiry && currentExpiryInstruments.length > 0 && (
+        <div className="px-3 py-2 flex flex-wrap gap-1.5 border-b border-gray-800/60">
+          <span className="text-xs text-gray-500 w-full mb-1">{selectedExpiry} 到期 · 行权价</span>
+          {currentExpiryInstruments.sort((a, b) => a.strike - b.strike).map(i => (
+            <button key={i.instrument_name} onClick={() => setSelectedInstrument(i.instrument_name)}
+              className={`text-xs px-2 py-0.5 rounded border transition-all ${
+                selectedInstrument === i.instrument_name
+                  ? 'bg-blue-400/20 border-blue-400/60 text-blue-300'
+                  : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500'
+              }`}>
+              ${i.strike.toLocaleString()}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 历史价格图表 */}
+      {selectedInstrument && (
+        <div className="px-3 py-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-gray-300 font-mono">{selectedInstrument}</span>
+            {histLoading && <span className="text-xs text-gray-500">加载历史数据...</span>}
+            {histError && <span className="text-xs text-red-400">{histError}</span>}
+          </div>
+          {!histLoading && !histError && points.length > 0 && (
+            <ResponsiveContainer width="100%" height={220}>
+              <ComposedChart data={points} margin={{ top: 4, right: 50, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 10 }} tickFormatter={v => v.slice(5)} interval={Math.floor(points.length / 6)} />
+                <YAxis yAxisId="mark" orientation="left" tick={{ fill: '#6b7280', fontSize: 10 }} tickFormatter={v => `$${v}`} width={50} />
+                <YAxis yAxisId="eth" orientation="right" tick={{ fill: '#6b7280', fontSize: 10 }} tickFormatter={v => `$${v.toLocaleString()}`} width={65} />
+                <Tooltip
+                  contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 8, fontSize: 11 }}
+                  formatter={(value: any, name: string) => [`$${Number(value).toLocaleString()}`, name]}
+                  labelStyle={{ color: '#9ca3af' }}
+                />
+                <Legend wrapperStyle={{ fontSize: 11, color: '#9ca3af' }} />
+                <Line yAxisId="mark" type="monotone" dataKey="markUsd" name="标记价 (USD)" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                <Line yAxisId="eth" type="monotone" dataKey="ethPrice" name="ETH 现价" stroke="#38bdf8" strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
+              </ComposedChart>
+            </ResponsiveContainer>
+          )}
+          {!histLoading && !histError && points.length === 0 && (
+            <div className="text-center text-gray-600 text-xs py-6">该合约暂无历史成交数据</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── 模拟数据生成 ───────────────────────────────────────────────────────────
 // 模拟 ETH-25DEC2026-2000-C 从 2025-01-01 到 2026-07-10 的每周数据
@@ -271,6 +492,9 @@ export default function HistoryAnalysis() {
       </div>
 
       <div className="px-2 py-4 space-y-4 w-full">
+        {/* 已过期合约查询 */}
+        <ExpiredContractExplorer />
+
         {/* 说明卡片 */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl px-3 py-3 text-sm text-gray-400 leading-relaxed">
           <span className="text-white font-medium">研究目标：</span>
@@ -506,4 +730,3 @@ export default function HistoryAnalysis() {
     </div>
   );
 }
-

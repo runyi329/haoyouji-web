@@ -4019,21 +4019,6 @@ export default function AnnualizedChain() {
         const rows = allRows.filter(r => activeDims.has(r.dim));
         return (
           <div>
-            {/* 行权价多选 Tag */}
-            <div className="flex items-center gap-1.5 px-3 py-2 flex-wrap border-b border-[var(--ac-border-subtle)]/40">
-              <span className="text-[length:var(--ac-fs-xs)] font-sans text-[var(--ac-text-dim)] shrink-0 mr-0.5">价位</span>
-              {allStrikes.map(s => {
-                const active = strikeList.includes(s);
-                return (
-                  <button key={s} onClick={() => toggleStrike(s)}
-                    className={`text-[length:var(--ac-fs-xs)] font-sans px-2 py-0.5 rounded-[2px] border transition-all duration-150 shrink-0 ${
-                      active ? 'bg-blue-400/15 border-blue-400/50 text-blue-300' : 'bg-transparent border-[var(--ac-border-subtle)]/50 text-[var(--ac-text-dim)] hover:border-[var(--ac-border)]/80 hover:text-[var(--ac-text-secondary)]'
-                    }`}>
-                    {s}
-                  </button>
-                );
-              })}
-            </div>
             {/* 对比表格：(N行权价 × 4到期日) 行 × 字段列 */}
             <div className="overflow-x-auto">
               <table className="w-full border-collapse" style={{ tableLayout: 'auto' }}>

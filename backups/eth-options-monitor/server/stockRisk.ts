@@ -478,6 +478,7 @@ export const stockRiskRouter = router({
       marginPct: z.number().int(),
       boardTypes: z.array(z.string()),
       stocks: z.array(z.object({ code: z.string(), name: z.string().nullable() })),
+      monthlyRate: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();
@@ -489,6 +490,7 @@ export const stockRiskRouter = router({
         marginPct: input.marginPct,
         boardTypes: JSON.stringify(input.boardTypes),
         stocks: JSON.stringify(input.stocks),
+        monthlyRate: input.monthlyRate,
       });
       return { success: true };
     }),
@@ -519,6 +521,7 @@ export const stockRiskRouter = router({
       marginPct: z.number().int(),
       boardTypes: z.array(z.string()),
       stocks: z.array(z.object({ code: z.string(), name: z.string().nullable() })),
+      monthlyRate: z.number().optional(),
     }))
     .mutation(async ({ ctx, input }) => {
       const db = await getDb();

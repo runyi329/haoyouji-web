@@ -4,6 +4,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import html2canvas from "html2canvas";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { startLogin } from "@/const";
@@ -130,10 +131,11 @@ let idCounter = 0;
 export default function StockRisk() {
   // 利息测算状态
   const [calcBaseRate, setCalcBaseRate] = useState(12);
-  const [calcMarginPct, setCalcMarginPct] = useState(20);
+  const [calcMarginPct, setCalcMarginPct] = useState(25);
   const [bufferPct, setBufferPct] = useState(0);
   // 板块选择（空股票时生效）
-  const [boardTypes, setBoardTypes] = useState<Array<"main" | "star" | "gem" | "st">>([ "main"]);
+  const [boardTypes, setBoardTypes] = useState<Array<"main" | "star" | "gem" | "st">>(["main"]);
+
 
   const toggleBoard = (b: "main" | "star" | "gem" | "st") => {
     setBoardTypes(prev =>
@@ -142,11 +144,55 @@ export default function StockRisk() {
   };
 
   // 结算方式
-  const [settlementType, setSettlementType] = useState<"rmb" | "crypto" | "cash" | "foreign">("rmb");
+  const [settlementType, setSettlementType] = useState<"crypto" | "rmb" | "foreign">("crypto");
   // 结算频率
-  const [settlementFreqMode, setSettlementFreqMode] = useState<"timed" | "countdown">("timed");
+  const [settlementFreqMode, setSettlementFreqMode] = useState<"countdown" | "expiry">("countdown");
   const [timedFreq, setTimedFreq] = useState<"daily" | "weekly">("daily");
   const [countdownAmount, setCountdownAmount] = useState<10000 | 20000 | 30000 | 50000>(10000);
+
+  // 实时综合年化利率计算（结算方式为乘数）
+  // 全部采用乘法逻辑
+  // 保证金乘数：主板×1.0；非主板：10%→×1.5，15%→×1.25，20/25%→×1.0
+  // 缓冲垫乘数：0%→×1.0，5%→×1.05，10%→×1.10，15%→×1.15
+  // 结算方式乘数：数字币×1.0，人民币×1.15，外币×1.12
+  const SETTLEMENT_MULTIPLIER: Record<string, number> = { crypto: 1, rmb: 1.15, foreign: 1.12 };
+  const BUFFER_MULTIPLIER: Record<number, number> = { 0: 1, 5: 1.05, 10: 1.10, 15: 1.15 };
+  const realtimeCalc = (() => {
+    const baseMonthly = calcBaseRate / 12;
+    // 保证金乘数
+    const hasNonMain = boardTypes.some(b => b !== "main");
+    const marginMult = hasNonMain
+      ? (calcMarginPct <= 10 ? 1.5 : calcMarginPct <= 15 ? 1.25 : 1)
+      : 1;
+    // 缓冲垫乘数
+    const bufferMult = BUFFER_MULTIPLIER[bufferPct] ?? 1;
+    // 结算方式乘数
+    const settleMult = SETTLEMENT_MULTIPLIER[settlementType] ?? 1;
+    // 综合：基础 × 保证金乘数 × 缓冲垫乘数 × 结算方式乘数
+    const final = baseMonthly * marginMult * bufferMult * settleMult;
+    return {
+      baseMonthly: Math.round(baseMonthly * 1000) / 1000,
+      marginMult,
+      bufferMult,
+      settleMult,
+      final: Math.round(final * 1000) / 1000,
+    };
+  })();
+  const realtimeMonthly = realtimeCalc.final;
+  const realtimeRate = realtimeMonthly * 12;
+
+  // 加成明细（用于悬浮条说明行，全部用乘号）
+  const realtimeBreakdown = (() => {
+    const items: { label: string; desc: string }[] = [];
+    const settleNames: Record<string, string> = { crypto: "数字币", rmb: "人民币", foreign: "外币" };
+    if (realtimeCalc.marginMult !== 1)
+      items.push({ label: `交易品种+保证金 ${calcMarginPct}%`, desc: `×${realtimeCalc.marginMult}` });
+    if (realtimeCalc.bufferMult !== 1)
+      items.push({ label: `预留缓冲垫 ${bufferPct}%`, desc: `×${realtimeCalc.bufferMult.toFixed(2)}` });
+    if (realtimeCalc.settleMult !== 1)
+      items.push({ label: `结算方式：${settleNames[settlementType]}`, desc: `×${realtimeCalc.settleMult.toFixed(2)}` });
+    return items;
+  })();
 
   // 单格数组：每次+新增一个格子，默认两个
   const [calcCells, setCalcCells] = useState<Array<{ code: string; name: string | null; tsCode: string }>>(
@@ -190,6 +236,7 @@ export default function StockRisk() {
   const [currentPlanId, setCurrentPlanId] = useState<number | null>(null);
   const [currentPlanName, setCurrentPlanName] = useState<string | null>(null);
   const [showUpdateConfirm, setShowUpdateConfirm] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const savePlanMutation = trpc.stockRisk.savePlan.useMutation();
   const updatePlanMutation = trpc.stockRisk.updatePlan.useMutation();
   const deletePlanMutation = trpc.stockRisk.deletePlan.useMutation();
@@ -211,6 +258,7 @@ export default function StockRisk() {
         marginPct: calcMarginPct,
         boardTypes,
         stocks: calcCells.filter(c => c.code).map(c => ({ code: c.code, name: c.name })),
+        monthlyRate: realtimeMonthly,
       });
       utils.stockRisk.listPlans.invalidate();
       setSaveMsg("已保存");
@@ -229,6 +277,7 @@ export default function StockRisk() {
         marginPct: calcMarginPct,
         boardTypes,
         stocks: calcCells.filter(c => c.code).map(c => ({ code: c.code, name: c.name })),
+        monthlyRate: realtimeMonthly,
       });
       utils.stockRisk.listPlans.invalidate();
       setShowUpdateConfirm(false);
@@ -415,21 +464,62 @@ export default function StockRisk() {
       overflowX: "hidden",
     }}>
 
-      {/* ── Header ── */}
+      {/* ── 固定顶部：蓝色标题区（两行高度）── */}
       <div style={{
+        position: "fixed", top: 0, left: 0, right: 0, zIndex: 51,
         background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
-        padding: "14px 20px 24px",
-        color: "white",
+        padding: "10px 16px 10px",
+        display: "flex", alignItems: "center",
+        minHeight: 56,
       }}>
         <ProductSwitcher />
-        <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: 1, marginTop: 10, marginBottom: 0, textAlign: "center" }}>
+        <h1 style={{ fontSize: 17, fontWeight: 700, letterSpacing: 0.8, margin: 0, color: "white", flex: 1, textAlign: "center", lineHeight: 1.4 }}>
           澳门潤儀A股业务风控管理 - B
         </h1>
+        <div style={{ minWidth: 40 }} />
+      </div>
+
+      {/* ── 固定次顶：实时利率条（米白+金边，区分上下）── */}
+      <div style={{
+        position: "fixed", top: 56, left: 0, right: 0, zIndex: 50,
+        background: "linear-gradient(90deg, #fffbf0 0%, #fff8e7 100%)",
+        borderTop: "1px solid #f0d080",
+        borderBottom: "2px solid #e8a838",
+        padding: "6px 20px 7px",
+        boxShadow: "0 3px 10px rgba(232,168,56,0.15)",
+      }}>
+        {/* 主利率行 */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ fontSize: 10, color: "#b8860b", letterSpacing: 0.5, fontWeight: 600 }}>实时综合利率</div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 2 }}>
+            <span style={{ fontSize: 22, fontWeight: 900, color: "#c8780a", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
+              {realtimeMonthly.toFixed(2)}%
+            </span>
+            <span style={{ fontSize: 11, color: "#c8a050" }}>/月</span>
+          </div>
+          <div style={{ minWidth: 40 }} />
+        </div>
+        {/* 加成明细行 */}
+        {realtimeBreakdown.length > 0 && (
+          <div style={{ marginTop: 3, display: "flex", flexWrap: "wrap", gap: "2px 10px" }}>
+            {realtimeBreakdown.map((item, i) => (
+              <div key={i} style={{ fontSize: 10, color: "#a07020", display: "flex", alignItems: "center", gap: 3 }}>
+                <span style={{ color: "#c8a050" }}>·</span>
+                <span>{item.label}</span>
+                <span style={{
+                  fontWeight: 700,
+                  color: "#c8780a",
+                  fontVariantNumeric: "tabular-nums",
+                }}>{item.desc}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── 利息测算模块 ── */}
-      <div style={{ background: "white", padding: "20px 18px 22px", borderBottom: "2px solid #f0f2f5" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+      <div style={{ background: "white", padding: "20px 18px 22px", borderBottom: "2px solid #f0f2f5", marginTop: 94 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 15, fontWeight: 700, color: "#1a1a2e", letterSpacing: 0.5 }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#e8a838", display: "inline-block" }} />
             利息测算
@@ -449,6 +539,19 @@ export default function StockRisk() {
               方案
             </button>
             <button
+              onClick={() => setShowResetConfirm(true)}
+              style={{
+                padding: "4px 12px", fontSize: 12, fontWeight: 600,
+                background: "#f5f6f8", border: "1px solid #dde0e8",
+                borderRadius: 6, cursor: "pointer", color: "#555",
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "#ef4444"; (e.currentTarget as HTMLButtonElement).style.color = "white"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#dc2626"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "#f5f6f8"; (e.currentTarget as HTMLButtonElement).style.color = "#555"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#dde0e8"; }}
+            >
+              重置
+            </button>
+            <button
               onClick={() => window.location.reload()}
               style={{
                 padding: "4px 12px", fontSize: 12, fontWeight: 600,
@@ -466,7 +569,9 @@ export default function StockRisk() {
 
         {/* 基础月化利率 */}
         <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 11, color: "#999", letterSpacing: 0.3, marginBottom: 6 }}>基础月化利率</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+            <div style={{ fontSize: 11, color: "#999", letterSpacing: 0.3 }}>基础月化利率</div>
+          </div>
           <div style={{ display: "flex", gap: 5 }}>
             {[
               { val: 12, label: "1%", period: "使用一年" },
@@ -478,7 +583,7 @@ export default function StockRisk() {
                 key={item.val}
                 onClick={() => setCalcBaseRate(item.val)}
                 style={{
-                  flex: 1, padding: "9px 0 10px", textAlign: "center",
+                  flex: 1, padding: "5px 0 6px", textAlign: "center",
                   background: calcBaseRate === item.val ? "#e8a838" : "#f5f6f8",
                   border: `1px solid ${calcBaseRate === item.val ? "#d4922a" : "#dde0e8"}`,
                   borderRadius: 8, cursor: "pointer",
@@ -494,16 +599,45 @@ export default function StockRisk() {
           </div>
         </div>
 
-        {/* 保证金比例 */}
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 11, color: "#999", letterSpacing: 0.3, marginBottom: 6 }}>保证金比例</div>
+        {/* 股票板块选择（无股票代码时显示） */}
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 11, color: "#999", letterSpacing: 0.3, marginBottom: 4 }}>交易品种</div>
           <div style={{ display: "flex", gap: 5 }}>
-            {[5, 10, 15, 20].map(v => (
+            {([
+              { val: "main" as const, label: "沪深主板" },
+              { val: "gem" as const, label: "创业板" },
+              { val: "star" as const, label: "科创板" },
+              { val: "st" as const, label: "ST股" },
+            ] as const).map(item => (
+              <div
+                key={item.val}
+                onClick={() => toggleBoard(item.val)}
+                style={{
+                  flex: 1, padding: "5px 0 6px", textAlign: "center",
+                  background: boardTypes.includes(item.val) ? "#e8a838" : "#f5f6f8",
+                  border: `1px solid ${boardTypes.includes(item.val) ? "#d4922a" : "#dde0e8"}`,
+                  borderRadius: 8, cursor: "pointer",
+                  boxShadow: boardTypes.includes(item.val) ? "0 2px 8px rgba(232,168,56,0.45)" : "none",
+                  transition: "all 0.15s",
+                  userSelect: "none",
+                }}
+              >
+                <div style={{ fontSize: 13, fontWeight: 700, color: boardTypes.includes(item.val) ? "white" : "#1a1a1a", lineHeight: 1.3 }}>{item.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 保证金比例 */}
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 11, color: "#999", letterSpacing: 0.3, marginBottom: 4 }}>保证金比例</div>
+          <div style={{ display: "flex", gap: 5 }}>
+            {[25, 20, 15, 10].map(v => (
               <div
                 key={v}
                 onClick={() => setCalcMarginPct(v)}
                 style={{
-                  flex: 1, padding: "9px 0 10px", textAlign: "center",
+                  flex: 1, padding: "5px 0 6px", textAlign: "center",
                   background: calcMarginPct === v ? "#e8a838" : "#f5f6f8",
                   border: `1px solid ${calcMarginPct === v ? "#d4922a" : "#dde0e8"}`,
                   borderRadius: 8, cursor: "pointer",
@@ -519,10 +653,8 @@ export default function StockRisk() {
             ))}
           </div>
         </div>
-
-        {/* 预留缓冲垫 */}
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 11, color: "#999", letterSpacing: 0.3, marginBottom: 6 }}>预留缓冲垫</div>
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 11, color: "#999", letterSpacing: 0.3, marginBottom: 4 }}>预留缓冲垫</div>
           <div style={{ display: "flex", gap: 5 }}>
             {[
               { val: 0, label: "不预留", sub: "0%" },
@@ -534,7 +666,7 @@ export default function StockRisk() {
                 key={item.val}
                 onClick={() => setBufferPct(item.val)}
                 style={{
-                  flex: 1, padding: "9px 0 10px", textAlign: "center",
+                  flex: 1, padding: "5px 0 6px", textAlign: "center",
                   background: bufferPct === item.val ? "#e8a838" : "#f5f6f8",
                   border: `1px solid ${bufferPct === item.val ? "#d4922a" : "#dde0e8"}`,
                   borderRadius: 8, cursor: "pointer",
@@ -544,27 +676,25 @@ export default function StockRisk() {
                 }}
               >
                 <div style={{ fontSize: 14, fontWeight: 700, color: bufferPct === item.val ? "white" : "#1a1a1a", lineHeight: 1.3 }}>{item.label}</div>
-                <div style={{ fontSize: 10, fontWeight: 400, color: bufferPct === item.val ? "rgba(255,255,255,0.8)" : "#bbb", marginTop: 2 }}>{item.sub}</div>
               </div>
             ))}
           </div>
         </div>
 
         {/* 结算方式 */}
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 11, color: "#999", letterSpacing: 0.3, marginBottom: 6 }}>结算方式</div>
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 11, color: "#999", letterSpacing: 0.3, marginBottom: 4 }}>结算方式</div>
           <div style={{ display: "flex", gap: 5 }}>
             {[
               { val: "crypto" as const, label: "数字币", sub: "USDT/BTC" },
-              { val: "cash" as const, label: "现金", sub: "实物现金" },
-              { val: "rmb" as const, label: "转账", sub: "CNY人民币" },
-              { val: "foreign" as const, label: "转账", sub: "USD/HKD外币" },
+              { val: "rmb" as const, label: "人民币", sub: "CNY转账" },
+              { val: "foreign" as const, label: "外币", sub: "USD/HKD" },
             ].map(item => (
               <div
                 key={item.val}
                 onClick={() => setSettlementType(item.val)}
                 style={{
-                  flex: 1, padding: "9px 0 10px", textAlign: "center",
+                  flex: 1, padding: "5px 0 6px", textAlign: "center",
                   background: settlementType === item.val ? "#e8a838" : "#f5f6f8",
                   border: `1px solid ${settlementType === item.val ? "#d4922a" : "#dde0e8"}`,
                   borderRadius: 8, cursor: "pointer",
@@ -574,26 +704,24 @@ export default function StockRisk() {
                 }}
               >
                 <div style={{ fontSize: 13, fontWeight: 700, color: settlementType === item.val ? "white" : "#1a1a1a", lineHeight: 1.3 }}>{item.label}</div>
-                <div style={{ fontSize: 10, fontWeight: 400, color: settlementType === item.val ? "rgba(255,255,255,0.8)" : "#bbb", marginTop: 2 }}>{item.sub}</div>
               </div>
             ))}
           </div>
         </div>
 
         {/* 结算频率 */}
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 11, color: "#999", letterSpacing: 0.3, marginBottom: 6 }}>结算频率</div>
-          {/* 一级：到时/倒数 */}
-          <div style={{ display: "flex", gap: 5, marginBottom: 6 }}>
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 11, color: "#999", letterSpacing: 0.3, marginBottom: 4 }}>结算频率</div>
+          <div style={{ display: "flex", gap: 5 }}>
             {([
-              { val: "timed" as const, label: "到时结算", sub: "按时间周期" },
-              { val: "countdown" as const, label: "倒数结算", sub: "按盈利金额" },
+              { val: "countdown" as const, label: "到数结算", sub: "按盈利金额" },
+              { val: "expiry" as const, label: "到期结算", sub: "合约到期日" },
             ] as const).map(item => (
               <div
                 key={item.val}
                 onClick={() => setSettlementFreqMode(item.val)}
                 style={{
-                  flex: 1, padding: "9px 0 10px", textAlign: "center",
+                  flex: 1, padding: "5px 0 6px", textAlign: "center",
                   background: settlementFreqMode === item.val ? "#e8a838" : "#f5f6f8",
                   border: `1px solid ${settlementFreqMode === item.val ? "#d4922a" : "#dde0e8"}`,
                   borderRadius: 8, cursor: "pointer",
@@ -603,84 +731,6 @@ export default function StockRisk() {
                 }}
               >
                 <div style={{ fontSize: 13, fontWeight: 700, color: settlementFreqMode === item.val ? "white" : "#1a1a1a", lineHeight: 1.3 }}>{item.label}</div>
-                <div style={{ fontSize: 10, fontWeight: 400, color: settlementFreqMode === item.val ? "rgba(255,255,255,0.8)" : "#bbb", marginTop: 2 }}>{item.sub}</div>
-              </div>
-            ))}
-          </div>
-          {/* 二级子选项 */}
-          {settlementFreqMode === "timed" ? (
-            <div style={{ display: "flex", gap: 5 }}>
-              {([
-                { val: "daily" as const, label: "每日", sub: "每个交易日" },
-                { val: "weekly" as const, label: "每周", sub: "每周结算一次" },
-              ] as const).map(item => (
-                <div
-                  key={item.val}
-                  onClick={() => setTimedFreq(item.val)}
-                  style={{
-                    flex: 1, padding: "8px 0 9px", textAlign: "center",
-                    background: timedFreq === item.val ? "#e8a838" : "#f5f6f8",
-                    border: `1px solid ${timedFreq === item.val ? "#d4922a" : "#dde0e8"}`,
-                    borderRadius: 8, cursor: "pointer",
-                    boxShadow: timedFreq === item.val ? "0 2px 8px rgba(232,168,56,0.45)" : "none",
-                    transition: "all 0.15s",
-                    userSelect: "none",
-                  }}
-                >
-                  <div style={{ fontSize: 13, fontWeight: 700, color: timedFreq === item.val ? "white" : "#1a1a1a", lineHeight: 1.3 }}>{item.label}</div>
-                  <div style={{ fontSize: 10, fontWeight: 400, color: timedFreq === item.val ? "rgba(255,255,255,0.8)" : "#bbb", marginTop: 2 }}>{item.sub}</div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div style={{ display: "flex", gap: 5 }}>
-              {([10000, 20000, 30000, 50000] as const).map(amt => (
-                <div
-                  key={amt}
-                  onClick={() => setCountdownAmount(amt)}
-                  style={{
-                    flex: 1, padding: "8px 0 9px", textAlign: "center",
-                    background: countdownAmount === amt ? "#e8a838" : "#f5f6f8",
-                    border: `1px solid ${countdownAmount === amt ? "#d4922a" : "#dde0e8"}`,
-                    borderRadius: 8, cursor: "pointer",
-                    boxShadow: countdownAmount === amt ? "0 2px 8px rgba(232,168,56,0.45)" : "none",
-                    transition: "all 0.15s",
-                    userSelect: "none",
-                  }}
-                >
-                  <div style={{ fontSize: 13, fontWeight: 700, color: countdownAmount === amt ? "white" : "#1a1a1a", lineHeight: 1.3 }}>{amt / 10000}万</div>
-                  <div style={{ fontSize: 10, fontWeight: 400, color: countdownAmount === amt ? "rgba(255,255,255,0.8)" : "#bbb", marginTop: 2 }}>盈利达{amt / 10000}万</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* 股票板块选择（无股票代码时显示） */}
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 11, color: "#999", letterSpacing: 0.3, marginBottom: 6 }}>交易品种</div>
-          <div style={{ display: "flex", gap: 5 }}>
-            {([
-              { val: "main" as const, label: "沪深主板", sub: "600/000/002" },
-              { val: "gem" as const, label: "创业板", sub: "300/301" },
-              { val: "star" as const, label: "科创板", sub: "688" },
-              { val: "st" as const, label: "ST股", sub: "ST/*ST" },
-            ] as const).map(item => (
-              <div
-                key={item.val}
-                onClick={() => toggleBoard(item.val)}
-                style={{
-                  flex: 1, padding: "9px 0 10px", textAlign: "center",
-                  background: boardTypes.includes(item.val) ? "#e8a838" : "#f5f6f8",
-                  border: `1px solid ${boardTypes.includes(item.val) ? "#d4922a" : "#dde0e8"}`,
-                  borderRadius: 8, cursor: "pointer",
-                  boxShadow: boardTypes.includes(item.val) ? "0 2px 8px rgba(232,168,56,0.45)" : "none",
-                  transition: "all 0.15s",
-                  userSelect: "none",
-                }}
-              >
-                <div style={{ fontSize: 13, fontWeight: 700, color: boardTypes.includes(item.val) ? "white" : "#1a1a1a", lineHeight: 1.3 }}>{item.label}</div>
-                <div style={{ fontSize: 10, fontWeight: 400, color: boardTypes.includes(item.val) ? "rgba(255,255,255,0.8)" : "#bbb", marginTop: 2 }}>{item.sub}</div>
               </div>
             ))}
           </div>
@@ -895,7 +945,7 @@ export default function StockRisk() {
               }
               return null;
             })()}
-            <CalcResultBlock result={calcResult} baseRate={calcBaseRate} />
+            <CalcResultBlock result={calcResult} baseRate={calcBaseRate} realtimeMonthly={realtimeMonthly} realtimeBreakdown={realtimeBreakdown} />
           </div>
         )}
       </div>
@@ -1241,6 +1291,54 @@ export default function StockRisk() {
       )}
 
       {/* ── 我的方案弹窗 ── */}
+      {/* 重置确认弹窗 */}
+      {showResetConfirm && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 200,
+          background: "rgba(0,0,0,0.45)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }} onClick={() => setShowResetConfirm(false)}>
+          <div style={{
+            background: "white", borderRadius: 14, padding: "28px 28px 22px",
+            width: 300, boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
+            textAlign: "center",
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 32, marginBottom: 10 }}>⚠️</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#1a1a2e", marginBottom: 8 }}>确认重置？</div>
+            <div style={{ fontSize: 13, color: "#666", lineHeight: 1.6, marginBottom: 22 }}>
+              所有已填写的测算条件（交易品种、保证金、股票代码等）将全部清空，无法撤销。
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => setShowResetConfirm(false)}
+                style={{
+                  flex: 1, padding: "10px 0", fontSize: 14, fontWeight: 600,
+                  background: "#f5f6f8", border: "1px solid #dde0e8",
+                  borderRadius: 8, cursor: "pointer", color: "#555",
+                }}
+              >取消</button>
+              <button
+                onClick={() => {
+                  setCalcBaseRate(12);
+                  setBoardTypes(["main"]);
+                  setCalcMarginPct(25);
+                  setBufferPct(0);
+                  setSettlementType("crypto");
+                  setSettlementFreqMode("countdown");
+                  setCalcCells([{ code: "", name: null, tsCode: "" }, { code: "", name: null, tsCode: "" }]);
+                  setCalcResult(null);
+                  setShowResetConfirm(false);
+                }}
+                style={{
+                  flex: 1, padding: "10px 0", fontSize: 14, fontWeight: 700,
+                  background: "#ef4444", border: "none",
+                  borderRadius: 8, cursor: "pointer", color: "white",
+                }}
+              >确认重置</button>
+            </div>
+          </div>
+        </div>
+      )}
       {showPlansModal && (
         <div
           style={{
@@ -1270,7 +1368,7 @@ export default function StockRisk() {
               <div style={{ textAlign: "center", color: "#aaa", padding: "20px 0", fontSize: 13 }}>暂无保存的方案</div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {plansQuery.data.map((plan: { id: number; name: string; baseRate: number; marginPct: number; boardTypes: string[]; stocks: Array<{ code: string; name: string | null }>; createdAt: Date }) => (
+                {plansQuery.data.map((plan: { id: number; name: string; baseRate: number; marginPct: number; boardTypes: string[]; stocks: Array<{ code: string; name: string | null }>; monthlyRate?: number | null; createdAt: Date }) => (
                   <div
                     key={plan.id}
                     style={{
@@ -1284,7 +1382,11 @@ export default function StockRisk() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 14, fontWeight: 700, color: "#1a1a2e", marginBottom: 3 }}>{plan.name}</div>
                         <div style={{ fontSize: 11, color: "#888" }}>
-                          年化 {plan.baseRate}% · 保证金 {plan.marginPct}%
+                          {plan.monthlyRate != null
+                            ? <span style={{ color: "#c8780a", fontWeight: 700 }}>综合 {plan.monthlyRate.toFixed(2)}%/月</span>
+                            : <span>年化 {plan.baseRate}%</span>
+                          }
+                          {" · 保证金 "}{plan.marginPct}%
                           {plan.stocks.length > 0 && ` · ${plan.stocks.length} 只股票`}
                         </div>
                         <div style={{ fontSize: 10, color: "#bbb", marginTop: 2 }}>
@@ -1415,7 +1517,11 @@ const tdStyle: React.CSSProperties = {
 
 // ─── 利息测算结果块 ───────────────────────────────────────────────
 
-function CalcResultBlock({ result, baseRate }: { result: CheckResult; baseRate: number }) {
+function CalcResultBlock({ result, baseRate, realtimeMonthly, realtimeBreakdown }: { result: CheckResult; baseRate: number; realtimeMonthly: number; realtimeBreakdown: { label: string; desc: string }[] }) {
+  const [copied, setCopied] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const sorted = [...result.results].sort((a, b) => (b.account_rate || baseRate) - (a.account_rate || baseRate));
   const worstStock = sorted[0];
   if (!worstStock) return null;
@@ -1423,11 +1529,145 @@ function CalcResultBlock({ result, baseRate }: { result: CheckResult; baseRate: 
   const totalAdd = Math.round((maxRate - baseRate) * 100) / 100;
   const rateColor = totalAdd === 0 ? "#27ae60" : totalAdd <= 3 ? "#e8a838" : "#e53935";
 
+  // 综合月化利率 = realtimeMonthly（含品种/保证金/缓冲垫/结算方式乘数）× 风险加息
+  const riskAddMonthly = Math.round((maxRate - baseRate) / 12 * 100) / 100;
+  const finalMonthly = Math.round((realtimeMonthly + riskAddMonthly) * 100) / 100;
+
+  const handleCopyQuote = () => {
+    const lines: string[] = [];
+    lines.push(`【澳门潤儀 A股业务报价单】`);
+    lines.push(`综合月化利率：${finalMonthly.toFixed(2)}%/月`);
+    lines.push(`─────────────`);
+    lines.push(`利率构成：`);
+    lines.push(`  基础利率：${(baseRate / 12).toFixed(2)}%/月`);
+    realtimeBreakdown.forEach(item => lines.push(`  ${item.label}：${item.desc}`));
+    if (riskAddMonthly > 0) lines.push(`  风险加息：+${riskAddMonthly.toFixed(2)}%/月`);
+    lines.push(`─────────────`);
+    if (result.results.length > 0) {
+      lines.push(`股票风险评估：`);
+      [...result.results]
+        .sort((a, b) => b.account_rate - a.account_rate)
+        .forEach(s => {
+          const add = Math.round((s.account_rate - baseRate) * 100) / 100;
+          lines.push(`  ${s.name || s.ts_code}（${s.ts_code}）：${add > 0 ? `+${add}% 风险加息` : "无风险加息"}`);
+        });
+      lines.push(`─────────────`);
+    }
+    lines.push(`以上报价仅供参考，最终以合同为准。`);
+    navigator.clipboard.writeText(lines.join('\n')).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  };
+
+  const handleGenerateImage = async () => {
+    if (!cardRef.current || generating) return;
+    setGenerating(true);
+    try {
+      const canvas = await html2canvas(cardRef.current, {
+        backgroundColor: "#f8f9fb",
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+      setPreviewUrl(canvas.toDataURL("image/png"));
+    } catch (e) {
+      console.error("生成图片失败", e);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleDownload = () => {
+    if (!previewUrl) return;
+    const link = document.createElement("a");
+    link.download = `报价单_${new Date().toLocaleDateString("zh-CN").replace(/\//g, "-")}.png`;
+    link.href = previewUrl;
+    link.click();
+  };
+
   return (
-    <div style={{ animation: "fadeIn 0.3s ease" }}>
+    <>
+    {/* 图片预览弹窗 */}
+    {previewUrl && (
+      <div
+        onClick={() => setPreviewUrl(null)}
+        style={{
+          position: "fixed", inset: 0, zIndex: 300,
+          background: "rgba(0,0,0,0.85)",
+          display: "flex", flexDirection: "column",
+          alignItems: "center", justifyContent: "center",
+          padding: "20px 16px",
+        }}
+      >
+        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginBottom: 12, textAlign: "center" }}>
+          📱 长按图片保存到相册 · 点击空白处关闭
+        </div>
+        <img
+          src={previewUrl}
+          alt="报价单"
+          onClick={e => e.stopPropagation()}
+          style={{
+            maxWidth: "100%", maxHeight: "70vh",
+            borderRadius: 12,
+            boxShadow: "0 8px 40px rgba(0,0,0,0.5)",
+            display: "block",
+          }}
+        />
+        <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
+          <button
+            onClick={e => { e.stopPropagation(); handleDownload(); }}
+            style={{
+              padding: "10px 24px", fontSize: 14, fontWeight: 700,
+              background: "#e8a838", color: "white",
+              border: "none", borderRadius: 8, cursor: "pointer",
+            }}
+          >
+            下载到本地
+          </button>
+          <button
+            onClick={() => setPreviewUrl(null)}
+            style={{
+              padding: "10px 24px", fontSize: 14, fontWeight: 600,
+              background: "rgba(255,255,255,0.15)", color: "white",
+              border: "1px solid rgba(255,255,255,0.3)", borderRadius: 8, cursor: "pointer",
+            }}
+          >
+            关闭
+          </button>
+        </div>
+      </div>
+    )}
+    <div ref={cardRef} style={{ animation: "fadeIn 0.3s ease", padding: "4px 0" }}>
+      {/* 综合月化利率汇总卡片 */}
+      <div style={{
+        background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
+        borderRadius: 12, padding: "14px 18px", marginBottom: 12,
+        border: "1px solid rgba(232,168,56,0.3)",
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", letterSpacing: 0.5, marginBottom: 4 }}>综合月化利率（含风险加息）</div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+              <span style={{ fontSize: 34, fontWeight: 900, color: "#e8a838", lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{finalMonthly.toFixed(2)}%</span>
+              <span style={{ fontSize: 12, color: "rgba(255,255,255,0.5)" }}>/月</span>
+            </div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginBottom: 4 }}>利率构成</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", lineHeight: 1.8 }}>
+              <div>基础 {(baseRate/12).toFixed(2)}%</div>
+              {realtimeBreakdown.map((item, i) => (
+                <div key={i}>{item.label} {item.desc}</div>
+              ))}
+              {riskAddMonthly > 0 && <div style={{ color: "#ff7875" }}>风险加息 +{riskAddMonthly.toFixed(2)}%</div>}
+            </div>
+          </div>
+        </div>
+      </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <div>
-          <div style={{ fontSize: 11, color: "#999", marginBottom: 2 }}>应执行年化利率</div>
+          <div style={{ fontSize: 11, color: "#999", marginBottom: 2 }}>风险加息后年化</div>
           <div style={{ fontSize: 36, fontWeight: 900, color: rateColor, lineHeight: 1 }}>{maxRate.toFixed(2)}%</div>
         </div>
         <div style={{ fontSize: 13, color: "#888", textAlign: "right" }}>
@@ -1473,7 +1713,40 @@ function CalcResultBlock({ result, baseRate }: { result: CheckResult; baseRate: 
           })}
         </div>
       )}
+      {/* 复制报价按钮 */}
+      <button
+        onClick={handleCopyQuote}
+        style={{
+          width: "100%", marginTop: 14, padding: "11px 0",
+          fontSize: 14, fontWeight: 700,
+          background: copied ? "#27ae60" : "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
+          color: copied ? "white" : "#e8a838",
+          border: `1px solid ${copied ? "#27ae60" : "rgba(232,168,56,0.4)"}`,
+          borderRadius: 10, cursor: "pointer",
+          transition: "all 0.2s",
+          letterSpacing: 0.5,
+        }}
+      >
+        {copied ? "✓ 已复制到剪贴板" : "复制报价"}
+      </button>
+      <button
+        onClick={handleGenerateImage}
+        disabled={generating}
+        style={{
+          width: "100%", marginTop: 8, padding: "11px 0",
+          fontSize: 14, fontWeight: 700,
+          background: generating ? "#e8a838" : "white",
+          color: generating ? "white" : "#c8780a",
+          border: "1.5px solid #e8a838",
+          borderRadius: 10, cursor: generating ? "not-allowed" : "pointer",
+          transition: "all 0.2s",
+          letterSpacing: 0.5,
+        }}
+      >
+        {generating ? "生成中..." : "生成报价单图片"}
+      </button>
     </div>
+    </>
   );
 }
 
