@@ -3856,19 +3856,25 @@ export default function AnnualizedChain() {
                 {viewMode === 'byStrike' && (
           /* 按价位模式：价位Tag行 + 字段Tag行 */
           <div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 flex-wrap border-b border-[var(--ac-border-subtle)]/20">
-              <span className="text-[length:var(--ac-fs-xs)] font-sans text-[var(--ac-text-dim)] shrink-0 w-6">价位</span>
-              {allStrikes.map(s => {
-                const active = selectedStrikes.has(s);
-                return (
-                  <button key={s} onClick={() => toggleStrike(s)}
-                    className={`text-[length:var(--ac-fs-xs)] font-sans px-2 py-0.5 rounded-[2px] border transition-all duration-150 shrink-0 ${
-                      active ? 'bg-blue-400/15 border-blue-400/50 text-blue-300' : 'bg-transparent border-[var(--ac-border-subtle)]/50 text-[var(--ac-text-dim)] hover:border-[var(--ac-border)]/80 hover:text-[var(--ac-text-secondary)]'
-                    }`}>
-                    {s}
-                  </button>
-                );
-              })}
+            <div className="px-3 py-1.5 border-b border-[var(--ac-border-subtle)]/20">
+              <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(52px, 1fr))' }}>
+                {allStrikes.map(s => {
+                  const active = selectedStrikes.has(s);
+                  const isAtm = atmStrike === s;
+                  return (
+                    <button key={s} onClick={() => toggleStrike(s)}
+                      className={`text-[length:var(--ac-fs-xs)] font-sans py-1 rounded-[3px] border transition-all duration-150 text-center leading-tight ${
+                        active
+                          ? isAtm ? 'bg-orange-400/20 border-orange-400 text-orange-300' : 'bg-blue-400/15 border-blue-400/50 text-blue-300'
+                          : isAtm ? 'bg-orange-400/10 border-orange-400/70 text-orange-300' : 'bg-transparent border-[var(--ac-border-subtle)]/50 text-[var(--ac-text-dim)] hover:border-[var(--ac-border)]/80 hover:text-[var(--ac-text-secondary)]'
+                      }`}
+                      title={isAtm ? `ATM · 最接近 ETH $${ethPrice}` : undefined}>
+                      <div className="font-semibold">{s >= 1000 ? (s / 1000).toFixed(1) + 'K' : s}</div>
+                      {isAtm && <div className="text-[9px] font-bold text-orange-400 leading-none mt-0.5">ATM</div>}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div className="flex items-center gap-1.5 px-3 py-1.5 flex-wrap">
               <span className="text-[length:var(--ac-fs-xs)] font-sans text-[var(--ac-text-dim)] shrink-0 w-6">字段</span>
@@ -3887,21 +3893,23 @@ export default function AnnualizedChain() {
           </div>
         )}
         {viewMode === 'byExpiry' && (
-          /* 按到期日模式：到期日Tag行 + 字段Tag行 */
+          /* 按到期日模式：到期日Tag行（等宽网格）+ 字段Tag行 */
           <div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 flex-wrap border-b border-[var(--ac-border-subtle)]/20">
-              <span className="text-[length:var(--ac-fs-xs)] font-sans text-[var(--ac-text-dim)] shrink-0 w-6">到期</span>
-              {allExpiries.map(ex => {
-                const active = selectedExpiries.has(ex.code);
-                return (
-                  <button key={ex.code} onClick={() => toggleExpiry(ex.code)}
-                    className={`text-[length:var(--ac-fs-xs)] font-sans px-2 py-0.5 rounded-[2px] border transition-all duration-150 shrink-0 ${
-                      active ? 'bg-amber-400/15 border-amber-400/50 text-amber-300' : 'bg-transparent border-[var(--ac-border-subtle)]/50 text-[var(--ac-text-dim)] hover:border-[var(--ac-border)]/80 hover:text-[var(--ac-text-secondary)]'
-                    }`}>
-                    {ex.label}
-                  </button>
-                );
-              })}
+            <div className="px-3 py-1.5 border-b border-[var(--ac-border-subtle)]/20">
+              <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(52px, 1fr))' }}>
+                {allExpiries.map(ex => {
+                  const active = selectedExpiries.has(ex.code);
+                  return (
+                    <button key={ex.code} onClick={() => toggleExpiry(ex.code)}
+                      className={`text-[length:var(--ac-fs-xs)] font-sans py-1 rounded-[3px] border transition-all duration-150 text-center leading-tight ${
+                        active ? 'bg-amber-400/15 border-amber-400/50 text-amber-300' : 'bg-transparent border-[var(--ac-border-subtle)]/50 text-[var(--ac-text-dim)] hover:border-[var(--ac-border)]/80 hover:text-[var(--ac-text-secondary)]'
+                      }`}>
+                      <div className="font-semibold">{ex.label}</div>
+                      <div className="text-[10px] opacity-60">{ex.year}年</div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <div className="flex items-center gap-1.5 px-3 py-1.5 flex-wrap">
               <span className="text-[length:var(--ac-fs-xs)] font-sans text-[var(--ac-text-dim)] shrink-0 w-6">字段</span>
@@ -4055,7 +4063,7 @@ export default function AnnualizedChain() {
                             {isFirstExpiry && (
                               <div className="flex items-center gap-1">
                                 <span className="text-[length:var(--ac-fs-md)] font-bold font-sans text-blue-300">{s.toLocaleString()}</span>
-                                {isAtm && <span className="text-[length:var(--ac-fs-xs)] font-sans px-1 rounded-[2px] bg-amber-400/20 text-amber-400">ATM</span>}
+                                {isAtm && <span className="text-[length:var(--ac-fs-xs)] font-sans px-1 rounded-[2px] bg-orange-400/20 text-orange-400">ATM</span>}
                               </div>
                             )}
                             <div className="text-[length:var(--ac-fs-xs)] font-sans text-[var(--ac-text-muted)] whitespace-nowrap">{ex.label} {c.daysLeft}D</div>
@@ -4129,21 +4137,6 @@ export default function AnnualizedChain() {
         const eRows = eAllRows.filter(r => activeDims.has(r.dim));
         return (
           <div>
-            {/* 到期日多选 Tag */}
-            <div className="flex items-center gap-1.5 px-3 py-2 flex-wrap border-b border-[var(--ac-border-subtle)]/40">
-              <span className="text-[length:var(--ac-fs-xs)] font-sans text-[var(--ac-text-dim)] shrink-0 mr-0.5">到期日</span>
-              {allExpiries.map(ex => {
-                const active = selectedExpiries.has(ex.code);
-                return (
-                  <button key={ex.code} onClick={() => toggleExpiry(ex.code)}
-                    className={`text-[length:var(--ac-fs-xs)] font-sans px-2 py-0.5 rounded-[2px] border transition-all duration-150 shrink-0 ${
-                      active ? 'bg-amber-400/15 border-amber-400/50 text-amber-300' : 'bg-transparent border-[var(--ac-border-subtle)]/50 text-[var(--ac-text-dim)] hover:border-[var(--ac-border)]/80 hover:text-[var(--ac-text-secondary)]'
-                    }`}>
-                    {ex.label}
-                  </button>
-                );
-              })}
-            </div>
             {/* 对比表格：字段行 × (N到期日 × M行权价) 列 */}
             <div className="overflow-x-auto">
               <table className="w-full border-collapse" style={{ tableLayout: 'auto' }}>
@@ -4316,19 +4309,19 @@ export default function AnnualizedChain() {
                 <tr
                   key={strike}
                   ref={isAtm ? atmRowRef : undefined}
-                  className={`border-b border-[var(--ac-border-subtle)]/50 ${isAtm ? 'bg-amber-500/[0.07] ring-1 ring-inset ring-amber-500/20' : ''}`}
-                  style={isAtm ? { boxShadow: 'inset 3px 0 0 0 rgba(245,158,11,0.85)' } : undefined}
+                  className={`border-b border-[var(--ac-border-subtle)]/50 ${isAtm ? 'bg-orange-400/[0.08] ring-1 ring-inset ring-orange-400/30' : ''}`}
+                  style={isAtm ? { boxShadow: 'inset 3px 0 0 0 rgba(251,146,60,0.9)' } : undefined}
                 >
                     <td
                       className="py-0.5 px-1 text-center"
-                      style={activeMatrixExpiries.length > 4 ? { position: 'sticky', left: 0, zIndex: 5, background: isAtm ? 'rgba(245,158,11,0.07)' : 'var(--ac-bg-base)' } : {}}
+                      style={activeMatrixExpiries.length > 4 ? { position: 'sticky', left: 0, zIndex: 5, background: isAtm ? 'rgba(251,146,60,0.08)' : 'var(--ac-bg-base)' } : {}}
                     >
                     {isAtm ? (
                       <div className="flex flex-col items-center gap-0">
-                        <div className="text-[length:var(--ac-fs-sm)] font-sans font-bold text-amber-400 leading-tight">
+                        <div className="text-[length:var(--ac-fs-sm)] font-sans font-bold text-orange-300 leading-tight">
                           {strike.toLocaleString()}
                         </div>
-                        <div className="text-[length:var(--ac-fs-xs)] font-sans font-bold text-amber-400 leading-tight tracking-widest">ATM</div>
+                        <div className="text-[length:var(--ac-fs-xs)] font-sans font-bold text-orange-400 leading-tight tracking-widest">ATM</div>
                         {ethPrice > 0 && (
                           <div className="text-[length:var(--ac-fs-xs)] font-sans text-[var(--ac-text-muted)] leading-tight tabular-nums">
                             {Math.round(ethPrice).toLocaleString()}
