@@ -8769,4 +8769,10 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-08-02T10:18:18Z", type: "other", cleanMessage: "期权卡片：新增时间/内在/总价值三行，P&L图优化（X轴固定1200-4000，Y轴固定10k-50k五档，背景紫色，BE点修正），Greeks面板重构为3+4列网格，去掉期权标记价" },
     { date: "2026-08-02T11:09:07Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
   ],
+  "2026-08-03": [
+    { date: "2026-08-02T16:58:44Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-08-02T17:06:51Z", type: "fix", cleanMessage: "清除 Deribit 来源期权缓存（FP5835/FK2891），后端折算逻辑已修正" },
+    { date: "2026-08-03T00:10:43Z", type: "other", cleanMessage: "sync: 价值分解图优化、利息测算全乘法逻辑、已过期合约查询、按价位重复选择器修复" },
+    { date: "2026-08-03T00:29:45Z", type: "other", cleanMessage: "sync: 等宽网格 Tag、ATM 橙色统一、按到期日重复 Tag 修复、已过期合约查询" },
+  ],
 };
