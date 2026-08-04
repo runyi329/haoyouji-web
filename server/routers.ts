@@ -16346,7 +16346,7 @@ ${klinesSummary}
           participantCount: participantCountMap[Number(o.id)] || 0,
           _participantUserIds: participantUserIdsMap[Number(o.id)] || [],
         }));
-        return { orders: ordersWithPaid, livePrices };
+        return { orders: ordersWithPaid, livePrices, _debug: { targetUserId, participantQueryUserIdEarly, participantOrderIds, viewAsUserId: input.viewAsUserId } };
       }),
 
     // 获取本人名下共享担保池数据（用于担保缺口问号弹窗汇总展示）
