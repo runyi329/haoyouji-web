@@ -16249,11 +16249,50 @@ ${klinesSummary}
           }
                     return o;
         });
+        // 参与者视角字段覆盖：为参与方订单覆盖 order_perspective、owner_label、order_owner_name、interest_rate_annual 等
+        const participantQueryUserIdSet = new Set(participantOrderIds);
+        // 查询参与者自己的利率/计息基数/display_config 等字段
+        let piDetailMap: Record<number, any> = {};
+        let participantUserName = '';
+        if (conn && participantOrderIds.length > 0) {
+          try {
+            const ph2 = participantOrderIds.map(() => '?').join(',');
+            const piDetailRows = await conn.execute(
+              `SELECT order_id, interest_rate, interest_base, interest_base_currency, interest_payment_type, interest_start_date, interest_rate_currency, display_config FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND order_id IN (${ph2})`,
+              [input.ledgerId, participantQueryUserId, ...participantOrderIds]
+            ) as any;
+            const piDetailArr = Array.isArray(piDetailRows[0]) ? piDetailRows[0] : (Array.isArray(piDetailRows) ? piDetailRows : []);
+            for (const pi of piDetailArr) piDetailMap[Number(pi.order_id)] = pi;
+            // 查询参与者自己的名字
+            const puRows = await conn.execute(`SELECT username, name FROM users WHERE id = ? LIMIT 1`, [participantQueryUserId]) as any;
+            const puArr = Array.isArray(puRows[0]) ? puRows[0] : (Array.isArray(puRows) ? puRows : []);
+            if (puArr.length > 0) participantUserName = puArr[0].name || puArr[0].username || '';
+          } catch {}
+        }
+        const ordersWithParticipantView = ordersWithParticipant.map((o: any) => {
+          const isParticipantOrder = participantQueryUserIdSet.has(Number(o.id)) && Number(o.user_id) !== participantQueryUserId;
+          if (!isParticipantOrder) return o;
+          const pi = piDetailMap[Number(o.id)];
+          const result = { ...o };
+          result.order_perspective = 'other';
+          result.order_owner_name = o.owner_label || o.username || null;
+          if (participantUserName) result.owner_label = participantUserName;
+          if (pi) {
+            if (pi.interest_rate) result.interest_rate_annual = pi.interest_rate;
+            if (pi.interest_base) result.interest_base = pi.interest_base;
+            if (pi.interest_base_currency) result.interest_base_currency = pi.interest_base_currency;
+            if (pi.interest_payment_type) result.interest_payment_type = pi.interest_payment_type;
+            if (pi.interest_start_date) result.interest_start_date = pi.interest_start_date;
+            if (pi.interest_rate_currency) result.interest_rate_currency = pi.interest_rate_currency;
+            if (pi.display_config) result.display_config = pi.display_config;
+          }
+          return result;
+        });
         // 附带每个订单的已结利息/已结佣金汇总（paid_total）
         let paidTotalMap: Record<number, { amount: number; currency: string }> = {};
-        if (conn && ordersWithParticipant.length > 0) {
+        if (conn && ordersWithParticipantView.length > 0) {
           try {
-            const orderIds = ordersWithParticipant.map((o: any) => Number(o.id));
+            const orderIds = ordersWithParticipantView.map((o: any) => Number(o.id));
             const placeholders = orderIds.map(() => '?').join(',');
             const ptRows = await conn.execute(
               `SELECT order_id, IFNULL(currency, 'U') as currency, SUM(amount) as total_paid
@@ -16276,9 +16315,9 @@ ${klinesSummary}
         // 查询每个订单的参与方数量和用户ID列表
         let participantCountMap: Record<number, number> = {};
         let participantUserIdsMap: Record<number, number[]> = {};
-        if (conn && ordersWithParticipant.length > 0) {
+        if (conn && ordersWithParticipantView.length > 0) {
           try {
-            const orderIds = ordersWithParticipant.map((o: any) => Number(o.id));
+            const orderIds = ordersWithParticipantView.map((o: any) => Number(o.id));
             const placeholders = orderIds.map(() => '?').join(',');
             const pcRows = await conn.execute(
               `SELECT order_id, user_id FROM ledger_order_participants WHERE order_id IN (${placeholders})`,
@@ -16293,7 +16332,7 @@ ${klinesSummary}
             }
           } catch {}
         }
-        const ordersWithPaid = ordersWithParticipant.map((o: any) => ({
+        const ordersWithPaid = ordersWithParticipantView.map((o: any) => ({
           ...o,
           paidTotal: paidTotalMap[Number(o.id)] || null,
           participantCount: participantCountMap[Number(o.id)] || 0,
