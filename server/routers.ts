@@ -16071,6 +16071,7 @@ ${klinesSummary}
         }
         // 查询参与者订单（用 targetUserId 或 ctx.user.id）
         const participantQueryUserIdEarly = targetUserId || ctx.user.id;
+        console.log('[funderGetAssetOrders] targetUserId=', targetUserId, 'participantQueryUserIdEarly=', participantQueryUserIdEarly, 'viewAsUserId=', input.viewAsUserId, 'isManager=', isManager, 'isFunder=', isFunder);
         let participantOrderIds: number[] = [];
         if (conn) {
           try {
