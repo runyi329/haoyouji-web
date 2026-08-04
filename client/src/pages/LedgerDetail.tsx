@@ -2312,7 +2312,7 @@ export default function LedgerDetail() {
     isOwner ? '创建者' : isAdmin ? '管理员' : (ledgerData as any)?.userRole === 'member' ? '普通用户' : isClient ? '客户' : isEmployee ? '企业员工' : '普通用户'
   ) : '';
   // 视角切换时，用目标用户的角色来控制 UI 显示
-  const viewAsRole = viewAsUserId ? ((membersData as any[])?.find((m: any) => m.userId === viewAsUserId)?.role || 'member') : null;
+  const viewAsRole = viewAsUserId ? ((membersData as any[])?.find((m: any) => Number(m.userId) === Number(viewAsUserId))?.role || 'member') : null;
   const effectiveIsOwner = viewAsUserId ? viewAsRole === 'owner' : isOwner;
   const effectiveIsAdmin = viewAsUserId ? viewAsRole === 'admin' : isAdmin;
   const effectiveIsFunder = viewAsUserId ? viewAsRole === 'funder' : isFunder;
