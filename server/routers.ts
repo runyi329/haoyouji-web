@@ -16071,7 +16071,7 @@ ${klinesSummary}
         }
         // 查询参与者订单（用 targetUserId 或 ctx.user.id）
         const participantQueryUserIdEarly = targetUserId || ctx.user.id;
-        console.log('[funderGetAssetOrders] targetUserId=', targetUserId, 'participantQueryUserIdEarly=', participantQueryUserIdEarly, 'viewAsUserId=', input.viewAsUserId, 'isManager=', isManager, 'isFunder=', isFunder);
+        try { require('fs').appendFileSync('/tmp/funder_debug.txt', JSON.stringify({ t: new Date().toISOString(), targetUserId, participantQueryUserIdEarly, viewAsUserId: input.viewAsUserId, isManager, isFunder, ctxUserId: ctx.user.id }) + '\n'); } catch {}
         let participantOrderIds: number[] = [];
         if (conn) {
           try {
