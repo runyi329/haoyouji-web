@@ -922,6 +922,18 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         commissionRate: formData.commissionRate || undefined,
         commissionBase: formData.commissionBase || undefined,
         commissionStartDate: formData.commissionStartDate || undefined,
+        // 参与者独立可编辑字段
+        interestRate: formData.interestRateAnnual || undefined,
+        interestBase: formData.interestBase || undefined,
+        interestBaseCurrency: formData.interestBaseCurrency || undefined,
+        interestPaymentType: formData.interestPaymentType || undefined,
+        interestStartDate: formData.interestStartDate || undefined,
+        interestRateCurrency: formData.interestRateCurrency || undefined,
+        displayConfig: formData.displayConfig ? JSON.stringify(formData.displayConfig) : undefined,
+        buyDateOverride: formData.buyDate || undefined,
+        brokerNameOverride: formData.brokerName || undefined,
+        brokerAccountOverride: formData.brokerAccount || undefined,
+        note: formData.note || undefined,
       });
       return;
     }
@@ -1589,7 +1601,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                 </div>
               )}
                 {/* 开仓日期（与用户同行并排） */}
-                <div className="flex-1 min-w-0" style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
+                <div className="flex-1 min-w-0" style={{}}>
                   <label className="block text-sm font-medium text-gray-600 mb-2">开仓日期</label>
                   <div className="relative">
                     <button
@@ -1914,7 +1926,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               </div>
 
               {/* 计息基数 */}
-              <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
+              <div style={{}}>
                 <label className="block text-sm font-medium text-gray-600 mb-1">
                   计息基数
                   <span className="ml-1.5 text-xs text-gray-400 font-normal">利息计算的本金基数</span>
@@ -2006,7 +2018,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               )}
 
               {/* 计息开始日期 */}
-              <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
+              <div style={{}}>
                 <label className="block text-sm font-medium text-gray-600 mb-2">
                   计息开始日期
                   <span className="ml-1.5 text-xs text-gray-400 font-normal">利息从此日开始累计</span>
@@ -2029,7 +2041,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               </div>
 
               {/* 约定年化利息 */}
-              <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
+              <div style={{}}>
                 <label className="block text-sm font-medium text-gray-600 mb-2">约定年化利息（%）</label>
                 {/* 收（红圈+）/ 付（绿圈-） 与利率输入同行 */}
                 <div className="flex items-center gap-2">
@@ -2092,7 +2104,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
               </div>
 
               {/* 利息支付方式 */}
-              <div style={{ opacity: editingOrder?.participantInfo ? 0.5 : 1, pointerEvents: editingOrder?.participantInfo ? 'none' : 'auto' }}>
+              <div style={{}}>
                 <label className="block text-sm font-medium text-gray-600 mb-2">利息支付方式</label>
                 <select
                   value={formData.interestPaymentType}

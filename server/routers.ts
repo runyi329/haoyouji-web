@@ -16258,7 +16258,7 @@ ${klinesSummary}
           try {
             const ph2 = participantOrderIds.map(() => '?').join(',');
             const piDetailRows = await conn.execute(
-              `SELECT order_id, interest_rate, interest_base, interest_base_currency, interest_payment_type, interest_start_date, interest_rate_currency, display_config FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND order_id IN (${ph2})`,
+              `SELECT order_id, interest_rate, interest_base, interest_base_currency, interest_payment_type, interest_start_date, interest_rate_currency, display_config, buy_date_override, broker_name_override, broker_account_override, note FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND order_id IN (${ph2})`,
               [input.ledgerId, participantQueryUserId, ...participantOrderIds]
             ) as any;
             const piDetailArr = Array.isArray(piDetailRows[0]) ? piDetailRows[0] : (Array.isArray(piDetailRows) ? piDetailRows : []);
@@ -16285,6 +16285,10 @@ ${klinesSummary}
             if (pi.interest_start_date) result.interest_start_date = pi.interest_start_date;
             if (pi.interest_rate_currency) result.interest_rate_currency = pi.interest_rate_currency;
             if (pi.display_config) result.display_config = pi.display_config;
+            if (pi.buy_date_override) result.buy_date = pi.buy_date_override;
+            if (pi.broker_name_override) result.broker_name = pi.broker_name_override;
+            if (pi.broker_account_override) result.broker_account = pi.broker_account_override;
+            if (pi.note) result.note = pi.note;
           }
           return result;
         });
@@ -18133,6 +18137,20 @@ ${klinesSummary}
         commissionRate: z.string().optional(),
         commissionBase: z.string().optional(),
         commissionStartDate: z.string().optional(),
+        // 参与者独立可编辑字段
+        interestRate: z.string().optional(),
+        interestBase: z.string().optional(),
+        interestBaseCurrency: z.string().optional(),
+        interestPaymentType: z.string().optional(),
+        interestStartDate: z.string().optional(),
+        interestRateCurrency: z.string().optional(),
+        displayConfig: z.string().optional(),
+        orderNoOverride: z.string().optional(),
+        buyDateOverride: z.string().optional(),
+        brokerNameOverride: z.string().optional(),
+        brokerAccountOverride: z.string().optional(),
+        paidInterest: z.string().optional(),
+        note: z.string().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -18146,8 +18164,26 @@ ${klinesSummary}
         const conn = await getDbConnection();
         if (!conn) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: '数据库连接失败' });
         await conn.execute(
-          'UPDATE ledger_order_participants SET commission_rate = ?, commission_base = ?, commission_start_date = ?, updated_at = NOW() WHERE order_id = ? AND ledger_id = ? AND user_id = ?',
-          [input.commissionRate || null, input.commissionBase || null, input.commissionStartDate || null, input.orderId, input.ledgerId, input.userId]
+          `UPDATE ledger_order_participants SET
+            commission_rate = ?, commission_base = ?, commission_start_date = ?,
+            interest_rate = ?, interest_base = ?, interest_base_currency = ?,
+            interest_payment_type = ?, interest_start_date = ?, interest_rate_currency = ?,
+            display_config = ?, note = ?,
+            order_no_override = ?, buy_date_override = ?,
+            broker_name_override = ?, broker_account_override = ?,
+            paid_interest = ?,
+            updated_at = NOW()
+           WHERE order_id = ? AND ledger_id = ? AND user_id = ?`,
+          [
+            input.commissionRate || null, input.commissionBase || null, input.commissionStartDate || null,
+            input.interestRate || null, input.interestBase || null, input.interestBaseCurrency || null,
+            input.interestPaymentType || null, input.interestStartDate || null, input.interestRateCurrency || null,
+            input.displayConfig || null, input.note || null,
+            input.orderNoOverride || null, input.buyDateOverride || null,
+            input.brokerNameOverride || null, input.brokerAccountOverride || null,
+            input.paidInterest || null,
+            input.orderId, input.ledgerId, input.userId
+          ]
         );
         return { success: true };
       }),
