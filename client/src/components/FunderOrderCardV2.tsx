@@ -1074,8 +1074,10 @@ export function FunderOrderCardV2Silver({
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
   const [showInterestDetail, setShowInterestDetail] = useState(false);
   const [showInterestHistory, setShowInterestHistory] = useState(false);
+  const _v2IsParticipant = (order as any).order_perspective === 'other';
+  const _v2ParticipantUserId = _v2IsParticipant ? ((order as any).participantInfo?.userId || undefined) : undefined;
   const { data: interestPaymentsData } = trpc.ledger.funderGetInterestPayments.useQuery(
-    { orderId: order.id as number, ledgerId: ledgerId as number },
+    { orderId: order.id as number, ledgerId: ledgerId as number, participantUserId: _v2ParticipantUserId },
     { enabled: showInterestHistory && !!ledgerId, staleTime: 10000 }
   );
   // 备注相关 state
@@ -2478,8 +2480,10 @@ export function FunderLenderCardSilver({
   };
   const [showInterestHistory, setShowInterestHistory] = useState(false);
   const [showCollateralInfo, setShowCollateralInfo] = useState(false);
+  const _lnIsParticipant = (order as any).order_perspective === 'other';
+  const _lnParticipantUserId = _lnIsParticipant ? ((order as any).participantInfo?.userId || undefined) : undefined;
   const interestHistoryQuery = trpc.ledger.funderGetInterestPayments.useQuery(
-    { ledgerId: ledgerId ?? 0, orderId: order.id as number },
+    { ledgerId: ledgerId ?? 0, orderId: order.id as number, participantUserId: _lnParticipantUserId },
     { enabled: showInterestHistory && !!ledgerId, staleTime: 0 }
   );
   // 共享担保池查询（仅当订单开启了本人订单共享时才查询）

@@ -472,8 +472,10 @@ export function FunderOrderCard({
   });
   // 已结利息历史浮层
   const [showInterestHistory, setShowInterestHistory] = useState(false);
+  const _isParticipantOrder = (order as any).order_perspective === 'other';
+  const _participantUserId = _isParticipantOrder ? ((order as any).participantInfo?.userId || undefined) : undefined;
   const interestHistoryQuery = trpc.ledger.funderGetInterestPayments.useQuery(
-    { ledgerId, orderId: order.id as number },
+    { ledgerId, orderId: order.id as number, participantUserId: _participantUserId },
     { enabled: showInterestHistory, staleTime: 0 }
   );
   // 内部 mutations
@@ -492,7 +494,7 @@ export function FunderOrderCard({
   // 内部结息查询（仅当未传入 interestPayments 时启用）
   const _activeShowPaymentPanelForQuery = showPaymentPanel !== undefined ? showPaymentPanel : _intShowPayment;
   const { data: _intInterestPayments, refetch: _intRefetchPayments } = trpc.ledger.funderGetInterestPayments.useQuery(
-    { ledgerId, orderId: _activeShowPaymentPanelForQuery! },
+    { ledgerId, orderId: _activeShowPaymentPanelForQuery!, participantUserId: _participantUserId },
     { enabled: interestPayments === undefined && _activeShowPaymentPanelForQuery === order.id }
   );
   const _intAddPaymentMutation = trpc.ledger.funderAddInterestPayment.useMutation({
@@ -2374,7 +2376,7 @@ export function FunderOrderCard({
             <button
               onClick={() => {
                 if (!$paymentForm.amount || parseFloat($paymentForm.amount) <= 0) { toast.error('请填写结息金额'); return; }
-                $addPaymentMutation.mutate({ ledgerId, orderId: order.id, amount: parseFloat($paymentForm.amount), currency: $paymentForm.currency || 'U', exchangeRate: parseFloat($paymentForm.exchangeRate || String(cnyRate || 6.75)), payDate: $paymentForm.payDate || new Date().toISOString().slice(0, 10), note: $paymentForm.note || undefined, periodStart: ($paymentForm as any).periodStart || undefined, periodEnd: ($paymentForm as any).periodEnd || undefined });
+                $addPaymentMutation.mutate({ ledgerId, orderId: order.id, amount: parseFloat($paymentForm.amount), currency: $paymentForm.currency || 'U', exchangeRate: parseFloat($paymentForm.exchangeRate || String(cnyRate || 6.75)), payDate: $paymentForm.payDate || new Date().toISOString().slice(0, 10), note: $paymentForm.note || undefined, periodStart: ($paymentForm as any).periodStart || undefined, periodEnd: ($paymentForm as any).periodEnd || undefined, participantUserId: (order as any).order_perspective === 'other' ? ((order as any).participantInfo?.userId || undefined) : undefined });
               }}
               disabled={$addPaymentMutation.isPending}
               className="w-full py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50"

@@ -16305,12 +16305,21 @@ ${klinesSummary}
           try {
             const orderIds = ordersWithParticipantView.map((o: any) => Number(o.id));
             const placeholders = orderIds.map(() => '?').join(',');
+            // 参与者视角：只查自己的付款（participant_user_id = participantQueryUserId）
+            // 拥有者视角：只查主订单的付款（participant_user_id IS NULL）
+            const isParticipantQuery = participantOrderIds.length > 0 && !isManager;
+            const paidWhereClause = isParticipantQuery
+              ? `order_id IN (${placeholders}) AND participant_user_id = ?`
+              : `order_id IN (${placeholders}) AND participant_user_id IS NULL`;
+            const paidParams = isParticipantQuery
+              ? [...orderIds, participantQueryUserId]
+              : orderIds;
             const ptRows = await conn.execute(
               `SELECT order_id, IFNULL(currency, 'U') as currency, SUM(amount) as total_paid
                FROM ledger_order_payments
-               WHERE order_id IN (${placeholders})
+               WHERE ${paidWhereClause}
                GROUP BY order_id, IFNULL(currency, 'U')`,
-              orderIds
+              paidParams
             ) as any;
             const ptArr = Array.isArray(ptRows[0]) ? ptRows[0] : (Array.isArray(ptRows) ? ptRows : []);
             for (const row of ptArr) {
@@ -16826,6 +16835,7 @@ ${klinesSummary}
         note: z.string().optional(),
         periodStart: z.string().optional(), // YYYY-MM-DD 结算起始日
         periodEnd: z.string().optional(),   // YYYY-MM-DD 结算截止日
+        participantUserId: z.number().optional(), // 参与者userId，NULL表示拥有者付款
       }))
       .mutation(async ({ ctx, input }) => {
         const db = await getLedgerDb();
@@ -16868,8 +16878,8 @@ ${klinesSummary}
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin') throw new TRPCError({ code: 'FORBIDDEN', message: '仅管理员可操作' });
         await db.execute(
-          sql`INSERT INTO ledger_order_payments (order_id, ledger_id, amount, currency, exchange_rate, pay_date, note, period_start, period_end, created_by)
-              VALUES (${input.orderId}, ${input.ledgerId}, ${input.amount}, ${input.currency || 'U'}, ${input.exchangeRate || 6.75}, ${input.payDate}, ${input.note || ''}, ${input.periodStart || null}, ${input.periodEnd || null}, ${ctx.user.id})`
+          sql`INSERT INTO ledger_order_payments (order_id, ledger_id, amount, currency, exchange_rate, pay_date, note, period_start, period_end, created_by, participant_user_id)
+              VALUES (${input.orderId}, ${input.ledgerId}, ${input.amount}, ${input.currency || 'U'}, ${input.exchangeRate || 6.75}, ${input.payDate}, ${input.note || ''}, ${input.periodStart || null}, ${input.periodEnd || null}, ${ctx.user.id}, ${input.participantUserId || null})`
         );
         return { success: true };
       }),
@@ -16907,14 +16917,23 @@ ${klinesSummary}
         ) as any;
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         if (role !== 'owner' && role !== 'admin' && role !== 'funder') throw new TRPCError({ code: 'FORBIDDEN', message: '无权限查看' });
-        const rows = await db.execute(
-          sql`SELECT p.*, u.username, u.name as operatorName
-              FROM ledger_order_payments p
-              LEFT JOIN users u ON u.id = p.created_by
-              WHERE p.order_id = ${input.orderId} AND p.ledger_id = ${input.ledgerId}
-              ORDER BY p.pay_date DESC, p.id DESC`
-        ) as any;
-        const rawPayments = ((rows[0] || rows) as any[]) || [];
+        // 参与者视角：只查自己的付款记录；拥有者视角：只查 participant_user_id IS NULL 的记录
+        const rawRows = input.participantUserId
+          ? await db.execute(
+              sql`SELECT p.*, u.username, u.name as operatorName
+                  FROM ledger_order_payments p
+                  LEFT JOIN users u ON u.id = p.created_by
+                  WHERE p.order_id = ${input.orderId} AND p.ledger_id = ${input.ledgerId} AND p.participant_user_id = ${input.participantUserId}
+                  ORDER BY p.pay_date DESC, p.id DESC`
+            ) as any
+          : await db.execute(
+              sql`SELECT p.*, u.username, u.name as operatorName
+                  FROM ledger_order_payments p
+                  LEFT JOIN users u ON u.id = p.created_by
+                  WHERE p.order_id = ${input.orderId} AND p.ledger_id = ${input.ledgerId} AND p.participant_user_id IS NULL
+                  ORDER BY p.pay_date DESC, p.id DESC`
+            ) as any;
+        const rawPayments = ((rawRows[0] || rawRows) as any[]) || [];
         // 把 Date 对象统一序列化为 yyyy-MM-dd 字符串，防止前端崩溃
         const payDateFields = ['pay_date', 'period_start', 'period_end', 'created_at'];
         return rawPayments.map((p: any) => {
