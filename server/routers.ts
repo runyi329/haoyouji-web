@@ -17260,6 +17260,17 @@ ${klinesSummary}
             }
           } catch (_ptE) { /* 忽略错误 */ }
         }
+        // 临时调试日志
+        const participantDebug = allOrders.filter((o: any) => (o as any)._isParticipant);
+        if (participantDebug.length > 0) {
+          console.log('[DEBUG funderGetAssetOrders] 参与者订单:', participantDebug.map((o: any) => ({
+            id: o.id, order_no: o.order_no, _isParticipant: (o as any)._isParticipant,
+            order_perspective: o.order_perspective, interest_rate_annual: o.interest_rate_annual,
+            owner_label: o.owner_label, order_owner_name: (o as any).order_owner_name,
+          })));
+        } else {
+          console.log('[DEBUG funderGetAssetOrders] 无参与者订单, allOrders数量:', allOrders.length, 'targetUserId:', targetUserId);
+        }
         const ordersWithPaid = allOrders.map((o: any) => ({
           ...o,
           paidTotal: paidTotalMap[Number(o.id)] || null,
