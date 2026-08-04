@@ -17028,6 +17028,7 @@ ${klinesSummary}
         const myRole = (myRoleRows[0]?.[0] ?? myRoleRows[0])?.role;
         if (!myRole) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         const amIManager = myRole === 'owner' || myRole === 'admin';
+        console.log('[funderGetAssetOrders] 调用: userId=', ctx.user.id, 'myRole=', myRole, 'ledgerId=', input.ledgerId, 'viewAsUserId=', input.viewAsUserId);
         // 观察视角：只有 owner/admin 才能使用 viewAsUserId
         if (input.viewAsUserId && !amIManager) {
           throw new TRPCError({ code: 'FORBIDDEN', message: '无权限使用观察视角' });
