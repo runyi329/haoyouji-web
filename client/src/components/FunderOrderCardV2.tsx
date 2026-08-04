@@ -1034,6 +1034,29 @@ const SL_DIVIDER = 'rgba(0,0,0,0.08)';
 const SL_GREEN = '#A80000';      // 涨 = 深红（中国习惯）
 const SL_RED = '#16A34A';        // 跌 = 绿色
 const LN_EARN = '#C00000';       // 收益型卡片应收利息颜色（深红）
+// 参与者绿色磨砂主题
+const GRN_BG = [
+  'linear-gradient(135deg, rgba(255,255,255,0.50) 0%, rgba(255,255,255,0.15) 22%, rgba(255,255,255,0.0) 45%, rgba(0,0,0,0.0) 60%, rgba(0,0,0,0.20) 100%)',
+  'linear-gradient(90deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.05) 38%, rgba(0,0,0,0.0) 58%, rgba(0,0,0,0.12) 100%)',
+  'linear-gradient(180deg, rgba(0,0,0,0.06) 0%, rgba(255,255,255,0.14) 35%, rgba(255,255,255,0.20) 50%, rgba(255,255,255,0.06) 70%, rgba(0,0,0,0.08) 100%)',
+  'linear-gradient(160deg, #064e3b 0%, #065f46 18%, #047857 40%, #059669 62%, #047857 80%, #064e3b 100%)',
+].join(', ');
+const GRN_BORDER = '1.5px solid rgba(4,120,87,0.90)';
+const GRN_SHADOW = [
+  '0 6px 20px rgba(4,120,87,0.35)',
+  '0 1px 3px rgba(0,0,0,0.25)',
+  'inset 0 1.5px 0 rgba(167,243,208,0.88)',
+  'inset 0 -1.5px 0 rgba(2,44,34,0.62)',
+  'inset 1.5px 0 rgba(110,231,183,0.28)',
+  'inset -1.5px 0 rgba(0,0,0,0.16)',
+].join(', ');
+const GRN_RIVET_BG = 'radial-gradient(circle at 35% 35%, #d1fae5 0%, #6ee7b7 35%, #059669 65%, #064e3b 100%)';
+const GRN_TEXT_PRI = 'rgba(255,255,255,0.95)';
+const GRN_TEXT_SEC = 'rgba(255,255,255,0.65)';
+const GRN_TEXT_DIM = 'rgba(255,255,255,0.45)';
+const GRN_TEXT_SHADOW = '0 1px 2.5px rgba(0,0,0,0.60), 0 -0.5px 1px rgba(255,255,255,0.22)';
+const GRN_TEXT_SHADOW_LG = '0 1px 3px rgba(0,0,0,0.65), 0 -0.5px 1.5px rgba(255,255,255,0.25)';
+const GRN_DIVIDER = 'rgba(255,255,255,0.15)';
 
 export function FunderOrderCardV2Silver({
   order,
@@ -1291,20 +1314,24 @@ export function FunderOrderCardV2Silver({
     'inset 1.5px 0 rgba(245,205,65,0.28)',
     'inset -1.5px 0 rgba(0,0,0,0.16)',
   ].join(', ');
-  const cardBg = isStockCard ? GOLD_BG_SV : isOptionCard ? OPT_BG : SL_BG;
-  const cardBorder = isStockCard ? GOLD_BORDER_SV : isOptionCard ? OPT_BORDER : SL_BORDER;
-  const cardShadow = isStockCard ? GOLD_SHADOW_SV : isOptionCard ? OPT_SHADOW : SL_SHADOW;
-  // 动态文字颜色：期权卡片用白色系列，其他用黑色系列
-  const TXT_PRI = isOptionCard ? OPT_TEXT_PRI : SL_TEXT_PRI;
-  const TXT_SEC = isOptionCard ? OPT_TEXT_SEC : SL_TEXT_SEC;
-  const TXT_DIM = isOptionCard ? OPT_TEXT_DIM : SL_TEXT_DIM;
-  const TXT_SHADOW = isOptionCard ? OPT_TEXT_SHADOW : SL_TEXT_SHADOW;
-  const TXT_SHADOW_LG = isOptionCard ? OPT_TEXT_SHADOW_LG : SL_TEXT_SHADOW_LG;
-  const DIVIDER = isOptionCard ? OPT_DIVIDER : SL_DIVIDER;
-  const rivetBg = isStockCard
+  const isParticipant = (order as any).order_perspective === 'other';
+  const cardBg = isParticipant ? GRN_BG : isStockCard ? GOLD_BG_SV : isOptionCard ? OPT_BG : SL_BG;
+  const cardBorder = isParticipant ? GRN_BORDER : isStockCard ? GOLD_BORDER_SV : isOptionCard ? OPT_BORDER : SL_BORDER;
+  const cardShadow = isParticipant ? GRN_SHADOW : isStockCard ? GOLD_SHADOW_SV : isOptionCard ? OPT_SHADOW : SL_SHADOW;
+  // 动态文字颜色：参与者和期权卡片用白色系列，其他用黑色系列
+  const TXT_PRI = (isParticipant || isOptionCard) ? (isParticipant ? GRN_TEXT_PRI : OPT_TEXT_PRI) : SL_TEXT_PRI;
+  const TXT_SEC = (isParticipant || isOptionCard) ? (isParticipant ? GRN_TEXT_SEC : OPT_TEXT_SEC) : SL_TEXT_SEC;
+  const TXT_DIM = (isParticipant || isOptionCard) ? (isParticipant ? GRN_TEXT_DIM : OPT_TEXT_DIM) : SL_TEXT_DIM;
+  const TXT_SHADOW = (isParticipant || isOptionCard) ? (isParticipant ? GRN_TEXT_SHADOW : OPT_TEXT_SHADOW) : SL_TEXT_SHADOW;
+  const TXT_SHADOW_LG = (isParticipant || isOptionCard) ? (isParticipant ? GRN_TEXT_SHADOW_LG : OPT_TEXT_SHADOW_LG) : SL_TEXT_SHADOW_LG;
+  const DIVIDER = (isParticipant || isOptionCard) ? (isParticipant ? GRN_DIVIDER : OPT_DIVIDER) : SL_DIVIDER;
+  const rivetBg = isParticipant ? GRN_RIVET_BG
+    : isStockCard
     ? 'radial-gradient(circle at 35% 35%, #fff8d0 0%, #e8c050 35%, #a07010 65%, #6a4800 100%)'
     : isOptionCard ? OPT_RIVET_BG : SL_RIVET_BG;
-  const rivetShadow = isStockCard
+  const rivetShadow = isParticipant
+    ? '0 1px 2px rgba(0,0,0,0.55), inset 0 1px 1px rgba(167,243,208,0.9)'
+    : isStockCard
     ? '0 1px 2px rgba(0,0,0,0.55), inset 0 1px 1px rgba(255,240,140,0.9)'
     : isOptionCard
       ? '0 1px 2px rgba(0,0,0,0.55), inset 0 1px 1px rgba(216,180,254,0.9)'
@@ -1366,16 +1393,40 @@ export function FunderOrderCardV2Silver({
               const m = (membersData as any[])?.find((m: any) => m.userId === order.user_id);
               return m ? (m.nickname || m.username) : null;
             })();
+            // 参与者视角：订单拥有者名字
+            // 优先用 order_owner_name（预览卡片展开时由父组件注入），其次从 membersData 按订单原始 user_id 查
+            const orderOwnerName = isParticipant ? (
+              (order as any).order_owner_name ||
+              (() => {
+                // 注意：参与者订单的 user_id 是参与者自己，订单拥有者存在 _ownerUserId 字段或需通过其他方式获取
+                // 备用：用 username 字段（后端 JOIN 返回的订单拥有者 username）
+                return (order as any).username || null;
+              })()
+            ) : null;
             const buyDateStr = order.buy_date ? fmtDate(order.buy_date) : null;
-            const items = [ownerName, buyDateStr].filter(Boolean);
+            // 参与者视角：拥有者名字紧跟在参与者名字后，无框白色字体
+            // 构建 items：[ownerName + ownerLabel, buyDateStr]
+            const items = [buyDateStr].filter(Boolean);
             const priceDiff2 = liveP !== null && buyPrice > 0 ? liveP - buyPrice : null;
             const livePriceColor = dir === 'up' ? SL_GREEN : dir === 'down' ? SL_RED : TXT_PRI;
             return (
               <>
+                {/* 参与者名字 */}
+                {ownerName && (
+                  <span style={{ color: TXT_PRI, fontWeight: 500 }}>{ownerName}</span>
+                )}
+                {/* 拥有者名字：用竖线分隔，颜色与参与者名字一致 */}
+                {isParticipant && orderOwnerName && (
+                  <>
+                    {ownerName && <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>}
+                    <span style={{ color: TXT_PRI, fontWeight: 500 }}>{orderOwnerName}</span>
+                  </>
+                )}
+                {!ownerName && isParticipant && !orderOwnerName && null}
                 {items.map((item, i) => (
                   <React.Fragment key={i}>
-                    {i > 0 && <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>}
-                    <span style={{ color: i === 0 ? TXT_PRI : TXT_SEC, fontWeight: i === 0 ? 500 : 400 }}>{item}</span>
+                    {(ownerName || (isParticipant && orderOwnerName) || i > 0) && <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>}
+                    <span style={{ color: TXT_SEC, fontWeight: 400 }}>{item}</span>
                   </React.Fragment>
                 ))}
                 {/* 股票类：证券公司 + 证券账号，无标题，用竖线分隔 */}
@@ -1408,14 +1459,16 @@ export function FunderOrderCardV2Silver({
           })()}
         </div>
         {/* 右侧：订单号 */}
-        {order.order_no && (
-          <span
-            className="ml-auto text-[10px] font-mono"
-            style={{ color: TXT_DIM, letterSpacing: '0.05em' }}
-          >
-            {order.order_no}
-          </span>
-        )}
+        <div className="ml-auto flex items-center gap-1.5">
+          {order.order_no && (
+            <span
+              className="text-[10px] font-mono"
+              style={{ color: TXT_DIM, letterSpacing: '0.05em' }}
+            >
+              {order.order_no}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* ── 行2：主数据行（持有数量占宽，其侙3列均分）── */}
@@ -1425,10 +1478,13 @@ export function FunderOrderCardV2Silver({
           {isStockCard ? (
             // 股票类：显示持有资产（计息基数，单位元）
             <>
-              <div className="text-[10px] mb-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
-                {(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true
+              <div className="text-[10px] mb-1 flex items-center gap-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
+                <span>{(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true
                   ? `借出资产 (${baseCur === 'CNY' ? '元' : 'U'})`
-                  : '仓位额度 (元)'}
+                  : '仓位额度 (元)'}</span>
+                {isParticipant && (
+                  <span className="text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#fff', backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.7)' }}>参与</span>
+                )}
               </div>
               <div style={{ lineHeight: 1 }}>
                 <span style={{ fontSize: '1.6rem', fontWeight: 700, color: TXT_PRI, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: TXT_SHADOW_LG }}>
@@ -1441,6 +1497,9 @@ export function FunderOrderCardV2Silver({
             <>
               <div className="text-[10px] mb-1 flex items-center gap-1" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>
                 <span>{(order as any).principal_lent_out === 1 || (order as any).principal_lent_out === true ? `借出资产 (${coin})` : `持有资产 (${coin})`}</span>
+                {isParticipant && (
+                  <span className="text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#fff', backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.7)' }}>参与</span>
+                )}
                 {(order as any).trade_direction && (
                   <span
                     className="text-[10px] font-bold px-1 py-0"
@@ -2455,7 +2514,7 @@ export function FunderLenderCardSilver({
 
   const rateStr = getRateStr(order);
   const isNegRate = rateStr.startsWith('-');
-  const rateAbs = rateStr ? parseFloat(isNegRate ? rateStr.slice(1) : rateStr).toFixed(0) : '';
+  const rateAbs = rateStr ? parseFloat(isNegRate ? rateStr.slice(1) : rateStr).toFixed((order as any).order_perspective === 'other' ? 2 : 0) : '';
   const accrued = useAccruedInterestFunder(
     order.status === 'active' ? order.interest_base : null,
     order.status === 'active' ? order.interest_rate_annual : null,
@@ -2544,13 +2603,15 @@ export function FunderLenderCardSilver({
     { bottom: '6px', right: '7px' },
   ];
 
-  // 动态文字颜色：期权卡片用白色系列，其他用黑色系列
-  const TXT_PRI = isOption ? OPT_TEXT_PRI : SL_TEXT_PRI;
-  const TXT_SEC = isOption ? OPT_TEXT_SEC : SL_TEXT_SEC;
-  const TXT_DIM = isOption ? OPT_TEXT_DIM : SL_TEXT_DIM;
-  const TXT_SHADOW = isOption ? OPT_TEXT_SHADOW : SL_TEXT_SHADOW;
-  const TXT_SHADOW_LG = isOption ? OPT_TEXT_SHADOW_LG : SL_TEXT_SHADOW_LG;
-  const DIVIDER = isOption ? OPT_DIVIDER : SL_DIVIDER;
+  const isParticipant = (order as any).order_perspective === 'other';
+  const GRN_POSITIVE_COLOR = LN_EARN;  // 暂时恢复原始颜色
+  // 动态文字颜色：参与者和期权卡片用白色系列，其他用黑色系列
+  const TXT_PRI = (isParticipant || isOption) ? (isParticipant ? GRN_TEXT_PRI : OPT_TEXT_PRI) : SL_TEXT_PRI;
+  const TXT_SEC = (isParticipant || isOption) ? (isParticipant ? GRN_TEXT_SEC : OPT_TEXT_SEC) : SL_TEXT_SEC;
+  const TXT_DIM = (isParticipant || isOption) ? (isParticipant ? GRN_TEXT_DIM : OPT_TEXT_DIM) : SL_TEXT_DIM;
+  const TXT_SHADOW = (isParticipant || isOption) ? (isParticipant ? GRN_TEXT_SHADOW : OPT_TEXT_SHADOW) : SL_TEXT_SHADOW;
+  const TXT_SHADOW_LG = (isParticipant || isOption) ? (isParticipant ? GRN_TEXT_SHADOW_LG : OPT_TEXT_SHADOW_LG) : SL_TEXT_SHADOW_LG;
+  const DIVIDER = (isParticipant || isOption) ? (isParticipant ? GRN_DIVIDER : OPT_DIVIDER) : SL_DIVIDER;
   const GOLD_BG = [
     // 层1：左上角高光（稍弱）
     'linear-gradient(135deg, rgba(255,255,255,0.50) 0%, rgba(255,255,255,0.15) 22%, rgba(255,255,255,0.0) 45%, rgba(0,0,0,0.0) 60%, rgba(0,0,0,0.28) 100%)',
@@ -2576,9 +2637,9 @@ export function FunderLenderCardSilver({
       className="rounded-2xl overflow-hidden silver-card"
       style={{
         position: 'relative',
-        background: isStock ? GOLD_BG : isOption ? OPT_BG : SL_BG,
-        border: isStock ? GOLD_BORDER : isOption ? OPT_BORDER : SL_BORDER,
-        boxShadow: isStock ? GOLD_SHADOW : isOption ? OPT_SHADOW : SL_SHADOW,
+        background: isParticipant ? GRN_BG : isStock ? GOLD_BG : isOption ? OPT_BG : SL_BG,
+        border: isParticipant ? GRN_BORDER : isStock ? GOLD_BORDER : isOption ? OPT_BORDER : SL_BORDER,
+        boxShadow: isParticipant ? GRN_SHADOW : isStock ? GOLD_SHADOW : isOption ? OPT_SHADOW : SL_SHADOW,
       }}
     >
       {/* SVG 磨砂噪点滤镜 */}
@@ -2608,10 +2669,13 @@ export function FunderLenderCardSilver({
           style={{
             position: 'absolute', width: '6px', height: '6px', borderRadius: '50%', zIndex: 10,
             ...pos,
-            background: isStock
+            background: isParticipant ? GRN_RIVET_BG
+              : isStock
               ? 'radial-gradient(circle at 35% 35%, #fff8d0 0%, #e8c050 35%, #a07010 65%, #6a4800 100%)'
               : SL_RIVET_BG,
-            boxShadow: isStock
+            boxShadow: isParticipant
+              ? '0 1px 2px rgba(0,0,0,0.55), inset 0 1px 1px rgba(167,243,208,0.9)'
+              : isStock
               ? '0 1px 2px rgba(0,0,0,0.55), inset 0 1px 1px rgba(255,240,140,0.9)'
               : '0 1px 2px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.8)',
           }}
@@ -2626,20 +2690,37 @@ export function FunderLenderCardSilver({
               const m = (membersData as any[])?.find((m: any) => m.userId === order.user_id);
               return m ? (m.nickname || m.username) : null;
             })();
+            // 参与者视角：订单拥有者名字
+            const orderOwnerName = isParticipant ? (
+              (order as any).order_owner_name ||
+              (order as any).username ||
+              null
+            ) : null;
             const buyDateStr = order.buy_date ? fmtDate(order.buy_date) : null;
             const brokerStr = order.asset_type === 'stock'
               ? [order.broker_name, order.broker_account].filter(Boolean).join(' ')
               : null;
-            const items = [ownerName, buyDateStr, brokerStr].filter(Boolean);
+            const items = [buyDateStr, brokerStr].filter(Boolean);
             // 当前币价（带红绿色+闪烁箭头）
             const priceDiff2 = liveP !== null && buyPrice > 0 ? liveP - buyPrice : null;
             const livePriceColor = dir === 'up' ? SL_GREEN : dir === 'down' ? SL_RED : TXT_PRI;
             return (
               <>
+                {/* 参与者名字 */}
+                {ownerName && (
+                  <span style={{ color: TXT_PRI, fontWeight: 500 }}>{ownerName}</span>
+                )}
+                {/* 拥有者名字：用竖线分隔，颜色与参与者名字一致 */}
+                {isParticipant && orderOwnerName && (
+                  <>
+                    {ownerName && <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>}
+                    <span style={{ color: TXT_PRI, fontWeight: 500 }}>{orderOwnerName}</span>
+                  </>
+                )}
                 {items.map((item, i) => (
                   <React.Fragment key={i}>
-                    {i > 0 && <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>}
-                    <span style={{ color: i === 0 ? TXT_PRI : TXT_SEC, fontWeight: i === 0 ? 500 : 400 }}>{item}</span>
+                    {(ownerName || (isParticipant && orderOwnerName) || i > 0) && <span style={{ color: TXT_DIM, margin: '0 6px' }}>|</span>}
+                    <span style={{ color: TXT_SEC, fontWeight: 400 }}>{item}</span>
                   </React.Fragment>
                 ))}
                 {coin !== 'CNY' && coin !== 'USDT' && (
@@ -2691,7 +2772,7 @@ export function FunderLenderCardSilver({
             )}
           </div>
           <div style={{ lineHeight: 1, display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-            <span style={{ fontSize: '1.6rem', fontWeight: 700, color: LN_EARN, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: TXT_SHADOW_LG }}>
+            <span style={{ fontSize: '1.6rem', fontWeight: 700, color: GRN_POSITIVE_COLOR, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textShadow: TXT_SHADOW_LG }}>
               {displayAccrued > 0 ? '+' : ''}{fmt(displayAccrued, 2)}
             </span>
             <span className="text-[10px]" style={{ color: TXT_SEC, whiteSpace: 'nowrap' }}>
@@ -2920,7 +3001,7 @@ export function FunderLenderCardSilver({
             {(() => {
               const net = displayAccrued - displayPaid;
               const label = net >= 0 ? '待收利息' : '超收利息';
-              const numColor = net >= 0 ? LN_EARN : '#16A34A';
+              const numColor = net >= 0 ? GRN_POSITIVE_COLOR : '#16A34A';
               return (
                 <div className="flex justify-between" style={{ borderTop: `1px solid ${DIVIDER}`, paddingTop: 4, marginTop: 4 }}>
                   <span style={{ color: TXT_SEC }}>合计应收</span>

@@ -3480,6 +3480,7 @@ export default function CryptoPrediction() {
                         // 利率为负或为0 → 权益型（突出资产）；利率为正 → 付息型（突出利息）
                         const _rateNum = parseFloat(String(order.interest_rate_annual ?? '0'));
                         const _isRateNeg = _rateNum <= 0;
+                        // 参与者视角：内部已处理绿色主题，无需在此强制切换
                         return !_isRateNeg ? (
                           <FunderLenderCardSilver
                             key={order.id}

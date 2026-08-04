@@ -17162,10 +17162,11 @@ ${klinesSummary}
               [input.ledgerId, targetUserId, ...orderIds]
             ) as any;
             const participantOrderIds = new Set(
-              ((participantRows[0] || participantRows) as any[]).map((r: any) => r.order_id)
+              ((participantRows[0] || participantRows) as any[]).map((r: any) => Number(r.order_id))
             );
             for (const o of allOrders) {
-              if (participantOrderIds.has(o.id)) {
+              // 保留已有的 _isParticipant 标记，或根据参与者表查询结果设置
+              if (participantOrderIds.has(Number(o.id))) {
                 (o as any)._isParticipant = true;
               }
             }
@@ -17181,12 +17182,25 @@ ${klinesSummary}
             const piPlaceholders = participantOrderIds.map(() => '?').join(',');
             const piConn = await getLedgerDb();
             const piRows = await (piConn as any).execute(
-              `SELECT order_id, role, commission_rate, commission_base, commission_start_date, paid_commission, note FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND order_id IN (${piPlaceholders})`,
+              `SELECT order_id, role, commission_rate, commission_base, commission_start_date, paid_commission, note,
+               interest_rate, interest_base, interest_base_currency, interest_payment_type, interest_start_date, interest_rate_currency, display_config
+               FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND order_id IN (${piPlaceholders})`,
               [input.ledgerId, targetUserId, ...participantOrderIds]
             ) as any;
             const piArr = ((piRows[0] || piRows) as any[]) || [];
             const piMap: Record<number, any> = {};
             for (const pi of piArr) { piMap[Number(pi.order_id)] = pi; }
+            // 查询参与者自己的用户名（用于 owner_label）
+            let participantUserName = '';
+            try {
+              const puConn = await getLedgerDb();
+              const puRows = await (puConn as any).execute(
+                `SELECT username, name FROM users WHERE id = ? LIMIT 1`,
+                [targetUserId]
+              ) as any;
+              const puArr = ((puRows[0] || puRows) as any[]) || [];
+              if (puArr.length > 0) participantUserName = puArr[0].name || puArr[0].username || '';
+            } catch (_e) {}
             for (const o of allOrders) {
               const pi = piMap[Number(o.id)];
               if (pi) {
@@ -17198,8 +17212,23 @@ ${klinesSummary}
                   commissionStartDate: pi.commission_start_date || o.interest_start_date || null,
                   paidCommission: pi.paid_commission || '0',
                   note: pi.note || null,
-                  interestBaseCurrency: (['CNY', 'RMB', 'cny', 'rmb', '人民币'].includes(o.interest_base_currency || '') ? 'CNY' : 'USDT'),
+                  interestBaseCurrency: (['CNY', 'RMB', 'cny', 'rmb', '\u4eba\u6c11\u5e01'].includes((pi.interest_base_currency || o.interest_base_currency || '') ) ? 'CNY' : 'USDT'),
                 };
+                // 参与者视角：用参与者自己的字段覆盖主订单字段
+                if ((o as any)._isParticipant) {
+                  // 订单拥有者名字（原 owner_label 或 username）
+                  (o as any).order_owner_name = o.owner_label || (o as any).username || null;
+                  // 参与者自己的名字作为显示名
+                  if (participantUserName) (o as any).owner_label = participantUserName;
+                  // 用参与者的利率、计息基数、展示配置覆盖主订单
+                  if (pi.interest_rate) (o as any).interest_rate_annual = pi.interest_rate;
+                  if (pi.interest_base) (o as any).interest_base = pi.interest_base;
+                  if (pi.interest_base_currency) (o as any).interest_base_currency = pi.interest_base_currency;
+                  if (pi.interest_payment_type) (o as any).interest_payment_type = pi.interest_payment_type;
+                  if (pi.interest_start_date) (o as any).interest_start_date = pi.interest_start_date;
+                  if (pi.interest_rate_currency) (o as any).interest_rate_currency = pi.interest_rate_currency;
+                  if (pi.display_config) (o as any).display_config = pi.display_config;
+                }
               }
             }
           }
@@ -17234,6 +17263,8 @@ ${klinesSummary}
         const ordersWithPaid = allOrders.map((o: any) => ({
           ...o,
           paidTotal: paidTotalMap[Number(o.id)] || null,
+          // 参与方订单强制覆盖 order_perspective 为 'other'，确保前端显示绿色卡片
+          order_perspective: (o as any)._isParticipant ? 'other' : (o.order_perspective || 'self'),
         }));
         return { orders: ordersWithPaid };
       }),

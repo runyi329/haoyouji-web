@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc";
 import { ChevronLeft, ChevronDown, Plus, Pencil, Trash2, User, TrendingUp, ChevronLeft as CalLeft, ChevronRight as CalRight, Users2, X } from "lucide-react";
 import { toast } from "sonner";
 import { FunderOrderCard, COIN_OPTIONS, COIN_COLORS, STATUS_OPTIONS, INTEREST_PAYMENT_OPTIONS, getBeijingToday, DatePicker, CoinType, INTEGER_COINS_FUNDER } from "@/components/FunderOrderCard";
+import { FunderOrderCardV2Silver, FunderLenderCardSilver } from "@/components/FunderOrderCardV2";
 
 
 
@@ -2710,34 +2711,292 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
 
                     {/* 参与者完整参数面板 */}
                     {p.expanded && (
-                      <div className="px-3 pb-3 space-y-3 border-t border-indigo-100">
-                        {/* 融资金额 */}
-                        <div className="pt-2">
-                          <label className="block text-xs font-medium text-gray-500 mb-1">融资金额 (USDT)</label>
-                          <input type="number" inputMode="decimal" value={p.amount} onChange={e => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, amount: e.target.value } : pp))} className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white" placeholder="如：10000" />
+                      <div className="border-t border-indigo-100">
+                        {/* ===== 基础参数 ===== */}
+                        <div className="px-3 pb-3 space-y-3">
+                          {/* 融资金额 */}
+                          <div className="pt-2">
+                            <label className="block text-xs font-medium text-gray-500 mb-1">融资金额</label>
+                            <div className="flex gap-2">
+                              <input type="number" inputMode="decimal" value={p.amount} onChange={e => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, amount: e.target.value } : pp))} className="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white" placeholder="如：10000" />
+                              <div className="flex rounded-xl border border-gray-200 overflow-hidden text-xs">
+                                {(['USDT','CNY'] as const).map(c => (
+                                  <button key={c} type="button" onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, amountCurrency: c } : pp))} className={`px-2 py-1 ${(p.amountCurrency||'USDT')===c ? 'bg-blue-500 text-white' : 'bg-white text-gray-500'}`}>{c==='CNY'?'元':c}</button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                          {/* 年利率 */}
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">年利率 (%)</label>
+                            <div className="flex items-center gap-2">
+                              {(() => { const isNeg = (p.interestRateAnnual || '').startsWith('-'); return (
+                                <>
+                                  <button type="button" title="收"
+                                    onClick={() => { const raw = p.interestRateAnnual || ''; const absVal = raw.startsWith('-') ? raw.slice(1) : raw; setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestRateAnnual: absVal } : pp)); }}
+                                    className="w-8 h-8 rounded-full flex items-center justify-center text-base font-bold shrink-0 transition-all"
+                                    style={!isNeg ? { background: '#FEE2E2', color: '#DC2626', border: '2px solid #DC2626' } : { backgroundColor: '#F3F4F6', color: '#9CA3AF', border: '2px solid transparent' }}
+                                  >+</button>
+                                  <button type="button" title="付"
+                                    onClick={() => { const raw = p.interestRateAnnual || ''; const absVal = raw.startsWith('-') ? raw.slice(1) : raw; setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestRateAnnual: '-' + absVal } : pp)); }}
+                                    className="w-8 h-8 rounded-full flex items-center justify-center text-base font-bold shrink-0 transition-all"
+                                    style={isNeg ? { background: '#DEF7EC', color: '#059669', border: '2px solid #059669' } : { backgroundColor: '#F3F4F6', color: '#9CA3AF', border: '2px solid transparent' }}
+                                  >−</button>
+                                </>
+                              ); })()}
+                              <input type="text" inputMode="decimal"
+                                value={(p.interestRateAnnual || '').startsWith('-') ? (p.interestRateAnnual || '').slice(1) : (p.interestRateAnnual || '')}
+                                onChange={e => { const val = e.target.value; const isNeg = (p.interestRateAnnual || '').startsWith('-'); setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestRateAnnual: isNeg ? '-' + val : val } : pp)); }}
+                                className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white"
+                                placeholder="如：18" />
+                              <div className="flex rounded-xl border border-gray-200 overflow-hidden text-xs shrink-0">
+                                {(['USDT','CNY'] as const).map(c => (
+                                  <button key={c} type="button" onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestRateCurrency: c } : pp))} className={`px-2 py-1 ${(p.interestRateCurrency||'USDT')===c ? 'bg-blue-500 text-white' : 'bg-white text-gray-500'}`}>{c==='CNY'?'元':c}</button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                          {/* 计息基数 */}
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">计息基数</label>
+                            <div className="flex gap-2">
+                              <input type="number" inputMode="decimal" value={p.interestBase} onChange={e => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestBase: e.target.value } : pp))} className="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white" placeholder="如：10000" />
+                              <div className="flex rounded-xl border border-gray-200 overflow-hidden text-xs">
+                                {(['USDT','CNY'] as const).map(c => (
+                                  <button key={c} type="button" onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestBaseCurrency: c } : pp))} className={`px-2 py-1 ${(p.interestBaseCurrency||'USDT')===c ? 'bg-blue-500 text-white' : 'bg-white text-gray-500'}`}>{c==='CNY'?'元':c}</button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                          {/* 付息方式 */}
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">付息方式</label>
+                            <select value={p.interestPaymentType} onChange={e => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestPaymentType: e.target.value } : pp))} className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white appearance-none">
+                              <option value="">请选择</option>
+                              {INTEREST_PAYMENT_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                            </select>
+                          </div>
+                          {/* 起息日 */}
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">起息日</label>
+                            <input type="date" value={p.interestStartDate} onChange={e => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestStartDate: e.target.value } : pp))} className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white" />
+                          </div>
                         </div>
-                        {/* 年利率 */}
-                        <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1">年利率 (%)</label>
-                          <input type="text" value={p.interestRateAnnual} onChange={e => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestRateAnnual: e.target.value } : pp))} className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white" placeholder="如：18" />
+
+                        {/* ===== 显示配置开关（与本人编辑表单完全一致） ===== */}
+                        <div className="mx-3 h-px bg-indigo-100 my-1" />
+                        <div className="rounded-xl border border-indigo-100 overflow-hidden mx-3 mb-3" style={{ backgroundColor: '#FAFBFF' }}>
+                          {/* 左栏字段 */}
+                          <div className="px-3 pt-3 pb-1">
+                            <div className="text-xs font-medium text-blue-500 mb-2">左栏：持有资产</div>
+                            <div className="space-y-2">
+                              {[
+                                { key: 'buyPrice', label: '买入币价' },
+                                { key: 'buyValue', label: '买入价値' },
+                                { key: 'buyDate', label: '开仓时间' },
+                                { key: 'openPrice', label: '开仓币价' },
+                                { key: 'todayPrice', label: '当前币价' },
+                                { key: 'floatPnl', label: '浮动盈亏' },
+                                { key: 'holdDuration', label: '持有时长' },
+                                { key: 'orderNo', label: '订单编号' },
+                                { key: 'aiIcon', label: 'AI图标' },
+                                { key: 'assetType', label: '资产类型标签' },
+                                { key: 'showOwnerName', label: '显示订单所有者名字' },
+                              ].map(({ key, label }) => (
+                                <div key={key} className="flex items-center justify-between">
+                                  <span className="text-xs text-gray-600">{label}</span>
+                                  <button type="button" onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, displayConfig: { ...pp.displayConfig, [key]: !pp.displayConfig?.[key] } } : pp))}
+                                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 focus:outline-none ${p.displayConfig?.[key] ? 'bg-blue-500' : 'bg-gray-200'}`}>
+                                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${p.displayConfig?.[key] ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="mx-3 h-px bg-gray-100 my-2" />
+                          {/* 右栏上半：待结利息区 */}
+                          <div className="px-3 pb-2">
+                            <div className="text-xs font-medium text-blue-500 mb-2">右栏上半：待结利息区</div>
+                            <div className="space-y-2">
+                              {[
+                                { key: 'accruedInterest', label: '待结利息' },
+                                { key: 'paidInterest', label: '已结利息' },
+                                { key: 'interestBase', label: '计息基数' },
+                                { key: 'interestStartDate', label: '计息日期' },
+                                { key: 'interestDuration', label: '计息时长' },
+                                { key: 'interestPaymentType', label: '付息方式' },
+                                { key: 'collateralCoin', label: '担保货币' },
+                                { key: 'collateralValue', label: '担保价値' },
+                                { key: 'collateral', label: '担保缺口' },
+                                { key: 'marginRate', label: '保证金率' },
+                              ].map(({ key, label }) => (
+                                <div key={key}>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-xs text-gray-600">{label}</span>
+                                    <button type="button" onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, displayConfig: { ...pp.displayConfig, [key]: !pp.displayConfig?.[key] } } : pp))}
+                                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 focus:outline-none ${p.displayConfig?.[key] ? 'bg-blue-500' : 'bg-gray-200'}`}>
+                                      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${p.displayConfig?.[key] ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                                    </button>
+                                  </div>
+                                  {key === 'marginRate' && p.displayConfig?.marginRate && (
+                                    <div className="mt-1 flex items-center gap-2 pl-1">
+                                      <span className="text-xs text-gray-400 shrink-0">低于</span>
+                                      <input type="number" min="0" max="200" step="1" value={p.marginAlertThreshold||''} onChange={e => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, marginAlertThreshold: e.target.value } : pp))} placeholder="如：80" className="w-14 text-xs text-center border border-gray-200 rounded-lg px-1 py-0.5 focus:outline-none focus:border-orange-400" style={{ color: '#D97706' }} />
+                                      <span className="text-xs text-gray-400 shrink-0">% 时预警</span>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="mx-3 h-px bg-gray-100 my-2" />
+                          {/* 约等于显示控制 */}
+                          <div className="px-3 pb-2">
+                            <div className="text-xs font-medium text-blue-500 mb-2">约等于显示控制</div>
+                            <div className="space-y-2">
+                              {([
+                                { key: 'approxHolding', label: '持有资产约等于' },
+                                { key: 'approxInterest', label: '待结利息约等于' },
+                                { key: 'approxCollateralItem', label: '担保货币约等于' },
+                                { key: 'approxCollateralValue', label: '担保价値约等于' },
+                              ] as { key: string; label: string }[]).map(({ key, label }) => (
+                                <div key={key}>
+                                  <div className="text-xs text-gray-600 mb-1">{label}</div>
+                                  <div className="flex gap-1">
+                                    {(['hidden', 'U', 'CNY'] as const).map(opt => (
+                                      <button key={opt} type="button" onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, displayConfig: { ...pp.displayConfig, [key]: opt } } : pp))}
+                                        className={`flex-1 py-0.5 text-xs rounded-lg border transition-colors ${ (p.displayConfig?.[key]||'hidden') === opt ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-500 border-gray-200' }`}>
+                                        {opt === 'hidden' ? '不显示' : opt === 'U' ? '≈ U' : '≈ 元'}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="mx-3 h-px bg-gray-100 my-2" />
+                          {/* 借出本金开关 */}
+                          <div className="px-3 pb-3">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <span className="text-xs font-medium text-gray-700">借出本金</span>
+                                <p className="text-xs text-gray-400 mt-0.5">开启后担保缺口计算将扣除计息基数（本金）</p>
+                              </div>
+                              <button type="button" onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, displayConfig: { ...pp.displayConfig, principalLentOut: !pp.displayConfig?.principalLentOut } } : pp))}
+                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 focus:outline-none ${p.displayConfig?.principalLentOut ? 'bg-orange-500' : 'bg-gray-200'}`}>
+                                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${p.displayConfig?.principalLentOut ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                        {/* 计息基数 */}
-                        <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1">计息基数</label>
-                          <input type="number" inputMode="decimal" value={p.interestBase} onChange={e => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestBase: e.target.value } : pp))} className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white" placeholder="如：10000" />
-                        </div>
-                        {/* 付息方式 */}
-                        <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1">付息方式</label>
-                          <select value={p.interestPaymentType} onChange={e => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestPaymentType: e.target.value } : pp))} className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white appearance-none">
-                            <option value="">请选择</option>
-                            {INTEREST_PAYMENT_OPTIONS.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-                          </select>
-                        </div>
-                        {/* 起息日 */}
-                        <div>
-                          <label className="block text-xs font-medium text-gray-500 mb-1">起息日</label>
-                          <input type="date" value={p.interestStartDate} onChange={e => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestStartDate: e.target.value } : pp))} className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm bg-white" />
+
+                        {/* ===== 参与者预览卡片（常驻展开） ===== */}
+                        <div className="mx-3 mb-3">
+                          {/* 模式切换 Tab */}
+                          <div className="flex items-center gap-1 mb-2 p-0.5 rounded-full bg-gray-100" style={{ width: 'fit-content' }}>
+                            {(['card', 'order'] as const).map(mode => (
+                              <button key={mode} type="button"
+                                onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, previewMode: mode } : pp))}
+                                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${ ((p as any).previewMode || 'order') === mode ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700' }`}>
+                                {mode === 'card' ? '卡片模式' : '订单模式'}
+                              </button>
+                            ))}
+                          </div>
+                          {(() => {
+                            const pPreviewOrder: any = {
+                              id: editingOrder?.id ?? -1,
+                              order_no: editingOrder?.order_no ?? null,
+                              user_id: p.userId,
+                              owner_label: p.userName,
+                              // 订单拥有者名字（从 membersData 按 editingOrder.user_id 查）
+                              order_owner_name: (() => {
+                                const allM = ((ledgerData as any)?.members || funderUsers || []) as any[];
+                                const ownerM = allM.find((m: any) => m.userId === editingOrder?.user_id);
+                                return ownerM ? (ownerM.nickname || ownerM.username) : (editingOrder?.owner_label || editingOrder?.username || null);
+                              })(),
+                              coin: formData.coin,
+                              asset_type: formData.assetType || null,
+                              buy_price: formData.buyPrice || null,
+                              buy_quantity: formData.assetType === 'stock' ? null : (formData.buyQuantity || null),
+                              amount: formData.assetType === 'stock' ? (amountInputValue || null) : null,
+                              buy_date: formData.buyDate || null,
+                              status: formData.status || 'active',
+                              broker_name: formData.brokerName || null,
+                              broker_account: formData.brokerAccount || null,
+                              interest_rate_annual: p.interestRateAnnual || formData.interestRateAnnual || null,
+                              interest_payment_type: p.interestPaymentType || formData.interestPaymentType || null,
+                              interest_base: p.interestBase || formData.interestBase || null,
+                              interest_base_currency: p.interestBaseCurrency || formData.interestBaseCurrency || 'USDT',
+                              interest_rate_currency: p.interestRateCurrency || formData.interestRateCurrency || 'USDT',
+                              interest_start_date: p.interestStartDate || formData.interestStartDate || null,
+                              principal_lent_out: p.displayConfig?.principalLentOut ? 1 : 0,
+                              collateral_assets: collateralAssets.length > 0 ? JSON.stringify(collateralAssets) : null,
+                              option_info: formData.assetType === 'crypto_option' ? JSON.stringify({
+                                coin: optionFormData.optionCurrency,
+                                direction: optionFormData.direction,
+                                exerciseDate: optionFormData.exerciseDate || null,
+                                deribitLabel: optionFormData.deribitLabel || null,
+                                strikePrice: optionFormData.strikePrice ? parseFloat(optionFormData.strikePrice) : null,
+                                premium: optionFormData.premium || null,
+                                denomination: optionFormData.premiumDenomination === 'BTC' ? 'B' : 'U',
+                                buyQty: optionFormData.buyQty || null,
+                              }) : null,
+                              collateral_share_mode: collateralShareMode || 'none',
+                              trade_direction: formData.tradeDirection || null,
+                              display_config: JSON.stringify({ ...p.displayConfig, marginAlertThreshold: p.marginAlertThreshold || undefined }),
+                              participantCount: 0,
+                              participantInfo: null,
+                              paidTotal: null,
+                              order_perspective: 'other',
+                            };
+                            const pMode = (p as any).previewMode || 'order';
+                            const rateVal = parseFloat(String(pPreviewOrder.interest_rate_annual || '0'));
+                            return (
+                              <div>
+                                {pMode === 'card' ? (
+                                  // 参与者视角：内部已处理绿色主题，无需在此强制切换
+                                  rateVal > 0 ? (
+                                    <FunderLenderCardSilver
+                                      order={pPreviewOrder}
+                                      ledgerId={ledgerId}
+                                      livePrices={formLivePrices}
+                                      priceDirection={priceDirection}
+                                      membersData={((ledgerData as any)?.members || funderUsers) as any[]}
+                                      cnyRate={cnyRate}
+                                      currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar } : undefined}
+                                    />
+                                  ) : (
+                                    <FunderOrderCardV2Silver
+                                      order={pPreviewOrder}
+                                      ledgerId={ledgerId}
+                                      livePrices={formLivePrices}
+                                      priceDirection={priceDirection}
+                                      membersData={((ledgerData as any)?.members || funderUsers) as any[]}
+                                      cnyRate={cnyRate}
+                                      currentUser={currentUser ? { id: (currentUser as any).id, name: (currentUser as any).name, username: (currentUser as any).username, avatar: (currentUser as any).avatar } : undefined}
+                                    />
+                                  )
+                                ) : (
+                                  <FunderOrderCard
+                                    order={pPreviewOrder}
+                                    livePrices={formLivePrices}
+                                    priceDirection={priceDirection}
+                                    currentUser={currentUser}
+                                    isAdmin={isAdminUser}
+                                    membersData={((ledgerData as any)?.members || funderUsers) as any[]}
+                                    ledgerId={ledgerId}
+                                    previewMode={true}
+                                    showCollateralInfo={false}
+                                    setShowCollateralInfo={() => {}}
+                                    showMarginInfo={false}
+                                    setShowMarginInfo={() => {}}
+                                    showInterestTip={false}
+                                    setShowInterestTip={() => {}}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     )}
@@ -2772,7 +3031,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               coin: formData.coin,
                               amount: formData.assetType === 'stock' ? amountInputValue : (computedAmount || ''),
                               amountCurrency: formData.amountCurrency || 'USDT',
-                              interestRateAnnual: formData.interestRateAnnual || '',
+                              interestRateAnnual: '1',  // 参与者默认年化1%（正数），不继承主订单利率
                               interestBase: formData.interestBase || '',
                               interestBaseCurrency: formData.interestBaseCurrency || 'USDT',
                               interestRateCurrency: formData.interestRateCurrency || 'USDT',

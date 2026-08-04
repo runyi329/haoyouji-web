@@ -913,9 +913,21 @@ export function FunderOrderCard({
               return m ? (m.username || m.nickname) : null;
             })();
             if (!label) return null;
+            const isParticipantOrder = (order as any).order_perspective === 'other';
+            // 参与者视角：订单拥有者名字（优先用 order_owner_name，备用 username）
+            const orderOwnerLabel = isParticipantOrder ? (
+              (order as any).order_owner_name ||
+              (order as any).username ||
+              null
+            ) : null;
             return (
-              <span className="text-[11px] font-medium px-1.5 py-0.5 rounded truncate max-w-[80px]" style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}>
-                {label}
+              <span className="flex items-center gap-0.5">
+                <span className="text-[11px] font-medium px-1.5 py-0.5 rounded truncate max-w-[80px]" style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}>
+                  {label}
+                </span>
+                {isParticipantOrder && orderOwnerLabel && (
+                  <span className="text-[11px] font-medium px-1.5 py-0.5 rounded truncate max-w-[80px]" style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}>{orderOwnerLabel}</span>
+                )}
               </span>
             );
           })()}
@@ -965,7 +977,7 @@ export function FunderOrderCard({
               <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5" style={{ borderRadius: '4px', color: '#fff', backgroundColor: '#F97316' }}>挂单中</span>
             )}
             {(order as any).order_perspective === 'other' && (
-              <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5" style={{ borderRadius: '4px', color: '#fff', backgroundColor: '#7C3AED' }}>他人</span>
+              <span className="ml-1 text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#16A34A', backgroundColor: '#fff', border: '1px solid #16A34A' }}>参与</span>
             )}
             {order.asset_type === 'crypto' && show('showTradeDirection') && (order as any).trade_direction === 'long' && (
               <span className="ml-1 text-[10px] font-bold px-1.5 py-0" style={{ borderRadius: '4px', color: '#fff', backgroundColor: '#DC2626', border: '1px solid #DC2626' }}>多</span>
