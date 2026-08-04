@@ -3442,8 +3442,8 @@ export default function CryptoPrediction() {
                   {/* 第2层：自己 / 他人 / 已结清 */}
                   <div className="flex rounded p-1 gap-1 mb-3" style={{ backgroundColor: '#E8EEFF', border: '1px solid #C7D7FF' }}>
                     {([
-                      ['mine',   '自己', cntMine],
-                      ['shared', '他人', cntShared],
+                      ['mine',   '本人', cntMine],
+                      ['shared', '参与', cntShared],
                     ] as const).map(([key, label, cnt]) => (
                       <button key={key} onClick={() => { setFinanceL2Tab(key as any); setFinanceL3Tab('all'); }}
                         style={tabBtnStyle(financeL2Tab === key)}>

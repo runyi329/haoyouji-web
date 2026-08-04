@@ -2540,6 +2540,7 @@ export default function LedgerDetail() {
   const [funderPriceDirection, setFunderPriceDirection] = useState<Record<string, 'up' | 'down' | 'same'>>({});
   // 资产订单视图模式：large=大图（单列放大），medium=中图（左右双栏），small=小图（紧凑列表）
   const [funderViewMode, setFunderViewMode] = useState<'card' | 'order'>('card');
+  const [funderOrderTab, setFunderOrderTab] = useState<'mine' | 'participant'>('mine');
   useEffect(() => {
     if (!hasFreshPrices) return;
     let prevPrices: Record<string, number> = {};
@@ -5179,9 +5180,26 @@ export default function LedgerDetail() {
         <div className="flex-1 px-4 pb-20">
           <div className="mt-4">
 
+            {/* 本人 / 参与 Tab */}
+            {(() => {
+              const allActive = (funderAssetOrders as any[]).filter((o: any) => o.status !== 'settled');
+              const mineOrders = allActive.filter((o: any) => (o as any).order_perspective !== 'other');
+              const participantOrders = allActive.filter((o: any) => (o as any).order_perspective === 'other');
+              const hasParticipant = participantOrders.length > 0;
+              return hasParticipant ? (
+                <div className="flex rounded p-1 gap-1 mb-3" style={{ backgroundColor: '#E8EEFF', border: '1px solid #C7D7FF' }}>
+                  {([['mine', '本人', mineOrders.length], ['participant', '参与', participantOrders.length]] as const).map(([key, label, cnt]) => (
+                    <button key={key} onClick={() => setFunderOrderTab(key)}
+                      style={{ flex: 1, padding: '6px 0', borderRadius: '4px', fontSize: '15px', fontWeight: 700, transition: 'all 0.15s', backgroundColor: funderOrderTab === key ? '#1A56DB' : 'transparent', color: funderOrderTab === key ? '#fff' : '#6B7280', boxShadow: funderOrderTab === key ? '0 1px 3px rgba(26,86,219,0.3)' : 'none' }}>
+                      {label} <span style={{ opacity: 0.75, fontSize: '11px' }}>{cnt}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null;
+            })()}
             <div className="flex items-center mb-3">
               <h3 className="text-base font-semibold" style={{ color: '#1A2340' }}>资产订单</h3>
-              <span className="text-xs text-gray-400 ml-1.5">共 {(funderAssetOrders as any[])?.filter((o: any) => o.status !== 'settled').length ?? 0} 笔</span>
+              <span className="text-xs text-gray-400 ml-1.5">共 {(funderAssetOrders as any[])?.filter((o: any) => o.status !== 'settled' && (funderOrderTab === 'participant' ? (o as any).order_perspective === 'other' : (o as any).order_perspective !== 'other')).length ?? 0} 笔</span>
               {/* 左右拨动开关 */}
               <div
                 className="ml-auto flex items-center"
@@ -5236,7 +5254,7 @@ export default function LedgerDetail() {
             ) : funderViewMode === 'card' ? (
               /* 卡片模式：銀色铭牌风格 */
               <div className="space-y-3">
-                {(funderAssetOrders as any[]).filter((order: any) => order.status !== 'settled').map((order: any) => {
+                {(funderAssetOrders as any[]).filter((order: any) => order.status !== 'settled' && (funderOrderTab === 'participant' ? (order as any).order_perspective === 'other' : (order as any).order_perspective !== 'other')).map((order: any) => {
                   // 按利率符号判断布局：正号（rate>=0）→付息型（突出利息），负号（rate<0）→权益型（突出持有数量/浮动盈亏）
                   // 参与者视角：优先用 participantInfo.commissionRate，否则用 interest_rate_annual
                   const isParticipantView = (order as any).order_perspective === 'other';
@@ -5270,7 +5288,7 @@ export default function LedgerDetail() {
             ) : (
               /* 订单模式：原始 FunderOrderCard */
               <div className="space-y-3">
-                {(funderAssetOrders as any[]).filter((order: any) => order.status !== 'settled').map((order: any) => (
+                {(funderAssetOrders as any[]).filter((order: any) => order.status !== 'settled' && (funderOrderTab === 'participant' ? (order as any).order_perspective === 'other' : (order as any).order_perspective !== 'other')).map((order: any) => (
                   <FunderOrderCard
                     key={order.id}
                     order={order}
