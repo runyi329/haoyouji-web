@@ -16046,7 +16046,7 @@ ${klinesSummary}
     // ========== 资方资产订单管理 API ==========
     // 获取资方资产订单列表（资金方看自己的，管理员看全部或指定用户的）
     funderGetAssetOrders: protectedProcedure
-      .input(z.object({ ledgerId: z.number(), userId: z.number().optional(), roleFilter: z.enum(["funder", "admin"]).optional(), financeOnly: z.boolean().optional() }))
+      .input(z.object({ ledgerId: z.number(), userId: z.number().optional(), viewAsUserId: z.number().optional(), roleFilter: z.enum(["funder", "admin"]).optional(), financeOnly: z.boolean().optional() }))
       .query(async ({ ctx, input }) => {
         const db = await getLedgerDb();
         // 查询当前用户在账本中的角色
@@ -16059,10 +16059,12 @@ ${klinesSummary}
         // 检查当前用户是否是某些订单的参与方
         const { getDbConnection } = await import('./db');
         const conn = await getDbConnection();
-        // 先确定 targetUserId，再查参与者订单
+        // 先确定 targetUserId：优先用 viewAsUserId（管理员切换视角），其次 userId，最后 funder 自身
         const memberRoleFilter = input.financeOnly ? "'member'" : "'funder','owner','admin'";
         let targetUserId: number | null = null;
-        if (isFunder && !isManager) {
+        if (input.viewAsUserId && isManager) {
+          targetUserId = input.viewAsUserId;
+        } else if (isFunder && !isManager) {
           targetUserId = ctx.user.id;
         } else if (input.userId) {
           targetUserId = input.userId;
