@@ -16267,11 +16267,13 @@ ${klinesSummary}
             ) as any;
             const piDetailArr = Array.isArray(piDetailRows[0]) ? piDetailRows[0] : (Array.isArray(piDetailRows) ? piDetailRows : []);
             for (const pi of piDetailArr) piDetailMap[Number(pi.order_id)] = pi;
-            // 查询参与者自己的名字
+          } catch (e) { console.error('[funderGetAssetOrders] piDetail error:', e); }
+          // 查询参与者自己的名字（独立 try/catch）
+          try {
             const puRows = await conn.execute(`SELECT username, name FROM users WHERE id = ? LIMIT 1`, [participantQueryUserId]) as any;
             const puArr = Array.isArray(puRows[0]) ? puRows[0] : (Array.isArray(puRows) ? puRows : []);
             if (puArr.length > 0) participantUserName = puArr[0].name || puArr[0].username || '';
-          } catch {}
+          } catch (e) { console.error('[funderGetAssetOrders] participantUserName error:', e); }
         }
         const ordersWithParticipantView = ordersWithParticipant.map((o: any) => {
           const isParticipantOrder = participantQueryUserIdSet.has(Number(o.id)) && Number(o.user_id) !== participantQueryUserId;
