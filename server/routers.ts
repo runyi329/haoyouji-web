@@ -17233,7 +17233,7 @@ ${klinesSummary}
               }
             }
           }
-        } catch (_e) { /* 表不存在或无参与方则忽略 */ }
+        } catch (_e) { console.error('[funderGetAssetOrders] piRows catch error:', _e); }
         // 附带已结利息汇总（paidTotal）
         let paidTotalMap: Record<number, { amount: number; currency: string }> = {};
         if (allOrders.length > 0) {
