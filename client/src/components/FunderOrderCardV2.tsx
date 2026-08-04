@@ -1389,19 +1389,16 @@ export function FunderOrderCardV2Silver({
         {/* 左侧：竖线分隔的标签组 */}
         <div className="flex items-center text-xs" style={{ color: TXT_SEC, gap: 0 }}>
           {(() => {
-            const ownerName = order.owner_label || (() => {
-              const m = (membersData as any[])?.find((m: any) => m.userId === order.user_id);
-              return m ? (m.nickname || m.username) : null;
-            })();
-            // 参与者视角：订单拥有者名字
-            // 优先用 order_owner_name（预览卡片展开时由父组件注入），其次从 membersData 按订单原始 user_id 查
+            // 参与者视角时，只用 owner_label（后端已覆盖为参与者名字），不走 membersData fallback（避免查到订单者名字）
+            const ownerName = isParticipant
+              ? (order.owner_label || null)
+              : (order.owner_label || (() => {
+                  const m = (membersData as any[])?.find((m: any) => m.userId === order.user_id);
+                  return m ? (m.nickname || m.username) : null;
+                })());
+            // 参与者视角：订单拥有者名字（优先用 order_owner_name，备用 username）
             const orderOwnerName = isParticipant ? (
-              (order as any).order_owner_name ||
-              (() => {
-                // 注意：参与者订单的 user_id 是参与者自己，订单拥有者存在 _ownerUserId 字段或需通过其他方式获取
-                // 备用：用 username 字段（后端 JOIN 返回的订单拥有者 username）
-                return (order as any).username || null;
-              })()
+              (order as any).order_owner_name || (order as any).username || null
             ) : null;
             const buyDateStr = order.buy_date ? fmtDate(order.buy_date) : null;
             // 参与者视角：拥有者名字紧跟在参与者名字后，无框白色字体
@@ -2686,15 +2683,16 @@ export function FunderLenderCardSilver({
       <div className="flex items-center px-4 pt-3 pb-2" style={{ borderBottom: `1px solid ${DIVIDER}` }}>
         <div className="flex items-center text-xs" style={{ color: TXT_SEC, gap: 0 }}>
           {(() => {
-            const ownerName = order.owner_label || (() => {
-              const m = (membersData as any[])?.find((m: any) => m.userId === order.user_id);
-              return m ? (m.nickname || m.username) : null;
-            })();
-            // 参与者视角：订单拥有者名字
+            // 参与者视角时，只用 owner_label（后端已覆盖为参与者名字），不走 membersData fallback
+            const ownerName = isParticipant
+              ? (order.owner_label || null)
+              : (order.owner_label || (() => {
+                  const m = (membersData as any[])?.find((m: any) => m.userId === order.user_id);
+                  return m ? (m.nickname || m.username) : null;
+                })());
+            // 参与者视角：订单拥有者名字（优先用 order_owner_name，备用 username）
             const orderOwnerName = isParticipant ? (
-              (order as any).order_owner_name ||
-              (order as any).username ||
-              null
+              (order as any).order_owner_name || (order as any).username || null
             ) : null;
             const buyDateStr = order.buy_date ? fmtDate(order.buy_date) : null;
             const brokerStr = order.asset_type === 'stock'
