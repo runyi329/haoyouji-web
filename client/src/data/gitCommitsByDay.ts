@@ -8796,5 +8796,11 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-08-04T06:18:26Z", type: "fix", cleanMessage: "funderGetAssetOrders enabled 条件简化为 isCustomAF，后端自行控制权限" },
     { date: "2026-08-04T06:23:41Z", type: "fix", cleanMessage: "参与者视角帽檐 ownerName 不走 membersData fallback，避免显示订单者名字" },
     { date: "2026-08-04T06:28:14Z", type: "fix", cleanMessage: "参与者名字查询独立 try/catch，加错误日志" },
+    { date: "2026-08-04T06:29:08Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-08-04T07:07:16Z", type: "fix", cleanMessage: "卡片选择时参与者视角用 participantInfo.commissionRate 判断正负" },
+    { date: "2026-08-04T07:13:16Z", type: "fix", cleanMessage: "participantInfo 加 interestRate 字段，前端用它判断卡片布局正负" },
+    { date: "2026-08-04T08:17:24Z", type: "feat", cleanMessage: "已付利息按参与者独立记录，ledger_order_payments 加 participant_user_id 字段" },
+    { date: "2026-08-04T08:22:04Z", type: "fix", cleanMessage: "参与者视角用自己的利率计算年化收益和应收利息" },
+    { date: "2026-08-04T08:29:17Z", type: "feat", cleanMessage: "资方账本加本人/参与Tab，融资付息页他人改为参与" },
   ],
 };
