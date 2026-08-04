@@ -2509,7 +2509,7 @@ export default function LedgerDetail() {
   // 资方专属：资产订单列表（funder 角色查询，管理员视角切换时传目标用户ID）
   const PRICE_CACHE_KEY = `funder_live_prices_${ledgerId}`;
   const { data: funderAssetData } = trpc.ledger.funderGetAssetOrders.useQuery(
-    { ledgerId: Number(ledgerId) },
+    { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: isCustomAF && effectiveIsFunder, refetchOnWindowFocus: true, staleTime: 0 }
   );
   const funderAssetOrders = (funderAssetData as any)?.orders ?? funderAssetData ?? [];
