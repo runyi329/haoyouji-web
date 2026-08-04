@@ -5240,7 +5240,7 @@ export default function LedgerDetail() {
                   // 按利率符号判断布局：正号（rate>=0）→付息型（突出利息），负号（rate<0）→权益型（突出持有数量/浮动盈亏）
                   // 参与者视角：优先用 participantInfo.commissionRate，否则用 interest_rate_annual
                   const isParticipantView = (order as any).order_perspective === 'other';
-                  const participantRate = isParticipantView ? parseFloat(String((order as any).participantInfo?.commissionRate || '0')) : 0;
+                  const participantRate = isParticipantView ? parseFloat(String((order as any).participantInfo?.interestRate || (order as any).participantInfo?.commissionRate || '0')) : 0;
                   const rateVal = isParticipantView && participantRate !== 0 ? participantRate : parseFloat(String(order.interest_rate_annual || '0'));
                   return rateVal > 0 ? (
                     <FunderLenderCardSilver

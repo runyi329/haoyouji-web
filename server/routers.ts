@@ -16217,7 +16217,7 @@ ${klinesSummary}
         if (conn) {
           try {
             const piRows = await conn.execute(
-              'SELECT order_id, role, commission_rate, commission_base, commission_start_date, paid_commission, note FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ?',
+              'SELECT order_id, role, interest_rate, commission_rate, commission_base, commission_start_date, paid_commission, note FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ?',
               [input.ledgerId, participantQueryUserId]
             ) as any;
             const piArr = Array.isArray(piRows[0]) ? piRows[0] : (Array.isArray(piRows) ? piRows : []);
@@ -16241,6 +16241,7 @@ ${klinesSummary}
               participantInfo: {
                 userId: participantQueryUserId,
                 role: pi.role,
+                interestRate: pi.interest_rate || null,
                 commissionRate: pi.commission_rate || null,
                 commissionBase: pi.commission_base || o.interest_base || null,
                 commissionStartDate: pi.commission_start_date || o.interest_start_date || null,
