@@ -16059,12 +16059,22 @@ ${klinesSummary}
         // 检查当前用户是否是某些订单的参与方
         const { getDbConnection } = await import('./db');
         const conn = await getDbConnection();
+        // 先确定 targetUserId，再查参与者订单
+        const memberRoleFilter = input.financeOnly ? "'member'" : "'funder','owner','admin'";
+        let targetUserId: number | null = null;
+        if (isFunder && !isManager) {
+          targetUserId = ctx.user.id;
+        } else if (input.userId) {
+          targetUserId = input.userId;
+        }
+        // 查询参与者订单（用 targetUserId 或 ctx.user.id）
+        const participantQueryUserIdEarly = targetUserId || ctx.user.id;
         let participantOrderIds: number[] = [];
         if (conn) {
           try {
             const pRows = await conn.execute(
               'SELECT DISTINCT order_id FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ?',
-              [input.ledgerId, ctx.user.id]
+              [input.ledgerId, participantQueryUserIdEarly]
             ) as any;
             const pArr = Array.isArray(pRows[0]) ? pRows[0] : (Array.isArray(pRows) ? pRows : []);
             participantOrderIds = pArr.map((r: any) => Number(r.order_id)).filter(Boolean);
@@ -16073,15 +16083,6 @@ ${klinesSummary}
         const isParticipant = participantOrderIds.length > 0;
         // 无权限：既不是管理员/资金方，也不是任何订单的参与方
         if (!isManager && !isFunder && !isParticipant) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
-        // 资金方只能看自己的，管理员可以看指定用户或全部，参与方只能看自己参与的订单
-        // financeOnly: 查 member 角色用户的订单（借方），默认查 funder/owner/admin 角色用户的订单（资方）
-        const memberRoleFilter = input.financeOnly ? "'member'" : "'funder','owner','admin'";
-        let targetUserId: number | null = null;
-        if (isFunder && !isManager) {
-          targetUserId = ctx.user.id;
-        } else if (input.userId) {
-          targetUserId = input.userId;
-        }
         let rows: any;
         if (!isManager && targetUserId) {
           // 资金方（funder）：自己名下的订单 + 作为参与方的订单，统一用原生 SQL 合并
@@ -16208,7 +16209,7 @@ ${klinesSummary}
           if (p) livePrices[coin] = p;
         }
         // 附带参与方配置：管理员查看某用户时用 targetUserId，否则用当前用户
-        const participantQueryUserId = (isManager && targetUserId) ? targetUserId : ctx.user.id;
+        const participantQueryUserId = participantQueryUserIdEarly;
         let participantInfoMap: Record<number, any> = {};
         if (conn) {
           try {
