@@ -2768,6 +2768,24 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                               </div>
                             </div>
                           </div>
+                          {/* 利息计价货币（大按钮，与主订单一致） */}
+                          <div className="flex gap-2">
+                            {(['USDT', 'CNY'] as const).map(cur => (
+                              <button
+                                key={cur}
+                                type="button"
+                                onClick={() => setParticipants(prev => prev.map((pp, i) => i === idx ? { ...pp, interestRateCurrency: cur } : pp))}
+                                className="flex-1 py-2 rounded-xl text-sm font-medium transition-all"
+                                style={
+                                  (p.interestRateCurrency || 'USDT') === cur
+                                    ? { background: 'linear-gradient(135deg, #1A56DB, #3B82F6)', color: '#fff' }
+                                    : { backgroundColor: '#F3F4F6', color: '#6B7280' }
+                                }
+                              >
+                                {cur === 'USDT' ? 'U（USDT）' : '人民币（元）'}
+                              </button>
+                            ))}
+                          </div>
                           {/* 计息基数 */}
                           <div>
                             <label className="block text-xs font-medium text-gray-500 mb-1">计息基数</label>
