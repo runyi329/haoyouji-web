@@ -24,6 +24,7 @@ const COIN_SYMBOLS: Record<string, string> = {
   BTC: 'BTCUSDT',
   ETH: 'ETHUSDT',
   SOL: 'SOLUSDT',
+  HYPE: 'HYPEUSDT',
 };
 
 // 全局扫描锁：防止并发执行
@@ -56,7 +57,7 @@ async function fetch1hLowPrice(coin: string): Promise<{ low: number } | null> {
 
   // 1. Gate.io 主用（1h K线）
   try {
-    const pair = symbol.replace(/^(BTC|ETH|SOL)(USDT)$/, '$1_$2');
+    const pair = symbol.replace(/^([A-Z]+)(USDT)$/, '$1_$2');
     const r = await fetchWithRetry(
       `https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=${pair}&interval=1h&limit=2`,
       12000
@@ -120,7 +121,7 @@ async function fetch1hLowPrice(coin: string): Promise<{ low: number } | null> {
 
   // 4. OKX 备用（1H K线）
   try {
-    const instId = symbol.replace(/^(BTC|ETH|SOL)(USDT)$/, '$1-$2');
+    const instId = symbol.replace(/^([A-Z]+)(USDT)$/, '$1-$2');
     const res = await fetchWithRetry(
       `https://www.okx.com/api/v5/market/candles?instId=${instId}&bar=1H&limit=2`,
       10000
