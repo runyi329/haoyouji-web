@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-08-07
+// 生成时间：2026-08-08
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8810,5 +8810,10 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   ],
   "2026-08-06": [
     { date: "2026-08-05T19:07:14Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+  ],
+  "2026-08-07": [
+    { date: "2026-08-06T22:41:59Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-08-07T15:20:44Z", type: "feat", cleanMessage: "参与者编辑区年利率下方新增利息计价货币大按钮切换（U/人民币）" },
+    { date: "2026-08-07T15:25:44Z", type: "feat", cleanMessage: "新增 HYPE 币种支持（购买币种/担保物选择/实时价格联动）" },
   ],
 };
