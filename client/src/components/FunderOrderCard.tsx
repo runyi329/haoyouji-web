@@ -1637,7 +1637,8 @@ export function FunderOrderCard({
 
                           {/* ③ 差值：担保物 - 缺口需求 */}
                           {sharedPoolInfo && (() => {
-                            // totalRequired 用 livePrices 重算，与第①部分完全一致
+                            // totalRequired 用 livePrices 重算，与第①部分「合计缺口需求」完全一致
+                            // 包含：CNY 汇率换算 + 借出本金扣除
                             const orders = (sharedPoolInfo as any).orders ?? [];
                             let totalRequired = 0;
                             let allHaveGap = true;
@@ -1645,10 +1646,16 @@ export function FunderOrderCard({
                               const oQty = Number(o.quantity ?? 0);
                               const oPrincipal = Number(o.principal ?? 0);
                               const oCoin = (o.coin || '').toUpperCase();
+                              const isCNYr = oCoin === 'CNY';
                               const oLiveP = livePrices[oCoin] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
-                              if (oLiveP === null) { allHaveGap = false; continue; }
-                              const oFloatPnlR = oLiveP * oQty - oPrincipal;
-                              totalRequired += oFloatPnlR - Number(o.pendingInterest ?? 0);
+                              if (!isCNYr && oLiveP === null) { allHaveGap = false; continue; }
+                              const oCurrentValueR = isCNYr ? oQty / cnyRate : oLiveP! * oQty;
+                              const oPrincipalUR = isCNYr ? oPrincipal / cnyRate : oPrincipal;
+                              const oPendingInterestR = isCNYr ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
+                              const oFloatPnlR = oCurrentValueR - oPrincipalUR;
+                              const oPrincipalLentOutR = o.principalLentOut === true || o.principalLentOut === 1;
+                              const oPrincipalDeductR = oPrincipalLentOutR ? oPrincipalUR : 0;
+                              totalRequired += oFloatPnlR - oPendingInterestR - oPrincipalDeductR;
                             }
                             const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
                             const diff = totalColl + totalRequired; // totalRequired 已带符号（负=缺口，正=盈余）
