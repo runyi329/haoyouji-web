@@ -16436,7 +16436,8 @@ ${klinesSummary}
             }
             // 计算待结利息（简化：本金 × 年利率 / 365 × 持有天数 - 已结利息）
             const principal = parseFloat(String(o.interest_base || o.amount || 0)) || 0;
-            const annualRate = parseFloat(String(o.interest_rate_annual || 0)) || 0;
+            // 年利率取绝对值：负利率（付息型）和正利率（收息型）利息金额都是正数
+            const annualRate = Math.abs(parseFloat(String(o.interest_rate_annual || 0)) || 0);
             const startDate = o.interest_start_date ? new Date(o.interest_start_date) : null;
             // 按北京时间自然日计天，开始当天算1天
             const holdDays = (() => {
