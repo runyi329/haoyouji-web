@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-08-08
+// 生成时间：2026-08-09
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8815,5 +8815,17 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
     { date: "2026-08-06T22:41:59Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
     { date: "2026-08-07T15:20:44Z", type: "feat", cleanMessage: "参与者编辑区年利率下方新增利息计价货币大按钮切换（U/人民币）" },
     { date: "2026-08-07T15:25:44Z", type: "feat", cleanMessage: "新增 HYPE 币种支持（购买币种/担保物选择/实时价格联动）" },
+  ],
+  "2026-08-08": [
+    { date: "2026-08-07T18:34:24Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-08-07T23:24:34Z", type: "fix", cleanMessage: "修复共享担保第③步净缺口合计与第①部分数字不一致（补充CNY换算和借出本金扣除）" },
+    { date: "2026-08-07T23:49:45Z", type: "fix", cleanMessage: "共享担保弹窗pendingInterest计算年利率取绝对值，修复负利率订单缺口显示错误" },
+    { date: "2026-08-08T00:23:28Z", type: "fix", cleanMessage: "livePrices 硬编码列表加入 HYPE，修复担保物第三项无法显示约等于U的问题" },
+    { date: "2026-08-08T00:31:00Z", type: "fix", cleanMessage: "共享担保缺口计算全面加入已结利息(paidInterest)，卡片/弹窗第①合计/第③步保持一致" },
+    { date: "2026-08-08T01:03:12Z", type: "fix", cleanMessage: "撤回弹窗多余paidInterest/期权订单coin用option_info.coin/更新说明文字" },
+    { date: "2026-08-08T01:17:03Z", type: "feat", cleanMessage: "共享担保弹窗订单号可点击，弹出第二层订单详情预览" },
+    { date: "2026-08-08T01:28:34Z", type: "feat", cleanMessage: "共享担保弹窗调整顺序，总计风险敞口+保证金比例移到最上面" },
+    { date: "2026-08-08T03:34:49Z", type: "feat", cleanMessage: "编辑页实时预览加卡片/订单模式切换，修复挂单中状态不显示" },
+    { date: "2026-08-08T03:57:38Z", type: "feat", cleanMessage: "去除受邀旧逻辑，卡片参与者按钮快捷跳转编辑页参与者区域" },
   ],
 };
