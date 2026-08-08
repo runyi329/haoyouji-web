@@ -166,6 +166,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
   const [showPreviewCollateralInfo, setShowPreviewCollateralInfo] = useState(false); // 预览卡片-担保缺口说明
   const [showPreviewMarginInfo, setShowPreviewMarginInfo] = useState(false); // 预览卡片-保证金率说明
   const [showPreviewInterestTip, setShowPreviewInterestTip] = useState(false); // 预览卡片-利息说明
+  const [previewViewMode, setPreviewViewMode] = useState<'order' | 'card'>('order'); // 预览模式切换
   const COLLATERAL_COINS = ['BTC', 'ETH', 'SOL', 'USDT', 'CNY'];
 
   // ===== 订单参与者 =====
@@ -2634,6 +2635,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                   amount: formData.assetType === 'stock' ? (amountInputValue || null) : null,
                   buy_date: formData.buyDate || null,
                   status: formData.status || 'active',
+                  order_fill_status: formData.orderFillStatus || 'filled',
                   storage_account: formData.storageAccount || null,
                   broker_name: formData.brokerName || null,
                   broker_account: formData.brokerAccount || null,
@@ -2672,25 +2674,58 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     ? { amount: String((editingOrderPayments as any[]).reduce((s: number, p: any) => s + parseFloat(p.amount || '0'), 0)), currency: (editingOrderPayments as any[])[0]?.currency || 'U' }
                     : null,
                 };
+                const rateValPreview = parseFloat(String(previewOrder.interest_rate_annual || '0'));
                 return (
                   <div>
-                    <div className="text-xs font-medium text-gray-400 mb-2">实时预览</div>
-                    <FunderOrderCard
-                      order={previewOrder}
-                      livePrices={formLivePrices}
-                      priceDirection={priceDirection}
-                      currentUser={currentUser}
-                      isAdmin={isAdminUser}
-                      membersData={((ledgerData as any)?.members || funderUsers) as any[]}
-                      ledgerId={ledgerId}
-                      previewMode={true}
-                      showCollateralInfo={showPreviewCollateralInfo}
-                      setShowCollateralInfo={setShowPreviewCollateralInfo}
-                      showMarginInfo={showPreviewMarginInfo}
-                      setShowMarginInfo={setShowPreviewMarginInfo}
-                      showInterestTip={showPreviewInterestTip}
-                      setShowInterestTip={setShowPreviewInterestTip}
-                    />
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-xs font-medium text-gray-400">实时预览</div>
+                      {/* 模式切换 Tab */}
+                      <div className="flex items-center gap-1 p-0.5 rounded-full bg-gray-100">
+                        {(['order', 'card'] as const).map(mode => (
+                          <button key={mode} type="button"
+                            onClick={() => setPreviewViewMode(mode)}
+                            className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${previewViewMode === mode ? 'bg-blue-500 text-white shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+                            {mode === 'card' ? '卡片模式' : '订单模式'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {previewViewMode === 'order' ? (
+                      <FunderOrderCard
+                        order={previewOrder}
+                        livePrices={formLivePrices}
+                        priceDirection={priceDirection}
+                        currentUser={currentUser}
+                        isAdmin={isAdminUser}
+                        membersData={((ledgerData as any)?.members || funderUsers) as any[]}
+                        ledgerId={ledgerId}
+                        previewMode={true}
+                        showCollateralInfo={showPreviewCollateralInfo}
+                        setShowCollateralInfo={setShowPreviewCollateralInfo}
+                        showMarginInfo={showPreviewMarginInfo}
+                        setShowMarginInfo={setShowPreviewMarginInfo}
+                        showInterestTip={showPreviewInterestTip}
+                        setShowInterestTip={setShowPreviewInterestTip}
+                      />
+                    ) : (
+                      rateValPreview > 0 ? (
+                        <FunderLenderCardSilver
+                          order={previewOrder}
+                          ledgerId={ledgerId}
+                          livePrices={formLivePrices}
+                          priceDirection={priceDirection}
+                          membersData={((ledgerData as any)?.members || funderUsers) as any[]}
+                        />
+                      ) : (
+                        <FunderOrderCardV2Silver
+                          order={previewOrder}
+                          ledgerId={ledgerId}
+                          livePrices={formLivePrices}
+                          priceDirection={priceDirection}
+                          membersData={((ledgerData as any)?.members || funderUsers) as any[]}
+                        />
+                      )
+                    )}
                   </div>
                 );
               })()}
