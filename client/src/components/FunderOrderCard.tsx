@@ -397,6 +397,8 @@ export interface FunderOrderCardProps {
   setShowMarginInfo?: (v: boolean) => void;
   /** 预览模式：隐藏底部操作栏、公开备注区、状态操作弹窗 */
   previewMode?: boolean;
+  /** 共享担保弹窗点击订单号时，用于查找完整订单数据 */
+  allOrders?: any[];
 }
 
 export function FunderOrderCard({
@@ -447,7 +449,11 @@ export function FunderOrderCard({
   showMarginInfo: _propShowMarginInfo,
   setShowMarginInfo: _propSetShowMarginInfo,
   previewMode = false,
+  allOrders,
 }: FunderOrderCardProps) {
+  // 共享担保弹窗：点击订单号弹出第二层订单详情
+  const [clickedOrderNo, setClickedOrderNo] = useState<string | null>(null);
+  const clickedOrder = clickedOrderNo ? (allOrders ?? []).find((o: any) => o.order_no === clickedOrderNo) : null;
   // ===== 内部 fallback：当父组件未传入对应 props 时，组件自己管理 state 和 mutation =====
   const trpcUtils = trpc.useUtils();
   // 结息面板
@@ -1555,7 +1561,7 @@ export function FunderOrderCard({
                                     return (
                                       <div key={o.orderId} className="flex justify-between items-center">
                                         <div>
-                                          <span className="font-mono font-medium" style={{ color: '#374151' }}>{o.orderNo}</span>
+                                          <button type="button" onClick={() => allOrders && setClickedOrderNo(o.orderNo)} className={`font-mono font-medium ${allOrders ? 'underline underline-offset-2 cursor-pointer' : ''}`} style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
                                           <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
                                           {o.quantity ? <span className="ml-1" style={{ color: '#9CA3AF' }}>× {oCoin === 'BTC' ? oQty.toFixed(2) : oQty}</span> : null}
                                         </div>
@@ -1613,12 +1619,12 @@ export function FunderOrderCard({
                                     <div key={o.orderId}>
                                       {(o.collateralAssets ?? []).length === 0 ? (
                                         <div className="flex justify-between items-center">
-                                          <span className="font-mono" style={{ color: '#374151' }}>{o.orderNo}</span>
+                                          <button type="button" onClick={() => allOrders && setClickedOrderNo(o.orderNo)} className={`font-mono ${allOrders ? 'underline underline-offset-2 cursor-pointer' : ''}`} style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
                                           <span style={{ color: '#9CA3AF' }}>无担保物</span>
                                         </div>
                                       ) : (
                                         <div className="flex justify-between items-center">
-                                          <span className="font-mono" style={{ color: '#374151' }}>{o.orderNo}</span>
+                                          <button type="button" onClick={() => allOrders && setClickedOrderNo(o.orderNo)} className={`font-mono ${allOrders ? 'underline underline-offset-2 cursor-pointer' : ''}`} style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
                                           <span className="font-mono font-semibold" style={{ color: '#DC2626' }}>
                                             {o.collateralValue > 0 ? `+${o.collateralValue.toFixed(2)} u` : '+--- u'}
                                           </span>
@@ -1750,6 +1756,29 @@ export function FunderOrderCard({
                     </div>
                     </div>
                     )}
+                  </div>
+                </div>
+              )}
+              {/* 第二层弹窗：点击订单号弹出订单详情 */}
+              {clickedOrderNo && clickedOrder && (
+                <div className="fixed inset-0 z-[200] flex items-end justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} onClick={() => setClickedOrderNo(null)}>
+                  <div className="w-full max-w-lg bg-white rounded-t-2xl overflow-y-auto" style={{ maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center justify-between px-4 pt-4 pb-2">
+                      <span className="text-sm font-bold" style={{ color: '#1A2340' }}>{clickedOrderNo} 订单详情</span>
+                      <button onClick={() => setClickedOrderNo(null)} className="text-gray-400 text-xl leading-none">×</button>
+                    </div>
+                    <div className="pb-4">
+                      <FunderOrderCard
+                        order={clickedOrder}
+                        livePrices={livePrices}
+                        priceDirection={priceDirection}
+                        currentUser={currentUser}
+                        isAdmin={isAdmin}
+                        membersData={membersData}
+                        ledgerId={ledgerId}
+                        previewMode={true}
+                      />
+                    </div>
                   </div>
                 </div>
               )}

@@ -1300,6 +1300,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
                     setShowInterestTip={(v) => setInterestTipOrderId(v ? order.id : null)}
                     showMarginInfo={marginInfoOrderId === order.id}
                     setShowMarginInfo={(v) => setMarginInfoOrderId(v ? order.id : null)}
+                    allOrders={assetOrders as any[]}
                   />
                 );
               })}
