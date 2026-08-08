@@ -368,7 +368,7 @@ export interface FunderOrderCardProps {
   deletePaymentMutation?: any;
   interestPayments?: any[] | undefined;
   updateMutation?: any;
-  handleOpenEdit?: (order: any) => void;
+  handleOpenEdit?: (order: any, scrollTo?: string) => void;
   handleDelete?: (orderId: number) => void;
   handleOpenParticipants?: (orderId: number, interestBase: string) => void;
   showParticipantsPanel?: number | null;
@@ -729,8 +729,8 @@ export function FunderOrderCard({
   const [tipPos, setTipPos] = useState<{ bottom: number; right: number }>({ bottom: 0, right: 0 });
   const accrued = useAccruedInterestFunder(
     (order.status === 'active' || order.settled_at) ? order.interest_base : null,
-    (order.status === 'active' || order.settled_at) ? (isInvited ? order.participantInfo?.commissionRate : order.interest_rate_annual) : null,
-    (order.status === 'active' || order.settled_at) ? (isInvited ? order.participantInfo?.commissionStartDate : order.interest_start_date) : null,
+    (order.status === 'active' || order.settled_at) ? order.interest_rate_annual : null,
+    (order.status === 'active' || order.settled_at) ? order.interest_start_date : null,
     order.settled_at
   );
 
@@ -738,7 +738,7 @@ export function FunderOrderCard({
   const statusColor = order.status === 'active' ? '#22C55E' : order.status === 'settled' ? '#3B82F6' : '#9CA3AF';
   const coinColor = COIN_COLORS[order.coin as CoinType] || '#6B7280';
   const isSettled = order.status === 'settled';
-  const rateStr = String(isInvited ? (order.participantInfo?.commissionRate || '') : (order.interest_rate_annual || ''));
+  const rateStr = String(order.interest_rate_annual || '');
   const isNegRate = rateStr.startsWith('-');
   const rateAbs = isNegRate ? parseFloat(rateStr.slice(1)).toFixed(0) : (rateStr ? parseFloat(rateStr).toFixed(0) : '');
   const rateSign = isNegRate ? '-' : '+';
@@ -841,9 +841,7 @@ export function FunderOrderCard({
   }
 
   // 风险敞口
-  const interestBaseNum = isInvited
-    ? (order.participantInfo?.commissionBase ? parseFloat(order.participantInfo.commissionBase) : totalU)
-    : (order.interest_base ? Number(order.interest_base) : totalU);
+  const interestBaseNum = order.interest_base ? Number(order.interest_base) : totalU;
   const liveP = livePrices[order.coin] ?? null;
   const currentValue = liveP !== null ? liveP * qty : null;
   const isShort = (order as any).trade_direction === 'short';
@@ -884,9 +882,7 @@ export function FunderOrderCard({
     <>
     <div
       className="rounded-lg overflow-hidden relative"
-      style={isInvited
-        ? { background: '#f0fdf4', border: '1px solid #86EFAC', boxShadow: '0 1px 6px rgba(34,197,94,0.08)' }
-        : { background: '#ffffff', border: '1px solid #E8EDFF', boxShadow: '0 1px 4px rgba(26,35,64,0.05)' }}
+      style={{ background: '#ffffff', border: '1px solid #E8EDFF', boxShadow: '0 1px 4px rgba(26,35,64,0.05)' }}
     >
       {isSettled && (
         <div className="absolute inset-0 pointer-events-none select-none flex items-center justify-center" style={{ backgroundColor: 'rgba(220,38,38,0.06)', zIndex: 10 }}>
@@ -895,7 +891,7 @@ export function FunderOrderCard({
       )}
 
       {/* 帽子：标签行 + 操作按钮 */}
-      <div className="flex items-center gap-2 px-4 py-2" style={{ borderBottom: '1px solid #E4E8F5', backgroundColor: isInvited ? '#DCFCE7' : '#D0D6EE' }}>
+      <div className="flex items-center gap-2 px-4 py-2" style={{ borderBottom: '1px solid #E4E8F5', backgroundColor: '#D0D6EE' }}>
 
         {/* 状态：仅非持有中时显示（圆点 + 文字） */}
         {order.status !== 'active' && (
@@ -953,11 +949,7 @@ export function FunderOrderCard({
             </span>
           )}
 
-          {isInvited && (
-            <span className="text-[11px] font-medium px-1.5 py-0.5 rounded" style={{ backgroundColor: '#D1FAE5', color: '#059669' }}>
-              受邀
-            </span>
-          )}
+
           {(() => {
             try {
               const t = (order as any).tags;
@@ -978,10 +970,10 @@ export function FunderOrderCard({
         {/* 左栏：持有资产 */}
         <div className="w-1/2 p-4 pr-3">
           <div className="flex items-center gap-0.5 mb-0.5">
-            <span className="text-[10px] font-medium" style={{ color: isInvited ? '#16A34A' : '#3B82F6' }}>
-              {isInvited ? '订单资产' : ((order.principal_lent_out === 1 || order.principal_lent_out === true)
+            <span className="text-[10px] font-medium" style={{ color: '#3B82F6' }}>
+              {(order.principal_lent_out === 1 || order.principal_lent_out === true)
                 ? `借出资产 (${isOptionOrder ? (optionInfo?.coin || 'ETH') : order.asset_type === 'stock' ? (baseCur === 'CNY' ? '元' : 'U') : order.coin})`
-                : '持有资产')}
+                : '持有资产'}
             </span>
             {(order as any).order_fill_status === 'pending' && (
               <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5" style={{ borderRadius: '4px', color: '#fff', backgroundColor: '#F97316' }}>挂单中</span>
@@ -1162,7 +1154,7 @@ export function FunderOrderCard({
         {/* 右栏：待结利息 */}
         <div className="w-1/2 p-4 pl-3 flex flex-col">
           {show('accruedInterest') && <div className="flex items-center gap-1 mb-0.5 relative" style={{ height: '16px' }}>
-            <span className="text-[10px]" style={{ color: '#3B82F6' }}>{isInvited ? '待结佣金' : '待结利息'}</span>
+            <span className="text-[10px]" style={{ color: '#3B82F6' }}>待结利息</span>
             {rateAbs && <span className="text-[10px] text-gray-400">(年化 {rateAbs}%)</span>}
             <button
               ref={tipBtnRef}
@@ -1293,8 +1285,8 @@ export function FunderOrderCard({
           </div>}
           {show('accruedInterest') && (
           <div className="flex items-baseline gap-0.5 flex-wrap mb-1">
-                <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: isInvited ? '#1A2340' : (displayAccrued === 0 ? '#1A2340' : (isNegRate ? '#059669' : '#DC2626')), fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-                  {isInvited ? '' : (displayAccrued === 0 ? '' : (isNegRate ? '-' : '+'))}{displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <span className="text-2xl font-bold tabular-nums leading-tight" style={{ color: displayAccrued === 0 ? '#1A2340' : (isNegRate ? '#059669' : '#DC2626'), fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+                  {displayAccrued === 0 ? '' : (isNegRate ? '-' : '+')}{displayAccrued.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
                 <span className="text-xs font-semibold" style={{ color: '#1A2340' }}>{interestUnit}</span>
                 {(() => {
@@ -1312,7 +1304,7 @@ export function FunderOrderCard({
             <>
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-1">
-                <span className="whitespace-nowrap">{isInvited ? '已结佣金' : '已结利息'}</span>
+                <span className="whitespace-nowrap">已结利息</span>
                 <button
                   type="button"
                   onClick={() => setShowInterestHistory(v => !v)}
@@ -1344,17 +1336,17 @@ export function FunderOrderCard({
             )}
             {show('interestBase') && order.interest_base && parseFloat(order.interest_base) > 0 && (
               <div className="flex items-center justify-between">
-                <span className="text-gray-400 whitespace-nowrap">{isInvited ? '计佣基数' : '计息基数'}</span>
+                <span className="text-gray-400 whitespace-nowrap">计息基数</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>
                   {parseFloat(order.interest_base).toLocaleString(undefined, { maximumFractionDigits: 2 })} {interestUnit}
                 </span>
               </div>
             )}
-            {show('interestStartDate') && (isInvited ? order.participantInfo?.commissionStartDate : order.interest_start_date) && (
+            {show('interestStartDate') && order.interest_start_date && (
               <div className="flex items-center justify-between">
-                <span className="text-gray-400">{isInvited ? '计佣日期' : '计息日期'}</span>
+                <span className="text-gray-400">计息日期</span>
                 <span className="font-medium" style={{ color: '#4B5563' }}>
-                  {fmtDate(String(isInvited ? order.participantInfo.commissionStartDate : order.interest_start_date))}
+                  {fmtDate(String(order.interest_start_date))}
                 </span>
               </div>
             )}
@@ -1977,11 +1969,11 @@ export function FunderOrderCard({
       {!previewMode && !isInvited && isAdmin && (
         <div className="flex items-center gap-1.5 px-4 py-2.5 border-t overflow-x-auto" style={{ borderColor: '#F3F4F6', backgroundColor: '#FAFBFF', flexWrap: 'nowrap' }}>
           <button
-            onClick={() => $handleOpenParticipants(order.id, order.interest_base || '')}
+            onClick={() => handleOpenEdit && handleOpenEdit(order, 'participants')}
             className="px-2.5 py-1.5 text-xs rounded-lg font-medium transition-colors whitespace-nowrap shrink-0"
-            style={{ backgroundColor: $showParticipantsPanel === order.id ? '#1A2340' : '#EDEEF5', color: $showParticipantsPanel === order.id ? '#fff' : '#4B5563' }}
+            style={{ backgroundColor: '#EDEEF5', color: '#4B5563' }}
           >
-            参与方{order.participantCount > 0 ? ` ${order.participantCount}` : ''}
+            参与者{order.participantCount > 0 ? ` ${order.participantCount}` : ''}
           </button>
           <button
             onClick={() => {
@@ -2305,7 +2297,7 @@ export function FunderOrderCard({
       )}
 
       {/* 结息面板 + 备注区 */}
-      <div className="px-4 pt-3 pb-3 border-t border-blue-100" style={{ backgroundColor: isInvited ? '#DCFCE7' : '#D0D6EE' }}>
+      <div className="px-4 pt-3 pb-3 border-t border-blue-100" style={{ backgroundColor: '#D0D6EE' }}>
 
         {$showPaymentPanel === order.id && (
           <div className="bg-blue-50 rounded-xl p-3 mb-3 space-y-2">

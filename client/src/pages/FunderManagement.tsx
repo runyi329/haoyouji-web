@@ -753,7 +753,8 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     setShowForm(true);
   };
 
-  const handleOpenEdit = (order: any) => {
+  const participantsSectionRef = React.useRef<HTMLDivElement>(null);
+  const handleOpenEdit = (order: any, scrollTo?: string) => {
     // amount_currency 为 NULL/空表示老订单，按 USDT 口径兼容（amount 本就是 USDT 价值）
     const editAmountCurrency = (order.amount_currency && String(order.amount_currency).trim()) ? String(order.amount_currency) : 'USDT';
     setFormData({
@@ -906,6 +907,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
     setShowDatePicker(false);
     setShowInterestDatePicker(false);
     setShowForm(true);
+    if (scrollTo === 'participants') {
+      setTimeout(() => {
+        participantsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 300);
+    }
   };
 
   const handleSubmit = () => {
@@ -2733,7 +2739,7 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
 
             {/* ===== 订单参与者管理 ===== */}
             {editingOrder && (
-              <div className="px-5 pb-4">
+              <div className="px-5 pb-4" ref={participantsSectionRef}>
                 {/* 分隔线 */}
                 <div className="flex items-center gap-3 mb-3">
                   <div className="flex-1 h-px bg-gray-100" />
