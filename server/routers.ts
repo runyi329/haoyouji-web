@@ -16478,6 +16478,7 @@ ${klinesSummary}
               currentValue,
               principalLoss,
               pendingInterest,
+              paidInterest,  // 已结利息，供前端弹窗第①部分缺口计算加回
               collateralRequired,
               collateralValue,
               collateralGap: collateralValue - collateralRequired,
