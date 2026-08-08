@@ -1529,12 +1529,13 @@ export function FunderOrderCard({
                           {/* ① 所有共享订单的缺口汇总 */}
                           <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
                             <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>① 共享订单缺口汇总</div>
-                            <div className="mb-1" style={{ color: '#9CA3AF' }}>每张订单缺口 = 本金亏损 + 待结利息</div>
+                            <div className="mb-1" style={{ color: '#9CA3AF' }}>每张订单缺口 = 浮动盈亏 − 待结利息（已扣除已结利息）</div>
                             {sharedPoolInfo ? (
                               <>
                                 <div className="space-y-1.5">
                                   {((sharedPoolInfo as any).orders ?? []).map((o: any) => {
-                                    // 与卡片公式完全一致：gap = floatPnl - pendingInterest + paidInterest - principalDeduct
+                                    // gap = floatPnl - pendingInterest - principalDeduct
+                                    // pendingInterest 后端已是净待付（totalInterest - paidInterest），不需要再加 paidInterest
                                     // 盈利订单缺口为正（盈余），亏损订单缺口为负
                                     const oQty = Number(o.quantity ?? 0);
                                     const oPrincipal = Number(o.principal ?? 0);
@@ -1547,12 +1548,10 @@ export function FunderOrderCard({
                                     const oFloatPnl = oCurrentValue !== null ? oCurrentValue - oPrincipalU : null;
                                     const oPendingInterestRaw = Number(o.pendingInterest ?? 0);
                                     const oPendingInterest = isCNY ? oPendingInterestRaw / cnyRate : oPendingInterestRaw;
-                                    const oPaidInterestRaw = Number(o.paidInterest ?? 0);
-                                    const oPaidInterest = isCNY ? oPaidInterestRaw / cnyRate : oPaidInterestRaw;
                                     // 借出本金：若勾选了「借出本金」，需从缺口中扣除本金（CNY 订单折算成 U）
                                     const oPrincipalLentOut = o.principalLentOut === true || o.principalLentOut === 1;
                                     const oPrincipalDeduct = oPrincipalLentOut ? oPrincipalU : 0;
-                                    const gap = oFloatPnl !== null ? oFloatPnl - oPendingInterest + oPaidInterest - oPrincipalDeduct : null;
+                                    const gap = oFloatPnl !== null ? oFloatPnl - oPendingInterest - oPrincipalDeduct : null;
                                     return (
                                       <div key={o.orderId} className="flex justify-between items-center">
                                         <div>
@@ -1584,11 +1583,10 @@ export function FunderOrderCard({
                                     const oCurrentValueT = isCNYt ? oQty / cnyRate : oLiveP! * oQty;
                                     const oPrincipalUT = isCNYt ? oPrincipal / cnyRate : oPrincipal;
                                     const oPendingInterestT = isCNYt ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
-                                    const oPaidInterestT = isCNYt ? Number(o.paidInterest ?? 0) / cnyRate : Number(o.paidInterest ?? 0);
                                     const oFloatPnlT = oCurrentValueT - oPrincipalUT;
                                     const oPrincipalLentOutT = o.principalLentOut === true || o.principalLentOut === 1;
                                     const oPrincipalDeductT = oPrincipalLentOutT ? oPrincipalUT : 0;
-                                    totalGapLive += oFloatPnlT - oPendingInterestT + oPaidInterestT - oPrincipalDeductT;
+                                    totalGapLive += oFloatPnlT - oPendingInterestT - oPrincipalDeductT;
                                   }
                                   return (
                                     <div className="mt-2 pt-1.5 flex justify-between font-semibold" style={{ borderTop: '1px solid #E5E7EB' }}>
@@ -1656,11 +1654,10 @@ export function FunderOrderCard({
                               const oCurrentValueR = isCNYr ? oQty / cnyRate : oLiveP! * oQty;
                               const oPrincipalUR = isCNYr ? oPrincipal / cnyRate : oPrincipal;
                               const oPendingInterestR = isCNYr ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
-                              const oPaidInterestR = isCNYr ? Number(o.paidInterest ?? 0) / cnyRate : Number(o.paidInterest ?? 0);
                               const oFloatPnlR = oCurrentValueR - oPrincipalUR;
                               const oPrincipalLentOutR = o.principalLentOut === true || o.principalLentOut === 1;
                               const oPrincipalDeductR = oPrincipalLentOutR ? oPrincipalUR : 0;
-                              totalRequired += oFloatPnlR - oPendingInterestR + oPaidInterestR - oPrincipalDeductR;
+                              totalRequired += oFloatPnlR - oPendingInterestR - oPrincipalDeductR;
                             }
                             const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
                             const diff = totalColl + totalRequired; // totalRequired 已带符号（负=缺口，正=盈余）

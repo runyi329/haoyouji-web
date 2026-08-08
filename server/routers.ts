@@ -16397,7 +16397,7 @@ ${klinesSummary}
             `SELECT fo.id, fo.order_no, fo.coin, fo.amount, fo.buy_price, fo.buy_quantity, fo.interest_base, fo.interest_rate_annual,
                     fo.interest_start_date, fo.collateral_assets, fo.collateral_share_mode,
                     fo.interest_base_currency, fo.interest_rate_currency, fo.interest_payment_type,
-                    fo.principal_lent_out
+                    fo.principal_lent_out, fo.option_info
              FROM ledger_orders fo
              WHERE fo.ledger_id = ? AND fo.user_id = ? AND fo.status = 'active'
                AND fo.deleted_at IS NULL AND fo.collateral_share_mode = 'self'`,
@@ -16456,7 +16456,10 @@ ${klinesSummary}
             const collateralRequired = principal + pendingInterest;
             // 计算当前市值（数量 × 实时价）
             const quantity = parseFloat(String(o.buy_quantity ?? 0)) || 0;
-            const coinUpper = (o.coin || '').toUpperCase().replace(/\s+/g, '');
+            // 期权订单：实际标的币种在 option_info.coin，优先使用
+            const optionInfo = (() => { try { const raw = o.option_info; if (!raw) return null; if (typeof raw === 'string') return JSON.parse(raw); if (Buffer.isBuffer(raw)) return JSON.parse(raw.toString('utf8')); return raw; } catch { return null; } })();
+            const effectiveCoin = (optionInfo?.coin || o.coin || '').toUpperCase().replace(/\s+/g, '');
+            const coinUpper = effectiveCoin;
             const isStablecoinCoin = coinUpper === 'USDT' || coinUpper === 'U' || coinUpper === 'USDC' || coinUpper === 'BUSD' || coinUpper === 'DAI';
             const currentPrice = isStablecoinCoin ? 1 : (getLatestPrice(coinUpper) || null);
             const currentValue = currentPrice !== null ? quantity * currentPrice : null;
@@ -16469,7 +16472,7 @@ ${klinesSummary}
             return {
               orderId: Number(o.id),
               orderNo: o.order_no,
-              coin: o.coin,
+              coin: coinUpper, // 期权订单优先用 option_info.coin
               quantity,
               buyPrice,
               buyValue,
