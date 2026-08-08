@@ -1532,9 +1532,60 @@ export function FunderOrderCard({
                       {/* 共享担保订单：新版三段式汇总版式 */}
                       {orderShareMode === 'self' ? (
                         <>
-                          {/* ① 所有共享订单的缺口汇总 */}
+                          {/* ①② 总计风险敎口 + 保证金比例（移到最上面） */}
+                          {sharedPoolInfo && (() => {
+                            const orders = (sharedPoolInfo as any).orders ?? [];
+                            let totalRequired = 0;
+                            let allHaveGap = true;
+                            for (const o of orders) {
+                              const oQty = Number(o.quantity ?? 0);
+                              const oPrincipal = Number(o.principal ?? 0);
+                              const oCoin = (o.coin || '').toUpperCase();
+                              const isCNYr = oCoin === 'CNY';
+                              const oLiveP = livePrices[oCoin] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
+                              if (!isCNYr && oLiveP === null) { allHaveGap = false; continue; }
+                              const oCurrentValueR = isCNYr ? oQty / cnyRate : oLiveP! * oQty;
+                              const oPrincipalUR = isCNYr ? oPrincipal / cnyRate : oPrincipal;
+                              const oPendingInterestR = isCNYr ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
+                              const oFloatPnlR = oCurrentValueR - oPrincipalUR;
+                              const oPrincipalLentOutR = o.principalLentOut === true || o.principalLentOut === 1;
+                              const oPrincipalDeductR = oPrincipalLentOutR ? oPrincipalUR : 0;
+                              totalRequired += oFloatPnlR - oPendingInterestR - oPrincipalDeductR;
+                            }
+                            const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
+                            const diff = totalColl + totalRequired;
+                            const totalBuyValue = (sharedPoolInfo as any).totalBuyValue ?? 0;
+                            const marginRatio = totalBuyValue > 0 ? (diff / totalBuyValue) * 100 : null;
+                            const diffColor = diff < 0 ? '#16A34A' : '#DC2626';
+                            const ratioColor = marginRatio === null ? '#9CA3AF' : (marginRatio < 0 ? '#16A34A' : '#DC2626');
+                            return (
+                              <>
+                                <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
+                                  <div className="font-semibold mb-1" style={{ color: '#374151' }}>① 总计风险敎口</div>
+                                  <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>担保物合计 + 净缺口合计</div>
+                                  <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
+                                    {allHaveGap
+                                      ? <>{totalColl.toFixed(2)} + ({totalRequired >= 0 ? '+' : ''}{totalRequired.toFixed(2)}) = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} u</span></>
+                                      : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
+                                  </div>
+                                </div>
+                                <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
+                                  <div className="font-semibold mb-1" style={{ color: '#374151' }}>② 保证金比例</div>
+                                  <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>风险敎口 ÷ 总订单买入价値</div>
+                                  <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
+                                    {allHaveGap
+                                      ? <>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} ÷ {totalBuyValue.toFixed(2)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '--'}</span></>
+                                      : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
+                                  </div>
+                                  <div className="text-xs" style={{ color: '#9CA3AF' }}>总买入价値 {totalBuyValue.toFixed(2)} u（各订单买入价 × 数量之和，不随币价变动）</div>
+                                </div>
+                              </>
+                            );
+                          })()}
+
+                          {/* ③ 所有共享订单的缺口汇总 */}
                           <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
-                            <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>① 共享订单缺口汇总</div>
+                            <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>③ 共享订单缺口汇总</div>
                             <div className="mb-1" style={{ color: '#9CA3AF' }}>每张订单缺口 = 浮动盈亏 − 待结利息（已扣除已结利息）</div>
                             {sharedPoolInfo ? (
                               <>
@@ -1643,59 +1694,6 @@ export function FunderOrderCard({
                             )}
                           </div>
 
-                          {/* ③ 差值：担保物 - 缺口需求 */}
-                          {sharedPoolInfo && (() => {
-                            // totalRequired 用 livePrices 重算，与第①部分「合计缺口需求」完全一致
-                            // 包含：CNY 汇率换算 + 借出本金扣除
-                            const orders = (sharedPoolInfo as any).orders ?? [];
-                            let totalRequired = 0;
-                            let allHaveGap = true;
-                            for (const o of orders) {
-                              const oQty = Number(o.quantity ?? 0);
-                              const oPrincipal = Number(o.principal ?? 0);
-                              const oCoin = (o.coin || '').toUpperCase();
-                              const isCNYr = oCoin === 'CNY';
-                              const oLiveP = livePrices[oCoin] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
-                              if (!isCNYr && oLiveP === null) { allHaveGap = false; continue; }
-                              const oCurrentValueR = isCNYr ? oQty / cnyRate : oLiveP! * oQty;
-                              const oPrincipalUR = isCNYr ? oPrincipal / cnyRate : oPrincipal;
-                              const oPendingInterestR = isCNYr ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
-                              const oFloatPnlR = oCurrentValueR - oPrincipalUR;
-                              const oPrincipalLentOutR = o.principalLentOut === true || o.principalLentOut === 1;
-                              const oPrincipalDeductR = oPrincipalLentOutR ? oPrincipalUR : 0;
-                              totalRequired += oFloatPnlR - oPendingInterestR - oPrincipalDeductR;
-                            }
-                            const totalColl = (sharedPoolInfo as any).totalCollateralValue ?? 0;
-                            const diff = totalColl + totalRequired; // totalRequired 已带符号（负=缺口，正=盈余）
-                            const totalBuyValue = (sharedPoolInfo as any).totalBuyValue ?? 0;
-                            const marginRatio = totalBuyValue > 0 ? (diff / totalBuyValue) * 100 : null;
-                            // 负数（担保不足）显绿色，正数（担保充足）显红色
-                            const diffColor = diff < 0 ? '#16A34A' : '#DC2626';
-                            const ratioColor = marginRatio === null ? '#9CA3AF' : (marginRatio < 0 ? '#16A34A' : '#DC2626');
-                            return (
-                              <>
-                                <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
-                                  <div className="font-semibold mb-1" style={{ color: '#374151' }}>③ 总计风险敞口</div>
-                                  <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>担保物合计 + 净缺口合计</div>
-                                  <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
-                                    {allHaveGap
-                                      ? <>{totalColl.toFixed(2)} + ({totalRequired >= 0 ? '+' : ''}{totalRequired.toFixed(2)}) = <span className="font-bold text-sm" style={{ color: diffColor }}>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} u</span></>
-                                      : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
-                                  </div>
-                                </div>
-                                <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
-                                  <div className="font-semibold mb-1" style={{ color: '#374151' }}>④ 保证金比例</div>
-                                  <div className="font-mono text-xs mb-1.5" style={{ color: '#6B7280' }}>风险敞口 ÷ 总订单买入价值</div>
-                                  <div className="font-mono text-xs mb-1" style={{ color: '#6B7280' }}>
-                                    {allHaveGap
-                                      ? <>{diff >= 0 ? '+' : ''}{diff.toFixed(2)} ÷ {totalBuyValue.toFixed(2)} = <span className="font-bold text-sm" style={{ color: ratioColor }}>{marginRatio !== null ? `${marginRatio >= 0 ? '+' : ''}${marginRatio.toFixed(2)}%` : '--'}</span></>
-                                      : <span style={{ color: '#9CA3AF' }}>订单缺口加载中...</span>}
-                                  </div>
-                                  <div className="text-xs" style={{ color: '#9CA3AF' }}>总买入价值 {totalBuyValue.toFixed(2)} u（各订单买入价 × 数量之和，不随币价变动）</div>
-                                </div>
-                              </>
-                            );
-                          })()}
                         </>
                       ) : (
                         /* 非共享订单：保留原有三段式计算说明 */
