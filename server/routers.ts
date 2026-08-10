@@ -16048,19 +16048,27 @@ ${klinesSummary}
     funderGetAssetOrders: protectedProcedure
       .input(z.object({ ledgerId: z.number(), userId: z.number().optional(), viewAsUserId: z.number().optional(), roleFilter: z.enum(["funder", "admin"]).optional(), financeOnly: z.boolean().optional() }))
       .query(async ({ ctx, input }) => {
-        const db = await getLedgerDb();
-        // 查询当前用户在账本中的角色
-        const roleRows = await db.execute(
-          sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
-        ) as any;
+        // 并行初始化：同时获取 DB 连接和 Drizzle DB
+        const [db, { getDbConnection }] = await Promise.all([
+          getLedgerDb(),
+          import('./db')
+        ]);
+        const conn = await getDbConnection();
+        const memberRoleFilter = input.financeOnly ? "'member'" : "'funder','owner','admin'";
+        // 并行查询角色（管理员角色确定前无法确定 targetUserId，先用 ctx.user.id 查参与订单）
+        const [roleRows, pRowsEarly] = await Promise.all([
+          db.execute(
+            sql`SELECT role FROM ledger_members WHERE ledgerId = ${input.ledgerId} AND userId = ${ctx.user.id} LIMIT 1`
+          ) as Promise<any>,
+          conn ? conn.execute(
+            'SELECT DISTINCT order_id FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ?',
+            [input.ledgerId, input.viewAsUserId || input.userId || ctx.user.id]
+          ).catch(() => null) as Promise<any> : Promise.resolve(null)
+        ]);
         const role = (roleRows[0]?.[0] ?? roleRows[0])?.role;
         const isManager = role === 'owner' || role === 'admin';
         const isFunder = role === 'funder';
-        // 检查当前用户是否是某些订单的参与方
-        const { getDbConnection } = await import('./db');
-        const conn = await getDbConnection();
-        // 先确定 targetUserId：优先用 viewAsUserId（管理员切换视角），其次 userId，最后 funder 自身
-        const memberRoleFilter = input.financeOnly ? "'member'" : "'funder','owner','admin'";
+        // 确定 targetUserId
         let targetUserId: number | null = null;
         if (input.viewAsUserId && isManager) {
           targetUserId = input.viewAsUserId;
@@ -16069,17 +16077,20 @@ ${klinesSummary}
         } else if (input.userId) {
           targetUserId = input.userId;
         }
-        // 查询参与者订单（用 targetUserId 或 ctx.user.id）
         const participantQueryUserIdEarly = targetUserId || ctx.user.id;
-        try { require('fs').appendFileSync('/tmp/funder_debug.txt', JSON.stringify({ t: new Date().toISOString(), targetUserId, participantQueryUserIdEarly, viewAsUserId: input.viewAsUserId, isManager, isFunder, ctxUserId: ctx.user.id }) + '\n'); } catch {}
+        // 如果先前查询的 userId 和最终 participantQueryUserIdEarly 不一致，重新查询
+        const earlyQueryUserId = input.viewAsUserId || input.userId || ctx.user.id;
         let participantOrderIds: number[] = [];
-        if (conn) {
+        if (earlyQueryUserId === participantQueryUserIdEarly && pRowsEarly) {
+          const pArr = Array.isArray(pRowsEarly[0]) ? pRowsEarly[0] : (Array.isArray(pRowsEarly) ? pRowsEarly : []);
+          participantOrderIds = pArr.map((r: any) => Number(r.order_id)).filter(Boolean);
+        } else if (conn) {
           try {
-            const pRows = await conn.execute(
+            const pRows2 = await conn.execute(
               'SELECT DISTINCT order_id FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ?',
               [input.ledgerId, participantQueryUserIdEarly]
             ) as any;
-            const pArr = Array.isArray(pRows[0]) ? pRows[0] : (Array.isArray(pRows) ? pRows : []);
+            const pArr = Array.isArray(pRows2[0]) ? pRows2[0] : (Array.isArray(pRows2) ? pRows2 : []);
             participantOrderIds = pArr.map((r: any) => Number(r.order_id)).filter(Boolean);
           } catch {}
         }
@@ -16211,31 +16222,57 @@ ${klinesSummary}
           const p = getLatestPrice(coin);
           if (p) livePrices[coin] = p;
         }
-        // 附带参与方配置：管理员查看某用户时用 targetUserId，否则用当前用户
+        // 并行查询：参与方配置 + 参与者独立字段 + 参与者名字
         const participantQueryUserId = participantQueryUserIdEarly;
+        const participantQueryUserIdSet = new Set(participantOrderIds);
         let participantInfoMap: Record<number, any> = {};
+        let piDetailMap: Record<number, any> = {};
+        let participantUserName = '';
         if (conn) {
-          try {
-            const piRows = await conn.execute(
+          const ph2 = participantOrderIds.length > 0 ? participantOrderIds.map(() => '?').join(',') : null;
+          const [piRowsResult, piDetailRowsResult, puRowsResult] = await Promise.all([
+            // 1. 参与方配置
+            conn.execute(
               'SELECT order_id, role, interest_rate, commission_rate, commission_base, commission_start_date, paid_commission, note FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ?',
               [input.ledgerId, participantQueryUserId]
-            ) as any;
-            const piArr = Array.isArray(piRows[0]) ? piRows[0] : (Array.isArray(piRows) ? piRows : []);
+            ).catch(() => null) as Promise<any>,
+            // 2. 参与者独立字段（只有有参与订单时才查）
+            ph2 ? conn.execute(
+              `SELECT order_id, interest_rate, interest_base, interest_base_currency, interest_payment_type, interest_start_date, interest_rate_currency, display_config, buy_date_override, broker_name_override, broker_account_override, note FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND order_id IN (${ph2})`,
+              [input.ledgerId, participantQueryUserId, ...participantOrderIds]
+            ).catch((e: any) => { console.error('[funderGetAssetOrders] piDetail error:', e); return null; }) as Promise<any> : Promise.resolve(null),
+            // 3. 参与者名字（只有有参与订单时才查）
+            participantOrderIds.length > 0 ? conn.execute(
+              'SELECT username, name FROM users WHERE id = ? LIMIT 1',
+              [participantQueryUserId]
+            ).catch((e: any) => { console.error('[funderGetAssetOrders] participantUserName error:', e); return null; }) as Promise<any> : Promise.resolve(null)
+          ]);
+          // 处理参与方配置
+          if (piRowsResult) {
+            const piArr = Array.isArray(piRowsResult[0]) ? piRowsResult[0] : (Array.isArray(piRowsResult) ? piRowsResult : []);
             for (const pi of piArr) {
-              // 序列化 commission_start_date 防止前端崩溃
               if (pi.commission_start_date instanceof Date) {
                 const d = pi.commission_start_date as Date;
                 pi.commission_start_date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
               }
               participantInfoMap[Number(pi.order_id)] = pi;
             }
-          } catch {}
+          }
+          // 处理参与者独立字段
+          if (piDetailRowsResult) {
+            const piDetailArr = Array.isArray(piDetailRowsResult[0]) ? piDetailRowsResult[0] : (Array.isArray(piDetailRowsResult) ? piDetailRowsResult : []);
+            for (const pi of piDetailArr) piDetailMap[Number(pi.order_id)] = pi;
+          }
+          // 处理参与者名字
+          if (puRowsResult) {
+            const puArr = Array.isArray(puRowsResult[0]) ? puRowsResult[0] : (Array.isArray(puRowsResult) ? puRowsResult : []);
+            if (puArr.length > 0) participantUserName = puArr[0].name || puArr[0].username || '';
+          }
         }
         // 给每个订单附带 participantInfo（如果当前用户是参与方）
         const ordersWithParticipant = orders.map((o: any) => {
           const pi = participantInfoMap[Number(o.id)];
           if (pi) {
-            // 参与方订单：附带参与方配置，默认値用订单的计息基数和计息日期
             return {
               ...o,
               participantInfo: {
@@ -16247,35 +16284,12 @@ ${klinesSummary}
                 commissionStartDate: pi.commission_start_date || o.interest_start_date || null,
                 paidCommission: pi.paid_commission || '0',
                 note: pi.note || null,
-                // 原始订单的计息货币单位，佣金显示跟随此字段
                 interestBaseCurrency: (['CNY', 'RMB', 'cny', 'rmb', '人民币'].includes(o.interest_base_currency || '') ? 'CNY' : 'USDT'),
               }
             };
           }
-                    return o;
+          return o;
         });
-        // 参与者视角字段覆盖：为参与方订单覆盖 order_perspective、owner_label、order_owner_name、interest_rate_annual 等
-        const participantQueryUserIdSet = new Set(participantOrderIds);
-        // 查询参与者自己的利率/计息基数/display_config 等字段
-        let piDetailMap: Record<number, any> = {};
-        let participantUserName = '';
-        if (conn && participantOrderIds.length > 0) {
-          try {
-            const ph2 = participantOrderIds.map(() => '?').join(',');
-            const piDetailRows = await conn.execute(
-              `SELECT order_id, interest_rate, interest_base, interest_base_currency, interest_payment_type, interest_start_date, interest_rate_currency, display_config, buy_date_override, broker_name_override, broker_account_override, note FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND order_id IN (${ph2})`,
-              [input.ledgerId, participantQueryUserId, ...participantOrderIds]
-            ) as any;
-            const piDetailArr = Array.isArray(piDetailRows[0]) ? piDetailRows[0] : (Array.isArray(piDetailRows) ? piDetailRows : []);
-            for (const pi of piDetailArr) piDetailMap[Number(pi.order_id)] = pi;
-          } catch (e) { console.error('[funderGetAssetOrders] piDetail error:', e); }
-          // 查询参与者自己的名字（独立 try/catch）
-          try {
-            const puRows = await conn.execute(`SELECT username, name FROM users WHERE id = ? LIMIT 1`, [participantQueryUserId]) as any;
-            const puArr = Array.isArray(puRows[0]) ? puRows[0] : (Array.isArray(puRows) ? puRows : []);
-            if (puArr.length > 0) participantUserName = puArr[0].name || puArr[0].username || '';
-          } catch (e) { console.error('[funderGetAssetOrders] participantUserName error:', e); }
-        }
         const ordersWithParticipantView = ordersWithParticipant.map((o: any) => {
           const isParticipantOrder = participantQueryUserIdSet.has(Number(o.id)) && Number(o.user_id) !== participantQueryUserId;
           if (!isParticipantOrder) return o;
