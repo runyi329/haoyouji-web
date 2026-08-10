@@ -1058,7 +1058,7 @@ export function FunderOrderCard({
                 {optionInfo.premium && (
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400 shrink-0">权利金/张</span>
-                    <span className="font-medium" style={{ color: '#4B5563' }}>{optionInfo.premium} {optionInfo.denomination === 'B' ? (optionInfo.coin || 'BTC') : 'USDT'}</span>
+                    <span className="font-medium" style={{ color: '#4B5563' }}>{parseFloat(optionInfo.premium).toFixed(2)} {optionInfo.denomination === 'B' ? (optionInfo.coin || 'BTC') : 'USDT'}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between">
