@@ -3580,7 +3580,10 @@ export default function LedgerDetail() {
                 const usdtInCny = usdtTotal * effectiveCnyRate;
                 const totalInCny = cnyTotal + usdtInCny;
                 if (totalInCny <= 0) return null;
-                const fmtCny = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const fmtCny = (v: number) => v >= 10000
+                  ? (v / 10000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '万'
+                  : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const fmtCnyFull = (v: number) => v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 const fmtU = (v: number) => v >= 10000
                   ? (v / 10000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '万'
                   : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -3590,7 +3593,7 @@ export default function LedgerDetail() {
                     <div className="flex items-baseline gap-2 mb-1.5">
                       <span className="text-2xl font-bold tracking-tight" style={{ color: 'rgba(255,255,255,0.55)', letterSpacing: '0.05em' }}>TTL</span>
                       <span className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.7)' }}>￥</span>
-                      <span className="text-2xl font-bold tracking-tight" style={{ color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{fmtCny(totalInCny)}</span>
+                      <span className="text-2xl font-bold tracking-tight" style={{ color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{fmtCnyFull(totalInCny)}</span>
                     </div>
                     {/* 副标题：占比进度条 */}
                     {(() => {
