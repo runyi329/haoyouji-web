@@ -3604,7 +3604,7 @@ export default function LedgerDetail() {
                           {/* 进度条：分段圆角，中间留间隙 */}
                           <div className="flex gap-0.5 mb-2" style={{ height: '6px' }}>
                             {cnyPct > 0 && <div style={{ width: `calc(${cnyPct}% - 2px)`, background: '#F5C842', borderRadius: '3px', transition: 'width 0.4s' }} />}
-                            {usdtPct > 0 && <div style={{ width: `calc(${usdtPct}% - 2px)`, background: '#38BDF8', borderRadius: '3px', transition: 'width 0.4s' }} />}
+                            {usdtPct > 0 && <div style={{ width: `calc(${usdtPct}% - 2px)`, background: 'rgba(255,255,255,0.75)', borderRadius: '3px', transition: 'width 0.4s' }} />}
                           </div>
                           {/* 占比标签：两侧都有颜色 */}
                           <div className="flex justify-between">
@@ -3613,7 +3613,7 @@ export default function LedgerDetail() {
                               <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.5)' }}>･{fmtCny(cnyTotal)}</span>
                             </div>
                             <div className="flex flex-col gap-0 items-end">
-                              <span className="text-[11px] font-semibold" style={{ color: '#38BDF8' }}>数字币 {usdtPct}%</span>
+                              <span className="text-[11px] font-semibold" style={{ color: '#fff' }}>数字币 {usdtPct}%</span>
                               <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.5)' }}>{fmtU(usdtTotal)} USDT</span>
                             </div>
                           </div>
