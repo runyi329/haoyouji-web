@@ -16048,12 +16048,14 @@ ${klinesSummary}
     funderGetAssetOrders: protectedProcedure
       .input(z.object({ ledgerId: z.number(), userId: z.number().optional(), viewAsUserId: z.number().optional(), roleFilter: z.enum(["funder", "admin"]).optional(), financeOnly: z.boolean().optional() }))
       .query(async ({ ctx, input }) => {
+        const _t0 = Date.now();
         // 并行初始化：同时获取 DB 连接和 Drizzle DB
         const [db, { getDbConnection }] = await Promise.all([
           getLedgerDb(),
           import('./db')
         ]);
         const conn = await getDbConnection();
+        console.log(`[funderGetAssetOrders] t1_dbconn: ${Date.now()-_t0}ms`);
         const memberRoleFilter = input.financeOnly ? "'member'" : "'funder','owner','admin'";
         // 并行查询角色（管理员角色确定前无法确定 targetUserId，先用 ctx.user.id 查参与订单）
         const [roleRows, pRowsEarly] = await Promise.all([
@@ -16095,6 +16097,7 @@ ${klinesSummary}
           } catch {}
         }
         const isParticipant = participantOrderIds.length > 0;
+        console.log(`[funderGetAssetOrders] t2_role_participant: ${Date.now()-_t0}ms`);
         // 无权限：既不是管理员/资金方，也不是任何订单的参与方
         if (!isManager && !isFunder && !isParticipant) throw new TRPCError({ code: 'FORBIDDEN', message: '无权限' });
         let rows: any;
@@ -16185,6 +16188,7 @@ ${klinesSummary}
             );
           }
         }
+        console.log(`[funderGetAssetOrders] t3_main_query: ${Date.now()-_t0}ms`);
         const rawOrdersRaw = ((rows[0] || rows) as any[]) || [];
         // 按 id 去重，防止同一订单因 OR 条件或数据异常出现多次
         const seenIds = new Set<number>();
@@ -16313,29 +16317,30 @@ ${klinesSummary}
           }
           return result;
         });
-        // 附带每个订单的已结利息/已结佣金汇总（paid_total）
+        // 并行查询：已结利息汇总 + 参与方数量
         let paidTotalMap: Record<number, { amount: number; currency: string }> = {};
+        let participantCountMap: Record<number, number> = {};
+        let participantUserIdsMap: Record<number, number[]> = {};
         if (conn && ordersWithParticipantView.length > 0) {
-          try {
-            const orderIds = ordersWithParticipantView.map((o: any) => Number(o.id));
-            const placeholders = orderIds.map(() => '?').join(',');
-            // 参与者视角：只查自己的付款（participant_user_id = participantQueryUserId）
-            // 拥有者视角：只查主订单的付款（participant_user_id IS NULL）
-            const isParticipantQuery = participantOrderIds.length > 0 && !isManager;
-            const paidWhereClause = isParticipantQuery
-              ? `order_id IN (${placeholders}) AND participant_user_id = ?`
-              : `order_id IN (${placeholders}) AND participant_user_id IS NULL`;
-            const paidParams = isParticipantQuery
-              ? [...orderIds, participantQueryUserId]
-              : orderIds;
-            const ptRows = await conn.execute(
-              `SELECT order_id, IFNULL(currency, 'U') as currency, SUM(amount) as total_paid
-               FROM ledger_order_payments
-               WHERE ${paidWhereClause}
-               GROUP BY order_id, IFNULL(currency, 'U')`,
+          const orderIds = ordersWithParticipantView.map((o: any) => Number(o.id));
+          const placeholders = orderIds.map(() => '?').join(',');
+          const isParticipantQuery = participantOrderIds.length > 0 && !isManager;
+          const paidWhereClause = isParticipantQuery
+            ? `order_id IN (${placeholders}) AND participant_user_id = ?`
+            : `order_id IN (${placeholders}) AND participant_user_id IS NULL`;
+          const paidParams = isParticipantQuery ? [...orderIds, participantQueryUserId] : orderIds;
+          const [ptRowsResult, pcRowsResult] = await Promise.all([
+            conn.execute(
+              `SELECT order_id, IFNULL(currency, 'U') as currency, SUM(amount) as total_paid FROM ledger_order_payments WHERE ${paidWhereClause} GROUP BY order_id, IFNULL(currency, 'U')`,
               paidParams
-            ) as any;
-            const ptArr = Array.isArray(ptRows[0]) ? ptRows[0] : (Array.isArray(ptRows) ? ptRows : []);
+            ).catch(() => null) as Promise<any>,
+            conn.execute(
+              `SELECT order_id, user_id FROM ledger_order_participants WHERE order_id IN (${placeholders})`,
+              orderIds
+            ).catch(() => null) as Promise<any>
+          ]);
+          if (ptRowsResult) {
+            const ptArr = Array.isArray(ptRowsResult[0]) ? ptRowsResult[0] : (Array.isArray(ptRowsResult) ? ptRowsResult : []);
             for (const row of ptArr) {
               const oid = Number(row.order_id);
               if (!paidTotalMap[oid]) {
@@ -16344,34 +16349,25 @@ ${klinesSummary}
                 paidTotalMap[oid].amount += parseFloat(row.total_paid || '0');
               }
             }
-          } catch {}
-        }
-        // 查询每个订单的参与方数量和用户ID列表
-        let participantCountMap: Record<number, number> = {};
-        let participantUserIdsMap: Record<number, number[]> = {};
-        if (conn && ordersWithParticipantView.length > 0) {
-          try {
-            const orderIds = ordersWithParticipantView.map((o: any) => Number(o.id));
-            const placeholders = orderIds.map(() => '?').join(',');
-            const pcRows = await conn.execute(
-              `SELECT order_id, user_id FROM ledger_order_participants WHERE order_id IN (${placeholders})`,
-              orderIds
-            ) as any;
-            const pcArr = Array.isArray(pcRows[0]) ? pcRows[0] : (Array.isArray(pcRows) ? pcRows : []);
+          }
+          if (pcRowsResult) {
+            const pcArr = Array.isArray(pcRowsResult[0]) ? pcRowsResult[0] : (Array.isArray(pcRowsResult) ? pcRowsResult : []);
             for (const row of pcArr) {
               const oid = Number(row.order_id);
               participantCountMap[oid] = (participantCountMap[oid] || 0) + 1;
               if (!participantUserIdsMap[oid]) participantUserIdsMap[oid] = [];
               participantUserIdsMap[oid].push(Number(row.user_id));
             }
-          } catch {}
+          }
         }
+        console.log(`[funderGetAssetOrders] t5_paid_participant: ${Date.now()-_t0}ms`);
         const ordersWithPaid = ordersWithParticipantView.map((o: any) => ({
           ...o,
           paidTotal: paidTotalMap[Number(o.id)] || null,
           participantCount: participantCountMap[Number(o.id)] || 0,
           _participantUserIds: participantUserIdsMap[Number(o.id)] || [],
         }));
+        console.log(`[funderGetAssetOrders] t_TOTAL: ${Date.now()-_t0}ms, orders: ${ordersWithPaid.length}`);
         return { orders: ordersWithPaid, livePrices, _debug: { targetUserId, participantQueryUserIdEarly, participantOrderIds, viewAsUserId: input.viewAsUserId } };
       }),
 

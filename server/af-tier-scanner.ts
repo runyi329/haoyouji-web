@@ -222,8 +222,7 @@ export async function runTierScan(targetOrderId?: number) {
         const currentTier = Math.floor(dropPct / 0.1); // 0=未跌10%, 1=跌10-20%, ...
 
         if (currentTier <= 0) {
-          console.log(`[AF扫描] 订单#${order.id} ${coin} 未达到第1档 (买入:${buyPrice}, 当前最低:${low}, 跌幅:${(dropPct*100).toFixed(2)}%)`);
-          continue;
+          continue; // 未达到第1档，不打印日志
         }
         const tierToTrigger = Math.min(currentTier, 9); // 最多9档
 
@@ -244,9 +243,7 @@ export async function runTierScan(targetOrderId?: number) {
           console.log(`[AF扫描] ✅ 订单#${order.id} ${coin} 触发第${tier}档 (买入价:${buyPrice}, 当前最低:${low}, 跌幅:${(dropPct*100).toFixed(2)}%)`);
         }
 
-        if (maxTriggered >= tierToTrigger) {
-          console.log(`[AF扫描] 订单#${order.id} ${coin} 已在第${maxTriggered}档，当前档位${tierToTrigger}，无需新增`);
-        }
+        // 已触发过的档位不再打印日志
       }
     } catch (err) {
       console.error(`[AF扫描] ${coin} 处理出错:`, err);
@@ -287,10 +284,10 @@ export function startTierScanner() {
   // 先立即执行一次
   runTierScan().catch(e => console.error('[层次扫描] 初始扫描失败:', e));
 
-  // 每3秒扫描一次（与 price-scanner.ts 保持一致）
+  // 每4小时扫描一次（与4小时K线周期匹配）
   setInterval(() => {
     runTierScan().catch(e => console.error('[层次扫描] 定时扫描失败:', e));
-  }, 3 * 1000);
+  }, 4 * 60 * 60 * 1000);
 
-  console.log('[层次扫描] 收益权档位监控已启动，每3秒扫描一次（规范：crypto-price-unified）');
+  console.log('[层次扫描] 收益权档位监控已启动，每4小时扫描一次');
 }
