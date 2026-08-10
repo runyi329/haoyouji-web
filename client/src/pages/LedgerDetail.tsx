@@ -2508,7 +2508,7 @@ export default function LedgerDetail() {
   );
   // 资方专属：资产订单列表（funder 角色查询，管理员视角切换时传目标用户ID）
   const PRICE_CACHE_KEY = `funder_live_prices_${ledgerId}`;
-  const { data: funderAssetData } = trpc.ledger.funderGetAssetOrders.useQuery(
+  const { data: funderAssetData, isLoading: funderOrdersLoading } = trpc.ledger.funderGetAssetOrders.useQuery(
     { ledgerId: Number(ledgerId), ...(viewAsUserId ? { viewAsUserId } : {}) },
     { enabled: isCustomAF && !!ledgerId, refetchOnWindowFocus: true, staleTime: 0 }
   );
@@ -5264,7 +5264,26 @@ export default function LedgerDetail() {
                 }}>订单模式</span>
               </div>
             </div>
-            {(!funderAssetOrders || (funderAssetOrders as any[]).length === 0) ? (
+            {funderOrdersLoading ? (
+              /* 骨架屏加载动画 */
+              <div className="space-y-3 px-1">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="rounded-2xl overflow-hidden" style={{ background: '#F3F4F6' }}>
+                    <div className="h-8 animate-pulse" style={{ background: 'linear-gradient(90deg, #E5E7EB 25%, #F3F4F6 50%, #E5E7EB 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.5s infinite' }} />
+                    <div className="p-4 space-y-3">
+                      <div className="flex justify-between">
+                        <div className="h-10 w-28 rounded-xl animate-pulse" style={{ background: '#E5E7EB' }} />
+                        <div className="h-10 w-28 rounded-xl animate-pulse" style={{ background: '#E5E7EB' }} />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[1,2,3,4].map(j => <div key={j} className="h-5 rounded-lg animate-pulse" style={{ background: '#E5E7EB' }} />)}
+                      </div>
+                      <div className="h-5 w-3/4 rounded-lg animate-pulse" style={{ background: '#E5E7EB' }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (!funderAssetOrders || (funderAssetOrders as any[]).length === 0) ? (
               <div className="text-center py-12">
                 <Receipt className="w-14 h-14 text-gray-200 mx-auto mb-3" />
                 <div className="text-gray-400 text-base mb-1">暂无资产订单</div>
