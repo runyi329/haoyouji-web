@@ -1085,6 +1085,11 @@ export default function FunderManagement({ ledgerIdProp, hideHeader, adminOnly, 
         {(() => {
           const activeOrders: any[] = (assetOrders as any[]).filter((o: any) => o.status === 'active');
           const totalAmount = activeOrders.reduce((sum: number, o: any) => {
+            // coin=CNY 且 amount_currency=USDT 的订单：用 buy_quantity÷cnyRate 实时折算，避免存储值过期
+            if ((o.coin === 'CNY' || o.coin === 'RMB') && (o.amount_currency === 'USDT' || o.amount_currency === 'U')) {
+              const qty = parseFloat(o.buy_quantity || '0');
+              if (!isNaN(qty) && qty > 0 && cnyRate > 0) return sum + qty / cnyRate;
+            }
             const amt = parseFloat(o.amount || '0');
             return sum + (isNaN(amt) ? 0 : amt);
           }, 0);
