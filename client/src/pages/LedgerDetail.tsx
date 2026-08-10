@@ -3544,8 +3544,10 @@ export default function LedgerDetail() {
               {/* 资方视角：合作资金总额汇总 */}
               {isCustomAF && effectiveIsFunder && (() => {
                 const activeOrders: any[] = (funderAssetOrders as any[] || []).filter((o: any) => o.status !== 'settled');
+                const effectiveCnyRate2 = (cnyRate && cnyRate > 0) ? cnyRate : 6.75;
                 const usdtTotal = activeOrders.reduce((sum: number, o: any) => {
-                  if ((o.interest_base_currency || 'USDT') === 'CNY') return sum;
+                  // 股票类型归入人民币，不计入数字币
+                  if (o.asset_type === 'stock') return sum;
                   // 期权订单：用持有数量 × 实时价格（当前市值）
                   if (o.asset_type === 'crypto_option') {
                     try {
@@ -3555,16 +3557,24 @@ export default function LedgerDetail() {
                       const price = (funderLivePrices as any)?.[coin] ?? null;
                       if (qty > 0 && price !== null) return sum + qty * price;
                     } catch {}
-                    // fallback 到 amount
                     return sum + parseFloat(o.amount || '0');
                   }
-                  const amt = parseFloat(o.interest_base || o.amount || '0');
-                  return sum + (isNaN(amt) ? 0 : amt);
+                  // 数字币订单：计息基数为 CNY 时折算成 USDT
+                  const baseCur = (o.interest_base_currency || 'USDT');
+                  const baseAmt = parseFloat(o.interest_base || o.amount || '0');
+                  if (isNaN(baseAmt)) return sum;
+                  if (baseCur === 'CNY') return sum + baseAmt / effectiveCnyRate2;
+                  return sum + baseAmt;
                 }, 0);
                 const cnyTotal = activeOrders.reduce((sum: number, o: any) => {
-                  if ((o.interest_base_currency || 'USDT') !== 'CNY') return sum;
-                  const amt = parseFloat(o.interest_base || o.amount || '0');
-                  return sum + (isNaN(amt) ? 0 : amt);
+                  // 只有股票类型才归入人民币
+                  if (o.asset_type !== 'stock') return sum;
+                  const baseCur = (o.interest_base_currency || 'CNY');
+                  const baseAmt = parseFloat(o.interest_base || o.amount || '0');
+                  if (isNaN(baseAmt)) return sum;
+                  // 股票订单若 interest_base_currency=USDT，折算成 CNY
+                  if (baseCur !== 'CNY') return sum + baseAmt * effectiveCnyRate2;
+                  return sum + baseAmt;
                 }, 0);
                 const effectiveCnyRate = (cnyRate && cnyRate > 0) ? cnyRate : 6.75;
                 const usdtInCny = usdtTotal * effectiveCnyRate;
