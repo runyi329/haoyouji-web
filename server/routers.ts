@@ -28156,6 +28156,167 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
       }),
   }),
 
+  // ========== 信用卡管理 ==========
+  creditCard: router({
+    // 获取当前用户的信用卡列表
+    list: protectedProcedure.query(async ({ ctx }) => {
+      const conn = await (await import('./db')).getDbConnection();
+      if (!conn) return [];
+      const [rows] = await conn.execute(
+        'SELECT * FROM credit_cards WHERE user_id = ? AND is_active = 1 ORDER BY created_at DESC',
+        [ctx.user.id]
+      ) as any[];
+      return (Array.isArray(rows) ? rows : []) as any[];
+    }),
+    // 新增信用卡
+    create: protectedProcedure
+      .input(z.object({
+        bankName: z.string(),
+        cardName: z.string().optional(),
+        cardHolder: z.string().optional(),
+        cardNetwork: z.string().optional(),
+        expiryMonth: z.string().optional(),
+        cardLast4: z.string().max(23).optional(),
+        creditLimit: z.number().optional(),
+        billingDay: z.number().min(1).max(31).optional(),
+        dueDay: z.number().min(1).max(31).optional(),
+        currency: z.string().default('CNY'),
+        color: z.string().optional(),
+        note: z.string().optional(),
+        tempLimit: z.number().optional(),
+        tempLimitStart: z.string().optional(),
+        tempLimitEnd: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new Error('db error');
+        await conn.execute(
+          'INSERT INTO credit_cards (user_id, bank_name, card_name, card_holder, card_network, expiry_month, card_last4, credit_limit, billing_day, due_day, currency, color, note, temp_limit, temp_limit_start, temp_limit_end) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+          [ctx.user.id, input.bankName, input.cardName||null, input.cardHolder||null, input.cardNetwork||null, input.expiryMonth||null, input.cardLast4||null, input.creditLimit||null, input.billingDay||null, input.dueDay||null, input.currency, input.color||null, input.note||null, input.tempLimit||null, input.tempLimitStart||null, input.tempLimitEnd||null]
+        );
+        return { success: true };
+      }),
+    // 更新信用卡
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number(),
+        bankName: z.string().optional(),
+        cardName: z.string().optional(),
+        cardHolder: z.string().optional(),
+        cardNetwork: z.string().optional(),
+        expiryMonth: z.string().optional(),
+        cardLast4: z.string().max(23).optional(),
+        creditLimit: z.number().optional(),
+        billingDay: z.number().min(1).max(31).optional(),
+        dueDay: z.number().min(1).max(31).optional(),
+        currency: z.string().optional(),
+        color: z.string().optional(),
+        note: z.string().optional(),
+        tempLimit: z.number().nullable().optional(),
+        tempLimitStart: z.string().nullable().optional(),
+        tempLimitEnd: z.string().nullable().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new Error('db error');
+        const { id, ...fields } = input;
+        const sets: string[] = [];
+        const vals: any[] = [];
+        if (fields.bankName !== undefined) { sets.push('bank_name=?'); vals.push(fields.bankName); }
+        if (fields.cardName !== undefined) { sets.push('card_name=?'); vals.push(fields.cardName); }
+        if (fields.cardHolder !== undefined) { sets.push('card_holder=?'); vals.push(fields.cardHolder); }
+        if (fields.cardNetwork !== undefined) { sets.push('card_network=?'); vals.push(fields.cardNetwork); }
+        if (fields.expiryMonth !== undefined) { sets.push('expiry_month=?'); vals.push(fields.expiryMonth); }
+        if (fields.cardLast4 !== undefined) { sets.push('card_last4=?'); vals.push(fields.cardLast4); }
+        if (fields.creditLimit !== undefined) { sets.push('credit_limit=?'); vals.push(fields.creditLimit); }
+        if (fields.billingDay !== undefined) { sets.push('billing_day=?'); vals.push(fields.billingDay); }
+        if (fields.dueDay !== undefined) { sets.push('due_day=?'); vals.push(fields.dueDay); }
+        if (fields.currency !== undefined) { sets.push('currency=?'); vals.push(fields.currency); }
+        if (fields.color !== undefined) { sets.push('color=?'); vals.push(fields.color); }
+        if (fields.note !== undefined) { sets.push('note=?'); vals.push(fields.note); }
+        if (fields.tempLimit !== undefined) { sets.push('temp_limit=?'); vals.push(fields.tempLimit); }
+        if (fields.tempLimitStart !== undefined) { sets.push('temp_limit_start=?'); vals.push(fields.tempLimitStart); }
+        if (fields.tempLimitEnd !== undefined) { sets.push('temp_limit_end=?'); vals.push(fields.tempLimitEnd); }
+        if (sets.length === 0) return { success: true };
+        vals.push(id, ctx.user.id);
+        await conn.execute(`UPDATE credit_cards SET ${sets.join(',')} WHERE id=? AND user_id=?`, vals);
+        return { success: true };
+      }),
+    // 删除信用卡（软删除）
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new Error('db error');
+        await conn.execute('UPDATE credit_cards SET is_active=0 WHERE id=? AND user_id=?', [input.id, ctx.user.id]);
+        return { success: true };
+      }),
+    // 管理员：查看所有用户的信用卡（按用户分组）
+    adminListAll: protectedProcedure.query(async ({ ctx }) => {
+      if (!ctx.user.isAdmin) throw new Error('no permission');
+      const conn = await (await import('./db')).getDbConnection();
+      if (!conn) return [];
+      const [rows] = await conn.execute(
+        `SELECT cc.*, u.name as user_name, u.username as user_username
+         FROM credit_cards cc
+         LEFT JOIN users u ON u.id = cc.user_id
+         WHERE cc.is_active = 1
+         ORDER BY cc.user_id, cc.created_at DESC`
+      ) as any[];
+      return (Array.isArray(rows) ? rows : []) as any[];
+    }),
+    // 管理员：获取所有用户列表（用于选择要为谁添加）
+    adminListUsers: protectedProcedure.query(async ({ ctx }) => {
+      if (!ctx.user.isAdmin) throw new Error('no permission');
+      const conn = await (await import('./db')).getDbConnection();
+      if (!conn) return [];
+      const [rows] = await conn.execute(
+        'SELECT id, name, username FROM users WHERE deleted_at IS NULL ORDER BY name'
+      ) as any[];
+      return (Array.isArray(rows) ? rows : []) as any[];
+    }),
+    // 管理员：为指定用户添加信用卡
+    adminCreate: protectedProcedure
+      .input(z.object({
+        targetUserId: z.number(),
+        bankName: z.string(),
+        cardName: z.string().optional(),
+        cardHolder: z.string().optional(),
+        cardNetwork: z.string().optional(),
+        expiryMonth: z.string().optional(),
+        cardLast4: z.string().max(23).optional(),
+        creditLimit: z.number().optional(),
+        billingDay: z.number().min(1).max(31).optional(),
+        dueDay: z.number().min(1).max(31).optional(),
+        currency: z.string().default('CNY'),
+        color: z.string().optional(),
+        note: z.string().optional(),
+        tempLimit: z.number().optional(),
+        tempLimitStart: z.string().optional(),
+        tempLimitEnd: z.string().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user.isAdmin) throw new Error('no permission');
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new Error('db error');
+        await conn.execute(
+          'INSERT INTO credit_cards (user_id, bank_name, card_name, card_holder, card_network, expiry_month, card_last4, credit_limit, billing_day, due_day, currency, color, note, temp_limit, temp_limit_start, temp_limit_end) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+          [input.targetUserId, input.bankName, input.cardName||null, input.cardHolder||null, input.cardNetwork||null, input.expiryMonth||null, input.cardLast4||null, input.creditLimit||null, input.billingDay||null, input.dueDay||null, input.currency, input.color||null, input.note||null, input.tempLimit||null, input.tempLimitStart||null, input.tempLimitEnd||null]
+        );
+        return { success: true };
+      }),
+    // 管理员：删除任意用户的信用卡
+    adminDelete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        if (!ctx.user.isAdmin) throw new Error('no permission');
+        const conn = await (await import('./db')).getDbConnection();
+        if (!conn) throw new Error('db error');
+        await conn.execute('UPDATE credit_cards SET is_active=0 WHERE id=?', [input.id]);
+        return { success: true };
+      }),
+  }),
+
 });
 
 // 管理员容器定义管理（独立 router，仅超级管理员可用）

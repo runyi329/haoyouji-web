@@ -438,6 +438,9 @@ function Router() {
         <Route path="/admin/super-view" component={SuperViewUserList} />
         <Route path="/admin/super-view/contacts" component={SuperViewContacts} />
 
+        {/* 信用卡管理 */}
+        <Route path="/credit-cards" component={lazy(() => import('./pages/CreditCardManagement'))} />
+
         {/* 商品商店 */}
         <Route path="/products" component={ProductStore} />
         <Route path="/products/:id" component={ProductDetail} />

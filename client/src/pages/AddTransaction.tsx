@@ -133,6 +133,7 @@ const AddTransaction = () => {
   );
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
   const [showCompanyPicker, setShowCompanyPicker] = useState(false);
+  const [showAJMenu, setShowAJMenu] = useState(false);
   // AJ账本：获取当前选中企业的报销类型配置
   const { data: companyExpenseConfig } = trpc.ledger.ajGetCompanyExpenseTypes.useQuery(
     { ledgerId, companyId: selectedCompanyId! },
@@ -927,7 +928,35 @@ const AddTransaction = () => {
         <button onClick={() => setLocation(fromPage === 'home' ? '/' : `/ledger/${id}`)}>
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-base font-semibold">{isCustomAJ ? (isEditMode ? "修改报销申请" : "报销申请单") : (isEditMode ? "修改账目" : "添加账目")}</h1>
+        {isCustomAJ && !isEditMode ? (
+          <div className="relative">
+            <button
+              onClick={() => setShowAJMenu(prev => !prev)}
+              className="flex items-center space-x-1 text-base font-semibold"
+            >
+              <span>报销申请单</span>
+              <ChevronDown className="w-4 h-4 opacity-70" />
+            </button>
+            {showAJMenu && (
+              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 bg-white rounded-xl shadow-lg overflow-hidden z-50 min-w-[140px]">
+                <button
+                  onClick={() => setShowAJMenu(false)}
+                  className="w-full px-4 py-3 text-sm text-left text-[#1A2B4A] font-semibold bg-blue-50"
+                >
+                  报销申请单
+                </button>
+                <button
+                  onClick={() => { setShowAJMenu(false); setLocation('/credit-cards'); }}
+                  className="w-full px-4 py-3 text-sm text-left text-gray-700 border-t border-gray-100"
+                >
+                  信用卡管理
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <h1 className="text-base font-semibold">{isCustomAJ ? "修改报销申请" : (isEditMode ? "修改账目" : "添加账目")}</h1>
+        )}
         <div className="w-5" /> {/* 占位 */}
       </div>
 
