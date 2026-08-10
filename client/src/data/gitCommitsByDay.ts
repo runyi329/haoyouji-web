@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-08-10
+// 生成时间：2026-08-11
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8830,5 +8830,26 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   ],
   "2026-08-09": [
     { date: "2026-08-08T18:17:01Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+  ],
+  "2026-08-10": [
+    { date: "2026-08-09T18:19:36Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-08-10T08:58:25Z", type: "fix", cleanMessage: "修复数字币Total计算逻辑，coin=CNY订单用buy_quantity÷cnyRate实时折算" },
+    { date: "2026-08-10T09:09:36Z", type: "fix", cleanMessage: "TTL统计按asset_type归类，crypto/option的CNY计息基数折算成USDT" },
+    { date: "2026-08-10T09:14:11Z", type: "fix", cleanMessage: "TTL主标题全部陈列，占比标签人民币/数字币统一用万单位" },
+    { date: "2026-08-10T09:19:10Z", type: "other", cleanMessage: "ui: TTL区域重新设计，进度条分段圆角，数字币用青蓝色，两侧标签对称" },
+    { date: "2026-08-10T09:22:11Z", type: "other", cleanMessage: "ui: TTL数字币标签改为白色，进度条数字币段改为白色半透明（蓝色背景下可见）" },
+    { date: "2026-08-10T09:37:07Z", type: "fix", cleanMessage: "期权担保缺口按方向计算(卖出用计息基数/买入用行权价×张数)，修复弹窗编号④，加计算说明" },
+    { date: "2026-08-10T09:44:33Z", type: "fix", cleanMessage: "修复期权订单共享担保缺口重复扣减本金bug，后端assetType字段传前端" },
+    { date: "2026-08-10T09:53:46Z", type: "fix", cleanMessage: "期权担保缺口由借出开关控制是否含计息基数，更新说明文字" },
+    { date: "2026-08-10T09:59:44Z", type: "fix", cleanMessage: "期权订单权利金/张显示改为小数点后2位" },
+    { date: "2026-08-10T10:10:24Z", type: "other", cleanMessage: "ui: 融资付息订单页初始加载改为骨架屏动画，避免显示暂无订单" },
+    { date: "2026-08-10T10:17:30Z", type: "perf", cleanMessage: "funderGetAssetOrders 后端并行查询优化+前端30s缓存，加速融资订单页加载" },
+    { date: "2026-08-10T10:35:30Z", type: "perf", cleanMessage: "AF扫描从每3秒改为每4小时，去掉无用日志，解决服务器性能瓶颈" },
+    { date: "2026-08-10T10:41:19Z", type: "fix", cleanMessage: "piRows查询改用原生conn.execute修复SQL语法错误，消除每次请求的报错延迟" },
+    { date: "2026-08-10T14:42:30Z", type: "feat", cleanMessage: "信用卡管理页面（完整功能含临时额度、草稿、刷卡建议）" },
+    { date: "2026-08-10T14:56:33Z", type: "fix", cleanMessage: "修复 temp_limit_end Date对象调用slice崩溃" },
+  ],
+  "2026-08-11": [
+    { date: "2026-08-10T16:31:09Z", type: "feat", cleanMessage: "信用卡管理-可用额度更新/UI优化/删除二次确认/卡号遮码/草稿" },
   ],
 };
