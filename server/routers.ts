@@ -28215,6 +28215,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         tempLimit: z.number().nullable().optional(),
         tempLimitStart: z.string().nullable().optional(),
         tempLimitEnd: z.string().nullable().optional(),
+        availableLimit: z.number().nullable().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
         const conn = await (await import('./db')).getDbConnection();
@@ -28237,6 +28238,7 @@ ${input.recentTrend ? `- 近期走势：${input.recentTrend}` : ''}
         if (fields.tempLimit !== undefined) { sets.push('temp_limit=?'); vals.push(fields.tempLimit); }
         if (fields.tempLimitStart !== undefined) { sets.push('temp_limit_start=?'); vals.push(fields.tempLimitStart); }
         if (fields.tempLimitEnd !== undefined) { sets.push('temp_limit_end=?'); vals.push(fields.tempLimitEnd); }
+        if (fields.availableLimit !== undefined) { sets.push('available_limit=?'); vals.push(fields.availableLimit); sets.push('available_limit_updated_at=NOW()'); }
         if (sets.length === 0) return { success: true };
         vals.push(id, ctx.user.id);
         await conn.execute(`UPDATE credit_cards SET ${sets.join(',')} WHERE id=? AND user_id=?`, vals);

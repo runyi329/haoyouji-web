@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import {
   ChevronLeft, Plus, CreditCard, Pencil, Trash2,
   X, Check, Users, User, Search, ChevronDown, Lightbulb, ToggleLeft, ToggleRight,
+  Eye, EyeOff,
 } from "lucide-react";
 
 const BANK_COLORS: Record<string, { bg: string; border: string }> = {
@@ -240,6 +241,7 @@ export default function CreditCardManagement() {
   }, [form, showForm, editingId]);
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [deleteConfirmStep, setDeleteConfirmStep] = useState<1 | 2>(1);
   const [bankSearchText, setBankSearchText] = useState('');
   const [showBankPicker, setShowBankPicker] = useState(false);
   const [showNetworkPicker, setShowNetworkPicker] = useState(false);
@@ -371,54 +373,142 @@ export default function CreditCardManagement() {
     const swipe = card.billing_day && card.due_day ? calcBestSwipeDay(card.billing_day, card.due_day) : null;
     const tempActive = isTempLimitActive(card.temp_limit_start, card.temp_limit_end);
     const tempEndLabel = card.temp_limit_end ? formatDateLabel(card.temp_limit_end) : '';
+    const [showFullCard, setShowFullCard] = useState(false);
+    const [showMenu, setShowMenu] = useState(false);
+    const [showAvailableInput, setShowAvailableInput] = useState(false);
+    const [availableInputVal, setAvailableInputVal] = useState('');
 
     return (
       <div className="rounded-2xl overflow-hidden shadow-md">
         {/* 卡片主体 */}
         <div className="p-4 relative" style={{ background: `linear-gradient(135deg, ${color.bg} 0%, ${color.border} 100%)` }}>
-          <div className="absolute right-4 top-3 w-16 h-16 rounded-full opacity-20 bg-white" />
-          <div className="absolute right-8 top-6 w-10 h-10 rounded-full opacity-15 bg-white" />
+
           <div className="relative z-10">
             <div className="flex items-start justify-between">
               <div>
-                <div className="flex items-center flex-wrap gap-1">
-                  <p className="text-white/70 text-xs">{card.bank_name}</p>
-                  {card.card_network && card.card_network.split(',').map((net: string) => (
-                    <span key={net} className="text-white/60 text-xs border border-white/30 rounded px-1">{net.trim()}</span>
-                  ))}
+                {/* 卡组织标签行 */}
+                {card.card_network && (
+                  <div className="flex items-center flex-wrap gap-1 mb-0.5">
+                    {card.card_network.split(',').map((net: string) => (
+                      <span key={net} className="text-white/60 text-xs border border-white/30 rounded px-1">{net.trim()}</span>
+                    ))}
+                  </div>
+                )}
+                {/* 姓名 + 銀行名同一行 */}
+                <div className="flex items-baseline space-x-2">
+                  <p className="text-white font-bold text-base">
+                    {card.card_holder || card.card_name || "持卡人"}
+                  </p>
+                  {card.bank_name && <span className="text-white/60 text-xs">{card.bank_name.replace(/銀/g, "银").replace(/購/g, "购").replace(/廣/g, "广")}</span>}
                 </div>
-                <p className="text-white font-bold text-base mt-0.5">
-                  {card.card_holder || card.card_name || "持卡人"}
-                </p>
                 <div className="flex items-center space-x-2 mt-0.5">
-                  {card.card_last4 && (
-                    <span className="text-white/60 text-sm tracking-widest">
-                      {card.card_last4.replace(/\D/g, '').length > 4
-                        ? '**** **** **** ' + card.card_last4.replace(/\D/g, '').slice(-4)
-                        : '**** ' + card.card_last4.replace(/\D/g, '')}
-                    </span>
-                  )}
+                  {card.card_last4 && (() => {
+                    const digits = card.card_last4.replace(/\D/g, '');
+                    const first4 = digits.slice(0, 4);
+                    const last4 = digits.slice(-4);
+                    const middleCount = digits.length - 8;
+                    const middleMask = middleCount > 0 ? ' ' + '*'.repeat(middleCount).replace(/(....)/g, '$1 ').trim() + ' ' : ' **** ';
+                    const masked = digits.length >= 8
+                      ? first4 + middleMask + last4
+                      : digits.length > 4
+                        ? first4 + ' **** ' + last4
+                        : digits;
+                    const formatted = digits.replace(/(\d{4})(?=\d)/g, '$1 ');
+                    return (
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-white/70 text-sm tracking-widest font-mono">
+                          {showFullCard ? formatted : masked}
+                        </span>
+                        <button
+                          onClick={() => setShowFullCard(v => !v)}
+                          className="w-5 h-5 flex items-center justify-center opacity-60 active:opacity-100"
+                        >
+                          {showFullCard
+                            ? <EyeOff className="w-3.5 h-3.5 text-white" />
+                            : <Eye className="w-3.5 h-3.5 text-white" />}
+                        </button>
+                      </div>
+                    );
+                  })()}
                   {card.expiry_month && <span className="text-white/50 text-xs">{card.expiry_month}</span>}
                 </div>
               </div>
-              <div className="flex space-x-2">
-                {viewMode === 'self' && (
-                  <button onClick={() => handleEdit(card)} className="w-7 h-7 flex items-center justify-center rounded-full bg-white/20 active:bg-white/30">
-                    <Pencil className="w-3.5 h-3.5 text-white" />
-                  </button>
-                )}
-                <button onClick={() => setDeleteConfirmId(card.id)} className="w-7 h-7 flex items-center justify-center rounded-full bg-white/20 active:bg-white/30">
-                  <Trash2 className="w-3.5 h-3.5 text-white" />
+              {/* ··· 更多菜单 */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowMenu(v => !v)}
+                  className="w-7 h-7 flex items-center justify-center active:opacity-60"
+                >
+                  <span className="text-white font-bold text-base leading-none tracking-widest">···</span>
                 </button>
+                {showMenu && (
+                  <>
+                    {/* 遥控覆盖层 */}
+                    <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+                    <div className="absolute right-0 top-9 z-50 bg-white rounded-xl shadow-xl overflow-hidden min-w-[100px]">
+                      {viewMode === 'self' && (
+                        <button
+                          onClick={() => { handleEdit(card); setShowMenu(false); }}
+                          className="w-full flex items-center space-x-2 px-4 py-3 text-sm text-gray-700 active:bg-gray-50"
+                        >
+                          <Pencil className="w-4 h-4 text-gray-400" />
+                          <span>编辑</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          setAvailableInputVal(card.available_limit != null ? String(card.available_limit) : '');
+                          setShowAvailableInput(true);
+                          setShowMenu(false);
+                        }}
+                        className="w-full flex items-center space-x-2 px-4 py-3 text-sm text-gray-700 active:bg-gray-50"
+                      >
+                        <CreditCard className="w-4 h-4 text-gray-400" />
+                        <span>更新可用额度</span>
+                      </button>
+                      <button
+                        onClick={() => { setDeleteConfirmId(card.id); setDeleteConfirmStep(1); setShowMenu(false); }}
+                        className="w-full flex items-center space-x-2 px-4 py-3 text-sm text-red-500 active:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-400" />
+                        <span>删除</span>
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
             {/* 额度行：正常额度 + 临时额度标签 */}
             <div className="flex items-center flex-wrap gap-2 mt-2">
-              {card.credit_limit && (
-                <p className="text-white/80 text-sm">
-                  额度：<span className="text-white font-semibold">{Number(card.credit_limit).toLocaleString()} {card.currency || "CNY"}</span>
-                </p>
-              )}
+              {card.credit_limit && (() => {
+                const limit = Number(card.credit_limit);
+                const avail = card.available_limit != null ? Number(card.available_limit) : null;
+                const used = avail != null ? limit - avail : null;
+                const usedPct = avail != null ? Math.round((used! / limit) * 100) : null;
+                return (
+                  <div className="flex flex-col space-y-0.5">
+                    <div className="flex items-baseline space-x-1.5">
+                      <span className="text-white/70 text-xs">额度</span>
+                      <span className="text-white font-semibold text-sm">{limit.toLocaleString()}</span>
+                      <span className="text-white/60 text-xs">{card.currency || 'CNY'}</span>
+                      {avail != null && (
+                        <span className="text-white/60 text-xs">· 可用 <span className="text-white font-medium">{avail.toLocaleString()}</span></span>
+                      )}
+                    </div>
+                    {used != null && (
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-white/50 text-xs">已用 {used.toLocaleString()} · {usedPct}%</span>
+                        {/* 进度条 */}
+                        <div className="flex-1 h-1 bg-white/20 rounded-full overflow-hidden" style={{maxWidth: '80px'}}>
+                          <div className={`h-full rounded-full ${
+                            usedPct! >= 90 ? 'bg-red-400' : usedPct! >= 70 ? 'bg-amber-400' : 'bg-green-400'
+                          }`} style={{width: `${Math.min(100, usedPct!)}%`}} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
               {/* 临时额度标签 */}
               {card.temp_limit && (
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
@@ -434,28 +524,92 @@ export default function CreditCardManagement() {
             </div>
           </div>
         </div>
+
+        {/* 可用额度输入弹出 */}
+        {showAvailableInput && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
+            <div className="bg-white rounded-t-2xl w-full max-w-[480px] px-5 pt-5 pb-8">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-gray-900 font-semibold">更新可用额度</p>
+                <button onClick={() => setShowAvailableInput(false)} className="text-gray-400 active:text-gray-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              {card.credit_limit && (
+                <p className="text-gray-400 text-xs mb-3">信用额度 {Number(card.credit_limit).toLocaleString()} {card.currency || 'CNY'}</p>
+              )}
+              <input
+                type="number"
+                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-lg font-semibold text-gray-900 mb-2 focus:outline-none focus:border-[#1A2B4A]"
+                placeholder="输入当前可用额度"
+                value={availableInputVal}
+                onChange={e => setAvailableInputVal(e.target.value)}
+                autoFocus
+              />
+              {availableInputVal && card.credit_limit && (
+                <p className="text-gray-400 text-xs mb-4">
+                  已用额度：<span className="text-gray-700 font-medium">{(Number(card.credit_limit) - Number(availableInputVal)).toLocaleString()}</span>
+                  {' · '}
+                  <span className="text-gray-700 font-medium">{Math.round(((Number(card.credit_limit) - Number(availableInputVal)) / Number(card.credit_limit)) * 100)}%</span>
+                </p>
+              )}
+              <button
+                onClick={async () => {
+                  const val = Number(availableInputVal);
+                  if (isNaN(val) || val < 0) return;
+                  try {
+                    await updateMutation.mutateAsync({ id: card.id, availableLimit: val } as any);
+                    await refetch();
+                    setShowAvailableInput(false);
+                    toast.success('可用额度已更新');
+                  } catch (e: any) {
+                    toast.error('更新失败: ' + (e?.message || ''));
+                  }
+                }}
+                className="w-full py-3 rounded-xl bg-[#1A2B4A] text-white font-semibold text-sm active:opacity-80"
+              >
+                确认更新
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 账单信息 */}
-        <div className="bg-white px-4 py-3 space-y-2">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-gray-400 text-xs">账单日</p>
+        <div className="bg-white px-4 pt-3 pb-4 space-y-3">
+          <div className="grid grid-cols-2 gap-0 divide-x divide-gray-100">
+            <div className="pr-3">
+              <p className="text-gray-400 text-xs mb-1">账单日</p>
               {card.billing_day ? (
-                <div className="flex items-baseline space-x-1">
-                  <p className="text-gray-800 font-semibold text-sm">每月 {card.billing_day} 日</p>
-                  {billingDays !== null && <span className={`text-xs ${billingDays <= 3 ? 'text-red-500' : 'text-gray-400'}`}>({billingDays}天后)</span>}
+                <div className="flex items-end space-x-1.5">
+                  <p className="text-gray-900 font-bold text-lg leading-none">{card.billing_day}</p>
+                  <span className="text-gray-400 text-xs mb-0.5">日</span>
+                  {billingDays !== null && (
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full mb-0.5 ${
+                      billingDays <= 3 ? 'bg-red-50 text-red-500' :
+                      billingDays <= 7 ? 'bg-orange-50 text-orange-500' : 'bg-gray-100 text-gray-400'
+                    }`}>{billingDays}天后</span>
+                  )}
                 </div>
               ) : <p className="text-gray-300 text-sm">未设置</p>}
             </div>
-            <div>
-              <p className="text-gray-400 text-xs">最后还款日</p>
+            <div className="pl-3">
+              <p className="text-gray-400 text-xs mb-1">还款日</p>
               {card.due_day ? (
-                <div className="flex items-baseline space-x-1">
-                  <p className="text-gray-800 font-semibold text-sm">每月 {card.due_day} 日</p>
-                  {dueDays !== null && <span className={`text-xs ${dueDays <= 3 ? 'text-red-500' : dueDays <= 7 ? 'text-orange-500' : 'text-gray-400'}`}>({dueDays}天后)</span>}
+                <div className="flex items-end space-x-1.5">
+                  <p className="text-gray-900 font-bold text-lg leading-none">{card.due_day}</p>
+                  <span className="text-gray-400 text-xs mb-0.5">日</span>
+                  {dueDays !== null && (
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full mb-0.5 ${
+                      dueDays <= 3 ? 'bg-red-50 text-red-500' :
+                      dueDays <= 7 ? 'bg-orange-50 text-orange-500' : 'bg-gray-100 text-gray-400'
+                    }`}>{dueDays}天后</span>
+                  )}
                 </div>
               ) : <p className="text-gray-300 text-sm">未设置</p>}
             </div>
           </div>
+          {/* 分隔线 */}
+          <div className="border-t border-gray-100" />
           {/* 最优刷卡建议 */}
           {swipe && (() => {
             const now = new Date();
@@ -536,49 +690,56 @@ export default function CreditCardManagement() {
             const isTodayBest = todayNum === swipe.bestDay;
 
             return (
-              <div className="bg-amber-50 rounded-xl px-3 py-2.5 space-y-2">
-                <div className="flex items-center space-x-1.5">
-                  <Lightbulb className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
-                  <p className="text-amber-700 text-xs font-medium">刷卡免息期建议</p>
-                </div>
-
-                {/* 今天刷卡 */}
-                <div className={`rounded-lg px-3 py-2 ${
-                  isTodayBest ? 'bg-green-500' :
-                  swipe.todayStatus === 'avoid' ? 'bg-red-50' : 'bg-white'
-                }`}>
-                  <div className="flex items-center justify-between">
-                    <span className={`text-xs font-medium ${
-                      isTodayBest ? 'text-white' :
-                      swipe.todayStatus === 'avoid' ? 'text-red-500' : 'text-gray-600'
-                    }`}>
-                      {isTodayBest ? '★ 今天刷最优' : swipe.todayStatus === 'avoid' ? '⚠️ 今天刷卡' : '今天刷卡'}
-                    </span>
-                    <span className={`text-sm font-bold ${
-                      isTodayBest ? 'text-white' :
-                      swipe.todayStatus === 'avoid' ? 'text-red-500' : 'text-amber-600'
-                    }`}>{todayDates.freeDays} 天免息</span>
-                  </div>
-                  <p className={`text-xs mt-0.5 ${
-                    isTodayBest ? 'text-white/80' :
-                    swipe.todayStatus === 'avoid' ? 'text-red-400' : 'text-gray-400'
+              <div className="mt-1">
+                {/* 标题行 */}
+                <p className="text-gray-400 text-xs mb-2">免息期建议</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {/* 今天刷卡 */}
+                  <div className={`rounded-xl px-3 py-2.5 ${
+                    isTodayBest ? 'bg-[#1A2B4A]' :
+                    swipe.todayStatus === 'avoid' ? 'bg-red-50 border border-red-100' : 'bg-gray-50'
                   }`}>
-                    账单日 {todayDates.billingLabel} · 还款日 {todayDates.dueLabel}
-                  </p>
-                </div>
-
-                {/* 最优刷卡日 */}
-                {!isTodayBest && (
-                  <div className="bg-white rounded-lg px-3 py-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-green-600">★ 最优 {bestLabel} 刷</span>
-                      <span className="text-sm font-bold text-green-600">{bestDates.freeDays} 天免息</span>
+                    <p className={`text-xs mb-1.5 ${
+                      isTodayBest ? 'text-white/50' :
+                      swipe.todayStatus === 'avoid' ? 'text-red-400' : 'text-gray-400'
+                    }`}>{(() => {
+                      const bjNow = new Date(new Date().getTime() + 8 * 60 * 60 * 1000);
+                      return `今日（${bjNow.getUTCMonth() + 1}月${bjNow.getUTCDate()}日）`;
+                    })()}</p>
+                    <div className="flex items-baseline space-x-0.5">
+                      <p className={`text-2xl font-bold leading-none ${
+                        isTodayBest ? 'text-white' :
+                        swipe.todayStatus === 'avoid' ? 'text-red-500' : 'text-gray-900'
+                      }`}>{todayDates.freeDays}</p>
+                      <span className={`text-xs ${
+                        isTodayBest ? 'text-white/60' :
+                        swipe.todayStatus === 'avoid' ? 'text-red-400' : 'text-gray-400'
+                      }`}>天</span>
+                      <span className="text-xs text-red-500 ml-0.5">免息期</span>
                     </div>
-                    <p className="text-xs text-gray-400 mt-0.5">
-                      账单日 {bestDates.billingLabel} · 还款日 {bestDates.dueLabel}
-                    </p>
+                    <div className="flex items-center space-x-1 mt-2">
+                      <p className={`text-xs ${
+                        isTodayBest ? 'text-white/50' :
+                        swipe.todayStatus === 'avoid' ? 'text-red-300' : 'text-gray-400'
+                      }`}>还款 {todayDates.dueLabel}</p>
+                      {swipe.todayStatus === 'avoid' && <span className="text-red-400 text-xs">· 最短</span>}
+                    </div>
                   </div>
-                )}
+
+                  {/* 最优刷卡日 */}
+                  <div className="bg-[#1A2B4A] rounded-xl px-3 py-2.5">
+                    <p className="text-white/50 text-xs mb-1.5">{bestLabel}</p>
+                    <div className="flex items-baseline space-x-0.5">
+                      <p className="text-2xl font-bold leading-none text-white">{bestDates.freeDays}</p>
+                      <span className="text-xs text-white/60">天</span>
+                      <span className="text-xs text-red-400 ml-0.5">免息期</span>
+                    </div>
+                    <div className="flex items-center space-x-1 mt-2">
+                      <p className="text-white/50 text-xs">还款 {bestDates.dueLabel}</p>
+                      <span className="text-green-400 text-xs">· 最长</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             );
           })()}
@@ -1085,12 +1246,25 @@ export default function CreditCardManagement() {
       {deleteConfirmId !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
           <div className="bg-white rounded-2xl p-6 mx-6 w-full max-w-xs">
-            <p className="text-gray-800 font-semibold text-center mb-2">确认删除？</p>
-            <p className="text-gray-500 text-sm text-center mb-5">删除后不可恢复</p>
-            <div className="flex space-x-3">
-              <button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium">取消</button>
-              <button onClick={() => handleDelete(deleteConfirmId)} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-sm font-medium">删除</button>
-            </div>
+            {deleteConfirmStep === 1 ? (
+              <>
+                <p className="text-gray-800 font-semibold text-center mb-2">删除信用卡</p>
+                <p className="text-gray-500 text-sm text-center mb-5">确定要删除这张信用卡吗？</p>
+                <div className="flex space-x-3">
+                  <button onClick={() => setDeleteConfirmId(null)} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium">取消</button>
+                  <button onClick={() => setDeleteConfirmStep(2)} className="flex-1 py-2.5 rounded-xl bg-gray-800 text-white text-sm font-medium">继续</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-red-500 font-semibold text-center mb-2">再次确认删除</p>
+                <p className="text-gray-500 text-sm text-center mb-5">删除后数据不可恢复，请确认操作</p>
+                <div className="flex space-x-3">
+                  <button onClick={() => { setDeleteConfirmId(null); setDeleteConfirmStep(1); }} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm font-medium">取消</button>
+                  <button onClick={() => handleDelete(deleteConfirmId)} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white text-sm font-medium">确认删除</button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
