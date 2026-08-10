@@ -841,7 +841,18 @@ export function FunderOrderCard({
   }
 
   // 风险敞口
-  const interestBaseNum = order.interest_base ? Number(order.interest_base) : totalU;
+  // 期权订单：担保缺口基数按方向区分
+  // 卖出(short_call/short_put) → 用计息基数（保证金）
+  // 买入(long_call/long_put) → 用行权价 × 张数
+  const optionDirection = isOptionOrder ? (optionInfo?.direction || '') : '';
+  const isShortOption = optionDirection === 'short_call' || optionDirection === 'short_put';
+  const optionStrikePrice = isOptionOrder && optionInfo?.strikePrice ? Number(optionInfo.strikePrice) : 0;
+  const optionBuyQty = isOptionOrder && optionInfo?.buyQty ? Number(optionInfo.buyQty) : 0;
+  const interestBaseNum = isOptionOrder
+    ? (isShortOption
+        ? (order.interest_base ? Number(order.interest_base) : totalU)
+        : (optionStrikePrice > 0 && optionBuyQty > 0 ? optionStrikePrice * optionBuyQty : totalU))
+    : (order.interest_base ? Number(order.interest_base) : totalU);
   const liveP = livePrices[order.coin] ?? null;
   const currentValue = liveP !== null ? liveP * qty : null;
   const isShort = (order as any).trade_direction === 'short';
@@ -1652,9 +1663,9 @@ export function FunderOrderCard({
                             )}
                           </div>
 
-                          {/* ② 所有担保物汇总 */}
+                          {/* ④ 所有担保物汇总 */}
                           <div className="p-2.5 rounded-lg" style={{ background: '#fff', border: '1px solid #E5E7EB' }}>
-                            <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>② 共享担保物汇总</div>
+                            <div className="font-semibold mb-1.5" style={{ color: '#374151' }}>④ 共享担保物汇总</div>
                             {sharedPoolInfo ? (
                               <>
                                 <div className="space-y-1.5">
@@ -1684,6 +1695,15 @@ export function FunderOrderCard({
                             ) : (
                               <div className="text-gray-400">加载中...</div>
                             )}
+                          </div>
+
+                          {/* 共享担保计算说明 */}
+                          <div className="mt-2 p-2.5 rounded-lg text-[10px] space-y-1.5" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#6B7280' }}>
+                            <div className="font-semibold text-[11px]" style={{ color: '#374151' }}>计算说明</div>
+                            <div>• <strong>每张订单缺口</strong> = 浮动盈亏 − 待结利息（已扣除已结利息），盈利订单缺口为正（盈余），亚损订单缺口为负</div>
+                            <div>• <strong>总计风险敎口</strong> = 共享担保物合计 + 各订单缺口合计（正数表示担保充足，负数表示担保不足）</div>
+                            <div>• <strong>保证金比例</strong> = 风险敎口 ÷ 全部订单买入价值，负数表示担保不足需补仓</div>
+                            <div>• <strong>期权担保基数</strong>：卖出期权用「计息基数」，买入期权用「行权价 × 张数」</div>
                           </div>
 
                         </>
@@ -1743,6 +1763,16 @@ export function FunderOrderCard({
                           </div>
                         </>
                       )}
+                      {/* 计算说明注释 */}
+                      <div className="mt-3 p-2.5 rounded-lg text-[10px] space-y-1.5" style={{ background: '#F9FAFB', border: '1px solid #E5E7EB', color: '#6B7280' }}>
+                        <div className="font-semibold text-[11px]" style={{ color: '#374151' }}>计算说明</div>
+                        <div>• <strong>担保缺口</strong> = 担保物市值 + 浮动盈亏 − 待结利息 + 已结利息（开启借出本金时再减去计息基数）</div>
+                        <div>• <strong>浮动盈亏</strong> = 当前市值 − 计息基数（资产上涨为盈，下跌为亥）</div>
+                        {isOptionOrder && (
+                          <div>• <strong>期权担保基数</strong>：卖出期权（short_call/short_put）用「计息基数」作为担保缺口基数；买入期权（long_call/long_put）用「行权价 × 张数」作为担保缺口基数</div>
+                        )}
+                        <div>• <strong>正数表示担保充足</strong>（担保物覆盖了所有风险），负数表示担保不足（需要补充担保物）</div>
+                      </div>
                     </div>
                     </div>
                     )}
