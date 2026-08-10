@@ -3589,27 +3589,33 @@ export default function LedgerDetail() {
                   : v.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 return (
                   <div className="mt-3 rounded-2xl px-4 py-3" style={{ background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(4px)' }}>
-                    {/* 主标题：TOTAL 和金额同一行 */}
-                    <div className="flex items-baseline gap-2 mb-1.5">
-                      <span className="text-2xl font-bold tracking-tight" style={{ color: 'rgba(255,255,255,0.55)', letterSpacing: '0.05em' }}>TTL</span>
-                      <span className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.7)' }}>￥</span>
+                    {/* 主标题：TTL + 总金额 */}
+                    <div className="flex items-baseline gap-2 mb-2">
+                      <span className="text-sm font-bold tracking-widest" style={{ color: 'rgba(255,255,255,0.45)', letterSpacing: '0.12em' }}>TTL</span>
+                      <span className="text-xs" style={{ color: 'rgba(255,255,255,0.5)' }}>･</span>
                       <span className="text-2xl font-bold tracking-tight" style={{ color: '#fff', fontVariantNumeric: 'tabular-nums' }}>{fmtCnyFull(totalInCny)}</span>
                     </div>
-                    {/* 副标题：占比进度条 */}
+                    {/* 占比进度条 + 标签 */}
                     {(() => {
                       const cnyPct = totalInCny > 0 ? Math.round(cnyTotal / totalInCny * 100) : 0;
                       const usdtPct = 100 - cnyPct;
                       return (
                         <>
-                          {/* 进度条 */}
-                          <div className="flex rounded-full overflow-hidden mb-1.5" style={{ height: '4px', background: 'rgba(255,255,255,0.15)' }}>
-                            {cnyPct > 0 && <div style={{ width: `${cnyPct}%`, background: '#FFD700', transition: 'width 0.4s' }} />}
-                            {usdtPct > 0 && <div style={{ width: `${usdtPct}%`, background: 'rgba(255,255,255,0.5)', transition: 'width 0.4s' }} />}
+                          {/* 进度条：分段圆角，中间留间隙 */}
+                          <div className="flex gap-0.5 mb-2" style={{ height: '6px' }}>
+                            {cnyPct > 0 && <div style={{ width: `calc(${cnyPct}% - 2px)`, background: '#F5C842', borderRadius: '3px', transition: 'width 0.4s' }} />}
+                            {usdtPct > 0 && <div style={{ width: `calc(${usdtPct}% - 2px)`, background: '#38BDF8', borderRadius: '3px', transition: 'width 0.4s' }} />}
                           </div>
-                          {/* 占比标签 */}
-                          <div className="flex justify-between text-[10px]" style={{ color: 'rgba(255,255,255,0.6)' }}>
-                            <span style={{ color: '#FFD700' }}>人民币 <span style={{ fontVariantNumeric: 'tabular-nums' }}>{cnyPct}%</span> <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '9px' }}>￥{fmtCny(cnyTotal)}</span></span>
-                            <span>数字币 <span style={{ fontVariantNumeric: 'tabular-nums' }}>{usdtPct}%</span> <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '9px' }}>{fmtU(usdtTotal)} USDT</span></span>
+                          {/* 占比标签：两侧都有颜色 */}
+                          <div className="flex justify-between">
+                            <div className="flex flex-col gap-0">
+                              <span className="text-[11px] font-semibold" style={{ color: '#F5C842' }}>人民币 {cnyPct}%</span>
+                              <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.5)' }}>･{fmtCny(cnyTotal)}</span>
+                            </div>
+                            <div className="flex flex-col gap-0 items-end">
+                              <span className="text-[11px] font-semibold" style={{ color: '#38BDF8' }}>数字币 {usdtPct}%</span>
+                              <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.5)' }}>{fmtU(usdtTotal)} USDT</span>
+                            </div>
                           </div>
                         </>
                       );
