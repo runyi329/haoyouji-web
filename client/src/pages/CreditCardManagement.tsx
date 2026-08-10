@@ -129,17 +129,18 @@ function daysUntil(day: number): number {
 }
 
 // 判断临时额度是否在有效期内
-function isTempLimitActive(startStr: string | null | undefined, endStr: string | null | undefined): boolean {
+function isTempLimitActive(startStr: string | Date | null | undefined, endStr: string | Date | null | undefined): boolean {
   if (!endStr) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  // 用本地时间解析，避免 UTC 时区偏差
-  const parseLocal = (s: string) => {
-    const [y, m, d] = s.slice(0, 10).split('-').map(Number);
+  // 将任意类型转为本地日期（支持 Date 对象和字符串）
+  const parseLocal = (s: string | Date) => {
+    if (s instanceof Date) return new Date(s.getFullYear(), s.getMonth(), s.getDate());
+    const str = String(s).slice(0, 10);
+    const [y, m, d] = str.split('-').map(Number);
     return new Date(y, m - 1, d);
   };
   const end = parseLocal(endStr);
-  // 如果有开始日则判断范围，否则只判断未过期
   if (startStr) {
     const start = parseLocal(startStr);
     return today >= start && today <= end;
@@ -148,8 +149,11 @@ function isTempLimitActive(startStr: string | null | undefined, endStr: string |
 }
 
 // 格式化日期为 M月D日
-function formatDateLabel(dateStr: string | null | undefined): string {
+function formatDateLabel(dateStr: string | Date | null | undefined): string {
   if (!dateStr) return '';
+  if (dateStr instanceof Date) {
+    return `${dateStr.getMonth() + 1}月${dateStr.getDate()}日`;
+  }
   const d = new Date(dateStr);
   return `${d.getMonth() + 1}月${d.getDate()}日`;
 }
@@ -366,7 +370,7 @@ export default function CreditCardManagement() {
     const dueDays = card.due_day ? daysUntil(card.due_day) : null;
     const swipe = card.billing_day && card.due_day ? calcBestSwipeDay(card.billing_day, card.due_day) : null;
     const tempActive = isTempLimitActive(card.temp_limit_start, card.temp_limit_end);
-    const tempEndLabel = card.temp_limit_end ? formatDateLabel(String(card.temp_limit_end).slice(0, 10)) : '';
+    const tempEndLabel = card.temp_limit_end ? formatDateLabel(card.temp_limit_end) : '';
 
     return (
       <div className="rounded-2xl overflow-hidden shadow-md">
