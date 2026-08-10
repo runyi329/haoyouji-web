@@ -16452,9 +16452,12 @@ ${klinesSummary}
             const totalInterest = principal * (annualRate / 100) * holdDays / 365;
             const paidInterest = paidMap[Number(o.id)] || 0;
             const pendingInterest = Math.max(0, totalInterest - paidInterest);
-            // 担保需求：期权订单只算待结利息（不包含本金），其他订单 = 本金 + 待结利息
+            // 担保需求 = 本金 + 待结利息
+            // 期权订单：本金是否计入由 principal_lent_out 开关控制
             const isOptionAsset = o.asset_type === 'crypto_option';
-            const collateralRequired = isOptionAsset ? pendingInterest : principal + pendingInterest;
+            const principalLentOut2 = o.principal_lent_out === 1 || o.principal_lent_out === true;
+            const effectivePrincipal = (isOptionAsset && !principalLentOut2) ? 0 : principal;
+            const collateralRequired = effectivePrincipal + pendingInterest;
             // 计算当前市值（数量 × 实时价）
             const quantity = parseFloat(String(o.buy_quantity ?? 0)) || 0;
             // 期权订单：实际标的币种在 option_info.coin，优先使用

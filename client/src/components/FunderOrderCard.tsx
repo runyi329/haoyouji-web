@@ -1605,10 +1605,14 @@ export function FunderOrderCard({
                                     const isCNY = oCoin === 'CNY';
                                     const oPendingInterestRaw = Number(o.pendingInterest ?? 0);
                                     const oPendingInterest = isCNY ? oPendingInterestRaw / cnyRate : oPendingInterestRaw;
-                                    // 期权订单且 quantity=0：无法计算浮动盈亏，缺口只有待结利息
+                                    // 期权订单且 quantity=0：无法计算浮动盈亏
+                                    // 缺口 = 待结利息 + （借出开关开时加计息基数）
                                     const isOptionNoQty = o.assetType === 'crypto_option' || (oQty === 0 && o.principalLentOut);
                                     if (isOptionNoQty) {
-                                      const gap = -oPendingInterest;
+                                      const oPrincipalLentOutOpt = o.principalLentOut === true || o.principalLentOut === 1;
+                                      const oPrincipalU_opt = isCNY ? oPrincipal / cnyRate : oPrincipal;
+                                      const oPrincipalDeductOpt = oPrincipalLentOutOpt ? oPrincipalU_opt : 0;
+                                      const gap = -(oPendingInterest + oPrincipalDeductOpt);
                                       return (
                                         <div key={o.orderId} className="flex justify-between items-center">
                                           <div>
@@ -1655,9 +1659,15 @@ export function FunderOrderCard({
                                     const oCoin = (o.coin || '').toUpperCase();
                                     const isCNYt = oCoin === 'CNY';
                                     const oPendingInterestT = isCNYt ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
-                                    // 期权订单且 quantity=0：缺口只有待结利息
+                                    // 期权订单且 quantity=0：缺口 = 待结利息 + （借出开关开时加计息基数）
                                     const isOptionNoQtyT = o.assetType === 'crypto_option' || (oQty === 0 && o.principalLentOut);
-                                    if (isOptionNoQtyT) { totalGapLive += -oPendingInterestT; continue; }
+                                    if (isOptionNoQtyT) {
+                                      const oPrincipalLentOutT2 = o.principalLentOut === true || o.principalLentOut === 1;
+                                      const oPrincipalUT2 = isCNYt ? oPrincipal / cnyRate : oPrincipal;
+                                      const oPrincipalDeductT2 = oPrincipalLentOutT2 ? oPrincipalUT2 : 0;
+                                      totalGapLive += -(oPendingInterestT + oPrincipalDeductT2);
+                                      continue;
+                                    }
                                     const oLiveP = livePrices[oCoin] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
                                     if (!isCNYt && oLiveP === null) { allKnown = false; continue; }
                                     const oCurrentValueT = isCNYt ? oQty / cnyRate : oLiveP! * oQty;
@@ -1722,7 +1732,7 @@ export function FunderOrderCard({
                             <div>• <strong>每张订单缺口</strong> = 浮动盈亏 − 待结利息（已扣除已结利息），盈利订单缺口为正（盈余），亚损订单缺口为负</div>
                             <div>• <strong>总计风险敎口</strong> = 共享担保物合计 + 各订单缺口合计（正数表示担保充足，负数表示担保不足）</div>
                             <div>• <strong>保证金比例</strong> = 风险敎口 ÷ 全部订单买入价值，负数表示担保不足需补仓</div>
-                            <div>• <strong>期权担保基数</strong>：卖出期权用「计息基数」，买入期权用「行权价 × 张数」</div>
+                            <div>• <strong>期权订单缺口</strong>：开启「借出本金」开关→ 缺口 = 计息基数 + 待结利息；未开启→ 缺口 = 只有待结利息</div>
                           </div>
 
                         </>
@@ -1788,7 +1798,7 @@ export function FunderOrderCard({
                         <div>• <strong>担保缺口</strong> = 担保物市值 + 浮动盈亏 − 待结利息 + 已结利息（开启借出本金时再减去计息基数）</div>
                         <div>• <strong>浮动盈亏</strong> = 当前市值 − 计息基数（资产上涨为盈，下跌为亥）</div>
                         {isOptionOrder && (
-                          <div>• <strong>期权担保基数</strong>：卖出期权（short_call/short_put）用「计息基数」作为担保缺口基数；买入期权（long_call/long_put）用「行权价 × 张数」作为担保缺口基数</div>
+                          <div>• <strong>期权订单</strong>：开启「借出本金」开关→ 担保缺口基数 = 计息基数 + 待结利息；未开启→ 担保缺口 = 只有待结利息。买入期权用行权价×张数作为基数</div>
                         )}
                         <div>• <strong>正数表示担保充足</strong>（担保物覆盖了所有风险），负数表示担保不足（需要补充担保物）</div>
                       </div>
