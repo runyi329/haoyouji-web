@@ -17270,27 +17270,29 @@ ${klinesSummary}
           const participantOrderIds = allOrders.map((o: any) => Number(o.id));
           if (participantOrderIds.length > 0) {
             const piPlaceholders = participantOrderIds.map(() => '?').join(',');
-            const piConn = await getLedgerDb();
-            const piRows = await (piConn as any).execute(
-              `SELECT order_id, role, commission_rate, commission_base, commission_start_date, paid_commission, note,
-               interest_rate, interest_base, interest_base_currency, interest_payment_type, interest_start_date, interest_rate_currency, display_config
-               FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND order_id IN (${piPlaceholders})`,
-              [input.ledgerId, targetUserId, ...participantOrderIds]
-            ) as any;
-            const piArr = ((piRows[0] || piRows) as any[]) || [];
+            const piConnRaw = await getDbConnection();
+            if (!piConnRaw) throw new Error('no db conn');
+            // 并行查询参与者字段和用户名
+            const [piRowsResult, puRowsResult] = await Promise.all([
+              piConnRaw.execute(
+                `SELECT order_id, role, commission_rate, commission_base, commission_start_date, paid_commission, note,
+                 interest_rate, interest_base, interest_base_currency, interest_payment_type, interest_start_date, interest_rate_currency, display_config
+                 FROM ledger_order_participants WHERE ledger_id = ? AND user_id = ? AND order_id IN (${piPlaceholders})`,
+                [input.ledgerId, targetUserId, ...participantOrderIds]
+              ).catch(() => null) as Promise<any>,
+              piConnRaw.execute(
+                'SELECT username, name FROM users WHERE id = ? LIMIT 1',
+                [targetUserId]
+              ).catch(() => null) as Promise<any>
+            ]);
+            const piArr = piRowsResult ? ((piRowsResult[0] || piRowsResult) as any[]) || [] : [];
             const piMap: Record<number, any> = {};
             for (const pi of piArr) { piMap[Number(pi.order_id)] = pi; }
-            // 查询参与者自己的用户名（用于 owner_label）
             let participantUserName = '';
-            try {
-              const puConn = await getLedgerDb();
-              const puRows = await (puConn as any).execute(
-                `SELECT username, name FROM users WHERE id = ? LIMIT 1`,
-                [targetUserId]
-              ) as any;
-              const puArr = ((puRows[0] || puRows) as any[]) || [];
+            if (puRowsResult) {
+              const puArr = ((puRowsResult[0] || puRowsResult) as any[]) || [];
               if (puArr.length > 0) participantUserName = puArr[0].name || puArr[0].username || '';
-            } catch (_e) {}
+            }
             for (const o of allOrders) {
               const pi = piMap[Number(o.id)];
               if (pi) {
