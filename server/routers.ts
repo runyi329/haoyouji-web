@@ -16397,7 +16397,7 @@ ${klinesSummary}
             `SELECT fo.id, fo.order_no, fo.coin, fo.amount, fo.buy_price, fo.buy_quantity, fo.interest_base, fo.interest_rate_annual,
                     fo.interest_start_date, fo.collateral_assets, fo.collateral_share_mode,
                     fo.interest_base_currency, fo.interest_rate_currency, fo.interest_payment_type,
-                    fo.principal_lent_out, fo.option_info
+                    fo.principal_lent_out, fo.option_info, fo.asset_type
              FROM ledger_orders fo
              WHERE fo.ledger_id = ? AND fo.user_id = ? AND fo.status = 'active'
                AND fo.deleted_at IS NULL AND fo.collateral_share_mode = 'self'`,
@@ -16452,8 +16452,9 @@ ${klinesSummary}
             const totalInterest = principal * (annualRate / 100) * holdDays / 365;
             const paidInterest = paidMap[Number(o.id)] || 0;
             const pendingInterest = Math.max(0, totalInterest - paidInterest);
-            // 担保需求 = 本金 + 待结利息
-            const collateralRequired = principal + pendingInterest;
+            // 担保需求：期权订单只算待结利息（不包含本金），其他订单 = 本金 + 待结利息
+            const isOptionAsset = o.asset_type === 'crypto_option';
+            const collateralRequired = isOptionAsset ? pendingInterest : principal + pendingInterest;
             // 计算当前市值（数量 × 实时价）
             const quantity = parseFloat(String(o.buy_quantity ?? 0)) || 0;
             // 期权订单：实际标的币种在 option_info.coin，优先使用
@@ -16489,6 +16490,7 @@ ${klinesSummary}
               shareMode: o.collateral_share_mode,
               principalLentOut,
               interestBaseCurrency: o.interest_base_currency || 'USDT',
+              assetType: o.asset_type || 'crypto',
             };
           });
 

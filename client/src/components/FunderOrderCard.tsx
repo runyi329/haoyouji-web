@@ -1603,11 +1603,27 @@ export function FunderOrderCard({
                                     const oLiveP = livePrices[oCoin] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
                                     // CNY 订单：金额单位是人民币，除以汇率换算成 U
                                     const isCNY = oCoin === 'CNY';
+                                    const oPendingInterestRaw = Number(o.pendingInterest ?? 0);
+                                    const oPendingInterest = isCNY ? oPendingInterestRaw / cnyRate : oPendingInterestRaw;
+                                    // 期权订单且 quantity=0：无法计算浮动盈亏，缺口只有待结利息
+                                    const isOptionNoQty = o.assetType === 'crypto_option' || (oQty === 0 && o.principalLentOut);
+                                    if (isOptionNoQty) {
+                                      const gap = -oPendingInterest;
+                                      return (
+                                        <div key={o.orderId} className="flex justify-between items-center">
+                                          <div>
+                                            <button type="button" onClick={() => allOrders && setClickedOrderNo(o.orderNo)} className={`font-mono font-medium ${allOrders ? 'underline underline-offset-2 cursor-pointer' : ''}`} style={{ color: '#1A56DB', background: 'none', border: 'none', padding: 0 }}>{o.orderNo}</button>
+                                            <span className="ml-1.5" style={{ color: '#9CA3AF' }}>{o.coin}</span>
+                                          </div>
+                                          <div className="text-right">
+                                            <span className="font-mono font-semibold" style={{ color: gap >= 0 ? '#DC2626' : '#16A34A' }}>{gap >= 0 ? '+' : ''}{gap.toFixed(2)} u</span>
+                                          </div>
+                                        </div>
+                                      );
+                                    }
                                     const oCurrentValue = isCNY ? oQty / cnyRate : (oLiveP !== null ? oLiveP * oQty : null);
                                     const oPrincipalU = isCNY ? oPrincipal / cnyRate : oPrincipal;
                                     const oFloatPnl = oCurrentValue !== null ? oCurrentValue - oPrincipalU : null;
-                                    const oPendingInterestRaw = Number(o.pendingInterest ?? 0);
-                                    const oPendingInterest = isCNY ? oPendingInterestRaw / cnyRate : oPendingInterestRaw;
                                     // 借出本金：若勾选了「借出本金」，需从缺口中扣除本金（CNY 订单折算成 U）
                                     const oPrincipalLentOut = o.principalLentOut === true || o.principalLentOut === 1;
                                     const oPrincipalDeduct = oPrincipalLentOut ? oPrincipalU : 0;
@@ -1638,11 +1654,14 @@ export function FunderOrderCard({
                                     const oPrincipal = Number(o.principal ?? 0);
                                     const oCoin = (o.coin || '').toUpperCase();
                                     const isCNYt = oCoin === 'CNY';
+                                    const oPendingInterestT = isCNYt ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
+                                    // 期权订单且 quantity=0：缺口只有待结利息
+                                    const isOptionNoQtyT = o.assetType === 'crypto_option' || (oQty === 0 && o.principalLentOut);
+                                    if (isOptionNoQtyT) { totalGapLive += -oPendingInterestT; continue; }
                                     const oLiveP = livePrices[oCoin] ?? (o.currentPrice !== null && o.currentPrice !== undefined ? Number(o.currentPrice) : null);
                                     if (!isCNYt && oLiveP === null) { allKnown = false; continue; }
                                     const oCurrentValueT = isCNYt ? oQty / cnyRate : oLiveP! * oQty;
                                     const oPrincipalUT = isCNYt ? oPrincipal / cnyRate : oPrincipal;
-                                    const oPendingInterestT = isCNYt ? Number(o.pendingInterest ?? 0) / cnyRate : Number(o.pendingInterest ?? 0);
                                     const oFloatPnlT = oCurrentValueT - oPrincipalUT;
                                     const oPrincipalLentOutT = o.principalLentOut === true || o.principalLentOut === 1;
                                     const oPrincipalDeductT = oPrincipalLentOutT ? oPrincipalUT : 0;
