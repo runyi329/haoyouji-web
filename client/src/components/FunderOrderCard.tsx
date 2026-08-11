@@ -1029,13 +1029,13 @@ export function FunderOrderCard({
                 {optionInfo.coin && (
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400 shrink-0">标的</span>
-                    <span className="font-medium text-white">{optionInfo.coin}</span>
+                    <span className="font-medium" style={{ color: '#1A2340' }}>{optionInfo.coin}</span>
                   </div>
                 )}
                 {optionInfo.direction && (
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400 shrink-0">方向</span>
-                    <span className="font-medium text-white">{
+                    <span className="font-medium" style={{ color: '#1A2340' }}>{
                       optionInfo.direction === 'long_call' ? '买入看涨' :
                       optionInfo.direction === 'long_put' ? '买入看跌' :
                       optionInfo.direction === 'short_call' ? '卖出看涨' :
@@ -1046,24 +1046,24 @@ export function FunderOrderCard({
                 {optionInfo.exerciseDate && (
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400 shrink-0">到期日</span>
-                    <span className="font-medium text-white">{optionInfo.exerciseDate}</span>
+                    <span className="font-medium" style={{ color: '#1A2340' }}>{optionInfo.exerciseDate}</span>
                   </div>
                 )}
                 {optionInfo.strikePrice && (
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400 shrink-0">行权价</span>
-                    <span className="font-medium text-white">{Number(optionInfo.strikePrice).toLocaleString()} USD</span>
+                    <span className="font-medium" style={{ color: '#1A2340' }}>{Number(optionInfo.strikePrice).toLocaleString()} USD</span>
                   </div>
                 )}
                 {optionInfo.premium && (
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400 shrink-0">权利金/张</span>
-                    <span className="font-medium text-white">{parseFloat(optionInfo.premium).toFixed(2)} {optionInfo.denomination === 'B' ? (optionInfo.coin || 'BTC') : 'USDT'}</span>
+                    <span className="font-medium" style={{ color: '#1A2340' }}>{parseFloat(optionInfo.premium).toFixed(2)} {optionInfo.denomination === 'B' ? (optionInfo.coin || 'BTC') : 'USDT'}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between">
                   <span className="text-gray-400 shrink-0">期权价</span>
-                  <span className="font-medium text-white">
+                  <span className="font-medium" style={{ color: '#1A2340' }}>
                     {greeksResult.loading && !greeksResult.data ? '加载中...' : greeksResult.data?.markPrice != null ? `${greeksResult.data.markPrice.toFixed(2)} U` : '--'}
                   </span>
                 </div>
