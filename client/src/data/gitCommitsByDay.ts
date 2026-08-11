@@ -1,5 +1,5 @@
 // 自动生成，勿手动修改
-// 生成时间：2026-08-11
+// 生成时间：2026-08-12
 export const gitCommitsByDay: Record<string, { date: string; type: string; cleanMessage: string }[]> = {
   "2026-01-23": [
     { date: "2026-01-22T11:51:27-05:00", type: "other", cleanMessage: "Initial project bootstrap" },
@@ -8851,5 +8851,11 @@ export const gitCommitsByDay: Record<string, { date: string; type: string; clean
   ],
   "2026-08-11": [
     { date: "2026-08-10T16:31:09Z", type: "feat", cleanMessage: "信用卡管理-可用额度更新/UI优化/删除二次确认/卡号遮码/草稿" },
+    { date: "2026-08-10T18:37:44Z", type: "chore", cleanMessage: "自动更新工作日志静态数据 [skip ci]" },
+    { date: "2026-08-11T01:50:17Z", type: "fix", cleanMessage: "期权卡片订单模式数值颜色改为白色" },
+    { date: "2026-08-11T02:12:50Z", type: "fix", cleanMessage: "期权卡片现价和总价值颜色改为白色" },
+    { date: "2026-08-11T03:42:40Z", type: "fix", cleanMessage: "期权订单模式标的/方向/到期日/行权价/权利金字段颜色改为深色（白底可见）" },
+    { date: "2026-08-11T04:08:44Z", type: "feat", cleanMessage: "新增 BNB 币种支持（购买币种选择+实时价格）" },
+    { date: "2026-08-11T04:49:57Z", type: "fix", cleanMessage: "后端 coin 枚举加入 BNB 和 HYPE（修复添加订单时 invalid_value 错误）" },
   ],
 };
