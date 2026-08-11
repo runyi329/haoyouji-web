@@ -16596,7 +16596,7 @@ ${klinesSummary}
       .input(z.object({
         ledgerId: z.number(),
         userId: z.number(),
-        coin: z.enum(['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'SKHYNIX', 'BZ']),
+        coin: z.enum(['BTC', 'ETH', 'SOL', 'BNB', 'HYPE', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'SKHYNIX', 'BZ']),
         amount: z.string(),
         buyPrice: z.string().optional(),
         buyDate: z.string().optional(),
@@ -17423,7 +17423,7 @@ ${klinesSummary}
       .input(z.object({
         ledgerId: z.number(),
         userId: z.number(),
-        coin: z.enum(['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'SKHYNIX', 'BZ']),
+        coin: z.enum(['BTC', 'ETH', 'SOL', 'BNB', 'HYPE', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'SKHYNIX', 'BZ']),
         amount: z.string(),
         amountCurrency: z.string().optional(),
         buyPrice: z.string().optional(),
@@ -17536,7 +17536,7 @@ ${klinesSummary}
         id: z.number(),
         ledgerId: z.number(),
         userId: z.number().optional(),
-        coin: z.enum(['BTC', 'ETH', 'SOL', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'SKHYNIX', 'BZ']).optional(),
+        coin: z.enum(['BTC', 'ETH', 'SOL', 'BNB', 'HYPE', 'AAVE', 'SUI', 'ONDO', 'ASTER', 'LDO', 'ENA', 'ARKM', 'USDT', 'CNY', 'MSTR', 'TSLA', 'NVDA', 'AAPL', 'MSFT', 'GOOGL', 'META', 'AMZN', 'SPY', 'QQQ', 'NFLX', 'ORCL', 'TSM', 'AMD', 'CL', 'NG', 'CRCL', 'DRAM', 'MU', 'PLUME', 'SEI', 'SKHYNIX', 'BZ']).optional(),
         amount: z.string().optional(),
         amountCurrency: z.string().optional(),
         buyPrice: z.string().optional(),
