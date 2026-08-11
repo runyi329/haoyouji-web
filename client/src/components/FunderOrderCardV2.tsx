@@ -1569,7 +1569,7 @@ export function FunderOrderCardV2Silver({
             <div className="text-right" style={{ flex: 1 }}>
               <div className="text-[10px] mb-1" style={{ color: TXT_SEC }}>{isOptionCard ? '期权现价 (U)' : '当前价 (U)'}</div>
               <div style={{ lineHeight: 1 }}>
-                <span className="text-sm font-semibold" style={{ color: isOptionCard ? (optMarkPrice != null && _optInfo?.premium ? (optMarkPrice > parseFloat(_optInfo.premium) ? SL_GREEN : optMarkPrice < parseFloat(_optInfo.premium) ? SL_RED : TXT_PRI) : TXT_PRI) : TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
+                <span className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
                   {isOptionCard
                     ? (optMarkPrice != null ? fmt(optMarkPrice, 2) : (greeksResult.loading ? '...' : '--'))
                     : (liveP != null ? fmt(liveP, 2) : '--')}
@@ -1751,10 +1751,10 @@ export function FunderOrderCardV2Silver({
             {/* 总价值 */}
             <div className="text-right" style={{ flex: 1 }}>
               <div className="text-[10px] mb-0.5" style={{ color: TXT_SEC, textShadow: TXT_SHADOW }}>总价值 (U)</div>
-              <div className="text-sm font-semibold" style={{ color: totalValue != null && optPremiumTotal != null ? (totalValue >= optPremiumTotal ? SL_GREEN : SL_RED) : TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
+              <div className="text-sm font-semibold" style={{ color: TXT_PRI, fontVariantNumeric: 'tabular-nums', textShadow: TXT_SHADOW }}>
                 {totalPerUnit !== null ? fmt(totalPerUnit, 2) : '--'}
               </div>
-              <div className="text-[10px]" style={{ color: totalValue != null && optPremiumTotal != null ? (totalValue >= optPremiumTotal ? SL_GREEN : SL_RED) : TXT_DIM, fontVariantNumeric: 'tabular-nums' }}>
+              <div className="text-[10px]" style={{ color: TXT_DIM, fontVariantNumeric: 'tabular-nums' }}>
                 {totalValue !== null ? `×${fmt(optQty, 2)}=${fmt(totalValue, 0)}` : ''}
               </div>
             </div>
