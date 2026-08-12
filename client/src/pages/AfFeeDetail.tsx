@@ -447,6 +447,50 @@ export default function AfFeeDetail() {
           const netDaily = collectDailyTotal - payDailyTotal;
           const collectBaseTotal = collectOrders.reduce((s: number, o: any) => s + getBase(o), 0);
           const payBaseTotal = payOrders.reduce((s: number, o: any) => s + getBase(o), 0);
+
+          // 资金概况：与下方「按人员」列表保持完全相同的成员范围及缺口口径。
+          // 缺口仅针对付息订单：累计待付利息绝对值超过该成员当前钱包余额的部分。
+          const getPersonDaily = (order: any) => {
+            const rawBase = order.interest_base != null ? Number(order.interest_base) : (order.amount != null ? Number(order.amount) : 0);
+            const baseInU = (order.interest_base_currency || 'USDT').toUpperCase() === 'CNY' ? rawBase / cnyRate : rawBase;
+            const annualRate = order.interest_rate_annual != null ? Number(order.interest_rate_annual) : null;
+            return baseInU && annualRate != null ? baseInU * (Math.abs(annualRate) / 100) / 365 : 0;
+          };
+          const financePersonOrders = new Map<string, { userId: number; orders: any[] }>();
+          for (const order of ongoingOrders) {
+            const userKey = String(order.user_id || order.userId || order.username || 'unknown');
+            const numericUserId = parseInt(order.user_id || order.userId || '0');
+            if (!financePersonOrders.has(userKey)) {
+              financePersonOrders.set(userKey, {
+                userId: Number.isFinite(numericUserId) ? numericUserId : 0,
+                orders: [],
+              });
+            }
+            financePersonOrders.get(userKey)!.orders.push(order);
+          }
+          const todayForWalletSummary = new Date();
+          const todayWalletSummaryStr = `${todayForWalletSummary.getFullYear()}-${String(todayForWalletSummary.getMonth() + 1).padStart(2, '0')}-${String(todayForWalletSummary.getDate()).padStart(2, '0')}`;
+          let walletBalanceTotal = 0;
+          let shortfallTotal = 0;
+          let shortfallUserCount = 0;
+          for (const person of Array.from(financePersonOrders.values())) {
+            const walletBalance = person.userId > 0 && memberBalances ? Number(memberBalances[person.userId] ?? 0) : 0;
+            walletBalanceTotal += walletBalance;
+            const pendingPayable = person.orders
+              .filter((order: any) => !isCollect(order))
+              .reduce((sum: number, order: any) => {
+                const paidAmount = finPaidMap[Number(order.id)] != null ? Number(finPaidMap[Number(order.id)]) : 0;
+                const startDate = order.interest_start_date || order.buy_date || '';
+                if (!startDate) return sum;
+                const accumulatedDays = Math.max(0, Math.round((new Date(todayWalletSummaryStr).getTime() - new Date(startDate.slice(0, 10)).getTime()) / 86400000) + 1);
+                return sum + (-getPersonDaily(order) * accumulatedDays + paidAmount);
+              }, 0);
+            const pendingAbs = Math.abs(pendingPayable);
+            if (pendingPayable < 0 && walletBalance < pendingAbs) {
+              shortfallTotal += pendingAbs - walletBalance;
+              shortfallUserCount += 1;
+            }
+          }
           return (
             <div className="px-4 pb-4 pt-3 space-y-2">
               {/* 本金规模（左）+ 订单概况（右） */}
@@ -456,6 +500,7 @@ export default function AfFeeDetail() {
                 const CELL_BG = 'rgba(255,255,255,0.80)';
                 const HEADER_BG = 'rgba(255,255,255,0.92)';
                 return (
+                <>
                 <div className="grid grid-cols-2 gap-2">
                   {/* 本金规模线框表格 */}
                   <div className="overflow-hidden rounded" style={{ border: BORDER }}>
@@ -508,6 +553,23 @@ export default function AfFeeDetail() {
                     ))}
                   </div>
                 </div>
+
+                {/* 资金概况：成员钱包余额总额与缺口总额 */}
+                <div className="grid grid-cols-2 overflow-hidden rounded" style={{ border: BORDER }}>
+                  {[
+                    { label: '钱包余额总额(U)', value: walletBalanceTotal.toFixed(2), color: walletBalanceTotal > 0 ? '#dc2626' : walletBalanceTotal < 0 ? '#16a34a' : '#94a3b8', hint: `${financePersonOrders.size} 人` },
+                    { label: '缺口总额(U)', value: shortfallTotal > 0 ? `-${shortfallTotal.toFixed(2)}` : '0.00', color: shortfallTotal > 0 ? '#16a34a' : '#94a3b8', hint: shortfallUserCount > 0 ? `${shortfallUserCount} 人存在缺口` : '暂无缺口' },
+                  ].map((item, index) => (
+                    <div key={item.label} className="flex items-center justify-between gap-2 px-3 py-2" style={{ background: index === 1 && shortfallTotal > 0 ? '#fff7f7' : HEADER_BG, borderRight: index === 0 ? BORDER : 'none' }}>
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-medium text-gray-500 whitespace-nowrap">{item.label}</div>
+                        <div className="text-[9px] text-gray-400 mt-0.5 whitespace-nowrap">{item.hint}</div>
+                      </div>
+                      <div className="text-sm font-bold tabular-nums whitespace-nowrap" style={{ color: item.color }}>{item.value}</div>
+                    </div>
+                  ))}
+                </div>
+                </>
                 );
               })()}
               {/* 利息预测（收息 + 付息 + 汇总） */}
