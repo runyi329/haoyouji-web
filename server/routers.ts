@@ -2899,19 +2899,6 @@ ${klinesSummary}
       const url = `${baseUrl}/api/auth/external-login?uid=${encodeURIComponent(uid)}&name=${encodeURIComponent(name)}&ts=${ts}&sign=${sign}&redirect=/stock-risk`;
       return { url };
     }),
-    // 企伴 SSO 跳转链接生成
-    qibanSsoLink: protectedProcedure.mutation(async ({ ctx }) => {
-      const user = ctx.user;
-      const uid = String(user.id);
-      const name = user.name || user.username || '';
-      const ts = String(Math.floor(Date.now() / 1000));
-      const sharedSecret = process.env.HAOYOUJI_SHARED_SECRET || 'mlm-bonus-shared-secret-2026';
-      const payload = `${uid}:${name}:${ts}`;
-      const sign = createHmac('sha256', sharedSecret).update(payload).digest('hex');
-      const baseUrl = 'https://qiban.jiangyuchen.cn';
-      const url = `${baseUrl}/api/auth/sso?uid=${encodeURIComponent(uid)}&name=${encodeURIComponent(name)}&ts=${ts}&sign=${sign}&redirect=/`;
-      return { url };
-    }),
   }),
 
   // 通用文件上传API
