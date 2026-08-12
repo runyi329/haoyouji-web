@@ -375,6 +375,37 @@ export default function AfFeeDetail() {
           const dailyTotal2 = todayActive.reduce((s: number, i: any) => s + i.dailyFee, 0);
           const monthlyForecast2 = dailyTotal2 * 30;
           const yearlyForecast2 = dailyTotal2 * 365;
+
+          // 资金概况：与下方「人员」视图严格采用同一成员范围与缺口口径。
+          const gjPersonOrders = new Map<string, { userId: number; orders: any[] }>();
+          for (const item of feeItems) {
+            if (item.feeType === 'settled') continue;
+            const userKey = String(item.userId || item.username || 'unknown');
+            const numericUserId = parseInt(userKey);
+            if (!gjPersonOrders.has(userKey)) {
+              gjPersonOrders.set(userKey, {
+                userId: Number.isFinite(numericUserId) ? numericUserId : 0,
+                orders: [],
+              });
+            }
+            gjPersonOrders.get(userKey)!.orders.push(item);
+          }
+          let gjWalletBalanceTotal = 0;
+          let gjShortfallTotal = 0;
+          let gjShortfallUserCount = 0;
+          for (const person of Array.from(gjPersonOrders.values())) {
+            const walletBalance = person.userId > 0 && memberBalances ? Number(memberBalances[person.userId] ?? 0) : 0;
+            gjWalletBalanceTotal += walletBalance;
+            const pendingFee = person.orders.reduce((sum: number, order: any) => {
+              const prepaid = parseFloat(order.prepaidFee || '0');
+              return sum + (-Number(order.totalFee || 0) + prepaid);
+            }, 0);
+            const pendingAbs = Math.abs(pendingFee);
+            if (pendingFee < 0 && walletBalance < pendingAbs) {
+              gjShortfallTotal += pendingAbs - walletBalance;
+              gjShortfallUserCount += 1;
+            }
+          }
           return (
             <div className="px-4 pb-4 pt-3 space-y-2">
               {/* 管理费汇总 — 横向 4 列表格 */}
@@ -425,6 +456,22 @@ export default function AfFeeDetail() {
                   <div className="py-2 px-2 text-xs text-center tabular-nums font-medium" style={{ color: '#0369a1', borderRight: '1px solid #e5e7eb' }}>{Math.round(monthlyForecast2)}</div>
                   <div className="py-2 px-2 text-xs text-center tabular-nums font-bold" style={{ color: '#16a34a' }}>{Math.round(yearlyForecast2)}</div>
                 </div>
+              </div>
+
+              {/* 资金概况：钱包余额与人员缺口汇总 */}
+              <div className="grid grid-cols-2 overflow-hidden rounded" style={{ border: '1px solid #d1d5db', background: '#fff' }}>
+                {[
+                  { label: '钱包余额总额(U)', value: gjWalletBalanceTotal.toFixed(2), color: gjWalletBalanceTotal > 0 ? '#dc2626' : '#94a3b8', hint: `${gjPersonOrders.size} 人` },
+                  { label: '缺口总额(U)', value: gjShortfallTotal > 0 ? `-${gjShortfallTotal.toFixed(2)}` : '0.00', color: gjShortfallTotal > 0 ? '#16a34a' : '#94a3b8', hint: gjShortfallUserCount > 0 ? `${gjShortfallUserCount} 人存在缺口` : '暂无缺口' },
+                ].map((item, index) => (
+                  <div key={item.label} className="flex items-center justify-between gap-2 px-3 py-2" style={{ background: index === 1 && gjShortfallTotal > 0 ? '#fff7f7' : '#fff', borderRight: index === 0 ? '1px solid #e5e7eb' : 'none' }}>
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-medium text-gray-500 whitespace-nowrap">{item.label}</div>
+                      <div className="text-[9px] text-gray-400 mt-0.5 whitespace-nowrap">{item.hint}</div>
+                    </div>
+                    <div className="text-sm font-bold tabular-nums whitespace-nowrap" style={{ color: item.color }}>{item.value}</div>
+                  </div>
+                ))}
               </div>
             </div>
           );
